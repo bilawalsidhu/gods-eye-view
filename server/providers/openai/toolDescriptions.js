@@ -135,7 +135,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_cockpit: {
     description:
-      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (establishes Contacts itself; no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
+      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (needs only its own Flights/Military layer on, not Contacts; opens Contacts itself, no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
     $position: 1,
     parameters: {
       properties: {
@@ -523,13 +523,17 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         direction: {
           description:
-            'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
+            'Pan/rotate/tilt steps; orbit/rotate_globe default right.',
           $position: 2,
         },
         mode: {
           description:
             'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.',
           $position: 2,
+        },
+        pitchDeg: {
+          description: 'Absolute; -45 default, -89 top-down.',
+          $position: 1,
         },
       },
     },

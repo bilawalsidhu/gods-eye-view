@@ -30,11 +30,6 @@ const reservations = JSON.parse(
     'utf8',
   ),
 );
-assert.equal(
-  reservations.some(([, token]) => token === '00'),
-  false,
-  '00 must remain unallocated in the production ledger for this QA fixture',
-);
 const productionTokens = new Set(reservations.map(([, token]) => token));
 const priorDigitRows = [...'0123456789']
   .filter((digit) => !productionTokens.has(digit))
@@ -43,20 +38,24 @@ const priorState = parseLayerStateTokenReservations([
   ...reservations,
   ...priorDigitRows,
 ]);
-assert.equal(nextLayerStateToken(priorState), '00');
+// The first two-character token production has not allocated yet ('00'
+// until a real layer takes it).
+const qaToken = nextLayerStateToken(priorState);
+assert.match(qaToken, /^[0-9a-z]{2}$/);
+assert.equal(productionTokens.has(qaToken), false);
 assert.equal(
   validateLayerStateAllocations(
     LAYER_STATE_TOKEN_RESERVATIONS,
     parseLayerStateTokenReservations([
       ...reservations,
       ...priorDigitRows,
-      [fixtureId, '00'],
+      [fixtureId, qaToken],
     ]),
   ),
   true,
 );
 console.log(
-  'PASS: isolated fixture exhausts prior digits before allocating 00',
+  `PASS: isolated fixture exhausts prior digits before allocating ${qaToken}`,
 );
 for (const source of [
   '../src/data/layerState.js',
@@ -79,7 +78,7 @@ function replaceOnce(source, from, to, label) {
 }
 
 function injectCodec(source) {
-  const fixtureRows = JSON.stringify([...priorDigitRows, [fixtureId, '00']]);
+  const fixtureRows = JSON.stringify([...priorDigitRows, [fixtureId, qaToken]]);
   let result = replaceOnce(
     source,
     'parseLayerStateTokenReservations(reservationRows)',
@@ -89,7 +88,7 @@ function injectCodec(source) {
   result = replaceOnce(
     result,
     ']);\n\nexport const REGISTERED_LAYER_IDS',
-    `  Object.freeze({ id: '${fixtureId}', token: '00', disposition: 'enabled-only' }),\n]);\n\nexport const REGISTERED_LAYER_IDS`,
+    `  Object.freeze({ id: '${fixtureId}', token: '${qaToken}', disposition: 'enabled-only' }),\n]);\n\nexport const REGISTERED_LAYER_IDS`,
     'registry',
   );
   injections.codec += 1;
@@ -218,15 +217,18 @@ try {
   );
   assert.equal(toggled, true, 'synthetic layer enables through manager');
   await sender.page.waitForFunction(
-    () => new URLSearchParams(location.hash.slice(1)).get('l') === '00',
+    (token) => new URLSearchParams(location.hash.slice(1)).get('l') === token,
     { timeout: 15_000 },
+    qaToken,
   );
   const sharedUrl = sender.page.url();
   const authored = new URLSearchParams(new URL(sharedUrl).hash.slice(1));
   assert.equal(authored.get('v'), '2');
-  assert.equal(authored.get('l'), '00');
+  assert.equal(authored.get('l'), qaToken);
   assert.ok(authored.has('lat') && authored.has('lon'));
-  console.log('PASS: real user-origin enable encoded 00 in a full share URL');
+  console.log(
+    `PASS: real user-origin enable encoded ${qaToken} in a full share URL`,
+  );
 
   const recipient = await newPage();
   contexts.push(recipient.context);
@@ -247,7 +249,7 @@ try {
     'share coordinator restored the synthetic layer',
   );
   console.log(
-    'PASS: cold recipient reload restored the 00 layer without writing local preferences',
+    `PASS: cold recipient reload restored the ${qaToken} layer without writing local preferences`,
   );
 
   await recipient.page.reload({
@@ -262,8 +264,10 @@ try {
   const reloaded = await waitForRestore(recipient.page);
   assert.equal(reloaded.enabled, true);
   assert.equal(reloaded.localStorage, null);
-  assert.equal(new URLSearchParams(reloaded.hash.slice(1)).get('l'), '00');
-  console.log('PASS: a full recipient reload restores the same 00 layer state');
+  assert.equal(new URLSearchParams(reloaded.hash.slice(1)).get('l'), qaToken);
+  console.log(
+    `PASS: a full recipient reload restores the same ${qaToken} layer state`,
+  );
 
   const disabled = await recipient.page.evaluate(
     (id) =>
@@ -278,7 +282,9 @@ try {
     { timeout: 15_000 },
   );
   assert.equal((await loadedState(recipient.page)).enabled, false);
-  console.log('PASS: explicit OFF removes 00 from the authored share URL');
+  console.log(
+    `PASS: explicit OFF removes ${qaToken} from the authored share URL`,
+  );
 
   const legacy = await newPage();
   contexts.push(legacy.context);
@@ -291,7 +297,7 @@ try {
 
   const mixed = await newPage();
   contexts.push(mixed.context);
-  await load(mixed.page, withLayers(sharedUrl, 'f.00'));
+  await load(mixed.page, withLayers(sharedUrl, `f.${qaToken}`));
   const mixedState = await waitForRestore(mixed.page);
   assert.equal(mixedState.flights, true);
   assert.equal(mixedState.enabled, true);
@@ -299,7 +305,7 @@ try {
 
   const malformed = await newPage();
   contexts.push(malformed.context);
-  await load(malformed.page, withLayers(sharedUrl, 'f..00'));
+  await load(malformed.page, withLayers(sharedUrl, `f..${qaToken}`));
   const malformedState = await waitForRestore(malformed.page);
   assert.equal(malformedState.flights, false);
   assert.equal(malformedState.enabled, false);
@@ -312,7 +318,7 @@ try {
   contexts.push(repeated.context);
   const repeatedUrl = new URL(withLayers(sharedUrl, 'f'));
   const repeatedParams = new URLSearchParams(repeatedUrl.hash.slice(1));
-  repeatedParams.append('l', '00');
+  repeatedParams.append('l', qaToken);
   repeatedUrl.hash = repeatedParams.toString();
   await load(repeated.page, repeatedUrl.href);
   const repeatedState = await waitForRestore(repeated.page);
@@ -328,7 +334,7 @@ try {
     'PASS: QA-only codec and catalog injections reached every isolated session',
   );
   console.log(
-    'Synthetic end-to-end evidence only; production 00 allocation remains pending.',
+    `Synthetic end-to-end evidence only; production ${qaToken} allocation remains pending.`,
   );
   console.log('RESULT: 10 passed, 0 failed, 0 skipped');
 } finally {

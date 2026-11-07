@@ -30,6 +30,8 @@ import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { ghostMapsProxy } from './ghostMaps.js';
 import { airAccidentsProxy } from './airAccidents.js';
 import { droneAirspaceProxy } from './droneAirspace.js';
+import { inaturalistProxy } from './inaturalist/observations.js';
+import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 
@@ -83,6 +85,8 @@ function localProviderPlugins({
     ghostMapsProxy(),
     airAccidentsProxy(),
     droneAirspaceProxy(),
+    inaturalistProxy(),
+    acartiaProxy(),
     keySetupEndpoint(),
   ];
 }

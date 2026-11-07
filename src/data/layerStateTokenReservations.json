@@ -1,5 +1,5 @@
 [
-  ["air-accidents", "9"],
+  ["air-accidents", "00"],
   ["air-quality", "4"],
   ["ais-live-vessels", "a"],
   ["alpr-cameras", "p"],
@@ -34,5 +34,6 @@
   ["weather-lightning", "l"],
   ["weather-radar", "v"],
   ["weather-satellite", "o"],
+  ["wildlife-sightings", "9"],
   ["wind", "k"]
 ]

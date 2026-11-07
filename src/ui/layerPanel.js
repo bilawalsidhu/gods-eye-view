@@ -77,9 +77,13 @@ const PANEL_GROUPS = [
       'local-firms',
       'fire-perimeters',
       'gnss-integrity',
-      's2-ghostmaps',
       'air-accidents',
+      's2-ghostmaps',
     ],
+  },
+  {
+    label: msg('Wildlife'),
+    ids: ['wildlife-sightings'],
   },
   {
     label: msg('Weather'),
