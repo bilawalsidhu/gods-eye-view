@@ -12,9 +12,16 @@ import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
-import * as Cesium from 'cesium';
-import { cameraOf } from '../render/cesium/camera.js';
-import { distance as chordM, toLonLatH } from '../geo/index.js';
+import {
+  distance as chordM,
+  fromRadians,
+  toCartographicRadians,
+  toDegrees,
+  toLonLatH,
+  toRadians,
+} from '../geo/index.js';
+import { sphereFromPoints } from '../geo/sphere.js';
+import { cameraOf, findCamera, findQuery } from '../render/rendererOf.js';
 import { CITY_POIS } from '../cityPois.js';
 import { greatCircleKm } from '../geoDistance.js';
 import {
@@ -2619,7 +2626,8 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
       ? 120
       : 150;
   const radiusKm = clampNumber(args.radiusKm, 10, 20000, defaultRadiusKm);
-  const center = getViewTargetCartesian(viewer) || viewer.camera.positionWC;
+  const center =
+    getViewTargetCartesian(viewer) || cameraOf(viewer).pose().position;
 
   let entries = [];
   if (typeof module.getNearby === 'function') {
@@ -2646,11 +2654,9 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
     };
   }
 
-  const sphere = Cesium.BoundingSphere.fromPoints(
-    entries.map((entry) => entry.position),
-  );
+  const sphere = sphereFromPoints(entries.map((entry) => entry.position));
   sphere.radius = Math.max(sphere.radius * 1.25, 8000);
-  const pitch = Cesium.Math.toRadians(isSatellites ? -35 : -62);
+  const pitch = toRadians(isSatellites ? -35 : -62);
   return runManagedVoiceNavigation(
     styleManager,
     'frame',
@@ -2737,10 +2743,11 @@ function runManagedVoiceNavigation(
 export async function getBasemapLabelContext(
   viewer,
   service = defaultGeospatial,
-  { cachedOnly = false, previous = null } = {},
+  { cachedOnly = false, previous = null, camera = cameraOf(viewer) } = {},
 ) {
-  const cameraHeightM = viewer.camera.positionCartographic.height;
-  const target = getViewTargetCartographic(viewer);
+  const pose = camera.pose();
+  const cameraHeightM = pose.height;
+  const target = getViewTargetCartographic(viewer, camera);
   if (!target) {
     return {
       placeLabels: [],
@@ -2751,14 +2758,14 @@ export async function getBasemapLabelContext(
     };
   }
 
-  const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
-  const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
+  const latitude = Number(toDegrees(target.latitude).toFixed(6));
+  const longitude = Number(toDegrees(target.longitude).toFixed(6));
   const view = placeLookupView({
     latitude,
     longitude,
-    rangeM: viewTargetRangeM(viewer, target, cameraHeightM),
-    fovRad: viewer.camera.frustum?.fov,
-    aspectRatio: viewer.camera.frustum?.aspectRatio,
+    rangeM: viewTargetRangeM(pose, target, cameraHeightM),
+    fovRad: widerFov(pose),
+    aspectRatio: pose.aspectRatio,
     tier: basemapLookupTier(cameraHeightM),
   });
   if (
@@ -2800,13 +2807,24 @@ function basemapLookupTier(cameraHeightM) {
   ].join(':');
 }
 
+/**
+ * The wider of the view's two angles of view, radians: the horizontal one
+ * when the view is wider than tall, else the vertical one.
+ */
+function widerFov({ fovy, aspectRatio }) {
+  if (!Number.isFinite(fovy) || !Number.isFinite(aspectRatio)) return undefined;
+  return aspectRatio > 1
+    ? 2 * Math.atan(Math.tan(fovy / 2) * aspectRatio)
+    : fovy;
+}
+
 /** Camera distance to the view target, or the camera height without one. */
-function viewTargetRangeM(viewer, target, cameraHeightM) {
-  const position = viewer.camera.positionWC;
+function viewTargetRangeM(pose, target, cameraHeightM) {
+  const position = pose.position;
   if (!position) return cameraHeightM;
-  const range = Cesium.Cartesian3.distance(
+  const range = chordM(
     position,
-    Cesium.Cartographic.toCartesian(target),
+    fromRadians(target.longitude, target.latitude, target.height),
   );
   return Number.isFinite(range) ? range : cameraHeightM;
 }
@@ -2881,10 +2899,12 @@ const prewarmedViewers = new WeakSet();
 
 function installViewTargetPrewarm(viewer) {
   if (prewarmedViewers.has(viewer)) return;
+  const camera = findCamera(viewer);
+  if (!camera) return;
   prewarmedViewers.add(viewer);
   let timer = null;
   let reportedPrewarmFailure = false;
-  viewer.camera.moveEnd.addEventListener(() => {
+  camera.on('moveEnd', () => {
     if (timer) window.clearTimeout(timer);
     timer = window.setTimeout(() => {
       timer = null;
@@ -3003,10 +3023,12 @@ function nextIssPass(viewer, dataManager, args) {
   let latDeg = Number.isFinite(args.latitude) ? args.latitude : null;
   let lonDeg = Number.isFinite(args.longitude) ? args.longitude : null;
   if (latDeg == null || lonDeg == null) {
-    const carto = viewer?.camera?.positionCartographic;
-    if (!carto) throw new Error('Camera position unavailable');
-    latDeg = Cesium.Math.toDegrees(carto.latitude);
-    lonDeg = Cesium.Math.toDegrees(carto.longitude);
+    const pose = findCamera(viewer)?.pose();
+    if (!Number.isFinite(pose?.lat) || !Number.isFinite(pose?.lon)) {
+      throw new Error('Camera position unavailable');
+    }
+    latDeg = pose.lat;
+    lonDeg = pose.lon;
   }
   const minElevDeg = Number.isFinite(args.minElevationDeg)
     ? args.minElevationDeg
@@ -3464,7 +3486,7 @@ async function getEntityContext(
   const layerId = normalizeLayerId(args.layerId || args.layer);
   const limit = Math.round(clampNumber(args.limit, 1, 12, 5));
   const selected = selectedEntityContext(dataManager);
-  const cameraHeightM = viewer.camera.positionCartographic.height;
+  const cameraHeightM = cameraOf(viewer).pose().height;
   const viewTarget = getViewTargetCartographic(viewer);
   const scenePromise = getSceneContext(
     viewer,
@@ -3634,7 +3656,7 @@ async function getTargetContext(
   }
   const hasPosition = Number.isFinite(lat) && Number.isFinite(lon);
   const viewTarget = hasPosition
-    ? Cesium.Cartographic.fromDegrees(lon, lat)
+    ? { longitude: toRadians(lon), latitude: toRadians(lat), height: 0 }
     : getViewTargetCartographic(viewer);
   const selected = describeTargetEntity(dataManager, target);
   const scene = await getSceneContext(
@@ -3653,7 +3675,7 @@ async function getTargetContext(
       selected,
     };
   }
-  const cameraHeightM = viewer.camera.positionCartographic.height;
+  const cameraHeightM = cameraOf(viewer).pose().height;
   const visible = shouldScanVisibleEntities(cameraHeightM)
     ? visibleEntityContexts(viewer, dataManager, {
         layerId: normalizeLayerId(args.layerId || args.layer),
@@ -3914,7 +3936,8 @@ const SUBJECT_CENTER_TOLERANCE_KM = 1;
  * ~1.5 km away — far enough to be a different place, close enough to slip
  * through and get answered as the subject's window.
  * @param {{lat: number, lon: number}} center Requested centre.
- * @param {Cesium.Cartesian3} subjectPosition Subject's world position.
+ * @param {{x: number, y: number, z: number}} subjectPosition Subject's
+ *   world position, ECEF.
  * @returns {boolean} True when the two are the same place.
  */
 function centerMatchesSubject(center, subjectPosition) {
@@ -3953,8 +3976,8 @@ function visibleEntityContexts(
   const height = canvas.clientHeight || canvas.height || 0;
   const centerX = width / 2;
   const centerY = height / 2;
-  const targetLat = target ? Cesium.Math.toDegrees(target.latitude) : null;
-  const targetLon = target ? Cesium.Math.toDegrees(target.longitude) : null;
+  const targetLat = target ? toDegrees(target.latitude) : null;
+  const targetLon = target ? toDegrees(target.longitude) : null;
   const store = getContextStore();
   const enabledLayerIds = new Set(
     dataManager
@@ -3966,8 +3989,8 @@ function visibleEntityContexts(
   for (const record of store.entities.values()) {
     if (layerId && record.layerId !== layerId) continue;
     if (record.layerId && !enabledLayerIds.has(record.layerId)) continue;
-    if (record.entity?.show === false || record.dataSource?.show === false)
-      continue;
+    // Hidden from the map (its carrier or its source not shown).
+    if (!isContextRecordActive(record)) continue;
     if (!Number.isFinite(record.latitude) || !Number.isFinite(record.longitude))
       continue;
     insertNearestRecord(
@@ -3988,13 +4011,11 @@ function visibleEntityContexts(
   }
 
   const candidates = [];
+  const query = findQuery(viewer);
   for (const { record } of nearbyRecords) {
     const position = record.targetPosition;
-    if (!position) continue;
-    const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-      viewer.scene,
-      position,
-    );
+    if (!position || !query) continue;
+    const screen = query.project(position);
     if (
       !screen ||
       screen.x < 0 ||
@@ -4045,9 +4066,7 @@ async function getSceneContext(
   viewTarget = null,
   service = defaultGeospatial,
 ) {
-  const cartographic = Cesium.Cartographic.fromCartesian(
-    viewer.camera.positionWC,
-  );
+  const cartographic = cameraOf(viewer).pose();
   const basemap = await getBasemapContext(viewer, viewTarget, service);
   const enabledLayers = dataManager
     .getAll()
@@ -4060,10 +4079,8 @@ async function getSceneContext(
     }));
   return {
     camera: {
-      latitude: Number(Cesium.Math.toDegrees(cartographic.latitude).toFixed(6)),
-      longitude: Number(
-        Cesium.Math.toDegrees(cartographic.longitude).toFixed(6),
-      ),
+      latitude: Number(cartographic.lat.toFixed(6)),
+      longitude: Number(cartographic.lon.toFixed(6)),
       heightM: Math.round(cartographic.height),
     },
     basemap,
@@ -4080,10 +4097,7 @@ async function getBasemapContext(
   const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const target = viewTarget;
   const samples = sampleViewportCartographics(viewer);
-  const cameraCartographic = Cesium.Cartographic.fromCartesian(
-    viewer.camera.positionWC,
-  );
-  const cameraHeightM = cameraCartographic.height;
+  const cameraHeightM = cameraOf(viewer).pose().height;
   const viewScale = classifyViewScale(cameraHeightM);
   const cachedViewportPlaces = viewportPlacesFromCache(
     samples,
@@ -4110,8 +4124,8 @@ async function getBasemapContext(
     };
   }
 
-  const latitude = Number(Cesium.Math.toDegrees(target.latitude).toFixed(6));
-  const longitude = Number(Cesium.Math.toDegrees(target.longitude).toFixed(6));
+  const latitude = Number(toDegrees(target.latitude).toFixed(6));
+  const longitude = Number(toDegrees(target.longitude).toFixed(6));
   const inferredCountry = inferCountryFromSamples(samples);
   const knownLandmarks = nearbyKnownLandmarks(
     latitude,
@@ -4262,8 +4276,8 @@ function coarseBasemapPlace(
   };
 }
 
-function getViewTargetCartographic(viewer) {
-  const signature = cameraViewSignature(viewer);
+function getViewTargetCartographic(viewer, camera = cameraOf(viewer)) {
+  const signature = cameraViewSignature(camera);
   const cached = viewTargetCache.get(viewer);
   if (
     cached?.signature === signature &&
@@ -4272,11 +4286,11 @@ function getViewTargetCartographic(viewer) {
     return cached.target;
   }
   const position = getViewTargetCartesian(viewer);
-  // `fromCartesian` still returns undefined for a point too near the ellipsoid
-  // center to project; normalize that to the same "no target" null the callers
-  // already handle for a missed pick.
-  const target = position
-    ? Cesium.Cartographic.fromCartesian(position) || null
+  // A point too near the ellipsoid center has no geodetic position: the same
+  // "no target" null the callers already handle for a missed pick.
+  const carto = position ? toCartographicRadians(position) : null;
+  const target = carto
+    ? { longitude: carto.lon, latitude: carto.lat, height: carto.height }
     : null;
   viewTargetCache.set(viewer, {
     signature,
@@ -4286,15 +4300,14 @@ function getViewTargetCartographic(viewer) {
   return target;
 }
 
-function cameraViewSignature(viewer) {
-  const camera = viewer.camera;
-  const cartographic = camera.positionCartographic;
+function cameraViewSignature(camera) {
+  const pose = camera.pose();
   return [
-    Cesium.Math.toDegrees(cartographic.latitude).toFixed(5),
-    Cesium.Math.toDegrees(cartographic.longitude).toFixed(5),
-    Math.round(cartographic.height / 2),
-    camera.heading.toFixed(3),
-    camera.pitch.toFixed(3),
+    pose.lat.toFixed(5),
+    pose.lon.toFixed(5),
+    Math.round(pose.height / 2),
+    pose.heading.toFixed(3),
+    pose.pitch.toFixed(3),
   ].join(':');
 }
 
@@ -4302,46 +4315,38 @@ function cameraViewSignature(viewer) {
  * World position under the center of the viewport, or null when the view has no
  * target. Each stage of the cascade is validated before it is accepted: a depth
  * pick over empty sky can return a NaN or center-of-the-earth Cartesian, and
- * converting one of those throws deep inside Cesium. A degenerate pick is a
+ * converting one of those throws deep inside the maths. A degenerate pick is a
  * MISSED pick, so it falls through to the next stage rather than poisoning
  * every caller downstream.
  */
 function getViewTargetCartesian(viewer) {
-  const scene = viewer.scene;
-  const canvas = scene.canvas;
+  const query = findQuery(viewer);
+  if (!query) return null;
+  const canvas = viewer.scene.canvas;
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
-  const center = new Cesium.Cartesian2(width / 2, height / 2);
+  const x = width / 2;
+  const y = height / 2;
   let position = null;
 
-  if (scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
+  // Depth under the pointer, where the renderer can read it.
+  try {
+    position = query.pickPosition(x, y);
+  } catch {
+    position = null;
+  }
+
+  if (!isPickedWorldPosition(position)) {
     try {
-      position = scene.pickPosition(center);
+      position = query.pickEllipsoid(x, y);
     } catch {
       position = null;
     }
   }
 
-  if (
-    !isPickedWorldPosition(position) &&
-    viewer.camera &&
-    typeof viewer.camera.pickEllipsoid === 'function'
-  ) {
+  if (!isPickedWorldPosition(position)) {
     try {
-      position = viewer.camera.pickEllipsoid(center, Cesium.Ellipsoid.WGS84);
-    } catch {
-      position = null;
-    }
-  }
-
-  if (
-    !isPickedWorldPosition(position) &&
-    viewer.camera &&
-    typeof viewer.camera.getPickRay === 'function'
-  ) {
-    try {
-      const ray = viewer.camera.getPickRay(center);
-      position = scene.globe?.pick(ray, scene) || null;
+      position = query.pickGlobe(query.pickRay(x, y));
     } catch {
       position = null;
     }
@@ -4367,12 +4372,11 @@ function sampleViewportCartographics(viewer) {
     [0.5, 0.75],
   ];
 
+  const query = findQuery(viewer);
+  if (!query) return [];
   const samples = [];
   for (const [x, y] of points) {
-    const cartesian = viewer.camera.pickEllipsoid(
-      new Cesium.Cartesian2(width * x, height * y),
-      Cesium.Ellipsoid.WGS84,
-    );
+    const cartesian = query.pickEllipsoid(width * x, height * y);
     if (!isPickedWorldPosition(cartesian)) continue;
     const at = toLonLatH(cartesian);
     if (!at) continue;
@@ -4646,8 +4650,7 @@ async function resolveWithin(promise, timeoutMs, fallback) {
 
 function approximateCoordinateDistanceSq(latA, lonA, latB, lonB) {
   const latDelta = latB - latA;
-  const lonDelta =
-    (lonB - lonA) * Math.cos(Cesium.Math.toRadians((latA + latB) / 2));
+  const lonDelta = (lonB - lonA) * Math.cos(toRadians((latA + latB) / 2));
   return latDelta * latDelta + lonDelta * lonDelta;
 }
 
@@ -4856,14 +4859,14 @@ function analystProviders(
       };
     },
     getViewContext() {
-      const carto = viewer.camera.positionCartographic;
-      const altKm = carto.height / 1000;
+      const pose = cameraOf(viewer).pose();
+      const altKm = pose.height / 1000;
       // View radius scales with altitude: street-level asks stay local,
       // country-level asks sweep wide. Clamped so "in view" is never absurd.
       const viewRadiusKm = Math.max(25, Math.min(2500, altKm * 1.6));
       return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
+        lat: pose.lat,
+        lon: pose.lon,
         viewRadiusKm,
       };
     },

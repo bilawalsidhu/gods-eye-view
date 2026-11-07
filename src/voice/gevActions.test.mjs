@@ -26,6 +26,7 @@ import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult } from './speech.js';
 import { withEntityRecord } from '../data/entityRecords.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from '../testSupport/fakeCesiumScene.mjs';
 import { cameraOf } from '../render/rendererOf.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
@@ -2668,6 +2669,7 @@ function createPrewarmHarness({ pickPosition, positionCartographic } = {}) {
       },
     },
   };
+  bindFakeCesiumCamera(viewer, { query: fakeSceneQuery(viewer) });
   return { viewer, calls, fireMoveEnd: () => moveEndListener?.(), hasListener: () => !!moveEndListener };
 }
 

@@ -11,7 +11,9 @@
  *   `computeViewRectangle()`, in degrees; events from its own `moveEnd`,
  *   `moveStart` and `changed`.
  * - query: `sampleHeightNow` through the scene's height service;
- *   `pickEllipsoid` through the double camera's, when it has one; `project`
+ *   `pickPosition` through the scene's, where `pickPositionSupported`;
+ *   `pickRay` and `pickEllipsoid` through the double camera's, when it has
+ *   them; `pickGlobe` through the scene's globe; `project`
  *   (and `projectMany`) through `Cesium.SceneTransforms.worldToWindowCoordinates`
  *   (which a test may stub), `isOccluded` against the ellipsoid's horizon
  *   from the camera's `positionWC` (never occluded without one).
@@ -54,6 +56,32 @@ export function fakeSceneQuery(viewer) {
         position,
       );
       return s ? { x: s.x, y: s.y } : null;
+    },
+    /** The scene's depth pick, where the double says it has one. */
+    pickPosition(x, y) {
+      const scene = viewer.scene;
+      if (
+        !scene?.pickPositionSupported ||
+        typeof scene.pickPosition !== 'function'
+      )
+        return null;
+      const hit = scene.pickPosition(new Cesium.Cartesian2(x, y));
+      return hit ? plain(hit) : null;
+    },
+    /** The double camera's own pick ray. */
+    pickRay(x, y) {
+      const ray = cameraOfDouble(viewer).getPickRay(
+        new Cesium.Cartesian2(x, y),
+      );
+      return { origin: plain(ray.origin), direction: plain(ray.direction) };
+    },
+    /** The double globe's own pick, when it has one. */
+    pickGlobe(ray) {
+      const hit = viewer.scene?.globe?.pick?.(
+        new Cesium.Ray(toCartesian(ray.origin), toCartesian(ray.direction)),
+        viewer.scene,
+      );
+      return hit ? plain(hit) : null;
     },
     /** The double camera's own, when it has one. */
     get pickEllipsoid() {

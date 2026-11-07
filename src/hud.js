@@ -1031,6 +1031,7 @@ export class IntelHUD {
     const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, {
       ...this.basemapContext,
       previous: this._placeLabels,
+      camera: this._camera,
     });
     // A slower build for a view the camera has left must not replace the
     // newer view's lookup.
