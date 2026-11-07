@@ -190,6 +190,8 @@ test('consumer build includes only infrastructure code and resolves assets under
     'cameraInput.js',
     'celestial.js',
     'common.js',
+    'creditMarkup.js',
+    'credits.js',
     'ctrlWheelZoom.js',
     'dispatcher.js',
     'events.js',
