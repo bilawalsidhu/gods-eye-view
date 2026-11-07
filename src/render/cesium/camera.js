@@ -91,7 +91,10 @@ export function createCesiumCamera({ scene, camera, report, widget }) {
     report,
   });
   removers.push(
-    scene.postUpdate.addEventListener(() => cameraEvents.stepChanged()),
+    scene.postUpdate.addEventListener(() => {
+      applyFov();
+      cameraEvents.stepChanged();
+    }),
     camera.moveStart.addEventListener(() => cameraEvents.emit('moveStart')),
     camera.moveEnd.addEventListener(() => cameraEvents.emit('moveEnd')),
   );
@@ -174,6 +177,23 @@ export function createCesiumCamera({ scene, camera, report, widget }) {
     if (!ended && !cameraFlightActive(camera)) end('cancelled');
     scene.requestRender();
     return handle;
+  }
+
+  /**
+   * The vertical field of view `setFov` asked for, held across resizes:
+   * Cesium's `fov` is the wider of the two angles (the horizontal one when
+   * the view is wider than tall), and it keeps that one when the aspect
+   * changes. Before the first resize, and on a frustum without a field of
+   * view, it waits.
+   */
+  let heldFovy = null;
+  function applyFov() {
+    const frustum = camera.frustum;
+    const aspect = frustum?.aspectRatio;
+    if (heldFovy === null || !('fov' in frustum) || !(aspect > 0)) return;
+    const fov =
+      aspect > 1 ? 2 * Math.atan(Math.tan(heldFovy / 2) * aspect) : heldFovy;
+    if (frustum.fov !== fov) frustum.fov = fov;
   }
 
   const cameraPort = {
@@ -287,6 +307,24 @@ export function createCesiumCamera({ scene, camera, report, widget }) {
       if (metres < 0) camera.zoomOut(-metres);
       else camera.zoomIn(metres);
       scene.requestRender();
+    },
+    setFov({ vertical }) {
+      // Cesium would take a bad angle and draw a garbage projection.
+      if (!(vertical > 0 && vertical < Math.PI))
+        throw new RangeError(`no vertical field of view of ${vertical}`);
+      heldFovy = vertical;
+      applyFov();
+      scene.requestRender();
+    },
+    // The scene's own frame: ECEF in 3D, the only mode Core runs (Cesium's
+    // 2D and Columbus view frames are projected map coordinates).
+    matrices() {
+      return {
+        view: Float64Array.from(Cesium.Matrix4.toArray(camera.viewMatrix)),
+        projection: Float64Array.from(
+          Cesium.Matrix4.toArray(camera.frustum.projectionMatrix),
+        ),
+      };
     },
     viewRectangle() {
       const rect = camera.computeViewRectangle(Cesium.Ellipsoid.WGS84);

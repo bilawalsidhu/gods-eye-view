@@ -27,6 +27,8 @@ export const CESIUM_CHECKS = new Set([
   'camera.trace.flyTo with a duration of 0 completes inside the call',
   'camera.trace.flyTo where the camera already is completes inside the call',
   'camera.viewRectangle',
+  'camera.fov',
+  'camera.trace.view and projection matrices',
   'draw.drillPick',
   'draw.ids',
   'draw.models',

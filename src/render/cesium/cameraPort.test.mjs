@@ -25,7 +25,7 @@ const QUERY_RECORDS = new Set([
   'occluded',
 ]);
 /** Commands and records the port does not have yet. */
-const MISSING = new Set(['matrices']);
+const MISSING = new Set([]);
 
 const runnable = CAMERA_SCRIPTS.filter((script) =>
   script.steps.every(
@@ -231,4 +231,22 @@ test('a Cesium viewer with no renderer bound gets a camera port over its own cam
     assert.ok(Math.abs(pose.height - 1500) < 1e-6);
     assert.throws(() => cameraOf({ scene, camera: {} }), /no renderer camera/);
   });
+});
+
+test('setFov holds the vertical angle across resizes, and waits for a first one', () => {
+  const { scene, camera } = headlessCamera();
+  scene.postUpdate = new Cesium.Event();
+  scene.requestRender = () => {};
+  camera.frustum.aspectRatio = NaN;
+  const { port } = createCesiumCamera({ scene, camera, report: () => {} });
+  port.setFov({ vertical: 0.5 });
+  for (const aspect of [16 / 9, 0.6, 4 / 3]) {
+    camera.frustum.aspectRatio = aspect;
+    scene.postUpdate.raiseEvent(scene);
+    assert.ok(Math.abs(camera.frustum.fovy - 0.5) < 1e-12, `aspect ${aspect}`);
+  }
+  camera.switchToOrthographicFrustum();
+  assert.doesNotThrow(() => port.setFov({ vertical: 0.4 }));
+  assert.throws(() => port.setFov({ vertical: Math.PI }), RangeError);
+  assert.throws(() => port.setFov({ vertical: NaN }), RangeError);
 });

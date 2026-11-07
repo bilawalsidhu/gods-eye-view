@@ -333,8 +333,6 @@ const EXPECTED_MISSING = [
   'camera.controls.suspend',
   'camera.controls.zoomFactor',
   'camera.controls.zoomInputs',
-  'camera.matrices',
-  'camera.setFov',
   'draw.atlas',
   'draw.clampState',
   'draw.on',
