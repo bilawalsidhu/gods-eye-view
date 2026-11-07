@@ -1,5 +1,4 @@
 import * as geo from '../geo/index.js';
-import { isGlobeEngine } from '../globe/contract.js';
 import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
 export { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
 import {
@@ -2727,7 +2726,8 @@ function createDevFacade() {
  * @param {import('../globe/contract.js').GlobeEngine} engine
  */
 export function initWorldOverlay(engine) {
-  if (!isGlobeEngine(engine))
+  // What the host reads of the engine: a Cesium viewer has none of it.
+  if (!engine?.projector || !engine.frames?.postRender || !engine.host)
     throw new TypeError('initWorldOverlay requires a globe engine');
   if (_engine === engine && _canvas && _removePostRender) return;
   if (_engine) destroyWorldOverlay();

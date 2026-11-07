@@ -6,6 +6,16 @@ import {
   globeOutOfFrame,
 } from '../globeInView.js';
 
+// Dev convenience: expose the app's Cesium instance for console/preview probing
+// (single shared module instance — avoids dual-Cesium state bugs when testing).
+// A getter, because the production build's Cesium global loads only with the
+// first Cesium globe.
+if (typeof window !== 'undefined' && !('__CESIUM__' in window))
+  Object.defineProperty(window, '__CESIUM__', {
+    configurable: true,
+    get: () => Cesium,
+  });
+
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
 

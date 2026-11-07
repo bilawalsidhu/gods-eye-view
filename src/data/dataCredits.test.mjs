@@ -56,17 +56,25 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
   );
 });
 
+// A Cesium engine's credits over a viewer double's credit display.
+async function cesiumCreditsEngine(viewer) {
+  const { createCesiumCredits } = await import('../globe/cesium/credits.js');
+  return {
+    credits: createCesiumCredits(viewer).credits,
+    render: { request() {} },
+  };
+}
+
 test('inline OSM attribution persists until its last display owner leaves', async (t) => {
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const visible = new Set();
-  const viewer = {
+  const viewer = await cesiumCreditsEngine({
     creditDisplay: {
       addStaticCredit: (c) => visible.add(c),
       removeStaticCredit: (c) => visible.delete(c),
     },
-    scene: { requestRender() {} },
-  };
+  });
   assert.equal(showOsmCredit(viewer, 'alpr'), true);
   assert.equal(showOsmCredit(viewer, 'alpr'), false);
   assert.equal(visible.size, 1);
@@ -96,29 +104,31 @@ test('inline OSM attribution persists until its last display owner leaves', asyn
   assert.equal(visible.size, 1, 'reenabling restores the short credit');
 });
 
-test('tile attribution follows source changes and viewers have independent ownership', async () => {
+test('tile attribution follows source changes and engines have independent ownership', async () => {
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
-  const create = () => {
+  const create = async () => {
     const credits = new Set();
     return {
-      credits,
-      creditDisplay: {
-        addStaticCredit: (c) => credits.add(c),
-        removeStaticCredit: (c) => credits.delete(c),
-      },
+      shown: credits,
+      ...(await cesiumCreditsEngine({
+        creditDisplay: {
+          addStaticCredit: (c) => credits.add(c),
+          removeStaticCredit: (c) => credits.delete(c),
+        },
+      })),
     };
   };
-  const a = create(),
-    b = create();
+  const a = await create(),
+    b = await create();
   showOsmCredit(a, 'installations', { openMapTiles: true });
   showOsmCredit(b, 'installations');
-  assert.equal(a.credits.size, 2);
-  assert.equal(b.credits.size, 1);
+  assert.equal(a.shown.size, 2);
+  assert.equal(b.shown.size, 1);
   showOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 1, 'wide names no longer use tiles');
+  assert.equal(a.shown.size, 1, 'wide names no longer use tiles');
   hideOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 0);
-  assert.equal(b.credits.size, 1);
+  assert.equal(a.shown.size, 0);
+  assert.equal(b.shown.size, 1);
 });
 
 test('data credits go through the globe engine credits', async () => {

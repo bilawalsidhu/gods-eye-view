@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { nextTick } from 'vue';
 import { isPointerFree } from '../data/inputOwnership.js';
 import { createInteractionSession } from '../director/interactions/session.js';
@@ -9,21 +8,19 @@ import { applicationPinia } from '../ui/vueRuntime.js';
 /**
  * Own the active shot's pick handler, accessible actions and plain-text
  * feedback. The Scene actions panel is presented to the scene interactions
- * store, which its view renders inside the viewer's container.
+ * store, which its view renders inside the globe engine's container. A
+ * feature is picked through engine.input (a click with its pick).
  */
 // Keys each activation's panel, so a new one never reuses an old one's DOM.
 let activations = 0;
 
-export function createSceneInteractions(
-  viewer,
-  {
-    execute,
-    engine = null,
-    available = () => true,
-    store = useSceneInteractionsStore(applicationPinia()),
-  },
-) {
-  let container = engine?.host?.container ?? viewer?.container;
+export function createSceneInteractions({
+  execute,
+  engine = null,
+  available = () => true,
+  store = useSceneInteractionsStore(applicationPinia()),
+}) {
+  let container = engine?.host?.container;
   let panel = null,
     handler,
     items = [],
@@ -79,7 +76,7 @@ export function createSceneInteractions(
     return ok;
   }
   function bindInput(owner) {
-    if (!engine && !viewer) return;
+    if (!engine) return;
     const click = (event) => {
       if (
         panel?.owner !== owner ||
@@ -88,9 +85,7 @@ export function createSceneInteractions(
         !available()
       )
         return;
-      const picked = engine
-        ? event.picked?.id
-        : viewer.scene.pick(event.position)?.id;
+      const picked = event.picked?.id;
       const matches = items.filter(
         (item) =>
           targets.get(
@@ -108,32 +103,26 @@ export function createSceneInteractions(
       void nextTick(() => {
         if (panel?.owner !== owner || !shown()) return;
         const id = globalThis.CSS?.escape?.(matches[0].id) ?? matches[0].id;
-        (engine?.host.container ?? viewer?.container)
+        engine?.host.container
           ?.querySelector?.(
             `[data-director-interactions] [data-director-action="${id}"]`,
           )
           ?.focus({ preventScroll: true });
       });
     };
-    if (engine) {
-      handler = { destroy: engine.input.on('click', click, { pick: true }) };
-    } else {
-      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      handler.setInputAction(click, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    }
+    handler = { destroy: engine.input.on('click', click, { pick: true }) };
   }
   return {
     clear,
     destroy: clear,
     getState: session.getState,
-    setScene(nextViewer, nextEngine, registered) {
+    setScene(nextEngine, registered) {
       handler?.destroy();
       handler = null;
-      viewer = nextViewer;
       engine = nextEngine;
       if (registered) targets = registered;
-      if (!panel || (!engine && !viewer)) return;
-      container = engine?.host?.container ?? viewer?.container ?? container;
+      if (!panel || !engine) return;
+      container = engine.host?.container ?? container;
       update({ container });
       bindInput(panel.owner);
     },

@@ -1,13 +1,12 @@
 // An engine-contract view shared by layer renderers and the celestial HUD:
 // `camera` camera-shaped and `scene`
 // scene-shaped adapters over engine.camera.pose() (refreshed once per frame,
-// and whenever the camera moved), with the engine registered for the scene
-// (engineFromViewer) so the shared helpers (iconOrientation, focus) project
-// through its projector; the frame number, frustum and horizon tests, the
-// window projection and the frame/camera events. No three, no Cesium.
+// and whenever the camera moved), the scene carrying the engine's projector
+// so the shared helpers (iconOrientation, focus) project through it; the
+// frame number, frustum and horizon tests, the window projection and the
+// frame/camera events. No three, no Cesium.
 
 import * as geo from '../../../geo/index.js';
-import { registerViewerEngine } from '../../../globe/cesium/engineFromViewer.js';
 
 /**
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
@@ -87,9 +86,9 @@ export function createEngineLayerView(
         return frameNumber;
       },
     },
+    // What the shared helpers project through.
+    projector: engine.projector,
   };
-  // Shared helpers project through the engine registered for their scene.
-  removers.push(registerViewerEngine(scene, engine));
   const horizon = {
     isPointVisible: (position) => engine.projector.horizonVisible(position),
   };

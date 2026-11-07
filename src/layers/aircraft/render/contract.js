@@ -34,8 +34,8 @@
 // rightWC, heading, pitch, roll, frustum.fovy) and `scene` scene-shaped
 // ({ camera, canvas.clientHeight, frameState.frameNumber }) for the shared
 // helpers that take them (iconOrientation, focusDeemphasis): adapters over
-// engine.camera.pose(), with the engine registered for the scene
-// (engineFromViewer) so projections go through its projector.
+// engine.camera.pose(), the scene carrying the engine's `projector` so
+// projections go through it.
 
 /**
  * @typedef {object} AircraftView

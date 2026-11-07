@@ -28,6 +28,7 @@ import {
   createNominatimGate,
 } from '../../server/providers/regional/nominatimGate.js';
 import { createVoiceAreas } from '../voice/areaActions.js';
+import { cameraOnlyEngine } from '../testSupport/viewerEngine.mjs';
 
 const TILES = [6745, 6746].map((y) =>
   decodeOpenFreeMapOutlineTile(
@@ -924,15 +925,16 @@ const PLACES = {
   },
 };
 
-const viewerAt = (lat, lon, height = 4000) => ({
-  camera: {
-    positionCartographic: {
-      latitude: (lat * Math.PI) / 180,
-      longitude: (lon * Math.PI) / 180,
-      height,
+const viewerAt = (lat, lon, height = 4000) =>
+  cameraOnlyEngine({
+    camera: {
+      positionCartographic: {
+        latitude: (lat * Math.PI) / 180,
+        longitude: (lon * Math.PI) / 180,
+        height,
+      },
     },
-  },
-});
+  });
 
 test('default settings: outline, street and building asks send nothing to Overpass', async (t) => {
   const prior = process.env.OVERPASS_UPSTREAMS;
@@ -979,9 +981,9 @@ test('default settings: outline, street and building asks send nothing to Overpa
   const placeSearch = {
     geocode: async (q) => ({ place: PLACES[q] || null, answered: true }),
   };
-  const resolve = async (viewer, args) => {
+  const resolve = async (engine, args) => {
     const result = await resolver.resolveAnnotationTarget({
-      viewer,
+      engine,
       placeSearch,
       footprint: true,
       deferFootprint: true,
@@ -1000,7 +1002,7 @@ test('default settings: outline, street and building asks send nothing to Overpa
   });
 
   const areas = createVoiceAreas({
-    viewer: viewerAt(27.7, 85.3, 40_000),
+    engine: viewerAt(27.7, 85.3, 40_000),
     annotationResolver: resolver,
     placeSearch,
   });

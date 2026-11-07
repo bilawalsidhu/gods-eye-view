@@ -275,7 +275,7 @@ function attachViewerTools(
     resolver: operations.annotationResolver,
     defer,
   });
-  annotations.attachScene({ viewer, tileset });
+  annotations.attachScene({ viewer, engine, tileset });
   defer(() => annotations.detachScene());
   // UTILITIES ▸ Draw on this viewer (src/app/sessionTools.js): the tool
   // claims this viewer's pointer while a sketch is open.
@@ -285,7 +285,7 @@ function attachViewerTools(
     styleManager,
     defer,
   });
-  drawTool?.attachScene({ viewer, navigation: styleManager });
+  drawTool?.attachScene({ viewer, engine, navigation: styleManager });
   defer(() => drawTool?.detachScene());
   // UTILITIES ▸ Import on this viewer: the next Cesium viewer reads the
   // session's files again. The drop listeners belong to this viewer.
@@ -309,8 +309,9 @@ function attachViewerTools(
   if (recentImagery) {
     recentImagery.attachTileset(tileset);
     const imageryBoxTool = initImageryBoxTool({
-      viewer,
+      engine,
       onBox: (box) => recentImagery.setBox(box),
+      onPreview: (box) => recentImagery.setBoxPreview(box),
       onCancel: (reason, message, box) => {
         if (message) recentImagery.reportBoxRefusal(message, box);
       },

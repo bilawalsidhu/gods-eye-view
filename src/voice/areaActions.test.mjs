@@ -113,7 +113,6 @@ function fakeAnnotations() {
 function makeAreas(overrides = {}) {
   const annotations = overrides.annotations || fakeAnnotations();
   const areas = createVoiceAreas({
-    viewer: {},
     annotations,
     annotationResolver: fakeLadder(),
     findRegion: async () => null,
@@ -181,7 +180,6 @@ test('draw failures stay honest in the result, spoken line, and card', async (t)
   for (const entry of cases) {
     await t.test(entry.name, async () => {
       const areas = createVoiceAreas({
-        viewer: {},
         annotations: entry.annotations,
         annotationResolver: fakeLadder(),
         findRegion: async () => null,
@@ -732,7 +730,6 @@ test('a clear during a slow lookup is not undone by a late outline', async () =>
     release = resolve;
   });
   const areas = createVoiceAreas({
-    viewer: {},
     annotations,
     findRegion: async () => null,
     findAdminCandidates: async () => [],
@@ -781,7 +778,6 @@ test('an outlined area keeps its full geometry past store eviction', async () =>
 test('an outline from before a page reload asks to resolve again, never counts its drawing', async () => {
   const annotations = fakeAnnotations();
   const first = createVoiceAreas({
-    viewer: {},
     annotations,
     annotationResolver: fakeLadder(),
     findRegion: async () => null,
@@ -792,7 +788,6 @@ test('an outline from before a page reload asks to resolve again, never counts i
   // outline stays on the map. A mic restart keeps the runner (and handles);
   // see integrationContract.test.mjs.
   const second = createVoiceAreas({
-    viewer: {},
     annotations,
     findRegion: async () => null,
     findAdminCandidates: async () => [],

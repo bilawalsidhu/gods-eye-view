@@ -1,8 +1,6 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
-import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
-import { isGlobeEngine } from '../globe/contract.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -21,16 +19,6 @@ import {
   recordWorkSlice,
 } from '../sources/phaseTiming.js';
 import { formatDistanceText } from '../data/distanceFormat.js';
-
-// Dev convenience: expose the app's Cesium instance for console/preview probing
-// (single shared module instance — avoids dual-Cesium state bugs when testing).
-// A getter, because the production build's Cesium global loads only with the
-// first Cesium globe.
-if (typeof window !== 'undefined' && !('__CESIUM__' in window))
-  Object.defineProperty(window, '__CESIUM__', {
-    configurable: true,
-    get: () => Cesium,
-  });
 
 /**
  * Annotation engine — the voice agent's "whiteboard" over the 3D world.
@@ -148,7 +136,7 @@ const DETACHED_RENDERER = Object.freeze({
 
 export function createAnnotationEngine({
   placeSearch = defaultGeospatial,
-  viewer = null,
+  globe = null,
   renderer = DETACHED_RENDERER,
   outlineRetryDelaysMs = OUTLINE_RETRY_DELAYS_MS,
   resolveTarget = resolveAnnotationTarget,
@@ -428,7 +416,7 @@ export function createAnnotationEngine({
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
-    if (destroyed || !viewer)
+    if (destroyed || !globe)
       return {
         ok: false,
         drawn: 0,
@@ -437,7 +425,7 @@ export function createAnnotationEngine({
         results: [],
         error: destroyed
           ? 'destroyed'
-          : 'Annotations are drawn on the Cesium globe only.',
+          : 'Annotations are drawn on a globe only.',
       };
     const list = (Array.isArray(requests) ? requests : [requests]).map(
       promoteStreetHighlight,
@@ -914,7 +902,7 @@ export function createAnnotationEngine({
     const type = normalizeType(spec?.type);
     // MANUAL geometry (drawTool.js): the person clicked the vertices, so there is
     // nothing to resolve. Same record shapes as a resolved spec, source 'manual'.
-    if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, viewer);
+    if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, globe);
     if (type === 'route') {
       const points = Array.isArray(spec.points) ? spec.points : [];
       if (points.length < 2)
@@ -925,7 +913,7 @@ export function createAnnotationEngine({
         const name = pt.target ?? pt.name ?? null;
         const r = await resolveTarget({
           placeSearch,
-          viewer,
+          engine: globe,
           target: name,
           latitude: pt.latitude,
           longitude: pt.longitude,
@@ -983,7 +971,7 @@ export function createAnnotationEngine({
     if (type === 'arrow') {
       const from = await resolveTarget({
         placeSearch,
-        viewer,
+        engine: globe,
         target: spec.target,
         latitude: spec.latitude,
         longitude: spec.longitude,
@@ -995,7 +983,7 @@ export function createAnnotationEngine({
       });
       const to = await resolveTarget({
         placeSearch,
-        viewer,
+        engine: globe,
         target: spec.toTarget,
         latitude: spec.toLatitude,
         longitude: spec.toLongitude,
@@ -1028,7 +1016,7 @@ export function createAnnotationEngine({
       type === 'area' ? spec.footprint !== false : Boolean(spec.footprint);
     return resolveTarget({
       placeSearch,
-      viewer,
+      engine: globe,
       target: spec.target,
       latitude: spec.latitude,
       longitude: spec.longitude,
@@ -1669,7 +1657,7 @@ export function createAnnotationEngine({
   /** Fly the camera to one mark; a line is framed whole, not by its start. */
   function frame(id) {
     const anno = annotations.get(id);
-    if (!anno || !viewer) return false;
+    if (!anno || !globe) return false;
     if (anno.type === 'route' && anno.path?.length) {
       const ring = anno.path.map((p) => [p.lon, p.lat]);
       // Unwrap around the first vertex, as ringRange does, so a line across
@@ -1739,7 +1727,7 @@ export function createAnnotationEngine({
       const cart = points.map((p) =>
         geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
       );
-      const sphere = Cesium.BoundingSphere.fromPoints(cart);
+      const sphere = geo.boundingSphere.fromPoints(cart);
       flyToSphere(sphere.center, sphere.radius, {
         pitch: geo.math.toRadians(-35),
         range: Math.max(900, sphere.radius * 2.6),
@@ -1755,23 +1743,7 @@ export function createAnnotationEngine({
   function isPointOnScreen(p) {
     try {
       const pos = geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
-      if (isGlobeEngine(viewer)) return engineSeesPoint(viewer, pos);
-      const camera = viewer.camera;
-      const cv = camera.frustum.computeCullingVolume(
-        camera.position,
-        camera.direction,
-        camera.up,
-      );
-      if (
-        cv.computeVisibility(new Cesium.BoundingSphere(pos, 1)) ===
-        Cesium.Intersect.OUTSIDE
-      )
-        return false;
-      const occluder = new Cesium.EllipsoidalOccluder(
-        Cesium.Ellipsoid.WGS84,
-        camera.position,
-      );
-      return occluder.isPointVisible(pos);
+      return engineSeesPoint(globe, pos);
     } catch {
       return true;
     }
@@ -1810,28 +1782,13 @@ export function createAnnotationEngine({
   }
 
   /**
-   * Fly to a sphere keeping the camera's heading: Cesium's
-   * flyToBoundingSphere on a viewer, the contract's flyToSphere on a globe
-   * engine (the same offset semantics).
+   * Fly to a sphere keeping the camera's heading (the contract's
+   * flyToSphere: Cesium's flyToBoundingSphere offset).
    */
   function flyToSphere(center, radius, { pitch, range, duration }) {
-    if (isGlobeEngine(viewer)) {
-      viewer.camera.flyToSphere(
-        { center, radius },
-        { heading: viewer.camera.pose().heading, pitch, range, duration },
-      );
-      return;
-    }
-    viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(center, radius),
-      {
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          pitch,
-          range,
-        ),
-        duration,
-      },
+    globe.camera.flyToSphere(
+      { center, radius },
+      { heading: globe.camera.pose().heading, pitch, range, duration },
     );
   }
 
@@ -1861,7 +1818,7 @@ export function createAnnotationEngine({
       generation++;
       const previous = renderer;
       renderer = DETACHED_RENDERER;
-      viewer = null;
+      globe = null;
       for (const anno of annotations.values()) {
         anno.pendingOutline = false;
         try {
@@ -1877,13 +1834,13 @@ export function createAnnotationEngine({
       }
     },
     /**
-     * Draw the board on a globe: `viewer` and the `renderer` built for it.
-     * Marks kept while no globe drew them appear again as they were.
+     * Draw the board on a globe: its `engine` and the `renderer` built for
+     * it. Marks kept while no globe drew them appear again as they were.
      */
-    attachRenderer({ viewer: nextViewer, renderer: nextRenderer }) {
+    attachRenderer({ engine: nextGlobe = null, renderer: nextRenderer }) {
       if (destroyed) return;
       engine.detachRenderer();
-      viewer = nextViewer;
+      globe = nextGlobe;
       renderer = nextRenderer ?? DETACHED_RENDERER;
       for (const anno of annotations.values()) {
         try {
@@ -2093,7 +2050,7 @@ export function createAnnotationEngine({
   }) {
     if (destroyed) return;
     try {
-      viewer?.camera.flyTo({
+      globe?.camera.flyTo({
         destination: geo.cartesian3.fromDegrees(lon, lat, height),
         orientation: {
           heading: geo.math.toRadians(heading),
@@ -2371,7 +2328,7 @@ function manualPairs(list) {
  * (not synthesized) outline so it drapes solid; a line is a `route` with mode
  * 'manual', its length as distance and no travel time; a pin is a point.
  */
-function resolveManualSpec(spec, type, viewer) {
+function resolveManualSpec(spec, type, globe) {
   if (type === 'route') {
     // height 0 is a placeholder, not a placement: the world renderer draws a
     // route with clampToGround + CESIUM_3D_TILE classification, so the line is
@@ -2412,7 +2369,7 @@ function resolveManualSpec(spec, type, viewer) {
     return {
       lon,
       lat,
-      height: sampleGroundHeight(viewer, lon, lat),
+      height: sampleGroundHeight(globe, lon, lat),
       ring,
       ...(polygons ? { polygons } : {}),
       footprintKind: 'area',
@@ -2427,7 +2384,7 @@ function resolveManualSpec(spec, type, viewer) {
   return {
     lon,
     lat,
-    height: sampleGroundHeight(viewer, lon, lat),
+    height: sampleGroundHeight(globe, lon, lat),
     ring: null,
     source: 'manual',
   };
@@ -2490,8 +2447,8 @@ function appendDistance(baseLabel, distM) {
 
 /**
  * Whether a globe engine shows a world point: in front of the camera, inside
- * the canvas and on the near side of the globe (what the Cesium path's
- * culling volume and ellipsoid occluder answer).
+ * the canvas and on the near side of the globe (what Cesium's culling
+ * volume and ellipsoid occluder answer).
  */
 function engineSeesPoint(engine, position) {
   if (!engine.projector.horizonVisible(position)) return false;

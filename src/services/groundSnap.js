@@ -47,7 +47,6 @@
  */
 
 import * as geo from '../geo/index.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
 import { MAX_FLOOR_TILE_SIZE_M } from './meshFloorSampler.js';
 
@@ -155,7 +154,7 @@ export function firstVisibleTileset(primitives) {
 /**
  * Create a per-layer ground-snap cache.
  * @returns {{
- *   heightFor: (target: object, icao: string, pos: Cesium.Cartesian3,
+ *   heightFor: (engine: object, icao: string, pos: Cesium.Cartesian3,
  *               getExclusions?: () => Array<unknown>) => number|null,
  *   forget: (icao: string) => void,
  *   clear: () => void,
@@ -266,9 +265,8 @@ export function createGroundSnap({ groundFloor }) {
    * A contact that HAS resolved once keeps that answer through a resample outage;
    * see `heldSnapM`.
    *
-   * @param {object} target - The globe engine (`engine.surface`:
-   *   sampleHeightDetailed and tilesLoaded), or a viewer whose engine is
-   *   registered (engineFromViewer); without one, no sample.
+   * @param {object} engine - The globe engine (`engine.surface`:
+   *   sampleHeightDetailed and tilesLoaded); without one, no sample.
    * @param {string} icao - Cache key (per-layer icao space).
    * @param {Cesium.Cartesian3} pos - Current display position. Cache movement
    *   is measured after projecting this input to the WGS84 ellipsoid, so a
@@ -279,8 +277,7 @@ export function createGroundSnap({ groundFloor }) {
    *   lands on its icon/model otherwise). Only invoked when a sample fires.
    * @returns {number|null}
    */
-  function heightFor(target, icao, pos, getExclusions) {
-    const engine = engineFromViewer(target);
+  function heightFor(engine, icao, pos, getExclusions) {
     const surfacePos = geo.ellipsoid.WGS84.scaleToGeodeticSurface(
       pos,
       scratchSurfacePos,

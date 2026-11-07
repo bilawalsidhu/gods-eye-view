@@ -24,9 +24,10 @@ import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
  */
 export function createHybridAnnotationRenderer(
   viewer,
-  { screen: screenOptions, world: worldRenderer, screenScene } = {},
+  { screen: screenOptions, world: worldRenderer, screenScene, engine } = {},
 ) {
-  const world = worldRenderer ?? createWorldAnnotationRenderer(viewer);
+  const world =
+    worldRenderer ?? createWorldAnnotationRenderer(viewer, { engine });
   const screen = createScreenAnnotationRenderer(
     screenScene ?? viewer,
     screenOptions,

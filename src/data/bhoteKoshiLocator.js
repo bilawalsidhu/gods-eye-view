@@ -291,7 +291,6 @@ export function createBhoteKoshiLocatorLayer({
   let _native = null;
   let _pausedApproach = null;
   const cameraForScene = () => _engine?.camera ?? _viewer?.camera;
-  const creditTarget = () => _engine ?? _viewer;
   const requestRender = (reason) =>
     _engine?.kind === 'navara'
       ? _engine.render.request(reason)
@@ -1049,8 +1048,8 @@ export function createBhoteKoshiLocatorLayer({
     if (!_dataSource) return;
     if (_viewer) _viewer.dataSources.add(_dataSource);
     else if (_engine) _native = createNativeRenderer(_engine, _dataSource);
-    registerDynamicCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_CREDIT);
-    showOsmCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    registerDynamicCredit(_engine, BHOTE_KOSHI_LOCATOR_CREDIT);
+    showOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
   }
 
   function attachRenderer(viewer, { engine = null } = {}) {
@@ -1080,7 +1079,7 @@ export function createBhoteKoshiLocatorLayer({
     _native?.destroy();
     _native = null;
     if (_viewer && _dataSource) _viewer.dataSources.remove(_dataSource, false);
-    hideOsmCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    hideOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
     _engine = _viewer = null;
   }
 
@@ -1137,7 +1136,7 @@ export function createBhoteKoshiLocatorLayer({
   }
 
   async function disable() {
-    hideOsmCredit(creditTarget(), BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    hideOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
     _pausedApproach = null;
     _enabled = false;
     _boundaryReady = false;

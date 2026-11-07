@@ -1401,7 +1401,6 @@
   "scripts/fixtures/w2/radio.mjs",
   "scripts/qa-map-policy.mjs",
   "scripts/qa-map-policy.test.mjs",
-  "src/ui/imageryBoxNavara.test.mjs",
   "scripts/qa-w2-imagery.mjs",
   "src/globe/navara/postSamplingPass.test.mjs",
   "src/globe/navara/emptySceneRender.test.mjs",

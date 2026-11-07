@@ -47,7 +47,12 @@ const PALETTE = {
  * BOTH paints onto terrain AND onto 3D tiles, so one value covers both worlds.
  */
 
-export function createWorldAnnotationRenderer(viewer) {
+/**
+ * @param {Cesium.Viewer} viewer
+ * @param {{ engine?: object }} [options] `engine`: the globe engine whose
+ *   credits show the OpenStreetMap attribution of the marks drawn from it.
+ */
+export function createWorldAnnotationRenderer(viewer, { engine = null } = {}) {
   const CLASSIFY = Cesium.ClassificationType.BOTH;
   const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
   const dataSource = new Cesium.CustomDataSource('gev-annotations');
@@ -522,7 +527,7 @@ export function createWorldAnnotationRenderer(viewer) {
         }),
       );
       osmAnnotations.add(anno);
-      showOsmCredit(viewer, anno);
+      showOsmCredit(engine, anno);
     } else if (anno.type === 'arrow' && anno.to) {
       // Connector draped across the ground from origin to destination.
       const positions = [
@@ -577,7 +582,7 @@ export function createWorldAnnotationRenderer(viewer) {
     ) {
       // The actual world proxy owns both geometry and credit, including rollback.
       osmAnnotations.add(anno);
-      showOsmCredit(viewer, anno, {
+      showOsmCredit(engine, anno, {
         openMapTiles: anno.outlineCredit === 'tiles',
       });
     }
@@ -600,7 +605,7 @@ export function createWorldAnnotationRenderer(viewer) {
 
   function remove(anno) {
     pendingGround.get(anno)?.finish('cancelled');
-    hideOsmCredit(viewer, anno);
+    hideOsmCredit(engine, anno);
     osmAnnotations.delete(anno);
     drawn.delete(anno);
     if (!anno?._entities) return;
@@ -630,7 +635,7 @@ export function createWorldAnnotationRenderer(viewer) {
   function destroy() {
     destroyed = true;
     for (const task of [...pendingGround.values()]) task.finish('cancelled');
-    for (const anno of osmAnnotations) hideOsmCredit(viewer, anno);
+    for (const anno of osmAnnotations) hideOsmCredit(engine, anno);
     osmAnnotations.clear();
     drawn.clear();
     try {

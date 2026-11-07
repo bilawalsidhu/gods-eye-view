@@ -2,15 +2,15 @@
   "metrics": {
     "cesiumLayerRendererLines": 330,
     "navaraLayerRendererLines": 2304,
-    "cesiumImportFiles": 31,
-    "viewerLines": 1367,
-    "navaraKindChecks": 6,
-    "engineSniffCalls": 14,
+    "cesiumImportFiles": 27,
+    "viewerLines": 1234,
+    "navaraKindChecks": 5,
+    "engineSniffCalls": 0,
     "engineExtensionReads": 12,
     "groundEffectPasses": 3,
     "cesiumSdkLoads": 4,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 78
+    "engineNameLines": 73
   },
-  "measuredAt": "after engine.imagery with FIRMS heat and Recent Imagery on it, 2026-11-07"
+  "measuredAt": "after the phase 7 feature moves, 2026-11-07"
 }

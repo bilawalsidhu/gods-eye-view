@@ -1364,8 +1364,7 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   const fakes = boxToolFakes();
   const cancels = [];
   const tool = initImageryBoxTool({
-    viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    engine: fakes.engine,
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => f.layer.setBox(box),

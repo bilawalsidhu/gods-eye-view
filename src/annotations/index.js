@@ -12,22 +12,25 @@ import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
  */
 export function initAnnotations({
   viewer,
+  engine: globe = null,
   tileset = null,
   placeSearch,
   resolver,
 }) {
   const engine = createSessionAnnotations({ placeSearch, resolver });
-  engine.attachScene({ viewer, tileset });
+  engine.attachScene({ viewer, engine: globe, tileset });
   return engine;
 }
 
 /**
  * The page's annotation board, kept across globe engine switches: the marks
- * belong to the page session, their drawing to the attached globe.
- * `attachScene({ viewer, tileset })` draws the board on a Cesium viewer;
- * `attachScene({ engine, renderer })` on a globe engine without a viewer
- * (Navara: src/annotations/navaraAnnotationRenderer.js, built by the caller
- * so this module never loads it); with neither the marks stay undrawn.
+ * belong to the page session, their drawing to the attached globe. The board
+ * works on the globe `engine` (camera, picks, surface); its drawing is the
+ * `renderer` built for that engine (Navara:
+ * src/annotations/navaraAnnotationRenderer.js, built by the caller so this
+ * module never loads it), or on a Cesium `viewer` the hybrid renderer built
+ * here. `attachScene({ engine, viewer, tileset })` or
+ * `attachScene({ engine, renderer })`; with neither the marks stay undrawn.
  * `detachScene()` releases the drawing and keeps the marks.
  */
 export function createSessionAnnotations({ placeSearch, resolver }) {
@@ -41,8 +44,7 @@ export function createSessionAnnotations({ placeSearch, resolver }) {
     engine: globe = null,
     renderer = null,
   } = {}) => {
-    if (!viewer && globe && renderer)
-      return engine.attachRenderer({ viewer: globe, renderer });
+    if (renderer) return engine.attachRenderer({ engine: globe, renderer });
     if (!viewer) return engine.detachRenderer();
     // World-space footprint draping; clamped marks can use the photoreal tiles.
     if (tileset) {
@@ -53,8 +55,8 @@ export function createSessionAnnotations({ placeSearch, resolver }) {
       }
     }
     engine.attachRenderer({
-      viewer,
-      renderer: createHybridAnnotationRenderer(viewer),
+      engine: globe,
+      renderer: createHybridAnnotationRenderer(viewer, { engine: globe }),
     });
   };
   engine.detachScene = () => engine.detachRenderer();

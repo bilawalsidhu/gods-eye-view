@@ -74,11 +74,13 @@ export function aircraftViewerRenderer({
     get scene() {
       return viewer?.scene;
     },
+    // The engine registered for the viewer (the surface samplers take an
+    // engine).
     get surfaceOwner() {
-      return viewer;
+      return engine ?? engineFromViewer(viewer);
     },
     get surfaceScene() {
-      return viewer?.scene;
+      return engine ?? engineFromViewer(viewer);
     },
     frameNumber: () => viewer?.scene?.frameState?.frameNumber ?? -1,
     viewportHeightPx: () => viewer.scene.canvas.clientHeight,

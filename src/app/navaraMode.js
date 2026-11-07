@@ -13,11 +13,11 @@ import {
 } from './layers/renderers.js';
 import {
   governorRequestRender,
-  installRenderGovernor,
+  installEngineRenderGovernor,
   uninstallRenderGovernor,
 } from '../renderGovernor.js';
 import { attachSessionVoice } from './sessionVoice.js';
-import { initNavaraImageryBoxTool } from '../ui/imageryBoxNavara.js';
+import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import {
   attachNavaraAnnotations,
   attachNavaraDraw,
@@ -368,7 +368,7 @@ export function attachViewerlessTools(
   });
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
-    const tool = initNavaraImageryBoxTool({
+    const tool = initImageryBoxTool({
       engine,
       onBox: (box) => recentImagery.setBox(box),
       onPreview: (box) => recentImagery.setBoxPreview(box),
@@ -397,7 +397,7 @@ export function attachViewerlessTools(
   }
   // Holds drive engine.render.setContinuous; requests go to the engine. A
   // parked engine uninstalls it (createNavaraScene suspend).
-  installRenderGovernor(engine);
+  installEngineRenderGovernor(engine);
   const syncVisibility = () => {
     if (document.hidden && !isEmbeddedInline()) return;
     data.presentation.flushVisible();

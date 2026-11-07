@@ -116,7 +116,7 @@ export class SceneDirector {
     });
     this._sharing = createSceneSharing(this);
     this._interactionTransitions = 0;
-    this._interactions = createSceneInteractions(viewer, {
+    this._interactions = createSceneInteractions({
       engine,
       available: () =>
         !this._destroyed && !this._running && !this.viewer?.trackedEntity,
@@ -255,7 +255,7 @@ export class SceneDirector {
     });
     this._cameraHandoffUnsubscribe?.();
     this._removeCameraInput?.();
-    this._interactions.setScene(null, null);
+    this._interactions.setScene(null);
     this._dataPacks.setScene(null, null);
     this._flight?.suspend();
     this.engine = this.viewer = null;
@@ -268,7 +268,7 @@ export class SceneDirector {
     this._isMapStackAvailable = isAvailable;
     try {
       this._dataPacks.setScene(viewer, native, engine.host.container);
-      this._interactions.setScene(viewer, engine, this._dataPacks.getTargets());
+      this._interactions.setScene(engine, this._dataPacks.getTargets());
     } catch (error) {
       // Release any packs already drawn before the caller parks the failed globe.
       this.suspendScene();

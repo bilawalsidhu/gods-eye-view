@@ -1,15 +1,13 @@
 import { worldToWindowCoordinates } from './render/cesiumProjection.js';
 import * as geo from '../geo/index.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
-// A window position through the engine's projector when `scene` has a
-// registered engine (a Cesium scene in the app, the Navara aircraft
-// renderer's scene adapter), else Cesium's SceneTransforms (bare scenes in
-// tests). The two agree on Cesium (the engine projector is SceneTransforms).
+// A window position through the engine projector the scene carries (the
+// layers' engine views, src/layers/shared/render/engineView.js), else
+// Cesium's SceneTransforms (a Cesium scene). The two agree on Cesium (the
+// engine projector is SceneTransforms).
 function worldToWindow(scene, position, result) {
-  const projector = engineFromViewer(scene)?.projector;
-  return projector
-    ? projector.worldToWindow(position, result)
+  return scene.projector
+    ? scene.projector.worldToWindow(position, result)
     : worldToWindowCoordinates(scene, position, result);
 }
 

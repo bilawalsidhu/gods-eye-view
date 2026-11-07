@@ -3415,7 +3415,6 @@
       "src/layers/vessels/icons.js",
       "src/maps/sceneApply.js",
       "src/layers/localAdsb/qaDrawn.js",
-      "src/ui/imageryBoxNavara.js",
       "src/geo/",
       "src/time/clock.js",
       "src/globe/navara/overlay.js",

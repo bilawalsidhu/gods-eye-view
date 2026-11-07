@@ -1,8 +1,5 @@
-import { isGlobeEngine } from '../globe/contract.js';
-import { createCesiumCredits } from '../globe/cesium/credits.js';
-
 /**
- * Per-layer data attribution registered into Cesium's credit display.
+ * Per-layer data attribution registered into the globe engine's credits.
  *
  * Legal requirement (see DATA_SOURCES.md, findings H10/H11 in
  * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
@@ -13,7 +10,7 @@ import { createCesiumCredits } from '../globe/cesium/credits.js';
  *
  * These credits are registered ONCE at init as STATIC credits with
  * showOnScreen=false, so they live in the expandable bottom-left "Data
- * attribution" lightbox (Cesium's credit popover) rather than cluttering the
+ * attribution" lightbox (the engine's credit popover) rather than cluttering the
  * on-globe line. Always-present is intentional and reversible: the lightbox is
  * the app's canonical attribution surface and DATA_SOURCES.md is the
  * machine-readable index. Strings are copied verbatim from DATA_SOURCES.md — if
@@ -49,29 +46,18 @@ export const ACARTIA_CREDIT = Object.freeze({
 
 const osmDisplays = new WeakMap();
 const googlePlacesDisplays = new WeakMap();
-const viewerCredits = new WeakMap();
 
 /**
- * Credits of a globe engine, or of a Cesium viewer's credit display for
- * callers that still hold a viewer (Cesium layers); null without one.
+ * Credits of a globe engine (engine.credits, shown on its next frame); null
+ * without one.
  * @returns {{ addStatic: Function, request: () => void } | null}
  */
-function creditsOf(target) {
-  if (isGlobeEngine(target))
-    return {
-      addStatic: (html, options) => target.credits.addStatic(html, options),
-      request: () => target.render.request('credits'),
-    };
-  if (typeof target?.creditDisplay?.addStaticCredit !== 'function') return null;
-  let credits = viewerCredits.get(target);
-  if (!credits) {
-    credits = {
-      addStatic: createCesiumCredits(target).credits.addStatic,
-      request: () => target.scene?.requestRender?.(),
-    };
-    viewerCredits.set(target, credits);
-  }
-  return credits;
+function creditsOf(engine) {
+  if (typeof engine?.credits?.addStatic !== 'function') return null;
+  return {
+    addStatic: (html, options) => engine.credits.addStatic(html, options),
+    request: () => engine.render?.request('credits'),
+  };
 }
 
 function updateOsmDisplay(credits, state) {
@@ -713,7 +699,7 @@ const dynamicCreditKeys = new WeakMap();
  * Register a conditional credit at the moment its data source activates.
  * Idempotent per `credit.key`; lands in the same "Data attribution" popover
  * as the static credits (showOnScreen=false).
- * @param {object} target — the globe engine, or the initialized Cesium viewer
+ * @param {object} target — the globe engine
  * @param {{ key: string, html: string }} credit — e.g. `TOMTOM_CREDIT`
  * @returns {boolean} True when the credit is (now) registered.
  */
@@ -730,10 +716,10 @@ export function registerDynamicCredit(target, credit) {
 }
 
 /**
- * Register every per-layer data credit into the viewer's credit display.
+ * Register every per-layer data credit into the engine's credit display.
  * Idempotent: safe to call once at init. Credits are static and always
  * present in the "Data attribution" popover.
- * @param {object} target — the globe engine, or the initialized Cesium viewer
+ * @param {object} target — the globe engine
  */
 export function registerDataCredits(target, credits = DATA_CREDITS) {
   const display = creditsOf(target);

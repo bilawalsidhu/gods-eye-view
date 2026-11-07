@@ -36,3 +36,19 @@ export function trackingEngine(viewer) {
   });
   return engine;
 }
+
+/**
+ * A globe engine with only the camera of a viewer test double: its pose at
+ * the double's positionCartographic and its view rectangle. It has no canvas
+ * (screen picks miss) and no surface (ground heights are 0).
+ */
+export function cameraOnlyEngine(viewer) {
+  const camera = viewer?.camera;
+  return {
+    camera: {
+      pose: () => ({ cartographic: camera?.positionCartographic }),
+      viewRectangle: () => camera?.computeViewRectangle?.(),
+    },
+    host: { size: () => ({ width: 0, height: 0 }) },
+  };
+}

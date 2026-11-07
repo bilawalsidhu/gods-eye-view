@@ -47,7 +47,7 @@ test('the marks survive a globe leaving and are drawn again on the next one', as
   withAnimationFrames(t);
   const log = [];
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: recordingRenderer(log, 'cesium'),
     resolveTarget: async () => ({ ...BUILDING }),
   });
@@ -69,7 +69,7 @@ test('the marks survive a globe leaving and are drawn again on the next one', as
 
   log.length = 0;
   engine.attachRenderer({
-    viewer: {},
+    engine: {},
     renderer: recordingRenderer(log, 'next'),
   });
   assert.deepEqual(log, ['next add Capitol']);
@@ -83,13 +83,13 @@ test('detaching twice and attaching over an attached globe release each drawing 
   withAnimationFrames(t);
   const log = [];
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: recordingRenderer(log, 'a'),
   });
   engine.detachRenderer();
   engine.detachRenderer();
-  engine.attachRenderer({ viewer: {}, renderer: recordingRenderer(log, 'b') });
-  engine.attachRenderer({ viewer: {}, renderer: recordingRenderer(log, 'c') });
+  engine.attachRenderer({ engine: {}, renderer: recordingRenderer(log, 'b') });
+  engine.attachRenderer({ engine: {}, renderer: recordingRenderer(log, 'c') });
   assert.deepEqual(log, ['a destroy', 'b destroy']);
   engine.destroy();
 });

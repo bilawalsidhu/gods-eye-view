@@ -3569,7 +3569,7 @@ export function createBhoteKoshiEventLayer({
       else await _viewer.dataSources.add(_floodDataSource);
       if (!current()) return;
     }
-    registerDynamicCredit(engine ?? viewer, BHOTE_KOSHI_CREDIT);
+    registerDynamicCredit(engine, BHOTE_KOSHI_CREDIT);
     _scenePathPositionCache.clear();
     _lastCinematicProgress = null;
     const terrain = syncTerrainComparison();
@@ -3640,7 +3640,7 @@ export function createBhoteKoshiEventLayer({
     try {
       const event = await loadEvent();
       throwIfEnableCancelled(signal, _enabled);
-      registerDynamicCredit(_engine ?? viewer, BHOTE_KOSHI_CREDIT);
+      registerDynamicCredit(_engine, BHOTE_KOSHI_CREDIT);
       if (_mapStackController) {
         _comparisonLease = acquireImageryComparison(_mapStackController, {
           owner: BHOTE_KOSHI_LAYER_ID,

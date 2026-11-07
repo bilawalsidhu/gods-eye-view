@@ -19,8 +19,8 @@
 // The view: `camera` camera-shaped (positionWC, positionCartographic,
 // rightWC, upWC, heading, pitch, roll, pickEllipsoid(screen)) and `scene`
 // scene-shaped ({ camera, canvas }) for the shared helpers that take them
-// (iconOrientation, the view-area request), with the engine registered for
-// the scene (engineFromViewer) so projections go through its projector.
+// (iconOrientation, the view-area request), the scene carrying the engine's
+// `projector` so projections go through it.
 
 /**
  * @typedef {object} VesselView

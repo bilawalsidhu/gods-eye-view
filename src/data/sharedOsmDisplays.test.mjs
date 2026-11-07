@@ -10,6 +10,7 @@ import { createDirectionsSource } from '../layers/directions/source.js';
 import { createLifecycle as createCctvLifecycle } from '../layers/cctv/lifecycle.js';
 import { createCctvDisplay } from '../layers/cctv/render/display.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createCesiumCredits } from '../globe/cesium/credits.js';
 import * as input from './inputOwnership.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
 
@@ -34,6 +35,11 @@ function viewer(t) {
   };
   return v;
 }
+// The Cesium engine's credits over the viewer double's credit display.
+const cesiumCredits = (v) => ({
+  credits: createCesiumCredits(v).credits,
+  render: { request: noop },
+});
 function assertCredit(v) {
   assert.ok(v.credits.some((credit) => credit.showOnScreen && credit.html.includes('>© OpenStreetMap<')));
 }
@@ -55,13 +61,13 @@ for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce th
 test('Nepal locator introduces the shared OSM credit', async (t) => {
   const v = viewer(t);
   const layer = createBhoteKoshiLocatorLayer({ boundaryResolver: async () => ({ name: 'Nepal', ring: [[80, 26], [88, 26], [88, 30], [80, 30]] }), overlayHost, requestRender: noop, scheduleFrame: () => 1, cancelFrame: noop });
-  await layer.init(v); await layer.enable(v, { origin: 'scene' });
+  await layer.init(v, { engine: cesiumCredits(v) }); await layer.enable(v, { origin: 'scene' });
   assertCredit(v); await layer.destroy(v);
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
 });
 
 test('voice route geometry introduces the shared OSM credit', (t) => {
-  const v = viewer(t), renderer = createWorldAnnotationRenderer(v);
+  const v = viewer(t), renderer = createWorldAnnotationRenderer(v, { engine: cesiumCredits(v) });
   renderer.add({ id: 'route', type: 'route', color: 'primary', anchor: { lat: 0, lon: 0 }, path: [{ lat: 0, lon: 0 }, { lat: 0.01, lon: 0.01 }] });
   assertCredit(v); renderer.destroy();
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);

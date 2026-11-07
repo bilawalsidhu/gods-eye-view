@@ -410,7 +410,7 @@ test('annotation capability miss keeps its pin and exposes the unavailable label
     event,
     attempts = 0;
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: {
       add() {},
       update(mark) {

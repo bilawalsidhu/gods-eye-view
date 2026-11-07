@@ -2,6 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   installRenderGovernor,
+  installEngineRenderGovernor,
   holdContinuousRender,
   releaseContinuousRender,
   governorRequestRender,
@@ -118,7 +119,7 @@ test('on a non-Cesium globe engine the governor drives engine.render with owner-
   _resetRenderGovernorForTest();
   const engine = createFakeEngine({ kind: 'navara' });
   holdContinuousRender('before-install');
-  installRenderGovernor(engine);
+  installEngineRenderGovernor(engine);
   assert.equal(engine.render.isContinuous(), true, 'a hold taken before install applies');
   releaseContinuousRender('before-install');
   assert.equal(engine.render.isContinuous(), false);
@@ -141,7 +142,7 @@ test('releasing an absent Navara hold does not wake an already idle engine', asy
   const { createFakeEngine } = await import('./globe/testing/fakeEngine.js');
   _resetRenderGovernorForTest();
   const engine = createFakeEngine({ kind: 'navara' });
-  installRenderGovernor(engine);
+  installEngineRenderGovernor(engine);
   engine.fake.resetCalls();
   for (let i = 0; i < 22; i++) releaseContinuousRender('cctv-projection');
   assert.equal(engine.fake.callsOf('render.request').length, 0);

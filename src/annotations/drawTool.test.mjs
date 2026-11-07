@@ -53,7 +53,7 @@ test('the engine resolves manual geometry before any name resolution', () => {
     'async function resolveSpec(spec, signal) {',
   );
   const manualAt = engine.indexOf(
-    'if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, viewer);',
+    'if (isManualSpec(spec, type)) return resolveManualSpec(spec, type, globe);',
     resolveAt,
   );
   const routeAt = engine.indexOf("if (type === 'route') {", resolveAt);

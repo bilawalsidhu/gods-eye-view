@@ -163,12 +163,9 @@ test('NearFarScalar rendered-size interpolation matches Cesium clamp endpoints',
   assert.ok(middle > 0.5 && middle < 3);
 });
 
-test('a focus target projects through the engine registered for its scene', async () => {
+test('a focus target projects through the projector its scene carries', async () => {
   const { publishFocusTargetFromCachedPosition, clearFocusTarget } =
     await import('./focusDeemphasis.js');
-  const { registerViewerEngine } = await import(
-    '../globe/cesium/engineFromViewer.js'
-  );
   const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
   const engine = createFakeEngine();
   const projected = [];
@@ -176,9 +173,11 @@ test('a focus target projects through the engine registered for its scene', asyn
     projected.push(position);
     return Object.assign(result, { x: 300, y: 200 });
   };
-  // A scene with no Cesium behind it (the Navara renderer's adapter).
-  const scene = { frameState: { frameNumber: 7 } };
-  const unregister = registerViewerEngine(scene, engine);
+  // A scene with no Cesium behind it (a layer's engine view).
+  const scene = {
+    frameState: { frameNumber: 7 },
+    projector: engine.projector,
+  };
   try {
     const target = publishFocusTargetFromCachedPosition({
       ownerLayer: 'flights',
@@ -201,7 +200,6 @@ test('a focus target projects through the engine registered for its scene', asyn
     assert.equal(target.frameNumber, 7);
   } finally {
     clearFocusTarget('flights');
-    unregister();
     engine.destroy();
   }
 });

@@ -1,5 +1,4 @@
 import * as geo from '../geo/index.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
 
 /** Answers from tiles larger than this are too coarse to latch (m).
@@ -86,9 +85,8 @@ export function createMeshFloorSampler({
    * layer poll (never per contact, never per frame). Synchronous — Cesium's
    * sampleHeight is a CPU-side query against loaded tiles.
    *
-   * @param {object|undefined} target - The globe engine (engine.surface,
-   *   camera.height, maps.photorealActive), or a viewer or scene whose
-   *   engine is registered (engineFromViewer); without one, nothing.
+   * @param {object|undefined} engine - The globe engine (engine.surface,
+   *   camera.height, maps.photorealActive); without one, nothing.
    * @param {Array<{lat: number, lon: number}>} points - Contact/waypoint coords.
    * @param {object} [options]
    * @param {Array<object>} [options.excludeObjects] - What the probe passes
@@ -98,12 +96,11 @@ export function createMeshFloorSampler({
    *   Viewer subpoint (computed once by the caller's poll).
    */
   function sampleMeshFloorCells(
-    target,
+    engine,
     points,
     { excludeObjects = [], viewerLat, viewerLon } = {},
   ) {
     if (!meshFloorPreferred()) return;
-    const engine = engineFromViewer(target);
     if (!engine || engine.isDestroyed?.() || !engine.surface.supported) return;
     if (!Array.isArray(points) || !points.length) return;
     // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):

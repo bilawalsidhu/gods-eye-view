@@ -26,14 +26,12 @@ import {
   horizonOccluder,
 } from './render/cesiumProjection.js';
 import * as geo from '../geo/index.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 
-// A window position through the engine's projector when `scene` has a
-// registered engine (engineFromViewer), else Cesium's SceneTransforms.
+// A window position through the engine projector the scene carries (the
+// layers' engine views), else Cesium's SceneTransforms (a Cesium scene).
 function worldToWindow(scene, position, result) {
-  const projector = engineFromViewer(scene)?.projector;
-  return projector
-    ? projector.worldToWindow(position, result)
+  return scene.projector
+    ? scene.projector.worldToWindow(position, result)
     : worldToWindowCoordinates(scene, position, result);
 }
 

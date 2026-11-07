@@ -9,6 +9,7 @@ import * as Cesium from 'cesium';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from '../annotations/resolver.js';
 import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
+import { cameraOnlyEngine } from '../testSupport/viewerEngine.mjs';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -135,8 +136,8 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
       3000,
     );
     const resolved = await resolveAnnotationTarget({
-      // The resolver reads only the camera (no scene to pick from).
-      viewer: { camera: viewer.camera },
+      // The resolver reads only the camera (no canvas to pick from).
+      engine: cameraOnlyEngine({ camera: viewer.camera }),
       target,
       footprint: true,
       deferFootprint: true,

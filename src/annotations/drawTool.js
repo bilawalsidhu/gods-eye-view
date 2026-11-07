@@ -67,15 +67,17 @@ const PREVIEW = DRAW_COLOR_CSS;
  * through the actions it gives `connect`, which returns their disconnect.
  * A row's fly-to is an immediate navigation through `navigation`, like
  * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
- * The globe it draws on is a Cesium `viewer` or a draw `surface` factory
- * (`surface({ session, cursor })`: the input and preview of a globe without
- * a viewer, src/annotations/drawInputNavara.js), which gets the open shape
- * and the rubber band's end as live getters.
- * @param {{viewer?: Cesium.Viewer, surface?: Function, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
+ * The globe it draws on is a Cesium `viewer` (with its `engine`, which
+ * answers the picks) or a draw `surface` factory (`surface({ session,
+ * cursor })`: the input and preview of a globe without a viewer,
+ * src/annotations/drawInputNavara.js), which gets the open shape and the
+ * rubber band's end as live getters.
+ * @param {{viewer?: Cesium.Viewer, engine?: object, surface?: Function, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
  * @returns {{destroy: Function}|null}
  */
 export function initDrawTool({
   viewer = null,
+  engine = null,
   surface: makeSurface = null,
   annotations,
   navigation = null,
@@ -119,7 +121,7 @@ export function initDrawTool({
   const live = { session: () => session, cursor: () => cursor };
   const surface = makeSurface
     ? makeSurface(live)
-    : cesiumDrawSurface(viewer, live);
+    : cesiumDrawSurface(viewer, engine, live);
 
   const present = () =>
     publish({
@@ -485,7 +487,7 @@ export function initDrawTool({
  * click actions on its own handler (select, track); they are borrowed while a
  * sketch is open and given back on the way out.
  */
-function cesiumDrawSurface(viewer, live) {
+function cesiumDrawSurface(viewer, engine, live) {
   const previewEntities = [];
   const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
   // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
@@ -526,12 +528,15 @@ function cesiumDrawSurface(viewer, live) {
   });
   return {
     canvas: viewer.scene.canvas,
-    /** The world point under a canvas position, or null. */
+    /** The world point under a canvas position (the engine's picks), or null. */
     pick(position) {
-      const canvas = viewer.scene.canvas;
-      const w = canvas.clientWidth || canvas.width || 1;
-      const h = canvas.clientHeight || canvas.height || 1;
-      return pickWorldFromScreen(viewer, position.x / w, position.y / h);
+      if (!engine) return null;
+      const { width, height } = engine.host.size();
+      return pickWorldFromScreen(
+        engine,
+        position.x / (width || 1),
+        position.y / (height || 1),
+      );
     },
     /** Show the open shape (null: none) in `color`. */
     sync(session, color) {
@@ -657,8 +662,8 @@ function cesiumDrawSurface(viewer, live) {
  * The Draw control for the page session. The marks live on the annotation
  * board and the chosen shape and colour here; the drawing tool itself (its
  * preview, click handler and Escape/Enter keys) belongs to the attached
- * globe. `attachScene({ viewer, navigation })` starts the tool on a Cesium
- * viewer, `attachScene({ surface, navigation })` on a globe without one
+ * globe. `attachScene({ viewer, engine, navigation })` starts the tool on
+ * a Cesium viewer, `attachScene({ surface, navigation })` on a globe without one
  * (Navara: src/annotations/drawInputNavara.js), with the shape and colour
  * last chosen; `detachScene()` ends it, an open shape included. Without a
  * globe the controls answer nothing. Same handle as initDrawTool's
@@ -731,6 +736,7 @@ export function createSessionDrawTool({
     whenSettled: () => inner?.whenSettled() ?? settled,
     attachScene({
       viewer = null,
+      engine = null,
       surface = null,
       navigation: next = navigation,
     } = {}) {
@@ -740,6 +746,7 @@ export function createSessionDrawTool({
       if (!viewer && !surface) return;
       inner = initDrawTool({
         viewer,
+        engine,
         surface,
         annotations,
         navigation,

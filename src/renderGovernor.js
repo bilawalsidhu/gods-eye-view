@@ -38,11 +38,9 @@
  * `scene.requestRender()`. It needs no frame events (`engine.frames`).
  *
  * Any other globe engine (Navara) is the governor's backend instead: install
- * it on the engine and the owner-counted holds drive
- * `engine.render.setContinuous`, requests go to `engine.render.request`.
+ * it on the engine (installEngineRenderGovernor) and the owner-counted holds
+ * drive `engine.render.setContinuous`, requests go to `engine.render.request`.
  */
-
-import { isGlobeEngine } from './globe/contract.js';
 
 let _viewer = null;
 /** The non-Cesium engine the governor drives, or null (Cesium: `_viewer`). */
@@ -75,22 +73,14 @@ function applyMode() {
 }
 
 /**
- * Install the governor on the viewer. Idempotent. Before install,
- * hold/release still record into the holds set (and apply at install time);
- * requests are safe no-ops — so modules can call all three unconditionally
- * in tests without a viewer.
- * @param {Cesium.Viewer | import('./globe/contract.js').GlobeEngine} viewer
- *   The Cesium viewer, or a non-Cesium globe engine.
+ * Install the governor on a Cesium viewer, as the Cesium engine's render
+ * backend. Idempotent. Before install, hold/release still record into the
+ * holds set (and apply at install time); requests are safe no-ops — so
+ * modules can call all three unconditionally in tests without a viewer.
+ * @param {Cesium.Viewer} viewer
  * @returns {void}
  */
 export function installRenderGovernor(viewer) {
-  if (isGlobeEngine(viewer) && viewer.kind !== 'cesium') {
-    _engine = viewer;
-    _viewer = viewer;
-    _installed = true;
-    applyMode();
-    return;
-  }
   if (!viewer?.scene)
     throw new TypeError('installRenderGovernor requires a Cesium viewer');
   _engine = null;
@@ -100,6 +90,22 @@ export function installRenderGovernor(viewer) {
   // idle means idle. All re-renders are camera/tiles (Cesium-native) or
   // explicit requests.
   viewer.scene.maximumRenderTimeChange = Infinity;
+  applyMode();
+}
+
+/**
+ * Install the governor on a globe engine that renders by itself (Navara):
+ * the holds drive `engine.render.setContinuous`, requests go to
+ * `engine.render.request`. Idempotent, like installRenderGovernor.
+ * @param {import('./globe/contract.js').GlobeEngine} engine
+ * @returns {void}
+ */
+export function installEngineRenderGovernor(engine) {
+  if (typeof engine?.render?.setContinuous !== 'function')
+    throw new TypeError('installEngineRenderGovernor requires a globe engine');
+  _engine = engine;
+  _viewer = engine;
+  _installed = true;
   applyMode();
 }
 

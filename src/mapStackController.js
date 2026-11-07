@@ -10,11 +10,11 @@ export class MapStackController extends MapSourceController {
     const googleApiKey =
       typeof window !== 'undefined' ? window.__GOOGLE_MAPS_API_KEY__ : '';
     // Sources for the page's engine: Navara builds its own from the
-    // descriptions (src/maps/defaultSources.js).
+    // descriptions (src/maps/defaultSources.js). Without an engine, Cesium's.
     const registry = createDefaultMapSources({
       ...options,
       googleApiKey,
-      engineKind: options.engine?.kind === 'navara' ? 'navara' : 'cesium',
+      engineKind: options.engine?.kind ?? 'cesium',
     });
     super(viewer, {
       registry,

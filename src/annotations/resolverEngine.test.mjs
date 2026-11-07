@@ -1,6 +1,5 @@
-// The view-centred search helpers read the camera through a globe engine as
-// well as through a viewer (src/locations.js searchAndFlyTo hands them the
-// engine).
+// The view-centred search helpers read the camera through the globe engine
+// (src/locations.js searchAndFlyTo and the annotation board hand it to them).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../geo/index.js';

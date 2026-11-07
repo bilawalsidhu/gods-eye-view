@@ -52,9 +52,7 @@ test('on a globe engine loading tiles or a miss return null without a sample cac
   assert.equal(engine.fake.callsOf('surface.sampleHeightDetailed').length, 1);
 });
 
-test('a coarse tile answer or only terrain is a miss; a viewer reaches its engine', async () => {
-  const { registerViewerEngine } =
-    await import('../globe/cesium/engineFromViewer.js');
+test('a coarse tile answer or only terrain is a miss', async () => {
   const snap = createGroundSnap({ groundFloor: groundFloor() });
   const engine = createFakeEngine();
   engine.fake.script('sampleHeightDetailed', () => ({
@@ -73,14 +71,8 @@ test('a coarse tile answer or only terrain is a miss; a viewer reaches its engin
     source: 'tiles',
     tileSizeM: 241,
   }));
-  const viewer = {};
-  const unregister = registerViewerEngine(viewer, engine);
-  try {
-    assert.equal(snap.heightFor(viewer, 'd3', KAUS), 122.5);
-  } finally {
-    unregister();
-  }
-  assert.equal(snap.heightFor({}, 'd4', KAUS), null, 'no engine: no sample');
+  assert.equal(snap.heightFor(engine, 'd3', KAUS), 122.5);
+  assert.equal(snap.heightFor(null, 'd4', KAUS), null, 'no engine: no sample');
 });
 
 const atDenverAirport = geo.cartesian3.fromDegrees(-104.6737, 39.8561, 0);

@@ -173,8 +173,8 @@ function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undef
     trackedEntity: undefined,
     entities: { remove() {} },
   };
-  // The ground snap samples through the viewer's engine (engineFromViewer):
-  // the engine surface over this stub's tileset and scene.sampleHeight.
+  // The ground snap samples through the viewer's engine (the test
+  // renderer's surfaceOwner, engineFromViewer): the engine surface over this stub's tileset and scene.sampleHeight.
   registerViewerEngine(viewer, {
     isDestroyed: () => false,
     surface: {

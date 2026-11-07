@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createApplicationScene } from './scene.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import {
-  installRenderGovernor,
+  installEngineRenderGovernor,
   isRenderGovernorInstalled,
 } from '../renderGovernor.js';
 
@@ -164,7 +164,7 @@ test('the Navara scene tears down the controller, then the globe', async (t) => 
   const run = await startScene();
   // The tools install the governor on the engine (src/app/tools.js); the
   // scene removes it before the engine goes.
-  installRenderGovernor(run.engine);
+  installEngineRenderGovernor(run.engine);
   const view = globalThis.window;
   await run.teardown();
   assert.equal(run.globeDestroyed(), 1);

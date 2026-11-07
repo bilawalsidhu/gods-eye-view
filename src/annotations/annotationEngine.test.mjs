@@ -241,7 +241,7 @@ test('outline queue: an 8-spec batch keeps at most two FIFO upgrades in flight',
     };
   };
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget,
   });
@@ -313,7 +313,7 @@ test('outline queue: clear drops queued-but-unstarted upgrades without a later f
       }),
   });
   engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget,
   });
@@ -379,7 +379,7 @@ test('retry: HTTP 429 Retry-After 5s gets one ladder-spaced retry; a second 429 
   });
 
   const resolved = await resolveAnnotationTarget({
-    viewer: {},
+    globe: {},
     target: 'PT2 rate-limit fixture',
     latitude: 12.345,
     longitude: 67.89,
@@ -453,7 +453,7 @@ test('retry: a plain HTTP 500 still exhausts the existing 8s/25s transient ladde
   });
 
   const resolved = await resolveAnnotationTarget({
-    viewer: {},
+    globe: {},
     target: 'PT2 transient fixture',
     latitude: -12.345,
     longitude: -67.89,
@@ -603,8 +603,8 @@ test('outline upgrade updates the rendered element in place without remove/add',
     remove() { calls.remove += 1; },
     sync() {},
   };
-  const viewer = {};
-  const engine = createAnnotationEngine({ viewer, renderer, placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => 'unit-test-key' }) });
+  const globe = {};
+  const engine = createAnnotationEngine({ globe, renderer, placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => 'unit-test-key' }) });
   const upgraded = new Promise((resolve) => engine.onOutlineEvent(resolve));
 
   const result = await engine.annotate([{
@@ -715,7 +715,7 @@ test('fresh async building batch reserves slots together and releases failed/cle
   t.after(() => _resetRenderGovernorForTest());
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: h.renderer,
     resolveTarget: async ({ target }) => ({
       ...BUILDING_FP,
@@ -762,7 +762,7 @@ test('outline workers retain completion ownership and clear cancels resolved-but
   const h = controlledBuildingRenderer();
   const started = [];
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: h.renderer,
     resolveTarget: async ({ target }) => ({
       ...FIXED_POINT,
@@ -805,7 +805,7 @@ test('building recaption timeout retains old route and a newer replacement owns 
   installAnimationFrameStubs(t);
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: h.renderer,
     resolveTarget: async () => ({ ...BUILDING_FP }),
   });
@@ -860,7 +860,7 @@ test('replacement cleanup failure still removes the old route and retains failed
   installAnimationFrameStubs(t);
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
+    globe: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
   });
   const initial = engine.annotate([{ type: 'area', target: 'Capitol', label: 'Old' }]);
   await flushMicrotasks();
@@ -905,7 +905,7 @@ test('identical refresh revokes an older building replacement even if cancellati
   installAnimationFrameStubs(t);
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
+    globe: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
   });
   const initial = engine.annotate([{ type: 'area', target: 'Capitol', label: 'Old' }]);
   await flushMicrotasks(); h.pending[0].finish(); await initial;
@@ -936,7 +936,7 @@ test('successful replacement survives failed old-route retirement and keeps clea
   installAnimationFrameStubs(t);
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
+    globe: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
   });
   const initial = engine.annotate([{ type: 'area', target: 'Capitol', label: 'Old' }]);
   await flushMicrotasks(); h.pending[0].finish(); await initial;
@@ -975,7 +975,7 @@ test('pending fresh predecessor failure cannot erase a newer building intent', a
   globalThis.requestAnimationFrame = (callback) => { frames.push(callback); return frames.length; };
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
+    globe: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
   });
   const first = engine.annotate([{ type: 'area', target: 'Capitol', label: 'First' }]);
   await flushMicrotasks();
@@ -1004,7 +1004,7 @@ test('duplicate pending building results reflect final failure rather than a dea
   installAnimationFrameStubs(t);
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
+    globe: {}, renderer: h.renderer, resolveTarget: async () => ({ ...BUILDING_FP }),
   });
   const spec = { type: 'area', target: 'Capitol', label: 'Same' };
   const batch = engine.annotate([spec, spec]);
@@ -1023,7 +1023,7 @@ test('separate duplicate callers observe the original building install outcome',
   for (const outcome of ['installed', 'failed', 'timeout', 'clear']) {
     const h = controlledBuildingRenderer();
     const engine = createAnnotationEngine({
-      viewer: {},
+      globe: {},
       renderer: h.renderer,
       resolveTarget: async () => ({ ...BUILDING_FP }),
     });
@@ -1077,7 +1077,7 @@ test('a duplicate joins the physical deferred install but not another outline lo
   const h = controlledBuildingRenderer();
   let lookups = 0;
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: h.renderer,
     resolveTarget: async () => ({
       ...FIXED_POINT,
@@ -1119,7 +1119,7 @@ test('duplicate-replacement: a renderer throw leaves no phantom mark and no leak
 
   const { renderer, failAddOnce } = throwingRendererHarness();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: async () => ({ ...FIXED_POINT }),
   });
@@ -1173,7 +1173,7 @@ test('fresh path: a renderer throw is rolled back the same way', async (t) => {
 
   const { renderer, failAddOnce } = throwingRendererHarness();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: async () => ({ ...FIXED_POINT }),
   });
@@ -1237,7 +1237,7 @@ test('fresh path: a throw AFTER partial renderer state leaves nothing on the boa
 
   const { renderer, failAddOnce, live } = partialStateRendererHarness();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: async () => ({ ...FIXED_POINT }),
   });
@@ -1278,7 +1278,7 @@ test('duplicate-replacement: a throw AFTER partial renderer state leaves nothing
 
   const { renderer, failAddOnce, live } = partialStateRendererHarness();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: async () => ({ ...FIXED_POINT }),
   });
@@ -1335,7 +1335,7 @@ test('destroy releases the renderer and prevents subsequent annotation work', as
   renderer.destroy = () => {
     destroyed++;
   };
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   const drawn = await engine.annotate([
     { type: 'pin', longitude: -97.74, latitude: 30.27 },
   ]);
@@ -1360,7 +1360,7 @@ test('a late annotation resolver cannot redraw after destruction', async (t) => 
   let release;
   let signal;
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: (options) => {
       signal = options.signal;
@@ -1385,9 +1385,10 @@ test('caller cancellation prevents a late annotation and camera mutation', async
   let resolverSignal;
   let flights = 0;
   const engine = createAnnotationEngine({
-    viewer: {
+    globe: {
       camera: {
-        flyToBoundingSphere() {
+        pose: () => ({ heading: 0 }),
+        flyToSphere() {
           flights += 1;
         },
       },
@@ -1424,7 +1425,7 @@ test('only an explicit navigation request permits resolving distant annotation t
   renderer.destroy = () => {};
   const received = [];
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: async (options) => {
       received.push(options);
@@ -1448,7 +1449,7 @@ test('recaption inherits outline credit from borrowed geometry rather than its n
   const { renderer } = fakeRenderer();
   let first = true;
   const ring = [[-99,31],[-98.99,31],[-98.99,31.01],[-99,31]];
-  const engine = createAnnotationEngine({ viewer: {}, renderer,
+  const engine = createAnnotationEngine({ globe: {}, renderer,
     resolveTarget: async () => {
       if (first) { first = false; return { ...FIXED_POINT, ring, footprintKind: 'area', outlineCredit: 'tiles' }; }
       return { ...FIXED_POINT, source: 'osm-local', resolveOutline: async () => null };
@@ -1471,7 +1472,7 @@ test('hand-drawn marks: one mark can be hidden, renamed, recoloured, framed and 
   const { renderer, calls } = fakeRenderer();
   const flights = [];
   const engine = createAnnotationEngine({
-    viewer: { camera: { heading: 0, flyToBoundingSphere: (sphere) => flights.push(sphere) } },
+    globe: { camera: { pose: () => ({ heading: 0 }), flyToSphere: (sphere) => flights.push(sphere) } },
     renderer,
   });
   let changes = 0;
@@ -1540,10 +1541,10 @@ test('hand-drawn marks: remove, hide, clear, expiry and framing have their effec
   const { renderer, calls } = fakeRenderer();
   const flights = [];
   const engine = createAnnotationEngine({
-    viewer: {
+    globe: {
       camera: {
-        heading: 0,
-        flyToBoundingSphere: (sphere) => flights.push(sphere),
+        pose: () => ({ heading: 0 }),
+        flyToSphere: (sphere) => flights.push(sphere),
       },
     },
     renderer,
@@ -1638,7 +1639,7 @@ test('hand-drawn marks: a voice mark or a hidden mark is not taken as their dupl
   _resetRenderGovernorForTest();
   t.after(() => _resetRenderGovernorForTest());
   const { renderer } = fakeRenderer();
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   await engine.annotate(
     [
       {
@@ -1691,7 +1692,7 @@ test('hand-drawn marks: only a manual mark can be restyled', async (t) => {
   t.after(() => _resetRenderGovernorForTest());
   const { renderer } = fakeRenderer();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer,
     resolveTarget: async () => ({ ...FIXED_POINT }),
   });
@@ -1706,7 +1707,7 @@ test('a drawn line that rounds up to the next unit is labelled in it, not as 100
   installAnimationFrameStubs(t);
   const labels = [];
   const renderer = { add(anno) { labels.push(anno.label); }, update() {}, remove() {}, sync() {}, destroy() {} };
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   const metresPerDegree = (6371.0088 * 1000 * Math.PI) / 180;
   for (const metres of [994, 996, 9940, 9960]) {
     await engine.annotate([
@@ -1722,7 +1723,7 @@ test('hand-drawn marks: two unnamed pins close together are two pins, whatever t
   _resetRenderGovernorForTest();
   t.after(() => _resetRenderGovernorForTest());
   const { renderer } = fakeRenderer();
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   const pin = (lon, color) => ({ type: 'pin', manual: true, latitude: 30.27, longitude: lon, label: '', color });
   await engine.annotate([pin(-97.74, 'primary')], { persist: true });
   await engine.annotate([pin(-97.7402, 'primary')], { persist: true });
@@ -1740,7 +1741,7 @@ test('hand-drawn marks: hiding a mark before its first frame takes it off at onc
   t.after(() => _resetRenderGovernorForTest());
   let syncs = 0;
   const renderer = { add() {}, update() {}, remove() {}, sync() { syncs += 1; }, destroy() {} };
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
   const [mark] = engine.list();
   const before = syncs;
@@ -1759,7 +1760,7 @@ test('hand-drawn marks: with every mark hidden the scene idles, and showing one 
   let renders = 0;
   installRenderGovernor({ scene: { requestRenderMode: true, requestRender: () => (renders += 1) } });
   const { renderer } = fakeRenderer();
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   await engine.annotate([
     { type: 'pin', manual: true, latitude: 1, longitude: 1 },
     { type: 'pin', manual: true, latitude: 2, longitude: 2 },
@@ -1784,7 +1785,7 @@ test('hand-drawn marks: a restyle the renderer cannot draw takes the mark off an
   const { renderer, failAddOnce } = throwingRendererHarness();
   let syncs = 0;
   renderer.sync = () => (syncs += 1);
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
   const [mark] = engine.list();
   let changes = 0;
@@ -1811,7 +1812,7 @@ test('hand-drawn marks: a mark shown again right after it was drawn appears at o
   });
   const tick = () => queued.splice(0).forEach((callback) => callback());
   const { renderer } = fakeRenderer();
-  const engine = createAnnotationEngine({ viewer: {}, renderer });
+  const engine = createAnnotationEngine({ globe: {}, renderer });
   await engine.annotate([{ type: 'pin', manual: true, latitude: 1, longitude: 1 }], { persist: true });
   const [mark] = engine.list();
   engine.setHidden(mark.id, true);
@@ -1832,7 +1833,7 @@ test('removing one mark whose cleanup fails keeps it addressable for a retry', a
     calls.remove += 1;
     if (failRemove) throw new Error('renderer remove failed');
   };
-  const engine = createAnnotationEngine({ viewer: { camera: { heading: 0 } }, renderer });
+  const engine = createAnnotationEngine({ globe: { camera: { pose: () => ({ heading: 0 }) } }, renderer });
   await engine.annotate([
     { type: 'pin', manual: true, latitude: 30.27, longitude: -97.74, label: 'Camp' },
   ], { persist: true });
@@ -1850,7 +1851,7 @@ test('a building install in the batch does not re-judge marks that never install
   installAnimationFrameStubs(t);
   const h = controlledBuildingRenderer();
   const engine = createAnnotationEngine({
-    viewer: {},
+    globe: {},
     renderer: h.renderer,
     resolveTarget: async ({ target }) =>
       target === 'Tower' ? { ...BUILDING_FP, lon: -97.7 } : { ...FIXED_POINT },
@@ -1873,7 +1874,7 @@ test('plain recaption keeps the old mark addressable when its removal throws', a
   installAnimationFrameStubs(t);
   const { renderer } = fakeRenderer();
   const engine = createAnnotationEngine({
-    viewer: {}, renderer, resolveTarget: async () => ({ ...FIXED_POINT }),
+    globe: {}, renderer, resolveTarget: async () => ({ ...FIXED_POINT }),
   });
   await engine.annotate([{ type: 'point', target: 'Capitol', label: 'Capitol' }]);
   const old = engine.list()[0];

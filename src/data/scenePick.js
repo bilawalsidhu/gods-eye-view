@@ -1,5 +1,3 @@
-import { isGlobeEngine } from '../globe/contract.js';
-
 /**
  * Validation for positions that came back from a Cesium screen pick.
  *
@@ -54,28 +52,18 @@ export function isPickedWorldPosition(position) {
  * The world position under a screen point: the rendered surface where the
  * depth buffer has it, else the ellipsoid; null over the sky.
  *
- * @param {object} target The globe engine (`engine.picker.pickPosition`, then
- *   `engine.camera.pickEllipsoid`), or a Cesium viewer from callers that
- *   still hold one (`scene.pickPosition`, then `camera.pickEllipsoid`).
+ * @param {object} engine The globe engine (`engine.picker.pickPosition`,
+ *   then `engine.camera.pickEllipsoid`); without one, null.
  * @param {{x: number, y: number}} screenPosition
  * @returns {{x: number, y: number, z: number}|null} A Cartesian3.
  */
-export function pickGroundPosition(target, screenPosition) {
-  if (isGlobeEngine(target)) {
-    const { picker, camera } = target;
-    return groundUnder(
-      screenPosition,
-      picker.pickPositionSupported ? picker : null,
-      camera,
-    );
-  }
-  const scene = target?.scene;
+export function pickGroundPosition(engine, screenPosition) {
+  if (!engine) return null;
+  const { picker, camera } = engine;
   return groundUnder(
     screenPosition,
-    scene?.pickPositionSupported && typeof scene.pickPosition === 'function'
-      ? scene
-      : null,
-    typeof target?.camera?.pickEllipsoid === 'function' ? target.camera : null,
+    picker.pickPositionSupported ? picker : null,
+    camera,
   );
 }
 

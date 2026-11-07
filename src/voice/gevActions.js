@@ -378,7 +378,7 @@ export function createGevActionRunner({
   // analyst's region/area/drawn scopes, find_imagery and osm_query all read
   // the same store.
   const voiceAreas = createVoiceAreas({
-    viewer,
+    engine,
     annotations,
     placeSearch,
     annotationResolver,
@@ -1452,7 +1452,7 @@ export function createGevActionRunner({
               runOptions,
             ),
           search: searchOsmFeatures,
-          onCredit: () => registerDynamicCredit(viewer, OSM_PLACES_CREDIT),
+          onCredit: () => registerDynamicCredit(engine, OSM_PLACES_CREDIT),
           // The listed places become the analyst's "last answer", so
           // "which of those…" filters them and never an older set.
           rememberResults: (rows, presentation, { truncated = false } = {}) => {

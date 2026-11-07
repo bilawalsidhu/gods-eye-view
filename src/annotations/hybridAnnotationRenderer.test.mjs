@@ -5,11 +5,18 @@ import { createPinia } from 'pinia';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
+import { createCesiumCredits } from '../globe/cesium/credits.js';
+
+/** The engine fakeViewer built for each viewer double (its credits). */
+const enginesOf = new WeakMap();
 
 /** A hybrid renderer whose screen board is presented to its own store. */
 function hybridWithBoard(viewer) {
   const store = useScreenAnnotationsStore(createPinia());
-  const renderer = createHybridAnnotationRenderer(viewer, { screen: { store } });
+  const renderer = createHybridAnnotationRenderer(viewer, {
+    screen: { store },
+    engine: enginesOf.get(viewer),
+  });
   return { store, renderer };
 }
 
@@ -107,10 +114,7 @@ function fakeViewer(lon, lat) {
       scene.renderRequests += 1;
     },
   };
-  return {
-    dataSources,
-    frames,
-    viewer: {
+  const viewer = {
       credits,
       creditDisplay: {
         addStaticCredit: (credit) => credits.add(credit),
@@ -130,8 +134,14 @@ function fakeViewer(lon, lat) {
           return index >= 0;
         },
       },
-    },
+    };
+  // The Cesium engine's credits over the viewer's credit display.
+  const engine = {
+    credits: createCesiumCredits(viewer).credits,
+    render: { request: () => scene.requestRender() },
   };
+  enginesOf.set(viewer, engine);
+  return { dataSources, frames, viewer, engine };
 }
 
 function controlledFrames() {
@@ -475,14 +485,14 @@ function workTrace() {
 
 test('buildings share one probe per frame and preserve probe geometry, filtering and fallback', async (t) => {
   installBrowserGlobals(t);
-  const { viewer, dataSources, frames } = fakeViewer(-99, 31);
-  const renderer = createHybridAnnotationRenderer(viewer);
+  const { viewer, engine, dataSources, frames } = fakeViewer(-99, 31);
+  const renderer = createHybridAnnotationRenderer(viewer, { engine });
   t.after(() => renderer.destroy());
   const first = buildingAnnotation('sampled-building');
   const second = buildingAnnotation('fallback-building', 0.01);
   second.outlineCredit = 'osm';
   const otherOwner = {};
-  showOsmCredit(viewer, otherOwner);
+  showOsmCredit(engine, otherOwner);
   const probes = [];
   const outcomes = [-500, 120, 30, null, new Error('tile unavailable'), 60, 9001, 90];
   viewer.scene.clampToHeight = (position) => {
@@ -583,7 +593,7 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
     'removing the last tile proxy retains the OSM building and other owner');
   renderer.remove(second);
   assert.equal([...viewer.credits].filter(c => c.showOnScreen).length, 1);
-  hideOsmCredit(viewer, otherOwner);
+  hideOsmCredit(engine, otherOwner);
   assert.equal(viewer.credits.size, 0);
 });
 
