@@ -9,7 +9,14 @@ import { createPinia } from 'pinia';
 import { useCelestialRingStore } from './ui/stores/celestialRing.js';
 import CelestialRingView from './ui/views/panels/CelestialRing.vue';
 import * as Cesium from 'cesium';
-import { CelestialRing } from './celestialRing.js';
+import {
+  CelestialRing,
+  earthDiscScreenRadius,
+  projectEarthDiscToViewport,
+} from './celestialRing.js';
+import { bindRenderer } from './render/rendererOf.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
+import { fakeSceneFrame } from './testSupport/fakeCesiumScene.mjs';
 
 // happy-dom has no 2D context; a stand-in takes every drawing call.
 const context = new Proxy(
@@ -19,18 +26,26 @@ const context = new Proxy(
 globalThis.HTMLCanvasElement.prototype.getContext = () => context;
 
 function fakeViewer(container) {
-  return {
+  const canvas = {
+    clientWidth: 400,
+    clientHeight: 300,
+    width: 400,
+    height: 300,
+  };
+  const viewer = {
     container,
+    canvas,
     camera: {
       rightWC: new Cesium.Cartesian3(1, 0, 0),
       upWC: new Cesium.Cartesian3(0, 1, 0),
     },
     scene: {
-      canvas: { clientWidth: 400, clientHeight: 300, width: 400, height: 300 },
+      canvas,
       postRender: { addEventListener: () => () => {} },
       requestRender() {},
     },
   };
+  return bindFakeCesiumCamera(viewer, { frame: fakeSceneFrame(viewer) });
 }
 
 function fixture(t) {
@@ -157,8 +172,7 @@ const FRAMED = {
 /** Run one rendered frame, past the frame-rate throttle. */
 function frame(ring, disc) {
   ring._projectedEarthDisc = () => disc;
-  // Fixed sun and moon directions; Cesium's own model would fetch its
-  // orientation data.
+  // Fixed sun and moon directions, so markers do not move with the clock.
   ring._updateEphemeris = () => {
     if (ring._ephemerisDirty) {
       Cesium.Cartesian3.clone(new Cesium.Cartesian3(1, 0, 0), ring._sunFixed);
@@ -248,4 +262,120 @@ test('a ring the store no longer shows stops drawing', async (t) => {
   frame(earlier, null);
   assert.equal(earlier.enabled, true);
   assert.equal(disabled, 0);
+});
+
+test('the sun and moon directions are the planetary model in the pseudo-fixed frame', () => {
+  const pinia = createPinia();
+  const ring = new CelestialRing(fakeViewer({}), {
+    enabled: false,
+    store: useCelestialRingStore(pinia),
+    // The precise frame's tables have not loaded.
+    preciseFrameAt: () => null,
+  });
+  const ms = Date.UTC(2026, 10, 7, 12, 30);
+  ring._ephemerisDirty = true;
+  assert.equal(ring._updateEphemeris(ms), true);
+  // Cesium's own, before the sky has loaded the precise frame's tables.
+  const time = Cesium.JulianDate.fromDate(new Date(ms));
+  const matrix = Cesium.Transforms.computeTemeToPseudoFixedMatrix(time);
+  const expected = (inertial) =>
+    Cesium.Cartesian3.normalize(
+      Cesium.Matrix3.multiplyByVector(
+        matrix,
+        inertial,
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    );
+  const sun = expected(
+    Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
+      time,
+    ),
+  );
+  const moon = expected(
+    Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
+      time,
+    ),
+  );
+  for (const [got, want] of [
+    [ring._sunFixed, sun],
+    [ring._moonFixed, moon],
+  ])
+    for (const axis of ['x', 'y', 'z'])
+      assert.ok(Object.is(got[axis], want[axis]), axis);
+  assert.equal(ring._ephemerisUpdateCount, 1);
+  ring.destroy();
+});
+
+test('the projected disc reads the camera and query ports', () => {
+  const canvas = { clientWidth: 800, clientHeight: 600 };
+  const viewer = { canvas };
+  const distance = 3 * 6378137;
+  const pose = {
+    position: { x: distance, y: 0, z: 0 },
+    direction: { x: -1, y: 0, z: 0 },
+    fovy: Math.PI / 3,
+  };
+  const unbind = bindRenderer(viewer, {
+    canvas,
+    camera: { pose: () => pose },
+    query: { project: () => ({ x: 410, y: 290 }) },
+  });
+  const toCenter = { x: 0, y: 0, z: 0 };
+  const centre = { x: 0, y: 0 };
+  const disc = projectEarthDiscToViewport(viewer, 800, 600, centre, toCenter);
+  assert.equal(disc.earthCenterX, 410);
+  assert.equal(disc.earthCenterY, 290);
+  assert.deepEqual(centre, { x: 410, y: 290 });
+  // The scratch takes the eye-to-centre vector, as callers read it after.
+  assert.deepEqual(toCenter, { x: -distance, y: -0, z: -0 });
+  assert.ok(
+    Math.abs(
+      disc.earthRadius - earthDiscScreenRadius(distance, 600, pose.fovy),
+    ) < 1e-9,
+  );
+  // Facing away: null, with the eye-to-centre vector still written, as
+  // radio navigation reads it after.
+  pose.direction = { x: 1, y: 0, z: 0 };
+  const away = { x: 0, y: 0, z: 0 };
+  assert.equal(projectEarthDiscToViewport(viewer, 800, 600, null, away), null);
+  assert.deepEqual(away, { x: -distance, y: -0, z: -0 });
+  // Inside the ellipsoid's largest radius: null, the scratch untouched.
+  pose.position = { x: 6378137, y: 0, z: 0 };
+  const inside = { x: 1, y: 2, z: 3 };
+  assert.equal(
+    projectEarthDiscToViewport(viewer, 800, 600, null, inside),
+    null,
+  );
+  assert.deepEqual(inside, { x: 1, y: 2, z: 3 });
+  unbind();
+});
+
+test('the precise frame serves once it answers', () => {
+  const pinia = createPinia();
+  // A quarter turn about z: x goes to y.
+  const quarter = {
+    x: { x: 0, y: 1, z: 0 },
+    y: { x: -1, y: 0, z: 0 },
+    z: { x: 0, y: 0, z: 1 },
+  };
+  const ring = new CelestialRing(fakeViewer({}), {
+    enabled: false,
+    store: useCelestialRingStore(pinia),
+    preciseFrameAt: () => quarter,
+  });
+  const ms = Date.UTC(2026, 10, 7, 12, 30);
+  ring._ephemerisDirty = true;
+  ring._updateEphemeris(ms);
+  const time = Cesium.JulianDate.fromDate(new Date(ms));
+  const sun = Cesium.Cartesian3.normalize(
+    Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
+      time,
+    ),
+    new Cesium.Cartesian3(),
+  );
+  assert.ok(Math.abs(ring._sunFixed.x + sun.y) < 1e-12);
+  assert.ok(Math.abs(ring._sunFixed.y - sun.x) < 1e-12);
+  assert.ok(Math.abs(ring._sunFixed.z - sun.z) < 1e-12);
+  ring.destroy();
 });

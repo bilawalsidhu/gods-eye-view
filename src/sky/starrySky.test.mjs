@@ -7,6 +7,7 @@ import {
   SKY_ROTATION_EPSILON_SECONDS,
   StarrySky,
   computeSkyRotation,
+  icrfToFixedAxes,
   isSkyRotationCurrent,
 } from './starrySky.js';
 
@@ -197,4 +198,26 @@ test('a render update uploads six opaque black environment faces only once', () 
     if (!sky.isDestroyed()) sky.destroy();
     Cesium.ContextLimits._maximumCubeMapSize = previous;
   }
+});
+
+test('the precise frame is given as its axes once its tables answer', (t) => {
+  const matrix = Cesium.Matrix3.fromRowMajorArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  let asked = null;
+  t.mock.method(Cesium.Transforms, 'computeIcrfToFixedMatrix', (time, out) => {
+    asked = time;
+    return Cesium.Matrix3.clone(matrix, out);
+  });
+  const ms = Date.UTC(2026, 10, 7);
+  assert.deepEqual(icrfToFixedAxes(ms), {
+    x: { x: 1, y: 4, z: 7 },
+    y: { x: 2, y: 5, z: 8 },
+    z: { x: 3, y: 6, z: 9 },
+  });
+  assert.ok(
+    Cesium.JulianDate.equals(asked, Cesium.JulianDate.fromDate(new Date(ms))),
+  );
+  Cesium.Transforms.computeIcrfToFixedMatrix.mock.mockImplementation(
+    () => undefined,
+  );
+  assert.equal(icrfToFixedAxes(ms), null);
 });

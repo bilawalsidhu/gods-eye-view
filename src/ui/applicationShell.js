@@ -60,6 +60,7 @@ import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
+import { icrfToFixedAxes } from '../sky/starrySky.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
 import { useHudStore } from './stores/hud.js';
@@ -433,6 +434,8 @@ export class StyleManager extends ShellFacade {
     this.celestialRing = new CelestialRing(viewer, {
       enabled: false,
       store: useCelestialRingStore(applicationPinia()),
+      // The precise frame, once the sky has loaded its tables.
+      preciseFrameAt: icrfToFixedAxes,
       onAutoDisable: () =>
         this.setCelestialRingEnabled(false, {
           syncShare: !!this.shareLinkManager,

@@ -3,6 +3,10 @@ import { ringCentroid } from '../sources/featureGeometry.js';
 import * as Cesium from 'cesium';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 import { heightsFor } from '../render/cesium/heights.js';
+// The annotations entry's Cesium side: it loads the factories that build
+// the camera, frame and query ports the engine and screen renderer ask for
+// on a viewer with no renderer bound.
+import '../render/cesium/camera.js';
 
 /**
  * World-space annotation renderer (Direction A).

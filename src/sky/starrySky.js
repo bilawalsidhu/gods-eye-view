@@ -128,6 +128,29 @@ export function computeSkyRotation(time, result) {
   };
 }
 
+const scratchIcrf = new Cesium.Matrix3();
+
+/**
+ * The precise ICRF-to-fixed rotation at `ms` (epoch milliseconds) as its
+ * axes (the matrix's columns, the form `geo/frames` uses), or null while
+ * Cesium's IAU 2006 tables for that time have not loaded (the sky loads
+ * them while it shows). Callers fall back to `temeToPseudoFixed`.
+ * @param {number} ms
+ * @returns {{x: object, y: object, z: object} | null}
+ */
+export function icrfToFixedAxes(ms) {
+  const m = Cesium.Transforms.computeIcrfToFixedMatrix(
+    Cesium.JulianDate.fromDate(new Date(ms)),
+    scratchIcrf,
+  );
+  if (!m) return null;
+  return {
+    x: { x: m[0], y: m[1], z: m[2] },
+    y: { x: m[3], y: m[4], z: m[5] },
+    z: { x: m[6], y: m[7], z: m[8] },
+  };
+}
+
 /** Whether a cached rotation at `cachedTime` still serves `time`. */
 export function isSkyRotationCurrent(cachedTime, time) {
   return (

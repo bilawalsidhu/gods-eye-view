@@ -6,7 +6,6 @@
   "src/app/scene.js",
   "src/app/viewer.js",
   "src/cameraVerbs.js",
-  "src/celestialRing.js",
   "src/cockpitCloudEffects.js",
   "src/cyberSonarGpu.js",
   "src/cyberSonarScene.js",
