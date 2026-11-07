@@ -1,4 +1,7 @@
 import * as Cesium from 'cesium';
+// The Cesium camera factory: given a viewer of a caller's own, with no
+// renderer bound, the layer's flights and camera reads find a camera port.
+import '../../render/cesium/camera.js';
 import { clusterPointCollection as clusterPointsOf } from '../../render/cesium/internals.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import {
@@ -423,6 +426,26 @@ export function createRendering({
         scheduleRadioOverlayPublish();
       });
   }
+  /**
+   * Add the stations' data source to the viewer, once, with its clustering.
+   * @param {object} viewer
+   */
+  function installDataSource(viewer) {
+    if (layerState._dataSource) return;
+    layerState._dataSource = new Cesium.CustomDataSource('Radio stations');
+    viewer.dataSources.add(layerState._dataSource);
+    installClusterStyling();
+  }
+
+  /** Stop styling clusters and take the data source off the viewer. */
+  function removeDataSource() {
+    layerState._removeClusterListener?.();
+    layerState._removeClusterListener = null;
+    if (layerState._dataSource && layerState._viewer)
+      layerState._viewer.dataSources.remove(layerState._dataSource, true);
+    layerState._dataSource = null;
+  }
+
   /** Show or hide the stations' entities. */
   function setStationsShown(shown) {
     if (layerState._dataSource) layerState._dataSource.show = shown;
@@ -451,6 +474,8 @@ export function createRendering({
 
   return {
     radioStationIdFromPick,
+    installDataSource,
+    removeDataSource,
     setStationsShown,
     removeSelectionEntity,
     reclusterStations,

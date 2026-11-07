@@ -635,6 +635,7 @@
   "src/layers/radio/volume.js",
   "src/data/radio.js",
   "src/layers/radio/source.test.mjs",
+  "src/layers/radio/lifecycle.test.mjs",
   "src/layers/submarineCables/bundledSource.js",
   "src/layers/submarineCables/geometry.js",
   "src/layers/submarineCables/index.js",
