@@ -141,6 +141,12 @@ export class LayerBindings {
       });
       this._weatherShellModules.push(layer);
     }
+    // Active Fires drapes its far-zoom heatmap on the same imagery host.
+    const fires = this._dataManager?.layers?.get('local-firms')?.module;
+    if (typeof fires?.attachShellServices === 'function') {
+      fires.attachShellServices({ imageryHost: this.services.imageryHost });
+      this._weatherShellModules.push(fires);
+    }
   }
 
   _persistAwarenessSelection(event, cleared = false) {
