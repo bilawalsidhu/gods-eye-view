@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { historyTools } from '../../server/recorder/tools.js';
 import test from 'node:test';
 import { PassThrough } from 'node:stream';
 import { createLocalMcpServer } from '../../server/mcp/server.js';
@@ -70,7 +71,9 @@ test('the stdio server answers newline-delimited requests using only its data so
   // Every Core tool's services are composed locally.
   assert.deepEqual(
     byId.get(2).result.tools.map((tool) => tool.name),
-    toolsForSurface(coreTools, 'mcp').map((tool) => tool.name),
+    toolsForSurface([...coreTools, ...historyTools], 'mcp').map(
+      (tool) => tool.name,
+    ),
   );
   assert.equal(
     byId.get(3).result.content[0].text,

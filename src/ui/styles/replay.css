@@ -1,0 +1,322 @@
+/* Replay: a right-rail readout built from the weather rail's timeline and
+   chips. Only the panel frame is declared here. */
+.replay-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+#replay-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+#replay-panel-count {
+  color: var(--text-secondary);
+  font: 9px var(--font-mono);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+#replay-panel-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
+}
+#replay-panel.collapsed #replay-panel-body,
+#replay-panel.collapsed #replay-panel-count,
+#replay-panel[hidden] {
+  display: none !important;
+}
+.replay-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.replay-alerts {
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-alerts[hidden] {
+  display: none;
+}
+.replay-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.replay-fences {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-fences[hidden] {
+  display: none;
+}
+.replay-fence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.replay-fence-remove {
+  padding: 0 6px;
+}
+
+.replay-input {
+  flex: 1 1 120px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-primary, #e6f6ff);
+  font: 10px var(--font-mono);
+  color-scheme: dark;
+}
+.replay-input:focus {
+  outline: 1px solid rgba(0, 212, 255, 0.6);
+}
+
+.replay-track-first {
+  color: #4dff9a;
+}
+.replay-track-last {
+  color: #ff5c5c;
+}
+
+/* The rail passes clicks through; each panel opts back in, as the weather
+   panel does. */
+#right-context-rail > #replay-panel {
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  width: 100%;
+  max-height: 100%;
+  pointer-events: auto;
+}
+#right-context-rail > #replay-panel.collapsed {
+  width: var(--right-display-collapsed-width);
+  margin-left: auto;
+}
+
+/* Storage bar: green below 60%, orange to 85%, red above. The faint track
+   shows the three zones so the thresholds are visible before they are hit. */
+.replay-storage {
+  --bar: #4dff9a;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-storage[hidden] {
+  display: none;
+}
+.replay-storage[data-level='orange'] {
+  --bar: #ffb000;
+}
+.replay-storage[data-level='red'] {
+  --bar: #ff5c5c;
+}
+.replay-storage-head,
+.replay-storage-numbers {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.replay-storage-head span:last-child {
+  color: var(--bar);
+  font-weight: 700;
+}
+.replay-bar {
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgba(77, 255, 154, 0.16) 0 60%,
+    rgba(255, 176, 0, 0.16) 60% 85%,
+    rgba(255, 92, 92, 0.16) 85% 100%
+  );
+}
+.replay-bar[hidden] {
+  display: none;
+}
+.replay-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--bar);
+  transition:
+    width 0.4s ease,
+    background-color 0.4s ease;
+}
+.replay-storage-numbers span:first-child {
+  color: var(--text-primary, #e6f6ff);
+}
+.replay-storage-warn {
+  color: #ff5c5c;
+}
+.replay-storage-warn[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .replay-bar-fill {
+    transition: none;
+  }
+}
+
+.replay-alert-emergency {
+  color: #ff5c5c;
+  font-weight: 700;
+}
+
+/* Heat map key: the same ramp the squares use, quiet to busy. */
+.replay-heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.replay-heat-legend[hidden] {
+  display: none;
+}
+.replay-heat-swatch {
+  flex: 0 0 56px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.35),
+    rgba(255, 176, 0, 0.67),
+    rgba(255, 60, 60, 0.92)
+  );
+}
+
+/* Settings: a label above each box, locked ones dashed. */
+.replay-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.replay-settings[hidden] {
+  display: none;
+}
+.replay-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-input.replay-locked {
+  border-style: dashed;
+}
+/* A row input grows sideways; in a labelled field it must keep its height. */
+.replay-field .replay-input {
+  flex: 0 0 auto;
+}
+
+/* Feed health: green delivering, amber answering with nothing, red failing,
+   grey when nothing is asking or it has not been seen. */
+.replay-feed-ok {
+  color: #4dff9a;
+}
+.replay-feed-empty {
+  color: #ffb000;
+}
+.replay-feed-failing {
+  color: #ff5c5c;
+}
+.replay-feed-idle,
+.replay-feed-unseen {
+  color: #8da3ad;
+}
+
+.replay-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.replay-check input {
+  margin: 1px 0 0;
+  accent-color: #00d4ff;
+}
+
+/* Layout: labelled groups, chips that share a row evenly, and inputs that
+   fill their line. */
+.replay-readout {
+  gap: 12px;
+}
+.replay-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.replay-group-label {
+  color: var(--text-secondary);
+  font: 9px var(--font-mono);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.replay-group .replay-chips,
+.replay-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+  gap: 6px;
+}
+.replay-group .replay-chips .data-toggle-chip,
+.replay-modes .data-toggle-chip {
+  justify-content: center;
+  text-align: center;
+}
+.replay-group .replay-row-input {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.replay-group .replay-row-pair {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.replay-input {
+  font-size: 11px;
+}
+.replay-alerts {
+  line-height: 1.5;
+}
+
+/* Nearly-full drive: orange when low, red when critical. */
+.replay-drive-full[data-level='low'] {
+  color: #ffb000;
+}
