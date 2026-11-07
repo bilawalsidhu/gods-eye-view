@@ -103,10 +103,8 @@ function createTickableViewer({ heightM = 700 } = {}) {
   };
   const viewer = bindFakeCesiumCamera({
     trackedEntity: undefined,
-    clock: { onTick: { addEventListener: (fn) => { listeners.push(fn); return () => {}; } } },
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
-      tweens: [],
       requestRender() {},
     },
     camera,
@@ -114,6 +112,12 @@ function createTickableViewer({ heightM = 700 } = {}) {
     // A live app has a rendered surface under the route; the mesh probe reads
     // it, so these flights start immediately rather than arming.
     query: { sampleHeightNow: () => 0 },
+    frame: {
+      on: (phase, fn) => {
+        if (phase === 'preUpdate') listeners.push(fn);
+        return () => {};
+      },
+    },
   });
   return {
     viewer,
@@ -1102,4 +1106,28 @@ test('a route hidden from Draw is not flown; the newest visible one is', () => {
   assert.equal(started.ok, true);
   assert.match(JSON.stringify(started), /shown walk/, 'the visible route is flown');
   interruptCameraMotion?.('test');
+});
+
+test('a frame port bound after the verbs started runs the next motion', () => {
+  // A viewer with no renderer yet, so no frame port to listen to.
+  const viewer = {
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+  };
+  try {
+    initCameraVerbs(viewer);
+    const listeners = [];
+    bindRenderer(viewer, {
+      frame: {
+        on: (phase, fn) => {
+          if (phase === 'preUpdate') listeners.push(fn);
+          return () => listeners.splice(listeners.indexOf(fn), 1);
+        },
+      },
+    });
+    assert.equal(listeners.length, 0, 'nothing listens before a motion');
+    assert.equal(moveCamera({ motion: 'rotate', direction: 'left' }).ok, true);
+    assert.equal(listeners.length, 1, 'the motion runs on the bound port');
+  } finally {
+    interruptCameraMotion('test-cleanup');
+  }
 });

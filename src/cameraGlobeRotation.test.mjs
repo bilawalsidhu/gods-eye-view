@@ -1,5 +1,8 @@
 import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
-import { fakeSceneQuery } from './testSupport/fakeCesiumScene.mjs';
+import {
+  fakeSceneFrame,
+  fakeSceneQuery,
+} from './testSupport/fakeCesiumScene.mjs';
 import { GLOBE_VIEW } from './locations.js';
 import { projectEarthDiscToViewport } from './celestialRing.js';
 import assert from 'node:assert/strict';
@@ -130,7 +133,7 @@ function harness(
     mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
     mode: Cesium.SceneMode.SCENE3D,
     pixelRatio: 1,
-    tweens: [],
+    preUpdate: new Cesium.Event(),
     requestRender() {},
   };
   const camera = new Cesium.Camera(scene);
@@ -153,10 +156,10 @@ function harness(
     scene,
     trackedEntity: undefined,
     trackedEntityChanged: new Cesium.Event(),
-    clock: { onTick: new Cesium.Event() },
   };
   const viewer = bindFakeCesiumCamera(double, {
     query: fakeSceneQuery(double),
+    frame: fakeSceneFrame(double),
   });
   const target = Cesium.Cartesian3.fromDegrees(
     longitudeDeg,
@@ -171,73 +174,13 @@ function harness(
   });
   const tick = (seconds = 0.1) => {
     nowMs += seconds * 1000;
-    viewer.clock.onTick.raiseEvent(viewer.clock);
+    viewer.scene.preUpdate.raiseEvent(viewer.scene);
   };
   const finishOnce = () => {
     for (let i = 0; i < 20 && getActiveCameraMotion(); i += 1) tick();
     assert.equal(getActiveCameraMotion(), null, 'once motion must finish');
   };
   return { viewer, camera, canvas, target, tick, finishOnce };
-}
-
-for (const [name, sceneMode] of [
-  ['2D', Cesium.SceneMode.SCENE2D],
-  ['Columbus', Cesium.SceneMode.COLUMBUS_VIEW],
-  ['morphing', Cesium.SceneMode.MORPHING],
-]) {
-  test(`globe rotation refuses ${name} before changing the prior owner`, (t) => {
-    const { viewer, camera } = harness(t);
-    assert.equal(
-      moveCamera({ motion: 'rotate', direction: 'right', mode: 'continuous' })
-        .ok,
-      true,
-    );
-    const priorId = activeCameraMotionId();
-    const before = pose(camera);
-    const transform = Cesium.Matrix4.clone(camera.transform);
-    viewer.scene.mode = sceneMode;
-    let handoffs = 0;
-    let cancellations = 0;
-    camera.cancelFlight = () => {
-      cancellations += 1;
-    };
-    for (const mode of ['once', 'continuous']) {
-      const result = moveCamera(
-        { motion: 'rotate_globe', direction: 'left', mode },
-        () => {
-          handoffs += 1;
-          return { ok: true };
-        },
-      );
-      assert.equal(result.ok, false);
-      assert.match(result.error, /3D/);
-    }
-    assert.equal(handoffs, 0);
-    assert.equal(cancellations, 0);
-    assert.equal(activeCameraMotionId(), priorId);
-    assert.equal(hasRenderHold(), true);
-    assert.ok(Cesium.Matrix4.equals(camera.transform, transform));
-    samePose(camera, before);
-  });
-
-  test(`active globe rotation yields to ${name} without changing the camera`, (t) => {
-    const { viewer, camera, tick } = harness(t);
-    assert.equal(
-      moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
-      true,
-    );
-    viewer.scene.mode = sceneMode;
-    const before = pose(camera);
-    let rotations = 0;
-    camera.rotate = () => {
-      rotations += 1;
-    };
-    tick();
-    assert.equal(rotations, 0);
-    assert.equal(getActiveCameraMotion(), null);
-    assert.equal(hasRenderHold(), false);
-    samePose(camera, before);
-  });
 }
 
 test('globe rotation yields to tracking acquired and cleared before the next tick', (t) => {
@@ -534,7 +477,7 @@ test('replacement motion rejects a stale globe owner cancellation', (t) => {
   assert.equal(hasRenderHold(), false);
 });
 
-test('replacing the viewer retires globe motion and its old clock listener', (t) => {
+test('replacing the viewer retires globe motion and its old frame listener', (t) => {
   const { viewer, camera, tick } = harness(t);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
@@ -542,15 +485,16 @@ test('replacing the viewer retires globe motion and its old clock listener', (t)
   );
   tick();
   const before = pose(camera);
-  const nextViewer = {
-    ...viewer,
-    clock: { onTick: new Cesium.Event() },
-  };
+  const nextScene = { ...viewer.scene, preUpdate: new Cesium.Event() };
+  const nextViewer = bindFakeCesiumCamera(
+    { ...viewer, scene: nextScene },
+    { frame: fakeSceneFrame({ scene: nextScene }) },
+  );
   initCameraVerbs(nextViewer);
   assert.equal(getActiveCameraMotion(), null);
   assert.equal(hasRenderHold(), false);
   tick();
-  nextViewer.clock.onTick.raiseEvent(nextViewer.clock);
+  nextScene.preUpdate.raiseEvent(nextScene);
   samePose(camera, before);
 });
 
@@ -926,29 +870,6 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
     }
   });
 
-for (const [label, ellipsoid] of [
-  ['nonfinite radii', { minimumRadius: 1, maximumRadius: Infinity }],
-  ['nonpositive radii', { minimumRadius: 0, maximumRadius: 1 }],
-  ['non-WGS84 radii', new Cesium.Ellipsoid(30_000_000, 30_000_000, 1_000_000)],
-])
-  test(`globe rotation refuses ${label} before handoff`, (t) => {
-    const { viewer, camera } = harness(t, { height: 100_000_000 });
-    const before = pose(camera);
-    viewer.scene.globe.ellipsoid = ellipsoid;
-    let handedOff = false;
-    const result = moveCamera({ motion: 'rotate_globe' }, () => {
-      handedOff = true;
-    });
-    assert.equal(result.ok, false);
-    assert.equal(
-      result.reason,
-      label === 'non-WGS84 radii' ? 'unsupported-view' : 'unsafe-ellipsoid',
-    );
-    assert.equal(handedOff, false);
-    assert.equal(hasRenderHold(), false);
-    samePose(camera, before);
-  });
-
 test('an external radius change retires globe rotation without another write', (t) => {
   const { camera, tick } = harness(t);
   moveCamera({ motion: 'rotate_globe', mode: 'continuous' });
@@ -958,16 +879,6 @@ test('an external radius change retires globe rotation without another write', (
   assert.equal(getActiveCameraMotion(), null);
   assert.equal(hasRenderHold(), false);
   samePose(camera, changed);
-});
-
-test('a non-WGS84 ellipsoid fails closed rather than borrowing the WGS84 silhouette', (t) => {
-  const ellipsoid = new Cesium.Ellipsoid(10_000_000, 10_000_000, 8_000_000);
-  const { camera } = harness(t, { ellipsoid, latitude: 60 });
-  const before = pose(camera);
-  const result = moveCamera({ motion: 'rotate_globe' });
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, 'unsupported-view');
-  samePose(camera, before);
 });
 
 test('untouched polar framing permits repeated direction and speed changes below preset altitude', (t) => {

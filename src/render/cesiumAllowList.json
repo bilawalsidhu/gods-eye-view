@@ -5,7 +5,6 @@
   "src/app/embed.js",
   "src/app/scene.js",
   "src/app/viewer.js",
-  "src/cameraVerbs.js",
   "src/cockpitCloudEffects.js",
   "src/cyberSonarGpu.js",
   "src/cyberSonarScene.js",

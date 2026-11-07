@@ -26,6 +26,7 @@ import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult } from './speech.js';
 import { withEntityRecord } from '../data/entityRecords.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { cameraOf } from '../render/rendererOf.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -581,7 +582,9 @@ test('a chained orbit preserves its current destination flight while still stamp
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   viewer.trackedEntity = undefined;
-  viewer.scene.tweens.push({ id: 'destination-flight' });
+  // The destination flight, still in progress.
+  cameraOf(viewer).flyToBounds({ center: { x: 0, y: 0, z: 0 }, radius: 10 });
+  order.length = 0;
   const runner = createGevActionRunner({
     viewer,
     styleManager,
@@ -591,7 +594,7 @@ test('a chained orbit preserves its current destination flight while still stamp
   assert.equal(result.ok, true);
   assert.equal(result.armed, 'waiting-for-arrival');
   assert.deepEqual(order, ['stamp:camera', 'release']);
-  assert.equal(viewer.scene.tweens.length, 1);
+  assert.equal(cameraOf(viewer).flying, true);
   interruptCameraMotion('test-cleanup');
 });
 

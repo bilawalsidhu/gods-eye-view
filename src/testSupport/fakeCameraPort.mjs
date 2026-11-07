@@ -71,7 +71,7 @@ export function fakeCameraPort({ pose = {}, viewRectangle = null } = {}) {
  * port's commands reach the fake camera as the renderer maps them
  * (`flyTo({destination: Cartesian3, ...})`), while poses are read leniently
  * from what the fake has (`positionCartographic`, `heading`, `pitch`,
- * `roll`) and events come from the fake's own `changed`, `moveStart` and
+ * `roll`, the frustum's `fovy`, `aspectRatio`, `near` and `far`) and events come from the fake's own `changed`, `moveStart` and
  * `moveEnd`. A fake with `trackedEntityChanged` and `entities` follows
  * through the port, as the renderer does. Its credits are the renderer's
  * credits port over the fake's `creditDisplay`, if it has one; `ports`
@@ -158,6 +158,12 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
             : {}),
           ...(Number.isFinite(fake.frustum?.aspectRatio)
             ? { aspectRatio: fake.frustum.aspectRatio }
+            : {}),
+          ...(typeof fake.frustum?.near === 'number'
+            ? { near: fake.frustum.near }
+            : {}),
+          ...(typeof fake.frustum?.far === 'number'
+            ? { far: fake.frustum.far }
             : {}),
           lon: c ? toDegrees(c.longitude) : NaN,
           lat: c ? toDegrees(c.latitude) : NaN,
