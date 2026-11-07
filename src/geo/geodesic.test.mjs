@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test from 'node:test';
-import { surfaceDistance } from './geodesic.js';
+import { geodesicAt, surfaceDistance } from './geodesic.js';
 
 test('surface distance matches the default renderer’s geodesic', () => {
   let seed = 11;
@@ -44,4 +44,40 @@ test('the same point is no distance away, and nearly antipodal points still answ
     { lon: Math.PI - 1e-9, lat: 0 },
   );
   assert.ok(Number.isFinite(far) && far > 1.9e7);
+});
+
+test('a point along the geodesic is the default renderer’s', () => {
+  let seed = 23;
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const d = Math.PI / 180;
+  for (let i = 0; i < 200; i++) {
+    const start = new Cesium.Cartographic(
+      (random() * 360 - 180) * d,
+      (random() * 170 - 85) * d,
+    );
+    const reach = i % 2 ? 3 : 90;
+    const end = new Cesium.Cartographic(
+      start.longitude + (random() * 2 - 1) * reach * d,
+      Math.max(
+        -89,
+        Math.min(89, start.latitude / d + (random() * 2 - 1) * reach),
+      ) * d,
+    );
+    const geodesic = new Cesium.EllipsoidGeodesic(start, end);
+    for (const fraction of [0, 0.25, 0.5, 0.9, 1]) {
+      const theirs = geodesic.interpolateUsingFraction(fraction);
+      const ours = geodesicAt(
+        start.longitude,
+        start.latitude,
+        end.longitude,
+        end.latitude,
+        fraction,
+      );
+      assert.ok(
+        Math.abs(ours.lon - theirs.longitude) <= 1e-12 &&
+          Math.abs(ours.lat - theirs.latitude) <= 1e-12,
+        `${i} @ ${fraction}: ${ours.lon},${ours.lat} vs ${theirs.longitude},${theirs.latitude}`,
+      );
+    }
+  }
 });

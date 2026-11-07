@@ -44,7 +44,7 @@ import {
   zeroToTwoPi,
 } from './math.js';
 import { createCameraEvents } from '../camera/events.js';
-import { geodesicAt } from './geodesic.js';
+import { geodesicAt } from '../../geo/geodesic.js';
 
 const DEFAULT_FOV = Math.PI / 3;
 const MOVE_END_WAIT_MS = 500;

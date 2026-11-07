@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
     services.overlays;
@@ -135,13 +133,6 @@ export function createState({ services }) {
   state._launchPadZoneLaunchId = null;
 
   state._missionOrbitPrimitives = new Map();
-
-  state._declutterTime = new Cesium.JulianDate();
-
-  state._declutterOccluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    new Cesium.Cartesian3(),
-  );
 
   state._missionRingDate = new Date(0);
 

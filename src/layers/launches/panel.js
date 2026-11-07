@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { toCartographicRadians } from '../../geo/ellipsoid.js';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
@@ -274,7 +274,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
         return {
           index,
           id: String(launch.id ?? ''),
-          color: parts.model.missionMarkerColor(launch).toCssColorString(),
+          color: parts.model.missionMarkerCss(launch),
           label,
           ariaLabel: t('Select {mission}', { mission: label }),
           provider: launch.provider || t('UNSPECIFIED OPERATOR'),
@@ -319,18 +319,12 @@ export function createPanel({ state: layerState, services, parts, source }) {
     const now = performance.now();
     if (!force && now - layerState._lastPanelTelemetryMs < 250) return;
     layerState._lastPanelTelemetryMs = now;
-    const satellite = layerState._dataSource.entities.getById(
-      `rocket-satellite:${layerState._selectedLaunchId}`,
-    );
-    const position = satellite?.position?.getValue(
-      Cesium.JulianDate.now(layerState._declutterTime),
-    );
-    const altitudeM = position
-      ? Cesium.Cartographic.fromCartesian(position)?.height
-      : null;
-    const speedMps = layerState._satelliteTelemetry.get(
+    const telemetry = layerState._satelliteTelemetry.get(
       layerState._selectedLaunchId,
-    )?.speedMps;
+    );
+    const position = telemetry?.position?.();
+    const altitudeM = position ? toCartographicRadians(position)?.height : null;
+    const speedMps = telemetry?.speedMps;
     layerState._missionTelemetry = {
       distance: Number.isFinite(altitudeM)
         ? t('{value} KM', {

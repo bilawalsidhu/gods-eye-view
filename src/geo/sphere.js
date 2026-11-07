@@ -81,3 +81,36 @@ export function sphereFromPoints(points) {
     ? { center: ritter, radius: ritterRadius }
     : { center: naive, radius: naiveRadius };
 }
+
+/**
+ * The smallest sphere holding both spheres, by the default renderer's own
+ * method (`BoundingSphere.union`).
+ * @param {{center: {x: number, y: number, z: number}, radius: number}} left
+ * @param {{center: {x: number, y: number, z: number}, radius: number}} right
+ * @returns {{center: {x: number, y: number, z: number}, radius: number}}
+ */
+export function sphereUnion(left, right) {
+  const toRight = {
+    x: right.center.x - left.center.x,
+    y: right.center.y - left.center.y,
+    z: right.center.z - left.center.z,
+  };
+  const separation = Math.sqrt(
+    toRight.x * toRight.x + toRight.y * toRight.y + toRight.z * toRight.z,
+  );
+  if (left.radius >= separation + right.radius)
+    return { center: copy(left.center), radius: left.radius };
+  if (right.radius >= separation + left.radius)
+    return { center: copy(right.center), radius: right.radius };
+  // Halfway between the two tangent points, one on the far side of each.
+  const half = (left.radius + separation + right.radius) * 0.5;
+  const along = (-left.radius + half) / separation;
+  return {
+    center: {
+      x: toRight.x * along + left.center.x,
+      y: toRight.y * along + left.center.y,
+      z: toRight.z * along + left.center.z,
+    },
+    radius: half,
+  };
+}

@@ -570,9 +570,9 @@ test('latest roster input owns preview and restores the remaining owner on leave
 });
 
 test('assigns distinct stable colors to mission operators', () => {
-  assert.equal(missionMarkerColor({ provider: 'NASA', name: 'Science Flight' }).toCssColorString(), 'rgb(255,159,67)');
-  assert.equal(missionMarkerColor({ provider: 'SpaceX', name: 'Starlink Group' }).toCssColorString(), 'rgb(76,201,240)');
-  assert.equal(missionMarkerColor({ provider: 'Private Launch Co.', name: 'Test Flight' }).toCssColorString(), 'rgb(192,132,252)');
+  assert.deepEqual(missionMarkerColor({ provider: 'NASA', name: 'Science Flight' }), [255 / 255, 159 / 255, 67 / 255, 1]);
+  assert.deepEqual(missionMarkerColor({ provider: 'SpaceX', name: 'Starlink Group' }), [76 / 255, 201 / 255, 240 / 255, 1]);
+  assert.deepEqual(missionMarkerColor({ provider: 'Private Launch Co.', name: 'Test Flight' }), [192 / 255, 132 / 255, 252 / 255, 1]);
 });
 
 test('normalizes recent launches and preserves supplied trajectory/orbit data', () => {

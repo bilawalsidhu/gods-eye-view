@@ -22,7 +22,7 @@ function fixture() {
       previewMissionFromRoster: (launch) => calls.push(['preview', launch.id]),
     },
     model: {
-      missionMarkerColor: () => ({ toCssColorString: () => 'rgb(1, 2, 3)' }),
+      missionMarkerCss: () => 'rgb(1, 2, 3)',
     },
     selection: {
       setSelectedMission: (id, isolate) => calls.push(['select', id, isolate]),
