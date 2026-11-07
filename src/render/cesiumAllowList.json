@@ -81,7 +81,6 @@
   "src/sceneCommandRelease.js",
   "src/scenes/dataPacks/geometry.js",
   "src/scenes/dataPacks/presentation.js",
-  "src/scenes/director.js",
   "src/services/groundSnap.js",
   "src/services/meshFloorSampler.js",
   "src/sky/starrySky.js",

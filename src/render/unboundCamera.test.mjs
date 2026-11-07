@@ -96,6 +96,10 @@ const DRAW_FROM_CALLER = new Set([
  * `./render/cesium/unbound`.
  */
 const CAMERA_FROM_CALLER = new Set([
+  // Not Cesium-free yet: its data packs still draw through Cesium in their
+  // own listed modules. Its flights ask `cameraOf`, which throws until the
+  // caller has loaded the export.
+  './scenes',
   './ui/navigation',
   './voice/commands',
   './voice/controller',
