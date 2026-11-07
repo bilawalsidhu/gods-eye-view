@@ -135,6 +135,12 @@ const ANCHORS = {
   top: Cesium.VerticalOrigin.TOP,
 };
 
+/** The longest straight step of a geodesic line, metres: a degree of arc. */
+const GEODESIC_STEP_M =
+  Cesium.Ellipsoid.WGS84.maximumRadius * Cesium.Math.RADIANS_PER_DEGREE;
+/** The fewest straight steps a geodesic line is drawn in. */
+const GEODESIC_LINE_STEPS = 64;
+
 /** The `flow` line material's type. */
 const FLOW_MATERIAL = 'DrawFlowLine';
 
@@ -1175,8 +1181,15 @@ export function createCesiumDraw({
       const a = Cesium.Cartographic.fromCartesian(points[i]);
       const b = Cesium.Cartographic.fromCartesian(points[i + 1]);
       const geodesic = new Cesium.EllipsoidGeodesic(a, b);
-      for (let k = 0; k < 64; k++) {
-        const s = k / 64;
+      // At least a step a degree of arc, as Cesium's own geodesic
+      // polylines are cut, and 64 steps over the whole line: a long trail
+      // of short legs stays as light as its positions.
+      const steps = Math.max(
+        Math.ceil((geodesic.surfaceDistance || 0) / GEODESIC_STEP_M),
+        Math.ceil(GEODESIC_LINE_STEPS / (points.length - 1)),
+      );
+      for (let k = 0; k < steps; k++) {
+        const s = k / steps;
         const at = geodesic.interpolateUsingFraction(s);
         dense.push(
           Cesium.Cartesian3.fromRadians(

@@ -161,3 +161,96 @@ test('a flight layer without an icon set declines contact refreshes', () => {
   assert.equal(layer.refreshTr3b('abc123'), false);
   assert.equal(layer.trackById('abc123'), false);
 });
+
+test('the tracked trail head is drawn each frame while tracked and stops with the trail', async () => {
+  const Cesium = await import('cesium');
+  const { bindFakeDraw } = await import('../../testSupport/fakeDrawPort.mjs');
+  const trails = await import('../../data/trailRenderer.js');
+  const listeners = new Set();
+  const frame = {
+    on(phase, cb) {
+      const entry = { phase, cb };
+      listeners.add(entry);
+      return () => listeners.delete(entry);
+    },
+  };
+  const tick = () => {
+    for (const { phase, cb } of [...listeners]) if (phase === 'preRender') cb();
+  };
+  const viewer = { isDestroyed: () => false };
+  const { draw, unbind } = bindFakeDraw(viewer, { frame });
+  const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 1000);
+  const old = Cesium.JulianDate.addSeconds(
+    Cesium.JulianDate.now(),
+    -600,
+    new Cesium.JulianDate(),
+  );
+  let headLon = 0.03;
+  const flightState = {
+    _viewer: viewer,
+    _trackedIcao: 'abc123',
+    _trail: null,
+    _trailPositions: [],
+    _trailBackfillToken: 0,
+    _trailHeadOff: null,
+    _cockpitContactMode: false,
+    _positionHistory: new Map([
+      [
+        'abc123',
+        [0, 0.01, 0.02].map((lon) => ({ time: old, position: at(lon) })),
+      ],
+    ]),
+    _scratchWarmupTime: new Cesium.JulianDate(),
+    _scratchTrailHead: new Cesium.Cartesian3(),
+    feed: { _source: {} },
+    records: { data: new Map() },
+    lifetime: new AbortController(),
+  };
+  const supplied = services();
+  supplied.trails = trails;
+  const tracking = createTracking({
+    flightState,
+    services: supplied,
+    parts: {
+      motion: {
+        _isTrackWarmingUp: () => false,
+        _trackedTrailCached: () => at(headLon),
+        _trackedDisplayPosition: () => null,
+        _trackedModelCenterWorld: () => null,
+        _trackedModelEnvelopeM: () => 0,
+      },
+    },
+    layer: {},
+  });
+  try {
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1, 'one frame listener');
+    tick();
+    const set = draw.find('trail:');
+    const head = () => set.items.get(`${[...set.items.keys()][0]}:head`);
+    assert.ok(
+      Cesium.Cartesian3.equals(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.03),
+      ),
+    );
+    headLon = 0.04;
+    tick();
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.04),
+        1e-6,
+      ),
+    );
+    // Tracked again: still one listener.
+    tracking._clearTrail();
+    assert.equal(listeners.size, 0, 'cleared with the trail');
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1);
+    tracking._destroyTrail();
+    assert.equal(listeners.size, 0, 'gone with the trail');
+  } finally {
+    unbind();
+  }
+});

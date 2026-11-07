@@ -138,9 +138,10 @@ export function createLocalAdsbLayer({
   let viewer = null;
   /**
    * The layer's draw sets on its viewer's renderer (`drawOf`), made at
-   * `init`: the markers, the 978 MHz rings and the selected aircraft's live
-   * trail head. Shown while the layer is enabled.
-   * @type {{markers: object, rings: object, head: object}|null}
+   * `init`: the markers and the 978 MHz rings. Shown while the layer is
+   * enabled. The selected aircraft's trail and its live head draw through
+   * the shared trail renderer.
+   * @type {{markers: object, rings: object}|null}
    */
   let sets = null;
   let enabled = false;
@@ -153,7 +154,6 @@ export function createLocalAdsbLayer({
   let renderHeld = false;
   let selectedId = null;
   let selectedTrail = null;
-  let trailHeadSeq = 0;
   let models = null;
   let geoidReady = false;
   let rejectedFixes = 0;
@@ -406,7 +406,6 @@ export function createLocalAdsbLayer({
   function releaseTrail() {
     if (!selectedTrail) return;
     selectedTrail.trail?.destroy();
-    sets?.head.clear();
     selectedTrail = null;
   }
 
@@ -420,35 +419,24 @@ export function createLocalAdsbLayer({
    * costs nothing a frame.
    */
   function drawTrailHead() {
-    if (!sets || !selectedTrail?.headId) return;
+    if (!selectedTrail?.trail?.setHead) return;
     const current = markers.get(selectedTrail.id);
     const from = selectedTrail.lastFix;
     const positions =
       current?.position && from ? [from, { ...current.position }] : [];
-    const key = positions.map(({ x, y, z }) => `${x},${y},${z}`).join(';');
-    if (key === selectedTrail.drawnKey) return;
     const at = now();
     if (
+      positions.length &&
       from === selectedTrail.drawnFrom &&
       at - selectedTrail.drawnAt < HEAD_REDRAW_MS
     )
       return;
-    selectedTrail.drawnKey = key;
     selectedTrail.drawnFrom = from;
     selectedTrail.drawnAt = at;
-    sets.head.upsert([
-      {
-        // 'gev-trail' namespace: claimed by the trail pick owner so a click
-        // on the head segment never reads as empty space.
-        id: selectedTrail.headId,
-        positions,
-        widthPx: 2.5,
-        // Metres to a few km: straight is the ellipsoid's arc to the pixel.
-        mode: '3d',
-        style: { kind: 'solid', color: hexColor(LOCAL_ADSB_COLOR, 0.9) },
-        depthFailColor: hexColor(LOCAL_ADSB_COLOR, 0.45),
-      },
-    ]);
+    // The trail's head line: 'gev-trail' ids, claimed by the trail pick
+    // owner so a click on it never reads as empty space; dimmed where the
+    // surface hides it. A head that has not moved is not drawn again.
+    selectedTrail.trail.setHead(positions);
   }
 
   function refreshTrail() {
@@ -464,15 +452,13 @@ export function createLocalAdsbLayer({
   function startTrail(marker) {
     releaseTrail();
     const createTrail = services.trails?.createTrail;
-    if (typeof createTrail !== 'function' || !viewer || !sets) return;
+    if (typeof createTrail !== 'function' || !viewer) return;
     selectedTrail = {
       id: marker.id,
       trail: createTrail(viewer, { color: LOCAL_ADSB_COLOR, width: 2.5 }),
       // Live head: last heard fix → the extrapolated marker, every frame.
-      headId: `gev-trail:local-adsb-head-${++trailHeadSeq}`,
       lastFix: null,
-      // Where, from which fix and when the head was last drawn.
-      drawnKey: null,
+      // From which fix and when the head was last drawn.
       drawnFrom: null,
       drawnAt: -Infinity,
     };
@@ -772,7 +758,6 @@ export function createLocalAdsbLayer({
           show: false,
           pickable: false,
         }),
-        head: draw.lines({ id: `${prefix}:trail-head`, show: false }),
       };
       models = createLocalAdsbModels({
         viewer,

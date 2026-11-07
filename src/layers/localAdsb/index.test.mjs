@@ -445,6 +445,7 @@ test('selecting an aircraft draws a magenta trail of the fixes the receiver hear
 });
 
 test('the trail head runs from the last fix to the marker every frame, dimmed behind the surface', async (t) => {
+  const trails = await import('../../data/trailRenderer.js');
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const listeners = new Map();
@@ -462,19 +463,24 @@ test('the trail head runs from the last fix to the marker every frame, dimmed be
   const input = fakeInput(viewer);
   const { layer } = await enabledLayer(receiver, clock, null, {
     viewer: { draw, viewer, input },
-    services: {
-      trails: {
-        createTrail: () => ({ setPositions() {}, destroy() {} }),
-      },
-    },
+    services: { trails },
   });
   t.after(() => layer.destroy());
   receiver.set({ aircraft: [record()] });
   await layer.update();
   assert.equal(layer.selectAircraft('abc123'), true);
-  const heads = () => [...layerSet(draw, ':trail-head').items.values()];
+  // The head is the shared trail's head line.
+  const trailSet = () => draw.find('trail:');
+  const heads = () =>
+    [...(trailSet()?.items.values() ?? [])].filter(
+      (line) => line.id.endsWith(':head') && line.show !== false,
+    );
+  // Selected at its fix, the head has no length yet.
+  assert.equal(heads().length, 0);
+  clock.now = 100_500;
+  listeners.get('preRender')();
   const [head] = heads();
-  assert.match(head.id, /^gev-trail:local-adsb-head-\d+$/);
+  assert.match(head.id, /^gev-trail:\d+:head$/);
   assert.equal(head.mode, '3d');
   assert.equal(head.widthPx, 2.5);
   assert.deepEqual(head.style, {
@@ -505,9 +511,9 @@ test('the trail head runs from the last fix to the marker every frame, dimmed be
   );
 
   // A frame where nothing moved leaves the head alone.
-  const writes = layerSet(draw, ':trail-head').writes;
+  const writes = trailSet().writes;
   listeners.get('preRender')();
-  assert.equal(layerSet(draw, ':trail-head').writes, writes);
+  assert.equal(trailSet().writes, writes);
 
   await layer.disable();
   assert.equal(listeners.has('preRender'), false, 'frames stop when off');
@@ -889,7 +895,7 @@ test('the layer draws into sets of its own, shown while it is enabled and let go
       .filter((record) => !record.disposed)
       .map((record) => record.spec.id);
   const mine = ids(draw);
-  assert.equal(mine.length, 3, 'markers, rings and the trail head');
+  assert.equal(mine.length, 2, 'markers and rings');
   assert.ok(
     ids(other.draw).every((id) => !mine.includes(id)),
     'a second layer has ids of its own',

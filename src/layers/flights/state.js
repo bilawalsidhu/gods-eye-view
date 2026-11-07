@@ -189,15 +189,11 @@ export function createFlightState({ source, services }) {
 
   flightState._trail = null;
 
-  /** @type {Cesium.Entity|null} Cheap 2-point head segment bridging the last fix to the LIVE
-   *  dead-reckoned icon, updated per frame via a CallbackProperty — so the trail head stays
-   *  glued to the 12 Hz icon without rebuilding the 400-point trail primitive every frame. */
+  /** @type {(() => void)|null} Stops the per-frame live head (last body point → live
+   *  icon), drawn as the trail's head line so the head stays glued to the 12 Hz icon
+   *  without rebuilding the 400-point trail body every frame. */
 
-  flightState._trailHeadEntity = null;
-
-  /** @type {number} Uniquifier for head-segment entity ids (Cesium requires unique ids). */
-
-  flightState._trailHeadSeq = 0;
+  flightState._trailHeadOff = null;
 
   /** @type {Cesium.Cartesian3[]} Chronological tracked-aircraft fixes (oldest first) */
 

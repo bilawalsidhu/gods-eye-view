@@ -2787,7 +2787,7 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
         removeEntityContextsForLayer: noop,
       },
       picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-      trails: { createTrail: () => ({ setPositions: noop, destroy: noop }) },
+      trails: await import('../../data/trailRenderer.js'),
     },
     now: () => clock.now,
   });
@@ -2821,9 +2821,10 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
   assert.equal(ring.outlineWidth, 1.5);
   assert.equal(ring.color.alpha, 0);
   assert.equal(ring.distanceDisplayCondition.far, 2_000_000);
-  // Selected at its fix, the head has no length yet.
-  const head = hostOf(':trail-head');
-  assert.equal(head.get(1).length, 0);
+  // Selected at its fix, the trail and its head have no length yet.
+  const trailHost = () =>
+    scene.added.find((host) => host.drawSetId?.startsWith('trail:'));
+  assert.equal(trailHost(), undefined);
 
   // A frame flies them on, in place.
   const before = toLonLatH(icon.position).lat;
@@ -2834,12 +2835,11 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
   assert.equal(rings.get(0).id.id, 'local-adsb:a1b2c3');
   // The head now runs from the fix to the aircraft, dimmed, not hidden,
   // behind the surface.
-  assert.equal(hostOf(':trail-head'), head, 'the same lines');
-  const deep = head.get(1);
+  const deep = trailHost().get(1);
   assert.equal(deep.length, 1);
   const line = deep.get(0);
   assert.ok(line instanceof Cesium.Primitive);
-  assert.match(line.geometryInstances.id.id, /^gev-trail:local-adsb-head-/);
+  assert.match(line.geometryInstances.id.id, /^gev-trail:\d+:head$/);
   const fail = line.depthFailAppearance.material.uniforms.color;
   assert.ok(
     fail.equals(Cesium.Color.fromCssColorString('#ff4fd8').withAlpha(0.45)),
@@ -3281,3 +3281,72 @@ test('a draped line moved while its set rebuilds is no longer drawn where it was
       set.dispose();
     }),
   ));
+
+test('a contact trail draws its history and moving head as depth-fail geodesic lines on a viewer of its own', async () => {
+  const { createTrail } = await import('../../data/trailRenderer.js');
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const viewer = { scene, isDestroyed: () => false };
+    const trail = createTrail(viewer, { color: '#00d4ff', width: 2.5 });
+    // 400 fixes about a kilometre apart: a degree of arc per step keeps
+    // each leg one straight piece.
+    const fixes = Array.from({ length: 400 }, (_, i) =>
+      Cesium.Cartesian3.fromDegrees(-97 + i * 0.01, 30, 10000),
+    );
+    trail.setPositions(fixes);
+    const host = scene.added[0];
+    const deep = host.get(1);
+    const body = deep.get(0);
+    assert.ok(body instanceof Cesium.Primitive);
+    assert.equal(body.geometryInstances.geometry._positions.length, 400);
+    assert.ok(
+      Cesium.Color.equals(
+        body.depthFailAppearance.material.uniforms.color,
+        Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.4),
+      ),
+    );
+    // A long leg follows the globe instead of chording through it.
+    trail.setPositions([
+      Cesium.Cartesian3.fromDegrees(-150, 20, 10000),
+      Cesium.Cartesian3.fromDegrees(-120, 30, 10000),
+    ]);
+    const long = deep.get(0);
+    const arc = long.geometryInstances.geometry._positions;
+    assert.equal(arc.length, 65, 'a lone leg in 64 steps');
+    // A long leg among short ones still takes a step a degree.
+    trail.setPositions([
+      ...fixes,
+      Cesium.Cartesian3.fromDegrees(-63, 30, 10000),
+    ]);
+    const mixed = deep.get(0).geometryInstances.geometry._positions;
+    assert.ok(mixed.length > 400 + 25 && mixed.length < 400 + 40, `${mixed.length}`);
+    // The head moves every frame alone, under one pick id.
+    const head = (lon) => [
+      Cesium.Cartesian3.fromDegrees(-120, 30, 10000),
+      Cesium.Cartesian3.fromDegrees(lon, 30, 10000),
+    ];
+    // Its first head is a new line: the set is built again, once.
+    trail.setHead(head(-119.99));
+    const host2 = scene.added[0];
+    const deep2 = host2.get(1);
+    assert.equal(deep2.length, 2);
+    const first = deep2.get(1);
+    const id = first.geometryInstances.id;
+    assert.match(id.id, /^gev-trail:\d+:head$/);
+    const history = deep2.get(0);
+    trail.setHead(head(-119.98));
+    assert.equal(scene.added[0], host2, 'the set is not rebuilt');
+    assert.equal(deep2.get(0), history, 'the history is not rebuilt');
+    assert.notEqual(deep2.get(1), first);
+    assert.equal(deep2.get(1).geometryInstances.id, id);
+    // No head for a while: hidden in place.
+    trail.setHead(null);
+    assert.equal(scene.added[0], host2);
+    assert.equal(deep2.get(0), history);
+    assert.equal(deep2.get(1).show, false);
+    trail.setVisible(false);
+    assert.equal(host2.show, false);
+    trail.destroy();
+    assert.equal(scene.added.length, 0);
+  });
+});

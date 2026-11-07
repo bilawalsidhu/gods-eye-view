@@ -1,4 +1,5 @@
 import { cameraOf } from '../../render/cesium/camera.js';
+import { findFrame } from '../../render/rendererOf.js';
 import {
   entityFollowTarget,
   onFollowChanged,
@@ -224,7 +225,6 @@ export function createTracking({
     // synchronously blocked Chrome's renderer into Page Unresponsive.
     if (flightState._modelCollection) flightState._modelCollection.show = true;
     flightState._trail?.setVisible(!next);
-    if (flightState._trailHeadEntity) flightState._trailHeadEntity.show = !next;
     for (const icao24 of flightState._icons?.ids() ?? [])
       parts.icons._applyIconPresentation(icao24);
     flightState._lastFleetTickMs = 0;
@@ -382,7 +382,7 @@ export function createTracking({
     // The trail BODY is the accumulated fixes EXCLUDING the newest raw one — that newest
     // fix is at ~now, ~one poll interval AHEAD of the delayed icon (rendered at
     // now − RENDER_DELAY_SEC), so drawing it would push the trail in front of the plane.
-    // The cheap per-frame _trailHeadEntity segment bridges the last body point to the
+    // The cheap per-frame trail head segment bridges the last body point to the
     // delayed dead-reckoned head, so the body primitive only rebuilds on a real fix
     // (poll cadence), never at motion cadence.
     if (!flightState._trail) return;
@@ -391,6 +391,54 @@ export function createTracking({
         ? flightState._trailPositions.slice(0, -1)
         : flightState._trailPositions,
     );
+  }
+
+  /**
+   * The live head: the last DISPLAYED body point to the delayed head, or no
+   * positions while there is none.
+   * @returns {Cesium.Cartesian3[]}
+   */
+  function _trailHeadPositions() {
+    // Need ≥2 accumulated points: the body draws all-but-newest, so the head must
+    // start at the last DISPLAYED body point (index n−2). With a single fix that
+    // point would be the sole raw fix — which is ~now, AHEAD of the delayed icon —
+    // so the segment would draw IN FRONT of the plane. Likewise during warm-up the
+    // icon predates all real history, so there is no valid body point behind it.
+    if (
+      !flightState._trackedIcao ||
+      flightState._trailPositions.length < 2 ||
+      parts.motion._isTrackWarmingUp()
+    )
+      return [];
+    const head =
+      parts.motion._trackedTrailCached() ||
+      parts.motion._trackedDisplayPosition(flightState._trackedIcao);
+    if (!head) return [];
+    // body[n−2] (last displayed body point) → delayed head: runs FORWARD, never a
+    // backward/reversing segment.
+    const start =
+      flightState._trailPositions[flightState._trailPositions.length - 2];
+    // On a contact that has not moved this segment runs from inside the
+    // model out to its own anchor — a line through the fuselage. The END
+    // never gives, so a moving trail still terminates on the tail; the
+    // START is what slides, from nothing on a parked contact out to the
+    // whole segment once it has cleared its own envelope.
+    // See trailHeadStart. Read `head` in place and clone only on the draw
+    // path — a suppressed parked contact runs this every frame.
+    const from = trailHeadStart(
+      start,
+      head,
+      parts.motion._trackedModelCenterWorld(),
+      parts.motion._trackedModelEnvelopeM(),
+      flightState._scratchTrailHead,
+    );
+    if (!from) return [];
+    return [from, Cesium.Cartesian3.clone(head)];
+  }
+
+  /** Each drawn frame, before it draws: the live head where the aircraft is now. */
+  function _drawTrailHead() {
+    flightState._trail?.setHead(_trailHeadPositions());
   }
 
   /**
@@ -425,65 +473,13 @@ export function createTracking({
       });
     }
     flightState._trail?.setVisible(!flightState._cockpitContactMode);
-    // Live head segment: last fix → current dead-reckoned icon, updated every frame via
-    // a CallbackProperty (Cesium updates entity-polyline positions cheaply, unlike the
-    // trail primitive which fully rebuilds on setPositions). Keeps the head glued to the
-    // 12 Hz icon instead of lagging ~1 s behind it.
-    if (!flightState._trailHeadEntity && flightState._viewer) {
-      flightState._trailHeadEntity = flightState._viewer.entities.add({
-        // 'gev-trail' namespace (round 6): claimed by trailRenderer's pick
-        // owner so a click on the head segment never reads as empty space.
-        id: `gev-trail:fl-head-${++flightState._trailHeadSeq}`,
-        show: !flightState._cockpitContactMode,
-        polyline: {
-          positions: new Cesium.CallbackProperty(() => {
-            // Need ≥2 accumulated points: the body draws all-but-newest, so the head must
-            // start at the last DISPLAYED body point (index n−2). With a single fix that
-            // point would be the sole raw fix — which is ~now, AHEAD of the delayed icon —
-            // so the segment would draw IN FRONT of the plane. Likewise during warm-up the
-            // icon predates all real history, so there is no valid body point behind it.
-            if (
-              !flightState._trackedIcao ||
-              flightState._trailPositions.length < 2 ||
-              parts.motion._isTrackWarmingUp()
-            )
-              return [];
-            const head =
-              parts.motion._trackedTrailCached() ||
-              parts.motion._trackedDisplayPosition(flightState._trackedIcao);
-            if (!head) return [];
-            // body[n−2] (last displayed body point) → delayed head: runs FORWARD, never a
-            // backward/reversing segment.
-            const start =
-              flightState._trailPositions[
-                flightState._trailPositions.length - 2
-              ];
-            // On a contact that has not moved this segment runs from inside the
-            // model out to its own anchor — a line through the fuselage. The END
-            // never gives, so a moving trail still terminates on the tail; the
-            // START is what slides, from nothing on a parked contact out to the
-            // whole segment once it has cleared its own envelope.
-            // See trailHeadStart. Read `head` in place and clone only on the draw
-            // path — a suppressed parked contact runs this every frame.
-            const from = trailHeadStart(
-              start,
-              head,
-              parts.motion._trackedModelCenterWorld(),
-              parts.motion._trackedModelEnvelopeM(),
-              flightState._scratchTrailHead,
-            );
-            if (!from) return [];
-            return [from, Cesium.Cartesian3.clone(head)];
-          }, false),
-          width: 2.5,
-          material: Cesium.Color.fromCssColorString(TRAIL_COLOR).withAlpha(0.9),
-          // Round 4: the head must never vanish into the mesh either (dimmed
-          // when occluded so depth still reads).
-          depthFailMaterial:
-            Cesium.Color.fromCssColorString(TRAIL_COLOR).withAlpha(0.45),
-          arcType: Cesium.ArcType.GEODESIC, // round 8: consistent with the trail body (no chords)
-        },
-      });
+    // Live head segment: last displayed body point → current dead-reckoned icon, drawn
+    // again each frame before it draws, so it stays glued to the 12 Hz icon instead of
+    // lagging ~1 s behind it. Only the head line is rebuilt; the body rebuilds on a real
+    // fix (poll cadence). Dimmed where occluded (round 4), geodesic as the body (round 8).
+    if (!flightState._trailHeadOff && flightState._viewer) {
+      flightState._trailHeadOff =
+        findFrame(flightState._viewer)?.on('preRender', _drawTrailHead) ?? null;
     }
     _refreshTrailDisplay();
 
@@ -600,18 +596,8 @@ export function createTracking({
     flightState._trailBackfillToken += 1;
     flightState._trailPositions = [];
     if (flightState._trail) flightState._trail.clear();
-    if (
-      flightState._trailHeadEntity &&
-      flightState._viewer &&
-      !flightState._viewer.isDestroyed()
-    ) {
-      try {
-        flightState._viewer.entities.remove(flightState._trailHeadEntity);
-      } catch {
-        /* already gone */
-      }
-    }
-    flightState._trailHeadEntity = null;
+    flightState._trailHeadOff?.();
+    flightState._trailHeadOff = null;
   }
 
   /**
