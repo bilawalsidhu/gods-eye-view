@@ -33,7 +33,8 @@
       "src/layers/infrastructure/index.js",
       "src/layers/infrastructure/render/display.js",
       "src/layers/shared/color.js",
-      "src/sources/requestDeadline.js"
+      "src/sources/requestDeadline.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": []
   },
@@ -1225,7 +1226,18 @@
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/globe/cesium/doubleClick.js"
+      "src/globe/cesium/doubleClick.js",
+      "src/celestialRing.js",
+      "src/celestialRing/ephemeris.js",
+      "src/celestialRing/view.js",
+      "src/data/detectionCohort.js",
+      "src/data/labelArbiter.js",
+      "src/globe/cesium/celestial.js",
+      "src/layers/shared/render/engineView.js",
+      "src/overlays/worldOverlay.js",
+      "src/overlays/worldOverlayDraw.js",
+      "src/overlays/worldOverlayTokens.js",
+      "src/time/clock.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1604,7 +1616,8 @@
       "src/globe/cesium/sceneProjection.js",
       "src/geo/",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/cesium/engineFromViewer.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -1617,7 +1630,8 @@
       "src/layers/earthquakes/records.js",
       "src/geo/",
       "src/layers/shared/color.js",
-      "src/layers/earthquakes/render/display.js"
+      "src/layers/earthquakes/render/display.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": []
   },
@@ -1685,7 +1699,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/geo/",
       "src/layers/firms/rectangle.js",
-      "src/layers/shared/color.js"
+      "src/layers/shared/color.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": []
   },
@@ -1727,7 +1742,8 @@
       "src/ui/unitLabels.js",
       "src/geo/",
       "src/time/clock.js",
-      "src/layers/shared/color.js"
+      "src/layers/shared/color.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1772,7 +1788,8 @@
       "src/geo/",
       "src/time/clock.js",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/cesium/engineFromViewer.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -1981,7 +1998,8 @@
       "src/layers/shared/color.js",
       "src/geo/",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/cesium/engineFromViewer.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": []
   },
@@ -2038,7 +2056,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/shared/color.js",
-      "src/geo/"
+      "src/geo/",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["hls.js"]
   },
@@ -2200,7 +2219,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/geo/"
+      "src/geo/",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": []
   },
@@ -2230,7 +2250,8 @@
       "src/geo/",
       "src/sources/requestDeadline.js",
       "src/layers/shared/color.js",
-      "src/layers/submarineCables/render/display.js"
+      "src/layers/submarineCables/render/display.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -3612,7 +3633,8 @@
       "src/globe/meshes.js",
       "src/globe/navara/meshes.js",
       "src/globe/exclusivePointer.js",
-      "src/globe/cesium/followOffset.js"
+      "src/globe/cesium/followOffset.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": [
       "hls.js",
@@ -4376,7 +4398,8 @@
       "src/globe/cesium/meshes.js",
       "src/globe/meshes.js",
       "src/globe/exclusivePointer.js",
-      "src/globe/cesium/followOffset.js"
+      "src/globe/cesium/followOffset.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": [
       "hls.js",
@@ -4742,7 +4765,8 @@
       "src/ui/unitLabels.js",
       "src/geo/",
       "src/layers/directions/render/display.js",
-      "src/layers/directions/render/style.js"
+      "src/layers/directions/render/style.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": []
   },
@@ -5145,7 +5169,8 @@
       "src/globe/cesium/meshes.js",
       "src/globe/meshes.js",
       "src/globe/exclusivePointer.js",
-      "src/data/selectionDispatcher.js"
+      "src/data/selectionDispatcher.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -5199,7 +5224,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/layers/shared/color.js",
       "src/geo/",
-      "src/globe/contract.js"
+      "src/globe/contract.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -5265,7 +5291,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/shared/color.js",
-      "src/layers/perimeters/render/display.js"
+      "src/layers/perimeters/render/display.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -5378,7 +5405,8 @@
       "src/layers/streetLevel/view.js",
       "src/data/geoImportRecords.js",
       "src/data/geoImportKml.js",
-      "src/data/geoImportDisplay.js"
+      "src/data/geoImportDisplay.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -5426,7 +5454,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/shared/color.js",
-      "src/layers/droneAirspace/render/display.js"
+      "src/layers/droneAirspace/render/display.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -5631,7 +5660,8 @@
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
       "src/layers/shared/color.js",
-      "src/layers/airQuality/render/display.js"
+      "src/layers/airQuality/render/display.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -5710,7 +5740,8 @@
       "src/globe/cesium/credits.js",
       "src/layers/wildlifeSightings/display.js",
       "src/data/spriteOrder.js",
-      "src/layers/shared/color.js"
+      "src/layers/shared/color.js",
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },

@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 // Source errors stay English until the layer panel presents them.
 const msg = (text) => text;
 import * as geo from '../../geo/index.js';
@@ -31,6 +32,8 @@ export function createEarthquakesLayer({
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
   if (typeof renderer?.create !== 'function')
     throw new TypeError('Earthquakes require a renderer factory');
+  let sceneEngine = null;
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
   let initialized = false;
   let observations = [];
   let discs = [];
@@ -73,6 +76,7 @@ export function createEarthquakesLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || _renderer)
         throw new Error('Invalid earthquake scene attachment');
+      sceneEngine = engine;
       _renderer = renderer.create({ engine });
       if (!_renderer) throw new Error('Earthquake renderer unavailable');
       _renderer.setVisible(_enabled);
@@ -86,6 +90,7 @@ export function createEarthquakesLayer({
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
       _renderer?.destroy();
       _renderer = null;
+      sceneEngine = null;
     },
 
     enable(viewer) {

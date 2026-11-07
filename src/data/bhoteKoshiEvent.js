@@ -1,3 +1,5 @@
+import { bindOverlayHost } from '../overlays/bindOverlayHost.js';
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import { waitForSignal } from '../sources/requestDeadline.js';
 import * as Cesium from 'cesium';
 import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
@@ -106,6 +108,7 @@ const PASSIVE_ENABLE_ORIGINS = new Set([
 ]);
 
 const DEFAULT_OVERLAY_HOST = Object.freeze({
+  forEngine: worldOverlayFor,
   setEntries: setOverlayEntries,
   setVisible: setOverlaySourceVisible,
   clearSource: clearOverlaySource,
@@ -1019,6 +1022,7 @@ export function createBhoteKoshiEventLayer({
   panelStore = useBhoteKoshiPanelStore(applicationPinia()),
 } = {}) {
   let _viewer = null;
+  overlayHost = bindOverlayHost(overlayHost, () => _engine);
   let _engine = null;
   let _native = null;
   let _nativeFlood = null;

@@ -1,3 +1,4 @@
+import { worldOverlayFor } from '../../overlays/worldOverlay.js';
 import { rendererFor } from './renderers.js';
 import { createFirmsHeatmapLayer as createLayer } from '../../layers/firms/index.js';
 import * as render from '../../renderGovernor.js';
@@ -30,6 +31,7 @@ export function createApplicationFirms({ surface, ...options }) {
         rendererFor('local-firms', engine, renderOptions),
     },
     overlayHost: options.overlayHost ?? {
+      forEngine: worldOverlayFor,
       setEntries: overlays.setOverlayEntries,
       setVisible: overlays.setOverlaySourceVisible,
       clearSource: overlays.clearOverlaySource,

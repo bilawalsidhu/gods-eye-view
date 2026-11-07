@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createPhotoSlots } from './photos.js';
 import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
@@ -73,6 +74,7 @@ export function createWildlifeSightingsLayer({
     retryAt: 0,
     failures: 0,
   };
+  overlayHost = bindOverlayHost(overlayHost, () => state.engine);
   const parts = {};
   const services = {
     source,

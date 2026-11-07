@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 // The submarine cables on the globe contract, the same on every engine:
 // - cable paths: one engine.ground corridor set (2.5 px, each cable's own
 //   colour at 0.92), draped on the active map stack's surface;
@@ -134,7 +135,9 @@ export function createCablesDisplay(
 ) {
   if (!engine?.ground || !engine?.movers || !engine?.lines)
     throw new TypeError('The cables display needs a globe engine');
-  const publisher = createCableOverlayPublisher({ host: overlayHost });
+  const publisher = createCableOverlayPublisher({
+    host: bindOverlayHost(overlayHost, () => engine),
+  });
   const gate = createCableReferenceSweepGate({ now: sweepClock });
   // Reference records by id (their pickId), in creation order.
   const records = new Map();

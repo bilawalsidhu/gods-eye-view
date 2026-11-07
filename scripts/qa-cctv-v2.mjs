@@ -1486,7 +1486,7 @@ async function main() {
       const canvas = scene.canvas;
       const rect = canvas.getBoundingClientRect();
       const { hitTestWorldOverlay } =
-        await import('/src/overlays/worldOverlay.js');
+        (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
       const candidates = [
         [0.55, 0.72],
         [0.45, 0.72],

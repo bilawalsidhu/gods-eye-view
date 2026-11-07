@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 import { msg } from '../../i18n/marker.js';
 import { OSM_PLACES_LAYER_ID, OSM_PLACE_COLOR } from './model.js';
@@ -26,6 +27,8 @@ export function createOsmPlacesLayer({
   createRenderer = ({ engine }) => createOsmPlacesDisplay(engine),
 } = {}) {
   if (!overlayHost) throw new TypeError('OSM Places requires an overlay host');
+  let sceneEngine = null;
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
   let initialized = false;
   let renderer = null;
   let enabled = false;
@@ -101,6 +104,7 @@ export function createOsmPlacesLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid OSM Places scene attachment');
+      sceneEngine = engine;
       renderer = createRenderer({ viewer, engine });
       renderer.setVisible(enabled);
       if (enabled) overlayHost.setVisible(OVERLAY_SOURCE_ID, true);
@@ -112,6 +116,7 @@ export function createOsmPlacesLayer({
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
       renderer?.destroy();
       renderer = null;
+      sceneEngine = null;
     },
 
     enable() {

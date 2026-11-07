@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 import { msg, t } from '../../i18n/index.js';
 import { createDroneAirspaceDisplay } from './render/display.js';
@@ -60,6 +61,7 @@ export function createDroneAirspaceLayer({
   /** @type {Map<string, {stableId: string, anchor: {lon: number, lat: number}}>} */
   const _rowById = new Map();
 
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
   const canSelect = () => overlayHost && picking;
 
   function publishSelectedCard() {

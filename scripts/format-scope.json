@@ -1705,5 +1705,6 @@
   "src/app/layers/displayRehearsal.test.mjs",
   "src/globe/cesium/annotations/worldAnnotationRenderer.js",
   "src/globe/cesium/annotations/screenAnnotationRenderer.js",
-  "src/globe/navara/windFlow.js"
+  "src/globe/navara/windFlow.js",
+  "src/overlays/bindOverlayHost.js"
 ]

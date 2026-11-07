@@ -1,3 +1,4 @@
+import { worldOverlayFor } from '../../overlays/worldOverlay.js';
 import { createDroneAirspaceLayer } from '../../layers/droneAirspace/index.js';
 import { rendererFor } from './renderers.js';
 import * as picking from '../../data/pickRegistry.js';
@@ -12,6 +13,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 export function createApplicationDroneAirspace(options) {
   return createDroneAirspaceLayer({
     overlayHost: {
+      forEngine: worldOverlayFor,
       setEntries: overlays.setOverlayEntries,
       setVisible: overlays.setOverlaySourceVisible,
       clearSource: overlays.clearOverlaySource,

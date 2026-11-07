@@ -1,3 +1,4 @@
+import { createWorldOverlay } from '../overlays/worldOverlay.js';
 import { createRenderGovernor } from '../renderGovernor.js';
 import { createPickRegistry } from './pickRegistry.js';
 import { createSelectionDispatcher } from './selectionDispatcher.js';
@@ -9,6 +10,7 @@ const scenes = new WeakMap();
 /** Create the services for one attachment, including reuse of a parked engine. */
 export function createSceneServices(engine, options = {}) {
   scenes.get(engine)?.destroy();
+  const overlay = createWorldOverlay(engine);
   const render = createRenderGovernor(engine);
   const picking = createPickRegistry();
   const selection = createSelectionDispatcher(engine, { ...options, picking });
@@ -17,11 +19,13 @@ export function createSceneServices(engine, options = {}) {
     picking,
     selection,
     render,
+    overlay,
     destroy() {
       if (destroyed) return;
       destroyed = true;
       selection.destroy();
       picking.destroy();
+      overlay.destroy();
       render.destroy();
     },
   };

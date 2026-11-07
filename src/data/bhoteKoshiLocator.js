@@ -1,3 +1,5 @@
+import { bindOverlayHost } from '../overlays/bindOverlayHost.js';
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import * as Cesium from 'cesium';
 import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
 import {
@@ -151,6 +153,7 @@ const INCIDENT_ACCENT = '#ffad55';
 const INCIDENT_COLOR = () => Cesium.Color.fromCssColorString(INCIDENT_ACCENT);
 
 const DEFAULT_OVERLAY_HOST = Object.freeze({
+  forEngine: worldOverlayFor,
   setEntries: setOverlayEntries,
   clearSource: clearOverlaySource,
 });
@@ -287,6 +290,7 @@ export function createBhoteKoshiLocatorLayer({
   cancelDelay = (handle) => clearTimeout(handle),
 } = {}) {
   let _viewer = null;
+  overlayHost = bindOverlayHost(overlayHost, () => _engine);
   let _engine = null;
   let _native = null;
   let _pausedApproach = null;

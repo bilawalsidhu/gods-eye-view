@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createCatalogModel } from './catalogModel.js';
 import { createLabels } from './labels.js';
 import { createClustering } from './clustering.js';
@@ -20,8 +21,12 @@ import { createState } from './state.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
 export function createRadioLayer({ services, source, rendererFactory }) {
-  const state = createState({ services });
   const parts = {};
+  services = {
+    ...services,
+    overlays: bindOverlayHost(services.overlays, () => parts.renderer?.engine),
+  };
+  const state = createState({ services });
   const context = { state, services, parts, source, rendererFactory };
   parts.catalogModel = createCatalogModel(context);
   parts.labels = createLabels(context);

@@ -137,7 +137,9 @@ export async function sampleTransitPixels(page, palette) {
       .module._transitStateForTest();
     // Decode the actual billboard rasters before the paint being judged.
     const overlay = window.location
-      ? await import('/src/overlays/worldOverlay.js')
+      ? (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(
+          window.__godsEyeView.engine,
+        )
       : null;
     const rasters = new Map();
     await Promise.all(

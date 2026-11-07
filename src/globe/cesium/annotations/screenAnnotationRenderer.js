@@ -71,7 +71,8 @@ function markScale(h) {
 export function createScreenAnnotationRenderer(
   target,
   {
-    overlayPaintRect = getOverlayPaintRect,
+    engine,
+    overlayPaintRect = (...args) => getOverlayPaintRect(engine, ...args),
     activeTrackedReadoutId = getActiveTrackedReadoutId,
     store = useScreenAnnotationsStore(applicationPinia()),
   } = {},

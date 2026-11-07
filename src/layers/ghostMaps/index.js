@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { fromDegrees } from '../../geo/cartesian3.js';
 import {
   decodeXml,
@@ -186,6 +187,7 @@ export function createGhostMapsLayer({
 
   const notifyRow = () => _rowListener?.();
   const render = () => _display?.requestRender();
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
   const canSelect = () => overlayHost && picking && createRenderer;
 
   function wanted(product) {

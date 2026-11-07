@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { fromDegrees } from '../../geo/cartesian3.js';
 import { toDegrees } from '../../geo/math.js';
 import { createAirQualityDisplay } from './render/display.js';
@@ -33,6 +34,8 @@ export function createAirQualityLayer({
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
+  let sceneEngine = null;
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
   let initialized = false;
   let _request = null;
   let renderer = null;
@@ -79,6 +82,7 @@ export function createAirQualityLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid air quality scene attachment');
+      sceneEngine = engine;
       renderer = createRenderer({ engine });
       renderer.setVisible(_enabled);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, _enabled);
@@ -90,6 +94,7 @@ export function createAirQualityLayer({
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
       renderer?.destroy();
       renderer = null;
+      sceneEngine = null;
     },
 
     enable() {

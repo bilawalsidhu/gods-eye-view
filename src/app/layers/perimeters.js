@@ -1,3 +1,4 @@
+import { worldOverlayFor } from '../../overlays/worldOverlay.js';
 import { rendererFor } from './renderers.js';
 import {
   createFirePerimetersLayer,
@@ -16,6 +17,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 export function createApplicationFirePerimeters(options) {
   return createFirePerimetersLayer({
     overlayHost: {
+      forEngine: worldOverlayFor,
       setEntries: overlays.setOverlayEntries,
       setVisible: overlays.setOverlaySourceVisible,
       clearSource: overlays.clearOverlaySource,

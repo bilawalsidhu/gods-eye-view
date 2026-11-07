@@ -70,6 +70,19 @@ export function installWorldOverlayFontInvalidation() {
   );
 }
 
+let _drawHosts = 0;
+
+/** Keep shared font measurements live while any scene host is attached. */
+export function retainWorldOverlayDraw() {
+  _drawHosts++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--_drawHosts === 0) destroyWorldOverlayDraw();
+  };
+}
+
 /** Remove font hooks and cached measurements when the overlay host is destroyed. */
 export function destroyWorldOverlayDraw() {
   _fontInvalidationGeneration++;

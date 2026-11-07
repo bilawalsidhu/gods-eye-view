@@ -1,3 +1,4 @@
+import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { renderGovernorFor } from '../renderGovernor.js';
 import { retainsLayerSession } from '../app/layerSession.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
@@ -253,6 +254,16 @@ export class ShellScene extends ShellFacade {
     // detection and tracked-readout initialize. It stays transparent until a
     // production source explicitly registers entries.
     initWorldOverlay(engine);
+    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
+    this._overlayActionsUnsubscribe?.();
+    overlayActionsStore.connect({
+      activate: (...args) =>
+        this.services.activateWorldOverlayAction(engine, ...args),
+    });
+    this._overlayActionsUnsubscribe =
+      this.services.subscribeWorldOverlayActions?.(engine, (view) =>
+        overlayActionsStore.publish(view),
+      );
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline. Both run on the engine,
     // Navara's too.
@@ -415,7 +426,9 @@ export class ShellScene extends ShellFacade {
     this._layerBindings.disconnect();
     destroyTrackedReadout();
     destroyDetection();
-    destroyWorldOverlay();
+    destroyWorldOverlay(this._scene.engine);
+    this._overlayActionsUnsubscribe?.();
+    this._overlayActionsUnsubscribe = null;
     this.celestialRing?.destroy();
     this.celestialRing = null;
     this._visualSettings.destroy();

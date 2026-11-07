@@ -1,3 +1,4 @@
+let overlayEngine;
 import * as Cesium from 'cesium';
 import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import * as geo from '../geo/index.js';
@@ -1321,7 +1322,7 @@ function main() {
   // The Navara projector profile swaps the engine's projector before the
   // host reads it.
   if (PROFILE === 'navara-projector') env.engine.projector = navaraProjector();
-  initWorldOverlay(env.engine);
+  initWorldOverlay((overlayEngine = env.engine));
   const workload =
     PROFILE === 'phase6-detection'
       ? buildPhase6DetectionWorkload(ENTRY_COUNT)
@@ -1376,16 +1377,21 @@ function main() {
     setDetectionMode('DENSE');
   } else if (workload.registrations) {
     for (const registration of workload.registrations) {
-      setOverlayEntries(registration.sourceId, registration.entries, {
-        ...registration.options,
-        // Exercise the stricter moving-source solve cadence while retaining
-        // the production source ids, entries, caps, and bounded cohorts.
-        moving: true,
-        solveIntervalMs,
-      });
+      setOverlayEntries(
+        overlayEngine,
+        registration.sourceId,
+        registration.entries,
+        {
+          ...registration.options,
+          // Exercise the stricter moving-source solve cadence while retaining
+          // the production source ids, entries, caps, and bounded cohorts.
+          moving: true,
+          solveIntervalMs,
+        },
+      );
     }
   } else {
-    setOverlayEntries('alloc-probe', entries, {
+    setOverlayEntries(overlayEngine, 'alloc-probe', entries, {
       collisionCapacity: 96,
       cohortLimit: 256,
       moving: true,
@@ -1411,7 +1417,7 @@ function main() {
     globalThis.gc();
     for (let i = 0; i < CHUNK_FRAMES; i++) tick();
   }
-  const warm = getWorldOverlayDiagnostics();
+  const warm = getWorldOverlayDiagnostics(overlayEngine);
   const detectionWarm = detectionActive ? getDetectionDiagnostics() : null;
   const painted = detectionActive
     ? detectionWarm.visibleCount
@@ -1434,7 +1440,7 @@ function main() {
   }
   const solveRevisionAfter = detectionActive
     ? getDetectionDiagnostics().solveRevision
-    : getWorldOverlayDiagnostics().solveRevision;
+    : getWorldOverlayDiagnostics(overlayEngine).solveRevision;
   const sorted = chunkRates.slice().sort((a, b) => a - b);
   const maxBytesPerFrame = sorted[sorted.length - 1];
   const medianBytesPerFrame = sorted[Math.floor(sorted.length / 2)];
@@ -1470,7 +1476,7 @@ function main() {
   );
 
   if (detectionActive) destroyDetection();
-  destroyWorldOverlay();
+  destroyWorldOverlay(overlayEngine);
   env.engine.destroy();
 }
 

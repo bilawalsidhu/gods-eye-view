@@ -1,6 +1,7 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    services.overlays;
+    bindOverlayHost(services.overlays, () => layerState._engine);
   const layerState = {};
 
   layerState.DEFAULT_OVERLAY_HOST = Object.freeze({

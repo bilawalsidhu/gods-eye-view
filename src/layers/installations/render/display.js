@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 // Mapped Installations on the globe contract (engine.movers, engine.ground,
 // engine.input, engine.camera), the same on every engine:
 //
@@ -164,7 +165,7 @@ export function createInstallationsDisplay(
     state,
     services,
     parts,
-    overlayHost,
+    overlayHost: bindOverlayHost(overlayHost, () => engine),
   });
 
   let initialized = false;

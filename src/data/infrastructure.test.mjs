@@ -198,6 +198,7 @@ test('consumer build includes only infrastructure code and engine-free geometry,
     'src/layers/infrastructure/index.js',
     'src/layers/infrastructure/render/display.js',
     'src/layers/shared/color.js',
+    'src/overlays/bindOverlayHost.js',
     'src/sources/infrastructureData.js',
     'src/sources/requestDeadline.js',
   ]);

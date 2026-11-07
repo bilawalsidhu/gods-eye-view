@@ -109,8 +109,6 @@ export class StyleManager extends ShellScene {
       CelestialRing,
       initTrackedReadout,
       initWorldOverlay,
-      subscribeWorldOverlayActions,
-      activateWorldOverlayAction,
       initDetection,
       setDetectionStyle,
       trafficLayer,
@@ -313,14 +311,6 @@ export class StyleManager extends ShellScene {
     });
 
     this._initSceneOverlays();
-    // Its focusable mirror of the painted cards, which the scene chrome
-    // renders.
-    const overlayActionsStore = useWorldOverlayActionsStore(applicationPinia());
-    overlayActionsStore.connect({ activate: activateWorldOverlayAction });
-    this._overlayActionsUnsubscribe = subscribeWorldOverlayActions((view) =>
-      overlayActionsStore.publish(view),
-    );
-
     this._displayBindings = new DisplayBindings({
       viewer,
       services: {

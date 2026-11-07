@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { fromDegrees } from '../../geo/cartesian3.js';
 import { createPerimetersDisplay } from './render/display.js';
 import {
@@ -89,6 +90,7 @@ export function createFirePerimetersLayer({
     _linkRequest = null;
   }
 
+  overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
   const canSelect = () => overlayHost && picking;
 
   /**

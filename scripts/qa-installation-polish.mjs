@@ -11,7 +11,7 @@ export async function checkInstallationPan(page, dir) {
   await sleep(3000);
   await page.evaluate(async () => {
     const { getOverlayPaintRect } =
-      await import('/src/overlays/worldOverlay.js');
+      (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
     const g = window.__godsEyeView;
     const installations = g.dataManager.layers.get(
       'military-installations',
@@ -188,7 +188,7 @@ export async function checkInstallationSelection(
         const { getSelectedEntityContext } =
           await import('/src/data/contextStore.js');
         const { getOverlayPaintRect, getWorldOverlayDiagnostics } =
-          await import('/src/overlays/worldOverlay.js');
+          (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
         // The selected site's fill is one engine.ground polygon set
         // (render/display.js SELECTION_FILL_SET_ID), an item per footprint
         // part; the layer owns no Cesium entities or ground primitives.

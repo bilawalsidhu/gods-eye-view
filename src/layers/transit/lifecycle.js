@@ -339,10 +339,10 @@ export function createLifecycle({
      */
     destroy(viewer) {
       this.disable(viewer);
+      state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       parts.renderer?.destroy();
       parts.renderer = null;
       state._markers = state._animatedMarkers = null;
-      state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       parts.height.clear();
       unbindStyleEvents();
       state._dataManager = null;

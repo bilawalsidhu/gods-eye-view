@@ -315,21 +315,31 @@ export function initDetection(engine, layers, onModeChange) {
   );
   _hostLayoutRevision = -1;
   _calloutCount = 0;
-  _hostLane = registerWorldOverlayPaintLane('detection', _paintDetectionLane, {
-    id: 'detection',
-    active: _mode !== MODE_OFF && !_suspended,
-    target: 'detection',
-    shouldPaint: _shouldPaintDetectionLane,
-  });
+  _hostLane = registerWorldOverlayPaintLane(
+    engine,
+    'detection',
+    _paintDetectionLane,
+    {
+      id: 'detection',
+      active: _mode !== MODE_OFF && !_suspended,
+      target: 'detection',
+      shouldPaint: _shouldPaintDetectionLane,
+    },
+  );
   // Registered AFTER the sensor lane so it replays the callouts that lane just
   // solved. Both sit in the 'detection' lane — the host's bottom slot — so
   // callouts still paint under every ordinary overlay card and under the
   // tracked readout, exactly where they sat before.
-  _calloutLane = registerWorldOverlayPaintLane('detection', _paintCalloutLane, {
-    id: 'detection-callouts',
-    active: _mode !== MODE_OFF && !_suspended,
-    target: 'shared',
-  });
+  _calloutLane = registerWorldOverlayPaintLane(
+    engine,
+    'detection',
+    _paintCalloutLane,
+    {
+      id: 'detection-callouts',
+      active: _mode !== MODE_OFF && !_suspended,
+      target: 'shared',
+    },
+  );
   _hostSurface = _hostLane.surface;
   _cockpitModeListener = (event) => {
     _cockpitActive = event?.detail?.active === true;

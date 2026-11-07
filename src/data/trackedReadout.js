@@ -28,9 +28,9 @@ const TRACKED_BILLBOARD_SCALE = Object.freeze({
 });
 
 const DEFAULT_TRACKED_OVERLAY_HOST = Object.freeze({
-  setEntries: setOverlayEntries,
-  setVisible: setOverlaySourceVisible,
-  clearSource: clearOverlaySource,
+  setEntries: (...args) => setOverlayEntries(_engine, ...args),
+  setVisible: (...args) => setOverlaySourceVisible(_engine, ...args),
+  clearSource: (...args) => clearOverlaySource(_engine, ...args),
 });
 
 // The globe engine: the followed target is engine.camera.following().

@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createVesselFeed } from './ingestion.js';
 import { VesselRecords } from './records.js';
 import * as geo from '../../geo/index.js';
@@ -9,7 +10,10 @@ export function createVesselState({ source, services }) {
     setOverlaySourceVisible,
     clearOverlaySource,
     hitTestWorldOverlay,
-  } = services.overlay;
+  } = bindOverlayHost(
+    services.overlay,
+    () => vesselState.state.renderer?.engine,
+  );
   const vesselState = {};
 
   vesselState._source = source;

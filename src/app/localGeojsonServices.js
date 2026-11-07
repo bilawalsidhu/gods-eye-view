@@ -1,3 +1,4 @@
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 import {
   clearSelectedEntityContextForLayer,
@@ -14,6 +15,7 @@ import {
 /** Existing standalone application operations, shared by its local layers. */
 export const localGeoJsonServices = Object.freeze({
   overlayHost: Object.freeze({
+    forEngine: worldOverlayFor,
     clearSource: clearOverlaySource,
     setEntries: setOverlayEntries,
     setVisible: setOverlaySourceVisible,

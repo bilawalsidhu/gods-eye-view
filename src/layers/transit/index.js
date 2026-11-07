@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createTransitSource } from './source.js';
 import { createTrails } from './trails.js';
 import { createState } from './state.js';
@@ -39,8 +40,12 @@ export function createTransitLayer({
       'A transit source needs snapshot and history operations',
     );
   }
-  const state = createState({ services });
   const parts = {};
+  services = {
+    ...services,
+    overlays: bindOverlayHost(services.overlays, () => parts.renderer?.engine),
+  };
+  const state = createState({ services });
   const context = { state, services, parts, source, rendererFactory };
   parts.trails = createTrails(context);
   parts.height = createHeight(context);

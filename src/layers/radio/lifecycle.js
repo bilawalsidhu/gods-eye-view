@@ -50,12 +50,12 @@ export function createLifecycle({
       parts.interaction.removeInteraction();
       clearTimeout(layerState._overlayPublishTimer);
       layerState._overlayPublishTimer = null;
+      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
       parts.renderer?.destroy();
       parts.renderer = null;
       layerState._renderById.clear();
       layerState._selectedPosition = null;
       layerState._lastHorizonCameraPosition = null;
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
     },
 
     /** Show stations. Enabling or preset restoration never starts audio. */
@@ -109,9 +109,9 @@ export function createLifecycle({
       if (layerState._audio) layerState._audio.volume = DEFAULT_RADIO_VOLUME;
       layerState._audio = null;
       layerState._userVolume = DEFAULT_RADIO_VOLUME;
+      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
       parts.renderer?.destroy();
       parts.renderer = null;
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
       layerState._stations = [];
       layerState._acceptedCatalogSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
       layerState._stationById.clear();

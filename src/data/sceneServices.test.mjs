@@ -1,3 +1,5 @@
+import { createDroneAirspaceLayer } from '../layers/droneAirspace/index.js';
+import { overlayHost } from '../app/layers/overlayHost.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GROUND_HARNESSES } from '../testSupport/groundDisplayEngines.mjs';
@@ -133,5 +135,62 @@ for (const makeHarness of GROUND_HARNESSES) {
     first.click({ id: 'shared-id' });
     assert.deepEqual(calls, ['second', 'second-escape', 'next']);
     assert.equal(b.picking.findPickOwner('shared-id'), 'flights');
+  });
+}
+
+for (const makeHarness of GROUND_HARNESSES) {
+  test(`${makeHarness.name}: a retained selected airspace card moves between overlay services`, async (t) => {
+    const first = makeHarness();
+    const second = makeHarness();
+    const a = createSceneServices(first.engine);
+    const b = createSceneServices(second.engine);
+    let requests = 0;
+    const ring = [
+      [-77.04, 38.89],
+      [-77.03, 38.89],
+      [-77.03, 38.9],
+      [-77.04, 38.89],
+    ];
+    const layer = createDroneAirspaceLayer({
+      source: {
+        async getSnapshot() {
+          requests++;
+          return [
+            {
+              stableId: '310',
+              name: 'P-56',
+              typeCode: 'P',
+              type: 'Prohibited',
+              polygons: [[ring]],
+            },
+          ];
+        },
+      },
+      overlayHost,
+      picking,
+      pointer: { isPointerFree: () => true },
+    });
+    t.after(() => {
+      layer.destroy();
+      a.destroy();
+      b.destroy();
+      first.destroy();
+      second.destroy();
+    });
+    layer.init(null, { engine: first.engine });
+    layer.enable();
+    await layer.update();
+    first.click({ id: 'drone-airspace:310:0' });
+    assert.equal(a.overlay.getDiagnostics().entryCount, 1);
+    assert.equal(b.overlay.getDiagnostics().entryCount, 0);
+    layer.detachRenderer();
+    assert.equal(a.overlay.getDiagnostics().entryCount, 0);
+    layer.attachRenderer(null, { engine: second.engine });
+    assert.equal(requests, 1);
+    assert.equal(b.overlay.getDiagnostics().entryCount, 1);
+    a.destroy();
+    assert.equal(b.overlay.getDiagnostics().entryCount, 1);
+    layer.disable();
+    assert.equal(b.overlay.getDiagnostics().entryCount, 0);
   });
 }

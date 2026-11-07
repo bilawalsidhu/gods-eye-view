@@ -1618,7 +1618,9 @@ try {
       await wait(600);
       anchor = await page.evaluate(
         async (key, durationMs) => {
-          const overlay = await import('/src/overlays/worldOverlay.js');
+          const overlay = (
+            await import('/src/overlays/worldOverlay.js')
+          ).worldOverlayFor(window.__godsEyeView.engine);
           const app = window.__godsEyeView;
           const layer = app.dataManager.layers.get('transit').module;
           const state = layer._transitStateForTest();

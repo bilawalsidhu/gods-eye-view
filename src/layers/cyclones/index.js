@@ -65,7 +65,7 @@ const number = (value, unit) =>
  */
 export function createCyclonesLayer({
   feed,
-  hitTestOverlay = hitTestWorldOverlay,
+  hitTestOverlay = null,
   overlayHost,
   context = null,
   createRendering = null,
@@ -75,6 +75,7 @@ export function createCyclonesLayer({
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Cyclones require a snapshot source');
   let engine = null;
+  hitTestOverlay ??= (...args) => hitTestWorldOverlay(engine, ...args);
   let rendering = null,
     snapshot = null,
     request = null,

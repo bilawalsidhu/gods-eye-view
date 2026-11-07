@@ -28,10 +28,10 @@ export function createHybridAnnotationRenderer(
 ) {
   const world =
     worldRenderer ?? createWorldAnnotationRenderer(viewer, { engine });
-  const screen = createScreenAnnotationRenderer(
-    screenScene ?? viewer,
-    screenOptions,
-  );
+  const screen = createScreenAnnotationRenderer(screenScene ?? viewer, {
+    engine,
+    ...screenOptions,
+  });
   // anno.id -> { worldProxy?, screenProxy? } — proxies own the sub-renderer state.
   const routed = new Map();
 

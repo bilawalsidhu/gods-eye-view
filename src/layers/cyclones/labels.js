@@ -1,8 +1,4 @@
-import {
-  clearOverlaySource,
-  setOverlayEntries,
-  setOverlaySourceVisible,
-} from '../../overlays/worldOverlay.js';
+import { worldOverlayFor } from '../../overlays/worldOverlay.js';
 
 /**
  * @module cyclones/labels
@@ -30,12 +26,6 @@ export const CYCLONE_MARKER_PX = Object.freeze({
 
 const STORM_PRIORITY = 1000;
 const LEAD_PRIORITY = 500;
-
-const CYCLONE_OVERLAY_HOST = Object.freeze({
-  setEntries: setOverlayEntries,
-  setVisible: setOverlaySourceVisible,
-  clearSource: clearOverlaySource,
-});
 
 /** Fire-card anchor clearance: the gap and leader start follow the marker. */
 function markerClearance(markerPx) {
@@ -139,7 +129,10 @@ export function cycloneStormIdFromEntryId(entryId) {
  * Publish the renderer's committed anchors and selection to the overlay host.
  * @param {{host?:{setEntries:Function,setVisible:Function,clearSource:Function}}} [options]
  */
-export function createCycloneLabels({ host = CYCLONE_OVERLAY_HOST } = {}) {
+export function createCycloneLabels({
+  engine,
+  host = worldOverlayFor(engine),
+} = {}) {
   let storms = [];
   let selectedId = null;
   let published = false;

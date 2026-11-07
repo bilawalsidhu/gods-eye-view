@@ -1,3 +1,4 @@
+import { worldOverlayFor } from '../../overlays/worldOverlay.js';
 import { createWildlifeSightingsLayer } from '../../layers/wildlifeSightings/index.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
@@ -10,6 +11,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 export function createApplicationWildlifeSightings(options) {
   return createWildlifeSightingsLayer({
     overlayHost: {
+      forEngine: worldOverlayFor,
       setEntries: overlays.setOverlayEntries,
       setVisible: overlays.setOverlaySourceVisible,
       clearSource: overlays.clearOverlaySource,

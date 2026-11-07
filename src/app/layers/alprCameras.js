@@ -30,7 +30,8 @@ export function createApplicationAlpr({
       picking,
       groundFloor,
       overlays: {
-        registerPaintLane: registerWorldOverlayPaintLane,
+        registerPaintLane: (lane, painter, options, engine) =>
+          registerWorldOverlayPaintLane(engine, lane, painter, options),
         keyholeAlpha: keyholeLabelAlphaFromGeometry,
         refreshReadout: refreshTrackedReadout,
         subscribeMapStack(callback) {

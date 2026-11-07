@@ -81,9 +81,7 @@ export function cycloneSphereVisible(sphere, camera) {
 export function createCyclonesDisplay(engine, { overlayHost } = {}) {
   if (!engine?.movers || !engine?.ground)
     throw new TypeError('The cyclone display needs a globe engine');
-  const labels = createCycloneLabels(
-    overlayHost ? { host: overlayHost } : undefined,
-  );
+  const labels = createCycloneLabels({ engine, host: overlayHost });
   // Mover set ids stay unique when a set is rebuilt larger.
   let setSeq = 0;
   const pointSet = (role, capacity, outlinePx, sizePx, order) =>

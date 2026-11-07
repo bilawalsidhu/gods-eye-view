@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 /**
  * @module layers/directions
  * @description Keyless A→B directions on the globe: drive, walk or cycle.
@@ -871,6 +872,10 @@ export function createDirectionsLayer({
    * tests swap it. Resolved on use, not at import, because the services arrive
    * after this module is evaluated.
    */
+  services = {
+    ...services,
+    overlays: bindOverlayHost(services.overlays, () => _engine),
+  };
   const DEFAULT_OVERLAY_HOST = Object.freeze({
     setEntries: (...args) => services.overlays.setOverlayEntries(...args),
     setVisible: (...args) => services.overlays.setOverlaySourceVisible(...args),

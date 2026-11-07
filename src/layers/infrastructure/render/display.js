@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 // The datacenters and dams on the globe contract (engine.movers,
 // engine.lines, engine.ground, engine.surface), the same on every engine.
 // Each point or polygon feature has a reference:
@@ -113,7 +114,7 @@ export function createInfrastructureDisplay(
   const footprintFill = [css.red, css.green, css.blue, FOOTPRINT_ALPHA];
   const publisher = createLocalInfrastructureOverlayPublisher({
     sourceId: id,
-    host: services.overlayHost,
+    host: bindOverlayHost(services.overlayHost, () => engine),
   });
   const key = (featureId) => `${id}:${featureId}`;
   const wake = (reason = id) => engine.render.request(reason);

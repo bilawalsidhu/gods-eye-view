@@ -222,7 +222,14 @@ export function createAlprDisplay(engine, { state, services, source }) {
 
   const overlay = createAlprOverlayCore({
     state,
-    services,
+    services: {
+      ...services,
+      overlays: {
+        ...services.overlays,
+        registerPaintLane: (...args) =>
+          services.overlays.registerPaintLane?.(...args, engine),
+      },
+    },
     onSurfaceChange: refreshPlacements,
     engine: {
       marker: (id) => markers.get(id),

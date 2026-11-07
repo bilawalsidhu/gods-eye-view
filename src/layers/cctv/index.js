@@ -1,3 +1,4 @@
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createCalibration } from './calibration.js';
 import { createTesting } from './testing.js';
 import { createProjection } from './projection.js';
@@ -27,8 +28,12 @@ export function createCctvLayer({ services, source, rendererFactory }) {
     )
   )
     throw new TypeError('A camera source is required');
-  const state = createState({ services });
   const parts = {};
+  services = {
+    ...services,
+    overlays: bindOverlayHost(services.overlays, () => parts.renderer?.engine),
+  };
+  const state = createState({ services });
   const context = { state, services, parts, source, rendererFactory };
   parts.calibration = createCalibration(context);
   parts.testing = createTesting(context);

@@ -283,7 +283,15 @@ one application, and only the globe-bound parts move to the next engine.
   Cesium implements its render mode directly. Retained layers identify their
   attached engine, and scene callbacks capture their governor. Teardown clears
   only that scene's holds; an old service cannot release a replacement's hold.
-  The overlay host and tracked readout still have module-owned state.
+- **Scene world overlays.** `scene.services.overlay` owns each attachment's
+  label sources, paint lanes, collision domains, canvases, observers, timers
+  and accessible actions. Both canvases live inside the engine container;
+  detection remains outside the card root to preserve its blend. Retained
+  models resolve their attached engine, and the shell reconnects its action
+  subscription after switching. Destroyed services and old lane handles stay
+  inert; a parked engine receives a new host. Shared font measurements live
+  until the last host detaches. The tracked readout remains page-owned and
+  publishes into the attached overlay; its event isolation is separate work.
 - **The session owns the state.** Catalog, layer models, sources, selection,
   camera mode and URL state outlive a switch. A layer that is a session model
   gets `attachRenderer(viewer, { engine })` / `detachRenderer()` instead of being rebuilt,

@@ -565,6 +565,31 @@ attachment-bound callbacks can capture `renderGovernorFor(engine)` directly.
 Destroying the scene clears its holds and makes the captured service inert.
 A parked engine gets a fresh service when reattached.
 
+## World overlays
+
+`scene.services.overlay` owns one attachment's world labels and cards. It
+keeps its sources, collision domains, paint lanes, canvases, frame listeners,
+observers, timers and accessible action subscribers. `init()` installs its
+DOM inside `engine.host.container`; the detection blend surface stays beside
+the card root so it can blend against the scene.
+
+Publish with `setEntries(sourceId, entries, options)`, `setVisible(sourceId,
+visible)` and `clearSource(sourceId)`. Read painted rectangles with
+`getPaintRect(sourceId, entryId)` and register custom painters with
+`registerPaintLane(laneId, painter, options)`. `subscribeActions(listener)`
+provides the accessible mirror; `activateAction(owner, key)` rejects an old
+host's actions. The shell reconnects these operations on every attachment.
+
+`worldOverlayFor(engine)` resolves the same service for standalone consumers.
+The module helper functions take the engine first. Retained layer models use
+`bindOverlayHost` with their attached-engine getter; injected hosts without a
+`forEngine` resolver keep their own operations. Publications can buffer before
+`init()`. Destruction is terminal, including before initialization; a parked
+engine needs fresh scene services. An old paint-lane handle cannot mutate its
+replacement. Font measurements are shared until the last live host releases
+them. The tracked-readout bridge remains page-owned and publishes into its
+attached engine's overlay.
+
 ## Render effects
 
 The optional `visualStyles`, `bloom` and `contactSonar` capabilities are

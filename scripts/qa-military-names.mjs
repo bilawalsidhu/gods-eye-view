@@ -153,7 +153,7 @@ try {
     const before = await stats();
     const overlaps = await page.evaluate(async () => {
       const { getOverlayPaintRect } =
-        await import('/src/overlays/worldOverlay.js');
+        (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
       const layer = window.__godsEyeView.dataManager.layers.get(
         'military-installations',
       ).module;
@@ -214,7 +214,7 @@ try {
   );
   await sleep(300);
   result.cleanUi = await page.evaluate(async () => {
-    const host = await import('/src/overlays/worldOverlay.js');
+    const host = (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
     const root = document.getElementById('world-overlay-root');
     return {
       active: document.body.classList.contains('ui-clean-view'),
@@ -244,7 +244,7 @@ try {
     ),
   );
   result.disabled = await page.evaluate(async () => {
-    const host = await import('/src/overlays/worldOverlay.js');
+    const host = (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
     return host.getWorldOverlayDiagnostics().entriesBySource[
       'military-installations'
     ];
@@ -267,7 +267,7 @@ try {
   await page.evaluate(async () => {
     const C = await import('/node_modules/cesium/Build/Cesium/index.js');
     const { getOverlayPaintRect } =
-      await import('/src/overlays/worldOverlay.js');
+      (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
     const g = window.__godsEyeView;
     const layer = g.dataManager.layers.get('military-installations').module;
     const overlay = document.createElement('div');
