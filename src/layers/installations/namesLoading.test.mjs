@@ -121,6 +121,7 @@ for (const stage of ['response', 'body'])
       cooldownMs: 100,
       loadPack: (signal) =>
         loadBundledJson(new URL('https://example.test/names.json'), { signal }),
+      loadSupplements: async () => [],
     });
     const first = load();
     assert.equal(load(), first, 'shared acquisition');

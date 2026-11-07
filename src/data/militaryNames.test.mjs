@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import {
+  createMilitaryNamesLoader,
   loadMilitaryNames,
   militaryOsmKey,
   nameMilitaryFragment,
@@ -64,8 +65,9 @@ test('the separately licensed pack has unique typed identities, areas, names and
   ).split(' ')[0];
   assert.equal(createHash('sha256').update(raw).digest('hex'), hash);
   assert.ok(gzipSync(raw, { level: 9 }).length <= 2_000_000);
+  assert.equal(JSON.parse(raw).records.length, 36466);
   const names = await loadMilitaryNames();
-  assert.equal(names.records.length, 36466);
+  assert.equal(names.records.length, 36466 + 10);
   assert.equal(names.byId.size, names.records.length);
   assert.ok(
     names.records.every(
@@ -226,4 +228,195 @@ test('queries can take every named site in a box instead of one per display cell
   assert.equal(all.count, thinned.count);
   assert.equal(all.records.length, all.count);
   assert.ok(all.records.length > thinned.records.length);
+});
+
+test('the Norwegian supplement names unnamed mapped areas and places sites with none', async () => {
+  const raw = readFileSync(
+    new URL('./local_data/osm_military_names/norway.json', import.meta.url),
+  );
+  const hash = readFileSync(
+    new URL('./local_data/osm_military_names/norway.sha256', import.meta.url),
+    'utf8',
+  ).split(' ')[0];
+  assert.equal(createHash('sha256').update(raw).digest('hex'), hash);
+  const pack = JSON.parse(raw);
+  const overture = JSON.parse(
+    readFileSync(
+      new URL('./local_data/osm_military_names/names.json', import.meta.url),
+    ),
+  );
+  assert.deepEqual(pack.classes, overture.classes);
+  const packKeys = new Set(overture.records.map((r) => r[0]));
+  for (const [
+    osmKey,
+    ,
+    lon,
+    lat,
+    west,
+    south,
+    east,
+    north,
+    ,
+    area,
+    qid,
+  ] of pack.records) {
+    assert.match(qid, /^Q\d+$/);
+    assert.ok(lon >= 4 && lon <= 31.5 && lat >= 57.9 && lat <= 71.2);
+    assert.ok(west <= lon && lon <= east && south <= lat && lat <= north);
+    assert.ok(area > 0);
+    if (osmKey) assert.ok(!packKeys.has(osmKey), `${osmKey} is already named`);
+  }
+  const names = await loadMilitaryNames();
+  const andoya = names.byId.get('w162902961');
+  assert.equal(andoya.name, 'Andøya flystasjon');
+  assert.equal(andoya.class, 'airfield');
+  assert.equal(andoya.standalone, undefined);
+  assert.deepEqual(andoya.sources, [
+    { name: 'OpenStreetMap', id: 'w162902961' },
+    { name: 'Wikidata', id: 'Q3271057' },
+  ]);
+  const setermoen = names.byId.get('Q19388269');
+  assert.equal(setermoen.id, 'wikidata:military:Q19388269');
+  assert.equal(setermoen.standalone, true);
+  assert.equal(names.byId.get('w561519525').name, 'Haakonsvern orlogsstasjon');
+});
+
+const loaderPack = (id, name) => ({
+  classes: ['base'],
+  records: [[id, name, 10, 60, 9, 59, 11, 61, 0, 10000]],
+});
+
+test('supplement failures keep base names cached and retry with independent backoff', async () => {
+  let clock = 0,
+    baseCalls = 0,
+    baseIndexReads = 0,
+    supplementCalls = 0;
+  const pack = loaderPack('w1', 'Base site');
+  const load = createMilitaryNamesLoader({
+    now: () => clock,
+    cooldownMs: 100,
+    maxCooldownMs: 200,
+    loadPack: async () => {
+      baseCalls++;
+      return {
+        classes: pack.classes,
+        get records() {
+          baseIndexReads++;
+          return pack.records;
+        },
+      };
+    },
+    loadSupplements: async () => {
+      supplementCalls++;
+      if (supplementCalls < 3) throw new Error('Norway unavailable');
+      return [
+        loaderPack('w1', 'Must not replace base'),
+        loaderPack('w2', 'Recovered supplement'),
+      ];
+    },
+  });
+  const first = load();
+  assert.equal(load(), first, 'concurrent consumers share acquisition');
+  const base = await first;
+  assert.equal(base.byId.get('w1').name, 'Base site');
+  assert.equal(base.records.length, 1);
+  clock = 99;
+  assert.equal(await load(), base, 'cooldown returns the indexed base object');
+  assert.equal(supplementCalls, 1);
+  clock = 100;
+  assert.equal(await load(), base);
+  assert.equal(supplementCalls, 2);
+  clock = 299;
+  assert.equal(await load(), base);
+  assert.equal(supplementCalls, 2, 'a second failure doubles the cooldown');
+  clock = 300;
+  const retry = load();
+  assert.equal(load(), retry, 'the supplement retry is shared too');
+  const recovered = await retry;
+  assert.equal(recovered.byId.get('w1'), base.byId.get('w1'));
+  assert.equal(recovered.byId.get('w2').name, 'Recovered supplement');
+  assert.equal(recovered.records.length, 2);
+  assert.equal(load(), retry, 'the completed composite is cached');
+  assert.equal(baseCalls, 1);
+  assert.equal(baseIndexReads, 1, 'base rows are not reindexed on retries');
+  assert.equal(supplementCalls, 3);
+});
+
+test('a malformed supplement does not poison cached base names or its later retry', async () => {
+  let clock = 0,
+    calls = 0;
+  const load = createMilitaryNamesLoader({
+    now: () => clock,
+    cooldownMs: 100,
+    loadPack: async () => loaderPack('w1', 'Base site'),
+    loadSupplements: async () =>
+      ++calls === 1
+        ? [{ classes: ['base'], records: null }]
+        : [loaderPack('w2', 'Supplement')],
+  });
+  const base = await load();
+  assert.equal(base.byId.get('w1').name, 'Base site');
+  assert.equal(await load(), base);
+  clock = 100;
+  assert.equal((await load()).byId.get('w2').name, 'Supplement');
+  assert.equal(calls, 2);
+});
+
+test('a stalled supplement is bounded and can recover without reloading the base', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let clock = 0,
+    calls = 0,
+    baseCalls = 0,
+    stalledSignal;
+  const load = createMilitaryNamesLoader({
+    now: () => clock,
+    timeoutMs: 50,
+    cooldownMs: 100,
+    loadPack: async () => {
+      baseCalls++;
+      return loaderPack('w1', 'Base site');
+    },
+    loadSupplements: async (signal) => {
+      if (++calls > 1) return [loaderPack('w2', 'Supplement')];
+      stalledSignal = signal;
+      return new Promise(() => {});
+    },
+  });
+  const pending = load();
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  t.mock.timers.tick(51);
+  const base = await pending;
+  assert.equal(stalledSignal.aborted, true);
+  assert.equal(base.byId.get('w1').name, 'Base site');
+  assert.equal(await load(), base);
+  assert.equal(calls, 1);
+  clock = 100;
+  assert.equal((await load()).byId.get('w2').name, 'Supplement');
+  assert.equal(baseCalls, 1);
+});
+
+test('base failure remains retryable without reloading a successful supplement', async () => {
+  let clock = 0,
+    baseCalls = 0,
+    supplementCalls = 0;
+  const load = createMilitaryNamesLoader({
+    now: () => clock,
+    cooldownMs: 100,
+    loadPack: async () => {
+      if (++baseCalls === 1) throw new Error('Base unavailable');
+      return loaderPack('w1', 'Base site');
+    },
+    loadSupplements: async () => {
+      supplementCalls++;
+      return [loaderPack('w2', 'Supplement')];
+    },
+  });
+  await assert.rejects(load(), /Base unavailable/);
+  await assert.rejects(load(), /Base unavailable/);
+  assert.equal(baseCalls, 1);
+  clock = 100;
+  const recovered = await load();
+  assert.equal(recovered.byId.size, 2);
+  assert.equal(baseCalls, 2);
+  assert.equal(supplementCalls, 1);
 });

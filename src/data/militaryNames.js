@@ -9,54 +9,128 @@ export const MILITARY_LABEL_CAP = 24;
 
 const MILITARY_NAMES_TIMEOUT_MS = 10_000;
 
-/** Share a bounded acquisition; failed assets become retryable after cooldown. */
+/** Map a pack row (optionally carrying a Wikidata item) onto a display record. */
+function nameRecord(classes, row) {
+  const [
+    osmKey,
+    name,
+    longitude,
+    latitude,
+    west,
+    south,
+    east,
+    north,
+    kind,
+    areaM2,
+    wikidata,
+  ] = row;
+  // A supplement row without an OSM identity is a Wikidata position with no
+  // mapped military area: it stands alone in close views too.
+  const key = osmKey || wikidata;
+  return {
+    id: osmKey ? `osm:military:${osmKey}` : `wikidata:military:${wikidata}`,
+    osmKey: key,
+    name,
+    longitude,
+    latitude,
+    bbox: [west, south, east, north],
+    class: classes[kind],
+    areaM2,
+    kind: 'installation',
+    namedArea: true,
+    pointOnly: true,
+    ...(osmKey ? {} : { standalone: true }),
+    validation: 'unreviewed',
+    sources: [
+      ...(osmKey
+        ? [
+            { name: 'OpenStreetMap', id: osmKey },
+            ...(wikidata
+              ? []
+              : [{ name: 'Overture Maps Foundation', id: osmKey }]),
+          ]
+        : []),
+      ...(wikidata ? [{ name: 'Wikidata', id: wikidata }] : []),
+    ],
+  };
+}
+
+function sortedNames(byId) {
+  const records = [...byId.values()].sort(
+    (a, b) => b.areaM2 - a.areaM2 || a.osmKey.localeCompare(b.osmKey),
+  );
+  return { records, byId };
+}
+
+function indexNamePacks(packs) {
+  const byId = new Map();
+  for (const { classes, records } of packs)
+    for (const row of records) {
+      const record = nameRecord(classes, row);
+      if (!byId.has(record.osmKey)) byId.set(record.osmKey, record);
+    }
+  return sortedNames(byId);
+}
+
+/** Share bounded acquisitions; optional packs retry without discarding base names. */
 export function createMilitaryNamesLoader({
   loadPack = (signal) =>
     loadBundledJson(
       new URL('./local_data/osm_military_names/names.json', import.meta.url),
       { signal },
     ),
+  // Curated Norwegian names for areas OpenStreetMap leaves unnamed, plus
+  // Wikidata positions for active sites with no mapped area.
+  loadSupplements = (signal) =>
+    Promise.all([
+      loadBundledJson(
+        new URL('./local_data/osm_military_names/norway.json', import.meta.url),
+        { signal },
+      ),
+    ]),
   timeoutMs = MILITARY_NAMES_TIMEOUT_MS,
   ...retryOptions
 } = {}) {
-  return createRetryableLoader(async () => {
+  // Keep both successful acquisition and indexing cached independently: a
+  // small supplement outage must not reload/reindex the worldwide base pack.
+  const baseNames = createRetryableLoader(async () => {
     const pack = await requestWithDeadline(loadPack, { timeoutMs });
-    const records = pack.records.map(
-      ([
-        osmKey,
-        name,
-        longitude,
-        latitude,
-        west,
-        south,
-        east,
-        north,
-        kind,
-        areaM2,
-      ]) => ({
-        id: `osm:military:${osmKey}`,
-        osmKey,
-        name,
-        longitude,
-        latitude,
-        bbox: [west, south, east, north],
-        class: pack.classes[kind],
-        areaM2,
-        kind: 'installation',
-        namedArea: true,
-        pointOnly: true,
-        validation: 'unreviewed',
-        sources: [
-          { name: 'OpenStreetMap', id: osmKey },
-          { name: 'Overture Maps Foundation', id: osmKey },
-        ],
-      }),
-    );
-    records.sort(
-      (a, b) => b.areaM2 - a.areaM2 || a.osmKey.localeCompare(b.osmKey),
-    );
-    return { records, byId: new Map(records.map((r) => [r.osmKey, r])) };
+    return indexNamePacks([pack]);
   }, retryOptions);
+  const supplementNames = createRetryableLoader(async () => {
+    const packs = await requestWithDeadline(loadSupplements, { timeoutMs });
+    return indexNamePacks(packs);
+  }, retryOptions);
+  let inFlight = null;
+  let complete = null;
+  return function loadNames() {
+    if (complete) return complete;
+    if (inFlight) return inFlight;
+    let supplemented = false;
+    const attempt = Promise.all([
+      baseNames(),
+      supplementNames().catch(() => null),
+    ]).then(([base, supplement]) => {
+      if (!supplement) return base;
+      supplemented = true;
+      const byId = new Map(base.byId);
+      // Supplements only name what the base pack leaves unnamed.
+      for (const [key, record] of supplement.byId)
+        if (!byId.has(key)) byId.set(key, record);
+      return sortedNames(byId);
+    });
+    inFlight = attempt;
+    attempt.then(
+      () => {
+        inFlight = null;
+        if (supplemented) complete = attempt;
+      },
+      () => {
+        inFlight = null;
+      },
+    );
+    return attempt;
+  };
 }
 
 /** Load and index the separate data asset only when installation context needs it. */
