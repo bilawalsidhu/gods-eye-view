@@ -1,6 +1,7 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
 import {
   readAircraftInfo,
+  readVesselInfo,
   readSubjectLayerId,
   resolveEntryKind,
   dispatchCockpitModeChanged,
@@ -19,6 +20,8 @@ import {
   publishRouteView,
   updateHud,
   updateRoute,
+  updateRadar,
+  presentLook,
   syncWeatherToggle,
   setVisionMode,
   cycleVisionMode,
@@ -67,9 +70,20 @@ import {
 import {
   onKeyDown,
   onSceneDoubleClick,
+  onScenePointerDown,
   routeSceneDoubleClick,
 } from './cockpitInput.js';
+import { DEFAULT_RADAR_RANGE_NM, nextRadarRange } from '../cockpitRadar.js';
+import { VESSEL_BRIDGE_PITCH_DEG } from '../cockpitSubjects.js';
+import { stepLook } from '../cockpitLook.js';
 import * as Cesium from 'cesium';
+
+/** Whether the user asked for reduced motion: look turns then jump. */
+function prefersReducedMotion() {
+  return Boolean(
+    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+  );
+}
 
 export class CockpitViewController {
   constructor(
@@ -80,6 +94,7 @@ export class CockpitViewController {
       getInitialVisionMode = null,
       onCameraTakeover = null,
       isEntryAllowed = null,
+      isBridgeEntryAllowed = null,
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
@@ -93,6 +108,10 @@ export class CockpitViewController {
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
+    /** 'aircraft' or 'vessel' while active; which subject the camera rides. */
+    this.subjectKind = null;
+    /** The vessel subject's MMSI; aircraft are identified by trackedEntity. */
+    this.subjectId = null;
     this.trackedEntity = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
@@ -105,6 +124,14 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
+    /**
+     * Where the bridge view is turned to (`lookTarget`) and where the camera
+     * looks on its way there (`lookView`): yaw off the bow, starboard
+     * positive, and absolute pitch. Aircraft never turn it.
+     */
+    this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
+    this.lookView = { ...this.lookTarget };
+    this.lookLastMs = 0;
     this.entry = document.getElementById('cockpit-entry');
     this.tr3bToggle = document.getElementById('tr3b-toggle');
     this._tr3bSignature = null;
@@ -130,6 +157,11 @@ export class CockpitViewController {
         : () => false;
     this.isEntryAllowed =
       typeof isEntryAllowed === 'function' ? isEntryAllowed : () => true;
+    // Without a supplied gate there is no vessel layer to ride either.
+    this.isBridgeEntryAllowed =
+      typeof isBridgeEntryAllowed === 'function'
+        ? isBridgeEntryAllowed
+        : () => false;
     this.isUtilityDisclosureOpen =
       typeof isUtilityDisclosureOpen === 'function'
         ? isUtilityDisclosureOpen
@@ -164,9 +196,15 @@ export class CockpitViewController {
     this.publishVision = publish.vision ?? (() => {});
     this.publishSignals = publish.signals ?? (() => {});
     this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
+    this.publishRadar = publish.radar ?? (() => {});
+    /** The bridge radar's range in nautical miles; kept across bridges. */
+    this.radarRangeNm = DEFAULT_RADAR_RANGE_NM;
     this.presence = {
       active: false,
       entryAvailable: false,
+      // Which subject the entry button would enter, and the active subject.
+      entryKind: null,
+      subjectKind: null,
       tr3b: null,
       context: false,
       // The Contact and briefing cards' collapse, which their toggles show.
@@ -216,9 +254,15 @@ export class CockpitViewController {
     );
     this._listen(this.entry, 'click', () => this.enter());
     // Double-clicking the followed track is a third way in.
+    this._listen(
+      viewer.scene?.canvas,
+      'pointerdown',
+      () => this.onScenePointerDown(),
+      true,
+    );
     this._listenerRemovers.push(routeSceneDoubleClick.call(this));
     // The readout's entry renders inside the Intel HUD, which may mount after
-    // this controller, so its clicks are delegated.
+    // this controller; delegated like the radar's range button.
     this._listen(document, 'click', (event) => {
       if (event.target?.closest?.('#cockpit-entry-readout')) this.enter();
     });
@@ -247,6 +291,15 @@ export class CockpitViewController {
     });
     this._listen(window, 'gev:cockpit-weather-state', (event) => {
       this.syncWeatherToggle(event?.detail?.enabled !== false);
+    });
+    // The radar mounts only on a bridge, so its range button is delegated.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-radar-range'))
+        this.cycleRadarRange();
+    });
+    // The look-ahead button shows only on a turned bridge view; delegated.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-look-ahead')) this.lookAhead();
     });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
@@ -289,6 +342,9 @@ export class CockpitViewController {
   readAircraftInfo() {
     return readAircraftInfo.call(this);
   }
+  readVesselInfo() {
+    return readVesselInfo.call(this);
+  }
   readSubjectLayerId() {
     return readSubjectLayerId.call(this);
   }
@@ -316,8 +372,8 @@ export class CockpitViewController {
   _adoptTrackedEntity(nowMs, suppliedInfo) {
     return _adoptTrackedEntity.call(this, nowMs, suppliedInfo);
   }
-  enter() {
-    return enter.call(this);
+  enter(options) {
+    return enter.call(this, options);
   }
   exit(options) {
     return exit.call(this, options);
@@ -336,6 +392,58 @@ export class CockpitViewController {
   }
   updateRoute(info) {
     return updateRoute.call(this, info);
+  }
+  updateRadar(info) {
+    return updateRadar.call(this, info);
+  }
+  /** Step the bridge radar to its next range and redraw it at once. */
+  cycleRadarRange() {
+    this.radarRangeNm = nextRadarRange(this.radarRangeNm);
+    if (this.active && this.subjectKind === 'vessel' && this.lastAircraftInfo)
+      this.updateRadar(this.lastAircraftInfo);
+  }
+  presentLook() {
+    return presentLook.call(this);
+  }
+  /**
+   * Turn the bridge view one arrow step (see `lookKeyStep`). The camera
+   * eases there unless the user prefers reduced motion.
+   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
+   * @returns {boolean} True when a bridge view was turned.
+   */
+  turnLook(step) {
+    if (!this.active || this.subjectKind !== 'vessel' || !step) return false;
+    this.lookTarget = stepLook(this.lookTarget, step);
+    if (prefersReducedMotion()) this.lookView = { ...this.lookTarget };
+    this.presentLook();
+    this.publishInstrumentsView();
+    return true;
+  }
+  /**
+   * Point the bridge view back over the bow at the rest pitch.
+   * @param {{immediate?: boolean}} [options] Jump there instead of easing,
+   *   as entry and exit do.
+   */
+  resetLook({ immediate = false } = {}) {
+    this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
+    if (immediate || prefersReducedMotion())
+      this.lookView = { ...this.lookTarget };
+    this.lookLastMs = performance.now();
+    this.presentLook();
+    this.publishInstrumentsView();
+  }
+  /**
+   * The LOOK AHEAD control and the Home and 0 keys: ease the bridge view
+   * back over the bow. Focus leaves the button before it hides.
+   * @returns {boolean} True on a bridge.
+   */
+  lookAhead() {
+    if (!this.active || this.subjectKind !== 'vessel') return false;
+    const button = document.getElementById('cockpit-look-ahead');
+    const hadFocus = !!button && button.contains(document.activeElement);
+    this.resetLook();
+    if (hadFocus) this.mapViewButton?.focus({ preventScroll: true });
+    return true;
   }
   syncWeatherToggle(enabled) {
     return syncWeatherToggle.call(this, enabled);
@@ -426,8 +534,11 @@ export class CockpitViewController {
   onKeyDown(event) {
     return onKeyDown.call(this, event);
   }
-  onSceneDoubleClick(position) {
-    return onSceneDoubleClick.call(this, position);
+  onSceneDoubleClick(position, nowMs) {
+    return onSceneDoubleClick.call(this, position, nowMs);
+  }
+  onScenePointerDown(nowMs) {
+    return onScenePointerDown.call(this, nowMs);
   }
 
   handleSignalClick(event) {

@@ -361,6 +361,7 @@ export class StyleManager extends ShellFacade {
       services: {
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
+        aisLiveVesselsLayer: services.aisLiveVesselsLayer,
         isTr3b: services.isTr3b,
         toggleTr3b: services.toggleTr3b,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
@@ -400,6 +401,8 @@ export class StyleManager extends ShellFacade {
             useCockpitStore(applicationPinia()).publishVision(view),
           signals: (rows) =>
             useCockpitStore(applicationPinia()).publishSignals(rows),
+          radar: (view) =>
+            useCockpitStore(applicationPinia()).publishRadar(view),
           utilityLayout: (layout) =>
             useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
         },

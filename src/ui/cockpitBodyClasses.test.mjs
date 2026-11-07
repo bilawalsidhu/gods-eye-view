@@ -52,7 +52,7 @@ function cockpitBodyClasses() {
 
 test('the Cockpit adds its subject classes to <body>', () => {
   const classes = cockpitBodyClasses();
-  for (const name of ['cockpit-mode']) {
+  for (const name of ['cockpit-mode', 'cockpit-bridge']) {
     assert.ok(classes.includes(name), `${name} is not added to <body>`);
   }
 });

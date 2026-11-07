@@ -34,7 +34,13 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     context.value = next && markRaw(next);
   }
 
-  /** The presented instruments; null until the first HUD update. */
+  /**
+   * The presented instruments; null until the first HUD update. Besides the
+   * readouts, `look: { offset, yawDeg, readout }` says whether a bridge view
+   * is turned off the bow, the yaw it is turned to (degrees in -180..180,
+   * starboard positive; the radar draws its look line there) and the worded
+   * readout. An aircraft's look always rests (`offset: false`).
+   */
   const instruments = shallowRef(null);
 
   /** @param {?object} next A fresh presentation of the instruments. */
@@ -64,6 +70,21 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
   /** @param {?object[]} next A fresh presentation of the signal rows. */
   function publishSignals(next) {
     signals.value = next && markRaw(next);
+  }
+
+  /**
+   * The bridge radar: null outside a vessel bridge. Shape:
+   * `{ rangeNm, rangeLabel, ringsNm: number[], headingDeg,
+   *    ownRelativeCourseDeg|null,
+   *    contacts: [{ id, name, x, y, distanceNm, relativeBearingDeg,
+   *    relativeCourseDeg|null, color, stale }] }` where x/y are heading-up
+   * screen fractions in [-1, 1] (x right, y up) of the range circle.
+   */
+  const radar = shallowRef(null);
+
+  /** @param {?object} next A fresh presentation of the bridge radar. */
+  function publishRadar(next) {
+    radar.value = next && markRaw(next);
   }
 
   /**
@@ -101,6 +122,8 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
     publishVision,
     signals,
     publishSignals,
+    radar,
+    publishRadar,
     utilityLayout,
     publishUtilityLayout,
   };
