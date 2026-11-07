@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { createHistoryBudget } from '../../data/contactPlayback.js';
 
 /**
@@ -22,9 +21,9 @@ export function createState({ services }) {
   });
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  /** @type {Cesium.Viewer|null} */
+  /** The viewer the layer draws on, or null. */
   state._viewer = null;
-  /** @type {Cesium.BillboardCollection|null} */
+  /** The stationary markers' billboard collection, or null. */
   state._markers = null;
   state._animatedMarkers = null;
   state._visible = new Set();
@@ -120,7 +119,8 @@ export function createState({ services }) {
   state._error = null;
   state._limitWarned = false;
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  // Where `samplePosition` writes a marker's position, each frame.
+  state._scratchCartesian = { x: 0, y: 0, z: 0 };
 
   return state;
 }

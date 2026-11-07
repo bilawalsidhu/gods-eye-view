@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-import { billboardCollectionOf } from '../../render/cesium/internals.js';
 import {
   SELECTED_CARD_REFRESH_MS,
   TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
@@ -27,7 +25,7 @@ export function createSelection({ state, services, parts }) {
    * reset alike, with no per-frame work here. Null when there is nothing to
    * anchor to: a hidden or removed marker draws no card.
    * @param {object} entry
-   * @returns {() => Cesium.Cartesian3|null}
+   * @returns {() => {x: number, y: number, z: number}|null} ECEF
    */
   function anchorFor(entry) {
     return () => {
@@ -122,6 +120,13 @@ export function createSelection({ state, services, parts }) {
     state._clickSubscription = inputFor(viewer).onClick((event) => {
       const position = event.position;
       const picked = event.pick;
+      // The collection of the marker picked: the one its vehicle's marker is
+      // in, when the pick is one of this layer's markers.
+      const owner = state._vehicles.get(picked?.primitive?.id);
+      const collection =
+        owner && owner.marker === picked.primitive
+          ? owner.markerCollection
+          : null;
       state._lastPickForTest = {
         id: typeof picked?.id === 'string' ? picked.id : null,
         primitiveId:
@@ -131,9 +136,9 @@ export function createSelection({ state, services, parts }) {
         x: position.x,
         y: position.y,
         collection:
-          billboardCollectionOf(picked?.primitive) === state._animatedMarkers
+          collection && collection === state._animatedMarkers
             ? 'animated'
-            : billboardCollectionOf(picked?.primitive) === state._markers
+            : collection && collection === state._markers
               ? 'stationary'
               : null,
       };
