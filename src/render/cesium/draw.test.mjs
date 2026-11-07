@@ -236,6 +236,76 @@ test('clamped fills are ground primitives packed so none overlap within one', ()
   set.dispose();
 });
 
+test('a set that never picks keeps its ground fills and draped lines out of picks', () => {
+  const { scene, draw } = drawOver();
+  const fills = draw.shapes({ id: 'cells', pickable: false });
+  const square = {
+    id: 'a',
+    geometry: {
+      kind: 'rectangle',
+      rect: { west: 0, south: 0, east: 1, north: 1 },
+    },
+    fill: [1, 0, 0, 0.3],
+    height: 'clampGround',
+  };
+  fills.set([square]);
+  const groundOf = (host) => {
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.GroundPrimitive) return host.get(i);
+    return null;
+  };
+  const passes = (primitive) => {
+    const seen = [];
+    const update = Cesium.GroundPrimitive.prototype.update;
+    Cesium.GroundPrimitive.prototype.update = function (frameState) {
+      seen.push(frameState.passes.pick ? 'pick' : 'render');
+    };
+    try {
+      primitive.update({ passes: { pick: true } });
+      primitive.update({ passes: { render: true } });
+    } finally {
+      Cesium.GroundPrimitive.prototype.update = update;
+    }
+    return seen;
+  };
+  let ground = groundOf(scene.added[0]);
+  assert.equal(ground.allowPicking, false);
+  assert.deepEqual(passes(ground), ['render'], 'no pick pass at all');
+  // Whether it picks is built into the primitives: a change rebuilds them.
+  fills.setOptions({ pickable: true });
+  ground = groundOf(scene.added.at(-1));
+  assert.equal(ground.allowPicking, true);
+  assert.deepEqual(passes(ground), ['pick', 'render']);
+  // Stopping picks drops the old, pickable ground at once, before the new
+  // ground is ready: kept drawing, it would still hide the ground from picks.
+  fills.setOptions({ pickable: false });
+  assert.equal(scene.added.length, 1, 'only the new host is drawn');
+  assert.equal(groundOf(scene.added[0]).allowPicking, false);
+  fills.dispose();
+
+  const lines = draw.lines({ id: 'edges', pickable: false });
+  lines.set([
+    {
+      id: 'e',
+      positions: [
+        Cesium.Cartesian3.fromDegrees(0, 0),
+        Cesium.Cartesian3.fromDegrees(1, 0),
+      ],
+      widthPx: 2,
+      mode: 'draped',
+      style: { kind: 'solid', color: '#fff' },
+    },
+  ]);
+  const host = scene.added.at(-1);
+  let draped = null;
+  for (let i = 0; i < host.length; i++)
+    if (host.get(i) instanceof Cesium.GroundPolylinePrimitive)
+      draped = host.get(i);
+  assert.equal(draped.allowPicking, false);
+  lines.dispose();
+  assert.equal(scene.added.length, 0);
+});
+
 test('changing what a set clamps to rebuilds its items', () => {
   const { scene, draw } = drawOver();
   const set = draw.points({ id: 'reclamp', clampTo: 'terrain' });

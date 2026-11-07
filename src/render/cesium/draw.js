@@ -13,7 +13,9 @@
  * drawing its last ground primitives until the new ones are ready, so a
  * refresh never blinks. `horizonCull` hides a set's points and icons past
  * the ellipsoid's horizon, each frame before it draws, tested at the
- * position each was given (not where clamping put it).
+ * position each was given (not where clamping put it). The ground fills and
+ * draped lines of a set made with `pickable: false` stay out of the pick
+ * pass, so they never hide the ground geometry drawn under them from picks.
  *
  * Built over a scene by `createCesiumPorts`, and on its own over a Cesium
  * viewer with no renderer bound, when code first asks
@@ -84,6 +86,18 @@ const pointBlendOf = (blend) =>
     opaque: Cesium.BlendOption.OPAQUE,
     translucent: Cesium.BlendOption.TRANSLUCENT,
   })[blend] ?? Cesium.BlendOption.OPAQUE_AND_TRANSLUCENT;
+
+/**
+ * Ground fills of a set that never takes part in picks (`pickable: false`).
+ * `allowPicking: false` drops their ids, but a ground primitive still draws
+ * its stencil in the pick pass, which would erase picks of ground geometry
+ * under it; these skip the pick pass altogether.
+ */
+class UnpickableGroundPrimitive extends Cesium.GroundPrimitive {
+  update(frameState) {
+    if (!frameState.passes.pick) super.update(frameState);
+  }
+}
 
 const ANCHORS = {
   center: Cesium.VerticalOrigin.CENTER,
@@ -172,9 +186,19 @@ export function createCesiumDraw({ scene, report }) {
         const culled = spec.horizonCull;
         const clampTo = spec.clampTo;
         const blend = spec.blend;
+        const pickable = spec.pickable !== false;
         Object.assign(spec, options);
-        // What clamped items clamp to, and how points blend, are built in.
-        if (spec.clampTo !== clampTo || spec.blend !== blend) rebuild();
+        // What clamped items clamp to, how points blend, and whether ground
+        // primitives pick, are built into them.
+        if (
+          spec.clampTo !== clampTo ||
+          spec.blend !== blend ||
+          (spec.pickable !== false) !== pickable
+        )
+          rebuild();
+        // A set that stops picking lets its old ground go now: still drawn
+        // while the new builds, it would keep hiding the ground from picks.
+        if (pickable && spec.pickable === false) retire(record);
         setsVersion += 1;
         showHosts(record);
         // No longer culled: what the cull hid comes back.
@@ -643,6 +667,7 @@ export function createCesiumDraw({ scene, report }) {
           geometryInstances,
           appearance: new Cesium.PolylineColorAppearance(),
           classificationType: classificationOf(clampTo),
+          allowPicking: record.spec.pickable !== false,
         }),
     );
     replaceHost(record, collect(host, ground), ground, host);
@@ -797,11 +822,16 @@ export function createCesiumDraw({ scene, report }) {
       batch.rectangles.insert(String(batch.instances.length), rectangle);
       batch.instances.push(instance);
     }
+    const pickable = record.spec.pickable !== false;
+    const Ground = pickable
+      ? Cesium.GroundPrimitive
+      : UnpickableGroundPrimitive;
     return batches.map(
       (batch) =>
-        new Cesium.GroundPrimitive({
+        new Ground({
           geometryInstances: batch.instances,
           classificationType: classificationOf(batch.clampTo),
+          allowPicking: pickable,
         }),
     );
   }
