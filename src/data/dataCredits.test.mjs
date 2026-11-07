@@ -38,6 +38,29 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
 });
 
+test('the UCS Satellite Database is acknowledged with its version and webpage', () => {
+  // UCS database manual, section 3: references name the version (the Excel
+  // file's name) and link www.ucsusa.org/satellite_database.
+  const credit = DATA_CREDITS.find(
+    (entry) => entry.key === 'ucs-satellite-database',
+  );
+  assert.ok(credit, 'the satellite classes and operators come from UCS');
+  assert.match(credit.html, /UCS-Satellite-Database 5-1-2023/);
+  assert.match(
+    credit.html,
+    /href="https:\/\/www\.ucsusa\.org\/satellite_database"/,
+  );
+});
+
+test('the imaging sensor swaths credit operator and agency specifications', () => {
+  // Each sensor-pack entry cites its operator's or agency's own pages;
+  // no aggregator database is credited.
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'imaging-sensors');
+  assert.ok(credit, 'the orbital zoom caps come from the sensor pack');
+  assert.match(credit.html, /operator and agency specifications/);
+  assert.doesNotMatch(credit.html, /OSCAR|wmo\.int/);
+});
+
 test('OpenStreetMap has one generic data credit with separate tile and names distributors', () => {
   const osm = DATA_CREDITS.filter((entry) =>
     entry.html.includes('openstreetmap.org/copyright'),
