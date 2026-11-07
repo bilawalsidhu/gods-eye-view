@@ -90,6 +90,34 @@ Item options:
 - `drape` is `'both'` (the default), `'terrain'` or `'tiles'`. Cesium
   honours it; Navara drapes on whatever surface it draws.
 
+Discs with a fill may use `radial: { fillAlpha, rimAlpha, rimStart, rimEnd,
+emission }`. Alpha multipliers are in 0..1; the radius fractions satisfy
+`0 <= rimStart < rimEnd < 1`; emission is nonnegative. The rim grows with
+smoothstep between the two radii, then fades smoothly to zero at the outer
+edge. Space Missions uses a 500 m disc with alpha 0.105 inside and 0.72 at
+the rim, transitions at 0.952 and 0.985, and emission 0.35. Cesium retains
+its textured ground material and polygon depth bias. Navara composes the
+same radial envelope in its ground pass after tone mapping.
+
+An unpickable pixel corridor set with `reveal: true` accepts
+`setReveal(fraction)` in 0..1. Each path is clipped at that fraction of its
+length. Geometry stays intact: Cesium updates material uniforms and Navara
+updates the corridor item texture. Hiding, showing and committing a new
+path retain the fraction. A corridor may have `backing: { widthPx, color }`:
+a wider edge with its own colour, with the core blended only once.
+
+Transit drapes its history and active head through ground corridors. Its
+completed runs retain their age bands, 5 px dark backing and 3 px colour,
+with band updates once per displayed second. The active head is one backed
+corridor revealed along the whole current segment; only a segment crossing
+rebuilds its geometry. Transit uses dynamic sets so new history and head
+corridors build synchronously once Cesium's terrain bounds are available.
+The ground pass handles occlusion on both engines.
+
+Cesium also builds reveal sets synchronously after loading those bounds.
+For nonempty sets, `ready()` includes the visible globe's tile readiness:
+classification needs the current surface depth as well as built geometry.
+
 A `widthPx` corridor can also take the looks Cesium's ground polyline
 materials gave it. The GPU works them out every frame from the time, so a
 commit never rebuilds them:
@@ -528,6 +556,23 @@ not applied, and ground edges use great circles rather than rhumb lines.
 These appearance limits are not included in the undrawn count.
 
 ## Input ownership
+
+`engine.input.on(type, listener, { pick, drill, pickWindow })` accepts
+`pickWindow: { width, height }` with positive integer dimensions passed to
+the picker. Omitted dimensions keep the engine default. Listeners share a
+pick only when their windows match, and each receives its requested drill
+limit. Pointer-down picks are synchronous. Moves, including drills, coalesce
+to the latest position per frame. Navara clicks still use one GPU answer
+from the gesture; a missing hit falls back to the requested CPU window.
+Street Level requests 9 × 9 px; CCTV's gizmo requests its own window and
+limit for presses and hover. Pointer ownership and removal still suppress
+delivery while a pick is pending.
+
+`engine.projector.horizonVisible(position, { ellipsoid })` accepts a plain
+ellipsoid with positive finite `radii: { x, y, z }` in metres. Without the
+option it uses WGS84. Street Level supplies WGS84 radii reduced by 1,000 m
+so nearby cones remain visible below sea level. The shared math is tested
+against the native ellipsoidal occluder, including points near the limb.
 
 `engine.input.suspendCameraInputs()` disables camera gestures and returns an
 idempotent resume function. Suspensions are counted: only the last resume

@@ -218,6 +218,15 @@ one application, and only the globe-bound parts move to the next engine.
     engines, and `scripts/qa-ground-looks.mjs` drew the jam line and the
     route on Cesium as the old materials did, with no pixel changed at four
     moments of the pulse and the dashes.
+- **Ground and input parity.** Space Missions draws its 500 m launch-pad
+  zone with the radial ground material: faint fill, bright soft rim and
+  emission, classified on terrain and tiles. Transit draws its age-banded
+  trail and dark backing as ground corridors. The active segment uses a
+  shader reveal, retaining its geometry between segment crossings. Navara
+  composes both in the ground pass after tone mapping. Street Level's 9 px
+  pick window and CCTV's custom window and drill limit go through input
+  subscriptions. Street Level's lowered horizon ellipsoid is a projector
+  option on every engine; default callers retain the WGS84 horizon.
 - **Shared follow and Draw.** Share links read the follow target, identity and
   camera pose through the engine; their saved offset uses `camera.follow`'s
   `swingTo` option on both engines. Cesium keeps its guarded 60-degree frame
