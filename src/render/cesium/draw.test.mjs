@@ -1399,3 +1399,57 @@ test('an icon set is built anew where changing it in place would draw out of ord
   assert.equal(scene.added[0].length, 0);
   set.dispose();
 });
+
+test('icons scale, fade and show by eye distance, and drop the curves in place', () => {
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const set = part.port.icons({ id: 'icons:distance' });
+  const icon = (extra = {}) => ({
+    id: 'a',
+    pos: { lon: 0, lat: 0 },
+    image: 'a.png',
+    size: [8, 8],
+    ...extra,
+  });
+  set.set([
+    icon({
+      scaleByDistance: { near: 1e3, nearValue: 1.5, far: 1e6, farValue: 0.5 },
+      fadeByDistance: { near: 2e3, nearValue: 1, far: 2e6, farValue: 0 },
+      displayRange: [10, 5e6],
+    }),
+  ]);
+  const [host] = scene.added;
+  const a = host.get(0);
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      a.scaleByDistance,
+      new Cesium.NearFarScalar(1e3, 1.5, 1e6, 0.5),
+    ),
+  );
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      a.translucencyByDistance,
+      new Cesium.NearFarScalar(2e3, 1, 2e6, 0),
+    ),
+  );
+  assert.equal(a.distanceDisplayCondition.near, 10);
+  assert.equal(a.distanceDisplayCondition.far, 5e6);
+
+  set.upsert([icon()]);
+  assert.equal(host.get(0), a, 'changed in place');
+  assert.equal(a.scaleByDistance, undefined);
+  assert.equal(a.translucencyByDistance, undefined);
+  assert.equal(a.distanceDisplayCondition, undefined);
+  set.upsert([
+    icon({
+      scaleByDistance: { near: 5, nearValue: 1, far: 5, farValue: 2 },
+    }),
+  ]);
+  assert.equal(a.scaleByDistance, undefined, 'no curve: left out');
+  set.upsert([icon({ displayRange: [100, 100] })]);
+  assert.equal(a.show, false, 'an empty range shows it nowhere');
+  set.dispose();
+});

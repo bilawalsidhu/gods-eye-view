@@ -65,6 +65,14 @@ const KNOBS = Object.freeze([
   { key: 'targetFps', kind: 'number', min: 0, max: 240, default: 0, cost: 0.2 },
 ]);
 
+/** A distance curve's value at `distance`: held past each end. */
+function nearFarValue(curve, distance) {
+  if (distance <= curve.near) return curve.nearValue;
+  if (distance >= curve.far) return curve.farValue;
+  const t = (distance - curve.near) / (curve.far - curve.near);
+  return curve.nearValue + (curve.farValue - curve.nearValue) * t;
+}
+
 function uncaught(error) {
   if (typeof globalThis.reportError === 'function')
     globalThis.reportError(error);
@@ -562,20 +570,31 @@ export function createStubRenderer(options = {}) {
         if (item.show === false || item.pickable === false) continue;
         const p = itemPosition(set, item);
         if (!p || isOccluded(p)) continue;
+        const distance = magnitude(sub(p, eye().position));
         if (item.displayRange) {
-          const distance = magnitude(sub(p, eye().position));
           const [nearM, farM] = item.displayRange;
           if (distance < nearM || distance >= farM) continue;
         }
+        // Faded out entirely, it is not drawn.
+        if (
+          item.fadeByDistance &&
+          nearFarValue(item.fadeByDistance, distance) <= 0
+        )
+          continue;
         const s = project(p);
         if (!s) continue;
         const pixel = item.pixelSize ?? item.marker?.pixelSize ?? 10;
         const size = item.pickProxy?.size ??
           item.size ??
           item.marker?.size ?? [pixel, pixel];
+        const scale = item.scaleByDistance
+          ? nearFarValue(item.scaleByDistance, distance)
+          : 1;
+        // Scaled to nothing, it is not drawn.
+        if (scale <= 0) continue;
         if (
-          Math.abs(s.x - x) <= size[0] / 2 + halfW &&
-          Math.abs(s.y - y) <= size[1] / 2 + halfH
+          Math.abs(s.x - x) <= (size[0] * scale) / 2 + halfW &&
+          Math.abs(s.y - y) <= (size[1] * scale) / 2 + halfH
         )
           hits.push({
             set: setId,

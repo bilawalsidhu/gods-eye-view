@@ -70,15 +70,33 @@ const classificationOf = (clampTo = 'both') =>
     tiles: Cesium.ClassificationType.CESIUM_3D_TILE,
   })[clampTo] ?? Cesium.ClassificationType.BOTH;
 
-/** A distance curve as Cesium's, or undefined. */
+/**
+ * A distance curve as Cesium's, or undefined. Cesium's curves hold the same
+ * end values but ease between them (not linearly, as the contract's do):
+ * points and icons draw them as Cesium's own entities always have. A curve
+ * whose far end is not past its near one is left out.
+ */
 const nearFarOf = (curve) =>
-  curve
+  // One that ends where it starts is no curve, which Cesium refuses.
+  curve && curve.far > curve.near
     ? new Cesium.NearFarScalar(
         curve.near,
         curve.nearValue,
         curve.far,
         curve.farValue,
       )
+    : undefined;
+
+/** Whether a `displayRange` shows anything: `[near, far)` is not empty. */
+const displayable = (range) => !range || range[1] > range[0];
+
+/**
+ * A `displayRange` as Cesium's, or undefined for none (or an empty one).
+ * Cesium still shows an item at exactly its far distance.
+ */
+const displayConditionOf = (range) =>
+  range && displayable(range)
+    ? new Cesium.DistanceDisplayCondition(range[0], range[1])
     : undefined;
 
 /** Cesium's point blending for a set's `blend`. */
@@ -445,7 +463,11 @@ export function createCesiumDraw({ scene, report }) {
       verticalOrigin: ANCHORS[item.anchor ?? 'center'],
       disableDepthTestDistance: item.disableDepthTest ?? 0,
       heightReference: heightReferenceOf(item.height, record.spec.clampTo),
-      show: item.show !== false,
+      // An empty range shows it nowhere.
+      show: item.show !== false && displayable(item.displayRange),
+      scaleByDistance: nearFarOf(item.scaleByDistance),
+      translucencyByDistance: nearFarOf(item.fadeByDistance),
+      distanceDisplayCondition: displayConditionOf(item.displayRange),
       // The defaults, so a restyle in place puts back what an item dropped.
       rotation: 0,
       alignedAxis: Cesium.Cartesian3.ZERO,

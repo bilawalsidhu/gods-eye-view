@@ -1222,6 +1222,51 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.icons.distance',
+      'icons scale, fade and show by eye distance',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({ id: 'conf:icons-distance' });
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const icon = (extra = {}) => ({
+          id: 'one',
+          pos,
+          image: DOT,
+          size: [16, 16],
+          ...extra,
+        });
+        set.set([icon()]);
+        await drawn(h, r);
+        await settled(r);
+        const s = r.query.project(pos);
+        ok(s, 'the icon projects');
+        const at = (dx) => r.query.pick(s.x + dx, s.y);
+        const mine = (hit) => hit?.set === 'conf:icons-distance';
+        ok(mine(at(0)) && !mine(at(20)), 'drawn at its size');
+        // The eye is 2 km off: held at the curve's near value.
+        const curve = (value) => ({
+          near: 1e4,
+          nearValue: value,
+          far: 1e7,
+          farValue: value,
+        });
+        set.upsert([icon({ scaleByDistance: curve(4) })]);
+        await drawn(h, r);
+        await settled(r);
+        ok(mine(at(20)), 'scaled up by distance: picked 20 px off');
+        set.upsert([icon({ fadeByDistance: curve(0) })]);
+        await drawn(h, r);
+        ok(!mine(at(0)), 'faded out by distance: not drawn');
+        set.upsert([icon({ displayRange: [0, 100] })]);
+        await drawn(h, r);
+        ok(!mine(at(0)), 'out of its display range: not drawn');
+        set.upsert([icon({ displayRange: [0, 1e6] })]);
+        await drawn(h, r);
+        ok(mine(at(0)), 'in its display range: drawn');
+        set.dispose();
+      },
+    ),
+    check(
       'draw.columns',
       'column updates are rows: sized, picked, removed',
       async (h, r) => {
