@@ -620,8 +620,10 @@ export function createInstallationsDisplay(
       namedMarkers.enable();
       namedMarkers.sync(state.records || []);
       claimCameraSensitivity(engine, LAYER_ID, 0.01);
-      services.picking.registerPickOwner(LAYER_ID, (id) =>
-        state.recordById.has(id),
+      services.picking.registerPickOwner(
+        LAYER_ID,
+        (id) => state.recordById.has(id),
+        engine,
       );
       setVisible(true);
       // The layer manager calls update() right after enable(), which owns
@@ -639,7 +641,7 @@ export function createInstallationsDisplay(
       state.coverage = { kind: 'viewport' };
       state.cameraLoadKey = null;
       state.cameraLoadOwner = null;
-      services.picking.unregisterPickOwner(LAYER_ID);
+      services.picking.unregisterPickOwner(LAYER_ID, engine);
       parts.viewport.clearUnavailableRetry();
       clearTimeout(state.timer);
       state.abort?.abort();
@@ -664,7 +666,7 @@ export function createInstallationsDisplay(
     detach() {
       services.credits?.hideOsmCredit?.(engine, LAYER_ID);
       services.credits?.hideGooglePlacesCredit?.(engine, LAYER_ID);
-      services.picking.unregisterPickOwner(LAYER_ID);
+      services.picking.unregisterPickOwner(LAYER_ID, engine);
       releaseCameraSensitivity(engine, LAYER_ID);
       state.surfaceChangedRemove?.();
       state.surfaceChangedRemove = null;

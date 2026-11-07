@@ -1537,7 +1537,7 @@ export function createDirectionsLayer({
       clearRouteGraphics();
       _selectedStep = selected;
       _removeClickHandler();
-      services.picking.unregisterPickOwner('directions');
+      services.picking.unregisterPickOwner('directions', _engine);
       _display?.destroy();
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
       _display = _engine = null;
@@ -1554,6 +1554,7 @@ export function createDirectionsLayer({
         'directions',
         (pickedId) =>
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
+        _engine,
       );
       syncRenderHold();
     },
@@ -1564,7 +1565,7 @@ export function createDirectionsLayer({
       clearAll();
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
       _removeClickHandler();
-      services.picking.unregisterPickOwner('directions');
+      services.picking.unregisterPickOwner('directions', _engine);
       _display?.show(false);
       syncRenderHold();
     },

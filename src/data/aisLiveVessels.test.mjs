@@ -32,7 +32,9 @@ import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { registerEntityContext, selectEntityContext } from './contextStore.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
-import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import { pickRegistryFor } from './pickRegistry.js';
+const wireEngine = {};
+const { registerPickOwner, unregisterPickOwner } = pickRegistryFor(wireEngine);
 import { applyVesselOverlayPolicy } from './vesselLabels.js';
 import { layerFeedState } from './manager.js';
 import {
@@ -959,7 +961,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     trackedEntityChanged,
   };
   const renderer = ({ billboardCollection }) =>
-    vesselViewerRenderer({ viewer: followViewer, billboardCollection });
+    ({ ...vesselViewerRenderer({ viewer: followViewer, billboardCollection }), engine: wireEngine });
   _setVesselStateForTest({
     records: [record],
     selectedRecord: record,

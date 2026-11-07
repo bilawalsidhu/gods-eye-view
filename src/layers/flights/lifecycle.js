@@ -135,8 +135,10 @@ export function createLifecycle({
       }
       if (!renderer) return;
       parts.tracking._installClickHandler();
-      registerPickOwner('flights', (pickedId) =>
-        flightState._billboards.has(pickedId),
+      registerPickOwner(
+        'flights',
+        (pickedId) => flightState._billboards.has(pickedId),
+        flightState._renderer?.engine,
       );
       // Force a fresh rotation pass on the first tick after re-enable
       flightState._lastCamPoseSig = '';

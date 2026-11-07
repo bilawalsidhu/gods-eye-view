@@ -590,6 +590,7 @@ export function createCctvDisplay(engine, { state, services = {} } = {}) {
   let credit = false;
 
   return {
+    engine,
     attach() {
       if (destroyed) throw new Error('CCTV display is destroyed');
       initialized = true;

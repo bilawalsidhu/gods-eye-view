@@ -1,4 +1,4 @@
-import { nearbyContact } from './pickRegistry.js';
+import { sceneServicesFor } from './sceneServices.js';
 // One selection dispatcher for the layers that draw through the globe
 // engine: one click subscription with picks
 // (engine.input.on('click', …, { pick: true, drill: 8 })), the press
@@ -27,16 +27,11 @@ import { nearbyContact } from './pickRegistry.js';
 // layer.
 
 import { isPointerFree as pointerFree } from './inputOwnership.js';
-import {
-  findPickOwner,
-  registerPickOwner,
-  resolvePickId,
-  unregisterPickOwner,
-} from './pickRegistry.js';
+import { pickRegistryFor, resolvePickId } from './pickRegistry.js';
 import {
   isTrackingClickGesture,
   isTrackingSelectionGesture,
-} from './trackingClickGesture.js';
+} from './trackingGesture.js';
 
 const SELECTION_DRILL = 8;
 
@@ -47,11 +42,18 @@ const SELECTION_DRILL = 8;
 export function createSelectionDispatcher(
   engine,
   {
+    picking = pickRegistryFor(engine),
     keyTarget = globalThis.document,
     now = () => performance.now(),
     isPointerFree = pointerFree,
   } = {},
 ) {
+  const {
+    findPickOwner,
+    registerPickOwner,
+    unregisterPickOwner,
+    nearbyContact,
+  } = picking;
   const owners = new Map();
   let removers = [];
   let destroyed = false;
@@ -254,21 +256,9 @@ export function createSelectionDispatcher(
   };
 }
 
-const dispatchers = new WeakMap();
-
-/**
- * The application's one dispatcher for `engine`, created on first use (the
- * layers that moved onto the engine share it).
- * @param {import('../globe/contract.js').GlobeEngine} engine
- */
+/** The selection dispatcher owned by the engine's attached scene. */
 export function selectionDispatcherFor(engine) {
-  if (!engine) return null;
-  let dispatcher = dispatchers.get(engine);
-  if (!dispatcher) {
-    dispatcher = createSelectionDispatcher(engine);
-    dispatchers.set(engine, dispatcher);
-  }
-  return dispatcher;
+  return sceneServicesFor(engine)?.selection ?? null;
 }
 
 function safely(run) {

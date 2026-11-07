@@ -538,6 +538,15 @@ Cockpit, imagery-box drawing, CCTV calibration and infrastructure flights use
 these methods on every engine. Pointer claims remain separate from camera
 input suspension.
 
+Pick ownership belongs to the scene attachment, not to an engine implementation.
+`scene.services.picking` owns its predicates and `scene.services.selection` owns
+its shared click dispatcher. Layer entry points resolve these services using
+their attached engine (`sceneServicesFor(engine)`); the pick-registry helper
+functions take that engine as their final argument. Standalone entries acquire
+the same services on first use. The application destroys them on detach and
+creates fresh services when reattaching a parked engine. Identical layer IDs in
+simultaneous scenes cannot replace or unregister one another's picks.
+
 ## Render effects
 
 The optional `visualStyles`, `bloom` and `contactSonar` capabilities are

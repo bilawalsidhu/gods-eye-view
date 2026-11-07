@@ -89,7 +89,7 @@ export function createLifecycle({
         layerState._preRenderListener =
           null;
       document.removeEventListener('keydown', parts.interaction._onKeyDown);
-      unregisterPickOwner('satellites');
+      unregisterPickOwner('satellites', layerState._engine);
       if (layerState._trackedEntity) {
         layerState._handoffOrigin =
           layerState._trackedEntity.gevSelectionOrigin;
@@ -205,10 +205,14 @@ export function createLifecycle({
       if (layerState._renderer) parts.interaction._installClickHandler();
       // Pick-ownership (H2): satellite dot ids are numeric NORAD catalog numbers;
       // the registry hands predicates String()-coerced ids, so match via Number().
-      registerPickOwner('satellites', (pickedId) => {
-        const norad = Number(pickedId);
-        return Number.isFinite(norad) && layerState._points.has(norad);
-      });
+      registerPickOwner(
+        'satellites',
+        (pickedId) => {
+          const norad = Number(pickedId);
+          return Number.isFinite(norad) && layerState._points.has(norad);
+        },
+        layerState._engine,
+      );
       if (!layerState._preRenderListener && layerState._renderer) {
         layerState._preRenderListener = getRenderer().onFrame(
           parts.rendering._preRenderTick,
@@ -237,7 +241,7 @@ export function createLifecycle({
         layerState._trackedEntityChangedRemove = null;
       }
       document.removeEventListener('keydown', parts.interaction._onKeyDown);
-      unregisterPickOwner('satellites');
+      unregisterPickOwner('satellites', layerState._engine);
       if (layerState._preRenderListener) {
         layerState._preRenderListener();
         layerState._preRenderListener = null;
@@ -261,7 +265,7 @@ export function createLifecycle({
         layerState._trackedEntityChangedRemove = null;
       }
       document.removeEventListener('keydown', parts.interaction._onKeyDown);
-      unregisterPickOwner('satellites');
+      unregisterPickOwner('satellites', layerState._engine);
       if (layerState._preRenderListener) {
         layerState._preRenderListener();
         layerState._preRenderListener = null;

@@ -306,7 +306,7 @@ export function createBikeshareDisplay(engine, context) {
   }
   function releaseInput() {
     parts.selection._uninstallClickHandler();
-    unregisterPickOwner?.(LAYER_ID);
+    unregisterPickOwner?.(LAYER_ID, engine);
   }
 
   const methods = {
@@ -336,8 +336,10 @@ export function createBikeshareDisplay(engine, context) {
       state._overlayHost.setVisible(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.selection._installClickHandler();
       // Pick ownership: station point ids are render-map keys.
-      registerPickOwner?.(LAYER_ID, (pickedId) =>
-        state._stationRenderMap.has(pickedId),
+      registerPickOwner?.(
+        LAYER_ID,
+        (pickedId) => state._stationRenderMap.has(pickedId),
+        engine,
       );
       attachCamera();
       void parts.viewport.runProximityCheck();

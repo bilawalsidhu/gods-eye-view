@@ -190,7 +190,7 @@ export function createLifecycle({
       state.preRenderRemover = null;
       components.rendering.cancelTrailingVisibilityPass();
       releaseContinuousRender('ais-vessels');
-      unregisterPickOwner('ais-live-vessels');
+      unregisterPickOwner('ais-live-vessels', state.renderer?.engine);
       components.tracking.detachSelectedVesselTrail();
       for (const record of state.records.all)
         components.rendering.removeRecordPrimitives(record);
@@ -244,7 +244,7 @@ export function createLifecycle({
       invalidateAisSession();
       releaseContinuousRender('ais-vessels');
       components.rendering.cancelTrailingVisibilityPass();
-      unregisterPickOwner('ais-live-vessels');
+      unregisterPickOwner('ais-live-vessels', state.renderer?.engine);
       components.rendering.setVisible(false);
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
       components.selection.clearVesselInspection();
@@ -264,7 +264,7 @@ export function createLifecycle({
       releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
       components.rendering.cancelTrailingVisibilityPass();
       if (state.feed.abort) state.feed.abort.abort();
-      unregisterPickOwner('ais-live-vessels');
+      unregisterPickOwner('ais-live-vessels', state.renderer?.engine);
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
       detachFleet();
@@ -289,8 +289,10 @@ export function createLifecycle({
   function bindVisibleScene(activeViewer, scene) {
     // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
     // the registry resolver reduces it to the record's mmsi (a string key).
-    registerPickOwner('ais-live-vessels', (pickedId) =>
-      state.records.byMmsi.has(pickedId),
+    registerPickOwner(
+      'ais-live-vessels',
+      (pickedId) => state.records.byMmsi.has(pickedId),
+      state.renderer?.engine,
     );
     restoreSpriteOrderOnEnable('ais', activeViewer);
     // Vessels are asked for by view, so ask again when the view moves away.

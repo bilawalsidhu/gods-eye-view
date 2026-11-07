@@ -158,6 +158,7 @@ export function createGhostMapsLayer({
   if (typeof source?.getCatalog !== 'function')
     throw new TypeError('GhostMaps layer requires a catalog source');
   let _display = null;
+  let sceneEngine = null;
   let _enabled = false;
   let _catalog = null;
   let _lastError = null;
@@ -538,6 +539,7 @@ export function createGhostMapsLayer({
       GHOSTMAPS_LAYER_ID,
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
+      sceneEngine,
     );
     _clickHandler = _display.onClick((click, pick) => {
       if (pointer && !pointer.isPointerFree()) return;
@@ -560,7 +562,10 @@ export function createGhostMapsLayer({
       }
       if (picked) {
         const pickId = picking.resolvePickId(picked);
-        if (pickId && picking.isOwnedByOtherLayer(GHOSTMAPS_LAYER_ID, pickId))
+        if (
+          pickId &&
+          picking.isOwnedByOtherLayer(GHOSTMAPS_LAYER_ID, pickId, sceneEngine)
+        )
           return;
       }
       if (_selectedKey) {
@@ -573,7 +578,7 @@ export function createGhostMapsLayer({
   function removeClickHandler() {
     _clickHandler?.();
     _clickHandler = null;
-    picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID);
+    picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID, sceneEngine);
   }
 
   function featureCount() {
@@ -599,6 +604,7 @@ export function createGhostMapsLayer({
       if (_display) throw new Error('GhostMaps display is already attached');
       if (typeof createRenderer !== 'function')
         throw new TypeError('GhostMaps needs a renderer factory');
+      sceneEngine = engine;
       _display = createRenderer(engine);
       if (!_enabled) return;
       installClickHandler();
@@ -629,6 +635,7 @@ export function createGhostMapsLayer({
       overlayHost?.clearSource?.(GHOSTMAPS_OVERLAY_SOURCE_ID);
       _display?.destroy();
       _display = null;
+      sceneEngine = null;
     },
 
     enable() {

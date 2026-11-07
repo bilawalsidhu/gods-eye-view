@@ -1,3 +1,4 @@
+import { createSceneServices } from '../data/sceneServices.js';
 import { releaseCameraVerbs } from '../cameraVerbs.js';
 import { createApplicationOperations } from './operations.js';
 import {
@@ -79,6 +80,8 @@ export async function createApplicationScene({
   const { viewer, engine, tileset, mapStackController } = rendererCache
     ? await rendererCache.acquire(options.engineKind, build, defer)
     : await build({ defer });
+  const services = createSceneServices(engine);
+  defer(services.destroy);
   if (layerSession) {
     // DEM cells belong to the session. Mesh samples came from the outgoing
     // scene, including when the incoming canvas was warm in the cache.
@@ -93,6 +96,7 @@ export async function createApplicationScene({
     tileset,
     mapStackController,
     operations,
+    services,
   };
 }
 

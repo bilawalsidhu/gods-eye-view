@@ -462,7 +462,7 @@ export function createLifecycle({
       if (!parts.renderer) return;
       layerState._restoringViewport = true;
       parts.renderer.hideCredit();
-      unregisterPickOwner('cctv');
+      unregisterPickOwner('cctv', parts.renderer?.engine);
       if (layerState._mapStackListener) {
         window.removeEventListener(
           'gev:map-stack-changed',
@@ -528,19 +528,23 @@ export function createLifecycle({
         parts.renderer?.showCredit();
       // Pick-ownership (H2): camera billboards use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
-      registerPickOwner('cctv', (pickedId) => {
-        if (layerState._recordById.has(pickedId)) return true;
-        if (
-          typeof pickedId === 'string' &&
-          pickedId.startsWith(GIZMO_ID_PREFIX)
-        )
-          return true;
-        const coverage =
-          /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
-            pickedId,
-          );
-        return Boolean(coverage && layerState._recordById.has(coverage[1]));
-      });
+      registerPickOwner(
+        'cctv',
+        (pickedId) => {
+          if (layerState._recordById.has(pickedId)) return true;
+          if (
+            typeof pickedId === 'string' &&
+            pickedId.startsWith(GIZMO_ID_PREFIX)
+          )
+            return true;
+          const coverage =
+            /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
+              pickedId,
+            );
+          return Boolean(coverage && layerState._recordById.has(coverage[1]));
+        },
+        parts.renderer?.engine,
+      );
       const activeRecord = parts.selection.getActiveRecord();
       if (activeRecord) {
         parts.projection.ensureProjectionRuntime(activeRecord);
@@ -573,7 +577,7 @@ export function createLifecycle({
     disable() {
       parts.renderer?.hideCredit();
       layerState._enabled = false;
-      unregisterPickOwner('cctv');
+      unregisterPickOwner('cctv', parts.renderer?.engine);
       // ADJUST mode does not survive a layer toggle — predictable re-entry.
       layerState._calibrationMode = false;
       releaseContinuousRender('cctv-adjust');
@@ -606,7 +610,7 @@ export function createLifecycle({
           'visibilitychange',
           parts.cards.handleVisibilityChange,
         );
-      unregisterPickOwner('cctv');
+      unregisterPickOwner('cctv', parts.renderer?.engine);
       if (layerState._mapStackListener && typeof window !== 'undefined') {
         window.removeEventListener(
           'gev:map-stack-changed',

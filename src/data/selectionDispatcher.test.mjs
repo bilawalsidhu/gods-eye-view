@@ -78,8 +78,8 @@ test('a click on an owned object selects it; empty space deselects everyone', ()
 });
 
 test("another layer's pick is not empty space, owned through the shared registry", () => {
-  const { dispatcher, click } = setup({ 10: [{ id: 'cctv-1' }] });
-  registerPickOwner('cctv', (id) => id.startsWith('cctv'));
+  const { engine, dispatcher, click } = setup({ 10: [{ id: 'cctv-1' }] });
+  registerPickOwner('cctv', (id) => id.startsWith('cctv'), engine);
   try {
     const flights = recorder();
     dispatcher.register('flights', {
@@ -87,19 +87,21 @@ test("another layer's pick is not empty space, owned through the shared registry
       ...flights.handlers,
     });
     assert.equal(
-      isOwnedByOtherLayer('cctv', 'x'),
+      isOwnedByOtherLayer('cctv', 'x', engine),
       true,
       'registered for legacy handlers',
     );
     click(10);
     assert.deepEqual(flights.calls, []);
   } finally {
-    unregisterPickOwner('cctv');
+    unregisterPickOwner('cctv', engine);
   }
 });
 
 test('a pick no layer owns is empty space, as for the old handlers', () => {
-  const { dispatcher, click } = setup({ 10: [{ id: 'unclaimed-entity' }] });
+  const { engine, dispatcher, click } = setup({
+    10: [{ id: 'unclaimed-entity' }],
+  });
   const flights = recorder();
   dispatcher.register('flights', {
     owns: (id) => id === 'x',
@@ -115,7 +117,7 @@ test('a pick no layer owns is empty space, as for the old handlers', () => {
 });
 
 test('trails do not take clicks: the object under a trail is selected', () => {
-  const { dispatcher, click } = setup({
+  const { engine, dispatcher, click } = setup({
     10: [{ id: 'trail-ae01ce', owner: 'flights-trail' }, { id: 'ae01ce' }],
   });
   const flights = recorder();
@@ -129,10 +131,10 @@ test('trails do not take clicks: the object under a trail is selected', () => {
 });
 
 test("a drill-through owner finds its object under another layer's", () => {
-  const { dispatcher, click } = setup({
+  const { engine, dispatcher, click } = setup({
     10: [{ id: 'cctv-1' }, { id: 'adsb:abc' }],
   });
-  registerPickOwner('cctv', (id) => id.startsWith('cctv'));
+  registerPickOwner('cctv', (id) => id.startsWith('cctv'), engine);
   try {
     const local = recorder();
     dispatcher.register('local-adsb', {
@@ -143,12 +145,12 @@ test("a drill-through owner finds its object under another layer's", () => {
     click(10);
     assert.deepEqual(local.calls, [['select', 'adsb:abc', undefined]]);
   } finally {
-    unregisterPickOwner('cctv');
+    unregisterPickOwner('cctv', engine);
   }
 });
 
 test('a drag selects nothing and deselects nothing; a long press still selects', () => {
-  const { dispatcher, click } = setup({ 10: [{ id: 'ae01ce' }] });
+  const { engine, dispatcher, click } = setup({ 10: [{ id: 'ae01ce' }] });
   const flights = recorder();
   dispatcher.register('flights', {
     owns: (id) => id === 'ae01ce',
@@ -189,7 +191,7 @@ test('unregister and destroy remove the subscriptions', () => {
   dispatcher.destroy();
   click(10);
   assert.deepEqual(flights.calls, []);
-  assert.equal(isOwnedByOtherLayer('other', 'a'), false);
+  assert.equal(isOwnedByOtherLayer('other', 'a', engine), false);
   assert.ok(engine.fake.callsOf('input.on').length >= 1);
 });
 
@@ -208,7 +210,7 @@ test('the application has one dispatcher per engine', () => {
 
 test('a look-under owner (local ADS-B) keeps its own click rule beside the others', () => {
   // x: what lies under each column, top first.
-  const { dispatcher, click } = setup({
+  const { engine, dispatcher, click } = setup({
     10: [{ id: 'local-adsb:a' }], // its own marker
     20: [{ primitive: { tileset: true } }, { id: 'local-adsb:a' }], // under a tile
     30: [{ id: 'gev-trail:local-adsb-head-1' }, { id: 'local-adsb:b' }], // under a trail
@@ -217,8 +219,8 @@ test('a look-under owner (local ADS-B) keeps its own click rule beside the other
     60: [{ id: 'cctv-1' }, { id: 'local-adsb:a' }], // a registry owner's on top
     70: [], // empty map
   });
-  registerPickOwner('trails', (id) => id.startsWith('gev-trail:'));
-  registerPickOwner('cctv', (id) => id.startsWith('cctv'));
+  registerPickOwner('trails', (id) => id.startsWith('gev-trail:'), engine);
+  registerPickOwner('cctv', (id) => id.startsWith('cctv'), engine);
   try {
     const local = recorder();
     const flights = recorder();
@@ -252,8 +254,8 @@ test('a look-under owner (local ADS-B) keeps its own click rule beside the other
       ['empty', 0],
     ]);
   } finally {
-    unregisterPickOwner('trails');
-    unregisterPickOwner('cctv');
+    unregisterPickOwner('trails', engine);
+    unregisterPickOwner('cctv', engine);
   }
 });
 

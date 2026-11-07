@@ -135,6 +135,7 @@ export function createFirmsDisplay(
     sprites = null;
   };
   return {
+    engine,
     view: layerView.view,
     dataSource,
     project: (position, result) =>

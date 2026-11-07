@@ -73,7 +73,11 @@ export function createInteraction({
         // the follow, which that sibling may have JUST started) alone (H2).
         if (picked) {
           const pickedId = resolvePickId(picked);
-          if (pickedId && isOwnedByOtherLayer('satellites', pickedId)) return;
+          if (
+            pickedId &&
+            isOwnedByOtherLayer('satellites', pickedId, layerState._engine)
+          )
+            return;
         }
 
         // Clicked empty space — deselect

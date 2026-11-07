@@ -105,13 +105,16 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   layer.enable();
   layer.enable();
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'),
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
     true,
     'flight tracking recognizes the cyclone pick and leaves the camera alone',
   );
-  assert.equal(isOwnedByOtherLayer('vessels', 'cyclone:ep162026:center'), true);
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:foreign'),
+    isOwnedByOtherLayer('vessels', 'cyclone:ep162026:center', h.engine),
+    true,
+  );
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:foreign', h.engine),
     false,
     'registration recognizes exact current IDs, not a prefix',
   );
@@ -222,7 +225,7 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   );
   layer.disable();
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'),
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
     false,
   );
   assert.equal(layer.getDiagnostics().selectionActive, false);
@@ -238,7 +241,10 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   assert.equal(h.picks, afterDisable, 'disable removes the click listener');
   layer.enable();
   await layer.update();
-  assert.equal(isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'), true);
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
+    true,
+  );
   h.click(click);
   assert.equal(
     h.picks,
@@ -248,7 +254,7 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   assert.equal(h.subscriptions(), 2);
   layer.destroy();
   assert.equal(
-    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center'),
+    isOwnedByOtherLayer('flights', 'cyclone:ep162026:center', h.engine),
     false,
   );
   const afterDestroy = h.picks;
@@ -894,12 +900,15 @@ test('advisories delivered between scenes keep a deliberate selection without an
   const pending = deferred();
   let reads = 0;
   const drawn = [];
+  const first = createFakeEngine();
+  const second = createFakeEngine();
   const layer = createCyclonesLayer({
     feed: {
       getSnapshot: () =>
         ++reads === 1 ? snapshot([storm()]) : pending.promise,
     },
     createRendering: () => ({
+      ownsPickId: (id) => id === 'cyclone:ep152026:center',
       setSnapshot(next) {
         drawn.push(next.storms.map((s) => s.advisoryNumber));
         return true;
@@ -909,17 +918,39 @@ test('advisories delivered between scenes keep a deliberate selection without an
       destroy() {},
     }),
   });
-  layer.init(null, { engine: createFakeEngine() });
+  layer.init(null, { engine: first });
   layer.enable();
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', first),
+    true,
+  );
   await layer.update();
   layer.setParams({ stormId: 'ep152026' });
   const refresh = layer.update();
   layer.detachRenderer();
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', first),
+    false,
+  );
   pending.resolve(snapshot([{ ...storm(), advisoryNumber: '11' }]));
   await refresh;
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  await layer.attachRenderer(null, { engine: createFakeEngine() });
+  await layer.attachRenderer(null, { engine: second });
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', second),
+    true,
+  );
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', first),
+    false,
+  );
   assert.deepEqual(drawn, [['10'], ['11']]);
   assert.equal(reads, 2);
   layer.destroy();
+  assert.equal(
+    isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', second),
+    false,
+  );
+  first.destroy();
+  second.destroy();
 });

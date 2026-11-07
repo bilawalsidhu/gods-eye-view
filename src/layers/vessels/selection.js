@@ -57,7 +57,11 @@ export function createSelection({
     handler.setInputAction((click) =>
       handleClick({
         position: click.position,
-        picked: pickContact(viewer.scene, click.position),
+        picked: pickContact(
+          viewer.scene,
+          click.position,
+          state.renderer?.engine,
+        ),
       }),
     );
     // The follow signal of the layer's renderer.
@@ -98,12 +102,18 @@ export function createSelection({
     // A sibling layer already owns this click. Preserve the current vessel
     // selection and do not compete with its camera command.
     const siblingOwned =
-      pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId);
+      pickedId &&
+      isOwnedByOtherLayer('ais-live-vessels', pickedId, state.renderer?.engine);
     // Cyclone geometry is ambient context behind painted cards. Its handler
     // yields to the same foreground AIS hit. Keep moving-contact precedence
     // unchanged: those handlers may issue their own camera command.
     const cycloneBackground =
-      siblingOwned && !isOwnedByOtherLayer('weather-cyclones', pickedId);
+      siblingOwned &&
+      !isOwnedByOtherLayer(
+        'weather-cyclones',
+        pickedId,
+        state.renderer?.engine,
+      );
     if (siblingOwned && !cycloneBackground) return;
 
     // Cards are painted on a pointer-events:none canvas, so the scene pick is

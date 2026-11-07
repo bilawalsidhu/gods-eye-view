@@ -74,7 +74,11 @@ export function createSelection({ state, parts }) {
     if (state.clickHandler || !map?.engine) return;
     state.clickHandler = map.engine.input.on('click', onClick);
     document.addEventListener('keydown', onKeyDown);
-    picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick);
+    picking?.registerPickOwner?.(
+      STREET_LEVEL_LAYER_ID,
+      parts.router.ownsPick,
+      state.map?.engine,
+    );
   }
 
   function uninstall() {
@@ -83,7 +87,7 @@ export function createSelection({ state, parts }) {
     state.clickHandler();
     state.clickHandler = null;
     document.removeEventListener('keydown', onKeyDown);
-    picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID);
+    picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID, state.map?.engine);
   }
 
   return { install, uninstall, ownsPick: parts.router.ownsPick };

@@ -14,7 +14,7 @@ export function createAircraftSceneBinding({
   let resumeOrigin = 'programmatic';
   function removeSceneListeners() {
     parts.tracking._removeClickHandler();
-    services.picking.unregisterPickOwner(id);
+    services.picking.unregisterPickOwner(id, flightState._renderer?.engine);
     if (flightState._preRenderRemove) {
       flightState._preRenderRemove();
       flightState._preRenderRemove = null;

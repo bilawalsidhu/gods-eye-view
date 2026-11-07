@@ -640,6 +640,7 @@ export function createTransitDisplay(
     own(event.addEventListener((...args) => wrap(() => fn(...args))));
   const scratchCartographic = geo.cartographic.create();
   return {
+    engine,
     attach() {
       attached = true;
     },

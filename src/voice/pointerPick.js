@@ -36,7 +36,7 @@ export function createPointerPicker({
     } catch {
       picked = null;
     }
-    const entity = resolvePickedContext(picked, { dataManager });
+    const entity = resolvePickedContext(picked, { dataManager, engine });
     let ground = null;
     try {
       const hit = pickWorldFromScreen(engine, x / width, y / height);

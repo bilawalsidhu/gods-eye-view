@@ -61,6 +61,7 @@ export function createFirePerimetersLayer({
     throw new TypeError('Fire perimeters require a snapshot source');
   let initialized = false;
   let renderer = null;
+  let sceneEngine = null;
   const geometry = new Map();
   let _request = null;
   let _linkRequest = null;
@@ -230,7 +231,11 @@ export function createFirePerimetersLayer({
       // "empty space" — leave the selection alone and let that layer handle it.
       if (picked) {
         const pickId = picking.resolvePickId(picked);
-        if (pickId && picking.isOwnedByOtherLayer(layer.id, pickId)) return;
+        if (
+          pickId &&
+          picking.isOwnedByOtherLayer(layer.id, pickId, sceneEngine)
+        )
+          return;
       }
       if (_selectedId) {
         abortLinkVerification();
@@ -280,6 +285,7 @@ export function createFirePerimetersLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid fire perimeter scene attachment');
+      sceneEngine = engine;
       renderer = createRenderer({ engine });
       renderer.setVisible(_enabled);
       if (geometry.size) renderer.replace([...geometry.values()]);
@@ -296,6 +302,7 @@ export function createFirePerimetersLayer({
       overlayHost?.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, false);
       renderer?.destroy();
       renderer = null;
+      sceneEngine = null;
     },
 
     enable() {

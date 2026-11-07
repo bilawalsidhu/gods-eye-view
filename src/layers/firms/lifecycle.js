@@ -59,7 +59,7 @@ export function createLifecycle({
       components.selection.removeClickHandler();
       components.viewport.removeMoveEndWatcher();
       components.viewport.removeLodWatcher();
-      unregisterPickOwner(id);
+      unregisterPickOwner(id, layerState._renderer?.engine);
       components.rendering.removeDetectionCollections();
       releaseHeat();
       layerState._renderer?.destroy();
@@ -89,8 +89,10 @@ export function createLifecycle({
       components.viewport.installLodWatcher();
       components.viewport.installMoveEndWatcher();
       components.selection.installClickHandler();
-      registerPickOwner(id, (pickedId) =>
-        layerState._pickIndexById.has(pickedId),
+      registerPickOwner(
+        id,
+        (pickedId) => layerState._pickIndexById.has(pickedId),
+        layerState._renderer?.engine,
       );
       components.rendering.renderCurrentLod(true);
     },
@@ -117,7 +119,7 @@ export function createLifecycle({
       clearSelectedEntityContextForLayer(id);
       components.selection.removeClickHandler();
       components.viewport.removeMoveEndWatcher();
-      unregisterPickOwner(id);
+      unregisterPickOwner(id, layerState._renderer?.engine);
       components.viewport.removeLodWatcher();
     },
 
@@ -131,7 +133,7 @@ export function createLifecycle({
       components.viewport.removeLodWatcher();
       components.viewport.removeMoveEndWatcher();
       components.selection.removeClickHandler();
-      unregisterPickOwner(id);
+      unregisterPickOwner(id, layerState._renderer?.engine);
       components.rendering.removeDetectionCollections();
       layerState._renderer?.destroy();
       layerState._renderer = null;

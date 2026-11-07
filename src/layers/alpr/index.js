@@ -68,6 +68,7 @@ export function createAlprCamerasLayer({
     renderSaturated: false,
   };
   let renderer = null;
+  let sceneEngine = null;
   let restoringView = false;
 
   function setAlprStatus(status, error = null) {
@@ -280,6 +281,7 @@ export function createAlprCamerasLayer({
       if (renderer?.ready) throw new Error('ALPR layer is already initialized');
       if (typeof rendererFactory !== 'function')
         throw new TypeError('An ALPR renderer factory is required');
+      sceneEngine = options.engine;
       renderer = rendererFactory({
         state,
         services,
@@ -288,15 +290,22 @@ export function createAlprCamerasLayer({
       });
       renderer.init(viewer, { onMove: scheduleLoad });
       if (state.enabled) {
+        registerPickOwner(
+          LAYER_ID,
+          (id) => state.recordById.has(id),
+          sceneEngine,
+        );
         renderer.setVisible(true);
         if (!restoringView) renderer.renderRecords();
       }
     },
     detachRenderer() {
+      unregisterPickOwner(LAYER_ID, sceneEngine);
       restoringView = true;
       clearTimeout(state.debounceTimer);
       renderer?.destroy({ retainContext: true });
       renderer = null;
+      sceneEngine = null;
     },
     resumeViewport() {
       if (!restoringView) return;
@@ -309,14 +318,18 @@ export function createAlprCamerasLayer({
     enable() {
       if (state.enabled) return;
       state.enabled = true;
-      registerPickOwner(LAYER_ID, (id) => state.recordById.has(id));
+      registerPickOwner(
+        LAYER_ID,
+        (id) => state.recordById.has(id),
+        sceneEngine,
+      );
       renderer.setVisible(true);
       // DataLayerManager calls update() right after enable(); it owns the first fetch.
     },
     disable() {
       state.enabled = false;
       renderer?.hideOnMapCredit();
-      unregisterPickOwner(LAYER_ID);
+      unregisterPickOwner(LAYER_ID, sceneEngine);
       clearUnavailableRetry();
       clearTimeout(state.debounceTimer);
       state.abort?.abort();
@@ -337,6 +350,7 @@ export function createAlprCamerasLayer({
       this.disable();
       renderer?.destroy();
       renderer = null;
+      sceneEngine = null;
       state.records = [];
       state.recordById = new Map();
       state.lastQueryBox = null;

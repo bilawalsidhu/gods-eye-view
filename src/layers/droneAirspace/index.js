@@ -44,6 +44,7 @@ export function createDroneAirspaceLayer({
     throw new TypeError('Drone airspace requires a snapshot source');
   let initialized = false;
   let renderer = null;
+  let sceneEngine = null;
   /** The rows drawn, kept for the next globe's renderer. */
   let _rows = [];
   let _request = null;
@@ -119,7 +120,11 @@ export function createDroneAirspaceLayer({
       }
       if (picked) {
         const pickId = picking.resolvePickId(picked);
-        if (pickId && picking.isOwnedByOtherLayer(layer.id, pickId)) return;
+        if (
+          pickId &&
+          picking.isOwnedByOtherLayer(layer.id, pickId, sceneEngine)
+        )
+          return;
       }
       if (_selectedId) {
         _selectedId = null;
@@ -168,6 +173,7 @@ export function createDroneAirspaceLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid drone airspace scene attachment');
+      sceneEngine = engine;
       renderer = createRenderer({ engine });
       renderer.setVisible(_enabled);
       if (_rows.length) renderer.replace(_rows);
@@ -185,6 +191,7 @@ export function createDroneAirspaceLayer({
       overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, false);
       renderer?.destroy();
       renderer = null;
+      sceneEngine = null;
     },
 
     enable() {

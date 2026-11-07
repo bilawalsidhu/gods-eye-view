@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApplicationScene } from './scene.js';
+import { sceneServicesFor } from '../data/sceneServices.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import {
   installEngineRenderGovernor,
@@ -259,4 +260,20 @@ test('parking or tearing down the Navara scene releases a running camera verb', 
     assert.equal(engine.fake.callsOf('camera.setView').length, 0, end);
     if (end === 'park') cache.clear();
   }
+});
+
+test('the application scene owns and releases its pick services', async () => {
+  const run = await startScene({ googleApiKey: '' });
+  const { engine, services } = run.scene;
+  try {
+    assert.equal(sceneServicesFor(engine), services);
+    services.selection.register('flights', { owns: (id) => id === 'contact' });
+    assert.equal(services.picking.findPickOwner('contact'), 'flights');
+  } finally {
+    await run.teardown();
+  }
+  assert.equal(services.picking.findPickOwner('contact'), null);
+  services.picking.registerPickOwner('late', () => true);
+  assert.equal(services.picking.findPickOwner('contact'), null);
+  assert.equal(engine.isDestroyed(), true);
 });

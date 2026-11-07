@@ -54,7 +54,11 @@ export function createInteraction({
     const primaryStationId = stationFromPick(primaryPick);
     if (primaryStationId) return primaryStationId;
     const primaryId = resolvePickId(primaryPick);
-    if (primaryId && isOwnedByOtherLayer('radio', primaryId)) return null;
+    if (
+      primaryId &&
+      isOwnedByOtherLayer('radio', primaryId, parts.renderer?.engine)
+    )
+      return null;
 
     if (typeof renderer.drillPick === 'function') {
       const drilled = renderer.drillPick(position, 16) || [];
@@ -71,7 +75,11 @@ export function createInteraction({
       };
       const picked = renderer.pick(offsetPosition);
       const pickedId = resolvePickId(picked);
-      if (pickedId && isOwnedByOtherLayer('radio', pickedId)) continue;
+      if (
+        pickedId &&
+        isOwnedByOtherLayer('radio', pickedId, parts.renderer?.engine)
+      )
+        continue;
       const stationId = stationFromPick(picked);
       if (stationId) return stationId;
     }

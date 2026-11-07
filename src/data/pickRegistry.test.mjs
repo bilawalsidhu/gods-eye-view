@@ -11,13 +11,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  registerPickOwner,
-  unregisterPickOwner,
-  isOwnedByOtherLayer,
-  resolvePickId,
-  pickContact,
-} from './pickRegistry.js';
+import { createPickRegistry, resolvePickId } from './pickRegistry.js';
+const { registerPickOwner, unregisterPickOwner, isOwnedByOtherLayer, pickContact } = createPickRegistry();
 
 // ---------------------------------------------------------------------------
 // resolvePickId — canonical String coercion for every layer's pick shape

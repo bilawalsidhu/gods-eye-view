@@ -45,7 +45,11 @@ export function createSelection({
       // "empty space" — leave the selection alone and let that layer handle it.
       if (picked) {
         const pickedId = resolvePickId(picked);
-        if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
+        if (
+          pickedId &&
+          isOwnedByOtherLayer(id, pickedId, layerState._renderer?.engine)
+        )
+          return;
       }
       const cardHit = overlayHost.hitTest?.(
         click.position?.x,

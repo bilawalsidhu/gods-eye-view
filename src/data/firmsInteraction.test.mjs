@@ -383,12 +383,12 @@ const SIBLING_PICKS = [
 for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
   test(`a ${layerId} pick shaped ${JSON.stringify(picked)} wins over a card hit`, () => {
     const fire = makeFire();
-    registerPickOwner(layerId, (pickedId) => pickedId === ownedId);
     const h = harness({
       fires: [fire],
       picked,
       cardHit: `fire:${fireDetectionKey(fire)}`,
     });
+    registerPickOwner(layerId, (pickedId) => pickedId === ownedId, h.engine);
     try {
       h.click();
       assert.equal(
@@ -398,7 +398,7 @@ for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
       );
     } finally {
       h.cleanup();
-      unregisterPickOwner(layerId);
+      unregisterPickOwner(layerId, h.engine);
     }
   });
 }

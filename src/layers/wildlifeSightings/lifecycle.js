@@ -527,6 +527,7 @@ export function createLifecycle({ state, services, parts }) {
         typeof id === 'string' &&
         id.startsWith('wildlife:') &&
         state.rowById.has(id.slice(9)),
+      state.engine,
     );
     state.removeCamera =
       state.engine.camera.moveEnd.addEventListener(onMoveEnd);
@@ -537,7 +538,7 @@ export function createLifecycle({ state, services, parts }) {
     state.removeCamera = null;
     parts.rendering.deactivate?.();
     parts.selection.uninstall?.();
-    services.picking?.unregisterPickOwner?.('wildlife-sightings');
+    services.picking?.unregisterPickOwner?.('wildlife-sightings', state.engine);
   }
 
   // Requests, timers and debounces in flight end with their scene or lifetime.

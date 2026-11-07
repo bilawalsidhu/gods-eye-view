@@ -11,7 +11,7 @@ import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
 import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
-import { findPickOwner } from '../../../data/pickRegistry.js';
+import { createPickRegistry } from '../../../data/pickRegistry.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { vesselTypeCss } from '../../../data/vesselLabels.js';
 import { WHITE } from '../../shared/color.js';
@@ -122,6 +122,7 @@ test('the chevron atlas has one 32 px cell per chevron the layer draws', () => {
 });
 
 test('trail picks belong to the trail owner, so no layer reads one as empty space', () => {
+  const { findPickOwner } = createPickRegistry();
   assert.equal(findPickOwner('gev-trail:ais-live-vessels-1'), 'trails');
   assert.equal(findPickOwner('gev-trail:flights-1'), 'trails');
   assert.equal(findPickOwner('gev-trailing-contact'), null);

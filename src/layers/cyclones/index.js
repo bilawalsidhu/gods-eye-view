@@ -244,6 +244,13 @@ export function createCyclonesLayer({
     removeClickCapture = null;
     owner?.destroy();
   }
+  function registerOwnership() {
+    registerPickOwner(
+      'weather-cyclones',
+      (id) => enabled && rendering?.ownsPickId?.(id) === true,
+      engine,
+    );
+  }
   const layer = {
     id: 'weather-cyclones',
     name: 'Cyclone advisories',
@@ -260,6 +267,7 @@ export function createCyclonesLayer({
           ? createRendering(engine, { overlayHost })
           : null;
       if (!enabled) return;
+      registerOwnership();
       installSelection();
       if (rendering && snapshot && !snapshot.unavailable) {
         const active = rendering;
@@ -269,6 +277,7 @@ export function createCyclonesLayer({
       }
     },
     detachRenderer() {
+      unregisterPickOwner('weather-cyclones', engine);
       removeSelection();
       ++navigationGeneration;
       rendering?.destroy();
@@ -286,16 +295,13 @@ export function createCyclonesLayer({
     enable() {
       if (!destroyed && !enabled) {
         enabled = true;
-        registerPickOwner(
-          'weather-cyclones',
-          (id) => enabled && rendering?.ownsPickId?.(id) === true,
-        );
+        registerOwnership();
         installSelection();
       }
     },
     disable() {
       enabled = false;
-      unregisterPickOwner('weather-cyclones');
+      unregisterPickOwner('weather-cyclones', engine);
       removeSelection();
       request?.abort();
       request = null;

@@ -270,8 +270,15 @@ one application, and only the globe-bound parts move to the next engine.
   unknown kind and no native extensions, draws fixtures, hides or releases them,
   and checks primitives, subscriptions and service records before engine
   destruction. The three self-drawing entries are named skips. This is a
-  display-level rehearsal; application kind registration, scene-service
-  singletons, queue consolidation and native debug access remain work.
+  display-level rehearsal; application kind registration, the remaining scene
+  services, queue consolidation and native debug access remain work.
+- **Scene pick ownership.** Each attachment owns `scene.services.picking` and
+  `scene.services.selection` (`src/data/sceneServices.js`). Layers and displays
+  resolve these services with their attached engine; simultaneous engines do
+  not share owner predicates or click subscriptions. Detach releases both
+  services before the renderer is parked. Reattachment creates fresh services,
+  while retained layers register their current picks again. The overlay host,
+  render governor and tracked readout still have module-owned state.
 - **The session owns the state.** Catalog, layer models, sources, selection,
   camera mode and URL state outlive a switch. A layer that is a session model
   gets `attachRenderer(viewer, { engine })` / `detachRenderer()` instead of being rebuilt,

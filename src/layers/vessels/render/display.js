@@ -22,7 +22,6 @@ import {
   packImageAtlas,
 } from '../../shared/render/imageAtlas.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
-import { registerPickOwner } from '../../../data/pickRegistry.js';
 import { allVesselChevronIcons, VESSEL_ICON_PX } from '../icons.js';
 
 const LAYER_ID = 'ais-live-vessels';
@@ -34,13 +33,6 @@ const MIN_SEGMENT_DISTANCE_SQ = 0.01;
 const ATLAS_PAD = 2;
 /** The id namespace of track-history lines (vessels and aircraft). */
 export const TRAIL_PICK_PREFIX = 'gev-trail:';
-
-// A trail hugs its contact, so an unclaimed trail pick would read as empty
-// space in every layer's click rule and release the very contact selected.
-// Claiming the namespace makes a trail pick another layer's for everyone.
-registerPickOwner('trails', (pickedId) =>
-  String(pickedId).startsWith(TRAIL_PICK_PREFIX),
-);
 
 const iconEntry = (key, image) => ({
   key,

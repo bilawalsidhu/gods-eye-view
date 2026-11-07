@@ -172,6 +172,7 @@ export function createRadioDisplay(engine, { state, services, parts }) {
   };
 
   const renderer = {
+    engine,
     get ready() {
       return initialized;
     },

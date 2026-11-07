@@ -1087,11 +1087,15 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
     engine: harness.engine,
   });
   // The app's pick owners: the trails, and a Flights contact.
-  registerPickOwner('trails', (id) => String(id).startsWith('gev-trail:'));
-  registerPickOwner('flights', (id) => id === 'abc123');
+  registerPickOwner(
+    'trails',
+    (id) => String(id).startsWith('gev-trail:'),
+    harness.engine,
+  );
+  registerPickOwner('flights', (id) => id === 'abc123', harness.engine);
   t.after(() => {
-    unregisterPickOwner('trails');
-    unregisterPickOwner('flights');
+    unregisterPickOwner('trails', harness.engine);
+    unregisterPickOwner('flights', harness.engine);
     layer.destroy();
     harness.release();
   });

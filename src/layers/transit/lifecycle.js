@@ -183,7 +183,11 @@ export function createLifecycle({
       );
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.selection.installClickHandler(viewer);
-      registerPickOwner('transit', (pickedId) => state._vehicles.has(pickedId));
+      registerPickOwner(
+        'transit',
+        (pickedId) => state._vehicles.has(pickedId),
+        parts.renderer?.engine,
+      );
       if (!state._cameraChangedAttached) {
         state._cameraChangedRemove = parts.renderer.onCameraChanged(
           parts.viewport.onCameraChanged,
@@ -226,7 +230,7 @@ export function createLifecycle({
         state._visibilityTimer =
           null;
       parts.selection.removeClickHandler();
-      unregisterPickOwner('transit');
+      unregisterPickOwner('transit', parts.renderer?.engine);
       state._cameraChangedRemove?.();
       state._cameraChangedRemove = null;
       if (state._cameraChangedAttached) returnCameraSensitivity();
@@ -274,7 +278,7 @@ export function createLifecycle({
       parts.selection.clearSelection();
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
       parts.selection.removeClickHandler();
-      unregisterPickOwner('transit');
+      unregisterPickOwner('transit', parts.renderer?.engine);
       if (state._cameraChangedAttached) {
         state._cameraChangedRemove?.();
         state._cameraChangedRemove = null;

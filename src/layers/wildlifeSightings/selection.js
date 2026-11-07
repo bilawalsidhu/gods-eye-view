@@ -504,7 +504,14 @@ export function createSelection({ state, services, parts }) {
       selectAndFocus(id.slice(9))
     )
       return;
-    if (id && services.picking?.isOwnedByOtherLayer?.('wildlife-sightings', id))
+    if (
+      id &&
+      services.picking?.isOwnedByOtherLayer?.(
+        'wildlife-sightings',
+        id,
+        state.engine,
+      )
+    )
       return;
     clearAndRebuild();
   }

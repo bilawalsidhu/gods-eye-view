@@ -647,7 +647,7 @@ export function createLocalAdsbLayer({
         const restore = selectedId;
         selectedId = null;
         renderer.setVisible(true);
-        registerPickOwner(LAYER_ID, (id) => markers.has(id));
+        registerPickOwner(LAYER_ID, (id) => markers.has(id), renderer?.engine);
         installInteraction();
         installFrame();
         sync();
@@ -663,7 +663,7 @@ export function createLocalAdsbLayer({
       if (getSelectedEntityContext()?.id !== selectedId) selectedId = null;
       releaseInteraction();
       releaseFrame();
-      unregisterPickOwner(LAYER_ID);
+      unregisterPickOwner(LAYER_ID, renderer?.engine);
       releaseTrail();
       models?.destroy();
       models = null;
@@ -682,7 +682,11 @@ export function createLocalAdsbLayer({
     async enable() {
       enabled = true;
       renderer?.setVisible(true);
-      registerPickOwner(LAYER_ID, (pickedValue) => markers.has(pickedValue));
+      registerPickOwner(
+        LAYER_ID,
+        (pickedValue) => markers.has(pickedValue),
+        renderer?.engine,
+      );
       installInteraction();
       installFrame();
       clearInterval(tickTimer);
@@ -704,7 +708,7 @@ export function createLocalAdsbLayer({
       tickTimer = null;
       releaseInteraction();
       releaseFrame();
-      unregisterPickOwner(LAYER_ID);
+      unregisterPickOwner(LAYER_ID, renderer?.engine);
       sync();
       models?.clear();
       renderer?.setVisible(false);

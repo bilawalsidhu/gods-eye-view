@@ -600,7 +600,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   ordered(
     vesselClick,
     [
-      "isOwnedByOtherLayer('ais-live-vessels', pickedId)",
+      /isOwnedByOtherLayer\(\s*'ais-live-vessels',\s*pickedId,\s*state\.renderer\?\.engine,?\s*\)/,
       '_vesselOverlayHost.hitTest?.(',
       'selectAndFocusVessel(record)',
     ],
@@ -626,7 +626,7 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   ordered(
     fireClick,
     [
-      'isOwnedByOtherLayer(id, pickedId)',
+      /isOwnedByOtherLayer\(\s*id,\s*pickedId,\s*layerState\._renderer\?\.engine,?\s*\)/,
       'overlayHost.hitTest?.(',
       'selectAndFocusFire(carded)',
     ],

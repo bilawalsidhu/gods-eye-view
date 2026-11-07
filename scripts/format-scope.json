@@ -1,4 +1,7 @@
 [
+  "src/data/sceneServices.js",
+  "src/data/sceneServices.test.mjs",
+  "src/data/trackingGesture.js",
   ".prettierrc.json",
   "package.json",
   "scripts/format-scope.json",
