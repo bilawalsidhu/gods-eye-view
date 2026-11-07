@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/index.js';
 import { destinationPointDeg } from './model.js';
 import {
   DIRECTION_CONE_M,
@@ -8,8 +8,8 @@ import {
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 /**
- * Badge scale at a camera distance, matching Cesium's NearFarScalar for the
- * native badges (linear between near and far, clamped outside).
+ * Badge scale at a camera distance, matching the native badges'
+ * scale-by-distance (linear between near and far, clamped outside).
  * @param {number} distanceM Camera-to-marker distance.
  * @returns {number} Scale factor.
  */
@@ -75,7 +75,8 @@ export function alprLabelDetails(record, source) {
  * @param {function(number, number): (number|null)} [heightAt] Optional height
  *   for the two far corners (degrees lat, lon), so the wedge follows a slope
  *   instead of floating level from the apex; falls back to the apex height.
- * @returns {Array<Cesium.Cartesian3>|null} Apex, left and right corners.
+ * @returns {Array<{x: number, y: number, z: number}>|null} Apex, left and
+ *   right corners, ECEF.
  */
 export function directionWedgePositions(record, heightM = 0, heightAt = null) {
   if (!Number.isFinite(record.directionDeg)) return null;
@@ -96,13 +97,9 @@ export function directionWedgePositions(record, heightM = 0, heightAt = null) {
     return Number.isFinite(height) ? height : heightM;
   };
   return [
-    Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, heightM),
-    Cesium.Cartesian3.fromDegrees(left.longitude, left.latitude, corner(left)),
-    Cesium.Cartesian3.fromDegrees(
-      right.longitude,
-      right.latitude,
-      corner(right),
-    ),
+    fromDegrees(record.longitude, record.latitude, heightM),
+    fromDegrees(left.longitude, left.latitude, corner(left)),
+    fromDegrees(right.longitude, right.latitude, corner(right)),
   ];
 }
 

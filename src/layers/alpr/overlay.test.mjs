@@ -284,3 +284,21 @@ test('a still view replaces floor anchors with the rendered surface, within the 
   h.paint();
   assert.equal(samples, taken, 'each anchor is checked once');
 });
+
+test('a bearing wedge is plain ECEF at the apex and its two far corners', () => {
+  const record = { latitude: 30.26, longitude: -97.74, directionDeg: 90 };
+  const wedge = directionWedgePositions(record, 150, (lat) =>
+    lat > 30.26 ? 160 : null,
+  );
+  assert.equal(wedge.length, 3);
+  const apex = Cesium.Cartesian3.fromDegrees(-97.74, 30.26, 150);
+  assert.deepEqual({ ...wedge[0] }, { x: apex.x, y: apex.y, z: apex.z });
+  const heights = wedge.map(
+    (p) =>
+      Cesium.Cartographic.fromCartesian(new Cesium.Cartesian3(p.x, p.y, p.z))
+        .height,
+  );
+  // The corner north of the apex takes the sampled height; the other falls back.
+  assert.ok(heights.some((h) => Math.abs(h - 160) < 1e-6));
+  assert.ok(heights.slice(1).some((h) => Math.abs(h - 150) < 1e-6));
+});

@@ -5,7 +5,7 @@
  * - `record`: the camera record the marker shows.
  * - `clamped`: whether the marker sits on the surface rather than at its height.
  * - `canvasPosition`, `displayPosition`: the canvas anchor and the position the card reads.
- * - `wedge`: the direction wedge's positions.
+ * - `wedge`: the direction wedge's positions, plain ECEF.
  * - `nativeAppearance`, `pickPosition`: the native look saved while the canvas draws it.
  * - `shown`, `surfaceCheckedFor`: the last visibility applied and the anchor last checked.
  */
