@@ -2972,6 +2972,7 @@
       "src/voice/narration.js",
       "src/voice/earcon.js",
       "src/voice/pointerContext.js",
+      "src/render/rendererOf.js",
       "src/voice/pointerReticle.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",

@@ -86,6 +86,19 @@ const DRAW_FROM_CALLER = new Set([
   './layers/air-quality',
 ]);
 
+/**
+ * Cesium-free entries that reach the camera port but draw nothing: given a
+ * viewer with no renderer bound, they find no camera
+ * (`findCamera` is null) and leave it alone until the caller loads
+ * `./render/cesium/unbound`.
+ */
+const CAMERA_FROM_CALLER = new Set([
+  './ui/navigation',
+  './voice/commands',
+  './voice/controller',
+  './voice/realtime-session',
+]);
+
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 /** The browser module an export resolves to, or null for Node-only ones. */
@@ -196,6 +209,10 @@ test('every public entry that reaches the renderer bridge loads the unbound came
     const carrier = INJECTED[key];
     const loads = (file) => reachable(file, { eager: true }).has(FACTORY);
     if (DRAW_FROM_CALLER.has(key)) continue;
+    if (CAMERA_FROM_CALLER.has(key)) {
+      assert.ok(!loads(entry), `${key} loads the factory: unlist it`);
+      continue;
+    }
     if (!loads(entry) && !(carrier && loads(carrier))) missing.push(key);
   }
   assert.ok(bridged > 0, 'no entry reaches the bridge: the walk is broken');
@@ -231,7 +248,11 @@ function checkLookupFactory(
     const entry = path.normalize(target.slice(2));
     if (![...reachable(entry)].some(calls)) continue;
     reaching += 1;
-    if (fromCaller && DRAW_FROM_CALLER.has(key)) continue;
+    if (
+      fromCaller &&
+      (DRAW_FROM_CALLER.has(key) || CAMERA_FROM_CALLER.has(key))
+    )
+      continue;
     const carrier = INJECTED[key];
     const loads = (file) => reachable(file, { eager: true }).has(factory);
     if (!loads(entry) && !(carrier && loads(carrier))) missing.push(key);

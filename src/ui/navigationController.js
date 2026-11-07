@@ -1,4 +1,4 @@
-import { findCamera } from '../render/cesium/camera.js';
+import { findCamera } from '../render/rendererOf.js';
 import { stopFollowing } from '../data/followed.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
@@ -217,7 +217,7 @@ export class NavigationController {
       release: () => {
         this.interruptCameraMotion('camera-orientation');
         this.stopOrbit();
-        this.viewer.camera.cancelFlight();
+        findCamera(this.viewer)?.cancelFlight();
       },
       navigate,
     });

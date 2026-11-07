@@ -1,5 +1,5 @@
-import { pickThroughFollowHelper } from '../render/cesium/follow.js';
-import * as Cesium from 'cesium';
+import { pickAt as defaultPickAt } from '../input/dispatcher.js';
+import { findCamera } from '../render/rendererOf.js';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { cameraPoseKey } from './pointerContext.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
@@ -11,20 +11,30 @@ function pointerRadiusKm(cameraHeightM) {
   return Math.round(Math.min(400, Math.max(5, heightKm * 0.75)));
 }
 
+function cameraHeightM(viewer) {
+  try {
+    return findCamera(viewer)?.pose().height;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * The Cesium side of point-and-ask: one entity pick and one depth-aware world
+ * The scene side of point-and-ask: one entity pick and one depth-aware world
  * pick at canvas CSS pixels. Called lazily by the pointer tracker (dwell and
  * snapshot only), never per mouse move.
  * @param {object} options
- * @param {object} options.viewer Cesium viewer.
+ * @param {object} options.viewer The scene object.
  * @param {object} [options.dataManager] Layer lifecycle.
  * @param {Function} [options.pickWorldFromScreen] Normalized-pixel world pick.
+ * @param {Function} [options.pickAt] Entity pick at canvas CSS pixels.
  * @returns {(x: number, y: number) => {entity: object|null, ground: object|null, radiusKm: number}|null}
  */
 export function createPointerPicker({
   viewer,
   dataManager = null,
   pickWorldFromScreen = defaultAnnotationResolver.pickWorldFromScreen,
+  pickAt = defaultPickAt,
 }) {
   return function pickPointer(x, y) {
     const scene = viewer?.scene;
@@ -33,12 +43,7 @@ export function createPointerPicker({
     const width = canvas.clientWidth || canvas.width || 0;
     const height = canvas.clientHeight || canvas.height || 0;
     if (!width || !height) return null;
-    let picked = null;
-    try {
-      picked = pickThroughFollowHelper(scene.pick(new Cesium.Cartesian2(x, y)));
-    } catch {
-      picked = null;
-    }
+    const picked = pickAt(viewer, x, y);
     const entity = resolvePickedContext(picked, { dataManager });
     let ground = null;
     try {
@@ -55,7 +60,7 @@ export function createPointerPicker({
     return {
       entity,
       ground,
-      radiusKm: pointerRadiusKm(viewer.camera?.positionCartographic?.height),
+      radiusKm: pointerRadiusKm(cameraHeightM(viewer)),
       cameraKey: cameraPoseKey(viewer),
     };
   };

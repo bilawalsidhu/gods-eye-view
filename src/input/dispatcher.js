@@ -138,6 +138,29 @@ const dispatchers = new WeakMap();
  */
 
 /**
+ * What is under canvas CSS pixel `x, y` now, as a click would see it (a hit
+ * on the follow's helper is a hit on its target), for a reader that is not
+ * handed a click (point-and-ask). Null when nothing is there or the pick
+ * fails.
+ * @param {object} viewer
+ * @param {number} x
+ * @param {number} y
+ * @returns {object|null}
+ */
+export function pickAt(viewer, x, y) {
+  try {
+    if (!viewer || viewer.isDestroyed?.()) return null;
+    const scene = viewer.scene;
+    if (typeof scene?.pick !== 'function') return null;
+    return (
+      pickThroughFollowHelper(scene.pick(new Cesium.Cartesian2(x, y))) ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The scene's dispatcher, made on first use.
  * @param {object} viewer A Cesium viewer (or a test double with `scene`).
  * @param {{createHandler?: (canvas: object) => object, now?: () => number, document?: object|null}} [options]

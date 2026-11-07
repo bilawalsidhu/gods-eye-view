@@ -12,6 +12,7 @@ import {
   toggleCameraTilt,
 } from './cameraOrientationControls.js';
 import { NavigationController } from './navigationController.js';
+import { bindRenderer } from '../render/rendererOf.js';
 import { entityRecord } from '../data/entityRecords.js';
 
 function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
@@ -600,10 +601,10 @@ test('orientation animation cancels on replacement and explicit cancellation', (
 test('orientation navigation preserves follow and selection; new navigation cancels animation', () => {
   const calls = [];
   const entity = {};
-  const viewer = {
-    trackedEntity: entity,
+  const viewer = { trackedEntity: entity };
+  bindRenderer(viewer, {
     camera: { cancelFlight: () => calls.push('cancel-flight') },
-  };
+  });
   let cockpit = false;
   const navigation = new NavigationController({
     viewer,

@@ -119,9 +119,6 @@
   "src/ui/cockpitController.js",
   "src/ui/flyToDataSource.js",
   "src/ui/imageryBoxTool.js",
-  "src/ui/locationNavigation.js",
-  "src/ui/navigationController.js",
   "src/ui/shareFollow.js",
-  "src/voice/gevActions.js",
-  "src/voice/pointerPick.js"
+  "src/voice/gevActions.js"
 ]

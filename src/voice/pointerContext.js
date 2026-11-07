@@ -18,6 +18,7 @@
  *
  * Provider-neutral and Cesium-free: the pick is injected.
  */
+import { findCamera } from '../render/rendererOf.js';
 
 /** Movement below this many CSS pixels is still the same dwell. */
 const POINTER_DWELL_PX = 12;
@@ -55,23 +56,28 @@ const finite = finiteOrNull;
 
 /**
  * Camera pose identity: position to 1 m, orientation to about 0.06 degrees.
- * A pixel read under one key names nothing under another. Reads plain
- * numbers only, so it needs no Cesium import.
- * @param {object} viewer Cesium viewer.
+ * A pixel read under one key names nothing under another. Reads the
+ * camera port's pose.
+ * @param {object} viewer The scene object.
  * @returns {string|null}
  */
 export function cameraPoseKey(viewer) {
-  const camera = viewer?.camera;
-  const p = camera?.positionWC;
+  let pose = null;
+  try {
+    pose = findCamera(viewer)?.pose() ?? null;
+  } catch {
+    return null;
+  }
+  const p = pose?.position;
   if (!p || !Number.isFinite(p.x)) return null;
   const angle = (value) => Math.round((Number(value) || 0) * 1000);
   return [
     Math.round(p.x),
     Math.round(p.y),
     Math.round(p.z),
-    angle(camera.heading),
-    angle(camera.pitch),
-    angle(camera.roll),
+    angle(pose.heading),
+    angle(pose.pitch),
+    angle(pose.roll),
   ].join(',');
 }
 
