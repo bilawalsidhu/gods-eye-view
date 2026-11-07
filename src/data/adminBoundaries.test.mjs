@@ -7,6 +7,7 @@ import {
   decodeRing,
   findAdminArea,
   findAdminAreaAt,
+  findAdminCandidates,
   normalizeAdminName,
   packLoads,
   parseAdminQuery,
@@ -225,6 +226,29 @@ test('geocoder-confirmed lookup: the named unit that contains the point', async 
   assert.equal(await findAdminAreaAt(['Georgia'], 41.7, 44.8, 'state'), null);
   const newYork = await findAdminAreaAt(['New York'], 42.9, -75.5, 'state');
   assert.equal(newYork?.id, 'US-NY');
+  assert.equal(
+    (
+      await findAdminAreaAt(
+        ['Ontario Province', 'Ontario'],
+        43.6532,
+        -79.3832,
+        'state',
+      )
+    )?.id,
+    'CA-ON',
+  );
+  // Natural Earth still carries the historical NP-BA Bagmati Zone. An ask
+  // for today's province must not silently select that incompatible geometry.
+  assert.equal(
+    await findAdminAreaAt(
+      ['Bagmati Province', 'Bagmati'],
+      27.7172,
+      85.324,
+      'state',
+    ),
+    null,
+  );
+  assert.deepEqual(await findAdminCandidates('Bagmati Province'), []);
   // A county the geocoder typed, named without the county word.
   const travis = await findAdminAreaAt(
     ['Travis', 'Travis County'],

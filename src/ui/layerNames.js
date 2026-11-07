@@ -30,10 +30,13 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'telegeography-submarine-cables': msg('Submarine Cables'),
   'local-firms': msg('FIRMS Active Fires'),
   'local-adsb': msg('Local ADS-B'),
+  'osm-places': msg('OSM Places'),
   transit: msg('Transit'),
   'recent-imagery': msg('Recent Imagery'),
   'fire-perimeters': msg('Fire Perimeters'),
   'gnss-integrity': msg('GNSS Integrity'),
+  'drone-airspace': msg('Prohibited & Restricted Airspace'),
+  'wildlife-sightings': msg('Wildlife Sightings'),
   's2-ghostmaps': msg('S2 GhostMaps'),
   wind: msg('Wind'),
   'weather-radar': msg('Rain radar'),
@@ -43,6 +46,8 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'air-quality': msg('Air quality'),
   directions: msg('Directions'),
   'alpr-cameras': msg('ALPR Cameras'),
+  'sea-marks': msg('Sea Marks'),
+  'ski-pistes': msg('Ski Pistes'),
 });
 
 /** The layer panel's own English names, where they differ from the module's. */
@@ -136,4 +141,18 @@ export function sourceLabel(source) {
   return source.includes(' · ')
     ? source.split(' · ').map(translateKnown).join(' · ')
     : translateKnown(source);
+}
+
+/**
+ * A provider name with the feed state it answered in, so a fallback or stale
+ * snapshot does not read as the live primary feed.
+ * @param {string} source English source name.
+ * @param {'fallback'|'stale'|null} status Feed state from `layerFeedState`.
+ * @returns {string}
+ */
+export function sourceStatusLabel(source, status) {
+  const name = sourceLabel(source);
+  if (status === 'fallback') return `${name} · ${t('FALLBACK')}`;
+  if (status === 'stale') return `${name} · ${t('STALE')}`;
+  return name;
 }

@@ -309,6 +309,37 @@ export const CATALONIA_ANCHORS = [
   { lat: 41.5636, lon: 2.0111 }, // Terrassa
 ];
 
+/**
+ * Icelandic Road and Coastal Administration (Vegagerðin, IRCA) road cameras:
+ * one keyless JSON list, one row per camera view (about 500 views at roughly
+ * 170 stations, verified 2026-11-06). Frames are stills on the IRCA host, each
+ * rewritten by the publisher every few minutes. Camera images are published
+ * under CC BY 4.0 (IRCA terms of use, "Open data" section).
+ */
+export const ICELAND_CAMERAS_URL =
+  'https://gagnaveita.vegagerdin.is/api/vefmyndavelar2014_1';
+/** The only directory Iceland camera frames may come from. */
+export const ICELAND_IMAGE_ORIGIN =
+  'https://www.vegagerdin.is/vgdata/vefmyndavelar/';
+/** Byte ceiling for the Iceland catalog read (~150 KB observed 2026-11-06). */
+export const ICELAND_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Ground-elevation prior in metres: the feed carries none, and the country
+ * runs from sea level to highland passes. The client's ground snap corrects
+ * this on 3D-tile stacks. */
+export const ICELAND_GROUND_ELEVATION_M = 60;
+/** The feed lists about 500 views; the default keeps half so the shared
+ * catalog cap still leaves room for denser regions. */
+export const DEFAULT_ICELAND_MAX_SOURCES = 250;
+/** Prioritization anchors: Reykjavík and the regional centres, so a cap keeps
+ * every region's nearest cameras instead of only the capital's. */
+export const ICELAND_ANCHORS = [
+  { lat: 64.1466, lon: -21.9426 }, // Reykjavík
+  { lat: 65.6885, lon: -18.1262 }, // Akureyri
+  { lat: 65.2639, lon: -14.3948 }, // Egilsstaðir
+  { lat: 66.0749, lon: -23.1351 }, // Ísafjörður
+  { lat: 63.9331, lon: -20.9971 }, // Selfoss
+];
+
 /** Hong Kong Transport Department traffic snapshot cameras: keyless English
  * locations XML on DATA.GOV.HK; frames are stills on the TD CCTV host. */
 export const DEFAULT_HK_CAMERAS_URL =
@@ -441,6 +472,37 @@ export const NYC_ANCHORS = [
   { lat: 40.7282, lon: -73.7949 }, // Queens
   { lat: 40.8448, lon: -73.8648 }, // Bronx
   { lat: 40.5795, lon: -74.1502 }, // Staten Island
+];
+
+/** Houston TranStar cameras: one keyless JSON list for the metro (~1,000
+ * cameras with a numeric id). Frames are stills synthesized from that id on
+ * the city's snapshot host — never taken from the payload. The catalog is
+ * served as `application/javascript`; asking for `application/json` gets HTTP
+ * 406, so the loader accepts any media type. */
+export const HOUSTON_CAMERAS_URL =
+  'https://traffic.houstontranstar.org/data/layers/cctvSnapshots_json.js';
+/** The only origin Houston camera frames may come from. The catalog's `url`
+ * is a `showWin(...)` viewer helper and is ignored; the registered path is
+ * always this origin plus `/snapshots/cctv/<id>.jpg`. */
+export const HOUSTON_IMAGE_ORIGIN = 'https://www.houstontranstar.org/';
+export const HOUSTON_IMAGE_URL = (id) =>
+  `${HOUSTON_IMAGE_ORIGIN}snapshots/cctv/${id}.jpg`;
+/** Numeric TranStar snapshot ids: 3–5 digits, no leading zero. Id `0` is a
+ * different (non-snapshot) camera class in the same list. */
+export const HOUSTON_CAMERA_ID_RE = /^[1-9]\d{2,4}$/;
+export const DEFAULT_HOUSTON_MAX_SOURCES = 250;
+export const HOUSTON_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Ground-elevation prior in metres. The TranStar payload carries none, and
+ * Houston sits a few metres above sea level. */
+export const HOUSTON_GROUND_ELEVATION_M = 15;
+/** Downtown Houston (Main @ Texas): the primary prioritization anchor. */
+export const HOUSTON_DOWNTOWN = { lat: 29.7604, lon: -95.3698 };
+export const HOUSTON_ANCHORS = [
+  { lat: 29.7604, lon: -95.3698 }, // Downtown
+  { lat: 29.739, lon: -95.461 }, // Uptown / Galleria
+  { lat: 29.71, lon: -95.398 }, // Texas Medical Center
+  { lat: 29.9902, lon: -95.3368 }, // IAH
+  { lat: 29.3013, lon: -94.7977 }, // Galveston
 ];
 
 /** Autostrada del Brennero (A22, Brenner–Modena) webcams: the keyless Open

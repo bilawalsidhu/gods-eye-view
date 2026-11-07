@@ -682,10 +682,18 @@ function flatRules(block) {
 
 test('narrow-screen rails pin every hosted panel glow inside its panel box', () => {
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
-  for (const panel of ['data-panel', 'scene-panel', 'cctv-panel']) {
+  for (const panel of [
+    'data-panel',
+    'utilities-panel',
+    'scene-panel',
+    'cctv-panel',
+  ]) {
+    // The glow rule may be shared: `#data-panel .panel-glow, #utilities-panel .panel-glow {`.
     assert.match(
       css,
-      new RegExp(`#${panel} \\.panel-glow \\{[^}]*\\binset: -\\d+px;`),
+      new RegExp(
+        `#${panel} \\.panel-glow(?:,[^{]*)? \\{[^}]*\\binset: -\\d+px;`,
+      ),
       `${panel} glow no longer overhangs its panel; revisit this pin`,
     );
   }

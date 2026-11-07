@@ -61,9 +61,12 @@ const PANEL_GROUPS = [
     ids: [
       'alpr-cameras',
       'military-installations',
+      'drone-airspace',
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'sea-marks',
+      'ski-pistes',
     ],
   },
   {
@@ -78,6 +81,10 @@ const PANEL_GROUPS = [
     ],
   },
   {
+    label: msg('Wildlife'),
+    ids: ['wildlife-sightings'],
+  },
+  {
     label: msg('Weather'),
     ids: [
       'air-quality',
@@ -88,13 +95,20 @@ const PANEL_GROUPS = [
       'weather-cyclones',
     ],
   },
+  // Directions renders in the Utilities panel, beside Draw and Import, and
+  // needs no heading there.
   {
     label: msg('Utilities'),
-    ids: ['directions', 'radio'],
+    ids: ['directions', 'osm-places'],
+    containerId: 'utilities-toggles',
+  },
+  {
+    label: msg('Audio'),
+    ids: ['radio'],
   },
 ];
-const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
-  ids.map((id) => ({ id, label })),
+const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids, containerId }) =>
+  ids.map((id) => ({ id, label, containerId })),
 );
 const PANEL_POSITIONS = new Map(
   PANEL_ORDER.map(({ id }, index) => [id, index]),
@@ -264,6 +278,8 @@ export class LayerPanel {
     this._generation = 0;
     this._removers = [];
     this._destroyed = false;
+    /** @type {Map<string, HTMLElement>} lists of their own, by element id */
+    this._groupContainers = new Map();
     this._cancelRowControlsRefresh = null;
     this._recentImageryFactory = null;
     this._recentImageryPanel = null;
@@ -276,9 +292,21 @@ export class LayerPanel {
     this._releaseBindings();
     if (this._toggleContainer && this._toggleContainer !== container)
       renderVue(null, this._toggleContainer);
+    for (const element of this._groupContainers.values())
+      renderVue(null, element);
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
+    // A group with a list of its own (Directions in Utilities) renders there;
+    // without that list it stays in Data Layers under its heading.
+    this._groupContainers = new Map();
+    for (const { containerId } of PANEL_GROUPS) {
+      const element =
+        containerId && container?.ownerDocument?.getElementById?.(containerId);
+      if (!element) continue;
+      if (!element._vnode) element.replaceChildren();
+      this._groupContainers.set(containerId, element);
+    }
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
@@ -325,6 +353,9 @@ export class LayerPanel {
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
     if (this._toggleContainer) renderVue(null, this._toggleContainer);
+    for (const element of this._groupContainers.values())
+      renderVue(null, element);
+    this._groupContainers = new Map();
     this._toggleContainer = null;
   }
   _renderToggles() {
@@ -348,9 +379,15 @@ export class LayerPanel {
       const group =
         PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ??
         msg('Other layers');
-      if (group && group !== previousGroup)
+      const containerId =
+        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.containerId;
+      const container = this._groupContainers.has(containerId)
+        ? containerId
+        : null;
+      // A group in a list of its own needs no heading there.
+      if (!container && group && group !== previousGroup)
         this._rows.push({ key: `group:${group}`, heading: group });
-      previousGroup = group;
+      previousGroup = container ? '' : group;
       const readout = Boolean(this._rowControlsFor(layer.id)?.readout);
       const controls = this.hasRowControls(layer.id);
       if (controls) {
@@ -365,6 +402,7 @@ export class LayerPanel {
       this._rows.push({
         key: layer.id,
         id: layer.id,
+        container,
         count: !readout,
         controls: controls && !readout,
         info: false,
@@ -385,23 +423,34 @@ export class LayerPanel {
   _paint() {
     if (this._destroyed || !this._toggleContainer) return;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
-    const items = this._rows.map((row) => {
-      if (row.heading) return { key: row.key, heading: t(row.heading) };
-      const layer = layers.get(row.id);
-      if (layer) this._rowViews.set(row.id, this._presentRow(row, layer));
-      return this._rowViews.get(row.id);
-    });
+    // Each list renders its own rows: Data Layers, and any group's own list.
+    const lists = new Map([[null, []]]);
+    for (const id of this._groupContainers.keys()) lists.set(id, []);
+    for (const row of this._rows) {
+      let item;
+      if (row.heading) item = { key: row.key, heading: t(row.heading) };
+      else {
+        const layer = layers.get(row.id);
+        if (layer) this._rowViews.set(row.id, this._presentRow(row, layer));
+        item = this._rowViews.get(row.id);
+      }
+      if (item) lists.get(row.container ?? null).push(item);
+    }
     const generation = this._generation;
-    renderVue(
-      h(LayerRows, {
-        items: items.filter(Boolean),
-        onToggle: (id) => this._toggle(id, generation),
-        onChip: (id, chipId) => this._selectChip(id, chipId, generation),
-        onListItem: (id, itemId) =>
-          this._selectListItem(id, itemId, generation),
-      }),
-      this._toggleContainer,
-    );
+    for (const [id, items] of lists)
+      renderVue(
+        h(LayerRows, {
+          items,
+          onToggle: (layerId) => this._toggle(layerId, generation),
+          onChip: (layerId, chipId) =>
+            this._selectChip(layerId, chipId, generation),
+          onListItem: (layerId, itemId) =>
+            this._selectListItem(layerId, itemId, generation),
+          onSlider: (layerId, sliderId, value) =>
+            this._moveSlider(layerId, sliderId, value, generation),
+        }),
+        id === null ? this._toggleContainer : this._groupContainers.get(id),
+      );
   }
 
   _presentRow(row, layer) {
@@ -428,7 +477,8 @@ export class LayerPanel {
   }
 
   /**
-   * A layer's row chips, color legend, info line and ordered list. The block
+   * A layer's row chips, one-of-many switch, slider, color legend, info line
+   * and ordered list. The block
    * is hidden while the layer is off (or while a dependency owner has
    * surrendered it), so a quiet row stays quiet. Chips and list items are
    * keyed, so the refresh a chip's own click triggers keeps keyboard focus.
@@ -452,11 +502,20 @@ export class LayerPanel {
           : `${item.label} ${formatCount(item.count)}`,
     }));
     const infoText = controls?.info ? String(controls.info) : '';
+    const segmented = controls?.segmented || null;
+    const slider = controls?.slider || null;
     // The info line, once shown, stays in place and hides when empty.
     if (infoText) row.info = true;
     return {
-      hidden: chips.length === 0 && legend.length === 0 && !infoText,
+      hidden:
+        chips.length === 0 &&
+        legend.length === 0 &&
+        !infoText &&
+        !segmented &&
+        !slider,
       chips,
+      segmented,
+      slider,
       legend,
       info: row.info
         ? { text: infoText, title: controls?.infoTitle || '' }
@@ -494,13 +553,31 @@ export class LayerPanel {
   // listeners, so a click from a released generation is dropped.
   _selectChip(id, chipId, generation = this._generation) {
     if (this._destroyed || this._generation !== generation) return;
-    const chip = this._rowControlsFor(id)?.chips?.find(
-      (entry) => entry.id === chipId,
-    );
+    // A switch option carries the same fields as a chip.
+    const live = this._rowControlsFor(id);
+    const chip = [
+      ...(live?.chips || []),
+      ...(live?.segmented?.options || []),
+    ].find((entry) => entry.id === chipId);
     if (!chip || chip.disabled || !this.isEnabled(id)) return;
     if (typeof chip.onClick === 'function') chip.onClick();
     else if (chip.params)
       this.setLayerParams(id, chip.params, { origin: 'user' });
+  }
+
+  // A row slider (e.g. the Active Fires minimum-FRP filter) maps its position
+  // to params through the live descriptor on every tick.
+  _moveSlider(id, sliderId, value, generation = this._generation) {
+    if (this._destroyed || this._generation !== generation) return;
+    const slider = this._rowControlsFor(id)?.slider;
+    if (
+      !slider ||
+      slider.id !== sliderId ||
+      typeof slider.params !== 'function' ||
+      !this.isEnabled(id)
+    )
+      return;
+    this.setLayerParams(id, slider.params(value), { origin: 'user' });
   }
 
   _selectListItem(id, itemId, generation = this._generation) {
