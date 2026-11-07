@@ -8,6 +8,7 @@
 @import './src/ui/styles/location.css';
 @import './src/ui/styles/status.css';
 @import './src/ui/styles/cockpit.css';
+@import './src/ui/styles/cockpitRadar.css';
 @import './src/ui/styles/overlays.css';
 @import './src/ui/styles/layers.css';
 @import './src/ui/styles/radio.css';
