@@ -22,6 +22,9 @@ export const TOOL_SURFACES = Object.freeze({
   next_satellite_pass: voiceOff,
   // Voice receives text only, so tools that answer with an image are off.
   get_weather_map: voiceOff,
+  // MCP-first: voice's Realtime instructions currently have a fixed size gate.
+  get_air_quality: voiceOff,
+  get_gnss_integrity: voiceOff,
   get_recent_imagery: voiceOff,
   get_cctv_snapshot: voiceOff,
   // The app shows its HUD caption itself, and assistants write their own.
