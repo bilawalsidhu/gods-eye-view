@@ -46,6 +46,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.motion.arc',
   'draw.motion.climb',
   'draw.motion.live',
+  'draw.motion.shared',
   'draw.pick',
   'draw.sets',
   'effects.crossfade',
