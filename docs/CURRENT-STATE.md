@@ -225,8 +225,14 @@ one application, and only the globe-bound parts move to the next engine.
   vessels, satellites, Space Missions, ALPR, bikeshare, OSM Places,
   Wildlife Sightings, radio, transit, CCTV, earthquakes, air quality, GNSS
   Integrity, fire perimeters, Prohibited & Restricted Airspace, Active Fires,
-  S2 GhostMaps, cyclone advisories and submarine cables through their own
-  `render/display.js`; the fills of the last nine are `engine.ground` sets.
+  S2 GhostMaps, cyclone advisories, submarine cables, Mapped Installations,
+  Global Context, datacenters and dams through their own `render/display.js`;
+  the fills of the ground layers, installation outlines and the selection fill
+  are `engine.ground` sets. Global Context's range pulses, an animated disc the
+  contract has no primitive for yet, draw behind one seam,
+  `src/layers/awareness/render/pulseDisc.js` (`render/cesiumPulses.js`, a
+  material disc, on Cesium; `render/navaraPulses.js`, a surface pass that the
+  Navara mode loads and passes in).
   The Active Fires far-zoom heatmap, a raster draped on the ground that the
   contract has no primitive for yet, draws behind one seam,
   `src/layers/firms/render/heatField.js` (`render/cesiumHeat.js`, an imagery
