@@ -708,3 +708,96 @@ test('parsed roads carry plain ECEF waypoints that dots spawn on and move along'
   assert.ok(Number.isFinite(after.x) && Number.isFinite(after.z));
   assert.ok(C.Cartesian3.distance(before, after) > 0, 'the dot moves');
 });
+
+test('selection asks the query port for depth and screen positions, and the camera port for the eye', async () => {
+  const { createFlow } = await import('./flow.js');
+  const { bindRenderer } = await import('../../render/rendererOf.js');
+  const road = (lon) => ({
+    type: 'primary',
+    oneway: 1,
+    coords: [
+      [lon, 0],
+      [lon + 0.0001, 0],
+    ],
+    waypoints: [
+      C.Cartesian3.fromDegrees(lon, 0),
+      C.Cartesian3.fromDegrees(lon + 0.0001, 0),
+    ],
+    segmentDist: [11],
+  });
+  const viewer = {
+    scene: {
+      canvas: { clientWidth: 1000, clientHeight: 800 },
+      globe: { show: true, tilesLoaded: true, getHeight: () => 0 },
+    },
+  };
+  const picks = [];
+  let poses = 0;
+  const eye = C.Cartesian3.fromDegrees(0, 0, 1250);
+  // Near roads land 300 px per 0.001° east of the centre; anything past
+  // 0.1° is drawn on screen, so only the eye's range can drop it.
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => (poses++, { position: { x: eye.x, y: eye.y, z: eye.z } }),
+    },
+    query: {
+      pickPosition(x, y) {
+        picks.push([x, y]);
+        return C.Cartesian3.fromDegrees(0, 0, 400);
+      },
+      project(point) {
+        const lon = C.Math.toDegrees(
+          C.Cartographic.fromCartesian(point).longitude,
+        );
+        return { x: lon > 0.1 ? 500 : 500 + lon * 300000, y: 400 };
+      },
+    },
+  });
+  const rendered = [];
+  const state = {
+    _dots: [],
+    _viewer: viewer,
+    _enabled: true,
+    _loadGeneration: 1,
+    _roadSource: 'OpenStreetMap',
+    _flowPending: 0,
+    _activeFetchAbort: new AbortController(),
+  };
+  const flow = createFlow({
+    state,
+    services: { credits: { registerDynamicCredit() {} } },
+    source: {},
+    parts: {
+      model: {
+        allocateRoadDotBudgets: (roads) => roads.map(() => 1),
+        recolorDotsInPlace() {},
+      },
+      rendering: {
+        visibleRoadsForAltitude: (roads) => roads,
+        renderRoadsForAltitude(roads) {
+          rendered.push(...roads);
+        },
+      },
+    },
+  });
+  try {
+    const near = road(0.0001),
+      offCanvas = road(0.005),
+      outOfRange = road(0.2);
+    await flow.applyFlowThenRender(
+      [near, offCanvas, outOfRange],
+      {},
+      1,
+      1250,
+      'Loaded major',
+    );
+    assert.deepEqual(picks[0], [500, 480], 'the depth probe below centre');
+    assert.equal(state._viewHeightEstimate, 400);
+    assert.equal(poses, 1, 'the eye is read once a pass');
+    assert.ok(rendered.includes(near), 'an on-canvas road is admitted');
+    assert.ok(!rendered.includes(offCanvas), 'an off-canvas road is not');
+    assert.ok(!rendered.includes(outOfRange), 'nor one out of range');
+  } finally {
+    unbind();
+  }
+});

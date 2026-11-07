@@ -1,5 +1,7 @@
 import { roadIdentity } from './retention.js';
-import * as Cesium from 'cesium';
+import { fromDegrees, toCartographicRadians } from '../../geo/ellipsoid.js';
+import { distance, dot, sub } from '../../geo/vector.js';
+import { findCamera, findQuery } from '../../render/rendererOf.js';
 import {
   prepareRoadSurfaces,
   roadHeightStations,
@@ -13,6 +15,19 @@ import {
 } from './policy.js';
 import { msg } from '../../i18n/index.js';
 import { nextTask } from '../../sources/vectorTiles.js';
+
+/** Squared straight-line distance, as the default renderer computes it. */
+function distanceSquared(a, b) {
+  const d = sub(a, b);
+  return dot(d, d);
+}
+
+/** Copy `from`'s coordinates into the point `to`, in place. */
+function copyPoint(from, to) {
+  to.x = from.x;
+  to.y = from.y;
+  to.z = from.z;
+}
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -264,8 +279,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const localHeights = [];
     for (const prepared of preparedRoads.values()) {
       const height =
-        Cesium.Cartographic.fromCartesian(prepared.waypoints[0]).height -
-        DOT_HEIGHT_OFFSET;
+        toCartographicRadians(prepared.waypoints[0]).height - DOT_HEIGHT_OFFSET;
       if (Number.isFinite(height) && Math.abs(height) <= 9000)
         localHeights.push(height);
       if (localHeights.length === 9) break;
@@ -277,15 +291,17 @@ export function createFlow({ state: layerState, services, parts, source }) {
     }
     // A rendered center-depth pick follows the current city's elevation even
     // while older coarse samples are being replaced. It is selection-only.
+    // The renderer's query port answers the pick and the projections below;
+    // its camera port says where the eye is.
+    const query = findQuery(layerState._viewer);
     let depthHeight;
-    if (scene.pickPositionSupported && scene.canvas?.clientWidth) {
-      const probe = new Cesium.Cartesian2(
-        scene.canvas.clientWidth / 2,
-        scene.canvas.clientHeight * 0.6,
-      );
+    if (query && scene.canvas?.clientWidth) {
       try {
-        const hit = scene.pickPosition(probe);
-        const height = hit && Cesium.Cartographic.fromCartesian(hit).height;
+        const hit = query.pickPosition(
+          scene.canvas.clientWidth / 2,
+          scene.canvas.clientHeight * 0.6,
+        );
+        const height = hit && toCartographicRadians(hit)?.height;
         if (Number.isFinite(height) && Math.abs(height) <= 9000)
           depthHeight = height;
       } catch {
@@ -298,7 +314,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       const prepared = !refining && preparedRoads.get(road.key);
       if (prepared) {
         for (let i = 0; i < road.waypoints.length; i++)
-          Cesium.Cartesian3.clone(prepared.waypoints[i], road.waypoints[i]);
+          copyPoint(prepared.waypoints[i], road.waypoints[i]);
       } else if (
         (!road.surfaceReady || refining) &&
         (localHeights.length || depthHeight !== undefined)
@@ -306,9 +322,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
         road.surfaceReady = false;
         // Opposite source directions may share waypoint arrays. Provisional
         // selection must not overwrite an already measured sibling.
-        road.waypoints = road.waypoints.map((point) =>
-          Cesium.Cartesian3.clone(point),
-        );
+        road.waypoints = road.waypoints.map(({ x, y, z }) => ({ x, y, z }));
         for (let i = 0; i < road.coords.length; i++) {
           const [lon, lat] = road.coords[i];
           const floor = services.ground?.cachedGroundFloor?.(lat, lon);
@@ -316,20 +330,17 @@ export function createFlow({ state: layerState, services, parts, source }) {
             Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? Math.max(floor, layerState._viewHeightEstimate)
               : layerState._viewHeightEstimate;
-          Cesium.Cartesian3.fromDegrees(
-            lon,
-            lat,
-            height + DOT_HEIGHT_OFFSET,
-            undefined,
+          copyPoint(
+            fromDegrees(lon, lat, height + DOT_HEIGHT_OFFSET),
             road.waypoints[i],
           );
         }
       }
     }
+    const camera = findCamera(layerState._viewer)?.pose().position;
     const selected = parts.rendering
       .visibleRoadsForAltitude(roads, altitude)
       .filter((road) => {
-        const camera = layerState._viewer.camera?.positionWC;
         const localHeight = Math.max(
           0,
           altitude - (layerState._viewHeightEstimate || 0),
@@ -340,9 +351,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
         if (
           camera &&
           road.waypoints.every(
-            (point) =>
-              Cesium.Cartesian3.distanceSquared(camera, point) >
-              radius * radius,
+            (point) => distanceSquared(camera, point) > radius * radius,
           )
         )
           return false;
@@ -352,11 +361,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
           minY = Infinity,
           maxX = -Infinity,
           maxY = -Infinity;
-        for (const point of road.waypoints) {
-          const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-            scene,
-            point,
-          );
+        for (const point of query ? road.waypoints : []) {
+          const screen = query.project(point);
           if (!screen) continue;
           minX = Math.min(minX, screen.x);
           maxX = Math.max(maxX, screen.x);
@@ -368,11 +374,10 @@ export function createFlow({ state: layerState, services, parts, source }) {
           road.baseDensityWeight ??= road.densityWeight || 1;
           road.densityWeight =
             road.baseDensityWeight /
-            Math.max(
-              1,
-              Cesium.Cartesian3.distance(camera, road.waypoints[0]) / 1500,
-            );
+            Math.max(1, distance(camera, road.waypoints[0]) / 1500);
         }
+        // Without a query port nothing is projected: every road is kept.
+        if (!query) return true;
         return (
           maxX >= -100 &&
           minX <= scene.canvas.clientWidth + 100 &&
@@ -386,12 +391,11 @@ export function createFlow({ state: layerState, services, parts, source }) {
       roadDotBudget(altitude),
     );
     const admitted = selected.filter((r, i) => budgets[i] > 0);
-    const camera = layerState._viewer.camera?.positionWC;
     if (camera)
       admitted.sort(
         (a, b) =>
-          Cesium.Cartesian3.distanceSquared(camera, a.waypoints[0]) -
-          Cesium.Cartesian3.distanceSquared(camera, b.waypoints[0]),
+          distanceSquared(camera, a.waypoints[0]) -
+          distanceSquared(camera, b.waypoints[0]),
       );
     // The wide pass is a fast preview when detailed tiles follow. Preparing
     // the entire coarse graph only to replace it doubles surface work.
@@ -438,7 +442,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       const prepared = !refining && preparedRoads.get(road.key);
       if (prepared) {
         for (let i = 0; i < road.waypoints.length; i++)
-          Cesium.Cartesian3.clone(prepared.waypoints[i], road.waypoints[i]);
+          copyPoint(prepared.waypoints[i], road.waypoints[i]);
         for (let i = 0; i < road.segmentDist.length; i++)
           road.segmentDist[i] = prepared.segmentDist[i];
         road.surfaceReady = true;

@@ -95,7 +95,6 @@
   "src/layers/streetLevel/sequenceCones.js",
   "src/layers/streetLevel/view.js",
   "src/layers/traffic/animation.js",
-  "src/layers/traffic/flow.js",
   "src/layers/traffic/lifecycle.js",
   "src/layers/traffic/rendering.js",
   "src/layers/traffic/retention.js",
