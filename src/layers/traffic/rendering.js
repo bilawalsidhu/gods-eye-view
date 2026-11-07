@@ -8,6 +8,9 @@ import {
   HEAT_SLOW_COLOR,
   HEAT_LINE_JAM_WIDTH,
   HEAT_JAM_BASE_ALPHA,
+  HEAT_JAM_GLOW_POWER,
+  HEAT_JAM_PULSE_ALPHA,
+  HEAT_JAM_PULSE_PERIOD_MS,
   HEAT_LINE_SLOW_WIDTH,
   TRAFFIC_TIMING_ENABLED,
 } from './policy.js';
@@ -44,9 +47,9 @@ export function createRendering({
 
   /**
    * Rebuild the congestion heat-line underlay (jam-viz heatline prototype):
-   * slow/jam roads drape a corridor line onto the rendered 3D tiles — red for
-   * jam, faint flat amber for slow — with the dots animating on top. One
-   * display set per bucket. Capped at HEAT_LINE_CAP (jam first, longest
+   * slow/jam roads drape a corridor line onto the rendered 3D tiles — a red
+   * glow pulsing about its base alpha for jam (~1.6 s), faint flat amber for
+   * slow — with the dots animating on top. One display set per bucket. Capped at HEAT_LINE_CAP (jam first, longest
    * first); overflow is logged. No-op in sim mode, when the heatline mode is
    * off, or without a display.
    *
@@ -89,8 +92,14 @@ export function createRendering({
     const roadsFor = (bucket) =>
       kept.filter((item) => item.bucket === bucket).map((item) => item.road);
     layerState._display.setHeat('jam', roadsFor('jam'), {
-      color: jamLineColor.withAlpha(HEAT_JAM_BASE_ALPHA).rgba(),
+      color: jamLineColor.withAlpha(1).rgba(),
       widthPx: HEAT_LINE_JAM_WIDTH,
+      glow: { power: HEAT_JAM_GLOW_POWER },
+      pulse: {
+        periodMs: HEAT_JAM_PULSE_PERIOD_MS,
+        min: HEAT_JAM_BASE_ALPHA - HEAT_JAM_PULSE_ALPHA,
+        max: HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA,
+      },
     });
     layerState._display.setHeat('slow', roadsFor('slow'), {
       color: slowLineColor.rgba(),

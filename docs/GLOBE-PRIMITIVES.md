@@ -237,18 +237,18 @@ At 10 000 corridors Cesium allocated 613 MB of WebGL memory, the pass 44 MB
 and the vector layers about 70 MB.
 
 The pass with corridor tiles, measured again with the pass before them on
-the same afternoon (the machine busier, the empty scene 6.0–8.9 ms):
+the same day (the machine busier, the empty scene 6.7–8.1 ms):
 
 | N      | Cesium         | pass before    | pass with tiles |
 | ------ | -------------- | -------------- | --------------- |
-| 1 000  | 12.8 / 13.9 ms | 19.8 / 24.9 ms | 9.1 / 12.6 ms   |
-| 10 000 | 23.1 / 23.2 ms | 151 / 196 ms   | 12.1 / 15.4 ms  |
-| 15 000 | 31.8 / 31.4 ms | 226 / 289 ms   | 17.7 / 19.7 ms  |
+| 1 000  | 12.8 / 13.9 ms | 19.8 / 24.9 ms | 8.7 / 10.0 ms   |
+| 10 000 | 23.1 / 23.2 ms | 151 / 196 ms   | 11.8 / 13.8 ms  |
+| 15 000 | 31.8 / 31.4 ms | 226 / 289 ms   | 17.9 / 19.9 ms  |
 
-The tiles hold about what the chunks held: 47 MB of textures at 10 000
-corridors (46 MB before), 68 MB at 15 000 (69 MB). Packing takes longer:
-the commit of 10 000 corridors went from 0.6 s to about 1.9 s, and 15 000
-from 0.8 s to 3.0 s.
+The tiles hold about what the chunks held: 43 MB of textures at 10 000
+corridors (46 MB before), 66 MB at 15 000 (69 MB). Packing takes longer:
+the commit of 10 000 corridors went from 0.6 s to 1.1 s, and 15 000 from
+0.8 s to 1.7 s.
 
 A pixel corridor's width is now measured across the line (the gradient of
 the distance to it), so it is the same at any angle, as on Cesium. Before,
@@ -284,8 +284,8 @@ ground outlines and no metre widths. Their colours are lit, and hiding them
 needs a rebuild.
 
 Corridors were the pass's limit: 10 000 lines took 135 ms. With a
-set-wide grid of bins (corridor tiles), 10 000 take 12 ms, under Cesium's
-23 ms.
+set-wide grid of bins (corridor tiles), 10 000 take 12 ms still and 14 ms
+moving, under Cesium's 23 ms.
 
 ## Imagery: rasters on the ground
 

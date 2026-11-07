@@ -209,12 +209,15 @@ one application, and only the globe-bound parts move to the next engine.
   - Navara draws them in one screen pass classified on the scene depth
     (`src/globe/navara/ground/`). A corridor set is tiles of binned
     segments (`corridors.js`): 10,000 corridors draw in about 12 ms still
-    and 15 ms moving, where Cesium takes 23 ms (the chunks before took 151
+    and 14 ms moving, where Cesium takes 23 ms (the chunks before took 151
     and 196 ms).
   - Navara's vector layers were measured against that pass and lost
     (`docs/GLOBE-PRIMITIVES.md`).
   - On November 7, 2026, `scripts/qa-ground-suite.mjs` (the ground checks
-    with pixels) passed 3 of 3 on both engines.
+    with pixels, the corridor looks among them) passed 4 of 4 on both
+    engines, and `scripts/qa-ground-looks.mjs` drew the jam line and the
+    route on Cesium as the old materials did, with no pixel changed at four
+    moments of the pulse and the dashes.
 - **Rasters on the ground** (`engine.imagery`) are required of every engine
   too: layers of Web Mercator tiles from a URL template or of one image (a
   canvas, an image, RGBA bytes or an image URL) over a rectangle, each with

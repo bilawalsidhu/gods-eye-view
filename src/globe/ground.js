@@ -213,14 +213,105 @@ export function normalizeGroundItem(kind, item, index = 0) {
   const width = hasPx ? item.widthPx : item.widthM;
   if (!(isFiniteNumber(width) && width > 0))
     fail(`item ${index} width must be a positive number`);
+  const animation = animationOf(item, index);
+  if (animation && !hasPx)
+    fail(`item ${index} glow, pulse and dash need widthPx`);
   return {
     ...base,
     path,
     fill: Float32Array.from(item.color),
     outline: null,
     ...(hasPx ? { widthPx: width } : { widthM: width }),
+    animation,
     bounds: boundsOf([path]),
   };
+}
+
+const unit = (value) => isFiniteNumber(value) && value >= 0 && value <= 1;
+
+// A pixel corridor's look over its width and time, as Cesium's ground
+// polyline materials drew it: `glow` PolylineGlow's falloff, `pulse` its
+// alpha going up and down, `dash` the annotation route's flowing dashes.
+// Null without any.
+function animationOf(item, index) {
+  const { glow, pulse, dash } = item;
+  if (glow == null && pulse == null && dash == null) return null;
+  const label = `item ${index}`;
+  let glowOut = null;
+  if (glow != null) {
+    if (!isObject(glow)) fail(`${label} glow must be { power, taper }`);
+    const taper = glow.taper ?? 1;
+    if (!(isFiniteNumber(glow.power) && glow.power > 0 && glow.power <= 0.5))
+      fail(`${label} glow.power must be in (0, 0.5]: ${glow.power}`);
+    if (!(isFiniteNumber(taper) && taper > 0 && taper <= 1))
+      fail(`${label} glow.taper must be in (0, 1]: ${taper}`);
+    glowOut = Object.freeze({ power: glow.power, taper });
+  }
+  let pulseOut = null;
+  if (pulse != null) {
+    if (!isObject(pulse)) fail(`${label} pulse must be { periodMs, min, max }`);
+    const { periodMs, min, max } = pulse;
+    if (!(isFiniteNumber(periodMs) && periodMs > 0))
+      fail(`${label} pulse.periodMs must be a positive number: ${periodMs}`);
+    if (!unit(min) || !unit(max) || min > max)
+      fail(`${label} pulse needs 0 <= min <= max <= 1: ${min}, ${max}`);
+    pulseOut = Object.freeze({ periodMs, min, max });
+  }
+  let dashOut = null;
+  if (dash != null) {
+    if (!isObject(dash))
+      fail(`${label} dash must be { cells, duty, speed, gapAlpha, emission }`);
+    const { cells, duty } = dash;
+    const speed = dash.speed ?? 0;
+    const gapAlpha = dash.gapAlpha ?? 0;
+    const emission = dash.emission ?? 0;
+    if (!(isFiniteNumber(cells) && cells > 0))
+      fail(`${label} dash.cells must be a positive number: ${cells}`);
+    if (!(isFiniteNumber(duty) && duty > 0 && duty < 1))
+      fail(`${label} dash.duty must be in (0, 1): ${duty}`);
+    if (!isFiniteNumber(speed))
+      fail(`${label} dash.speed must be a number: ${speed}`);
+    if (!unit(gapAlpha))
+      fail(`${label} dash.gapAlpha must be in 0..1: ${gapAlpha}`);
+    if (!(isFiniteNumber(emission) && emission >= 0))
+      fail(`${label} dash.emission must be a number >= 0: ${emission}`);
+    dashOut = Object.freeze({ cells, duty, speed, gapAlpha, emission });
+  }
+  return Object.freeze({ glow: glowOut, pulse: pulseOut, dash: dashOut });
+}
+
+/** Whether a checked item changes over time (a pulse or a dash). */
+export const animates = (item) =>
+  Boolean(item.animation?.pulse || item.animation?.dash);
+
+/**
+ * The time animated corridors are drawn at, in seconds: the page's
+ * monotonic clock, as Cesium's route and heat-line materials read it (not
+ * the app clock: a frozen or sped-up scene time leaves them as they are).
+ */
+export const groundSeconds = () => performance.now() / 1000;
+
+/** A pulse's alpha factor at `seconds`: min..max, a sine of its period. */
+export function pulseFactor({ periodMs, min, max }, seconds) {
+  const wave = Math.sin((2 * Math.PI * seconds * 1000) / periodMs);
+  return min + (max - min) * (0.5 + 0.5 * wave);
+}
+
+/** Half the soft edge of a dash, in cells (the route flow material's). */
+export const DASH_EDGE = 0.08;
+
+/**
+ * How lit a dash is (0..1) at `along` (0 at the corridor's start, 1 at its
+ * end) and `seconds`: the cells scroll toward the end at `speed` a second.
+ */
+export function dashLit({ cells, duty, speed }, along, seconds) {
+  const flow = along * cells - seconds * speed;
+  const at = flow - Math.floor(flow);
+  const t = Math.min(
+    1,
+    Math.max(0, (at - (duty - DASH_EDGE)) / (2 * DASH_EDGE)),
+  );
+  return 1 - t * t * (3 - 2 * t);
 }
 
 /** A disc's boundary as a ring of `segments` points (degrees, flat). */
@@ -301,6 +392,8 @@ export function createGroundRegistry(build) {
         // What the last commit drew: picks read it.
         items: [],
         shown: true,
+        // Whether the last commit has a pulse or a dash.
+        animated: false,
         destroyed: false,
       };
       const alive = () => {
@@ -318,6 +411,7 @@ export function createGroundRegistry(build) {
         commit() {
           alive();
           state.items = state.pending;
+          state.animated = state.items.some(animates);
           part.commit(state.items);
         },
         show(visible) {
@@ -336,6 +430,7 @@ export function createGroundRegistry(build) {
           part.destroy();
           state.pending = [];
           state.items = [];
+          state.animated = false;
         },
         isDestroyed: () => state.destroyed,
       };
@@ -344,17 +439,27 @@ export function createGroundRegistry(build) {
       return set;
     },
     list: () =>
-      [...live.values()].map(({ options, items, shown }) => ({
+      [...live.values()].map(({ options, items, shown, animated }) => ({
         id: options.id,
         kind: options.kind,
         count: items.length,
         shown,
         order: options.order,
+        animated,
       })),
   };
   return {
     ground,
     live,
+    /**
+     * Whether a shown set has a pulse or a dash: the engine draws a frame
+     * after every frame while it does, as Cesium's continuous render did.
+     */
+    animating() {
+      for (const state of live.values())
+        if (state.shown && state.animated) return true;
+      return false;
+    },
     destroyAll() {
       for (const state of [...live.values()]) state.set.destroy();
     },

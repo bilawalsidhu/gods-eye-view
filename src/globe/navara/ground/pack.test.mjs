@@ -3,12 +3,19 @@ import assert from 'node:assert/strict';
 import * as geo from '../../../geo/index.js';
 import { normalizeGroundItem } from '../../ground.js';
 import {
+  EPSILON_M,
+  ITEM_TEXELS,
+  LOOK,
+  MARGIN_RATIO,
+  MAX_PIECE_DEG,
+} from './corridors.js';
+import {
   BIN_THRESHOLD,
   binArea,
   composeGround,
-  CORRIDOR_CHUNK,
   GRID_COLS,
   KIND,
+  packHeights,
   packSet,
   STYLE_TEXELS,
 } from './pack.js';
@@ -74,11 +81,21 @@ test('gnomonic segments keep a great-circle edge straight and distances right', 
       },
     ]),
   );
-  const [ax, ay, bx, by] = corridor.segments;
-  assert.ok(Math.abs(ay) < 1e-6 && Math.abs(by) < 1e-6, 'on the equator');
-  assert.ok(Math.abs(ax + bx) < 1e-6);
-  assert.equal(corridor.styles[8], KIND.corridorPx);
-  assert.equal(corridor.styles[10], 4);
+  // Cut into pieces of at most MAX_PIECE_DEG, each straight in the plane.
+  const pieces = corridor.segments.length / 4;
+  assert.equal(pieces, Math.ceil(2 / MAX_PIECE_DEG));
+  for (let at = 0; at < corridor.segments.length; at += 4) {
+    const [ax, ay, bx, by] = corridor.segments.slice(at, at + 4);
+    assert.ok(Math.abs(ay) < 1e-3 && Math.abs(by) < 1e-3, 'on the equator');
+    if (at) assert.equal(ax, corridor.segments[at - 2], 'joined');
+    assert.ok(bx > ax);
+  }
+  assert.ok(
+    Math.abs(corridor.segments[0] + corridor.segments.at(-2)) < 1e-3,
+    'centred',
+  );
+  assert.equal(corridor.styles[8], KIND.corridorTile);
+  assert.equal(corridor.items[4], 4, 'the item keeps its width');
 });
 
 test('composed sets keep draw order and offset their segments', () => {
@@ -171,31 +188,203 @@ test('composed sets keep draw order and offset their segments', () => {
   assert.ok(state.frames.data[2] < -1.9e6);
 });
 
-test('a long corridor packs as chunks that own their own segments', () => {
-  const positions = Array.from({ length: 41 }, (_, index) => [index * 0.01, 0]);
-  const pack = packSet(
-    'corridor',
-    items('corridor', [{ positions, color: [1, 1, 1, 1], widthM: 10 }]),
+// Random lines over a region, as the ground bench draws them.
+function lines(count, { lon = 55, lat = 25, spread = 0.4, step = 0.004 } = {}) {
+  let seed = 7;
+  const next = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+  return Array.from({ length: count }, (_, index) => {
+    let x = lon + next() * spread;
+    let y = lat + next() * spread;
+    const heading = next() * 2 * Math.PI;
+    const positions = [];
+    for (let k = 0; k < 12; k++) {
+      positions.push([x, y]);
+      const turn = heading + (next() - 0.5) * 1.2;
+      x += step * Math.cos(turn);
+      y += step * Math.sin(turn);
+    }
+    return {
+      positions,
+      color: [1, 1, 1, 1],
+      ...(index % 5 ? { widthPx: 2 + (index % 3) } : { widthM: 30 }),
+    };
+  });
+}
+
+// A tile's levels as the shader walks them: [directory start, columns, rows].
+function levelsOf(style) {
+  const out = [];
+  let columns = style[10];
+  let rows = style[11];
+  let dir = style[18];
+  for (let z = 0; z <= style[7]; z++) {
+    out.push([dir, columns, rows]);
+    dir += columns * rows;
+    columns = (columns + 1) >> 1;
+    rows = (rows + 1) >> 1;
+  }
+  return out;
+}
+
+test('a corridor set packs as tiles whose bins list every segment near them', () => {
+  const checked = items('corridor', lines(80));
+  const pack = packSet('corridor', checked, { tilePieces: 300 });
+  assert.ok(pack.count > 1, `${pack.count} tiles`);
+  assert.ok(pack.count >= 1);
+  assert.equal(pack.items.length, checked.length * ITEM_TEXELS * 4);
+  for (let tile = 0; tile < pack.count; tile++) {
+    const style = pack.styles.slice(
+      tile * STYLE_TEXELS * 4,
+      (tile + 1) * STYLE_TEXELS * 4,
+    );
+    assert.equal(style[8], KIND.corridorTile);
+    const size = style[9];
+    const [x0, y0] = [style[16], style[17]];
+    const segmentStart = style[14];
+    const runStart = style[15];
+    const reference = style[6];
+    for (const [z, [dir, columns, rows]] of levelsOf(style).entries()) {
+      const bin = size * 2 ** z;
+      // Brute force: every segment of the tile within its margin of a bin
+      // is in one of the bin's runs.
+      for (let row = 0; row < rows; row++)
+        for (let column = 0; column < columns; column++) {
+          const at = (dir + row * columns + column) * 4;
+          const listed = new Set();
+          for (let r = 0; r < pack.bins[at + 1]; r++) {
+            const run = (runStart + pack.bins[at] + r) * 4;
+            for (let k = 0; k < pack.runs[run + 2]; k++)
+              listed.add(pack.runs[run + 1] + k);
+          }
+          const left = x0 + column * bin;
+          const bottom = y0 + row * bin;
+          for (
+            let s = 0;
+            s <
+            (tile + 1 < pack.count
+              ? pack.styles[(tile + 1) * STYLE_TEXELS * 4 + 14]
+              : pack.segments.length / 4) -
+              segmentStart;
+            s++
+          ) {
+            const g = (segmentStart + s) * 4;
+            const [ax, ay, bx, by] = pack.segments.slice(g, g + 4);
+            // The segment's distance to the bin's square.
+            let near = Infinity;
+            for (let t = 0; t <= 16; t++) {
+              const px = ax + ((bx - ax) * t) / 16;
+              const py = ay + ((by - ay) * t) / 16;
+              const dx = Math.max(left - px, 0, px - left - bin);
+              const dy = Math.max(bottom - py, 0, py - bottom - bin);
+              near = Math.min(near, Math.hypot(dx, dy));
+            }
+            // The least margin of any item: a 2 px one (1.5 px of reach)
+            // or a 30 m one (0.5 px, the reference, and 15 m).
+            const margin =
+              Math.min(
+                (MARGIN_RATIO * bin * 1.5) / reference,
+                MARGIN_RATIO * bin + 15,
+              ) +
+              EPSILON_M * 0.5;
+            if (near < margin)
+              assert.ok(
+                listed.has(s),
+                `tile ${tile} level ${z} bin ${column},${row} misses segment ${s}`,
+              );
+          }
+        }
+    }
+  }
+});
+
+test("tiles' cells split the set's region: one tile holds each point", () => {
+  const checked = items('corridor', [
+    ...lines(400, { lon: -179.9, lat: 60, spread: 0.3, step: 0.02 }),
+    ...lines(400, { lon: 179.7, lat: 60.1, spread: 0.2, step: 0.02 }),
+  ]);
+  // Few pieces a tile: many tiles.
+  const pack = packSet('corridor', checked, { tilePieces: 300 });
+  assert.ok(pack.count > 8, `${pack.count} tiles`);
+  const cells = [];
+  for (let tile = 0; tile < pack.count; tile++) {
+    const at = tile * STYLE_TEXELS * 4;
+    cells.push([
+      ...pack.styles.slice(at, at + 8),
+      ...pack.styles.slice(at + 20, at + 22),
+    ]);
+  }
+  let seed = 3;
+  const next = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+  for (let k = 0; k < 2000; k++) {
+    // Inside the set's bounds and beyond them (open sides).
+    const lon = 179.4 + next() * 1.3;
+    const lat = 59.8 + next() * 0.7;
+    const world = geo.cartesian3.fromDegrees(lon, lat, next() * 500);
+    const sinLat = world.z / Math.hypot(world.x, world.y, world.z);
+    const holders = cells.filter(
+      (c) =>
+        world.x * c[0] + world.y * c[1] + c[8] >= 0 &&
+        world.x * c[2] + world.y * c[3] + c[9] > 0 &&
+        sinLat >= c[4] &&
+        sinLat < c[5],
+    );
+    assert.equal(holders.length, 1, `${lon}, ${lat}: ${holders.length} tiles`);
+  }
+});
+
+test("a corridor item's look packs for the shader", () => {
+  const [item] = items('corridor', [
+    {
+      positions: [
+        [0, 0],
+        [0.01, 0],
+      ],
+      color: [1, 0, 0, 1],
+      widthPx: 9,
+      glow: { power: 0.25 },
+      pulse: { periodMs: 1600, min: 0.35, max: 0.75 },
+      dash: {
+        cells: 64,
+        duty: 0.46,
+        speed: 0.55,
+        gapAlpha: 0.18,
+        emission: 0.9,
+      },
+    },
+  ]);
+  const pack = packSet('corridor', [item]);
+  const look = [...pack.items];
+  assert.deepEqual(look.slice(0, 4), [1, 0, 0, 1]);
+  assert.equal(look[4], 9);
+  assert.ok(Math.abs(look[6] - 1113) < 5, `length ${look[6]}`);
+  assert.equal(look[7], LOOK.glow | LOOK.pulse | LOOK.dash);
+  assert.ok(Math.abs(look[8] - 0.25) < 1e-6);
+  assert.equal(look[9], 1, 'no taper');
+  assert.ok(Math.abs(look[10] - 1.6) < 1e-6);
+  assert.ok(Math.abs(look[11] - 0.35) < 1e-6);
+  assert.ok(Math.abs(look[12] - 0.75) < 1e-6);
+  assert.deepEqual(
+    look.slice(13, 16).map((v) => +v.toFixed(2)),
+    [64, 0.46, 0.55],
   );
-  assert.equal(pack.count, Math.ceil(40 / CORRIDOR_CHUNK));
-  const owned = (index) => [
-    ...pack.styles.slice(
-      index * STYLE_TEXELS * 4 + 16,
-      index * STYLE_TEXELS * 4 + 18,
-    ),
-  ];
-  const counts = (index) => pack.styles[index * STYLE_TEXELS * 4 + 15];
-  // The first chunk has no segment before it, the others one each side.
-  assert.deepEqual(owned(0), [0, CORRIDOR_CHUNK]);
-  assert.equal(counts(0), CORRIDOR_CHUNK + 1);
-  assert.deepEqual(owned(1), [1, CORRIDOR_CHUNK]);
-  assert.equal(counts(1), CORRIDOR_CHUNK + 2);
-  const last = pack.count - 1;
-  const rest = 40 - last * CORRIDOR_CHUNK;
-  assert.deepEqual(owned(last), [1, rest]);
-  assert.equal(counts(last), rest + 1);
-  assert.equal(pack.styles[8], KIND.corridorM);
-  assert.equal(pack.styles[11], 10);
+  assert.deepEqual(
+    look.slice(16, 18).map((v) => +v.toFixed(2)),
+    [0.18, 0.9],
+  );
+});
+
+test('heights are sampled again without packing the set again', () => {
+  const checked = items('corridor', lines(20));
+  const pack = packSet('corridor', checked);
+  assert.ok(pack.heights.every(Number.isNaN));
+  const heights = packHeights(pack, { terrainHeight: () => 25 });
+  assert.deepEqual([...heights], Array(pack.count * 2).fill(25));
 });
 
 test('sampled terrain heights bound the screen box; unknown ones keep it deep', () => {

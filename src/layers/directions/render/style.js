@@ -13,12 +13,17 @@ const rgba = (css, alpha) => {
 
 // The route flow material (src/annotations/worldAnnotationRenderer.js): the
 // route colour at 0.95, 64 dash cells along the route, each lit for its
-// first 46 % and at 18 % alpha between.
+// first 46 % (brightened by 0.9 of its colour) and at 18 % alpha between,
+// flowing toward the destination at 0.55 cells a second.
 export const ROUTE_WIDTH_PX = 9;
-export const ROUTE_DASH_CELLS = 64;
-export const ROUTE_DASH_DUTY = 0.46;
-export const ROUTE_DASH_COLOR = rgba(DIRECTIONS_ROUTE_COLOR, 0.95);
-export const ROUTE_GAP_COLOR = rgba(DIRECTIONS_ROUTE_COLOR, 0.95 * 0.18);
+export const ROUTE_COLOR = rgba(DIRECTIONS_ROUTE_COLOR, 0.95);
+export const ROUTE_DASH = Object.freeze({
+  cells: 64,
+  duty: 0.46,
+  speed: 0.55,
+  gapAlpha: 0.18,
+  emission: 0.9,
+});
 
 // Maneuver dots: white at 0.95 with a 2 px route-colour outline, 8 px, 13 px
 // while selected.

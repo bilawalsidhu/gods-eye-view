@@ -241,9 +241,10 @@ async function openEngine(browser, kind) {
         }
         return items;
       },
+      // N - 1 lines, then the magenta mark on top of them.
       corridors(count) {
         const next = random(11);
-        const items = [window.__bench.centreDisc()];
+        const items = [];
         for (let index = 1; index < count; index++) {
           let lon = 54.95 + next() * 0.65;
           let lat = 24.95 + next() * 0.4;
@@ -262,6 +263,7 @@ async function openEngine(browser, kind) {
             pickId: index,
           });
         }
+        items.push(window.__bench.centreDisc());
         return items;
       },
       // The magenta mark of the corridors scenario: a 40 px corridor.

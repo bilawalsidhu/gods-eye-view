@@ -1,7 +1,7 @@
 // The Directions display on the engine contract, on the fake engine and on
 // the Cesium engine (real Cesium point and billboard collections and the
-// engine's ground batches over fake primitives): the route's dash cells,
-// width, colours and drape; the maneuver dots' style, anchoring, selection
+// engine's ground batches over fake primitives): the route's flowing
+// dashes, width, colour and drape, and the render it holds; the maneuver dots' style, anchoring, selection
 // and picks; the A and B markers at the surface with their letters; show and
 // hide through the layer; and what teardown leaves.
 
@@ -14,14 +14,10 @@ import { createApplicationDirectionsLayer } from '../../../data/directions.js';
 import {
   DIRECTIONS_SET_IDS as IDS,
   createDirectionsDisplay,
-  routeDashPieces,
   stepPickId,
 } from './display.js';
-import {
-  DIRECTIONS_ROUTE_COLOR,
-  ROUTE_DASH_CELLS,
-  ROUTE_DASH_DUTY,
-} from './style.js';
+import { DIRECTIONS_ROUTE_COLOR } from './style.js';
+import { getRenderGovernorDiagnostics } from '../../../renderGovernor.js';
 import { rgbaFromCss } from '../../shared/color.js';
 
 const near = (actual, expected, label, tolerance = 1e-6) =>
@@ -170,46 +166,10 @@ test('the display needs a globe engine', () => {
   assert.throws(() => createDirectionsDisplay(null), TypeError);
 });
 
-test('the route is cut into lit and dim dash cells that keep every turn', () => {
-  const path = payload.geometry;
-  const pieces = routeDashPieces(path);
-  assert.equal(pieces.length, ROUTE_DASH_CELLS * 2);
-  pieces.forEach((piece, index) =>
-    assert.equal(piece.lit, index % 2 === 0, `piece ${index}`),
-  );
-  assert.deepEqual(pieces[0].positions[0], path[0]);
-  assert.deepEqual(pieces.at(-1).positions.at(-1), path.at(-1));
-  // Pieces join end to end, and the middle vertex is kept.
-  for (let i = 1; i < pieces.length; i++)
-    assert.deepEqual(pieces[i].positions[0], pieces[i - 1].positions.at(-1));
-  assert.ok(
-    pieces.some((piece) =>
-      piece.positions.some(([lon, lat]) => lon === MID.lon && lat === MID.lat),
-    ),
-  );
-  // A lit cell is the duty fraction of its cell's length.
-  const length = (positions) =>
-    positions
-      .slice(1)
-      .reduce(
-        (sum, [lon, lat], i) =>
-          sum +
-          geo.cartesian3.distance(
-            geo.cartesian3.fromDegrees(...positions[i]),
-            geo.cartesian3.fromDegrees(lon, lat),
-          ),
-        0,
-      );
-  const lit = length(pieces[2].positions);
-  const dim = length(pieces[3].positions);
-  near(lit / (lit + dim), ROUTE_DASH_DUTY, 'duty', 1e-3);
-  assert.deepEqual(routeDashPieces([[0, 0]]), []);
-});
-
 for (const makeHarness of GROUND_HARNESSES) {
   const { name } = makeHarness();
 
-  test(`the route is one 9 px corridor set draped on terrain and tiles, its cells at 0.95 and 0.171 (${name})`, async (t) => {
+  test(`the route is one 9 px corridor draped on terrain and tiles whose dashes flow toward B, holding the render (${name})`, async (t) => {
     const f = fixture(t, makeHarness);
     await f.route();
     const set = f.set(IDS.route);
@@ -217,19 +177,24 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(set.options.drape, 'both');
     assert.equal(set.options.pickable, false);
     assert.equal(set.shown, true);
-    assert.equal(set.items.length, ROUTE_DASH_CELLS * 2);
-    set.items.forEach((item, index) => {
-      assert.equal(item.widthPx, 9);
-      nearAll(
-        item.color,
-        [...ROUTE_RGB, index % 2 === 0 ? 0.95 : 0.95 * 0.18],
-        `colour ${index}`,
-      );
-    });
-    assert.deepEqual(set.items[0].positions[0], payload.geometry[0]);
+    assert.equal(set.items.length, 1);
+    const [item] = set.items;
+    assert.equal(item.widthPx, 9);
+    assert.deepEqual(item.positions, payload.geometry);
+    nearAll(item.color, [...ROUTE_RGB, 0.95], 'colour');
+    // The route flow material: 64 cells lit for 46 %, 18 % between, 0.9
+    // emission, 0.55 cells a second toward the destination.
     assert.deepEqual(
-      set.items.at(-1).positions.at(-1),
-      payload.geometry.at(-1),
+      { ...item.dash },
+      { cells: 64, duty: 0.46, speed: 0.55, gapAlpha: 0.18, emission: 0.9 },
+    );
+    assert.equal(
+      f.engine.ground.list().find(({ id }) => id === IDS.route).animated,
+      true,
+    );
+    assert.ok(
+      getRenderGovernorDiagnostics().holds.includes('directions'),
+      'a drawn route holds continuous render',
     );
     if (f.cesium) {
       const { fills, lines } = f.primitives(IDS.route);
@@ -239,7 +204,20 @@ for (const makeHarness of GROUND_HARNESSES) {
         lines[0].options.classificationType,
         Cesium.ClassificationType.BOTH,
       );
+      const { uniforms } = lines[0].options.appearance.material;
+      assert.equal(uniforms.dashCells, 64);
+      near(uniforms.dashDuty, 0.46, 'duty');
+      near(uniforms.dashSpeed, 0.55, 'speed');
+      near(uniforms.dashGap, 0.18, 'gap');
+      near(uniforms.dashEmission, 0.9, 'emission');
+      near(uniforms.color.alpha, 0.95, 'alpha');
     }
+    f.layer.setParams({ clear: true });
+    assert.equal(f.set(IDS.route), undefined);
+    assert.ok(
+      !getRenderGovernorDiagnostics().holds.includes('directions'),
+      'a cleared route releases it',
+    );
   });
 
   test(`maneuver dots are 8 px white over the scene with a 2 px route outline, hidden until anchored (${name})`, async (t) => {
@@ -381,7 +359,7 @@ test('an engine switch redraws the route, dots and markers on the new engine onl
   f.layer.resumeCamera();
   assert.equal(f.engine.movers.list().length, 0);
   assert.equal(f.sets(), 0);
-  assert.equal(next.set(IDS.route).items.length, ROUTE_DASH_CELLS * 2);
+  assert.equal(next.set(IDS.route).items.length, 1);
   assert.equal(movers(IDS.steps).count, 1);
   assert.equal(movers(IDS.markers).rows[0].show, true);
   assert.equal(movers(IDS.markers).rows[1].show, true);

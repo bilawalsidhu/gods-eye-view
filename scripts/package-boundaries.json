@@ -3577,7 +3577,8 @@
       "src/globe/navara/imagery/pass.js",
       "src/globe/navara/imagery/index.js",
       "src/globe/imagery.js",
-      "src/globe/cesium/imagery.js"
+      "src/globe/cesium/imagery.js",
+      "src/globe/navara/ground/corridors.js"
     ],
     "external": [
       "hls.js",

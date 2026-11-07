@@ -141,6 +141,14 @@ export const HEAT_JAM_BASE_ALPHA = 0.55;
 
 export const HEAT_JAM_PULSE_ALPHA = 0.2;
 
+/** @const {number} Ms — jam heat-line pulse period: sin(now / 260 ms), 2π × 260. */
+
+export const HEAT_JAM_PULSE_PERIOD_MS = 2 * Math.PI * 260;
+
+/** @const {number} Jam heat-line glow falloff (Cesium PolylineGlow glowPower). */
+
+export const HEAT_JAM_GLOW_POWER = 0.25;
+
 /** @const {import('../shared/color.js').Rgba} Jam corridor color (bucket red, alpha pulsed live). */
 
 export const HEAT_JAM_COLOR = rgbaFromCss('#e05252');

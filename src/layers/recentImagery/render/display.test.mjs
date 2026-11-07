@@ -217,7 +217,14 @@ test('the box preview is one ground cell, hidden with no box', () => {
     display.setBoxPreview(BOX);
     assert.deepEqual(
       { ...listed(), id: undefined },
-      { id: undefined, kind: 'cell', count: 1, shown: true, order: 10 },
+      {
+        id: undefined,
+        kind: 'cell',
+        count: 1,
+        shown: true,
+        order: 10,
+        animated: false,
+      },
     );
     display.setBoxPreview(null);
     assert.equal(listed().shown, false);

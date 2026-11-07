@@ -5,14 +5,25 @@
 // fill (polygons, discs as EllipseGeometry, cells as RectangleGeometry,
 // metre corridors as CorridorGeometry) and one GroundPolylinePrimitive of
 // every outline and pixel corridor, over the fills, both with per-instance
-// colours and the set's classificationType. Cesium builds them in workers;
-// the engine keeps requesting frames until they are drawn. A set made
+// colours and the set's classificationType. A pixel corridor with a glow,
+// a pulse or a dash draws in a GroundPolylinePrimitive of its own look and
+// colour (a material has one colour), over the set's other batches; its
+// material reads a time uniform the engine writes before every frame, and
+// while a shown set has a pulse or a dash the engine asks for a frame after
+// every frame, the continuous render Cesium drew them with. Cesium builds
+// them in workers; the engine keeps requesting frames until they are
+// drawn. A set made
 // without pickable stays out of the pick pass (a GroundPrimitive with
 // allowPicking false still writes its stencil there and hides what lies
 // under it); identify() names a picked item.
 
 import * as Cesium from 'cesium';
-import { areaRings, createGroundRegistry } from '../ground.js';
+import {
+  areaRings,
+  createGroundRegistry,
+  DASH_EDGE,
+  groundSeconds,
+} from '../ground.js';
 
 // Read when a set is made: no module reads Cesium while it loads.
 const classificationOf = (drape) =>
@@ -54,6 +65,72 @@ const DEFAULT_FACTORIES = {
 };
 
 const colorOf = (rgba) => new Cesium.Color(rgba[0], rgba[1], rgba[2], rgba[3]);
+
+// One material for every animated corridor: PolylineGlow's falloff across
+// the width (st.t) and taper along it (st.s), an alpha pulse, and the
+// annotation route's flowing dashes (src/annotations/worldAnnotationRenderer.js,
+// GevRouteFlow): its diffuse plus emission and alpha. Each part is off at
+// its zero uniform. Fragments are LDR and premultiplied, as Cesium writes
+// ground polylines.
+const CORRIDOR_MATERIAL = 'GevGroundCorridor';
+const CORRIDOR_SOURCE = /* glsl */ `
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  czm_material material = czm_getDefaultMaterial(materialInput);
+  vec2 st = materialInput.st;
+  vec3 rgb = color.rgb;
+  float alpha = color.a;
+  if (pulsePeriod > 0.0)
+    alpha *= mix(pulseMin, pulseMax, 0.5 + 0.5 * sin(6.283185307179586 * time / pulsePeriod));
+  if (glowPower > 0.0) {
+    float glow = glowPower / abs(st.t - 0.5) - (glowPower / 0.5);
+    if (taperPower <= 0.99999)
+      glow *= min(1.0, taperPower / (0.5 - st.s * 0.5) - (taperPower / 0.5));
+    rgb = max(vec3(glow - 1.0 + rgb), rgb);
+    alpha *= clamp(glow, 0.0, 1.0);
+  }
+  if (dashCells > 0.0) {
+    float flow = fract(st.s * dashCells - time * dashSpeed);
+    float on = 1.0 - smoothstep(dashDuty - ${DASH_EDGE}, dashDuty + ${DASH_EDGE}, flow);
+    rgb *= 1.0 + dashEmission * on;
+    alpha *= max(on, dashGap);
+  }
+  material.emission = rgb;
+  material.alpha = alpha;
+  return material;
+}`;
+
+/** The uniforms of an animated corridor's material (pure, for tests). */
+export function corridorUniforms(item) {
+  const { glow, pulse, dash } = item.animation;
+  return {
+    color: colorOf(item.fill),
+    time: 0,
+    glowPower: glow?.power ?? 0,
+    taperPower: glow?.taper ?? 1,
+    pulsePeriod: pulse ? pulse.periodMs / 1000 : 0,
+    pulseMin: pulse?.min ?? 1,
+    pulseMax: pulse?.max ?? 1,
+    dashCells: dash?.cells ?? 0,
+    dashDuty: dash?.duty ?? 0.5,
+    dashSpeed: dash?.speed ?? 0,
+    dashGap: dash?.gapAlpha ?? 0,
+    dashEmission: dash?.emission ?? 0,
+  };
+}
+
+const corridorMaterial = (item) =>
+  new Cesium.Material({
+    fabric: {
+      type: CORRIDOR_MATERIAL,
+      uniforms: corridorUniforms(item),
+      source: CORRIDOR_SOURCE,
+    },
+    translucent: true,
+  });
+
+// Items of one look and colour share a primitive.
+const lookKey = (item) =>
+  JSON.stringify([Array.from(item.fill), item.animation]);
 
 function positionsOf(flat) {
   const positions = [];
@@ -104,19 +181,34 @@ export function fillGeometry(kind, item) {
 
 /**
  * The geometry instances of a commit: `fills` for the GroundPrimitive,
- * `lines` for the GroundPolylinePrimitive. Instance ids name the set and
- * item ({ gevGroundSet, instance }).
+ * `lines` for the GroundPolylinePrimitive, `animated` the corridors with a
+ * glow, pulse or dash ({ item, instances }: one per look and colour, by
+ * their first item). Instance ids name the set and item ({ gevGroundSet,
+ * instance }).
  */
 export function groundInstances(options, items) {
   const fills = [];
   const lines = [];
+  const looks = new Map();
   items.forEach((item, instance) => {
     const id = { gevGroundSet: options.id, instance };
     const attributes = (rgba) => ({
       color: Cesium.ColorGeometryInstanceAttribute.fromColor(colorOf(rgba)),
     });
     if (options.kind === 'corridor') {
-      if (item.widthM)
+      if (item.animation) {
+        const key = lookKey(item);
+        if (!looks.has(key)) looks.set(key, { item, instances: [] });
+        looks.get(key).instances.push(
+          new Cesium.GeometryInstance({
+            geometry: new Cesium.GroundPolylineGeometry({
+              positions: positionsOf(item.path),
+              width: item.widthPx,
+            }),
+            id,
+          }),
+        );
+      } else if (item.widthM)
         fills.push(
           new Cesium.GeometryInstance({
             geometry: fillGeometry('corridor', item),
@@ -161,7 +253,7 @@ export function groundInstances(options, items) {
           }),
         );
   });
-  return { fills, lines };
+  return { fills, lines, animated: [...looks.values()] };
 }
 
 /**
@@ -197,6 +289,32 @@ export function createCesiumGround(
       }
     });
   };
+  // Animated materials of every live set: their time is written before
+  // every frame, and a frame follows every frame while a shown set has a
+  // pulse or a dash.
+  const materials = new Set();
+  let removeTick = null;
+  let removeAnimate = null;
+  const animate = () => {
+    if (materials.size && !removeTick && scene.preRender)
+      removeTick = scene.preRender.addEventListener(() => {
+        const seconds = groundSeconds();
+        for (const material of materials) material.uniforms.time = seconds;
+      });
+    if (!materials.size && removeTick) {
+      removeTick();
+      removeTick = null;
+    }
+    const wanted = registry.animating();
+    if (wanted && !removeAnimate && scene.postRender)
+      removeAnimate = scene.postRender.addEventListener(() =>
+        requestRender('ground-animate'),
+      );
+    if (!wanted && removeAnimate) {
+      removeAnimate();
+      removeAnimate = null;
+    }
+  };
   const rootCollection = () => {
     if (!root) {
       root = new Cesium.PrimitiveCollection({ destroyPrimitives: true });
@@ -210,14 +328,20 @@ export function createCesiumGround(
     ordered.splice(at, 0, { order: options.order, slot });
     rootCollection().add(slot, at);
     let drawn = [];
+    let looks = [];
     const classificationType = classificationOf(options.drape);
     const allowPicking = options.pickable;
+    const forget = () => {
+      for (const primitive of drawn) building.delete(primitive);
+      for (const material of looks) materials.delete(material);
+      drawn = [];
+      looks = [];
+    };
     return {
       commit(items) {
-        for (const primitive of drawn) building.delete(primitive);
+        forget();
         slot.removeAll();
-        drawn = [];
-        const { fills, lines } = groundInstances(options, items);
+        const { fills, lines, animated } = groundInstances(options, items);
         if (fills.length)
           drawn.push(
             make.fills({
@@ -239,22 +363,38 @@ export function createCesiumGround(
               allowPicking,
             }),
           );
+        for (const { item, instances } of animated) {
+          const material = corridorMaterial(item);
+          material.uniforms.time = groundSeconds();
+          looks.push(material);
+          materials.add(material);
+          drawn.push(
+            make.lines({
+              geometryInstances: instances,
+              appearance: new Cesium.PolylineMaterialAppearance({ material }),
+              classificationType,
+              allowPicking,
+            }),
+          );
+        }
         for (const primitive of drawn) {
           primitive.gevGroundSet = options.id;
           slot.add(primitive);
           building.add(primitive);
         }
         watch();
+        animate();
         requestRender('ground');
       },
       show(visible) {
         slot.show = visible;
+        animate();
         requestRender('ground');
       },
       ready: () => drawn.every((primitive) => primitive.ready === true),
       destroy() {
-        for (const primitive of drawn) building.delete(primitive);
-        drawn = [];
+        forget();
+        animate();
         ordered.splice(
           ordered.findIndex((entry) => entry.slot === slot),
           1,
@@ -284,6 +424,10 @@ export function createCesiumGround(
       registry.destroyAll();
       removeWatch?.();
       removeWatch = null;
+      removeTick?.();
+      removeAnimate?.();
+      removeTick = removeAnimate = null;
+      materials.clear();
       building.clear();
       if (root) {
         scene.groundPrimitives.remove(root);

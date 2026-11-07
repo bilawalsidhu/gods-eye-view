@@ -2,21 +2,29 @@
 // gnomonic frame of its own (the tangent plane at its centre, reached along
 // rays from the Earth's centre, where great-circle edges are straight
 // lines), its boundary as segments in that plane, in float64 until the
-// numbers are small; per camera change the frames in view space, each
+// numbers are small; a corridor set as tiles of binned segments
+// (corridors.js); per camera change the frames in view space, each pass
 // item's conservative screen box and a screen grid of candidate items,
 // kept in draw order.
 
 import * as geo from '../../../geo/index.js';
 import { cellRing } from '../../ground.js';
+import {
+  ITEM_TEXELS,
+  itemTexels,
+  packTile,
+  tileCorridors,
+  tileSamples,
+} from './corridors.js';
 
 const { cartesian3 } = geo;
+const DEG = Math.PI / 180;
 
 /** Item kinds as the shader reads them. */
 export const KIND = Object.freeze({
   area: 0,
   disc: 1,
-  corridorPx: 2,
-  corridorM: 3,
+  corridorTile: 4,
 });
 export const GRID_COLS = 64;
 export const GRID_ROWS = 40;
@@ -27,9 +35,7 @@ export const STYLE_TEXELS = 6;
 /** An area of more segments than this gets a grid of bins (binArea). */
 export const BIN_THRESHOLD = 32;
 const MAX_BINS = 32;
-/** Segments of a corridor drawn as one pass item. */
-export const CORRIDOR_CHUNK = 4;
-/** Texture rows hold this many texels. */
+/** Texture rows hold this many texels (a power of two: the shader masks). */
 export const ROW = 1024;
 
 // Highest ground above the ellipsoid a fill reaches (the item's volume).
@@ -51,7 +57,7 @@ const nearFloor = (distance) => -Math.min(-FLOOR_M, 1000 + 0.05 * distance);
 const SAMPLE_STEP_DEG = 0.005;
 const lodMargin = (distance) => 450 + 0.02 * distance;
 const TILE_HEADROOM_M = 900;
-/** Terrain samples per pass item. */
+/** Terrain samples per area; a corridor tile takes more (corridors.js). */
 const SAMPLES = 9;
 const CELL_STEP_DEG = 0.25;
 
@@ -66,8 +72,18 @@ function frameAt(lon, lat) {
   if (!Number.isFinite(east.x)) Object.assign(east, { x: 1, y: 0, z: 0 });
   const north = cartesian3.cross(up, east, cartesian3.create());
   const scratch = cartesian3.create();
-  // A ground position in the frame's gnomonic plane, metres.
+  // A ground position in the frame's gnomonic plane, metres; or, given a
+  // unit direction [x, y, z] from the Earth's centre, where its ray meets
+  // the plane.
   const project = (lonDeg, latDeg) => {
+    if (Array.isArray(lonDeg)) {
+      const [x, y, z] = lonDeg;
+      const scale = radius / (x * up.x + y * up.y + z * up.z);
+      return [
+        (x * east.x + y * east.y + z * east.z) * scale,
+        (x * north.x + y * north.y + z * north.z) * scale,
+      ];
+    }
     cartesian3.fromDegrees(lonDeg, latDeg, 0, undefined, scratch);
     const dx = scratch.x - center.x;
     const dy = scratch.y - center.y;
@@ -172,56 +188,44 @@ export function binArea(list) {
   };
 }
 
+// An open side of a corridor tile's cell: its meridian test always holds.
+const OPEN = 1e30;
+
+// A pixel corridor reaches half its width and the half pixel of its
+// anti-aliasing in pixels; a metre one its half width in metres and the
+// half pixel.
+const reachOf = (item) => [
+  (item.widthPx ?? 0) / 2 + 0.5,
+  (item.widthM ?? 0) / 2,
+];
+
 /**
  * One set's items packed for the pass as pass items: float64 frames, the
  * terrain heights under each (`terrainHeight(lon, lat)`, undefined where
- * not loaded: that item keeps the deep default box), the
- * style texels (segment starts relative to the set's own segments) and the
- * segments. A corridor longer than CORRIDOR_CHUNK segments becomes one pass
- * item per chunk, each in its own plane with its own screen box; a chunk
- * also holds its neighbours' end segments and draws only where its own
- * segments are the nearest, so joints blend once.
+ * not loaded: that item keeps the deep default box; packHeights samples
+ * them again), the style texels (segment starts relative to the set's own
+ * segments) and the segments. A corridor set becomes tiles (corridors.js):
+ * each a pass item with its segments, the runs of its bins and the set's
+ * item looks (`items`, ITEM_TEXELS each).
  */
-export function packSet(kind, items, { terrainHeight = null } = {}) {
+export function packSet(
+  kind,
+  items,
+  { terrainHeight = null, tilePieces = undefined } = {},
+) {
   const frames = [];
   const styles = [];
   const volumes = [];
-  const heights = [];
   const segments = [];
   const bins = [];
-  // Terrain heights on a grid of SAMPLE_STEP_DEG, each sampled once.
-  const sampled = new Map();
-  const heightAt = (lon, lat) => {
-    const x = Math.round(lon / SAMPLE_STEP_DEG);
-    const y = Math.round(lat / SAMPLE_STEP_DEG);
-    const key = x * 1e6 + y;
-    if (!sampled.has(key))
-      sampled.set(
-        key,
-        terrainHeight?.(x * SAMPLE_STEP_DEG, y * SAMPLE_STEP_DEG),
-      );
-    return sampled.get(key);
-  };
-  // The lowest and highest terrain under a pass item's sample positions
-  // (flat [lon, lat, …], at most SAMPLES of them), NaN when unknown.
-  const sampleHeights = (flat) => {
-    if (!terrainHeight) return [Number.NaN, Number.NaN];
-    let low = Infinity;
-    let high = -Infinity;
-    const count = flat.length / 2;
-    const step = Math.max(1, Math.ceil(count / SAMPLES));
-    for (let index = 0; index < count; index += step) {
-      const height = heightAt(flat[index * 2], flat[index * 2 + 1]);
-      if (!Number.isFinite(height)) return [Number.NaN, Number.NaN];
-      low = Math.min(low, height);
-      high = Math.max(high, height);
-    }
-    return [low, high];
-  };
-  const emit = (frame, style, extent, padPx, list, samples, extra = null) => {
-    heights.push(...sampleHeights(samples));
+  const runs = [];
+  const looks = [];
+  const samples = [];
+  const emit = (frame, style, extent, padPx, list, sampled, extra = null) => {
+    samples.push(sampled);
     const start = segments.length / 4;
-    segments.push(...list);
+    for (let index = 0; index < list.length; index++)
+      segments.push(list[index]);
     if (extra) {
       // The bins' own segment lists follow the item's, relative to its start.
       style.bins[3] = bins.length / 4;
@@ -255,7 +259,7 @@ export function packSet(kind, items, { terrainHeight = null } = {}) {
       floor,
       CEILING_M,
       start,
-      list.length / 4,
+      style.count ?? list.length / 4,
       ...style.bins,
       ...style.origin,
     );
@@ -272,114 +276,180 @@ export function packSet(kind, items, { terrainHeight = null } = {}) {
   };
   const reach = (points) =>
     points.reduce((most, [x, y]) => Math.max(most, Math.hypot(x, y)), 0);
-  for (const item of items) {
-    const none = [0, 0, 0, 0];
-    if (kind === 'corridor') {
-      const code = item.widthM ? KIND.corridorM : KIND.corridorPx;
-      const segmentCount = item.path.length / 2 - 1;
-      for (let first = 0; first < segmentCount; first += CORRIDOR_CHUNK) {
-        const own = Math.min(CORRIDOR_CHUNK, segmentCount - first);
-        const from = Math.max(0, first - 1);
-        const to = Math.min(segmentCount, first + own + 1);
-        const part = item.path.subarray(from * 2, (to + 1) * 2);
-        let west = Infinity;
-        let east = -Infinity;
-        let south = Infinity;
-        let north = -Infinity;
-        for (let at = 0; at < part.length; at += 2) {
-          west = Math.min(west, part[at]);
-          east = Math.max(east, part[at]);
-          south = Math.min(south, part[at + 1]);
-          north = Math.max(north, part[at + 1]);
-        }
-        const frame = frameAt((west + east) / 2, (south + north) / 2);
-        const points = planePoints(part, frame.project);
+  if (kind === 'corridor' && items.length) {
+    const reference = Math.min(...items.map((item) => reachOf(item)[0]));
+    const { pieces, tiles } = tileCorridors(
+      items,
+      reachOf,
+      reference,
+      tilePieces,
+    );
+    items.forEach((item, index) =>
+      looks.push(...itemTexels(item, pieces.lineLengths[index])),
+    );
+    for (const tile of tiles) {
+      const frame = frameAt(
+        (tile.west + tile.east) / 2,
+        (tile.south + tile.north) / 2,
+      );
+      const packed = packTile(tile, pieces, items, frame, reachOf, reference);
+      // Runs and bins relative to the tile's own: its style holds where
+      // they start in the set's.
+      const runStart = runs.length / 4;
+      for (const value of packed.runs) runs.push(value);
+      const binStart = bins.length / 4;
+      for (const value of packed.bins) bins.push(value);
+      // The tile's cell: east of its west meridian (a normal pointing
+      // east), west of its east one (one pointing west), between its
+      // parallels' sines; an open side takes everything beyond it.
+      const meridian = (lon, sign) => [
+        -sign * Math.sin(lon * DEG),
+        sign * Math.cos(lon * DEG),
+      ];
+      const { open } = tile;
+      const parallel = (latc, side) =>
+        open[side] ? (side === 'south' ? -2 : 2) : Math.sin(latc * DEG);
+      emit(
+        frame,
+        {
+          fill: [...meridian(tile.west, 1), ...meridian(tile.east, -1)],
+          line: [
+            parallel(tile.south, 'south'),
+            parallel(tile.north, 'north'),
+            reference,
+            packed.top,
+          ],
+          shape: [KIND.corridorTile, packed.size, packed.columns, packed.rows],
+          count: runStart,
+          bins: [...packed.origin, binStart, 0],
+          // Its open meridians, and the far corner of its bins.
+          origin: [
+            open.west ? OPEN : 0,
+            open.east ? OPEN : 0,
+            packed.origin[0] + packed.columns * packed.size,
+            packed.origin[1] + packed.rows * packed.size,
+          ],
+        },
+        packed.extent * 1.01 + 1 + packed.metres,
+        packed.pixels,
+        packed.segments,
+        tileSamples(tile, pieces),
+      );
+    }
+  } else
+    for (const item of items) {
+      const none = [0, 0, 0, 0];
+      const style = {
+        fill: item.fill ?? none,
+        line: item.outline?.color ?? none,
+        shape: [KIND.area, item.outline?.widthPx ?? 0, 0, 0],
+        bins: [0, 0, 0, 0],
+        origin: [0, 0, 0, 0],
+      };
+      const padPx = (item.outline?.widthPx ?? 0) / 2;
+      if (kind === 'disc') {
+        const frame = frameAt(item.center[0], item.center[1]);
+        const radius = frame.radius * Math.tan(item.radiusM / frame.radius);
+        style.shape = [KIND.disc, item.outline?.widthPx ?? 0, 0, radius];
         emit(
           frame,
-          {
-            fill: item.fill,
-            line: none,
-            shape: [code, 0, item.widthPx ?? 0, item.widthM ?? 0],
-            bins: [first - from, own, 0, 0],
-            origin: [0, 0, 0, 0],
-          },
-          reach(points) + (item.widthM ?? 0) / 2,
-          (item.widthPx ?? 0) / 2,
-          segmentsOf(points, false),
-          part,
+          style,
+          radius,
+          padPx,
+          [],
+          Float64Array.of(
+            ...item.center,
+            item.bounds.west,
+            item.center[1],
+            item.bounds.east,
+            item.center[1],
+            item.center[0],
+            item.bounds.south,
+            item.center[0],
+            item.bounds.north,
+          ),
         );
+        continue;
       }
-      continue;
-    }
-    const style = {
-      fill: item.fill ?? none,
-      line: item.outline?.color ?? none,
-      shape: [KIND.area, item.outline?.widthPx ?? 0, 0, 0],
-      bins: [0, 0, 0, 0],
-      origin: [0, 0, 0, 0],
-    };
-    const padPx = (item.outline?.widthPx ?? 0) / 2;
-    if (kind === 'disc') {
-      const frame = frameAt(item.center[0], item.center[1]);
-      const radius = frame.radius * Math.tan(item.radiusM / frame.radius);
-      style.shape = [KIND.disc, item.outline?.widthPx ?? 0, 0, radius];
+      const { bounds } = item;
+      const frame = frameAt(
+        (bounds.west + bounds.east) / 2,
+        (bounds.south + bounds.north) / 2,
+      );
+      const rings = (
+        kind === 'cell' ? [cellRing(item, CELL_STEP_DEG)] : item.rings
+      ).map((ring) => planePoints(ring, frame.project));
+      const list = rings.flatMap((ring) => segmentsOf(ring, true));
+      const binned = binArea(list);
+      if (binned) {
+        style.bins = [binned.columns, binned.rows, binned.size, 0];
+        style.origin = [binned.x, binned.y, 0, 0];
+      }
       emit(
         frame,
         style,
-        radius,
+        Math.max(...rings.map(reach)),
         padPx,
-        [],
+        list,
         Float64Array.of(
-          ...item.center,
-          item.bounds.west,
-          item.center[1],
-          item.bounds.east,
-          item.center[1],
-          item.center[0],
-          item.bounds.south,
-          item.center[0],
-          item.bounds.north,
+          (bounds.west + bounds.east) / 2,
+          (bounds.south + bounds.north) / 2,
+          ...(kind === 'cell' ? cellRing(item, CELL_STEP_DEG) : item.rings[0]),
         ),
+        binned,
       );
-      continue;
     }
-    const { bounds } = item;
-    const frame = frameAt(
-      (bounds.west + bounds.east) / 2,
-      (bounds.south + bounds.north) / 2,
-    );
-    const rings = (
-      kind === 'cell' ? [cellRing(item, CELL_STEP_DEG)] : item.rings
-    ).map((ring) => planePoints(ring, frame.project));
-    const list = rings.flatMap((ring) => segmentsOf(ring, true));
-    const binned = binArea(list);
-    if (binned) {
-      style.bins = [binned.columns, binned.rows, binned.size, 0];
-      style.origin = [binned.x, binned.y, 0, 0];
-    }
-    emit(
-      frame,
-      style,
-      Math.max(...rings.map(reach)),
-      padPx,
-      list,
-      Float64Array.of(
-        (bounds.west + bounds.east) / 2,
-        (bounds.south + bounds.north) / 2,
-        ...(kind === 'cell' ? cellRing(item, CELL_STEP_DEG) : item.rings[0]),
-      ),
-      binned,
-    );
-  }
-  return {
+  const pack = {
     count: volumes.length / 4,
     bins: Float32Array.from(bins),
-    heights: Float64Array.from(heights),
     frames: Float64Array.from(frames),
     styles: Float32Array.from(styles),
     volumes: Float64Array.from(volumes),
     segments: Float32Array.from(segments),
+    runs: Float32Array.from(runs),
+    items: Float32Array.from(looks),
+    samples,
   };
+  pack.heights = packHeights(pack, { terrainHeight });
+  return pack;
+}
+
+/**
+ * The lowest and highest terrain under each pass item of a pack, NaN where
+ * any of its samples is not loaded: [low, high, …].
+ */
+export function packHeights(pack, { terrainHeight = null } = {}) {
+  const heights = new Float64Array(pack.count * 2).fill(Number.NaN);
+  if (!terrainHeight) return heights;
+  // Terrain heights on a grid of SAMPLE_STEP_DEG, each sampled once.
+  const sampled = new Map();
+  const heightAt = (lon, lat) => {
+    const x = Math.round(lon / SAMPLE_STEP_DEG);
+    const y = Math.round(lat / SAMPLE_STEP_DEG);
+    const key = x * 1e6 + y;
+    if (!sampled.has(key))
+      sampled.set(key, terrainHeight(x * SAMPLE_STEP_DEG, y * SAMPLE_STEP_DEG));
+    return sampled.get(key);
+  };
+  pack.samples.forEach((flat, item) => {
+    let low = Infinity;
+    let high = -Infinity;
+    const count = flat.length / 2;
+    const limit =
+      pack.styles[item * STYLE_TEXELS * 4 + 8] === KIND.corridorTile
+        ? count
+        : SAMPLES;
+    const step = Math.max(1, Math.ceil(count / limit));
+    for (let index = 0; index < count; index += step) {
+      const height = heightAt(flat[index * 2], flat[index * 2 + 1]);
+      if (!Number.isFinite(height)) return;
+      low = Math.min(low, height);
+      high = Math.max(high, height);
+    }
+    heights[item * 2] = low;
+    heights[item * 2 + 1] = high;
+  });
+  return heights;
 }
 
 /** Storage for `texels` RGBA texels in rows of ROW. */
@@ -454,9 +524,17 @@ export function composeGround(packs) {
   const bins = texelStorage(
     packs.reduce((total, pack) => total + pack.bins.length / 4, 0),
   );
+  const runs = texelStorage(
+    packs.reduce((total, pack) => total + pack.runs.length / 4, 0),
+  );
+  const looks = texelStorage(
+    packs.reduce((total, pack) => total + pack.items.length / 4, 0),
+  );
   let item = 0;
   let segment = 0;
   let bin = 0;
+  let run = 0;
+  let look = 0;
   for (const pack of packs) {
     frames64.set(pack.frames, item * 13);
     volumes.set(pack.volumes, item * 4);
@@ -468,12 +546,22 @@ export function composeGround(packs) {
       // A binned area's first bin.
       if (styles.data[at + 8] === KIND.area && styles.data[at + 16] > 0)
         styles.data[at + 19] += bin;
+      // A corridor tile's first run, first bin and its set's first item.
+      if (styles.data[at + 8] === KIND.corridorTile) {
+        styles.data[at + 15] += run;
+        styles.data[at + 18] += bin;
+        styles.data[at + 19] += look / ITEM_TEXELS;
+      }
     }
     segments.data.set(pack.segments, segment * 4);
     bins.data.set(pack.bins, bin * 4);
+    runs.data.set(pack.runs, run * 4);
+    looks.data.set(pack.items, look * 4);
     item += pack.count;
     segment += pack.segments.length / 4;
     bin += pack.bins.length / 4;
+    run += pack.runs.length / 4;
+    look += pack.items.length / 4;
   }
   const frames = texelStorage(count * TEXELS);
   const grid = {
@@ -499,6 +587,8 @@ export function composeGround(packs) {
     styles,
     segments,
     bins,
+    runs,
+    items: looks,
     frames,
     grid,
     get candidates() {

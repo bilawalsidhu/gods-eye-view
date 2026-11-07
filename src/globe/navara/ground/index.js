@@ -3,13 +3,15 @@
 // alike. A commit packs the set's items once (pack.js), with the terrain
 // heights under them that bound each item's screen box; a set packed before
 // its terrain loaded is packed again a few times, further apart each time,
-// until it has them. A show, hide or commit composes the shown sets in draw
-// order (set order, then creation) and asks for one frame. Nothing animates
-// on its own. Picks are CPU picks at the globe under the pointer
-// (src/globe/ground.js), wired by the engine.
+// until it has them (only the heights are sampled again). A show, hide or
+// commit composes the shown sets in draw order (set order, then creation)
+// and asks for one frame; while a shown set has a pulse or a dash, every
+// frame asks for the next, the continuous render Cesium drew them with (the
+// pass reads the time each frame). Picks are CPU picks at the globe under
+// the pointer (src/globe/ground.js), wired by the engine.
 
 import { createGroundRegistry } from '../../ground.js';
-import { composeGround, packSet } from './pack.js';
+import { composeGround, packHeights, packSet } from './pack.js';
 
 // Frames before the first new try at a set's missing terrain heights; each
 // later try waits twice as long, up to RETRIES tries.
@@ -18,14 +20,38 @@ const RETRIES = 6;
 
 /**
  * @param {object} view an initialised Navara ThreeView
- * @param {{ createPass: (view: object) => ReturnType<typeof import('./pass.js').createGroundPass> }} options
+ * @param {{ createPass: (view: object) => ReturnType<typeof import('./pass.js').createGroundPass>,
+ *   nextFrame?: (run: () => void) => void }} options
  *   `createPass` makes the pass (pass.js createGroundPass; the view's three
- *   runtime, which Node tests replace).
+ *   runtime, which Node tests replace); `nextFrame` runs a callback before
+ *   the next display frame (requestAnimationFrame).
+ * Navara clears its update request once a frame is drawn, so one made
+ * while the frame is drawn (in postRender) is asked again from the next
+ * display frame.
  * @returns {{ ground: import('../../contract.js').GlobeGround,
  *   pickables: () => object[], diagnostics: () => object, destroy: () => void }}
  */
-export function createNavaraGround(view, { createPass }) {
+export function createNavaraGround(
+  view,
+  {
+    createPass,
+    nextFrame = (run) =>
+      globalThis.requestAnimationFrame
+        ? globalThis.requestAnimationFrame(run)
+        : setTimeout(run, 16),
+  },
+) {
   const pass = createPass(view);
+  let destroyed = false;
+  let asked = false;
+  const askNextFrame = () => {
+    if (asked) return;
+    asked = true;
+    nextFrame(() => {
+      asked = false;
+      if (!destroyed) view.forceUpdate();
+    });
+  };
   const entries = new Set();
   const terrainHeight = (lon, lat) => {
     const height = view.sampleTerrainHeight?.({ lat, lng: lon });
@@ -33,6 +59,10 @@ export function createNavaraGround(view, { createPass }) {
   };
   const pack = (entry) => {
     entry.pack = packSet(entry.options.kind, entry.items, { terrainHeight });
+    entry.wait = entry.pack.heights.some(Number.isNaN) ? RETRY_FRAMES : 0;
+  };
+  const sampleAgain = (entry) => {
+    entry.pack.heights = packHeights(entry.pack, { terrainHeight });
     entry.wait = entry.pack.heights.some(Number.isNaN) ? RETRY_FRAMES : 0;
   };
   const compose = () => {
@@ -49,13 +79,14 @@ export function createNavaraGround(view, { createPass }) {
     for (const entry of entries) {
       if (!entry.wait || !entry.shown || --entry.wait > 0) continue;
       const tries = entry.tries + 1;
-      pack(entry);
+      sampleAgain(entry);
       entry.tries = tries;
       if (entry.wait)
         entry.wait = tries < RETRIES ? RETRY_FRAMES * 2 ** tries : 0;
       changed = true;
     }
     if (changed) compose();
+    if (changed || registry.animating()) askNextFrame();
   };
   view.on('postRender', retry);
   const registry = createGroundRegistry((options) => {
@@ -99,6 +130,7 @@ export function createNavaraGround(view, { createPass }) {
       textureBytes: pass.textureBytes(),
     }),
     destroy() {
+      destroyed = true;
       view.off('postRender', retry);
       registry.destroyAll();
       pass.destroy();

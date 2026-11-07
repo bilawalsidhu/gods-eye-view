@@ -87,3 +87,41 @@ test('a set packed before its terrain loaded is packed again later', () => {
   assert.equal(pass.states.length, before + 1, 'no more once it has them');
   ground.destroy();
 });
+
+test('while a shown set pulses or dashes, every frame asks for the next', () => {
+  const view = fakeView();
+  const pass = fakePass();
+  const queued = [];
+  const ground = createNavaraGround(view, {
+    createPass: () => pass,
+    nextFrame: (run) => queued.push(run),
+  });
+  const set = ground.ground.createSet({ id: 'route', kind: 'corridor' });
+  set.replace([
+    {
+      positions: [
+        [0, 0],
+        [0.1, 0],
+      ],
+      color: [0, 1, 1, 1],
+      widthPx: 9,
+      dash: { cells: 8, duty: 0.5, speed: 1 },
+    },
+  ]);
+  set.commit();
+  const before = view.frames;
+  view.postRender();
+  view.postRender();
+  assert.equal(queued.length, 1, 'one request a display frame');
+  queued.shift()();
+  assert.equal(view.frames, before + 1);
+  set.show(false);
+  view.postRender();
+  assert.equal(queued.length, 0, 'none while hidden');
+  set.show(true);
+  view.postRender();
+  ground.destroy();
+  const destroyed = view.frames;
+  queued.shift()();
+  assert.equal(view.frames, destroyed, 'none after destroy');
+});

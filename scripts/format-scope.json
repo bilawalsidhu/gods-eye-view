@@ -1653,5 +1653,7 @@
   "src/globe/navara/imagery/index.test.mjs",
   "src/globe/navara/imagery/pass.js",
   "src/layers/recentImagery/render/display.js",
-  "src/layers/recentImagery/render/display.test.mjs"
+  "src/layers/recentImagery/render/display.test.mjs",
+  "src/globe/navara/ground/corridors.js",
+  "scripts/qa-ground-looks.mjs"
 ]

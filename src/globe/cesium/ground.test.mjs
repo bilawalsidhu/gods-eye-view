@@ -5,6 +5,17 @@ import { normalizeGroundItem } from '../ground.js';
 import { createCesiumGround, groundInstances } from './ground.js';
 import { createFakeViewer } from './testing/fakeViewer.mjs';
 
+// Cesium's Material types its uniforms against the browser's image and
+// canvas classes; Node has none of them.
+for (const name of [
+  'HTMLCanvasElement',
+  'HTMLImageElement',
+  'HTMLVideoElement',
+  'ImageBitmap',
+  'OffscreenCanvas',
+])
+  globalThis[name] ??= class {};
+
 const items = (kind, list) =>
   list.map((item, index) => normalizeGroundItem(kind, item, index));
 
@@ -156,4 +167,82 @@ test('sets join scene.groundPrimitives in order and rebuild on commit', () => {
   assert.equal(part.identify({ id: 'entity' }), null);
   part.destroy();
   assert.equal(added.length, 0);
+});
+
+test('a glow, a pulse or a dash draws through its own material, timed every frame', () => {
+  const viewer = createFakeViewer();
+  viewer.scene.groundPrimitives = { add() {}, remove() {} };
+  const made = [];
+  const fake = (type) => (options) => {
+    const primitive = {
+      type,
+      options,
+      ready: false,
+      destroy() {},
+      isDestroyed: () => false,
+    };
+    made.push(primitive);
+    return primitive;
+  };
+  const renders = [];
+  const part = createCesiumGround(viewer, {
+    requestRender: (reason) => renders.push(reason),
+    factories: { fills: fake('fills'), lines: fake('lines') },
+  });
+  const line = (lat, extra) => ({
+    positions: [
+      [0, lat],
+      [1, lat],
+    ],
+    color: [1, 0, 0, 1],
+    widthPx: 9,
+    ...extra,
+  });
+  const pulse = { periodMs: 1600, min: 0.35, max: 0.75 };
+  const set = part.ground.createSet({ id: 'heat', kind: 'corridor' });
+  set.replace([
+    line(0),
+    line(1, { glow: { power: 0.25 }, pulse }),
+    line(2, { glow: { power: 0.25 }, pulse }),
+    line(3, { glow: { power: 0.25 }, pulse, color: [1, 1, 1, 1] }),
+    line(4, { dash: { cells: 64, duty: 0.46, speed: 0.55 } }),
+  ]);
+  set.commit();
+  // The plain line batch, then one per look and colour.
+  assert.deepEqual(
+    made.map(({ type }) => type),
+    ['lines', 'lines', 'lines', 'lines'],
+  );
+  const [plain, red, white, dashed] = made;
+  assert.ok(plain.options.appearance instanceof Cesium.PolylineColorAppearance);
+  assert.equal(red.options.geometryInstances.length, 2);
+  assert.deepEqual(
+    red.options.geometryInstances.map(({ id }) => id.instance),
+    [1, 2],
+  );
+  const material = red.options.appearance.material;
+  assert.equal(material.type, 'GevGroundCorridor');
+  assert.equal(material.uniforms.glowPower, 0.25);
+  assert.ok(Math.abs(material.uniforms.pulsePeriod - 1.6) < 1e-9);
+  assert.equal(material.uniforms.dashCells, 0, 'no dash');
+  assert.equal(white.options.appearance.material.uniforms.color.green, 1);
+  assert.equal(dashed.options.appearance.material.uniforms.dashCells, 64);
+  assert.equal(dashed.options.appearance.material.uniforms.glowPower, 0);
+  // Before every frame the materials read the time; after it, a frame more.
+  const before = performance.now() / 1000;
+  viewer.scene.preRender.raiseEvent();
+  assert.ok(material.uniforms.time >= before);
+  renders.length = 0;
+  viewer.scene.postRender.raiseEvent();
+  assert.ok(renders.includes('ground-animate'));
+  set.show(false);
+  renders.length = 0;
+  viewer.scene.postRender.raiseEvent();
+  assert.ok(!renders.includes('ground-animate'), 'none while hidden');
+  set.show(true);
+  set.destroy();
+  renders.length = 0;
+  viewer.scene.postRender.raiseEvent();
+  assert.ok(!renders.includes('ground-animate'), 'none once destroyed');
+  part.destroy();
 });

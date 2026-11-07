@@ -3239,6 +3239,209 @@ function groundChecks(
         }
       },
     ],
+    [
+      'ground: corridors glow, pulse and dash, and keep frames coming while they move',
+      async () => {
+        const line = (lat, extra) => ({
+          positions: [
+            [19, lat],
+            [21, lat],
+          ],
+          color: [1, 0, 1, 1],
+          widthPx: 12,
+          ...extra,
+        });
+        const bad = ground.createSet({
+          id: 'contract-looks-bad',
+          kind: 'corridor',
+        });
+        try {
+          for (const [item, label] of [
+            [
+              {
+                ...line(9, { glow: { power: 0.25 } }),
+                widthPx: undefined,
+                widthM: 900,
+              },
+              'a glow on a metre corridor',
+            ],
+            [
+              line(9, { pulse: { periodMs: 1000, min: 0.8, max: 0.2 } }),
+              'a pulse min over max',
+            ],
+            [
+              line(9, { pulse: { periodMs: 0, min: 0, max: 1 } }),
+              'a pulse of no period',
+            ],
+            [
+              line(9, { dash: { cells: 8, duty: 1 } }),
+              'a dash lit all its cell',
+            ],
+            [line(9, { glow: { power: 0 } }), 'a glow of no power'],
+          ])
+            throwsType(() => bad.replace([item]), label);
+        } finally {
+          bad.destroy();
+        }
+        const glowing = ground.createSet({
+          id: 'contract-glow',
+          kind: 'corridor',
+          order: 5,
+        });
+        const pulsing = ground.createSet({
+          id: 'contract-pulse',
+          kind: 'corridor',
+          order: 5,
+        });
+        const dashed = ground.createSet({
+          id: 'contract-dash',
+          kind: 'corridor',
+          order: 5,
+        });
+        const listed = (id) => ground.list().find((entry) => entry.id === id);
+        // Frames drawn in a window, with nothing asked of the engine.
+        const framesIn = async (ms) => {
+          let frames = 0;
+          const remove = engine.frames.postRender.addEventListener(
+            () => frames++,
+          );
+          await new Promise((resolve) => setTimeout(resolve, ms));
+          remove();
+          return frames;
+        };
+        try {
+          if (readRegion) await nadirView(1e6);
+          const idle = readRegion ? await framesIn(1000) : 0;
+          glowing.replace([
+            line(9, {
+              color: [0, 1, 0, 1],
+              widthPx: 24,
+              glow: { power: 0.25 },
+            }),
+          ]);
+          glowing.commit();
+          ensure(
+            listed('contract-glow')?.animated === false,
+            'a glow alone does not animate',
+          );
+          pulsing.replace([
+            line(10, { pulse: { periodMs: 800, min: 0.1, max: 1 } }),
+          ]);
+          pulsing.commit();
+          ensure(
+            listed('contract-pulse')?.animated === true,
+            'a pulse animates',
+          );
+          dashed.replace([
+            line(11, { dash: { cells: 10, duty: 0.5, speed: 2 } }),
+          ]);
+          dashed.commit();
+          ensure(listed('contract-dash')?.animated === true, 'a dash animates');
+          await until(
+            () => glowing.ready() && pulsing.ready() && dashed.ready(),
+            'the animated corridors built',
+          );
+          if (!readRegion) return;
+          // (A page that already draws every frame shows nothing more.)
+          const moving = await framesIn(1000);
+          ensure(
+            moving >= Math.min(idle + 20, 50),
+            `${moving} frames in 1 s while corridors pulse and flow, ${idle} before`,
+          );
+          // Pixels along a line of latitude between 19.2° and 20.8°E.
+          const along = (lat, samples = 120) => {
+            const out = [];
+            for (let k = 0; k < samples; k++) {
+              const at = screenOf(19.2 + (1.6 * k) / (samples - 1), lat);
+              out.push([
+                ...readRegion(Math.round(at.x), Math.round(at.y), 1, 1),
+              ]);
+            }
+            return out;
+          };
+          const magenta = ([r, g, b]) => r > 200 && b > 200 && g < 60;
+          // The glow: white at its centre line, green toward its edges.
+          {
+            const centre = screenOf(20, 9);
+            const column = readRegion(
+              Math.round(centre.x),
+              Math.round(centre.y) - 12,
+              1,
+              25,
+            );
+            const mid = column.slice(12 * 4, 12 * 4 + 4);
+            ensure(
+              mid[0] > 200 && mid[1] > 200 && mid[2] > 200,
+              `the glow's centre is ${[...mid.slice(0, 3)]}, not white`,
+            );
+            let greenish = 0;
+            for (let i = 0; i < column.length; i += 4)
+              if (column[i + 1] > 120 && column[i] < column[i + 1] - 60)
+                greenish++;
+            ensure(
+              greenish >= 2,
+              `the glow fades to green over ${greenish} px`,
+            );
+          }
+          // The pulse: magenta at its peak, faint at its trough.
+          {
+            let peak = 0;
+            let trough = 0;
+            const started = performance.now();
+            while (performance.now() - started < 1600) {
+              const centre = screenOf(20, 10);
+              const pixel = readRegion(
+                Math.round(centre.x),
+                Math.round(centre.y),
+                1,
+                1,
+              );
+              if (magenta(pixel)) peak++;
+              else trough++;
+              await settle(1);
+            }
+            ensure(
+              peak > 0 && trough > 0,
+              `the pulse was magenta ${peak} times, not ${trough}`,
+            );
+          }
+          // The dash: lit and dark cells along the line, moving.
+          {
+            const first = along(11).map(magenta);
+            let changes = 0;
+            for (let k = 1; k < first.length; k++)
+              if (first[k] !== first[k - 1]) changes++;
+            const lit = first.filter(Boolean).length / first.length;
+            ensure(
+              changes >= 8 && lit > 0.25 && lit < 0.75,
+              `the dash is ${lit.toFixed(2)} lit with ${changes} changes along it`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            await settle(2);
+            const second = along(11).map(magenta);
+            const moved = second.filter(
+              (value, k) => value !== first[k],
+            ).length;
+            ensure(
+              moved >= 12,
+              `the dash moved at ${moved} of 120 pixels in 150 ms`,
+            );
+          }
+          pulsing.show(false);
+          dashed.show(false);
+          await settle(2);
+          const still = await framesIn(1000);
+          ensure(
+            still <= idle + 3,
+            `${still} frames in 1 s once hidden, ${idle} before`,
+          );
+        } finally {
+          glowing.destroy();
+          pulsing.destroy();
+          dashed.destroy();
+        }
+      },
+    ],
   ];
 }
 

@@ -903,6 +903,9 @@ export function createDirectionsLayer({
   const _stepAnchors = new Map();
   let _selectedStep = null;
   let _listening = false;
+  /** Whether a route is on the display, and the continuous render it holds. */
+  let _routeDrawn = false;
+  let _renderHeld = false;
   let _removeClick = null;
   let _rowControlsListener = null;
   let _dataManager = null;
@@ -987,13 +990,28 @@ export function createDirectionsLayer({
     );
   }
 
+  /**
+   * The route's dashes flow toward B: the scene renders continuously while
+   * it is drawn and the layer is on, as it did under Cesium's route flow
+   * material.
+   */
+  function syncRenderHold() {
+    const shouldHold = _enabled && _routeDrawn;
+    if (shouldHold === _renderHeld) return;
+    _renderHeld = shouldHold;
+    if (shouldHold) services.render.holdContinuousRender?.('directions');
+    else services.render.releaseContinuousRender?.('directions');
+  }
+
   function clearRouteGraphics() {
     services.credits?.hideOsmCredit?.(_engine, 'directions');
     _clearStepSelection();
     stopStepAnchoring();
     _display?.setRoute(null);
+    _routeDrawn = false;
     _stepAnchors.clear();
     _display?.setSteps([]);
+    syncRenderHold();
   }
 
   function stopStepAnchoring() {
@@ -1055,6 +1073,8 @@ export function createDirectionsLayer({
     clearRouteGraphics();
     if (!_display) return;
     _display.setRoute(route.geometry);
+    _routeDrawn = true;
+    syncRenderHold();
     // One dot per decision; A and B already mark departure and arrival. The dots
     // start hidden and appear as anchorStepPoints resolves each ground cell.
     const cells = [];
@@ -1535,6 +1555,7 @@ export function createDirectionsLayer({
         (pickedId) =>
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
       );
+      syncRenderHold();
     },
 
     /** Remove the route, markers and listeners. */
@@ -1545,6 +1566,7 @@ export function createDirectionsLayer({
       _removeClickHandler();
       services.picking.unregisterPickOwner('directions');
       _display?.show(false);
+      syncRenderHold();
     },
 
     /** Nothing to poll: routes are requested on placement and mode change. */

@@ -7,7 +7,8 @@
 //   distance, eased by ^0.2), and depth-tested against the scene;
 // - congestion heat lines: two engine.ground corridor sets (jam, then slow),
 //   draped on 3D tiles, as the GroundPolylinePrimitives Cesium drew with
-//   ClassificationType.CESIUM_3D_TILE.
+//   ClassificationType.CESIUM_3D_TILE; a bucket's look (the jam's glow and
+//   pulse) goes to the engine, which animates it on the GPU.
 // The layer keeps each dot's look as plain data on `dot.point` (position,
 // pixelSize, color, outlineColor, outlineWidth, show, scaleByDistance,
 // translucencyByDistance); the display only reads it.
@@ -49,7 +50,7 @@ export function nearFarValue(scalar, distance) {
 /**
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  * @returns {{ drawDots: (dots: object[]) => void, show: (visible: boolean) => void,
- *   setHeat: (bucket: 'jam'|'slow', roads: object[], style: { color: number[], widthPx: number }) => void,
+ *   setHeat: (bucket: 'jam'|'slow', roads: object[], style: { color: number[], widthPx: number, glow?: object, pulse?: object }) => void,
  *   clearHeat: () => void, excluded: () => object[], destroy: () => void }}
  */
 export function createTrafficDisplay(engine) {
@@ -148,8 +149,11 @@ export function createTrafficDisplay(engine) {
         commit();
       }
     },
-    /** One bucket's heat lines: a corridor per road, along its coordinates. */
-    setHeat(bucket, roads, { color: rgba, widthPx }) {
+    /**
+     * One bucket's heat lines: a corridor per road, along its coordinates,
+     * with the bucket's glow and pulse (engine.ground corridor looks).
+     */
+    setHeat(bucket, roads, { color: rgba, widthPx, glow, pulse }) {
       if (destroyed) return;
       dropHeat(bucket);
       if (!roads.length) return;
@@ -161,8 +165,17 @@ export function createTrafficDisplay(engine) {
         drape: 'tiles',
       });
       heat.set(bucket, set);
+      const look = {
+        ...(glow ? { glow } : {}),
+        ...(pulse ? { pulse } : {}),
+      };
       set.replace(
-        roads.map((road) => ({ positions: road.coords, color: rgba, widthPx })),
+        roads.map((road) => ({
+          positions: road.coords,
+          color: rgba,
+          widthPx,
+          ...look,
+        })),
       );
       set.commit();
     },

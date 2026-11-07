@@ -489,7 +489,19 @@
  *   - cell: `west`, `south`, `east`, `north` (west > east across the
  *     antimeridian), edges along meridians and parallels;
  *   - corridor: `positions` (a line), `color`, and `widthPx` (CSS pixels) or
- *     `widthM` (metres).
+ *     `widthM` (metres). A `widthPx` corridor may take a look that Cesium's
+ *     ground polyline materials drew, worked out on the GPU each frame:
+ *     `glow` ({ power, taper = 1 }: PolylineGlow's glowPower and
+ *     taperPower, brighter toward the centre line and fading to its
+ *     edges), `pulse` ({ periodMs, min, max }: the alpha times a factor
+ *     going from min to max and back, a sine of the page's monotonic clock,
+ *     performance.now()) and `dash` ({ cells, duty, speed = 0,
+ *     gapAlpha = 0, emission = 0 }: `cells` dashes along the whole line,
+ *     each lit for its first `duty` with an edge of 0.08 of a cell, moving
+ *     toward the line's end at `speed` cells a second; between them the
+ *     alpha times `gapAlpha`; a lit dash brightened by `emission` times its
+ *     colour). A shown set with a pulse or a dash keeps the engine drawing
+ *     a frame after every frame, as Cesium's continuous render did.
  *   Polygons, discs and cells take `fill` (omitted: none) and `outline`
  *   ({ color, widthPx }, a ground line on the boundary of every ring;
  *   omitted: none). Every kind takes `pickId`: what a pick of the item
@@ -511,7 +523,8 @@
  *
  * @typedef {object} GlobeGround
  * @property {(options: GroundSetOptions) => GroundSet} createSet
- * @property {() => { id: string, kind: string, count: number, shown: boolean, order: number }[]} list
+ * @property {() => { id: string, kind: string, count: number, shown: boolean, order: number, animated: boolean }[]} list
+ *   `animated`: the last commit has a pulse or a dash.
  *
  * @typedef {{ west: number, south: number, east: number, north: number }} DegreeRectangle
  *   Degrees; south below north; west > east crosses the antimeridian.

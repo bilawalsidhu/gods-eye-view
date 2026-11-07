@@ -30,7 +30,8 @@ test('traffic render demand follows the animated population across empty, disabl
   assert.deepEqual(calls, [['hold', 'traffic']]);
   animation.clearDots();
   assert.deepEqual(calls.at(-1), ['release', 'traffic']);
-  // Heat lines are static ground fills: they alone hold no continuous render.
+  // Heat lines alone hold no continuous render: the jam's pulse keeps frames
+  // coming through engine.ground while it is shown.
   state._heatLineCount = 3;
   animation.syncRenderDemand();
   assert.deepEqual(calls.at(-1), ['release', 'traffic']);

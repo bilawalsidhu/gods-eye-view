@@ -1,7 +1,8 @@
 // Directions on the globe contract, the same on every engine:
 // - the route: one engine.ground corridor set (9 px, draped on terrain and
-//   3D tiles), its dash cells lit and dim as the route flow material draws
-//   them at rest;
+//   3D tiles) of one corridor whose dashes flow toward the destination, as
+//   the route flow material drew them (the engine animates them on the GPU
+//   and draws every frame while the route shows);
 // - the maneuver dots: one point mover set over the scene, white with a
 //   route-colour outline, picked as `directions:step:<index>`; a dot without
 //   a ground anchor yet is hidden;
@@ -23,10 +24,8 @@ import {
   MARKER_OUTLINE_PX,
   MARKER_PIXEL_SIZE,
   ORDER,
-  ROUTE_DASH_CELLS,
-  ROUTE_DASH_COLOR,
-  ROUTE_DASH_DUTY,
-  ROUTE_GAP_COLOR,
+  ROUTE_COLOR,
+  ROUTE_DASH,
   ROUTE_WIDTH_PX,
   STEP_COLOR,
   STEP_OUTLINE_COLOR,
@@ -47,56 +46,6 @@ const FIRST_STEP_CAPACITY = 16;
 
 /** The pickId of maneuver dot `index`. */
 export const stepPickId = (index) => `${ID}:step:${index}`;
-
-const wrapLon = (lon) => ((lon + 540) % 360) - 180;
-
-/**
- * The route cut into its dash cells, lit and dim in turn: each of
- * ROUTE_DASH_CELLS equal lengths along the route is lit for its first
- * ROUTE_DASH_DUTY and dim for the rest. Every original vertex is kept.
- * @param {number[][]} path [lon, lat] pairs.
- * @returns {{ positions: number[][], lit: boolean }[]}
- */
-export function routeDashPieces(path) {
-  const vertices = path.map(([lon, lat]) =>
-    geo.cartesian3.fromDegrees(lon, lat),
-  );
-  const arc = [0];
-  for (let i = 1; i < vertices.length; i++)
-    arc.push(
-      arc[i - 1] + geo.cartesian3.distance(vertices[i - 1], vertices[i]),
-    );
-  const total = arc.at(-1);
-  if (!(total > 0)) return [];
-  // The point at arc length `at` on segment i - 1 .. i.
-  const pointAt = (i, at) => {
-    const f = Math.max(
-      0,
-      Math.min(1, (at - arc[i - 1]) / (arc[i] - arc[i - 1] || 1)),
-    );
-    const [lon, lat] = path[i - 1];
-    const [nextLon, nextLat] = path[i];
-    const delta = wrapLon(nextLon - lon);
-    return [wrapLon(lon + f * delta), lat + f * (nextLat - lat)];
-  };
-  const cuts = [];
-  for (let cell = 0; cell < ROUTE_DASH_CELLS; cell++) {
-    cuts.push({ at: (total * (cell + ROUTE_DASH_DUTY)) / ROUTE_DASH_CELLS });
-    cuts.push({ at: (total * (cell + 1)) / ROUTE_DASH_CELLS });
-  }
-  const pieces = [];
-  let start = path[0];
-  let i = 1;
-  cuts.forEach(({ at }, index) => {
-    const last = index === cuts.length - 1;
-    const positions = [start];
-    while (i < path.length - 1 && arc[i] < at) positions.push(path[i++]);
-    start = last ? path.at(-1) : pointAt(i, at);
-    positions.push(start);
-    pieces.push({ positions, lit: index % 2 === 0 });
-  });
-  return pieces;
-}
 
 /** The letters' atlas: one cell per marker, the glyph above its centre. */
 function letterAtlas() {
@@ -273,21 +222,21 @@ export function createDirectionsDisplay(engine) {
       if (destroyed) return;
       route?.destroy();
       route = null;
-      const pieces = geometry ? routeDashPieces(geometry) : [];
-      if (!pieces.length) return;
+      if (!(geometry?.length >= 2)) return;
       route = engine.ground.createSet({
         id: DIRECTIONS_SET_IDS.route,
         kind: 'corridor',
         drape: 'both',
         pickable: false,
       });
-      route.replace(
-        pieces.map(({ positions, lit }) => ({
-          positions,
-          color: lit ? ROUTE_DASH_COLOR : ROUTE_GAP_COLOR,
+      route.replace([
+        {
+          positions: geometry,
+          color: ROUTE_COLOR,
           widthPx: ROUTE_WIDTH_PX,
-        })),
-      );
+          dash: ROUTE_DASH,
+        },
+      ]);
       route.commit();
       route.show(visible);
     },

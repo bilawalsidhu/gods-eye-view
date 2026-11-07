@@ -259,7 +259,8 @@ export function createFakeEngine(options = {}) {
     };
     return part;
   });
-  // Ground sets keep their items for tests; commit counts as a render request.
+  // Ground sets keep their items for tests; commit counts as a render
+  // request, and so does every frame while a shown set animates.
   const groundRegistry = createGroundRegistry(() => ({
     commit() {
       fake.renderRequests++;
@@ -948,6 +949,8 @@ export function createFakeEngine(options = {}) {
       events['frames.preRender'].raiseEvent(clock);
       cameraEvents();
       events['frames.postRender'].raiseEvent(clock);
+      // A shown ground set with a pulse or a dash asks for the next frame.
+      if (groundRegistry.animating()) fake.renderRequests++;
     },
     frames(count = 1, dt = 16) {
       for (let index = 0; index < count; index++) fake.frame(dt);

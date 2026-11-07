@@ -17,6 +17,9 @@ import { createRendering } from '../rendering.js';
 import {
   HEAT_JAM_BASE_ALPHA,
   HEAT_JAM_COLOR,
+  HEAT_JAM_GLOW_POWER,
+  HEAT_JAM_PULSE_ALPHA,
+  HEAT_JAM_PULSE_PERIOD_MS,
   HEAT_LINE_JAM_WIDTH,
   HEAT_LINE_SLOW_WIDTH,
   HEAT_SLOW_COLOR,
@@ -299,7 +302,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(h.set(IDS.slow), undefined);
   });
 
-  test(`the layer's heat lines: jam red at its base alpha, slow amber; mono presets in grey (${name})`, (t) => {
+  test(`the layer's heat lines: jam red, glowing and pulsing about its base alpha, slow amber; mono presets in grey (${name})`, (t) => {
     const { h, display } = fixture(t, makeHarness);
     const state = createState({ services: {} });
     Object.assign(state, {
@@ -337,10 +340,43 @@ for (const makeHarness of GROUND_HARNESSES) {
     );
     nearAll(
       jam.items[0].color,
-      [...HEAT_JAM_COLOR.rgba().slice(0, 3), HEAT_JAM_BASE_ALPHA],
+      [...HEAT_JAM_COLOR.rgba().slice(0, 3), 1],
       'jam colour',
     );
     assert.equal(jam.items[0].widthPx, HEAT_LINE_JAM_WIDTH);
+    // Cesium's PolylineGlow at glowPower 0.25, its alpha 0.55 ± 0.2 on
+    // sin(now / 260 ms).
+    assert.deepEqual(jam.items[0].glow, { power: HEAT_JAM_GLOW_POWER });
+    assert.equal(HEAT_JAM_GLOW_POWER, 0.25);
+    near(HEAT_JAM_PULSE_PERIOD_MS, 2 * Math.PI * 260, 'pulse period');
+    nearAll(
+      [jam.items[0].pulse.min, jam.items[0].pulse.max],
+      [
+        HEAT_JAM_BASE_ALPHA - HEAT_JAM_PULSE_ALPHA,
+        HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA,
+      ],
+      'pulse',
+    );
+    assert.equal(jam.items[0].pulse.periodMs, HEAT_JAM_PULSE_PERIOD_MS);
+    assert.equal(slow.items[0].glow, undefined, 'slow lines are flat');
+    assert.equal(slow.items[0].pulse, undefined);
+    assert.equal(
+      h.engine.ground.list().find(({ id }) => id === IDS.jam).animated,
+      true,
+    );
+    if (h.cesium) {
+      // The jam batch draws through the engine's animated material.
+      const [line] = h.primitives(IDS.jam).lines;
+      const { uniforms } = line.options.appearance.material;
+      near(uniforms.glowPower, 0.25, 'glowPower');
+      near(uniforms.pulseMin, 0.35, 'pulse min', 1e-6);
+      near(uniforms.pulseMax, 0.75, 'pulse max', 1e-6);
+      near(uniforms.pulsePeriod, (2 * Math.PI * 260) / 1000, 'pulse period');
+      assert.equal(
+        line.options.classificationType,
+        Cesium.ClassificationType.CESIUM_3D_TILE,
+      );
+    }
     assert.equal(slow.items.length, 1);
     nearAll(slow.items[0].color, HEAT_SLOW_COLOR.rgba(), 'slow colour');
     assert.equal(slow.items[0].widthPx, HEAT_LINE_SLOW_WIDTH);
@@ -348,11 +384,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     // NVG and the other mono presets re-encode in luminance.
     state._stylePreset = 'surveillance';
     parts.rendering.rebuildHeatLines(roads);
-    nearAll(
-      h.set(IDS.jam).items[0].color,
-      [1, 1, 1, HEAT_JAM_BASE_ALPHA],
-      'mono jam',
-    );
+    nearAll(h.set(IDS.jam).items[0].color, [1, 1, 1, 1], 'mono jam');
     nearAll(
       h.set(IDS.slow).items[0].color,
       [0.7, 0.7, 0.7, HEAT_SLOW_COLOR.alpha],

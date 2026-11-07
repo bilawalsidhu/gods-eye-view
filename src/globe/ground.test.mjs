@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../geo/index.js';
 import {
+  animates,
   cellRing,
   createGroundPicks,
   createGroundRegistry,
+  dashLit,
   discRing,
   normalizeGroundItem,
   normalizeGroundSetOptions,
+  pulseFactor,
 } from './ground.js';
 
 test('set options are checked and defaulted', () => {
@@ -182,7 +185,14 @@ test('the registry stores on replace, draws on commit, lists, shows and destroys
   assert.equal(set.count(), 1);
   set.show(false);
   assert.deepEqual(ground.list(), [
-    { id: 'zones', kind: 'cell', count: 1, shown: false, order: 2 },
+    {
+      id: 'zones',
+      kind: 'cell',
+      count: 1,
+      shown: false,
+      order: 2,
+      animated: false,
+    },
   ]);
   assert.equal(set.ready(), true);
   destroyAll();
@@ -194,6 +204,108 @@ test('the registry stores on replace, draws on commit, lists, shows and destroys
     ['show', 'zones', false],
     ['destroy', 'zones'],
   ]);
+});
+
+test("a pixel corridor's glow, pulse and dash are checked and defaulted", () => {
+  const line = (extra) => ({
+    positions: [
+      [0, 0],
+      [1, 0],
+    ],
+    color: [1, 0, 0, 1],
+    widthPx: 9,
+    ...extra,
+  });
+  const item = normalizeGroundItem(
+    'corridor',
+    line({
+      glow: { power: 0.25 },
+      pulse: { periodMs: 1600, min: 0.35, max: 0.75 },
+      dash: { cells: 64, duty: 0.46 },
+    }),
+  );
+  assert.deepEqual(item.animation, {
+    glow: { power: 0.25, taper: 1 },
+    pulse: { periodMs: 1600, min: 0.35, max: 0.75 },
+    dash: { cells: 64, duty: 0.46, speed: 0, gapAlpha: 0, emission: 0 },
+  });
+  assert.ok(Object.isFrozen(item.animation.dash));
+  assert.equal(animates(item), true);
+  assert.equal(
+    animates(normalizeGroundItem('corridor', line({ glow: { power: 0.1 } }))),
+    false,
+    'a glow alone is still',
+  );
+  assert.equal(normalizeGroundItem('corridor', line()).animation, null);
+  for (const extra of [
+    { glow: { power: 0.6 } },
+    { glow: { power: 0.2, taper: 0 } },
+    { pulse: { periodMs: -1, min: 0, max: 1 } },
+    { pulse: { periodMs: 100, min: 0.5, max: 0.4 } },
+    { pulse: { periodMs: 100, min: 0, max: 2 } },
+    { dash: { cells: 0, duty: 0.5 } },
+    { dash: { cells: 4, duty: 0 } },
+    { dash: { cells: 4, duty: 0.5, gapAlpha: 2 } },
+    { dash: { cells: 4, duty: 0.5, emission: -1 } },
+    { dash: 'on' },
+  ])
+    assert.throws(
+      () => normalizeGroundItem('corridor', line(extra)),
+      TypeError,
+      JSON.stringify(extra),
+    );
+  assert.throws(
+    () =>
+      normalizeGroundItem('corridor', {
+        ...line({ pulse: { periodMs: 100, min: 0, max: 1 } }),
+        widthPx: undefined,
+        widthM: 10,
+      }),
+    /widthPx/,
+  );
+});
+
+test('a pulse swings between its min and max; a dash scrolls toward the end', () => {
+  const pulse = { periodMs: 2000, min: 0.2, max: 0.8 };
+  assert.ok(Math.abs(pulseFactor(pulse, 0) - 0.5) < 1e-9);
+  assert.ok(Math.abs(pulseFactor(pulse, 0.5) - 0.8) < 1e-9);
+  assert.ok(Math.abs(pulseFactor(pulse, 1.5) - 0.2) < 1e-9);
+  const dash = { cells: 10, duty: 0.5, speed: 1 };
+  // Lit for the first half of each cell, dark for the second, soft edges.
+  assert.equal(dashLit(dash, 0.02, 0), 1);
+  assert.equal(dashLit(dash, 0.08, 0), 0);
+  assert.ok(Math.abs(dashLit(dash, 0.05, 0) - 0.5) < 1e-9);
+  // A second later the pattern has moved one cell toward the end.
+  assert.equal(dashLit(dash, 0.12, 1), dashLit(dash, 0.02, 0));
+});
+
+test('the registry knows when a shown set animates', () => {
+  const { ground, animating } = createGroundRegistry(() => ({
+    commit() {},
+    show() {},
+    destroy() {},
+  }));
+  const set = ground.createSet({ id: 'route', kind: 'corridor' });
+  set.replace([
+    {
+      positions: [
+        [0, 0],
+        [1, 0],
+      ],
+      color: [1, 1, 1, 1],
+      widthPx: 9,
+      dash: { cells: 8, duty: 0.5, speed: 1 },
+    },
+  ]);
+  assert.equal(animating(), false, 'not before the commit');
+  set.commit();
+  assert.equal(animating(), true);
+  assert.equal(ground.list()[0].animated, true);
+  set.show(false);
+  assert.equal(animating(), false, 'not while hidden');
+  set.show(true);
+  set.destroy();
+  assert.equal(animating(), false, 'not once destroyed');
 });
 
 test('CPU picks find the item under the picked ground, on top first', () => {
