@@ -6,7 +6,12 @@ import {
 } from '../../data/iconOrientation.js';
 import { fromDegreesInto, toLonLatH } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
-import { drawOf, findCamera, findFrame } from '../../render/rendererOf.js';
+import {
+  drawOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
@@ -105,8 +110,6 @@ const DEFAULT_DISPLAY = Object.freeze({
  *   (`createGroundSnap`).
  * @param {() => number} [options.now] Clock, injectable for tests.
  * @param {(url: string) => string} [options.resolveAsset] Model URL resolver.
- * @param {(options: object) => Promise<object>} [options.loadModel] Model
- *   loader, injectable for tests.
  * @returns {object} Data-layer module.
  */
 export function createLocalAdsbLayer({
@@ -115,7 +118,6 @@ export function createLocalAdsbLayer({
   services,
   now = Date.now,
   resolveAsset = (url) => url,
-  loadModel,
 }) {
   if (typeof receiver?.getState !== 'function')
     throw new TypeError('Local ADS-B requires a receiver session');
@@ -534,6 +536,7 @@ export function createLocalAdsbLayer({
 
   function showSets(show) {
     if (sets) for (const set of Object.values(sets)) set.show = show;
+    if (models) models.show = show;
   }
 
   function updateRenderHold() {
@@ -632,12 +635,12 @@ export function createLocalAdsbLayer({
     return true;
   }
 
-  /**
-   * The id under a pick, through the shared pick-id resolver: a draw-set
-   * item's id (markers, the trail head) or a model's.
-   */
-  function pickedId(picked) {
-    return services.picking.resolvePickId?.(picked) ?? null;
+  /** A local aircraft's id when `hit` is one of its markers or models. */
+  function ownHit(hit) {
+    if (!hit || hit.surface || !markers.has(hit.id)) return null;
+    return hit.set === sets?.markers.id || hit.set === models?.setId
+      ? hit.id
+      : null;
   }
 
   function ownedElsewhere(id) {
@@ -651,25 +654,35 @@ export function createLocalAdsbLayer({
    *
    * The frontmost pick decides, except that something no layer owns (a
    * photoreal tile, a ring) or a trail line drawn over or through a local
-   * aircraft does not hide it: the click looks underneath for the aircraft.
+   * aircraft does not hide it: the click looks underneath, through the
+   * renderer's draw-set picks, for the aircraft.
    */
   function clickTarget(event) {
-    const top = pickedId(event.pick);
-    if (top && markers.has(top)) return top;
-    const trail = Boolean(top) && String(top).startsWith(TRAIL_PICK_PREFIX);
-    if (ownedElsewhere(top) && !trail) return 'other';
+    const top = event.drawHit;
+    const own = ownHit(top);
+    if (own) return own;
+    // What is on top when it is no draw-set item: a sibling's contact
+    // drawn on its own, a tile, or (on a coarse pointer) a contact found
+    // under the touch.
+    const topId = top ? top.id : event.id;
+    if (!top && topId && markers.has(topId)) return topId;
+    const trail = Boolean(topId) && String(topId).startsWith(TRAIL_PICK_PREFIX);
+    if (ownedElsewhere(topId) && !trail) return 'other';
     let hits = [];
     try {
-      hits = event.drill(CLICK_DRILL_LIMIT);
+      hits =
+        findQuery(viewer)?.drillPick(event.position.x, event.position.y, {
+          limit: CLICK_DRILL_LIMIT,
+        }) ?? [];
     } catch {
       hits = [];
     }
     for (const hit of hits) {
-      const id = pickedId(hit);
-      if (id && markers.has(id)) return id;
-      if (id && String(id).startsWith(TRAIL_PICK_PREFIX)) continue;
+      const id = ownHit(hit);
+      if (id) return id;
+      if (String(hit.id).startsWith(TRAIL_PICK_PREFIX)) continue;
       // A sibling layer's contact above ours takes the click.
-      if (ownedElsewhere(id)) return 'other';
+      if (ownedElsewhere(hit.id)) return 'other';
     }
     return trail ? 'trail' : null;
   }
@@ -761,10 +774,13 @@ export function createLocalAdsbLayer({
       };
       models = createLocalAdsbModels({
         viewer,
+        draw,
+        camera: findCamera(viewer),
+        setId: `${prefix}:models`,
+        seeThrough: [sets.markers.id, sets.rings.id],
         color: LOCAL_ADSB_COLOR,
         resolveAsset,
         groundSnap: services.groundSnap?.createGroundSnap?.() || null,
-        ...(loadModel ? { loadModel } : {}),
       });
       services.geoid
         ?.ensureGeoidReady?.()

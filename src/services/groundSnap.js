@@ -48,6 +48,7 @@
 
 import * as Cesium from 'cesium';
 import { heightsFor } from '../render/cesium/heights.js';
+import { heightsOf } from '../queries/heights.js';
 // The application operations entry reaches the annotation resolver and
 // locations.js, whose flights and heights go through the camera and query
 // ports and which cannot load the Cesium adapter themselves; this listed
@@ -169,7 +170,8 @@ function _tilesReady(viewer) {
  * Create a per-layer ground-snap cache.
  * @returns {{
  *   heightFor: (viewer: Cesium.Viewer, icao: string, pos: Cesium.Cartesian3,
- *               getExclusions?: () => Array<unknown>) => number|null,
+ *               getExclusions?: (() => Array<unknown>)|{sets: string[]})
+ *               => number|null,
  *   forget: (icao: string) => void,
  *   clear: () => void,
  * }}
@@ -287,7 +289,10 @@ export function createGroundSnap({ groundFloor }) {
    * @param {(() => Array<unknown>)|undefined} getExclusions - Lazily builds the
    *   scene.sampleHeight objectsToExclude list (own billboards/models/entities —
    *   the vertical pick ray at a plane's OWN lat/lon lands on its icon/model
-   *   otherwise). Only invoked when a sample actually fires.
+   *   otherwise). Only invoked when a sample actually fires. `{sets}` (draw
+   *   set ids) instead samples through the renderer's query port
+   *   (`heightsOf`), which sees through every draw set not drawn as ground
+   *   and these: for a caller whose markers and models are on the draw port.
    * @returns {number|null}
    */
   function heightFor(viewer, icao, pos, getExclusions) {
@@ -359,11 +364,15 @@ export function createGroundSnap({ groundFloor }) {
       Cesium.Ellipsoid.WGS84,
       scratchCarto,
     );
-    const sampled = carto
-      ? heightsFor(viewer.scene).now(carto, {
-          exclude: getExclusions ? getExclusions() : undefined,
-        })
-      : null;
+    // Draw-set exclusions ask the renderer's query port, which sees through
+    // every draw set not drawn as ground (the caller's markers and models).
+    const sampled = !carto
+      ? null
+      : Array.isArray(getExclusions?.sets)
+        ? heightsOf(viewer).now(carto, { exclude: getExclusions.sets })
+        : heightsFor(viewer.scene).now(carto, {
+            exclude: getExclusions ? getExclusions() : undefined,
+          });
     // Same sanity floor as cctv.js's sampleGroundHeight: a hit far below the
     // ellipsoid is pick garbage, not ground.
     if (!Number.isFinite(sampled) || sampled < -150) return miss();

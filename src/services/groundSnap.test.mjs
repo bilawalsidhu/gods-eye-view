@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createGroundSnap } from './groundSnap.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 const groundFloor = {
   cachedMeshFloor: () => null,
@@ -59,4 +60,27 @@ test('a retry backoff stamped before the clock stepped back does not wait for it
   t.mock.timers.setTime(10_000_000 - 3_600_000);
   assert.equal(snap.heightFor(viewer, 'a00001', atDenverAirport), 1650);
   assert.equal(viewer.calls.samples, 1);
+});
+
+test('draw-set exclusions sample through the renderer’s query port', () => {
+  const viewer = makeViewer();
+  const asked = [];
+  bindRenderer(viewer, {
+    query: {
+      sampleHeightNow(point, options) {
+        asked.push({ point, options });
+        return 1655;
+      },
+    },
+  });
+  const snap = createGroundSnap({ groundFloor });
+  assert.equal(
+    snap.heightFor(viewer, 'a00001', atDenverAirport, {
+      sets: ['mine:models'],
+    }),
+    1655,
+  );
+  assert.equal(viewer.calls.samples, 0, 'not the scene’s own sample');
+  assert.deepEqual(asked[0].options, { exclude: ['mine:models'] });
+  assert.ok(Math.abs(asked[0].point.lon + 104.6737) < 1e-6);
 });

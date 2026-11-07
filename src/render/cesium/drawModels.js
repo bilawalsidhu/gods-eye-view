@@ -15,6 +15,9 @@
  * measures `minPixelSize`), `scaleByDistance`, `fadeByDistance` (the tint's
  * alpha) and the set's `horizonCull`.
  *
+ * A failed load is tried again when its item is next updated, once
+ * `MODEL_RETRY_MS` has passed.
+ *
  * `shading: 'thermal'` draws the model unlit and white-hot (its texture
  * left out), then tinted as asked: a hot target, as the thermal views draw
  * them. Heights are absolute: models clamp nothing.
@@ -26,6 +29,13 @@ const BLEND_MODES = {
   replace: Cesium.ColorBlendMode.REPLACE,
   mix: Cesium.ColorBlendMode.MIX,
 };
+
+/**
+ * How long a failed load waits before an update of its item tries the url
+ * again (a fleet updates every frame; a dropped request or a server
+ * hiccup should not leave the item without its model for good).
+ */
+export const MODEL_RETRY_MS = 5000;
 
 /** Cesium's own blend amount, for a `mix` that names none. */
 const DEFAULT_MIX = 0.5;
@@ -80,8 +90,10 @@ const scratchHpr = new Cesium.HeadingPitchRoll();
 const scratchMatrix = new Cesium.Matrix4();
 const scratchSphere = new Cesium.BoundingSphere();
 const scratchColor = new Cesium.Color();
-/** The colour last written to each model, as a key. */
+/** The colour last written to each model. */
 const writtenColors = new WeakMap();
+/** What the per-frame pass found, for a model it does not run on. */
+const STILL = Object.freeze({ scale: 1, alpha: 1, shown: true });
 
 /** An item's position as Cesium's, into `result`. */
 function positionOf(pos, result) {
@@ -95,6 +107,14 @@ function positionOf(pos, result) {
     result,
   );
 }
+
+/** A tint as a key: a CSS string as it is, an RGBA array joined. */
+const tintKey = (tint) =>
+  tint === undefined || tint === null
+    ? null
+    : typeof tint === 'string'
+      ? tint
+      : tint.join(',');
 
 /** Whether an item needs the per-frame pass. */
 const needsFrame = (item, spec) =>
@@ -171,6 +191,7 @@ export function createModelSets({
       host.loading -= 1;
       if (failed && entry.token === token) {
         entry.failed = true;
+        entry.failedAt = Date.now();
         host.failed += 1;
       }
       requestRender();
@@ -284,10 +305,9 @@ export function createModelSets({
     if (model.colorBlendAmount !== amount) model.colorBlendAmount = amount;
     // An empty `displayRange` shows nothing.
     const hidden = range && !(range[1] > range[0]);
-    entry.styled = { range: rangeKey };
+    if (entry.styled?.range !== rangeKey) entry.styled = { range: rangeKey };
     entry.dynamic = needsFrame(item, record.spec);
-    const frame = entry.frame ?? { scale: 1, alpha: 1, shown: true };
-    apply(entry, model, frame, hidden);
+    apply(entry, model, entry.frame ?? STILL, hidden);
   }
 
   /**
@@ -305,9 +325,9 @@ export function createModelSets({
     color.alpha *= frame.alpha;
     // Written only when what is asked changes, so a theme's own write to a
     // model's colour stands until then.
-    const key = `${color.red},${color.green},${color.blue},${color.alpha}`;
-    if (writtenColors.get(model) !== key) {
-      writtenColors.set(model, key);
+    const written = writtenColors.get(model);
+    if (!written || !Cesium.Color.equals(written, color)) {
+      writtenColors.set(model, Cesium.Color.clone(color, written));
       model.color = color;
     }
     const show =
@@ -334,10 +354,12 @@ export function createModelSets({
         model: null,
         at: new Cesium.Cartesian3(),
         tint: null,
+        tintKey: undefined,
         radius: 0,
         next: null,
         token: null,
         failed: false,
+        failedAt: 0,
         settleLoad: null,
         styled: null,
         dynamic: false,
@@ -352,8 +374,12 @@ export function createModelSets({
       entry.pickId.lodGroup = item.lodGroup;
     }
     positionOf(item.pos, entry.at);
-    entry.tint =
-      item.tint === undefined || item.tint === null ? null : toColor(item.tint);
+    // A fleet re-poses every frame with the same tint: parsed when it changes.
+    const tint = tintKey(item.tint);
+    if (entry.tintKey !== tint) {
+      entry.tintKey = tint;
+      entry.tint = tint === null ? null : toColor(item.tint);
+    }
     if (entry.url !== item.url && item.url === entry.modelUrl) {
       // Back to the url it draws: the load in between is not wanted.
       cancel(record, entry);
@@ -362,7 +388,8 @@ export function createModelSets({
     // The model it draws keeps up while another loads.
     for (const model of [entry.model, entry.next])
       if (model) style(record, entry, model);
-    if (entry.url !== item.url) load(record, entry);
+    const retry = entry.failed && Date.now() - entry.failedAt >= MODEL_RETRY_MS;
+    if (entry.url !== item.url || retry) load(record, entry);
   }
 
   /** Stop the entry's load in flight, keeping the model it draws. */

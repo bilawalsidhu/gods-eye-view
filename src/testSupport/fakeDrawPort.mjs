@@ -19,6 +19,7 @@ export function fakeDrawPort() {
       show: spec.show !== false,
       disposed: false,
       writes: 0,
+      ready: new Set(),
     };
     sets.set(spec.id, record);
     const write = (fn) => {
@@ -53,7 +54,11 @@ export function fakeDrawPort() {
       set show(value) {
         record.show = value;
       },
-      on: () => () => {},
+      on(event, cb) {
+        if (event !== 'ready') return () => {};
+        record.ready.add(cb);
+        return () => record.ready.delete(cb);
+      },
       dispose() {
         record.disposed = true;
       },
@@ -72,6 +77,11 @@ export function fakeDrawPort() {
     points: make('points'),
     lines: make('lines'),
     shapes: make('shapes'),
+    models: make('models'),
+    /** Fire a models set's `ready` for an item, as a load finishing does. */
+    ready(setId, id) {
+      for (const cb of [...(sets.get(setId)?.ready ?? [])]) cb(id);
+    },
     clampState: () => 'draped',
     on: () => () => {},
     atlas() {},

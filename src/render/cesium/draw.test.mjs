@@ -4,6 +4,7 @@ import test from 'node:test';
 import { bindRenderer, drawOf, findDraw } from '../rendererOf.js';
 import { createCesiumDraw, revealUniform, unboundDrawPart } from './draw.js';
 import { drawHitOf } from './drawHit.js';
+import { MODEL_RETRY_MS } from './drawModels.js';
 
 // Node has no WebGL context to report line-width limits.
 Cesium.ContextLimits._minimumAliasedLineWidth = 1;
@@ -3834,6 +3835,52 @@ test('a model load superseded or failed settles once', async () => {
     assert.equal(host.failed, 0, 'gone with its item');
     set.dispose();
   } finally {
+    restore();
+  }
+});
+
+test('a failed model load is tried again on a later update, after a wait', async () => {
+  const { loads, restore } = fakeModelLoads();
+  const realNow = Date.now;
+  let now = 1_000_000;
+  Date.now = () => now;
+  try {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'm' });
+    const item = {
+      id: 'a',
+      pos: { lon: 0, lat: 0 },
+      url: 'a.glb',
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+    };
+    set.upsert([item]);
+    const host = scene.added[0];
+    loads[0].reject(new Error('network'));
+    await settle();
+    assert.equal(host.failed, 1);
+    now += MODEL_RETRY_MS - 1;
+    set.upsert([{ ...item }]);
+    assert.equal(loads.length, 1, 'not before the wait');
+    now += 1;
+    set.upsert([{ ...item }]);
+    assert.equal(loads.length, 2, 'the same url again');
+    assert.equal(host.failed, 0, 'loading again, not failed');
+    assert.equal(host.loading, 1);
+    const ready = [];
+    set.on('ready', (id) => ready.push(id));
+    loads[1].resolve();
+    await settle();
+    loads[1].ready();
+    assert.deepEqual(ready, ['a']);
+    set.upsert([{ ...item }]);
+    assert.equal(loads.length, 2, 'a loaded model is not loaded again');
+    set.dispose();
+  } finally {
+    Date.now = realNow;
     restore();
   }
 });

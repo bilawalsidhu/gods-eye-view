@@ -43,7 +43,6 @@
   "src/layers/launches/launchPad.js",
   "src/layers/launches/orbitRendering.js",
   "src/layers/launches/rendering.js",
-  "src/layers/localAdsb/models.js",
   "src/layers/military/lifecycle.js",
   "src/layers/military/motion.js",
   "src/layers/military/policy.js",

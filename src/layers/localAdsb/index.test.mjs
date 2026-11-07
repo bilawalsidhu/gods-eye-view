@@ -12,9 +12,10 @@ import {
   localAdsbReceiverLine,
   localAdsbStatus,
 } from './index.js';
+import { createLocalAdsbModels } from './models.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { resolvePickId } from '../../data/pickRegistry.js';
-import { toLonLatH } from '../../geo/ellipsoid.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { hexColor } from '../../render/color.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
@@ -117,17 +118,21 @@ function fakeServices() {
 }
 
 /**
- * A viewer with a fake draw port and a camera port whose screen axes are
- * east and north at (0°, 0°); `viewer` adds the Cesium-shaped members the
- * 3D models read.
+ * A viewer with a fake draw port, a camera port whose screen axes are east
+ * and north at (0°, 0°), and a query port whose drill picks are the
+ * viewer's `drillHits`; `pose` sets the camera.
  */
-function fakeViewer(viewer = { scene: {} }) {
+function fakeViewer(viewer = { scene: {} }, pose = {}) {
   const camera = fakeCameraPort({
-    pose: { right: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 } },
+    pose: { right: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 }, ...pose },
   });
-  const { draw } = bindFakeDraw(viewer, { camera: camera.port });
+  const query = {
+    drillPick: (x, y, { limit } = {}) =>
+      (viewer.drillHits ?? []).slice(0, limit),
+  };
+  const { draw } = bindFakeDraw(viewer, { camera: camera.port, query });
   const input = fakeInput(viewer);
-  return { draw, viewer, input };
+  return { draw, viewer, input, camera };
 }
 
 function record(overrides = {}) {
@@ -182,31 +187,16 @@ function fakeFeeds(initial = {}) {
   };
 }
 
-/** A viewer whose camera looks down on (0°, 0°) from 50 km, with primitives. */
-function modelViewer(primitives) {
-  const camera = {
-    positionWC: new Cesium.Cartesian3(6_378_137 + 50_000, 0, 0),
-    positionCartographic: new Cesium.Cartographic(0, 0, 50_000),
-    directionWC: new Cesium.Cartesian3(-1, 0, 0),
-    frustum: {
-      computeCullingVolume: () => ({
-        computeVisibility: () => Cesium.Intersect.INSIDE,
-      }),
+/** A viewer whose camera looks down on (0°, 0°) from 50 km. */
+function modelViewer() {
+  return fakeViewer(
+    { scene: {} },
+    {
+      height: 50_000,
+      position: { x: 6_378_137 + 50_000, y: 0, z: 0 },
+      direction: { x: -1, y: 0, z: 0 },
     },
-  };
-  return fakeViewer({
-    camera,
-    scene: {
-      camera,
-      primitives: {
-        add(collection) {
-          primitives.push(collection);
-          return collection;
-        },
-        remove() {},
-      },
-    },
-  });
+  );
 }
 
 async function enabledLayer(receiver, clock, feeds = null, options = {}) {
@@ -217,7 +207,6 @@ async function enabledLayer(receiver, clock, feeds = null, options = {}) {
     feeds,
     services: { ...services, ...options.services },
     now: () => clock.now,
-    loadModel: options.loadModel,
   });
   layer.init(viewer);
   await layer.enable();
@@ -572,65 +561,43 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
 test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
-  const loads = [];
   const display = { models3d: true, models3dMode: 'proximity' };
-  const primitives = [];
   const { layer, draw } = await enabledLayer(receiver, clock, null, {
     services: { display: { getParams: () => display } },
-    viewer: modelViewer(primitives),
-    loadModel: async (options) => {
-      const model = {
-        ...options,
-        ready: true,
-        show: true,
-        modelMatrix: new Cesium.Matrix4(),
-        destroyed: false,
-        destroy() {
-          this.destroyed = true;
-        },
-        isDestroyed() {
-          return this.destroyed;
-        },
-        update() {},
-      };
-      loads.push(model);
-      return model;
-    },
+    viewer: modelViewer(),
   });
   t.after(() => layer.destroy());
   receiver.set({ aircraft: [record({ icao: 'a0b702', category: 'A7' })] });
   await layer.update();
-  await new Promise((resolve) => setImmediate(resolve));
-  await layer.update();
-  assert.equal(loads.length, 1);
-  const [model] = loads;
-  assert.equal(
-    model.url,
-    '/models/bell206.glb',
-    'the Flights helicopter model',
-  );
-  assert.equal(model.scale, 1);
-  assert.equal(model.id, 'local-adsb:a0b702');
-  assert.ok(
-    Cesium.Color.equals(
-      model.color,
-      Cesium.Color.fromCssColorString('#ff4fd8'),
-    ),
-  );
-  assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.MIX);
-  assert.equal(model.colorBlendAmount, 0.94);
-  assert.equal(model.show, true);
+  const models = layerSet(draw, ':models');
+  const model = () => models.items.get('local-adsb:a0b702');
+  assert.ok(model(), 'admitted');
+  assert.equal(model().url, '/models/bell206.glb', 'the Flights helicopter');
+  assert.equal(model().scale, 1);
+  assert.deepEqual(model().tint, MAGENTA);
+  assert.deepEqual(model().colorBlend, { mode: 'mix', amount: 0.94 });
+  assert.equal(model().environmentMap, false);
   const heli = () => iconOf(draw, 'local-adsb:a0b702');
+  assert.equal(heli().show, true, 'the icon until the model is ready');
+  draw.ready(models.spec.id, 'local-adsb:a0b702');
+  await layer.update();
+  assert.equal(model().show, true);
   assert.equal(heli().show, false, 'the model is the visual');
-  const origin = Cesium.Matrix4.getTranslation(
-    model.modelMatrix,
-    new Cesium.Cartesian3(),
+  assert.ok(
+    Math.hypot(
+      model().pos.x - heli().pos.x,
+      model().pos.y - heli().pos.y,
+      model().pos.z - heli().pos.z,
+    ) < 1,
+    'where its icon is',
   );
-  assert.ok(Cesium.Cartesian3.distance(origin, heli().pos) < 1);
+  const writes = models.writes;
+  await layer.update();
+  assert.ok(models.writes > writes, 'moved in place each frame');
 
   display.models3d = false;
   await layer.update();
-  assert.equal(model.destroyed || !primitives[0].contains(model), true);
+  assert.equal(models.items.size, 0, 'models dropped');
   assert.equal(heli().show, true, 'the icon is back');
 });
 
@@ -895,7 +862,7 @@ test('the layer draws into sets of its own, shown while it is enabled and let go
       .filter((record) => !record.disposed)
       .map((record) => record.spec.id);
   const mine = ids(draw);
-  assert.equal(mine.length, 2, 'markers and rings');
+  assert.equal(mine.length, 3, 'markers, rings and models');
   assert.ok(
     ids(other.draw).every((id) => !mine.includes(id)),
     'a second layer has ids of its own',
@@ -1107,87 +1074,35 @@ test('row status names two same-band feeds by their ordinal labels', () => {
   );
 });
 
-function fakeModel(options) {
-  return {
-    ...options,
-    ready: true,
-    show: true,
-    modelMatrix: new Cesium.Matrix4(),
-    destroyed: false,
-    destroy() {
-      this.destroyed = true;
-    },
-    isDestroyed() {
-      return this.destroyed;
-    },
-    update() {},
-  };
-}
-
-test('the last aircraft expiring removes its 3D model and cancels a pending load', async (t) => {
+test('the last aircraft expiring removes its 3D model', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
-  const primitives = [];
-  const loads = [];
-  const deferred = [];
-  const { layer } = await enabledLayer(receiver, clock, null, {
+  const { layer, draw } = await enabledLayer(receiver, clock, null, {
     services: {
       display: {
         getParams: () => ({ models3d: true, models3dMode: 'proximity' }),
       },
     },
-    viewer: modelViewer(primitives),
-    loadModel: (options) => {
-      const model = fakeModel(options);
-      loads.push(model);
-      if (options.id === 'local-adsb:abc123') return Promise.resolve(model);
-      return new Promise((resolve) => deferred.push(() => resolve(model)));
-    },
+    viewer: modelViewer(),
   });
   t.after(() => layer.destroy());
   receiver.set({ aircraft: [record({ category: 'A7' })] });
   await layer.update();
-  await new Promise((resolve) => setImmediate(resolve));
-  await layer.update();
-  const [model] = loads;
-  assert.equal(model.show, true, 'the model is the visual');
-  assert.ok(primitives[0].contains(model));
+  const models = layerSet(draw, ':models');
+  assert.ok(models.items.has('local-adsb:abc123'));
 
   // Its position ages out: no markers remain, so no per-frame model pass.
   clock.now = 160_000;
   await layer.update();
-  assert.equal(
-    model.destroyed || !primitives[0].contains(model),
-    true,
-    'the expired aircraft leaves no model behind',
-  );
+  assert.equal(models.items.size, 0, 'no model left behind');
 
-  // A load still in flight when its aircraft expires is never admitted.
-  clock.now = 200_000;
-  receiver.set({
-    aircraft: [
-      record({
-        icao: 'def456',
-        lastPositionAt: 200_000,
-        lastMessageAt: 200_000,
-      }),
-    ],
-  });
-  await layer.update();
-  clock.now = 260_000;
-  await layer.update();
-  assert.equal(deferred.length, 1, 'a load was in flight');
-  deferred[0]();
-  await new Promise((resolve) => setImmediate(resolve));
-  const late = loads.at(-1);
-  assert.equal(late.id, 'local-adsb:def456');
-  assert.equal(primitives[0].contains(late), false);
-  assert.equal(late.destroyed, true);
+  layer.destroy();
+  assert.equal(models.disposed, true, 'the set goes with the layer');
 });
 
 /** A pick on a draw-port icon of the layer's, as the renderer reports it. */
-function iconPick(id) {
-  return { primitive: {}, id: { set: 'local-adsb:1:markers', id } };
+function iconPick(draw, id) {
+  return { primitive: {}, id: { set: layerSet(draw, ':markers').spec.id, id } };
 }
 
 /** A viewer with a canvas and scripted picks, plus the layer's click action. */
@@ -1195,12 +1110,8 @@ function clickHarness() {
   const scene = {
     canvas: {},
     pickResult: null,
-    drillResult: [],
     pick() {
       return scene.pickResult;
-    },
-    drillPick() {
-      return scene.drillResult;
     },
   };
   const base = fakeViewer({ scene });
@@ -1217,13 +1128,13 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const harness = clickHarness();
-  const { layer, calls } = await enabledLayer(receiver, clock, null, {
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
   });
   t.after(() => layer.destroy());
   receiver.set({ aircraft: [record()] });
   await layer.update();
-  harness.scene.pickResult = iconPick('local-adsb:abc123');
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123']);
   // Its card may have been displaced (another readout, a camera move): a
@@ -1238,7 +1149,7 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   const clock = { now: 100_000 };
   const harness = clickHarness();
   const owners = new Map();
-  const { layer, calls } = await enabledLayer(receiver, clock, null, {
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
     services: {
       picking: {
@@ -1259,27 +1170,107 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
     aircraft: [record(), record({ icao: 'def456', lat: 0.01 })],
   });
   await layer.update();
-  const [first, second] = ['abc123', 'def456'].map((icao) =>
-    iconPick(`local-adsb:${icao}`),
-  );
+  const hit = (suffix, id) => ({
+    set: suffix.startsWith(':') ? layerSet(draw, suffix).spec.id : suffix,
+    id,
+    surface: false,
+  });
+  const second = hit(':markers', 'local-adsb:def456');
   // A photoreal tile (no pick id) drawn over the 3D model at this pixel.
   harness.scene.pickResult = { primitive: { tileset: true } };
-  harness.scene.drillResult = [
-    harness.scene.pickResult,
-    { primitive: { id: 'local-adsb:abc123' }, id: 'local-adsb:abc123' },
-  ];
+  harness.viewer.viewer.drillHits = [hit(':models', 'local-adsb:abc123')];
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123']);
 
   // The selected aircraft's trail crosses another local aircraft's marker.
-  harness.scene.pickResult = { id: { id: 'gev-trail:local-adsb-head-1' } };
-  harness.scene.drillResult = [harness.scene.pickResult, second];
+  const trail = hit('trail:1', 'gev-trail:1:head');
+  harness.scene.pickResult = { primitive: {}, id: trail };
+  harness.viewer.viewer.drillHits = [trail, second];
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:def456']);
 
   // Another layer's own contact on top is that layer's click.
   harness.scene.pickResult = { id: 'abc123', primitive: {} };
-  harness.scene.drillResult = [harness.scene.pickResult, first];
+  harness.viewer.viewer.drillHits = [hit(':markers', 'local-adsb:abc123')];
   harness.click();
   assert.equal(calls.selected.length, 2, 'the Flights contact is not taken');
+});
+
+test('a grounded aircraft changing class keeps its drawn model on its own belly offset until the new one is ready', () => {
+  const { draw, viewer, camera } = modelViewer();
+  const models = createLocalAdsbModels({
+    viewer,
+    draw,
+    camera: camera.port,
+    setId: 'test:models',
+    color: '#ff00ff',
+    resolveAsset: (url) => url,
+    groundSnap: { heightFor: () => 100, forget() {}, clear() {} },
+  });
+  const marker = {
+    position: fromDegrees(0, 0, 0),
+    courseDeg: 0,
+    klass: 'light',
+    onGround: true,
+  };
+  const markers = new Map([['a', marker]]);
+  const display = { models3d: true, models3dMode: 'proximity' };
+  const height = () =>
+    toLonLatH(draw.sets.get('test:models').items.get('a').pos).height;
+  models.frame(markers, display, 100_000);
+  draw.ready('test:models', 'a');
+  models.frame(markers, display, 100_001);
+  assert.ok(Math.abs(height() - 101.36) < 0.01, 'light: its belly offset');
+  marker.klass = 'widebody';
+  models.frame(markers, display, 200_000);
+  assert.equal(
+    draw.sets.get('test:models').items.get('a').url,
+    '/models/b789.glb',
+  );
+  assert.ok(Math.abs(height() - 101.36) < 0.01, 'the light model still draws');
+  draw.ready('test:models', 'a');
+  models.frame(markers, display, 200_001);
+  assert.ok(Math.abs(height() - 107.81) < 0.01, 'the widebody, on its own');
+  models.destroy();
+});
+
+test('a class change takes its belly offset with the new model, however soon it is ready; a scale-only change at once', () => {
+  const { draw, viewer, camera } = modelViewer();
+  const models = createLocalAdsbModels({
+    viewer,
+    draw,
+    camera: camera.port,
+    setId: 'test:models',
+    color: '#ff00ff',
+    resolveAsset: (url) => url,
+    groundSnap: { heightFor: () => 100, forget() {}, clear() {} },
+  });
+  const marker = {
+    position: fromDegrees(0, 0, 0),
+    courseDeg: 0,
+    klass: 'narrowbody',
+    onGround: true,
+  };
+  const markers = new Map([['a', marker]]);
+  const display = { models3d: true, models3dMode: 'proximity' };
+  const item = () => draw.sets.get('test:models').items.get('a');
+  const height = () => toLonLatH(item().pos).height;
+  models.frame(markers, display, 100_000);
+  draw.ready('test:models', 'a');
+  models.frame(markers, display, 100_001);
+  assert.ok(Math.abs(height() - 106.719) < 0.01, 'narrowbody');
+  // The same asset at another scale: no load, no ready.
+  marker.klass = 'glider';
+  models.frame(markers, display, 100_002);
+  assert.equal(item().url, '/models/airplane.glb');
+  assert.equal(item().scale, 0.75);
+  assert.ok(Math.abs(height() - 105.03925) < 0.01, 'at once');
+  // Another asset, ready before the next eligibility pass.
+  marker.klass = 'widebody';
+  models.frame(markers, display, 100_003);
+  assert.ok(Math.abs(height() - 105.03925) < 0.01, 'the old model draws');
+  draw.ready('test:models', 'a');
+  models.frame(markers, display, 100_004);
+  assert.ok(Math.abs(height() - 107.81) < 0.01, 'the widebody, on its own');
+  models.destroy();
 });

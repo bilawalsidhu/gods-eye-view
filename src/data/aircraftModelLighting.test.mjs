@@ -19,13 +19,6 @@ const SOURCES = [
     name: 'militaryFlights',
     source: readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
   },
-  {
-    name: 'localAdsb',
-    source: readFileSync(
-      new URL('../layers/localAdsb/models.js', import.meta.url),
-      'utf8',
-    ),
-  },
 ];
 
 test('the shared option turns the dynamic environment map off', () => {
@@ -49,3 +42,14 @@ for (const { name, source } of SOURCES) {
       );
   });
 }
+
+test('localAdsb: its draw-port models skip the dynamic environment map', () => {
+  const source = readFileSync(
+    new URL('../layers/localAdsb/models.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    source,
+    /\benvironmentMap:\s*AIRCRAFT_ENVIRONMENT_MAP_OPTIONS\.enabled\b/,
+  );
+});
