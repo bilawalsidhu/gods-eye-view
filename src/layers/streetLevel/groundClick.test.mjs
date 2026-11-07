@@ -3,9 +3,15 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import * as scenePick from '../../data/scenePick.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { streetPorts } from '../../testSupport/streetLevelFakes.mjs';
 
 const GROUND = Cesium.Cartesian3.fromDegrees(-121.4944, 38.5816, 10);
 const TILESET = { isCesium3DTileset: true };
+
+/** A viewer double bound to the camera and query ports, as the app binds its renderer. */
+const viewerWith = (viewer) =>
+  bindFakeCesiumCamera(viewer, streetPorts(viewer));
 
 /**
  * A layer state with providers `{id, on, groundClick, configured, available}`;
@@ -39,7 +45,7 @@ function harness({
         ],
       ),
     ),
-    viewer: {
+    viewer: viewerWith({
       scene: { pickPositionSupported: true, pickPosition: () => picked },
       camera: {
         pickEllipsoid: () => ellipsoid,
@@ -49,7 +55,7 @@ function harness({
           height,
         ),
       },
-    },
+    }),
   };
   const openAtGround = createGroundClick({
     state,
@@ -120,12 +126,13 @@ test('nothing opens over another layer’s object, the sky, from high up, off it
 });
 
 test('street zoom is measured above the ground under the camera', () => {
-  const viewer = (height) => ({
-    camera: {
-      positionCartographic: Cesium.Cartographic.fromDegrees(0, 0, height),
-    },
-    scene: { globe: { getHeight: () => 1500 } },
-  });
+  const viewer = (height) =>
+    viewerWith({
+      camera: {
+        positionCartographic: Cesium.Cartographic.fromDegrees(0, 0, height),
+      },
+      scene: { globe: { getHeight: () => 1500 } },
+    });
   // 1,500 m up a plateau, 2,000 m above it: still a street.
   assert.equal(groundClickHeightOk(viewer(3500)), true);
   assert.equal(groundClickHeightOk(viewer(5000)), false);

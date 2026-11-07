@@ -1,6 +1,18 @@
-import * as Cesium from 'cesium';
 import { wrapLon } from './tileMath.js';
-import { heightsFor } from '../../queries/heights.js';
+import {
+  offsetEllipsoid,
+  rayEllipsoid,
+  toLonLatH,
+  WGS84,
+} from '../../geo/ellipsoid.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import { distance } from '../../geo/vector.js';
+import {
+  findCamera,
+  findFrame,
+  findQuery,
+  rendererOf,
+} from '../../render/rendererOf.js';
 
 /** Equirectangular metres between {lon, lat} points, the short way round ±180°; street scale. */
 export function metresBetween(a, b) {
@@ -17,68 +29,85 @@ export function plausibleSurfaceHeight(height) {
 }
 
 /**
- * Height (m) of the rendered surface, 3D tiles included, at `carto`; null
- * when unsampleable or implausible (`sampleHeight` reads kilometres
- * underground before tiles load).
+ * Height (m) of the rendered surface, 3D tiles included, at `point`
+ * (`{lon, lat}` degrees); null when unsampleable or implausible
+ * (`sampleHeight` reads kilometres underground before tiles load).
+ * `against: 'tiles'` reads the 3D tiles alone.
  */
-export function sampledSurfaceHeight(scene, carto) {
-  const height = scene?.sampleHeightSupported
-    ? heightsFor(scene).now(carto)
-    : null;
+export function sampledSurfaceHeight(viewer, point, { against } = {}) {
+  const height =
+    findQuery(viewer)?.sampleHeightNow(point, against ? { against } : {}) ??
+    null;
   return plausibleSurfaceHeight(height) ? height : null;
 }
 
+/** The camera's pose, or null without one (or with no position). */
+function poseOf(viewer) {
+  if (!viewer) return null;
+  const pose = findCamera(viewer)?.pose();
+  return pose && Number.isFinite(pose.height) ? pose : null;
+}
+
 /**
- * Ellipsoidal height (m) of the ground under the camera, or null. Under
- * Google 3D (globe hidden) the rendered surface counts, minus any roof above
- * the camera.
+ * Ellipsoidal height (m) of the ground under the camera, or null. Where 3D
+ * tiles answer under the camera (Google 3D) they decide: their surface,
+ * minus any roof above the camera, or null while they are still loading
+ * (they read kilometres underground then). Elsewhere the loaded terrain,
+ * else the drawn surface below the camera.
  */
 export function groundUnderCamera(viewer) {
-  const carto = viewer?.camera?.positionCartographic;
-  const scene = viewer?.scene;
-  if (!carto || !scene) return null;
-  const globe = scene.globe;
-  if (globe && globe.show !== false) {
-    const ground = heightsFor(scene).now(carto, { against: 'terrain' });
-    if (ground !== null) return ground;
-  }
-  const sampled = sampledSurfaceHeight(scene, carto);
-  return sampled !== null && sampled < carto.height ? sampled : null;
+  const pose = poseOf(viewer);
+  const query = pose && findQuery(viewer);
+  if (!query) return null;
+  const point = { lon: pose.lon, lat: pose.lat };
+  const tiles = query.sampleHeightNow(point, { against: 'tiles' }) ?? null;
+  if (tiles !== null)
+    return plausibleSurfaceHeight(tiles) && tiles < pose.height ? tiles : null;
+  const terrain = query.sampleHeightNow(point, { against: 'terrain' }) ?? null;
+  if (Number.isFinite(terrain)) return terrain;
+  const surface = sampledSurfaceHeight(viewer, point);
+  return surface !== null && surface < pose.height ? surface : null;
 }
 
-/** The ellipsoid `height` metres above `ellipsoid` (the ground at that height). */
-function raisedEllipsoid(ellipsoid, height) {
-  if (!Number.isFinite(height) || Math.abs(height) < 1) return ellipsoid;
-  const { x, y, z } = ellipsoid.radii;
-  return new Cesium.Ellipsoid(x + height, y + height, z + height);
+/** The ellipsoid `height` metres above WGS84 (the ground at that height). */
+function raisedEllipsoid(height) {
+  if (!Number.isFinite(height) || Math.abs(height) < 1) return WGS84;
+  return offsetEllipsoid(height);
+}
+
+/** The CSS size of the canvas the viewer draws on; zeros without one. */
+export function canvasSize(viewer) {
+  const canvas = rendererOf(viewer)?.canvas ?? viewer?.canvas;
+  return {
+    width: canvas?.clientWidth || canvas?.width || 0,
+    height: canvas?.clientHeight || canvas?.height || 0,
+  };
 }
 
 /**
- * Where a screen point's ray meets the ground, as a Cartographic, or null.
- * `maxRange` (metres from the camera) drops hits near the horizon.
+ * Where a screen point's ray meets `ellipsoid`, as `{lon, lat}` degrees on
+ * it, or null. `maxRange` (metres from the camera) drops hits near the
+ * horizon.
  */
-function groundHit(camera, point, ellipsoid, maxRange) {
-  let cartesian = null;
+function groundHit(query, x, y, ellipsoid, maxRange) {
+  let ray = null;
   try {
-    cartesian = camera.pickEllipsoid(point, ellipsoid);
+    ray = query.pickRay(x, y);
   } catch {
-    cartesian = null;
+    ray = null;
   }
-  if (!cartesian) return null;
-  if (
-    Number.isFinite(maxRange) &&
-    camera.positionWC &&
-    Cesium.Cartesian3.distance(cartesian, camera.positionWC) > maxRange
-  )
+  const hit = ray?.origin && ray.direction && rayEllipsoid(ray, ellipsoid);
+  if (!hit) return null;
+  if (Number.isFinite(maxRange) && distance(hit, ray.origin) > maxRange)
     return null;
-  return Cesium.Cartographic.fromCartesian(cartesian, ellipsoid) || null;
+  return toLonLatH(hit, ellipsoid);
 }
 
 /** Camera height (m) above the ground under it. */
 export function cameraHeightAboveGround(viewer) {
-  const carto = viewer?.camera?.positionCartographic;
-  if (!carto) return null;
-  return carto.height - (groundUnderCamera(viewer) ?? 0);
+  const pose = poseOf(viewer);
+  if (!pose) return null;
+  return pose.height - (groundUnderCamera(viewer) ?? 0);
 }
 
 /** Screen rays per side, less one, that `visibleBbox` casts. */
@@ -93,24 +122,22 @@ export function visibleBbox(
   viewer,
   { groundHeight = null, maxRange = null } = {},
 ) {
-  const scene = viewer?.scene;
-  const camera = viewer?.camera;
-  if (!scene || !camera) return null;
-  const width = scene.canvas?.clientWidth || scene.canvas?.width || 0;
-  const height = scene.canvas?.clientHeight || scene.canvas?.height || 0;
+  const query = viewer && findQuery(viewer);
+  if (!query || !poseOf(viewer)) return null;
+  const { width, height } = canvasSize(viewer);
   const hits = [];
   if (width > 0 && height > 0) {
-    const ellipsoid = raisedEllipsoid(
-      scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
-      groundHeight,
-    );
-    const point = new Cesium.Cartesian2();
+    const ellipsoid = raisedEllipsoid(groundHeight);
     for (let i = 0; i <= BBOX_GRID; i++) {
       for (let j = 0; j <= BBOX_GRID; j++) {
-        point.x = (width * i) / BBOX_GRID;
-        point.y = (height * j) / BBOX_GRID;
-        const carto = groundHit(camera, point, ellipsoid, maxRange);
-        if (carto) hits.push(carto);
+        const hit = groundHit(
+          query,
+          (width * i) / BBOX_GRID,
+          (height * j) / BBOX_GRID,
+          ellipsoid,
+          maxRange,
+        );
+        if (hit) hits.push(hit);
       }
     }
   }
@@ -119,9 +146,7 @@ export function visibleBbox(
     let south = Infinity;
     let east = -Infinity;
     let north = -Infinity;
-    for (const carto of hits) {
-      const lon = Cesium.Math.toDegrees(carto.longitude);
-      const lat = Cesium.Math.toDegrees(carto.latitude);
+    for (const { lon, lat } of hits) {
       west = Math.min(west, lon);
       east = Math.max(east, lon);
       south = Math.min(south, lat);
@@ -133,8 +158,7 @@ export function visibleBbox(
     if (east - west > 180) {
       let west360 = Infinity;
       let east360 = -Infinity;
-      for (const carto of hits) {
-        const lon = Cesium.Math.toDegrees(carto.longitude);
+      for (const { lon } of hits) {
         const shifted = lon < 0 ? lon + 360 : lon;
         west360 = Math.min(west360, shifted);
         east360 = Math.max(east360, shifted);
@@ -151,12 +175,8 @@ export function visibleBbox(
 
 /** The point on the ground under the camera, as {lon, lat} degrees. */
 export function cameraNadir(viewer) {
-  const carto = viewer?.camera?.positionCartographic;
-  if (!carto) return null;
-  return {
-    lon: Cesium.Math.toDegrees(carto.longitude),
-    lat: Cesium.Math.toDegrees(carto.latitude),
-  };
+  const pose = poseOf(viewer);
+  return pose ? { lon: pose.lon, lat: pose.lat } : null;
 }
 
 /**
@@ -168,24 +188,17 @@ export function viewFocus(
   { groundHeight = null, maxRange = null } = {},
 ) {
   const nadir = cameraNadir(viewer);
-  const scene = viewer?.scene;
-  const width = scene?.canvas?.clientWidth || scene?.canvas?.width || 0;
-  const height = scene?.canvas?.clientHeight || scene?.canvas?.height || 0;
-  if (!nadir || !width || !height) return nadir;
-  const hit = groundHit(
-    viewer.camera,
-    new Cesium.Cartesian2(width / 2, height / 2),
-    raisedEllipsoid(
-      scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
-      groundHeight,
-    ),
+  const { width, height } = canvasSize(viewer);
+  const query = nadir && findQuery(viewer);
+  if (!nadir || !query || !width || !height) return nadir;
+  const ahead = groundHit(
+    query,
+    width / 2,
+    height / 2,
+    raisedEllipsoid(groundHeight),
     maxRange,
   );
-  if (!hit) return nadir;
-  const ahead = {
-    lon: Cesium.Math.toDegrees(hit.longitude),
-    lat: Cesium.Math.toDegrees(hit.latitude),
-  };
+  if (!ahead) return nadir;
   return {
     lon: wrapLon(nadir.lon + wrapLon(ahead.lon - nadir.lon) / 2),
     lat: (nadir.lat + ahead.lat) / 2,
@@ -197,60 +210,60 @@ export function viewFocus(
  * (NYC −22 m), and an occluder at 0 m would hide the cones around it.
  */
 const HORIZON_CULL_DEPTH_M = 1000;
-const HORIZON_CULL_ELLIPSOID = new Cesium.Ellipsoid(
-  Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
-  Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
-  Cesium.Ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
-);
+const HORIZON_CULL_ELLIPSOID = offsetEllipsoid(-HORIZON_CULL_DEPTH_M);
 
 /**
- * Hide billboards and points behind the horizon: they skip the depth test, so
- * nothing else stops the far side drawing through the globe. Re-culls on
- * pre-render after the camera moves; stops when nothing is left to cull.
- * @param {{getViewer: () => object|null, items: () => Iterable<{position: object, show: boolean}>, onChange?: () => void}} options
+ * Hide markers behind the horizon: they skip the depth test, so nothing
+ * else stops the far side drawing through the globe. Re-culls before a
+ * frame draws after the camera moves; stops when nothing is left to cull.
+ * Items are `{position, show}` (`position` ECEF); `onChange` hears the
+ * items whose `show` it changed.
+ * @param {{getViewer: () => object|null, items: () => Iterable<{position: {x: number, y: number, z: number}, show: boolean}>, onChange?: (changed: object[]) => void}} options
  */
 export function createHorizonCull({ getViewer, items, onChange }) {
-  const occluder = new Cesium.EllipsoidalOccluder(HORIZON_CULL_ELLIPSOID);
   let from = null;
   let stopListening = null;
 
   /** Show what is in front of the horizon, hide the rest; the count seen. */
   function cull(list, position) {
-    occluder.cameraPosition = position;
+    const horizon = horizonFrom(position, HORIZON_CULL_ELLIPSOID);
     let seen = 0;
-    let changed = false;
+    const changed = [];
     for (const item of list) {
       seen++;
-      const show = occluder.isPointVisible(item.position);
+      const show = horizon.isPointVisible(item.position);
       if (item.show !== show) {
         item.show = show;
-        changed = true;
+        changed.push(item);
       }
     }
-    if (changed) onChange?.();
+    if (changed.length) onChange?.(changed);
     return seen;
   }
 
   /** Cull everything from the camera at `position`; the count seen. */
   function cullAll(position) {
-    from = Cesium.Cartesian3.clone(position, from);
+    from = { x: position.x, y: position.y, z: position.z };
     return cull(items(), position);
   }
 
+  const eyeOf = (viewer) => (viewer ? poseOf(viewer)?.position : null) ?? null;
+  const same = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
+
   function onPreRender() {
-    const position = getViewer()?.camera?.positionWC;
-    if (!position || (from && Cesium.Cartesian3.equals(from, position))) return;
+    const position = eyeOf(getViewer());
+    if (!position || (from && same(from, position))) return;
     if (!cullAll(position)) stop();
   }
 
   /** Cull `added` items (or all) now, then all again whenever the camera moves. */
   function update(added) {
     const viewer = getViewer();
-    const position = viewer?.camera?.positionWC;
+    const position = eyeOf(viewer);
     if (position && !(added ? cull(added, position) : cullAll(position)))
       return;
     stopListening ||=
-      viewer?.scene?.preRender?.addEventListener(onPreRender) || null;
+      (viewer && findFrame(viewer)?.on('preRender', onPreRender)) || null;
   }
 
   function stop() {
@@ -273,10 +286,6 @@ export function viewCentre(viewer) {
     if (lon > 180) lon -= 360;
     return { lat: (bbox[1] + bbox[3]) / 2, lon };
   }
-  const carto = viewer.camera?.positionCartographic;
-  if (!carto) return null;
-  return {
-    lat: Cesium.Math.toDegrees(carto.latitude),
-    lon: Cesium.Math.toDegrees(carto.longitude),
-  };
+  const pose = poseOf(viewer);
+  return pose ? { lat: pose.lat, lon: pose.lon } : null;
 }

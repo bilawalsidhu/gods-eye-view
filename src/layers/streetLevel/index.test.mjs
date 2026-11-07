@@ -12,6 +12,7 @@ import {
   fakeMapillarySource,
   fakePhotoViewer,
   fakeStreetLevelProvider as fakeProvider,
+  streetPorts,
 } from '../../testSupport/streetLevelFakes.mjs';
 import { setLocale } from '../../i18n/index.js';
 
@@ -331,7 +332,7 @@ function fakeViewer() {
     disableRootEvents: true,
     onwheel: null,
   });
-  return bindFakeCesiumCamera({
+  const viewer = {
     credits,
     flights,
     scene: {
@@ -363,7 +364,8 @@ function fakeViewer() {
         if (at !== -1) credits.splice(at, 1);
       },
     },
-  });
+  };
+  return bindFakeCesiumCamera(viewer, streetPorts(viewer));
 }
 
 /** A layer over `providers`, initialised and enabled on a stand-in viewer. */

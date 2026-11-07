@@ -1,7 +1,6 @@
-import * as Cesium from 'cesium';
 import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
-import { heightsFor } from '../../queries/heights.js';
-import { cameraOf } from '../../render/cesium/camera.js';
+import { toRadians } from '../../geo/index.js';
+import { cameraOf, findQuery } from '../../render/rendererOf.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {
@@ -29,11 +28,13 @@ export function createCameraFraming({ state }) {
    * ellipsoid before tiles load, so only a plausible height counts.
    */
   function groundHeightAt(lon, lat, fallback) {
-    const scene = state.viewer?.scene;
-    const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-    let height = sampledSurfaceHeight(scene, carto);
-    if (height === null && scene)
-      height = heightsFor(scene).now(carto, { against: 'terrain' });
+    const viewer = state.viewer;
+    const point = { lon, lat };
+    let height = sampledSurfaceHeight(viewer, point);
+    if (height === null && viewer)
+      height =
+        findQuery(viewer)?.sampleHeightNow(point, { against: 'terrain' }) ??
+        null;
     if (!plausibleSurfaceHeight(height)) height = fallback;
     return plausibleSurfaceHeight(height) ? height : 0;
   }
@@ -63,8 +64,8 @@ export function createCameraFraming({ state }) {
       },
       {
         offset: {
-          heading: Cesium.Math.toRadians(bearing || 0),
-          pitch: Cesium.Math.toRadians(-32),
+          heading: toRadians(bearing || 0),
+          pitch: toRadians(-32),
           range: 140,
         },
         durationS: 1.6,

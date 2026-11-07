@@ -9,7 +9,9 @@ import { validateProviders } from '../../registry.js';
 import {
   fakeMapillarySource,
   rayCamera,
+  streetPorts,
 } from '../../../../testSupport/streetLevelFakes.mjs';
+import { bindRenderer } from '../../../../render/rendererOf.js';
 
 function fakeContext(filter = { pano: 'all', sinceMs: null }) {
   const opened = [];
@@ -105,7 +107,7 @@ function streetViewer() {
     }),
     { changed: event(), moveEnd: event() },
   );
-  return {
+  const viewer = {
     camera,
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
@@ -117,6 +119,8 @@ function streetViewer() {
       requestRender() {},
     },
   };
+  bindRenderer(viewer, streetPorts(viewer, { camera: true }));
+  return viewer;
 }
 
 test('coverage asks for no tiles before the key status is known, and none without a key', async (t) => {

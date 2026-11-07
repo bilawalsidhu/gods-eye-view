@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createMarker } from './marker.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { streetPorts } from '../../testSupport/streetLevelFakes.mjs';
 
 /** A viewer whose camera is 20,000 km over `view`, and its pre-render listeners. */
 function setup() {
@@ -23,6 +25,7 @@ function setup() {
       },
     },
   };
+  bindRenderer(viewer, streetPorts(viewer, { camera: true }));
   const state = {
     services: {},
     viewer,

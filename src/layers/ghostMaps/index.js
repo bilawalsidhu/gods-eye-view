@@ -15,6 +15,9 @@ import {
   tn,
 } from '../../i18n/index.js';
 import { createHorizonCull } from '../streetLevel/view.js';
+// The horizon cull reads the camera and frame ports: a viewer of a
+// caller's own gets them from the unbound factories this loads.
+import '../../render/cesium/camera.js';
 import { readGhostMapsKml } from './kml.js';
 import { fieldLabel, parseDescriptionFields, wrapCardText } from './records.js';
 import { inputFor as defaultInputFor } from '../../input/dispatcher.js';

@@ -6,9 +6,11 @@ import {
   distance,
   distanceSquared,
   eastNorthUp,
+  ellipsoidOf,
   fromDegrees,
   geodeticSurfaceNormal,
   lerpInto,
+  offsetEllipsoid,
   rayEllipsoid,
   scaleToGeodeticSurface,
   toCartographicRadians,
@@ -244,4 +246,68 @@ test('in-place vector helpers match the default renderer bit for bit', () => {
     { ...p },
     { ...Cesium.Cartesian3.lerp(ca, cb, 0.25, new Cesium.Cartesian3()) },
   );
+});
+
+test('on another ellipsoid, rays and geodetic positions match the default renderer’s', () => {
+  const rand = random(7);
+  for (const metres of [1600, -1000, 30]) {
+    const ours = offsetEllipsoid(metres);
+    const theirs = new Cesium.Ellipsoid(
+      Cesium.Ellipsoid.WGS84.radii.x + metres,
+      Cesium.Ellipsoid.WGS84.radii.y + metres,
+      Cesium.Ellipsoid.WGS84.radii.z + metres,
+    );
+    for (let i = 0; i < 200; i++) {
+      const origin = Cesium.Cartesian3.fromDegrees(
+        rand() * 360 - 180,
+        rand() * 170 - 85,
+        100 + rand() * 2e5,
+      );
+      const target = Cesium.Cartesian3.fromDegrees(
+        rand() * 360 - 180,
+        rand() * 170 - 85,
+      );
+      const direction = Cesium.Cartesian3.normalize(
+        Cesium.Cartesian3.subtract(target, origin, new Cesium.Cartesian3()),
+        new Cesium.Cartesian3(),
+      );
+      const ray = new Cesium.Ray(origin, direction);
+      const span = Cesium.IntersectionTests.rayEllipsoid(ray, theirs);
+      const hit = rayEllipsoid({ origin, direction }, ours);
+      if (!span) {
+        assert.equal(hit, null);
+        continue;
+      }
+      const expected = Cesium.Ray.getPoint(
+        ray,
+        span.start > 0 ? span.start : span.stop,
+      );
+      assert.ok(distance(hit, expected) < 1e-3, `ray ${i} at ${metres} m`);
+      const carto = Cesium.Cartographic.fromCartesian(expected, theirs);
+      const deg = toLonLatH(expected, ours);
+      assert.ok(Math.abs(deg.lon - toDegrees(carto.longitude)) < 1e-9);
+      assert.ok(Math.abs(deg.lat - toDegrees(carto.latitude)) < 1e-9);
+      assert.ok(Math.abs(deg.height - carto.height) < 1e-3);
+    }
+  }
+});
+
+test('an ellipsoid argument that is not one (a map index) means WGS84', () => {
+  const p = fromDegrees(10, 20, 30);
+  assert.deepEqual(toLonLatH(p, 1), toLonLatH(p));
+  assert.deepEqual(
+    rayEllipsoid(
+      { origin: { x: 1e7, y: 0, z: 0 }, direction: { x: -1, y: 0, z: 0 } },
+      0,
+    ),
+    rayEllipsoid({
+      origin: { x: 1e7, y: 0, z: 0 },
+      direction: { x: -1, y: 0, z: 0 },
+    }),
+  );
+  assert.deepEqual(ellipsoidOf({ x: 1, y: 2, z: 4 }).oneOverRadiiSquared, {
+    x: 1,
+    y: 0.25,
+    z: 0.0625,
+  });
 });

@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
 import { CLICK_PICK_WINDOW_PX, STREET_LEVEL_LAYER_ID } from './policy.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { toLonLatH } from '../../geo/index.js';
 
 /** One click handler for every provider's lines and cones, and the marker. */
 export function createSelection({ state, parts }) {
@@ -33,13 +33,8 @@ export function createSelection({ state, parts }) {
       viewer,
       screenPosition,
     );
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
-    return carto
-      ? {
-          lon: Cesium.Math.toDegrees(carto.longitude),
-          lat: Cesium.Math.toDegrees(carto.latitude),
-        }
-      : null;
+    const ground = position && toLonLatH(position);
+    return ground ? { lon: ground.lon, lat: ground.lat } : null;
   }
 
   /**

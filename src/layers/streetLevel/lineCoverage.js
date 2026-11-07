@@ -3,6 +3,7 @@ import { passesImageryFilter } from './filter.js';
 import { groundUnderCamera, viewFocus, visibleBbox } from './view.js';
 import { tilesForBbox } from './tileMath.js';
 import { msg } from '../../i18n/index.js';
+import { findCamera } from '../../render/rendererOf.js';
 
 /** Sequences per primitive: smaller batches build, and show, sooner. */
 const SEQUENCE_PRIMITIVE_BATCH = 120;
@@ -396,7 +397,7 @@ export function createLineCoverage({
    */
   function wantedTiles(viewer) {
     const ground = groundUnderCamera(viewer);
-    const cameraHeight = viewer.camera?.positionCartographic?.height;
+    const cameraHeight = findCamera(viewer)?.pose().height;
     const height = Number.isFinite(cameraHeight)
       ? cameraHeight - (ground ?? 0)
       : null;
@@ -456,8 +457,9 @@ export function createLineCoverage({
 
   function attach(viewer) {
     detach();
-    const remove = viewer.camera.changed.addEventListener(scheduleRefresh);
-    const removeEnd = viewer.camera.moveEnd.addEventListener(scheduleRefresh);
+    const camera = findCamera(viewer);
+    const remove = camera?.on('changed', scheduleRefresh) ?? (() => {});
+    const removeEnd = camera?.on('moveEnd', scheduleRefresh) ?? (() => {});
     state.coverage.removeCameraListener = () => {
       remove();
       removeEnd();

@@ -47,11 +47,45 @@ export const WGS84 = Object.freeze({
   }),
 });
 
+/**
+ * An ellipsoid with these radii, in the form `WGS84` has: for code that
+ * works on a surface other than WGS84 (the ground raised to a height, a
+ * horizon taken below it). Pass it as the trailing argument of the
+ * functions that take one.
+ * @param {{x: number, y: number, z: number}} radii
+ */
+export function ellipsoidOf({ x, y, z }) {
+  return Object.freeze({
+    radii: Object.freeze({ x, y, z }),
+    radiiSquared: Object.freeze({ x: x * x, y: y * y, z: z * z }),
+    oneOverRadii: Object.freeze({ x: 1 / x, y: 1 / y, z: 1 / z }),
+    oneOverRadiiSquared: Object.freeze({
+      x: 1 / (x * x),
+      y: 1 / (y * y),
+      z: 1 / (z * z),
+    }),
+  });
+}
+
+/** WGS84 with every radius `metres` longer (shorter, when negative). */
+export function offsetEllipsoid(metres) {
+  const { x, y, z } = WGS84.radii;
+  return ellipsoidOf({ x: x + metres, y: y + metres, z: z + metres });
+}
+
+/**
+ * The ellipsoid a trailing argument names: one from `ellipsoidOf`, else
+ * WGS84 (so these functions can still be handed to `map`, whose index
+ * lands there).
+ */
+const ellipsoidArg = (ellipsoid) =>
+  ellipsoid?.oneOverRadiiSquared ? ellipsoid : WGS84;
+
 const EPSILON12 = 1e-12;
 const CENTER_TOLERANCE_SQUARED = 0.1;
 
-export function geodeticSurfaceNormal(p) {
-  const o = WGS84.oneOverRadiiSquared;
+export function geodeticSurfaceNormal(p, ellipsoid) {
+  const o = ellipsoidArg(ellipsoid).oneOverRadiiSquared;
   return normalize(vec(p.x * o.x, p.y * o.y, p.z * o.z));
 }
 
@@ -77,11 +111,12 @@ export const fromDegrees = (lon, lat, height = 0) =>
   fromRadians(toRadians(lon), toRadians(lat), height);
 
 /** The point on the ellipsoid along the geodetic normal, or null at the centre. */
-export function scaleToGeodeticSurface(p) {
+export function scaleToGeodeticSurface(p, ellipsoid) {
+  const e = ellipsoidArg(ellipsoid);
   const { x: positionX, y: positionY, z: positionZ } = p;
-  const oneOverRadiiX = WGS84.oneOverRadii.x;
-  const oneOverRadiiY = WGS84.oneOverRadii.y;
-  const oneOverRadiiZ = WGS84.oneOverRadii.z;
+  const oneOverRadiiX = e.oneOverRadii.x;
+  const oneOverRadiiY = e.oneOverRadii.y;
+  const oneOverRadiiZ = e.oneOverRadii.z;
   const x2 = positionX * positionX * oneOverRadiiX * oneOverRadiiX;
   const y2 = positionY * positionY * oneOverRadiiY * oneOverRadiiY;
   const z2 = positionZ * positionZ * oneOverRadiiZ * oneOverRadiiZ;
@@ -91,9 +126,9 @@ export function scaleToGeodeticSurface(p) {
   if (squaredNorm < CENTER_TOLERANCE_SQUARED)
     return Number.isFinite(ratio) ? intersection : null;
 
-  const oneOverRadiiSquaredX = WGS84.oneOverRadiiSquared.x;
-  const oneOverRadiiSquaredY = WGS84.oneOverRadiiSquared.y;
-  const oneOverRadiiSquaredZ = WGS84.oneOverRadiiSquared.z;
+  const oneOverRadiiSquaredX = e.oneOverRadiiSquared.x;
+  const oneOverRadiiSquaredY = e.oneOverRadiiSquared.y;
+  const oneOverRadiiSquaredZ = e.oneOverRadiiSquared.z;
   const gradient = vec(
     intersection.x * oneOverRadiiSquaredX * 2.0,
     intersection.y * oneOverRadiiSquaredY * 2.0,
@@ -130,11 +165,14 @@ export function scaleToGeodeticSurface(p) {
   );
 }
 
-/** ECEF to geodetic `{lon, lat}` radians and `height` metres, or null at the centre. */
-export function toCartographicRadians(p) {
-  const surface = scaleToGeodeticSurface(p);
+/**
+ * ECEF to geodetic `{lon, lat}` radians and `height` metres, or null at the
+ * centre; on `ellipsoid` (from `ellipsoidOf`) when given, else WGS84.
+ */
+export function toCartographicRadians(p, ellipsoid) {
+  const surface = scaleToGeodeticSurface(p, ellipsoid);
   if (!surface) return null;
-  const n = geodeticSurfaceNormal(surface);
+  const n = geodeticSurfaceNormal(surface, ellipsoid);
   const h = sub(p, surface);
   return {
     lon: Math.atan2(n.y, n.x),
@@ -143,21 +181,23 @@ export function toCartographicRadians(p) {
   };
 }
 
-/** ECEF to `{lon, lat}` degrees and `height` metres. */
-export function toLonLatH(p) {
-  const c = toCartographicRadians(p);
+/** ECEF to `{lon, lat}` degrees and `height` metres, on `ellipsoid` as `toCartographicRadians`. */
+export function toLonLatH(p, ellipsoid) {
+  const c = toCartographicRadians(p, ellipsoid);
   if (!c) return null;
   return { lon: toDegrees(c.lon), lat: toDegrees(c.lat), height: c.height };
 }
 
 /**
  * Where a ray first meets the ellipsoid ahead of its origin, as Cesium's
- * `camera.pickEllipsoid` takes the hit, or null when it misses.
+ * `camera.pickEllipsoid` takes the hit, or null when it misses; on
+ * `ellipsoid` (from `ellipsoidOf`) when given, else WGS84.
  * @param {{origin: {x: number, y: number, z: number},
  *   direction: {x: number, y: number, z: number}}} ray
+ * @param {typeof WGS84} [ellipsoid]
  */
-export function rayEllipsoid(ray) {
-  const r = WGS84.oneOverRadii;
+export function rayEllipsoid(ray, ellipsoid) {
+  const r = ellipsoidArg(ellipsoid).oneOverRadii;
   const q = vec(ray.origin.x * r.x, ray.origin.y * r.y, ray.origin.z * r.z);
   const w = vec(
     ray.direction.x * r.x,

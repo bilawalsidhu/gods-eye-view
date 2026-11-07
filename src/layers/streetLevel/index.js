@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
@@ -14,7 +13,9 @@ import {
   keyAlternatives,
   summarizeCoverage,
 } from './uiState.js';
-import { groundUnderCamera, viewCentre } from './view.js';
+import { canvasSize, groundUnderCamera, viewCentre } from './view.js';
+import { toLonLatH } from '../../geo/index.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import { msg, t, translateKnown } from '../../i18n/index.js';
 import {
@@ -38,7 +39,9 @@ const GROUND_RETRY_MS = 1000;
  * The core owns what they share: the filter and switches, the photo viewer
  * host, the position marker, the click handler and nearest-image lookups.
  * Providers own coverage, sequences and their viewer. One source is lit at
- * a time.
+ * a time. It reaches the camera, queries and frames through the renderer's
+ * ports; given a Cesium viewer with no renderer bound,
+ * the caller loads the package's `./render/cesium/unbound` export first.
  * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
  */
 export function createStreetLevelLayer({
@@ -209,7 +212,7 @@ export function createStreetLevelLayer({
   function watchCamera(viewer) {
     removeCameraListener?.();
     removeCameraListener =
-      viewer?.camera?.moveEnd?.addEventListener(remeasureGround) || null;
+      (viewer && findCamera(viewer)?.on('moveEnd', remeasureGround)) || null;
   }
 
   const activeEntries = () =>
@@ -257,21 +260,12 @@ export function createStreetLevelLayer({
 
   /** Ground under the screen centre; null for sky, undefined when it cannot aim. */
   function screenCentreGround() {
-    const canvas = state.viewer?.scene?.canvas;
+    const { width, height } = canvasSize(state.viewer);
     const pick = state.services.scenePick?.pickGroundPosition;
-    if (!pick || !canvas?.clientWidth || !canvas?.clientHeight)
-      return undefined;
-    const position = pick(state.viewer, {
-      x: canvas.clientWidth / 2,
-      y: canvas.clientHeight / 2,
-    });
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
-    return carto
-      ? {
-          lon: Cesium.Math.toDegrees(carto.longitude),
-          lat: Cesium.Math.toDegrees(carto.latitude),
-        }
-      : null;
+    if (!pick || !width || !height) return undefined;
+    const position = pick(state.viewer, { x: width / 2, y: height / 2 });
+    const ground = position && toLonLatH(position);
+    return ground ? { lon: ground.lon, lat: ground.lat } : null;
   }
 
   /** `frame: false` keeps the camera where it is (the user picked the spot). */

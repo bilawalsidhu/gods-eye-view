@@ -3,6 +3,8 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { resolveFilter } from './filter.js';
 import { createSequenceCones, thinImages } from './sequenceCones.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { streetPorts } from '../../testSupport/streetLevelFakes.mjs';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -192,6 +194,7 @@ test('cones behind the globe are hidden, and show again from the other side', as
       },
     },
   };
+  bindRenderer(state.viewer, streetPorts(state.viewer, { camera: true }));
   sequences.select('A');
   // One image under the camera, one near its antipode.
   source.last('A').resolve([

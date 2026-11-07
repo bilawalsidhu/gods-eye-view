@@ -8,10 +8,12 @@ import { WGS84 } from './ellipsoid.js';
 
 /**
  * A horizon test from `eye` (ECEF): `isPointVisible(p)` is false for a
- * point the ellipsoid hides from it.
+ * point the ellipsoid hides from it. `ellipsoid` (from `ellipsoidOf`) puts
+ * the horizon on another surface, as the occluder takes one.
  */
-export function horizonFrom(eye) {
-  const o = WGS84.oneOverRadii;
+export function horizonFrom(eye, ellipsoid) {
+  // Anything but an ellipsoid (a map index, say) means WGS84.
+  const o = (ellipsoid?.oneOverRadii ? ellipsoid : WGS84).oneOverRadii;
   const cx = eye.x * o.x;
   const cy = eye.y * o.y;
   const cz = eye.z * o.z;

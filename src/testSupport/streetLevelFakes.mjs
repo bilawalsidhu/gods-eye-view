@@ -191,7 +191,7 @@ export function fakeCesiumViewer({ view = false } = {}) {
       },
     },
   );
-  return bindFakeCesiumCamera({
+  const viewer = {
     credits,
     flights,
     scene: {
@@ -212,7 +212,8 @@ export function fakeCesiumViewer({ view = false } = {}) {
         if (at !== -1) credits.splice(at, 1);
       },
     },
-  });
+  };
+  return bindFakeCesiumCamera(viewer, streetPorts(viewer));
 }
 
 /**
@@ -249,26 +250,111 @@ export function rayCamera({
   const halfY = Math.tan((fovY / 2) * RAD);
   const halfX =
     fovX == null ? halfY * (width / height) : Math.tan((fovX / 2) * RAD);
+  /** The ray through a screen point, as the query port's `pickRay`. */
+  function pickRay(x, y) {
+    const sx = ((2 * x) / width - 1) * halfX;
+    const sy = (1 - (2 * y) / height) * halfY;
+    const local = [0, 1, 2].map((i) => forward[i] + sx * right[i] + sy * up[i]);
+    const direction = Cesium.Cartesian3.normalize(
+      Cesium.Matrix4.multiplyByPointAsVector(
+        frame,
+        new Cesium.Cartesian3(...local),
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    );
+    return { origin: position, direction };
+  }
   return {
     positionWC: position,
     positionCartographic: Cesium.Cartographic.fromDegrees(lon, lat, altitude),
+    pickRay,
     pickEllipsoid(point, ellipsoid = Cesium.Ellipsoid.WGS84) {
-      const sx = ((2 * point.x) / width - 1) * halfX;
-      const sy = (1 - (2 * point.y) / height) * halfY;
-      const local = [0, 1, 2].map(
-        (i) => forward[i] + sx * right[i] + sy * up[i],
-      );
-      const direction = Cesium.Cartesian3.normalize(
-        Cesium.Matrix4.multiplyByPointAsVector(
-          frame,
-          new Cesium.Cartesian3(...local),
-          new Cesium.Cartesian3(),
-        ),
-        new Cesium.Cartesian3(),
-      );
+      const { direction } = pickRay(point.x, point.y);
       const ray = new Cesium.Ray(position, direction);
       const hit = Cesium.IntersectionTests.rayEllipsoid(ray, ellipsoid);
       return hit ? Cesium.Ray.getPoint(ray, hit.start) : undefined;
+    },
+  };
+}
+
+/**
+ * The query, frame and canvas a Street Level layer reads, answered from a
+ * Cesium-shaped viewer double: rays from its camera's `pickRay` (else
+ * through what its `pickEllipsoid` hits), heights from its scene's
+ * `sampleHeight` (3D tiles: only while its globe is hidden) and its
+ * globe's `getHeight` (terrain), and pre-render from its scene's
+ * `preRender`. `draw` adds a draw port. For `bindFakeCesiumCamera`'s
+ * `ports`.
+ * @param {object} viewer
+ * @param {{draw?: object}} [options]
+ */
+export function streetPorts(viewer, { draw, camera = false } = {}) {
+  const finite = (height) => (Number.isFinite(height) ? height : null);
+  const cartographic = ({ lon, lat }) => ({
+    longitude: lon * RAD,
+    latitude: lat * RAD,
+    height: 0,
+  });
+  return {
+    get canvas() {
+      return viewer.scene?.canvas;
+    },
+    query: {
+      pickRay(x, y) {
+        const camera = viewer.camera ?? {};
+        if (camera.pickRay) return camera.pickRay(x, y);
+        const hit = camera.pickEllipsoid?.({ x, y });
+        const origin = camera.positionWC;
+        if (!hit || !origin) return null;
+        const direction = Cesium.Cartesian3.normalize(
+          Cesium.Cartesian3.subtract(hit, origin, new Cesium.Cartesian3()),
+          new Cesium.Cartesian3(),
+        );
+        return { origin, direction };
+      },
+      sampleHeightNow(point, { against = 'surface' } = {}) {
+        const scene = viewer.scene ?? {};
+        if (against === 'terrain')
+          return finite(scene.globe?.getHeight?.(cartographic(point)));
+        if (!scene.sampleHeightSupported) return null;
+        if (against === 'tiles' && scene.globe?.show !== false) return null;
+        return finite(scene.sampleHeight?.(cartographic(point)));
+      },
+    },
+    frame: {
+      on(phase, cb) {
+        const event = viewer.scene?.[phase];
+        return event?.addEventListener?.(cb) ?? (() => {});
+      },
+    },
+    ...(draw ? { draw } : {}),
+    ...(camera ? { camera: liveCamera(viewer) } : {}),
+  };
+}
+
+/**
+ * A camera port over whatever camera double `viewer.camera` is when asked
+ * (tests swap it): its pose from `positionCartographic` and `positionWC`,
+ * its events from the double's own `changed` and `moveEnd`.
+ */
+export function liveCamera(viewer) {
+  return {
+    pose() {
+      const camera = viewer.camera ?? {};
+      const p = camera.positionWC;
+      const c =
+        camera.positionCartographic ??
+        (p && Cesium.Cartographic.fromCartesian(p));
+      return {
+        lon: c ? c.longitude / RAD : NaN,
+        lat: c ? c.latitude / RAD : NaN,
+        height: c ? c.height : NaN,
+        position: p ? { x: p.x, y: p.y, z: p.z } : null,
+      };
+    },
+    on(event, cb) {
+      return viewer.camera?.[event]?.addEventListener?.(cb) ?? (() => {});
     },
   };
 }
@@ -325,7 +411,7 @@ export function coverageViewer(view, t) {
       },
     };
   };
-  return {
+  const viewer = {
     view,
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
@@ -360,4 +446,5 @@ export function coverageViewer(view, t) {
       computeViewRectangle: () => undefined,
     },
   };
+  return bindFakeCesiumCamera(viewer, streetPorts(viewer));
 }

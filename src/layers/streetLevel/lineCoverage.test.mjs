@@ -10,7 +10,8 @@ import {
 import { resolveFilter } from './filter.js';
 import { encodeCoverageTile } from './providers/mapillary/coverageFixture.mjs';
 import { decodeCoverageTile } from './providers/mapillary/decode.js';
-import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
+import { rayCamera, streetPorts } from '../../testSupport/streetLevelFakes.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
 import {
   COLORS,
   COVERAGE_TUNING,
@@ -85,7 +86,7 @@ function tileCentre(lon, lat) {
 
 /** A viewer looking straight down on a 0.004° square around `view`. */
 function fakeViewer(view) {
-  return {
+  const viewer = {
     view,
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
@@ -101,6 +102,9 @@ function fakeViewer(view) {
           height: view.height,
         };
       },
+      get positionWC() {
+        return Cesium.Cartesian3.fromDegrees(view.lon, view.lat, view.height);
+      },
       pickEllipsoid(point) {
         return Cesium.Cartesian3.fromDegrees(
           view.lon - 0.002 + (point.x / 100) * 0.004,
@@ -109,6 +113,8 @@ function fakeViewer(view) {
       },
     },
   };
+  bindRenderer(viewer, streetPorts(viewer, { camera: true }));
+  return viewer;
 }
 
 /** A source whose tile requests the test resolves, one call at a time. */
