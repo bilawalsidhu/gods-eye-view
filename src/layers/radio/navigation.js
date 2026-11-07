@@ -1,11 +1,12 @@
 import { isFollowing } from '../../data/followed.js';
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { dot, magnitude } from '../../geo/vector.js';
 import {
   HORIZON_CAMERA_MOVE_EPSILON_M,
   GLOBAL_RADIO_ALTITUDE_M,
   RADIO_GLOBE_RECENTER_MAX_HEIGHT_M,
 } from './policy.js';
-import { cameraOf } from '../../render/cesium/camera.js';
+import { cameraOf, findCamera } from '../../render/rendererOf.js';
 
 export function createNavigation({
   state: layerState,
@@ -137,13 +138,14 @@ export function createNavigation({
       : currentHeight;
   }
 
-  function radioCameraState(camera = layerState._viewer?.camera) {
-    if (!camera) return null;
+  function radioCameraState() {
+    const pose = findCamera(layerState._viewer)?.pose();
+    if (!pose) return null;
     return {
-      height: camera.positionCartographic?.height,
-      heading: camera.heading,
-      pitch: camera.pitch,
-      roll: camera.roll,
+      height: pose.height,
+      heading: pose.heading,
+      pitch: pose.pitch,
+      roll: pose.roll,
     };
   }
 
@@ -154,12 +156,13 @@ export function createNavigation({
   }
 
   function radioGlobeRecenterPlan(viewer = layerState._viewer) {
-    const camera = viewer?.camera;
+    const pose = viewer?.camera ? findCamera(viewer)?.pose() : null;
     const canvas = viewer?.scene?.canvas;
     const width = canvas?.clientWidth || canvas?.width;
     const height = canvas?.clientHeight || canvas?.height;
-    const cartographic = camera?.positionCartographic;
-    if (!camera || !cartographic || !(width > 0) || !(height > 0)) return null;
+    // The eye at the earth's centre has no geodetic position.
+    if (!pose || !Number.isFinite(pose.height) || !(width > 0) || !(height > 0))
+      return null;
     const geometry = projectEarthDiscToViewport(
       viewer,
       width,
@@ -180,36 +183,29 @@ export function createNavigation({
       );
     } else {
       const earthRadius = earthDiscScreenRadius(
-        Cesium.Cartesian3.magnitude(camera.positionWC),
+        magnitude(pose.position),
         height,
-        camera.frustum?.fovy,
+        pose.fovy,
       );
       const facingEarthCenter =
-        Cesium.Cartesian3.dot(
-          camera.directionWC,
-          layerState._radioEarthToCenter,
-        ) > 0;
+        dot(pose.direction, layerState._radioEarthToCenter) > 0;
       if (!earthRadius || facingEarthCenter) return null;
       const keyhole = getKeyholeGeometry(width, height);
       fullGlobeCapable =
         earthRadius + GLOBE_ENTER_CLEARANCE_PX <= keyhole.radius;
     }
     const recenterHeight = radioGlobeRecenterHeight(
-      cartographic.height,
+      pose.height,
       fullGlobeCapable,
     );
     if (recenterHeight == null) return null;
     return {
-      destination: Cesium.Cartesian3.fromRadians(
-        cartographic.longitude,
-        cartographic.latitude,
-        recenterHeight,
-      ),
+      destination: fromDegrees(pose.lon, pose.lat, recenterHeight),
       cameraState: {
-        ...radioCameraState(camera),
+        ...radioCameraState(),
         height: recenterHeight,
         heading: 0,
-        pitch: -Cesium.Math.PI_OVER_TWO,
+        pitch: -Math.PI / 2,
         roll: 0,
       },
     };

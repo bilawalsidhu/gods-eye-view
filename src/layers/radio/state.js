@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   EMPTY_ACCEPTED_CATALOG_SNAPSHOT,
   DEFAULT_RADIO_FILTER,
@@ -8,9 +7,10 @@ import {
 export function createState({ services }) {
   const layerState = {};
 
-  layerState._radioEarthScreenCenter = new Cesium.Cartesian2();
+  // Scratch results the Earth-disc projection writes into.
+  layerState._radioEarthScreenCenter = { x: 0, y: 0 };
 
-  layerState._radioEarthToCenter = new Cesium.Cartesian3();
+  layerState._radioEarthToCenter = { x: 0, y: 0, z: 0 };
 
   layerState._viewer = null;
 

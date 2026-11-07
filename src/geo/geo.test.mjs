@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
+  distance,
   eastNorthUp,
   fromDegrees,
   geodeticSurfaceNormal,
+  rayEllipsoid,
   scaleToGeodeticSurface,
   toCartographicRadians,
   toDegrees,
@@ -166,4 +168,44 @@ test('east-north-up frames match the default renderer', () => {
     closeVec(ours.z, column(m, 2), 1e-12, `${where} up`);
     closeVec(ours.origin, column(m, 3), 0, `${where} origin`);
   }
+});
+
+test('a ray meets the ellipsoid where Cesium picks it', () => {
+  const rand = random(7);
+  let misses = 0;
+  for (let i = 0; i < 200; i++) {
+    const origin = new Cesium.Cartesian3(
+      (rand() - 0.5) * 4e7,
+      (rand() - 0.5) * 4e7,
+      (rand() - 0.5) * 4e7,
+    );
+    const toward = new Cesium.Cartesian3(
+      (rand() - 0.5) * 2.4e7,
+      (rand() - 0.5) * 2.4e7,
+      (rand() - 0.5) * 2.4e7,
+    );
+    const direction = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(toward, origin, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const ray = new Cesium.Ray(origin, direction);
+    // As `camera.pickEllipsoid` takes the hit.
+    const span = Cesium.IntersectionTests.rayEllipsoid(
+      ray,
+      Cesium.Ellipsoid.WGS84,
+    );
+    const ours = rayEllipsoid({ origin, direction });
+    if (!span) {
+      misses += 1;
+      assert.equal(ours, null);
+      continue;
+    }
+    const expected = Cesium.Ray.getPoint(
+      ray,
+      span.start > 0 ? span.start : span.stop,
+    );
+    assert.ok(ours, 'a hit');
+    assert.ok(distance(ours, expected) < 1e-3, `ray ${i}`);
+  }
+  assert.ok(misses > 0 && misses < 200, 'hits and misses both tried');
 });

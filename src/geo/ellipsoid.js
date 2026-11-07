@@ -149,3 +149,30 @@ export function toLonLatH(p) {
   if (!c) return null;
   return { lon: toDegrees(c.lon), lat: toDegrees(c.lat), height: c.height };
 }
+
+/**
+ * Where a ray first meets the ellipsoid ahead of its origin, as Cesium's
+ * `camera.pickEllipsoid` takes the hit, or null when it misses.
+ * @param {{origin: {x: number, y: number, z: number},
+ *   direction: {x: number, y: number, z: number}}} ray
+ */
+export function rayEllipsoid(ray) {
+  const r = WGS84.oneOverRadii;
+  const q = vec(ray.origin.x * r.x, ray.origin.y * r.y, ray.origin.z * r.z);
+  const w = vec(
+    ray.direction.x * r.x,
+    ray.direction.y * r.y,
+    ray.direction.z * r.z,
+  );
+  const a = dot(w, w);
+  const b = 2 * dot(q, w);
+  const c = dot(q, q) - 1;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return null;
+  const sq = Math.sqrt(disc);
+  const t0 = (-b - sq) / (2 * a);
+  const t1 = (-b + sq) / (2 * a);
+  const t = t0 >= 0 ? t0 : t1 >= 0 ? t1 : null;
+  if (t === null) return null;
+  return add(ray.origin, scale(ray.direction, t));
+}

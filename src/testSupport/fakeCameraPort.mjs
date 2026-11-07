@@ -144,9 +144,16 @@ export function bindFakeCesiumCamera(viewer) {
       value() {
         const c = fake.positionCartographic;
         const p = fake.positionWC;
+        const v = (w) => ({ x: w.x, y: w.y, z: w.z });
         return {
           ...DEFAULT_POSE,
-          ...(p ? { position: { x: p.x, y: p.y, z: p.z } } : {}),
+          ...(p ? { position: v(p) } : {}),
+          ...(fake.directionWC ? { direction: v(fake.directionWC) } : {}),
+          ...(fake.upWC ? { up: v(fake.upWC) } : {}),
+          ...(fake.rightWC ? { right: v(fake.rightWC) } : {}),
+          ...(Number.isFinite(fake.frustum?.fovy)
+            ? { fovy: fake.frustum.fovy }
+            : {}),
           lon: c ? toDegrees(c.longitude) : NaN,
           lat: c ? toDegrees(c.latitude) : NaN,
           height: c ? c.height : NaN,

@@ -1,4 +1,7 @@
 import * as Cesium from 'cesium';
+// The Cesium camera factory: given a viewer of a caller's own, with no
+// renderer bound, the layer's flights and camera reads find a camera port.
+import '../../render/cesium/camera.js';
 import {
   RADIO_OVERLAY_SOURCE_ID,
   DEFAULT_RADIO_VOLUME,
