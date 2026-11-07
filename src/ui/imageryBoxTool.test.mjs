@@ -11,6 +11,7 @@ import {
   initImageryBoxTool,
 } from './imageryBoxTool.js';
 import { boxToolFakes } from '../layers/recentImagery/testDoubles.mjs';
+import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
 
 function fixture(options = {}) {
   resetPointerOwnership();
@@ -20,7 +21,8 @@ function fixture(options = {}) {
   const actives = [];
   const tool = initImageryBoxTool({
     viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    createPreview: (viewer, dragBox) =>
+      createImageryBoxPreview(viewer, dragBox, { cesium: fakes.cesium }),
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => boxes.push(box),
@@ -150,7 +152,9 @@ test('destroy mid-drag restores the camera, releases the claim and detaches the 
   f.tool.start();
   f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
   assert.equal(f.viewer.dataSources.sources.length, 1);
-  await f.tool.destroy();
+  const destroying = f.tool.destroy();
+  assert.equal(f.tool.destroy(), destroying);
+  await destroying;
   assert.equal(f.camera.enableInputs, true);
   assert.equal(pointerOwner(), null);
   assert.equal(f.viewer.dataSources.sources.length, 0);

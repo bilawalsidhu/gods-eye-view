@@ -11,6 +11,7 @@
 // renderer is its Cesium side, so it brings the factories a viewer with no
 // renderer bound gets those ports from, and marks a tileset host as a base
 // the globe port drapes on.
+import * as Cesium from 'cesium';
 import '../../render/cesium/camera.js';
 import { markBaseTileset } from '../../render/cesium/globe.js';
 import { PRODUCTS, gibsTemplate } from './model.js';
@@ -232,6 +233,100 @@ export function createRecentImageryRenderer({
       for (const slotId of SLOT_IDS) changed = removeOwned(slotId) || changed;
       host = NO_HOST;
       if (changed) requestRender('recent-imagery-destroy');
+    },
+  };
+}
+
+/**
+ * The box tool's preview: the box being dragged, a translucent fill and a
+ * dashed outline on the ground (the draw port draws no dashed draped
+ * lines), read from `dragBox()` each frame it draws.
+ * @param {object} viewer
+ * @param {() => ({west: number, south: number, east: number, north: number}|null)} dragBox
+ *   Degrees, or null while no drag is live.
+ * @param {{cesium?: object}} [options] The Cesium namespace (tests pass a double).
+ * @returns {{setVisible: (visible: boolean) => void, changed: () => void, destroy: () => Promise<void>}}
+ */
+export function createImageryBoxPreview(
+  viewer,
+  dragBox,
+  { cesium = Cesium } = {},
+) {
+  const dataSource = new cesium.CustomDataSource(
+    'gev-recent-imagery-box-preview',
+  );
+  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
+    () => null,
+  );
+  let destroyed = false;
+  const stroke = cesium.Color.fromCssColorString('#8be9ff');
+  const previewRectangle = () => {
+    const box = dragBox();
+    return box
+      ? cesium.Rectangle.fromDegrees(box.west, box.south, box.east, box.north)
+      : undefined;
+  };
+  const previewOutline = () => {
+    const box = dragBox();
+    if (!box) return [];
+    return cesium.Cartesian3.fromDegreesArray([
+      box.west,
+      box.south,
+      box.east,
+      box.south,
+      box.east,
+      box.north,
+      box.west,
+      box.north,
+      box.west,
+      box.south,
+    ]);
+  };
+  const fill = dataSource.entities.add({
+    show: false,
+    rectangle: {
+      coordinates: new cesium.CallbackProperty(previewRectangle, false),
+      material: stroke.withAlpha(0.12),
+      classificationType: cesium.ClassificationType.BOTH,
+    },
+  });
+  // A rectangle graphic cannot draw a dashed edge on the ground, so the
+  // outline is its own draped polyline traced round the same corners.
+  const outline = dataSource.entities.add({
+    show: false,
+    polyline: {
+      positions: new cesium.CallbackProperty(previewOutline, false),
+      width: 2,
+      clampToGround: true,
+      classificationType: cesium.ClassificationType.BOTH,
+      material: new cesium.PolylineDashMaterialProperty({
+        color: stroke.withAlpha(0.95),
+        dashLength: 12,
+      }),
+    },
+  });
+  const requestRender = () => viewer.scene.requestRender?.();
+  return {
+    setVisible(visible) {
+      fill.show = visible;
+      outline.show = visible;
+      requestRender();
+    },
+    /** The box moved: draw it again. */
+    changed: requestRender,
+    /** Detach the preview; resolves once it is gone. */
+    destroy() {
+      if (destroyed) return attaching;
+      destroyed = true;
+      dataSource.entities.removeAll();
+      attaching = attaching.then(() => {
+        try {
+          viewer.dataSources.remove(dataSource, true);
+        } catch {
+          /* viewer already disposed */
+        }
+      });
+      return attaching;
     },
   };
 }

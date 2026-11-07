@@ -111,9 +111,7 @@
   "src/sky/starrySky.js",
   "src/ui/applicationShell.js",
   "src/ui/cockpitCamera.js",
-  "src/ui/cockpitContext.js",
   "src/ui/cockpitController.js",
-  "src/ui/imageryBoxTool.js",
   "src/ui/shareFollow.js",
   "src/voice/gevActions.js"
 ]

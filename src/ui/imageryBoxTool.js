@@ -5,7 +5,6 @@
  * actions are suppressed and given back, and `destroy()` returns everything —
  * and holds the camera only while a drag is in progress.
  */
-import * as Cesium from 'cesium';
 import { pickWorldFromScreen } from '../annotations/annotationResolver.js';
 import {
   claimPointer,
@@ -14,6 +13,7 @@ import {
 } from '../data/inputOwnership.js';
 import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import { validateBox } from '../layers/recentImagery/model.js';
+import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
 import { msg } from '../i18n/index.js';
 
 /** The id this tool claims the pointer under. */
@@ -21,9 +21,11 @@ export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
 
 /**
  * Wire the box tool.
- * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, cesium?: object, inputFor?: Function, pickWorld?: Function, documentRef?: object }} deps
+ * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, createPreview?: Function, inputFor?: Function, pickWorld?: Function, documentRef?: object }} deps
  *   `onEscape` runs before the tool cancels on Escape; returning `true` claims
  *   the key (it is still consumed) and leaves the tool armed.
+ *   `createPreview(viewer, dragBox)` draws the box being dragged
+ *   (`createImageryBoxPreview`).
  * @returns {{ start: () => boolean, cancel: (reason?: string) => void, isActive: () => boolean, destroy: () => Promise<void> } | null}
  */
 export function initImageryBoxTool({
@@ -32,7 +34,7 @@ export function initImageryBoxTool({
   onCancel,
   onActive,
   onEscape,
-  cesium = Cesium,
+  createPreview = createImageryBoxPreview,
   inputFor = defaultInputFor,
   pickWorld = pickWorldFromScreen,
   documentRef = globalThis.document,
@@ -56,65 +58,8 @@ export function initImageryBoxTool({
       north: Math.max(anchor.lat, corner.lat),
     };
 
-  const dataSource = new cesium.CustomDataSource(
-    'gev-recent-imagery-box-preview',
-  );
-  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
-    () => null,
-  );
-  const stroke = cesium.Color.fromCssColorString('#8be9ff');
-  const previewRectangle = () => {
-    const box = dragBox();
-    return box
-      ? cesium.Rectangle.fromDegrees(box.west, box.south, box.east, box.north)
-      : undefined;
-  };
-  const previewOutline = () => {
-    const box = dragBox();
-    if (!box) return [];
-    return cesium.Cartesian3.fromDegreesArray([
-      box.west,
-      box.south,
-      box.east,
-      box.south,
-      box.east,
-      box.north,
-      box.west,
-      box.north,
-      box.west,
-      box.south,
-    ]);
-  };
-  const fill = dataSource.entities.add({
-    show: false,
-    rectangle: {
-      coordinates: new cesium.CallbackProperty(previewRectangle, false),
-      material: stroke.withAlpha(0.12),
-      classificationType: cesium.ClassificationType.BOTH,
-    },
-  });
-  // A rectangle graphic cannot draw a dashed edge on the ground, so the
-  // outline is its own draped polyline traced round the same corners.
-  const outline = dataSource.entities.add({
-    show: false,
-    polyline: {
-      positions: new cesium.CallbackProperty(previewOutline, false),
-      width: 2,
-      clampToGround: true,
-      classificationType: cesium.ClassificationType.BOTH,
-      material: new cesium.PolylineDashMaterialProperty({
-        color: stroke.withAlpha(0.95),
-        dashLength: 12,
-      }),
-    },
-  });
-
-  const requestRender = () => viewer.scene.requestRender?.();
-  const setPreview = (visible) => {
-    fill.show = visible;
-    outline.show = visible;
-    requestRender();
-  };
+  const preview = createPreview(viewer, dragBox);
+  const setPreview = (visible) => preview.setVisible(visible);
   const worldAt = (position) => {
     if (!position) return null;
     const canvas = viewer.scene.canvas;
@@ -157,7 +102,7 @@ export function initImageryBoxTool({
     const point = anchor && !destroyed && worldAt(event.endPosition);
     if (!point) return;
     corner = point;
-    requestRender();
+    preview.changed();
   };
   const onUp = (event) => {
     if (!anchor || destroyed) return;
@@ -246,22 +191,14 @@ export function initImageryBoxTool({
     },
     /** Returns everything; resolves once the preview is detached. */
     destroy() {
-      if (destroyed) return attaching;
+      if (destroyed) return preview.destroy();
       if (active) setActive(false);
       destroyed = true;
       releaseScene();
       releasePointer(lease);
       lease = null;
       thawCamera();
-      dataSource.entities.removeAll();
-      attaching = attaching.then(() => {
-        try {
-          viewer.dataSources.remove(dataSource, true);
-        } catch {
-          /* viewer already disposed */
-        }
-      });
-      return attaching;
+      return preview.destroy();
     },
   };
 }

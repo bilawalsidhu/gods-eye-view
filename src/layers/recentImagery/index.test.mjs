@@ -13,6 +13,7 @@ import {
   SPLIT_PUBLISH_MS,
   createRecentImageryLayer,
 } from './index.js';
+import { createImageryBoxPreview } from './rendering.js';
 import {
   BOX,
   CANDIDATES,
@@ -1399,7 +1400,8 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   const cancels = [];
   const tool = initImageryBoxTool({
     viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    createPreview: (viewer, dragBox) =>
+      createImageryBoxPreview(viewer, dragBox, { cesium: fakes.cesium }),
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => f.layer.setBox(box),

@@ -1,5 +1,5 @@
 /** Contact readouts and nearby-signal presentation for the Cockpit controller. */
-import * as Cesium from 'cesium';
+import { toLonLatH } from '../geo/index.js';
 import { formatNumber, t, tn } from '../i18n/index.js';
 import { unitLabel } from './unitLabels.js';
 import {
@@ -151,14 +151,9 @@ export function updateContext(info, heading) {
     Number.isFinite(info.latitude) &&
     Number.isFinite(info.longitude)
   ) {
-    const cartographic = Cesium.Cartographic.fromCartesian(closest.position);
-    const bearing = cartographic
-      ? bearingBetweenCoordinates(
-          info.latitude,
-          info.longitude,
-          Cesium.Math.toDegrees(cartographic.latitude),
-          Cesium.Math.toDegrees(cartographic.longitude),
-        )
+    const at = toLonLatH(closest.position);
+    const bearing = at
+      ? bearingBetweenCoordinates(info.latitude, info.longitude, at.lat, at.lon)
       : null;
     relative = relativeBearing(bearing, heading);
   }
