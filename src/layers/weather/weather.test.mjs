@@ -9,6 +9,7 @@ import { NO_IMAGERY_HOST } from './imageryHost.js';
 import { createWeatherShell } from './shellRendering.js';
 import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 import { createCesiumGlobe } from '../../render/cesium/globe.js';
 import {
   createShellCesium,
@@ -200,6 +201,7 @@ function renderingHarness(options = {}) {
       },
     },
   };
+  const frame = fakeSceneFrame(viewer);
   const globe = fakeGlobePort({
     settled: () => viewer.scene.globe.tilesLoaded,
   });
@@ -224,6 +226,7 @@ function renderingHarness(options = {}) {
     globeOf: () => globe,
     cameraOf: cameraOver,
     creditsOf: () => credits,
+    frameOf: () => frame,
     toBitmap: (canvas) => canvas,
     createShell: (shellOptions) =>
       createWeatherShell({ ...shellOptions, cesium }),

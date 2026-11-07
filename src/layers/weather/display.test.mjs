@@ -8,6 +8,7 @@ import { createShellScene } from './shellFixture.mjs';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 
 const times = ['2026-09-15T20:00:00.000Z', '2026-09-15T20:05:00.000Z'];
 const base = {
@@ -615,7 +616,7 @@ function globeViewer() {
       requestRender() {},
     },
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, { frame: fakeSceneFrame(viewer) });
   const globe = fakeGlobePort();
   const owed = [];
   const credits = {

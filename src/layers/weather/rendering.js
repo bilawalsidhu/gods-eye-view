@@ -4,7 +4,12 @@ import { imageryHostStatus } from './imageryHost.js';
 import { drawMosaicTile } from './rasterTiles.js';
 import { weatherDisplay } from './display.js';
 import { msg } from '../../i18n/index.js';
-import { findCamera, findCredits, findGlobe } from '../../render/rendererOf.js';
+import {
+  findCamera,
+  findCredits,
+  findFrame,
+  findGlobe,
+} from '../../render/rendererOf.js';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import {
   acquireInfraredMosaic,
@@ -60,6 +65,7 @@ function createGlobeRendering({
   globeOf,
   cameraOf,
   creditsOf,
+  frameOf,
   toBitmap,
   getHost,
   onChange,
@@ -69,6 +75,8 @@ function createGlobeRendering({
   decodeImage,
   createCanvas,
 }) {
+  const requestRender = () => frameOf(viewer)?.requestRender('weather');
+  const onPostRender = (cb) => frameOf(viewer).on('postRender', cb);
   let current = null;
   let incoming = null;
   const retiring = new Set();
@@ -186,7 +194,7 @@ function createGlobeRendering({
       frame.creditSnapshot = snapshot;
       if (frame.credit !== undefined && setCredit(frame)) changed = true;
     }
-    if (changed) viewer.scene.requestRender();
+    if (changed) requestRender();
   }
 
   function remove(frame) {
@@ -236,7 +244,7 @@ function createGlobeRendering({
       current.kind = kind;
       syncCredit(current);
     }
-    if (changed || visibilityChanged) viewer.scene.requestRender();
+    if (changed || visibilityChanged) requestRender();
     return Boolean(changed || visibilityChanged);
   }
   return {
@@ -354,15 +362,13 @@ function createGlobeRendering({
           frame.layer.alpha = alpha;
           frame.layer.show = !frameHidden;
           syncCredit(frame);
-          viewer.scene.requestRender();
+          requestRender();
           if (previous) {
             retiring.add(previous);
-            previous.offRetire = viewer.scene.postRender.addEventListener(
-              () => {
-                remove(previous);
-                viewer.scene.requestRender();
-              },
-            );
+            previous.offRetire = onPostRender(() => {
+              remove(previous);
+              requestRender();
+            });
           }
         } else {
           lastError = msg(
@@ -371,12 +377,12 @@ function createGlobeRendering({
           remove(frame);
         }
         frame.resolve(ok);
-        viewer.scene.requestRender();
+        requestRender();
         onChange();
       };
       const abort = () => {
         if (incoming === frame) cancelIncoming();
-        viewer.scene.requestRender();
+        requestRender();
       };
       signal?.addEventListener('abort', abort, { once: true });
       frame.offAbort = () => signal?.removeEventListener('abort', abort);
@@ -385,7 +391,7 @@ function createGlobeRendering({
         if (frame.closed) return;
         // Keep at most two installed layers during rapid successive selections.
         if (retiring.size) {
-          frame.offInstall = viewer.scene.postRender.addEventListener(() => {
+          frame.offInstall = onPostRender(() => {
             frame.offInstall();
             frame.offInstall = null;
             try {
@@ -394,7 +400,7 @@ function createGlobeRendering({
               finish(false);
             }
           });
-          viewer.scene.requestRender();
+          requestRender();
           return;
         }
         setCredit(frame);
@@ -421,7 +427,7 @@ function createGlobeRendering({
             .finally(() => {
               frame.pending--;
               frame.lastActivity = now();
-              if (!frame.closed) viewer.scene.requestRender();
+              if (!frame.closed) requestRender();
             });
         };
         const spec = global
@@ -478,9 +484,9 @@ function createGlobeRendering({
           frame.deferred.clear();
           frame.lastActivity = now();
           settled = 0;
-          viewer.scene.requestRender();
+          requestRender();
         });
-        frame.offRender = viewer.scene.postRender.addEventListener(() => {
+        frame.offRender = onPostRender(() => {
           if (frame.failed) return finish(false);
           // Unrelated terrain/basemap work must not indefinitely hold a ready
           // observation. Require successful own tiles and a quiet scheduling
@@ -495,7 +501,7 @@ function createGlobeRendering({
             frame.pending === 0
           ) {
             if (++settled >= 2) finish(true);
-            else viewer.scene.requestRender();
+            else requestRender();
           } else settled = 0;
           // Waiting out the quiet interval needs another readiness check
           // later, not a render every frame: wake on a timer so the render
@@ -508,11 +514,10 @@ function createGlobeRendering({
           )
             frame.wake = setTimeout(() => {
               frame.wake = null;
-              if (!frame.closed && incoming === frame)
-                viewer.scene.requestRender();
+              if (!frame.closed && incoming === frame) requestRender();
             }, READY_WAKE_MS);
         });
-        viewer.scene.requestRender();
+        requestRender();
         onChange();
       };
       if (global) {
@@ -532,7 +537,7 @@ function createGlobeRendering({
           finish(false);
         }
       }
-      viewer.scene.requestRender();
+      requestRender();
       onChange();
       return result;
     },
@@ -544,12 +549,12 @@ function createGlobeRendering({
         for (const frame of retiring) remove(frame);
       }
       rehome();
-      viewer.scene.requestRender();
+      requestRender();
     },
     setAlpha(value) {
       alpha = value;
       if (current && current.layer.show) current.layer.alpha = alpha;
-      viewer.scene.requestRender();
+      requestRender();
     },
     clear() {
       cancelPrefetch();
@@ -560,7 +565,7 @@ function createGlobeRendering({
       frameHidden = false;
       lastError = null;
       mosaics.clear();
-      viewer.scene.requestRender();
+      requestRender();
     },
     getDiagnostics() {
       return {
@@ -592,6 +597,7 @@ export function createWeatherRendering({
   globeOf = findGlobe,
   cameraOf = findCamera,
   creditsOf = findCredits,
+  frameOf = findFrame,
   toBitmap = (canvas) =>
     globalThis.createImageBitmap(canvas, { premultiplyAlpha: 'none' }),
   getHost = () => ({ collection: viewer.imageryLayers, kind: 'globe' }),
@@ -617,8 +623,10 @@ export function createWeatherRendering({
     globeOf,
     cameraOf,
     creditsOf,
+    frameOf,
     toBitmap,
   });
+  const requestRender = () => frameOf(viewer)?.requestRender('weather');
   let shell = null;
   let active = null;
   let alpha = 0.7;
@@ -680,7 +688,7 @@ export function createWeatherRendering({
       if (hidden) globe.setHidden(true);
     }
     if (shown && !hidden) restage(shown);
-    viewer.scene.requestRender();
+    requestRender();
     return true;
   }
   return {
