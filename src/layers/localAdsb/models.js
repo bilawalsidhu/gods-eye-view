@@ -36,11 +36,11 @@ const specKey = (spec) => `${spec.url}@${spec.scale}`;
  * offset, and without a resolved ground it stays a billboard.
  * @param {object} options
  * @param {object} options.viewer Cesium viewer.
- * @param {Cesium.Color} options.color Model tint.
+ * @param {string} options.color Model tint, a CSS colour.
  * @param {(url: string) => string} options.resolveAsset
  * @param {object|null} [options.groundSnap] `createGroundSnap()` instance.
  * @param {(options: object) => Promise<object>} [options.loadModel]
- * @returns {object}
+ * @returns {object|null} Null on a viewer that draws no primitives.
  */
 export function createLocalAdsbModels({
   viewer,
@@ -49,6 +49,8 @@ export function createLocalAdsbModels({
   groundSnap = null,
   loadModel = (options) => Cesium.Model.fromGltfAsync(options),
 }) {
+  if (!viewer.scene?.primitives) return null;
+  const tint = Cesium.Color.fromCssColorString(color);
   const collection = new Cesium.PrimitiveCollection();
   viewer.scene.primitives.add(collection);
   /** @type {Map<string, import('../../data/modelRecord.js').ModelRecord>} id -> admitted model */
@@ -97,7 +99,7 @@ export function createLocalAdsbModels({
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
-        color,
+        color: tint,
         colorBlendMode: Cesium.ColorBlendMode.MIX,
         colorBlendAmount: spec.blendAmount,
         id,
@@ -177,9 +179,9 @@ export function createLocalAdsbModels({
     if (!marker.onGround) return marker.position;
     const record = models.get(id);
     // The vertical sample must hit the tile skin, not this aircraft's own
-    // billboard or model.
+    // model (its icon draws over depth, which height samples pass through).
     const height = groundSnap?.heightFor?.(viewer, id, marker.position, () =>
-      [marker.entity, record?.model].filter(Boolean),
+      [record?.model].filter(Boolean),
     );
     if (!Number.isFinite(height)) return null;
     const carto = Cesium.Cartographic.fromCartesian(

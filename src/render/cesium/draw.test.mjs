@@ -2695,3 +2695,131 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
     assert.equal(scene.added.length, 0, 'every set let go');
   }
 });
+
+test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on a viewer of its own', async (t) => {
+  // Materials check their uniforms against the DOM's image classes.
+  const names = ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas'];
+  const real = names.map((name) => globalThis[name]);
+  for (const name of names) globalThis[name] ??= class {};
+  t.after(() => names.forEach((name, i) => (globalThis[name] = real[i])));
+  await import('./frame.js');
+  const { createLocalAdsbLayer } = await import('../../layers/localAdsb/index.js');
+  const { fakeInput } = await import('../../input/testDoubles.mjs');
+  const { toLonLatH } = await import('../../geo/ellipsoid.js');
+  const scene = fakeScene();
+  // What a frame port over the scene listens to.
+  scene.preUpdate = new Cesium.Event();
+  scene.forceRender = () => {};
+  scene.pick = () => undefined;
+  scene.drillPick = () => [];
+  const viewer = {
+    scene,
+    clock: new Cesium.Clock(),
+    isDestroyed: () => false,
+  };
+  const clicks = fakeInput(viewer);
+  const noop = () => {};
+  const clock = { now: 100_000 };
+  const aircraft = (icao, band, lat) => ({
+    icao,
+    callsign: icao.toUpperCase(),
+    lat,
+    lon: 0,
+    altitudeFt: 10_000,
+    groundSpeedKt: 180,
+    trackDeg: 0,
+    verticalRateFpm: 0,
+    lastPositionAt: clock.now,
+    lastMessageAt: clock.now,
+    messageCount: 3,
+    band,
+    source: 'feed',
+  });
+  const records = [aircraft('abc123', '1090', 0), aircraft('a1b2c3', '978', 0.1)];
+  const layer = createLocalAdsbLayer({
+    receiver: {
+      getState: () => ({ aircraft: [] }),
+      subscribe: () => noop,
+      setMode: async () => true,
+    },
+    feeds: {
+      getState: () => ({ configured: true, feeds: [], records }),
+      subscribe: () => noop,
+      start: noop,
+      stop: noop,
+    },
+    services: {
+      render: { governorRequestRender: noop },
+      context: {
+        registerEntityContext: noop,
+        selectEntityContext: (carrier) => ({ id: 'local-adsb:abc123', carrier }),
+        getSelectedEntityContext: () => ({ id: 'local-adsb:abc123' }),
+        clearSelectedEntityContextForLayer: noop,
+        removeEntityContextsForLayer: noop,
+      },
+      picking: { registerPickOwner: noop, unregisterPickOwner: noop },
+      trails: { createTrail: () => ({ setPositions: noop, destroy: noop }) },
+    },
+    now: () => clock.now,
+  });
+  layer.init(viewer);
+  await layer.enable();
+  await layer.update();
+  assert.equal(layer.selectAircraft('abc123'), true);
+
+  const hostOf = (suffix) =>
+    scene.added.find((host) => host.drawSetId?.endsWith(suffix));
+  // Aircraft: magenta icons drawn over depth out to 2,000 km.
+  const markers = hostOf(':markers');
+  assert.ok(markers instanceof Cesium.BillboardCollection);
+  assert.equal(markers.length, 2);
+  const icon = markers.get(0);
+  assert.equal(icon.id.id, 'local-adsb:abc123');
+  assert.equal(icon.disableDepthTestDistance, Infinity);
+  assert.equal(icon.distanceDisplayCondition.far, 2_000_000);
+  assert.ok(icon.scaleByDistance instanceof Cesium.NearFarScalar);
+  assert.deepEqual(
+    [icon.scaleByDistance.near, icon.scaleByDistance.nearValue],
+    [1000, 3],
+  );
+  assert.ok(
+    icon.color.equals(Cesium.Color.fromCssColorString('#ff4fd8')),
+  );
+  // The UAT-only aircraft's ring: an outline, shown as far as it is.
+  const rings = hostOf(':rings');
+  assert.ok(rings instanceof Cesium.PointPrimitiveCollection);
+  assert.equal(rings.length, 1);
+  const ring = rings.get(0);
+  assert.equal(ring.id.id, 'local-adsb:a1b2c3');
+  assert.equal(ring.outlineWidth, 1.5);
+  assert.equal(ring.color.alpha, 0);
+  assert.equal(ring.distanceDisplayCondition.far, 2_000_000);
+  // Selected at its fix, the head has no length yet.
+  const head = hostOf(':trail-head');
+  assert.equal(head.get(1).length, 0);
+
+  // A frame flies them on, in place.
+  const before = toLonLatH(icon.position).lat;
+  clock.now += 1_000;
+  scene.preRender.raiseEvent(scene, Cesium.JulianDate.now());
+  assert.equal(markers.get(0), icon, 'the same billboard');
+  assert.ok(toLonLatH(icon.position).lat > before);
+  assert.equal(rings.get(0).id.id, 'local-adsb:a1b2c3');
+  // The head now runs from the fix to the aircraft, dimmed, not hidden,
+  // behind the surface.
+  assert.equal(hostOf(':trail-head'), head, 'the same lines');
+  const deep = head.get(1);
+  assert.equal(deep.length, 1);
+  const line = deep.get(0);
+  assert.ok(line instanceof Cesium.Primitive);
+  assert.match(line.geometryInstances.id.id, /^gev-trail:local-adsb-head-/);
+  const fail = line.depthFailAppearance.material.uniforms.color;
+  assert.ok(
+    fail.equals(Cesium.Color.fromCssColorString('#ff4fd8').withAlpha(0.45)),
+  );
+
+  await layer.disable();
+  layer.destroy();
+  clicks.destroy();
+  assert.equal(hostOf(':markers'), undefined, 'every set let go');
+});
