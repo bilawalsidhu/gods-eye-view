@@ -1,5 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
+import { findFrame } from '../../render/rendererOf.js';
 import { roadSurfaceChunks } from './surface.js';
 import { TRAFFIC_TIMING_ENABLED, DOT_HEIGHT_OFFSET } from './policy.js';
 
@@ -315,7 +316,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
     return trafficTimingPass(trace, pass, source);
   }
 
-  /** Record the first Cesium postRender following a completed dot render. */
+  /** Record the first drawn frame following a completed dot render. */
 
   function scheduleTrafficTimingPostRender(
     state,
@@ -323,9 +324,10 @@ export function createTiming({ state: layerState, services, parts, source }) {
     renderId,
     renderMetrics,
   ) {
-    if (!layerState._viewer?.scene) return;
+    const frame = findFrame(layerState._viewer);
+    if (!frame) return;
     let remove = null;
-    remove = layerState._viewer.scene.postRender.addEventListener(() => {
+    remove = frame.on('postRender', () => {
       remove?.();
       layerState._trafficTimingPostRenderRemovers?.delete(remove);
       const visibleTime = performance.now();

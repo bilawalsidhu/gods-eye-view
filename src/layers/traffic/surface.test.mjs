@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as C from 'cesium';
 import {
   detailBand,
+  loadedSurfaceHeight,
   renderedRoadHeight,
   prepareRoadSurfaces,
   roadSurfaceChunks,
@@ -402,4 +403,30 @@ test('surface keys reuse identity without building arrays or strings on unchange
     false,
     'readiness cannot recreate a subscription',
   );
+});
+
+test('the view-height estimate reads terrain under a shown globe, else the drawn surface past the dots', () => {
+  const at = { lon: -97.7431, lat: 30.2672 };
+  const dots = {};
+  const seen = [];
+  const terrain = {
+    globe: { show: true, getHeight: (carto) => (seen.push(carto), 151) },
+    // A shown globe wins even where the scene could sample what is drawn.
+    sampleHeightSupported: true,
+    sampleHeight: () => assert.fail('terrain, not the drawn surface'),
+  };
+  assert.equal(loadedSurfaceHeight(terrain, at, [dots]), 151);
+  assert.ok(Math.abs(C.Math.toDegrees(seen[0].longitude) - at.lon) < 1e-12);
+  const tiles = {
+    globe: { show: false },
+    sampleHeightSupported: true,
+    sampleHeight: (_carto, exclude) => (seen.push(exclude), 188),
+  };
+  assert.equal(loadedSurfaceHeight(tiles, at, [dots]), 188);
+  assert.deepEqual(seen[1], [dots], 'sees through the layer dots');
+  assert.equal(
+    loadedSurfaceHeight({ globe: { show: false } }, at, [dots]),
+    undefined,
+  );
+  assert.equal(loadedSurfaceHeight(undefined, at, [dots]), undefined);
 });

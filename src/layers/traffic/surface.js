@@ -65,6 +65,16 @@ function currentRenderedFrame(scene) {
     : null;
 }
 
+/**
+ * Whether the frame being drawn has its surface loaded, read while it
+ * finishes (from a frame-port `postRender` listener). It answers what the
+ * rendered-frame observer is recording for this same frame, which a frame
+ * listener may run before.
+ */
+export function drawnSurfaceReady(scene) {
+  return surfaceTilesReady(scene);
+}
+
 /** Only a completed render of this camera can certify cached surface heights. */
 export function trafficSurfaceReady(scene) {
   return currentRenderedFrame(scene)?.ready === true;
@@ -136,6 +146,25 @@ export function roadHeightStations(coords) {
 
 const validHeight = (height) =>
   Number.isFinite(height) && Math.abs(height) <= 9000;
+
+/**
+ * One loaded-surface height at a point, for the view-height estimate road
+ * selection starts from: terrain while the globe is shown, otherwise what is
+ * drawn (seeing through `exclude`, the layer's own dots) where the scene can
+ * sample it. Undefined when the scene cannot say.
+ * @param {object|undefined} scene
+ * @param {{lon: number, lat: number}} location Degrees.
+ * @param {object[]} exclude
+ * @returns {number|null|undefined}
+ */
+export function loadedSurfaceHeight(scene, location, exclude) {
+  if (!scene) return undefined;
+  return scene.globe?.show
+    ? heightsFor(scene).now(location, { against: 'terrain' })
+    : scene.sampleHeightSupported
+      ? heightsFor(scene).now(location, { exclude })
+      : undefined;
+}
 
 /**
  * Reuse the rendered depth buffer instead of drawing a new pick frustum per

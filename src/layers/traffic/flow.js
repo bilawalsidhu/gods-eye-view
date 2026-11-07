@@ -1,8 +1,9 @@
 import { roadIdentity } from './retention.js';
 import { fromDegrees, toCartographicRadians } from '../../geo/ellipsoid.js';
 import { copyInto, distance, distanceSquared } from '../../geo/vector.js';
-import { findCamera, findQuery } from '../../render/rendererOf.js';
+import { findCamera, findFrame, findQuery } from '../../render/rendererOf.js';
 import {
+  drawnSurfaceReady,
   prepareRoadSurfaces,
   roadHeightStations,
   trafficSurfaceReady,
@@ -508,11 +509,14 @@ export function createFlow({ state: layerState, services, parts, source }) {
     }
     paint(true);
     if (current()) layerState._surfacePending = prepared.pending.length;
+    // The frame port says when a frame has drawn, and so when the surface
+    // may have loaded the finer tiles a refinement waits for.
+    const frame = findFrame(layerState._viewer);
     if (
       current() &&
       !preview &&
       !label.includes('refined') &&
-      scene.postRender &&
+      frame &&
       (!trafficSurfaceReady(scene) ||
         prepared.pending.length ||
         ready.some((road) => road.surfaceSettled === false))
@@ -524,12 +528,12 @@ export function createFlow({ state: layerState, services, parts, source }) {
         if (layerState._surfaceRefineRemove === stop)
           layerState._surfaceRefineRemove = null;
       };
-      const remove = scene.postRender.addEventListener(() => {
+      const remove = frame.on('postRender', () => {
         if (!current()) {
           stop();
           return;
         }
-        if (!trafficSurfaceReady(scene)) return;
+        if (!drawnSurfaceReady(scene)) return;
         stop();
         // Revalidate only local samples taken at a coarser rendered LOD. This
         // background upgrade never holds road acquisition or first paint.

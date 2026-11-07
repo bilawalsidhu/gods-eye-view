@@ -527,6 +527,7 @@
   "src/layers/traffic/timing.js",
   "src/layers/traffic/style.js",
   "src/layers/traffic/style.test.mjs",
+  "src/layers/traffic/timing.test.mjs",
   "src/layers/bikeshare/lifecycle.js",
   "src/layers/bikeshare/viewport.js",
   "src/layers/bikeshare/registry.js",

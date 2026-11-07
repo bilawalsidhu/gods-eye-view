@@ -2,6 +2,7 @@ import { requestWithDeadline } from '../../sources/requestDeadline.js';
 import { resolveRoadMode, ROAD_SOURCE_LABELS } from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import { RoadRequestError, roadRequestError } from './source.js';
+import { loadedSurfaceHeight } from './surface.js';
 import {
   isUnavailableCapability,
   sourceResponseError,
@@ -11,7 +12,6 @@ import {
   TILE_CACHE_MAX_ENTRIES,
   FAST_FETCH_ALTITUDE,
 } from './policy.js';
-import { heightsFor } from '../../queries/heights.js';
 
 /** Retain complete parsed snapshots under both an LRU entry cap and a byte budget. */
 export function cacheRoadSnapshot(
@@ -270,19 +270,14 @@ export function createIngestion({
     layerState._viewHeightEstimate = 0;
     const centerLat = (clamped.south + clamped.north) / 2;
     const centerLon = (clamped.west + clamped.east) / 2;
-    const scene = layerState._viewer?.scene;
-    const location = { lon: centerLon, lat: centerLat };
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
     // A miss is the local mesh still loading.
-    if (!Number.isFinite(estimated) && scene) {
-      estimated = scene.globe?.show
-        ? heightsFor(scene).now(location, { against: 'terrain' })
-        : scene.sampleHeightSupported
-          ? heightsFor(scene).now(location, {
-              exclude: [layerState._pointCollection],
-            })
-          : undefined;
-    }
+    if (!Number.isFinite(estimated))
+      estimated = loadedSurfaceHeight(
+        layerState._viewer?.scene,
+        { lon: centerLon, lat: centerLat },
+        [layerState._pointCollection],
+      );
     if (Number.isFinite(estimated) && Math.abs(estimated) <= 9000)
       layerState._viewHeightEstimate = estimated;
 

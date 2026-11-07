@@ -452,3 +452,84 @@ test('partial coverage retries while coarse roads render, then stops after three
   assert.equal(calls, initial * 4, 'initial load plus three bounded retries');
   assert.ok(layer.getStats().count > 0);
 });
+
+test('an unready surface waits for drawn frames through the frame port, then refines once', async (t) => {
+  const listeners = new Set();
+  const frame = {
+    on(phase, cb) {
+      assert.equal(phase, 'postRender');
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+  };
+  const { layer, viewer, tick } = setup(
+    t,
+    async (bounds) => roads(bounds),
+    undefined,
+    { frame },
+  );
+  // The rendered-frame observer records on the scene's own postRender.
+  viewer.camera.viewMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY);
+  viewer.camera.frustum = {
+    projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+  };
+  viewer.scene.camera = viewer.camera;
+  viewer.scene.postRender = new Cesium.Event();
+  const drawn = (n) => {
+    // The frame port's listeners run first, as the renderer registers its
+    // frame listener before any layer's.
+    for (const cb of [...listeners]) cb({ frame: n });
+    viewer.scene.postRender.raiseEvent();
+  };
+  let samples = 0;
+  viewer.scene.globe.getHeight = () => (samples++, 0);
+  viewer.scene.globe.tilesLoaded = false;
+  layer.enable(viewer);
+  await tick(400);
+  await tick(400);
+  assert.equal(listeners.size, 1, 'a drawn frame is awaited');
+  drawn(1);
+  await tick(400);
+  assert.equal(listeners.size, 1, 'still loading: keep waiting');
+  // The frame that finishes loading refines, though the rendered-frame
+  // observer has not yet recorded it as ready.
+  viewer.scene.globe.tilesLoaded = true;
+  const before = samples;
+  drawn(2);
+  assert.equal(listeners.size, 0, 'a ready frame starts the refinement');
+  await tick(400);
+  await tick(400);
+  assert.ok(samples > before, 'the refinement samples the surface again');
+  const after = samples;
+  await tick(5000);
+  assert.equal(listeners.size, 0, 'and refines only once');
+  assert.equal(samples, after);
+  layer.disable(viewer);
+  await tick(5000);
+  assert.equal(listeners.size, 0, 'late work cannot resubscribe');
+});
+
+test('disabling while a refinement waits drops its frame listener', async (t) => {
+  const listeners = new Set();
+  const frame = {
+    on(_phase, cb) {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+  };
+  const { layer, viewer, tick } = setup(
+    t,
+    async (bounds) => roads(bounds),
+    undefined,
+    { frame },
+  );
+  viewer.scene.globe.tilesLoaded = false;
+  layer.enable(viewer);
+  await tick(400);
+  await tick(400);
+  assert.equal(listeners.size, 1);
+  layer.disable(viewer);
+  assert.equal(listeners.size, 0);
+  await tick(5000);
+  assert.equal(listeners.size, 0, 'late work cannot resubscribe');
+});
