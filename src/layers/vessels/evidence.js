@@ -41,13 +41,13 @@ export function createEvidence({
     const query = findQuery(state.viewer);
     return state.records.all.map((record) => {
       const visual = components.rendering.getVisual(record);
-      const row = state.icons?.row(visual.iconId) ?? -1;
-      const position = row >= 0 ? visual.position : null;
+      const drawn = state.icons?.has(visual.iconId) === true;
+      const position = drawn ? visual.position : null;
       const screen = position ? query?.project(position) : null;
       return {
         id: record.mmsi,
-        show: row >= 0 && visual.visible === true,
-        alpha: row >= 0 ? state.icons.focus(row) : null,
+        show: drawn && visual.visible === true,
+        alpha: drawn ? state.icons.focus(visual.iconId) : null,
         x: screen?.x ?? null,
         y: screen?.y ?? null,
       };

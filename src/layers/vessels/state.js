@@ -55,9 +55,8 @@ export function createVesselState({ source, services }) {
     records: new VesselRecords({ now: () => vesselState._aisRuntime.now() }),
     viewer: null,
 
-    /** The vessels' icon set and the primitive that draws it. */
+    /** The vessels' icons as drawn (`iconBook.js`), and their draw set. */
     icons: null,
-    iconPrimitive: null,
     /** The click subscription's unsubscribe. */
     clickSubscription: null,
     /** Exact EventTarget currently holding the Escape listener. */

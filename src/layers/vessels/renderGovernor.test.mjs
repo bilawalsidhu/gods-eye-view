@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { VISIBILITY_UPDATE_MS } from './policy.js';
+import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 
 // Vessels move only when a poll lands, so the layer must let the scene idle:
 // it asks for frames for forced passes and one trailing frame after the camera
@@ -54,7 +55,9 @@ function setup() {
     pitch: -1.2,
     roll: 0,
   };
-  layer.testing._setVesselStateForTest({ viewer: { camera, scene: {} } });
+  const viewer = { camera, scene: {} };
+  bindFakeCesiumScene(viewer);
+  layer.testing._setVesselStateForTest({ viewer });
   layer.testing._setAisRuntimeForTest({
     now: () => clock,
     setTimeout(fn, ms) {

@@ -1,5 +1,5 @@
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
-import { createIconSet } from '../../data/iconSet.js';
+import { createVesselIconBook } from './iconBook.js';
 
 export function createTesting({
   vesselState,
@@ -49,8 +49,9 @@ export function createTesting({
         .map((record) => [record.mmsi, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
-    state.icons = options.icons || createIconSet();
-    state.iconPrimitive = null;
+    // `icons: null` leaves the layer to make its own draw set.
+    state.icons =
+      options.icons === null ? null : options.icons || createVesselIconBook();
     state.trail = options.trail || null;
     state.trailMmsi = options.trailMmsi || null;
     state.trailPositions = Array.isArray(options.trailPositions)

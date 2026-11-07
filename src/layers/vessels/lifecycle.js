@@ -115,7 +115,6 @@ export function createLifecycle({
     state.feed.firstConnectTimer = null;
     state.feed.abort = null;
     state.icons = null;
-    state.iconPrimitive = null;
     state.records.all = [];
     state.records.byMmsi = new Map();
     state.records.unkeyed = [];
@@ -232,13 +231,7 @@ export function createLifecycle({
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
-      if (state.iconPrimitive && activeViewer?.scene?.primitives) {
-        activeViewer.scene.primitives.remove(state.iconPrimitive);
-      }
-      // Not in a scene (or no viewer to remove it from): still stop its atlas
-      // listener and free its GPU resources.
-      if (state.iconPrimitive && !state.iconPrimitive.isDestroyed())
-        state.iconPrimitive.destroy();
+      components.rendering.disposeCollections();
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
       vesselState._vesselOverlayHost.setVisible(
         VESSEL_OVERLAY_SOURCE_ID,

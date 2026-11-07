@@ -3,6 +3,7 @@ import * as Cesium from 'cesium';
 import test from 'node:test';
 import { bindRenderer, drawOf, findDraw } from '../rendererOf.js';
 import { createCesiumDraw } from './draw.js';
+import { drawHitOf } from './drawHit.js';
 
 // Node has no WebGL context to report line-width limits.
 Cesium.ContextLimits._minimumAliasedLineWidth = 1;
@@ -1629,4 +1630,97 @@ test('icons scale, fade and show by eye distance, and drop the curves in place',
   set.upsert([icon({ displayRange: [100, 100] })]);
   assert.equal(a.show, false, 'an empty range shows it nowhere');
   set.dispose();
+});
+
+test('the vessels layer draws its ships as one GPU icon set that holds them on course', async () => {
+  const { createVesselLayer } = await import('../../layers/vessels/index.js');
+  const { IconSetPrimitive } = await import('../../data/iconSetPrimitive.js');
+  const { ICON_CULL_LIFT, ICON_ROTATES } =
+    await import('../../data/iconSet.js');
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const viewer = { scene };
+  const noop = () => {};
+  const unbind = bindRenderer(viewer, {
+    draw: part.port,
+    query: { project: () => null, projectMany: (s, out) => out.fill(NaN) },
+  });
+  const layer = createVesselLayer({
+    source: { getSnapshot: async () => ({ records: [] }) },
+    services: {
+      context: {
+        clearSelectedEntityContextForLayer: noop,
+        registerEntityContext: () => null,
+      },
+      trails: {
+        createTrail: () => ({ setPositions: noop, clear: noop, destroy: noop }),
+      },
+      labels: { formatKnots: (knots) => `${knots} kt` },
+      picking: { unregisterPickOwner: noop },
+      overlay: {
+        setOverlayEntries: noop,
+        setOverlaySourceVisible: noop,
+        clearOverlaySource: noop,
+      },
+      geoid: {},
+      sprites: {},
+      focus: {
+        focusNowMs: (now) => now,
+        getFocusTarget: () => null,
+        focusPassIsNeeded: () => false,
+        forgetSpriteFocus: noop,
+      },
+      worldFocus: {},
+      render: {
+        holdContinuousRender: noop,
+        releaseContinuousRender: noop,
+        governorRequestRender: noop,
+      },
+    },
+  });
+  layer.testing._setVesselStateForTest({ viewer, icons: null });
+  layer.testing._reconcileVesselsForTest(viewer, [
+    { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90, speed: 12 },
+    { mmsi: '244000002', lat: 51.96, lon: 4.2, course: 200, speed: 2 },
+  ]);
+  const [host] = scene.added;
+  assert.ok(host instanceof IconSetPrimitive, 'one GPU icon set');
+  assert.match(host.drawSetId, /^ais-vessels:\d+$/);
+  const record = part.sets.get(host.drawSetId);
+  const set = record.gpu.set;
+  assert.equal(set.count, 2);
+  const row = set.row('244000001');
+  const tau = set.seconds(Cesium.JulianDate.now());
+  assert.equal(set.course(row, tau), 90, 'held on its heading');
+  assert.equal(set.course(set.row('244000002'), tau), 200, 'or its course');
+  assert.equal(set.width(row), 32);
+  assert.ok(Math.abs(set.scale(row) - 0.68) < 1e-6, 'scaled by speed');
+  assert.equal(set.flags(row) & ICON_ROTATES, ICON_ROTATES);
+  assert.equal(set.flags(row) & ICON_CULL_LIFT, ICON_CULL_LIFT);
+  assert.ok(set.depthTestDistance(row) >= 1e30, 'over depth everywhere');
+  const at = Cesium.Cartographic.fromCartesian(set.position(row, tau));
+  assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) - 4.1) < 1e-6);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(at.latitude) - 51.95) < 1e-6);
+  const facade = { show: true };
+  assert.deepEqual(drawHitOf(host._pickObject('244000001', null, facade)), {
+    set: host.drawSetId,
+    id: '244000001',
+    meta: { layer: 'ais-live-vessels', id: '244000001' },
+    surface: false,
+  });
+
+  // A poll that moves one and drops the other writes rows, not a new host.
+  layer.testing._reconcileVesselsForTest(viewer, [
+    { mmsi: '244000001', lat: 51.95, lon: 4.12, heading: 95, speed: 12 },
+  ]);
+  assert.equal(scene.added[0], host);
+  assert.equal(set.count, 1);
+  assert.equal(set.course(set.row('244000001'), tau), 95);
+
+  layer.destroy(viewer);
+  assert.equal(scene.added.length, 0, 'destroyed: the set goes');
+  unbind();
 });

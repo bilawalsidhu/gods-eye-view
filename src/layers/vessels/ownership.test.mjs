@@ -3,7 +3,16 @@ import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
 import * as Cesium from 'cesium';
-import { createIconSet } from '../../data/iconSet.js';
+import { createVesselIconBook } from './iconBook.js';
+import { liftedForHorizon } from '../../geo/horizon.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+
+/** A query port with nothing on screen: the viewer doubles have no scene. */
+const offscreen = {
+  project: () => null,
+  projectMany: (source, out) => out.fill(NaN),
+};
 
 const noop = () => {};
 function services() {
@@ -40,7 +49,9 @@ function services() {
 }
 function setup(source, options = {}, viewer = {}) {
   const layer = createVesselLayer({ source, services: services(), options });
-  const icons = createIconSet();
+  const icons = createVesselIconBook();
+  if (viewer.camera)
+    bindFakeCesiumCamera(viewer, { query: offscreen, draw: fakeDrawPort() });
   layer.testing._setVesselStateForTest({ viewer, icons });
   let now = 1000;
   layer.testing._setAisRuntimeForTest({
@@ -279,19 +290,17 @@ test('refresh keeps the icon row and its pick identity, and eviction releases th
   let current = snapshot([observation('111')]);
   const { layer, icons } = setup({ getSnapshot: async () => current });
   await layer.update();
-  assert.equal(icons.count, 1);
-  assert.equal(icons.idAt(0), '111');
-  const meta = icons.metaAt(0);
-  const drawn = () =>
-    icons.position(icons.row('111'), 0, new Cesium.Cartesian3());
+  assert.deepEqual(icons.ids(), ['111']);
+  const meta = icons.item('111').meta;
+  const drawn = () => icons.item('111').pos;
   const near = (a, b) => Cesium.Cartesian3.distance(a, b) < 0.01;
   assert.ok(near(layer.findByQuery('111').position, drawn()));
   const oldPosition = drawn();
   current = snapshot([{ ...observation('111'), longitude: 4.06 }]);
   await layer.update();
-  assert.equal(icons.count, 1);
+  assert.equal(icons.size, 1);
   assert.equal(
-    icons.metaAt(icons.row('111')),
+    icons.item('111').meta,
     meta,
     'focus identity survives a refresh',
   );
@@ -431,12 +440,9 @@ test('cards and detection judge the horizon where the icon shader culls the row'
     viewer,
   );
   await layer.update();
-  const row = icons.row('111');
   occluder.cameraPosition = positionWC;
   assert.equal(
-    occluder.isPointVisible(
-      icons.cullPoint(row, icons.position(row, 0, new Cesium.Cartesian3())),
-    ),
+    occluder.isPointVisible(liftedForHorizon(icons.item('111').pos)),
     true,
   );
   assert.deepEqual(

@@ -5,6 +5,7 @@ import { applyCctvFocusDeemphasis } from './cctv.js';
 import { applySatellitePointFocusDeemphasis } from './satellites.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
 import { createIconSet } from './iconSet.js';
+import { createVesselIconBook } from '../layers/vessels/iconBook.js';
 
 const params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS, paddingPx: 0 };
 const target = {
@@ -63,8 +64,8 @@ function assertResumeGate(name, makePass) {
 }
 
 assertResumeGate('vessel', () => {
-  const icons = createIconSet();
-  icons.setSize(icons.add('353136000', { id: '353136000' }), 32, 32);
+  const icons = createVesselIconBook();
+  icons.put({ id: '353136000', size: [32, 32], meta: { id: '353136000' } });
   const record = {
     iconId: '353136000',
     position: { x: 1, y: 2, z: 3 },
@@ -82,7 +83,7 @@ assertResumeGate('vessel', () => {
         cameraDistanceFor: () => 1200,
         params,
       }),
-    readAlpha: () => icons.focus(icons.row('353136000')),
+    readAlpha: () => icons.focus('353136000'),
   };
 });
 

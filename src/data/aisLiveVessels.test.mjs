@@ -40,7 +40,8 @@ import {
   presentSelectedVessel,
   subscribeSelectedVessel,
 } from '../hudReadouts.js';
-import { createIconSet } from './iconSet.js';
+import { createVesselIconBook } from '../layers/vessels/iconBook.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(
@@ -769,12 +770,12 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
 
 /** One vessel row in a fresh set, as the layer adds it, plus its record. */
 function focusFixture() {
-  const icons = createIconSet();
-  const row = icons.add('353136000', {
-    layer: 'ais-live-vessels',
+  const icons = createVesselIconBook();
+  icons.put({
     id: '353136000',
+    size: [32, 32],
+    meta: { layer: 'ais-live-vessels', id: '353136000' },
   });
-  icons.setSize(row, 32, 32);
   const record = {
     iconId: '353136000',
     position: { x: 1, y: 2, z: 3 },
@@ -784,7 +785,7 @@ function focusFixture() {
     icons,
     records: [record],
     record,
-    focus: () => icons.focus(icons.row('353136000')),
+    focus: () => icons.focus('353136000'),
   };
 }
 
@@ -1192,9 +1193,18 @@ test('vessel interaction wire: CCTV-owned pick preserves vessel selection', () =
 });
 
 test('vessel interaction wire: own-layer unkeyed record pick does not deselect', () => {
-  const icons = createIconSet();
-  icons.add('ais-unkeyed:1', { id: 'ais-unkeyed:1' });
-  const harness = installWireHarness({ id: 'ais-unkeyed:1' }, { icons });
+  // The layer's icon set, drawing the unkeyed row.
+  const icons = createVesselIconBook({
+    id: 'ais-vessels:test',
+    upsert() {},
+    remove() {},
+    dispose() {},
+  });
+  icons.put({ id: 'ais-unkeyed:1', size: [32, 32], meta: {} });
+  const harness = installWireHarness(
+    { id: { set: 'ais-vessels:test', id: 'ais-unkeyed:1' } },
+    { icons },
+  );
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(
@@ -1564,19 +1574,36 @@ test('buildSelectedVesselCard: full detail card with MMSI + position time', () =
 
 test('vessel host publication preserves the shipped grid winner and separation selector', () => {
   const publications = [];
-  const originalProjection = Cesium.SceneTransforms.worldToWindowCoordinates;
-  const makeCandidate = (mmsi, name, x, y, speed = 1) =>
-    makeRecord({
+  // Where the query port projects each candidate, by its position's x.
+  const screens = new Map();
+  const makeCandidate = (mmsi, name, x, y, speed = 1) => {
+    const key = screens.size + 1;
+    screens.set(key, { x, y });
+    return makeRecord({
       mmsi,
       name,
       speed,
-      position: { x: 1, y: 2, z: 3, screen: { x, y } },
+      position: { x: key, y: 2, z: 3 },
     });
+  };
   const low = makeCandidate('100', 'VESSEL', 20, 20, 1);
   const winner = makeCandidate('200', 'NAMED WINNER', 40, 30, 16);
   const separated = makeCandidate('300', 'SEPARATED', 400, 300, 3);
-  Cesium.SceneTransforms.worldToWindowCoordinates = (_scene, position) =>
-    position.screen;
+  const viewer = {
+    scene: { canvas: { clientWidth: 1600, clientHeight: 900 } },
+  };
+  const unbind = bindRenderer(viewer, {
+    query: {
+      project: (p) => screens.get(p.x) ?? null,
+      projectMany(source, out) {
+        for (let i = 0; i * 3 < source.length; i++) {
+          const screen = screens.get(source[i * 3]);
+          out[i * 2] = screen ? screen.x : NaN;
+          out[i * 2 + 1] = screen ? screen.y : NaN;
+        }
+      },
+    },
+  });
   _setVesselOverlayHostForTest({
     setEntries(sourceId, entries, options) {
       publications.push({ sourceId, entries, options });
@@ -1585,7 +1612,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
     clearSource() {},
   });
   _setVesselStateForTest({
-    viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
+    viewer,
     records: [low, winner, separated],
   });
   try {
@@ -1599,7 +1626,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
     assert.equal(publications[0].options.cohortLimit, 112);
     assert.equal(publications[0].options.collisionCapacity, 112);
   } finally {
-    Cesium.SceneTransforms.worldToWindowCoordinates = originalProjection;
+    unbind();
     _setVesselStateForTest({ enabled: false });
     _setVesselOverlayHostForTest();
   }
@@ -2009,13 +2036,13 @@ test('vessel selection passes the opaque source reference to optional history', 
 });
 
 test('vessel focus wire skips hidden sprites at rest while a target is tracked', () => {
-  const icons = createIconSet();
+  const icons = createVesselIconBook();
   const records = Array.from({ length: 51 }, (_, i) => {
     const iconId = String(i);
-    icons.setSize(icons.add(iconId, { id: iconId }), 32, 32);
+    icons.put({ id: iconId, size: [32, 32], meta: { id: iconId } });
     return { iconId, position: { x: 1, y: 2, z: 3 }, visible: i === 0 };
   });
-  const focus = (record) => icons.focus(icons.row(record.iconId));
+  const focus = (record) => icons.focus(record.iconId);
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
     paddingPx: 0,

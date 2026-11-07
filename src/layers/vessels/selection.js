@@ -27,15 +27,17 @@ export function createSelection({
   function bindVesselInteraction(viewer, keyTarget) {
     state.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state.feed.enabled) return;
-      const picked = event.hit;
       const pickedId = event.id;
       let record = pickedId ? state.records.byMmsi.get(pickedId) : null;
-      // A vessel icon's pick id is its row id: the MMSI, or an unkeyed row's.
-      // Removing a row destroys its pick id, so an evicted vessel cannot be
-      // picked at all; a live row whose record is gone stays a no-op below.
-      const rawId = picked?.id;
+      // A vessel icon's pick is an item of the layer's icon set, whose id is
+      // its row id: the MMSI, or an unkeyed row's. Removing a row removes its
+      // item, so an evicted vessel cannot be picked at all; a live row whose
+      // record is gone stays a no-op below.
+      const hit = event.drawHit;
       const ownRecordPick =
-        typeof rawId === 'string' && state.icons?.has(rawId) === true;
+        Boolean(hit) &&
+        hit.set === state.icons?.setId &&
+        state.icons.has(hit.id) === true;
 
       // An own-layer row without a live map key is a strict no-op (FB-1
       // residual). Trails carry no layer identity and hug their contacts, so any

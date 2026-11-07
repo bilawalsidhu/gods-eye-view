@@ -1109,6 +1109,10 @@ destroying the layer cancels pending work and ignores late results.
 `./layers/vessels` package entry. The factory owns feed lifecycle, keyed records,
 rendering, selection, trails and cards in separate components. The standalone
 entry supplies its AISStream source, scene services and existing row limits.
+Its ship icons are one renderer icon draw set (held motion, course rotation,
+focus emphasis, horizon cull) and the entry no longer reaches Cesium, so a
+caller handing it a Cesium viewer, with no renderer bound,
+loads the `./render/cesium/unbound` export once first.
 
 Incomplete observations retain missing keyed vessels for at most five minutes
 since their last accepted receipt, within the renderer's row budget (plus the

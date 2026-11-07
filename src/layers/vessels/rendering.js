@@ -1,8 +1,3 @@
-import * as Cesium from 'cesium';
-// The Cesium camera factory, which loads the query factory: given a viewer
-// of a caller's own, with no renderer bound, the view area and evidence
-// reads still find a camera and a query port.
-import '../../render/cesium/camera.js';
 import { t } from '../../i18n/index.js';
 import {
   vesselTypeCss,
@@ -11,15 +6,16 @@ import {
   applyVesselOverlayPolicy,
   VESSEL_CARD_FADE_DISTANCE_M,
 } from '../../data/vesselLabels.js';
-import { cameraPoseSignature } from '../../data/iconOrientation.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { horizonFrom, liftedForHorizon } from '../../geo/horizon.js';
+import { distance } from '../../geo/vector.js';
 import {
-  createIconSet,
-  ICON_CULL_LIFT,
-  ICON_ROTATES,
-} from '../../data/iconSet.js';
-import { writeHoldSegment } from '../../data/iconSegment.js';
-import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
-import { iconAtlas } from '../../data/iconAtlas.js';
+  drawOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../../render/rendererOf.js';
+import { createVesselIconBook } from './iconBook.js';
 import {
   VESSEL_LIFT_M,
   DEFAULT_RENDER_ROWS,
@@ -32,6 +28,20 @@ import {
 
 /** The ship artwork's own raster size (px). */
 const SHIP_ICON_PX = 32;
+
+let instances = 0;
+
+/**
+ * The camera pose a pass evaluated, to the precision that moves what it
+ * draws: the eye to 10 m and its angles to a milliradian.
+ */
+function poseSignature(pose) {
+  const p = pose.position;
+  return (
+    `${Math.round(p.x / 10)}:${Math.round(p.y / 10)}:${Math.round(p.z / 10)}:` +
+    `${pose.heading.toFixed(3)}:${pose.pitch.toFixed(3)}:${pose.roll.toFixed(3)}`
+  );
+}
 
 export function createRendering({
   vesselState,
@@ -73,22 +83,26 @@ export function createRendering({
    * Where a record's icon is anchored: VESSEL_LIFT_M above the sea surface
    * (the geoid, once its grid has loaded).
    * @param {Object} record - Vessel record with a finite lat/lon.
-   * @returns {Cesium.Cartesian3} A Cesium position: icon rows, focus and the
-   *   layer's queries take it as it is.
+   * @returns {{x: number, y: number, z: number}} ECEF metres: icon items,
+   *   focus and the layer's queries take it as it is.
    */
   function anchorPosition(record) {
     const heightM = components.queries.vesselDatumHeightM(
       components.tracking.currentGeoidN(record.lat, record.lon),
       VESSEL_LIFT_M,
     );
-    return Cesium.Cartesian3.fromDegrees(record.lon, record.lat, heightM);
+    return fromDegrees(record.lon, record.lat, heightM);
   }
+
+  // Reused projection buffers for the card pass, grown to the candidates.
+  let worldXyz = new Float64Array(0);
+  let screenXy = new Float32Array(0);
 
   function resetRecordVisuals() {
     visualRecords = new WeakMap();
   }
 
-  const { registerSpriteCollection } = services.sprites;
+  const { registerSpriteSet } = services.sprites;
   const {
     forgetSpriteFocus,
     focusNowMs,
@@ -121,25 +135,51 @@ export function createRendering({
   }
 
   /**
-   * The layer's icon set and its primitive. Vessels hold still between polls,
-   * so each row is a hold segment and the primitive's clock only keeps segment
-   * times small. The set draws depth-test-free on the near plane and culls the
-   * far side on the GPU (locked height-datum principle #2: contacts are ALWAYS
-   * visible; the tile sea mesh ≠ the geoid, so a depth-tested chevron at the
-   * geoid would clip behind local tide/mesh noise).
+   * The layer's icon draw set. Vessels hold still between polls, so each
+   * item's motion is a hold at its anchor, turned along its course on screen.
+   * The set draws over depth and culls the far side of the horizon, judged a
+   * little above sea level (locked height-datum principle #2: contacts are
+   * ALWAYS visible; the tile sea mesh ≠ the geoid, so a depth-tested chevron
+   * at the geoid would clip behind local tide/mesh noise).
    */
   function ensureCollections(viewer) {
     if (!viewer || state.icons) return;
-    const epoch = Cesium.JulianDate.now();
-    state.icons = createIconSet({ epoch });
-    state.icons.show = state.feed.enabled;
-    state.iconPrimitive = new IconSetPrimitive({
-      set: state.icons,
-      renderTime: () => epoch,
-      requestRender: () => governorRequestRender('ais-vessels-icons'),
+    const set = drawOf(viewer).icons({
+      id: `ais-vessels:${++instances}`,
+      horizonCull: true,
     });
-    viewer.scene.primitives.add(state.iconPrimitive);
-    registerSpriteCollection('ais', state.iconPrimitive);
+    // Columns of no rows put the set's host in the scene now, where the
+    // sprite order finds it, rather than with its first vessel.
+    set.setColumns?.({ ids: [] });
+    state.icons = createVesselIconBook(set);
+    state.icons.show = state.feed.enabled;
+    registerSpriteSet?.('ais', set.id);
+  }
+
+  /** Let the icon draw set go (the layer is destroyed). */
+  function disposeCollections() {
+    state.icons?.dispose();
+    state.icons = null;
+  }
+
+  /** The icon item a record draws, as it now is. */
+  function iconItem(record, visual) {
+    const selected = record === state.selectedRecord;
+    const courseDeg = vesselCourseDeg(record);
+    return {
+      id: visual.iconId,
+      pos: visual.position,
+      image: shipIcon(record, selected),
+      size: [SHIP_ICON_PX, SHIP_ICON_PX],
+      scale: shipScale(record) * (selected ? 1.2 : 1),
+      rotationMode: 'course',
+      // Held on course; `course` for renderers without motion segments.
+      course: courseDeg,
+      motion: { kind: 'hold', courseDeg },
+      focus: state.icons?.focus(visual.iconId) ?? 1,
+      disableDepthTest: Infinity,
+      meta: visual.meta,
+    };
   }
 
   /**
@@ -147,53 +187,32 @@ export function createRendering({
    * (vesselLabels.js) rebuilt by the declutter pass — no per-record label
    * primitive exists anymore.
    * @param {Object} record - Normalized vessel record.
-   * @param {Cesium.EllipsoidalOccluder|null} occluder - Horizon occluder for initial visibility.
+   * @param {{isPointVisible: Function}|null} occluder - Horizon test for initial visibility.
    */
 
   function addRecordPrimitives(record, occluder) {
     const visual = getVisual(record);
-    const set = state.icons;
-    const row = set.add(visual.iconId, {
-      layer: 'ais-live-vessels',
-      id: visual.iconId,
-    });
-    set.setSize(row, SHIP_ICON_PX, SHIP_ICON_PX);
-    set.setFlag(row, ICON_ROTATES, true);
-    // Sea level sits at geoid N, below the ellipsoid across much of the ocean.
-    set.setFlag(row, ICON_CULL_LIFT, true);
-    set.setShown(row, true);
-    syncRecordIcon(record);
+    // The pick meta, and the key of the vessel's focus emphasis.
+    visual.meta = { layer: 'ais-live-vessels', id: visual.iconId };
+    state.icons.put({ ...iconItem(record, visual), focus: 1 });
+    if (visual.position)
+      visual.cullPosition = liftedForHorizon(visual.position);
     visual.visible = isVisible(visual.cullPosition, occluder);
   }
 
   /**
-   * Write a record's row from its visual position, course, tint and selection,
-   * and keep the point the shader judges the horizon at (`cullPosition`) so
-   * the CPU card/focus pass draws the same boundary.
+   * Draw a record's icon from its visual position, course, tint and
+   * selection, and keep the point the renderer judges the horizon at
+   * (`cullPosition`: lifted to a little above sea level, as a horizon-culled
+   * GPU icon is) so the CPU card/focus pass draws the same boundary.
    * @param {Object} record - Vessel record with a prepared visual.
    */
 
   function syncRecordIcon(record) {
     const visual = getVisual(record);
-    const set = state.icons;
-    const row = set?.row(visual.iconId) ?? -1;
-    if (row < 0 || !visual.position) return;
-    const selected = record === state.selectedRecord;
-    const slot = iconAtlas.slot(shipIcon(record, selected), SHIP_ICON_PX);
-    set.setImage(row, slot, slot);
-    set.setScale(row, shipScale(record) * (selected ? 1.2 : 1));
-    writeHoldSegment(
-      set.segments,
-      row,
-      visual.position,
-      vesselCourseDeg(record),
-    );
-    set.segmentWritten(row);
-    visual.cullPosition = set.cullPoint(
-      row,
-      visual.position,
-      visual.cullPosition,
-    );
+    if (!state.icons?.has(visual.iconId) || !visual.position) return;
+    state.icons.put(iconItem(record, visual));
+    visual.cullPosition = liftedForHorizon(visual.position);
   }
 
   /**
@@ -203,12 +222,11 @@ export function createRendering({
 
   function removeRecordPrimitives(record) {
     if (!record) return;
-    const set = state.icons;
+    const icons = state.icons;
     const visual = getVisual(record);
-    const row = set?.row(visual.iconId) ?? -1;
-    if (row < 0) return;
-    forgetSpriteFocus(set.metaAt(row));
-    set.remove(visual.iconId);
+    if (!icons?.has(visual.iconId)) return;
+    forgetSpriteFocus(icons.item(visual.iconId).meta);
+    icons.remove(visual.iconId);
   }
 
   function shipScale(record) {
@@ -221,7 +239,7 @@ export function createRendering({
   /**
    * Best available real-world direction of travel for a vessel, degrees
    * clockwise from north (true heading preferred, course-over-ground fallback).
-   * The icon set turns this into its screen rotation on the GPU each frame.
+   * The renderer turns this into its screen rotation each frame.
    * @param {Object} record - Vessel record.
    * @returns {number} Course in degrees (0 when unknown).
    */
@@ -268,9 +286,8 @@ export function createRendering({
   // own label publication requests a frame, and scheduling on that would loop.
   function installRuntime(viewer) {
     if (state.preRenderRemover || !viewer) return;
-    state.preRenderRemover = viewer.scene.preRender.addEventListener(() =>
-      updateVisibility(),
-    );
+    state.preRenderRemover =
+      findFrame(viewer)?.on('preRender', () => updateVisibility()) ?? null;
   }
 
   function scheduleTrailingVisibilityPass(now) {
@@ -296,6 +313,7 @@ export function createRendering({
     if (force) governorRequestRender('ais-vessels-update');
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
+    const pose = state.viewer ? findCamera(state.viewer)?.pose() : null;
     const regularPass =
       force || now - state.lastVisibilityUpdate >= VISIBILITY_UPDATE_MS;
     const focusPass =
@@ -303,8 +321,8 @@ export function createRendering({
       (force || now - state.lastFocusUpdate >= FOCUS_UPDATE_MS);
     if (
       !regularPass &&
-      state.viewer?.camera &&
-      cameraPoseSignature(state.viewer.camera) !== vesselState._lastCamPoseSig
+      pose &&
+      poseSignature(pose) !== vesselState._lastCamPoseSig
     )
       scheduleTrailingVisibilityPass(now);
     if (!regularPass && !focusPass) return;
@@ -315,10 +333,7 @@ export function createRendering({
       // Still record the pose this pass evaluated, or every later frame that
       // falls inside the cadence would schedule another trailing frame.
       if (regularPass) {
-        if (state.viewer?.camera)
-          vesselState._lastCamPoseSig = cameraPoseSignature(
-            state.viewer.camera,
-          );
+        if (pose) vesselState._lastCamPoseSig = poseSignature(pose);
         updateClusteredLabels([]);
       }
       if (focusPass) {
@@ -328,15 +343,14 @@ export function createRendering({
       return;
     }
 
-    const scene = state.viewer?.scene;
-    const camera = state.viewer?.camera;
+    const query = state.viewer ? findQuery(state.viewer) : null;
     if (regularPass) {
       // Candidate construction stays on the original 800 ms selector cadence.
       // The 80 ms focus-only pass below never allocates label candidates.
       // Icons cull and rotate on the GPU; this pass only picks the cards and
       // remembers which vessels the horizon leaves in view for focus.
-      if (camera) vesselState._lastCamPoseSig = cameraPoseSignature(camera);
-      const occluder = makeOccluder();
+      if (pose) vesselState._lastCamPoseSig = poseSignature(pose);
+      const occluder = makeOccluder(pose);
       const labelCandidates = [];
       for (const record of state.records.all) {
         const visual = getVisual(record);
@@ -345,20 +359,14 @@ export function createRendering({
       }
       updateClusteredLabels(labelCandidates);
     }
-    if (focusPass && scene && camera) {
+    if (focusPass && query && pose) {
       const result = applyVesselFocusDeemphasis({
         records: state.records.all,
         target: focusTarget,
         previousActiveCount: state.activeFocusCount,
         nowMs: now,
-        screenPositionFor: (position) =>
-          Cesium.SceneTransforms.worldToWindowCoordinates(
-            scene,
-            position,
-            vesselState._scratchFocusScreen,
-          ),
-        cameraDistanceFor: (position) =>
-          Cesium.Cartesian3.distance(camera.positionWC, position),
+        screenPositionFor: (position) => query.project(position),
+        cameraDistanceFor: (position) => distance(pose.position, position),
       });
       state.activeFocusCount = result.activeCount;
       if (result.activeCount > 0 || result.transitioning)
@@ -368,13 +376,13 @@ export function createRendering({
   }
 
   /**
-   * Apply focus emphasis to vessel icons through the set's focus column
+   * Apply focus emphasis to vessel icons through their items' `focus`
    * (narrow always-visible amendment: the ship chevron remains present at the
    * non-zero floor while it competes with the tracked target). Kept as a
    * production wire seam so the animation/deadband contract can be tested
-   * without constructing WebGL.
+   * without a renderer.
    * @param {object} input
-   * @param {object} [input.icons] The icon set (defaults to the layer's).
+   * @param {object} [input.icons] The icon book (defaults to the layer's).
    * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
    */
 
@@ -396,10 +404,11 @@ export function createRendering({
     let activeCount = 0;
     for (const record of records || []) {
       const visual = getVisual(record);
-      const row = icons?.row(visual?.iconId) ?? -1;
+      const id = visual?.iconId;
+      const item = icons?.item(id);
       const position = visual?.position;
-      if (row < 0 || !position) continue;
-      const sprite = icons.metaAt(row);
+      if (!item || !position) continue;
+      const sprite = item.meta;
       // Most of a worldwide feed sits behind the horizon. A hidden icon with
       // no pending focus state at full emphasis would advance to exactly what
       // it already is, so skip it instead of paying its distance and state
@@ -407,7 +416,7 @@ export function createRendering({
       if (
         !visual.visible &&
         spriteFocusAtRest(sprite) &&
-        !focusAlphaNeedsWrite(icons.focus(row), 1, params)
+        !focusAlphaNeedsWrite(icons.focus(id), 1, params)
       )
         continue;
       const focus = advanceSpriteFocus(sprite, {
@@ -420,26 +429,24 @@ export function createRendering({
         params,
         // Vessel artwork is 32 px before scale. Including the ambient
         // chevron's own rendered extent prevents edge-overlap misses.
-        spriteHalfWidthPx: icons.width(row) * icons.scale(row) * 0.5,
-        spriteHalfHeightPx: icons.height(row) * icons.scale(row) * 0.5,
+        spriteHalfWidthPx: item.size[0] * (item.scale ?? 1) * 0.5,
+        spriteHalfHeightPx: item.size[1] * (item.scale ?? 1) * 0.5,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;
-      if (focusAlphaNeedsWrite(icons.focus(row), focus.factor, params)) {
-        icons.setFocus(row, focus.factor);
+      if (focusAlphaNeedsWrite(icons.focus(id), focus.factor, params)) {
+        icons.setFocus(id, focus.factor);
         writes += 1;
       }
     }
     return { writes, transitioning, activeCount, ran: true };
   }
 
-  function makeOccluder() {
-    const cameraPosition = state.viewer?.camera?.positionWC;
-    if (!cameraPosition) return null;
-    return new Cesium.EllipsoidalOccluder(
-      Cesium.Ellipsoid.WGS84,
-      cameraPosition,
-    );
+  /** The ellipsoid's horizon from the eye, or null with no camera. */
+  function makeOccluder(
+    pose = state.viewer ? findCamera(state.viewer)?.pose() : null,
+  ) {
+    return pose?.position ? horizonFrom(pose.position) : null;
   }
 
   function isVisible(cullPosition, occluder) {
@@ -460,34 +467,47 @@ export function createRendering({
 
   function updateClusteredLabels(records) {
     const viewer = state.viewer;
-    const scene = viewer?.scene;
+    const query = viewer ? findQuery(viewer) : null;
     const selected = state.selectedRecord;
     const entries = selected
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
     const maxLabels = labelRowLimit();
 
-    if (!scene || !records.length || maxLabels <= 0) {
+    if (!query || !records.length || maxLabels <= 0) {
       state.activeLabelCount = entries.length;
       publishVesselOverlayEntries(entries);
       return;
     }
 
+    // Every candidate projected in one call: NaN behind the eye.
+    const ambient = records.filter((record) => record !== selected);
+    if (worldXyz.length < ambient.length * 3) {
+      worldXyz = new Float64Array(ambient.length * 3);
+      screenXy = new Float32Array(ambient.length * 2);
+    }
+    ambient.forEach((record, i) => {
+      const p = getVisual(record).position;
+      worldXyz[i * 3] = p.x;
+      worldXyz[i * 3 + 1] = p.y;
+      worldXyz[i * 3 + 2] = p.z;
+    });
+    query.projectMany(
+      worldXyz.subarray(0, ambient.length * 3),
+      screenXy.subarray(0, ambient.length * 2),
+    );
     const cells = new Map();
-    for (const record of records) {
-      const visual = getVisual(record);
-      if (record === selected) continue;
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        visual.position,
-      );
-      if (!screen) continue;
-      const key = `${Math.floor(screen.x / LABEL_GRID_PX)}:${Math.floor(screen.y / LABEL_GRID_PX)}`;
+    for (let i = 0; i < ambient.length; i++) {
+      const record = ambient[i];
+      const x = screenXy[i * 2];
+      const y = screenXy[i * 2 + 1];
+      if (Number.isNaN(x) || Number.isNaN(y)) continue;
+      const key = `${Math.floor(x / LABEL_GRID_PX)}:${Math.floor(y / LABEL_GRID_PX)}`;
       const candidate = {
         record,
         score: labelPriority(record, selected),
-        x: screen.x,
-        y: screen.y,
+        x,
+        y,
       };
       const existing = cells.get(key);
       if (!existing || candidate.score > existing.score) {
@@ -499,10 +519,7 @@ export function createRendering({
     // selected card's anchor seeds the accepted set so ambient cards keep clear.
     const accepted = [];
     if (selected) {
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        iconPosition(selected),
-      );
+      const screen = query.project(iconPosition(selected));
       if (screen) accepted.push({ x: screen.x, y: screen.y });
     }
     const ranked = [...cells.values()].sort((a, b) => b.score - a.score);
@@ -606,6 +623,7 @@ export function createRendering({
     renderRowLimit,
     labelRowLimit,
     ensureCollections,
+    disposeCollections,
     addRecordPrimitives,
     syncRecordIcon,
     removeRecordPrimitives,
