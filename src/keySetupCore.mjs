@@ -98,6 +98,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'qldtraffic',
+    title: 'QLD TRAFFIC', // i18n-ignore: provider product name
+    unlocks: msg('Queensland traffic and flood cameras'),
+    getUrl: 'https://qldtraffic.qld.gov.au/more/Developers-and-Data/index.html',
+    envVars: Object.freeze(['QLDTRAFFIC_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'cesium-ion',
     title: 'CESIUM ION', // i18n-ignore: provider product name
     unlocks: msg('Bing imagery map stacks + world terrain'),

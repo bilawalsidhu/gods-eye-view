@@ -306,6 +306,14 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'qldtraffic-cctv',
+    html:
+      'Traffic and flood cameras (Queensland): ' +
+      '<a href="https://qldtraffic.qld.gov.au/" target="_blank" rel="noopener">State of Queensland (Department of Transport and Main Roads)</a>, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0 AU</a>; ' +
+      'council-supplied flood cameras are credited to their council in the CCTV panel',
+  },
+  {
     key: 'florida-cctv',
     html:
       'Traffic cameras (Florida): FL511, Florida Department of Transportation. ' +
