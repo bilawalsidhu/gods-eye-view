@@ -1,6 +1,12 @@
 import * as Cesium from 'cesium';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
+  formatMeasure,
+  getUnitSystem,
+  onUnitSystemChange,
+  unitCase,
+} from '../../ui/unitLabels.js';
+import {
   MISSION_CLOSE_VIEW_RANGE_M,
   MISSION_GLOBE_VIEW_RANGE_M,
 } from './policy.js';
@@ -176,8 +182,13 @@ export function createPanel({ state: layerState, services, parts, source }) {
     const position = endpoint
       ? `${isolate(`${endpoint.lat.toFixed(2)}, ${endpoint.lon.toFixed(2)}`)} · ${accuracyLabel(endpoint.accuracy)}`
       : stage.downrangeKm > 0
-        ? t('{value} KM DOWNRANGE', {
-            value: formatNumber(stage.downrangeKm),
+        ? t('{distance} DOWNRANGE', {
+            distance: unitCase(
+              formatMeasure(stage.downrangeKm, 'km', {
+                useGrouping: true,
+                maximumFractionDigits: 1,
+              }),
+            ),
           })
         : t('POSITION UNAVAILABLE');
     const detail = [
@@ -339,25 +350,32 @@ export function createPanel({ state: layerState, services, parts, source }) {
     const speedMps = layerState._satelliteTelemetry.get(
       layerState._selectedLaunchId,
     )?.speedMps;
+    // Altitude in km and speed in km/s (km/h on hover), or miles and mph
+    // under imperial units.
+    const imperial = getUnitSystem() === 'imperial';
     layerState._missionTelemetry = {
       distance: Number.isFinite(altitudeM)
-        ? t('{value} KM', {
-            value: formatNumber(Math.max(0, altitudeM / 1000), {
-              maximumFractionDigits: 0,
+        ? unitCase(
+            formatMeasure(Math.max(0, altitudeM / 1000), 'km', {
+              useGrouping: true,
             }),
-          })
+          )
         : null,
       speed: Number.isFinite(speedMps)
-        ? t('{value} KM/S', {
-            value: formatNumber(speedMps / 1000, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }),
-          })
+        ? unitCase(
+            formatMeasure(
+              speedMps / 1000,
+              'km/s',
+              imperial
+                ? { useGrouping: true }
+                : { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+            ),
+          )
         : null,
-      speedTitle: Number.isFinite(speedMps)
-        ? `${formatNumber(speedMps * 3.6, { maximumFractionDigits: 0 })} km/h`
-        : null,
+      speedTitle:
+        Number.isFinite(speedMps) && !imperial
+          ? formatMeasure(speedMps * 3.6, 'km/h', { useGrouping: true })
+          : null,
     };
     if (republish) publishPanel();
   }
@@ -453,12 +471,14 @@ export function createPanel({ state: layerState, services, parts, source }) {
         preview: scheduleMissionRosterPreview,
         clear: clearMissionRosterPreviewState,
       });
-    // The roster and mission are worded again in a new locale.
-    layerState._offMissionLocale = onLocaleChange(() => {
+    // The roster and mission are worded again in a new locale or unit system.
+    const reword = () => {
       renderMissionRoster();
       updateMissionTelemetry(true, false);
       publishPanel();
-    });
+    };
+    layerState._offMissionLocale = onLocaleChange(reword);
+    layerState._offMissionUnits = onUnitSystemChange(reword);
     publishPanel();
   }
 
@@ -467,6 +487,8 @@ export function createPanel({ state: layerState, services, parts, source }) {
     layerState._missionPanelReady = false;
     layerState._offMissionLocale?.();
     layerState._offMissionLocale = null;
+    layerState._offMissionUnits?.();
+    layerState._offMissionUnits = null;
     layerState._missionRosterPreviewOwnership = null;
     layerState._missionRosterView = null;
     layerState._missionRosterSignature = null;

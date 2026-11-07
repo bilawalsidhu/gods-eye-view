@@ -30,7 +30,7 @@ import {
 import { layerNameForId, sourceLabel } from '../ui/layerNames.js';
 import { localizePlaceName } from '../ui/placeNames.js';
 import { translateStatusLine } from '../ui/statusText.js';
-import { formatQuantity } from '../ui/unitLabels.js';
+import { formatArea, formatDistance, formatMeasure } from '../ui/unitLabels.js';
 
 /** Split "a; b" caveat text into separate notes. */
 function notesOf(...values) {
@@ -153,7 +153,9 @@ function shownCount(count, noun) {
   }
 }
 
-const shownRadius = (km) => formatQuantity(Number(km), 'km');
+// The engine's radius in the page's unit system: "250 km", or "155 mi".
+const shownRadius = (km) =>
+  formatMeasure(Number(km), 'km', { maximumFractionDigits: 1 });
 
 const FIXED_SCOPES = new Map(
   [msg('anywhere in the loaded data'), msg('in view')].map((text) => [
@@ -316,8 +318,8 @@ const NOTE_PATTERNS = [
   [
     /^([\d,]+) m around the landmark$/,
     ([, radius]) =>
-      t('{radius} m around the landmark', {
-        radius: formatNumber(countOf(radius)),
+      t('{radius} around the landmark', {
+        radius: formatDistance(countOf(radius)),
       }),
   ],
   [
@@ -402,8 +404,10 @@ const NOTE_PATTERNS = [
   [
     /^Fly below ([\d,]+) km to a covered region$/,
     ([, km]) =>
-      t('Fly below {km} km to a covered region', {
-        km: formatNumber(Number(km.replace(/,/g, ''))),
+      t('Fly below {altitude} to a covered region', {
+        altitude: formatMeasure(Number(km.replace(/,/g, '')), 'km', {
+          useGrouping: true,
+        }),
       }),
   ],
   [
@@ -528,7 +532,9 @@ function areaCard(result, args = {}) {
     display: {
       title: `${result.name ? spokenLabel(result.name, 48) : t('Area', { context: 'voice area' })}${result.country ? `, ${spokenLabel(result.country, 24)}` : ''}`,
       lines: [
-        Number.isFinite(km2) && km2 > 0 ? `${formatNumber(km2)} km²` : null,
+        Number.isFinite(km2) && km2 > 0
+          ? formatArea(km2, { useGrouping: true, maximumFractionDigits: 3 })
+          : null,
         shownLine(display.basis),
         shownLine(display.parts),
         shownLine(display.drawnParts),

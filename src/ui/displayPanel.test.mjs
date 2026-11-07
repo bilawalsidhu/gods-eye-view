@@ -13,6 +13,11 @@ import { AircraftDisplay } from './aircraftDisplay.js';
 import { VisualSettings } from './visualSettings.js';
 import { initGeoFileImport } from './geoFileImport.js';
 import { CockpitDisplayPortal } from './cockpitDisplayPortal.js';
+import {
+  getUnitSystem,
+  setUnitSystem,
+  UNIT_SYSTEM_STORAGE_KEY,
+} from './unitLabels.js';
 // Core's classes on an element, without the kit's `ui-` classes.
 const coreClasses = (el) =>
   [...el.classList].filter((name) => !name.startsWith('ui-')).join(' ');
@@ -706,4 +711,39 @@ test('the real portal lays out once the groups have moved and puts back the focu
   portal.setActive(false);
   await nextTick();
   assert.deepEqual(layouts, [true]);
+});
+
+test('the Units switch shows the unit system, keeps a choice per browser and leaves the share state alone', async (t) => {
+  const { store, $ } = fixture(t);
+  const { owner, shares } = settings(store);
+  t.after(() => {
+    setUnitSystem('metric');
+    localStorage.removeItem(UNIT_SYSTEM_STORAGE_KEY);
+  });
+  const metric = $('units-metric');
+  const imperial = $('units-imperial');
+  assert.equal(metric.getAttribute('aria-checked'), 'true', 'metric by default');
+  assert.equal(imperial.getAttribute('aria-checked'), 'false');
+
+  // A click reaches the owner through the display store.
+  const chosen = [];
+  const token = store.connect({ setUnits: (system) => chosen.push(system) });
+  imperial.click();
+  store.detach(token);
+  assert.deepEqual(chosen, ['imperial']);
+
+  // The owner applies, keeps and shows the choice.
+  shares.length = 0;
+  assert.equal(owner._setUnitSystem('imperial'), 'imperial');
+  await nextTick();
+  assert.equal(getUnitSystem(), 'imperial');
+  assert.equal(localStorage.getItem(UNIT_SYSTEM_STORAGE_KEY), 'imperial');
+  assert.equal(imperial.getAttribute('aria-checked'), 'true');
+  assert.equal(metric.getAttribute('aria-checked'), 'false');
+  assert.equal(shares.length, 0, 'display only: no share-state sync');
+
+  assert.equal(owner._setUnitSystem('nonsense'), 'metric');
+  await nextTick();
+  assert.equal(localStorage.getItem(UNIT_SYSTEM_STORAGE_KEY), 'metric');
+  assert.equal(metric.getAttribute('aria-checked'), 'true');
 });

@@ -20,6 +20,7 @@ import {
   t,
   translateKnown,
 } from '../i18n/index.js';
+import { onUnitSystemChange } from './unitLabels.js';
 
 // Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
 // label translates.
@@ -408,13 +409,13 @@ export class LayerPanel {
         info: false,
       });
     }
-    // The rows carry text this panel translates; show it in a new locale.
-    this._removers.push(
-      onLocaleChange(() => {
-        this._paint();
-        this._refreshWeatherPanel();
-      }),
-    );
+    // The rows carry text this panel translates and measurements it
+    // formats; show them in a new locale or unit system.
+    const reword = () => {
+      this._paint();
+      this._refreshWeatherPanel();
+    };
+    this._removers.push(onLocaleChange(reword), onUnitSystemChange(reword));
     this._paint();
     this._refreshWeatherPanel();
   }

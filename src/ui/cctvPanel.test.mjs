@@ -7,6 +7,7 @@ import { createApp, nextTick } from 'vue';
 import { CctvControls } from './cctvControls.js';
 import { presentCctvPanel } from './cctvPresentation.js';
 import { useCctvStore } from './stores/cctv.js';
+import { setUnitSystem } from './unitLabels.js';
 import CctvPanel from './views/panels/CctvPanel.vue';
 
 const BUTTONS = {
@@ -512,4 +513,42 @@ test('the panel meta line reads a bearing that rounds to north as HDG 0°', () =
   };
   assert.match(meta(359.4), /· HDG 359° ·/);
   assert.match(meta(359.6), /· HDG 0° ·/);
+});
+
+test('in feet, an untouched length closes without moving the pose; a typed one is stored in metres', async (t) => {
+  setUnitSystem('imperial');
+  t.after(() => setUnitSystem('metric'));
+  const page = panel(t);
+  const patches = [];
+  page.controls.actions.setParams = (params) => patches.push(params);
+  page.controls._renderCctvState({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: { ...camera, mountHeightM: 6, basePose: { mountHeightM: 6 } },
+  });
+  await nextTick();
+  const chip = document.querySelector('[data-cal-field="height"]');
+  assert.equal(chip.textContent, 'HGT 20ft');
+  const begin = async () => {
+    chip.click();
+    await nextTick();
+    return chip.querySelector('input');
+  };
+  let input = await begin();
+  assert.equal(input.value, '20');
+  input.dispatchEvent(new Event('blur'));
+  assert.deepEqual(patches, [], '20 ft is 6.096 m: leaving it as shown commits nothing');
+  await nextTick();
+  input = await begin();
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+  assert.deepEqual(patches, [], 'nor does Enter on the shown value');
+  await nextTick();
+  input = await begin();
+  input.value = '25';
+  input.dispatchEvent(new Event('blur'));
+  assert.equal(patches.length, 1);
+  const { heightM } = patches[0].calibration.patch;
+  assert.ok(Math.abs(heightM - (25 * 0.3048 - 6)) < 1e-9, `heightM ${heightM}`);
 });

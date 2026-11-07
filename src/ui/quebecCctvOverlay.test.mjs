@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import * as Cesium from 'cesium';
 import { createQuebecCctvOverlay } from './quebecCctvOverlay.js';
+import { setUnitSystem } from './unitLabels.js';
 
 const MEDIA_URL =
   'https://www.quebec511.info/Carte/Fenetres/camera.ashx?id=3735&format=mp4';
@@ -122,6 +123,23 @@ test('a camera without browser media shows only its provider link', (t) => {
   const link = ui.window.document.querySelector('.qci-panel a');
   assert.equal(link.hidden, false);
   assert.equal(link.href, CAMERA.sourceUrl);
+});
+
+test('location accuracy follows the unit system', (t) => {
+  t.after(() => setUnitSystem('metric'));
+  const ui = mountOverlay(t);
+  const coordinates = () =>
+    ui.window.document.querySelector('.qci-coordinates').textContent;
+  const placed = { ...CAMERA, browserMediaUrl: '', accuracyM: 30 };
+
+  ui.overlay.setCamera(placed);
+  assert.match(coordinates(), /±30 m ·/);
+  assert.equal(ui.label(), 'Route 136 at rue Panet · ±30 m');
+
+  setUnitSystem('imperial');
+  ui.overlay.setCamera({ ...placed });
+  assert.match(coordinates(), /±98 ft ·/);
+  assert.equal(ui.label(), 'Route 136 at rue Panet · ±98 ft');
 });
 
 test('routine same-camera updates keep Québec feed errors visible until recovery', (t) => {

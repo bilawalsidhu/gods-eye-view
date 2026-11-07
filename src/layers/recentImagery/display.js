@@ -9,7 +9,7 @@ import {
   getLocale,
   t,
 } from '../../i18n/index.js';
-import { formatQuantity } from '../../ui/unitLabels.js';
+import { formatMeasure } from '../../ui/unitLabels.js';
 import { dayTime } from './model.js';
 
 const SHORT_DAY = Object.freeze({
@@ -25,8 +25,11 @@ export function displayDay(day, options = SHORT_DAY) {
   return time === null ? '' : formatDate(time, options);
 }
 
-/** `30 m` / `30 м`, number and unit kept together. */
-export const displayMetres = (value) => formatQuantity(value, 'm');
+/**
+ * `30 m` / `30 м` (`98 ft` under imperial units), number and unit kept
+ * together.
+ */
+export const displayMetres = (value) => formatMeasure(value, 'm');
 
 /** The readout's words in the page's language; the model keeps them English. */
 export const READOUT_WORDS = Object.freeze({

@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
 import { t } from '../../i18n/index.js';
-import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
+import { displayUnit, formatMeasure, unitLabel } from '../../ui/unitLabels.js';
 import {
   ISS_NORAD,
   CONTEXT_REFRESH_INTERVAL_MS,
@@ -359,8 +359,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // The card is display only (the voice context slot keeps its own English
     // copy), so the altitude unit and the companions line follow the language.
     const altitudeText = Number.isFinite(altitudeM)
-      ? formatQuantity(Math.round(altitudeM / 1000), 'km')
-      : `?\u00a0${unitLabel('km')}`;
+      ? formatMeasure(altitudeM / 1000, 'km')
+      : `?\u00a0${unitLabel(displayUnit('km'))}`;
     const detail = `${altitudeText} · NORAD ${layerState._trackedNorad}`;
     // Class leads the detail block: it is what tells the operator WHAT they are
     // looking at, and it stays readable under the IR styles that flatten the

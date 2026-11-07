@@ -334,6 +334,11 @@ function englishText(text, values) {
   );
 }
 
+/** A reported speed in whole km/h, the default `speedText` of the card copy. */
+function englishSpeed(metresPerSecond) {
+  return `${Math.round(metresPerSecond * 3.6)} km/h`;
+}
+
 /** GTFS-realtime OccupancyStatus in words. */
 function occupancyText(occupancy, t) {
   switch (occupancy) {
@@ -368,6 +373,8 @@ function occupancyText(occupancy, t) {
  * @param {object|null} [entry] Playback entry of the vehicle.
  * @param {(text: string, values?: object) => string} [t] Translates the
  *   card's English text; English when omitted.
+ * @param {(metresPerSecond: number) => string} [speedText] Words a reported
+ *   speed in the page's units; whole km/h when omitted.
  * @returns {{title:string, details:string[]}}
  */
 export function buildTransitSelectionCopy(
@@ -378,6 +385,7 @@ export function buildTransitSelectionCopy(
   fetchedAtMs = null,
   entry = null,
   t = englishText,
+  speedText = englishSpeed,
 ) {
   const icon = TRANSIT_MODE_ICON[mode] || TRANSIT_MODE_ICON.unknown;
   const routeLabel = record.routeId
@@ -404,7 +412,7 @@ export function buildTransitSelectionCopy(
   const reportedMotion = [];
   if (Number.isFinite(record.speedMps))
     reportedMotion.push(
-      t('reported {speed} km/h', { speed: Math.round(record.speedMps * 3.6) }),
+      t('reported {speed}', { speed: speedText(record.speedMps) }),
     );
   if (Number.isFinite(record.bearing))
     reportedMotion.push(

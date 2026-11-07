@@ -1198,11 +1198,11 @@ test('cockpit summary presents the focused item as Contact', () => {
   assert.match(match[0], /aria-label="Contact navigation"/);
   assert.match(
     match[0],
-    /aria-label="Previous — prior visited contact in the 250 km window"/,
+    /aria-label="Previous — prior visited contact in the 250\u00a0km window"/,
   );
   assert.match(
     match[0],
-    /aria-label="Next — nearest unvisited contact in the 250 km window"/,
+    /aria-label="Next — nearest unvisited contact in the 250\u00a0km window"/,
   );
   assert.match(match[0], /aria-label="Collapse Contact panel"/);
   assert.doesNotMatch(match[0], />GLOBAL CONTEXT</);
