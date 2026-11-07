@@ -268,3 +268,23 @@ test('real FIRMS lifecycle clears host entries on disable and destroy', async ()
     else globalThis.window = originalWindow;
   }
 });
+
+test('a detection without FRP or confidence reads FIRE, never 0 MW or low confidence', () => {
+  const unknown = fire({ frp: null, confidence: null, satellite: 'G19', sensor: 'ABI' });
+  const ambient = buildFireCard({ fire: unknown, position: { x: 1, y: 2, z: 3 } }, NOW);
+  assert.equal(ambient.title, 'FIRE');
+  assert.equal(ambient.details[0], '2h · G19');
+  const selected = buildSelectedFireCard(unknown, NOW);
+  assert.equal(selected.title, 'FIRE');
+  assert.doesNotMatch(selected.details[0], /conf/);
+  assert.match(selected.details[0], /^2h ago · ABI G19$/);
+  // Mid-ramp ('flame'), not the ember a 0 MW fire would get.
+  assert.equal(ambient.accent, accentForSeverity('flame'));
+});
+
+test('a cell of detections without FRP shows its age but no maximum', () => {
+  const candidate = { cell: { count: 3, maxFrp: null, newestAcqMs: NOW - 2 * H }, position: {}, accent: undefined };
+  const card = buildCellCard(candidate, NOW);
+  assert.equal(card.title, '3 FIRES');
+  assert.equal(card.details[0], 'new 2h');
+});

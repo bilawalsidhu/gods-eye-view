@@ -36,6 +36,10 @@ export function createFirmsState({ services, config }) {
 
   layerState._stale = false;
 
+  /** Who supplied the last snapshot: 'firms', or 'inpe' on a keyless server. */
+
+  layerState._provider = 'firms';
+
   /** Surfaced error string when the live fetch failed outright. */
 
   layerState._error = null;

@@ -2544,6 +2544,11 @@ reporting are unchanged.
 
 ## FIRMS source status
 
+The FIRMS proxy requests VIIRS NOAA-20, VIIRS NOAA-21 and MODIS NRT (Terra and
+Aqua). It no longer requests VIIRS Suomi NPP: NASA stopped delivering Suomi NPP
+data on 2026-11-02, and the source returned no rows while still costing one
+MAP_KEY transaction per refresh.
+
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
 The `get_active_fires` tool reports acquisition times as UTC ISO timestamps,
 including zero-padded hours and minutes; missing or invalid dates and times
@@ -2566,6 +2571,19 @@ reports as `ConnectTimeoutError`, is. A retry answered with a null-body status
 the server, and a non-OK response releases its connection at once. FIRMS
 warnings include the per-address connection errors and never the request URL,
 which embeds the MAP_KEY.
+
+Without a `FIRMS_MAP_KEY`, `/api/firms` answers with INPE Programa Queimadas'
+South American detections (`provider: 'inpe'`, `coverage: 'south-america'`)
+instead of `503 no_key`, refreshed every 10 minutes under the same single-flight
+and serve-stale rules. Each INPE 10-minute file is downloaded once and kept
+while it is inside a 30-hour lookback; detections are clamped to the trailing
+24 hours by their GMT pass time. INPE publishes no FRP or confidence, so those
+fields are null: cards read `FIRE` instead of a megawatt figure and omit the
+confidence, cells omit their maximum, and markers draw mid-scale. The layer row
+credits `INPE Programa Queimadas · SOUTH AMERICA`, the attribution
+lightbox carries INPE's citation, and `get_active_fires` reports
+`source`, `coverage` and a South-America-only note. `FIRMS_INPE_ENABLED=0`
+restores the keyless `503 no_key`.
 
 ## Installations and map-source guidance
 
@@ -2627,7 +2645,9 @@ which embeds the MAP_KEY.
 > to the lowest-configured install. The mission does not branch on whether a key
 > is present — everyone gets the same tile.
 >
-> Keyless, the honest surface is the **layer row**, which reads
+> Keyless, the fires half shows INPE Programa Queimadas' South American
+> detections and the row reads `INPE Programa Queimadas · SOUTH AMERICA`.
+> With `FIRMS_INPE_ENABLED=0` the honest surface is the **layer row**, which reads
 > `UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED`. Its control also names the
 > key: hovering it, and its accessible name, read
 > `Needs FIRMS_MAP_KEY — add it in Provider Settings`. A layer declares which
