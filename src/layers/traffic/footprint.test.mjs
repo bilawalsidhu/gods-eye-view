@@ -33,10 +33,7 @@ test('oblique horizon bearings are bounded and tile caps hold at city latitudes'
     [51.507, -0.128],
     [70, 10],
   ]) {
-    const camera = {
-      positionCartographic: Cesium.Cartographic.fromDegrees(lon, lat, 300),
-      heading: 0,
-      pitch: -Math.PI / 12,
+    const fake = {
       pickEllipsoid(p, e, result) {
         if (p.y < 300) return undefined;
         return Cesium.Cartesian3.fromDegrees(
@@ -56,8 +53,21 @@ test('oblique horizon bearings are bounded and tile caps hold at city latitudes'
         return ray;
       },
     };
+    const camera = {
+      pose: () => ({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 300),
+        heading: 0,
+        pitch: -Math.PI / 12,
+      }),
+    };
+    const query = {
+      pickEllipsoid: (x, y) =>
+        fake.pickEllipsoid({ x, y }, Cesium.Ellipsoid.WGS84) ?? null,
+      pickRay: (x, y) =>
+        fake.getPickRay({ x, y }, { direction: new Cesium.Cartesian3() }),
+    };
     const result = createReticleFootprint()(
-      { camera, scene: { canvas: { width: 1280, height: 800 } } },
+      { camera, query, width: 1280, height: 800 },
       300,
     );
     assert.ok(result.coverage.coarse.length <= 16);
@@ -89,4 +99,43 @@ test('coarse roads retain far segments but never duplicate a detailed tile core'
   assert.equal(roads.length, 2);
   assert.equal(roads[0].coordinates.at(-1)[0], b.west);
   assert.equal(roads[1].coordinates[0][0], b.east);
+});
+
+test('without a camera or query port there is no footprint', () => {
+  const footprint = createReticleFootprint();
+  const query = { pickEllipsoid: () => null, pickRay: () => null };
+  assert.equal(
+    footprint({ camera: null, query, width: 10, height: 10 }, 300),
+    null,
+  );
+  assert.equal(
+    footprint(
+      { camera: { pose: () => ({}) }, query: null, width: 10, height: 10 },
+      300,
+    ),
+    null,
+  );
+});
+
+test('a pixel with no pick ray samples no direction, as before', () => {
+  const query = {
+    pickEllipsoid: () => null,
+    pickRay: () => {
+      throw new TypeError('no ray on a canvas of no size');
+    },
+  };
+  const camera = {
+    pose: () => ({
+      position: Cesium.Cartesian3.fromDegrees(10, 20, 300),
+      heading: 0,
+      pitch: -Math.PI / 2,
+    }),
+  };
+  const result = createReticleFootprint()(
+    { camera, query, width: 0, height: 0 },
+    300,
+  );
+  assert.ok(Math.abs(result.coverage.near.lat - 20) < 1e-9);
+  assert.ok(Math.abs(result.coverage.near.lon - 10) < 1e-9);
+  assert.deepEqual(result.coverage.coarse, []);
 });

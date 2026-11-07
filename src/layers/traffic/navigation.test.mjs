@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createTrafficLayer } from './index.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
 function deferred() {
   let resolve;
@@ -11,7 +12,12 @@ function deferred() {
   return { promise, resolve };
 }
 
-function setup(t, requestRoads, getStatus = async () => ({ hasKey: false })) {
+function setup(
+  t,
+  requestRoads,
+  getStatus = async () => ({ hasKey: false }),
+  ports = {},
+) {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const camera = {
     positionCartographic: Cesium.Cartographic.fromDegrees(
@@ -49,6 +55,8 @@ function setup(t, requestRoads, getStatus = async () => ({ hasKey: false })) {
       primitives: { add: (value) => value, remove: () => true },
     },
   };
+  // The layer reads the camera through its port.
+  bindFakeCesiumCamera(viewer, ports);
   const layer = createTrafficLayer({
     services: {
       credits: {},
@@ -184,7 +192,14 @@ test('arrival below the camera change threshold loads the final city and unsubsc
     seen.push(bounds);
     return roads(bounds);
   });
+  // The camera port listens for itself; the layer's own listeners go.
+  const ported = {
+    moveEnd: viewer.camera.moveEnd.numberOfListeners,
+    changed: viewer.camera.changed.numberOfListeners,
+  };
   layer.enable(viewer);
+  assert.ok(viewer.camera.moveEnd.numberOfListeners > ported.moveEnd);
+  assert.ok(viewer.camera.changed.numberOfListeners > ported.changed);
   await tick(400);
   viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
     -0.1276,
@@ -195,8 +210,8 @@ test('arrival below the camera change threshold loads the final city and unsubsc
   await tick(400);
   assert.ok(seen.some((bounds) => bounds.south > 50));
   layer.disable(viewer);
-  assert.equal(viewer.camera.moveEnd.numberOfListeners, 0);
-  assert.equal(viewer.camera.changed.numberOfListeners, 0);
+  assert.equal(viewer.camera.moveEnd.numberOfListeners, ported.moveEnd);
+  assert.equal(viewer.camera.changed.numberOfListeners, ported.changed);
 });
 
 test('parked failures back off and disabling cancels the scheduled retry', async (t) => {
@@ -365,17 +380,24 @@ test('coverage changes at the same center reload and disabling invalidates cover
 
 test('a settled footprint loads new tiles even when the camera centre stays put', async (t) => {
   const seen = [];
+  // The footprint asks the query port where the reticle meets the ground.
+  const query = {
+    pickEllipsoid: (x, y) =>
+      viewer.camera.pickEllipsoid({ x, y }, Cesium.Ellipsoid.WGS84),
+    pickRay: () => null,
+  };
   const { layer, viewer, tick } = setup(
     t,
     async (bounds, { majorOnly, coverage }) => {
       if (!majorOnly) seen.push({ ...bounds, coverage });
       return roads(bounds);
     },
+    undefined,
+    { query },
   );
   layer.setParams({ roadMode: 'osm' });
   let reach = 0.005;
   const camera = viewer.camera;
-  camera.getPickRay = () => null;
   camera.heading = 0;
   camera.pitch = -Math.PI / 2;
   camera.pickEllipsoid = (pixel, ellipsoid, result) =>

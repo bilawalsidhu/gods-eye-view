@@ -239,6 +239,23 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       },
     };
 
+    // The layer reads the camera through the renderer's camera port.
+    const { bindRenderer } = await server.ssrLoadModule('/src/render/rendererOf.js');
+    const degrees = (radians) => radians * 180 / Math.PI;
+    bindRenderer(viewer, {
+      camera: {
+        pose: () => ({
+          lon: degrees(camera.positionCartographic.longitude),
+          lat: degrees(camera.positionCartographic.latitude),
+          height: camera.positionCartographic.height,
+        }),
+        viewRectangle() {
+          const r = camera.computeViewRectangle();
+          return { west: degrees(r.west), south: degrees(r.south), east: degrees(r.east), north: degrees(r.north) };
+        },
+      },
+    });
+
     performance.clearMarks();
     performance.clearMeasures();
     trafficLayer.init(viewer);

@@ -1,5 +1,9 @@
 import { observeTrafficSurface } from './surface.js';
 import * as Cesium from 'cesium';
+// Still Cesium for its points and events, so this layer loads the unbound
+// camera factory (with its query port) its other parts reach the renderer
+// through.
+import '../../render/cesium/camera.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 import {
   claimCameraSensitivity,

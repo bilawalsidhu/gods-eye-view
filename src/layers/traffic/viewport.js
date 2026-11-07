@@ -1,5 +1,6 @@
 import { createReticleFootprint } from './footprint.js';
-import * as Cesium from 'cesium';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import { findCamera, findQuery } from '../../render/rendererOf.js';
 import {
   deriveFetchCenter,
   clampBoundsAroundCenter,
@@ -15,6 +16,23 @@ import {
 
 export function createViewport({ state: layerState, services, parts, source }) {
   const reticleFootprint = createReticleFootprint();
+
+  /**
+   * The renderer's camera and query ports for the layer's scene: the bound
+   * renderer's, or those the default renderer's adapter builds over a viewer
+   * renderer bound.
+   */
+  const cameraPort = () => findCamera(layerState._viewer);
+  const queryPort = () => findQuery(layerState._viewer);
+
+  /** The canvas size in CSS pixels, as the layer has always read it. */
+  function canvasSize() {
+    const canvas = layerState._viewer.scene.canvas;
+    return {
+      width: canvas.clientWidth || canvas.width,
+      height: canvas.clientHeight || canvas.height,
+    };
+  }
   // ─── Camera Monitoring ─────────────────────────────────────
 
   /**
@@ -23,8 +41,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getCameraAltitude() {
-    const carto = layerState._viewer.camera.positionCartographic;
-    return carto ? carto.height : Infinity;
+    const height = cameraPort()?.pose().height;
+    return Number.isFinite(height) ? height : Infinity;
   }
 
   /**
@@ -34,14 +52,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getViewBounds() {
-    const rect = layerState._viewer.camera.computeViewRectangle();
-    if (!rect) return null;
-    return {
-      south: Cesium.Math.toDegrees(rect.south),
-      west: Cesium.Math.toDegrees(rect.west),
-      north: Cesium.Math.toDegrees(rect.north),
-      east: Cesium.Math.toDegrees(rect.east),
-    };
+    return cameraPort()?.viewRectangle() ?? null;
   }
 
   /**
@@ -59,25 +70,21 @@ export function createViewport({ state: layerState, services, parts, source }) {
    */
 
   function getFetchCenter() {
-    const carto = layerState._viewer.camera.positionCartographic;
-    if (!carto) return null;
-    const nadirLat = Cesium.Math.toDegrees(carto.latitude);
-    const nadirLon = Cesium.Math.toDegrees(carto.longitude);
+    const pose = cameraPort()?.pose();
+    if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon))
+      return null;
+    const nadirLat = pose.lat;
+    const nadirLon = pose.lon;
 
     let hitLat;
     let hitLon;
-    const canvas = layerState._viewer.scene.canvas;
-    const width = canvas.clientWidth || canvas.width;
-    const height = canvas.clientHeight || canvas.height;
+    const { width, height } = canvasSize();
     if (width > 0 && height > 0) {
-      const hit = layerState._viewer.camera.pickEllipsoid(
-        new Cesium.Cartesian2(width / 2, height / 2),
-        Cesium.Ellipsoid.WGS84,
-      );
-      if (hit) {
-        const hitCarto = Cesium.Cartographic.fromCartesian(hit);
-        hitLat = Cesium.Math.toDegrees(hitCarto.latitude);
-        hitLon = Cesium.Math.toDegrees(hitCarto.longitude);
+      const hit = queryPort()?.pickEllipsoid(width / 2, height / 2);
+      const hitAt = hit && toLonLatH(hit);
+      if (hitAt) {
+        hitLat = hitAt.lat;
+        hitLon = hitAt.lon;
       }
     }
 
@@ -199,7 +206,10 @@ export function createViewport({ state: layerState, services, parts, source }) {
         if (!layerState._enabled) return;
         const alt = getCameraAltitude();
         if (alt > ACTIVATION_ALTITUDE) return onCameraChanged();
-        const footprint = reticleFootprint(layerState._viewer, alt);
+        const footprint = reticleFootprint(
+          { camera: cameraPort(), query: queryPort(), ...canvasSize() },
+          alt,
+        );
         const bounds = footprint || getViewBounds();
         if (!bounds) return;
         const center = footprint ? null : getFetchCenter();
