@@ -170,28 +170,18 @@ export async function registerNavaraLayerRenderers() {
       return (engine) =>
         createDirectionsNavaraRenderer(engine, engine.extensions.navara);
     },
-    'telegeography-submarine-cables': async () => {
-      const { createNavaraCables } =
-        await import('../layers/submarineCables/render/navara.js');
-      return (engine, { overlayHost }) =>
-        createNavaraCables(engine, engine.extensions.navara, overlayHost);
-    },
+    'telegeography-submarine-cables': async () =>
+      (await import('../layers/submarineCables/render/display.js'))
+        .createCablesDisplay,
     wind: async () => {
       const { createWindNavaraRenderer } =
         await import('../layers/wind/render/navara.js');
       return (engine) =>
         createWindNavaraRenderer(engine, engine.extensions.navara);
     },
-    'weather-cyclones': async () => {
-      const { createCyclonesNavaraRenderer } =
-        await import('../layers/cyclones/render/navara.js');
-      return (engine, options) =>
-        createCyclonesNavaraRenderer(
-          engine,
-          engine.extensions.navara.view,
-          options,
-        );
-    },
+    'weather-cyclones': async () =>
+      (await import('../layers/cyclones/render/display.js'))
+        .createCyclonesDisplay,
     ...Object.fromEntries(
       ['local-datacenters', 'local-dams'].map((id) => [
         id,
@@ -208,12 +198,9 @@ export async function registerNavaraLayerRenderers() {
         },
       ]),
     ),
-    's2-ghostmaps': async () => {
-      const { createGhostMapsNavaraRenderer } =
-        await import('../layers/ghostMaps/render/navara.js');
-      return (engine) =>
-        createGhostMapsNavaraRenderer(engine, engine.extensions.navara.view);
-    },
+    's2-ghostmaps': async () =>
+      (await import('../layers/ghostMaps/render/display.js'))
+        .createGhostMapsDisplay,
     'military-awareness': async () => {
       const { createAwarenessNavaraRenderer } =
         await import('../layers/awareness/render/navara.js');
@@ -229,13 +216,17 @@ export async function registerNavaraLayerRenderers() {
           ...engine.extensions.navara,
         });
     },
+    // The FIRMS display, with the Navara backend of its heatmap.
     'local-firms': async () => {
-      const { createFirmsNavaraRenderer } =
-        await import('../layers/firms/render/navara.js');
+      const [{ createFirmsDisplay }, { createFirmsHeatDrape }] =
+        await Promise.all([
+          import('../layers/firms/render/display.js'),
+          import('../layers/firms/render/navaraHeat.js'),
+        ]);
       return (engine, options) =>
-        createFirmsNavaraRenderer(engine, {
+        createFirmsDisplay(engine, {
           ...options,
-          ...engine.extensions.navara,
+          navaraHeat: createFirmsHeatDrape,
         });
     },
     'osm-places': async () =>
@@ -243,39 +234,20 @@ export async function registerNavaraLayerRenderers() {
         .createOsmPlacesDisplay,
     // Draws itself through the globe contract (engine.movers, engine.lines).
     'wildlife-sightings': async () => () => null,
-    'drone-airspace': async () => {
-      const { createDroneAirspaceNavaraRenderer } =
-        await import('../layers/droneAirspace/render/navara.js');
-      return (engine) =>
-        createDroneAirspaceNavaraRenderer(engine, engine.extensions.navara);
-    },
-    'fire-perimeters': async () => {
-      const { createPerimetersNavaraRenderer } =
-        await import('../layers/perimeters/render/navara.js');
-      return (engine) =>
-        createPerimetersNavaraRenderer(engine, engine.extensions.navara);
-    },
-    'gnss-integrity': async () => {
-      const { createGnssNavaraRenderer } =
-        await import('../layers/gnss/render/navara.js');
-      return (engine) =>
-        createGnssNavaraRenderer(engine, engine.extensions.navara);
-    },
-    'air-quality': async () => {
-      const { createAirQualityNavaraRenderer } =
-        await import('../layers/airQuality/render/navara.js');
-      return (engine) =>
-        createAirQualityNavaraRenderer(engine, engine.extensions.navara);
-    },
-    earthquakes: async () => {
-      const { createEarthquakesNavaraRenderer } =
-        await import('../layers/earthquakes/render/navara.js');
-      return (engine, options) =>
-        createEarthquakesNavaraRenderer(engine, {
-          ...options,
-          ...engine.extensions.navara,
-        });
-    },
+    'drone-airspace': async () =>
+      (await import('../layers/droneAirspace/render/display.js'))
+        .createDroneAirspaceDisplay,
+    'fire-perimeters': async () =>
+      (await import('../layers/perimeters/render/display.js'))
+        .createPerimetersDisplay,
+    'gnss-integrity': async () =>
+      (await import('../layers/gnss/render/display.js')).createGnssDisplay,
+    'air-quality': async () =>
+      (await import('../layers/airQuality/render/display.js'))
+        .createAirQualityDisplay,
+    earthquakes: async () =>
+      (await import('../layers/earthquakes/render/display.js'))
+        .createEarthquakesDisplay,
     // The same displays as on Cesium (renderers.js).
     'rocket-launches': async () =>
       (await import('../layers/launches/render/display.js'))

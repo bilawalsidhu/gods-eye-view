@@ -1,6 +1,5 @@
 import { fromDegrees } from '../../geo/cartesian3.js';
-import { createPerimetersCesiumRenderer } from './render/cesium.js';
-export { containmentColor } from './render/cesium.js';
+import { createPerimetersDisplay } from './render/display.js';
 import {
   PERIMETER_OVERLAY_SOURCE_ID,
   perimeterAnchorDegrees,
@@ -51,13 +50,12 @@ function samePolygons(left, right) {
 export function createFirePerimetersLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
   picking = null,
   pointer = null,
   inciwebSource = null,
   inciwebPublications = null,
   openExternal = null,
-  createRenderer = createPerimetersCesiumRenderer,
+  createRenderer = ({ engine }) => createPerimetersDisplay(engine),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Fire perimeters require a snapshot source');
@@ -90,8 +88,7 @@ export function createFirePerimetersLayer({
     _linkRequest = null;
   }
 
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  const canSelect = () => overlayHost && picking;
 
   /**
    * Refresh the InciWeb catalog off the render path: a hanging or failed
@@ -273,7 +270,7 @@ export function createFirePerimetersLayer({
         throw new Error('Fire perimeter layer is already initialized');
       initialized = true;
       try {
-        if (viewer || engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer(viewer, { engine });
       } catch (error) {
         this.destroy();
         throw error;
@@ -283,11 +280,7 @@ export function createFirePerimetersLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid fire perimeter scene attachment');
-      renderer = createRenderer({
-        viewer,
-        engine,
-        screenSpaceEventHandlerFactory,
-      });
+      renderer = createRenderer({ engine });
       renderer.setVisible(_enabled);
       if (geometry.size) renderer.replace([...geometry.values()]);
       if (_enabled) {

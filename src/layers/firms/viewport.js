@@ -98,13 +98,9 @@ export function createViewport({
 
   function computeViewRect() {
     try {
-      if (layerState._renderer)
-        return layerState._renderer.viewRectangle(layerState.scratchViewRect);
-      const rect = layerState._viewer?.camera?.computeViewRectangle(
-        layerState._viewer?.scene?.globe?.ellipsoid,
-        layerState.scratchViewRect,
+      return (
+        layerState._renderer?.viewRectangle(layerState.scratchViewRect) ?? null
       );
-      return rect || null;
     } catch {
       return null;
     }

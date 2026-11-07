@@ -372,12 +372,12 @@ export function createRendering({
   }
 
   function ensureDetectionCollections() {
-    if (!layerState._viewer || layerState._billboards) return;
+    if (!layerState._renderer || layerState._billboards) return;
     layerState._billboards = layerState._renderer.ensureSprites();
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, layerState._enabled);
   }
 
-  function removeDetectionCollections(viewer) {
+  function removeDetectionCollections() {
     layerState._renderer?.removeSprites();
     layerState._billboards = null;
     overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
@@ -385,21 +385,14 @@ export function createRendering({
   }
 
   /**
-   * Shared horizon occluder positioned at the current camera, or null when
-   * there is no usable camera yet (init order / headless stubs).
-   * `viewer.camera` and `viewer.scene.camera` are the SAME object in Cesium;
-   * both are probed so a partial stub (either shape) still gets a real
-   * occluder rather than silently degrading to "nothing is ever occluded".
-   * @returns {?Cesium.EllipsoidalOccluder}
+   * The ellipsoid horizon at the current camera (the engine's
+   * projector.horizonVisible, Cesium's EllipsoidalOccluder test), or null
+   * without a renderer.
+   * @returns {?{isPointVisible: function(Object): boolean}}
    */
 
   function fireHorizonOccluder() {
-    if (layerState._renderer) return layerState._renderer.horizon();
-    const camera = layerState._viewer?.camera?.positionWC
-      ? layerState._viewer.camera
-      : layerState._viewer?.scene?.camera;
-    if (!camera?.positionWC) return null;
-    return config.horizonOccluder(camera);
+    return layerState._renderer?.horizon() ?? null;
   }
 
   /**

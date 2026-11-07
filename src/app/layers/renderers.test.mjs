@@ -71,6 +71,9 @@ test('the layers with extracted renderers', () => {
     'radio',
     'transit',
     'local-firms',
+    's2-ghostmaps',
+    'weather-cyclones',
+    'telegeography-submarine-cables',
     'rocket-launches',
     'satellites',
     'flights',
@@ -94,6 +97,17 @@ test('the layers drawn through one display get the same factory on every engine'
     bikeshare: ['bikeshare', 'createBikeshareDisplay'],
     radio: ['radio', 'createRadioDisplay'],
     transit: ['transit', 'createTransitDisplay'],
+    earthquakes: ['earthquakes', 'createEarthquakesDisplay'],
+    'air-quality': ['airQuality', 'createAirQualityDisplay'],
+    'gnss-integrity': ['gnss', 'createGnssDisplay'],
+    'fire-perimeters': ['perimeters', 'createPerimetersDisplay'],
+    'drone-airspace': ['droneAirspace', 'createDroneAirspaceDisplay'],
+    's2-ghostmaps': ['ghostMaps', 'createGhostMapsDisplay'],
+    'weather-cyclones': ['cyclones', 'createCyclonesDisplay'],
+    'telegeography-submarine-cables': [
+      'submarineCables',
+      'createCablesDisplay',
+    ],
   };
   // The Navara mode registers the same modules' factories.
   const navaraMode = readFileSync(

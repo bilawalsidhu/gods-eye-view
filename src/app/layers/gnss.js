@@ -1,14 +1,15 @@
 import { rendererFor } from './renderers.js';
-import { createGnssCesiumRenderer } from '../../layers/gnss/render/cesium.js';
 import { createGnssIntegrityLayer } from '../../layers/gnss/index.js';
 
-/** Wire the adsb.lol GNSS navigation-integrity layer into the application catalog. */
+/**
+ * Wire the adsb.lol GNSS navigation-integrity layer into the application
+ * catalog; the cells are the engine's renderer from the registry
+ * (render/display.js on every engine).
+ */
 export function createApplicationGnssIntegrity(options) {
   return createGnssIntegrityLayer({
-    createRenderer: ({ viewer, engine, viewAnchor }) =>
-      engine
-        ? rendererFor('gnss-integrity', engine, { viewer, viewAnchor })
-        : createGnssCesiumRenderer({ viewer, viewAnchor }),
+    createRenderer: ({ engine, viewAnchor }) =>
+      rendererFor('gnss-integrity', engine, { viewAnchor }),
     ...options,
   });
 }

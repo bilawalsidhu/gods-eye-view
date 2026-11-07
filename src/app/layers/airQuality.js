@@ -1,15 +1,15 @@
 import { rendererFor } from './renderers.js';
-import { createAirQualityCesiumRenderer } from '../../layers/airQuality/render/cesium.js';
 import { createAirQualityLayer } from '../../layers/airQuality/index.js';
 import { overlayHost } from './overlayHost.js';
-/** Wire air-quality readings to the application overlay host. */
+/**
+ * Wire air-quality readings to the application overlay host; the station
+ * discs are the engine's renderer from the registry (render/display.js on
+ * every engine).
+ */
 export function createApplicationAirQuality(options) {
   return createAirQualityLayer({
     overlayHost,
-    createRenderer: ({ viewer, engine }) =>
-      engine
-        ? rendererFor('air-quality', engine, { viewer })
-        : createAirQualityCesiumRenderer({ viewer }),
+    createRenderer: ({ engine }) => rendererFor('air-quality', engine),
     ...options,
   });
 }

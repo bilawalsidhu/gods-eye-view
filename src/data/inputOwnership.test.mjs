@@ -120,7 +120,8 @@ test('every scene click handler consults ownership before it picks', () => {
     // ALPR and bikeshare take the engine's click with its pick.
     ['src/layers/alpr/render/display.js', 'overlay.pick(position) ||'],
     ['src/layers/bikeshare/render/display.js', 'const picked = event.picked;'],
-    ['src/layers/firms/selection.js', 'scene.pick(click.position)'],
+    // FIRMS takes the engine dispatcher's click with its pick.
+    ['src/layers/firms/selection.js', 'const picked = click.picked;'],
     [
       'src/layers/installations/render/cesium/selection.js',
       'viewer.scene.pick(click.position)',
@@ -136,8 +137,8 @@ test('every scene click handler consults ownership before it picks', () => {
       'getRenderer().isTrackedPick(picked',
     ],
     [
-      'src/layers/submarineCables/interaction.js',
-      'viewer.scene.pick(click.position)',
+      'src/layers/submarineCables/render/display.js',
+      'const picked = event.picked;',
     ],
     // Vessels take the engine dispatcher's pick: the guard
     // comes before the click rule reads it.

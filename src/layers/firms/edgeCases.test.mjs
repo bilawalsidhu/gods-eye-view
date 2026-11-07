@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createFirmsHeatmapLayer } from './index.js';
-import { createFirmsNavaraRenderer } from './render/navara.js';
-import { unregisterSpriteCollection } from '../../data/spriteOrder.js';
+import { createFirmsDisplay } from './render/display.js';
+import { createFirmsHeatDrape } from './render/navaraHeat.js';
 
 const settle = async () => {
   for (let i = 0; i < 5; i++)
@@ -88,6 +88,8 @@ function fixture() {
     EffectDesc: class {},
     NavaraEffect: class {},
   };
+  // The heatmap draws through the Navara backend on this view.
+  engine.extensions = { navara: native };
   const noop = () => {};
   const layer = createFirmsHeatmapLayer({
     id: 'local-firms',
@@ -116,7 +118,7 @@ function fixture() {
     overlayHost: { setEntries: noop, setVisible: noop, clearSource: noop },
     renderer: {
       create: ({ engine: target, id }) =>
-        createFirmsNavaraRenderer(target, { ...native, id }),
+        createFirmsDisplay(target, { id, navaraHeat: createFirmsHeatDrape }),
     },
   });
   layer.init(null, { engine });
@@ -156,7 +158,6 @@ function fixture() {
     },
     cleanup() {
       layer.destroy();
-      unregisterSpriteCollection('local-firms');
       performance.now = realNow;
       restore();
     },

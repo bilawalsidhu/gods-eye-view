@@ -1,14 +1,14 @@
 import { rendererFor } from './renderers.js';
-import { createEarthquakesCesiumRenderer } from '../../layers/earthquakes/render/cesium.js';
 import { createEarthquakesLayer } from '../../layers/earthquakes/index.js';
 import { overlayHost } from './overlayHost.js';
-/** Wire earthquake observations to the application overlay host. */
+/**
+ * Wire earthquake observations to the application overlay host; the discs
+ * are the engine's renderer from the registry (render/display.js on every
+ * engine).
+ */
 export function createApplicationEarthquakes({
   renderer = {
-    create: ({ engine = null, ...options }) =>
-      engine
-        ? rendererFor('earthquakes', engine, options)
-        : createEarthquakesCesiumRenderer(null, options),
+    create: ({ engine }) => rendererFor('earthquakes', engine),
   },
   ...options
 } = {}) {

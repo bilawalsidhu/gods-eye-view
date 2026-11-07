@@ -11,8 +11,8 @@ export function createLifecycle({
   const { clearSelectedEntityContextForLayer } = services.context;
   const { id, overlayHost } = config;
 
-  // The heatmap is draped on the renderer's globe (Cesium only); it goes
-  // with the renderer and is built again on the next one that can drape it.
+  // The heatmap is draped on the renderer's globe; it goes with the renderer
+  // and is built again on the next one.
   function releaseHeat() {
     clearTimeout(layerState._heatRebuildTimer);
     layerState._heatRebuildTimer = null;
@@ -26,7 +26,8 @@ export function createLifecycle({
     /**
      * Shell services: `imageryHost()` resolves where draped imagery goes on
      * the active map stack (globe or 3D tiles, src/maps/imageryHost.js). The
-     * heatmap moves with it; without a host it drapes on viewer.imageryLayers.
+     * heatmap moves with it; without a host it drapes on the globe's own
+     * imagery (render/heatField.js).
      * @param {{imageryHost?: () => {collection: ?Object, kind: string}}|null} services
      */
     attachShellServices(services) {
@@ -40,36 +41,33 @@ export function createLifecycle({
     init(viewer, options) {
       this.attachRenderer(viewer, options);
     },
+    /** Draws on `engine` (the scene's globe engine); without one, nothing. */
     attachRenderer(
-      viewer,
+      _viewer,
       { engine = null, waitForCameraRestore = false } = {},
     ) {
       if (layerState._destroyed) return;
-      if (layerState._renderer) return;
-      layerState._renderer = config.renderer.create({
-        viewer,
-        engine,
-        id,
-        services,
-        screenSpaceEventHandlerFactory: config.screenSpaceEventHandlerFactory,
-      });
+      if (layerState._renderer || !engine) return;
+      layerState._renderer = config.renderer.create({ engine, id, services });
+      if (!layerState._renderer) return;
       layerState._viewer = layerState._renderer.view;
       layerState._dataSource = layerState._renderer.dataSource;
       layerState._renderer.setVisible(false);
       layerState._restoringViewport = waitForCameraRestore;
-      if (layerState._enabled && !waitForCameraRestore) {
-        this.showRenderer();
-        layerState._renderer.onEnable();
-      }
+      if (layerState._enabled && !waitForCameraRestore) this.showRenderer();
+      // Enabled before a renderer: the load enable() could not start.
+      if (
+        layerState._enabled &&
+        !layerState._fires.length &&
+        !layerState._loading
+      )
+        void components.ingestion.loadHeatmap();
     },
 
     resumeViewport() {
       if (!layerState._restoringViewport) return;
       layerState._restoringViewport = false;
-      if (layerState._enabled && layerState._renderer) {
-        this.showRenderer();
-        layerState._renderer.onEnable();
-      }
+      if (layerState._enabled && layerState._renderer) this.showRenderer();
     },
 
     detachRenderer() {
@@ -77,7 +75,7 @@ export function createLifecycle({
       components.viewport.removeMoveEndWatcher();
       components.viewport.removeLodWatcher();
       unregisterPickOwner(id);
-      components.rendering.removeDetectionCollections(layerState._viewer);
+      components.rendering.removeDetectionCollections();
       releaseHeat();
       layerState._renderer?.destroy();
       layerState._renderer = layerState._viewer = layerState._dataSource = null;
@@ -112,16 +110,13 @@ export function createLifecycle({
       components.rendering.renderCurrentLod(true);
     },
 
-    async enable(viewer) {
+    async enable() {
       if (layerState._destroyed) return;
-      if (!layerState._dataSource) this.init(viewer);
       layerState._enabled = true;
-      const renderer = layerState._renderer;
+      if (!layerState._renderer) return;
       this.showRenderer();
       if (!layerState._fires.length && !layerState._loading)
         await components.ingestion.loadHeatmap();
-      if (layerState._enabled && layerState._renderer === renderer)
-        renderer.onEnable();
     },
 
     disable() {
@@ -141,7 +136,7 @@ export function createLifecycle({
       components.viewport.removeLodWatcher();
     },
 
-    destroy(viewer = layerState._viewer) {
+    destroy() {
       layerState.request?.abort();
       layerState.request = null;
       layerState._loading = false;
@@ -152,7 +147,7 @@ export function createLifecycle({
       components.viewport.removeMoveEndWatcher();
       components.selection.removeClickHandler();
       unregisterPickOwner(id);
-      components.rendering.removeDetectionCollections(viewer);
+      components.rendering.removeDetectionCollections();
       layerState._renderer?.destroy();
       layerState._renderer = null;
       layerState._viewer = null;

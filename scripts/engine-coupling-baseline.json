@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 1636,
-    "navaraLayerRendererLines": 6953,
-    "cesiumImportFiles": 65,
-    "viewerLines": 1901,
-    "navaraKindChecks": 12,
+    "cesiumLayerRendererLines": 1011,
+    "navaraLayerRendererLines": 4832,
+    "cesiumImportFiles": 53,
+    "viewerLines": 1745,
+    "navaraKindChecks": 9,
     "engineSniffCalls": 14,
-    "engineExtensionReads": 26,
-    "groundEffectPasses": 7,
+    "engineExtensionReads": 19,
+    "groundEffectPasses": 5,
     "cesiumSdkLoads": 6,
-    "screenSpaceHandlerFiles": 10,
-    "engineNameLines": 133
+    "screenSpaceHandlerFiles": 8,
+    "engineNameLines": 108
   },
-  "measuredAt": "after the radio, transit and CCTV displays; one engine.extensions read is CCTV's meshes seam, 2026-11-07"
+  "measuredAt": "after the ground layers (earthquakes, air quality, GNSS, perimeters, drone airspace, FIRMS, GhostMaps, cyclones, cables), 2026-11-07"
 }

@@ -18,8 +18,8 @@ export function createCards({
    * Rebuild the card entries for the shared world-overlay host: the
    * selected-fire detail card (if any) plus at most MAX_AMBIENT_LABELS
    * ambient cards picked by a greedy screen-space declutter — walk the
-   * priority-ranked candidates, project each with
-   * SceneTransforms.worldToWindowCoordinates, and accept only candidates
+   * priority-ranked candidates, project each through the renderer
+   * (engine.projector.worldToWindow), and accept only candidates
    * ≥ LABEL_MIN_SEP_PX from every already-accepted card. Candidates whose
    * projection fails are dropped silently. SELECTION runs here, on LOD/
    * viewport rebuilds and camera moveEnd — never per frame; RENDERING is
@@ -28,17 +28,15 @@ export function createCards({
    */
 
   function rebuildAmbientLabels() {
-    if (!layerState._viewer) return;
+    if (!layerState._renderer) return;
     const scene = layerState._viewer.scene;
     const project = (position, result) =>
-      layerState._renderer
-        ? layerState._renderer.project(position, result)
-        : config.projectToWindow(scene, position, result);
+      layerState._renderer.project(position, result);
     const now = Date.now();
     const entries = [];
     /** @type {Array<{x: number, y: number}>} Screen positions of accepted labels. */
     const accepted = [];
-    // worldToWindowCoordinates happily projects points on the FAR side of the
+    // The window projection happily projects points on the FAR side of the
     // planet, so without this the ≤18 ambient slots get spent on fires the
     // overlay host will then horizon-cull at paint time (`horizonCull: true`
     // in applyFirmsOverlayPolicy) — near-side fires silently lose their cards.

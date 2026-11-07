@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
@@ -6,10 +5,7 @@ import {
   registerPickOwner,
   unregisterPickOwner,
 } from '../../data/pickRegistry.js';
-import {
-  createCycloneRendering,
-  coherentCycloneGeometry,
-} from './rendering.js';
+import { coherentCycloneGeometry } from './rendering.js';
 import {
   CYCLONE_OVERLAY_SOURCE_ID,
   cycloneStormIdFromEntryId,
@@ -62,23 +58,24 @@ const classificationName = (code) =>
 const number = (value, unit) =>
   value === null ? t('Unavailable') : formatQuantity(value, unit);
 
-/** Advisory status and coherent forecast geometry; selected through the shared row list. */
+/**
+ * Advisory status and coherent forecast geometry; selected through the
+ * shared row list. `createRendering(engine, { overlayHost })` makes the
+ * engine's display (render/display.js through the renderer registry).
+ */
 export function createCyclonesLayer({
   feed,
   hitTestOverlay = hitTestWorldOverlay,
   overlayHost,
   context = null,
-  cesium = null,
-  createRendering = createCycloneRendering,
-  createNativeRendering = null,
+  createRendering = null,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   openLink = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Cyclones require a snapshot source');
   let engine = null;
-  let viewer = null,
-    rendering = null,
+  let rendering = null,
     snapshot = null,
     request = null,
     listener = null,
@@ -157,27 +154,14 @@ export function createCyclonesLayer({
     selectedId = id;
     rendering?.setSelection(id);
   }
-  // The SDK, on Cesium only: the production build's Cesium global loads with
-  // the first Cesium globe, so a Navara page has none.
-  const sdk = () => cesium ?? (engine?.kind === 'navara' ? null : Cesium);
-  // Photorealistic 3D Tiles pick as tileset content without an entity id;
-  // that is empty map, the same as no pick at all on the globe.
+  // Photorealistic 3D Tiles pick as tile content without an id; that is
+  // empty map, the same as no pick at all on the globe.
   const isSurfacePick = (picked) =>
-    !picked ||
-    (picked.id === undefined &&
-      (picked.content !== undefined ||
-        (typeof sdk()?.Cesium3DTileset === 'function' &&
-          picked.primitive instanceof sdk().Cesium3DTileset)));
+    !picked || (picked.id === undefined && picked.content !== undefined);
   function installSelection() {
-    const canvas = engine?.host.canvas ?? viewer?.scene?.canvas;
-    const native = engine?.kind === 'navara';
-    if (
-      clickHandler ||
-      !canvas ||
-      (!native && typeof sdk()?.ScreenSpaceEventHandler !== 'function')
-    )
-      return;
-    const owner = native ? {} : new (sdk().ScreenSpaceEventHandler)(canvas);
+    const canvas = engine?.host.canvas;
+    if (clickHandler || !canvas) return;
+    const owner = {};
     clickHandler = owner;
     let capturedHit = null;
     const overlayHit = (x, y) => {
@@ -246,21 +230,19 @@ export function createCyclonesLayer({
         if (id) layer.setParams({ stormId: id });
         return;
       }
-      const picked = native ? click.picked : viewer.scene.pick(click.position);
+      const { picked } = click;
       const id = rendering?.pickStorm(picked);
       if (id) layer.setParams({ stormId: id });
       else if (isSurfacePick(picked)) layer.setParams({ clear: true });
     };
-    if (native)
-      owner.destroy = engine.input.on('click', onClick, { pick: true });
-    else owner.setInputAction(onClick, sdk().ScreenSpaceEventType.LEFT_CLICK);
+    owner.destroy = engine.input.on('click', onClick, { pick: true });
   }
   function removeSelection() {
     const owner = clickHandler;
     clickHandler = null;
     removeClickCapture?.();
     removeClickCapture = null;
-    if (owner && !owner.isDestroyed?.()) owner.destroy();
+    owner?.destroy();
   }
   const layer = {
     id: 'weather-cyclones',
@@ -268,20 +250,18 @@ export function createCyclonesLayer({
     icon: '◉',
     source: 'NOAA NHC / CPHC',
     updateInterval: 300_000,
-    init(nextViewer, options = {}) {
-      if (nextViewer || options.engine)
-        return layer.attachRenderer(nextViewer, options);
+    init(_viewer, options = {}) {
+      if (options.engine) return layer.attachRenderer(_viewer, options);
     },
-    attachRenderer(nextViewer, options = {}) {
-      viewer = nextViewer;
+    attachRenderer(_viewer, options = {}) {
       engine = options.engine ?? null;
       rendering =
-        engine?.kind === 'navara'
-          ? createNativeRendering(engine, { overlayHost })
-          : createRendering({ viewer, cesium: sdk(), overlayHost });
+        engine && createRendering
+          ? createRendering(engine, { overlayHost })
+          : null;
       if (!enabled) return;
       installSelection();
-      if (snapshot && !snapshot.unavailable) {
+      if (rendering && snapshot && !snapshot.unavailable) {
         const active = rendering;
         return Promise.resolve(active.setSnapshot(snapshot)).then(() => {
           if (active === rendering) active.setSelection(selectedId);
@@ -293,7 +273,6 @@ export function createCyclonesLayer({
       ++navigationGeneration;
       rendering?.destroy();
       rendering = null;
-      viewer = null;
       engine = null;
       runNavigation = null;
     },
@@ -424,7 +403,7 @@ export function createCyclonesLayer({
         notify();
       }
       const storm = selected();
-      if (params.focus === true && storm && runNavigation) {
+      if (params.focus === true && storm && runNavigation && engine) {
         const sphere = rendering?.getFocusSphere(storm.id);
         if (sphere) {
           const generation = ++navigationGeneration;
@@ -436,10 +415,7 @@ export function createCyclonesLayer({
               selectedId !== storm.id
             )
               return;
-            const fly = engine
-              ? engine.camera.flyToSphere.bind(engine.camera)
-              : viewer.camera.flyToBoundingSphere.bind(viewer.camera);
-            return fly(sphere, {
+            return engine.camera.flyToSphere(sphere, {
               duration: matchMedia?.('(prefers-reduced-motion: reduce)')
                 ?.matches
                 ? 0

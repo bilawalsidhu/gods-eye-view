@@ -1,6 +1,6 @@
 import { fromDegrees } from '../../geo/cartesian3.js';
 import { toDegrees } from '../../geo/math.js';
-import { createAirQualityCesiumRenderer } from './render/cesium.js';
+import { createAirQualityDisplay } from './render/display.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
@@ -28,7 +28,7 @@ const READOUT_LIMIT = 5;
 export function createAirQualityLayer({
   source,
   overlayHost,
-  createRenderer = createAirQualityCesiumRenderer,
+  createRenderer = ({ engine }) => createAirQualityDisplay(engine),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
@@ -69,7 +69,7 @@ export function createAirQualityLayer({
         throw new Error('Air quality layer is already initialized');
       initialized = true;
       try {
-        if (viewer || engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer(viewer, { engine });
       } catch (error) {
         this.destroy();
         throw error;
@@ -79,7 +79,7 @@ export function createAirQualityLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid air quality scene attachment');
-      renderer = createRenderer({ viewer, engine });
+      renderer = createRenderer({ engine });
       renderer.setVisible(_enabled);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, _enabled);
       if (_readings.length) this._render();
@@ -139,7 +139,7 @@ export function createAirQualityLayer({
       }
     },
 
-    /** Rebuild entities and overlay labels from the current readings. */
+    /** Redraw the station discs and overlay labels from the current readings. */
     _render() {
       if (!renderer) return;
       renderer.replace(_readings, STATION_MARKER_RADIUS_M);

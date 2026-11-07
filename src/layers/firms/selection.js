@@ -21,28 +21,21 @@ export function createSelection({
     getContextStore,
     registerEntityContext,
   } = services.context;
-  const { id, name, overlayHost, screenSpaceEventHandlerFactory } = config;
+  const { id, name, overlayHost } = config;
 
   /**
-   * Install the LEFT_CLICK handler for fire selection (enable-time only,
+   * Install the click handler for fire selection (enable-time only,
    * mirroring the flight layers). Clicking a fire sprite selects it and
    * surfaces it in the shared context store; clicking empty space clears
    * the selection. Picks owned by sibling layers are left alone.
    */
 
   function installClickHandler() {
-    if (layerState._clickHandler || !layerState._viewer) return;
-    layerState._clickHandler = layerState._renderer
-      ? layerState._renderer.createInputHandler()
-      : screenSpaceEventHandlerFactory(layerState._viewer);
-    const clickType =
-      layerState._renderer?.clickType ?? config.leftClickEventType;
-    layerState._clickHandler.setInputAction((click) => {
+    if (layerState._clickHandler || !layerState._renderer) return;
+    layerState._clickHandler = layerState._renderer.onClick((click) => {
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
-      const picked = layerState._renderer
-        ? layerState._renderer.pick(click.position, click)
-        : layerState._viewer.scene.pick(click.position);
+      const picked = click.picked;
       const fire = pickedFire(picked);
       if (fire) {
         selectAndFocusFire(fire);
@@ -67,14 +60,12 @@ export function createSelection({
         return;
       }
       clearFireSelection();
-    }, clickType);
+    });
   }
 
   function removeClickHandler() {
-    if (layerState._clickHandler) {
-      layerState._clickHandler.destroy();
-      layerState._clickHandler = null;
-    }
+    layerState._clickHandler?.();
+    layerState._clickHandler = null;
   }
 
   /** Select one stable detection and request one UI-owned camera transfer. */

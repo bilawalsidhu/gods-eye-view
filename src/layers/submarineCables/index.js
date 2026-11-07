@@ -1,47 +1,41 @@
-import { createState } from './state.js';
-import { createLifecycle } from './lifecycle.js';
+import { createCableSessionLayer } from './session.js';
+import { createCablesDisplay } from './render/display.js';
 import { defaultSweepClock } from './policy.js';
-import { createRendering } from './rendering.js';
-import { createIngestion } from './ingestion.js';
-import { createInteraction } from './interaction.js';
+
+/**
+ * The submarine cable layer on any globe engine: the dataset is read once
+ * per activation (session.js) and drawn by `createDisplay(engine)`, by
+ * default the contract display (render/display.js).
+ */
 export function createSubmarineCableLayer({
   source,
   overlayHost,
-  screenSpaceEventHandlerFactory,
   mapStackEventTarget = null,
   sweepClock = defaultSweepClock,
+  createDisplay = (engine) =>
+    createCablesDisplay(engine, {
+      overlayHost,
+      mapStackEventTarget,
+      sweepClock,
+    }),
 }) {
   if (!source?.fetch || !source.label)
     throw new TypeError(
       'A cable source with a label and fetch(signal) is required',
     );
-  const state = createState({ overlayHost, sweepClock });
-  const parts = {};
-  const context = {
-    state,
-    parts,
-    source,
-    screenSpaceEventHandlerFactory,
-    mapStackEventTarget,
-  };
-  parts.rendering = createRendering(context);
-  parts.ingestion = createIngestion(context);
-  parts.interaction = createInteraction(context);
-  return createLifecycle(context);
+  return createCableSessionLayer({ source, createDisplay });
 }
+export { createCableSessionLayer } from './session.js';
+export { createCablesDisplay } from './render/display.js';
 export {
   selectCableReferenceLabelWinners,
   cableReferencePriority,
   createCableOverlayEntry,
   createCableOverlayPublisher,
   createCableReferenceSweepGate,
-  updateCableReferenceStem,
+  updateCableReferenceTip,
 } from './overlay.js';
-export {
-  cableClassificationTypeForStack,
-  cableClassificationTypeForScene,
-  applyTranslucentMarkerBlend,
-} from './surface.js';
+export { cableDrapeForStack, cableDrapeForEngine } from './surface.js';
 export {
   CABLE_REFERENCE_LABEL_WINNER_CAP,
   CABLE_OVERLAY_SOURCE_ID,

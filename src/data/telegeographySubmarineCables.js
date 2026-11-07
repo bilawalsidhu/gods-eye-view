@@ -22,9 +22,8 @@ export {
   selectCableReferenceLabelWinners,
   cableReferencePriority,
   createCableOverlayEntry,
-  cableClassificationTypeForStack,
-  cableClassificationTypeForScene,
-  applyTranslucentMarkerBlend,
+  cableDrapeForStack,
+  cableDrapeForEngine,
   createCableReferenceSweepGate,
-  updateCableReferenceStem,
+  updateCableReferenceTip,
 } from '../layers/submarineCables/index.js';

@@ -1,9 +1,3 @@
-import { createPerimetersCesiumRenderer } from '../../layers/perimeters/render/cesium.js';
-import { createDroneAirspaceCesiumRenderer } from '../../layers/droneAirspace/index.js';
-import { createGnssCesiumRenderer } from '../../layers/gnss/render/cesium.js';
-import { createAirQualityCesiumRenderer } from '../../layers/airQuality/render/cesium.js';
-import { createFirmsCesiumRenderer } from '../../layers/firms/render/cesium.js';
-import { createEarthquakesCesiumRenderer } from '../../layers/earthquakes/render/cesium.js';
 // Which engine draws which layer: the layer renderer registry and the layer
 // availability API built on it.
 //
@@ -43,6 +37,15 @@ import { createBikeshareDisplay } from '../../layers/bikeshare/render/display.js
 import { createRadioDisplay } from '../../layers/radio/render/display.js';
 import { createTransitDisplay } from '../../layers/transit/render/display.js';
 import { createCctvDisplay } from '../../layers/cctv/render/display.js';
+import { createEarthquakesDisplay } from '../../layers/earthquakes/render/display.js';
+import { createAirQualityDisplay } from '../../layers/airQuality/render/display.js';
+import { createGnssDisplay } from '../../layers/gnss/render/display.js';
+import { createPerimetersDisplay } from '../../layers/perimeters/render/display.js';
+import { createDroneAirspaceDisplay } from '../../layers/droneAirspace/render/display.js';
+import { createFirmsDisplay } from '../../layers/firms/render/display.js';
+import { createGhostMapsDisplay } from '../../layers/ghostMaps/render/display.js';
+import { createCyclonesDisplay } from '../../layers/cyclones/render/display.js';
+import { createCablesDisplay } from '../../layers/submarineCables/render/display.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -102,19 +105,20 @@ export const layerAvailableOn = (layerId, engineKind) =>
 
 /** Cesium renderers extracted from their layers (render/cesium.js). */
 export const CESIUM_LAYER_RENDERERS = Object.freeze({
-  earthquakes: createEarthquakesCesiumRenderer,
-  'air-quality': (_engine, options) => createAirQualityCesiumRenderer(options),
-  'gnss-integrity': (_engine, options) => createGnssCesiumRenderer(options),
-  'fire-perimeters': (_engine, options) =>
-    createPerimetersCesiumRenderer(options),
-  'drone-airspace': (_engine, options) =>
-    createDroneAirspaceCesiumRenderer(options),
+  earthquakes: createEarthquakesDisplay,
+  'air-quality': createAirQualityDisplay,
+  'gnss-integrity': createGnssDisplay,
+  'fire-perimeters': createPerimetersDisplay,
+  'drone-airspace': createDroneAirspaceDisplay,
   'osm-places': createOsmPlacesDisplay,
   'alpr-cameras': createAlprDisplay,
   bikeshare: createBikeshareDisplay,
   radio: createRadioDisplay,
   transit: createTransitDisplay,
-  'local-firms': createFirmsCesiumRenderer,
+  'local-firms': createFirmsDisplay,
+  's2-ghostmaps': createGhostMapsDisplay,
+  'weather-cyclones': createCyclonesDisplay,
+  'telegeography-submarine-cables': createCablesDisplay,
   'rocket-launches': createLaunchesDisplay,
   satellites: createSatellitesDisplay,
   flights: createFlightsDisplay,

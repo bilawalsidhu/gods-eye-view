@@ -1,6 +1,6 @@
 import * as geo from '../../geo/index.js';
 import { msg, t } from '../../i18n/index.js';
-import { createZonesCesiumRenderer } from '../shared/render/cesiumZones.js';
+import { createDroneAirspaceDisplay } from './render/display.js';
 import {
   DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
   droneAirspaceAnchorDegrees,
@@ -10,20 +10,6 @@ import {
 export { normalizeDroneAirspaceSnapshot } from './records.js';
 export { createDroneAirspaceSource } from './source.js';
 export * from './cards.js';
-
-/** The zones on a Cesium globe (the default renderer). */
-export function createDroneAirspaceCesiumRenderer({
-  viewer,
-  screenSpaceEventHandlerFactory,
-}) {
-  return createZonesCesiumRenderer({
-    viewer,
-    screenSpaceEventHandlerFactory,
-    name: 'drone-airspace',
-    idPrefix: 'drone-airspace',
-    colorOf: (row) => droneAirspaceAccent(row.typeCode),
-  });
-}
 
 /**
  * FNV-1a over a zone's rings: a short, deterministic fingerprint so a
@@ -50,10 +36,9 @@ const CARD_HOST_OPTIONS = Object.freeze({
 export function createDroneAirspaceLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
   picking = null,
   pointer = null,
-  createRenderer = createDroneAirspaceCesiumRenderer,
+  createRenderer = ({ engine }) => createDroneAirspaceDisplay(engine),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Drone airspace requires a snapshot source');
@@ -74,8 +59,7 @@ export function createDroneAirspaceLayer({
   /** @type {Map<string, {stableId: string, anchor: {lon: number, lat: number}}>} */
   const _rowById = new Map();
 
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  const canSelect = () => overlayHost && picking;
 
   function publishSelectedCard() {
     if (!canSelect() || !renderer) return;
@@ -172,7 +156,7 @@ export function createDroneAirspaceLayer({
         throw new Error('Drone airspace layer is already initialized');
       initialized = true;
       try {
-        if (viewer || engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer(viewer, { engine });
       } catch (error) {
         this.destroy();
         throw error;
@@ -184,11 +168,7 @@ export function createDroneAirspaceLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid drone airspace scene attachment');
-      renderer = createRenderer({
-        viewer,
-        engine,
-        screenSpaceEventHandlerFactory,
-      });
+      renderer = createRenderer({ engine });
       renderer.setVisible(_enabled);
       if (_rows.length) renderer.replace(_rows);
       if (_enabled) {

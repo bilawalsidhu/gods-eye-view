@@ -34,6 +34,10 @@ const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 // cesium only in render/cesium*.js, three and Navara only in
 // render/navara*.js. The list grows with each layer moved onto renderers.
 const RENDERED_LAYER_DIRS = [
+  'src/layers/droneAirspace/',
+  'src/layers/cyclones/',
+  'src/layers/ghostMaps/',
+  'src/layers/submarineCables/',
   'src/layers/alpr/',
   'src/layers/cctv/',
   'src/layers/transit/',

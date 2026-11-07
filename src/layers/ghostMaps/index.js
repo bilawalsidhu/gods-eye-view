@@ -1,5 +1,4 @@
 import { fromDegrees } from '../../geo/cartesian3.js';
-import { createGhostMapsCesiumRenderer } from './render/cesium.js';
 import {
   decodeXml,
   kmzImageResolver,
@@ -149,7 +148,6 @@ function anchorOf(geometry) {
 export function createGhostMapsLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
   createRenderer = null,
   picking = null,
   pointer = null,
@@ -187,10 +185,7 @@ export function createGhostMapsLayer({
 
   const notifyRow = () => _rowListener?.();
   const render = () => _display?.requestRender();
-  const canSelect = () =>
-    overlayHost &&
-    picking &&
-    (screenSpaceEventHandlerFactory || createRenderer);
+  const canSelect = () => overlayHost && picking && createRenderer;
 
   function wanted(product) {
     return _selection ? _selection.has(product.id) : product.defaultOn;
@@ -597,18 +592,14 @@ export function createGhostMapsLayer({
     updateInterval: 300000,
 
     init(viewer, options = {}) {
-      if (viewer || options.engine) return this.attachRenderer(viewer, options);
+      if (options.engine) return this.attachRenderer(viewer, options);
     },
 
-    attachRenderer(viewer, { engine = null, signal = null } = {}) {
+    attachRenderer(_viewer, { engine = null, signal = null } = {}) {
       if (_display) throw new Error('GhostMaps display is already attached');
-      _display = viewer
-        ? createGhostMapsCesiumRenderer(
-            viewer,
-            screenSpaceEventHandlerFactory,
-            markerImage,
-          )
-        : createRenderer(engine);
+      if (typeof createRenderer !== 'function')
+        throw new TypeError('GhostMaps needs a renderer factory');
+      _display = createRenderer(engine);
       if (!_enabled) return;
       installClickHandler();
       publishCard();

@@ -2,8 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { createImageryGround } from '../../recentImagery/render/navaraGround.js';
-import { createEarthquakesNavaraRenderer } from '../../earthquakes/render/navara.js';
-import { createGroundCellDisplay } from './navaraGroundCells.js';
 
 // EffectDesc gives insertAfter priority, then tries insertBefore. Check the
 // actual renderer declarations under every activation order, including the
@@ -12,8 +10,6 @@ const declarations = [
   'gevRecentImagery',
   'gevNepalEvent',
   'gevObservedWeather',
-  'gevEarthquakeGround',
-  'gevFirmsGround',
   'gevPreSharpenOverlay',
 ];
 // The descriptor a renderer registers; its setup stops there.
@@ -49,8 +45,6 @@ const specs = [
   registered((sdk) => createImageryGround({}, sdk, {})),
   registered((sdk) => createImageryGround({}, sdk, {}, 'gevNepalEvent')),
   await declared('gevObservedWeather', '../../weather/render/navaraSurface.js'),
-  registered((sdk) => createEarthquakesNavaraRenderer({ render: {} }, sdk)),
-  registered((sdk) => createGroundCellDisplay({}, sdk, 0)),
   await declared(
     'gevPreSharpenOverlay',
     '../../../globe/navara/overlay.js',

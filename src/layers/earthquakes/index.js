@@ -10,17 +10,22 @@ import {
   selectEarthquakeOverlayCohort,
   mapAnalystRecord,
 } from './model.js';
+import { createEarthquakesDisplay } from './render/display.js';
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
 
 /**
  * Own one earthquake display and its refresh lifecycle.
- * renderer.create({viewer, engine}) owns drawing and returns:
- * setVisible(boolean), replace(discs), destroy().
- * Discs are plain ECEF anchors, metre radii and Rgba colours; renderers keep
- * source order. The layer retains observations for queries while detached.
+ * renderer.create({ engine }) owns drawing (render/display.js by default)
+ * and returns: setVisible(boolean), replace(discs), destroy().
+ * Discs are degrees, metre radii and Rgba colours; renderers keep source
+ * order. The layer retains observations for queries while detached.
  */
-export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
+export function createEarthquakesLayer({
+  source,
+  overlayHost,
+  renderer = { create: ({ engine }) => createEarthquakesDisplay(engine) },
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Earthquakes require a snapshot source');
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
@@ -57,7 +62,7 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
         throw new Error('Earthquake layer is already initialized');
       initialized = true;
       try {
-        if (viewer || engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer(viewer, { engine });
       } catch (error) {
         this.destroy();
         throw error;
@@ -68,7 +73,7 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || _renderer)
         throw new Error('Invalid earthquake scene attachment');
-      _renderer = renderer.create({ viewer, engine });
+      _renderer = renderer.create({ engine });
       if (!_renderer) throw new Error('Earthquake renderer unavailable');
       _renderer.setVisible(_enabled);
       if (discs.length) _renderer.replace(discs);
@@ -117,38 +122,14 @@ export function createEarthquakesLayer({ source, overlayHost, renderer } = {}) {
         let count = 0;
         const overlayEntries = [];
 
-        for (const {
-          stableId,
-          usgsId,
-          lon,
-          lat,
-          depthKm,
-          mag,
-          place,
-          time,
-        } of rows) {
+        for (const { stableId, lon, lat, depthKm, mag } of rows) {
           count++;
           const baseRadius = Math.pow(2, mag) * 1000;
           const color = depthColor(depthKm || 0);
-          const isSignificant = mag >= 5.0;
-          const fillAlpha = isSignificant ? 0.4 : 0.3;
-          const outlineAlpha = isSignificant ? 1.0 : 0.8;
+          const fillAlpha = mag >= 5.0 ? 0.4 : 0.3;
 
           const position = geo.cartesian3.fromDegrees(lon, lat);
-          nextDiscs.push({
-            stableId,
-            usgsId,
-            position,
-            baseRadius,
-            color,
-            isSignificant,
-            fillAlpha,
-            outlineAlpha,
-            mag,
-            place,
-            time,
-            depthKm,
-          });
+          nextDiscs.push({ stableId, lon, lat, baseRadius, color, fillAlpha });
           overlayEntries.push(
             createEarthquakeOverlayEntry({
               id: String(stableId),

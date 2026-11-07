@@ -37,49 +37,6 @@ export function featureReference(feature) {
   };
 }
 
-/**
- * Split a [lon, lat] path where a segment crosses the antimeridian, so no
- * drawn segment runs the long way across the whole map.
- */
-function splitAtAntimeridian(path) {
-  const parts = [];
-  let current = [];
-  for (let index = 0; index < path.length; index++) {
-    const point = path[index];
-    const previous = path[index - 1];
-    if (previous && Math.abs(point[0] - previous[0]) > 180) {
-      const edge = previous[0] > point[0] ? 180 : -180;
-      const unwrapped = point[0] + 2 * edge;
-      const t = (edge - previous[0]) / (unwrapped - previous[0]);
-      const lat = previous[1] + t * (point[1] - previous[1]);
-      current.push([edge, lat]);
-      parts.push(current);
-      current = [[-edge, lat]];
-    }
-    current.push(point);
-  }
-  parts.push(current);
-  return parts.filter((part) => part.length > 1);
-}
-
-/** A line or multi-line feature whose paths are split at the antimeridian. */
-export function splitFeatureAtAntimeridian(feature) {
-  const geometry = feature?.geometry;
-  if (geometry?.type !== 'LineString' && geometry?.type !== 'MultiLineString')
-    return feature;
-  const paths =
-    geometry.type === 'LineString'
-      ? [geometry.coordinates]
-      : geometry.coordinates;
-  return {
-    ...feature,
-    geometry: {
-      type: 'MultiLineString',
-      coordinates: paths.flatMap((path) => splitAtAntimeridian(path)),
-    },
-  };
-}
-
 function coordsFromProperty(value) {
   if (!Array.isArray(value) || value.length < 2) return null;
   const lon = Number(value[0]);

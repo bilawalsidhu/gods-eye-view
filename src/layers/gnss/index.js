@@ -1,5 +1,5 @@
-import { createGnssCesiumRenderer } from './render/cesium.js';
-export { defaultGnssViewAnchor } from './render/cesium.js';
+import { createGnssDisplay } from './render/display.js';
+export { defaultGnssViewAnchor } from './render/display.js';
 import { formatNumber, msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
@@ -30,7 +30,8 @@ const LEVEL_LABELS = Object.freeze({
 export function createGnssIntegrityLayer({
   source,
   viewAnchor,
-  createRenderer = createGnssCesiumRenderer,
+  createRenderer = ({ engine, viewAnchor: anchor }) =>
+    createGnssDisplay(engine, { viewAnchor: anchor }),
   now = () => Date.now(),
   monotonicNow = () => performance.now(),
   windowMs: requestedWindowMs,
@@ -160,7 +161,7 @@ export function createGnssIntegrityLayer({
         throw new Error('GNSS integrity layer is already initialized');
       initialized = true;
       try {
-        if (viewer || engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer(viewer, { engine });
       } catch (error) {
         this.destroy();
         throw error;
@@ -170,7 +171,7 @@ export function createGnssIntegrityLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid GNSS scene attachment');
-      renderer = createRenderer({ viewer, engine, viewAnchor });
+      renderer = createRenderer({ engine, viewAnchor });
       _removeCameraEnd = renderer.camera?.moveEnd?.addEventListener(
         scheduleCameraRefresh,
       );

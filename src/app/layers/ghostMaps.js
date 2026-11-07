@@ -1,11 +1,14 @@
-import * as Cesium from 'cesium';
 import { rendererFor } from './renderers.js';
 import { createGhostMapsLayer } from '../../layers/ghostMaps/index.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
-/** Wire the S2 Underground GhostMaps layer into the application catalog. */
+/**
+ * Wire the S2 Underground GhostMaps layer into the application catalog; it
+ * draws with the engine's renderer from the registry (render/display.js on
+ * every engine).
+ */
 export function createApplicationGhostMaps(options) {
   return createGhostMapsLayer({
     overlayHost: {
@@ -15,8 +18,6 @@ export function createApplicationGhostMaps(options) {
       hitTest: overlays.hitTestWorldOverlay,
     },
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
-    screenSpaceEventHandlerFactory: (viewer) =>
-      new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
     picking,
     pointer: { isPointerFree },
     createRenderer: (engine) => rendererFor('s2-ghostmaps', engine),

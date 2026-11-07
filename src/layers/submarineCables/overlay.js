@@ -41,7 +41,9 @@ export function selectCableReferenceLabelWinners(
     .sort(
       (a, b) =>
         a.distanceM - b.distanceM ||
-        String(a.entity?.id || '').localeCompare(String(b.entity?.id || '')),
+        String(a.id ?? a.entity?.id ?? '').localeCompare(
+          String(b.id ?? b.entity?.id ?? ''),
+        ),
     )
     .slice(0, cap);
 }
@@ -66,7 +68,7 @@ export function cableReferencePriority(distanceM) {
  * The entry stays attached to the record's mutable stem-tip Cartesian and is
  * created once per record; only `priority` is refreshed per sweep.
  * `interactive: false` follows the infrastructure precedent — the depth-tested
- * native point/stem/line remains the click surface, and a non-interactive
+ * point, stem and line on the globe remain the click surface, and a non-interactive
  * label keeps the host's per-frame accessibility/hit sync allocation-free.
  * @param {object} record Reference record ({ id, kind, label, tip }).
  * @returns {object}
@@ -212,7 +214,7 @@ export function createCableReferenceSweepGate({
       dirty = true;
     },
     /**
-     * @param {Cesium.Camera} [camera] Live camera; omit to disable the motion
+     * @param {{ positionWC: object }} [camera] Live camera; omit to disable the motion
      *   fallback entirely (pure dirty-only gate).
      * @returns {boolean}
      */
@@ -248,16 +250,14 @@ export function createCableReferenceSweepGate({
 }
 
 /**
- * Recompute one staticized stem on the sweep cadence. Replaces the former
- * per-frame `CallbackProperty` pair: constant properties are redefined only
- * when the camera-scaled tip moved beyond the settle epsilon, and the two
- * preallocated position buffers alternate so each real change raises exactly
- * one geometry notification (the localGeojson double-buffer pattern).
- * @param {object} record Reference record with entity/base/tip/nextTip/buffers.
- * @param {Cesium.Cartesian3} cameraPositionWC
+ * Size one reference's tip on the sweep cadence: high enough above its base
+ * for a ~STEM_TARGET_PX stem at the camera's distance (700 m..85 km). The
+ * tip moves only when it changed by more than the settle epsilon.
+ * @param {object} record Reference record with base/tip/nextTip/reference.
+ * @param {{x: number, y: number, z: number}} cameraPositionWC
  * @param {number} canvasHeight CSS-pixel canvas height.
  * @param {number} fov Camera frustum field of view (radians).
- * @returns {boolean} True when the stem geometry was redefined.
+ * @returns {boolean} True when the tip moved.
  */
 
 export function updateCableReferenceTip(
@@ -289,24 +289,6 @@ export function updateCableReferenceTip(
     return false;
   }
   geo.cartesian3.clone(record.nextTip, record.tip);
-  return true;
-}
-
-export function updateCableReferenceStem(
-  record,
-  cameraPositionWC,
-  canvasHeight,
-  fov,
-) {
-  if (!updateCableReferenceTip(record, cameraPositionWC, canvasHeight, fov))
-    return false;
-  record.stemPositionBufferIndex = 1 - record.stemPositionBufferIndex;
-  const stemPositions =
-    record.stemPositionBuffers[record.stemPositionBufferIndex];
-  stemPositions[0] = record.base;
-  stemPositions[1] = record.tip;
-  record.entity.position.setValue(record.tip);
-  record.entity.polyline.positions.setValue(stemPositions);
   return true;
 }
 

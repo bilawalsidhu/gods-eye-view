@@ -1,10 +1,12 @@
+import { msg } from '../../i18n/index.js';
 import { waitForSignal } from '../../sources/requestDeadline.js';
-/** The dataset is acquired once per activation, independently of scene attachment. */
-export function createCableSessionLayer({
-  source,
-  createCesium,
-  createNavara,
-}) {
+
+/**
+ * The dataset is acquired once per activation, independently of scene
+ * attachment; `createDisplay(engine)` draws it on each attached engine
+ * (show(dataset), hide(), destroy(), stats()).
+ */
+export function createCableSessionLayer({ source, createDisplay }) {
   const id = 'telegeography-submarine-cables';
   let data,
     request,
@@ -58,7 +60,7 @@ export function createCableSessionLayer({
           owner === display &&
           e?.name !== 'AbortError'
         )
-          error = e.message;
+          error = e?.message || msg('TeleGeography load failed');
       }
     })();
     rendering = result;
@@ -73,29 +75,11 @@ export function createCableSessionLayer({
     source: source.label,
     updateInterval: 0,
     statsRefreshInterval: 500,
-    init(viewer, ctx) {
-      return this.attachRenderer(viewer, ctx);
+    init(_viewer, ctx) {
+      return this.attachRenderer(_viewer, ctx);
     },
-    attachRenderer(viewer, { engine, signal = null } = {}) {
-      if (viewer) {
-        const legacy = createCesium({ label: source.label, fetch: read });
-        legacy.init(viewer);
-        let shown = false;
-        display = {
-          async show() {
-            if (!shown) {
-              await legacy.enable(viewer);
-              shown = !legacy.getStats().error;
-            } else if (!legacy.getStats().count) await legacy.update(viewer);
-          },
-          hide() {
-            shown = false;
-            legacy.disable();
-          },
-          destroy: () => legacy.destroy(viewer),
-          stats: () => legacy.getStats(),
-        };
-      } else display = createNavara(engine);
+    attachRenderer(_viewer, { engine = null, signal = null } = {}) {
+      display = engine ? createDisplay(engine) : null;
       // The cable data load belongs to the session and keeps running; only
       // this scene's wait for it ends when the scene is released. show()
       // draws nothing into a display that was released meanwhile.

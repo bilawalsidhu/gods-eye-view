@@ -223,8 +223,15 @@ one application, and only the globe-bound parts move to the next engine.
   engine over the globe contract: the aircraft family (flights, military and
   local ADS-B) through `src/layers/aircraft/render/display.js`, and AIS
   vessels, satellites, Space Missions, ALPR, bikeshare, OSM Places,
-  Wildlife Sightings, radio, transit and CCTV through their own
-  `render/display.js`. CCTV's monitor plane and viewshed volume, which the
+  Wildlife Sightings, radio, transit, CCTV, earthquakes, air quality, GNSS
+  Integrity, fire perimeters, Prohibited & Restricted Airspace, Active Fires,
+  S2 GhostMaps, cyclone advisories and submarine cables through their own
+  `render/display.js`; the fills of the last nine are `engine.ground` sets.
+  The Active Fires far-zoom heatmap, a raster draped on the ground that the
+  contract has no primitive for yet, draws behind one seam,
+  `src/layers/firms/render/heatField.js` (`render/cesiumHeat.js`, an imagery
+  layer, on Cesium; `render/navaraHeat.js`, a surface pass that the Navara
+  mode loads and passes in). CCTV's monitor plane and viewshed volume, which the
   contract has no primitive for yet, draw behind one seam,
   `src/layers/cctv/render/meshes.js` (`render/cesiumMeshes.js` on Cesium;
   `render/navaraMeshes.js`, which the Navara mode loads and passes in). Cesium
@@ -863,7 +870,7 @@ forecast lead-hour points and cones render only when all source parts match the
 status advisory; a newer status shows its position with geometry pending rather
 than relabeling older geometry. The cone represents forecast center uncertainty,
 not storm size or the full hazard area. Successful empty and unavailable states
-are distinct. One owned native Cesium data source preserves polygon holes and
+are distinct. The display draws centres and forecast points as point movers and each storm's track and cone as ground sets, keeping polygon holes and
 geographic seams and releases on disable; forecast animation is not implied.
 NHC movement speed is converted from miles per hour to rounded knots by the
 proxy; advisory wind intensity is already in knots and is passed through.
@@ -2492,7 +2499,7 @@ retaining rooftop and below-sea-level elevations. A hidden globe does not
 constrain photoreal geometry, and retry work remains bounded. Already sampled
 nearby markers follow higher settled terrain on existing bounded walks, without
 additional GPU samples or timers, when close-up tile detail refines the floor.
-The submarine-cable renderer is unchanged. These limits bound active stem work;
+Submarine cables draw through `render/display.js` on every engine. These limits bound active stem work;
 they do not reduce the materialized entity count or establish an FPS gain.
 
 ## Keyboard interaction and focus
