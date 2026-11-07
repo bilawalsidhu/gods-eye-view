@@ -101,5 +101,6 @@
   ["kartverket-topo-grey", "2r"],
   ["kartverket-topo", "2s"],
   ["kartverket-toporaster", "2t"],
-  ["mapterhorn-terrain", "2u"]
+  ["mapterhorn-terrain", "2u"],
+  ["amsterdam-traffic-cameras", "2v"]
 ]

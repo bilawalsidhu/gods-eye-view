@@ -3498,6 +3498,7 @@
       "src/library/selection.js",
       "src/library/ledger.json",
       "src/library/entries/ak-statewide-imagery.json",
+      "src/library/entries/amsterdam-traffic-cameras.json",
       "src/library/entries/ar-statewide-imagery.json",
       "src/library/entries/az-statewide-imagery.json",
       "src/library/entries/bangor-me.json",
