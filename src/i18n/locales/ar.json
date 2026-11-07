@@ -3480,5 +3480,17 @@
   "Maximum event age: {days}d; undated markers are kept": "الحد الأقصى لعمر الحدث: {days} يوم؛ تُحفظ العلامات غير المؤرخة",
   "event age filter|All": "الكل",
   "Event age": "عمر الحدث",
-  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ"
+  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ",
+  "READ NEAREST": "قراءة الأقرب",
+  "Fly to the nearest sign and read its board": "الطيران إلى أقرب لوحة وقراءة رسالتها",
+  "No signs are currently posting": "لا توجد لوحات تعرض رسائل حاليًا",
+  "Message boards": "لوحات الرسائل",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "لوحات رسائل مباشرة، تتجه كل منها نحو حركة المرور التي تخاطبها. قرّب العرض لقراءة الواجهة؛ وتتبدّل صفحات اللوحة متعددة الصفحات.",
+  "Message sign": "لوحة رسائل",
+  "No message-sign packs enabled; see .env.example to enable one": "لا توجد حزم لوحات رسائل مفعّلة؛ راجع .env.example لتفعيل واحدة",
+  "Message signs timed out": "انتهت مهلة لوحات الرسائل",
+  "Message signs temporarily unavailable": "لوحات الرسائل غير متاحة مؤقتًا",
+  "Message signs returned an incomplete response": "أعادت لوحات الرسائل استجابة غير مكتملة",
+  "Message signs": "لوحات الرسائل",
+  "Message Signs": "لوحات الرسائل"
 }

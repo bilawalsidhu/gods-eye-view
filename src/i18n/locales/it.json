@@ -3255,5 +3255,17 @@
   "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} giorni; indicatori senza data mantenuti",
   "event age filter|All": "Tutti",
   "Event age": "Età degli eventi",
-  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti"
+  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti",
+  "READ NEAREST": "LEGGI IL PIÙ VICINO",
+  "Fly to the nearest sign and read its board": "Vola al pannello più vicino e leggine il messaggio",
+  "No signs are currently posting": "Al momento nessun pannello mostra messaggi",
+  "Message boards": "Pannelli a messaggio",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "Pannelli a messaggio in tempo reale, ciascuno rivolto al traffico a cui si indirizza. Avvicinati per leggere la faccia; un pannello a più pagine le alterna.",
+  "Message sign": "Pannello a messaggio",
+  "No message-sign packs enabled; see .env.example to enable one": "Nessun pacchetto di pannelli a messaggio attivo; consulta .env.example per attivarne uno",
+  "Message signs timed out": "I pannelli a messaggio sono andati in timeout",
+  "Message signs temporarily unavailable": "Pannelli a messaggio temporaneamente non disponibili",
+  "Message signs returned an incomplete response": "I pannelli a messaggio hanno restituito una risposta incompleta",
+  "Message signs": "Pannelli a messaggio",
+  "Message Signs": "Pannelli a messaggio"
 }

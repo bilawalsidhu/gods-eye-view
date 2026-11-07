@@ -3105,5 +3105,17 @@
   "Maximum event age: {days}d; undated markers are kept": "イベントの最大経過日数：{days}日。日付のないマーカーは保持",
   "event age filter|All": "すべて",
   "Event age": "経過日数",
-  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持"
+  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持",
+  "READ NEAREST": "最寄りを読む",
+  "Fly to the nearest sign and read its board": "最寄りの道路情報板へ移動して表示を読む",
+  "No signs are currently posting": "現在、メッセージを表示している道路情報板はありません",
+  "Message boards": "道路情報板",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "リアルタイムの道路情報板です。各情報板は案内対象の交通の方向を向いています。ズームインすると表示面を読めます。複数ページの情報板は順に切り替わります。",
+  "Message sign": "道路情報板",
+  "No message-sign packs enabled; see .env.example to enable one": "道路情報板のパックが有効になっていません。有効にするには .env.example を参照してください",
+  "Message signs timed out": "道路情報板がタイムアウトしました",
+  "Message signs temporarily unavailable": "道路情報板は一時的に利用できません",
+  "Message signs returned an incomplete response": "道路情報板から不完全な応答が返されました",
+  "Message signs": "道路情報板",
+  "Message Signs": "道路情報板"
 }

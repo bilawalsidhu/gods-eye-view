@@ -3105,5 +3105,17 @@
   "Maximum event age: {days}d; undated markers are kept": "事件最長保留時間：{days}天；保留無日期標記",
   "event age filter|All": "全部",
   "Event age": "事件時間",
-  "Event age: {days}d · undated kept": "事件時間：{days}天內 · 保留無日期標記"
+  "Event age: {days}d · undated kept": "事件時間：{days}天內 · 保留無日期標記",
+  "READ NEAREST": "讀取最近",
+  "Fly to the nearest sign and read its board": "飛到最近的情報板並讀取內容",
+  "No signs are currently posting": "目前沒有情報板顯示訊息",
+  "Message boards": "情報板",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "即時情報板，每塊都朝向其提示的車流。放大即可讀取板面；多頁情報板會輪換顯示。",
+  "Message sign": "情報板",
+  "No message-sign packs enabled; see .env.example to enable one": "未啟用任何情報板數據包；請參閱 .env.example 進行啟用",
+  "Message signs timed out": "情報板請求超時",
+  "Message signs temporarily unavailable": "情報板暫時不可用",
+  "Message signs returned an incomplete response": "情報板返回的響應不完整",
+  "Message signs": "情報板",
+  "Message Signs": "情報板"
 }
