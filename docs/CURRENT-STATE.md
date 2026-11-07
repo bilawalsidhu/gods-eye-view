@@ -1558,6 +1558,32 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Giroc / Webcam Romania CCTV source pack
+
+`config/cctv_sources.romania.json` is an optional single-camera pack for Giroc,
+Timiș, Romania. To use it, set `CCTV_SOURCES_FILE=config/cctv_sources.romania.json`
+in the local `.env` and restart the server. Set `CCTV_FORCE_AUSTIN=1` as well to
+retain the built-in live packs; despite its historical name, this flag applies
+to all live packs. The default catalog is unchanged.
+
+The camera uses Webcam Romania's public HLS stream and JPEG snapshot, fetched
+at runtime without an API key. Its position, 45.70028947266781, 21.233675914004227,
+was corrected by the contributor rather than copied from the directory's
+inaccurate pin. Heading, pitch, field of view, mounting height and ground
+elevation are uncalibrated priors; the camera retains the RAW PRIOR badge.
+See `DATA_SOURCES.md` for attribution and provider terms. Webcam Romania's
+terms grant no reuse licence for the video and name no camera operator; the
+provider's sanctioned route is its iframe embed. Keep this pack to local use
+and off hosted deployments unless the operator grants permission.
+
+The existing HLS puller resolves same-origin relative master/media references
+and serves local leased playlists and segments. It downloads complete segments
+without forwarding a browser Range header. Its per-segment streamed-byte cap
+is 8 MiB: Giroc's roughly ten-second 2702×1520 segments can exceed the former
+4 MiB cap (one measured 6,437,120 bytes). Retained data remains capped at
+24 MiB and 12 segments per session, with two sessions maximum. Redirect
+refusal, origin pinning, timeouts and lease expiry are unchanged.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT
@@ -1573,9 +1599,11 @@ from the payload. There is no heading in the feed, so gizmos use the shared
 id-hash fallback at low confidence.
 
 Once enabled, the 250 cameras nearest the five borough cores load.
-`CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The catalog-wide ceiling stays at 4,000 and is shared
-round-robin: no region is dropped outright, but when the packs together exceed
-the ceiling, adding a pack trims cameras from the largest packs.
+`CCTV_NYC_MAX_SOURCES` sets the pack cap (8–400). The default catalog limit is
+7,350: 4,000 shared round-robin slots, plus room above them for the 1,120
+Québec locations and 2,230 World image sources. Lower explicit
+`CCTV_MAX_SOURCES` values are honored; reservations only use the capacity
+above the 4,000 shared slots.
 
 ## City of Toronto RESCU CCTV source pack
 
@@ -1591,8 +1619,9 @@ cameras return a 200 "Image Unavailable" placeholder frame instead of an error.
 
 By default all ~336 cameras load, nearest downtown first.
 `CCTV_TORONTO_MAX_SOURCES` sets the pack cap (8–500) and
-`CCTV_TORONTO_ENABLED=0` turns the pack off. The pack shares the 4,000
-catalog-wide ceiling round-robin with the other packs.
+`CCTV_TORONTO_ENABLED=0` turns the pack off. The pack shares the default
+7,350-source catalog limit with the other packs; Québec and the World image
+pack have reserved slots and the remaining sources use round-robin allocation.
 
 ## Lithuania CCTV source pack
 
@@ -1612,24 +1641,8 @@ video; camera poses use the existing low-confidence heading prior.
 
 ## Taiwan CCTV source pack
 
-The CCTV catalog includes Taiwan national freeway cameras from the Freeway
-Bureau, MOTC. One keyless request reads the daily MOTC 2.0 `CCTV.xml` table
-(~1,800 cameras); the request refuses redirects, has a 15-second deadline and a
-6 MiB response cap, and uses the shared 15-minute cache and fair catalog
-allocation. A failed download serves the last good table (up to a day old),
-or an empty pack, and is not retried for an hour: the catalog host does not
-answer from some networks outside Taiwan, and without the backoff every refresh
-there would wait out the connect timeout. The table
-publishes MJPEG stream URLs; each is mapped to the same camera server's
-single-JPEG path for the same camera number, and only those exact HTTPS pairs
-on the four `freeway.gov.tw` camera servers are registered with the frame
-proxy. Camera keys come from the server and camera number, because published
-CCTV IDs contain Chinese place names and a few repeat across cameras. Poses use
-the low-confidence heading prior. `CCTV_TAIWAN_ENABLED=0` disables the pack;
-`CCTV_TAIWAN_MAX_SOURCES` sets its cap (default 600, bounded to 1–2000), and
-`CCTV_TAIWAN_URL` overrides the table URL.
-Gate: `src/data/cctvTaiwan.test.mjs`.
-
+The CCTV catalog includes Taiwan national freeway cameras from the Freeway Bureau, MOTC. The app first reads the daily MOTC 2.0 CCTV.xml table with a keyless HTTPS request, a 15-second deadline, a 6 MiB response cap, and the shared 15-minute cache. If that catalog is unreachable and no last-good source list exists, the loader uses the Highway Bureau’s public provincial-road CCTV XML feed at https://cctv-maintain.thb.gov.tw/opendataCCTVs.xml. The fallback is capped by the same Taiwan source limit and hourly retry backoff; its MJPEG feeds are restricted to the eight cctv-ss01 through cctv-ss08.thb.gov.tw HTTPS servers. The frame proxy returns one bounded JPEG from each stream, not an unbounded video response. The Highway Bureau open-data page states XML downloads are free and asks users to attribute the source; the app credits Highway Bureau, MOTC. These are provincial-road cameras, not a replacement for the national freeway cameras. CCTV_TAIWAN_ENABLED=0 disables both feeds; CCTV_TAIWAN_MAX_SOURCES sets the shared cap (default 600, bounded to 1–2000), and CCTV_TAIWAN_URL overrides the Freeway Bureau table URL.
+Gate: src/data/cctvTaiwan.test.mjs and src/data/cctvProxy.test.mjs.
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
@@ -4358,7 +4371,7 @@ its criteria cannot be silently ignored.
 | Satellites                           | CelesTrak                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/satellites.js`                                                  | `/api/celestrak`                                                                                        | 120s                                                                                                                        |
 | Space Missions (30d)                 | Launch Library 2 + CelesTrak                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `src/data/rocketLaunches.js`                                              | `/api/launches` + `/api/celestrak/active`                                                               | 5 min                                                                                                                       |
 | Traffic                              | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `src/data/traffic.js`                                                     | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow                                                | viewport-driven; capped tile cache                                                                                          |
-| CCTV                                 | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                                        | `/api/cctv`                                                                                             | 10s (active)                                                                                                                |
+| CCTV                                 | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Iceland (Vegagerðin / IRCA) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                                        | `/api/cctv`                                                                                             | 10s (active)                                                                                                                |
 | Radio                                | Radio Browser (public-domain station directory)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/data/radio.js`                                                       | `/api/radio/stations`, `/api/radio/click/:uuid`                                                         | 45 min directory refresh                                                                                                    |
 | Transit 🚌                           | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/transit/` via `src/app/layers/transit.js`                     | `/api/transit`                                                                                          | 15s (poll + delayed playback)                                                                                               |
 | Bikeshare 🚲                         | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                                                                                                                                                                                                                           | `src/data/bikeshare.js`                                                   | `/api/gbfs`                                                                                             | 60s                                                                                                                         |
@@ -5448,8 +5461,10 @@ silently demoting every later lookup for the session.
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
   covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
-  on the main road spine. `CCTV_MAX_SOURCES` is a 4,000 catalog-wide ceiling shared round-robin
-  across packs, so a lower global cap thins every region instead of starving the last pack.
+  on the main road spine. `CCTV_MAX_SOURCES` defaults to 7,350: 4,000 shared
+  round-robin slots plus 3,350 reserved Québec and World image slots.
+  Reservations only use capacity above the 4,000 shared slots, so at 4,000 or
+  less every pack, Québec and World included, shares the cap round-robin.
   ~1,100 cameras total, all RAW PRIOR poses, stills-first. The catalog lives for 15 minutes; once
   it expires, `/api/cctv` keeps answering from it while one background refresh reloads every
   pack, so only the very first load waits for the slowest pack (a live first load took about
@@ -7126,3 +7141,79 @@ the container healthy. Checks time out after 10 seconds, with a 30-second
 startup grace period and three consecutive failures before reporting unhealthy.
 This reports app HTTP availability, not individual provider health, and does not
 configure automatic restarts.
+
+## Québec CCTV integration
+
+The regular CCTV source loader reads `public/quebec-cameras.json` by default
+when `CCTV_QUEBEC_ENABLED` is not `0`. The pack contains 1,120 records: 680
+MTQ highway cameras, 426 Montréal OSM camera locations, and 14 scenic webcams.
+The default catalog limit is 7,350: it reserves all 1,120 Québec locations and
+2,230 World image feeds, and keeps 4,000 slots for the existing round-robin
+camera packs. Reservations only use capacity above those 4,000 slots: a lower
+explicit `CCTV_MAX_SOURCES` thins every pack round-robin, Québec and World
+included, instead of taking the shared slots.
+
+The Québec 511 video is opt-in (`CCTV_QUEBEC_VIDEO_ENABLED=1`) because Québec
+511's terms for embedding its clips on another site are unconfirmed; the camera
+locations themselves are CC BY 4.0. With the flag unset, MTQ cameras show
+their location, credit and a link to the Québec 511 viewer page. With it set,
+selecting an MTQ camera opens a floating panel with a Play button and a notice
+that Québec 511 sees the viewer's IP address; the browser contacts Québec 511
+only after Play, never on selection alone (layer enable, auto-hop, a scene or
+voice), and a different camera starts unplayed. After Play, the panel plays
+the official MP4 in a native browser player and requests a second video for the
+paused map preview. The official feed is a five-second clip refreshed by
+Québec 511 every 2–4 minutes, not continuous live video; the browser player
+reloads every two minutes while the tab is visible. The
+map preview is a DOM overlay attached to the camera's coordinates and scales
+down with camera distance. Neither video is read into a canvas or Cesium texture:
+Québec 511 does not grant localhost pixel access, and its MP4 is not available
+to the app's server proxy. Montréal and scenic entries are regular CCTV camera
+locations with per-camera source-page links, but no direct frame URLs; those
+show a location label and open the official/operator page. MTQ positions carry
+CC BY 4.0 attribution, Montréal positions are attributed to OpenStreetMap
+contributors under ODbL, and scenic rows retain their position accuracy and
+provenance. Québec cameras load through the normal CCTV layer.
+
+## City of Ottawa CCTV source pack
+
+The CCTV catalog can add City of Ottawa traffic cameras, including the MTO
+cameras the city carries. Camera images come from the city's Traffic Camera
+Images API (`traffic.ottawa.ca/opendata/camera`), which needs a certificate
+from the city's registration form and lets one certificate and user id fetch a
+camera at most once a minute. Without `OTTAWA_CAMERA_CERTIFICATE` the pack is
+skipped with no request and one log line. The camera list is the documented
+keyless `traffic.ottawa.ca/map/service/camera` JSON. Catalog URLs carry no
+key: the frame proxy adds the certificate and the fixed user id `gev` at fetch
+time, only for a numeric camera number inside the pinned `/opendata/` path,
+and serves each camera from one shared server-side frame per minute. Inside
+that minute a camera with no cached frame gets the placeholder, never the
+Street View fallback. The feed publishes no bearing, so headings use the
+id-hash fallback at low confidence. `CCTV_OTTAWA_MAX_SOURCES` caps the pack
+(default 250, nearest downtown) and `CCTV_OTTAWA_ENABLED=0` turns it off.
+
+## World camera image feeds
+
+The default `world-cameras` pack reads only the checked-in, curated
+`config/cctv_sources.world-image-cameras.json` file. It adds 1,176 Oregon
+TripCheck and 1,054 MLIT river cameras. Duplicate feeds are excluded because
+DriveBC, Ottawa, Québec and Iceland (Vegagerðin) already have app packs. NZTA's
+249 rows are excluded because they were collected from a Journey Planner web
+cache whose current terms prohibit automated scraping; an authorized API feed
+or permission is required before adding them. The wider discovery export is
+not shipped with the app.
+
+The app validates and pins each still-image URL to its provider directory
+before the server proxy uses it. Oregon frames refresh no faster
+than every five minutes; MLIT river frames refresh every ten minutes to reduce
+requests. Images are not persisted; the proxy reuses frames in a bounded 32 MB
+in-memory cache until their provider cadence. Set
+`CCTV_WORLD_CAMERAS_ENABLED=0` to disable the pack.
+
+Only the curated image-backed rows are bundled. Camera images are fetched from
+their registered providers at request time and are not included in this data
+file. The additive `/api/cctv/sources` metadata includes provider source links,
+browser-only media links, refresh cadence, and location provenance where
+available. When MLIT serves its recognized adjustment image, `/api/cctv/frame`
+returns a God’s Eye maintenance card and `/api/cctv/health` reports the camera
+as degraded with the provider-adjustment reason.
