@@ -1418,6 +1418,135 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.drape',
+      'draped glow and dash lines draw and pick; a revealed line draws only its first part; a draped line and a clamped point that move every frame are drawn where they now are in the next frame',
+      async (h, r) => {
+        await overAustin(h, r);
+        const at = (dLon, dLat = 0) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat });
+        const lines = r.draw.lines({ id: 'conf:line-drape' });
+        const mine = (pos, id) => {
+          const s = r.query.project(pos);
+          return Boolean(
+            s &&
+            r.query
+              .drillPick(s.x, s.y)
+              .some((hit) => hit.set === 'conf:line-drape' && hit.id === id),
+          );
+        };
+        lines.set([
+          {
+            id: 'glow',
+            positions: [at(-0.003, 0.002), at(0.003, 0.002)],
+            widthPx: 12,
+            mode: 'draped',
+            style: { kind: 'glow', color: [1, 0.6, 0.2, 1], power: 0.25 },
+          },
+          {
+            id: 'dash',
+            positions: [at(-0.003, -0.002), at(0.003, -0.002)],
+            widthPx: 12,
+            mode: 'draped',
+            style: {
+              kind: 'dash',
+              color: [1, 0.6, 0.2, 1],
+              gapColor: [0.2, 0.6, 1, 1],
+              length: 16,
+            },
+          },
+          {
+            id: 'reveal',
+            positions: [at(-0.003), at(0.003)],
+            widthPx: 12,
+            mode: 'draped',
+            style: { kind: 'solid', color: '#20e7f2' },
+            revealFraction: 0.5,
+          },
+        ]);
+        await drawn(h, r);
+        await settled(r);
+        await drawn(h, r);
+        ok(mine(at(0, 0.002), 'glow'), 'a draped glow line picks');
+        ok(mine(at(0, -0.002), 'dash'), 'a draped dash line picks');
+        ok(mine(at(-0.0015), 'reveal'), 'revealed: its first half draws');
+        ok(!mine(at(0.0015), 'reveal'), 'revealed: its second half does not');
+        lines.upsert([
+          {
+            id: 'reveal',
+            positions: [at(-0.003), at(0.003)],
+            widthPx: 12,
+            mode: 'draped',
+            style: { kind: 'solid', color: '#20e7f2' },
+            revealFraction: 1,
+          },
+        ]);
+        await drawn(h, r);
+        ok(mine(at(0.0015), 'reveal'), 'revealed whole: all of it draws');
+        // A draped line growing every frame. Its first moves may take a
+        // few frames while the renderer readies itself to build it at once.
+        const growing = (end) => ({
+          id: 'growing',
+          positions: [at(-0.003, 0.004), at(end, 0.004)],
+          widthPx: 12,
+          mode: 'draped',
+          style: { kind: 'solid', color: '#ff00ff' },
+        });
+        lines.upsert([growing(-0.002)]);
+        let ready = false;
+        for (let i = 0; i < 300 && !ready; i++) {
+          lines.upsert([growing(-0.002 + (i % 2) * 1e-6)]);
+          await drawn(h, r, 1);
+          ready = mine(at(-0.0025, 0.004), 'growing');
+        }
+        ok(ready, 'the growing line draws');
+        const points = r.draw.points({ id: 'conf:line-drape-point' });
+        const front = (dLon) => ({
+          id: 'front',
+          pos: { lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + 0.003, height: 0 },
+          height: 'clampGround',
+          pixelSize: 16,
+          color: '#ff0000',
+          // On the surface it would be half under it.
+          disableDepthTest: Infinity,
+        });
+        const point = (dLon) => {
+          const s = r.query.project(at(dLon, 0.003));
+          return Boolean(
+            s &&
+            r.query
+              .drillPick(s.x, s.y)
+              .some((hit) => hit.set === 'conf:line-drape-point'),
+          );
+        };
+        points.set([front(-0.002)]);
+        await drawn(h, r);
+        await settled(r);
+        await drawn(h, r);
+        ok(point(-0.002), 'the clamped point draws');
+        for (let i = 1; i <= 4; i++) {
+          const end = -0.002 + i * 0.001;
+          lines.upsert([growing(end)]);
+          points.upsert([front(-0.002 + i * 0.001)]);
+          await drawn(h, r, 1);
+          ok(
+            mine(at(end - 0.0004, 0.004), 'growing'),
+            `grown, frame ${i}: drawn to its new end`,
+          );
+          ok(
+            point(-0.002 + i * 0.001),
+            `moved, frame ${i}: the point is there`,
+          );
+          ok(
+            i < 2 || !point(-0.002 + (i - 2) * 0.001),
+            `moved, frame ${i}: not where it was`,
+          );
+        }
+        equal(lines.size(), 4, 'every line held');
+        points.dispose();
+        lines.dispose();
+      },
+    ),
+    check(
       'draw.points.update',
       'an upserted point is drawn where it now is once drawn again, and shows only within its display range',
       async (h, r) => {

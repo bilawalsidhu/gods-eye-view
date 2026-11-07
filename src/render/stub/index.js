@@ -10,6 +10,7 @@
  * loop on a virtual clock, one frame at a time, in the contract's order.
  */
 import { horizonFrom } from '../../geo/horizon.js';
+import { alongLength } from '../../geo/polyline.js';
 import { createInputRouter } from '../input/router.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
@@ -559,6 +560,24 @@ export function createStubRenderer(options = {}) {
     const hits = [];
     for (const [setId, set] of sets) {
       if (!set.show || set.spec.pickable === false) continue;
+      if (set.kind === 'lines') {
+        for (const item of set.items.values()) {
+          if (item.show === false || item.pickable === false) continue;
+          // Lines in the sky's frame are not picked where they are drawn.
+          if (item.frame === 'inertial') continue;
+          const p = lineHit(item, x, y, Math.max(halfW, halfH));
+          if (p)
+            hits.push({
+              set: setId,
+              id: item.id,
+              meta: item.meta,
+              surface: false,
+              position: p,
+              depth: magnitude(sub(p, eye().position)),
+            });
+        }
+        continue;
+      }
       if (
         set.kind !== 'icons' &&
         set.kind !== 'points' &&
@@ -610,6 +629,68 @@ export function createStubRenderer(options = {}) {
     hits.sort((a, b) => a.depth - b.depth);
     for (const hit of hits) delete hit.depth;
     return hits;
+  }
+
+  /**
+   * A line's positions as ECEF, cut at its `revealFraction` of length (as
+   * drawn straight between its positions).
+   */
+  function revealedLine(item) {
+    const flat = item.positions instanceof Float64Array;
+    const n = flat ? item.positions.length / 3 : item.positions.length;
+    const points = [];
+    for (let i = 0; i < n; i++)
+      points.push(
+        flat
+          ? vec(
+              item.positions[i * 3],
+              item.positions[i * 3 + 1],
+              item.positions[i * 3 + 2],
+            )
+          : toEcef(item.positions[i]),
+      );
+    const fraction = item.revealFraction;
+    if (fraction === undefined || fraction >= 1) return points;
+    const at = alongLength(points, fraction);
+    if (!at) return [];
+    const { index, t } = at;
+    return [
+      ...points.slice(0, index + 1),
+      add(points[index], scale(sub(points[index + 1], points[index]), t)),
+    ];
+  }
+
+  /**
+   * Where a line is under the pixel `(x, y)`: the nearest point of a
+   * drawn segment within half its width (and `slack`) of it, or null.
+   */
+  function lineHit(item, x, y, slack) {
+    const points = revealedLine(item);
+    const reach = (item.widthPx ?? 1) / 2 + slack;
+    let best = null;
+    let bestDistance = Infinity;
+    for (let i = 0; i + 1 < points.length; i++) {
+      if (item.segmentShow?.[i] === false) continue;
+      const a = points[i];
+      const b = points[i + 1];
+      if (isOccluded(a) && isOccluded(b)) continue;
+      const sa = project(a);
+      const sb = project(b);
+      if (!sa || !sb) continue;
+      const dx = sb.x - sa.x;
+      const dy = sb.y - sa.y;
+      const span = dx * dx + dy * dy;
+      const t =
+        span > 0
+          ? Math.max(0, Math.min(1, ((x - sa.x) * dx + (y - sa.y) * dy) / span))
+          : 0;
+      const distance = Math.hypot(sa.x + dx * t - x, sa.y + dy * t - y);
+      if (distance <= reach && distance < bestDistance) {
+        bestDistance = distance;
+        best = add(a, scale(sub(b, a), t));
+      }
+    }
+    return best;
   }
 
   function surfaceHit(x, y) {

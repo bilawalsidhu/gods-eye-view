@@ -41,6 +41,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.icons.distance',
   'draw.icons.update',
   'draw.lines.styles',
+  'draw.lines.drape',
   'draw.ids',
   'draw.models',
   'draw.motion',

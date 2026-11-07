@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test from 'node:test';
 import { bindRenderer, drawOf, findDraw } from '../rendererOf.js';
-import { createCesiumDraw } from './draw.js';
+import { createCesiumDraw, revealUniform } from './draw.js';
 import { drawHitOf } from './drawHit.js';
 
 // Node has no WebGL context to report line-width limits.
@@ -2084,7 +2084,10 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     );
     assert.equal(
       set.imageNear(row),
-      iconAtlas.slot(aircraftIcon('airliner', TRACKED_ICON_PX), TRACKED_ICON_PX),
+      iconAtlas.slot(
+        aircraftIcon('airliner', TRACKED_ICON_PX),
+        TRACKED_ICON_PX,
+      ),
       'the near glyph at 192 px',
     );
     assert.equal(set.imageSwitch(row), nearImageSwitchPx(2));
@@ -2106,7 +2109,9 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
       Cesium.Cartographic.fromCartesian(drawn).longitude,
     );
     assert.ok(lon > -97 && lon < -96.9, 'interpolating the fixes');
-    assert.ok(Math.abs(set.course(row, tau) - icons._iconCourse('abc123')) < 0.01);
+    assert.ok(
+      Math.abs(set.course(row, tau) - icons._iconCourse('abc123')) < 0.01,
+    );
     assert.equal(state._icons.expires('abc123'), now - 20_000);
     assert.deepEqual(
       drawHitOf(host._pickObject('abc123', null, { show: true })),
@@ -2392,7 +2397,14 @@ test('flow lines run their dashes toward the end, draped or not, on the frame cl
     const shown = new Uint8Array([1]);
     draped.getGeometryInstanceAttributes = () => ({ show: shown });
     set.upsert([
-      { id: 'route', positions, widthPx: 9, mode: 'draped', style, show: false },
+      {
+        id: 'route',
+        positions,
+        widthPx: 9,
+        mode: 'draped',
+        style,
+        show: false,
+      },
     ]);
     assert.equal(scene.added[0], host, 'changed in place');
     assert.deepEqual([...shown], [0]);
@@ -2416,19 +2428,19 @@ test('flow lines run their dashes toward the end, draped or not, on the frame cl
     asked = 0;
     frame();
     assert.equal(asked, 0, 'an emptied set asks for none');
-    // Other styles still drape only solid.
+    // Arrows and patterns are not draped.
     assert.throws(
       () =>
         set.set([
           {
-            id: 'dash',
+            id: 'arrow',
             positions,
             widthPx: 1,
             mode: 'draped',
-            style: { kind: 'dash', color: '#fff', length: 8 },
+            style: { kind: 'arrow', color: '#fff' },
           },
         ]),
-      /drapes solid and flow lines only/,
+      /drapes solid, glow, dash and flow lines only/,
     );
     set.dispose();
   }));
@@ -2555,7 +2567,12 @@ test('a draped flow line still drawing while its rebuilds build keeps flowing', 
 
 test('the directions layer draws its markers, flowing route and maneuver dots on a viewer of its own', async (t) => {
   // Materials check their uniforms against the DOM's image classes.
-  const names = ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas'];
+  const names = [
+    'HTMLCanvasElement',
+    'HTMLImageElement',
+    'ImageBitmap',
+    'OffscreenCanvas',
+  ];
   const real = names.map((name) => globalThis[name]);
   for (const name of names) globalThis[name] ??= class {};
   t.after(() => names.forEach((name, i) => (globalThis[name] = real[i])));
@@ -2698,12 +2715,18 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
 
 test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on a viewer of its own', async (t) => {
   // Materials check their uniforms against the DOM's image classes.
-  const names = ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas'];
+  const names = [
+    'HTMLCanvasElement',
+    'HTMLImageElement',
+    'ImageBitmap',
+    'OffscreenCanvas',
+  ];
   const real = names.map((name) => globalThis[name]);
   for (const name of names) globalThis[name] ??= class {};
   t.after(() => names.forEach((name, i) => (globalThis[name] = real[i])));
   await import('./frame.js');
-  const { createLocalAdsbLayer } = await import('../../layers/localAdsb/index.js');
+  const { createLocalAdsbLayer } =
+    await import('../../layers/localAdsb/index.js');
   const { fakeInput } = await import('../../input/testDoubles.mjs');
   const { toLonLatH } = await import('../../geo/ellipsoid.js');
   const scene = fakeScene();
@@ -2735,7 +2758,10 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
     band,
     source: 'feed',
   });
-  const records = [aircraft('abc123', '1090', 0), aircraft('a1b2c3', '978', 0.1)];
+  const records = [
+    aircraft('abc123', '1090', 0),
+    aircraft('a1b2c3', '978', 0.1),
+  ];
   const layer = createLocalAdsbLayer({
     receiver: {
       getState: () => ({ aircraft: [] }),
@@ -2752,7 +2778,10 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
       render: { governorRequestRender: noop },
       context: {
         registerEntityContext: noop,
-        selectEntityContext: (carrier) => ({ id: 'local-adsb:abc123', carrier }),
+        selectEntityContext: (carrier) => ({
+          id: 'local-adsb:abc123',
+          carrier,
+        }),
         getSelectedEntityContext: () => ({ id: 'local-adsb:abc123' }),
         clearSelectedEntityContextForLayer: noop,
         removeEntityContextsForLayer: noop,
@@ -2782,9 +2811,7 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
     [icon.scaleByDistance.near, icon.scaleByDistance.nearValue],
     [1000, 3],
   );
-  assert.ok(
-    icon.color.equals(Cesium.Color.fromCssColorString('#ff4fd8')),
-  );
+  assert.ok(icon.color.equals(Cesium.Color.fromCssColorString('#ff4fd8')));
   // The UAT-only aircraft's ring: an outline, shown as far as it is.
   const rings = hostOf(':rings');
   assert.ok(rings instanceof Cesium.PointPrimitiveCollection);
@@ -2823,3 +2850,434 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
   clicks.destroy();
   assert.equal(hostOf(':markers'), undefined, 'every set let go');
 });
+
+/** Run `fn` as if Cesium's approximate terrain heights had loaded. */
+function withTerrainHeights(fn) {
+  const heights = Cesium.ApproximateTerrainHeights;
+  const was = heights._terrainHeights;
+  heights._terrainHeights ??= {};
+  try {
+    return fn();
+  } finally {
+    heights._terrainHeights = was;
+  }
+}
+
+test('draped glow and dash lines drape with their materials, each on a ground primitive of its own', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'styled', clampTo: 'terrain' });
+    const positions = [
+      { lon: 0, lat: 0 },
+      { lon: 1, lat: 1 },
+    ];
+    set.set([
+      {
+        id: 'core',
+        positions,
+        widthPx: 5,
+        mode: 'draped',
+        style: {
+          kind: 'glow',
+          color: [1, 0.5, 0, 0.9],
+          power: 0.24,
+          taper: 0.7,
+        },
+      },
+      {
+        id: 'halo',
+        positions,
+        widthPx: 18,
+        mode: 'draped',
+        clampTo: 'both',
+        style: { kind: 'dash', color: '#d8954e', length: 18 },
+      },
+    ]);
+    const host = scene.added[0];
+    const [glow, dash] = [host.get(1), host.get(2)];
+    for (const ground of [glow, dash]) {
+      assert.ok(ground instanceof Cesium.GroundPolylinePrimitive);
+      assert.ok(ground.appearance instanceof Cesium.PolylineMaterialAppearance);
+      assert.equal(ground.show, false, 'hidden while it builds');
+    }
+    assert.equal(glow.classificationType, Cesium.ClassificationType.TERRAIN);
+    assert.equal(dash.classificationType, Cesium.ClassificationType.BOTH);
+    assert.equal(glow.geometryInstances[0].id.id, 'core');
+    assert.equal(dash.geometryInstances[0].geometry.width, 18);
+    const glowMaterial = glow.appearance.material;
+    assert.equal(glowMaterial.type, 'PolylineGlow');
+    assert.equal(glowMaterial.uniforms.glowPower, 0.24);
+    assert.equal(glowMaterial.uniforms.taperPower, 0.7);
+    assert.ok(glowMaterial.uniforms.color instanceof Cesium.Color);
+    const dashMaterial = dash.appearance.material;
+    assert.equal(dashMaterial.type, 'PolylineDash');
+    assert.equal(dashMaterial.uniforms.dashLength, 18);
+    assert.ok(
+      Cesium.Color.equals(
+        dashMaterial.uniforms.gapColor,
+        Cesium.Color.TRANSPARENT,
+      ),
+    );
+    set.dispose();
+  }));
+
+test('revealFraction draws a line up to that fraction of its length, and changes in place', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'revealed' });
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+    // Segments a quarter and three quarters of the length.
+    const air = (revealFraction, extra = {}) => ({
+      id: 'air',
+      positions: [at(0), at(1), at(4)],
+      widthPx: 3,
+      mode: '3d',
+      style: { kind: 'solid', color: '#fff' },
+      revealFraction,
+      ...extra,
+    });
+    const ground = (revealFraction) => ({
+      id: 'ground',
+      positions: [
+        { lon: 0, lat: 0 },
+        { lon: 1, lat: 1 },
+      ],
+      widthPx: 2,
+      mode: 'draped',
+      style: { kind: 'solid', color: '#20e7f2' },
+      revealFraction,
+    });
+    set.set([air(0.5), ground(0.25)]);
+    const host = scene.added[0];
+    const polyline = host.get(0).get(0);
+    assert.equal(polyline.material.type, 'DrawRevealLine_solid');
+    // Half the length is a third of the way along the second segment,
+    // which a polyline's texture spans from 1/2 to 1.
+    assert.ok(
+      Math.abs(polyline.material.uniforms.reveal - (1 + 1 / 3) / 2) < 1e-3,
+    );
+    assert.ok(
+      Cesium.Color.equals(
+        polyline.material.materials.revealed.uniforms.color,
+        Cesium.Color.WHITE,
+      ),
+    );
+    // A revealed draped line draws alone, its texture along its length.
+    const draped = host.get(1);
+    assert.ok(draped instanceof Cesium.GroundPolylinePrimitive);
+    assert.equal(draped.appearance.material.type, 'DrawRevealLine_solid');
+    assert.equal(draped.appearance.material.uniforms.reveal, 0.25);
+    // Revealed further, in place.
+    Object.defineProperty(draped, 'ready', { value: true });
+    draped.getGeometryInstanceAttributes = () => ({
+      show: new Uint8Array([1]),
+    });
+    set.upsert([air(0.25), ground(0.75)]);
+    assert.equal(scene.added[0], host, 'not rebuilt');
+    assert.ok(Math.abs(polyline.material.uniforms.reveal - 0.5) < 1e-3);
+    assert.equal(draped.appearance.material.uniforms.reveal, 0.75);
+    // Nothing at 0, everything at 1.
+    set.upsert([air(0), ground(1)]);
+    assert.ok(polyline.material.uniforms.reveal < 0);
+    assert.ok(draped.appearance.material.uniforms.reveal > 1);
+    // Dropping the reveal draws the line whole: a new look, rebuilt.
+    set.upsert([air(undefined)]);
+    assert.notEqual(scene.added.at(-1), host);
+    set.dispose();
+  }));
+
+test('revealFraction reveals flow and depth-fail lines too, their clocks still run', () =>
+  withImageClasses(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.lines({ id: 'revealed-styles' });
+    const flow = {
+      kind: 'flow',
+      color: '#39d0ff',
+      repeat: 8,
+      duty: 0.5,
+      speed: 1,
+    };
+    set.set([
+      {
+        id: 'route',
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon: 1, lat: 1 },
+        ],
+        widthPx: 9,
+        mode: 'draped',
+        style: flow,
+        revealFraction: 0.5,
+      },
+      {
+        id: 'head',
+        positions: [
+          Cesium.Cartesian3.fromDegrees(0, 0, 100),
+          Cesium.Cartesian3.fromDegrees(0, 0, 300),
+        ],
+        widthPx: 2,
+        mode: '3d',
+        style: { kind: 'solid', color: '#f0f' },
+        depthFailColor: [1, 0, 1, 0.45],
+        revealFraction: 0.5,
+      },
+    ]);
+    const host = scene.added[0];
+    const route = host.get(1).appearance.material;
+    assert.equal(route.type, 'DrawRevealLine_flow');
+    const clock = route.materials.revealed;
+    assert.equal(clock.type, 'DrawFlowLine');
+    clock.uniforms.time = -1;
+    frame();
+    assert.ok(clock.uniforms.time >= 0, 'the revealed flow keeps its clock');
+    const head = host.get(0).get(1).get(0);
+    assert.equal(head.appearance.material.uniforms.reveal, 0.5);
+    assert.equal(head.depthFailAppearance.material.uniforms.reveal, 0.5);
+    assert.ok(
+      Cesium.Color.equals(
+        head.depthFailAppearance.material.materials.revealed.uniforms.color,
+        new Cesium.Color(1, 0, 1, 0.45),
+      ),
+    );
+    set.dispose();
+  }));
+
+test('a draped line that moves is drawn where it now is in the same frame, once terrain heights are loaded', () =>
+  withImageClasses(() =>
+    withTerrainHeights(() => {
+      const { scene, draw, frame } = drawOver();
+      const set = draw.lines({ id: 'growing' });
+      const flow = {
+        kind: 'flow',
+        color: '#39d0ff',
+        repeat: 8,
+        duty: 0.5,
+        speed: 1,
+      };
+      const line = (id, lon, extra = {}) => ({
+        id,
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon, lat: 1 },
+        ],
+        widthPx: 3,
+        mode: 'draped',
+        style: { kind: 'solid', color: '#20e7f2' },
+        ...extra,
+      });
+      set.set([line('a', 1), line('b', 1), line('f', 1, { style: flow })]);
+      const host = scene.added[0];
+      const batch = host.get(1);
+      const own = host.get(2);
+      const shows = new Map();
+      const attributesOf = (primitive) => {
+        primitive.getGeometryInstanceAttributes = (id) => {
+          const key = `${primitive.geometryInstances.length}:${id.id}`;
+          if (!shows.has(key)) shows.set(key, { show: new Uint8Array([1]) });
+          return shows.get(key);
+        };
+      };
+      attributesOf(batch);
+      // Moved while its batch still builds: drawn alone, built at once.
+      set.upsert([line('a', 2, { meta: 'moved' })]);
+      assert.equal(scene.added[0], host, 'the set is not rebuilt');
+      const solo = host.get(host.length - 1);
+      assert.ok(solo instanceof Cesium.GroundPolylinePrimitive);
+      assert.equal(solo.asynchronous, false, 'built in the frame it is drawn');
+      assert.equal(solo.geometryInstances[0].id.id, 'a');
+      assert.equal(solo.geometryInstances[0].id.meta, 'moved');
+      assert.notEqual(solo.show, false, 'shown at once');
+      const end = solo.geometryInstances[0].geometry._positions.at(-1);
+      assert.ok(
+        Cesium.Cartesian3.equalsEpsilon(
+          end,
+          Cesium.Cartesian3.fromDegrees(2, 1),
+          1e-6,
+        ),
+      );
+      // Its place in the batch is hidden once the batch is ready.
+      Object.defineProperty(batch, 'ready', { value: true });
+      Object.defineProperty(own, 'ready', { value: true });
+      frame();
+      assert.deepEqual([...shows.get('2:a').show], [0], 'hidden in the batch');
+      assert.equal(batch.show, true, 'the batch still draws the rest');
+      // Moved again: the one built for it is replaced.
+      set.upsert([line('a', 3)]);
+      const again = host.get(host.length - 1);
+      assert.notEqual(again, solo);
+      assert.ok(solo.isDestroyed(), 'the old one goes');
+      // A flow line moved keeps flowing on its new material.
+      set.upsert([line('f', 2, { style: flow })]);
+      assert.ok(own.isDestroyed(), 'its own primitive replaced');
+      const moved = host.get(host.length - 1);
+      const clock = moved.appearance.material;
+      assert.equal(clock.type, 'DrawFlowLine');
+      clock.uniforms.time = -1;
+      frame();
+      assert.ok(clock.uniforms.time >= 0);
+      // Positions that make no line draw nothing, until they do.
+      const count = host.length;
+      set.upsert([line('a', 0, { positions: [{ lon: 0, lat: 0 }] })]);
+      assert.equal(host.length, count - 1);
+      set.upsert([line('a', 4)]);
+      assert.equal(host.length, count);
+      // A show change on a ready one is in place.
+      const shown = host.get(host.length - 1);
+      Object.defineProperty(shown, 'ready', { value: true });
+      attributesOf(shown);
+      set.upsert([line('a', 4, { show: false })]);
+      assert.equal(host.get(host.length - 1), shown);
+      assert.deepEqual([...shows.get('1:a').show], [0]);
+      set.dispose();
+      assert.equal(scene.added.length, 0);
+    }),
+  ));
+
+test('a draped line that moves before terrain heights load is rebuilt, as before', () =>
+  withImageClasses(() => {
+    const heights = Cesium.ApproximateTerrainHeights;
+    const was = heights._terrainHeights;
+    heights._terrainHeights = undefined;
+    try {
+      const { scene, draw } = drawOver();
+      const set = draw.lines({ id: 'early' });
+      const line = (lon) => ({
+        id: 'a',
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon, lat: 1 },
+        ],
+        widthPx: 3,
+        mode: 'draped',
+        style: { kind: 'solid', color: '#fff' },
+      });
+      set.set([line(1)]);
+      const host = scene.added[0];
+      set.upsert([line(2)]);
+      assert.notEqual(scene.added.at(-1), host, 'rebuilt');
+      set.dispose();
+    } finally {
+      heights._terrainHeights = was;
+    }
+  }));
+
+test('a clamped point that moves follows the ground where it now is, on the dot it has', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.points({ id: 'surge' });
+  const front = (lon, extra = {}) => ({
+    id: 'front',
+    pos: { lon, lat: 28 },
+    height: 'clampGround',
+    pixelSize: 11,
+    color: '#e8b47c',
+    outlineColor: [0, 0, 0, 0.85],
+    outlineWidth: 3,
+    ...extra,
+  });
+  set.set([front(85)]);
+  const host = scene.added[0];
+  const dot = host.get(0);
+  scene.clamped.length = 0;
+  set.upsert([front(85.01, { meta: 'next', show: false })]);
+  assert.equal(scene.added[0], host, 'not rebuilt');
+  assert.equal(host.get(0), dot, 'the same dot');
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(
+      dot.position,
+      Cesium.Cartesian3.fromDegrees(85.01, 28),
+      1e-6,
+    ),
+  );
+  assert.equal(dot.heightReference, Cesium.HeightReference.CLAMP_TO_GROUND);
+  assert.ok(scene.clamped.length > 0, 'clamped again where it now is');
+  assert.equal(dot.id.meta, 'next');
+  assert.equal(dot.show, false);
+  // A new look is a new dot image: rebuilt.
+  set.upsert([front(85.01, { pixelSize: 14 })]);
+  assert.notEqual(scene.added[0], host);
+  // So is clamping it no more.
+  const clamped = scene.added[0];
+  set.upsert([front(85.01, { pixelSize: 14, height: undefined })]);
+  assert.notEqual(scene.added[0], clamped);
+  set.dispose();
+});
+
+test('a revealed polyline maps its length onto its texture as Cesium draws it', () => {
+  const p = (x) => new Cesium.Cartesian3(x, 0, 0);
+  // Its texture runs evenly over its vertices, neighbours at one place one.
+  assert.equal(revealUniform(0.5, [p(0), p(0), p(1), p(2)]), 0.5);
+  assert.ok(Math.abs(revealUniform(0.25, [p(0), p(1), p(4)]) - 0.5) < 1e-12);
+  assert.equal(revealUniform(0.4), 0.4, 'a ground line: its length');
+  assert.equal(revealUniform(0, [p(0), p(1)]), -1);
+  assert.equal(revealUniform(1, [p(0), p(1)]), 2);
+});
+
+test('a set of draped flow lines only asks for the frames they flow on', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    let asked = 0;
+    const request = scene.requestRender;
+    scene.requestRender = function () {
+      asked += 1;
+      return request.call(this);
+    };
+    const { draw, frame } = drawOver(scene);
+    const set = draw.lines({ id: 'draped-flow' });
+    set.set([
+      {
+        id: 'route',
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon: 1, lat: 1 },
+        ],
+        widthPx: 9,
+        mode: 'draped',
+        style: {
+          kind: 'flow',
+          color: '#39d0ff',
+          repeat: 8,
+          duty: 0.5,
+          speed: 1,
+        },
+      },
+    ]);
+    asked = 0;
+    frame();
+    assert.ok(asked > 0, 'it flows on in the frames that follow');
+    set.dispose();
+  }));
+
+test('a draped line moved while its set rebuilds is no longer drawn where it was', () =>
+  withImageClasses(() =>
+    withTerrainHeights(() => {
+      const { scene, draw, frame } = drawOver();
+      const set = draw.lines({ id: 'rebuilding' });
+      const line = (id, lon) => ({
+        id,
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon, lat: 1 },
+        ],
+        widthPx: 3,
+        mode: 'draped',
+        style: { kind: 'solid', color: '#fff' },
+      });
+      set.set([line('a', 1), line('b', 1)]);
+      const first = scene.added[0];
+      const ground = first.get(1);
+      Object.defineProperty(ground, 'ready', { value: true });
+      const shows = new Map();
+      ground.getGeometryInstanceAttributes = (id) => {
+        if (!shows.has(id.id)) shows.set(id.id, { show: new Uint8Array([1]) });
+        return shows.get(id.id);
+      };
+      frame();
+      // Rebuilt: the first host draws on until the new one is ready.
+      set.set([line('a', 1), line('b', 1), line('c', 1)]);
+      assert.ok(scene.added.includes(first), 'the first still draws');
+      set.upsert([line('a', 2)]);
+      assert.deepEqual([...shows.get('a').show], [0], 'hidden where it was');
+      assert.equal(shows.get('b'), undefined, 'the rest still draw there');
+      set.dispose();
+    }),
+  ));
