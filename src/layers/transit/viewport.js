@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import { rectangleCenter } from '../../geo/rectangle.js';
+import { toDegrees, toRadians } from '../../geo/vector.js';
+import { findCamera } from '../../render/rendererOf.js';
 import {
   ACTIVATION_ENTER_ALTITUDE_M,
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -18,28 +20,26 @@ export function createViewport({ state, services, parts }) {
   const { governorRequestRender } = services.render;
 
   function getCameraAltitude(viewer = state._viewer) {
-    const carto = viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
+    const height = findCamera(viewer)?.pose().height;
+    return Number.isFinite(height) ? height : Infinity;
   }
 
+  /** Where the camera looks: its view rectangle's middle, else under the eye. */
   function getCameraCenterLatLon(viewer = state._viewer) {
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+    const camera = findCamera(viewer);
+    const rect = camera?.viewRectangle();
     if (rect) {
-      const center = Cesium.Rectangle.center(rect);
-      return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
-      };
+      const center = rectangleCenter({
+        west: toRadians(rect.west),
+        south: toRadians(rect.south),
+        east: toRadians(rect.east),
+        north: toRadians(rect.north),
+      });
+      return { lat: toDegrees(center.lat), lon: toDegrees(center.lon) };
     }
-    const carto = viewer?.camera?.positionCartographic;
-    if (carto) {
-      return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
-      };
-    }
+    const pose = camera?.pose();
+    if (pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon))
+      return { lat: pose.lat, lon: pose.lon };
     return null;
   }
 
@@ -53,18 +53,8 @@ export function createViewport({ state, services, parts }) {
    * animating. Cheap, and only on a settled camera — never per frame.
    */
   function refreshViewBounds() {
-    const viewer = state._viewer;
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
-    state._viewBounds = rect
-      ? inflateViewBounds({
-          south: Cesium.Math.toDegrees(rect.south),
-          north: Cesium.Math.toDegrees(rect.north),
-          west: Cesium.Math.toDegrees(rect.west),
-          east: Cesium.Math.toDegrees(rect.east),
-        })
-      : null;
+    const rect = findCamera(state._viewer)?.viewRectangle();
+    state._viewBounds = rect ? inflateViewBounds(rect) : null;
     // The sweep itself is deferred: `marker.show` is a dirty flag, and a drag
     // fires this on every frame, so re-deciding visibility inline would put the
     // whole fleet back into the vertex buffer once a frame — the exact cost

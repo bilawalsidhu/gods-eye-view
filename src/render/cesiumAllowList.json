@@ -151,7 +151,6 @@
   "src/layers/transit/lifecycle.js",
   "src/layers/transit/rendering.js",
   "src/layers/transit/testing.js",
-  "src/layers/transit/viewport.js",
   "src/layers/vessels/cameraArea.js",
   "src/layers/vessels/evidence.js",
   "src/layers/vessels/queries.js",

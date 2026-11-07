@@ -306,6 +306,34 @@ function harness(
     },
   });
 
+  // The layer reads the camera through its port; this one reads the fake
+  // camera above as the Cesium port reads a real one, so a test can still
+  // move it by changing the fake.
+  const unbindCamera = bindRenderer(viewer, {
+    camera: {
+      pose() {
+        const carto = viewer.camera.positionCartographic;
+        return {
+          lon: carto ? Cesium.Math.toDegrees(carto.longitude) : NaN,
+          lat: carto ? Cesium.Math.toDegrees(carto.latitude) : NaN,
+          height: carto ? carto.height : NaN,
+        };
+      },
+      viewRectangle() {
+        const rect = viewer.camera.computeViewRectangle?.(
+          Cesium.Ellipsoid.WGS84,
+        );
+        if (!rect) return null;
+        const deg = Cesium.Math.toDegrees;
+        return {
+          west: deg(rect.west),
+          south: deg(rect.south),
+          east: deg(rect.east),
+          north: deg(rect.north),
+        };
+      },
+    },
+  });
   installRenderGovernor(framePortFor(viewer.scene));
   layer.init(viewer);
 
@@ -316,6 +344,7 @@ function harness(
       /* a test may already have destroyed it */
     }
     uninstallRenderGovernor(framePortFor(viewer.scene));
+    unbindCamera();
     _resetRenderGovernorForTest();
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;

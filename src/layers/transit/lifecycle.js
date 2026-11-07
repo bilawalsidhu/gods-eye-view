@@ -1,5 +1,8 @@
 import { destroyTrack } from '../../data/contactPlayback.js';
 import * as Cesium from 'cesium';
+// The Cesium camera factory: given a viewer of a caller's own, with no
+// renderer bound, the layer's camera reads find a camera port.
+import '../../render/cesium/camera.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
