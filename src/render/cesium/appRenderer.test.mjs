@@ -317,6 +317,4 @@ test('the application refuses a renderer it cannot run on, and destroys it', asy
   assert.deepEqual(destroyed, ['other']);
 });
 
-const EXPECTED_MISSING = ['renderer.globe'].map(
-  (member) => `${member} is missing`,
-);
+const EXPECTED_MISSING = [];

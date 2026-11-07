@@ -1,7 +1,7 @@
 /**
  * @module render/cesium/sceneRenderer
  * @description The part of the Cesium renderer the reference scenes need,
- * through the contract's own members: a bare globe and sky, icons, points,
+ * through the contract's own members: the globe and sky, icons, points,
  * lines, shapes and models, `setView`, picks and projection, the frame
  * phases, pointer input, credits, effects, settling, capture, pixel reads
  * and cache release. The
@@ -10,8 +10,8 @@
  *
  * Its ports are `ports.js`'s, which the application's renderer shares;
  * this factory adds the conformance widget, its fixed settings, the input
- * port (`input.js`, not yet the application's) and the bare-globe and sky
- * members.
+ * port (`input.js`) and a bare starting globe and sky: no imagery or
+ * terrain, every sky part off.
  *
  * It is not yet the whole Cesium renderer: each later migration adds the
  * members its layer family needs, until it passes the whole suite.
@@ -32,16 +32,6 @@ const feeds = new WeakMap();
  * @returns {((type: string, x: number, y: number, extra?: object) => void) | null}
  */
 export const pointerFeedOf = (renderer) => feeds.get(renderer) ?? null;
-
-const SKY_DEFAULTS = Object.freeze({
-  atmosphere: false,
-  stars: false,
-  milkyWay: 0,
-  sun: false,
-  moon: false,
-  fog: false,
-  lighting: false,
-});
 
 /**
  * @param {{container: HTMLElement, msaa?: number, capabilities?: Iterable<string>}} options
@@ -78,50 +68,15 @@ export async function createCesiumSceneRenderer({
   scene.fog.enabled = false;
   if (scene.sun) scene.sun.show = false;
   if (scene.moon) scene.moon.show = false;
+  scene.globe.enableLighting = false;
 
-  const sky = { ...SKY_DEFAULTS };
   const capabilities = new Set(cesiumCapabilities(scene, only));
-
-  function applySky() {
-    scene.globe.enableLighting = sky.lighting;
-    scene.fog.enabled = sky.fog;
-    if (scene.sun) scene.sun.show = sky.sun;
-    if (scene.moon) scene.moon.show = sky.moon;
-    scene.globe.showGroundAtmosphere = sky.atmosphere;
-    scene.requestRender();
-  }
 
   const ports = createCesiumPorts(widget, { capabilities });
   const input = createCesiumInput(widget, {
     query: ports.query,
     report: ports.report,
   });
-
-  // --- Globe -----------------------------------------------------------------
-
-  const globe = {
-    async setBase(base) {
-      if (
-        base.photoreal ||
-        (base.terrain && base.terrain.kind !== 'ellipsoid') ||
-        base.imagery?.length
-      )
-        throw new Error('the scene renderer draws a bare globe only');
-      return { photoreal: { route: 'none' }, imagery: [], settled: true };
-    },
-    setGlobeVisible(visible) {
-      scene.globe.show = visible;
-      scene.requestRender();
-    },
-    sky: {
-      get: () => ({ ...sky }),
-      set(settings) {
-        Object.assign(sky, settings);
-        applySky();
-      },
-    },
-    isSettled: () => scene.globe.tilesLoaded,
-  };
 
   // --- Renderer --------------------------------------------------------------
 
@@ -131,7 +86,7 @@ export async function createCesiumSceneRenderer({
     capabilities,
     canvas: scene.canvas,
     frame: ports.frame,
-    globe,
+    globe: ports.globe,
     // A member of a capability left out is absent, not stubbed.
     draw: capabilities.has('models')
       ? ports.draw

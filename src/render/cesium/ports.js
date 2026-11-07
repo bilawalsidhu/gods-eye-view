@@ -2,8 +2,8 @@
  * @module render/cesium/ports
  * @description The Cesium renderer's contract ports, built over a Cesium
  * widget or viewer someone else made and configured: frame phases, the
- * draw sets, `setView` and the pose, picks and projection, credits,
- * quality and capture.
+ * globe, the draw sets, `setView` and the pose, picks and projection,
+ * credits, quality and capture.
  * Building them puts the loop on demand (no holds yet, and no redraws for
  * scene time alone); nothing else in the scene changes until a call.
  *
@@ -18,6 +18,7 @@ import { createCesiumCamera } from './camera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumEffects } from './effects.js';
+import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuality } from './quality.js';
 import {
   atEndOfTick,
@@ -104,6 +105,18 @@ function cameraEqual(camera0, camera1, epsilon) {
 }
 
 /**
+ * What every Cesium globe does: photoreal tiles, terrain, imagery draped on
+ * tiles, the split and main-thread tile hooks.
+ */
+const GLOBE_CAPABILITIES = [
+  'photoreal',
+  'terrain',
+  'imageryOnTiles',
+  'splitSwipe',
+  'imageHooks',
+];
+
+/**
  * What a Cesium scene can do, as contract capabilities; `only` limits them
  * to those it lists. Depth picks, height samples and ray casts all need
  * depth textures, which `sampleHeightSupported` and `pickPositionSupported`
@@ -114,7 +127,7 @@ function cameraEqual(camera0, camera1, epsilon) {
  * @returns {string[]}
  */
 export function cesiumCapabilities(scene, only) {
-  const all = ['models', 'styles', 'bloom', 'sharpen'];
+  const all = ['models', 'styles', 'bloom', 'sharpen', ...GLOBE_CAPABILITIES];
   if (scene.pickPositionSupported) all.push('pickPosition');
   if (scene.sampleHeightSupported)
     all.push('sampleHeight', 'finestHeights', 'rayCast');
@@ -124,10 +137,12 @@ export function cesiumCapabilities(scene, only) {
 
 /**
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
- * @param {{capabilities: ReadonlySet<string>}} options The renderer's
- *   capabilities, which gate the members that need them.
+ * @param {{capabilities: ReadonlySet<string>, credentials?: object}} options
+ *   The renderer's capabilities, which gate the members that need them, and
+ *   the credentials its globe loads photoreal tiles and world data with
+ *   (`googleApiKey`, `googleTokens`, `worldDataToken`).
  */
-export function createCesiumPorts(widget, { capabilities }) {
+export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
   const scene = widget.scene;
   const camera = scene.camera;
   const sets = new Map();
@@ -841,6 +856,14 @@ export function createCesiumPorts(widget, { capabilities }) {
     requestRender: () => frame.requestRender('credits'),
   });
 
+  const globePart = createCesiumGlobe(widget, {
+    capabilities,
+    requestRender: (reason) => frame.requestRender(reason),
+    report,
+    credits: creditsPart.port,
+    credentials,
+  });
+
   // --- Query -----------------------------------------------------------------
 
   const screen = (x, y) => new Cesium.Cartesian2(x, y);
@@ -1390,6 +1413,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     },
     report,
     frame,
+    globe: globePart.port,
     draw,
     camera: cameraPort,
     credits: creditsPart.port,
@@ -1418,6 +1442,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       cameraPart.dispose();
       creditsPart.dispose();
       effectsPart.dispose();
+      globePart.dispose();
       qualityPart.dispose();
       for (const done of [...pendingRenders]) done();
       // Late model loads find no host and destroy themselves.
