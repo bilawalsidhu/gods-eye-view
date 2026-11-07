@@ -40,6 +40,10 @@ export function createState({ services }) {
 
   state._lastError = null;
 
+  // Cache provenance belongs to admitted core and dense records separately.
+  state._coreStale = false;
+  state._denseStale = false;
+
   state._activeUpdateControllers = new Set();
 
   state._denseLoadController = null;

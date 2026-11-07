@@ -43,14 +43,55 @@ export function ingestAisStreamEnvelope(envelope) {
   if (!mmsi) return false;
 
   if (messageType === 'ShipStaticData' || messageType === 'StaticDataReport') {
+    const previous = _aisStreamStatic.get(mmsi) || {};
+    const live = _aisStreamVessels.get(mmsi);
+    const liveName = live?.name === `MMSI ${mmsi}` ? '' : live?.name;
+    const fields =
+      messageType === 'StaticDataReport'
+        ? {
+            Name:
+              message.ReportA?.Valid === false
+                ? undefined
+                : message.ReportA?.Name,
+            Type:
+              message.ReportB?.Valid === false
+                ? undefined
+                : message.ReportB?.ShipType,
+          }
+        : message;
+    // Static reports may be partial (including Class B's separate A/B parts).
+    // Keep known values in the cache as well as in the current live row.
     const staticData = {
-      name: vesselNameFromAis(metadata, message, _aisStreamStatic.get(mmsi)),
-      type: vesselTypeFromAis(message, _aisStreamStatic.get(mmsi)),
-      destination: stringValue(message.Destination),
-      imo: stringValue(message.ImoNumber ?? message.IMO),
+      // The envelope repeats a cached name even on Class B's type-only part.
+      // Only an actual static name report replaces a known live name.
+      name:
+        stringValue(fields.Name ?? fields.ShipName) ||
+        liveName ||
+        previous.name ||
+        stringValue(metadata.ShipName),
+      type:
+        staticCode(fields.Type ?? fields.ShipType) ||
+        staticCode(live?.type) ||
+        staticCode(previous.type) ||
+        '',
+      destination:
+        stringValue(fields.Destination) ||
+        live?.destination ||
+        previous.destination ||
+        '',
+      imo:
+        staticCode(fields.ImoNumber ?? fields.IMO) ||
+        staticCode(live?.imo) ||
+        staticCode(previous.imo) ||
+        '',
     };
     _aisStreamStatic.set(mmsi, staticData);
     mergeAisStaticIntoLiveVessel(mmsi, staticData);
+    // AISStream repeats the last known position in a static message's
+    // MetaData, but the message has no speed, course or heading and is not a
+    // new fix. Rebuilding a tracked vessel from it would blank its motion and
+    // restamp its position time, so only merge the static fields.
+    if (_aisStreamVessels.has(mmsi)) return true;
   }
 
   const lat = numberValue(
@@ -72,8 +113,8 @@ export function ingestAisStreamEnvelope(envelope) {
     imo: stringValue(message.ImoNumber ?? message.IMO ?? staticData.imo),
     type: vesselTypeFromAis(message, staticData),
     destination: stringValue(message.Destination ?? staticData.destination),
-    speed: numberValue(message.Sog ?? message.SOG),
-    course: numberValue(message.Cog ?? message.COG),
+    speed: normalizedSpeedOverGround(message.Sog ?? message.SOG),
+    course: normalizedCourseOverGround(message.Cog ?? message.COG),
     heading: normalizedHeading(message.TrueHeading ?? message.Heading),
     last_position_UTC: normalizeAisTimestamp(
       metadata.time_utc ?? metadata.TimeUtc,
@@ -191,12 +232,10 @@ function approxMetersBetween(lat1, lon1, lat2, lon2) {
 function mergeAisStaticIntoLiveVessel(mmsi, staticData) {
   const existing = _aisStreamVessels.get(mmsi);
   if (!existing) return;
-  if (staticData.name && (!existing.name || existing.name === `MMSI ${mmsi}`))
-    existing.name = staticData.name;
-  if (staticData.type && !existing.type) existing.type = staticData.type;
-  if (staticData.destination && !existing.destination)
-    existing.destination = staticData.destination;
-  if (staticData.imo && !existing.imo) existing.imo = staticData.imo;
+  if (staticData.name) existing.name = staticData.name;
+  if (staticData.type) existing.type = staticData.type;
+  if (staticData.destination) existing.destination = staticData.destination;
+  if (staticData.imo) existing.imo = staticData.imo;
 }
 
 function vesselNameFromAis(metadata, message, staticData = {}) {
@@ -266,6 +305,12 @@ function stringValue(value) {
   return String(value).trim();
 }
 
+// AIS uses zero for unavailable ship type and IMO, not as a replacement value.
+function staticCode(value) {
+  const number = numberValue(value);
+  return Number.isInteger(number) && number > 0 ? String(number) : '';
+}
+
 function numberValue(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -275,6 +320,28 @@ function numberValue(value) {
 function normalizedHeading(value) {
   const heading = numberValue(value);
   return heading !== null && heading >= 0 && heading <= 360 ? heading : null;
+}
+
+/**
+ * Speed over ground in knots, or null when the report carries AIS's "not
+ * available" code. ITU-R M.1371 encodes SOG in 0.1-knot units where 1022 means
+ * "102.2 knots or higher" and 1023 means unavailable, so 102.3 is a sentinel
+ * and not a reading. It is finite, so every consumer would otherwise treat it
+ * as a genuine speed.
+ */
+function normalizedSpeedOverGround(value) {
+  const speed = numberValue(value);
+  return speed !== null && speed >= 0 && speed < 102.3 ? speed : null;
+}
+
+/**
+ * Course over ground in degrees, or null when the report carries AIS's "not
+ * available" code (3600 in 0.1-degree units, i.e. 360). Valid courses stop at
+ * 359.9; heading keeps its own separate sentinel of 511.
+ */
+function normalizedCourseOverGround(value) {
+  const course = numberValue(value);
+  return course !== null && course >= 0 && course < 360 ? course : null;
 }
 
 function normalizeAisTimestamp(value) {

@@ -1,3 +1,4 @@
+import { msg, t } from '../../i18n/index.js';
 import {
   featureLabel,
   featureReference,
@@ -5,13 +6,28 @@ import {
 } from './geometry.js';
 import * as Cesium from 'cesium';
 
+const SOURCE_FEATURE_INDEX = '__gevSourceFeatureIndex';
+
+function indexedCollection(features) {
+  return {
+    type: 'FeatureCollection',
+    features: features.map((feature, index) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        [SOURCE_FEATURE_INDEX]: index,
+      },
+    })),
+  };
+}
+
 export function createIngestion({ state, parts, source }) {
   async function load(viewer) {
     if (state._loading || state._loaded) return;
 
     state._loading = true;
     state._error = null;
-    state._loadingLabel = 'loading...';
+    state._loadingLabel = t('loading...');
     // Ownership token (the militaryAwareness activationId pattern): a
     // disable/abort followed by a fresh enable starts a NEWER load while this
     // one is still settling. The stale load must bail after every await and
@@ -48,7 +64,7 @@ export function createIngestion({ state, parts, source }) {
       const landingFeatures = normalizeFeatures(landingJson, 'landing');
 
       const cableDataSource = await Cesium.GeoJsonDataSource.load(
-        { type: 'FeatureCollection', features: cableFeatures },
+        indexedCollection(cableFeatures),
         {
           clampToGround: true,
           stroke: state.cableColor.withAlpha(0.95),
@@ -60,7 +76,7 @@ export function createIngestion({ state, parts, source }) {
       );
       if (!owns()) return;
       const landingDataSource = await Cesium.GeoJsonDataSource.load(
-        { type: 'FeatureCollection', features: landingFeatures },
+        indexedCollection(landingFeatures),
         {
           clampToGround: true,
           stroke: state.landingColor.withAlpha(0.9),
@@ -130,7 +146,12 @@ export function createIngestion({ state, parts, source }) {
       state._referenceRecords = [];
       state._surfaceRecords = [];
 
-      cableEntities.forEach((entity, index) => {
+      // Cesium expands multipart geometry into several entities and suffixes
+      // colliding IDs. Its copied properties retain this source index even
+      // when a provider has no ID, so every segment keeps the right owner.
+      const cableReferences = new Set();
+      cableEntities.forEach((entity) => {
+        const index = entity.properties?.[SOURCE_FEATURE_INDEX]?.getValue();
         const feature = cableFeatures[index];
         const reference = featureReference(feature);
         if (!reference) return;
@@ -145,6 +166,8 @@ export function createIngestion({ state, parts, source }) {
           entity,
           base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
         });
+        if (cableReferences.has(index)) return;
+        cableReferences.add(index);
         parts.rendering.addReferenceStem({
           reference,
           label: featureLabel(feature),
@@ -154,7 +177,9 @@ export function createIngestion({ state, parts, source }) {
         });
       });
 
-      landingEntities.forEach((entity, index) => {
+      const landingReferences = new Set();
+      landingEntities.forEach((entity) => {
+        const index = entity.properties?.[SOURCE_FEATURE_INDEX]?.getValue();
         const feature = landingFeatures[index];
         const reference = featureReference(feature);
         if (!reference) return;
@@ -169,6 +194,8 @@ export function createIngestion({ state, parts, source }) {
           entity,
           base: Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0),
         });
+        if (landingReferences.has(index)) return;
+        landingReferences.add(index);
         parts.rendering.addReferenceStem({
           reference,
           label: featureLabel(feature),
@@ -189,7 +216,7 @@ export function createIngestion({ state, parts, source }) {
       // A stale or aborted load reports nothing: its failure belongs to a
       // lifecycle the user already left.
       if (owns() && error?.name !== 'AbortError') {
-        state._error = error?.message || 'TeleGeography load failed';
+        state._error = error?.message || msg('TeleGeography load failed');
         console.warn(
           '[Data:telegeography-submarine-cables]',
           state._error,

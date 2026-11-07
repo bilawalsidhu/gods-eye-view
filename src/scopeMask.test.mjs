@@ -18,6 +18,7 @@ import {
   SCOPE_TERMINUS_MIN_PCT,
   SCOPE_TERMINUS_MAX_PCT,
   SCOPE_FEATHER_RATIO_DEFAULT,
+  getScopeMaskFeather,
   SCOPE_OUTSIDE_ALPHA,
   SCOPE_TERMINUS_ALPHA_NEAR,
   SCOPE_TERMINUS_FAR_M,
@@ -26,6 +27,7 @@ import {
   _resetScopeMaskForTest,
 } from './scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
+import { SCOPE_FEATHER_RATIO_MAX, clampScopeFeatherPct } from './scopeMaskPolicy.js';
 
 beforeEach(() => _resetScopeMaskForTest());
 
@@ -47,14 +49,32 @@ test('zero feather produces a hard edge exactly at the keyhole radius', () => {
   assert.equal(geo.outerR, keyholeR);
 });
 
-test('feather ratio is clamped to [0,1] and bad input falls back to 0', () => {
+test('feather ratio reaches the center at 200% and clamps larger input', () => {
   const wide = scopeMaskGeometry(1000, 800, 7);
-  const one = scopeMaskGeometry(1000, 800, 1);
-  assert.equal(wide.innerR, one.innerR);
-  assert.equal(wide.outerR, one.outerR);
+  const maximum = scopeMaskGeometry(1000, 800, SCOPE_FEATHER_RATIO_MAX);
+  const keyholeR = 800 * 0.5 * KEYHOLE_OUTER_RADIUS;
+  assert.equal(maximum.innerR, 0);
+  assert.equal(maximum.outerR, keyholeR * 2);
+  assert.equal(wide.innerR, maximum.innerR);
+  assert.equal(wide.outerR, maximum.outerR);
+  for (const ratio of [1, 1.5, 2]) {
+    setScopeMaskFeather(ratio);
+    assert.equal(getScopeMaskFeather(), ratio);
+    const geometry = scopeMaskGeometry(1000, 800);
+    assert.equal((geometry.innerR + geometry.outerR) / 2, keyholeR);
+    assert.equal(geometry.outerR - geometry.innerR, keyholeR * ratio);
+  }
+  setScopeMaskFeather(7);
+  assert.equal(getScopeMaskFeather(), SCOPE_FEATHER_RATIO_MAX);
   const nan = scopeMaskGeometry(1000, 800, Number.NaN);
   const zero = scopeMaskGeometry(1000, 800, 0);
   assert.equal(nan.innerR, zero.innerR);
+});
+
+test('UI and share feather percentages share one bounded integer range', () => {
+  for (const [value, expected] of [[0, 0], [11, 11], [175.6, 176], [200, 200], [350, 200], [-4, 0], [Number.NaN, 0]]) {
+    assert.equal(clampScopeFeatherPct(value), expected);
+  }
 });
 
 test('degenerate viewport yields null instead of a broken gradient', () => {
@@ -136,12 +156,14 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
       removeEventListener: (type, fn) => listeners.delete(fn),
     }),
   };
-  globalThis.document = { createElement: () => canvas };
+  const documentElement = { dataset: {} };
+  globalThis.document = { documentElement, createElement: () => canvas };
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   const container = { clientWidth: width, clientHeight: height, appendChild() {} };
   return {
     canvas,
     container,
+    documentElement,
     /** Canvas work counters: backing-store resizes, clears, fills. */
     ops,
     /** Every fillStyle string assigned since install (hard-crop path). */
@@ -159,6 +181,29 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
     },
   };
 }
+
+test('scope appearance follows direct state changes and install/destroy lifecycles', () => {
+  const dom = stubScopeMaskDom();
+  try {
+    setScopeMaskEnabled(false);
+    assert.equal(dom.documentElement.dataset.scopeMask, 'off');
+    delete dom.documentElement.dataset.scopeMask;
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.documentElement.dataset.scopeMask, 'off', 'install publishes retained OFF state');
+    destroyScopeMask();
+    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'destroy clears the document marker');
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.documentElement.dataset.scopeMask, 'off', 'reinstall retains the preference');
+    setScopeMaskEnabled(true);
+    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'ON uses the original presentation');
+    setScopeMaskEnabled(false);
+    _resetScopeMaskForTest();
+    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'test reset clears the marker');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
 
 test('a DPR change with no resize still repaints the backing store', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });

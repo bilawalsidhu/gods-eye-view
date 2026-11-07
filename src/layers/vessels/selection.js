@@ -10,7 +10,7 @@ export function createSelection({
   options,
 }) {
   const { state } = vesselState;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
   const { requestWorldFocus } = services.worldFocus;
   const {
     selectEntityContext,
@@ -37,7 +37,9 @@ export function createSelection({
       // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
       if (!isPointerFree()) return;
       if (!state.feed.enabled) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
       const pickedId = resolvePickId(picked);
       let record = pickedId ? state.records.byMmsi.get(pickedId) : null;
       const rawId = picked?.id ?? picked?.primitive?.id;
@@ -54,7 +56,14 @@ export function createSelection({
 
       // A sibling layer already owns this click. Preserve the current vessel
       // selection and do not compete with its camera command.
-      if (pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId)) return;
+      const siblingOwned =
+        pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId);
+      // Cyclone geometry is ambient context behind painted cards. Its handler
+      // yields to the same foreground AIS hit. Keep moving-contact precedence
+      // unchanged: those handlers may issue their own camera command.
+      const cycloneBackground =
+        siblingOwned && !isOwnedByOtherLayer('weather-cyclones', pickedId);
+      if (siblingOwned && !cycloneBackground) return;
 
       // Cards are painted on a pointer-events:none canvas, so the scene pick is
       // usually terrain behind the card. Resolve against the host's current
@@ -64,10 +73,14 @@ export function createSelection({
             click.position?.x,
             click.position?.y,
             {
-              sourceId: VESSEL_OVERLAY_SOURCE_ID,
+              ...(cycloneBackground
+                ? {}
+                : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
             },
           )
         : null;
+      if (cycloneBackground && cardHit?.sourceId !== VESSEL_OVERLAY_SOURCE_ID)
+        return;
       if (!record && cardHit) {
         const mmsi = String(cardHit.entryId || '').startsWith('vessel:')
           ? cardHit.entryId.slice('vessel:'.length)

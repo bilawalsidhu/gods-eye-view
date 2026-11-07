@@ -6,6 +6,10 @@ import path from 'node:path';
 import { cctvProxy } from '../../server/providers/cctv.js';
 import { radioBrowserProxy } from '../../server/providers/radio.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
+import { makeFixtureRoot } from './fixtureRoot.mjs';
+
+const nominatimStorageDir = await makeFixtureRoot('gev-media-composition-');
+test.after(() => rmSync(nominatimStorageDir, { recursive: true, force: true }));
 
 function install(plugin, hook = 'configureServer') {
   let handler;
@@ -97,7 +101,7 @@ test('CCTV instances resolve their own application source root and isolate catal
 
 test('composition creates exactly one CCTV and radio provider without acquisition', (t) => {
   isolate(t);
-  const plugins = localProviderPlugins();
+  const plugins = localProviderPlugins({ nominatimStorageDir });
   for (const factory of [cctvProxy, radioBrowserProxy]) {
     assert.equal(plugins.filter((p) => p.name === factory().name).length, 1);
   }
@@ -149,3 +153,45 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     assert.equal(cancelled, true);
   });
 }
+
+test('a failed CCTV media fetch reports a fixed health message, not the error text', async (t) => {
+  isolate(t);
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-cctv-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, 'config'));
+  writeFileSync(
+    path.join(root, 'config/cctv_sources.austin.json'),
+    JSON.stringify([
+      {
+        id: 'leaky',
+        name: 'Leaky camera',
+        lat: 30.27,
+        lon: -97.74,
+        feedType: 'video',
+        url: 'https://cams.fixture.invalid/leaky.m3u8',
+      },
+    ]),
+  );
+  const leak =
+    'connect ETIMEDOUT 203.0.113.9:443 C:\fixture\secret-path\cams.json';
+  t.mock.restoreAll();
+  t.mock.method(globalThis, 'fetch', () => {
+    throw Error(leak);
+  });
+
+  const call = install(cctvProxy({ sourceRoot: root }));
+  const media = await call('/media/leaky');
+  assert.equal(media.status, 502);
+  assert.equal(media.body.includes('203.0.113.9'), false);
+
+  // GET /health is the second door: src/layers/cctv/frames.js renders each
+  // entry's `message` as the camera's status label, so a raw errno stored here
+  // reaches the screen even though the response above is sanitized.
+  const camera = JSON.parse((await call('/health')).body).cameras.find(
+    (entry) => entry.id === 'leaky',
+  );
+  assert.equal(camera.status, 'degraded');
+  assert.equal(camera.message, 'Media fetch failed');
+  assert.equal(camera.message.includes('ETIMEDOUT'), false);
+  assert.equal(camera.message.includes('secret-path'), false);
+});

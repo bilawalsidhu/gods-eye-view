@@ -544,6 +544,10 @@ export class RealtimeFacade {
     return this._cost.recordUsage(...args);
   }
 
+  recordTranscriptionUsage(...args) {
+    return this._cost.recordTranscriptionUsage(...args);
+  }
+
   handleCostCap(...args) {
     return this._cost.handleCostCap(...args);
   }

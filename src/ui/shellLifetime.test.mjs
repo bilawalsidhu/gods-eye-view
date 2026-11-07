@@ -80,6 +80,7 @@ function bindings(t) {
     hud: { attachDataManager() {} },
     _contextControls: { connect() {} },
     _cctvControls: { connect() {} }, _radioControls: { connect() {} },
+    _streetLevelControls: { connects: 0, connect() { this.connects += 1; } },
   };
   const owner = new LayerBindings({
     viewer: {}, services: {}, readControls: () => controls,
@@ -97,7 +98,7 @@ function bindings(t) {
       subscribe() { events.push([id, 'subscribe']); return () => events.push([id, 'unsubscribe']); },
     };
   }
-  return { owner, manager, events };
+  return { owner, manager, events, controls };
 }
 
 test('manager replacement releases Directions even when the new manager has no route layer', (t) => {
@@ -116,6 +117,13 @@ test('manager replacement releases Directions even when the new manager has no r
   assert.equal(events.length, count);
 });
 
+test('attaching the manager reconnects Street Level, so its switch-on requests reach the panel', (t) => {
+  const { owner, manager, controls } = bindings(t);
+  owner.attachDataManager(manager('first'));
+  assert.equal(controls._streetLevelControls.connects, 1);
+  owner.stop(); owner.disconnect();
+});
+
 test('camera-entry listeners are removed before any asynchronous layer cleanup', (t) => {
   const { owner } = bindings(t);
   let changes = 0;
@@ -132,4 +140,24 @@ test('camera-entry listeners are removed before any asynchronous layer cleanup',
   trackedCallback({});
   owner.stop();
   assert.equal(changes, 1);
+});
+
+
+test('weather shell supplies live imagery hosts to wind and observations and releases them', (t) => {
+  const { owner } = bindings(t);
+  let host = { collection: {}, kind: 'tileset' };
+  owner.services.imageryHost = () => host;
+  const attached = new Map();
+  const ids = ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning'];
+  owner.attachDataManager({
+    layers: new Map(ids.map(id => [id, { module: {
+      attachShellServices(services) { attached.set(id, services); },
+    } }])),
+    subscribe: () => () => {},
+  });
+  for (const id of ids) assert.equal(attached.get(id).imageryHost(), host);
+  host = { collection: null, kind: 'none' };
+  for (const id of ids) assert.equal(attached.get(id).imageryHost(), host);
+  owner.disconnect();
+  for (const id of ids) assert.equal(attached.get(id), null);
 });

@@ -112,6 +112,13 @@ export class VisualEffects {
     if (this.stopped || !stage) return;
     stage.uniforms.intensity = value;
     stage.enabled = value > 0.001;
+    // Anime's bands turn the faint Milky Way into blotches, and depth cannot
+    // tell the sky from far geometry, so the glow fades with the style.
+    if (
+      stage === this.stages.anime &&
+      this.viewer.scene.skyBox?.milkyWayVisibility !== undefined
+    )
+      this.viewer.scene.skyBox.milkyWayVisibility = 1 - value;
     if (stage.enabled && stage.uniforms.time !== undefined)
       this.startAnimationLoop();
     this.requestRender('style-stage');
@@ -152,18 +159,30 @@ export class VisualEffects {
     this.requestRender('bloom');
   }
 
+  /**
+   * Sharpen runs only when it is on and its slider is above 0, as the style
+   * stages do: the pass costs the same at any amount (~1.5 ms GPU per frame
+   * on the Arc, 2026-10-24), and `0.1 + value * 2` still sharpened at 0.
+   */
+  syncSharpenEnabled() {
+    if (this.stopped || !this.sharpenStage) return;
+    this.sharpenStage.enabled =
+      this.sharpenEnabled && this.sharpenIntensity > 0.001;
+  }
+
   applySharpenIntensity(value) {
     if (this.stopped) return;
     this.sharpenIntensity = value;
     if (this.sharpenStage)
       this.sharpenStage.uniforms.amount = 0.1 + value * 2.0;
+    this.syncSharpenEnabled();
     this.requestRender('sharpen');
   }
 
   setSharpenEnabled(enabled) {
     if (this.stopped) return;
     this.sharpenEnabled = !!enabled;
-    if (this.sharpenStage) this.sharpenStage.enabled = this.sharpenEnabled;
+    this.syncSharpenEnabled();
     this.requestRender('sharpen');
   }
 

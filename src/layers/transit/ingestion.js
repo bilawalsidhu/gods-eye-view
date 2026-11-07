@@ -9,7 +9,6 @@ import {
   FEED_STALE_AFTER_MS,
   MAX_VEHICLES_TOTAL,
   MISSED_POLLS_TO_DROP,
-  TRANSIT_POLL_MS,
   isStaleVehicleFix,
   transitVehicleKey,
   vehicleReportTimeMs,
@@ -221,8 +220,12 @@ export function createIngestion({ state, services, parts, source }) {
     for (const record of records) {
       if (isStaleVehicleFix(record, now, fetchedAt)) continue;
       const key = transitVehicleKey(feed.id, record.id);
-      const mode = transitModeFor(feed, record.routeId);
-      const modeInferred = !transitModeResolved(feed, record.routeId);
+      const mode = transitModeFor(feed, record.routeId, record.id);
+      const modeInferred = !transitModeResolved(
+        feed,
+        record.routeId,
+        record.id,
+      );
       // A stamp ahead of the fetch is a clock fault; the fetch time bounds it.
       const stamped = vehicleReportTimeMs(record, fetchedAt);
       const reportAt =
@@ -472,6 +475,7 @@ export function createIngestion({ state, services, parts, source }) {
           `[Data:Transit] ${feed.id} poll failed:`,
           error?.message || error,
         );
+        // i18n-ignore: English data, translated on display (ui/statusText.js)
         status.error = `${feed.name} feed unavailable`;
         status.retryInSec = Number.isFinite(error?.retryInSec)
           ? error.retryInSec

@@ -33,6 +33,7 @@ export class LayerBindings {
     this._disposed = false;
     this._dataManager = null;
     this._directionsShellModule = null;
+    this._weatherShellModules = [];
     this._cctvRequestFocusHandler = null;
     this._removeCctvRequestFocusListener = null;
     this._worldRequestFocusHandler = null;
@@ -53,6 +54,9 @@ export class LayerBindings {
   }
   get _radioControls() {
     return this.readControls()._radioControls;
+  }
+  get _streetLevelControls() {
+    return this.readControls()._streetLevelControls;
   }
   observeCamera() {
     this._cctvRequestFocusHandler = (event) =>
@@ -114,6 +118,35 @@ export class LayerBindings {
       warmFn: (cells) => this.services.warmGroundFloor(cells),
       showToast: (message) => this._showToast(message),
     });
+  }
+
+  _connectWeatherCamera() {
+    for (const layer of this._weatherShellModules)
+      layer.attachShellServices?.(null);
+    this._weatherShellModules = [];
+    for (const id of [
+      'wind',
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
+      'weather-cyclones',
+    ]) {
+      const layer = this._dataManager?.layers?.get(id)?.module;
+      if (typeof layer?.attachShellServices !== 'function') continue;
+      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
+      layer.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation(noun, navigate),
+        imageryHost: this.services.imageryHost,
+      });
+      this._weatherShellModules.push(layer);
+    }
+    // Active Fires drapes its far-zoom heatmap on the same imagery host.
+    const fires = this._dataManager?.layers?.get('local-firms')?.module;
+    if (typeof fires?.attachShellServices === 'function') {
+      fires.attachShellServices({ imageryHost: this.services.imageryHost });
+      this._weatherShellModules.push(fires);
+    }
   }
 
   _persistAwarenessSelection(event, cleared = false) {
@@ -211,7 +244,10 @@ export class LayerBindings {
     this._syncContextModeButtons();
     this._cctvControls.connect();
     this._radioControls.connect();
+    // Its switch-on requests come from the manager, which arrives after it.
+    this._streetLevelControls?.connect();
     this._connectDirectionsCamera();
+    this._connectWeatherCamera();
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) =>
         this._persistAwarenessSelection(event, false);
@@ -263,5 +299,6 @@ export class LayerBindings {
     this._directionsShellModule?.attachShellServices?.(null);
     this._directionsShellModule = null;
     this._dataManager = null;
+    this._connectWeatherCamera();
   }
 }

@@ -105,14 +105,17 @@ checks when changing this wiring.
 
 `src/search` owns forward/reverse geocoding, place search and route provider
 interfaces. `createStandaloneApplication({ geospatial })` accepts `endpoints`
-and `providers`; the defaults preserve Google/Photon search, Google place context
-and the local OSRM route proxy. Location, annotations, HUD labels and voice use
-the composed service. Provider-specific credentials belong in the selected
-transport; server secrets never belong in browser configuration.
+and `providers`. Default forward search tries decimal coordinates and bundled
+place names (`presets`) first, without a network request, then Google when a key
+is configured, Photon, and the local `/api/geocode` Nominatim route. The
+defaults also keep Google place context and the local OSRM route proxy.
+Location, annotations, HUD labels and voice use the composed service.
+Provider-specific credentials belong in the selected transport; server secrets
+never belong in browser configuration.
 
-For a compatible protocol, configure `geocode`, `photon`, `reverse`, `textSearch`,
-`nearby` or `route` endpoints. These are developer-selected configuration, not
-URLs accepted from page queries or model arguments. A different protocol supplies
+For a compatible protocol, configure `geocode`, `photon`, `nominatim`, `reverse`,
+`textSearch`, `nearby` or `route` endpoints. These are developer-selected
+configuration, not URLs accepted from page queries or model arguments. A different protocol supplies
 an adapter function instead. The exported `createDefaultPlaceSearch` constructor
 supports the same options for direct composition:
 
@@ -155,7 +158,7 @@ routing and regional caches. Request parameters cannot override these endpoints.
 Voice controls accept an action runner and a controller factory through
 `createVoiceCommands` (`./voice/commands`). The default Realtime controller owns
 microphone tracks, playback, push-to-talk, tool cancellation and radio handoff.
-Its backend supplies `requestToken({ tier, signal })` and
+Its backend supplies `requestToken({ tier, authMode, signal })` and
 `negotiate({ offerSdp, credential, signal })`. The Realtime-compatible adapter
 (`./voice/realtime-backend`) accepts separate token and connection transports
 and endpoints. Only the short-lived client secret reaches the SDP endpoint.
@@ -181,10 +184,14 @@ separate constructors. Pass these to `createApplication`; use its `signal` and
 `defer` for ownership. The compatibility catalog is still page-scoped: construct
 one application per page. Controls, actions and renderers use the same layer
 instances. Configure sources with `application/sources` before registration or
-state restoration, and release them after the consumers stop.
+state restoration, and release them after the consumers stop. The catalog
+constructor (`application/layers`) also requires `wind`, `weather` and
+`cyclones` sources with `getSnapshot` for the Weather layers, and owns the
+observed-history clock those layers share for the catalog's lifetime.
 
 `application/services` accepts boundary, terrain, regional-context, weather and
-summary services. `application/requests` supplies the existing HTTP protocols
+summary services; its weather service supplies cockpit local conditions, not the
+Weather layers. `application/requests` supplies the existing HTTP protocols
 with configurable endpoints and a scoped transport. Changing an endpoint works
 only for a compatible protocol; another protocol supplies a service adapter.
 Cancellation discards late response bodies, and replacing a source invalidates
@@ -193,6 +200,24 @@ its pending results. Source disposal does not silently reinstate a default.
 `ui/composition` supplies the default engines to the shell. Applications can
 supply a HUD implementation or request policy through control services. The
 shared chrome owns the welcome/loading transition; standalone composition adds
-Provider Settings. `build/html` expands an allowlist of component markers from
-`src/ui/templates`; unknown names cannot read arbitrary filesystem paths. The
-standalone document expands to the same markup as before this extraction.
+Provider Settings. A page places each Vue view in `src/ui/views` with a host,
+`<div class="gev-view" data-gev-view="NAME"></div>`, and writes its own loading
+screen (`#loading-screen` with a `.loader-status` line) as static markup so it
+paints before any script runs. `createApplication()` renders the views before
+anything reads the page; `omitViews` names views the application leaves out,
+such as `provider-settings`, and their hosts are removed. Leaving out
+`layer-panels` also leaves out the scene sharing dialogs it draws, and leaving
+out `scene-chrome` the before/after imagery dividers (the imagery still splits,
+with no line or handle to move it), the status chips, the toast, the ORBIT
+indicator, the FPS readout, the Scene actions panel, the data-pack attribution
+cards, the wind inspection marker, the Space Missions replay vehicle, the
+full-globe celestial ring, the screen-space map annotations, the visible
+map target list and the Global Context compass;
+leaving out `command-dock` the voice control and its pointer reticle;
+leaving out `context` the Bhote Koshi reconstruction panel; and leaving out
+`intel-hud` the Intel HUD overlay (`#intel-hud`), whose readouts the HUD
+implementation publishes to the `gev-hud` store. An unknown
+view name is an error. A host that does not initialize Core's locale passes
+`localePicker: false` to `createApplicationControls` instead of editing the
+markup. Node tests that import application modules register the component
+loader with `node --import=<core package>/build/register-vue`.
