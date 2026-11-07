@@ -2899,10 +2899,14 @@
     max-height: min(48vh, 440px);
   }
 
+  /* Centred like the default theme's phone row; the desktop panel width
+     would otherwise pin it left of the Reset/Exit axis. */
   :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-controls {
     top: 92px !important;
     right: 12px;
     bottom: auto;
+    left: 12px;
+    width: auto;
   }
 
   :root[data-ui-theme='cyber']
