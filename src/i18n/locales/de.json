@@ -3181,8 +3181,16 @@
   "event age filter|All": "Alle",
   "Event age": "Ereignisalter",
   "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben",
-  "Close camera preview": "Kameravorschau schließen",
-  "Refresh map still": "Kartenstandbild aktualisieren",
-  "The map still uses a separate request and may show a different moment.": "Das Kartenstandbild wird separat abgerufen und kann einen anderen Moment zeigen.",
-  "Video plays from Québec 511, which sees your IP address.": "Das Video wird von Québec 511 abgespielt, das Ihre IP-Adresse sieht."
+  "READ NEAREST": "NÄCHSTGELEGENE LESEN",
+  "Fly to the nearest sign and read its board": "Zur nächstgelegenen Anzeigetafel fliegen und sie lesen",
+  "No signs are currently posting": "Derzeit zeigt keine Anzeigetafel eine Meldung",
+  "Message boards": "Anzeigetafeln",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "Live-Anzeigetafeln, jede dem Verkehr zugewandt, an den sie sich richtet. Zoome heran, um die Anzeige zu lesen; mehrseitige Tafeln wechseln durch.",
+  "Message sign": "Anzeigetafel",
+  "No message-sign packs enabled; see .env.example to enable one": "Keine Anzeigetafel-Pakete aktiviert; zum Aktivieren siehe .env.example",
+  "Message signs timed out": "Zeitüberschreitung bei den Anzeigetafeln",
+  "Message signs temporarily unavailable": "Anzeigetafeln vorübergehend nicht verfügbar",
+  "Message signs returned an incomplete response": "Die Anzeigetafeln haben eine unvollständige Antwort geliefert",
+  "Message signs": "Anzeigetafeln",
+  "Message Signs": "Anzeigetafeln"
 }

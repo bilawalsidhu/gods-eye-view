@@ -3256,8 +3256,16 @@
   "event age filter|All": "Todos",
   "Event age": "Antigüedad",
   "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha",
-  "Close camera preview": "Cerrar vista previa de la cámara",
-  "Refresh map still": "Actualizar imagen fija del mapa",
-  "The map still uses a separate request and may show a different moment.": "La imagen del mapa usa una solicitud independiente y puede mostrar otro momento.",
-  "Video plays from Québec 511, which sees your IP address.": "El vídeo se reproduce desde Québec 511, que ve tu dirección IP."
+  "READ NEAREST": "LEER LA MÁS CERCANA",
+  "Fly to the nearest sign and read its board": "Volar a la señal más cercana y leer su panel",
+  "No signs are currently posting": "Ninguna señal muestra mensajes ahora",
+  "Message boards": "Paneles de mensajes",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "Paneles de mensajes en vivo, cada uno orientado hacia el tráfico al que se dirige. Acércate para leer la cara; un panel de varias páginas las alterna.",
+  "Message sign": "Señal de mensajes",
+  "No message-sign packs enabled; see .env.example to enable one": "No hay paquetes de señales de mensajes activados; consulta .env.example para activar uno",
+  "Message signs timed out": "Las señales de mensajes tardaron demasiado en responder",
+  "Message signs temporarily unavailable": "Señales de mensajes no disponibles temporalmente",
+  "Message signs returned an incomplete response": "Las señales de mensajes devolvieron una respuesta incompleta",
+  "Message signs": "Señales de mensajes",
+  "Message Signs": "Señales de mensajes"
 }

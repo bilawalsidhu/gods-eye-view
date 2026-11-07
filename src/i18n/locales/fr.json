@@ -3256,8 +3256,16 @@
   "event age filter|All": "Tous",
   "Event age": "Ancienneté",
   "Event age: {days}d · undated kept": "Ancienneté : {days} j · marqueurs sans date conservés",
-  "Close camera preview": "Fermer l’aperçu de la caméra",
-  "Refresh map still": "Actualiser l’image fixe sur la carte",
-  "The map still uses a separate request and may show a different moment.": "L’image fixe de la carte utilise une requête distincte et peut montrer un autre moment.",
-  "Video plays from Québec 511, which sees your IP address.": "La vidéo est lue depuis Québec 511, qui voit votre adresse IP."
+  "READ NEAREST": "LIRE LE PLUS PROCHE",
+  "Fly to the nearest sign and read its board": "Voler jusqu’au panneau le plus proche et lire son message",
+  "No signs are currently posting": "Aucun panneau n’affiche de message pour le moment",
+  "Message boards": "Panneaux à messages",
+  "Live message boards, each facing the traffic it addresses. Zoom in to read the face; a multi-page board cycles.": "Panneaux à messages en direct, chacun orienté vers le trafic auquel il s’adresse. Zoomez pour lire la face ; un panneau à plusieurs pages les fait défiler.",
+  "Message sign": "Panneau à messages",
+  "No message-sign packs enabled; see .env.example to enable one": "Aucun pack de panneaux à messages activé ; consultez .env.example pour en activer un",
+  "Message signs timed out": "Délai des panneaux à messages dépassé",
+  "Message signs temporarily unavailable": "Panneaux à messages temporairement indisponibles",
+  "Message signs returned an incomplete response": "Les panneaux à messages ont renvoyé une réponse incomplète",
+  "Message signs": "Panneaux à messages",
+  "Message Signs": "Panneaux à messages"
 }

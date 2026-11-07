@@ -38,6 +38,7 @@ import {
   loadFloridaSourcesFromOpenData,
   loadHoustonSourcesFromOpenData,
   loadA22SourcesFromOpenDataHub,
+  loadNe511SourcesFromGraphQL,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -206,6 +207,14 @@ const LIVE_PACKS = [
     name: 'a22',
     enabled: () => envEnabled('CCTV_A22_ENABLED'),
     load: loadA22SourcesFromOpenDataHub,
+  },
+  {
+    // NDOT grants no reuse licence for its camera images (transportation
+    // purposes only, unless otherwise approved), so the pack is off unless
+    // the operator opts in (see DATA_SOURCES.md).
+    name: 'ne511',
+    enabled: () => envOptIn('CCTV_NE511_ENABLED'),
+    load: loadNe511SourcesFromGraphQL,
   },
 ];
 /**
