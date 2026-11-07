@@ -1558,6 +1558,29 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Giroc / Webcam Romania CCTV source pack
+
+`config/cctv_sources.romania.json` is an optional single-camera pack for Giroc,
+Timiș, Romania. To use it, set `CCTV_SOURCES_FILE=config/cctv_sources.romania.json`
+in the local `.env` and restart the server. Set `CCTV_FORCE_AUSTIN=1` as well to
+retain the built-in live packs; despite its historical name, this flag applies
+to all live packs. The default catalog is unchanged.
+
+The camera uses Webcam Romania's public HLS stream and JPEG snapshot, fetched
+at runtime without an API key. Its position, 45.70028947266781, 21.233675914004227,
+was corrected by the contributor rather than copied from the directory's
+inaccurate pin. Heading, pitch, field of view, mounting height and ground
+elevation are uncalibrated priors; the camera retains the RAW PRIOR badge.
+See `DATA_SOURCES.md` for attribution and provider terms.
+
+The existing HLS puller resolves same-origin relative master/media references
+and serves local leased playlists and segments. It downloads complete segments
+without forwarding a browser Range header. Its per-segment streamed-byte cap
+is 8 MiB: Giroc's roughly ten-second 2702×1520 segments can exceed the former
+4 MiB cap (one measured 6,437,120 bytes). Retained data remains capped at
+24 MiB and 12 segments per session, with two sessions maximum. Redirect
+refusal, origin pinning, timeouts and lease expiry are unchanged.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT
