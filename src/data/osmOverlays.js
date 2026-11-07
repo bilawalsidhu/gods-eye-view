@@ -1,5 +1,7 @@
-import * as Cesium from 'cesium';
-import { NO_IMAGERY_HOST, resolveImageryHost } from '../maps/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../maps/imageryHost.js';
+// The application's renderer gives the globe port; a viewer with no
+// renderer bound gets one from the factory its Cesium side loads.
+import { findGlobe } from '../render/rendererOf.js';
 
 /**
  * @file Open-data raster overlays: OpenSeaMap sea marks and OpenSnowMap ski
@@ -16,10 +18,11 @@ import { NO_IMAGERY_HOST, resolveImageryHost } from '../maps/imageryHost.js';
  *  - OpenInfraMap serves MapLibre vector tiles, not raster XYZ tiles. That
  *    needs a vector-tile rendering pipeline, not an imagery-layer drop-in.
  *
- * The overlays drape on whatever surface the active map stack offers (see
- * `maps/imageryHost.js`): the globe on the OSM and Bing stacks, the Google
- * Photorealistic tileset's own `imageryLayers` on Google 3D. Only a stack with
- * neither leaves them hidden, and the row says so.
+ * Each overlay is an imagery layer of the renderer's globe port, draped on
+ * whatever is drawn: the globe on the OSM and Bing stacks, the Google
+ * Photorealistic tiles on Google 3D. The map stack's own record says which
+ * (`getDrapeSurface`); only a stack with neither leaves them hidden, and the
+ * row says so.
  * @module data/osmOverlays
  */
 
@@ -54,76 +57,53 @@ export function osmOverlayHiddenReason(enabled, hostKind) {
   return enabled && hostKind === 'none' ? NO_IMAGERY_HOST : null;
 }
 
+/** The imagery spec of one overlay. */
+export function osmOverlaySpec(overlay) {
+  return {
+    kind: 'xyz',
+    url: overlay.urlTemplate,
+    maxLevel: overlay.maximumLevel,
+    credit: { text: overlay.credit },
+  };
+}
+
 /**
  * Create the layer for one overlay descriptor. Each application catalog gets
- * its own instances; the Cesium factories are injectable so tests run without
- * WebGL.
+ * its own instances; `globeOf` (the viewer's globe port) is injectable so
+ * tests run without WebGL.
  */
-export function createOsmOverlayLayer(
-  overlay,
-  {
-    host = resolveImageryHost,
-    createProvider = (descriptor) =>
-      new Cesium.UrlTemplateImageryProvider({
-        url: descriptor.urlTemplate,
-        credit: descriptor.credit,
-        maximumLevel: descriptor.maximumLevel,
-      }),
-    createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
-  } = {},
-) {
+export function createOsmOverlayLayer(overlay, { globeOf = findGlobe } = {}) {
   if (!OSM_OVERLAYS.includes(overlay))
     throw new TypeError(`Unknown open map overlay: ${overlay?.id}`);
   let viewer = null;
   let mapStack = null;
   let unsubscribeMap = null;
   let enabled = false;
-  let hostInfo = { collection: null, kind: 'none' };
-  /** The imagery layer this instance owns while enabled, and where it sits. */
+  let surface = 'none';
+  /** The imagery layer this instance owns while enabled. */
   let owned = null;
 
-  const usable = (collection) => collection && !collection.isDestroyed?.();
-
-  function detach(destroy) {
-    if (!owned) return;
-    const { collection, layer } = owned;
-    if (usable(collection) && collection.contains(layer))
-      collection.remove(layer, destroy);
-    else if (destroy && !layer.isDestroyed?.()) layer.destroy?.();
-    owned.collection = null;
-    if (destroy) owned = null;
+  /**
+   * What the overlay drapes on: the map stack's record, or with no map
+   * stack, whether the viewer's globe is shown.
+   */
+  function drapeSurface() {
+    const recorded = mapStack?.getDrapeSurface?.();
+    if (recorded) return recorded;
+    return viewer?.scene?.globe?.show === true ? 'globe' : 'none';
   }
 
-  function resolveHost() {
-    return (
-      host({ viewer, tileset: mapStack?.getImageryHostTileset?.() }) || {
-        collection: null,
-        kind: 'none',
-      }
-    );
-  }
-
-  /** Create, move or drop the owned imagery layer to match the state. */
+  /** Add or remove the owned imagery layer to match the state. */
   function sync() {
     if (!viewer) return;
-    hostInfo = enabled ? resolveHost() : { collection: null, kind: 'none' };
+    surface = enabled ? drapeSurface() : 'none';
     if (!enabled) {
-      detach(true);
-    } else {
-      owned ||= {
-        layer: createImageryLayer(createProvider(overlay)),
-        collection: null,
-      };
-      if (owned.collection !== hostInfo.collection) {
-        detach(false);
-        if (usable(hostInfo.collection)) {
-          // Appended, so it draws above the map stack's base imagery.
-          hostInfo.collection.add(owned.layer);
-          owned.collection = hostInfo.collection;
-        }
-      }
+      owned?.remove();
+      owned = null;
+    } else if (!owned) {
+      // Added last, so it draws above the map stack's base imagery.
+      owned = globeOf(viewer)?.imagery.add(osmOverlaySpec(overlay)) ?? null;
     }
-    viewer.scene?.requestRender?.();
   }
 
   return {
@@ -135,7 +115,7 @@ export function createOsmOverlayLayer(
     init(nextViewer) {
       viewer = nextViewer;
     },
-    /** Follow map-stack switches so the drape moves with the surface. */
+    /** Follow map-stack switches, for the row's hidden reason. */
     attachMapStackController(controller) {
       unsubscribeMap?.();
       unsubscribeMap = null;
@@ -159,27 +139,27 @@ export function createOsmOverlayLayer(
     getStats() {
       // Without a controller subscription the stats poll doubles as the
       // map-stack watch.
-      if (enabled && !unsubscribeMap) {
-        const next = resolveHost();
-        if (next.collection !== hostInfo.collection) sync();
-      }
+      if (enabled && !unsubscribeMap) surface = drapeSurface();
+      // No globe port yet (a viewer whose renderer came later): try again.
+      if (enabled && !owned) sync();
       return {
         count: enabled ? 1 : 0,
-        error: osmOverlayHiddenReason(enabled, hostInfo.kind),
+        error: osmOverlayHiddenReason(enabled, surface),
       };
     },
-    /** Owned layer count and host kind, for tests and live gates. */
+    /** Owned layer count and drape surface, for tests and live gates. */
     diagnostics() {
-      return { host: hostInfo.kind, ownedCount: owned ? 1 : 0 };
+      return { host: surface, ownedCount: owned ? 1 : 0 };
     },
     destroy() {
       enabled = false;
-      detach(true);
+      owned?.remove();
+      owned = null;
       unsubscribeMap?.();
       unsubscribeMap = null;
       mapStack = null;
       viewer = null;
-      hostInfo = { collection: null, kind: 'none' };
+      surface = 'none';
     },
   };
 }

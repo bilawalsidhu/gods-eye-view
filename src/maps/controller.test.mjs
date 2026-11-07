@@ -453,12 +453,18 @@ test('imagery host tileset follows supplied, owned and globe map sources', async
   assert.equal(controller.getImageryHostTileset(), supplied);
   await controller.setStack('owned');
   assert.equal(controller.getImageryHostTileset(), owned);
+  assert.equal(controller.getDrapeSurface(), 'tileset');
   await controller.setStack('globe');
   assert.equal(controller.getImageryHostTileset(), null);
+  assert.equal(controller.getDrapeSurface(), 'globe');
   await controller.setStack('supplied');
   assert.equal(controller.getImageryHostTileset(), supplied);
+  assert.equal(controller.getDrapeSurface(), 'tileset');
+  supplied.show = false;
+  assert.equal(controller.getDrapeSurface(), 'none');
   controller.destroy();
   assert.equal(controller.getImageryHostTileset(), null);
+  assert.equal(controller.getDrapeSurface(), null);
 });
 
 function leaseFixture() {

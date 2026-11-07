@@ -4,6 +4,7 @@ import { createMapCredits } from './credits.js';
 // A viewer of a consumer's own gets its credits port (and camera) from the
 // factories this loads.
 import '../render/cesium/camera.js';
+import { markBaseTileset } from '../render/cesium/globe.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
 /**
@@ -75,6 +76,9 @@ export class MapSourceController {
     this._replacedTerrain = null;
     this._subscribers = new Set();
     this._destroyed = false;
+    // The renderer's imagery drapes on these while they are shown.
+    for (const source of this._sources.values())
+      if (source.tileset) markBaseTileset(source.tileset);
   }
 
   getStack(id) {
@@ -111,6 +115,18 @@ export class MapSourceController {
     for (const tileset of this._ownedTilesets)
       if (tileset.show === true) return tileset;
     return null;
+  }
+  /**
+   * What draped imagery lands on now: `'globe'` while the globe is shown
+   * (a globe stack), `'tileset'` for a shown 3D stack, `'none'` when
+   * neither is drawn; null once destroyed, when it knows nothing.
+   * @returns {'globe' | 'tileset' | 'none' | null}
+   */
+  getDrapeSurface() {
+    if (this._destroyed) return null;
+    if (this.viewer?.scene?.globe?.show === true) return 'globe';
+    const tileset = this.getImageryHostTileset();
+    return tileset && !tileset.isDestroyed?.() ? 'tileset' : 'none';
   }
   getActiveId() {
     return this._activeId;
@@ -270,6 +286,7 @@ export class MapSourceController {
     if (gen !== this._switchGen) return;
     if (!source.tileset && !this._ownedTilesets.has(tileset)) {
       tileset.show = false;
+      markBaseTileset(tileset);
       this.viewer.scene.primitives.add(tileset);
       this._ownedTilesets.add(tileset);
     }
