@@ -33,6 +33,7 @@ import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { seaStateProxy } from './seaState.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -76,6 +77,7 @@ function localProviderPlugins({
     ...(gemini ? [geminiLiveProxy({ realtime: gemini })] : []),
     googlePlacesContextProxy(),
     windProxy(),
+    seaStateProxy(),
     weatherProxy(),
     cycloneProxy(),
     mapillaryProxy(),

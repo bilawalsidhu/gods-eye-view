@@ -1356,5 +1356,14 @@
   "src/layers/wildlifeSightings/cache.integration.test.mjs",
   "src/layers/wildlifeSightings/density.test.mjs",
   "src/layers/wildlifeSightings/selection.test.mjs",
-  "server/providers/inaturalist/proxy.fixture.mjs"
+  "server/providers/inaturalist/proxy.fixture.mjs",
+  "server/providers/seaState.js",
+  "server/providers/seaState.test.mjs",
+  "src/layers/seaState/model.js",
+  "src/layers/seaState/source.js",
+  "src/layers/seaState/index.js",
+  "src/layers/seaState/model.test.mjs",
+  "src/layers/seaState/source.test.mjs",
+  "src/layers/seaState/layer.test.mjs",
+  "src/app/layers/seaState.js"
 ]
