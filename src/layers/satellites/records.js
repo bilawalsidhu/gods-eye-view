@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
 import { ISS_NORAD } from './policy.js';
 
 /**
@@ -62,13 +62,13 @@ export function createRecords({ state, parts }) {
         speedMps: Number.isFinite(pos.speedMps) ? pos.speedMps : null,
       };
     }
-    const point = state._points.get(noradId);
-    if (!point?.position) return null;
-    const carto = Cesium.Cartographic.fromCartesian(point.position);
+    const position = parts.rendering._pointPosition(noradId);
+    if (!position) return null;
+    const carto = toLonLatH(position);
     if (!carto) return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: carto.lat,
+      lon: carto.lon,
       altitudeM: carto.height,
       speedMps: null,
     };

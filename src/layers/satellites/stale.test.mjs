@@ -10,6 +10,8 @@ import { createOrbits } from './orbits.js';
 import { createLabels } from './labels.js';
 import { createTracking } from './tracking.js';
 import { createRendering } from './rendering.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 import { createCatalog } from './catalog.js';
 import { createLifecycle } from './lifecycle.js';
 import { createInteraction } from './interaction.js';
@@ -115,8 +117,10 @@ async function fixture(t) {
     },
     trackedEntityChanged: new Cesium.Event(),
   };
+  const unbind = bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
   await parts.lifecycle.methods.init(viewer);
   t.after(async () => {
+    unbind();
     if (state._pointCollection) parts.lifecycle.methods.destroy(viewer);
     viewer.scene.primitives.destroy();
     if (previousDocument === undefined) delete globalThis.document;

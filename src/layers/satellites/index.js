@@ -38,7 +38,7 @@ export function createSatellitesLayer({ services, source }) {
       satelliteVisualsVisible: parts.controls.satelliteVisualsVisible,
       satelliteCatalogModeChanged: parts.controls.satelliteCatalogModeChanged,
       createIssOverlayEntry: parts.labels.createIssOverlayEntry,
-      orbitFrameModelMatrix: parts.orbits.orbitFrameModelMatrix,
+      orbitFrameModelMatrix: parts.rendering.orbitFrameModelMatrix,
       _setTrackedSatelliteRefreshStateForTest:
         parts.testing._setTrackedSatelliteRefreshStateForTest,
       _setSatelliteTrackingRefreshOutcomeForTest:

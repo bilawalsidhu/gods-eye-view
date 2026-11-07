@@ -49,17 +49,14 @@ export function createInteraction({
 
       if (picked) {
         // Clicking tracked entity itself — ignore
-        if (picked.id === layerState._trackedEntity) return;
+        if (parts.rendering._pickIsTrackedEntity(picked)) return;
 
         // Check if it's a satellite point (id is NORAD catalog number)
-        const prim = picked.primitive;
-        if (prim && prim.id != null) {
-          const noradId = Number(prim.id);
-          if (!isNaN(noradId) && layerState._catalog.has(noradId)) {
-            parts.tracking._cancelPendingTrackingRestore();
-            parts.tracking._trackSatellite(noradId, { origin: 'user' });
-            return;
-          }
+        const noradId = parts.rendering._pickedPointId(picked);
+        if (noradId !== null && layerState._catalog.has(noradId)) {
+          parts.tracking._cancelPendingTrackingRestore();
+          parts.tracking._trackSatellite(noradId, { origin: 'user' });
+          return;
         }
       }
 

@@ -1,6 +1,39 @@
 import * as Cesium from 'cesium';
+// The camera and frame ports over a viewer with no renderer bound, for the
+// tracking and lifecycle parts that follow and tick through them.
+import '../../render/cesium/camera.js';
+import '../../render/cesium/frame.js';
+import { toCartesian } from '../../render/cesium/common.js';
+import { toColor as cesiumColor } from '../../render/cesium/draw.js';
 import { gstime } from 'satellite.js';
 import { ISS_NORAD, POSITION_UPDATE_MS, RING_ROTATION_MS } from './policy.js';
+
+/**
+ * The satellites layer's Cesium side: the point collection and its point
+ * primitives, the baked orbit-ring primitives, the tracked entity the follow
+ * camera and the tracked card read, and the per-frame tick that moves them.
+ * The other parts hand it render-contract values (ECEF `{x, y, z}`, colours
+ * as `[r, g, b, a]`) and never touch these objects themselves.
+ */
+
+/** Points shrink with distance as they always have. */
+const POINT_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(1e6, 1.5, 2e7, 0.6);
+
+/** Each policy style once in Cesium's colours (styles are module constants). */
+const cesiumStyles = new WeakMap();
+function cesiumStyleOf(style) {
+  let converted = cesiumStyles.get(style);
+  if (!converted) {
+    converted = {
+      pixelSize: style.pixelSize,
+      color: cesiumColor(style.color),
+      outlineColor: cesiumColor(style.outlineColor),
+      outlineWidth: style.outlineWidth,
+    };
+    cesiumStyles.set(style, converted);
+  }
+  return converted;
+}
 
 export function createRendering({
   state: layerState,
@@ -15,7 +48,216 @@ export function createRendering({
     nearFarScalarValueAtDistance,
     advanceSpriteFocus,
     focusAlphaNeedsWrite,
+    publishFocusTargetFromCachedPosition,
   } = services.focus;
+
+  const scratchFocusScreen = new Cesium.Cartesian2();
+  const scratchRingRotation = new Cesium.Matrix3();
+  // The tracked satellite's per-frame ECEF sample (WS-D2), shared with the
+  // tracked entity, the follow camera and the tracked card. Tracking writes
+  // its x/y/z; it stays one Cesium value for the readers that take it.
+  layerState._trackedFrameCartesian = new Cesium.Cartesian3();
+
+  /**
+   * Build the rigid ECEF transform that keeps an orbit path baked at one GMST
+   * aligned with live SGP4 positions propagated at another epoch.
+   * @param {number} gmstAtBake GMST used when the path positions were baked.
+   * @param {Date} nowDate Epoch whose rotating-Earth frame should be displayed.
+   * @param {Cesium.Matrix4} [result] Optional matrix to update in place.
+   * @returns {Cesium.Matrix4} Z-rotation from bake-time ECEF to current ECEF.
+   */
+
+  function orbitFrameModelMatrix(
+    gmstAtBake,
+    nowDate,
+    result = new Cesium.Matrix4(),
+  ) {
+    const deltaGmst = gstime(nowDate) - gmstAtBake;
+    const rotation = Cesium.Matrix3.fromRotationZ(
+      -deltaGmst,
+      scratchRingRotation,
+    );
+    return Cesium.Matrix4.fromRotationTranslation(
+      rotation,
+      Cesium.Cartesian3.ZERO,
+      result,
+    );
+  }
+
+  /** ECEF `{x, y, z}` positions as the renderer's own. */
+  function _rendererPositions(positions) {
+    return positions.map(toCartesian);
+  }
+
+  /** The scene's rendered-frame number, the tracked sample's cache key. */
+  function _drawnFrameNumber() {
+    return layerState._viewer?.scene?.frameState?.frameNumber ?? -1;
+  }
+
+  /** Add the point collection the satellite dots draw in. */
+  function _attach(viewer) {
+    layerState._pointCollection = new Cesium.PointPrimitiveCollection();
+    viewer.scene.primitives.add(layerState._pointCollection);
+  }
+
+  /** Remove the point collection and every orbit ring from `viewer`. */
+  function _detach(viewer) {
+    if (layerState._pointCollection) {
+      viewer.scene.primitives.remove(layerState._pointCollection);
+      layerState._pointCollection = null;
+    }
+    // Orbit ring primitives are removed (and destroyed) here
+    for (const path of layerState._orbitPaths.values()) {
+      viewer.scene.primitives.remove(path.primitive);
+    }
+  }
+
+  /** Whether there is a point collection to draw satellites in. */
+  function _hasPointCollection() {
+    return Boolean(layerState._pointCollection);
+  }
+
+  /** Whether the satellite dots are shown. */
+  function _pointsShown() {
+    return Boolean(layerState._pointCollection?.show);
+  }
+
+  function _setPointsShown(show) {
+    if (layerState._pointCollection) layerState._pointCollection.show = show;
+  }
+
+  function _setOrbitPathsShown(show) {
+    for (const path of layerState._orbitPaths.values())
+      path.primitive.show = show;
+  }
+
+  function _setOrbitPathShown(noradId, show) {
+    const path = layerState._orbitPaths.get(noradId);
+    if (path) path.primitive.show = show;
+  }
+
+  /** Remove every orbit ring from `viewer`'s scene. */
+  function _clearOrbitPaths(viewer) {
+    for (const path of layerState._orbitPaths.values())
+      viewer.scene.primitives.remove(path.primitive);
+    layerState._orbitPaths.clear();
+  }
+
+  /**
+   * Draw one satellite's dot.
+   * @param {number} noradId
+   * @param {{x: number, y: number, z: number}} position ECEF metres.
+   * @param {object} style A `POINT_STYLES` entry.
+   */
+  function _addPoint(noradId, position, style) {
+    const look = cesiumStyleOf(style);
+    const point = layerState._pointCollection.add({
+      position: toCartesian(position),
+      pixelSize: look.pixelSize,
+      color: look.color,
+      outlineColor: look.outlineColor,
+      outlineWidth: look.outlineWidth,
+      scaleByDistance: POINT_SCALE_BY_DISTANCE,
+      id: noradId,
+    });
+    layerState._points.set(noradId, point);
+  }
+
+  /** Move a drawn dot to ECEF `position`; false when it has none. */
+  function _movePoint(noradId, position) {
+    const point = layerState._points.get(noradId);
+    if (!point) return false;
+    point.position = position; // primitive setter clones
+    return true;
+  }
+
+  function _removePoint(noradId) {
+    const point = layerState._points.get(noradId);
+    if (point && layerState._pointCollection)
+      layerState._pointCollection.remove(point);
+    layerState._points.delete(noradId);
+  }
+
+  /** Remove every dot. */
+  function _clearPoints() {
+    layerState._pointCollection.removeAll();
+    layerState._points.clear();
+  }
+
+  /** Where a dot is drawn (ECEF), or null. */
+  function _pointPosition(noradId) {
+    return layerState._points.get(noradId)?.position || null;
+  }
+
+  /** Hide a dot while the tracked entity draws it. */
+  function _hidePoint(noradId) {
+    const point = layerState._points.get(noradId);
+    if (point) point.show = false;
+  }
+
+  /** Show a dot again in its group's style (WS-D3). */
+  function _restorePoint(noradId, style) {
+    const point = layerState._points.get(noradId);
+    if (!point) return;
+    const look = cesiumStyleOf(style);
+    point.show = true;
+    point.pixelSize = look.pixelSize;
+    point.color = look.color;
+    point.outlineColor = look.outlineColor;
+    point.outlineWidth = look.outlineWidth;
+    point.disableDepthTestDistance = 0;
+  }
+
+  /**
+   * Add the tracked satellite's entity: it owns a point graphic so the
+   * follow camera can resolve a bounding sphere (a label-only entity left
+   * the camera stranded), and the tracked card reads its entity record.
+   * @param {{position: () => object, viewFrom: {x: number, y: number,
+   *   z: number}}} options `position` is evaluated every time it is read.
+   * @returns {object} The entity.
+   */
+  function _addTrackedEntity({ position, viewFrom }) {
+    return layerState._viewer.entities.add({
+      position: new Cesium.CallbackProperty(position, false),
+      viewFrom: toCartesian(viewFrom),
+      point: {
+        pixelSize: 14,
+        color: Cesium.Color.YELLOW,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+  }
+
+  function _removeTrackedEntity(entity) {
+    layerState._viewer.entities.remove(entity);
+  }
+
+  /** Whether a scene pick is the tracked satellite's entity. */
+  function _pickIsTrackedEntity(picked) {
+    return picked?.id === layerState._trackedEntity;
+  }
+
+  /**
+   * The NORAD id a scene pick's point primitive carries, or null. Any
+   * primitive with a numeric id answers; the caller checks the catalog.
+   */
+  function _pickedPointId(picked) {
+    const prim = picked?.primitive;
+    if (!prim || prim.id == null) return null;
+    const noradId = Number(prim.id);
+    return isNaN(noradId) ? null : noradId;
+  }
+
+  /** Publish the tracked satellite's focus rectangle from its cached position. */
+  function _publishTrackedFocus(target) {
+    publishFocusTargetFromCachedPosition({
+      ...target,
+      scene: layerState._viewer?.scene,
+      camera: layerState._viewer?.camera,
+    });
+  }
 
   /**
    * Show orbital path for a satellite.
@@ -43,10 +285,12 @@ export function createRendering({
     if (!sat || !layerState._viewer) return;
 
     const bakeDate = new Date();
-    const basePositions = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
+    const basePositions = _rendererPositions(
+      parts.orbits.computeOrbitPath(sat.satrec, bakeDate),
+    );
     if (basePositions.length < 2) return;
 
-    const pathColor = color || Cesium.Color.CYAN;
+    const pathColor = color ? cesiumColor(color) : Cesium.Color.CYAN;
 
     const primitive = new Cesium.Primitive({
       geometryInstances: new Cesium.GeometryInstance({
@@ -115,7 +359,7 @@ export function createRendering({
 
     for (const path of layerState._orbitPaths.values()) {
       if (!path.primitive) continue;
-      parts.orbits.orbitFrameModelMatrix(
+      orbitFrameModelMatrix(
         path.gmstAtBake,
         nowDate,
         path.primitive.modelMatrix,
@@ -239,14 +483,16 @@ export function createRendering({
         Cesium.SceneTransforms.worldToWindowCoordinates(
           scene,
           position,
-          layerState._scratchFocusScreen,
+          scratchFocusScreen,
         ),
       cameraDistanceFor: (position) =>
         Cesium.Cartesian3.distance(camera.positionWC, position),
       baseColorFor: (noradId) =>
-        parts.controls._pointStyleFor(
-          noradId,
-          layerState._catalog.get(noradId)?.group,
+        cesiumStyleOf(
+          parts.controls._pointStyleFor(
+            noradId,
+            layerState._catalog.get(noradId)?.group,
+          ),
         ).color,
     });
     layerState._activeFocusCount = result.activeCount;
@@ -309,6 +555,29 @@ export function createRendering({
     return { writes, transitioning, activeCount, ran: true };
   }
   return {
+    orbitFrameModelMatrix,
+    _rendererPositions,
+    _drawnFrameNumber,
+    _attach,
+    _detach,
+    _hasPointCollection,
+    _pointsShown,
+    _setPointsShown,
+    _setOrbitPathsShown,
+    _setOrbitPathShown,
+    _clearOrbitPaths,
+    _addPoint,
+    _movePoint,
+    _removePoint,
+    _clearPoints,
+    _pointPosition,
+    _hidePoint,
+    _restorePoint,
+    _addTrackedEntity,
+    _removeTrackedEntity,
+    _publishTrackedFocus,
+    _pickIsTrackedEntity,
+    _pickedPointId,
     _showOrbitPath,
     _updateOrbitPathRotations,
     _hideOrbitPath,

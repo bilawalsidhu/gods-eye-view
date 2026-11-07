@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { ISS_NORAD, ISS_OVERLAY_SOURCE_ID } from './policy.js';
 
 export function createTesting({ state: layerState, services, parts, source }) {
@@ -81,7 +80,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     return layerState._trackedFrameCartesian;
   }
 
-  /** Invoke the same callback registered on `scene.preRender` in production. */
+  /** Invoke the same per-frame tick the frame port runs in production. */
 
   function _runSatellitePreRenderForTest() {
     parts.rendering._preRenderTick();
@@ -177,7 +176,11 @@ export function createTesting({ state: layerState, services, parts, source }) {
       [
         ISS_NORAD,
         {
-          primitive: { show: true, modelMatrix: new Cesium.Matrix4() },
+          // A stand-in ring: shown, at the identity 4x4 (column-major).
+          primitive: {
+            show: true,
+            modelMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+          },
           gmstAtBake: 0,
         },
       ],

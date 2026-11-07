@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { twoline2satrec } from 'satellite.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import {
   DENSE_REFRESH_FRAMES,
@@ -39,14 +39,12 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       const noradId = layerState._denseIds[layerState._denseCursor++];
       if (noradId === layerState._trackedNorad) continue; // per-frame tracked path owns it
       const sat = layerState._catalog.get(noradId);
-      const point = layerState._points.get(noradId);
-      if (!sat || !point) continue;
+      if (!sat || !layerState._points.has(noradId)) continue;
       const pos = parts.orbits.propagatePosition(sat.satrec, now);
       if (pos) {
-        point.position = Cesium.Cartesian3.fromDegrees(
-          pos.longitude,
-          pos.latitude,
-          pos.altitude,
+        parts.rendering._movePoint(
+          noradId,
+          fromDegrees(pos.longitude, pos.latitude, pos.altitude),
         );
       }
     }
@@ -59,7 +57,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
    */
 
   async function _loadDenseCatalog({ signal = null } = {}) {
-    if (!layerState._viewer || !layerState._pointCollection)
+    if (!layerState._viewer || !parts.rendering._hasPointCollection())
       return { status: 'source-unavailable', reason: 'layer-unavailable' };
     layerState._denseLoadController?.abort();
     const resourceController = new AbortController();
@@ -105,7 +103,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         if (
           token !== layerState._denseLoadToken ||
           layerState._params.catalog !== 'dense' ||
-          !layerState._pointCollection
+          !parts.rendering._hasPointCollection()
         ) {
           return { status: 'superseded', reason: 'dense-load-superseded' };
         }
@@ -125,20 +123,11 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             group: 'dense',
             launchYear: tleLineLaunchYear(entry.line1),
           });
-          const point = layerState._pointCollection.add({
-            position: Cesium.Cartesian3.fromDegrees(
-              pos.longitude,
-              pos.latitude,
-              pos.altitude,
-            ),
-            pixelSize: style.pixelSize,
-            color: style.color,
-            outlineColor: style.outlineColor,
-            outlineWidth: style.outlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 2e7, 0.6),
-            id: noradId,
-          });
-          layerState._points.set(noradId, point);
+          parts.rendering._addPoint(
+            noradId,
+            fromDegrees(pos.longitude, pos.latitude, pos.altitude),
+            style,
+          );
           layerState._denseIds.push(noradId);
           layerState._denseStale ||= Boolean(res.stale);
           added++;
@@ -221,10 +210,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       parts.tracking._clearTracking();
     }
     for (const noradId of layerState._denseIds) {
-      const point = layerState._points.get(noradId);
-      if (point && layerState._pointCollection)
-        layerState._pointCollection.remove(point);
-      layerState._points.delete(noradId);
+      parts.rendering._removePoint(noradId);
       layerState._catalog.delete(noradId);
     }
     layerState._denseIds = [];

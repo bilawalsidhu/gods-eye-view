@@ -1939,6 +1939,7 @@
       "src/layers/satellites/orbits.js",
       "src/layers/satellites/records.js",
       "src/layers/satellites/policy.js",
+      "src/render/color.js",
       "src/layers/satellites/rendering.js",
       "src/layers/satellites/source.js",
       "src/layers/satellites/state.js",

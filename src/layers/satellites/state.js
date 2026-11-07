@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
     services.overlays;
@@ -25,8 +23,8 @@ export function createState({ services }) {
 
   state._detectionObjects = new Map();
 
-  // noradId → { primitive, gmstAtBake }
-  // primitive is a one-instance Cesium.Primitive holding the ring baked in ECEF
+  // noradId → { primitive, gmstAtBake }, owned by the rendering part:
+  // primitive is a one-instance primitive holding the ring baked in ECEF
   // at gmstAtBake; the preRender tick re-aligns it to current GMST by updating
   // its modelMatrix (rigid Z-rotation — no geometry rebuild, WS-D1).
 
@@ -62,8 +60,6 @@ export function createState({ services }) {
 
   state._activeFocusCount = 0;
 
-  state._scratchFocusScreen = new Cesium.Cartesian2();
-
   state._enabled = false;
 
   // Click-to-track state
@@ -88,7 +84,7 @@ export function createState({ services }) {
 
   state._clickSubscription = null;
 
-  /** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) */
+  /** @type {(() => void)|null} follow-changed listener disposer (cross-layer untrack) */
 
   state._trackedEntityChangedRemove = null;
 
@@ -140,24 +136,19 @@ export function createState({ services }) {
 
   // Per-frame cache for the tracked satellite (WS-D2): dot, host readout, camera, and
   // getTrackedInfo all read one SGP4 sample per rendered frame, keyed on
-  // scene.frameState.frameNumber, so they never diverge in epoch.
+  // the rendered-frame number, so they never diverge in epoch.
 
   state._trackedFrameNumber = -1;
 
   state._trackedFrameGeo = null;
   // { longitude, latitude, altitude } or null
 
-  state._trackedFrameCartesian = new Cesium.Cartesian3();
+  // The matching ECEF sample; the rendering part creates it.
+  state._trackedFrameCartesian = null;
 
   /** Optional deterministic clock used only by the production-frame test seam. */
 
   state._trackedFrameNowForTest = null;
-
-  // Scratch variables
-
-  state._scratchCartesian = new Cesium.Cartesian3();
-
-  state._scratchRingRotation = new Cesium.Matrix3();
 
   /** Update the explicit model only when the rounded altitude line changes. */
   /** Epoch of the last shared-context refresh for the tracked satellite. */
