@@ -183,6 +183,56 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
+    'off the globe, ground pins sit on the scene drawn, never on an imported point',
+    async ({ engine, viewer, pins }) => {
+      // 3D tiles under a low camera: the globe is not drawn.
+      if (viewer) {
+        viewer.scene.globe.show = false;
+        viewer.scene.clampToHeightSupported = true;
+      } else engine.imagery.surface = () => 'tiles';
+      engine.camera.height = () => 1000;
+      const excluded = [];
+      engine.surface.clampToHeight = (position, exclude) => {
+        excluded.push(exclude);
+        const at = geo.cartographic.fromCartesian(position);
+        return geo.cartesian3.fromRadians(at.longitude, at.latitude, 2000);
+      };
+      const ground = await drawImportedFile(
+        engine,
+        geoJsonRecords({ type: 'Point', coordinates: [1, 2] }, '#39d0ff'),
+        { createCanvas },
+      );
+      const raised = geoJsonRecords(
+        { type: 'Point', coordinates: [1, 2, 5000] },
+        '#39d0ff',
+      );
+      raised.points[0].altitude = 'absolute';
+      const high = await drawImportedFile(engine, raised, { createCanvas });
+      const height = () =>
+        Math.round(
+          geo.cartographic.fromCartesian(pins[0].items[0].position).height,
+        );
+      assert.equal(height(), 2000);
+      assert.deepEqual(
+        ground.footprint().map((p) => p.map(Math.round)),
+        [[1, 2, 2000]],
+        'a flight frames the pin where it draws',
+      );
+      await ground.refreshGround();
+      assert.equal(height(), 2000);
+      assert.deepEqual(
+        new Set(excluded.at(-1)),
+        new Set(pins.map(({ set }) => set)),
+        "another file's point is not ground",
+      );
+      high.destroy();
+      await ground.refreshGround();
+      assert.deepEqual(excluded.at(-1), [pins[0].set]);
+      ground.destroy();
+    },
+  );
+
+  displayTest(
     'fills keep holes, raised outlines and plain overlays',
     async ({ engine, set }) => {
       const records = geoJsonRecords(

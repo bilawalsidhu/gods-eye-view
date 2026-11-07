@@ -14,7 +14,9 @@
 // over the drawn one, whose tiles Cesium loads while the drawn one shows;
 // it takes the drawn one's place once its own requests are in and quiet.
 // A raised layer is a shell primitive instead (imageryShell.js), on every
-// surface.
+// surface. Cesium stretches the edge texels of its base layer (the first
+// layer shown on the globe) over the whole globe: an engine layer that
+// covers less than the globe never becomes it, a floor lies under it then.
 
 import * as Cesium from 'cesium';
 import { createImageryRegistry, isPixelImage } from '../imagery.js';
@@ -34,6 +36,22 @@ const STAGE_RETRIES = 3;
 
 const rectangleOf = ({ west, south, east, north }) =>
   Cesium.Rectangle.fromDegrees(west, south, east, north);
+
+const GLOBE = Object.freeze({ west: -180, south: -90, east: 180, north: 90 });
+// The floor's image: one transparent pixel, as a texture source Cesium
+// uploads without a canvas.
+const CLEAR_PIXEL = Object.freeze({
+  width: 1,
+  height: 1,
+  arrayBufferView: new Uint8Array(4),
+});
+// Whether a source draws on the whole globe (Web Mercator tiles stop at
+// ±85.05°).
+const coversGlobe = (source) =>
+  !(source.kind === 'tiles' && source.scheme !== 'geographic') &&
+  Object.entries(GLOBE).every(
+    ([edge, value]) => source.rectangle[edge] === value,
+  );
 
 const defaultCanvas = (width, height) =>
   Object.assign(document.createElement('canvas'), { width, height });
@@ -161,6 +179,11 @@ export function createCesiumImagery(
   const { scene } = viewer;
   const entries = new Set();
   let removeWatch = null;
+  let removeGuard = null;
+  // { layer, collection }: one transparent tile over the globe at alpha 0
+  // (Cesium draws nothing of it), the globe's base layer while an engine
+  // layer covering less than the globe would be.
+  let floor = null;
   const now = () => globalThis.performance?.now() ?? Date.now();
 
   function host() {
@@ -186,6 +209,60 @@ export function createCesiumImagery(
     if (usable(collection) && collection.contains(layer))
       collection.remove(layer, true);
     else if (!layer.isDestroyed?.()) layer.destroy?.();
+  }
+
+  // The source an engine layer draws, or null for a layer of others.
+  function sourceOf(layer) {
+    for (const entry of entries) {
+      if (entry.layer === layer) return entry.state.source;
+      if (entry.staging?.layer === layer) return entry.staging.source;
+    }
+    return null;
+  }
+
+  function dropFloor() {
+    if (!floor) return;
+    const { layer, collection } = floor;
+    floor = null;
+    if (usable(collection) && collection.contains(layer))
+      collection.remove(layer, true);
+    else if (!layer.isDestroyed?.()) layer.destroy?.();
+  }
+
+  // Before Cesium picks the base layer (each frame, and after each change
+  // here): the floor under the first layer shown on the globe when that is
+  // an engine layer covering less than the globe, else none.
+  function guardBase() {
+    const { collection, surface } = host();
+    const globe =
+      surface === 'globe' &&
+      usable(collection) &&
+      typeof collection.get === 'function'
+        ? collection
+        : null;
+    if (floor && floor.collection !== globe) dropFloor();
+    if (!globe) return;
+    let base = null;
+    for (let i = 0; i < globe.length && !base; i++) {
+      const layer = globe.get(i);
+      if (layer !== floor?.layer && layer.show) base = layer;
+    }
+    const source = base && sourceOf(base);
+    if (!source || coversGlobe(source)) {
+      dropFloor();
+      return;
+    }
+    if (floor) {
+      if (globe.indexOf(floor.layer) > globe.indexOf(base))
+        globe.lowerToBottom(floor.layer);
+      return;
+    }
+    const layer = make.layer(
+      singleImageProvider(CLEAR_PIXEL, rectangleOf(GLOBE), undefined),
+      { alpha: 0, show: true },
+    );
+    globe.add(layer, 0);
+    floor = { layer, collection: globe };
   }
 
   // Above every engine layer under it in draw order, below every one over
@@ -276,6 +353,7 @@ export function createCesiumImagery(
     layer.show = state.shown;
     layer.splitDirection =
       Cesium.SplitDirection?.[SPLIT[state.split]] ?? layer.splitDirection;
+    guardBase();
   }
 
   // A raised layer's place among the shells: the engine's draw order.
@@ -363,6 +441,7 @@ export function createCesiumImagery(
     const { collection } = host();
     if (!usable(collection) || (source.kind === 'image' && !entry.image)) {
       detach(entry);
+      guardBase();
       return;
     }
     const layer = make.layer(providerFor(entry, source), {
@@ -484,6 +563,7 @@ export function createCesiumImagery(
     if (entry.layer && entry.collection === collection)
       collection.add(job.layer, collection.indexOf(entry.layer) + 1);
     else place(entry, job.layer, collection);
+    guardBase();
     let settled = 0;
     job.offCamera = scene.camera?.moveEnd?.addEventListener(() => {
       // Tiles abandoned by the last view are no longer the source's work.
@@ -537,6 +617,7 @@ export function createCesiumImagery(
     if (usable(collection) && collection.contains(layer))
       collection.remove(layer, true);
     else if (!layer.isDestroyed?.()) layer.destroy?.();
+    guardBase();
   }
 
   // The staged source takes the drawn one's place.
@@ -612,11 +693,17 @@ export function createCesiumImagery(
   const watch = () => {
     if (!removeWatch && scene.preRender)
       removeWatch = scene.preRender.addEventListener(follow);
+    // Cesium picks the base layer before the frame's preRender.
+    if (!removeGuard && scene.preUpdate)
+      removeGuard = scene.preUpdate.addEventListener(guardBase);
   };
   const unwatch = () => {
-    if (entries.size || !removeWatch) return;
-    removeWatch();
+    if (entries.size) return;
+    removeWatch?.();
     removeWatch = null;
+    removeGuard?.();
+    removeGuard = null;
+    dropFloor();
   };
 
   // One timer per layer: any number of provider deferrals while it is
@@ -768,6 +855,7 @@ export function createCesiumImagery(
           entry.shell = null;
           entry.detailWaiting = null;
           detach(entry);
+          guardBase();
           unwatch();
           requestRender('imagery-destroy');
         },

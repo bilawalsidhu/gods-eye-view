@@ -108,6 +108,29 @@ const STYLED = kml(`
   <Placemark><name>deduplicated a</name><styleUrl>#a</styleUrl><LineString><coordinates>3,3 4,4</coordinates></LineString></Placemark>
   <Placemark><name>deduplicated b</name><styleUrl>#b</styleUrl><LineString><coordinates>4,4 5,5</coordinates></LineString></Placemark>`);
 
+// scripts/qa-geo-import-large.mjs's style check: one shared style with
+// point, line and polygon parts, each placemark overriding one part inline,
+// and named styles and an inline StyleMap pair that are alike.
+const SHARED = kml(`
+  <Style id="base"><IconStyle><heading>25</heading><scale>1.2</scale></IconStyle>
+    <LineStyle><color>ffdd6600</color><width>7</width></LineStyle>
+    <PolyStyle><color>6600ddff</color><fill>1</fill><outline>0</outline></PolyStyle></Style>
+  <Placemark><name>shared point</name><styleUrl>#base</styleUrl>
+    <Style><IconStyle><scale>0.6</scale><color>ff00dd66</color></IconStyle></Style>
+    <Point><coordinates>-122.49,37.77,0</coordinates></Point></Placemark>
+  <Placemark><name>shared line</name><styleUrl>#base</styleUrl>
+    <Style><LineStyle><width>3</width></LineStyle></Style>
+    <LineString><coordinates>-122.50,37.77,0 -122.49,37.77,0</coordinates></LineString></Placemark>
+  <Placemark><name>shared polygon</name><styleUrl>#base</styleUrl>
+    <Style><PolyStyle><outline>1</outline></PolyStyle></Style>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>-122.50,37.77,0 -122.49,37.77,0 -122.49,37.78,0 -122.50,37.77,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+  <Style id="named-a"><IconStyle><scale>0.8</scale></IconStyle></Style>
+  <Style id="named-b"><IconStyle><scale>0.8</scale></IconStyle></Style>
+  <StyleMap id="paired"><Pair><key>normal</key><Style><IconStyle><scale>0.8</scale></IconStyle></Style></Pair></StyleMap>
+  <Placemark><name>named-a</name><styleUrl>#named-a</styleUrl><Point><coordinates>-122.49,37.77,0</coordinates></Point></Placemark>
+  <Placemark><name>named-b</name><styleUrl>#named-b</styleUrl><Point><coordinates>-122.49,37.77,0</coordinates></Point></Placemark>
+  <Placemark><name>paired</name><styleUrl>#paired</styleUrl><Point><coordinates>-122.49,37.77,0</coordinates></Point></Placemark>`);
+
 /** A document as the import prepares it for reading. */
 function prepared(text) {
   const doc = parseXml(text, 'KML');
@@ -303,6 +326,7 @@ function ourReading(text) {
 for (const [name, text] of [
   ['the QA file', QA],
   ['styles, altitudes, multigeometries and overlays', STYLED],
+  ['shared styles with inline overrides, named and paired', SHARED],
 ]) {
   test(`KML records match Cesium's reading: ${name}`, async () => {
     const cesium = await cesiumReading(text);

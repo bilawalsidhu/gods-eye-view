@@ -13,11 +13,15 @@
 //   ignored the depth test;
 // - ground overlays: one image imagery layer each over its rectangle.
 // Nothing is pickable: an imported file has no card. Ground heights under
-// the points come from engine.surface, sampled again by refreshGround().
+// the points come from engine.surface, sampled again by refreshGround():
+// the terrain where the globe is drawn, else (3D tiles) the scene drawn
+// under a low camera, never an imported point (as Cesium's import kept its
+// pins out of height queries).
 
 import * as geo from '../geo/index.js';
 import { normalizeGroundItem } from '../globe/ground.js';
 import { composeIcon } from './geoImportPins.js';
+import { recordFootprint } from './geoImportRecords.js';
 
 const POLYGON_ORDER = 0;
 const LINE_ORDER = 1;
@@ -31,6 +35,13 @@ const HORIZON_LIFT_M = 2000;
 const CLAMP_TILES_BELOW_M = 250_000;
 const BATCH = 256;
 let serial = 0;
+// Each engine's imported point sets, left out of each other's ground.
+const pointSets = new WeakMap();
+const pointSetsOf = (engine) => {
+  let sets = pointSets.get(engine);
+  if (!sets) pointSets.set(engine, (sets = new Set()));
+  return sets;
+};
 
 const imageFromUrl = async (url) => {
   const image = new Image();
@@ -79,6 +90,7 @@ const lookKey = (icon, depth) =>
  * @returns {Promise<{ report: { drawn: number, undrawn: number,
  *   kinds: Object<string, number> }, setShow: (visible: boolean) => void,
  *   refreshGround: (signal?: AbortSignal) => Promise<void>,
+ *   footprint: () => Array<[number, number, number]>,
  *   destroy: () => void }>}
  */
 export async function drawImportedFile(
@@ -111,7 +123,10 @@ export async function drawImportedFile(
     for (const set of groundSets.splice(0)) set.destroy();
     for (const line of lines.splice(0)) line.destroy();
     for (const layer of layers.splice(0)) layer.destroy();
-    for (const look of looks.values()) look.set?.destroy();
+    for (const look of looks.values()) {
+      pointSetsOf(engine).delete(look.set);
+      look.set?.destroy();
+    }
     looks.clear();
   }
 
@@ -281,6 +296,7 @@ export async function drawImportedFile(
               : {}),
           },
         });
+        pointSetsOf(engine).add(look.set);
         drawn += look.pins.length;
       }),
     );
@@ -294,16 +310,15 @@ export async function drawImportedFile(
   }
   request();
 
-  // Where heights come from now: the terrain, or the 3D tiles under a low
-  // camera when they are the drawn surface.
+  // Where heights come from now: the terrain, or the scene drawn under a
+  // low camera when the globe is not (3D tiles).
   function heightContext() {
     const surface = engine.surface;
     const tiles =
-      engine.imagery?.surface?.() === 'tiles' &&
+      (engine.imagery?.surface?.() ?? 'globe') !== 'globe' &&
       surface.clampToHeightSupported &&
       engine.camera.height() < CLAMP_TILES_BELOW_M;
-    const exclude = [...looks.values()].map((look) => look.set).filter(Boolean);
-    return { surface, tiles, exclude };
+    return { surface, tiles, exclude: [...pointSetsOf(engine)] };
   }
 
   // The ground under a pin, falling back to the last known one.
@@ -413,6 +428,21 @@ export async function drawImportedFile(
       }
       syncCull();
       request();
+    },
+    /**
+     * What the file covers (recordFootprint), its points at the heights
+     * they draw at: on the ground sampled under them.
+     */
+    footprint() {
+      const out = recordFootprint({ ...records, points: [] });
+      for (const look of looks.values())
+        for (const pin of look.pins)
+          out.push([
+            pin.lon,
+            pin.lat,
+            pin.height ?? (pin.ground ?? 0) + pin.offset,
+          ]);
+      return out;
     },
     /** Sample the ground under the points again (a map or the terrain changed). */
     async refreshGround(signal) {

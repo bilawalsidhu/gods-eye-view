@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
-import { emptyRecords } from '../data/geoImportRecords.js';
+import { emptyRecords, recordFootprint } from '../data/geoImportRecords.js';
 
 class FakeClassList {
   constructor() {
@@ -123,6 +123,7 @@ function setup({
       report: { drawn: 1, undrawn: records.undrawn?.left ?? 0 },
       setShow: (next) => (drawing.show = next),
       refreshGround: async () => drawing.refreshed++,
+      footprint: () => recordFootprint(records),
       destroy: () => removed.push({ ds: drawing }),
     };
     added.push(drawing);
@@ -774,6 +775,7 @@ test('a drawing that fails reports the file instead of stopping the batch', asyn
         report: { undrawn: 0 },
         setShow() {},
         refreshGround: async () => {},
+        footprint: () => [],
         destroy() {},
       };
     },

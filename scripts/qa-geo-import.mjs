@@ -364,6 +364,21 @@ try {
       )),
     `${JSON.stringify(clockBefore)} → ${JSON.stringify(clockAfter)}`,
   );
+  // Over the files: their pins on the ground show unless beyond the
+  // horizon, so all of them show here.
+  await page.evaluate((view) => {
+    const viewer = window.__godsEyeView.viewer;
+    viewer.camera.cancelFlight?.();
+    viewer.camera.setView({
+      destination: window.__CESIUM__.Cartesian3.fromDegrees(
+        view.lon,
+        view.lat,
+        view.height,
+      ),
+      orientation: { heading: 0, pitch: (view.pitch * Math.PI) / 180, roll: 0 },
+    });
+  }, VIEW);
+  await wait(2500);
   const inside = await page.evaluate(() => {
     const groups = window.__qaImports.groups();
     const pins = (group) =>
@@ -389,7 +404,8 @@ try {
         ].some((key) => key in r),
       ),
       fallbackPins: pins(kml).length,
-      datedPinsShown: pins(kml).every((pin) => pin.show),
+      datedPinsShown:
+        pins(kml).length > 0 && pins(kml).every((pin) => pin.show),
       kmlVertices: paths(kml).map((line) => line.positions.length),
       gpxLines: paths(gpx).length,
       gpxPoints: pins(gpx).length,
@@ -442,19 +458,6 @@ try {
     'XYZ polygons and KML/KMZ lines use ground geometry',
     inside.xyzPolygon && inside.groundedLines,
   );
-  await page.evaluate((view) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
-      destination: window.__CESIUM__.Cartesian3.fromDegrees(
-        view.lon,
-        view.lat,
-        view.height,
-      ),
-      orientation: { heading: 0, pitch: (view.pitch * Math.PI) / 180, roll: 0 },
-    });
-  }, VIEW);
-  await wait(2500);
   const cyanShown = await cyanPixels();
   await shot('imported');
   check(

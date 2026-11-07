@@ -5,7 +5,6 @@ import {
   loadGeoFile,
 } from '../data/geoFileImport.js';
 import { drawImportedFile } from '../data/geoImportDisplay.js';
-import { recordFootprint } from '../data/geoImportRecords.js';
 import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
 import { flyToFootprint } from './flyToDataSource.js';
 
@@ -29,7 +28,7 @@ function localizedValues(values) {
  *   `load(file, {color, signal})` defaults to `loadGeoFile` (the file's
  *   plain records) and `drawFile(engine, records, {visible})` to
  *   `drawImportedFile` (their drawing: { report, setShow, refreshGround,
- *   destroy }); tests pass doubles. `publish({rows, hint})` hands the file
+ *   footprint, destroy }); tests pass doubles. `publish({rows, hint})` hands the file
  *   list and hint to the view that renders them. `connect(actions)` answers
  *   the view's pick and row buttons and returns their disconnect.
  *
@@ -194,7 +193,7 @@ export function createGeoFileImport({
   const fly = (item) => {
     if (!scene?.engine || !item.drawing) return false;
     if (!item.visible) setVisible(item.id, true);
-    flyToSource(scene.engine, recordFootprint(item.records), { ground });
+    flyToSource(scene.engine, item.drawing.footprint(), { ground });
     return true;
   };
 

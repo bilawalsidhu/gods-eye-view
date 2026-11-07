@@ -19,7 +19,9 @@ const meshBytes = Buffer.alloc(60);
 const fixture = {
   '/__qa_import_surface/tileset.json': {
     asset: { version: '1.1' },
-    geometricError: 0,
+    // Cesium draws no tileset whose own error is 0: the mesh must draw to be
+    // the rendered surface.
+    geometricError: 10000,
     root: {
       transform: Cesium.Matrix4.toArray(
         Cesium.Transforms.eastNorthUpToFixedFrame(
@@ -186,14 +188,28 @@ try {
       },
       'xyz.geojson',
     );
+    // The file's 100 m is dropped: the pin is on the ground sampled under
+    // it, the globe's tiles drawn (here the ellipsoid, 0 m, once they have
+    // loaded and the import has read them again).
+    const pinHeight = () =>
+      C.Cartographic.fromCartesian(pins(r)[0].position).height;
+    const groundDeadline = performance.now() + 15000;
+    while (
+      Math.abs(pinHeight()) >= 0.01 &&
+      performance.now() < groundDeadline
+    ) {
+      viewer.scene.requestRender();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     const pin = pins(r)[0],
       polygon = ground(r)[0];
     check(
       'XYZ ground footprint and isolated pick IDs',
       r.outcome.ok &&
         pin.pickId === undefined &&
-        Math.abs(C.Cartographic.fromCartesian(pin.position).height) < 0.01 &&
+        Math.abs(pinHeight()) < 0.01 &&
         polygon.rings.flat().every((p) => p.length === 2),
+      { pinHeight: pinHeight() },
     );
     check(
       'ground pins use fixed positions and ignore scene depth',

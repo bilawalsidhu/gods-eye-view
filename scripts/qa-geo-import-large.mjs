@@ -141,9 +141,15 @@ try {
             (value(b.verticalOrigin) === C.VerticalOrigin.BOTTOM
               ? height / 2
               : 0);
+          // A clamped billboard keeps its file height and Cesium clamps it
+          // while drawing; the import draws its pins at the sampled ground.
+          // Both compare by longitude and latitude.
+          const clamped =
+            (value(b.heightReference) ?? C.HeightReference.NONE) !==
+            C.HeightReference.NONE;
           rows.push({
             kind: 'pin',
-            position: xyz(value(e.position)),
+            position: (clamped ? lonLat : xyz)(value(e.position)),
             size:
               2 *
               Math.max(
@@ -184,7 +190,9 @@ try {
           for (const item of r.items)
             rows.push({
               kind: 'pin',
-              position: xyz(item.position),
+              position: (r.options.depthTest === 'always' ? lonLat : xyz)(
+                item.position,
+              ),
               size: r.options.sprite.sizePx,
               rotation: item.rotation,
               color: item.color,

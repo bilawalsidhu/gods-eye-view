@@ -45,6 +45,19 @@ function fakeHarness() {
 function cesiumHarness() {
   const { engine, viewer } = createCesiumMoversEngine();
   viewer.imageryLayers = new Cesium.ImageryLayerCollection();
+  // The map's base imagery, under the slot's layers.
+  const tilingScheme = new Cesium.WebMercatorTilingScheme();
+  const base = new Cesium.ImageryLayer({
+    tilingScheme,
+    rectangle: tilingScheme.rectangle,
+    tileWidth: 256,
+    tileHeight: 256,
+    minimumLevel: 0,
+    maximumLevel: 18,
+    errorEvent: new Cesium.Event(),
+    requestImage: () => undefined,
+  });
+  viewer.imageryLayers.add(base);
   viewer.scene.globe.show = true;
   viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
   const side = (direction) =>
@@ -57,8 +70,8 @@ function cesiumHarness() {
     name: 'the Cesium engine',
     engine,
     drawn: () =>
-      Array.from({ length: viewer.imageryLayers.length }, (_, i) => {
-        const layer = viewer.imageryLayers.get(i);
+      Array.from({ length: viewer.imageryLayers.length - 1 }, (_, i) => {
+        const layer = viewer.imageryLayers.get(i + 1);
         const provider = layer.imageryProvider;
         const { west, south, east, north } = provider.rectangle;
         return {

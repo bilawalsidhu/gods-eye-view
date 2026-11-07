@@ -436,6 +436,7 @@ test('the imported files render what the file import publishes and keep focus', 
       report: { undrawn: 0 },
       setShow() {},
       refreshGround: async () => {},
+      footprint: () => [],
       destroy() {},
     }),
     load: async (file) => ({
