@@ -80,6 +80,8 @@ export function createAlprTileSource({
       fetchImpl: tileFetchImpl,
       maxTiles: DETAIL_MAX_TILES,
       ttlMs: 60 * 60 * 1000,
+      // The extract server answers 404 for tiles that hold no cameras.
+      emptyStatuses: [404],
     }),
   );
   const precision = createAlprPrecisionCache();

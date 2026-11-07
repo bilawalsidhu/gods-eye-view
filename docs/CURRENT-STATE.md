@@ -1,5 +1,14 @@
 # God's Eye View Current State
 
+The vector tile reader accepts an `emptyStatuses` list. A tile answering one of
+those statuses is decoded from zero bytes, cached for the normal TTL and counted
+as loaded, so `partial` stays false and an all-empty batch no longer throws.
+Mapped ALPR Cameras passes `[404]` for both the US and Canada extracts because
+the extract server answers 404 for tiles that hold no cameras; the Canada
+extract's bounds reach 42.3°N, so Portland previously failed on 16 empty
+Canadian tiles. TomTom flow tiles and OpenFreeMap basemap tiles do not pass the
+option and keep their previous behaviour.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
