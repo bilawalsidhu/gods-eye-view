@@ -650,3 +650,41 @@ test('a whole-world bike-share search names every system it skipped', async () =
   const named = [...result.data.systems, ...result.data.systems_not_searched];
   assert.equal(named.length, GBFS_CITY_REGISTRY.length);
 });
+
+test('transit feeds with coverage circles are reached only inside them', async () => {
+  const entur = {
+    ...feed,
+    id: 'entur-norway',
+    name: 'Entur',
+    center: { lat: 67.0, lon: 7.0 },
+    loadRadiusKm: 1000,
+    coverage: [
+      { lat: 61.3, lon: 6.5, radiusKm: 380 },
+      { lat: 67.3, lon: 4.5, radiusKm: 600 },
+      { lat: 71.3, lon: 23.0, radiusKm: 340 },
+    ],
+  };
+  const source = {
+    requested: [],
+    async getFeeds() {
+      return [entur];
+    },
+    async requestSnapshot(id) {
+      this.requested.push(id);
+      return { ok: true, status: 200, json: async () => ({ vehicles: [] }) };
+    },
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { transit: source, clock },
+  });
+  const at = (lat, lon) => ({ lat, lon, radius_km: 10 });
+  // Umeå sits inside the extent circle (67.0N 7.0E, 1,000 km), not the coverage.
+  const umea = await catalog.call('get_transit_vehicles', {
+    area: at(63.83, 20.26),
+  });
+  assert.match(umea.summary, /^No supported transit feed covers/);
+  assert.deepEqual(source.requested, []);
+  await catalog.call('get_transit_vehicles', { area: at(60.39, 5.32) });
+  assert.deepEqual(source.requested, ['entur-norway']);
+});

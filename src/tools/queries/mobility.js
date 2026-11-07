@@ -27,14 +27,28 @@ const round = (value, digits) =>
 
 /**
  * Systems or feeds whose coverage reaches the area, nearest first: the
- * nearest MAX_SYSTEMS are read and the rest are returned as `skipped`.
+ * nearest MAX_SYSTEMS are read and the rest are returned as `skipped`. An
+ * entry's coverage is one or more circles ({lat, lon, radiusKm}); the area
+ * must reach one of them.
  */
-function covering(area, entries, centerOf, radiusOf) {
+function covering(area, entries, circlesOf) {
   const center = areaCenter(area);
   const reach = areaRadiusKm(area);
   const reaching = entries
-    .map((entry) => ({ entry, distance: distanceKm(center, centerOf(entry)) }))
-    .filter(({ entry, distance }) => distance <= reach + radiusOf(entry))
+    .map((entry) => {
+      // The circle the area is deepest inside, and how far its centre is.
+      let gap = Infinity;
+      let distance = Infinity;
+      for (const circle of circlesOf(entry)) {
+        const km = distanceKm(center, circle);
+        if (km - circle.radiusKm < gap) {
+          gap = km - circle.radiusKm;
+          distance = km;
+        }
+      }
+      return { entry, gap, distance };
+    })
+    .filter(({ gap }) => gap <= reach)
     .sort((a, b) => a.distance - b.distance)
     .map(({ entry }) => entry);
   return {
@@ -70,8 +84,13 @@ export const getBikeShare = defineTool({
     const { selected: systems, skipped } = covering(
       area,
       bikeshare.systems,
-      (system) => ({ lat: system.centerLat, lon: system.centerLon }),
-      (system) => system.loadRadiusKm,
+      (system) => [
+        {
+          lat: system.centerLat,
+          lon: system.centerLon,
+          radiusKm: system.loadRadiusKm,
+        },
+      ],
     );
     if (!systems.length)
       return {
@@ -173,8 +192,12 @@ export const getTransitVehicles = defineTool({
     const { selected: feeds, skipped } = covering(
       area,
       await services.transit.getFeeds({ signal }),
-      (feed) => feed.center,
-      (feed) => feed.loadRadiusKm ?? 0,
+      // A feed whose region no single circle fits lists `coverage` circles
+      // (transitFeeds.js); the tool reaches feeds as the layer polls them.
+      (feed) =>
+        Array.isArray(feed.coverage) && feed.coverage.length
+          ? feed.coverage
+          : [{ ...feed.center, radiusKm: feed.loadRadiusKm ?? 0 }],
     );
     if (!feeds.length)
       return {
