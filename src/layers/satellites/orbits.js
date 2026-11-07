@@ -8,7 +8,11 @@ import {
   twoline2satrec,
 } from 'satellite.js';
 import { findNextSatellitePass } from '../../data/satellitePass.js';
-import { noradIdFromSatnum, parseTleText } from '../../sources/tle.js';
+import {
+  noradIdFromSatnum,
+  parseTleText,
+  tleLineLaunchYear,
+} from '../../sources/tle.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
 export function createOrbits({ state: layerState, services, parts, source }) {
@@ -258,25 +262,12 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     return score;
   }
 
-  function internationalDesignatorYear(satrec) {
-    const match = String(satrec?.intldesg || '').match(/^(\d{2})/);
-    if (!match) return null;
-    const shortYear = Number(match[1]);
-    return shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear;
-  }
-
   function lookupTleEntries(tleText) {
     if (tleText !== layerState._lookupTleText) {
       layerState._lookupTleText = tleText;
       layerState._lookupTleEntries = parseTLE(tleText);
     }
     return layerState._lookupTleEntries;
-  }
-
-  function tleLineLaunchYear(line1) {
-    const shortYear = Number(String(line1 || '').slice(9, 11));
-    if (!Number.isFinite(shortYear)) return null;
-    return shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear;
   }
 
   function orbitTrackFromRecord(name, satrec) {
@@ -350,7 +341,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
         : null;
       let bestScore = 0;
       for (const [id, sat] of layerState._catalog) {
-        const designatorYear = internationalDesignatorYear(sat.satrec);
+        const designatorYear = sat.launchYear ?? null;
         if (
           launchYear !== null &&
           designatorYear !== null &&
@@ -379,7 +370,6 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     getNextSatellitePass,
     resolveSatelliteForPass,
     scoreSatelliteNameMatch,
-    internationalDesignatorYear,
     lookupTleEntries,
     tleLineLaunchYear,
     orbitTrackFromRecord,

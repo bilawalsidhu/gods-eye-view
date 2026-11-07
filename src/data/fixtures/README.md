@@ -1,5 +1,10 @@
 # Test fixtures
 
+- `photon-moscow-search.json` - Photon responses for `Москва`, captured
+  2026-11-05 with and without a proximity bias near the Tajikistan namesake.
+  The fixture is trimmed to the fields the keyless geocoder consumes and is
+  used only by offline search tests. Data from OpenStreetMap contributors,
+  ODbL 1.0 (https://www.openstreetmap.org/copyright).
 - `tomtom-flow-austin-12-935-1686.pbf` — one real TomTom traffic-flow vector
   tile (Mapbox Vector Tile protobuf, layer `"Traffic flow"`), downtown Austin
   z12 x935 y1686, captured 2026-07-16 from
@@ -41,3 +46,14 @@
   2026-09-25. Each record names its XYZ tile and expected traffic eligibility.
   Modified, test-only OpenStreetMap data; same ODbL attribution and database
   share-alike terms as the OpenFreeMap fixtures above.
+
+- `ofm-outlines-austin-14-3743-{6745,6746}.pbf` — OpenFreeMap / OpenMapTiles
+  z14 tiles from
+  `https://tiles.openfreemap.org/planet/20260913_164504_pt/{z}/{x}/{y}.pbf`,
+  retrieved 2026-09-28. Trimmed to the `transportation_name` features for
+  Congress Avenue, South Congress Avenue and East 11th Street, and the
+  `building` features within about 150 m of the Texas Capitol and the
+  `landcover` park polygon around it, preserving
+  original geometry and dictionaries. Used by the street and building outline
+  tests. Same OpenFreeMap / OpenMapTiles / OpenStreetMap attribution and ODbL
+  1.0 share-alike terms as the fixtures above. Test-only.

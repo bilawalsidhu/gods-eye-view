@@ -223,11 +223,20 @@ test('validated voice camera destinations share the UI navigation authority faca
     'move camera',
   );
   ordered(move, [
-    "if (!['orbit', 'pan', 'tilt', 'rotate'].includes(motion))",
+    'if (argsError) return argsError;',
     'const start = () => {',
     /const preserveCameraFlight =\s*motion === 'orbit'/,
     'runNavigation(start, { preserveCameraFlight })',
   ], 'move validation before handoff');
+  const moveArgs = body(
+    cameraVerbs,
+    /export function moveCameraArgsError\(args = \{\}\) \{([\s\S]*?)\n\}/,
+    'move camera argument checks',
+  );
+  assert.ok(
+    moveArgs.includes("if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion))"),
+    'unknown motions are refused before handoff',
+  );
 
   const route = body(
     cameraVerbs,
@@ -261,7 +270,7 @@ test('deferred search releases only after its final authority check', () => {
   assert.match(ui, /begin: \(\) => this\._beginDeferredNavigation\('location'\)/);
   assert.match(ui, /beforeFly: \(generation\) => this\._reassertNavigationHandoff\(generation\)/);
   assert.match(ui, /isCurrent: \(generation\) =>\s*!this\._disposed && generation === this\._navigationGeneration/);
-  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation\)/);
+  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation, \{\s*keepQuery: state\.status === 'missing' \|\| state\.status === 'failed',?\s*\}\)/);
   assert.doesNotMatch(search.slice(0, search.indexOf('await this.search')), /_releaseFollowCamera/);
 });
 
@@ -353,7 +362,7 @@ test('teardown refuses deferred location work before geocoding begins', () => {
     'if (!query || this.destroyed) return;',
     'const authority = this.begin();',
     'if (authority === false)',
-    'this.input.blur();',
+    'this.input?.blur();',
     'this.onStart?.(authority);',
     'await this.search(query',
   ], 'disposed search refusal');

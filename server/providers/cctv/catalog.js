@@ -20,6 +20,7 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadCataloniaSourcesFromOpenData,
+  loadIcelandSourcesFromOpenData,
   loadHkSourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
   loadKingCountySourcesFromOpenData,
@@ -28,6 +29,8 @@ import {
   loadNycSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
   loadFloridaSourcesFromOpenData,
+  loadHoustonSourcesFromOpenData,
+  loadA22SourcesFromOpenDataHub,
   loadAmsterdamSourcesFromOpenData,
 } from './sources.js';
 
@@ -110,6 +113,11 @@ const LIVE_PACKS = [
     load: loadCataloniaSourcesFromOpenData,
   },
   {
+    name: 'iceland',
+    enabled: () => envEnabled('CCTV_ICELAND_ENABLED'),
+    load: loadIcelandSourcesFromOpenData,
+  },
+  {
     name: 'hk',
     enabled: () => envEnabled('CCTV_HK_ENABLED'),
     load: loadHkSourcesFromOpenData,
@@ -165,6 +173,16 @@ const LIVE_PACKS = [
     name: 'taiwan',
     enabled: () => envEnabled('CCTV_TAIWAN_ENABLED'),
     load: loadTaiwanSources,
+  },
+  {
+    name: 'houston',
+    enabled: () => envOptIn('CCTV_HOUSTON_ENABLED'),
+    load: loadHoustonSourcesFromOpenData,
+  },
+  {
+    name: 'a22',
+    enabled: () => envEnabled('CCTV_A22_ENABLED'),
+    load: loadA22SourcesFromOpenDataHub,
   },
   {
     // Position-only: a register of where Amsterdam's public traffic and ANPR

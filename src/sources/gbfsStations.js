@@ -98,6 +98,13 @@ function dockCapacity(raw) {
   return capacity - geofenced;
 }
 
+/** Read a numeric coordinate without treating blank text or other JSON types as zero. */
+function coordinateNumber(value) {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim()))
+    return NaN;
+  return Number(value);
+}
+
 /**
  * Parse a GBFS station_information payload into a Map of station metadata.
  * Handles field-name variations across different GBFS providers
@@ -113,9 +120,16 @@ export function parseStationInformation(payload) {
   for (const raw of stations) {
     // Accept both GBFS (station_id) and alternate (id) field names
     const stationId = String(raw?.station_id ?? raw?.id ?? '').trim();
-    const lat = Number(raw?.lat ?? raw?.latitude);
-    const lon = Number(raw?.lon ?? raw?.longitude);
-    if (!stationId || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const lat = coordinateNumber(raw?.lat ?? raw?.latitude);
+    const lon = coordinateNumber(raw?.lon ?? raw?.longitude);
+    if (
+      !stationId ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    )
+      continue;
 
     stationMap.set(stationId, {
       stationId,
