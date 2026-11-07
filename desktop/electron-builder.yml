@@ -1,0 +1,45 @@
+appId: com.godseyeview.desktop
+# No apostrophe here: the name becomes the executable, installer and registry
+# names, and NSIS scripts quote them. The window title and data folder use
+# the full "God's Eye View" (see main.cjs).
+productName: Gods Eye View
+copyright: Copyright (c) 2026 Bilawal Sidhu (MIT)
+directories:
+  output: dist
+  buildResources: assets
+files:
+  - main.cjs
+  - lib/**/*.cjs
+  - '!lib/**/*.test.cjs'
+  - assets/icon.png
+  - package.json
+asar: true
+extraResources:
+  - from: .stage/payload
+    to: app-payload
+  - from: .stage/runtime
+    to: runtime
+compression: normal
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  icon: assets/icon.ico
+  # The executable icon and version resources are written by
+  # scripts/after-pack.cjs (pure JavaScript), so no rcedit/Wine is involved.
+  signAndEditExecutable: false
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+nsis:
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Gods Eye View
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  deleteAppDataOnUninstall: false
+afterPack: scripts/after-pack.cjs

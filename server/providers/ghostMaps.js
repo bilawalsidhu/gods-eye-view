@@ -12,6 +12,7 @@ import {
   readResponseJsonCapped,
   readResponseTextCapped,
 } from './common/http.js';
+import { gevCachePath } from '../cacheDir.js';
 
 // S2 Underground GhostMaps (public GitHub repository of KMZ intel products).
 // The repository is not ours, so there is no webhook: the watcher reads the
@@ -50,7 +51,7 @@ export function createGhostMapsWatcher({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
   pollMs = ghostMapsPollMs(),
-  cacheDir = path.join(process.cwd(), '.gev-cache', 'ghostmaps'),
+  cacheDir = gevCachePath('ghostmaps'),
   token = () => String(process.env.GITHUB_TOKEN || '').trim(),
   log = (...args) => console.log(...args),
   warn = (...args) => console.warn(...args),
