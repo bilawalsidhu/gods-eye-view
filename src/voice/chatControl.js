@@ -1,6 +1,7 @@
 import { bindChatAttachments } from './chatAttachments.js';
 import { bindChatPreferences } from './chatPreferences.js';
 import { readStoredCloudVoiceAuthMode } from './cloudVoiceAuth.js';
+import { isStoppable } from './session.js';
 import { t } from '../i18n/index.js';
 
 /**
@@ -94,7 +95,9 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
       : '';
   function open({ focus = true } = {}) {
     leaveChatSettings();
-    if (!isTyped() && session.isActive()) session.stop();
+    // Chat replaces voice, a stale voice error included, so the dock stops
+    // showing it.
+    if (!isTyped() && isStoppable(session)) session.stop();
     onOpen?.();
     ui.update('chat', { open: true, minimized: false, rows: 2, authNote });
     sync();
@@ -389,15 +392,7 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
       }
       const frame = ui.element('chatPanel')?.getBoundingClientRect?.();
       close();
-      ui.update('voicePanel', {
-        context: 'chat',
-        ...(frame?.width && {
-          frameWidth: frame.width,
-          frameHeight: frame.height,
-        }),
-      });
-      ui.update('chat', { backVisible: true });
-      sync();
+      showChatSettings(frame);
       void ui.focus(['chatBack']);
     }),
     // The panel clears its context as it closes, so chat tracks its own.
@@ -413,10 +408,37 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
     }),
   ];
   sync();
+  // Settings shown from chat, in chat's frame when it has one.
+  function showChatSettings(frame) {
+    ui.update('voicePanel', {
+      context: 'chat',
+      ...(frame?.width && {
+        frameWidth: frame.width,
+        frameHeight: frame.height,
+      }),
+    });
+    ui.update('chat', { backVisible: true });
+    sync();
+  }
+  // What a provider switch carries to the next mount: chat's Settings, never
+  // the conversation. The provider choice lives only in Settings, so chat
+  // itself is never open during a switch.
+  function presentation() {
+    if (!inChatSettings()) return null;
+    const { frameWidth: width, frameHeight: height } = ui.state.voicePanel;
+    return { view: 'settings', frame: width ? { width, height } : null };
+  }
+  // Restored without moving focus: the switch keeps it on the provider choice.
+  function restorePresentation(state) {
+    if (disposed || state?.view !== 'settings') return;
+    showChatSettings(state.frame);
+  }
   return {
     close,
     minimize,
     restore: open,
+    presentation,
+    restorePresentation,
     get minimized() {
       return chat().open && chat().minimized;
     },

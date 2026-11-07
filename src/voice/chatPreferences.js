@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 
 /**
  * Chat suggestions and the one chat preference (quick commands), written to
@@ -17,11 +17,15 @@ export function bindChatPreferences({ ui, getDraft, setDraft }) {
   };
   const quickCommands = () =>
     [
-      'Fly to Tokyo',
-      'Show live flights',
-      'Reset to globe view',
-      'Show earthquakes',
+      msg('Fly to Tokyo'),
+      msg('Show live flights'),
+      msg('Reset to globe view'),
+      msg('Show earthquakes'),
     ].map((text) => t(text));
+  // Arabic short vowels and shadda are optional in writing: typing "تتبع"
+  // still finds "تتبّع".
+  const fold = (text) =>
+    text.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '');
   try {
     const stored = JSON.parse(localStorage.getItem(key));
     if (typeof stored?.quick === 'boolean') quick = stored.quick;
@@ -31,18 +35,14 @@ export function bindChatPreferences({ ui, getDraft, setDraft }) {
   function render() {
     const draft = getDraft();
     if (historyIndex >= 0 && draft !== recent[historyIndex]) resetHistory();
-    const query = draft.trim().toLowerCase();
+    const query = fold(draft.trim());
     const groups = [];
     if (query) {
       const candidates = [...recent, ...(quick ? quickCommands() : [])];
       groups.push({
         label: t('Suggestions'),
         items: [...new Set(candidates)]
-          .filter(
-            (text) =>
-              text.toLowerCase().includes(query) &&
-              text.toLowerCase() !== query,
-          )
+          .filter((text) => fold(text).includes(query) && fold(text) !== query)
           .slice(0, 4),
       });
     } else {
