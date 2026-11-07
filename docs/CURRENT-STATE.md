@@ -1571,7 +1571,10 @@ at runtime without an API key. Its position, 45.70028947266781, 21.2336759140042
 was corrected by the contributor rather than copied from the directory's
 inaccurate pin. Heading, pitch, field of view, mounting height and ground
 elevation are uncalibrated priors; the camera retains the RAW PRIOR badge.
-See `DATA_SOURCES.md` for attribution and provider terms.
+See `DATA_SOURCES.md` for attribution and provider terms. Webcam Romania's
+terms grant no reuse licence for the video and name no camera operator; the
+provider's sanctioned route is its iframe embed. Keep this pack to local use
+and off hosted deployments unless the operator grants permission.
 
 The existing HLS puller resolves same-origin relative master/media references
 and serves local leased playlists and segments. It downloads complete segments
