@@ -834,7 +834,6 @@
   "src/layers/weather/index.js",
   "src/layers/weather/clock.js",
   "src/layers/weather/clock.test.mjs",
-  "src/layers/weather/rendering.js",
   "src/layers/weather/shellRendering.js",
   "src/layers/weather/shellRendering.test.mjs",
   "src/layers/weather/infraredAlpha.js",
@@ -843,7 +842,6 @@
   "src/layers/weather/infraredImage.test.mjs",
   "src/layers/weather/source.js",
   "src/layers/weather/weather.test.mjs",
-  "src/layers/weather/rasterTiles.test.mjs",
   "src/layers/wind/rendering.test.mjs",
   "src/layers/weather/source.test.mjs",
   "src/data/weatherProxy.test.mjs",
@@ -869,8 +867,6 @@
   "src/ui/railCards.test.mjs",
   "src/ui/railTimeline.js",
   "src/ui/railTimeline.test.mjs",
-  "src/layers/weather/imageryOrder.js",
-  "src/layers/weather/imageryOrder.test.mjs",
   "server/providers/cyclones.js",
   "server/providers/firePerimeters.js",
   "server/providers/droneAirspace.js",
@@ -1660,5 +1656,7 @@
   "src/layers/bhoteKoshi/render/display.test.mjs",
   "src/layers/shared/render/navaraGroundOrder.test.mjs",
   "src/globe/navara/ground/corridors.js",
-  "scripts/qa-ground-looks.mjs"
+  "scripts/qa-ground-looks.mjs",
+  "src/layers/wind/render/cesiumFlow.js",
+  "src/testSupport/imageryDisplayEngines.mjs"
 ]

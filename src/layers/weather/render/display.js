@@ -571,7 +571,6 @@ export function createWeatherDisplay(
     shell?.clear();
     shell = createWeatherShell({
       ...shared,
-      cesium: null,
       product,
       height: WEATHER_SHELL_HEIGHTS[product],
       getHost,

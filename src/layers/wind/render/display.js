@@ -3,12 +3,12 @@
 // imagery drapes on the globe and raised at the wind's shell height on 3D
 // tiles, faded out as the camera comes down while streamlines draw (they
 // carry the wind near the ground). The streamlines are the engine's own,
-// behind one seam: the `flow` backend each engine passes in (Cesium's
-// wind renderer without its field, rendering.js; Navara's flow mesh,
-// render/navaraFlow.js). Without one the field draws alone.
+// behind one seam: the `flow` backend the application passes in for each
+// engine (Cesium's wind renderer, rendering.js, on the page's SDK;
+// Navara's flow mesh, render/navaraFlow.js). Without one the field draws
+// alone.
 
-import { createFieldRaster } from '../fields.js';
-import { fieldUnavailableText } from '../rendering.js';
+import { createFieldRaster, fieldUnavailableText } from '../fields.js';
 import { NO_IMAGERY_HOST } from '../../weather/imageryHost.js';
 import { WEATHER_SHELL_HEIGHTS } from '../../weather/shellRendering.js';
 import { WEATHER_IMAGERY_ORDER } from '../../weather/render/display.js';
@@ -48,11 +48,12 @@ function rasterCanvas(raster) {
 /**
  * The wind layer's renderer on any engine (index.js).
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
- * @param {{ flow?: (engine: object) => object, onStatusChange?: () => void,
+ * @param {{ flow?: (engine: object, options: object) => object,
+ *   onStatusChange?: () => void,
  *   createCanvas?: (raster: object) => object }} [options]
- *   `flow` makes the engine's streamlines (rendering.js's interface:
- *   attach, setField, setOptions, start, stop, clear, destroy,
- *   getParticleCount, getDiagnostics).
+ *   `flow(engine, { onStatusChange })` makes the engine's streamlines
+ *   (rendering.js's interface: attach, setField, setOptions, start, stop,
+ *   clear, destroy, getParticleCount, getDiagnostics).
  */
 export function createWindDisplay(
   engine,
@@ -64,7 +65,7 @@ export function createWindDisplay(
 ) {
   if (!engine?.imagery)
     throw new TypeError('The wind display needs a globe engine');
-  const flow = makeFlow?.(engine) ?? null;
+  const flow = makeFlow?.(engine, { onStatusChange }) ?? null;
   const id = `wind-field-${++fields}`;
   let snapshot = null;
   let overlay = 'none';
@@ -209,7 +210,7 @@ export function createWindDisplay(
               ready: layer.ready(),
             }
           : null,
-        imageryError: imageryError ?? drawn.imageryError ?? null,
+        imageryError,
       };
     },
   };

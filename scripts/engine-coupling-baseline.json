@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 330,
+    "cesiumLayerRendererLines": 344,
     "navaraLayerRendererLines": 1695,
-    "cesiumImportFiles": 27,
-    "viewerLines": 1232,
+    "cesiumImportFiles": 25,
+    "viewerLines": 1177,
     "navaraKindChecks": 2,
     "engineSniffCalls": 0,
-    "engineExtensionReads": 8,
+    "engineExtensionReads": 9,
     "groundEffectPasses": 1,
     "cesiumSdkLoads": 4,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 63
+    "engineNameLines": 62
   },
-  "measuredAt": "after weather, wind and Bhote Koshi on engine.imagery, 2026-11-07"
+  "measuredAt": "Remove weather and wind fallback imagery; retain the explicit Cesium wind flow backend seam"
 }

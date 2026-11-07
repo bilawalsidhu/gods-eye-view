@@ -2506,7 +2506,6 @@
       "src/layers/wind/inspection.js",
       "src/layers/wind/presentation.js",
       "src/layers/wind/rendering.js",
-      "src/layers/weather/rasterTiles.js",
       "src/layers/wind/source.js",
       "src/sources/windBody.js",
       "src/data/detection.js",
@@ -3128,7 +3127,6 @@
       "src/voice/realtimeConnection.js",
       "src/layers/weather/index.js",
       "src/layers/weather/clock.js",
-      "src/layers/weather/rendering.js",
       "src/layers/weather/display.js",
       "src/layers/weather/shellRendering.js",
       "src/layers/weather/infraredAlpha.js",
@@ -3163,7 +3161,6 @@
       "src/scenes/sharing.js",
       "src/ui/sceneSharing.js",
       "src/ui/stores/sceneSharing.js",
-      "src/layers/weather/imageryOrder.js",
       "src/layers/weather/imageryHost.js",
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
@@ -3580,7 +3577,8 @@
       "src/globe/imagery.js",
       "src/globe/cesium/imagery.js",
       "src/globe/cesium/imageryShell.js",
-      "src/globe/navara/ground/corridors.js"
+      "src/globe/navara/ground/corridors.js",
+      "src/layers/wind/render/cesiumFlow.js"
     ],
     "external": [
       "hls.js",
@@ -3641,7 +3639,6 @@
       "src/layers/wind/inspection.js",
       "src/layers/wind/presentation.js",
       "src/layers/wind/rendering.js",
-      "src/layers/weather/rasterTiles.js",
       "src/app/layers/aisLiveVessels.js",
       "src/app/layers/alprCameras.js",
       "src/app/layers/bikeshare.js",
@@ -4062,13 +4059,11 @@
       "src/sources/overpassRoads.js",
       "src/layers/weather/index.js",
       "src/layers/weather/clock.js",
-      "src/layers/weather/rendering.js",
       "src/layers/weather/display.js",
       "src/layers/weather/shellRendering.js",
       "src/layers/weather/infraredAlpha.js",
       "src/layers/weather/infraredImage.js",
       "src/layers/weather/source.js",
-      "src/layers/weather/imageryOrder.js",
       "src/layers/weather/imageryHost.js",
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
@@ -4330,7 +4325,8 @@
       "src/layers/shared/render/navaraGroundSurface.js",
       "src/layers/wind/render/flowMesh.js",
       "src/layers/shared/render/navaraGroundEffect.js",
-      "src/layers/awareness/render/navaraPulses.js"
+      "src/layers/awareness/render/navaraPulses.js",
+      "src/layers/wind/render/cesiumFlow.js"
     ],
     "external": [
       "hls.js",

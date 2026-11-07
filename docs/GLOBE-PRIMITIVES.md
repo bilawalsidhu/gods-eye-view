@@ -445,9 +445,9 @@ near the camera from one 8×8 atlas over the whole view.
 - **The wind field** (`src/layers/wind/render/display.js`): one image over
   the globe at order 20, faded with the camera's height while streamlines
   draw, raised at 5 km on 3D tiles. The streamlines stay each engine's,
-  behind the display's `flow` backend: Cesium's wind renderer without its
-  field (`rendering.js`, from the layer), Navara's flow mesh
-  (`render/navaraFlow.js`, from the manifest).
+  behind the display's `flow` backend, loaded by the manifest:
+  `render/cesiumFlow.js` supplies Cesium's streamlines (`rendering.js`),
+  and `render/navaraFlow.js` supplies Navara's flow mesh.
 - **The Bhote Koshi event imagery** (`src/layers/bhoteKoshi/render/display.js`):
   two `url` images over the event's rectangle at alpha 0.96, split left
   and right at the engine's split position, order 15. The event's and the

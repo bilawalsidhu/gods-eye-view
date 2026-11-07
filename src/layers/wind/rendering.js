@@ -1,78 +1,19 @@
-import {
-  createShellSurface,
-  WEATHER_SHELL_HEIGHTS,
-} from '../weather/shellRendering.js';
 import { createWindRelief } from './relief.js';
-import { orderWeatherImagery } from '../weather/imageryOrder.js';
-import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
-import { msg } from '../../i18n/index.js';
 import { createWindGpuRendering } from './gpuRendering.js';
-import { advectParticle, sampleWind } from './model.js';
-import {
-  createFieldRaster,
-  SCALAR_UNAVAILABLE,
-  trailEraseAlpha,
-  windTrailColor,
-} from './fields.js';
+import { advectParticle, sampleWind, sameWind } from './model.js';
+import { trailEraseAlpha, windTrailColor } from './fields.js';
 
-// English for diagnostics; the row status shows it translated (index.js). The
-// scalar texts are the source's own; setOptions accepts only these overlays.
-const FIELD_UNAVAILABLE = Object.freeze({
-  speed: msg('Wind speed field unavailable'),
-  ...SCALAR_UNAVAILABLE,
-});
-
-/** English status for a scalar overlay with no drawable field. */
-export function fieldUnavailableText(overlay) {
-  return Object.hasOwn(FIELD_UNAVAILABLE, overlay)
-    ? FIELD_UNAVAILABLE[overlay]
-    : null;
-}
-const WIND_FIELD_FADE_HIGH_METERS = 1_200_000;
-const WIND_FIELD_FADE_LOW_METERS = 200_000;
-const WIND_FIELD_LOG_RANGE = Math.log(
-  WIND_FIELD_FADE_HIGH_METERS / WIND_FIELD_FADE_LOW_METERS,
-);
-
-// Snapshots own immutable decoded arrays. Compare their contents, not grid URLs
-// (which include the scalar overlay) or only cycle IDs (which can be revised).
-// This bounded scan runs on acquisition, never in the animation loop.
-export function sameWind(previous, next, previousField, nextField) {
-  if (!previous || !next || !previousField || !nextField) return false;
-  for (const key of ['model', 'level', 'units'])
-    if (previous[key] !== next[key]) return false;
-  for (const key of ['runIso', 'validIso', 'forecastHour', 'date', 'hour'])
-    if (previous.cycle?.[key] !== next.cycle?.[key]) return false;
-  for (const key of ['nx', 'ny', 'lo1', 'la1', 'dx', 'dy'])
-    if (previousField[key] !== nextField[key]) return false;
-  for (const key of ['u', 'v']) {
-    const before = previousField[key];
-    const after = nextField[key];
-    if (!before || !after || before.length !== after.length) return false;
-    if (before === after) continue;
-    for (let i = 0; i < before.length; i++)
-      if (before[i] !== after[i]) return false;
-  }
-  return true;
-}
-
-/** Globe-projected surface flow plus one owned, static colour field: globe
- * imagery on the globe host, a raised shell on the 3D Tiles host. With
- * `field: false` it draws the flow alone: the wind display draws the field
- * through the globe contract (render/display.js). */
+/** The wind's streamlines on Cesium (the wind display's flow backend,
+ * render/display.js, which draws the colour field): globe-projected surface
+ * flow over the viewer's scene, GPU streamlines where the context has them,
+ * else canvas particles in `container`. The Cesium SDK is the page's,
+ * passed in. */
 export function createWindRendering({
   cesium,
   container,
   getViewer,
-  getHost = () => ({
-    collection:
-      getViewer?.()?.imageryLayers ?? getViewer?.()?.scene?.imageryLayers,
-    kind: 'globe',
-  }),
-  eventTarget = globalThis.window,
   createGpuRendering = createWindGpuRendering,
   onStatusChange,
-  field: drawsField = true,
 } = {}) {
   let canvas = null;
   let context = null;
@@ -88,12 +29,6 @@ export function createWindRendering({
   let overlay = 'none';
   let paused = false;
   let reducedMotion = false;
-  let imagery = null;
-  let shell = null;
-  let imageryCollection = null;
-  let imageryKind = null;
-  let imageryError = null;
-  let imageryErrorRemove = null;
   let media = null;
   let removers = [];
   let bounds = null;
@@ -297,155 +232,10 @@ export function createWindRendering({
     for (const particle of particles) spawn(particle, scene, occluder);
   }
 
-  function removeImagery() {
-    imageryErrorRemove?.();
-    imageryErrorRemove = null;
-    if (imagery && imageryCollection && !imageryCollection.isDestroyed?.())
-      imageryCollection.remove(imagery, true);
-    else if (imagery && !imagery.isDestroyed?.()) imagery.destroy?.();
-    imagery = null;
-    shell?.destroy();
-    shell = null;
-    imageryCollection = null;
-    imageryKind = null;
-  }
-  function updateImageryFade(camera, settled = false) {
-    // The tileset shell keeps the quantised move-end fade; globe imagery keeps
-    // its smooth per-frame fade.
-    if (
-      (!imagery && !shell) ||
-      !camera?.positionCartographic ||
-      (imageryKind === 'tileset' && !settled)
-    )
-      return;
-    const height = camera.positionCartographic.height;
-    const fade = !gpuActive
-      ? 1
-      : height <= WIND_FIELD_FADE_LOW_METERS
-        ? 0
-        : height >= WIND_FIELD_FADE_HIGH_METERS
-          ? 1
-          : Math.log(height / WIND_FIELD_FADE_LOW_METERS) /
-            WIND_FIELD_LOG_RANGE;
-    const baseAlpha = overlay === 'temperature' ? 1 : 0.85;
-    const smoothAlpha = baseAlpha * fade;
-    const alpha =
-      gpuActive && imageryKind === 'tileset'
-        ? Math.round(smoothAlpha * 10) / 10
-        : smoothAlpha;
-    if (shell) {
-      shell.setAlpha(alpha);
-      shell.setShow(alpha > 0 && getHost().kind !== 'none');
-      return;
-    }
-    if (Math.abs(imagery.alpha - alpha) > 0.005) imagery.alpha = alpha;
-    const show = alpha > 0;
-    if (imagery.show !== show) imagery.show = show;
-  }
-  function installImagery() {
-    removeImagery();
-    imageryError = null;
-    const viewer = viewerReady();
-    if (!drawsField || !snapshot || overlay === 'none' || !viewer) return;
-    const { collection, kind } = getHost();
-    if (kind === 'none') {
-      imageryError = NO_IMAGERY_HOST;
-      return;
-    }
-    const raster = createFieldRaster(snapshot, overlay);
-    if (!raster) {
-      imageryError = fieldUnavailableText(overlay);
-      return;
-    }
-    if (
-      kind === 'tileset'
-        ? !cesium.Primitive
-        : !collection || !cesium.SingleTileImageryProvider
-    ) {
-      imageryError = msg('Globe imagery unavailable');
-      return;
-    }
-    try {
-      const texture = document.createElement('canvas');
-      texture.width = raster.width;
-      texture.height = raster.height;
-      const ctx = texture.getContext('2d');
-      const pixels = ctx.createImageData(raster.width, raster.height);
-      pixels.data.set(raster.rgba);
-      ctx.putImageData(pixels, 0, 0);
-      if (kind === 'tileset') {
-        shell = createShellSurface({
-          viewer,
-          cesium,
-          rectangle: cesium.Rectangle.MAX_VALUE,
-          height: WEATHER_SHELL_HEIGHTS.wind,
-        });
-        shell.setImage(texture);
-        imageryKind = kind;
-        shell.setAlpha(overlay === 'temperature' ? 1 : 0.85);
-        updateImageryFade(viewer.scene.camera, true);
-        viewer.scene?.requestRender?.();
-        return;
-      }
-      const provider = new cesium.SingleTileImageryProvider({
-        url: texture.toDataURL('image/png'),
-        tileWidth: raster.width,
-        tileHeight: raster.height,
-        rectangle: cesium.Rectangle.MAX_VALUE,
-      });
-      imagery = collection.addImageryProvider(provider);
-      orderWeatherImagery(collection, imagery, 0);
-      imageryCollection = collection;
-      imageryKind = kind;
-      // Temperature colors carry quantitative meaning; double transparency
-      // blends orange heat into blue ocean and obscures useful gradients.
-      imagery.alpha = overlay === 'temperature' ? 1 : 0.85;
-      if (gpuActive) updateImageryFade(viewer.scene.camera, true);
-      imageryErrorRemove = provider.errorEvent?.addEventListener(() => {
-        imageryError = msg('Globe field image unavailable');
-      });
-      viewer.scene?.requestRender?.();
-    } catch {
-      removeImagery();
-      imageryError = msg('Globe field image unavailable');
-    }
-  }
-
-  function rehome() {
-    if (!drawsField || !snapshot || overlay === 'none') return;
-    const { collection, kind } = getHost();
-    const wasHidden = imageryError === NO_IMAGERY_HOST;
-    if ((imagery || shell) && kind !== 'none' && kind !== imageryKind) {
-      installImagery();
-      onStatusChange?.();
-      return;
-    }
-    // A host without imagery hides the retained shell until a host returns.
-    if (shell && kind === 'none') shell.setShow(false);
-    if (imagery && collection !== imageryCollection) {
-      imageryCollection?.remove(imagery, false);
-      imageryCollection = collection;
-      if (collection) {
-        collection.add(imagery);
-        orderWeatherImagery(collection, imagery, 0);
-      }
-      viewerReady()?.scene?.requestRender?.();
-    }
-    if ((gpuActive || kind === 'tileset') && kind !== 'none')
-      updateImageryFade(viewerReady()?.scene?.camera, true);
-    if (kind === 'none') imageryError = NO_IMAGERY_HOST;
-    else if (wasHidden) {
-      imageryError = null;
-      if (!imagery && !shell) installImagery();
-    }
-    if (wasHidden !== (imageryError === NO_IMAGERY_HOST)) onStatusChange?.();
-  }
-
   /** No idle animation for pause/reduced motion; scene events repaint only changed views. */
   function viewChanged() {
     if (gpuActive) {
       const viewer = viewerReady();
-      if (viewer) updateImageryFade(viewer.scene.camera);
       const narrow = (viewer?.scene?.canvas?.clientWidth || 800) < 700;
       let visibilityUpdated = false;
       if (running && field && !hidden() && narrow !== gpuNarrow) {
@@ -492,7 +282,6 @@ export function createWindRendering({
     if (!running || !field || hidden()) return;
     const viewer = viewerReady();
     if (gpuActive) {
-      if (viewer) updateImageryFade(viewer.scene.camera);
       gpuVisible = viewer ? gpu.updateVisibility(viewer.scene.camera) : false;
       if (gpuVisible) {
         gpu.tick(flowTime);
@@ -508,11 +297,6 @@ export function createWindRendering({
     if (!target?.addEventListener) return;
     target.addEventListener(event, callback);
     removers.push(() => target.removeEventListener(event, callback));
-  }
-  function cameraSettled() {
-    if (gpuActive || imageryKind === 'tileset')
-      updateImageryFade(viewerReady()?.scene?.camera, true);
-    cameraMoved();
   }
   function cameraMoved() {
     viewChanged();
@@ -536,11 +320,10 @@ export function createWindRendering({
     listen(media, 'change', motionChanged);
     listen(globalThis.document, 'visibilitychange', motionChanged);
     listen(globalThis, 'resize', cameraMoved);
-    listen(eventTarget, 'gev:map-stack-changed', rehome);
     const viewer = viewerReady();
     const camera = viewer?.scene?.camera;
     listenScene(viewer?.scene?.preRender, viewChanged);
-    listenScene(camera?.moveEnd, cameraSettled);
+    listenScene(camera?.moveEnd, cameraMoved);
   }
   function detachListeners() {
     for (const remove of removers) remove();
@@ -688,7 +471,6 @@ export function createWindRendering({
   }
 
   return {
-    rehome,
     attach() {
       if (canvas) return;
       canvas = document.createElement('canvas');
@@ -732,7 +514,6 @@ export function createWindRendering({
           resize(viewer);
           seed(viewer.scene, makeOccluder(viewer.scene));
         }
-        installImagery();
         relief.attach();
         motionChanged();
       }
@@ -749,17 +530,13 @@ export function createWindRendering({
       const changedPause = newPaused !== paused;
       overlay = nextOverlay;
       paused = newPaused;
-      if (changedOverlay) {
-        installImagery();
-        clearPixels();
-      }
+      if (changedOverlay) clearPixels();
       if (changedOverlay || changedPause) motionChanged();
     },
     start() {
       if (running || !canvas) return;
       running = true;
       attachListeners();
-      rehome();
       motionChanged();
     },
     stop() {
@@ -781,8 +558,6 @@ export function createWindRendering({
       gpuVisible = false;
       reportedGpuReady = null;
       flowTime = 0;
-      removeImagery();
-      imageryError = null;
       clearPixels();
     },
     destroy() {
@@ -809,10 +584,6 @@ export function createWindRendering({
         relief: relief.getDiagnostics(),
         painted,
         framePending: frame !== null,
-        imageryActive: imagery !== null || shell !== null,
-        host: shell ? 'shell' : imagery ? 'globe' : null,
-        shell: shell?.getDiagnostics() ?? null,
-        imageryError,
       };
     },
   };

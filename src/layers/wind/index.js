@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { createWindRendering } from './rendering.js';
+import { createWindDisplay } from './render/display.js';
 import { WIND_FIELDS } from './fields.js';
 import {
   formatWindReading,
@@ -50,14 +49,15 @@ export function windStats(manifest) {
   };
 }
 
-/** Construct one wind layer with an explicit source and owned animation. */
+/** Construct one wind layer with an explicit source and owned animation. It
+ * draws through its display (render/display.js) on the engine it is attached
+ * to: `createNativeRendering(engine, options)`, the application's, which
+ * passes each engine's streamlines in, or the display made here, which draws
+ * the colour field alone. */
 export function createWindLayer({
   feed,
   clock,
-  cesium = null,
-  container,
-  createRendering = createWindRendering,
-  createNativeRendering,
+  createNativeRendering = createWindDisplay,
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Wind requires a snapshot source');
@@ -66,7 +66,6 @@ export function createWindLayer({
   let request = null;
   let enabled = false;
   let rendering = null;
-  let imageryHost = null;
   let manifest = null;
   let error = null;
   let loading = false;
@@ -125,44 +124,18 @@ export function createWindLayer({
     attachRenderer(nextViewer, { engine: nextEngine = null } = {}) {
       viewer = nextViewer;
       engine = nextEngine;
-      const cesiumRendering = (options) =>
-        createRendering({
-          // Read on Cesium only: the production build's Cesium global
-          // loads with the first Cesium globe.
-          cesium: cesium ?? Cesium,
-          container: container ?? nextViewer.container,
-          getViewer: () => viewer,
-          getHost: () =>
-            imageryHost?.() ?? {
-              collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-              kind: 'globe',
-            },
-          onStatusChange: notify,
-          ...options,
-        });
-      // The engine's display (render/display.js) when the layer has one,
-      // with Cesium's flow (no field) on Cesium; an engine's own flow
-      // backend takes its place. Else the Cesium renderer draws it all.
-      rendering =
-        (engine
-          ? createNativeRendering?.(engine, {
-              flow: nextViewer ? () => cesiumRendering({ field: false }) : null,
-              onStatusChange: notify,
-            })
-          : null) ?? cesiumRendering();
-      rendering.attach();
-      rendering.setOptions?.({ overlay, paused });
-      const target =
-        container ?? nextViewer?.container ?? engine?.host.container;
+      if (!engine) return;
+      rendering = createNativeRendering(engine, { onStatusChange: notify });
+      rendering?.attach();
+      rendering?.setOptions?.({ overlay, paused });
       inspectionMarker = createWindInspectionMarker({
-        container: target,
+        container: engine.host.container,
         viewer,
-        cesium: engine ? null : (cesium ?? Cesium),
         engine,
       });
       if (enabled && manifest && !manifest.unavailable) {
-        rendering.setField(manifest);
-        rendering.start();
+        rendering?.setField(manifest);
+        rendering?.start();
       }
       if (sampledPosition) inspectionMarker.show(sampledPosition);
     },
@@ -170,13 +143,9 @@ export function createWindLayer({
       inspectionMarker?.destroy();
       inspectionMarker = null;
       rendering?.destroy();
-      rendering = imageryHost = viewer = engine = null;
+      rendering = viewer = engine = null;
     },
-    attachShellServices(services) {
-      imageryHost =
-        typeof services?.imageryHost === 'function'
-          ? services.imageryHost
-          : null;
+    attachShellServices() {
       rendering?.rehome?.();
     },
     enable() {

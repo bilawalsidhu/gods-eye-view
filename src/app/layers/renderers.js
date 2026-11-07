@@ -130,6 +130,11 @@ const navaraStory = async () => {
       drawStorySource(engine, navaraNative(engine), data),
   };
 };
+const cesiumWindFlow = async () => {
+  const { createWindCesiumFlow } =
+    await import('../../layers/wind/render/cesiumFlow.js');
+  return { flow: createWindCesiumFlow };
+};
 const navaraWindFlow = async () => {
   const { createWindNavaraFlow } =
     await import('../../layers/wind/render/navaraFlow.js');
@@ -201,9 +206,12 @@ export const LAYER_MANIFEST = Object.freeze({
     }),
   }),
   // The wind field and the weather rasters on engine.imagery; the wind's
-  // streamlines are each engine's (Cesium's from the layer, Navara's flow
-  // mesh).
-  wind: display('createWindDisplay', ['imagery'], { navara: navaraWindFlow }),
+  // streamlines are each engine's backend (Cesium's wind renderer, Navara's
+  // flow mesh).
+  wind: display('createWindDisplay', ['imagery'], {
+    cesium: cesiumWindFlow,
+    navara: navaraWindFlow,
+  }),
   'weather-radar': display('createWeatherDisplay', ['imagery']),
   'weather-satellite': display('createWeatherDisplay', ['imagery']),
   'weather-lightning': display('createWeatherDisplay', ['imagery']),

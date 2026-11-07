@@ -3,7 +3,7 @@ import {
   WIND_NARROW_PATH_LIMIT,
   WIND_PATH_LIMIT,
 } from '../streamlines.js';
-import { sameWind } from '../rendering.js';
+import { sameWind } from '../model.js';
 import { createWindFlowMesh } from './flowMesh.js';
 
 const clamp = (n) => Math.max(0, Math.min(1, n));

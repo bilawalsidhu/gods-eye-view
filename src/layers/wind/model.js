@@ -87,3 +87,25 @@ export function advectParticle(
   );
   return particle;
 }
+
+// Snapshots own immutable decoded arrays. Compare their contents, not grid URLs
+// (which include the scalar overlay) or only cycle IDs (which can be revised).
+// This bounded scan runs on acquisition, never in the animation loop.
+export function sameWind(previous, next, previousField, nextField) {
+  if (!previous || !next || !previousField || !nextField) return false;
+  for (const key of ['model', 'level', 'units'])
+    if (previous[key] !== next[key]) return false;
+  for (const key of ['runIso', 'validIso', 'forecastHour', 'date', 'hour'])
+    if (previous.cycle?.[key] !== next.cycle?.[key]) return false;
+  for (const key of ['nx', 'ny', 'lo1', 'la1', 'dx', 'dy'])
+    if (previousField[key] !== nextField[key]) return false;
+  for (const key of ['u', 'v']) {
+    const before = previousField[key];
+    const after = nextField[key];
+    if (!before || !after || before.length !== after.length) return false;
+    if (before === after) continue;
+    for (let i = 0; i < before.length; i++)
+      if (before[i] !== after[i]) return false;
+  }
+  return true;
+}

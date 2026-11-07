@@ -11,6 +11,20 @@ export const SCALAR_UNAVAILABLE = Object.freeze({
   pressure: msg('Mean sea level pressure field unavailable'),
 });
 
+// English for diagnostics; the row status shows it translated (index.js). The
+// scalar texts are the source's own.
+const FIELD_UNAVAILABLE = Object.freeze({
+  speed: msg('Wind speed field unavailable'),
+  ...SCALAR_UNAVAILABLE,
+});
+
+/** English status for a scalar overlay with no drawable field. */
+export function fieldUnavailableText(overlay) {
+  return Object.hasOwn(FIELD_UNAVAILABLE, overlay)
+    ? FIELD_UNAVAILABLE[overlay]
+    : null;
+}
+
 /** Fixed physical scales shared by imagery and the field legend. */
 export const WIND_FIELDS = Object.freeze({
   speed: Object.freeze({

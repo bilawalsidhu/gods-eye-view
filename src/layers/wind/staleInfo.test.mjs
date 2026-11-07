@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale } from '../../i18n/index.js';
 import { createWindLayer } from './index.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 test('stale wind forecast is marked in the UI language', async () => {
   const rendering = Object.fromEntries(
@@ -24,9 +25,9 @@ test('stale wind forecast is marked in the UI language', async () => {
         reason: 'Wind upstream unavailable',
       }),
     },
-    createRendering: () => rendering,
+    createNativeRendering: () => rendering,
   });
-  layer.init({ container: {} });
+  layer.init(null, { engine: createFakeEngine() });
   layer.enable();
   await layer.update();
   try {

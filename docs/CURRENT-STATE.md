@@ -228,8 +228,10 @@ one application, and only the globe-bound parts move to the next engine.
     (`src/globe/cesium/imagery.js`).
   - Navara draws them in one screen pass after tone mapping, classified on
     the scene depth (`src/globe/navara/imagery/`).
-  - Active Fires' far-zoom heatmap and Recent Imagery draw through it;
-    weather, wind and the Bhote Koshi event imagery do not yet.
+  - Active Fires' far-zoom heatmap, Recent Imagery, weather, the wind
+    field and the Bhote Koshi event imagery draw through it. Weather and
+    wind require the engine's imagery primitive; the manifest supplies
+    each engine's wind streamlines through the display's flow backend.
   - `engine.maps.addOverlay` (Navara's native raster layers for Sea Marks
     and Ski Pistes) stays until those overlays move to `engine.imagery`.
   - On November 7, 2026, `scripts/qa-ground-suite.mjs --only=imagery:` (the

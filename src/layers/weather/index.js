@@ -1,6 +1,5 @@
-import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
-import { createWeatherRendering } from './rendering.js';
+import { createWeatherDisplay } from './render/display.js';
 import { engineImageryHost, imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
@@ -53,14 +52,15 @@ const utc = (value) =>
     : t('Unavailable');
 
 /** A per-application observation layer, using the existing layer lifecycle and
- * row controls. History is transient: shared links always open latest imagery. */
+ * row controls. History is transient: shared links always open latest imagery.
+ * It draws through its display (render/display.js) on the engine it is
+ * attached to: `createNativeRendering(engine, options)`, the application's,
+ * or the display made here. */
 export function createWeatherLayer({
   feed,
   clock,
   id = 'weather-radar',
-  cesium = null,
-  createRendering = createWeatherRendering,
-  createNativeRendering = null,
+  createNativeRendering = createWeatherDisplay,
   documentRef = globalThis.document,
   eventTarget = globalThis.window,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
@@ -75,8 +75,7 @@ export function createWeatherLayer({
   let infrared = 100;
   let sceneEngine = null;
   let lastShown = null;
-  let viewer = null,
-    rendering = null,
+  let rendering = null,
     manifest = null,
     request = null,
     listener = null;
@@ -90,7 +89,6 @@ export function createWeatherLayer({
     removeCamera = null;
   let motion = null;
   let runNavigation = null;
-  let imageryHost = null;
   let hostCollection;
   let hostHidden = false;
   let hostStatus = null;
@@ -107,16 +105,12 @@ export function createWeatherLayer({
           : REGIONAL_INFRARED_MAX_GAP_MS;
   const isLatest = () =>
     clock ? clock.getState().mode === 'latest' : followLatest;
-  // A display draws through engine.imagery, which follows the surface the
-  // map shows; the Cesium renderer of old resolves Cesium's imagery stack.
-  let drawsOnEngine = false;
+  // The display draws through engine.imagery, which follows the surface the
+  // map shows; without an engine nothing draws and nothing is hidden.
   const getHost = () =>
-    drawsOnEngine
+    sceneEngine
       ? engineImageryHost(sceneEngine)
-      : (imageryHost?.() ?? {
-          collection: viewer?.imageryLayers,
-          kind: 'globe',
-        });
+      : { collection: null, kind: 'globe' };
   const notify = () => listener?.();
   const shownTime = () =>
     noFrame ? null : (rendering?.getDiagnostics().time ?? lastShown);
@@ -285,7 +279,7 @@ export function createWeatherLayer({
     }
   }
   function watchCamera() {
-    const moveEnd = sceneEngine?.camera?.moveEnd ?? viewer?.camera?.moveEnd;
+    const moveEnd = sceneEngine?.camera.moveEnd;
     removeCamera ??= moveEnd?.addEventListener(() => {
       checkHost();
       notify();
@@ -306,28 +300,19 @@ export function createWeatherLayer({
       motion = matchMedia?.('(prefers-reduced-motion: reduce)');
       motion?.addEventListener?.('change', onVisibility);
       documentRef?.addEventListener?.('visibilitychange', onVisibility);
-      if (nextViewer || options.engine)
-        layer.attachRenderer(nextViewer, options);
+      if (options.engine) layer.attachRenderer(nextViewer, options);
     },
-    attachRenderer(nextViewer, { engine = null } = {}) {
-      viewer = nextViewer;
+    attachRenderer(_viewer, { engine = null } = {}) {
       sceneEngine = engine;
-      const options = { viewer, getHost, onChange: notify };
-      // The engine's display (render/display.js) when the layer has one;
-      // else the Cesium renderer, whose SDK is read here: the production
-      // build's Cesium global loads with the first Cesium globe.
-      const display = engine
-        ? (createNativeRendering?.(engine, options) ?? null)
+      rendering = engine
+        ? (createNativeRendering(engine, { onChange: notify }) ?? null)
         : null;
-      drawsOnEngine = display !== null;
-      rendering =
-        display ?? createRendering({ ...options, cesium: cesium ?? Cesium });
       checkHost(false);
       eventTarget?.addEventListener?.(
         'gev:map-stack-changed',
         onMapStackChanged,
       );
-      rendering.setAlpha(opacity === 'light' ? 0.4 : satellite ? 0.7 : 0.8);
+      rendering?.setAlpha(opacity === 'light' ? 0.4 : satellite ? 0.7 : 0.8);
       if (!enabled) return;
       watchCamera();
       if (!manifest) return;
@@ -338,7 +323,7 @@ export function createWeatherLayer({
             ? manifest.latest
             : lastShown;
       if (time) void show(time);
-      else rendering.setHidden(true);
+      else rendering?.setHidden(true);
     },
     detachRenderer() {
       ++generation;
@@ -354,19 +339,12 @@ export function createWeatherLayer({
       );
       rendering?.clear();
       rendering = null;
-      drawsOnEngine = false;
       hostCollection = null;
-      imageryHost = null;
       runNavigation = null;
       sceneEngine = null;
-      viewer = null;
       loading = Boolean(request && !request.signal.aborted);
     },
     attachShellServices(services) {
-      imageryHost =
-        typeof services?.imageryHost === 'function'
-          ? services.imageryHost
-          : null;
       checkHost();
       runNavigation =
         typeof services?.runNavigation === 'function'
@@ -516,7 +494,7 @@ export function createWeatherLayer({
         followLatest = true;
         rendering?.clear();
         if (clock) void clock.refresh();
-        if (enabled) void layer.update(viewer);
+        if (enabled) void layer.update();
       }
       if (infraredChanged && enabled && manifest) {
         clearTimeout(timer);
@@ -528,7 +506,8 @@ export function createWeatherLayer({
         params.focus === true &&
         enabled &&
         manifest?.bounds &&
-        runNavigation
+        runNavigation &&
+        sceneEngine
       ) {
         const b =
           weatherDisplay(manifest).extent ??
@@ -536,21 +515,14 @@ export function createWeatherLayer({
             ? { west: 110, south: -25, east: 0, north: 80 }
             : manifest.bounds);
         runNavigation(() =>
-          (sceneEngine?.camera ?? viewer.camera).flyTo({
+          sceneEngine.camera.flyTo({
             // The engine camera takes a plain rectangle in radians.
-            destination: sceneEngine
-              ? {
-                  west: geo.math.toRadians(b.west),
-                  south: geo.math.toRadians(b.south),
-                  east: geo.math.toRadians(b.east),
-                  north: geo.math.toRadians(b.north),
-                }
-              : (cesium ?? Cesium).Rectangle.fromDegrees(
-                  b.west,
-                  b.south,
-                  b.east,
-                  b.north,
-                ),
+            destination: {
+              west: geo.math.toRadians(b.west),
+              south: geo.math.toRadians(b.south),
+              east: geo.math.toRadians(b.east),
+              north: geo.math.toRadians(b.north),
+            },
             duration: motion?.matches ? 0 : 1.4,
           }),
         );
@@ -645,19 +617,16 @@ export function createWeatherLayer({
       const shownProblem = problem ? presentWeatherProblem(problem) : null;
       const shownHost = hostStatus ? t(hostStatus) : null;
       const b = manifest?.bounds;
-      const canvas = sceneEngine?.host.canvas ?? viewer?.scene?.canvas;
+      const canvas = sceneEngine?.host.canvas;
       const point =
         canvas &&
-        (sceneEngine?.camera ?? viewer.camera).pickEllipsoid?.(
+        sceneEngine.camera.pickEllipsoid(
           geo.cartesian2.create(
             canvas.clientWidth / 2,
             canvas.clientHeight / 2,
           ),
-          viewer?.scene?.globe?.ellipsoid,
         );
-      const camera = point
-        ? geo.cartographic.fromCartesian(point, viewer?.scene?.globe?.ellipsoid)
-        : null;
+      const camera = point ? geo.cartographic.fromCartesian(point) : null;
       const lon = camera ? geo.math.toDegrees(camera.longitude) : 0;
       const lat = camera ? geo.math.toDegrees(camera.latitude) : 0;
       const outside =
