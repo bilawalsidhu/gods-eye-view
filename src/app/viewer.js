@@ -2,6 +2,11 @@ import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { StarrySky } from '../sky/starrySky.js';
 
+// Dev convenience: expose the app's Cesium instance for console/preview probing
+// (single shared module instance — avoids dual-Cesium state bugs when testing).
+if (typeof window !== 'undefined' && !window.__CESIUM__)
+  window.__CESIUM__ = Cesium;
+
 /** Cesium.Viewer options of the standard globe viewer. */
 export function applicationViewerOptions(creditContainer) {
   return {

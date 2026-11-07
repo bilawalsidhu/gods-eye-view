@@ -1690,3 +1690,67 @@ test('plain recaption keeps the old mark addressable when its removal throws', a
   );
   assert.equal(engine.count(), 0);
 });
+
+// The camera assist frames a fresh mark only when none of it is in view:
+// off the frustum or behind the globe, as the renderer's camera and query
+// ports see it. A camera that cannot answer leaves the view alone.
+test('camera assist frames marks out of view and leaves visible ones alone', async (t) => {
+  installAnimationFrameStubs(t);
+  const { bindRenderer } = await import('../render/rendererOf.js');
+  const { horizonFrom } = await import('../geo/horizon.js');
+  const viewerOver = (lon, lat, height, { broken = false } = {}) => {
+    const position = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+    const direction = Cesium.Cartesian3.negate(
+      Cesium.Cartesian3.normalize(position, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const right = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.cross(direction, Cesium.Cartesian3.UNIT_Z, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const up = Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3());
+    const view = Cesium.Matrix4.computeView(position, direction, up, right, new Cesium.Matrix4());
+    const frustum = new Cesium.PerspectiveFrustum({
+      fov: Cesium.Math.toRadians(60), aspectRatio: 16 / 9, near: 1, far: 5e7,
+    });
+    const flights = [];
+    const viewer = {};
+    const horizon = horizonFrom(position);
+    bindRenderer(viewer, {
+      camera: {
+        pose: () => ({ heading: 0 }),
+        matrices() {
+          if (broken) throw new Error('no camera');
+          return {
+            view: Float64Array.from(Cesium.Matrix4.toArray(view)),
+            projection: Float64Array.from(Cesium.Matrix4.toArray(frustum.projectionMatrix)),
+          };
+        },
+        flyTo: (...args) => flights.push(['flyTo', ...args]),
+        flyToBounds: (...args) => flights.push(['flyToBounds', ...args]),
+      },
+      query: { isOccluded: (p) => !horizon.isPointVisible(p) },
+    });
+    return { viewer, flights };
+  };
+  const pinAt = async (viewer, lon, lat) => {
+    const engine = createAnnotationEngine({ viewer, renderer: fakeRenderer().renderer });
+    await engine.annotate([{ type: 'pin', manual: true, latitude: lat, longitude: lon }], { persist: true, flyTo: false });
+  };
+
+  const inView = viewerOver(-97.74, 30.27, 9000);
+  await pinAt(inView.viewer, -97.742, 30.268);
+  assert.equal(inView.flights.length, 0, 'a mark in view is left alone');
+
+  const aside = viewerOver(-97.74, 30.27, 9000);
+  await pinAt(aside.viewer, -97.5, 30.6);
+  assert.equal(aside.flights.length, 1, 'a mark off the frustum is framed');
+
+  const behind = viewerOver(60, 30, 9_000_000);
+  await pinAt(behind.viewer, -120, -30);
+  assert.equal(behind.flights.length, 1, 'a mark behind the globe is framed');
+
+  const broken = viewerOver(-97.74, 30.27, 9000, { broken: true });
+  await pinAt(broken.viewer, -97.5, 30.6);
+  assert.equal(broken.flights.length, 0, 'a camera that cannot answer moves nothing');
+});
