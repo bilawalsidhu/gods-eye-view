@@ -530,7 +530,7 @@ test('a keyed API outage is reported without blaming the key, and the keyless ca
   assert.doesNotMatch(lines.join('\n'), /secret-key-value/);
 });
 
-test('the CCTV catalog merges DriveNC cameras and CCTV_DRIVENC_ENABLED=0 skips the request', async (t) => {
+test('the CCTV catalog merges DriveNC cameras only with CCTV_DRIVENC_ENABLED=1', async (t) => {
   captureConsole(t);
   const sourceRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'gev-cctv-drivenc-'),
@@ -552,6 +552,18 @@ test('the CCTV catalog merges DriveNC cameras and CCTV_DRIVENC_ENABLED=0 skips t
     icons: mapIcons([['5413', ...near(RALEIGH, 0.001)]]),
   });
 
+  // Off by default: DriveNC states no reuse terms, so an unset flag never
+  // reaches the upstream.
+  assert.deepEqual(await createCctvCatalog({ sourceRoot })(), []);
+  assert.ok(requested.length > 0, 'the other live packs still load');
+  assert.equal(
+    requested.some((href) => href.startsWith('https://www.drivenc.gov/')),
+    false,
+    'an unset flag makes no DriveNC request',
+  );
+
+  process.env.CCTV_DRIVENC_ENABLED = '1';
+  requested.length = 0;
   const sources = await createCctvCatalog({ sourceRoot })();
   assert.deepEqual(
     sources.map((source) => source.id),
@@ -561,13 +573,59 @@ test('the CCTV catalog merges DriveNC cameras and CCTV_DRIVENC_ENABLED=0 skips t
   assert.equal(sources[0].pack, 'drivenc');
   assert.equal(sources[0].code, 'CCTV04-I40-311E_NC54');
 
-  process.env.CCTV_DRIVENC_ENABLED = '0';
-  requested.length = 0;
-  assert.deepEqual(await createCctvCatalog({ sourceRoot })(), []);
-  assert.ok(requested.length > 0, 'the other live packs still load');
-  assert.equal(
-    requested.includes(DRIVENC_MAP_ICONS_URL),
-    false,
-    'a disabled pack makes no request',
+  // Anything but "1" keeps it off, including the old kill-switch value.
+  for (const value of ['0', 'true', 'yes']) {
+    process.env.CCTV_DRIVENC_ENABLED = value;
+    requested.length = 0;
+    assert.deepEqual(await createCctvCatalog({ sourceRoot })(), [], value);
+    assert.equal(
+      requested.includes(DRIVENC_MAP_ICONS_URL),
+      false,
+      `CCTV_DRIVENC_ENABLED=${value} makes no request`,
+    );
+  }
+});
+
+test('a view id that would normalize out of the still directory registers no camera', async (t) => {
+  captureConsole(t);
+  routeFetch(t, {
+    tooltips: {
+      5413: tooltipHtml('5413', TOOLTIP_CODES[5413], '..'),
+      5464: tooltipHtml('5464', TOOLTIP_CODES[5464], '.'),
+    },
+  });
+  const keyless = await loadDriveNcSourcesFromOpenData(
+    {},
+    { CCTV_DRIVENC_MAX_SOURCES: '8' },
+  );
+  const ids = keyless.map((camera) => camera.id);
+  assert.equal(ids.includes('nc-5413'), false);
+  assert.equal(ids.includes('nc-5464'), false);
+  assert.equal(keyless.length, 6);
+  for (const camera of keyless) {
+    assert.match(camera.url, /^https:\/\/www\.drivenc\.gov\/map\/Cctv\/[^/]+$/);
+  }
+
+  t.mock.restoreAll();
+  captureConsole(t);
+  routeFetch(t, {
+    api: () =>
+      Response.json([
+        {
+          ...API_ROW,
+          Views: [
+            { Status: 'Enabled', Url: 'https://www.drivenc.gov/map/Cctv/..' },
+          ],
+        },
+        { ...API_ROW, Id: 43 },
+      ]),
+  });
+  const keyed = await loadDriveNcSourcesFromOpenData(
+    {},
+    { DRIVENC_API_KEY: 'k', CCTV_DRIVENC_MAX_SOURCES: '8' },
+  );
+  assert.deepEqual(
+    keyed.map((camera) => camera.id),
+    ['nc-43'],
   );
 });

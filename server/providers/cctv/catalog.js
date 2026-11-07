@@ -128,8 +128,12 @@ const LIVE_PACKS = [
     load: loadDelDOTSourcesFromOpenData,
   },
   {
+    // DriveNC publishes no reuse terms for its camera stills, and the keyless
+    // path reads the map's own catalog and tooltip pages (NCDOT's documented
+    // API needs a developer key and is throttled), so the pack is off unless
+    // the operator opts in (see DATA_SOURCES.md).
     name: 'drivenc',
-    enabled: () => envEnabled('CCTV_DRIVENC_ENABLED'),
+    enabled: () => envOptIn('CCTV_DRIVENC_ENABLED'),
     load: loadDriveNcSourcesFromOpenData,
   },
   {

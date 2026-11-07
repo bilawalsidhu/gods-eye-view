@@ -2678,10 +2678,11 @@ function pickDriveNcViewId(views) {
 /**
  * One DriveNC camera as a catalog source. The frame URL is built from the
  * validated view id under the official still directory, never read from
- * upstream text.
+ * upstream text, and must still resolve inside that directory (a view id of
+ * `.` or `..` would normalize out of it), or the camera is dropped.
  *
  * @param {{id:string, lat:number, lon:number, code:string, viewId:string, heading:number, headingConfidence:string}} camera
- * @returns {object}
+ * @returns {object|null}
  */
 function driveNcCameraToSource({
   id,
@@ -2693,7 +2694,11 @@ function driveNcCameraToSource({
   headingConfidence,
 }) {
   const cameraId = `nc-${id}`;
-  const imageUrl = `${DRIVENC_IMAGE_ORIGIN}${encodeURIComponent(viewId)}`;
+  const imageUrl = pinnedCameraUrl(
+    `${DRIVENC_IMAGE_ORIGIN}${encodeURIComponent(viewId)}`,
+    DRIVENC_IMAGE_ORIGIN,
+  );
+  if (!imageUrl || imageUrl === DRIVENC_IMAGE_ORIGIN) return null;
   const hasHeading = Number.isFinite(heading);
   // Only a dedicated direction field earns the confident pose personality;
   // the code's side-of-road letter keeps the low one, like a headingless pack.
@@ -2880,18 +2885,18 @@ async function loadDriveNcSourcesFromApi(key, maxCount) {
         heading = driveNcHeadingFromCode(code);
         headingConfidence = 'low';
       }
+      const source = driveNcCameraToSource({
+        id,
+        lat,
+        lon,
+        code,
+        viewId,
+        heading,
+        headingConfidence,
+      });
+      if (!source) continue;
       seen.add(id);
-      cameras.push(
-        driveNcCameraToSource({
-          id,
-          lat,
-          lon,
-          code,
-          viewId,
-          heading,
-          headingConfidence,
-        }),
-      );
+      cameras.push(source);
     }
     const prioritized = prioritizeSources(cameras, maxCount, DRIVENC_ANCHORS);
     console.log(
@@ -2995,17 +3000,16 @@ export async function loadDriveNcSourcesFromOpenData(
     for (const { id, lat, lon } of nearest) {
       const detail = details.get(id);
       if (!detail) continue;
-      cameras.push(
-        driveNcCameraToSource({
-          id,
-          lat,
-          lon,
-          code: detail.code,
-          viewId: detail.viewId,
-          heading: driveNcHeadingFromCode(detail.code),
-          headingConfidence: 'low',
-        }),
-      );
+      const source = driveNcCameraToSource({
+        id,
+        lat,
+        lon,
+        code: detail.code,
+        viewId: detail.viewId,
+        heading: driveNcHeadingFromCode(detail.code),
+        headingConfidence: 'low',
+      });
+      if (source) cameras.push(source);
     }
     // What the pack offered before its own cap, for the coverage report.
     Object.defineProperty(cameras, 'available', { value: listed.size });
