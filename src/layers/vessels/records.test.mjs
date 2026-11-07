@@ -111,3 +111,33 @@ test('unkeyed records rebuild on each refresh and numeric coercion keeps unknown
   assert.equal(probe.store.all.length, 1);
   assert.equal(normalizeVessel(row('bad', { lon: Infinity })), null);
 });
+
+test("each fix keeps when it was first received and its refresh's newest fix", () => {
+  const probe = setup();
+  probe.reconcile([
+    row('111', { last_position_epoch: 1_800_000_000 }),
+    row('222', { last_position_epoch: 1_800_000_030 }),
+    row('333'),
+  ]);
+  for (const mmsi of ['111', '222', '333']) {
+    const record = probe.store.byMmsi.get(mmsi);
+    assert.equal(record.fixFeedEpoch, 1_800_000_030, mmsi);
+    assert.equal(record.fixReceivedAtMs, 1000, mmsi);
+  }
+  // A new fix is stamped afresh.
+  probe.advance(60_000);
+  probe.reconcile([row('111', { last_position_epoch: 1_800_000_050 })]);
+  const record = probe.store.byMmsi.get('111');
+  assert.equal(record.fixFeedEpoch, 1_800_000_050);
+  assert.equal(record.fixReceivedAtMs, 61_000);
+  // The same fix re-served by later polls keeps its first receipt, while
+  // the row itself counts as seen for retention.
+  probe.advance(30_000);
+  probe.reconcile([
+    row('111', { last_position_epoch: 1_800_000_050 }),
+    row('222', { last_position_epoch: 1_800_000_090 }),
+  ]);
+  assert.equal(record.fixReceivedAtMs, 61_000);
+  assert.equal(record.fixFeedEpoch, 1_800_000_050);
+  assert.equal(record.receivedAtMs, 91_000);
+});

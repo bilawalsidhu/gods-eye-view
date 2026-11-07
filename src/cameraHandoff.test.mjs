@@ -42,7 +42,7 @@ function ordered(source, needles, label) {
 test('Cockpit takeover invalidates deferred work before camera cancellation', () => {
   const enter = cockpitEnter.toString();
   ordered(enter, [
-    'if (!info || !entity?.position) return false;',
+    'if (!info || (!vessel && !satellite && !entity?.position)) return false;',
     'this.onCameraTakeover?.();',
     'this.viewer.camera.cancelFlight();',
     'this.viewer.trackedEntity = undefined;',
@@ -106,7 +106,8 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   );
   ordered(transaction, [
     /if \(\s*!selectedLayer\.trackById\?\.\(selectedTarget\.id, \{\s*origin: selectionOrigin,?\s*\}\)\s*\) \{/,
-    'if (!entryError) entered = Boolean(cockpitView.enter());',
+    // Aircraft-only: a selected vessel must not stand in for a voice target.
+    "if (!entryError) entered = Boolean(cockpitView.enter({ kind: 'aircraft' }));",
   ], 'Cockpit entry transaction');
   // No direct camera control: every mutation goes through a layer tracker or
   // the cockpit controller, both of which stamp.
