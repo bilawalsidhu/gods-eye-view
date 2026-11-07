@@ -4,6 +4,7 @@ import {
   cesiumRenderer,
   cesiumViewerOf,
 } from '../render/cesium/appRenderer.js';
+import { trimStaleSceneCommands } from '../render/cesium/sceneCommandRelease.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -165,5 +166,8 @@ export async function createApplicationScene({
     mapStackController,
     operations,
     input,
+    // Drops the draw commands the scene keeps after it stops drawing them;
+    // run after a drawn frame (see src/sceneCommandRelease.js).
+    trimStaleCommands: () => trimStaleSceneCommands(viewer.scene),
   };
 }

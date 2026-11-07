@@ -2416,9 +2416,11 @@ which embeds the MAP_KEY.
 > so a turned-off layer's entities stayed reachable (Data Centers kept 116
 > MiB). `src/sceneCommandRelease.js`, installed in `src/app/tools.js`,
 > requests one frame through `governorRequestRender` after every layer
-> disable and then trims those arrays. It reads private Cesium fields through
-> `src/render/cesium/internals.js`; `src/sceneCommandRelease.test.mjs` pins
-> them and fails if Cesium renames them or changes which passes it truncates.
+> disable and then has `src/render/cesium/sceneCommandRelease.js` (handed
+> over by `src/app/scene.js`) trim those arrays. It reads private Cesium
+> fields through `src/render/cesium/internals.js`;
+> `src/render/cesium/sceneCommandRelease.test.mjs` pins them and fails if
+> Cesium renames them or changes which passes it truncates.
 
 > **2026-08-08 — performance waves 1+2:** the app idles via an explicit render
 > governor (`src/renderGovernor.js` — hold/release from every per-frame

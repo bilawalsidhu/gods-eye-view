@@ -43,7 +43,11 @@ await app.destroy();
 ```
 
 The example's containers and three remaining constructors are supplied by the
-consumer. The viewer helper preserves the standalone viewer's render settings;
+caller. The standalone scene also returns `trimStaleCommands()`, which drops
+the draw commands the Cesium scene keeps after a turned-off layer stops drawing;
+the application tools call it one frame after each layer disable. A scene
+without it keeps those commands, and so the layer's memory, until they are
+overwritten. The viewer helper preserves the standalone viewer's render settings;
 it neither selects map sources nor reads keys. Supply a visible credit container
 and retain all attribution required by the chosen sources. Cesium is external to
 this export: the consuming build must provide the same instance used elsewhere

@@ -20,7 +20,11 @@ import {
 import { entityRecord, readEntityRecord } from '../data/entityRecords.js';
 import { overlayHost } from './layers/overlayHost.js';
 
-/** Attach scene tools, rendering listeners and the application debug handle. */
+/**
+ * Attach scene tools, rendering listeners and the application debug handle.
+ * `scene` is what `createApplicationScene` returns; its `trimStaleCommands`
+ * runs after each layer disable (a scene without one keeps that memory).
+ */
 export function createApplicationTools({
   scene,
   controls,
@@ -131,15 +135,17 @@ export function createApplicationTools({
   // per frame. It goes idle only now, after every module above has had its
   // chance to hold. (perf wave 2)
   releaseContinuousRender('boot');
-  // Cesium keeps a turned-off layer's draw commands (and so all its entities)
-  // alive in reused per-pass arrays; trim them after each disable.
-  defer(
-    installLayerReleaseTrim({
-      scene: viewer.scene,
-      dataManager,
-      requestRender: governorRequestRender,
-    }),
-  );
+  // The renderer may keep a turned-off layer's draw commands (and so all its
+  // entities) alive; trim them after each disable.
+  if (scene.trimStaleCommands)
+    defer(
+      installLayerReleaseTrim({
+        frame: renderer.frame,
+        dataManager,
+        requestRender: governorRequestRender,
+        trim: scene.trimStaleCommands,
+      }),
+    );
 
   // Install the explicit scope mask used by the DISPLAY controls.
   installScopeMask(viewer);

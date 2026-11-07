@@ -78,7 +78,6 @@
   "src/maps/google3d.js",
   "src/maps/imagery.js",
   "src/maps/terrain.js",
-  "src/sceneCommandRelease.js",
   "src/services/groundSnap.js",
   "src/services/meshFloorSampler.js",
   "src/sky/starrySky.js",

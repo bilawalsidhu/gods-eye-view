@@ -3112,6 +3112,7 @@
       "src/app/layers/traffic.js",
       "src/app/operations.js",
       "src/app/scene.js",
+      "src/render/cesium/sceneCommandRelease.js",
       "src/render/cesium/appRenderer.js",
       "src/render/cesium/frame.js",
       "src/render/creditMarkup.js",
