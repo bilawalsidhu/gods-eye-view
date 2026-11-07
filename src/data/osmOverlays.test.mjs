@@ -165,3 +165,43 @@ test('destroy removes owned imagery and unsubscribes from the map stack', () => 
   assert.equal(created[0].destroyed, true);
   assert.equal(mapStack.subscribers.size, 0);
 });
+
+test('setOpacity dims the owned imagery and survives disable and enable', () => {
+  const { layer, created, viewer } = setup();
+  let renders = 0;
+  viewer.scene.requestRender = () => renders++;
+  // Set before the overlay exists, as a value restored from the address is.
+  layer.setOpacity(0.4);
+  assert.equal(created.length, 0);
+  layer.enable();
+  assert.equal(created[0].alpha, 0.4, 'the new imagery layer starts dimmed');
+
+  layer.setOpacity(0.7);
+  assert.equal(created[0].alpha, 0.7);
+  assert.ok(renders > 0, 'the scene is asked to draw again');
+
+  layer.disable();
+  layer.enable();
+  assert.equal(created[1].alpha, 0.7, 'a re-enabled overlay keeps the value');
+
+  layer.setOpacity(1);
+  assert.equal(created[1].alpha, 1);
+});
+
+test('setOpacity clamps and treats a non-number as 100 %', () => {
+  const { layer, created } = setup();
+  layer.enable();
+  layer.setOpacity(-1);
+  assert.equal(created[0].alpha, 0);
+  layer.setOpacity(4);
+  assert.equal(created[0].alpha, 1);
+  layer.setOpacity(0.5);
+  layer.setOpacity(Number.NaN);
+  assert.equal(created[0].alpha, 1);
+});
+
+test('an overlay never dimmed is created at full alpha', () => {
+  const { layer, created } = setup();
+  layer.enable();
+  assert.equal(created[0].alpha, 1);
+});
