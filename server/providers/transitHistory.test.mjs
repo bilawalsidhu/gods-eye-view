@@ -123,7 +123,7 @@ test('retention is opt-in and entire decoded identifiers are bounded', (t) => {
     h.ingest(feed, [row(1000, id)], 1000);
   }
   assert.equal(h.diagnostics().keys, 0);
-  assert.equal(validTransitIdentifier('🚋 vehicle 1'), true);
+  assert.equal(validTransitIdentifier('tram vehicle 1'), true);
 });
 test('unref sweep is owned and clear closes the cache', (t) => {
   const h = history(t, { sweep: true });

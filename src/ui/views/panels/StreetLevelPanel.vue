@@ -158,7 +158,7 @@ const vThumb = {
         <span class="cctv-summary-label">{{ t('PROVIDERS') }}</span>
         <div id="sl-provider-chips" class="sl-chips"><RailChips :chips="view ? view.providers : []" /></div>
       </div>
-      <div id="sl-error" class="sl-error" role="alert" :hidden="!view?.error"><span aria-hidden="true">⚠</span> <span id="sl-error-text">{{ view?.error || '' }}</span></div>
+      <div id="sl-error" class="sl-error" role="alert" :hidden="!view?.error"><svg class="sl-error-icon" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.2v.1"/></svg> <span id="sl-error-text">{{ view?.error || '' }}</span></div>
       <!-- A missing key gates the filters only: the chips above stay
            focusable so their tooltip can say how to add the key. -->
       <fieldset id="sl-controls" class="sl-controls" :disabled="Boolean(view?.controlsDisabled)" :hidden="!shows.pano && !shows.since">

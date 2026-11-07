@@ -116,7 +116,7 @@ test('the chip counts what is missing and the rows render from the status', asyn
   assert.equal(google.dataset.set, 'false');
   assert.equal(google.hasAttribute('data-managed'), false);
   assert.equal(google.querySelector('strong').textContent, 'Google Maps');
-  assert.equal(google.querySelector('.key-setup-tier').textContent, '🔴');
+  assert.ok(google.querySelector('.key-setup-tier').classList.contains('tier-metered'));
   assert.equal(
     google.querySelector('.key-setup-tier').title,
     'Metered — a billing-enabled account',

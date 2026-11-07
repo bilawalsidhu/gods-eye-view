@@ -78,7 +78,7 @@ const removeTitle = (title) =>
         <div class="key-setup-row-head">
           <span class="key-setup-led" aria-hidden="true"></span>
           <strong>{{ key.title }}</strong>
-          <span class="key-setup-tier" :title="key.tierTitle">{{ key.tierDot }}</span>
+          <span :class="['key-setup-tier', key.tierClass]" :title="key.tierTitle" aria-hidden="true"></span>
           <span v-if="key.clientExposed" class="key-setup-exposed" :title="t('This key runs in the browser by design — restrict it at the provider (see SECURITY.md)')">{{ t('browser-side') }}</span>
           <span v-if="key.external" class="key-setup-external" :title="t('Supplied by your environment, Keychain, or launcher — change it where it was set')">{{ t('configured externally') }}</span>
           <a class="key-setup-get" :href="key.getUrl" target="_blank" rel="noopener noreferrer">{{ key.set ? t('MANAGE ↗') : t('GET KEY ↗') }}</a>

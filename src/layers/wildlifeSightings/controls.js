@@ -1,5 +1,6 @@
 import { t, formatNumber, translateKnown } from '../../i18n/index.js';
 import { msg } from '../../i18n/marker.js';
+import { ICONS } from '../../icons.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import { wildlifeIconicGroup } from './model.js';
 import { formatAge } from './photoText.js';
@@ -76,7 +77,8 @@ export function createControls({ state, services, parts }) {
   const methods = {
     id: 'wildlife-sightings',
     name: 'Wildlife Sightings',
-    icon: '🦉',
+    icon: '',
+    iconSvg: ICONS.bird,
     source: 'iNaturalist',
     updateInterval: WILDLIFE_UPDATE_INTERVAL_MS,
 

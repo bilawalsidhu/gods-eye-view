@@ -70,7 +70,7 @@ export class LocationControls {
     this.activePoi = null;
     this.poisExpanded = false;
     this.status = {
-      city: t('📍 Location: --'),
+      city: t('Location: --'),
       poi: t('Landmark: --'),
     };
     this.searchError = null;
@@ -203,7 +203,7 @@ export class LocationControls {
     this.status = {
       city:
         lines.city === LOCATION_MINI_EMPTY.city
-          ? t('📍 Location: --')
+          ? t('Location: --')
           : lines.city,
       poi:
         lines.poi === LOCATION_MINI_EMPTY.poi

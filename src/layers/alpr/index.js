@@ -15,6 +15,7 @@ import {
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
 import { t, tn, msg } from '../../i18n/index.js';
+import { ICONS } from '../../icons.js';
 
 /**
  * Own one layer's requests, records, display and viewer subscriptions.
@@ -287,7 +288,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
   const alprCamerasLayer = {
     id: LAYER_ID,
     name: 'ALPR Cameras',
-    icon: '📷',
+    icon: '',
+    iconSvg: ICONS.camera,
     // English in layer state; the layer row translates it.
     source: source.label || msg('Mapped camera locations'),
     updateInterval: 0,

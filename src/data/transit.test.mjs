@@ -140,7 +140,7 @@ test('selection copy reads like a transit card and never leaks nulls', () => {
     'bus',
     now,
   );
-  assert.equal(full.title, '🚌 Route 17');
+  assert.equal(full.title, 'Route 17');
   assert.deepEqual(full.details, [
     // The mode is said in words: a glyph and a route number do not tell a
     // reader whether the dot on the street is a bus or a subway train.
@@ -200,7 +200,7 @@ test('selection copy reads like a transit card and never leaks nulls', () => {
     now,
     now - 120_000,
   );
-  assert.equal(sparse.title, '🚆 Vehicle abc');
+  assert.equal(sparse.title, 'Vehicle abc');
   assert.deepEqual(sparse.details, [
     'Train · Metro Transit · Minneapolis–St Paul, MN',
     'Reported 2 min ago (feed time)',

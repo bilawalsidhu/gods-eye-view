@@ -63,7 +63,7 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
               <span>{{ entry.label }}</span>
             </button>
             <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)">{{ t('SEARCH NEARBY SITES') }}</button>
-            <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" :aria-label="t('Reclassify tracked contact as TR-3B')" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')">🛸</UiButton>
+            <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" :aria-label="t('Reclassify tracked contact as TR-3B')" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 12a4.5 4.5 0 0 1 7 0"/><path d="M2.5 12c2-1.5 5.4-2.5 9.5-2.5s7.5 1 9.5 2.5c-2 1.5-5.4 2.5-9.5 2.5s-7.5-1-9.5-2.5z"/><path d="M7.5 17.5l-1 2.5M16.5 17.5l1 2.5M12 18v2.5"/></svg></UiButton>
           </div>
           <AwarenessPanel />
         </section>

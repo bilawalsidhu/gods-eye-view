@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateValue } from './schema.js';
 test('tool string schemas count Unicode characters rather than UTF-16 units', () => {
-  const value = '𠮷野家😀';
+  const value = '𠮷野家\u{1F600}';
   assert.deepEqual(validateValue({ type: 'string', maxLength: 4 }, value), []);
   assert.equal(
     validateValue({ type: 'string', minLength: 5 }, value).length,
@@ -21,9 +21,9 @@ test('tool string schemas count Unicode characters rather than UTF-16 units', ()
 
 test('tool string bounds hold at their edges and on huge arguments', () => {
   const string = (bounds) => ({ type: 'string', ...bounds });
-  assert.deepEqual(validateValue(string({ maxLength: 3 }), '😀😀😀'), []);
-  assert.equal(validateValue(string({ maxLength: 3 }), '😀😀😀😀').length, 1);
-  assert.deepEqual(validateValue(string({ minLength: 3 }), '😀😀😀'), []);
+  assert.deepEqual(validateValue(string({ maxLength: 3 }), '\u{1F600}\u{1F600}\u{1F600}'), []);
+  assert.equal(validateValue(string({ maxLength: 3 }), '\u{1F600}\u{1F600}\u{1F600}\u{1F600}').length, 1);
+  assert.deepEqual(validateValue(string({ minLength: 3 }), '\u{1F600}\u{1F600}\u{1F600}'), []);
   assert.deepEqual(validateValue(string({}), 'x'.repeat(1e6)), []);
   // Counting all of it takes roughly 0.7 s; stopping at the limit takes none.
   const huge = 'x'.repeat(1e8);

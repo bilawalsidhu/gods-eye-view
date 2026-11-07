@@ -468,6 +468,7 @@ export class LayerPanel {
       // English name for voice tools, which must not receive translated text.
       englishName: englishPanelLabel(layer),
       icon: layer.icon,
+      iconSvg: layer.iconSvg,
       name: panelLabel(layer),
       count: row.count ? presentLayerCount(layer.stats) : null,
       toggle,
@@ -630,6 +631,7 @@ export class LayerPanel {
         .map((layer) => ({
           id: layer.id,
           icon: layer.icon,
+          iconSvg: layer.iconSvg,
           ...this._rowControlsFor(layer.id),
         })),
     );

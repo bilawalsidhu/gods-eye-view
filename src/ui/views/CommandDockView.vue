@@ -92,12 +92,12 @@ function selectMapSource(chip) {
           <span class="btn-key">2</span>
         </button>
         <button class="style-btn" data-style="surveillance" @click="display.act('setStyle', 'surveillance')" v-class-toggle="{ ...(style && { active: style.name === 'surveillance' }) }" :title="t('Simulate night-vision goggles with green intensification and a tube vignette.')">
-          <span class="btn-icon">🌙</span>
+          <span class="btn-icon btn-icon-mask btn-icon-moon" aria-hidden="true"></span>
           <span class="btn-label">{{ t('NVG') }}</span>
           <span class="btn-key">3</span>
         </button>
         <button class="style-btn" data-style="thermal" @click="display.act('setStyle', 'thermal')" v-class-toggle="{ ...(style && { active: style.name === 'thermal' }) }" :title="t('Simulate FLIR-style thermal contrast. Turn up Ironbow for color.')">
-          <span class="btn-icon">🌡️</span>
+          <span class="btn-icon btn-icon-mask btn-icon-thermal" aria-hidden="true"></span>
           <span class="btn-label">{{ t('FLIR') }}</span>
           <span class="btn-key">4</span>
         </button>
@@ -140,7 +140,7 @@ function selectMapSource(chip) {
         <button class="panel-collapse-btn" data-collapse-target="location-bar" :title="t('Collapse panel')" @click="chrome.act('toggle', 'location-bar')">+</button>
       </div>
       <div id="location-mini-status" class="location-mini-status" aria-live="polite">
-        <div id="location-mini-city" class="location-mini-city">{{ loc ? loc.status.city : t('📍 Location: --') }}</div>
+        <div id="location-mini-city" class="location-mini-city">{{ loc ? loc.status.city : t('Location: --') }}</div>
         <div id="location-mini-poi" class="location-mini-poi">{{ loc ? loc.status.poi : t('Landmark: --') }}</div>
       </div>
       <div id="location-bar-popover" class="dock-popover-content">
