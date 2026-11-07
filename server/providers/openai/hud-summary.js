@@ -25,6 +25,77 @@ function extractOpenAiResponseText(data) {
     .trim();
 }
 
+/**
+ * Optional OpenAI-compatible HUD backend (any `/v1/chat/completions` server,
+ * e.g. a local model or an agent's inference bridge). Off unless
+ * GEV_HUD_SUMMARY_BASE_URL is set; then the HUD uses it instead of OpenAI.
+ * GEV_HUD_SUMMARY_API_KEY (optional) is sent as a bearer token and
+ * GEV_HUD_SUMMARY_MODEL (optional) names the model.
+ */
+export function hudSummaryCompatTarget(env = process.env) {
+  const raw = String(env.GEV_HUD_SUMMARY_BASE_URL ?? '').trim();
+  if (!raw) return null;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  return {
+    endpoint: `${url.href.replace(/\/+$/, '')}/chat/completions`,
+    apiKey: String(env.GEV_HUD_SUMMARY_API_KEY ?? '').trim() || null,
+    model: String(env.GEV_HUD_SUMMARY_MODEL ?? '').trim() || 'default',
+  };
+}
+
+/** Request body for an OpenAI-compatible chat completions HUD call. */
+export function hudSummaryCompatBody(context, model) {
+  return {
+    model,
+    n: 1,
+    stream: false,
+    max_tokens: 200,
+    messages: [
+      {
+        role: 'system',
+        content: `${hudSummaryInstructions(context?.locale)}\nReply with JSON only: {"summary": string, "feedState": string|null}.`,
+      },
+      { role: 'user', content: hudSummaryInput(context) },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: HUD_SUMMARY_RESPONSE_FORMAT.name,
+        strict: HUD_SUMMARY_RESPONSE_FORMAT.strict,
+        schema: HUD_SUMMARY_RESPONSE_FORMAT.schema,
+      },
+    },
+  };
+}
+
+function extractChatCompletionText(data) {
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text !== 'string') return '';
+  return text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+}
+
+async function compatHudSummary(target, context) {
+  const response = await fetch(target.endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(target.apiKey ? { Authorization: `Bearer ${target.apiKey}` } : {}),
+    },
+    body: JSON.stringify(hudSummaryCompatBody(context, target.model)),
+  });
+  const data = await response.json().catch(() => ({}));
+  return { response, text: extractChatCompletionText(data) };
+}
+
 /** Parse the summary and normalize the canonical feed state. */
 function parseHudSummaryReply(text, locale) {
   let reply = null;
@@ -88,7 +159,9 @@ async function handleHudSummary(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     res.end(
       JSON.stringify({
-        configured: !keylessHudSummaryResponse(process.env.OPENAI_API_KEY),
+        configured:
+          Boolean(hudSummaryCompatTarget()) ||
+          !keylessHudSummaryResponse(process.env.OPENAI_API_KEY),
       }),
     );
     return;
@@ -100,8 +173,9 @@ async function handleHudSummary(req, res) {
     return;
   }
 
+  const compat = hudSummaryCompatTarget();
   const apiKey = process.env.OPENAI_API_KEY;
-  const keyless = keylessHudSummaryResponse(apiKey);
+  const keyless = compat ? null : keylessHudSummaryResponse(apiKey);
   if (keyless) {
     res.statusCode = keyless.statusCode;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -118,6 +192,28 @@ async function handleHudSummary(req, res) {
   try {
     const body = await readRequestBody(req, 64 * 1024);
     const context = JSON.parse(body || '{}');
+    if (compat) {
+      const { response, text } = await compatHudSummary(compat, context);
+      const { summary, feedState } = parseHudSummaryReply(
+        text,
+        context?.locale,
+      );
+      res.statusCode = response.ok && summary ? 200 : response.status || 502;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      if (!response.ok)
+        console.warn(
+          `[hud-summary] compatible upstream HTTP ${response.status}`,
+        );
+      res.end(
+        JSON.stringify({
+          summary: summary || null,
+          feedState,
+          error: response.ok ? null : 'HUD summary request failed',
+        }),
+      );
+      return;
+    }
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
