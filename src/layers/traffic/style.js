@@ -137,10 +137,14 @@ export function createStyle({ state: layerState, services, parts, source }) {
     return layerState._jamViz === 'density' || layerState._jamViz === 'both';
   }
 
-  /** @returns {boolean} Heat-line prototype active. */
+  /** @returns {boolean} Road lines drawn: the `lines` toggle or the heat-line prototype. */
 
   function heatlineOn() {
-    return layerState._jamViz === 'heatline' || layerState._jamViz === 'both';
+    return (
+      layerState._showLines ||
+      layerState._jamViz === 'heatline' ||
+      layerState._jamViz === 'both'
+    );
   }
   return {
     presetProfileActive,

@@ -1127,3 +1127,59 @@ test('the panel says why a lit Street View draws nothing off Google 3D', async (
   const view = presentStreetLevelPanel(layer.getUIState());
   assert.match(view.meta, /Google Street View needs the Google 3D map/);
 });
+
+/** Mapillary (keyless unless `mapillary` says otherwise) plus KartaView. */
+function keylessLayer(t, mapillary = { hasToken: () => false }) {
+  const layer = createStreetLevelLayer({
+    providers: [
+      createMapillaryProvider({
+        source: fakeMapillarySource(mapillary),
+        photoViewer: fakePhotoViewer(),
+      }),
+      createKartaViewProvider(),
+    ],
+  });
+  t.after(() => layer.destroy());
+  return layer;
+}
+const litProviders = (layer) =>
+  layer
+    .getUIState()
+    .providers.filter((provider) => provider.on)
+    .map((provider) => provider.id);
+
+test('without a Mapillary key the first keyless source is lit instead', (t) => {
+  assert.deepEqual(litProviders(keylessLayer(t)), ['kartaview']);
+  assert.deepEqual(litProviders(keylessLayer(t, {})), ['mapillary']);
+  // A token-adding Graph proxy counts as a key.
+  const proxied = keylessLayer(t, {
+    hasToken: () => false,
+    graphEndpoint: '/api/mapillary/graph',
+  });
+  assert.deepEqual(litProviders(proxied), ['mapillary']);
+});
+
+test('restoring the default "Mapillary on" without its key keeps a keyless source', (t) => {
+  const layer = keylessLayer(t);
+  layer.setParams({ mapillary: true, providerSwitches: '' });
+  assert.deepEqual(litProviders(layer), ['kartaview']);
+  // A link that switches KartaView off keeps its word.
+  layer.setParams({ mapillary: true, providerSwitches: 'kartaview-0' });
+  assert.deepEqual(litProviders(layer), ['mapillary']);
+});
+
+test('filter-only updates keep the lit source, even a chosen keyless Mapillary', (t) => {
+  const layer = keylessLayer(t);
+  layer.setParams({ pano: 'pano' });
+  assert.deepEqual(litProviders(layer), ['kartaview']);
+  // What the MAPILLARY chip sends, and what stored state restores.
+  layer.setParams({ mapillary: true, providerSwitches: 'kartaview-0' });
+  for (const params of [{ pano: 'pano' }, { sinceDays: 365 }, {}]) {
+    layer.setParams(params);
+    assert.deepEqual(
+      litProviders(layer),
+      ['mapillary'],
+      JSON.stringify(params),
+    );
+  }
+});
