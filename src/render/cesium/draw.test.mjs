@@ -701,6 +701,104 @@ test('a rebuilt set keeps its place among the scene primitives, and names its ho
   set.dispose();
 });
 
+test('changing an option rebuilds only the kinds that build it in, in their place', () => {
+  const scene = fakeScene();
+  scene.primitives = new Cesium.PrimitiveCollection();
+  const { draw, frame } = drawOver(scene);
+  const below = scene.primitives.add(new Cesium.PrimitiveCollection());
+  const set = draw.shapes({ id: 'cells' });
+  set.set([
+    {
+      id: 'a',
+      geometry: {
+        kind: 'rectangle',
+        rect: { west: 0, south: 0, east: 1, north: 1 },
+      },
+      fill: [1, 0, 0, 0.3],
+      height: 'clampGround',
+    },
+  ]);
+  const above = scene.primitives.add(new Cesium.PrimitiveCollection());
+  const order = () => {
+    const out = [];
+    for (let i = 0; i < scene.primitives.length; i++) {
+      const p = scene.primitives.get(i);
+      out.push(p === below ? 'below' : p === above ? 'above' : p.drawSetId);
+    }
+    return out;
+  };
+  // Every ground primitive the set's current host holds, made ready.
+  const ready = () => {
+    for (let i = 0; i < scene.primitives.length; i++) {
+      const host = scene.primitives.get(i);
+      if (host.drawSetId !== 'cells') continue;
+      for (let j = 0; j < host.length; j++)
+        if (host.get(j) instanceof Cesium.GroundPrimitive)
+          Object.defineProperty(host.get(j), 'ready', { value: true });
+    }
+    frame();
+  };
+  ready();
+  assert.deepEqual(order(), ['below', 'cells', 'above']);
+  set.setOptions({ pickable: false });
+  assert.deepEqual(order(), ['below', 'cells', 'above'], 'stopping picks');
+  ready();
+  set.setOptions({ pickable: true });
+  assert.deepEqual(
+    order(),
+    ['below', 'cells', 'cells', 'above'],
+    'the old ground waits beside the new, in the same place',
+  );
+  ready();
+  assert.deepEqual(order(), ['below', 'cells', 'above'], 'picking again');
+  set.dispose();
+
+  // Kinds that do not build an option in are not rebuilt for it.
+  const hostOf = (id) => {
+    for (let i = 0; i < scene.primitives.length; i++)
+      if (scene.primitives.get(i).drawSetId === id)
+        return scene.primitives.get(i);
+    return null;
+  };
+  const dots = draw.points({ id: 'dots' });
+  dots.set([{ id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' }]);
+  const dotsHost = hostOf('dots');
+  dots.setOptions({ pickable: false });
+  assert.equal(hostOf('dots'), dotsHost, 'points do not build in picks');
+  dots.setOptions({ blend: 'opaque' });
+  assert.notEqual(hostOf('dots'), dotsHost, 'points build in their blend');
+  dots.dispose();
+  const kept = draw.shapes({ id: 'kept' });
+  kept.set([]);
+  const keptHost = hostOf('kept');
+  kept.setOptions({ blend: 'opaque' });
+  assert.equal(hostOf('kept'), keptHost, 'shapes do not build in a blend');
+  kept.dispose();
+  // Models are not loaded again for any of them.
+  const fromGltf = Cesium.Model.fromGltfAsync;
+  let loads = 0;
+  Cesium.Model.fromGltfAsync = () => {
+    loads += 1;
+    return new Promise(() => {});
+  };
+  try {
+    const models = draw.models({ id: 'models' });
+    models.set([
+      {
+        id: 'm',
+        pos: { lon: 0, lat: 0 },
+        url: 'model.glb',
+        orientation: { heading: 0, pitch: 0, roll: 0 },
+      },
+    ]);
+    models.setOptions({ pickable: false, blend: 'opaque', clampTo: 'terrain' });
+    assert.equal(loads, 1, 'a model is loaded once');
+    models.dispose();
+  } finally {
+    Cesium.Model.fromGltfAsync = fromGltf;
+  }
+});
+
 test('restyling points that stay put changes them in place; moving one rebuilds', () => {
   const { scene, draw } = drawOver();
   const set = draw.points({ id: 'restyled', blend: 'translucent' });

@@ -189,11 +189,15 @@ export function createCesiumDraw({ scene, report }) {
         const pickable = spec.pickable !== false;
         Object.assign(spec, options);
         // What clamped items clamp to, how points blend, and whether ground
-        // primitives pick, are built into them.
+        // primitives pick, are built into them. Models clamp nothing, only
+        // points build in the blend, and only shapes and lines have ground
+        // primitives: other kinds are not rebuilt for those (models would
+        // load again).
         if (
-          spec.clampTo !== clampTo ||
-          spec.blend !== blend ||
-          (spec.pickable !== false) !== pickable
+          (kind !== 'models' && spec.clampTo !== clampTo) ||
+          (kind === 'points' && spec.blend !== blend) ||
+          ((kind === 'shapes' || kind === 'lines') &&
+            (spec.pickable !== false) !== pickable)
         )
           rebuild();
         // A set that stops picking lets its old ground go now: still drawn
