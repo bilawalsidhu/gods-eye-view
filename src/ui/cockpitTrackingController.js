@@ -17,6 +17,30 @@ export function readAircraftInfo() {
   });
 }
 
+/**
+ * The layer the active view rides: the aircraft's own layer. It is read from
+ * the tracked entity's id once the layer has dropped its tracking, so a layer
+ * turned off still names itself.
+ * @returns {'flights'|'military'|null}
+ */
+export function readSubjectLayerId() {
+  if (!this.active) return null;
+  const layerId = this.readAircraftInfo()?.layerId;
+  if (layerId) return layerId;
+  const [prefix] = String(this.trackedEntity?.gevTrackedId || '').split(':');
+  return ['flights', 'military'].includes(prefix) ? prefix : null;
+}
+
+/**
+ * The subject entry would take: a Cesium-tracked aircraft.
+ * @returns {'aircraft'|null}
+ */
+export function resolveEntryKind() {
+  return this.readAircraftInfo() && this.viewer.trackedEntity?.position
+    ? 'aircraft'
+    : null;
+}
+
 export function dispatchCockpitModeChanged(active, info = null) {
   const subjectId = active
     ? String(info?.icao24 || '')
@@ -131,6 +155,7 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
   this.lastContextUpdateMs = 0;
   this.lastCameraUpdateMs = 0;
   this.contextNavigationDeadlineMs = 0;
+  this.onRide?.(info.layerId);
   this.dispatchCockpitModeChanged(true, info);
   return true;
 }
@@ -206,6 +231,7 @@ export function enter() {
       this.mapViewButton?.focus({ preventScroll: true });
   });
   this.onEntered?.();
+  this.onRide?.(info.layerId);
   this.dispatchCockpitModeChanged(true, info);
   return true;
 }
@@ -247,9 +273,12 @@ export function exit({ restoreTracking = true } = {}) {
     this.restoreTrackingFrame(entity);
   }
   this.syncEntry();
+  // Back to whichever entry was used: the Contacts button or the readout's.
+  const readoutEntry = document.getElementById('cockpit-entry-readout');
   const restoreTarget =
-    this.entryFocusOrigin === this.entry
-      ? this.entry
+    this.entryFocusOrigin === this.entry ||
+    (readoutEntry && this.entryFocusOrigin === readoutEntry)
+      ? this.entryFocusOrigin
       : this.entry || this.entryFocusOrigin;
   this.entryFocusOrigin = null;
   // The entry shows when Vue flushes the presence; read it after.
