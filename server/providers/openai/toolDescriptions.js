@@ -65,6 +65,28 @@ export const ACTION_DESCRIPTIONS = {
       },
     },
   },
+  show_street_level: {
+    description:
+      'Fly to a place and open its nearest street-level photo; Street View switches to Google 3D (billed). No query: view centre.',
+    $position: 1,
+    parameters: {
+      properties: {
+        query: {
+          description: 'Place or address; "pointer" = under the cursor.',
+          $position: 1,
+        },
+        provider: {
+          description:
+            'google = Street View; others by name; omit: the lit source.',
+          $position: 1,
+        },
+        referent: {
+          description: 'Numbered item n from the last result list.',
+          $position: 1,
+        },
+      },
+    },
+  },
   adjust_camera_zoom: {
     description:
       'Move the current Cesium camera closer to or farther from what it is presently looking at. Use for relative zoom requests without changing location.',

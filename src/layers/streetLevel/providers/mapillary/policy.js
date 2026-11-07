@@ -16,6 +16,7 @@ export const MAPILLARY_SOURCE_METHODS = Object.freeze([
   'getStatus',
   'getTile',
   'getSequenceImages',
+  'nearestImages',
 ]);
 
 /** Stable id prefixes for picked primitives; every one starts with `mly:`. */
@@ -72,3 +73,21 @@ export function mapillaryImageUrl(imageId) {
 /** Fields requested for a sequence's images. */
 export const SEQUENCE_IMAGE_FIELDS =
   'id,captured_at,compass_angle,geometry,is_pano';
+
+/**
+ * Images asked for in a nearest-image search (show_street_level and links
+ * open the photo nearest a point; the graph API caps the radius at 50 m).
+ * The API returns the radius's images in no particular order and cuts them
+ * at the limit first, so this asks for its most (100): the distance sort and
+ * the imagery filter then choose among the spot's photos, not a few of them.
+ */
+export const NEAREST_LIMIT = 100;
+/**
+ * A nearest-image search that has not answered (headers and body) in this
+ * long is given up: a link or a posted view waits on it, and so does every
+ * view queued behind that one.
+ */
+export const NEAREST_TIMEOUT_MS = 12_000;
+/** Fields a nearest-image search needs: where each is, and the filter's. */
+export const NEAREST_IMAGE_FIELDS =
+  'id,captured_at,geometry,computed_geometry,is_pano';

@@ -1,5 +1,9 @@
+import { NEAREST_RADIUS_M } from '../../policy.js';
 import {
   MAPILLARY_GRAPH_HOST,
+  NEAREST_IMAGE_FIELDS,
+  NEAREST_LIMIT,
+  NEAREST_TIMEOUT_MS,
   SEQUENCE_IMAGE_FIELDS,
   SEQUENCE_IMAGES_LIMIT,
 } from './policy.js';
@@ -66,7 +70,47 @@ export function createMapillarySource({
     ...endpoints,
   };
 
-  async function graph(path, params = {}, { signal } = {}) {
+  async function graph(path, params = {}, { signal, timeoutMs = 0 } = {}) {
+    if (!timeoutMs) return graphOnce(path, params, { signal });
+    // The whole answer, body included, within `timeoutMs`; the caller's
+    // abort still wins.
+    if (signal?.aborted) throw signal.reason;
+    const controller = new AbortController();
+    const onAbort = () => controller.abort(signal.reason);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    const timer = setTimeout(
+      () =>
+        controller.abort(
+          new MapillarySourceError('Mapillary did not answer in time', {
+            status: 504,
+          }),
+        ),
+      timeoutMs,
+    );
+    try {
+      // A body that never ends is given up too, whatever the fetch does.
+      const gaveUp = new Promise((_, reject) =>
+        controller.signal.addEventListener(
+          'abort',
+          () => reject(controller.signal.reason),
+          { once: true },
+        ),
+      );
+      return await Promise.race([
+        graphOnce(path, params, { signal: controller.signal }),
+        gaveUp,
+      ]);
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      if (controller.signal.aborted) throw controller.signal.reason;
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
+  async function graphOnce(path, params, { signal }) {
     if (graphBase) {
       const search = new URLSearchParams(params);
       const response = await fetchImpl(`${graphBase}${path}?${search}`, {
@@ -144,6 +188,25 @@ export function createMapillarySource({
           limit: String(limit),
         },
         { signal },
+      );
+      return Array.isArray(payload?.data) ? payload.data : [];
+    },
+
+    /** Images within `radius` metres of a point, in no particular order. */
+    async nearestImages(
+      { lat, lon, radius = NEAREST_RADIUS_M, limit = NEAREST_LIMIT },
+      { signal } = {},
+    ) {
+      const payload = await graph(
+        'images',
+        {
+          lat: String(lat),
+          lng: String(lon),
+          radius: String(Math.min(50, Math.max(1, radius))),
+          limit: String(Math.min(100, Math.max(1, limit))),
+          fields: NEAREST_IMAGE_FIELDS,
+        },
+        { signal, timeoutMs: NEAREST_TIMEOUT_MS },
       );
       return Array.isArray(payload?.data) ? payload.data : [];
     },

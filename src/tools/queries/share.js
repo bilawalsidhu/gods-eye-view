@@ -1,6 +1,11 @@
 /** Links that open God's Eye View at a view. */
 
-import { VIEW_PROPERTIES, createView, viewUrl } from '../../view/index.js';
+import {
+  VIEW_PROPERTIES,
+  createView,
+  lookAtPoint,
+  viewUrl,
+} from '../../view/index.js';
 import { defineTool, ToolError } from '../catalog.js';
 import { GLOBE_PANEL_URI } from '../globePanel.js';
 import { AREA_SCHEMA, resolveArea } from '../area.js';
@@ -37,6 +42,30 @@ async function followedAircraftPosition(follow, tools) {
 }
 
 /**
+ * Where a tilted camera looks, measured from the ground under it: a view's
+ * altitude is above the ellipsoid, and a city a mile up would otherwise put
+ * the point kilometres too far ahead. Null when the terrain cannot say.
+ */
+async function groundedLookAt(camera, services, signal) {
+  if (typeof services?.terrain?.getHeights !== 'function') return null;
+  if (!Number.isFinite(camera.altitude_m) || !(camera.pitch_deg > -89))
+    return null;
+  let heights;
+  try {
+    heights = await services.terrain.getHeights(
+      [{ lat: camera.lat, lon: camera.lon }],
+      { signal },
+    );
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return null;
+  }
+  const ground = Number(heights?.[0]?.ellipsoid);
+  if (!Number.isFinite(ground)) return null;
+  return lookAtPoint({ ...camera, altitude_m: camera.altitude_m - ground });
+}
+
+/**
  * The view described by tool arguments. An area frames the camera straight
  * down over it; camera fields given alongside it override the framing. A
  * view that only follows an aircraft is framed where the aircraft is now.
@@ -47,10 +76,31 @@ export async function resolveViewArguments(args, { services, signal, tools }) {
     ? { ...args.camera }
     : { ...base.camera, ...args.camera };
   let label = null;
+  // Street-level photos open at the area's centre unless a point is given;
+  // a new area or camera position moves a passed-through view's photos with
+  // it.
+  const moved =
+    Boolean(args.area) ||
+    args.camera?.lat !== undefined ||
+    args.camera?.lon !== undefined;
+  let streetLevel =
+    args.street_level && typeof args.street_level === 'object'
+      ? { ...args.street_level }
+      : base.street_level && typeof base.street_level === 'object'
+        ? moved
+          ? { provider: base.street_level.provider }
+          : { ...base.street_level }
+        : null;
   if (args.area) {
     const area = await resolveArea(args.area, { services, signal });
     label = area.label;
     const framed = cameraForArea(area);
+    if (
+      streetLevel &&
+      streetLevel.lat === undefined &&
+      streetLevel.lon === undefined
+    )
+      streetLevel = { ...streetLevel, lat: framed.lat, lon: framed.lon };
     // A tilted view of an area looks at its center from behind, unless the
     // caller placed the camera itself.
     camera =
@@ -75,6 +125,15 @@ export async function resolveViewArguments(args, { services, signal, tools }) {
     camera = { altitude_m: FOLLOW_ALTITUDE_M, ...camera, ...position };
     label = `${follow.kind === 'military_aircraft' ? 'military aircraft' : 'aircraft'} ${follow.id}`;
   }
+  // Photos for a camera with no point open where it looks, from its ground.
+  if (
+    streetLevel &&
+    streetLevel.lat === undefined &&
+    streetLevel.lon === undefined
+  ) {
+    const point = await groundedLookAt(camera, services, signal);
+    if (point) streetLevel = { ...streetLevel, ...point };
+  }
   let view;
   try {
     view = createView({
@@ -84,6 +143,7 @@ export async function resolveViewArguments(args, { services, signal, tools }) {
       map: args.map ?? base.map ?? null,
       follow,
       annotations: args.annotations ?? base.annotations ?? [],
+      street_level: streetLevel,
     });
   } catch (error) {
     // A view passed through can hold anything; report it as bad arguments.
@@ -113,7 +173,9 @@ export const showInGodsEyeView = defineTool({
     'it. Pass the view another answer returned, or describe one: an area ' +
     'framed from above or a camera position, with chosen data layers, visual ' +
     'style and map, optionally following an aircraft (or riding in its ' +
-    'cockpit view) or a satellite, and with marks drawn on the map.',
+    'cockpit view) or a satellite, with marks drawn on the map, or opening ' +
+    'street-level photos (Google Street View, Mapillary, KartaView or ' +
+    'Panoramax) at a place.',
   inputSchema: {
     type: 'object',
     properties: VIEW_ARGUMENTS,
@@ -131,7 +193,13 @@ export const showInGodsEyeView = defineTool({
     const url = viewUrl(base, view);
     return {
       summary: `Open ${label} in God's Eye View: ${url}`,
-      data: { url, view },
+      // A panel opens a billed photo only for a result it receives fresh;
+      // hosts hand a panel its result again whenever they mount it.
+      data: {
+        url,
+        view,
+        ...(view.street_level ? { issued_at: Date.now() } : {}),
+      },
     };
   },
 });

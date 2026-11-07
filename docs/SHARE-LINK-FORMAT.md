@@ -51,6 +51,16 @@ military aircraft or satellite. A selected vessel is not followed (the camera
 stays where the user puts it), so a link made then is a place view; vessel
 thing views open, but the app does not make them yet.
 
+## Street-level photos (`sl`)
+
+Views built by `show_in_gods_eye_view` or `src/view/index.js` can add
+`sl=<source>,<lat>,<lon>` to the long form. Once the link has restored, the
+app opens the nearest photo there, or, for a source that bills every load,
+arms the panel so OPEN loads it (see `docs/TOOLS.md`). The app's own links do
+not carry it: the address bar's long form drops `sl` when the camera next
+moves, and the short form has no field for it. A reload or the app's Copy
+Link keeps the lit source, the layer and the map, but not the photo request.
+
 ## Payload
 
 The code is unpadded base64url (`A–Z a–z 0–9 - _`). The decoded bytes are:

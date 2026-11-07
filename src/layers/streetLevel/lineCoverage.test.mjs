@@ -654,3 +654,67 @@ test('the selected sequence is drawn and highlighted even past the per-tile cap'
   assert.ok(state.coverage.highlight, 'the selected line is highlighted');
   coverage.clear();
 });
+
+test('drawnLines reports the lines on the globe as [lon, lat] copies, filtered like the drawing', async () => {
+  const { source, state, coverage, centre } = setup();
+  assert.deepEqual(coverage.drawnLines(), [], 'nothing before a tile');
+  const sequences = [
+    {
+      id: 'flat-1',
+      parts: [
+        [
+          [centre.lon - 0.001, centre.lat],
+          [centre.lon + 0.001, centre.lat],
+        ],
+      ],
+      capturedAt: 2_000_000_000_000,
+    },
+    {
+      id: 'pano-1',
+      parts: [
+        [
+          [centre.lon, centre.lat - 0.001],
+          [centre.lon, centre.lat],
+          [centre.lon, centre.lat + 0.001],
+        ],
+      ],
+      capturedAt: 1_000_000_000_000,
+      isPano: true,
+    },
+  ];
+  state.filter = { pano: 'pano', sinceDays: 0 };
+  coverage.refresh();
+  source.calls[0].resolve(encodeCoverageTile(centre.tile, { sequences }));
+  await settle();
+  const lines = coverage.drawnLines();
+  assert.deepEqual(
+    lines.map((line) => line.id),
+    ['pano-1'],
+    'only the drawn (filtered) lines',
+  );
+  assert.equal(lines[0].parts.length, 1);
+  assert.equal(lines[0].parts[0].length, 3);
+  // Tile coordinates are quantised to the tile grid (a few metres at z14).
+  const [midLon, midLat] = lines[0].parts[0][1];
+  assert.ok(
+    Math.abs(midLon - centre.lon) < 1e-4 &&
+      Math.abs(midLat - centre.lat) < 1e-4,
+    `coordinates as [lon, lat]: ${midLon}, ${midLat} vs ${centre.lon}, ${centre.lat}`,
+  );
+  assert.ok(
+    lines[0].parts[0][0][1] < lines[0].parts[0][2][1],
+    'vertex order kept: south to north',
+  );
+  // Copies: a caller cannot bend the drawn line.
+  lines[0].parts[0][1][0] = 0;
+  assert.notEqual(coverage.drawnLines()[0].parts[0][1][0], 0);
+  state.filter = { pano: 'all', sinceDays: 0 };
+  coverage.rebuild();
+  assert.deepEqual(
+    coverage
+      .drawnLines()
+      .map((line) => line.id)
+      .sort(),
+    ['flat-1', 'pano-1'],
+  );
+});

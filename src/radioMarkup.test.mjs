@@ -25,14 +25,15 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 34-tool inventory', () => {
+test('Realtime schema exposes the authoritative 35-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 34);
+  assert.equal(tools.length, 35);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 34, 'tool names are unique');
+  assert.equal(new Set(names).size, 35, 'tool names are unique');
   assert.ok(names.includes('resolve_area'));
   assert.ok(names.includes('find_imagery'));
   assert.ok(names.includes('osm_query'));
+  assert.ok(names.includes('show_street_level'));
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('set_voice_inactivity_timeout'));
@@ -206,6 +207,8 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'resolve_area',
     'find_imagery',
     'osm_query',
+    // Street-level photos: a new composite tool, not an edit to a shipped one.
+    'show_street_level',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))

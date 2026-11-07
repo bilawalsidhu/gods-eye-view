@@ -19,6 +19,8 @@ export const useStreetLevelStore = defineStore('gev-street-level', () => {
   const expanded = shallowRef(null);
   /** False on a page with neither element fullscreen nor popovers. */
   const expandAvailable = shallowRef(true);
+  /** Whether the photo is shown over the globe on an embedded page. */
+  const embedOverlay = shallowRef(false);
   /** @type {{handlers: StreetLevelHandlers}|null} */
   let owner = null;
 
@@ -47,6 +49,11 @@ export const useStreetLevelStore = defineStore('gev-street-level', () => {
     expandAvailable.value = Boolean(available);
   }
 
+  /** @param {boolean} on */
+  function setEmbedOverlay(on) {
+    embedOverlay.value = Boolean(on);
+  }
+
   /**
    * Stop forwarding actions to the owner holding `token`. The panel keeps
    * its last render, as the page did when its controls were wired by hand.
@@ -69,10 +76,12 @@ export const useStreetLevelStore = defineStore('gev-street-level', () => {
     view,
     expanded,
     expandAvailable,
+    embedOverlay,
     attach,
     publish,
     setExpanded,
     setExpandAvailable,
+    setEmbedOverlay,
     detach,
     act,
     describeSinceStop,

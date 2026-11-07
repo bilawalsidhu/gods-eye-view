@@ -622,6 +622,36 @@ for (const mode of ['ui-clean-view', 'recording-mode', 'cockpit-mode'])
       }
     }));
 
+test('in embed mode, which keeps Clean View on for its globe, EXPAND stays; the cockpit still ends it', () =>
+  withDom(async (dom) => {
+    const saved = globalThis.MutationObserver;
+    const watch = fakeMutationObserver();
+    globalThis.MutationObserver = watch.FakeObserver;
+    try {
+      dom.document.body.classList.add('ui-embed');
+      dom.document.body.classList.add('ui-clean-view');
+      const { layer, controls } = await stubPanel(
+        dom,
+        uiState({ open: false }),
+      );
+      await layer.publish(uiState({ open: true }));
+      dom.document.querySelector('#sl-viewer-expand').click();
+      await settle();
+      await settle();
+      watch.fire();
+      await settle();
+      assert.equal(controls.isViewerExpanded(), true, 'EXPAND stays open');
+      dom.document.body.classList.toggle('cockpit-mode', true);
+      watch.fire();
+      await settle();
+      await settle();
+      assert.equal(controls.isViewerExpanded(), false);
+      controls.destroy();
+    } finally {
+      globalThis.MutationObserver = saved;
+    }
+  }));
+
 /* ── Restores and keyboard rules ───────────────────────────────────────── */
 
 test('only an explicit switch-on opens the panel, unstored; a restore never does (P2-1)', () =>
@@ -919,5 +949,155 @@ test('a window changed elsewhere under a focused SINCE thumb leaves its readout 
     assert.equal(since.value, '5', 'the thumb stays under the hand');
     assert.match(label(), /^LAST YEAR · SINCE /, 'and the readout with it');
     assert.equal(since.getAttribute('aria-valuetext'), label());
+    controls.destroy();
+  }));
+
+/** In embed mode, the viewer moved out of the hidden rail onto the globe. */
+const overGlobe = (dom) =>
+  dom.wrap.parentNode === dom.document.body &&
+  dom.wrap.classList.contains('sl-viewer-wrap-embed');
+
+const escape = () =>
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+
+test('in embed mode an open photo leaves the hidden rail for an overlay on the globe, and goes back when it closes', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const home = dom.wrap.parentNode;
+    const after = dom.wrap.nextSibling;
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    assert.equal(overGlobe(dom), false, 'nothing to show yet');
+    await layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), true, 'shown over the globe');
+    assert.equal(dom.wrap.hidden, false, 'the panel view still renders it');
+    await layer.publish(uiState({ open: true, renderMode: 'fill' }));
+    assert.equal(overGlobe(dom), true, 'an update keeps it there');
+    assert.equal(
+      dom.wrap.querySelector('[aria-checked="true"]')?.textContent.trim(),
+      'FILL',
+      'and the panel view keeps patching it there',
+    );
+    await layer.publish(uiState({ open: false }));
+    assert.equal(overGlobe(dom), false);
+    assertSameNode(dom.wrap.parentNode, home, 'back in the panel');
+    assertSameNode(dom.wrap.nextSibling, after, 'in its own place');
+    assert.equal(dom.wrap.hidden, true);
+    controls.destroy();
+  }));
+
+test('outside embed mode a photo stays in the panel', () =>
+  withDom(async (dom) => {
+    const home = dom.wrap.parentNode;
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    await layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), false);
+    assertSameNode(dom.wrap.parentNode, home);
+    controls.destroy();
+  }));
+
+test('an opening photo brings its panel into view (a phone’s tab sheet); embed mode lifts it instead', () =>
+  withDom(async (dom) => {
+    const revealed = [];
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }), {
+      revealPanel: () => revealed.push('street-level'),
+    });
+    await layer.publish(uiState({ open: true }));
+    assert.deepEqual(revealed, ['street-level'], 'once, as it opens');
+    await layer.publish(uiState({ open: true, renderMode: 'fill' }));
+    assert.equal(revealed.length, 1, 'not on every update');
+    await layer.publish(uiState({ open: false }));
+    dom.document.body.classList.add('ui-embed');
+    await layer.publish(uiState({ open: true }));
+    assert.equal(revealed.length, 1, 'embed mode shows it over the globe');
+    controls.destroy();
+  }));
+
+test('in embed mode Esc closes the photo, and the next photo is shown over the globe again', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    let closed = 0;
+    layer.closeViewer = () => {
+      closed++;
+      layer.publish(uiState({ open: false }));
+    };
+    await layer.publish(uiState({ open: true }));
+    escape();
+    await nextTick();
+    assert.equal(closed, 1, 'Esc closed the photo');
+    assert.equal(overGlobe(dom), false);
+    await layer.publish(uiState({ open: true }));
+    assert.equal(overGlobe(dom), true, 'the next photo is shown');
+    controls.destroy();
+  }));
+
+test('in embed mode Esc in full screen leaves full screen and keeps the photo', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    let closed = 0;
+    layer.closeViewer = () => closed++;
+    await layer.publish(uiState({ open: true }));
+    await dom.wrap.requestFullscreen();
+    await settle();
+    assert.equal(controls.isViewerExpanded(), true);
+    escape();
+    assert.equal(closed, 0, 'the photo stays open');
+    controls.destroy();
+  }));
+
+test('outside embed mode Esc does not close a photo in the panel', () =>
+  withDom(async (dom) => {
+    const { layer, controls } = await stubPanel(dom, uiState({ open: true }));
+    let closed = 0;
+    layer.closeViewer = () => closed++;
+    escape();
+    assert.equal(closed, 0);
+    controls.destroy();
+  }));
+
+test('destroying the panel in embed mode puts an open photo back in the panel', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const home = dom.wrap.parentNode;
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    await layer.publish(uiState({ open: true }));
+    controls.destroy();
+    assert.equal(overGlobe(dom), false);
+    assertSameNode(dom.wrap.parentNode, home);
+  }));
+
+test('an embedded photo failure is shown inside the overlay, and only there', () =>
+  withDom(async (dom) => {
+    dom.document.body.classList.add('ui-embed');
+    const { layer, controls } = await stubPanel(dom, uiState({ open: false }));
+    const failed = uiState({ open: true });
+    Object.assign(failed.street, {
+      imageId: null,
+      error: 'Image could not be opened',
+    });
+    await layer.publish(failed);
+    assert.equal(overGlobe(dom), true);
+    const error = dom.wrap.querySelector('#sl-viewer-error');
+    assert.ok(error, 'the overlay contains an error region');
+    assert.equal(error.hidden, false);
+    assert.match(error.textContent, /Image could not be opened/);
+    assert.equal(dom.root.querySelector('#sl-error').hidden, true);
+    await layer.publish(uiState({ open: true }));
+    assert.equal(error.hidden, true, 'a successful retry clears the error');
+    controls.destroy();
+  }));
+
+test('outside embed mode a photo failure stays in the panel error region', () =>
+  withDom(async (dom) => {
+    const failed = uiState({ open: true });
+    failed.street.error = 'Image could not be opened';
+    const { controls } = await stubPanel(dom, failed);
+    const error = dom.wrap.querySelector('#sl-viewer-error');
+    assert.ok(error);
+    assert.equal(error.hidden, true, 'no duplicate error inside the photo');
+    assert.equal(dom.root.querySelector('#sl-error').hidden, false);
     controls.destroy();
   }));

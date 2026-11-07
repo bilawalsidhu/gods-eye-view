@@ -3109,5 +3109,15 @@
   "Close camera preview": "关闭摄像头预览",
   "Refresh map still": "刷新地图静止画面",
   "The map still uses a separate request and may show a different moment.": "地图静止画面通过单独的请求获取，可能显示不同的时刻。",
-  "Video plays from Québec 511, which sees your IP address.": "视频从 Québec 511 播放，Québec 511 会看到你的 IP 地址。"
+  "Video plays from Québec 511, which sees your IP address.": "视频从 Québec 511 播放，Québec 511 会看到你的 IP 地址。",
+  "Press OPEN to load the photo": "点击“打开”加载照片",
+  "Captured {month}": "拍摄于 {month}",
+  "this spot": "此处",
+  "the view centre": "视图中心",
+  "{source} at {place}": "{place} 的 {source}",
+  "Street level at {place}": "{place} 的街景",
+  "Switching map": "正在切换地图",
+  "Opening imagery": "正在打开影像",
+  "Street View is ready: press {open} to load it": "街景已就绪：按 {open} 加载",
+  "Street-level photos are hidden in the current view. Leave it first.": "当前视图隐藏了街景照片。请先退出该视图。"
 }

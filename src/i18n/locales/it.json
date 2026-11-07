@@ -3259,5 +3259,15 @@
   "Close camera preview": "Chiudi anteprima della telecamera",
   "Refresh map still": "Aggiorna immagine fissa sulla mappa",
   "The map still uses a separate request and may show a different moment.": "L’immagine sulla mappa usa una richiesta separata e può mostrare un momento diverso.",
-  "Video plays from Québec 511, which sees your IP address.": "Il video viene riprodotto da Québec 511, che vede il tuo indirizzo IP."
+  "Video plays from Québec 511, which sees your IP address.": "Il video viene riprodotto da Québec 511, che vede il tuo indirizzo IP.",
+  "Press OPEN to load the photo": "Premi APRI per caricare la foto",
+  "Captured {month}": "Scattata a {month}",
+  "this spot": "questo punto",
+  "the view centre": "il centro della vista",
+  "{source} at {place}": "{source} a {place}",
+  "Street level at {place}": "Vista stradale a {place}",
+  "Switching map": "Cambio mappa",
+  "Opening imagery": "Apertura delle immagini",
+  "Street View is ready: press {open} to load it": "Street View è pronto: premi {open} per caricarlo",
+  "Street-level photos are hidden in the current view. Leave it first.": "Le foto a livello stradale sono nascoste nella vista attuale. Esci prima da questa vista."
 }

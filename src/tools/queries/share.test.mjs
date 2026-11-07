@@ -113,3 +113,189 @@ test('links carry a camera, style, map and an entity to follow', async () => {
     /Give a view, an area, or a camera with lat and lon/,
   );
 });
+
+test('links can open street-level photos at the area, on the map the source needs', async () => {
+  const { viewFromParams } = await import('../../view/index.js');
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { app: { baseUrl: 'http://localhost:4173/' } },
+  });
+  const result = await catalog.call('show_in_gods_eye_view', {
+    area: { lat: 38.5799, lon: -121.4937, radius_km: 1 },
+    street_level: { provider: 'google' },
+  });
+  const { view } = result.data;
+  assert.equal(view.map, 'photoreal');
+  assert.deepEqual(view.layers, ['street-level']);
+  assert.deepEqual(view.street_level, {
+    provider: 'google',
+    lat: 38.5799,
+    lon: -121.4937,
+  });
+  const params = new URLSearchParams(new URL(result.data.url).hash.slice(1));
+  assert.equal(params.get('sl'), 'google,38.57990,-121.49370');
+  assert.equal(params.get('map'), 'photoreal');
+  assert.deepEqual(viewFromParams(params), view);
+  // The panel opens a billed photo only for a result it gets fresh.
+  assert.ok(Math.abs(Date.now() - result.data.issued_at) < 60_000);
+
+  const point = await catalog.call('show_in_gods_eye_view', {
+    view,
+    street_level: { provider: 'mapillary', lat: 38.58, lon: -121.49 },
+  });
+  assert.deepEqual(point.data.view.street_level, {
+    provider: 'mapillary',
+    lat: 38.58,
+    lon: -121.49,
+  });
+  await assert.rejects(
+    catalog.call('show_in_gods_eye_view', {
+      area: { lat: 0, lon: 0, radius_km: 1 },
+      map: 'osm',
+      street_level: { provider: 'google' },
+    }),
+    /photoreal/,
+  );
+});
+
+test('a new area or camera position moves a passed-through view’s photos, and a tilted area still opens them at its centre', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { app: { baseUrl: 'http://localhost:4173/' } },
+  });
+  const first = await catalog.call('show_in_gods_eye_view', {
+    area: { lat: 38.5799, lon: -121.4937, radius_km: 1 },
+    street_level: { provider: 'google' },
+  });
+  const second = await catalog.call('show_in_gods_eye_view', {
+    view: first.data.view,
+    area: { lat: 42.3314, lon: -83.0458, radius_km: 1 },
+  });
+  assert.deepEqual(second.data.view.street_level, {
+    provider: 'google',
+    lat: 42.3314,
+    lon: -83.0458,
+  });
+  // A new camera position moves them too; turning the camera keeps them.
+  const moved = await catalog.call('show_in_gods_eye_view', {
+    view: first.data.view,
+    camera: { lat: 40.758, lon: -73.9855, altitude_m: 800, pitch_deg: -90 },
+  });
+  assert.deepEqual(moved.data.view.street_level, {
+    provider: 'google',
+    lat: 40.758,
+    lon: -73.9855,
+  });
+  const turned = await catalog.call('show_in_gods_eye_view', {
+    view: first.data.view,
+    camera: { heading_deg: 90 },
+  });
+  assert.deepEqual(turned.data.view.street_level, first.data.view.street_level);
+  const tilted = await catalog.call('show_in_gods_eye_view', {
+    area: { lat: 48.8584, lon: 2.2945, radius_km: 1 },
+    camera: { pitch_deg: -30 },
+    street_level: { provider: 'mapillary' },
+  });
+  assert.notEqual(
+    tilted.data.view.camera.lat,
+    48.8584,
+    'the camera sits behind the target',
+  );
+  assert.deepEqual(tilted.data.view.street_level, {
+    provider: 'mapillary',
+    lat: 48.8584,
+    lon: 2.2945,
+  });
+  // A wide area frames the camera tens of km up, past where a camera's
+  // look-at point is trusted: the photos still open at the area's centre.
+  const wide = await catalog.call('show_in_gods_eye_view', {
+    area: { lat: 48.8584, lon: 2.2945, radius_km: 15 },
+    camera: { pitch_deg: -30 },
+    street_level: { provider: 'mapillary' },
+  });
+  assert.ok(wide.data.view.camera.altitude_m > 20_000);
+  assert.deepEqual(wide.data.view.street_level, {
+    provider: 'mapillary',
+    lat: 48.8584,
+    lon: 2.2945,
+  });
+  await assert.rejects(
+    catalog.call('show_in_gods_eye_view', {
+      area: { lat: 0, lon: 0, radius_km: 1 },
+      follow: { kind: 'aircraft', id: 'AE1234' },
+      street_level: {},
+    }),
+    /cannot both follow/,
+  );
+});
+
+test('a camera with no photo point opens photos where it looks, measured from its ground', async () => {
+  const { lookAtPoint } = await import('../../view/index.js');
+  const asked = [];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      app: { baseUrl: 'http://localhost:4173/' },
+      terrain: {
+        getHeights: async (points) => {
+          asked.push(points);
+          return [{ ellipsoid: 1590 }];
+        },
+      },
+    },
+  });
+  // Denver: 1,909 m above the ellipsoid is about 320 m above its streets.
+  const camera = {
+    lat: 39.7392,
+    lon: -104.9903,
+    altitude_m: 1909,
+    pitch_deg: -30,
+    heading_deg: 0,
+  };
+  const result = await catalog.call('show_in_gods_eye_view', {
+    camera,
+    street_level: { provider: 'mapillary' },
+  });
+  assert.deepEqual(asked, [[{ lat: 39.7392, lon: -104.9903 }]]);
+  const grounded = lookAtPoint({ ...camera, altitude_m: 319 });
+  const { street_level: street } = result.data.view;
+  assert.ok(Math.abs(street.lat - grounded.lat) < 1e-5, 'about 550 m ahead');
+  assert.ok(
+    street.lat - camera.lat < 0.006,
+    'not the 3.3 km a sea-level guess gives',
+  );
+  // No terrain answer: the view's own estimate, as before.
+  const offline = composeCatalog({
+    tools: coreTools,
+    services: {
+      app: { baseUrl: 'http://localhost:4173/' },
+      terrain: {
+        getHeights: async () => {
+          throw new Error('offline');
+        },
+      },
+    },
+  });
+  const fallback = await offline.call('show_in_gods_eye_view', {
+    camera,
+    street_level: { provider: 'mapillary' },
+  });
+  const guess = lookAtPoint(camera);
+  assert.ok(Math.abs(fallback.data.view.street_level.lat - guess.lat) < 1e-5);
+});
+
+test('a view passed through alone keeps its street-level photos', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { app: { baseUrl: 'http://localhost:4173/' } },
+  });
+  const first = await catalog.call('show_in_gods_eye_view', {
+    area: { lat: 38.5799, lon: -121.4937, radius_km: 1 },
+    street_level: { provider: 'mapillary' },
+  });
+  const again = await catalog.call('show_in_gods_eye_view', {
+    view: first.data.view,
+  });
+  assert.deepEqual(again.data.view.street_level, first.data.view.street_level);
+  assert.deepEqual(again.data.view, first.data.view);
+});
