@@ -17,7 +17,7 @@
  */
 
 const EARTH_RADIUS_M = 6371000;
-export const PLANE_VERT_ASPECT = 16 / 9;
+const PLANE_VERT_ASPECT = 16 / 9;
 export const SUPPORT_KEYS = Object.freeze([
   'bl',
   'bm',
@@ -128,7 +128,7 @@ export function planeSupportPoints(pose) {
  * @param {number} capAltM @param {-1|0|1} row @param {{upVert:number}} dims
  * @returns {number}
  */
-export function supportAltitude(capAltM, row, dims) {
+function supportAltitude(capAltM, row, dims) {
   return capAltM + row * dims.upVert;
 }
 

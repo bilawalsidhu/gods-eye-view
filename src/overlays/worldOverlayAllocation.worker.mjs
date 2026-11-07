@@ -27,6 +27,12 @@ import {
 } from '../data/trackedReadout.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../data/cctvLod.js';
 import {
+  AIR_QUALITY_OVERLAY_COHORT_LIMIT,
+  AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
+  AIR_QUALITY_OVERLAY_SOURCE_ID,
+  createAirQualityOverlayEntry,
+} from '../layers/airQuality/model.js';
+import {
   CCTV_OVERLAY_SOURCE_ID,
   createCctvThumbnailOverlayEntry,
   createFrameSlot,
@@ -351,6 +357,7 @@ function buildWorkload(count) {
       id: `mover-${index}`,
       position: () => position,
       variant: 'label',
+      // i18n-ignore: benchmark fixture
       title: `TRK ${1000 + index}`,
       details: [`ALT ${10_000 + index * 25}`],
       priority: index % 7,
@@ -461,6 +468,7 @@ function buildPhase3FirmsWorkload(count) {
           position,
           gapPx: 10,
           accent: '224, 82, 82',
+          // i18n-ignore: benchmark fixture
           title: `▲ ${50 + fireIndex} MW`,
           details: ['high · 2h · N20'],
           selected: false,
@@ -551,6 +559,7 @@ function buildPhase3VesselsWorkload(count) {
           position,
           gapPx: 10,
           accent: '224, 82, 82',
+          // i18n-ignore: benchmark fixture
           title: `▲ ${50 + fireIndex} MW`,
           details: ['high · 2h · N20'],
           selected: false,
@@ -570,6 +579,7 @@ function buildPhase3VesselsWorkload(count) {
         position,
         gapPx: selected ? 12 : 10,
         accent: '57, 213, 255',
+        // i18n-ignore: benchmark fixture
         title: selected ? 'SELECTED VESSEL' : `VESSEL ${vesselIndex}`,
         details: selected
           ? ['CARGO · 14.5KT · 231°', 'MMSI 353136000 · POS: LIVE']
@@ -644,6 +654,7 @@ function buildPhase3TrackedWorkload(count) {
     gevTrackedId: 'flights:allocation-probe',
     gevDisplayPosition: selected.position,
     gevLabelModel: {
+      // i18n-ignore: benchmark fixture
       title: 'ALLOC01',
       details: ['FL350 · 451 kts', 'TEST AIR · A320'],
       accent: '#39d0ff',
@@ -694,6 +705,7 @@ function buildPhase4CctvWorkload(count) {
     const entry = createCctvThumbnailOverlayEntry({
       id: active ? 'cctv:active' : `cctv:${index}`,
       position,
+      // i18n-ignore: benchmark fixture
       title: active ? 'ACTIVE CAMERA' : `CAMERA ${index}`,
       frameSlot: slot,
       rank: index,
@@ -867,6 +879,7 @@ function buildPhase5CivilWorkload(count) {
   const entry = registration?.entries[0];
   if (!entry)
     throw new Error('phase5-civil requires the protected tracked entry');
+  // i18n-ignore: benchmark fixture
   entry.title = 'ALLOC01 · FL350 · 451 kts';
   entry.details = ['TEST AIR · A320', 'AUS → LAX'];
   return workload;
@@ -881,6 +894,7 @@ function buildPhase5MilitaryWorkload(count) {
   if (!entry)
     throw new Error('phase5-military requires the protected tracked entry');
   entry.id = 'military:allocation-probe';
+  // i18n-ignore: benchmark fixture
   entry.title = 'RCH451';
   entry.details = ['C17 · 05-8152', 'USAF · 28000 ft · 400 kt'];
   entry.accent = '#ffd166';
@@ -1067,6 +1081,7 @@ function appendSubmarineCableWorkload(workload, count) {
       id: `${kind}-reference-${index}-alloc`,
       kind,
       label:
+        // i18n-ignore: benchmark fixture
         kind === 'cable' ? `Cable System ${index}` : `Landing Point ${index}`,
       tip: position,
       distanceM: 200_000 + index * 40_000,
@@ -1099,6 +1114,69 @@ function buildSubmarineCablesWorkload(count) {
     { entries: [], positions: [], drifts: [], registrations: [] },
     count,
   );
+}
+
+/**
+ * The air-quality station cohort at full size.
+ *
+ * Measured standalone (the submarine-cable precedent) rather than stacked on
+ * the Phase-5 host: air-quality stations are sparse and, with the single
+ * currently-registered provider, continental — so the question a budget has to
+ * answer is what its own cohort costs, not what it adds to a worldwide worst
+ * case it never shares a viewport with. The entry shape is the same static
+ * `ambient-label` the earthquake layer publishes, so the per-candidate ceiling
+ * is the meaningful gate.
+ */
+function buildAirQualityWorkload(count) {
+  if (count !== AIR_QUALITY_OVERLAY_COHORT_LIMIT) {
+    throw new Error(
+      `air-quality requires ${AIR_QUALITY_OVERLAY_COHORT_LIMIT} entries`,
+    );
+  }
+  const workload = {
+    entries: [],
+    positions: [],
+    drifts: [],
+    registrations: [],
+  };
+  const columns = Math.max(1, Math.ceil(Math.sqrt((count * 16) / 9)));
+  const rows = Math.max(1, Math.ceil(count / columns));
+  const spanX = columns > 1 ? 1.68 / (columns - 1) : 0;
+  const spanY = rows > 1 ? 1.56 / (rows - 1) : 0;
+  const stations = [];
+  for (let index = 0; index < count; index++) {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const baseX = -0.84 + column * spanX;
+    const baseY = -0.78 + row * spanY;
+    const position = new Cesium.Cartesian3(baseX, baseY, 0);
+    workload.positions.push(position);
+    workload.drifts.push({
+      baseX,
+      baseY,
+      phase: index * 0.27,
+      rate: 0.32 + (index % 6) * 0.04,
+    });
+    const entry = createAirQualityOverlayEntry({
+      id: `air-${index}`,
+      position,
+      // i18n-ignore: benchmark fixture
+      title: `Station ${index} ${1 + (index % 10)}`,
+      accent: '#4cc9f0',
+      value: 1 + (index % 10),
+    });
+    entry.horizonCull = false;
+    stations.push(entry);
+  }
+  workload.registrations.push({
+    sourceId: AIR_QUALITY_OVERLAY_SOURCE_ID,
+    entries: stations,
+    options: {
+      cohortLimit: AIR_QUALITY_OVERLAY_COHORT_LIMIT,
+      collisionCapacity: AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
+    },
+  });
+  return workload;
 }
 
 function buildPhase6DetectionWorkload(count) {
@@ -1206,9 +1284,13 @@ function main() {
                                 ? buildPhase5RocketMissionWorkload(ENTRY_COUNT)
                                 : PROFILE === 'all-live-radio'
                                   ? buildAllLiveRadioWorkload(ENTRY_COUNT)
-                                  : PROFILE === 'submarine-cables'
-                                    ? buildSubmarineCablesWorkload(ENTRY_COUNT)
-                                    : buildWorkload(ENTRY_COUNT);
+                                  : PROFILE === 'air-quality'
+                                    ? buildAirQualityWorkload(ENTRY_COUNT)
+                                    : PROFILE === 'submarine-cables'
+                                      ? buildSubmarineCablesWorkload(
+                                          ENTRY_COUNT,
+                                        )
+                                      : buildWorkload(ENTRY_COUNT);
   const { entries, positions, drifts } = workload;
   const solveIntervalMs = Number(process.env.GEV_ALLOC_SOLVE_MS) || 125;
   const detectionActive = !!workload.detectionLayer;

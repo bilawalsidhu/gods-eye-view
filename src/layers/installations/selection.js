@@ -10,6 +10,24 @@ export function createSelection({
 }) {
   const { clearSelectedEntityContextForLayer } = services.context;
 
+  let removeContextListeners = null;
+
+  function syncContextSelection(event) {
+    if (!layerState.enabled) return;
+    // Tracking layers publish this event before replacing the shared context.
+    const selected =
+      event?.type === 'gev:awareness-subject-selected'
+        ? event.detail
+        : services.context.getSelectedEntityContext();
+    const next =
+      selected?.layerId === LAYER_ID && layerState.recordById.has(selected.id)
+        ? selected.id
+        : null;
+    if (next === layerState.selectedId) return;
+    layerState.selectedId = next;
+    parts.rendering.renderRecords();
+  }
+
   function selectRecord(id) {
     const record = layerState.recordById.get(id);
     if (!record || !layerState.dataSource) return false;
@@ -21,6 +39,17 @@ export function createSelection({
 
   function installInteraction(viewer) {
     if (layerState.clickHandler) return;
+    const events = [
+      'gev:entity-selected',
+      'gev:entity-selection-cleared',
+      'gev:awareness-subject-selected',
+    ];
+    for (const event of events)
+      globalThis.window?.addEventListener?.(event, syncContextSelection);
+    removeContextListeners = () => {
+      for (const event of events)
+        globalThis.window?.removeEventListener?.(event, syncContextSelection);
+    };
     layerState.clickHandler = new Cesium.ScreenSpaceEventHandler(
       viewer.scene.canvas,
     );
@@ -29,7 +58,9 @@ export function createSelection({
       if (!isPointerFree()) return;
       if (!layerState.enabled) return;
       const picked = viewer.scene.pick(click.position);
-      const id = typeof picked?.id?.id === 'string' ? picked.id.id : null;
+      const id =
+        picked?.id?.installationId ||
+        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);
       } else if (layerState.selectedId) {
@@ -42,5 +73,12 @@ export function createSelection({
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
-  return { selectRecord, installInteraction };
+  return {
+    selectRecord,
+    installInteraction,
+    destroy() {
+      removeContextListeners?.();
+      removeContextListeners = null;
+    },
+  };
 }

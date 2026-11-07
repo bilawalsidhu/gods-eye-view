@@ -7,6 +7,8 @@
  * integer category (states index 17) and ADS-B emitter strings ("A1".."B1").
  */
 
+import { msg } from '../i18n/marker.js';
+
 const HELI = new Set([
   'EC20',
   'EC25',
@@ -437,6 +439,20 @@ export function classifyAircraft({ typeCode, category } = {}) {
   if (EMITTER_CATEGORY[cat]) return EMITTER_CATEGORY[cat];
   return 'airliner';
 }
+
+/** Readable name of each class, for cards and readouts (English data). */
+export const AIRCRAFT_CLASS_LABELS = Object.freeze({
+  light: msg('Light aircraft'),
+  glider: msg('Glider'),
+  turboprop: msg('Turboprop'),
+  airliner: msg('Airliner'),
+  widebody: msg('Widebody'),
+  quadjet: msg('Four-engine jet'),
+  helicopter: msg('Helicopter'),
+  fastjet: msg('Fast jet'),
+  bizjet: msg('Business jet'),
+  uav: msg('Drone'),
+});
 
 /** Billboard scale multipliers (skylight GLYPH_SCALE, + fastjet). */
 export const CLASS_SCALE_2D = {

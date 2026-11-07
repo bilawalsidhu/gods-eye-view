@@ -23,13 +23,17 @@ try {
     `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () => window.__godsEyeView?.dataManager?._layerPanel,
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 60000,
+  });
   const results = await page.evaluate(async () => {
     const manager = window.__godsEyeView.dataManager;
-    const container = manager._toggleContainer;
+    const entry = document.querySelector(
+      'script[type="module"][src*="/src/main.js"]',
+    );
+    const { application } = await import(entry.src);
+    const { presentation } = application.getComponents().data;
+    const container = presentation.panel._toggleContainer;
     const id = 'qa-panel-lifecycle';
     let listener = null;
     let enabled = 0;
@@ -54,7 +58,7 @@ try {
     });
     const result = [];
     try {
-      manager.buildTogglePanel(container);
+      presentation.mount(container);
       const row = () => container.querySelector(`[data-layer-id="${id}"]`);
       const first = row().querySelector('.data-toggle-btn');
       result.push([
@@ -66,7 +70,7 @@ try {
         'row subscription is installed',
         typeof listener === 'function',
       ]);
-      manager.buildTogglePanel(container);
+      presentation.mount(container);
       first.click();
       await Promise.resolve();
       result.push([
@@ -83,21 +87,25 @@ try {
         row().querySelector('.data-toggle-btn').dataset.feedState === 'stale',
       ]);
       const ui = window.__godsEyeView.styleManager;
-      ui._clearSelectedLayersBtn.click();
+      const clearButton = document.getElementById('clear-selected-layers');
+      clearButton.click();
+      // The bar renders the busy state on Vue's next flush.
+      await Promise.resolve();
       result.push([
         'native clear activation presents busy state',
-        ui._clearSelectedLayersBtn.getAttribute('aria-busy') === 'true' &&
+        clearButton.getAttribute('aria-busy') === 'true' &&
           !!ui._contextControls._clearSelectedLayersPromise,
       ]);
       await ui._contextControls._clearSelectedLayersPromise;
+      await Promise.resolve();
       result.push([
         'clear settles through the existing layer transaction',
         !manager.isEnabled(id) &&
-          ui._clearSelectedLayersBtn.getAttribute('aria-busy') === 'false',
+          clearButton.getAttribute('aria-busy') === 'false',
       ]);
       await manager.setEnabled(id, true);
       const final = row().querySelector('.data-toggle-btn');
-      manager._layerPanel.destroy();
+      presentation._panel.destroy();
       final.click();
       await Promise.resolve();
       result.push([
@@ -109,14 +117,22 @@ try {
         manager.isEnabled(id),
       ]);
     } finally {
-      manager._layerPanel?.destroy();
-      manager._layerPanel = null;
+      presentation._panel?.destroy();
+      presentation._panel = null;
       await window.__gevQaUnregisterLayer(manager, id);
-      manager.buildTogglePanel(container);
+      presentation.mount(container);
     }
     result.push([
       'ordinary layer rows return after reassembly',
       container.querySelectorAll('.data-toggle-row').length > 10,
+    ]);
+    result.push([
+      'Directions returns to the Utilities list after reassembly',
+      Boolean(
+        document.querySelector(
+          '#utilities-toggles [data-layer-id="directions"]',
+        ) && !container.querySelector('[data-layer-id="directions"]'),
+      ),
     ]);
     return result;
   });

@@ -134,6 +134,8 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   };
   // The gate itself is pure and unit-tested (admitKeySetupRequest in
   // src/keySetupCore.mjs) — this just feeds it the request.
+  // `code`/`params` pick the panel's sentence (src/keySetup.js); `error` is for logs.
+  const refusal = ({ error, code, params }) => ({ error, code, params });
   const admit = (req) =>
     admitKeySetupRequest({
       method: req.method,
@@ -247,18 +249,24 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     configureServer(server) {
       server.middlewares.use('/api/setup/status', (req, res) => {
         if (req.method !== 'GET')
-          return respond(res, 405, { error: 'Method not allowed' });
+          return respond(res, 405, {
+            error: 'Method not allowed',
+            code: 'method',
+          });
         const admission = admit(req);
         if (!admission.ok)
-          return respond(res, admission.status, { error: admission.error });
+          return respond(res, admission.status, refusal(admission));
         respond(res, 200, providerStatus());
       });
       server.middlewares.use('/api/setup/keys', (req, res) => {
         if (req.method !== 'POST')
-          return respond(res, 405, { error: 'Method not allowed' });
+          return respond(res, 405, {
+            error: 'Method not allowed',
+            code: 'method',
+          });
         const admission = admit(req);
         if (!admission.ok)
-          return respond(res, admission.status, { error: admission.error });
+          return respond(res, admission.status, refusal(admission));
         let body = '';
         let overflowed = false;
         req.on('data', (chunk) => {
@@ -270,15 +278,21 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
         });
         req.on('end', () => {
           if (overflowed)
-            return respond(res, 413, { error: 'Request too large' });
+            return respond(res, 413, {
+              error: 'Request too large',
+              code: 'too-large',
+            });
           let parsed;
           try {
             parsed = JSON.parse(body || '{}');
           } catch {
-            return respond(res, 400, { error: 'Invalid JSON' });
+            return respond(res, 400, {
+              error: 'Invalid JSON',
+              code: 'invalid-json',
+            });
           }
           const verdict = validateKeySetupUpdates(parsed);
-          if (!verdict.ok) return respond(res, 400, { error: verdict.error });
+          if (!verdict.ok) return respond(res, 400, refusal(verdict));
           // Neither a replace NOR a removal may touch an externally-supplied
           // credential (shell env, Keychain, another workflow). This backs the
           // UI's read-only "configured externally" state with a real contract —
@@ -289,6 +303,8 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
             if (isExternallyManaged(name, inStore)) {
               return respond(res, 409, {
                 error: `${name} is configured outside Provider Settings and can only be changed where it was set`,
+                code: 'external',
+                params: { name },
               });
             }
           }
@@ -305,10 +321,16 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
             ) {
               return respond(res, 500, {
                 error: `The key was not saved: ${error.message}`,
+                code:
+                  error.code === 'GEV_HARDEN_FAILED'
+                    ? 'harden-failed'
+                    : 'store-unreadable',
               });
             }
             return respond(res, 500, {
               error: `Could not write the ${storeName()} store`,
+              code: 'write-failed',
+              params: { store: storeName() },
             });
           }
           // Live for the server-side proxies immediately; the restart below is

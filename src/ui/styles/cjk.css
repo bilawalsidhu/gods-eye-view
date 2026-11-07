@@ -1,0 +1,79 @@
+/* Chinese and Japanese text. Tight tracking keeps CJK labels readable;
+   preserve Latin tracking for intel HUD readouts and content marked
+   translate="no", including its containers. */
+html:is(:lang(zh), :lang(ja))
+  body
+  :not(
+    #intel-hud,
+    #intel-hud *,
+    [translate='no'],
+    [translate='no'] *,
+    :has([translate='no'])
+  ) {
+  letter-spacing: 0.02em !important;
+}
+
+/* Japanese line breaking: never start a line with ー, a small kana or closing
+   punctuation (プレビュ / ー). */
+html:lang(ja) body {
+  line-break: strict;
+}
+
+/* Keep small CJK labels legible at a minimum of 9px. */
+html:is(:lang(zh), :lang(ja)) #command-dock .gev-mic-label,
+html:is(:lang(zh), :lang(ja)) #command-dock #gev-voice-detail,
+html:is(:lang(zh), :lang(ja)) .gev-voice-tier-btn,
+html:is(:lang(zh), :lang(ja)) .panel-layer-toggle {
+  font-size: 9px;
+}
+
+/* A two-glyph button label must not break between its glyphs. */
+html:is(:lang(zh), :lang(ja)) .pp-mode-btn {
+  white-space: nowrap;
+}
+
+/* Japanese segment labels are short words (すべて, 平面): keep each whole. */
+html:lang(ja) .gev-segment {
+  white-space: nowrap;
+}
+
+/* Keep unit symbols in their catalog case, including the cockpit readouts. */
+html:is(:lang(zh), :lang(ja)) #intel-hud *,
+html:is(:lang(zh), :lang(ja)) #cockpit-hud * {
+  text-transform: none;
+}
+
+/* Move short travel modes (步行 / 骑行, 徒歩 / 自転車) to the next line as
+   whole words. */
+html:is(:lang(zh), :lang(ja)) [data-layer-id='directions'] .data-toggle-meta {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Leave room for the complete sensor name and resolution on two lines. */
+html:is(:lang(zh), :lang(ja)) .recent-imagery-readout .ri-strip {
+  height: 131px;
+}
+html:is(:lang(zh), :lang(ja)) .recent-imagery-readout .ri-card {
+  height: 123px;
+  grid-template-rows: 42px 13px 22px 11px 18px;
+}
+html:is(:lang(zh), :lang(ja)) .recent-imagery-readout .ri-card-sensor {
+  white-space: normal;
+  text-overflow: clip;
+}
+
+/* The Japanese imagery slot line wraps at its · separators, never inside a
+   word (プレ / ビュー); a run too long for the line still breaks. */
+html:lang(ja) .recent-imagery-readout .ri-slot-value {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Japanese layer status lines wrap at their spaces and · separators, so an
+   age such as 1分以内 stays whole (更新 1 / 分以内); a run too long for the
+   line still breaks. */
+html:lang(ja) .data-toggle-meta {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}

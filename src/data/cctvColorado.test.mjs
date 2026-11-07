@@ -18,6 +18,7 @@ import { CAMERA_CODE_MAX_CHARS } from '../../server/providers/cctv/normalize.js'
 import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 import { directionToHeading } from './directionText.js';
+import { DATA_CREDITS } from './dataCredits.js';
 
 /**
  * A response whose body is a live stream, plus a flag that flips when the
@@ -154,7 +155,12 @@ test('no heading is derived from the roadway direction in the name', () => {
   assert.equal(directionToHeading('NB', true), 0);
   assert.equal(directionToHeading('WB', true), 270);
 
-  for (const name of ['I-25 NB at 20th', 'I-70 WB Vail', 'US-6 EB', 'SH-2 SB']) {
+  for (const name of [
+    'I-25 NB at 20th',
+    'I-70 WB Vail',
+    'US-6 EB',
+    'SH-2 SB',
+  ]) {
     const [source] = coloradoFeatureToSources(
       feature({
         properties: {
@@ -173,7 +179,10 @@ test('no heading is derived from the roadway direction in the name', () => {
     assert.equal(source.headingConfidence, 'low');
     assert.ok(Number.isFinite(source.headingDeg));
     // Same id, same fallback heading, whatever the direction token says.
-    assert.equal(source.headingDeg, coloradoFeatureToSources(feature())[0].headingDeg);
+    assert.equal(
+      source.headingDeg,
+      coloradoFeatureToSources(feature())[0].headingDeg,
+    );
   }
 });
 
@@ -186,7 +195,9 @@ test('non-public, broken, off-state and off-host records are dropped', () => {
   // Salt Lake City: a plausible lat/lon, but not a Colorado camera.
   assert.deepEqual(
     coloradoFeatureToSources(
-      feature({ geometry: { type: 'Point', coordinates: [-111.891, 40.7608] } }),
+      feature({
+        geometry: { type: 'Point', coordinates: [-111.891, 40.7608] },
+      }),
     ),
     [],
   );
@@ -266,12 +277,16 @@ test('frame URLs upgrade to HTTPS and ids stay stable', () => {
 
   // The full ".flv.png" double extension is stripped, leaving CDOT's code.
   assert.equal(
-    coloradoCameraId('https://cocam.carsprogram.org/Snapshots/025N21210CAM1SEC.flv.png'),
+    coloradoCameraId(
+      'https://cocam.carsprogram.org/Snapshots/025N21210CAM1SEC.flv.png',
+    ),
     'colorado-025n21210cam1sec',
   );
   // A filename-scheme change degrades to a still-stable slug, not a dropped camera.
   assert.equal(
-    coloradoCameraId('https://cocam.carsprogram.org/Snapshots/us6_clear_creek.jpg'),
+    coloradoCameraId(
+      'https://cocam.carsprogram.org/Snapshots/us6_clear_creek.jpg',
+    ),
     'colorado-us6-clear-creek',
   );
   assert.equal(coloradoCameraId(''), null);
@@ -279,17 +294,22 @@ test('frame URLs upgrade to HTTPS and ids stay stable', () => {
 
 test('a nameless view still gets a label', () => {
   assert.equal(
-    coloradoCameraName({ properties: { name: 'Feature name' } }, { name: '  View name ' }, 'colorado-a1'),
+    coloradoCameraName(
+      { properties: { name: 'Feature name' } },
+      { name: '  View name ' },
+      'colorado-a1',
+    ),
     'View name',
   );
   assert.equal(
-    coloradoCameraName({ properties: { name: 'Feature name' } }, {}, 'colorado-a1'),
+    coloradoCameraName(
+      { properties: { name: 'Feature name' } },
+      {},
+      'colorado-a1',
+    ),
     'Feature name',
   );
-  assert.equal(
-    coloradoCameraName({}, {}, 'colorado-a1'),
-    'Colorado Camera a1',
-  );
+  assert.equal(coloradoCameraName({}, {}, 'colorado-a1'), 'Colorado Camera a1');
 });
 
 test('the loader reads the keyless feed and collapses duplicate ids', async (t) => {
@@ -405,13 +425,16 @@ test('the catalog fetch refuses redirects and oversized bodies', async (t) => {
   // A body over the cap is refused rather than buffered.
   t.mock.restoreAll();
   t.mock.method(console, 'warn', () => {});
-  t.mock.method(globalThis, 'fetch', async () =>
-    new Response(JSON.stringify({ features: [feature()] }), {
-      headers: {
-        'Content-Type': 'application/json',
-        'content-length': String(COLORADO_MAX_CATALOG_BYTES + 1),
-      },
-    }),
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () =>
+      new Response(JSON.stringify({ features: [feature()] }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'content-length': String(COLORADO_MAX_CATALOG_BYTES + 1),
+        },
+      }),
   );
   assert.deepEqual(await loadColoradoSourcesFromOpenData(), []);
 
@@ -488,7 +511,7 @@ test('the Colorado lane is wired into the catalog and its loader runs', async (t
   try {
     delete process.env.CCTV_SOURCES_FILE;
     delete process.env.CCTV_SOURCES_JSON;
-    delete process.env.CCTV_COLORADO_ENABLED;
+    process.env.CCTV_COLORADO_ENABLED = '1';
     const { requested, sources } = await runCatalogWithMockedUpstreams(t);
     assert.ok(
       requested.includes(DEFAULT_COLORADO_ROWS_URL),
@@ -507,22 +530,27 @@ test('the Colorado lane is wired into the catalog and its loader runs', async (t
   }
 });
 
-test('CCTV_COLORADO_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
+test('the Colorado lane is opt-in: unset or 0 never reaches its upstream', async (t) => {
+  // The feed publishes no licence or terms, so an unset flag must not load it.
   const saved = { ...process.env };
   try {
     delete process.env.CCTV_SOURCES_FILE;
     delete process.env.CCTV_SOURCES_JSON;
-    process.env.CCTV_COLORADO_ENABLED = '0';
-    const { requested, sources } = await runCatalogWithMockedUpstreams(t);
-    assert.equal(
-      requested.includes(DEFAULT_COLORADO_ROWS_URL),
-      false,
-      'the disabled lane never reaches its upstream',
-    );
-    assert.deepEqual(
-      sources.filter((s) => s.cityId === 'colorado'),
-      [],
-    );
+    for (const value of [undefined, '', '0', 'true']) {
+      if (value === undefined) delete process.env.CCTV_COLORADO_ENABLED;
+      else process.env.CCTV_COLORADO_ENABLED = value;
+      t.mock.restoreAll();
+      const { requested, sources } = await runCatalogWithMockedUpstreams(t);
+      assert.equal(
+        requested.includes(DEFAULT_COLORADO_ROWS_URL),
+        false,
+        `CCTV_COLORADO_ENABLED=${value} never reaches the Colorado upstream`,
+      );
+      assert.deepEqual(
+        sources.filter((s) => s.cityId === 'colorado'),
+        [],
+      );
+    }
   } finally {
     for (const key of Object.keys(process.env)) {
       if (!(key in saved)) delete process.env[key];
@@ -533,4 +561,11 @@ test('CCTV_COLORADO_ENABLED=0 keeps the lane from being loaded at all', async (t
 
 test('the shipped catalog ceiling is not raised to make room for this pack', () => {
   assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+});
+
+test('Colorado camera frames are credited in the attribution list', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'colorado-cctv');
+  assert.ok(credit, 'COtrip camera frames must be credited');
+  assert.match(credit.html, /\(Colorado, when enabled\)/);
+  assert.match(credit.html, /Colorado Department of Transportation/);
 });

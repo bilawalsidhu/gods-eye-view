@@ -5,7 +5,6 @@
  * module so density cannot drift into contradictory mode semantics again.
  */
 
-export const DENSITY_STOPS = Object.freeze([0, 25, 50, 75, 100]);
 export const ALLOCATION_ELASTIC = 'ELASTIC';
 export const ALLOCATION_WEIGHTED = 'WEIGHTED';
 export const ALLOCATION_STRATEGIES = Object.freeze([
@@ -92,14 +91,18 @@ export function aircraftBracketAlphaFloor(outsideOpacity) {
  * @param {number} keyholeAlpha - Radial keyhole alpha for this contact.
  * @param {number} [outsideOpacity] - Live OUTSIDE slider value. Omitted means
  *   the default, so a caller that does not know it reproduces the shipped look.
+ * @param {boolean} [strictKeyholeFade] - When true, do not apply the AIR
+ *   readability floor; the bracket follows the radial keyhole alpha exactly.
  * @returns {number} Paint alpha, 0-1.
  */
 export function detectionBracketAlpha(
   type,
   keyholeAlpha,
   outsideOpacity = AIRCRAFT_BRACKET_FLOOR_ANCHOR,
+  strictKeyholeFade = false,
 ) {
   const alpha = Math.max(0, Math.min(1, Number(keyholeAlpha) || 0));
+  if (strictKeyholeFade) return alpha;
   if (String(type || '').toUpperCase() !== 'AIR' || alpha <= 0) return alpha;
   return Math.max(aircraftBracketAlphaFloor(outsideOpacity), alpha);
 }
@@ -114,7 +117,7 @@ export function detectionHorizontalSector(screenX, viewportWidth) {
   return 'front';
 }
 
-export const VIEW_SCALE_BUDGETS = Object.freeze({
+const VIEW_SCALE_BUDGETS = Object.freeze({
   street: Object.freeze({ 0: 9, 25: 23, 50: 45, 75: 68, 100: 90 }),
   city: Object.freeze({ 0: 7, 25: 18, 50: 35, 75: 53, 100: 70 }),
   metro: Object.freeze({ 0: 6, 25: 14, 50: 28, 75: 41, 100: 55 }),

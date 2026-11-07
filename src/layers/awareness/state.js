@@ -26,23 +26,31 @@ export function createState({ services }) {
     // layers activate only after Contacts is explicitly selected.
     passive: true,
     ownedDependencies: new Set(),
+    /** Stops following the manager's adoptions (see watchAdoptions). */
+    unwatchAdoptions: null,
     subject: null,
     results: null,
     visual: null,
-    panel: null,
-    panelOwned: false,
+    /** Whether layer views replace the panel's initial markup yet. */
+    panelShown: false,
+    /** The published panel view, its signature and its subscribers. */
+    panelView: null,
+    panelSignature: '',
+    panelListeners: new Set(),
+    /** Result renders, published or not; tests observe repaint storms. */
+    panelRenders: 0,
     subjectListener: null,
     contextListener: null,
     clearListener: null,
     subjectClearListener: null,
     runtimeListenersAttached: false,
     preRenderRemover: null,
-    panelClickListener: null,
-    directionRoot: null,
-    compassRing: null,
-    compassLabels: [],
-    compassHeading: null,
-    directionMarkers: [],
+    /** The published direction overlay, its signature and its subscribers. */
+    directionView: null,
+    directionSignature: '',
+    directionListeners: new Set(),
+    /** Each marker's last stable screen angle. */
+    directionAngles: [0, 0, 0],
     navigationHistory: [],
     navigationVisited: new Set(),
     navigationIndex: -1,
@@ -53,11 +61,14 @@ export function createState({ services }) {
     lastCameraPoseSig: '',
     /** When the pose signature last changed bins (hysteresis anchor). */
     lastCameraPoseChangeMs: 0,
+    /** When the viewer last handled the camera (pointer, wheel, touch, key). */
+    lastCameraInputMs: Number.NEGATIVE_INFINITY,
+    /** Element the camera-input listeners are attached to. */
+    cameraInputTarget: null,
     /** Whether the view currently counts as moving (hysteretic, not per-frame). */
     cameraMoving: false,
     lastEvaluatedPosition: null,
     sourceRevision: '',
-    panelMarkup: '',
     directionFrame: null,
     lastDirectionUpdateMs: 0,
     activationId: 0,

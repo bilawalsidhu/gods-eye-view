@@ -10,6 +10,9 @@ const FADE_IN_MS = 150;
 const FADE_OUT_MS = 300;
 const MIN_LIFETIME_MS = 2500;
 const COOLDOWN_MS = 1200;
+function zeroCount(_value, key, map) {
+  map.set(key, 0);
+}
 
 function clampInt(value, min, max) {
   return Math.max(min, Math.min(max, Math.floor(Number(value) || 0)));
@@ -757,6 +760,8 @@ export class LabelArbiter {
     this._layerBuckets = new Map();
     this._demand = new Map();
     this._quotas = new Map();
+    this._acceptedByLayer = new Map();
+    this._paintedByLayer = new Map();
     this._weightedQuotaScratch = [];
     this._quotaPriorityScratch = [];
     this._quotaRemainderScratch = [];
@@ -770,6 +775,12 @@ export class LabelArbiter {
     this._queue = new SpatialCandidateQueue();
   }
 
+  /** Release an identity when its source changes between ambient and protected paint. */
+  remove(key) {
+    if (this.states.delete(key)) this._stateListDirty = true;
+    this.selectedKeys.delete(key);
+  }
+
   clear() {
     this.states.clear();
     this.selectedKeys.clear();
@@ -781,6 +792,8 @@ export class LabelArbiter {
     this._candidates.length = 0;
     this._layerBuckets.clear();
     this._quotas.clear();
+    this._acceptedByLayer.clear();
+    this._paintedByLayer.clear();
     this._selectedCandidates.length = 0;
     this._selectedPlacements.length = 0;
     this._droppedKeys.length = 0;
@@ -889,6 +902,12 @@ export class LabelArbiter {
         demand.set(layerId, bucket.count);
     });
 
+    const limits = options.limitsByLayer;
+    demand.forEach((count, layerId) => {
+      demand.set(layerId, Math.min(count, limits?.get(layerId) ?? Infinity));
+    });
+    const acceptedByLayer = this._acceptedByLayer;
+    acceptedByLayer.forEach(zeroCount);
     const activeLayers = this._activeLayersScratch;
     let activeCount = 0;
     let totalDemand = 0;
@@ -937,6 +956,9 @@ export class LabelArbiter {
       )
         return false;
       attemptStamps.set(candidate.key, stamp);
+      const layerCount = acceptedByLayer.get(candidate.layerId) || 0;
+      if (layerCount >= (limits?.get(candidate.layerId) ?? Infinity))
+        return false;
       const previous = this.states.get(candidate.key);
       const stateless = candidate.stateless === true;
       // Stateless candidates ignore the re-entry cooldown (they return on the
@@ -955,6 +977,7 @@ export class LabelArbiter {
       selectedCandidates[selectedCount] = candidate;
       selectedPlacements[selectedCount] = placement;
       selectedCount++;
+      acceptedByLayer.set(candidate.layerId, layerCount + 1);
       return true;
     };
 
@@ -968,7 +991,8 @@ export class LabelArbiter {
       if (preserveIncumbents) {
         for (let i = 0; i < layerCount && accepted < target; i++) {
           const candidate = layerList[i];
-          if (!this.states.get(candidate.key)?.selected) continue;
+          if (candidate.stateless || !this.states.get(candidate.key)?.selected)
+            continue;
           if (attempt(candidate, true)) accepted++;
         }
       }
@@ -1139,7 +1163,7 @@ export class LabelArbiter {
    * Reproject accepted/fading identities from the current frame candidate map.
    * A caller-owned output array enables allocation-free per-frame rendering.
    */
-  renderEntries(currentCandidates, now = Date.now(), out = []) {
+  renderEntries(currentCandidates, now = Date.now(), out = [], limits = null) {
     const current =
       currentCandidates instanceof Map
         ? currentCandidates
@@ -1151,6 +1175,20 @@ export class LabelArbiter {
           );
     const states = this._refreshStateList();
     let outIndex = 0;
+    const painted = this._paintedByLayer;
+    painted.forEach(zeroCount);
+    // Reserve the live winners before spending any remaining slots on exit fades.
+    if (limits)
+      for (let i = 0; i < states.length; i++) {
+        const state = states[i];
+        if (!state.selected) continue;
+        const candidate = current.get(state.key) || state.lastCandidate;
+        if (candidate)
+          painted.set(
+            candidate.layerId,
+            (painted.get(candidate.layerId) || 0) + 1,
+          );
+      }
     for (let i = 0; i < states.length; i++) {
       const state = states[i];
       let temporalAlpha;
@@ -1171,9 +1209,14 @@ export class LabelArbiter {
       if (temporalAlpha <= 0) continue;
       const candidate = current.get(state.key) || state.lastCandidate;
       if (!candidate) continue;
+      if (limits && !state.selected) {
+        const count = painted.get(candidate.layerId) || 0;
+        if (count >= (limits.get(candidate.layerId) ?? Infinity)) continue;
+        painted.set(candidate.layerId, count + 1);
+      }
       const placement = renderPlacement(
         candidate,
-        state.stateless ? undefined : state.corner,
+        state.corner,
         state.lastPlacement,
       );
       if (!placement) continue;

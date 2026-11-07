@@ -63,6 +63,7 @@ export function createCctvLayer({ services, source }) {
       _setCctvOverlayHostForTest: parts.testing._setCctvOverlayHostForTest,
       createCctvProjectionOverlayEntry:
         parts.projection.createCctvProjectionOverlayEntry,
+      getActiveVideoElement: parts.projection.getActiveVideoElement,
       setCctvCardPresentationOptions:
         parts.cards.setCctvCardPresentationOptions,
       surfaceRegimeKey: parts.ground.surfaceRegimeKey,
@@ -90,6 +91,9 @@ export function createCctvLayer({ services, source }) {
       processGeometryBatch: parts.geometryQueue.processGeometryBatch,
       hideCctvRecordVisuals: parts.rendering.hideCctvRecordVisuals,
       refreshCoverageStyles: parts.rendering.refreshCoverageStyles,
+      refreshHorizonCulling: parts.rendering.refreshHorizonCulling,
+      _viewRecordIdsForTest: () =>
+        state._viewRecords.map((record) => record.camera.id),
       clearProbeClampOnDeactivation:
         parts.geometry.clearProbeClampOnDeactivation,
       cctvRecordNeedsActivation: parts.model.cctvRecordNeedsActivation,
@@ -108,6 +112,8 @@ export function createCctvLayer({ services, source }) {
       _setCctvCoverageStateForTest: parts.testing._setCctvCoverageStateForTest,
       focusCctvRecord: parts.navigation.focusCctvRecord,
       maybeAutoHop: parts.navigation.maybeAutoHop,
+      openingCameraId: parts.navigation.openingCameraId,
+      reopenNearestCamera: parts.navigation.reopenNearestCamera,
       cctvCycleIndex: parts.navigation.cctvCycleIndex,
     },
   );
