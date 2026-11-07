@@ -3073,20 +3073,27 @@ async function main() {
         expectedSlot: targetIndex,
         previewPlayDelta: previewPlays - playsBefore,
         commitPlayDelta: window.__qaRadioPlayCalls.length - playsBefore,
+        audioState: state.audioState,
+        tuningStatic: state.tuningStatic,
         samples,
         spread: Math.max(...samples) - Math.min(...samples),
       };
     });
     check(
-      'pointer preview never plays and release commits the nearest station once without a needle sweep',
+      'from a stopped Radio, pointer release only selects the nearest station, silently and without a needle sweep',
       tunerDirectRelease.targetId
         && tunerDirectRelease.selectedId === tunerDirectRelease.targetId
         && tunerDirectRelease.sliderSlot === tunerDirectRelease.expectedSlot
         && tunerDirectRelease.previewPlayDelta === 0
-        && tunerDirectRelease.commitPlayDelta === 1
+        && tunerDirectRelease.commitPlayDelta === 0
+        && tunerDirectRelease.audioState === 'stopped'
+        && !tunerDirectRelease.tuningStatic
         && tunerDirectRelease.spread < 0.5,
       JSON.stringify(tunerDirectRelease),
     );
+    // The release plays only if a stream was active when the drag began.
+    await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('radio').module.togglePlayback({ origin: 'user' }));
+    await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
     // Earlier cases scroll and resize the directory. Bring the physical drag
     // target back into its scroller before deriving viewport mouse coordinates.
     await page.$eval('#radio-tuner-slider', (slider) => slider.scrollIntoView({ block: 'center', inline: 'nearest' }));
@@ -3494,6 +3501,9 @@ async function main() {
       });
     });
     await sleep(500);
+    // Next left the Radio stopped; a release plays only from an active stream.
+    await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('radio').module.togglePlayback({ origin: 'user' }));
+    await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
     const failedTuner = await page.evaluate(async () => {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');
@@ -3692,7 +3702,14 @@ async function main() {
       radio.stopPlayback();
       Array.from({ length: gev.viewer.dataSources.length }, (_, index) => gev.viewer.dataSources.get(index))
         .find((item) => item.name === 'Radio stations').clustering.enabled = true;
-      radio.selectStation('00000000-0000-4000-8000-000000000001', { autoplay: false, focus: false });
+      // Next plays only while a stream is active, so start from a playing station.
+      radio.selectStation('00000000-0000-4000-8000-000000000001', { autoplay: true, focus: false });
+    });
+    await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
+    await page.evaluate(() => {
+      const gev = window.__godsEyeView;
+      const camera = gev.viewer.camera;
+      const radio = gev.dataManager.layers.get('radio').module;
       const pool = gev.styleManager._radioControls._radioTunerPool;
       const selectedIndex = pool.findIndex((station) => station.id === radio.getUIState().selected?.id);
       window.__qaRadioExpectedPrimary = pool[(selectedIndex + 1) % pool.length];

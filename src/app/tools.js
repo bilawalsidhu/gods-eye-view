@@ -8,7 +8,13 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
-import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
+import {
+  installScopeMask,
+  destroyScopeMask,
+  isScopeMaskEnabled,
+} from '../scopeMask.js';
+import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
+import { installGlobeInViewRecovery } from './viewer.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
   installRenderGovernor,
@@ -44,6 +50,14 @@ export function createApplicationTools({
     .get('bhote-koshi-2026')
     ?.module.attachSceneController(sceneDirector);
   defer(() => sceneDirector.destroy());
+  defer(
+    installGlobeInViewRecovery(viewer, {
+      // The scope mask hides everything outside its keyhole.
+      keyholeRadius: () => (isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0),
+      // An authored scene frames its own shots, holds included.
+      paused: () => sceneDirector.running,
+    }),
+  );
   onSceneDirector?.(sceneDirector);
   const annotations = initAnnotations({
     viewer,
@@ -62,17 +76,19 @@ export function createApplicationTools({
     const token = displayStore.connect(actions);
     return () => displayStore.detach(token);
   };
-  // DISPLAY ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
+  // UTILITIES ▸ Draw: the same whiteboard, drawn by hand. It claims the pointer
   // while a session is open, so its teardown belongs to the application
-  // lifetime rather than to whoever last pressed the button.
+  // lifetime rather than to whoever last pressed the button. A row's fly-to
+  // goes through the shell's navigation policy, as Import's does.
   const drawTool = initDrawTool({
     viewer,
     annotations,
+    navigation: styleManager,
     publish: (view) => displayStore.publishDraw(view),
     connect: connectDisplay,
   });
   defer(() => drawTool?.destroy());
-  // DISPLAY ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
+  // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
   // own data source. They live for the page session, so the application
   // lifetime removes them and the drop listeners on the viewer container.
   const geoFileImport = initGeoFileImport({
