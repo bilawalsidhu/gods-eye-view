@@ -83,6 +83,7 @@ export function createSelection({
     }
     layerState._activeCameraId = cameraId;
     layerState._autoHopSuspended = false;
+    layerState._openingCameraProvisional = false;
     // A real activation creates projection work — wake the self-stopping loop.
     parts.projection.startProjectionLoop();
     if (previousActiveRecord && previousActiveRecord !== record) {
@@ -169,6 +170,7 @@ export function createSelection({
     if (!record) return false;
     layerState._activeCameraId = null;
     layerState._autoHopSuspended = true;
+    layerState._openingCameraProvisional = false;
     record.activationDone = false;
     parts.geometry.clearProbeClampOnDeactivation(record, (previous) => {
       parts.geometry.applyFrustumGeometry(
