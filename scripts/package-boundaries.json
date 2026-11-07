@@ -5346,6 +5346,8 @@
       "src/layers/transit/viewport.js",
       "src/geo/rectangle.js",
       "src/render/rendererOf.js",
+      "src/render/cesium/query.js",
+      "src/render/cesium/frame.js",
       "src/render/cesium/camera.js",
       "src/render/camera/events.js",
       "src/geo/celestial.js",
