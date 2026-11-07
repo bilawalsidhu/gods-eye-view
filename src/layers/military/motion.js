@@ -26,6 +26,9 @@ import {
   aircraftMotionRegime,
   createMotionRegime,
   fixEpochMs,
+  fixPosition,
+  copyPosition,
+  historyFix,
   julianAt,
   fixSpeedMps,
   fixTrackDeg,
@@ -472,8 +475,73 @@ export function createMotion({
   /** The display instant `epochMs` as a JulianDate, for `_motionRegime`. */
   const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
 
+  /**
+   * Re-floor STALE grounded contacts (mirror of the flights layer): a parked
+   * contact whose feed went quiet froze at its pre-warm height. The
+   * model-ownership gate matches the live grounded-clamp path (a
+   * tileset-snapped model owns its visual; moving its icon would disturb
+   * groundSnap's input, the one-shot invariant).
+   */
+  function _refloorStaleGroundedContacts(currentIcaos) {
+    const { cachedGroundFloor, GROUND_FLOOR_LIFT_M } = services.groundFloor;
+    for (const [icao24, info] of flightState.records.data) {
+      if (!info?.onGround || currentIcaos.has(icao24)) continue;
+      if (parts.rendering._modelOwnsVisual(icao24)) continue;
+      if (!Number.isFinite(info.rawLat) || !Number.isFinite(info.rawLon))
+        continue;
+      const floor = cachedGroundFloor(info.rawLat, info.rawLon);
+      if (!Number.isFinite(floor)) continue;
+      const lifted = floor + GROUND_FLOOR_LIFT_M;
+      if (
+        Number.isFinite(info.renderAltitudeM) &&
+        info.renderAltitudeM >= floor - 1
+      )
+        continue;
+      info.renderAltitudeM = lifted;
+      const liftedPos = Cesium.Cartesian3.fromDegrees(
+        info.rawLon,
+        info.rawLat,
+        lifted,
+      );
+      const hist = flightState._positionHistory.get(icao24);
+      const newest = hist?.[hist.length - 1];
+      if (newest)
+        newest.position = Cesium.Cartesian3.clone(liftedPos, newest.position);
+      if (flightState._icons.has(icao24)) {
+        parts.icons._applyIconPresentation(icao24);
+        parts.icons._planIcon(icao24);
+      }
+    }
+  }
+
+  /**
+   * Sample the rendered mesh under the collected floor cells (see
+   * meshFloorSampler.js), leaving this layer's own icons and models out of
+   * the probe so it cannot land on an aircraft instead of the pavement.
+   */
+  function _sampleMeshFloor(points, viewerLat, viewerLon) {
+    services.meshFloor.sampleMeshFloorCells(
+      flightState._viewer?.scene,
+      points,
+      {
+        excludeObjects: [
+          ...parts.icons._iconIds(),
+          ...[...flightState._models.values()].map((record) => record.model),
+          flightState._trackedModel?.model,
+        ].filter(Boolean),
+        viewerLat,
+        viewerLon,
+      },
+    );
+  }
+
   return {
     _deadReckon,
+    _fixPosition: fixPosition,
+    _copyPosition: copyPosition,
+    _historyFix: historyFix,
+    _refloorStaleGroundedContacts,
+    _sampleMeshFloor,
     _motionRegime,
     _displayTimeAt,
     _fixEpochMs: fixEpochMs,

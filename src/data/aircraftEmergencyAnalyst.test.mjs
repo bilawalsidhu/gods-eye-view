@@ -9,6 +9,9 @@ import {
   aircraftMotionRegime,
   createMotionRegime,
   fixEpochMs,
+  fixPosition,
+  copyPosition,
+  historyFix,
   julianAt,
 } from './aircraftMotionRegime.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
@@ -504,6 +507,11 @@ test('GERMAN: an existing untracked military icon repaints each poll without los
         ),
       _displayTimeAt: julianAt,
       _fixEpochMs: fixEpochMs,
+      _fixPosition: fixPosition,
+      _copyPosition: copyPosition,
+      _historyFix: historyFix,
+      _refloorStaleGroundedContacts() {},
+      _sampleMeshFloor() {},
     },
   };
   const icons = createMilitaryIcons({
@@ -522,10 +530,10 @@ test('GERMAN: an existing untracked military icon repaints each poll without los
   const apply = createMilitarySnapshotRenderer({
     flightState,
     records,
-    groundFloor: { warmGroundFloor() {}, cachedGroundFloor: () => null },
-    meshFloor: { sampleMeshFloorCells() {} },
+    groundFloor: { warmGroundFloor() {} },
     militaryRegistry: { registerMilitaryIcaos() {} },
     rendering: parts.rendering,
+    motion: parts.motion,
     icons,
     tracking: {},
     queries: {},

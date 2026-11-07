@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { findCamera } from '../../render/rendererOf.js';
 import {
   turnRateFromFixHistory,
   liftRepeatedGroundFix,
@@ -6,21 +6,19 @@ import {
 } from '../../data/motionModel.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 
-/** Apply military record changes to Cesium resources and existing follow operations. */
+/** Apply military record changes to the layer's drawing and existing follow operations. */
 export function createMilitarySnapshotRenderer({
   flightState,
   records,
   groundFloor,
-  meshFloor,
   militaryRegistry,
   rendering,
   tracking,
+  motion,
   icons,
   queries,
 }) {
-  const { warmGroundFloor, cachedGroundFloor, GROUND_FLOOR_LIFT_M } =
-    groundFloor;
-  const { sampleMeshFloorCells } = meshFloor;
+  const { warmGroundFloor } = groundFloor;
   const { registerMilitaryIcaos } = militaryRegistry;
   return function applySnapshot(snapshot, viewer) {
     // Before init (or after destroy) there is no icon set to draw into.
@@ -46,7 +44,7 @@ export function createMilitarySnapshotRenderer({
             : false,
         },
       );
-      const position = Cesium.Cartesian3.fromDegrees(
+      const position = motion._fixPosition(
         meta.rawLon,
         meta.rawLat,
         meta.renderAltitudeM,
@@ -59,23 +57,22 @@ export function createMilitarySnapshotRenderer({
       // report, so the fix epoch is receipt time minus that age. Only
       // append when the fix actually advances, so stale repeats don't
       // create zero-dt segments.
-      const fixTime = Cesium.JulianDate.fromDate(new Date(fixEpochMs));
       if (!flightState._positionHistory.has(icao24)) {
         flightState._positionHistory.set(icao24, []);
       }
       const history = flightState._positionHistory.get(icao24);
       const newest = history[history.length - 1];
-      if (!newest || Cesium.JulianDate.greaterThan(fixTime, newest.time)) {
+      // Whole milliseconds, as the fix times are kept.
+      if (
+        !newest ||
+        Math.trunc(fixEpochMs) > Math.trunc(motion._fixEpochMs(newest))
+      ) {
         // Per-fix kinematics: the fix's own velocity/track ride along so the
         // extrapolation paths use the values that BELONG to the fix they
         // extend, not whatever the latest poll reported.
-        history.push({
-          time: fixTime,
-          epochMs: fixEpochMs,
-          position: position.clone(),
-          velocity: meta.speedMps,
-          track: meta.track,
-        });
+        history.push(
+          motion._historyFix(fixEpochMs, position, meta.speedMps, meta.track),
+        );
         if (history.length > POSITION_HISTORY_LIMIT) {
           history.shift();
         }
@@ -87,7 +84,7 @@ export function createMilitarySnapshotRenderer({
         // (owner): ground traffic appends too — taxi history stays live
         // after touchdown; _appendTrailFix floors grounded positions at
         // the surface so the ground leg drapes instead of diving.
-        if (isTracked) tracking._appendTrailFix(position.clone());
+        if (isTracked) tracking._appendTrailFix(motion._copyPosition(position));
       } else {
         const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
         if (!modelOwnsGroundVisual) {
@@ -106,7 +103,10 @@ export function createMilitarySnapshotRenderer({
             history.push(synthetic);
             if (history.length > POSITION_HISTORY_LIMIT) history.shift();
             meta.turnRateDps = turnRateFromFixHistory(history);
-            if (isTracked) tracking._appendTrailFix(synthetic.position.clone());
+            if (isTracked)
+              tracking._appendTrailFix(
+                motion._copyPosition(synthetic.position),
+              );
           }
         }
       }
@@ -144,58 +144,21 @@ export function createMilitarySnapshotRenderer({
     // synchronously by NEXT poll's clamp (same contract as flights.js's
     // grounded-surface warm).
     warmGroundFloor(_floorWarmPoints);
-    // Round 6: re-floor STALE grounded contacts (mirror of flights.js) —
-    // a parked contact whose feed went quiet froze at its pre-warm height.
-    // The model-ownership gate matches the live grounded-clamp path (a
-    // tileset-snapped model owns its visual; moving its icon would
-    // disturb groundSnap's input — the T7 one-shot invariant).
-    for (const [icao24, info] of flightState.records.data) {
-      if (!info?.onGround || currentIcaos.has(icao24)) continue;
-      if (rendering._modelOwnsVisual(icao24)) continue;
-      if (!Number.isFinite(info.rawLat) || !Number.isFinite(info.rawLon))
-        continue;
-      const floor = cachedGroundFloor(info.rawLat, info.rawLon);
-      if (!Number.isFinite(floor)) continue;
-      const lifted = floor + GROUND_FLOOR_LIFT_M;
-      if (
-        Number.isFinite(info.renderAltitudeM) &&
-        info.renderAltitudeM >= floor - 1
-      )
-        continue;
-      info.renderAltitudeM = lifted;
-      const liftedPos = Cesium.Cartesian3.fromDegrees(
-        info.rawLon,
-        info.rawLat,
-        lifted,
-      );
-      const hist = flightState._positionHistory.get(icao24);
-      const newest = hist?.[hist.length - 1];
-      if (newest)
-        newest.position = Cesium.Cartesian3.clone(liftedPos, newest.position);
-      if (flightState._icons.has(icao24)) {
-        icons._applyIconPresentation(icao24);
-        icons._planIcon(icao24);
-      }
-    }
+    // Round 6: re-floor STALE grounded contacts (mirror of flights.js); the
+    // motion part owns the positions it rewrites.
+    motion._refloorStaleGroundedContacts(currentIcaos);
     // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
     // budget-capped, viewer-proximate, google-3d regime only), excluding
     // this layer's own icons/models from the probe.
     {
-      const viewerCarto =
-        flightState._viewer?.camera?.positionCartographic || null;
-      sampleMeshFloorCells(flightState._viewer?.scene, _floorWarmPoints, {
-        excludeObjects: [
-          ...icons._iconIds(),
-          ...[...flightState._models.values()].map((record) => record.model),
-          flightState._trackedModel?.model,
-        ].filter(Boolean),
-        viewerLat: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.latitude)
-          : undefined,
-        viewerLon: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.longitude)
-          : undefined,
-      });
+      const pose = findCamera(flightState._viewer)?.pose() ?? null;
+      const hasSubpoint =
+        Number.isFinite(pose?.lat) && Number.isFinite(pose?.lon);
+      motion._sampleMeshFloor(
+        _floorWarmPoints,
+        hasSubpoint ? pose.lat : undefined,
+        hasSubpoint ? pose.lon : undefined,
+      );
     }
 
     // Remove aircraft only after MISSING_POLL_LIMIT consecutive absences.

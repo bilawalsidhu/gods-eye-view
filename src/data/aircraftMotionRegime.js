@@ -40,6 +40,30 @@ export function fixEpochMs(fix) {
     : Cesium.JulianDate.toDate(fix.time).getTime();
 }
 
+/** A feed fix's ECEF position, from its degrees and render altitude. */
+export function fixPosition(lonDeg, latDeg, heightM) {
+  return Cesium.Cartesian3.fromDegrees(lonDeg, latDeg, heightM);
+}
+
+/** A copy of a fix position, for a trail that keeps it. */
+export function copyPosition(position) {
+  return Cesium.Cartesian3.clone(position);
+}
+
+/**
+ * A position-history entry for a feed fix at `epochMs`, carrying the fix's
+ * own speed and track; it keeps a copy of `position`.
+ */
+export function historyFix(epochMs, position, velocity, track) {
+  return {
+    time: julianAt(epochMs),
+    epochMs,
+    position: Cesium.Cartesian3.clone(position),
+    velocity,
+    track,
+  };
+}
+
 /** A reusable result for `aircraftMotionRegime`. */
 export function createMotionRegime() {
   return {

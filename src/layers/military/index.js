@@ -31,10 +31,10 @@ export function createMilitaryFlightLayer({
     flightState,
     records: flightState.records,
     groundFloor: services.groundFloor,
-    meshFloor: services.meshFloor,
     militaryRegistry: services.militaryRegistry,
     rendering: parts.rendering,
     tracking: parts.tracking,
+    motion: parts.motion,
     icons: parts.icons,
     queries: parts.queries,
   });

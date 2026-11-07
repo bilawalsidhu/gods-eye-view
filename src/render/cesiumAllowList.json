@@ -58,7 +58,6 @@
   "src/layers/military/motion.js",
   "src/layers/military/policy.js",
   "src/layers/military/queries.js",
-  "src/layers/military/snapshotRenderer.js",
   "src/layers/military/state.js",
   "src/layers/military/testing.js",
   "src/layers/military/tracking.js",
