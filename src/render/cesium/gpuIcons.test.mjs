@@ -749,3 +749,35 @@ test('an SVG takes the atlas at its own size, other images at the item’s', asy
     'an svg ref at its own',
   );
 });
+
+test('an image switch in CSS pixels stands for the aircraft layers’ 76 device pixels', async () => {
+  const { NEAR_IMAGE_DEVICE_PX, nearImageSwitchPx } =
+    await import('../../data/iconAtlas.js');
+  assert.equal(NEAR_IMAGE_DEVICE_PX, 76);
+  assert.equal(nearImageSwitchPx(2), 38);
+  const display = globalThis.devicePixelRatio;
+  globalThis.devicePixelRatio = 2;
+  try {
+    assert.equal(
+      nearImageSwitchPx(),
+      76,
+      'the scene’s ratio, not the display’s',
+    );
+  } finally {
+    globalThis.devicePixelRatio = display;
+  }
+  assert.equal(nearImageSwitchPx(0), 76, 'no ratio: 1');
+  assert.equal(nearImageSwitchPx(NaN), 76);
+  const { part, draw } = drawOver();
+  const set = draw.icons({ id: 'gpu:switch-px' });
+  set.set([
+    icon('a', {
+      motion: { kind: 'hold' },
+      imageLod: { near: 'near.png', switchPx: nearImageSwitchPx(2) },
+    }),
+  ]);
+  const { set: rowsOf } = rows(part, 'gpu:switch-px');
+  // Stored as given: the shader (not run here) switches past it in CSS
+  // pixels, the drawn width over the scene's pixel ratio.
+  assert.equal(rowsOf.imageSwitch(rowsOf.row('a')), 38);
+});

@@ -9,6 +9,29 @@
  * each slot's texture rectangle from `rects`.
  */
 
+/**
+ * Drawn width in device pixels (the drawing buffer's) past which an icon
+ * row with no switch of its own draws its near image: the aircraft layers'
+ * switch.
+ */
+export const NEAR_IMAGE_DEVICE_PX = 76;
+
+/**
+ * `NEAR_IMAGE_DEVICE_PX` in CSS pixels, for an icon item's
+ * `imageLod.switchPx`, which the draw contract measures in CSS pixels: the
+ * device switch divided by the drawing buffer's pixels per CSS pixel. That
+ * is the scene's pixel ratio, which the quality port's frame signals report
+ * as `pixelRatio`: on the default renderer its `pixelRatio` setting, or 1
+ * while that is 0 (browser recommended). `devicePixelRatio` does not enter
+ * it. A layer drawing through the port passes the ratio its frames report
+ * and rewrites its rows' switch when that changes.
+ * @param {number} [pixelRatio] Drawing-buffer pixels per CSS pixel (1).
+ */
+export function nearImageSwitchPx(pixelRatio = 1) {
+  const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+  return NEAR_IMAGE_DEVICE_PX / ratio;
+}
+
 /** Slots a renderer can address (one vec4 uniform each). */
 export const MAX_ICON_SLOTS = 64;
 

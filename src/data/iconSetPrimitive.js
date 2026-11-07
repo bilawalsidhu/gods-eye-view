@@ -17,14 +17,15 @@
 import * as Cesium from 'cesium';
 import { ICON_SEGMENT_GLSL, SEGMENT_STRIDE } from './iconSegment.js';
 import { ICON_CULL_HEIGHT_M, ICON_CULL_LIFT, STYLE_STRIDE } from './iconSet.js';
-import { iconAtlas, MAX_ICON_SLOTS } from './iconAtlas.js';
+import {
+  iconAtlas,
+  MAX_ICON_SLOTS,
+  NEAR_IMAGE_DEVICE_PX,
+} from './iconAtlas.js';
 import {
   cameraLimbDistanceM,
   getAircraftRecessionParams,
 } from './aircraftRecession.js';
-
-/** On-screen device pixels above which a row draws its near (large) image. */
-const NEAR_IMAGE_PX = 76;
 
 const ATTRIBUTE_LOCATIONS = Object.freeze({
   corner: 0,
@@ -139,7 +140,7 @@ void main() {
   float glyphPx = style0.x * scale * distanceScale * czm_pixelRatio;
   bool nearImage = style3.x > 0.0
     ? glyphPx / czm_pixelRatio > style3.x
-    : glyphPx > ${NEAR_IMAGE_PX.toFixed(1)};
+    : glyphPx > ${NEAR_IMAGE_DEVICE_PX.toFixed(1)};
   float slot = nearImage ? style1.y : style1.x;
   if (slot < 0.0) return; // no image set
   vec4 rect = u_slots[int(slot)];
