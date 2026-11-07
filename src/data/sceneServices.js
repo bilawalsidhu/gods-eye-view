@@ -1,3 +1,5 @@
+import { createSceneContext } from './contextStore.js';
+import { createTrackedReadout } from './trackedReadout.js';
 import { createWorldOverlay } from '../overlays/worldOverlay.js';
 import { createRenderGovernor } from '../renderGovernor.js';
 import { createPickRegistry } from './pickRegistry.js';
@@ -11,6 +13,17 @@ const scenes = new WeakMap();
 export function createSceneServices(engine, options = {}) {
   scenes.get(engine)?.destroy();
   const overlay = createWorldOverlay(engine);
+  const context = createSceneContext(options.retainedSelection);
+  const trackedReadout = createTrackedReadout(engine, {
+    overlay: options.trackedOverlay ?? overlay,
+    events: context.events,
+    selectedContext: () => {
+      // Retained layers replace hidden outgoing carriers after camera restore.
+      // Initializing a readout must not clear their selection in the meantime.
+      const store = context.getContextStore();
+      return store.entities.get(store.selectedEntityId) ?? null;
+    },
+  });
   const render = createRenderGovernor(engine);
   const picking = createPickRegistry();
   const selection = createSelectionDispatcher(engine, { ...options, picking });
@@ -18,15 +31,20 @@ export function createSceneServices(engine, options = {}) {
   const services = {
     picking,
     selection,
+    context,
+    trackedReadout,
     render,
     overlay,
-    destroy() {
+    destroy(options) {
       if (destroyed) return;
       destroyed = true;
       selection.destroy();
       picking.destroy();
+      trackedReadout.destroy();
+      const retained = context.destroy(options);
       overlay.destroy();
       render.destroy();
+      return retained;
     },
   };
   scenes.set(engine, services);

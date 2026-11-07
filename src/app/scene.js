@@ -1,3 +1,4 @@
+import { retainsLayerSession } from './layerSession.js';
 import { createSceneServices } from '../data/sceneServices.js';
 import { releaseCameraVerbs } from '../cameraVerbs.js';
 import { createApplicationOperations } from './operations.js';
@@ -76,8 +77,16 @@ export async function createApplicationScene({
   const { viewer, engine, tileset, mapStackController } = rendererCache
     ? await rendererCache.acquire(options.engineKind, build, defer)
     : await build({ defer });
-  const services = createSceneServices(engine);
-  defer(services.destroy);
+  const services = createSceneServices(engine, {
+    retainedSelection: layerSession?.selectionContext,
+  });
+  if (layerSession) layerSession.selectionContext = null;
+  defer(() => {
+    const retained = services.destroy({
+      retainSelection: retainsLayerSession(layerSession),
+    });
+    if (layerSession) layerSession.selectionContext = retained;
+  });
   if (layerSession) {
     // DEM cells belong to the session. Mesh samples came from the outgoing
     // scene, including when the incoming canvas was warm in the cache.

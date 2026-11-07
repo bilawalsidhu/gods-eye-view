@@ -1,3 +1,4 @@
+import { bindContextStore } from '../../data/bindContextStore.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 
 export function createLifecycle({
@@ -8,7 +9,10 @@ export function createLifecycle({
   feed,
 }) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
-  const { clearSelectedEntityContextForLayer } = services.context;
+  const { clearSelectedEntityContextForLayer } = bindContextStore(
+    services.context,
+    () => layerState._renderer?.engine,
+  );
   const { id, overlayHost } = config;
 
   // The heatmap is draped on the renderer's globe; it goes with the renderer
@@ -135,12 +139,12 @@ export function createLifecycle({
       components.selection.removeClickHandler();
       unregisterPickOwner(id, layerState._renderer?.engine);
       components.rendering.removeDetectionCollections();
+      components.selection.clearContextRegistrations();
+      clearSelectedEntityContextForLayer(id);
       layerState._renderer?.destroy();
       layerState._renderer = null;
       layerState._viewer = null;
       layerState._dataSource = null;
-      components.selection.clearContextRegistrations();
-      clearSelectedEntityContextForLayer(id);
       layerState._allFires = [];
       layerState._allFiresByFrp = [];
       layerState._fires = [];

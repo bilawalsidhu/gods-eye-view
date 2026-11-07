@@ -424,7 +424,7 @@ export class ShellScene extends ShellFacade {
     this._visualSettings.releaseIrBoost();
     this._cockpitCoordinator.destroy();
     this._layerBindings.disconnect();
-    destroyTrackedReadout();
+    destroyTrackedReadout(this._scene.engine);
     destroyDetection();
     destroyWorldOverlay(this._scene.engine);
     this._overlayActionsUnsubscribe?.();

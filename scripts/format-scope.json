@@ -1706,5 +1706,8 @@
   "src/globe/cesium/annotations/worldAnnotationRenderer.js",
   "src/globe/cesium/annotations/screenAnnotationRenderer.js",
   "src/globe/navara/windFlow.js",
-  "src/overlays/bindOverlayHost.js"
+  "src/overlays/bindOverlayHost.js",
+  "src/data/bindContextStore.js",
+  "src/data/trackedReadoutScenes.test.mjs",
+  "src/data/trackedAircraftScenes.test.mjs"
 ]

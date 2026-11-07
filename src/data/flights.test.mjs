@@ -1,3 +1,4 @@
+import { createSceneServices } from './sceneServices.js';
 // src/data/flights.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
 // Pure function — no viewer/DOM needed; imported directly.
@@ -24,7 +25,6 @@ import {
   _clearMeshFloorCellsForTest,
 } from './groundFloor.js';
 import {
-  _setTrackedOverlayHostForTest,
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
@@ -478,11 +478,12 @@ test('real civil track path creates no native label and publishes every cached h
     },
   );
   globalThis.fetch = async () => ({ ok: false });
-  _setTrackedOverlayHostForTest(host);
+  const engine = trackingEngine(viewer);
+  const readoutServices = createSceneServices(engine, { trackedOverlay: host });
   try {
-    initTrackedReadout(trackingEngine(viewer));
+    initTrackedReadout(engine);
     _setTrackedFlightRefreshStateForTest({
-      renderer: aircraftViewerRenderer,
+      renderer: (options) => aircraftViewerRenderer({ ...options, engine }),
       icao24,
       entity: null,
       billboard,
@@ -710,8 +711,8 @@ test('real civil track path creates no native label and publishes every cached h
   } finally {
     flightsLayer.stopTracking();
     viewer.scene.preUpdate.raiseEvent();
-    destroyTrackedReadout();
-    _setTrackedOverlayHostForTest();
+    destroyTrackedReadout(engine);
+    readoutServices.destroy();
     globalThis.fetch = realFetch;
     globalThis.window = realWindow;
   }

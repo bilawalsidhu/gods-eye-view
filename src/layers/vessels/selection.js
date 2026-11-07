@@ -1,3 +1,4 @@
+import { bindContextStore } from '../../data/bindContextStore.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
@@ -15,7 +16,10 @@ export function createSelection({
     selectEntityContext,
     registerEntityContext,
     clearSelectedEntityContextForLayer,
-  } = services.context;
+  } = bindContextStore(
+    services.context,
+    () => vesselState.state.renderer?.engine,
+  );
   const aisLiveVesselsLayer = layer;
 
   /**

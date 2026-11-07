@@ -1,3 +1,4 @@
+import { bindContextStore } from '../../data/bindContextStore.js';
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
@@ -75,6 +76,7 @@ export function createCyclonesLayer({
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Cyclones require a snapshot source');
   let engine = null;
+  context = bindContextStore(context, () => engine);
   hitTestOverlay ??= (...args) => hitTestWorldOverlay(engine, ...args);
   let rendering = null,
     snapshot = null,

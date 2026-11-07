@@ -67,7 +67,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     registerEntityContext,
     removeEntityContextsForLayer,
     selectEntityContext,
-  } = services.context;
+  } = services.context.forEngine?.(engine) ?? services.context;
   const markers = new Map();
   const floors = createAlprFloorResolver(services.groundFloor);
   let normal = null,
@@ -525,7 +525,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     if (!chosen) state.selectedId = null;
     updateSelectedAnchor();
     overlay.sync(shown);
-    if (chosen) services.overlays?.refreshReadout?.(chosen);
+    if (chosen) services.overlays?.refreshReadout?.(chosen, engine);
     // Keep the on-map credit tied to displayed data, not loading or zoom prompts.
     if (shown.length) presentOnMapCredit();
     else hideOnMapCredit();

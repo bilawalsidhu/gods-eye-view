@@ -1,3 +1,4 @@
+import { bindContextStore } from '../../data/bindContextStore.js';
 import * as geo from '../../geo/index.js';
 import { constantRgba } from '../shared/color.js';
 import { appClock } from '../../time/clock.js';
@@ -28,7 +29,7 @@ export function createTracking({
     getContextStore,
     refreshTrackedSubjectContext,
     selectTrackedSubjectContext,
-  } = services.context;
+  } = bindContextStore(services.context, () => getRenderer()?.engine);
   const { refreshTrackedReadout } = services.readout;
 
   function _normalizeTrackedNorad(candidate) {
@@ -39,6 +40,12 @@ export function createTracking({
   }
 
   function _emitAwarenessEvent(type, detail) {
+    if (services.context.forEngine && getRenderer()?.engine) {
+      services.context
+        .forEngine(getRenderer()?.engine)
+        ?.publishAwareness(type, detail);
+      return;
+    }
     if (
       typeof window === 'undefined' ||
       !window.dispatchEvent ||
@@ -407,7 +414,7 @@ export function createTracking({
       details,
       accent: '#ffd84d',
     };
-    refreshTrackedReadout(layerState._trackedEntity);
+    refreshTrackedReadout(layerState._trackedEntity, getRenderer()?.engine);
   }
 
   function _trackSatellite(

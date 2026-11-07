@@ -290,8 +290,19 @@ one application, and only the globe-bound parts move to the next engine.
   models resolve their attached engine, and the shell reconnects its action
   subscription after switching. Destroyed services and old lane handles stay
   inert; a parked engine receives a new host. Shared font measurements live
-  until the last host detaches. The tracked readout remains page-owned and
-  publishes into the attached overlay; its event isolation is separate work.
+  until the last host detaches.
+- **Scene tracked readouts.** `scene.services.trackedReadout` owns the follow
+  subscription, selected card, active entry ID and follow-label cache for one
+  attachment. It publishes only into that scene's overlay. Selection records
+  and notifications belong to `scene.services.context`; publishers resolve
+  their attached engine. The existing page context slot and selection events
+  remain available to page consumers with the same payloads. Destroyed readouts
+  and context services stay inert; parked reattachment creates fresh services.
+  Engine handoff carries the retained page selection into the incoming context;
+  rebuilding its marker updates the readout without another page selection event.
+  Readout initialization leaves the selection intact while its outgoing display
+  is hidden and its incoming layer waits for camera restoration.
+  Label text, live visual anchors and follow-camera anti-jitter are unchanged.
 - **The session owns the state.** Catalog, layer models, sources, selection,
   camera mode and URL state outlive a switch. A layer that is a session model
   gets `attachRenderer(viewer, { engine })` / `detachRenderer()` instead of being rebuilt,

@@ -1237,7 +1237,9 @@
       "src/overlays/worldOverlay.js",
       "src/overlays/worldOverlayDraw.js",
       "src/overlays/worldOverlayTokens.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/data/contextStore.js",
+      "src/data/trackedReadout.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1464,7 +1466,8 @@
       "src/globe/contract.js",
       "src/globe/cesium/engineFromViewer.js",
       "src/layers/shared/color.js",
-      "src/layers/aircraft/qaDrawn.js"
+      "src/layers/aircraft/qaDrawn.js",
+      "src/data/bindContextStore.js"
     ],
     "external": ["cesium"]
   },
@@ -1532,7 +1535,8 @@
       "src/time/clock.js",
       "src/globe/contract.js",
       "src/globe/cesium/engineFromViewer.js",
-      "src/layers/aircraft/qaDrawn.js"
+      "src/layers/aircraft/qaDrawn.js",
+      "src/data/bindContextStore.js"
     ],
     "external": ["cesium"]
   },
@@ -1617,7 +1621,8 @@
       "src/geo/",
       "src/globe/contract.js",
       "src/globe/cesium/engineFromViewer.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/bindContextStore.js"
     ],
     "external": ["cesium"]
   },
@@ -1700,7 +1705,8 @@
       "src/geo/",
       "src/layers/firms/rectangle.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/bindContextStore.js"
     ],
     "external": []
   },
@@ -1743,7 +1749,8 @@
       "src/geo/",
       "src/time/clock.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/bindContextStore.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -3634,7 +3641,8 @@
       "src/globe/navara/meshes.js",
       "src/globe/exclusivePointer.js",
       "src/globe/cesium/followOffset.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/bindContextStore.js"
     ],
     "external": [
       "hls.js",
@@ -4399,7 +4407,8 @@
       "src/globe/meshes.js",
       "src/globe/exclusivePointer.js",
       "src/globe/cesium/followOffset.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/bindContextStore.js"
     ],
     "external": [
       "hls.js",
@@ -5170,7 +5179,9 @@
       "src/globe/meshes.js",
       "src/globe/exclusivePointer.js",
       "src/data/selectionDispatcher.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/contextStore.js",
+      "src/data/trackedReadout.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -5741,7 +5752,8 @@
       "src/layers/wildlifeSightings/display.js",
       "src/data/spriteOrder.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/bindContextStore.js"
     ],
     "external": ["cesium"]
   },

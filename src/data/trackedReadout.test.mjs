@@ -1,10 +1,10 @@
+import { createSceneServices } from './sceneServices.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { trackingEngine } from '../testSupport/viewerEngine.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  _setTrackedOverlayHostForTest,
   cachedTrackedDisplayPosition,
   cachedTrackedVisualPosition,
   createTrackedOverlayEntry,
@@ -156,9 +156,10 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
   const viewer = { trackedEntity: entity, trackedEntityChanged: changed };
   const recorder = makeHostRecorder();
   globalThis.window = fakeWindow;
-  _setTrackedOverlayHostForTest(recorder.host);
+  const engine = trackingEngine(viewer);
+  const services = createSceneServices(engine, { trackedOverlay: recorder.host });
   try {
-    initTrackedReadout(trackingEngine(viewer));
+    initTrackedReadout(engine);
     const publication = recorder.calls.find(({ op }) => op === 'set');
     assert.ok(publication);
     assert.equal(publication.sourceId, 'tracked');
@@ -173,21 +174,21 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
     assert.equal(entry.position(), display);
     assert.equal(publication.options.collisionCapacity, 0);
     assert.equal(publication.options.hideInCockpit, true);
-    assert.equal(getActiveTrackedReadoutId(), 'flights:abc123');
+    assert.equal(getActiveTrackedReadoutId(engine), 'flights:abc123');
 
     entity.gevLabelModel = { ...entity.gevLabelModel, details: ['FL360 · 455 kts'] };
-    refreshTrackedReadout(entity);
+    refreshTrackedReadout(entity, engine);
     assert.deepEqual(recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].details, [
       'FL360 · 455 kts',
     ]);
 
     viewer.trackedEntity = null;
     changed.raise();
-    assert.equal(getActiveTrackedReadoutId(), null);
+    assert.equal(getActiveTrackedReadoutId(engine), null);
     assert.equal(recorder.calls.at(-1).op, 'clear');
   } finally {
-    destroyTrackedReadout();
-    _setTrackedOverlayHostForTest();
+    destroyTrackedReadout(engine);
+    services.destroy();
     globalThis.window = originalWindow;
   }
 });
@@ -204,19 +205,20 @@ test('selection lifecycle leaves installations to their own entry and retains AL
     gevLabelModel: { title: 'FORT TEST', details: ['AIRFIELD'], accent: '#5aa9ff' },
   };
   globalThis.window = fakeWindow;
-  _setTrackedOverlayHostForTest(recorder.host);
+  const engine = trackingEngine(viewer);
+  const services = createSceneServices(engine, { trackedOverlay: recorder.host });
   try {
-    initTrackedReadout(trackingEngine(viewer));
+    initTrackedReadout(engine);
     const setsBefore = recorder.calls.filter(({ op }) => op === 'set').length;
-    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
+    services.context.events.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'ais-live-vessels', entity: installation },
     }));
     assert.equal(recorder.calls.filter(({ op }) => op === 'set').length, setsBefore);
 
-    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
+    services.context.events.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'military-installations', entity: installation },
     }));
-    assert.equal(getActiveTrackedReadoutId(), null);
+    assert.equal(getActiveTrackedReadoutId(engine), null);
     assert.equal(recorder.calls.filter(({ op }) => op === 'set').length, setsBefore, 'installation selection cannot create a second overlay');
 
     // ALPR cameras are static context too: a click publishes the same card.
@@ -225,35 +227,35 @@ test('selection lifecycle leaves installations to their own entry and retains AL
       gevDisplayPosition: () => ({ x: 4, y: 5, z: 6 }),
       gevLabelModel: { title: 'FLOCK SAFETY ALPR', details: ['CITY PD'], accent: '#ff66c4' },
     };
-    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
+    services.context.events.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'alpr-cameras', entity: camera },
     }));
-    assert.equal(getActiveTrackedReadoutId(), 'alpr:42');
+    assert.equal(getActiveTrackedReadoutId(engine), 'alpr:42');
     assert.equal(recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].title, 'FLOCK SAFETY ALPR');
 
-    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
+    services.context.events.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'ais-live-vessels', entity: installation },
     }));
-    assert.equal(getActiveTrackedReadoutId(), null, 'sibling selection clears an installation card');
+    assert.equal(getActiveTrackedReadoutId(engine), null, 'sibling selection clears an installation card');
 
-    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
+    services.context.events.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'military-installations', entity: installation },
     }));
 
-    fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selection-cleared', {
+    services.context.events.dispatchEvent(new CustomEvent('gev:entity-selection-cleared', {
       detail: { layerId: 'military-installations' },
     }));
-    assert.equal(getActiveTrackedReadoutId(), null);
+    assert.equal(getActiveTrackedReadoutId(engine), null);
     assert.ok(recorder.calls.some(({ op }) => op === 'clear'));
 
     const clearsBeforeDestroy = recorder.calls.filter(({ op }) => op === 'clear').length;
-    destroyTrackedReadout();
+    destroyTrackedReadout(engine);
     assert.ok(recorder.calls.filter(({ op }) => op === 'clear').length > clearsBeforeDestroy);
     assert.equal(changed.size, 0, 'trackedEntityChanged listener was removed');
     assert.ok(recorder.calls.some(({ op, visible }) => op === 'visible' && visible === false));
   } finally {
-    destroyTrackedReadout();
-    _setTrackedOverlayHostForTest();
+    destroyTrackedReadout(engine);
+    services.destroy();
     globalThis.window = originalWindow;
   }
 });
@@ -316,41 +318,41 @@ test("on a globe engine the readout follows engine.camera.follow's plain-data la
   const originalWindow = globalThis.window;
   globalThis.window = new EventTarget();
   const recorder = makeHostRecorder();
-  _setTrackedOverlayHostForTest(recorder.host);
   const engine = createFakeEngine();
+  const services = createSceneServices(engine, { trackedOverlay: recorder.host });
   const anchor = { x: 6_378_137, y: 0, z: 1000 };
   let model = { title: 'ISS (ZARYA)', details: ['408 km'], accent: '#ffd166' };
   try {
     initTrackedReadout(engine);
-    assert.equal(getActiveTrackedReadoutId(), null);
+    assert.equal(getActiveTrackedReadoutId(engine), null);
     const handle = engine.camera.follow({
       position: () => anchor,
       viewFrom: { x: 0, y: -5000, z: 2000 },
       label: { id: 'satellites:25544', model: () => model, position: () => anchor },
     });
-    assert.equal(getActiveTrackedReadoutId(), 'satellites:25544');
+    assert.equal(getActiveTrackedReadoutId(engine), 'satellites:25544');
     const entry = recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0];
     assert.equal(entry.title, 'ISS (ZARYA)');
     assert.equal(entry.position(), anchor);
     // A layer republishes its model through the follow handle.
     model = { ...model, details: ['409 km'] };
-    refreshTrackedReadout(handle);
+    refreshTrackedReadout(handle, engine);
     assert.deepEqual(
       recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].details,
       ['409 km'],
     );
     // So does a layer's tracked visual that names its follow handle.
     model = { ...model, details: ['410 km'] };
-    refreshTrackedReadout({ gevFollowHandle: handle });
+    refreshTrackedReadout({ gevFollowHandle: handle }, engine);
     assert.deepEqual(
       recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].details,
       ['410 km'],
     );
     handle.stop();
-    assert.equal(getActiveTrackedReadoutId(), null);
+    assert.equal(getActiveTrackedReadoutId(engine), null);
   } finally {
-    destroyTrackedReadout();
-    _setTrackedOverlayHostForTest();
+    destroyTrackedReadout(engine);
+    services.destroy();
     engine.destroy();
     globalThis.window = originalWindow;
   }

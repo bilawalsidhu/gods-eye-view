@@ -73,7 +73,7 @@ export function createScreenAnnotationRenderer(
   {
     engine,
     overlayPaintRect = (...args) => getOverlayPaintRect(engine, ...args),
-    activeTrackedReadoutId = getActiveTrackedReadoutId,
+    activeTrackedReadoutId = () => getActiveTrackedReadoutId(engine),
     store = useScreenAnnotationsStore(applicationPinia()),
   } = {},
 ) {

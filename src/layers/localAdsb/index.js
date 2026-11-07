@@ -1,3 +1,4 @@
+import { bindContextStore } from '../../data/bindContextStore.js';
 import * as geo from '../../geo/index.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
@@ -108,7 +109,7 @@ export function createLocalAdsbLayer({
     clearSelectedEntityContextForLayer,
     getSelectedEntityContext,
     removeEntityContextsForLayer,
-  } = services.context;
+  } = bindContextStore(services.context, () => renderer?.engine);
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
   /** The engine's Local ADS-B display for this lifecycle (render/display.js). */
@@ -434,7 +435,7 @@ export function createLocalAdsbLayer({
     const marker = selectedId ? markers.get(selectedId) : null;
     if (!marker?.entity) return;
     marker.entity.gevLabelModel = cardModel(marker, now());
-    services.overlays?.refreshReadout?.(marker.entity);
+    services.overlays?.refreshReadout?.(marker.entity, renderer?.engine);
   }
 
   function updateRenderHold() {
@@ -484,7 +485,8 @@ export function createLocalAdsbLayer({
       if (getSelectedEntityContext()?.id !== selectedId) {
         selectedId = null;
         releaseTrail();
-      } else services.overlays?.refreshReadout?.(selected.entity);
+      } else
+        services.overlays?.refreshReadout?.(selected.entity, renderer?.engine);
     }
     requestEnrichment();
     updateRenderHold();
@@ -672,13 +674,13 @@ export function createLocalAdsbLayer({
       renderHeld = false;
       renderer.detach();
       renderer.destroy();
+      removeEntityContextsForLayer(LAYER_ID);
       renderer = null;
       for (const marker of markers.values()) {
         marker.entity = null;
         marker.iconKind = marker.iconScale = null;
         marker.modelOwnsVisual = false;
       }
-      removeEntityContextsForLayer(LAYER_ID);
       updateRenderHold();
     },
 

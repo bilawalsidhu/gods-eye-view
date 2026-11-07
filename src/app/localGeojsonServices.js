@@ -1,3 +1,4 @@
+import * as context from '../data/contextStore.js';
 import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 import {
@@ -14,6 +15,7 @@ import {
 } from '../overlays/worldOverlay.js';
 /** Existing standalone application operations, shared by its local layers. */
 export const localGeoJsonServices = Object.freeze({
+  context,
   overlayHost: Object.freeze({
     forEngine: worldOverlayFor,
     clearSource: clearOverlaySource,

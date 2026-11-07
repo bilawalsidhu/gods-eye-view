@@ -1,3 +1,4 @@
+import { bindContextStore } from '../../data/bindContextStore.js';
 import {
   FIRMS_OVERLAY_SOURCE_ID,
   fireDetectionKey,
@@ -19,8 +20,9 @@ export function createSelection({
     selectEntityContext,
     clearSelectedEntityContextForLayer,
     getContextStore,
+    removeEntityContext = (id) => getContextStore()?.entities.delete(id),
     registerEntityContext,
-  } = services.context;
+  } = bindContextStore(services.context, () => layerState._renderer?.engine);
   const { id, name, overlayHost } = config;
 
   /**
@@ -143,9 +145,8 @@ export function createSelection({
    */
 
   function refreshContextRegistrations(fires) {
-    let store = null;
     try {
-      store = getContextStore();
+      if (!getContextStore()) return;
     } catch {
       return;
     }
@@ -161,7 +162,7 @@ export function createSelection({
     }
 
     for (const staleId of layerState._contextIds) {
-      if (!nextIds.has(staleId)) store.entities.delete(staleId);
+      if (!nextIds.has(staleId)) removeEntityContext(staleId);
     }
     layerState._contextIds = nextIds;
   }
@@ -211,9 +212,8 @@ export function createSelection({
   function clearContextRegistrations() {
     if (!layerState._contextIds.size) return;
     try {
-      const store = getContextStore();
       for (const recordId of layerState._contextIds)
-        store.entities.delete(recordId);
+        removeEntityContext(recordId);
     } catch {
       // store unavailable — nothing to clean
     }

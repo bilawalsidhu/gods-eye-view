@@ -1,3 +1,4 @@
+import { forEngine as contextForEngine } from './contextStore.js';
 // src/data/aisLiveVessels.test.mjs
 // Focused tests for the AIS feed-status derivation helper (Batch 10, finding H3/AIS)
 // and the vessel vertical-datum seam (2026-07-27 datum pass — see
@@ -985,6 +986,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     windowTarget,
     reinstalledHandlers,
     interactionHandlerFactory,
+    engine: wireEngine,
     renderer,
     cleanup() {
       stopReadout();
@@ -1100,12 +1102,12 @@ test('vessel interaction wire: id-less 3D Tiles pick deselects and resets the HU
   const harness = installWireHarness({ primitive: {}, content: {}, featureId: 0 });
   const cleared = [];
   try {
-    registerEntityContext(harness.record, {
+    contextForEngine(harness.engine).registerEntityContext(harness.record, {
       id: `ais-${harness.record.mmsi}`,
       layerId: 'ais-live-vessels',
       label: harness.record.name,
     });
-    selectEntityContext(harness.record);
+    contextForEngine(harness.engine).selectEntityContext(harness.record);
     harness.windowTarget.addEventListener('gev:entity-selection-cleared', (event) => {
       cleared.push(event.detail);
     });
@@ -1127,12 +1129,12 @@ test('vessel interaction wire: empty pick deselects and emits gev:entity-selecti
   const harness = installWireHarness(undefined);
   const cleared = [];
   try {
-    registerEntityContext(harness.record, {
+    contextForEngine(harness.engine).registerEntityContext(harness.record, {
       id: `ais-${harness.record.mmsi}`,
       layerId: 'ais-live-vessels',
       label: harness.record.name,
     });
-    selectEntityContext(harness.record);
+    contextForEngine(harness.engine).selectEntityContext(harness.record);
     harness.windowTarget.addEventListener('gev:entity-selection-cleared', (event) => {
       cleared.push(event.detail);
     });

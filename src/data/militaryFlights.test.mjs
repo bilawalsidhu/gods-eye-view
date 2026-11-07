@@ -1,3 +1,4 @@
+import { createSceneServices } from './sceneServices.js';
 // src/data/militaryFlights.test.mjs
 // Focused tests for the pure analyst-record mapper (analyst query engine seam).
 // Pure function — no viewer/DOM needed; imported directly.
@@ -13,7 +14,6 @@ import militaryFlightsLayer, {
   mapAnalystRecord,
 } from './militaryFlights.js';
 import {
-  _setTrackedOverlayHostForTest,
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
@@ -406,11 +406,12 @@ test('real military track path creates no native label and publishes every cache
     },
   );
   globalThis.fetch = async () => ({ ok: false });
-  _setTrackedOverlayHostForTest(host);
+  const engine = trackingEngine(viewer);
+  const readoutServices = createSceneServices(engine, { trackedOverlay: host });
   try {
-    initTrackedReadout(trackingEngine(viewer));
+    initTrackedReadout(engine);
     _setTrackedMilitaryRefreshStateForTest({
-      renderer: aircraftViewerRenderer,
+      renderer: (options) => aircraftViewerRenderer({ ...options, engine }),
       icao24,
       entity: null,
       billboard,
@@ -649,8 +650,8 @@ test('real military track path creates no native label and publishes every cache
   } finally {
     militaryFlightsLayer.stopTracking();
     viewer.scene.preUpdate.raiseEvent();
-    destroyTrackedReadout();
-    _setTrackedOverlayHostForTest();
+    destroyTrackedReadout(engine);
+    readoutServices.destroy();
     globalThis.fetch = realFetch;
     globalThis.window = realWindow;
   }

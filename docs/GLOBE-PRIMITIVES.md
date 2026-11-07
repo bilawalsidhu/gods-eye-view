@@ -587,8 +587,30 @@ The module helper functions take the engine first. Retained layer models use
 `init()`. Destruction is terminal, including before initialization; a parked
 engine needs fresh scene services. An old paint-lane handle cannot mutate its
 replacement. Font measurements are shared until the last live host releases
-them. The tracked-readout bridge remains page-owned and publishes into its
-attached engine's overlay.
+them.
+
+`scene.services.trackedReadout` bridges the follow handle's label and selected
+ALPR or Local ADS-B card into this overlay. `init()` subscribes to that engine's
+follow changes and that attachment's context events; `refresh(entity)` republishes
+changed label text, and `activeId()` resolves the card for annotation placement.
+Positions stay live cached visual anchors. `trackedReadoutFor(engine)` resolves
+the service; destruction removes its listeners and clears only its own source.
+
+`scene.services.context` owns selection records and notifications. Layer publishers
+use `bindContextStore` with their current engine, or a context service captured by
+their display. It mirrors records to the page context slot and preserves the
+`gev:entity-selected`, `gev:entity-selection-cleared` and aircraft awareness event
+payloads for page consumers. A clear reaches the page only when that attachment
+owns the page's selected record. Readouts listen only to their scene's event target.
+Identical IDs in different scenes cannot share a card or clear one another's
+selection. Retired context services cannot publish into a replacement attachment.
+An engine handoff carries the page-selected record through the layer session.
+The incoming context adopts it only while the page still selects that record;
+a clear between attachments wins. Rebuilt markers replace the retained carrier
+in the incoming readout without announcing another page selection.
+Readout initialization reads the retained record without testing the outgoing
+carrier's visibility; layers rebuild their carriers after camera restoration.
+The page chrome and detection controller still have page lifetimes.
 
 ## Render effects
 

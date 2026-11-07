@@ -1,3 +1,4 @@
+import { bindContextStore } from '../../data/bindContextStore.js';
 import * as geo from '../../geo/index.js';
 import { nearFarScale } from '../shared/color.js';
 import { appClock } from '../../time/clock.js';
@@ -81,7 +82,7 @@ export function createAircraftTracking({
     selectTrackedSubjectContext,
     clearTrackedSubjectContext,
     refreshTrackedSubjectContext,
-  } = services.context;
+  } = bindContextStore(services.context, () => flightState._renderer?.engine);
   const { isTr3b, tr3bConvertedIds } = services.aircraftPresentation;
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { resolveGroundFloorCellsBounded, floorAltitudeM, cachedGroundFloor } =
@@ -91,6 +92,12 @@ export function createAircraftTracking({
   const { selectionDispatcherFor } = services.selection;
 
   function _emitAwarenessEvent(type, detail) {
+    if (services.context.forEngine && flightState._renderer?.engine) {
+      services.context
+        .forEngine(flightState._renderer?.engine)
+        ?.publishAwareness(type, detail);
+      return;
+    }
     if (
       typeof window === 'undefined' ||
       !window.dispatchEvent ||
@@ -251,7 +258,10 @@ export function createAircraftTracking({
       trackedLabelText(icao24),
       trackedStyle.labelColor,
     );
-    refreshTrackedReadout(flightState._trackedEntity);
+    refreshTrackedReadout(
+      flightState._trackedEntity,
+      flightState._renderer?.engine,
+    );
     // The readout and the context slot describe the same contact — refresh them
     // together so voice never narrates a fix the card has already replaced.
     refreshTrackedSubjectContext(_contextSubjectMetadata(icao24));
@@ -998,7 +1008,10 @@ export function createAircraftTracking({
     // that should weld to the AIRCRAFT YOU SEE reads `gevVisualPosition` instead.
     flightState._trackedEntity.gevVisualPosition =
       parts.motion._trackedVisualCached;
-    refreshTrackedReadout(flightState._trackedEntity);
+    refreshTrackedReadout(
+      flightState._trackedEntity,
+      flightState._renderer?.engine,
+    );
     // Camera follows the tracked entity (the renderer cancels any flight
     // first and applies the one exact tracked frame).
     // A resumed binding or a share restore re-follows the session's own

@@ -160,7 +160,7 @@ export function createInstallationsDisplay(
     registerEntityContext,
     removeEntityContextsForLayer,
     selectEntityContext,
-  } = services.context;
+  } = services.context.forEngine?.(engine) ?? services.context;
   const namedMarkers = createNamedMarkers(engine, {
     state,
     services,

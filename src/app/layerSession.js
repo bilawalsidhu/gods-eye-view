@@ -18,6 +18,7 @@
  * @property {Map<string, {entry: object | null, enabled: boolean, durable: boolean | undefined}> | null} handoffLayers Switch coordinator: outgoing layer intentions.
  * @property {boolean} restoringView Switch coordinator: incoming address restoration.
  * @property {() => boolean} switching Switch coordinator: voice waits while busy.
+ * @property {object | null} selectionContext Scene factory: selected record carried to the next attachment.
  * @property {object | null} contextScene Shell: retained Context state.
  */
 
@@ -40,6 +41,7 @@ export function createLayerSession() {
     restoringView: false,
     switching: () => false,
     contextScene: null,
+    selectionContext: null,
   };
 }
 

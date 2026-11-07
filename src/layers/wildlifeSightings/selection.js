@@ -372,8 +372,11 @@ export function createSelection({ state, services, parts }) {
       const store = services.context.getContextStore?.();
       for (const id of state.contextIds) {
         if (!next.has(id)) {
-          if (store?.entities?.get(id)?.layerId === 'wildlife-sightings')
-            store.entities.delete(id);
+          if (store?.entities?.get(id)?.layerId === 'wildlife-sightings') {
+            if (services.context.removeEntityContext)
+              services.context.removeEntityContext(id);
+            else store.entities.delete(id);
+          }
           state.carriers.delete(id);
         }
       }
