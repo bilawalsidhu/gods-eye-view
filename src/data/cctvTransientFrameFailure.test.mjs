@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { cctvProxy } from '../../server/providers/cctv.js';
+import { DEFAULT_WORLD_CCTV_SOURCE_FILE } from '../../server/providers/cctv/constants.js';
 import {
   NO_FEED_CAMERA_TTL_MS,
   NO_FEED_TRANSIENT_TTL_MS,
@@ -27,15 +28,22 @@ const CAM = {
 };
 const T0 = 1800000000000;
 
-function fixture(t, fetchImpl) {
+function fixture(t, fetchImpl, cam = CAM, worldRows = null) {
   const saved = { ...process.env };
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-1314-transient-'));
   const server = new EventEmitter();
-  process.env.CCTV_SOURCES_JSON = JSON.stringify([CAM]);
+  process.env.CCTV_SOURCES_JSON = JSON.stringify([cam]);
   process.env.CCTV_SOURCES_FILE = 'absent.json';
   process.env.CCTV_FORCE_AUSTIN = '0';
   delete process.env.GOOGLE_MAPS_API_KEY;
   delete process.env.GOOGLE_MAPS_SERVER_API_KEY;
+  if (worldRows) {
+    process.env.CCTV_WORLD_CAMERAS_ENABLED = '1';
+    process.env.CCTV_FORCE_AUSTIN = '1'; // live packs load only when forced
+    const file = path.join(root, DEFAULT_WORLD_CCTV_SOURCE_FILE);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(worldRows));
+  }
   t.mock.method(globalThis, 'fetch', fetchImpl);
   let handler;
   const start = () =>
@@ -72,7 +80,7 @@ function fixture(t, fetchImpl) {
   };
   const feedType = async () =>
     JSON.parse((await get('/sources')).body).sources[0].feedType;
-  const frame = () => get(`/frame/${CAM.id}`);
+  const frame = () => get(`/frame/${cam.id}`);
   return { get, feedType, frame };
 }
 
@@ -209,4 +217,42 @@ test('a successful frame inside the retry window clears it at once', async (t) =
   healthy = true;
   assert.equal((await frame()).status, 200);
   assert.equal(await feedType(), 'image');
+});
+
+test('world-camera sources (throttled fetch path) are not learned from', async (t) => {
+  let now = T0;
+  t.mock.method(Date, 'now', () => now);
+  let worldCalls = 0;
+  const WORLD = {
+    id: 'world-or-1',
+    name: 'World camera',
+    sourceKind: 'tripcheck-odot',
+    lat: 45.5,
+    lon: -122.6,
+    url: 'https://www.tripcheck.com/roadcams/cams/one.jpg',
+    snapshotUrl: 'https://www.tripcheck.com/roadcams/cams/one.jpg',
+  };
+  const { get, frame } = fixture(
+    t,
+    async (url) => {
+      if (String(url).includes('/roadcams/')) worldCalls += 1;
+      return new Response(null, { status: 404 });
+    },
+    CAM,
+    [WORLD],
+  );
+  const kind = async () =>
+    JSON.parse((await get('/sources')).body).sources.find(
+      (s) => s.id === WORLD.id,
+    )?.feedType;
+  assert.notEqual(await kind(), undefined, 'world camera is in the catalog');
+  for (let i = 0; i < 3; i += 1) {
+    await get(`/frame/${WORLD.id}`);
+    now += 60 * 60 * 1000;
+  }
+  assert.ok(
+    worldCalls >= 2,
+    'the throttled path really fetched more than once',
+  );
+  assert.notEqual(await kind(), 'none');
 });
