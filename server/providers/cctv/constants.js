@@ -413,6 +413,36 @@ export const KARTVERKET_HEIGHT_RANGE_M = Object.freeze({ min: -20, max: 2500 });
 /** Same identity the other CCTV upstream requests send. */
 export const KARTVERKET_USER_AGENT = 'gods-eye-view-cctv-proxy/1.0';
 
+/** Auckland cameras from Waka Kotahi NZTA: one keyless GeoJSON list for the
+ * whole country; this pack keeps RegionID 7 (Auckland). Frames are stills
+ * synthesized from `ExternalId` on trafficnz.info — never from the payload
+ * `ImageUrl`, and never from the internal `id` (that path 404s). */
+export const AUCKLAND_CAMERAS_URL =
+  'https://www.journeys.nzta.govt.nz/assets/map-data-cache/cameras.json';
+/** The only origin Auckland camera frames may come from. */
+export const AUCKLAND_IMAGE_ORIGIN = 'https://www.trafficnz.info/';
+export const AUCKLAND_IMAGE_URL = (id) =>
+  `${AUCKLAND_IMAGE_ORIGIN}camera/${id}.jpg`;
+/** NZTA ExternalId values are 1–4 digit integers with no leading zero. */
+export const AUCKLAND_CAMERA_ID_RE = /^[1-9]\d{0,3}$/;
+/** Journeys map-data `RegionID` for Auckland (confirmed against the live
+ * catalog: 98 cameras, all inside the metro bounding box). */
+export const AUCKLAND_REGION_ID = 7;
+export const DEFAULT_AUCKLAND_MAX_SOURCES = 120;
+export const AUCKLAND_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Ground-elevation prior in metres. The NZTA payload carries none; Auckland
+ * sits a few tens of metres above sea level. */
+export const AUCKLAND_GROUND_ELEVATION_M = 40;
+/** Queen Street / Britomart: the primary prioritization anchor. */
+export const AUCKLAND_DOWNTOWN = { lat: -36.8485, lon: 174.7633 };
+export const AUCKLAND_ANCHORS = [
+  { lat: -36.8485, lon: 174.7633 }, // Downtown / Britomart
+  { lat: -36.727, lon: 174.7 }, // Albany / North Shore
+  { lat: -36.993, lon: 174.88 }, // Manukau
+  { lat: -37.008, lon: 174.785 }, // Auckland Airport
+  { lat: -36.881, lon: 174.631 }, // Henderson / west
+];
+
 /** NYC DOT Traffic Management Center cameras: one keyless JSON list for the
  * five boroughs (~980 cameras). Frames are stills synthesized from each
  * camera UUID on the city's webcam host — never taken from the payload. */
