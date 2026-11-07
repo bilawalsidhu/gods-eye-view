@@ -3105,5 +3105,32 @@
   "Maximum event age: {days}d; undated markers are kept": "事件最長保留時間：{days}天；保留無日期標記",
   "event age filter|All": "全部",
   "Event age": "事件時間",
-  "Event age: {days}d · undated kept": "事件時間：{days}天內 · 保留無日期標記"
+  "Event age: {days}d · undated kept": "事件時間：{days}天內 · 保留無日期標記",
+  "Loading the last 72 hours…": "正在載入過去 72 小時…",
+  "Last 72 hours unavailable": "過去 72 小時無法使用",
+  "No readings in the last 72 hours": "過去 72 小時沒有讀數",
+  "Last 72 h: low {min} · high {max}": "過去 72 小時：最低 {min} · 最高 {max}",
+  "Level flat over the last 72 hours": "過去 72 小時水位持平",
+  "Latest {value} is at {percent}% of that range": "最新值 {value} 位於該範圍的 {percent}%",
+  "SEA LEVEL STATION · IOC {code}": "海平面站 · IOC {code}",
+  "Last reading {value} · {age}": "最新讀數 {value} · {age}",
+  "No reading reported": "未回報讀數",
+  "Sensor {sensor} · {time} UTC": "感測器 {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "水位以各潮位計自身的基準面為準；切勿比較不同測站",
+  "Raw data, not quality controlled": "原始資料，未經品質管制",
+  "IOC station page ↗ · click card to open": "IOC 測站頁面 ↗ · 點選卡片開啟",
+  "Open {name} on the IOC station page": "在 IOC 測站頁面開啟 {name}",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · 原始",
+  "Sea level source unavailable": "海平面資料來源無法使用",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "顏色顯示每座潮位計最近一次回報的新舊，而非水位：每座潮位計都有自己的基準面。原始資料，未經品質管制。點選測站可查看過去 72 小時。",
+  "{count} reporting": {
+    "other": "{count} 站回報中"
+  },
+  "{count} stations": {
+    "other": "{count} 個測站"
+  },
+  "Reporting (within 3 h)": "回報中（3 小時內）",
+  "Late (3 to 24 h)": "延遲（3 至 24 小時）",
+  "Silent (over 24 h)": "無回報（超過 24 小時）",
+  "Sea level stations": "海平面測站"
 }

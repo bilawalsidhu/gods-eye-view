@@ -3255,5 +3255,36 @@
   "Maximum event age: {days}d; undated markers are kept": "Idade máxima do evento: {days} dias; marcadores sem data mantidos",
   "event age filter|All": "Todos",
   "Event age": "Idade do evento",
-  "Event age: {days}d · undated kept": "Idade do evento: {days} dias · sem data mantidos"
+  "Event age: {days}d · undated kept": "Idade do evento: {days} dias · sem data mantidos",
+  "Loading the last 72 hours…": "Carregando as últimas 72 horas…",
+  "Last 72 hours unavailable": "Últimas 72 horas indisponíveis",
+  "No readings in the last 72 hours": "Sem leituras nas últimas 72 horas",
+  "Last 72 h: low {min} · high {max}": "Últimas 72 h: mínimo {min} · máximo {max}",
+  "Level flat over the last 72 hours": "Nível constante nas últimas 72 horas",
+  "Latest {value} is at {percent}% of that range": "A última leitura, {value}, está a {percent}% desse intervalo",
+  "SEA LEVEL STATION · IOC {code}": "ESTAÇÃO DE NÍVEL DO MAR · IOC {code}",
+  "Last reading {value} · {age}": "Última leitura {value} · {age}",
+  "No reading reported": "Nenhuma leitura informada",
+  "Sensor {sensor} · {time} UTC": "Sensor {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "Os níveis são relativos ao datum próprio deste marégrafo; nunca compare estações",
+  "Raw data, not quality controlled": "Dados brutos, sem controle de qualidade",
+  "IOC station page ↗ · click card to open": "Página da estação IOC ↗ · clique no cartão para abrir",
+  "Open {name} on the IOC station page": "Abrir {name} na página de estações da IOC",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · BRUTO",
+  "Sea level source unavailable": "Fonte do nível do mar indisponível",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "A cor mostra há quanto tempo cada marégrafo informou, nunca o nível: cada marégrafo tem seu próprio datum. Dados brutos, sem controle de qualidade. Clique em uma estação para ver as últimas 72 horas.",
+  "{count} reporting": {
+    "one": "{count} informando",
+    "many": "{count} informando",
+    "other": "{count} informando"
+  },
+  "{count} stations": {
+    "one": "{count} estação",
+    "many": "{count} de estações",
+    "other": "{count} estações"
+  },
+  "Reporting (within 3 h)": "Informando (em até 3 h)",
+  "Late (3 to 24 h)": "Atrasadas (de 3 a 24 h)",
+  "Silent (over 24 h)": "Silenciosas (mais de 24 h)",
+  "Sea level stations": "Estações de nível do mar"
 }

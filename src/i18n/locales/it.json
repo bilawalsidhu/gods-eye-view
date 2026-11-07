@@ -3255,5 +3255,36 @@
   "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} giorni; indicatori senza data mantenuti",
   "event age filter|All": "Tutti",
   "Event age": "Età degli eventi",
-  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti"
+  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti",
+  "Loading the last 72 hours…": "Caricamento delle ultime 72 ore…",
+  "Last 72 hours unavailable": "Ultime 72 ore non disponibili",
+  "No readings in the last 72 hours": "Nessuna lettura nelle ultime 72 ore",
+  "Last 72 h: low {min} · high {max}": "Ultime 72 h: minimo {min} · massimo {max}",
+  "Level flat over the last 72 hours": "Livello costante nelle ultime 72 ore",
+  "Latest {value} is at {percent}% of that range": "L'ultima lettura, {value}, è al {percent}% di quell'intervallo",
+  "SEA LEVEL STATION · IOC {code}": "STAZIONE DI LIVELLO DEL MARE · IOC {code}",
+  "Last reading {value} · {age}": "Ultima lettura {value} · {age}",
+  "No reading reported": "Nessuna lettura segnalata",
+  "Sensor {sensor} · {time} UTC": "Sensore {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "I livelli sono riferiti al datum proprio di questo mareografo; non confrontare mai le stazioni",
+  "Raw data, not quality controlled": "Dati grezzi, senza controllo di qualità",
+  "IOC station page ↗ · click card to open": "Pagina della stazione IOC ↗ · clicca la scheda per aprire",
+  "Open {name} on the IOC station page": "Apri {name} nella pagina delle stazioni IOC",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · GREZZO",
+  "Sea level source unavailable": "Fonte del livello del mare non disponibile",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "Il colore indica quanto di recente ha trasmesso ogni mareografo, mai il livello: ogni mareografo ha il proprio datum. Dati grezzi, senza controllo di qualità. Clicca su una stazione per le ultime 72 ore.",
+  "{count} reporting": {
+    "one": "{count} trasmette",
+    "many": "{count} trasmettono",
+    "other": "{count} trasmettono"
+  },
+  "{count} stations": {
+    "one": "{count} stazione",
+    "many": "{count} di stazioni",
+    "other": "{count} stazioni"
+  },
+  "Reporting (within 3 h)": "Trasmettono (entro 3 h)",
+  "Late (3 to 24 h)": "In ritardo (da 3 a 24 h)",
+  "Silent (over 24 h)": "Mute (oltre 24 h)",
+  "Sea level stations": "Stazioni di livello del mare"
 }

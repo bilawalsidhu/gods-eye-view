@@ -3105,5 +3105,32 @@
   "Maximum event age: {days}d; undated markers are kept": "イベントの最大経過日数：{days}日。日付のないマーカーは保持",
   "event age filter|All": "すべて",
   "Event age": "経過日数",
-  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持"
+  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持",
+  "Loading the last 72 hours…": "過去 72 時間を読み込み中…",
+  "Last 72 hours unavailable": "過去 72 時間のデータを利用できません",
+  "No readings in the last 72 hours": "過去 72 時間の観測値はありません",
+  "Last 72 h: low {min} · high {max}": "過去 72 時間: 最低 {min} · 最高 {max}",
+  "Level flat over the last 72 hours": "過去 72 時間、水位は変化なし",
+  "Latest {value} is at {percent}% of that range": "最新値 {value} はその範囲の {percent}% の位置",
+  "SEA LEVEL STATION · IOC {code}": "海面水位観測所 · IOC {code}",
+  "Last reading {value} · {age}": "最新の観測値 {value} · {age}",
+  "No reading reported": "観測値の報告なし",
+  "Sensor {sensor} · {time} UTC": "センサー {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "水位は各験潮所固有の基準面に対する値です。観測所どうしを比較しないでください",
+  "Raw data, not quality controlled": "未加工データ、品質管理なし",
+  "IOC station page ↗ · click card to open": "IOC 観測所ページ ↗ · カードをクリックで開く",
+  "Open {name} on the IOC station page": "IOC 観測所ページで {name} を開く",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · 未加工",
+  "Sea level source unavailable": "海面水位のデータソースを利用できません",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "色は各験潮所が最後に報告した時刻の新しさを示し、水位は示しません。験潮所ごとに基準面が異なります。未加工データで品質管理は行われていません。観測所をクリックすると過去 72 時間を表示します。",
+  "{count} reporting": {
+    "other": "{count} 件が報告中"
+  },
+  "{count} stations": {
+    "other": "{count} 観測所"
+  },
+  "Reporting (within 3 h)": "報告中（3 時間以内）",
+  "Late (3 to 24 h)": "遅延（3〜24 時間）",
+  "Silent (over 24 h)": "無報告（24 時間超）",
+  "Sea level stations": "海面水位観測所"
 }

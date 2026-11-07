@@ -162,6 +162,7 @@
     "San Francisco",
     "Scanlines",
     "Scope",
+    "Sensor {sensor} · {time} UTC",
     "Sentinel-2",
     "Sonar",
     "Soul",
@@ -307,6 +308,7 @@
     "STD",
     "San Francisco",
     "Sector",
+    "Sensor {sensor} · {time} UTC",
     "Sonar",
     "Soul",
     "Techno",
@@ -535,6 +537,7 @@
     "{count} MSGS",
     "{count} SOURCES",
     "{count} messages",
+    "{count} stations",
     "{n} cyclones",
     "{n} satellites",
     "{rate} msg/s",
@@ -919,7 +922,8 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "Sensor {sensor} · {time} UTC"
   ],
   "ru": [
     "AIS: --",

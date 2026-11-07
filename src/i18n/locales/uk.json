@@ -3330,5 +3330,38 @@
   "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн.; позначки без дати збережено",
   "event age filter|All": "Усі",
   "Event age": "Вік події",
-  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено"
+  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено",
+  "Loading the last 72 hours…": "Завантаження останніх 72 годин…",
+  "Last 72 hours unavailable": "Останні 72 години недоступні",
+  "No readings in the last 72 hours": "Немає показань за останні 72 години",
+  "Last 72 h: low {min} · high {max}": "Останні 72 год: мін. {min} · макс. {max}",
+  "Level flat over the last 72 hours": "Рівень стабільний протягом останніх 72 годин",
+  "Latest {value} is at {percent}% of that range": "Останнє значення {value} — {percent}% від цього діапазону",
+  "SEA LEVEL STATION · IOC {code}": "СТАНЦІЯ РІВНЯ МОРЯ · IOC {code}",
+  "Last reading {value} · {age}": "Останнє показання {value} · {age}",
+  "No reading reported": "Показань не надійшло",
+  "Sensor {sensor} · {time} UTC": "Датчик {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "Рівні відраховуються від власного нуля цього мареографа; ніколи не порівнюйте станції",
+  "Raw data, not quality controlled": "Необроблені дані, без контролю якості",
+  "IOC station page ↗ · click card to open": "Сторінка станції IOC ↗ · натисніть картку, щоб відкрити",
+  "Open {name} on the IOC station page": "Відкрити {name} на сторінці станцій IOC",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · СИРІ",
+  "Sea level source unavailable": "Джерело рівня моря недоступне",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "Колір показує, наскільки недавно звітував кожен мареограф, а не рівень: у кожного мареографа свій нуль. Необроблені дані, без контролю якості. Натисніть станцію, щоб побачити останні 72 години.",
+  "{count} reporting": {
+    "one": "{count} звітує",
+    "few": "{count} звітують",
+    "many": "{count} звітують",
+    "other": "{count} звітують"
+  },
+  "{count} stations": {
+    "one": "{count} станція",
+    "few": "{count} станції",
+    "many": "{count} станцій",
+    "other": "{count} станції"
+  },
+  "Reporting (within 3 h)": "Звітують (протягом 3 год)",
+  "Late (3 to 24 h)": "Із запізненням (3–24 год)",
+  "Silent (over 24 h)": "Мовчать (понад 24 год)",
+  "Sea level stations": "Станції рівня моря"
 }

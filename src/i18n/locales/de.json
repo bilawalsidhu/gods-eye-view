@@ -3180,5 +3180,34 @@
   "Maximum event age: {days}d; undated markers are kept": "Maximales Ereignisalter: {days} Tage; undatierte Markierungen bleiben",
   "event age filter|All": "Alle",
   "Event age": "Ereignisalter",
-  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben"
+  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben",
+  "Loading the last 72 hours…": "Letzte 72 Stunden werden geladen…",
+  "Last 72 hours unavailable": "Letzte 72 Stunden nicht verfügbar",
+  "No readings in the last 72 hours": "Keine Messwerte in den letzten 72 Stunden",
+  "Last 72 h: low {min} · high {max}": "Letzte 72 h: Minimum {min} · Maximum {max}",
+  "Level flat over the last 72 hours": "Pegelstand in den letzten 72 Stunden unverändert",
+  "Latest {value} is at {percent}% of that range": "Der letzte Wert {value} liegt bei {percent} % dieses Bereichs",
+  "SEA LEVEL STATION · IOC {code}": "MEERESSPIEGELSTATION · IOC {code}",
+  "Last reading {value} · {age}": "Letzter Messwert {value} · {age}",
+  "No reading reported": "Kein Messwert gemeldet",
+  "Sensor {sensor} · {time} UTC": "Sensor {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "Pegelstände beziehen sich auf den eigenen Bezugswert dieses Pegels; Stationen nie vergleichen",
+  "Raw data, not quality controlled": "Rohdaten, nicht qualitätsgeprüft",
+  "IOC station page ↗ · click card to open": "IOC-Stationsseite ↗ · Karte anklicken zum Öffnen",
+  "Open {name} on the IOC station page": "{name} auf der IOC-Stationsseite öffnen",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · ROH",
+  "Sea level source unavailable": "Meeresspiegel-Quelle nicht verfügbar",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "Die Farbe zeigt, wie kürzlich jeder Pegel gemeldet hat, nie den Pegelstand: Jeder Pegel hat seinen eigenen Bezugswert. Rohdaten, nicht qualitätsgeprüft. Klicken Sie auf eine Station für die letzten 72 Stunden.",
+  "{count} reporting": {
+    "one": "{count} meldet",
+    "other": "{count} melden"
+  },
+  "{count} stations": {
+    "one": "{count} Station",
+    "other": "{count} Stationen"
+  },
+  "Reporting (within 3 h)": "Meldend (innerhalb von 3 h)",
+  "Late (3 to 24 h)": "Verspätet (3 bis 24 h)",
+  "Silent (over 24 h)": "Stumm (über 24 h)",
+  "Sea level stations": "Meeresspiegelstationen"
 }

@@ -3255,5 +3255,36 @@
   "Maximum event age: {days}d; undated markers are kept": "Ancienneté maximale : {days} j ; marqueurs sans date conservés",
   "event age filter|All": "Tous",
   "Event age": "Ancienneté",
-  "Event age: {days}d · undated kept": "Ancienneté : {days} j · marqueurs sans date conservés"
+  "Event age: {days}d · undated kept": "Ancienneté : {days} j · marqueurs sans date conservés",
+  "Loading the last 72 hours…": "Chargement des 72 dernières heures…",
+  "Last 72 hours unavailable": "72 dernières heures indisponibles",
+  "No readings in the last 72 hours": "Aucune mesure sur les 72 dernières heures",
+  "Last 72 h: low {min} · high {max}": "72 dernières h : min {min} · max {max}",
+  "Level flat over the last 72 hours": "Niveau constant sur les 72 dernières heures",
+  "Latest {value} is at {percent}% of that range": "La dernière valeur, {value}, se situe à {percent} % de cette plage",
+  "SEA LEVEL STATION · IOC {code}": "STATION DE NIVEAU DE LA MER · IOC {code}",
+  "Last reading {value} · {age}": "Dernière mesure {value} · {age}",
+  "No reading reported": "Aucune mesure signalée",
+  "Sensor {sensor} · {time} UTC": "Capteur {sensor} · {time} UTC",
+  "Levels are against this gauge’s own datum; never compare stations": "Les niveaux se rapportent au zéro propre à ce marégraphe ; ne comparez jamais les stations",
+  "Raw data, not quality controlled": "Données brutes, sans contrôle qualité",
+  "IOC station page ↗ · click card to open": "Page de la station IOC ↗ · cliquez sur la carte pour l'ouvrir",
+  "Open {name} on the IOC station page": "Ouvrir {name} sur la page de la station IOC",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · BRUT",
+  "Sea level source unavailable": "Source du niveau de la mer indisponible",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "La couleur indique la fraîcheur du dernier relevé de chaque marégraphe, jamais le niveau : chaque marégraphe a son propre zéro. Données brutes, sans contrôle qualité. Cliquez sur une station pour ses 72 dernières heures.",
+  "{count} reporting": {
+    "one": "{count} transmet",
+    "many": "{count} transmettent",
+    "other": "{count} transmettent"
+  },
+  "{count} stations": {
+    "one": "{count} station",
+    "many": "{count} de stations",
+    "other": "{count} stations"
+  },
+  "Reporting (within 3 h)": "Transmettent (moins de 3 h)",
+  "Late (3 to 24 h)": "En retard (3 à 24 h)",
+  "Silent (over 24 h)": "Silencieuses (plus de 24 h)",
+  "Sea level stations": "Stations de niveau de la mer"
 }

@@ -710,6 +710,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'satellites',
   }),
+  Object.freeze({
+    id: 'sea-level-stations',
+    token: '00',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'sea-marks', token: '6', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ski-pistes', token: '7', disposition: 'enabled-only' }),
   Object.freeze({
