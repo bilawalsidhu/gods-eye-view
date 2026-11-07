@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { distance } from '../../geo/vector.js';
 import { t, msg } from '../../i18n/index.js';
 
 // ingestion.js is a portable export (package.json) and writes English labels
@@ -165,7 +165,7 @@ export function createQueries({
 
   /**
    * Map one internal vessel record to a plain JSON-safe analyst record
-   * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+   * (analyst query engine seam). Pure — no renderer types. Missing/unknown
    * fields are null, never NaN/undefined. navStatus is always null: the
    * /api/vessels proxy does not surface AIS NavigationalStatus, so it
    * cannot be derived client-side.
@@ -271,7 +271,7 @@ export function createQueries({
     /**
      * Find a vessel by exact MMSI or case-insensitive name substring.
      * @param {string|number} query MMSI or partial vessel name.
-     * @returns {{ mmsi: string, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
+     * @returns {{ mmsi: string, name: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
      */
     findByQuery(query) {
       if (query === null || query === undefined) return null;
@@ -311,10 +311,10 @@ export function createQueries({
 
     /**
      * Get vessels within a range of a point, sorted nearest-first.
-     * @param {Cesium.Cartesian3} centerCartesian Center of the search.
+     * @param {{x: number, y: number, z: number}} centerCartesian ECEF centre of the search.
      * @param {number} rangeM Max distance in meters (non-finite = unbounded).
      * @param {number} [maxCount=25] Maximum entries to return.
-     * @returns {Array<{ mmsi: string, name: string, position: Cesium.Cartesian3, distanceM: number }>}
+     * @returns {Array<{ mmsi: string, name: string, position: {x: number, y: number, z: number}, distanceM: number }>}
      */
     getNearby(centerCartesian, rangeM, maxCount = 25) {
       const records = state.records.all;
@@ -330,7 +330,7 @@ export function createQueries({
           continue;
         const position = components.rendering.iconPosition(record);
         if (!position) continue;
-        const distanceM = Cesium.Cartesian3.distance(centerCartesian, position);
+        const distanceM = distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         entries.push({
           mmsi: record.mmsi,
@@ -346,7 +346,7 @@ export function createQueries({
     /**
      * Get positions of all currently loaded vessels.
      * @param {number} [maxCount=800] Maximum entries to return.
-     * @returns {Array<{ id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number }>}
+     * @returns {Array<{ id: string, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number }>}
      */
     /**
      * Whether this layer still carries a vessel, in O(1).
@@ -465,7 +465,7 @@ export function createQueries({
      * @param {Object} [options={}] - Options from the detection system.
      * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number} [options.seed] - Seed offset for stride sampling.
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
       if (!state.feed.enabled || !state.icons?.show) return [];

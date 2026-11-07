@@ -1,6 +1,5 @@
 import { createVesselFeed } from './ingestion.js';
 import { VesselRecords } from './records.js';
-import * as Cesium from 'cesium';
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
 
 export function createVesselState({ source, services }) {
@@ -18,7 +17,8 @@ export function createVesselState({ source, services }) {
 
   vesselState._lastCamPoseSig = '';
 
-  vesselState._scratchFocusScreen = new Cesium.Cartesian2();
+  /** Screen position the focus pass projects into, reused every pass. */
+  vesselState._scratchFocusScreen = { x: 0, y: 0 };
 
   vesselState.DEFAULT_VESSEL_OVERLAY_HOST = Object.freeze({
     setEntries: setOverlayEntries,
@@ -64,7 +64,7 @@ export function createVesselState({ source, services }) {
     keyTarget: null,
     /** Exact callback registered on keyTarget. */
     keydownHandler: null,
-    /** Cesium trackedEntityChanged listener disposer. */
+    /** Follow-change listener disposer. */
     trackedEntityRemover: null,
     /** Test-only key target for enable-time interaction installation. */
     interactionKeyTarget: null,
@@ -79,7 +79,7 @@ export function createVesselState({ source, services }) {
     selectedRecord: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
-    /** @type {Cesium.Cartesian3[]} Chronological trail vertices (oldest first) */
+    /** @type {{x: number, y: number, z: number}[]} Chronological ECEF trail vertices (oldest first) */
     trailPositions: [],
     /** @type {string|null} MMSI that owns the active selected-vessel trail. */
     trailMmsi: null,

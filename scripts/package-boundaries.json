@@ -1647,6 +1647,7 @@
       "src/layers/vessels/lifecycle.js",
       "src/layers/vessels/policy.js",
       "src/layers/vessels/queries.js",
+      "src/geo/vector.js",
       "src/layers/vessels/rendering.js",
       "src/data/entityRecords.js",
       "src/data/iconSetPrimitive.js",
