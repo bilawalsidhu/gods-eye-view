@@ -36,7 +36,11 @@ const runnable = CAMERA_SCRIPTS.filter((script) =>
   ),
 ).map((script) => `camera.trace.${script.name}`);
 
-const CHECKS = new Set([...runnable, 'camera.flight.callbacks']);
+const CHECKS = new Set([
+  ...runnable,
+  'camera.flight.callbacks',
+  'camera.controls.settings',
+]);
 
 function headlessHarness(clock) {
   return {

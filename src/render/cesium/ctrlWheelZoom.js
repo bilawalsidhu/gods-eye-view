@@ -5,6 +5,7 @@
  * pixel-mode Ctrl+wheel events) relayed at a usable speed.
  */
 import * as Cesium from 'cesium';
+import { bindingList, zoomInputName } from './cameraControls.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -32,15 +33,9 @@ export function installTrackpadPinchZoom(
     throw new TypeError('A complete Cesium viewer is required');
 
   const originalZoomEventTypes = controller.zoomEventTypes;
-  const zoomEventTypes = Array.isArray(originalZoomEventTypes)
-    ? originalZoomEventTypes
-    : originalZoomEventTypes === undefined
-      ? []
-      : [originalZoomEventTypes];
+  const zoomEventTypes = bindingList(originalZoomEventTypes);
   const alreadyHandlesControlWheel = zoomEventTypes.some(
-    (binding) =>
-      binding?.eventType === Cesium.CameraEventType.WHEEL &&
-      binding?.modifier === Cesium.KeyboardEventModifier.CTRL,
+    (binding) => zoomInputName(binding) === 'ctrlWheel',
   );
   const configuredZoomEventTypes = alreadyHandlesControlWheel
     ? originalZoomEventTypes

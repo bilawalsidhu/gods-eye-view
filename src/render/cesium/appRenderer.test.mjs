@@ -318,21 +318,6 @@ test('the application refuses a renderer it cannot run on, and destroys it', asy
 });
 
 const EXPECTED_MISSING = [
-  'camera.controls',
-  'camera.controls.coast',
-  'camera.controls.coast.drag',
-  'camera.controls.coast.zoom',
-  'camera.controls.collision',
-  'camera.controls.enableRotate',
-  'camera.controls.enableTilt',
-  'camera.controls.enableZoom',
-  'camera.controls.enabled',
-  'camera.controls.maxDistance',
-  'camera.controls.minDistance',
-  'camera.controls.pitchRange',
-  'camera.controls.suspend',
-  'camera.controls.zoomFactor',
-  'camera.controls.zoomInputs',
   'draw.atlas',
   'draw.clampState',
   'draw.on',

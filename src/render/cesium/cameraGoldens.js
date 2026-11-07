@@ -18,6 +18,7 @@ import {
 } from '../conformance/cameraScripts.js';
 import { runCameraScript } from '../conformance/cameraRunner.js';
 import { updateCameraChanged } from './internals.js';
+import { controllerDefaults } from './cameraControls.js';
 
 /**
  * The contract's easings as Cesium's, kept here rather than taken from the
@@ -66,8 +67,7 @@ export function headlessCamera() {
     globe: undefined,
     ellipsoid: Cesium.Ellipsoid.WGS84,
     screenSpaceCameraController: {
-      minimumZoomDistance: 1,
-      maximumZoomDistance: Number.POSITIVE_INFINITY,
+      ...controllerDefaults(),
       enableInputs: true,
     },
     frameState: { mode: Cesium.SceneMode.SCENE3D },

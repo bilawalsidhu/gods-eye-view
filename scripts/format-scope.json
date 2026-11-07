@@ -54,6 +54,8 @@
   "src/render/cesium/input.js",
   "src/render/cesium/input.test.mjs",
   "src/render/cesium/cameraInput.test.mjs",
+  "src/render/cesium/cameraControls.js",
+  "src/render/cesium/cameraControls.test.mjs",
   "src/render/input/router.js",
   "src/render/input/router.test.mjs",
   "src/render/cesium/internals.test.mjs",

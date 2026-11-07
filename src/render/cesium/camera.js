@@ -2,13 +2,15 @@
  * @module render/cesium/camera
  * @description The Cesium renderer's camera port over a Cesium camera:
  * poses, views, flights, `lookAt`, events and command hooks, each mapped
- * onto Cesium's own camera call.
+ * onto Cesium's own camera call, and the user's camera controls
+ * (`cameraControls.js`) on the scene's camera controller.
  */
 import * as Cesium from 'cesium';
 import { createCameraEvents } from '../camera/events.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { cameraFlightActive } from './internals.js';
 import { createCesiumFollow } from './follow.js';
+import { createCesiumControls } from './cameraControls.js';
 import { cameraOf, findCamera, provideUnboundCamera } from '../rendererOf.js';
 // Loads the factory an unbound viewer gets its credits port from.
 import './credits.js';
@@ -109,6 +111,8 @@ export function createCesiumCamera({ scene, camera, report, widget }) {
         onChanged: () => cameraEvents.emit('followChanged'),
       })
     : null;
+
+  const controlsPart = createCesiumControls({ scene });
 
   // Camera commands: hooks run before each one, so an owner can yield.
   const commandHooks = listenerList(report);
@@ -287,6 +291,7 @@ export function createCesiumCamera({ scene, camera, report, widget }) {
       return following?.followFramed ?? false;
     },
     followOffset: following?.followOffset ?? NO_FOLLOW_OFFSET,
+    controls: controlsPart.controls,
     release() {
       command('release');
       camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
@@ -375,6 +380,7 @@ export function createCesiumCamera({ scene, camera, report, widget }) {
     port: cameraPort,
     dispose() {
       following?.dispose();
+      controlsPart.dispose();
       for (const off of removers.splice(0)) off();
       cameraEvents.clear();
       commandHooks.clear();
