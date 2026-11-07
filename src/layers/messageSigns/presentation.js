@@ -65,8 +65,8 @@ export function createSignPresentation({ state, services, source }) {
 
   /**
    * Canvas per (sign, page), rebuilt only when the rendered page's content
-   * changes, so a refresh does not churn a GPU texture.
-   * @type {Map<string, {key:string, canvas:HTMLCanvasElement}>}
+   * changes, so neither a refresh nor a page cycle churns a GPU texture.
+   * @type {Map<string, Map<number, {key:string, canvas:HTMLCanvasElement|string}>>}
    */
   const faces = new Map();
 
@@ -87,7 +87,9 @@ export function createSignPresentation({ state, services, source }) {
 
   const faceFor = (record, index) => {
     const key = pageKey(record, index);
-    const cached = faces.get(record.id);
+    if (!faces.has(record.id)) faces.set(record.id, new Map());
+    const pagesFor = faces.get(record.id);
+    const cached = pagesFor.get(index);
     if (cached?.key === key) return cached.canvas;
     const page = record.pages[index];
     // An image page uses the board's own PNG, already host-validated.
@@ -97,7 +99,7 @@ export function createSignPresentation({ state, services, source }) {
           justification: page.justification,
         });
     if (!canvas) return cached?.canvas || null;
-    faces.set(record.id, { key, canvas });
+    pagesFor.set(index, { key, canvas });
     return canvas;
   };
 
@@ -233,6 +235,7 @@ export function createSignPresentation({ state, services, source }) {
             ),
           },
         });
+        entity.gevSignFace = face || null;
       } else {
         entity.position = position;
         entity.orientation = orientation;
@@ -241,11 +244,16 @@ export function createSignPresentation({ state, services, source }) {
           lineCount,
           record.id === state.selectedId,
         );
-        if (face) {
+        // Only a new face gets a new material. A fresh material property on
+        // every repaint (each refresh, and every page dwell while any board
+        // cycles) rebuilds the plane's primitive and reloads its texture; for
+        // an image page that is a new request for the same face.
+        if (face && entity.gevSignFace !== face) {
           entity.plane.material = new Cesium.ImageMaterialProperty({
             image: face,
             transparent: false,
           });
+          entity.gevSignFace = face;
         }
       }
 

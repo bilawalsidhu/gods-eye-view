@@ -113,7 +113,10 @@ export function createMessageSignsLayer({ source, services } = {}) {
     enable() {
       if (state.enabled) return;
       state.enabled = true;
-      registerPickOwner(LAYER_ID, (id) => state.recordById.has(id));
+      // A click on a board's housing panel (`<id>::back`) is this layer's too.
+      registerPickOwner(LAYER_ID, (id) =>
+        state.recordById.has(String(id).replace(/::back$/, '')),
+      );
       if (state.dataSource) state.dataSource.show = true;
       // DataLayerManager calls update() right after enable(); it owns the first fetch.
     },

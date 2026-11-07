@@ -11,7 +11,12 @@ import {
   signMessageLines,
 } from '../layers/messageSigns/model.js';
 import { createMessageSignsSource } from '../layers/messageSigns/source.js';
-import { faceBearingDeg } from '../layers/messageSigns/presentation.js';
+import * as Cesium from 'cesium';
+import {
+  faceBearingDeg,
+  createSignPresentation,
+} from '../layers/messageSigns/presentation.js';
+import { createMessageSignsLayer } from '../layers/messageSigns/index.js';
 import { SIGNS_URL, BOARD_WIDTH_M } from '../layers/messageSigns/policy.js';
 
 const record = (overrides = {}) => ({
@@ -270,4 +275,87 @@ test('a record keeps the provider and licence its agency published', () => {
   const bare = normalizeSignRecord(record());
   assert.equal(bare.provider, '');
   assert.equal(bare.license, '');
+});
+
+/** Scene services a presentation needs, with no viewer behind them. */
+function fakeSignServices(owners = new Map()) {
+  return {
+    render: { governorRequestRender: () => {} },
+    context: {
+      clearSelectedEntityContextForLayer: () => {},
+      getSelectedEntityContext: () => null,
+      registerEntityContext: () => {},
+      removeEntityContextsForLayer: () => {},
+      selectEntityContext: () => {},
+    },
+    groundFloor: {
+      cachedGroundFloor: () => 400,
+      resolveGroundFloorCellsBounded: async () => {},
+    },
+    picking: {
+      registerPickOwner: (id, owns) => owners.set(id, owns),
+      unregisterPickOwner: (id) => owners.delete(id),
+    },
+  };
+}
+
+test('a repaint keeps a board material unless its face changed', () => {
+  const image = '/api/signs/image?sign=a&page=0';
+  const signs = [
+    normalizeSignRecord(
+      record({
+        id: 'a',
+        views: [{ textLines: [], imageUrl: image }],
+      }),
+    ),
+  ];
+  const state = {
+    dataSource: new Cesium.CustomDataSource('message-signs-test'),
+    records: signs,
+    recordById: new Map(signs.map((sign) => [sign.id, sign])),
+    selectedId: null,
+  };
+  const presentation = createSignPresentation({
+    state,
+    services: fakeSignServices(),
+    source: { label: 'Message signs', attribution: {} },
+  });
+  presentation.render(0);
+  const entity = state.dataSource.entities.getById('a');
+  const first = entity.plane.material;
+  assert.equal(first.image.getValue(), image);
+  // A refresh, then page dwells, with the same face: a new material here
+  // rebuilds the plane and requests the face image again.
+  presentation.render(60_000);
+  presentation.render(64_000);
+  assert.equal(entity.plane.material, first);
+
+  const replaced = '/api/signs/image?sign=a&page=0&v=2';
+  state.records = [
+    { ...signs[0], pages: [{ ...signs[0].pages[0], imageUrl: replaced }] },
+  ];
+  state.recordById = new Map(state.records.map((sign) => [sign.id, sign]));
+  presentation.render(68_000);
+  assert.notEqual(entity.plane.material, first);
+  assert.equal(entity.plane.material.image.getValue(), replaced);
+});
+
+test('a click on a board housing panel belongs to the sign layer', async () => {
+  const owners = new Map();
+  const layer = createMessageSignsLayer({
+    source: {
+      fetch: async () => ({
+        records: [normalizeSignRecord(record({ id: 'a' }))],
+      }),
+      label: 'Message signs',
+    },
+    services: fakeSignServices(owners),
+  });
+  layer.enable();
+  await layer.update();
+  const owns = owners.get('message-signs');
+  assert.equal(owns('a'), true);
+  assert.equal(owns('a::back'), true);
+  assert.equal(owns('b::back'), false);
+  layer.disable();
 });
