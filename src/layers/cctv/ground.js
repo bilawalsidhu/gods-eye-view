@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import {
   SUPPORT_KEYS,
   planeSupportPoints,
@@ -231,13 +231,15 @@ export function createGround({ state: layerState, services, parts, source }) {
       // stall a large one.
       if (!record.frustumGeometry) {
         if (record.position) {
-          Cesium.Cartesian3.fromDegrees(
+          // In place: the record keeps its position object.
+          const { x, y, z } = fromDegrees(
             record.camera.lon,
             record.camera.lat,
             record.camera.absoluteHeightM,
-            undefined,
-            record.position,
           );
+          record.position.x = x;
+          record.position.y = y;
+          record.position.z = z;
           parts.rendering.moveCameraIcon(record);
           moved += 1;
         }

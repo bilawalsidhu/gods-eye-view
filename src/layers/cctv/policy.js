@@ -1,7 +1,7 @@
 export { ACTIVE_FRAME_REFRESH_MS } from './sourcePolicy.js';
-import * as Cesium from 'cesium';
 import { CCTV_CARD_FETCH_BURST_SPACING_MS } from '../../data/cctvCards.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
+import { hexColor } from '../../render/color.js';
 
 // ---------------------------------------------------------------------------
 // API endpoints
@@ -434,44 +434,33 @@ export const CAMERA_SEEDS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Visual style constants
+// Visual style constants: renderer colours, [r, g, b, a] in 0..1
 // ---------------------------------------------------------------------------
 
-export const IDLE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.88);
+export const IDLE_CAMERA_COLOR = hexColor('#6be8ff', 0.88);
 
-export const ACTIVE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#ffd97a').withAlpha(0.95);
+export const ACTIVE_CAMERA_COLOR = hexColor('#ffd97a', 0.95);
 
-export const LIVE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#b48cff').withAlpha(0.88);
+export const LIVE_CAMERA_COLOR = hexColor('#b48cff', 0.88);
 
-export const IDLE_COVERAGE_COLOR =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.24);
+export const IDLE_COVERAGE_COLOR = hexColor('#2fe0ff', 0.24);
 
-export const IDLE_COVERAGE_CENTER_MUTED =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.2);
+export const IDLE_COVERAGE_CENTER_MUTED = hexColor('#2fe0ff', 0.2);
 
-export const IDLE_COVERAGE_EDGE_MUTED =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.18);
+export const IDLE_COVERAGE_EDGE_MUTED = hexColor('#2fe0ff', 0.18);
 
-export const ACTIVE_COVERAGE_EDGE =
-  Cesium.Color.fromCssColorString('#8dff87').withAlpha(0.58);
+export const ACTIVE_COVERAGE_EDGE = hexColor('#8dff87', 0.58);
 
-export const ACTIVE_COVERAGE_CENTER =
-  Cesium.Color.fromCssColorString('#d7ff8d').withAlpha(0.82);
+export const ACTIVE_COVERAGE_CENTER = hexColor('#d7ff8d', 0.82);
 
 // H6: dimmer depth-fail materials let the active frustum wireframe read
 // through buildings while in monitor fallback mode.
 
-export const ACTIVE_COVERAGE_EDGE_DEPTHFAIL =
-  Cesium.Color.fromCssColorString('#8dff87').withAlpha(0.18);
+export const ACTIVE_COVERAGE_EDGE_DEPTHFAIL = hexColor('#8dff87', 0.18);
 
-export const ACTIVE_COVERAGE_CENTER_DEPTHFAIL =
-  Cesium.Color.fromCssColorString('#d7ff8d').withAlpha(0.26);
+export const ACTIVE_COVERAGE_CENTER_DEPTHFAIL = hexColor('#d7ff8d', 0.26);
 
-export const PLANE_OUTLINE_COLOR =
-  Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.55);
+export const PLANE_OUTLINE_COLOR = hexColor('#6be8ff', 0.55);
 
 /**
  * Card budget while the staggered geometry drain is running — the raised

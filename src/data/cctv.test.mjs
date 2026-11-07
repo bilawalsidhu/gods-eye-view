@@ -365,9 +365,13 @@ test('camera icons are violet for video feeds, cyan for stills, amber when activ
     const color = (record) => icons.color(icons.row(record.camera.id));
     const bytes = (c) =>
       [c.red, c.green, c.blue, c.alpha].map(Cesium.Color.floatToByte);
-    assert.deepEqual(bytes(color(idleVideo)), bytes(LIVE_CAMERA_COLOR));
-    assert.deepEqual(bytes(color(idleStill)), bytes(IDLE_CAMERA_COLOR));
-    assert.deepEqual(bytes(color(activeVideo)), bytes(ACTIVE_CAMERA_COLOR));
+    const policyBytes = (rgba) => rgba.map(Cesium.Color.floatToByte);
+    assert.deepEqual(bytes(color(idleVideo)), policyBytes(LIVE_CAMERA_COLOR));
+    assert.deepEqual(bytes(color(idleStill)), policyBytes(IDLE_CAMERA_COLOR));
+    assert.deepEqual(
+      bytes(color(activeVideo)),
+      policyBytes(ACTIVE_CAMERA_COLOR),
+    );
     assert.equal(icons.scale(icons.row(activeVideo.camera.id)), 1.25);
     assert.equal(icons.scale(icons.row(idleVideo.camera.id)), 1);
   } finally {

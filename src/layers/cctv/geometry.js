@@ -7,7 +7,7 @@ import {
   PROBE_CLEARANCE_M,
   COVERAGE_NEIGHBOR_RADIUS_KM,
   COVERAGE_NEIGHBOR_LIMIT,
-  IDLE_COVERAGE_COLOR,
+  IDLE_COVERAGE_COLOR as IDLE_COVERAGE_RGBA,
   PLANE_FOOTPRINT_LIFT_CAP_M,
 } from './policy.js';
 
@@ -17,6 +17,9 @@ import {
   requiredPlaneLift,
 } from '../../data/cctvFootprint.js';
 import { cctvPicks } from './pickState.js';
+import { toColor } from '../../render/cesium/draw.js';
+
+const IDLE_COVERAGE_COLOR = toColor(IDLE_COVERAGE_RGBA);
 
 export function createGeometry({ state: layerState, services, parts, source }) {
   const { warmGroundFloor, cachedGroundFloor } = services.ground;
@@ -260,6 +263,46 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     )
       return null;
     return Math.max(PROBE_MIN_RANGE_M, hitDistance - PROBE_CLEARANCE_M);
+  }
+
+  /**
+   * Reports whether the active Google Photorealistic 3D Tileset (if any) has
+   * finished loading the tiles in view. Shared mesh-floor sampling is gated on
+   * this so a one-shot cell never bakes in a miss from still-streaming tiles.
+   * Discovers + caches the tileset lazily from scene
+   * primitives (the CCTV module holds only a `_viewer` reference). When no
+   * tileset is present (OSM fallback) this returns true so ground sampling is
+   * not permanently blocked.
+   *
+   * Task 5 (review correction, spec §2): a HIDDEN tileset (`show === false`,
+   * i.e. a globe stack is active) must NOT report ready — Cesium 1.138's
+   * the shared sampler can only inspect *visible* 3D tilesets, so a sample taken
+   * against the hidden Google tileset would silently miss.
+   *
+   * @returns {boolean} True when tiles are loaded AND visible (or no tileset
+   *   exists to wait on).
+   */
+
+  function projectionTilesReady() {
+    if (
+      !layerState._activeTileset ||
+      layerState._activeTileset.isDestroyed?.()
+    ) {
+      layerState._activeTileset = null;
+      const primitives = layerState._viewer?.scene?.primitives;
+      if (primitives && typeof primitives.get === 'function') {
+        for (let i = 0; i < primitives.length; i++) {
+          const p = primitives.get(i);
+          if (p instanceof Cesium.Cesium3DTileset && !p.isDestroyed?.()) {
+            layerState._activeTileset = p;
+            break;
+          }
+        }
+      }
+    }
+    if (!layerState._activeTileset) return true;
+    if (layerState._activeTileset.show === false) return false;
+    return layerState._activeTileset.tilesLoaded === true;
   }
 
   /**
@@ -836,6 +879,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     activationProbeClampRange,
     frustumCartesians,
     frustumFrameEcef,
+    projectionTilesReady,
     applyFrustumGeometry,
     updateRecordGeometry,
     buildCoverageVisibleSet,

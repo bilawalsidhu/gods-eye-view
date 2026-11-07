@@ -3,11 +3,14 @@ import * as Cesium from 'cesium';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
-  PLANE_OUTLINE_COLOR,
+  PLANE_OUTLINE_COLOR as PLANE_OUTLINE_RGBA,
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
 } from './policy.js';
 import { cctvPicks } from './pickState.js';
+import { toColor } from '../../render/cesium/draw.js';
+
+const PLANE_OUTLINE_COLOR = toColor(PLANE_OUTLINE_RGBA);
 
 export function createProjection({
   state: layerState,
@@ -16,6 +19,12 @@ export function createProjection({
   source,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
+
+  /** The monitor plane's orientation, as the Cesium quaternion its entity takes. */
+  function planeOrientation(camera, capCenter) {
+    const q = parts.model.planeOrientationFor(camera, capCenter);
+    return new Cesium.Quaternion(q.x, q.y, q.z, q.w);
+  }
 
   /**
    * Build the protected label associated with one active monitor plane.
@@ -67,7 +76,7 @@ export function createProjection({
     const positions =
       record.frustumPositions || parts.geometry.frustumCartesians(geometry);
     runtime.planeEntity.position = positions.capCenter;
-    runtime.planeEntity.orientation = parts.model.planeOrientationFor(
+    runtime.planeEntity.orientation = planeOrientation(
       record.camera,
       positions.capCenter,
     );
@@ -122,6 +131,11 @@ export function createProjection({
     }
   }
 
+  /** A plain white plane material, for a plane with no media (tests). */
+  function plainPlaneMaterial() {
+    return new Cesium.ColorMaterialProperty(Cesium.Color.WHITE);
+  }
+
   /** Create the native monitor plane plus its cached host-label presentation. */
 
   function createProjectionPlane(record, runtime, geometry, positions) {
@@ -137,10 +151,7 @@ export function createProjection({
       id: `cctv-${record.camera.id}-plane`,
       show: false,
       position: positions.capCenter,
-      orientation: parts.model.planeOrientationFor(
-        record.camera,
-        positions.capCenter,
-      ),
+      orientation: planeOrientation(record.camera, positions.capCenter),
       plane: {
         plane: new Cesium.Plane(Cesium.Cartesian3.UNIT_Z, 0.0),
         dimensions: new Cesium.Cartesian2(
@@ -428,6 +439,7 @@ export function createProjection({
     updatePlanePlacement,
     clearProjectionOverlay,
     setPlaneVisible,
+    plainPlaneMaterial,
     createProjectionPlane,
     createProjectionRuntime,
     ensureProjectionRuntime,

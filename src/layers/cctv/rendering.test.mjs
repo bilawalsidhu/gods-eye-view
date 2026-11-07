@@ -24,7 +24,7 @@ function assertKeepsColor(icons, id, base, label) {
     [actual.red, actual.green, actual.blue, actual.alpha].map(
       Cesium.Color.floatToByte,
     ),
-    [base.red, base.green, base.blue, base.alpha].map(Cesium.Color.floatToByte),
+    base.map(Cesium.Color.floatToByte),
     `${label}: base color kept`,
   );
   assert.equal(icons.focus(row), FOCUS_FACTOR, `${label}: focus`);

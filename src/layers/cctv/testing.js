@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { createIconSet } from '../../data/iconSet.js';
 
 export function createTesting({ state: layerState, services, parts, source }) {
@@ -41,9 +40,10 @@ export function createTesting({ state: layerState, services, parts, source }) {
     const runtime = {
       cameraId: String(record.camera.id),
       planeEntity: null,
-      labelPosition: new Cesium.Cartesian3(),
+      // createProjectionPlane gives it its label position.
+      labelPosition: null,
       overlayEntry: null,
-      planeMaterial: new Cesium.ColorMaterialProperty(Cesium.Color.WHITE),
+      planeMaterial: parts.projection.plainPlaneMaterial(),
     };
     parts.projection.createProjectionPlane(
       record,

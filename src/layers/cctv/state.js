@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export function createState({ services }) {
   const {
     clearOverlaySource,
@@ -76,11 +74,13 @@ export function createState({ services }) {
 
   layerState._activeFocusStyleCount = 0;
 
-  layerState._scratchFocusScreen = new Cesium.Cartesian2();
+  // Screen-point scratches: the projections that fill them write only x and y.
+  layerState._scratchFocusScreen = { x: 0, y: 0 };
 
-  layerState._scratchViewScreen = new Cesium.Cartesian2();
+  layerState._scratchViewScreen = { x: 0, y: 0 };
 
-  layerState._scratchViewProjection = new Cesium.Matrix4();
+  /** The view pass's view-projection matrix, column-major. */
+  layerState._scratchViewProjection = new Float64Array(16);
 
   // Counts view passes; a record shown by the latest pass carries its number.
 

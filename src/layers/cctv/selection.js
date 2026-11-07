@@ -1,5 +1,4 @@
 import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
-import * as Cesium from 'cesium';
 import { cctvPicks } from './pickState.js';
 
 export function createSelection({
@@ -199,7 +198,7 @@ export function createSelection({
   }
 
   /**
-   * Extracts a camera ID from a Cesium pick result by checking icon row IDs,
+   * Extracts a camera ID from a scene pick result by checking icon row IDs,
    * primitive IDs, and the camera ids the layer keeps for its coverage entities.
    * @param {Object|null} picked - Result from scene.pick().
    * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.

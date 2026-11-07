@@ -2316,6 +2316,7 @@
       "src/render/cesium/common.js",
       "src/render/cesium/internals.js",
       "src/layers/cctv/policy.js",
+      "src/render/color.js",
       "src/layers/cctv/presentation.js",
       "src/layers/cctv/projection.js",
       "src/layers/cctv/videoPlayback.js",
