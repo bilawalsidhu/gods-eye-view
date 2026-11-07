@@ -310,7 +310,8 @@ export const DATA_CREDITS = [
     html:
       'Traffic and flood cameras (Queensland): ' +
       '<a href="https://qldtraffic.qld.gov.au/" target="_blank" rel="noopener">State of Queensland (Department of Transport and Main Roads)</a>, ' +
-      'CC BY 4.0',
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0 AU</a>; ' +
+      'council-supplied flood cameras are credited to their council in the CCTV panel',
   },
   {
     key: 'florida-cctv',

@@ -99,9 +99,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   }),
   Object.freeze({
     id: 'qldtraffic',
-    title: 'QLD TRAFFIC',
-    unlocks: 'Queensland traffic and flood cameras',
-    getUrl: 'https://qldtraffic.qld.gov.au/more/developers-and-data',
+    title: 'QLD TRAFFIC', // i18n-ignore: provider product name
+    unlocks: msg('Queensland traffic and flood cameras'),
+    getUrl: 'https://qldtraffic.qld.gov.au/more/Developers-and-Data/index.html',
     envVars: Object.freeze(['QLDTRAFFIC_API_KEY']),
     tier: 'free',
   }),

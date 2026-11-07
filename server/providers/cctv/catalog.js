@@ -103,6 +103,9 @@ const LIVE_PACKS = [
     load: loadNswSourcesFromOpenData,
   },
   {
+    // Bring-your-own-key: off unless the operator sets QLDTRAFFIC_API_KEY, so
+    // an unconfigured install never reaches the upstream (see DATA_SOURCES.md
+    // for why the camera stills' terms still need TMR's confirmation).
     name: 'qldtraffic',
     enabled: () =>
       envEnabled('CCTV_QLDTRAFFIC_ENABLED') &&

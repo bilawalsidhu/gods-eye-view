@@ -234,10 +234,17 @@ export const SYDNEY_CENTER = { lat: -33.8688, lon: 151.2093 };
 export const QLDTRAFFIC_API_ORIGIN = 'https://api.qldtraffic.qld.gov.au';
 export const QLDTRAFFIC_WEBCAMS_URL = `${QLDTRAFFIC_API_ORIGIN}/v1/webcams`;
 export const QLDTRAFFIC_FLOODCAMS_URL = `${QLDTRAFFIC_API_ORIGIN}/v1/floodcams`;
+/** Every frame in both feeds is served from this one host (257 of 257, checked
+ * 2026-09-28), so nothing else is registered. */
 export const QLDTRAFFIC_IMAGE_ORIGINS = Object.freeze([
   'https://cameras.qldtraffic.qld.gov.au',
-  'https://qldtraffic.qld.gov.au',
 ]);
+/** Each feed is ~130 GeoJSON points; 4 MiB leaves wide headroom while bounding
+ * what a misbehaving upstream can make the proxy buffer. */
+export const QLDTRAFFIC_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Canonical owner for cameras TMR runs; the floodcam feed spells it several ways. */
+export const QLDTRAFFIC_TMR_CREDIT =
+  'State of Queensland (Department of Transport and Main Roads)';
 export const DEFAULT_QLDTRAFFIC_MAX_SOURCES = 350;
 export const QLDTRAFFIC_ANCHORS = [
   { lat: -27.4705, lon: 153.026 }, // Brisbane

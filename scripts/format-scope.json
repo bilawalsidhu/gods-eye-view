@@ -579,6 +579,7 @@
   "src/data/cctvEstonia.test.mjs",
   "src/data/cctvWarendorf.test.mjs",
   "src/data/cctvCalgary.test.mjs",
+  "src/data/cctvQldTrafficSource.test.mjs",
   "src/data/cctvCataloniaSource.test.mjs",
   "src/data/cctvHk.test.mjs",
   "src/data/cctvVegvesen.test.mjs",

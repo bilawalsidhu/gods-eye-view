@@ -54,6 +54,8 @@ import {
   QLDTRAFFIC_WEBCAMS_URL,
   QLDTRAFFIC_FLOODCAMS_URL,
   QLDTRAFFIC_IMAGE_ORIGINS,
+  QLDTRAFFIC_MAX_CATALOG_BYTES,
+  QLDTRAFFIC_TMR_CREDIT,
   DEFAULT_QLDTRAFFIC_MAX_SOURCES,
   QLDTRAFFIC_ANCHORS,
   DEFAULT_CALGARY_ROWS_URL,
@@ -1610,6 +1612,9 @@ export function normalizeQldTrafficImageUrl(raw) {
     return null;
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  // URL.origin omits userinfo, so check it (and an explicit port) separately:
+  // catalog data must not be able to put credentials into a proxied request.
+  if (parsed.username || parsed.password || parsed.port) return null;
   parsed.protocol = 'https:';
   return QLDTRAFFIC_IMAGE_ORIGINS.includes(parsed.origin)
     ? parsed.toString()
@@ -1627,6 +1632,25 @@ export function normalizeQldTrafficImageUrl(raw) {
  * @param {'webcam'|'floodcam'} kind
  * @returns {?object}
  */
+/**
+ * Per-camera owner from the feed's `provided_by`. The feed's rights block says
+ * ownership follows that field (TMR, Transport for NSW or a council), so a
+ * council floodcam is credited to the council, and TMR's several spellings
+ * collapse to one credit. Missing or empty falls back to TMR.
+ *
+ * @param {unknown} providedBy
+ * @returns {string}
+ */
+export function qldTrafficCameraCredit(providedBy) {
+  const owner = (typeof providedBy === 'string' ? providedBy : '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+  if (!owner || /transport\s*(and|&)\s*main\s*roads|^tmr$/i.test(owner))
+    return QLDTRAFFIC_TMR_CREDIT;
+  return owner;
+}
+
 export function qldTrafficCameraToSource(feature, kind = 'webcam') {
   const props = feature?.properties || {};
   const rawId = String(props.id ?? feature?.id ?? '').trim();
@@ -1667,9 +1691,8 @@ export function qldTrafficCameraToSource(feature, kind = 'webcam') {
     snapshotUrl: imageUrl,
     sourceKind:
       kind === 'floodcam' ? 'qldtraffic-floodcam' : 'qldtraffic-webcam',
-    license:
-      'State of Queensland (Department of Transport and Main Roads), CC BY 4.0',
-    credit: 'State of Queensland (Department of Transport and Main Roads)',
+    license: 'QLDtraffic API data, CC BY 4.0 AU',
+    credit: qldTrafficCameraCredit(props.provided_by),
     code: cameraDisplayCode((description || rawId).toUpperCase()),
   };
 }
@@ -1683,17 +1706,27 @@ async function fetchQldTrafficCameraFeatures(baseUrl, apiKey) {
     redirect: 'manual',
     signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
   });
+  // A response this loader will not read still owns its transport until the
+  // body is released, so every rejection path cancels before returning.
+  const discard = async () => {
+    try {
+      await resp.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    return [];
+  };
   if (resp.status >= 300 && resp.status < 400) {
     console.warn(
       '[CCTV] QLDtraffic catalog redirected; redirects are not followed',
     );
-    return [];
+    return discard();
   }
   if (!resp.ok) {
     console.warn('[CCTV] QLDtraffic camera download failed:', resp.status);
-    return [];
+    return discard();
   }
-  const body = await resp.json();
+  const body = await readResponseJsonCapped(resp, QLDTRAFFIC_MAX_CATALOG_BYTES);
   return Array.isArray(body?.features) ? body.features : [];
 }
 
@@ -1721,9 +1754,14 @@ export async function loadQldTrafficSourcesFromOpenData() {
           ),
       ),
     ]);
-    const cameras = settled.flatMap((result) =>
-      result.status === 'fulfilled' ? result.value.filter(Boolean) : [],
-    );
+    const cameras = settled.flatMap((result) => {
+      if (result.status === 'fulfilled') return result.value.filter(Boolean);
+      console.warn(
+        '[CCTV] QLDtraffic camera feed skipped:',
+        result.reason?.code || result.reason?.message || result.reason,
+      );
+      return [];
+    });
     const unique = Array.from(
       new Map(cameras.map((camera) => [camera.id, camera])).values(),
     );
