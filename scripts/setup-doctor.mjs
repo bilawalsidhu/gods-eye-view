@@ -6,6 +6,7 @@ import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { projectRoot } from './project-root.mjs';
 import { selectMapStartupRoute } from '../src/mapStartup.js';
+import { dataDir } from '../server/providers/common/data-dir.js';
 
 const ROOT = projectRoot(import.meta.url);
 const OPENSKY_AUTH_MODE_DEFAULT = 'oauth';
@@ -98,7 +99,7 @@ export function readDoctorDotenvValue(
 
   const values = {};
   for (const filename of ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`]) {
-    const filepath = path.join(rootDir, filename);
+    const filepath = path.join(dataDir(rootDir), filename);
     if (!existsSync(filepath)) continue;
     try {
       Object.assign(values, parseEnv(readFileSync(filepath, 'utf8')));

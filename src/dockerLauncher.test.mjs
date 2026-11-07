@@ -66,6 +66,38 @@ test('an unwritable checkout is named at start instead of failing quietly', () =
   assert.match(warning, /env UID=0 GID=0 docker compose up/, 'or the env form, which bash does not ignore');
 });
 
+test('a relocated data directory is named, not the read-only checkout', () => {
+  const ids = { owner: { uid: 0, gid: 0 }, runAs: { uid: 1000, gid: 1000 } };
+  assert.equal(
+    unwritableRootWarning({ root: '/data', writable: true, kind: 'data', ...ids }),
+    null,
+    'a writable data directory says nothing, even when the code is read-only',
+  );
+  const warning = unwritableRootWarning({ root: '/data', writable: false, kind: 'data', ...ids });
+  assert.match(warning, /\/data \(GEV_DATA_DIR\) is owned by 0:0/, 'names the data directory');
+  assert.match(warning, /Mount a volume/, 'points at the volume, not at a checkout');
+  assert.match(warning, /chown 1000:1000/, 'offers the plain chown');
+  assert.doesNotMatch(warning, /Proxmox|LXC|101000/, 'no host-specific guidance');
+  assert.match(warning, /add :Z to the bind mount on SELinux/, 'names the SELinux label');
+  assert.doesNotMatch(warning, /checkout/);
+});
+
+test('the hardened image keeps everything it writes under GEV_DATA_DIR', () => {
+  const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
+  assert.match(dockerfile, /^ENV GEV_DATA_DIR=\/data$/m);
+  assert.match(dockerfile, /^VOLUME \["\/data"\]$/m);
+  assert.match(dockerfile, /^USER 1000:1000$/m);
+});
+
+test('every Dockerfile stage names the same digest-pinned base image', () => {
+  const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
+  const images = [...dockerfile.matchAll(/^FROM (\S+) AS \S+$/gm)].map((m) => m[1]);
+  assert.equal(images.length, 3, 'dev, deps and runtime stages');
+  assert.match(images[0], /^node:\d+\.\d+\.\d+-slim@sha256:[0-9a-f]{64}$/);
+  assert.equal(new Set(images).size, 1, 'all FROM lines use one image');
+  assert.doesNotMatch(dockerfile, /^ARG NODE_IMAGE/m, 'each FROM line names the base image itself');
+});
+
 test('the Docker install path keeps its loopback-only, launcher-owned contract', () => {
   const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
   assert.match(dockerfile, /^CMD \["node", "scripts\/docker-start\.mjs"\]$/m, 'the launcher is the container entry point');

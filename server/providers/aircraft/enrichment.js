@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 import { readResponseJsonCapped } from '../common/http.js';
+import { dataDir } from '../common/data-dir.js';
 
 /** Route and aircraft lookups are a few hundred bytes; 1 MiB is a hard bound. */
 const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
@@ -14,7 +15,7 @@ const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
  */
 export function adsbdbProxy() {
   const TTL_MS = 24 * 3600_000;
-  const CACHE_PATH = path.join(process.cwd(), '.gev-cache', 'adsbdb.json');
+  const CACHE_PATH = path.join(dataDir(), '.gev-cache', 'adsbdb.json');
   let cache = { routes: {}, aircraft: {} };
   let dirty = false;
   let loaded = false;
