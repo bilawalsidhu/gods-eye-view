@@ -196,7 +196,9 @@ function checkLookupFactory(lookup, factory, { reached = true } = {}) {
   const calls = (file) =>
     !file.startsWith('src/render/') &&
     /\.(m?js|vue)$/.test(file) &&
-    readFileSync(path.join(root, file), 'utf8').includes(`${lookup}(`);
+    new RegExp(`\\b${lookup}\\b`).test(
+      readFileSync(path.join(root, file), 'utf8'),
+    );
   for (const [key, declaration] of Object.entries(pkg.exports)) {
     const target = browserTarget(declaration);
     if (typeof target !== 'string' || !target.startsWith('./src/')) continue;
@@ -221,8 +223,9 @@ test('every public entry that reaches a findEffects caller loads the unbound eff
 });
 
 test('every public entry that reaches a findGlobe caller loads the unbound globe factory', () => {
-  // Only the application reaches one today, through no public entry.
-  checkLookupFactory('findGlobe', GLOBE_FACTORY, { reached: false });
+  // A caller may take `findGlobe` as a default rather than call it, so any
+  // use of the name counts.
+  checkLookupFactory('findGlobe', GLOBE_FACTORY);
 });
 
 test('the unbound export brings every unbound factory', () => {

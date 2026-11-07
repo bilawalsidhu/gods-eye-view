@@ -114,6 +114,7 @@ function fixture({
   hostKind = 'globe',
   controller = fakeController(),
   viirs = true,
+  globeOf,
 } = {}) {
   const renderer = fakeRenderer();
   const thumbnails = fakeThumbnails();
@@ -129,6 +130,7 @@ function fixture({
       collection: collections[hostState.kind],
       kind: hostState.kind,
     }),
+    ...(globeOf && { globeOf }),
     now: () => NOW,
     setTimeoutImpl: timers.setTimeoutImpl,
     clearTimeoutImpl: timers.clearTimeoutImpl,
@@ -827,6 +829,32 @@ test('without a host the drapes hide and say so; the stats poll rebinds when no 
   f.hostState.kind = 'tileset';
   assert.equal(f.layer.getStats().error, null);
   assert.equal(f.owned().a.kind, 'tileset');
+});
+
+test("the renderer is bound with the viewer's globe port, and the attached tileset while that is the host", async () => {
+  const globe = { name: 'globe port' };
+  const asked = [];
+  const f = fixture({
+    globeOf: (viewer) => {
+      asked.push(viewer);
+      return globe;
+    },
+  });
+  await f.ready();
+  const last = () => f.renderer.hosts.at(-1);
+  assert.equal(last().globe, globe);
+  assert.equal(last().tileset, null, 'a globe host carries no tileset');
+  assert.ok(asked.every((viewer) => viewer === f.viewer));
+  const tileset = { name: 'photoreal' };
+  f.hostState.kind = 'tileset';
+  f.layer.attachTileset(tileset);
+  assert.equal(last().kind, 'tileset');
+  assert.equal(last().globe, globe);
+  assert.equal(last().tileset, tileset);
+  f.hostState.kind = 'none';
+  f.layer.getStats();
+  assert.equal(last().globe, null, 'no host, no port');
+  f.layer.destroy();
 });
 
 test('a controller subscription moves the drape to the new host on every settled switch', async () => {

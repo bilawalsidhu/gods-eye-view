@@ -34,7 +34,7 @@ import {
 } from './model.js';
 import { msg, t } from '../../i18n/index.js';
 import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
-import { findCamera } from '../../render/rendererOf.js';
+import { findCamera, findGlobe } from '../../render/rendererOf.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -103,13 +103,14 @@ const modeFrom = (value) =>
 
 /**
  * Create the layer.
- * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
+ * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, globeOf?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
  */
 export function createRecentImageryLayer({
   catalog = { searchHls },
   renderer,
   thumbnails,
   host = resolveImageryHost,
+  globeOf = findGlobe,
   now = () => new Date(),
   days = CATALOG_DAYS,
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
@@ -380,7 +381,13 @@ export function createRecentImageryLayer({
     const changed =
       next.collection !== _hostInfo.collection || next.kind !== _hostInfo.kind;
     _hostInfo = next;
-    renderer.rebind(next);
+    // The layers drape through the viewer's globe port, on the tileset too
+    // when that is the host.
+    renderer.rebind({
+      ...next,
+      globe: next.kind === 'none' ? null : globeOf(_viewer),
+      tileset: next.kind === 'tileset' ? _tileset : null,
+    });
     return changed;
   }
 

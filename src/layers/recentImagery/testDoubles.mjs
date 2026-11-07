@@ -214,10 +214,14 @@ export function fakeRenderer() {
   const owned = { a: null, b: null };
   let host = { kind: 'none' };
   let peak = 0;
+  /** Every host the renderer was bound to, as given. */
+  const hosts = [];
   return {
     calls,
+    hosts,
     rebind(next) {
       calls.push(['rebind', next.kind]);
+      hosts.push(next);
       host = next;
       for (const slot of ['a', 'b'])
         if (owned[slot]) owned[slot] = { ...owned[slot], kind: next.kind };

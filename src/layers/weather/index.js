@@ -12,6 +12,9 @@ import {
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 import { cameraOf } from '../../render/cesium/camera.js';
+// The renderer drapes through `findGlobe`; a viewer with no renderer bound
+// gets its globe port from the factory this module provides.
+import '../../render/cesium/globe.js';
 
 /**
  * A stored (English) failure in the language. HTTP failures from source.js
