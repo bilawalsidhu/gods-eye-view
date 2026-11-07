@@ -12,20 +12,24 @@ export function shellScenePart(styleManager, { builtOn, catalog }) {
   let first = builtOn;
   return {
     name: 'shell',
-    attachScene(next) {
+    attachScene(next, { transaction } = {}) {
       if (next === first) {
         first = null;
         return;
       }
       first = null;
-      return styleManager.attachScene({
-        viewer: next.viewer,
-        engine: next.engine,
-        mapStackController: next.mapStackController,
-        services: catalogControlServices(next.catalog ?? catalog),
-        engineSwitch: true,
-      });
+      return styleManager.attachScene(
+        {
+          viewer: next.viewer,
+          engine: next.engine,
+          mapStackController: next.mapStackController,
+          services: catalogControlServices(next.catalog ?? catalog),
+          engineSwitch: true,
+        },
+        transaction,
+      );
     },
-    detachScene: (options) => styleManager.detachScene(options),
+    detachScene: (options, transaction) =>
+      styleManager.detachScene(options, transaction),
   };
 }

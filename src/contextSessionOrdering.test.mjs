@@ -237,7 +237,7 @@ test('Context entry awaits isolation and direct shell routes isolate in the visi
   // The generation discipline that outlived the reinstatement: dispose still
   // invalidates in-flight Context transactions so teardown cannot be raced into
   // publishing a mode.
-  const dispose = src.slice(src.indexOf('  async dispose() {'), src.indexOf('this._stampNavigation();', src.indexOf('  async dispose() {')));
+  const dispose = src.slice(src.indexOf('  async dispose('), src.indexOf('this._stampNavigation();', src.indexOf('  async dispose(')));
   assert.match(dispose, /this\._contextControls\.stop\(\)/);
   assert.match(ContextControls.prototype.stop.toString(), /this\._contextModeGeneration\+\+/);
 

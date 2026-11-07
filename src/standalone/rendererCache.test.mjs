@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRendererCache } from './rendererCache.js';
+import { createSceneHost } from '../app/sceneHost.js';
 
 function installDocument(t) {
   const host = {
@@ -223,4 +224,49 @@ test('acquiring one kind of an engine releases the other parked kind of it first
   assert.notEqual(await open('navara'), navara);
   assert.equal(hd.context.lost, true);
   cache.clear();
+});
+
+test('parked expiry during a host transition makes the queued return cold', async (t) => {
+  installDocument(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const host = createSceneHost();
+  const cache = createRendererCache({ parkedMs: 1000 });
+  t.after(() => cache.clear());
+  const released = { count: 0 };
+  const releases = new Map();
+  const build = fakeBuild(released);
+  const open = (kind, builder = build) => cache.acquire(kind, builder, (stop) => {
+    releases.set(kind, stop);
+  });
+  const first = await host.run(() => open('cesium'));
+  let finishBuild;
+  let entered;
+  const building = new Promise((resolve) => { entered = resolve; });
+  const away = host.run(async () => {
+    cache.retain('cesium');
+    releases.get('cesium')();
+    return open('navara', async (options) => {
+      entered();
+      await new Promise((resolve) => { finishBuild = resolve; });
+      return build(options);
+    });
+  });
+  await building;
+  const returning = host.run(async () => {
+    cache.retain('navara');
+    releases.get('navara')();
+    return open('cesium');
+  });
+  t.mock.timers.tick(1000);
+  assert.equal(released.count, 1);
+  assert.equal(first.context.lost, true);
+  finishBuild();
+  await away;
+  const next = await returning;
+  assert.notEqual(next, first);
+  assert.equal(next.context.lost, false);
+  releases.get('cesium')();
+  cache.clear();
+  t.mock.timers.tick(1000);
+  assert.equal(released.count, 3, 'each renderer is released once');
 });

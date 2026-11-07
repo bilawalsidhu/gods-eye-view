@@ -270,8 +270,16 @@ one application, and only the globe-bound parts move to the next engine.
   unknown kind and no native extensions, draws fixtures, hides or releases them,
   and checks primitives, subscriptions and service records before engine
   destruction. The three self-drawing entries are named skips. This is a
-  display-level rehearsal; application kind registration, the remaining scene
-  services, queue consolidation and native debug access remain work.
+  display-level rehearsal; application kind registration and native debug
+  access remain work.
+- **Scene transition ownership.** `src/app/sceneHost.js` serializes engine
+  requests, application attachment and direct shell calls. One transaction
+  covers handoff, renderer release, candidate acquisition, attachment, view
+  restoration and the single recovery attempt. Nested parts receive that
+  transaction explicitly; unrelated calls wait for it. Picker/history ordering,
+  hidden-tab settling and parked-renderer reuse retain their existing behavior.
+  A replacement application registers fresh parts on the same transition owner;
+  a shell used alone creates its own scene host.
 - **Scene pick ownership.** Each attachment owns `scene.services.picking` and
   `scene.services.selection` (`src/data/sceneServices.js`). Layers and displays
   resolve these services with their attached engine; simultaneous engines do

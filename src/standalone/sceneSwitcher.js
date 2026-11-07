@@ -8,7 +8,7 @@ import {
 /**
  * One scene-switch transaction: retain the session, detach and park the
  * outgoing globe, attach and resume the candidate, then uncover its frame.
- * The request coordinator owns ordering and the single rollback. The
+ * The scene host owns ordering and the single rollback. The
  * application owns candidate cleanup, including a failure during resume.
  *
  * @param {object} options
@@ -35,7 +35,7 @@ export function createSceneSwitcher({
     return components.scene?.engine ? components : null;
   };
 
-  async function leave(from) {
+  async function leave(from, _to, _change, transaction) {
     const components = liveComponents();
     if (components) {
       cover ??= keepFrame?.(components.scene.engine);
@@ -46,7 +46,7 @@ export function createSceneSwitcher({
           style.shareLinkManager?.currentLayerState?.()?.enabledLayerIds,
       });
       renderers.retain(from);
-      await getApplication().detachScene({ handoff: true });
+      await getApplication().detachScene({ handoff: true }, transaction);
     }
     count('detaches');
   }
@@ -71,18 +71,18 @@ export function createSceneSwitcher({
     }
   }
 
-  async function enter(kind, { recovery = false } = {}) {
+  async function enter(kind, { recovery = false } = {}, transaction) {
     layerSession.restoringView = true;
     let app = getApplication();
     if (!app || app.getState().status !== 'ready') {
-      app = startApplication(kind);
+      app = startApplication(kind, transaction);
       try {
         const { controls } = await app.start();
         await resume(controls.styleManager);
       } catch (error) {
         if (!signal.aborted)
           await app
-            .destroy()
+            .destroy(transaction)
             .catch((cleanupError) =>
               console.error(
                 'A failed globe could not be released:',
@@ -93,6 +93,7 @@ export function createSceneSwitcher({
       }
     } else {
       await app.attachScene(kind, {
+        transaction,
         resume: () => resume(app.getComponents().controls.styleManager),
       });
     }
@@ -114,5 +115,12 @@ export function createSceneSwitcher({
     components.controls.styleManager.shareLinkManager?.resumeNavigation?.();
   }
 
-  return createEngineSwitch({ ...options, signal, leave, enter, settle });
+  return createEngineSwitch({
+    ...options,
+    sceneHost: getApplication()?.sceneHost,
+    signal,
+    leave,
+    enter,
+    settle,
+  });
 }

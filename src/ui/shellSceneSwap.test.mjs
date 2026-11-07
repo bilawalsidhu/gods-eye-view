@@ -5,6 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { StyleManager } from './applicationShell.js';
+import { createSceneHost } from '../app/sceneHost.js';
+import { shellScenePart } from '../app/shellPart.js';
 
 function fakeShell() {
   const log = [];
@@ -304,4 +306,35 @@ test('an engine without Wildlife Sightings gets no card instead of a failed star
   });
   assert.doesNotThrow(() => shell._initWildlifeSightingCard());
   assert.equal(shell._wildlifeSightingCard, null);
+});
+
+test('a hosted shell uses the enclosing transition while direct calls wait outside it', async () => {
+  const { shell, session } = fakeShell();
+  const host = createSceneHost();
+  shell._sceneHost = host;
+  const first = { engine: shell.engine };
+  await host.attach(first);
+  const catalog = { get: () => ({}), unavailableMetadata: [] };
+  await host.register(shellScenePart(shell, { builtOn: first, catalog }));
+  let release;
+  let entered;
+  const detaching = new Promise((resolve) => { entered = resolve; });
+  session.context.canRetainScene = () => false;
+  session.context.restoreForDisposal = () => {
+    entered();
+    return new Promise((resolve) => { release = resolve; });
+  };
+  const next = { engine: { kind: 'navara' }, catalog };
+  const switching = host.run(async (transaction) => {
+    await host.detach({ handoff: true }, transaction);
+    await host.attach(next, transaction);
+  });
+  await detaching;
+  const outside = shell.detachScene();
+  session.context.canRetainScene = () => true;
+  release();
+  await switching;
+  await outside;
+  assert.equal(shell.engine, null);
+  assert.equal(host.current(), next);
 });

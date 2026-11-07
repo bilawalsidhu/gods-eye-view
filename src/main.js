@@ -80,7 +80,7 @@ window.addEventListener('popstate', () => {
   void engineSwitch.reconcile();
 });
 
-function createApplication(kind, engineSwitch) {
+function createApplication(kind, engineSwitch, transition) {
   session.count('applications');
   layerSession.restoringView = engineSwitch;
   application = createStandaloneApplication({
@@ -92,6 +92,7 @@ function createApplication(kind, engineSwitch) {
     rendererCache: renderers,
     layerSession,
     engineSwitch,
+    transition,
   });
   return application;
 }
@@ -186,7 +187,8 @@ createApplication(initialKind, false)
       requested: pageEngineKind,
       signal,
       getApplication: () => application,
-      startApplication: (kind) => createApplication(kind, true),
+      startApplication: (kind, transition) =>
+        createApplication(kind, true, transition),
       layerSession,
       renderers,
       diagnostics: session,

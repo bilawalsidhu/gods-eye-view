@@ -806,7 +806,7 @@ test('destroy cancels only a still-owned share flight and ignores delayed comple
 
 
 test('visual input listeners are revoked before asynchronous UI teardown', () => {
-  const disposal = uiSource.slice(uiSource.indexOf('  async dispose() {'));
+  const disposal = uiSource.slice(uiSource.indexOf('  async dispose('));
   const firstAwait = disposal.indexOf('await ');
   assert.ok(firstAwait > 0);
   const synchronous = disposal.slice(0, firstAwait);

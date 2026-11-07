@@ -97,12 +97,14 @@ export class StyleManager extends ShellScene {
       initialShareCode = null,
       engineSwitch = false,
       layerSession = null,
+      sceneHost = null,
       localePicker = true,
     } = {},
   ) {
     super();
     this._localePickerEnabled = localePicker;
     this._layerSession = layerSession;
+    this._sceneHost = sceneHost;
     const {
       IntelHUD,
       ShareLinkManager,
@@ -1610,7 +1612,7 @@ export class StyleManager extends ShellScene {
    * prevent leaked rAF loops and event listeners.
    * @returns {Promise<void>} Resolves after focused-session state restoration.
    */
-  async dispose() {
+  async dispose(transaction) {
     if (this._disposed) return;
     const layerSession = this._layerSession;
     const handoff = retainsLayerSession(layerSession);
@@ -1630,7 +1632,7 @@ export class StyleManager extends ShellScene {
     this._locationNavigation.destroy();
     this._shareState.destroy();
     // The globe-bound parts go before the session's controls and stores.
-    await this.detachScene({ handoff });
+    await this.detachScene({ handoff }, transaction);
     this._navigation.stop();
     this._lifetime.destroy();
     useLocaleStore(applicationPinia()).publishPicker(null);

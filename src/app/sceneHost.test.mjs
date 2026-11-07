@@ -178,3 +178,143 @@ test('a detach requested during an attach waits for it', async () => {
   assert.deepEqual(log, ['attach start', 'attach end', 'detach']);
   assert.equal(host.state(), 'detached');
 });
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+test('a transaction keeps outside work behind nested attachment and release', async () => {
+  const host = createSceneHost();
+  const gate = deferred();
+  const entered = deferred();
+  const log = [];
+  await host.register({
+    name: 'nested',
+    async attachScene(_scene, { transaction }) {
+      await host.run(() => log.push('nested attach'), transaction);
+      entered.resolve();
+      await gate.promise;
+    },
+    detachScene(_options, transaction) {
+      return host.run(() => log.push('nested detach'), transaction);
+    },
+  });
+  const switching = host.run(async (transaction) => {
+    await host.attach({}, transaction);
+    await host.detach({}, transaction);
+    log.push('released');
+  });
+  await entered.promise;
+  const outside = host.run(() => log.push('outside'));
+  await Promise.resolve();
+  assert.deepEqual(log, ['nested attach']);
+  gate.resolve();
+  await Promise.all([switching, outside]);
+  assert.deepEqual(log, ['nested attach', 'nested detach', 'released', 'outside']);
+});
+
+test('late registration settles before a concurrent detach releases the part', async () => {
+  const host = createSceneHost();
+  await host.attach({});
+  const gate = deferred();
+  const entered = deferred();
+  const log = [];
+  const registering = host.register({
+    name: 'late',
+    async attachScene(_scene, { defer }) {
+      entered.resolve();
+      await gate.promise;
+      defer(() => log.push('cleanup'));
+      log.push('attached');
+    },
+    detachScene() { log.push('detached'); },
+  });
+  await entered.promise;
+  const leaving = host.detach();
+  gate.resolve();
+  await Promise.all([registering, leaving]);
+  assert.deepEqual(log, ['attached', 'cleanup', 'detached']);
+});
+
+test('replacement application parts use the same transition owner', async () => {
+  const owner = createSceneHost();
+  const gate = deferred();
+  const entered = deferred();
+  const log = [];
+  let replacement;
+  let expired;
+  const switching = owner.run(async (transaction) => {
+    expired = transaction;
+    replacement = createSceneHost({ transitionHost: transaction.host });
+    await replacement.register({
+      name: 'replacement',
+      attachScene() { log.push('attached'); },
+      detachScene() { log.push('detached'); },
+    }, transaction);
+    await replacement.attach({}, transaction);
+    entered.resolve();
+    await gate.promise;
+    log.push('restored');
+  });
+  await entered.promise;
+  const leaving = replacement.detach();
+  gate.resolve();
+  await Promise.all([switching, leaving]);
+  assert.deepEqual(log, ['attached', 'restored', 'detached']);
+  const nextGate = deferred();
+  const blocking = owner.run(() => nextGate.promise);
+  const later = replacement.run(() => log.push('later'), expired);
+  await Promise.resolve();
+  assert.equal(log.includes('later'), false, 'an expired transaction cannot bypass the queue');
+  nextGate.resolve();
+  await Promise.all([blocking, later]);
+  assert.equal(log.at(-1), 'later');
+});
+
+test('engine requests wait for the host and a newer pick can keep the current engine', async () => {
+  const host = createSceneHost();
+  const gate = deferred();
+  const blocking = host.run(() => gate.promise);
+  const calls = [];
+  const switcher = host.createSwitcher({
+    kind: 'cesium',
+    requested: () => 'cesium',
+    signal: new AbortController().signal,
+    address: { select() {}, commit() {}, restore() {} },
+    leave() { calls.push('leave'); },
+    enter() { calls.push('enter'); },
+  });
+  const switching = switcher.select('navara');
+  assert.equal(switcher.select('cesium'), switching);
+  gate.resolve();
+  await Promise.all([blocking, switching]);
+  assert.deepEqual(calls, []);
+  assert.equal(switcher.state().kind, 'cesium');
+});
+
+test('a request arriving in the next host operation starts a new switch', async () => {
+  const host = createSceneHost();
+  let address = 'cesium';
+  const entered = [];
+  const switcher = host.createSwitcher({
+    kind: address,
+    requested: () => address,
+    signal: new AbortController().signal,
+    address: {
+      select() {},
+      commit(_token, kind) { address = kind; },
+      restore(kind) { address = kind; },
+    },
+    leave() {},
+    enter(kind) { entered.push(kind); },
+  });
+  const first = switcher.select('navara');
+  let next;
+  const between = host.run(() => { next = switcher.select('cesium'); });
+  await Promise.all([first, between]);
+  await next;
+  assert.deepEqual(entered, ['navara', 'cesium']);
+  assert.equal(switcher.state().busy, false);
+});

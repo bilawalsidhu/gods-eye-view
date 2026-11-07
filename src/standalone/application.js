@@ -62,6 +62,7 @@ export function createStandaloneApplication({
   rendererCache,
   layerSession,
   engineSwitch = false,
+  transition: startupTransition = null,
 }) {
   if (owner)
     throw new Error('The standalone application already owns this page');
@@ -82,6 +83,7 @@ export function createStandaloneApplication({
   let qaSources = {};
   // The engine-bound parts of every phase attach through this host.
   const sceneHost = createSceneHost({
+    transitionHost: startupTransition?.host,
     onError: (error, part) =>
       console.error(`The ${part} scene part failed:`, error),
   });
@@ -90,6 +92,7 @@ export function createStandaloneApplication({
   let current = null;
   let lifetime = null;
   let sessionContext = null;
+  let cleanupTransition = null;
 
   /** Acquire `kind`'s renderer and build its catalog: one attachment. */
   async function openScene(kind) {
@@ -196,6 +199,9 @@ export function createStandaloneApplication({
     get operations() {
       return layerSession?.operations ?? current?.operations ?? null;
     },
+    get transaction() {
+      return cleanupTransition ?? startupTransition;
+    },
     current: () => current,
     sceneHost,
   });
@@ -251,19 +257,20 @@ export function createStandaloneApplication({
       // The session's own defer (its logo gaze and key when no layer
       // session holds them) outlives every globe.
       sessionContext = { defer: context.defer };
-      current = await openScene(engineKind);
-      // The first globe: the phases build on it and register their parts.
-      await sceneHost.attach(current);
-      // After every part detached (the tools phase detaches them first),
-      // the globe's renderer is parked or released.
-      context.defer(async () => {
-        await sceneHost.detach({
-          handoff: retainsLayerSession(layerSession),
-        });
-        const scene = current;
-        current = null;
-        await scene?.release();
-      });
+      // The renderer is released after its parts, including a failed start.
+      context.defer(() =>
+        detachScene(
+          {
+            handoff: retainsLayerSession(layerSession),
+          },
+          sceneView.transaction,
+        ),
+      );
+      await sceneHost.run(async (transaction) => {
+        current = await openScene(engineKind);
+        // The first globe: the phases build on it and register their parts.
+        await sceneHost.attach(current, transaction);
+      }, startupTransition);
       return sceneView;
     },
     createControls: (context) =>
@@ -333,13 +340,20 @@ export function createStandaloneApplication({
    * detaches what attached and releases the candidate; the session stays as
    * it was, ready for the working engine to attach again.
    */
-  async function attachScene(kind, { resume } = {}) {
+  function attachScene(kind, { resume, transaction } = {}) {
+    return sceneHost.run(
+      (transaction) => attach(kind, resume, transaction),
+      transaction,
+    );
+  }
+
+  async function attach(kind, resume, transaction) {
     if (application.getState().status !== 'ready')
       throw new Error('The application is not running');
     if (current) throw new Error('A globe is attached; detach it first');
     const next = await openScene(kind);
     try {
-      await sceneHost.attach(next);
+      await sceneHost.attach(next, transaction);
       current = next;
       await resume?.();
       lifetime.throwIfAborted();
@@ -349,7 +363,7 @@ export function createStandaloneApplication({
       if (current === next) {
         current = null;
         await sceneHost
-          .detach({ handoff: !lifetime.aborted })
+          .detach({ handoff: !lifetime.aborted }, transaction)
           .catch((cleanupError) =>
             console.error(
               'A failed globe could not be released:',
@@ -368,11 +382,18 @@ export function createStandaloneApplication({
   }
 
   /** Detach every part from the attached globe and park or release it. */
-  async function detachScene(options = {}) {
+  function detachScene(options = {}, transaction) {
+    return sceneHost.run(
+      (transaction) => detach(options, transaction),
+      transaction,
+    );
+  }
+
+  async function detach(options, transaction) {
     const scene = current;
     if (!scene) return;
     try {
-      await sceneHost.detach(options);
+      await sceneHost.detach(options, transaction);
     } finally {
       current = null;
       await scene.release();
@@ -381,6 +402,22 @@ export function createStandaloneApplication({
 
   return Object.freeze({
     ...application,
+    async start() {
+      try {
+        return await application.start();
+      } finally {
+        startupTransition = null;
+      }
+    },
+    async destroy(transaction) {
+      cleanupTransition ??= transaction;
+      try {
+        await application.destroy();
+        await sceneHost.dispose(transaction);
+      } finally {
+        cleanupTransition = null;
+      }
+    },
     sceneHost,
     attachScene,
     detachScene,

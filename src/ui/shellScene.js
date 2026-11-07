@@ -1,3 +1,4 @@
+import { createSceneHost } from '../app/sceneHost.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { renderGovernorFor } from '../renderGovernor.js';
 import { retainsLayerSession } from '../app/layerSession.js';
@@ -301,14 +302,9 @@ export class ShellScene extends ShellFacade {
    * stay; the parts bound to a globe are built for this one and the
    * address's view is restored on it.
    */
-  attachScene(options = {}) {
-    return this._queueSceneTransition(() => this._attachScene(options));
-  }
-
-  _queueSceneTransition(work) {
-    const run = (this._sceneTransition ?? Promise.resolve()).then(work, work);
-    this._sceneTransition = run.catch(() => {});
-    return run;
+  attachScene(options = {}, transaction) {
+    this._sceneHost ??= createSceneHost();
+    return this._sceneHost.run(() => this._attachScene(options), transaction);
   }
 
   async _attachScene({
@@ -396,8 +392,9 @@ export class ShellScene extends ShellFacade {
    * the open panels stay. `handoff` keeps the selection and a retainable
    * Context mode for the next globe.
    */
-  detachScene(options = {}) {
-    return this._queueSceneTransition(() => this._detachScene(options));
+  detachScene(options = {}, transaction) {
+    this._sceneHost ??= createSceneHost();
+    return this._sceneHost.run(() => this._detachScene(options), transaction);
   }
 
   async _detachScene({

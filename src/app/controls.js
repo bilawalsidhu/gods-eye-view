@@ -59,11 +59,12 @@ export async function createApplicationControls({
     initialShareCode,
     engineSwitch,
     layerSession,
+    sceneHost: scene.sceneHost,
     localePicker,
   });
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());
-  defer(() => styleManager.dispose());
+  defer(() => styleManager.dispose(scene.transaction));
   // The shell was built on this globe; later globes attach to it.
   await attachScenePart(
     scene,

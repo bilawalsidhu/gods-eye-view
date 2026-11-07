@@ -205,7 +205,7 @@ test('replacement, repetition, and hidden-tab elapsed time use the newest fixed 
 test('universal notice lifecycle clears on dispose and uses the one top-center live region', async () => {
   const ui = readShellSource();
   const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-  const disposeStart = ui.indexOf('  async dispose() {');
+  const disposeStart = ui.indexOf('  async dispose(');
   const disposeEnd = ui.indexOf('\n  }\n', disposeStart);
   const dispose = ui.slice(disposeStart, disposeEnd);
 

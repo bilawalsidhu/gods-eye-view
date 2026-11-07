@@ -441,7 +441,7 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
     ],
     'reset supersession',
   );
-  const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
+  const dispose = body(ui, /async dispose\([^)]*\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(
     dispose,
     [
@@ -473,7 +473,7 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
 });
 
 test('teardown synchronously closes immediate camera entry points', () => {
-  const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
+  const dispose = body(ui, /async dispose\([^)]*\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(
     dispose,
     ['this._disposed = true;', 'await this.detachScene('],

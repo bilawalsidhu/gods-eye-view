@@ -1,7 +1,7 @@
 // The page's engine switch: one layer session, one engine at a time.
 //
 // The address (?engine=) is the source of truth, except while a picked
-// engine starts: that choice lives here until the engine runs, and only then
+// engine starts: the scene host holds that choice until it runs, and only then
 // is written to the address as a new history entry. A switch from the picker
 // (select) and a history visit (Back/Forward, a pasted address) both hand the
 // session off: the running engine is released, the requested engine starts on
@@ -12,207 +12,17 @@
 // Requests that arrive while a switch or a recovery runs are never dropped:
 // once the current attempt settles, the address is read again and reconciled.
 
-import { ENGINE_CHOICES } from '../app/engineChoice.js';
+import { createSceneHost } from '../app/sceneHost.js';
 
 /** A started engine whose first frame takes longer than this is shown anyway. */
 const FIRST_FRAME_WAIT_MS = 10_000;
 
-/**
- * Drive engine switches for one page session.
- *
- * A failed attempt rolls back to the last engine that actually started
- * (never to the one that just failed) and, when that recovery fails too,
- * leaves the page without an engine but still able to take the next request. A page lifetime abort (pagehide) stops the
- * machine: nothing starts after it.
- *
- * @param {object} options
- * @param {string} options.kind The engine already running.
- * @param {() => string} options.requested The engine the address asks for now.
- * @param {AbortSignal} options.signal The page lifetime.
- * @param {(from: string, to: string, change: {visit: boolean}) => Promise<void>} options.leave
- *   Hand the session off from the running engine and release that engine.
- * @param {(kind: string, attempt: {recovery: boolean}) => Promise<void>} options.enter
- *   Start an engine on the retained session. It resolves once the engine runs
- *   with the session attached; when it rejects it has already released what
- *   it started.
- * @param {{select: (from: ?string) => *, commit: (token: *, kind: string) => void, restore: (kind: string) => void}} options.address
- * @param {(state: {failed: boolean}) => Promise<void>|void} [options.settle] Runs
- *   once the address is reconciled, before the machine reports idle.
- * @param {(kind: string) => void} [options.remember] Store a picked engine.
- * @param {(state: object) => void} [options.onChange]
- * @param {(error: unknown, outcome: {recovered: boolean, kind: ?string}) => void} [options.onFailure]
- */
+/** Drive engine requests through the scene host's transition owner. */
 export function createEngineSwitch({
-  kind,
-  requested,
-  signal,
-  leave,
-  enter,
-  address,
-  settle,
-  remember,
-  onChange,
-  onFailure,
+  sceneHost = createSceneHost(),
+  ...options
 }) {
-  // The engine whose session is live, null while none is.
-  let current = kind;
-  // The engine attached to the application or starting to attach: what a
-  // history visit would leave.
-  let live = kind;
-  // The last engine that started successfully: the rollback target.
-  let working = kind;
-  let failed = false;
-  let busy = false;
-  // Every request (select or address visit) bumps this; a visit also bumps
-  // `visits`.
-  let requests = 0;
-  let visits = 0;
-  let queued = null;
-  // The pick being started, held here rather than in the address: a visit
-  // made meanwhile retires it and leaves every entry as it was.
-  let pending = null;
-  let running = null;
-
-  const state = () =>
-    Object.freeze({
-      kind: current ?? working,
-      engine: live,
-      busy,
-      failed,
-    });
-  const publish = () => onChange?.(state());
-
-  function prepare(next) {
-    pending = { to: next, token: address.select(current) };
-  }
-
-  /** The picker's choice. While a switch runs it is queued, not dropped. */
-  function select(next) {
-    if (!ENGINE_CHOICES.includes(next) || signal.aborted) return null;
-    requests++;
-    if (busy) {
-      queued = next;
-      return running;
-    }
-    if (next === current) return null;
-    prepare(next);
-    return run();
-  }
-
-  /** The address changed (history visit) or should be checked again. */
-  function reconcile() {
-    if (signal.aborted) return Promise.resolve();
-    requests++;
-    visits++;
-    // A later visit supersedes a pick queued or starting before it.
-    queued = null;
-    pending = null;
-    return busy ? running : run();
-  }
-
-  function run() {
-    busy = true;
-    publish();
-    running = drive()
-      .catch((error) =>
-        onFailure?.(error, { recovered: current !== null, kind: current }),
-      )
-      .finally(() => {
-        busy = false;
-        running = null;
-        publish();
-      });
-    return running;
-  }
-
-  async function drive() {
-    for (;;) {
-      await reconcileAddress();
-      if (signal.aborted) return;
-      const seen = requests;
-      try {
-        await settle?.({ failed });
-      } catch (error) {
-        // Revealing the globe is cosmetic; the engine runs either way.
-        console.error('The globe switch could not settle:', error);
-      }
-      if (signal.aborted || seen === requests) return;
-    }
-  }
-
-  async function reconcileAddress() {
-    let handled = null;
-    for (;;) {
-      if (signal.aborted) return;
-      if (queued !== null) {
-        const next = queued;
-        queued = null;
-        if (next !== current) prepare(next);
-      }
-      const target = pending?.to ?? requested();
-      if (target === current) return;
-      // After a failed recovery, wait for the person's next request instead
-      // of retrying the same address in a loop.
-      if (failed && handled === requests) return;
-      handled = requests;
-      await attempt(target);
-    }
-  }
-
-  async function attempt(target) {
-    const visitsAtStart = visits;
-    const visit = pending?.to !== target;
-    publish();
-    try {
-      if (current !== null) {
-        const from = current;
-        try {
-          await leave(from, target, { visit });
-        } finally {
-          current = null;
-        }
-      }
-      if (signal.aborted) return;
-      live = target;
-      await enter(target, { recovery: false });
-      if (signal.aborted) return;
-      current = working = target;
-      failed = false;
-      if (!visit && pending?.to === target) {
-        address.commit(pending.token, target);
-        remember?.(target);
-      }
-      pending = null;
-    } catch (error) {
-      if (signal.aborted) return;
-      pending = null;
-      // A failed pick never touched the address. A failed visit points its
-      // entry at the working engine, unless the person has since moved on.
-      if (visit && visits === visitsAtStart && requested() === target)
-        address.restore(working);
-      if (working === target) {
-        live = null;
-        failed = true;
-        onFailure?.(error, { recovered: false, kind: null });
-        return;
-      }
-      live = working;
-      try {
-        await enter(working, { recovery: true });
-        if (signal.aborted) return;
-        current = working;
-        failed = false;
-        onFailure?.(error, { recovered: true, kind: working });
-      } catch (recoveryError) {
-        if (signal.aborted) return;
-        live = null;
-        failed = true;
-        onFailure?.(recoveryError, { recovered: false, kind: null });
-      }
-    }
-  }
-
-  return Object.freeze({ select, reconcile, state });
+  return sceneHost.createSwitcher(options);
 }
 
 /**

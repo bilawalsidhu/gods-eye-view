@@ -8,8 +8,10 @@ import vm from 'node:vm';
 import { retainsLayerSession } from '../app/layerSession.js';
 import { createSceneHost } from '../app/sceneHost.js';
 import { attachScenePart } from '../app/sceneParts.js';
+import { createApplication } from '../app/application.js';
+import { createEngineSwitch } from './engineSwitch.js';
 
-function standalone({ failOpen = null } = {}) {
+function standalone({ failOpen = null, beforeOpen, beforeRelease, lifecycle = false, transition = null, failControls = false } = {}) {
   const source = readFileSync(
     new URL('./application.js', import.meta.url),
     'utf8',
@@ -32,7 +34,7 @@ function standalone({ failOpen = null } = {}) {
     applyDocumentLanguage() {},
     applyDocumentTranslations() {},
     CITY_POIS: [],
-    createApplication: (options) => ({
+    createApplication: lifecycle ? createApplication : (options) => ({
       ...options,
       subscribe() {},
       getState: () => ({ status: 'ready' }),
@@ -44,12 +46,27 @@ function standalone({ failOpen = null } = {}) {
     loadLayerRenderers: async () => {},
     createGoogleTokenSource: () => null,
     createStandaloneScene: async ({ engineKind, defer }) => {
+      await beforeOpen?.(engineKind);
       if (failOpen === engineKind) throw new Error(`${engineKind} refused`);
       const engine = { kind: engineKind, id: opened.length };
       opened.push(engine);
-      defer(() => released.push(engine));
+      defer(async () => {
+        await beforeRelease?.(engine);
+        released.push(engine);
+      });
       return { viewer: null, engine, operations: { kind: 'operations' } };
     },
+    createStandaloneControls: async ({ scene, defer }) => {
+      await attachScenePart(scene, {
+        name: 'controls',
+        attachScene() {},
+        detachScene() {},
+      }, { defer });
+      if (failControls) throw new Error('controls refused');
+      return {};
+    },
+    createStandaloneData: () => ({}),
+    createStandaloneTools: () => ({}),
     createSceneHost,
     retainsLayerSession,
     attachScenePart,
@@ -58,7 +75,7 @@ function standalone({ failOpen = null } = {}) {
     DOMException,
   });
   vm.runInContext(source, context);
-  const app = context.createStandaloneApplication({});
+  const app = context.createStandaloneApplication({ transition });
   return { app, opened, released };
 }
 
@@ -162,3 +179,114 @@ test('page teardown during resume releases the candidate only once', async () =>
   assert.equal(scene.engine, null);
   assert.deepEqual(released, opened);
 });
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+test('concurrent detach and attach wait for renderer release before acquiring the next', async () => {
+  const releasing = deferred();
+  const finishRelease = deferred();
+  const { app, opened, released } = standalone({
+    beforeRelease: async () => {
+      releasing.resolve();
+      await finishRelease.promise;
+    },
+  });
+  const scene = await app.createScene({ signal: new AbortController().signal, defer() {} });
+  const leaving = app.detachScene({ handoff: true });
+  const entering = app.attachScene('navara');
+  await releasing.promise;
+  assert.equal(opened.length, 1);
+  assert.equal(scene.engine, null);
+  finishRelease.resolve();
+  await Promise.all([leaving, entering]);
+  assert.equal(scene.engine, opened[1]);
+  assert.deepEqual(released, [opened[0]]);
+});
+
+test('a detach requested during renderer acquisition waits for attachment and resume', async () => {
+  const opening = deferred();
+  const finishOpen = deferred();
+  const { app, opened, released } = standalone({
+    beforeOpen: async (kind) => {
+      if (kind === 'navara') {
+        opening.resolve();
+        await finishOpen.promise;
+      }
+    },
+  });
+  const scene = await app.createScene({ signal: new AbortController().signal, defer() {} });
+  await app.detachScene();
+  let resumed = false;
+  const entering = app.attachScene('navara', { resume: () => { resumed = true; } });
+  await opening.promise;
+  const leaving = app.detachScene();
+  finishOpen.resolve();
+  await Promise.all([entering, leaving]);
+  assert.equal(resumed, true);
+  assert.equal(scene.engine, null);
+  assert.deepEqual(released, opened);
+});
+
+test('the host completes one recovery before an outside attachment operation runs', async () => {
+  const failedRelease = deferred();
+  const finishRelease = deferred();
+  const { app, opened, released } = standalone({
+    beforeRelease: async (engine) => {
+      if (engine.kind === 'navara') {
+        failedRelease.resolve();
+        await finishRelease.promise;
+      }
+    },
+  });
+  const scene = await app.createScene({ signal: new AbortController().signal, defer() {} });
+  const failures = [];
+  const switcher = createEngineSwitch({
+    sceneHost: app.sceneHost,
+    kind: 'cesium',
+    requested: () => 'cesium',
+    signal: new AbortController().signal,
+    address: { select() {}, commit() {}, restore() {} },
+    leave: (_from, _to, _change, transaction) => app.detachScene({ handoff: true }, transaction),
+    enter: (kind, _attempt, transaction) => app.attachScene(kind, {
+      transaction,
+      resume() { if (kind === 'navara') throw new Error('restore refused'); },
+    }),
+    onFailure: (error, outcome) => failures.push([error.message, outcome]),
+  });
+  const switching = switcher.select('navara');
+  await failedRelease.promise;
+  const outside = app.detachScene();
+  assert.equal(opened.length, 2);
+  finishRelease.resolve();
+  await Promise.all([switching, outside]);
+  assert.deepEqual(opened.map(({ kind }) => kind), ['cesium', 'navara', 'cesium']);
+  assert.deepEqual(released, opened);
+  assert.deepEqual(failures, [['restore refused', { recovered: true, kind: 'cesium' }]]);
+  assert.equal(scene.engine, null);
+});
+
+for (const failControls of [false, true]) {
+  test(`replacement application ${failControls ? 'failure cleanup' : 'startup and teardown'} uses the enclosing host transaction`, async () => {
+    const host = createSceneHost();
+    let fixture;
+    await host.run(async (transaction) => {
+      fixture = standalone({ lifecycle: true, transition: transaction, failControls });
+      if (failControls) {
+        await assert.rejects(fixture.app.start(), /controls refused/);
+        assert.equal(fixture.app.getState().status, 'failed');
+      } else {
+        const { scene } = await fixture.app.start();
+        assert.equal(scene.engine, fixture.opened[0]);
+        assert.equal(scene.transaction, null, 'startup does not retain the enclosing transaction');
+      }
+      await fixture.app.destroy(transaction);
+    });
+    assert.deepEqual(fixture.released, fixture.opened);
+    assert.equal(fixture.app.sceneHost.state(), 'detached');
+    assert.deepEqual(fixture.app.sceneHost.parts(), [], 'retired parts do not pin the old application');
+  });
+}

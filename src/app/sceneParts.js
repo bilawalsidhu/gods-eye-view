@@ -17,7 +17,8 @@ export function currentSceneOf(scene) {
  * attachment's result.
  */
 export function attachScenePart(scene, part, { defer }) {
-  if (scene?.sceneHost) return scene.sceneHost.register(part);
+  if (scene?.sceneHost)
+    return scene.sceneHost.register(part, scene.transaction);
   const controller = new AbortController();
   const cleanups = [];
   defer(async () => {
@@ -55,5 +56,10 @@ export function attachScenePart(scene, part, { defer }) {
 export function detachPartsOnTeardown(scene, defer, options) {
   const host = scene?.sceneHost;
   if (!host) return;
-  defer(() => host.detach(typeof options === 'function' ? options() : options));
+  defer(() =>
+    host.detach(
+      typeof options === 'function' ? options() : options,
+      scene.transaction,
+    ),
+  );
 }

@@ -637,8 +637,13 @@ parking and failed-release retries. Lifecycle keeps visibility intentions and
 refresh policy. `app/layerSession.js` defines the retained session fields and
 handoff predicate. `standalone/sceneSwitcher.js` coordinates page handoff;
 `ui/shellScene.js` owns scene-bound shell construction, while `applicationShell`
-keeps page controls and policy. Request, host and shell queues are not yet one
-queue. Pick ownership, selection dispatch and render demand belong to
+keeps page controls and policy. `app/sceneHost.js` owns the transition queue,
+request ordering and recovery decision. Application acquisition, attachment,
+restoration and renderer release run in that queue, and shell calls use it too.
+Nested work receives an explicit transaction; outside calls wait for the whole
+transition. A replacement application shares the transition owner with fresh
+parts, and a shell used alone creates its own host. Pick ownership, selection
+dispatch and render demand belong to
 `scene.services`; render demand drives the engine contract, with no dependency
 from the Cesium render backend to the governor. Overlay and tracked-readout
 services still include module singletons; debug access still exposes the native
