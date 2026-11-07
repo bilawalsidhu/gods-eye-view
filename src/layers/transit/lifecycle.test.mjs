@@ -3464,6 +3464,11 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
   click({ position: new Cesium.Cartesian2(100.9, 200.1) });
   assert.ok(Math.abs(actual.x - 100.5) < 1e-6);
   assert.ok(Math.abs(actual.y - 201) < 1e-6);
+  // A 2x drawing buffer snaps to the same CSS-pixel grid as the shaders.
+  scene.canvas = { ...scene.canvas, width: 3840, height: 2160 };
+  click({ position: new Cesium.Cartesian2(100.9, 200.1) });
+  assert.ok(Math.abs(actual.x - 100.5) < 1e-6);
+  assert.ok(Math.abs(actual.y - 201) < 1e-6);
   assert.equal(app.state()._selectedKey, entry.key);
 });
 
