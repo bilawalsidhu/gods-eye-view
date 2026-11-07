@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createCesiumGlobe, markBaseTileset } from './globe.js';
-import { hookProvider, xyzTileUrl } from './imagery.js';
+import { hookProvider, TILE_RETRY_DELAY_MS, xyzTileUrl } from './imagery.js';
 
 const ALL = new Set(['imageHooks', 'imageryOnTiles', 'splitSwipe', 'terrain']);
 const url = (name) => `https://${name}.invalid/{z}/{x}/{y}.png`;
@@ -241,6 +241,7 @@ test('admit decides first; at most maxConcurrentRequests are in flight', async (
     retrySoon: () => (counts.retries += 1),
     laterFrame: () => Promise.resolve(),
     signals: new Set(),
+    busy: () => counts.started > counts.settled,
   };
   const admitted = [];
   const hooked = hookProvider(
@@ -261,12 +262,56 @@ test('admit decides first; at most maxConcurrentRequests are in flight', async (
   assert.equal(hooked.requestImage(1, 0, 1), undefined, 'the second waits');
   assert.equal(counts.retries, 0, 'a full budget asks for no frame itself');
   assert.equal(hooked.requestImage(9, 0, 1), undefined, 'admit deferred');
-  assert.equal(counts.retries, 1, 'admit deferring asks for a later frame');
+  assert.equal(
+    counts.retries,
+    0,
+    'with a request in flight, its settling is the later frame',
+  );
   assert.deepEqual(admitted[0], { x: 0, y: 0, level: 1 });
   resolvers[0]('image');
   assert.equal(await first, 'image');
-  assert.deepEqual(counts, { started: 1, settled: 1, retries: 1 });
+  assert.deepEqual(counts, { started: 1, settled: 1, retries: 0 });
+  assert.equal(hooked.requestImage(9, 0, 1), undefined, 'admit deferred');
+  assert.equal(counts.retries, 1, 'with none in flight it asks for a frame');
   assert.ok(hooked.requestImage(1, 0, 1), 'the budget is free again');
+});
+
+test('removing a layer cancels the Cesium requests it has in flight', async () => {
+  const { scene, port } = setup();
+  const layer = port.imagery.add({
+    kind: 'xyz',
+    url: url('a'),
+    admit: (tile, issue) => issue(),
+  });
+  const provider = scene.imageryLayers.get(0).imageryProvider;
+  const settledRequest = new Cesium.Request({ throttle: false });
+  const request = new Cesium.Request({ throttle: false });
+  const answers = [];
+  Object.getPrototypeOf(provider).requestImage = () =>
+    new Promise((resolve) => answers.push(resolve));
+  const done = provider.requestImage(0, 0, 1, settledRequest);
+  assert.ok(provider.requestImage(1, 0, 1, request), 'issued');
+  answers[0]('image');
+  await done;
+  layer.remove();
+  assert.equal(request.cancelled, true, 'the one in flight is cancelled');
+  assert.equal(settledRequest.cancelled, false, 'a settled one is not');
+});
+
+test('a layer deferring while another has a request in flight asks for a frame', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { scene, port, renders } = setup();
+  port.imagery.add({ kind: 'xyz', url: url('a'), admit: (_t, i) => i() });
+  port.imagery.add({ kind: 'xyz', url: url('b'), admit: () => undefined });
+  const [busy, waiting] = [0, 1].map(
+    (i) => scene.imageryLayers.get(i).imageryProvider,
+  );
+  Object.getPrototypeOf(busy).requestImage = () => new Promise(() => {});
+  assert.ok(busy.requestImage(0, 0, 1), 'in flight');
+  renders.length = 0;
+  assert.equal(waiting.requestImage(0, 0, 1), undefined);
+  t.mock.timers.tick(TILE_RETRY_DELAY_MS);
+  assert.deepEqual(renders, ['imagery']);
 });
 
 test('fetchTile fetches in place of the provider, with the URL it would fetch', async (t) => {

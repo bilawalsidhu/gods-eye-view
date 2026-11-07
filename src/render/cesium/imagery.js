@@ -52,7 +52,7 @@ function resourceOf(spec) {
   const statuses = new Set(spec.retryStatuses);
   return new Cesium.Resource({
     url: spec.url,
-    retryAttempts: 2,
+    retryAttempts: 3,
     retryCallback: (_resource, error) => statuses.has(error?.statusCode),
   });
 }
@@ -216,10 +216,17 @@ function guarded(run) {
  * requests: `admit` decides first, an issued request goes through
  * `fetchTile` (or the provider), then `tileTransform`; at most
  * `maxConcurrentRequests` are in flight.
+ *
+ * A tile `admit` defers is asked again on a later frame: the one a request
+ * of the same layer in flight asks for as it settles, or, with none in
+ * flight (`busy`), the one `retrySoon` asks for. So a layer whose own
+ * budget is full never keeps the scene drawing while it waits.
  * @param {object} provider
  * @param {import('../contract/globe').ImagerySpec} spec
  * @param {{started: () => void, settled: () => void, retrySoon: () => void,
- *   laterFrame: () => Promise<void>, signals: Set<AbortController>}} ctx
+ *   laterFrame: () => Promise<void>, signals: Set<AbortController>,
+ *   busy?: () => boolean, requests?: Set<object>}} ctx
+ *   `requests`: the Cesium requests in flight, cancelled as the layer goes.
  */
 export function hookProvider(provider, spec, ctx) {
   const limit =
@@ -267,7 +274,7 @@ export function hookProvider(provider, spec, ctx) {
   }
 
   return withTileRequestHook(provider, {
-    requestImage({ x, y, level }, ask) {
+    requestImage({ x, y, level, request }, ask) {
       const tile = { x, y, level };
       // Deferred by the budget: the request in flight asks for a frame as
       // it settles, so none is asked for here.
@@ -287,17 +294,20 @@ export function hookProvider(provider, spec, ctx) {
         }
         inFlight += 1;
         ctx.started();
+        if (request) ctx.requests?.add(request);
         let result = Promise.resolve(started);
         if (spec.tileTransform)
           result = result.then((image) => transformTile(spec, tile, image));
         return result.finally(() => {
           inFlight -= 1;
+          if (request) ctx.requests?.delete(request);
           ctx.settled();
         });
       };
       if (!spec.admit) return issue();
       const answer = guarded(() => spec.admit(tile, issue));
-      if (answer === undefined && !waitsOnBudget) ctx.retrySoon();
+      if (answer === undefined && !waitsOnBudget && !ctx.busy?.())
+        ctx.retrySoon();
       return answer;
     },
   });
@@ -464,10 +474,18 @@ export function createCesiumImagery(
       frameReady: listenerList(report),
     };
     const signals = new Set();
+    const requests = new Set();
+    let layerPending = 0;
     const ctx = {
-      started: () => (pending += 1),
+      busy: () => layerPending > 0,
+      requests,
+      started: () => {
+        pending += 1;
+        layerPending += 1;
+      },
       settled: () => {
         pending -= 1;
+        layerPending -= 1;
         if (!disposed) requestRender('imagery');
       },
       retrySoon,
@@ -584,6 +602,10 @@ export function createCesiumImagery(
         if (i >= 0) layers.splice(i, 1);
         record.offError?.();
         for (const controller of signals) controller.abort();
+        // Cesium leaves a removed layer's requests running: cancelled, they
+        // are aborted and free their per-server slots on the next frame.
+        for (const request of requests) request.cancel?.();
+        requests.clear();
         listeners.tileError.clear();
         listeners.frameReady.clear();
         if (usable(record.host) && record.host.contains(record.cesium))
