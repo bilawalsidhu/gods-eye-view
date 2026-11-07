@@ -9,7 +9,16 @@ import {
 import { updateCameraChanged } from './internals.js';
 
 test('capabilities follow what the scene supports', () => {
-  const effects = ['styles', 'bloom', 'sharpen'];
+  const effects = [
+    'styles',
+    'bloom',
+    'sharpen',
+    'photoreal',
+    'terrain',
+    'imageryOnTiles',
+    'splitSwipe',
+    'imageHooks',
+  ];
   assert.deepEqual(cesiumCapabilities({}), ['models', ...effects]);
   assert.deepEqual(cesiumCapabilities({ pickPositionSupported: true }), [
     'models',

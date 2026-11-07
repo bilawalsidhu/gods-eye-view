@@ -60,6 +60,7 @@ function unboundPorts(member) {
 
 const unboundCameras = unboundPorts('camera');
 const unboundEffects = unboundPorts('effects');
+const unboundGlobes = unboundPorts('globe');
 /** Credits ports are `{port, dispose, release}`: see `bindRenderer`. */
 const unboundCredits = unboundPorts('credits');
 
@@ -94,6 +95,17 @@ export function provideUnboundEffects(build) {
 }
 
 /**
+ * Provide the factory `findGlobe` builds a globe port with for a scene
+ * object no renderer is bound to, as `provideUnboundCamera` does. A bound
+ * renderer supersedes it with `release`, as credits are.
+ * @param {(host: object) => ({port: object, dispose: () => void,
+ *   release?: () => void} | null)} build
+ */
+export function provideUnboundGlobe(build) {
+  unboundGlobes.provide(build);
+}
+
+/**
  * Let go of `port`, if it is the effects port `findEffects` built for
  * `host`: its passes go and the scene's own settings come back. A
  * renderer's own port, or one built later, is left alone.
@@ -109,7 +121,9 @@ export function releaseUnboundEffects(host, port) {
  * built for it while it had no renderer is disposed: its listeners hear
  * nothing more, and they answer with the renderer's ports from then on.
  * A credits port `findCredits` built is released, not disposed: the
- * credits added through it stay shown until their own Off.
+ * credits added through it stay shown until their own Off. A globe port
+ * `findGlobe` built is released too: its imagery stays drawn, following the
+ * base, until its callers remove it.
  * @param {object} host The scene object callers hold.
  * @param {object} renderer
  * @returns {() => void} Unbinds, if the binding is still this one.
@@ -119,6 +133,7 @@ export function bindRenderer(host, renderer) {
   // The renderer's ports supersede ones built while there was none.
   unboundCameras.drop(host);
   unboundEffects.drop(host);
+  unboundGlobes.supersede(host);
   unboundCredits.supersede(host);
   renderers.set(host, renderer);
   return () => {
@@ -155,6 +170,19 @@ export function findCamera(host) {
  */
 export function findEffects(host) {
   return unboundEffects.find(host);
+}
+
+/**
+ * The globe port of the renderer bound to `host`; with no renderer bound,
+ * one built over `host` by the provided factory and kept with it while
+ * `host` lives, as `findCamera` does. Imagery added through a built port
+ * stays drawn once a renderer is bound; the renderer's port lists only
+ * its own.
+ * @param {object|null|undefined} host
+ * @returns {import('./contract/globe').GlobePort | null}
+ */
+export function findGlobe(host) {
+  return unboundGlobes.find(host);
 }
 
 /**

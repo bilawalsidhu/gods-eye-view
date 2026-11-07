@@ -6,10 +6,10 @@
  *
  * The renderer it makes is transitional. Its ports are the shared Cesium
  * ports (`ports.js`), the ones the conformance renderer is checked with,
- * less the members that would not be true of the application yet: the
- * globe (it draws photoreal tiles the port does not know). Those arrive
- * with the layer families that need them (phase 2 of the renderer plan);
- * `checkRendererShape` lists what is still missing. `whenSettled` waits
+ * and it has every member of the contract. The application's base (the
+ * photoreal tiles, the map stack's imagery and terrain) is still loaded
+ * through the viewer by the scene and the map stack; the globe port drapes
+ * its imagery on that base as drawn (see `globe.js`). `whenSettled` waits
  * for the globe, the scene's 3D tiles and what the draw sets hold, not for
  * what layers still draw through the viewer themselves.
  * Until a family is ported, its code reaches the Cesium viewer through
@@ -23,15 +23,7 @@ import { bindRenderer } from '../rendererOf.js';
 import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 
-/**
- * The members a transitional renderer has today.
- * @typedef {Pick<import('../contract/renderer').Renderer,
- *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'frame' | 'draw'
- *   | 'camera' | 'query' | 'input' | 'effects' | 'quality' | 'capture'
- *   | 'credits' | 'readPixels' | 'releaseUnused' | 'whenSettled' | 'on'
- *   | 'resize' | 'destroy'>}
- *   TransitionalRenderer
- */
+/** @typedef {import('../contract/renderer').Renderer} TransitionalRenderer */
 
 const viewers = new WeakMap();
 
@@ -75,12 +67,18 @@ export function createCesiumRendererPlugin({
   return Object.freeze({
     id: 'cesium',
     /**
-     * Credentials stay with the scene, which still loads the tiles; they
-     * move into the renderer with the globe port.
-     * @param {{container: HTMLElement, signal: AbortSignal}} options
+     * The credentials are the globe port's, for a base set through it; the
+     * scene still loads the application's own base itself.
+     * @param {import('../contract/renderer').CreateOptions} options
      * @returns {Promise<TransitionalRenderer>}
      */
-    async create({ container, signal }) {
+    async create({
+      container,
+      signal,
+      googleApiKey,
+      googleTokens,
+      worldDataToken,
+    }) {
       signal?.throwIfAborted();
       // Provider attribution stays visible, including clean-view and recording.
       const creditContainer = document.createElement('div');
@@ -93,7 +91,10 @@ export function createCesiumRendererPlugin({
       try {
         viewer = createViewer({ container, creditContainer });
         capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
-        ports = createCesiumPorts(viewer, { capabilities });
+        ports = createCesiumPorts(viewer, {
+          capabilities,
+          credentials: { googleApiKey, googleTokens, worldDataToken },
+        });
         input = createCesiumInput(viewer, {
           query: ports.query,
           report: ports.report,
@@ -111,6 +112,7 @@ export function createCesiumRendererPlugin({
         capabilities,
         canvas: viewer.canvas,
         frame: ports.frame,
+        globe: ports.globe,
         draw: ports.draw,
         camera: ports.camera,
         query: ports.query,

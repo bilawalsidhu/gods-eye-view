@@ -6,7 +6,8 @@
  * that module too. It loads `render/cesium/credits.js`, whose factory
  * builds `findCredits`' port for such a viewer the same way.
  * Likewise an entry that reaches a caller of `findEffects` must load
- * `render/cesium/effects.js`, which provides the effects factory.
+ * `render/cesium/effects.js`, which provides the effects factory, and one
+ * that reaches a caller of `findGlobe` must load `render/cesium/globe.js`.
  *
  * The graph is every static import, re-export and literal dynamic import of
  * the entry's module and those it reaches, read by the parsers the Cesium
@@ -27,6 +28,7 @@ const root = path.resolve(
 const BRIDGE = 'src/render/rendererOf.js';
 const FACTORY = 'src/render/cesium/camera.js';
 const EFFECTS_FACTORY = 'src/render/cesium/effects.js';
+const GLOBE_FACTORY = 'src/render/cesium/globe.js';
 
 /**
  * Entries that take their Cesium code injected: the module named here is
@@ -166,28 +168,41 @@ test('every public entry that reaches the renderer bridge loads the unbound came
   );
 });
 
-test('every public entry that reaches a findEffects caller loads the unbound effects factory', () => {
+/**
+ * Every public entry reaching a caller of `lookup` loads `factory`. With
+ * `reached`, at least one entry must reach one, or the walk is broken.
+ */
+function checkLookupFactory(lookup, factory, { reached = true } = {}) {
   const missing = [];
   let reaching = 0;
-  const callsFindEffects = (file) =>
+  const calls = (file) =>
     !file.startsWith('src/render/') &&
     /\.(m?js|vue)$/.test(file) &&
-    readFileSync(path.join(root, file), 'utf8').includes('findEffects(');
+    readFileSync(path.join(root, file), 'utf8').includes(`${lookup}(`);
   for (const [key, declaration] of Object.entries(pkg.exports)) {
     const target = browserTarget(declaration);
     if (typeof target !== 'string' || !target.startsWith('./src/')) continue;
     const entry = path.normalize(target.slice(2));
-    if (![...reachable(entry)].some(callsFindEffects)) continue;
+    if (![...reachable(entry)].some(calls)) continue;
     reaching += 1;
     const carrier = INJECTED[key];
-    const loads = (file) =>
-      reachable(file, { eager: true }).has(EFFECTS_FACTORY);
+    const loads = (file) => reachable(file, { eager: true }).has(factory);
     if (!loads(entry) && !(carrier && loads(carrier))) missing.push(key);
   }
-  assert.ok(reaching > 0, 'no entry reaches findEffects: the walk is broken');
+  if (reached)
+    assert.ok(reaching > 0, `no entry reaches ${lookup}: the walk is broken`);
   assert.deepEqual(
     missing,
     [],
-    `These entries can reach findEffects without ${EFFECTS_FACTORY}; import it where the entry first reaches the lookup.`,
+    `These entries can reach ${lookup} without ${factory}; import it where the entry first reaches the lookup.`,
   );
+}
+
+test('every public entry that reaches a findEffects caller loads the unbound effects factory', () => {
+  checkLookupFactory('findEffects', EFFECTS_FACTORY);
+});
+
+test('every public entry that reaches a findGlobe caller loads the unbound globe factory', () => {
+  // Only the application reaches one today, through no public entry.
+  checkLookupFactory('findGlobe', GLOBE_FACTORY, { reached: false });
 });
