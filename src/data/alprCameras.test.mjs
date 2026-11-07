@@ -56,6 +56,7 @@ test('normalizeAlprNode: maps a full OSM node to a plain record', () => {
     longitude: -97.7431,
     operator: 'Flock Safety',
     manufacturer: null,
+    model: null,
     cameraType: 'fixed',
     zone: 'traffic',
     directionDeg: 270,

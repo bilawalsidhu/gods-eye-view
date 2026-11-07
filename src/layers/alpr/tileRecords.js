@@ -16,6 +16,8 @@ function normalizeAlprTileFeature(feature) {
       'surveillance:type': 'ALPR',
       operator: p.operator,
       manufacturer: p.brand,
+      // Not in the hourly extract yet; read when it ships the OSM tag.
+      model: p.model,
       'camera:type': p.cameraType,
       'camera:direction': p.direction,
       'surveillance:zone': p.surveillanceZone,
