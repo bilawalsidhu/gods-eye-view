@@ -566,8 +566,8 @@ export const DATA_CREDITS = [
     key: 'trafikverket',
     html:
       'CCTV cameras (Sweden): ' +
-      '<a href="https://api.trafikinfo.trafikverket.se/" target="_blank" rel="noopener">Trafikverket</a> ' +
-      '(Open Data)',
+      '<a href="https://www.trafikverket.se/e-tjanster/trafikverkets-oppna-api-for-trafikinformation/" target="_blank" rel="noopener">Trafikverket</a> ' +
+      'open API (<a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0 1.0</a>)',
   },
 ];
 

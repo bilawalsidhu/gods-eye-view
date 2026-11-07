@@ -1,8 +1,5 @@
 # Changelog
 
-- Add Sweden Trafikverket and VViS weather camera integration for live CCTV feeds via the Swedish Transport Administration Open API.
-
-
 ## [Unreleased]
 
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language

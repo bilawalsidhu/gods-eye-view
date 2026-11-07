@@ -141,6 +141,10 @@ import {
   DEFAULT_ICELAND_MAX_SOURCES,
   ICELAND_ANCHORS,
   TRAFIKVERKET_DATA_URL,
+  TRAFIKVERKET_IMAGE_ORIGIN,
+  TRAFIKVERKET_MAX_CATALOG_BYTES,
+  TRAFIKVERKET_STALE_PHOTO_MS,
+  TRAFIKVERKET_GROUND_ELEVATION_M,
   DEFAULT_TRAFIKVERKET_MAX_SOURCES,
   TRAFIKVERKET_ANCHORS,
 } from './constants.js';
@@ -175,6 +179,7 @@ import {
   rowArrayToObject,
   prioritizeSources,
   pinnedCameraUrl,
+  escapeXml,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
 import {
@@ -4119,29 +4124,139 @@ export async function loadHoustonSourcesFromOpenData() {
   }
 }
 
+let trafikverketKeyWarningLogged = false;
+
+/** Test seam: let the next keyless call log the missing-key line again. */
+export function _resetTrafikverketKeyWarningForTest() {
+  trafikverketKeyWarningLogged = false;
+}
+
+/** Trafikverket keys are 32 hex digits; accept a little more, nothing that
+ * could break out of the XML attribute it is sent in. */
+const TRAFIKVERKET_KEY_PATTERN = /^[A-Za-z0-9-]{16,64}$/;
+
 /**
- * Load Trafikverket traffic and road weather cameras.
+ * Pin a Trafikverket `PhotoUrl` to the official image directory.
  *
+ * @param {*} raw - Feed value, e.g.
+ *   `https://api.trafikinfo.trafikverket.se/v2/Images/RoadConditionCamera_39635739.Jpeg`.
+ * @returns {string} Canonical frame URL, or '' when it is anything else.
+ */
+export function normalizeTrafikverketPhotoUrl(raw) {
+  const pinned = pinnedCameraUrl(raw, TRAFIKVERKET_IMAGE_ORIGIN);
+  if (!pinned) return '';
+  const url = new URL(pinned);
+  if (url.search || url.hash) return '';
+  const file = url.pathname.slice(
+    new URL(TRAFIKVERKET_IMAGE_ORIGIN).pathname.length,
+  );
+  if (!/^[A-Za-z]{1,40}_\d{1,12}\.jpe?g$/i.test(file)) return '';
+  return `${TRAFIKVERKET_IMAGE_ORIGIN}${file}`;
+}
+
+/**
+ * One Trafikverket `Camera` object -> one catalog source, or null.
+ *
+ * @param {object} item - Camera object from the open API.
+ * @param {number} [now] - Epoch ms, for the frozen-camera check.
+ * @returns {?object}
+ */
+export function trafikverketCameraToSource(item, now = Date.now()) {
+  if (!item || typeof item !== 'object') return null;
+  const rawId = String(item.Id ?? '').trim();
+  if (!/^[A-Za-z0-9_.-]{1,80}$/.test(rawId)) return null;
+  const imageUrl = normalizeTrafikverketPhotoUrl(item.PhotoUrl);
+  if (!imageUrl) return null;
+
+  const wgs84 =
+    typeof item.Geometry?.WGS84 === 'string' ? item.Geometry.WGS84 : '';
+  const geom = parsePointString(wgs84);
+  if (!isLikelySwedenCoordinate(geom.lat, geom.lon)) return null;
+
+  // A camera whose last photo is days old shows a frozen frame; drop it.
+  const photoAt = Date.parse(String(item.PhotoTime ?? ''));
+  if (Number.isFinite(photoAt) && now - photoAt > TRAFIKVERKET_STALE_PHOTO_MS) {
+    return null;
+  }
+
+  const stableId = `se-trafikverket-${rawId}`.toLowerCase();
+  const isVvis = String(item.Type || '')
+    .toLowerCase()
+    .includes('väglag');
+  const name = String(item.Name || rawId).trim();
+
+  // The feed's Direction is a bearing in degrees on some cameras. It is the
+  // feed's value, not a hand-checked pose, so poseSource stays unset.
+  const direction = toFiniteNumber(item.Direction);
+  const hasDirection = Number.isFinite(direction);
+  const headingDeg = hasDirection
+    ? ((direction % 360) + 360) % 360
+    : fallbackHeadingFromId(stableId);
+
+  return {
+    id: stableId,
+    name,
+    city: 'Sweden',
+    cityId: 'sweden',
+    provider: isVvis ? 'Trafikverket VViS' : 'Trafikverket',
+    lat: geom.lat,
+    lon: geom.lon,
+    headingDeg,
+    headingConfidence: hasDirection ? 'high' : 'low',
+    pitchDeg: hasDirection ? -22 : -18,
+    fovDeg: 55,
+    rangeM: 200,
+    mountHeightM: 8,
+    groundElevationM: TRAFIKVERKET_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'trafikverket-open-data',
+    license: 'Trafikverket open API data, CC0 1.0',
+    code: cameraDisplayCode(name.toUpperCase()),
+    note: String(item.Description || '').trim() || undefined,
+  };
+}
+
+/**
+ * Load Trafikverket traffic-flow and VViS road-condition cameras (Sweden).
+ *
+ * The camera list needs a free Trafikverket API key (CCTV_TRAFIKVERKET_API_KEY);
+ * without one the pack is skipped with a single log line. The key travels in
+ * the POST body, so the request refuses redirects (a 307/308 would replay the
+ * body to the new location), and it is format-checked and XML-escaped before
+ * it goes into the query. The list decides ids, coordinates and which frame
+ * path is proxied, so its body read is capped and every `PhotoUrl` is pinned
+ * to the official image directory, which serves frames without a key.
+ *
+ * @param {object} [_options] The catalog's loader options (unused).
+ * @param {object} [env] Environment to read the key and the cap from.
  * @returns {Promise<Array<object>>}
  */
-export async function loadTrafikverketSourcesFromOpenData() {
-  const apiKey = process.env.CCTV_TRAFIKVERKET_API_KEY;
-  if (!apiKey) {
-    // Standard fail-soft missing-dependency behavior: no list to deliver.
-    console.warn(
-      '[CCTV] Trafikverket camera pack enabled but CCTV_TRAFIKVERKET_API_KEY is not set.',
-    );
+export async function loadTrafikverketSourcesFromOpenData(
+  _options = {},
+  env = process.env,
+) {
+  const apiKey = String(env.CCTV_TRAFIKVERKET_API_KEY ?? '').trim();
+  if (!apiKey || !TRAFIKVERKET_KEY_PATTERN.test(apiKey)) {
+    if (!trafikverketKeyWarningLogged) {
+      trafikverketKeyWarningLogged = true;
+      console.warn(
+        apiKey
+          ? '[CCTV] Trafikverket cameras skipped: CCTV_TRAFIKVERKET_API_KEY does not look like a Trafikverket API key'
+          : '[CCTV] Trafikverket cameras skipped: the Trafikverket open API needs a free key (set CCTV_TRAFIKVERKET_API_KEY)',
+      );
+    }
     return [];
   }
 
-  // Instructs Trafikverket to return only active cameras and the fields we need.
+  // Only active cameras, and only the fields the pack uses. Rows without a
+  // position or photo are dropped client-side.
   const query = `<REQUEST>
-  <LOGIN authenticationkey="${apiKey}"/>
+  <LOGIN authenticationkey="${escapeXml(apiKey)}"/>
   <QUERY objecttype="Camera" schemaversion="1">
     <FILTER>
       <EQ name="Active" value="true" />
-      <EXISTS name="Geometry.WGS84" value="true" />
-      <EXISTS name="PhotoUrl" value="true" />
     </FILTER>
     <INCLUDE>Id</INCLUDE>
     <INCLUDE>Name</INCLUDE>
@@ -4162,87 +4277,68 @@ export async function loadTrafikverketSourcesFromOpenData() {
         Accept: 'application/json',
       },
       body: query,
+      redirect: 'manual',
       signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
     });
-
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '');
-      console.warn(
-        `[CCTV] Trafikverket download failed: ${resp.status} (${errText.slice(0, 100)})`,
-      );
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
       return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Trafikverket catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      const keyHint =
+        resp.status === 401 || resp.status === 403
+          ? ' (check CCTV_TRAFIKVERKET_API_KEY)'
+          : '';
+      console.warn(
+        `[CCTV] Trafikverket camera download failed: ${resp.status}${keyHint}`,
+      );
+      return discard();
     }
 
-    const payload = await resp.json();
+    const payload = await readResponseJsonCapped(
+      resp,
+      TRAFIKVERKET_MAX_CATALOG_BYTES,
+    );
     const resultItem = Array.isArray(payload?.RESPONSE?.RESULT)
       ? payload.RESPONSE.RESULT[0]
       : null;
+    if (resultItem?.ERROR) {
+      // The API can report a query or key error inside a 200 response.
+      console.warn(
+        '[CCTV] Trafikverket API error:',
+        String(resultItem.ERROR.SOURCE || '').slice(0, 40),
+        String(resultItem.ERROR.MESSAGE || '').slice(0, 200),
+      );
+      return [];
+    }
     const cameraRows = Array.isArray(resultItem?.Camera)
       ? resultItem.Camera
       : [];
 
-    const cameras = [];
-    for (const item of cameraRows) {
-      if (!item || !item.Id || !item.PhotoUrl) continue;
-
-      const wgs84 =
-        typeof item.Geometry?.WGS84 === 'string' ? item.Geometry.WGS84 : '';
-      const geom = parsePointString(wgs84);
-      if (!isLikelySwedenCoordinate(geom.lat, geom.lon)) continue;
-
-      const cameraId = String(item.Id).trim();
-      const stableId = `se-trafikverket-${cameraId}`.toLowerCase();
-
-      const isVvis = String(item.Type || '')
-        .toLowerCase()
-        .includes('väglag');
-      const provider = isVvis ? 'Trafikverket VViS' : 'Trafikverket';
-
-      const hasDirection =
-        typeof item.Direction === 'number' && Number.isFinite(item.Direction);
-
-      // Trafikverket's standard headings are available on some cameras. Leave blank otherwise.
-      const headingDeg = hasDirection
-        ? ((item.Direction % 360) + 360) % 360
-        : fallbackHeadingFromId(stableId);
-      const headingConfidence = hasDirection ? 'high' : 'low';
-
-      cameras.push({
-        id: stableId,
-        name: String(item.Name || cameraId).trim(),
-        city: 'Sweden',
-        cityId: 'sweden',
-        provider,
-        lat: geom.lat,
-        lon: geom.lon,
-        headingDeg,
-        headingConfidence,
-        pitchDeg: headingConfidence === 'high' ? -22 : -18,
-        fovDeg: 55,
-        rangeM: 200,
-        mountHeightM: 8,
-        groundElevationM: 15,
-        feedType: 'image',
-        url: item.PhotoUrl,
-        snapshotUrl: item.PhotoUrl,
-        sourceKind: 'trafikverket-open-data',
-        license: 'Trafikverket',
-        poseSource: hasDirection ? 'curated' : undefined,
-        note: String(item.Description || '').trim() || undefined,
-      });
-    }
-
-    const maxRaw = Number(
-      process.env.CCTV_TRAFIKVERKET_MAX_SOURCES ||
-        DEFAULT_TRAFIKVERKET_MAX_SOURCES,
-    );
-    const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.floor(maxRaw))
-      : DEFAULT_TRAFIKVERKET_MAX_SOURCES;
-
+    const now = Date.now();
+    const cameras = cameraRows
+      .map((item) => trafikverketCameraToSource(item, now))
+      .filter(Boolean);
     const unique = Array.from(
       new Map(cameras.map((cam) => [cam.id, cam])).values(),
     );
+
+    const maxRaw = Number(
+      env.CCTV_TRAFIKVERKET_MAX_SOURCES || DEFAULT_TRAFIKVERKET_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
+      : DEFAULT_TRAFIKVERKET_MAX_SOURCES;
     const prioritized = prioritizeSources(
       unique,
       maxCount,
@@ -4253,9 +4349,11 @@ export async function loadTrafikverketSourcesFromOpenData() {
     );
     return prioritized;
   } catch (error) {
-    if (error.name !== 'AbortError') {
+    if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+      console.warn('[CCTV] Trafikverket camera download timed out');
+    } else {
       console.warn(
-        '[CCTV] Trafikverket source pack query failed:',
+        '[CCTV] Trafikverket camera download error:',
         error?.message || error,
       );
     }
