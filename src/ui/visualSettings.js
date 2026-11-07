@@ -5,6 +5,7 @@ import { useDisplayStore } from './stores/display.js';
 import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
+import { rendererOf } from '../render/rendererOf.js';
 import {
   VisualEffects,
   STYLES,
@@ -195,6 +196,7 @@ export class VisualSettings {
       setStyleParameter: (name, value) => this.setStyleParameter(name, value),
     });
     this._visualEffects = new VisualEffects({
+      effects: rendererOf(viewer)?.effects ?? null,
       viewer,
       requestRender: services.governorRequestRender,
       holdRender: services.holdContinuousRender,

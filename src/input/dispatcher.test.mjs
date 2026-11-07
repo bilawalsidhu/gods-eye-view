@@ -8,6 +8,7 @@ import {
   fakeInput,
 } from './testDoubles.mjs';
 import { sensorPickPosition } from './sensorPick.js';
+import { registerStyleStages } from '../styles/styleStages.js';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
 import {
   registerPickOwner,
@@ -376,11 +377,8 @@ test('sensor styles move the pick to where the picture came from', () => {
   const stage = { enabled: true, uniforms: { intensity: 1, pixelation: 4 } };
   const scene = {
     canvas: { clientWidth: 400, clientHeight: 200, width: 400, height: 200 },
-    postProcessStages: {
-      getStageByName: (name) =>
-        name === 'godsEyeView_surveillance' ? stage : undefined,
-    },
   };
+  registerStyleStages(scene, { surveillance: stage });
   const click = { x: 300, y: 50 };
   const mapped = sensorPickPosition(scene, click);
   assert.notDeepEqual([mapped.x, mapped.y], [300, 50]);

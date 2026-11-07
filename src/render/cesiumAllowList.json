@@ -224,7 +224,6 @@
   "src/ui/locationNavigation.js",
   "src/ui/navigationController.js",
   "src/ui/shareFollow.js",
-  "src/ui/visualEffects.js",
   "src/voice/gevActions.js",
   "src/voice/pointerPick.js"
 ]

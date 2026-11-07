@@ -37,9 +37,13 @@ const INJECTED = {
 /**
  * Modules whose use of the bridge holds up without the factory: with no
  * port they read Cesium's `trackedEntity` instead, which is all an unbound
- * viewer can follow by.
+ * viewer can follow by; visual settings ask for the renderer's effects
+ * only, never a camera, and keep their own records without one.
  */
-const FALLS_BACK = new Set(['src/data/followed.js']);
+const FALLS_BACK = new Set([
+  'src/data/followed.js',
+  'src/ui/visualSettings.js',
+]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 

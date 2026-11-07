@@ -7,6 +7,7 @@
  * distortion and quantization first.
  */
 import * as Cesium from 'cesium';
+import { styleStagesOf } from '../styles/styleStages.js';
 
 const SENSOR_STYLES = ['thermal', 'surveillance'];
 
@@ -18,10 +19,10 @@ const SENSOR_STYLES = ['thermal', 'surveillance'];
  */
 export function sensorPickPosition(scene, position) {
   const out = new Cesium.Cartesian2(position.x, position.y);
-  const stages = scene.postProcessStages;
-  if (typeof stages?.getStageByName !== 'function') return out;
+  const stages = styleStagesOf(scene);
+  if (!stages) return out;
   for (const style of SENSOR_STYLES) {
-    const stage = stages.getStageByName(`godsEyeView_${style}`);
+    const stage = stages[style];
     if (!stage?.enabled) continue;
     const intensity = stage.uniforms.intensity;
     const canvas = scene.canvas,

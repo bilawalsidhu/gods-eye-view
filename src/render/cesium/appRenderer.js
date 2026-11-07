@@ -27,15 +27,12 @@ import { cesiumCapabilities, createCesiumPorts } from './ports.js';
  * The members a transitional renderer has today.
  * @typedef {Pick<import('../contract/renderer').Renderer,
  *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'frame' | 'draw'
- *   | 'camera' | 'query' | 'input' | 'capture' | 'credits' | 'on'
- *   | 'resize' | 'destroy'>}
+ *   | 'camera' | 'query' | 'input' | 'effects' | 'capture' | 'credits'
+ *   | 'on' | 'resize' | 'destroy'>}
  *   TransitionalRenderer
  */
 
 const viewers = new WeakMap();
-
-/** Capabilities of ports the application renderer does not have yet. */
-const NOT_YET = ['styles', 'bloom', 'sharpen'];
 
 /** A Set no one can change once built, so `capabilities` stays true. */
 export class ReadonlySet extends Set {
@@ -94,11 +91,7 @@ export function createCesiumRendererPlugin({
       let capabilities;
       try {
         viewer = createViewer({ container, creditContainer });
-        // Effects are not the application's yet: its styles still run
-        // through stages of their own.
-        capabilities = new ReadonlySet(
-          cesiumCapabilities(viewer.scene).filter((c) => !NOT_YET.includes(c)),
-        );
+        capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
         ports = createCesiumPorts(viewer, { capabilities });
         input = createCesiumInput(viewer, {
           query: ports.query,
@@ -121,6 +114,7 @@ export function createCesiumRendererPlugin({
         camera: ports.camera,
         query: ports.query,
         input: input.port,
+        effects: ports.effects,
         capture: ports.capture,
         credits: ports.credits,
         on: ports.on,

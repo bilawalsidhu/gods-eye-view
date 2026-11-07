@@ -127,7 +127,7 @@ try {
     let animeOn = false;
     for (let i = 0; i < s.postProcessStages.length; i++) {
       const stage = s.postProcessStages.get(i);
-      if (stage.name === 'godsEyeView_anime')
+      if (stage.name === 'effects_style_anime')
         animeOn = stage.enabled && stage.uniforms.intensity > 0.99;
     }
     return {
