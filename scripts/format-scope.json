@@ -1643,6 +1643,7 @@
   "scripts/qa-weather-compare.mjs",
   "src/globe/cesium/imagery.js",
   "src/globe/cesium/imagery.test.mjs",
+  "src/globe/cesium/imageryShell.test.mjs",
   "src/globe/imagery.js",
   "src/globe/imagery.test.mjs",
   "src/globe/navara/imagery/index.js",
