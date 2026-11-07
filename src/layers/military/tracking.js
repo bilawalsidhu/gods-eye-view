@@ -34,6 +34,18 @@ import {
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
 
+/**
+ * The icao a pick carries: a draw-set item's id (the icon sets' rows), a
+ * string pick id, or a model primitive's id.
+ */
+function aircraftPickId(picked) {
+  const id = picked?.id;
+  if (typeof id === 'string') return id;
+  if (id && typeof id.set === 'string' && typeof id.id === 'string')
+    return id.id;
+  return picked?.primitive?.id;
+}
+
 export function createTracking({
   flightState,
   services,
@@ -68,7 +80,7 @@ export function createTracking({
   }
 
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
-    const position = parts.icons._iconPosition(icao24);
+    const position = parts.icons._iconPosition(icao24, new Cesium.Cartesian3());
     const info = flightState.records.data.get(icao24);
     if (!position || !info) return false;
     if (flightState._trackedEntity)
@@ -157,11 +169,14 @@ export function createTracking({
     const previous = flightState._cockpitNearContacts;
     const distancesSquared = [];
     const icons = flightState._icons;
-    const tau = parts.icons._displayTau();
-    for (let row = 0; row < (icons?.count ?? 0); row++) {
-      const icao24 = icons.idAt(row);
+    const t = parts.icons._displayMs();
+    for (const icao24 of icons?.ids() ?? []) {
       if (icao24 === flightState._trackedIcao) continue;
-      const position = icons.position(row, tau, flightState._scratchCockpitPos);
+      const position = icons.position(
+        icao24,
+        t,
+        flightState._scratchCockpitPos,
+      );
       distancesSquared.push([
         icao24,
         Cesium.Cartesian3.distanceSquared(
@@ -198,8 +213,8 @@ export function createTracking({
     flightState._trail?.setVisible(!next);
     if (flightState._trailHeadEntity) flightState._trailHeadEntity.show = !next;
     const icons = flightState._icons;
-    for (let row = 0; row < (icons?.count ?? 0); row++)
-      parts.icons._applyIconPresentation(icons.idAt(row));
+    for (const icao24 of icons?.ids() ?? [])
+      parts.icons._applyIconPresentation(icao24);
     flightState._lastFleetTickMs = 0;
   }
 
@@ -301,9 +316,8 @@ export function createTracking({
     if (isTr3b(id)) {
       if (flightState._models.has(id) || flightState._modelPending.has(id))
         parts.rendering._releaseModel(id);
-      const row = flightState._icons?.row(id) ?? -1;
-      if (row >= 0 && id !== flightState._trackedIcao)
-        flightState._icons.setShown(row, true);
+      if (flightState._icons?.has(id) && id !== flightState._trackedIcao)
+        flightState._icons.setShown(id, true);
       if (id === flightState._trackedIcao) {
         parts.rendering._releaseTrackedModel();
         _syncTracked2dRotation();
@@ -418,7 +432,10 @@ export function createTracking({
     if (!flightState._trackedIcao || !flightState._viewer) return;
     const pos =
       parts.motion._trackedDisplayCached() ||
-      parts.icons._iconPosition(flightState._trackedIcao);
+      parts.icons._iconPosition(
+        flightState._trackedIcao,
+        new Cesium.Cartesian3(),
+      );
     if (!pos) return;
     const projected = screenProjectedRotation(
       flightState._viewer.scene,
@@ -799,7 +816,7 @@ export function createTracking({
     // Hand the contact back to its icon only now, once it no longer reads as
     // tracked (the settle plans it as a fleet contact).
     if (flightState._icons?.has(clearedIcao)) {
-      flightState._icons.setShown(flightState._icons.row(clearedIcao), true);
+      flightState._icons.setShown(clearedIcao, true);
       parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
     }
     parts.icons._applyIconPresentation(clearedIcao);
@@ -847,15 +864,15 @@ export function createTracking({
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
     const icons = flightState._icons;
-    const row = icons?.row(icao24) ?? -1;
     const info = flightState.records.data.get(icao24);
-    if (row < 0 || !info) return;
+    if (!icons?.has(icao24) || !info) return;
 
     // The tracked limiter continues from the nose the icon was drawn with, and
     // the entity starts with the rotation the icon had on screen.
-    const tau = parts.icons._displayTau();
-    const iconPosition = icons.position(row, tau);
-    flightState._displayCourse.set(icao24, icons.course(row, tau));
+    const t = parts.icons._displayMs();
+    const iconPosition = icons.position(icao24, t, new Cesium.Cartesian3());
+    const iconCourse = icons.course(icao24, t);
+    flightState._displayCourse.set(icao24, iconCourse);
     flightState._trackedIcao = icao24;
     _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling, full load-retry budget
     flightState._cachedDRFrame = -1;
@@ -863,7 +880,7 @@ export function createTracking({
       screenProjectedRotation(
         flightState._viewer.scene,
         iconPosition,
-        icons.course(row, tau),
+        iconCourse,
         0,
       ) ?? 0;
     // Drop any fleet 3D model for this aircraft — the tracked entity now owns its visual (its
@@ -872,7 +889,7 @@ export function createTracking({
     parts.rendering._releaseModel(icao24);
 
     // Hide the icon -- the tracked entity replaces it visually
-    icons.setShown(row, false);
+    icons.setShown(icao24, false);
 
     // Helper: smoothed, per-frame-cached tracked position (see _trackedDisplayPosition —
     // one computation shared by the position/rotation/trail-head callbacks, with
@@ -880,7 +897,7 @@ export function createTracking({
     // aircraft has no fix.
     const getTrackedPosition = () =>
       parts.motion._trackedDisplayPosition(icao24) ||
-      parts.icons._iconPosition(icao24) ||
+      parts.icons._iconPosition(icao24, new Cesium.Cartesian3()) ||
       iconPosition;
 
     // Dead-reckoning position property evaluated every render frame.
@@ -1092,8 +1109,7 @@ export function createTracking({
         // above. H1: the model used to have no pick id, so this fell through to
         // "empty space" and deselected the very plane being tracked.
         if (flightState._trackedIcao) {
-          const rawPick =
-            typeof picked.id === 'string' ? picked.id : picked.primitive?.id;
+          const rawPick = aircraftPickId(picked);
           if (
             (flightState._trackedModel &&
               picked.primitive === flightState._trackedModel.model) ||
@@ -1102,9 +1118,7 @@ export function createTracking({
             return;
         }
 
-        // Icon picks carry the icao on picked.id; models carry it on the primitive.
-        const pickedIcao =
-          typeof picked.id === 'string' ? picked.id : picked.primitive?.id;
+        const pickedIcao = aircraftPickId(picked);
         if (pickedIcao && flightState._icons?.has(pickedIcao)) {
           _cancelPendingTrackingRestore();
           _trackFlight(pickedIcao, { origin: 'user' });

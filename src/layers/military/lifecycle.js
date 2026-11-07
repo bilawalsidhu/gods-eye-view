@@ -9,7 +9,7 @@ export function createLifecycle({
   resolveAsset,
 }) {
   const { clearFocusTarget } = services.focus;
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
+  const { registerSpriteSet, restoreSpriteOrder } = services.sprites;
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
@@ -42,7 +42,7 @@ export function createLifecycle({
         flightState.lifetime = new AbortController();
       clearFocusTarget('militaryFlights');
       flightState._viewer = viewer;
-      registerSpriteCollection('military', parts.icons._createIcons(viewer));
+      registerSpriteSet('military', parts.icons._createIcons(viewer));
       flightState._modelCollection = new Cesium.PrimitiveCollection();
       viewer.scene.primitives.add(flightState._modelCollection);
       // Warm the glTF cache so the tracked plane's model instantiates instantly when first needed
@@ -242,12 +242,7 @@ export function createLifecycle({
         flightState._moveEndRemove = null;
       }
       parts.rendering._releaseModels();
-      if (flightState._iconPrimitive) {
-        viewer.scene.primitives.remove(flightState._iconPrimitive); // removing destroys it
-        flightState._iconPrimitive = null;
-      }
-      flightState._icons?.clear();
-      flightState._icons = null;
+      parts.icons._disposeIcons();
       if (flightState._modelCollection) {
         viewer.scene.primitives.remove(flightState._modelCollection); // removing destroys it + its models
         flightState._modelCollection = null;

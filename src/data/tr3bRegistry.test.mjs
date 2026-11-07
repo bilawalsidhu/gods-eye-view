@@ -245,7 +245,7 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     // 2. The icon is never hidden by that suppression — it must keep
     //    satisfying the getNearby/getDetectableObjects visibility guards, so a
     //    converted contact still works in Contacts and Cockpit.
-    assert.match(source, /if\s*\(\s*row >= 0\s*&&\s*id\s*!==\s*flightState\._trackedIcao\s*\)\s*flightState\._icons\.setShown\(row, true\);/,
+    assert.match(source, /if\s*\(\s*flightState\._icons\?\.has\(id\)\s*&&\s*id\s*!==\s*flightState\._trackedIcao\s*\)\s*flightState\._icons\.setShown\(id, true\);/,
       `${name}: converting restores the icon the model handoff had hidden`);
 
     // 3. Every aircraftIcon() CALL SITE routes through the kind resolver, so no
@@ -411,7 +411,7 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
     const source = readLayerSource(new URL(`./${name}`, import.meta.url));
     // Anchor on the MODEL-eligibility loop (keepDistSq), not the unrelated
     // ambient-enrichment candidate loop that also builds a `cand`.
-    const loop = /const\s*cand\s*=\s*\[\];\s*\n\s*for\s*\(let row = 0; row < icons\.count; row\+\+\)[\s\S]*?cand\.push\(\s*/.exec(source)?.[0];
+    const loop = /const\s*cand\s*=\s*\[\];\s*\n\s*for\s*\(const icao of icons\.ids\(\)\)[\s\S]*?cand\.push\(\s*/.exec(source)?.[0];
     assert.ok(loop, `${name}: the model-eligibility candidate loop is present`);
     assert.match(loop, /keepDistSq/, `${name}: matched the model-eligibility loop`);
     assert.match(loop, /if \(isTr3b\(icao\)\) continue;/,

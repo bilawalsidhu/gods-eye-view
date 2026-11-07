@@ -1880,3 +1880,156 @@ test('vessels on a host with no sprite-set registry still draw, and say so once'
   layer.destroy(viewer);
   unbind();
 });
+
+test('an aircraft layer draws its contacts as one GPU icon set moving on the delayed live clock', async () => {
+  const { createAircraftIcons } =
+    await import('../../data/aircraftIconLayer.js');
+  const { IconSetPrimitive } = await import('../../data/iconSetPrimitive.js');
+  const { ICON_CULL_LIFT, ICON_RECEDES, ICON_ROTATES } =
+    await import('../../data/iconSet.js');
+  const { iconAtlas, nearImageSwitchPx } =
+    await import('../../data/iconAtlas.js');
+  const { aircraftIcon, FLEET_ICON_PX, TRACKED_ICON_PX } =
+    await import('../../data/aircraftIcons.js');
+  const { aircraftMotionRegime, createMotionRegime, fixEpochMs, julianAt } =
+    await import('../../data/aircraftMotionRegime.js');
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const viewer = { scene };
+  const unbind = bindRenderer(viewer, {
+    draw: part.port,
+    capabilities: new Set(['columns', 'motionSegments', 'courseGlide']),
+    quality: { get: () => ({ pixelRatio: 2 }) },
+  });
+  const now = Date.now();
+  const delayMs = 30_000;
+  const fixAt = (lon, ms) => ({
+    time: julianAt(ms),
+    epochMs: ms,
+    position: Cesium.Cartesian3.fromDegrees(lon, 30, 10_000),
+    velocity: 250,
+    track: 90,
+  });
+  const state = {
+    _viewer: viewer,
+    _icons: null,
+    _iconFocusActive: 0,
+    _positionHistory: new Map([
+      ['abc123', [fixAt(-97, now - 40_000), fixAt(-96.9, now - 20_000)]],
+    ]),
+    _displayCourse: new Map(),
+    _groundSnap: { forget() {} },
+    _models: new Map(),
+    _trackedIcao: null,
+    _cockpitContactMode: false,
+    _cockpitNearContacts: new Set(),
+    records: {
+      data: new Map([['abc123', { klass: 'airliner', velocity: 250 }]]),
+      missingPolls: new Map(),
+      forget() {},
+    },
+  };
+  const parts = {
+    motion: {
+      _motionRegime: (history, info, renderTime) =>
+        aircraftMotionRegime(
+          history,
+          info,
+          renderTime,
+          { speed: 'velocity', track: 'true_track' },
+          createMotionRegime(),
+        ),
+      _displayTimeAt: julianAt,
+      _fixEpochMs: fixEpochMs,
+    },
+    rendering: {
+      _iconKind: (id, klass) => klass,
+      _fleetBillboardScale: () => 1.25,
+      _fleetBillboardColor: () => Cesium.Color.WHITE,
+      _cockpitContactColor: () => Cesium.Color.CYAN,
+      _releaseModel() {},
+    },
+  };
+  const icons = createAircraftIcons({
+    state,
+    services: { focus: { focusPassIsNeeded: () => false } },
+    parts,
+    layerId: 'flights',
+    renderDelaySec: delayMs / 1000,
+    courseMaxDps: 3,
+    cockpitContactSizePx: 6,
+  });
+  try {
+    const setId = icons._createIcons(viewer);
+    assert.match(setId, /^flights-icons:\d+$/);
+    icons._addIcon('abc123');
+    // Written together once the task ends.
+    await Promise.resolve();
+    const [host] = scene.added;
+    assert.ok(host instanceof IconSetPrimitive, 'one GPU icon set');
+    assert.equal(host.drawSetId, setId);
+    const set = part.sets.get(setId).gpu.set;
+    assert.equal(set.count, 1);
+    const row = set.row('abc123');
+    assert.equal(
+      set.imageFar(row),
+      iconAtlas.slot(aircraftIcon('airliner'), FLEET_ICON_PX),
+      'the fleet glyph rasterised at 64 px',
+    );
+    assert.equal(
+      set.imageNear(row),
+      iconAtlas.slot(aircraftIcon('airliner', TRACKED_ICON_PX), TRACKED_ICON_PX),
+      'the near glyph at 192 px',
+    );
+    assert.equal(set.imageSwitch(row), nearImageSwitchPx(2));
+    assert.equal(set.width(row), 20);
+    assert.ok(Math.abs(set.scale(row) - 1.25) < 1e-6);
+    const flags = set.flags(row);
+    assert.equal(flags & ICON_ROTATES, ICON_ROTATES);
+    assert.equal(flags & ICON_RECEDES, ICON_RECEDES);
+    assert.equal(flags & ICON_CULL_LIFT, ICON_CULL_LIFT);
+    assert.ok(set.depthTestDistance(row) >= 1e30, 'over depth everywhere');
+
+    // Drawn where the layer reads it, between its two fixes.
+    const t = Date.now() - delayMs;
+    const tau = set.seconds(julianAt(t));
+    const drawn = set.position(row, tau);
+    const read = icons._iconPosition('abc123');
+    assert.ok(Cesium.Cartesian3.distance(drawn, read) < 0.5, 'same place');
+    const lon = Cesium.Math.toDegrees(
+      Cesium.Cartographic.fromCartesian(drawn).longitude,
+    );
+    assert.ok(lon > -97 && lon < -96.9, 'interpolating the fixes');
+    assert.ok(Math.abs(set.course(row, tau) - icons._iconCourse('abc123')) < 0.01);
+    assert.equal(state._icons.expires('abc123'), now - 20_000);
+    assert.deepEqual(
+      drawHitOf(host._pickObject('abc123', null, { show: true })),
+      {
+        set: setId,
+        id: 'abc123',
+        meta: { layer: 'flights', id: 'abc123' },
+        surface: false,
+      },
+    );
+
+    // A restyle that changes nothing writes nothing; hiding it writes it.
+    const before = part.sets.get(setId).items.get('abc123');
+    icons._applyIconPresentation('abc123');
+    await Promise.resolve();
+    assert.equal(part.sets.get(setId).items.get('abc123'), before);
+    icons._setIconShown('abc123', false);
+    await Promise.resolve();
+    assert.equal(set.shown(row), false);
+
+    icons._forgetContact('abc123');
+    await Promise.resolve();
+    assert.equal(set.count, 0);
+    icons._disposeIcons();
+    assert.equal(scene.added.length, 0, 'disposed: the set goes');
+  } finally {
+    unbind();
+  }
+});

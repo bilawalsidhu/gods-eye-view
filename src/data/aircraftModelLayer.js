@@ -1,6 +1,5 @@
 import * as Cesium from 'cesium';
 import { selectModelEligible } from './modelEligibility.js';
-import { horizonOccluder } from './iconOrientation.js';
 import { aircraftTreatmentAlpha } from './aircraftRecession.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
 import {
@@ -30,7 +29,7 @@ import {
  *   including the tracked contact's.
  * @param {(icao24: string) => void} [options.onModelEligible] Runs when a
  *   contact is about to render in 3D.
- * @param {(renderTime: Cesium.JulianDate, tau: number, nowMs: number,
+ * @param {(renderTime: Cesium.JulianDate, t: number, nowMs: number,
  *   camera: Cesium.Camera) => void} [options.afterReplan] The layer's own pass
  *   in the fleet tick, after expired rows are re-planned.
  */
@@ -189,17 +188,10 @@ export function createAircraftModels({
    * `beforeShow` runs only on the committing path — the per-tick model treatment
    * belongs to a model that is about to draw, not to one still waiting. */
 
-  function _driveFleetModelHandoff(
-    icao24,
-    record,
-    row,
-    pos,
-    course,
-    beforeShow,
-  ) {
+  function _driveFleetModelHandoff(icao24, record, pos, course, beforeShow) {
     const icons = state._icons;
     if (!record) {
-      icons.setShown(row, true);
+      icons.setShown(icao24, true);
       return false;
     }
     const displayPos = _modelDisplayPosition(
@@ -209,7 +201,7 @@ export function createAircraftModels({
     );
     if (!displayPos) {
       showModel(record, false); // no ground evidence → nothing safe to place a depth-tested model at
-      icons.setShown(row, true);
+      icons.setShown(icao24, true);
       return false;
     }
     // The matrix is written BEFORE the readiness test on purpose: a model can flip
@@ -226,12 +218,12 @@ export function createAircraftModels({
     );
     if (!record.model.ready) {
       showModel(record, false); // not loaded yet → keep the 2D icon, no half-model flash
-      icons.setShown(row, true);
+      icons.setShown(icao24, true);
       return false;
     }
     beforeShow?.();
     if (!record.show) showModel(record, true);
-    icons.setShown(row, false); // hand off ONLY once the model renders
+    icons.setShown(icao24, false); // hand off ONLY once the model renders
     return true;
   }
 
@@ -509,8 +501,8 @@ export function createAircraftModels({
 
   function _showReleasedIcon(icao24) {
     const icons = state._icons;
-    const row = icons?.row(icao24) ?? -1;
-    if (row >= 0 && icao24 !== state._trackedIcao) icons.setShown(row, true);
+    if (icons?.has(icao24) && icao24 !== state._trackedIcao)
+      icons.setShown(icao24, true);
   }
 
   /** Destroy the standalone tracked-aircraft model and invalidate any in-flight load. */
@@ -551,7 +543,7 @@ export function createAircraftModels({
     // readout consumers then reuse that exact cached position.
     const pos =
       parts.motion._trackedDisplayPosition(state._trackedIcao) ||
-      parts.icons._iconPosition(state._trackedIcao);
+      parts.icons._iconPosition(state._trackedIcao, new Cesium.Cartesian3());
     if (!pos) {
       if (state._trackedModel) showModel(state._trackedModel, false);
       return;
@@ -631,7 +623,10 @@ export function createAircraftModels({
           // default here produces a one-frame jump to the Earth's center.
           const currentPos =
             parts.motion._trackedDisplayCached() ||
-            parts.icons._iconPosition(state._trackedIcao);
+            parts.icons._iconPosition(
+              state._trackedIcao,
+              new Cesium.Cartesian3(),
+            );
           if (currentPos) {
             const displayPos = _modelDisplayPosition(
               state._trackedIcao,
@@ -710,33 +705,45 @@ export function createAircraftModels({
 
   /**
    * ~12 Hz fleet pass. Motion, rotation, the horizon cull, limb recession and
-   * the two-tier glyph swap all run on the GPU from each row's segment, so this
-   * only re-plans rows whose regime ended, runs the layer's own pass after
+   * the two-tier glyph swap all run on the GPU from each icon's motion, so this
+   * only re-plans icons whose regime ended, runs the layer's own pass after
    * that (flights floors grounded contacts), advances focus de-emphasis while
    * a target exists, and drives the 3D-model handoff inside the model regime.
-   * Driven by scene.preRender.
+   * Driven by scene.preRender: what it writes is flushed to the draw set
+   * before the frame draws, as the 3D models it shows and hides are.
    * @returns {void}
    */
 
   function _fleetTick() {
+    try {
+      _fleetPass();
+    } finally {
+      state._icons?.flush();
+    }
+  }
+
+  function _fleetPass() {
     const icons = state._icons;
     if (!state._viewer || !icons || !icons.show) return;
-    const scene = state._viewer.scene;
     const camera = state._viewer.camera;
     const nowMs = focusNowMs(Date.now());
 
     if (nowMs - state._lastFleetTickMs < policy.FLEET_DR_INTERVAL_MS) return;
     state._lastFleetTickMs = nowMs;
     // Every contact in this pass shares the same delayed display instant.
-    const renderTime = parts.icons._displayTime(state._scratchFleetRenderTime);
-    const tau = icons.seconds(renderTime);
+    const t = parts.icons._displayMs();
+    const renderTime = parts.motion._displayTimeAt(
+      t,
+      state._scratchFleetRenderTime,
+    );
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (state._cockpitContactMode) parts.tracking._refreshCockpitNearContacts();
-    parts.icons._replanExpired(tau);
-    afterReplan(renderTime, tau, nowMs, camera);
+    parts.icons._syncImageSwitch();
+    parts.icons._replanExpired(t);
+    afterReplan(renderTime, t, nowMs, camera);
     const focusTarget = getFocusTarget();
-    parts.icons._focusIcons(tau, scene, camera, nowMs, focusTarget);
+    parts.icons._focusIcons(t, nowMs, focusTarget);
 
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
     // Drop all models the moment we leave it (toggled off / zoomed out) so icons resume.
@@ -769,8 +776,7 @@ export function createAircraftModels({
     );
     // Candidates = planes within the KEEP radius, nearest first, each tagged with on-screen-ness.
     const cand = [];
-    for (let row = 0; row < icons.count; row++) {
-      const icao = icons.idAt(row);
+    for (const icao of icons.ids()) {
       if (icao === state._trackedIcao) continue;
       // A converted TR-3B renders as an icon and can never take a model, so
       // it must not occupy a CAP SLOT either — excluded here at selection time,
@@ -782,7 +788,7 @@ export function createAircraftModels({
       // ground or in the air — no distinction"). The cap + nearest-first ordering
       // below already bound airport clusters; grounded placement is handled by the
       // one-shot ground snap in _modelDisplayPosition.
-      const position = icons.position(row, tau, state._scratchModelBS.center);
+      const position = icons.position(icao, t, state._scratchModelBS.center);
       const d2 = Cesium.Cartesian3.distanceSquared(camPos, position);
       if (d2 > keepDistSq) continue; // beyond the keep radius → never eligible
       cand.push([
@@ -816,13 +822,12 @@ export function createAircraftModels({
     // modelless (the "planes vanish when 3D turns on" bug). Position the model every tick
     // regardless so it's framed the instant it becomes ready. Converted TR-3Bs stay 2D on
     // purpose: the Easter egg IS the triangle, and there is no GLB for it.
-    const occluder = horizonOccluder(camera);
+    const occluder = parts.icons._occluder();
     for (const icao24 of modelEligible) {
       if (isTr3b(icao24)) continue;
-      const row = icons.row(icao24);
-      if (row < 0) continue;
-      const position = icons.position(row, tau, state._scratchFleetPos);
-      if (!parts.icons._aboveHorizon(row, position, occluder)) {
+      if (!icons.has(icao24)) continue;
+      const position = icons.position(icao24, t, state._scratchFleetPos);
+      if (!parts.icons._aboveHorizon(position, occluder)) {
         // A model that crossed the limb would keep rendering through the
         // hidden globe at its last matrix; the icon's own cull is on the GPU.
         const hidden = state._models.get(icao24);
@@ -835,9 +840,8 @@ export function createAircraftModels({
       _driveFleetModelHandoff(
         icao24,
         record,
-        row,
         position,
-        icons.course(row, tau),
+        icons.course(icao24, t),
         () => {
           applyAircraftModelTreatment({
             model: record.model,
@@ -852,8 +856,8 @@ export function createAircraftModels({
             alpha: state._irBoost
               ? 1
               : aircraftTreatmentAlpha({
-                  baseAlpha: icons.alpha(row),
-                  focusFactor: icons.focus(row),
+                  baseAlpha: icons.alpha(icao24),
+                  focusFactor: icons.focus(icao24),
                   cameraDistanceM,
                   cameraHeightM: camera.positionCartographic?.height,
                 }),

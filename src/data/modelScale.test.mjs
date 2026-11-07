@@ -372,8 +372,8 @@ function normalBillboardScaleByDistance(sourceFile) {
   const src = readLayerSource(path.join(ROOT, sourceFile));
   const fn = src.match(/const NORMAL_SCALE_BY_DISTANCE = ([\s\S]*?\);)/);
   assert.ok(fn, `${sourceFile}: NORMAL_SCALE_BY_DISTANCE not found`);
-  const scalar = fn[1].match(/NearFarScalar\(\s*(\d+),\s*([\d.]+),\s*(\d+),\s*([\d.]+),?\s*\)/);
-  assert.ok(scalar, `${sourceFile}: billboard NearFarScalar not found`);
+  const scalar = fn[1].match(/near: (\d+),\s*nearValue: ([\d.]+),\s*far: (\d+),\s*farValue: ([\d.]+),?\s*\}/);
+  assert.ok(scalar, `${sourceFile}: icon scale-by-distance not found`);
   return scalar.slice(1).map(Number);
 }
 

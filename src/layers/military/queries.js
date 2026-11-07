@@ -96,7 +96,8 @@ export function createQueries({
   function _describeFlight(icao24) {
     const info = flightState.records.data.get(icao24);
     const basePos =
-      parts.motion._deadReckon(icao24) || parts.icons._iconPosition(icao24);
+      parts.motion._deadReckon(icao24) ||
+      parts.icons._iconPosition(icao24, new Cesium.Cartesian3());
     if (!basePos) return null;
     const displayed = displayedKinematics({
       derivedSpeedMps: flightState._drSpeedMps,
@@ -352,7 +353,7 @@ export function createQueries({
       const icons = flightState._icons;
       if (!center || !icons || !icons.show) return [];
       const occluder = parts.icons._occluder();
-      const tau = parts.icons._displayTau();
+      const t = parts.icons._displayMs();
       const scratch = flightState._scratchNearbyPos;
 
       const limit = Number.isFinite(maxCount)
@@ -363,21 +364,19 @@ export function createQueries({
 
       const nearby = [];
 
-      for (let row = 0; row < icons.count; row++) {
-        const icao24 = icons.idAt(row);
+      for (const icao24 of icons.ids()) {
         const isTracked = icao24 === flightState._trackedIcao;
         const trackedPos = isTracked
           ? parts.motion._trackedDisplayCached()
           : null; // cached, no recompute (anti-jitter)
-        const drawn = trackedPos || icons.position(row, tau, scratch);
+        const drawn = trackedPos || icons.position(icao24, t, scratch);
         // Keep planes rendered as a 3D model (icon hidden) so proximity counts
         // don't drop to zero on the 2D→3D handoff.
         if (
           !aircraftIncludedInNearby({
             isTracked,
             billboardShown:
-              icons.shown(row) &&
-              parts.icons._aboveHorizon(row, drawn, occluder),
+              icons.shown(icao24) && parts.icons._aboveHorizon(drawn, occluder),
             modelRendering: parts.rendering._modelOwnsVisual(icao24),
             includeHidden,
           })
@@ -437,11 +436,12 @@ export function createQueries({
       const stride = Math.max(1, Math.ceil(icons.count / maxCount));
       const start = seed % stride;
       const occluder = parts.icons._occluder();
-      const tau = parts.icons._displayTau();
+      const t = parts.icons._displayMs();
 
       const result = [];
-      for (let row = start; row < icons.count; row += stride) {
-        const icao24 = icons.idAt(row);
+      const ids = icons.ids();
+      for (let i = start; i < ids.length; i += stride) {
+        const icao24 = ids[i];
         if (
           flightState._cockpitContactMode &&
           icao24.toLowerCase() === flightState._cockpitSubjectId
@@ -452,7 +452,7 @@ export function createQueries({
         // doesn't vanish on the 2D→3D handoff.
         const record = flightState._models.get(icao24);
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
-        if (!isTracked && !icons.shown(row) && !modelOwnsVisual) continue;
+        if (!isTracked && !icons.shown(icao24) && !modelOwnsVisual) continue;
         const info = flightState.records.data.get(icao24);
         const callsign = info?.callsign?.trim();
         const registration = info?.registration?.trim();
@@ -476,7 +476,7 @@ export function createQueries({
           : null;
         const pos = isTracked
           ? parts.motion._trackedVisualCached() ||
-            icons.position(row, tau, object._iconPos)
+            icons.position(icao24, t, object._iconPos)
           : modelOwnsVisual
             ? modelVisualAnchor(
                 record.matrix,
@@ -486,13 +486,13 @@ export function createQueries({
                   : spec.scale,
                 object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
               )
-            : icons.position(row, tau, object._iconPos);
+            : icons.position(icao24, t, object._iconPos);
         // An icon past the horizon is not drawn, so it is not detectable.
         if (
           !pos ||
           (!isTracked &&
             !modelOwnsVisual &&
-            !parts.icons._aboveHorizon(row, pos, occluder))
+            !parts.icons._aboveHorizon(pos, occluder))
         )
           continue;
         object.position = pos;
@@ -598,12 +598,11 @@ export function createQueries({
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 500;
-      const tau = parts.icons._displayTau();
+      const t = parts.icons._displayMs();
 
       const result = [];
-      for (let row = 0; row < icons.count; row++) {
-        const icao24 = icons.idAt(row);
-        const pos = icons.position(row, tau);
+      for (const icao24 of icons.ids()) {
+        const pos = icons.position(icao24, t, new Cesium.Cartesian3());
         const carto = Cesium.Cartographic.fromCartesian(
           pos,
           Cesium.Ellipsoid.WGS84,

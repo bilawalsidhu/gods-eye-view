@@ -94,13 +94,8 @@ export function createRendering({
     // About to render in 3D: jump the ambient type-enrichment backlog.
     onModelEligible: (icao24) =>
       parts.enrichment._requestTypeEnrichment(icao24, true),
-    afterReplan: (renderTime, tau, nowMs, camera) =>
-      parts.icons._floorGroundedIcons(
-        renderTime,
-        tau,
-        nowMs,
-        camera.positionWC,
-      ),
+    afterReplan: (renderTime, t, nowMs, camera) =>
+      parts.icons._floorGroundedIcons(renderTime, t, nowMs, camera.positionWC),
   });
 
   return {

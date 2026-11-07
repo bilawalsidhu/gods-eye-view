@@ -36,6 +36,8 @@ import { readEntityRecord } from '../../data/entityRecords.js';
 import {
   aircraftMotionRegime,
   createMotionRegime,
+  fixEpochMs,
+  julianAt,
   fixSpeedMps,
   fixTrackDeg,
 } from '../../data/aircraftMotionRegime.js';
@@ -140,7 +142,10 @@ export function createMotion({
   function _deadReckon(icao24, result, sampledRenderTime) {
     const info = flightState.records.data.get(icao24);
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
-      const position = parts.icons._iconPosition(icao24);
+      const position = parts.icons._iconPosition(
+        icao24,
+        new Cesium.Cartesian3(),
+      );
       flightState._drCourseDeg = info?.true_track || 0;
       flightState._drSpeedMps = info?.velocity || 0;
       flightState._drCourseHold =
@@ -1056,9 +1061,14 @@ export function createMotion({
       out.push(cell);
     }
   }
+  /** The display instant `epochMs` as a JulianDate, for `_motionRegime`. */
+  const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
+
   return {
     _refloorStaleGroundedContacts,
     _deadReckon,
+    _displayTimeAt,
+    _fixEpochMs: fixEpochMs,
     _motionRegime,
     _extrapolateFix,
     _isTrackWarmingUp,

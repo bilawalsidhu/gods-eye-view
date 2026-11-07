@@ -4,8 +4,7 @@ import * as Cesium from 'cesium';
 import { createQueries } from './queries.js';
 import { createRendering } from './rendering.js';
 import { createIcons } from './icons.js';
-import { createIconSet } from '../../data/iconSet.js';
-import { writeHoldSegment } from '../../data/iconSegment.js';
+import { createContactIcons } from '../../data/aircraftIconLayer.js';
 import {
   createModelRecord,
   placeModel,
@@ -18,11 +17,10 @@ function fixture() {
     registration: ' N123 ',
     altitude: 1000,
   };
-  const icons = createIconSet();
+  const icons = createContactIcons();
   const flightState = {
     feed: {},
     _icons: icons,
-    _scratchIconRenderTime: new Cesium.JulianDate(),
     _models: new Map(),
     _detectionObjects: new Map(),
     records: { data: new Map([['abc123', info]]) },
@@ -49,15 +47,18 @@ function fixture() {
   parts.rendering = createRendering({ flightState, services, parts });
   parts.icons = createIcons({ flightState, services, parts });
   const queries = createQueries({ flightState, services, parts }).methods;
-  const row = () => icons.row('abc123');
   /** Hold the contact's icon at `position`. */
-  const place = (position) => {
-    writeHoldSegment(icons.segments, row(), position, 0);
-    icons.segmentWritten(row());
-  };
-  icons.add('abc123', { id: 'abc123' });
+  const place = (position) =>
+    icons.update(
+      'abc123',
+      {
+        pos: { x: position.x, y: position.y, z: position.z },
+        motion: { kind: 'hold', courseDeg: 0 },
+      },
+      { expiresAt: Infinity },
+    );
+  icons.put({ id: 'abc123', pos: { x: 0, y: 0, z: 0 }, show: true });
   place(new Cesium.Cartesian3(1, 2, 3));
-  icons.setShown(row(), true);
   return {
     flightState,
     info,
@@ -65,8 +66,9 @@ function fixture() {
     queries,
     formats: () => formats,
     place,
-    show: (shown) => icons.setShown(row(), shown),
-    drawn: () => parts.icons._iconPosition('abc123'),
+    show: (shown) => icons.setShown('abc123', shown),
+    drawn: () =>
+      parts.icons._iconPosition('abc123', new Cesium.Cartesian3()),
   };
 }
 

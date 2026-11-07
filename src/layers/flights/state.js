@@ -96,15 +96,10 @@ export function createFlightState({ source, services }) {
   // Module-level state: billboard collection and per-aircraft lookup maps
   // ---------------------------------------------------------------------------
 
-  /** Every contact's icon row (see icons.js); null outside a layer lifetime. */
+  /** Every contact's icon item as drawn (`createContactIcons`, see icons.js);
+   *  null outside a layer lifetime. */
 
   flightState._icons = null;
-
-  /** The primitive drawing `_icons`. */
-
-  flightState._iconPrimitive = null;
-
-  flightState._scratchIconRenderTime = new Cesium.JulianDate();
 
   /** Contacts whose latest poll put them on the ground. */
 

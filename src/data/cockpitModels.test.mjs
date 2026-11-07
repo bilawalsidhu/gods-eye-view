@@ -84,25 +84,25 @@ for (const layer of LAYERS) {
   test(`${layer.name}: near AIR state is independent from model admission`, () => {
     assert.match(source, /nextCockpitNearContacts\(/,
       'Cockpit derives a separate near-contact hysteresis set');
-    assert.match(source, /!state\._cockpitNearContacts\.has\(icao24\);\s*if \(cockpitDot\) \{\s*const dot = iconAtlas\.slot\(cockpitContactDotImage\(\)/,
+    assert.match(source, /!state\._cockpitNearContacts\.has\(icao24\);\s*const look = cockpitDot\s*\?\s*\{\s*image: cockpitDotImage\(\)/,
       'only out-of-range Cockpit contacts become dots');
     // `_iconKind` is identity for every unconverted contact (see
     // tr3bRegistry.test.mjs) — it only swaps the glyph for a contact the
     // operator explicitly converted into a TR-3B.
-    assert.match(source, /aircraftIcon\(\s*(?:parts\.)?rendering\._iconKind\(icao24, info\?\.klass\),?\s*\)/,
+    assert.match(source, /aircraftIcon\(\s*(?:parts\.)?rendering\._iconKind\(icao24, info\?\.klass\),?\s*(?:FLEET_ICON_PX,?\s*)?\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');
-    assert.match(source, /set\.setFlag\(row, ICON_ROTATES, false\);/,
+    assert.match(source, /color: rgba\(rendering\._cockpitContactColor\(icao24, info\)\),\s*rotationMode: 'screen',/,
       'far dots are reset to a rotation-free presentation');
-    assert.match(source, /set\.setFlag\(row, ICON_ROTATES, true\);/,
+    assert.match(source, /color: rgba\(rendering\._fleetBillboardColor\(icao24, info\)\),\s*rotationMode: 'course',/,
       'near 2D silhouettes continue to receive projected course');
-    assert.match(source, /icons\.setShown\(row, false\);\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
+    assert.match(source, /icons\.setShown\(icao24, false\);\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
       'the gap-proof icon-to-model handoff remains intact');
   });
 
   test(`${layer.name}: Cockpit exit clears near state before restoring map presentation`, () => {
     const setMode = /^([ \t]*)function _setCockpitContactMode\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.match(setMode, /else\s*(?:(?:flightState|state)\.)?_cockpitNearContacts\s*=\s*new\s*Set\(\s*,?\s*\);/);
-    assert.match(setMode, /for \(let row = 0; row < \(icons\?\.count \?\? 0\); row\+\+\)\s*parts\.icons\._applyIconPresentation\(icons\.idAt\(row\)\);/);
+    assert.match(setMode, /for \(const icao24 of (?:flightState\._)?icons\?\.ids\(\) \?\? \[\]\)\s*parts\.icons\._applyIconPresentation\(icao24\);/);
   });
 }
 

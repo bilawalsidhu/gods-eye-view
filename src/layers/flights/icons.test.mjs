@@ -3,12 +3,16 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createFlightState } from './state.js';
 import { createIcons } from './icons.js';
-import { createIconSet } from '../../data/iconSet.js';
-import { writeHoldSegment } from '../../data/iconSegment.js';
+import { createContactIcons } from '../../data/aircraftIconLayer.js';
 
 function services(focus = {}) {
   return {
-    focus: { focusPassIsNeeded: () => true, ...focus },
+    focus: {
+      focusPassIsNeeded: () => true,
+      focusAlphaNeedsWrite: (a, b) => Math.abs(a - b) > 1e-3,
+      spriteFocusAtRest: () => false,
+      ...focus,
+    },
     groundSnap: { createGroundSnap: () => ({ clear() {}, forget() {} }) },
   };
 }
@@ -16,20 +20,35 @@ function services(focus = {}) {
 function setup({ focus, motion = {}, rendering = {} } = {}) {
   const svc = services(focus);
   const flightState = createFlightState({ services: svc });
-  flightState._icons = createIconSet();
+  flightState._icons = createContactIcons();
   const parts = {
-    motion,
+    motion: {
+      _displayTimeAt: (ms) => Cesium.JulianDate.fromDate(new Date(ms)),
+      _fixEpochMs: (fix) => Cesium.JulianDate.toDate(fix.time).getTime(),
+      ...motion,
+    },
     rendering: { _modelOwnsVisual: () => false, ...rendering },
   };
   const icons = createIcons({ flightState, services: svc, parts });
   return { flightState, icons, set: flightState._icons };
 }
 
-function hold(set, id, position, course = 0) {
-  const row = set.add(id, { layer: 'flights', id });
-  writeHoldSegment(set.segments, row, position, course);
-  set.segmentWritten(row);
-  return row;
+function hold(set, id, position, course = 0, show = false) {
+  set.put(
+    {
+      id,
+      pos: { x: position.x, y: position.y, z: position.z },
+      motion: { kind: 'hold', courseDeg: course },
+      course,
+      size: [20, 20],
+      scale: 1,
+      show,
+      focus: 1,
+      meta: { layer: 'flights', id },
+    },
+    { expiresAt: Infinity },
+  );
+  return id;
 }
 
 const at = (lon, h = 1000) => Cesium.Cartesian3.fromDegrees(lon, 30, h);
@@ -39,18 +58,18 @@ test('focus advances for drawn rows and for rows a fleet model draws for', () =>
   const { flightState, icons, set } = setup({
     focus: {
       nearFarScalarValueAtDistance: () => 1,
-      advanceProjectedSpriteFocus(meta) {
+      advanceSpriteFocus(meta) {
         advanced.push(meta.id);
         return { factor: 0.4, active: true };
       },
     },
   });
-  set.setShown(hold(set, 'drawn', at(0)), true);
+  hold(set, 'drawn', at(0), 0, true);
   const modeled = hold(set, 'modeled', at(0.1));
   hold(set, 'hidden', at(0.2));
   flightState._models.set('modeled', {});
 
-  icons._focusIcons(0, {}, { positionWC: at(0, 50_000) }, 0, {});
+  icons._focusIcons(0, 0, {});
   assert.deepEqual(advanced, ['drawn', 'modeled']);
   assert.ok(
     Math.abs(set.focus(modeled) - 0.4) < 1e-6,
@@ -90,9 +109,9 @@ test('settling a pinned grounded contact re-floors it where it is now, nose kept
   flightState._positionHistory.set('g', [{}]);
 
   icons._settleIcon('g', { fromCourseDeg: 123 });
-  const tau = icons._displayTau();
-  assert.ok(Cesium.Cartesian3.distance(set.position(row, tau), floored) < 0.01);
-  assert.ok(Math.abs(set.course(row, tau) - 123) < 1e-3, 'tracked nose kept');
+  const t = icons._displayMs();
+  assert.ok(Cesium.Cartesian3.distance(set.position(row, t), floored) < 0.01);
+  assert.ok(Math.abs(set.course(row, t) - 123) < 1e-3, 'tracked nose kept');
   assert.ok(flightState._floorPinned.has('g'), 'pinned on the new floor');
 });
 
@@ -102,7 +121,7 @@ test('a contact that comes back dimmed re-arms the idle focus pass', () => {
     focus: {
       focusPassIsNeeded: (target, active) => target != null || active > 0,
       nearFarScalarValueAtDistance: () => 1,
-      advanceProjectedSpriteFocus(meta) {
+      advanceSpriteFocus(meta) {
         advanced.push(meta.id);
         return { factor: 1, active: false, transitioning: false };
       },
@@ -114,7 +133,7 @@ test('a contact that comes back dimmed re-arms the idle focus pass', () => {
   flightState._iconFocusActive = 0;
   icons._settleIcon('was-tracked');
   set.setShown(row, true);
-  icons._focusIcons(0, {}, { positionWC: at(0, 50_000) }, 0, null);
+  icons._focusIcons(0, 0, null);
   assert.deepEqual(advanced, ['was-tracked']);
   assert.equal(set.focus(row), 1);
 });

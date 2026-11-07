@@ -1,11 +1,9 @@
 import * as Cesium from 'cesium';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
-import { writeHoldSegment } from '../../data/iconSegment.js';
 import {
   aircraftRecessionFactors,
   aircraftTreatmentAlpha,
 } from '../../data/aircraftRecession.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 
 export function createEvidence({
   flightState,
@@ -39,6 +37,16 @@ export function createEvidence({
       record.latitude,
       Number.isFinite(record.altitudeM) ? record.altitudeM : 3_000,
     );
+  }
+
+  /** An icon item's motion held at `position` on `courseDeg`. */
+  function _heldAt(position, courseDeg) {
+    return {
+      pos: { x: position.x, y: position.y, z: position.z },
+      course: courseDeg,
+      motion: { kind: 'hold', courseDeg },
+      courseGlide: undefined,
+    };
   }
 
   /** Replace the real fleet with deterministic explicit-position contacts. */
@@ -85,9 +93,9 @@ export function createEvidence({
       flightState.records.data.set(id, meta);
       flightState._focusEvidenceIds.add(id);
       parts.icons._addIcon(id);
-      const row = icons.row(id);
-      writeHoldSegment(icons.segments, row, position, meta.true_track);
-      icons.segmentWritten(row);
+      icons.update(id, _heldAt(position, meta.true_track), {
+        expiresAt: Infinity,
+      });
     }
     flightState.feed._count = icons.count;
     flightState._lastFleetTickMs = 0;
@@ -106,21 +114,16 @@ export function createEvidence({
         .toLowerCase();
       if (!flightState._focusEvidenceIds.has(id)) continue;
       const position = _focusEvidencePosition(record);
-      const row = flightState._icons?.row(id) ?? -1;
-      if (!position || row < 0) continue;
+      if (!position || !flightState._icons?.has(id)) continue;
       const meta = flightState.records.data.get(id);
       if (meta) {
         if (Number.isFinite(record.trackDeg)) meta.true_track = record.trackDeg;
         if (Number.isFinite(record.velocityMps))
           meta.velocity = record.velocityMps;
       }
-      writeHoldSegment(
-        flightState._icons.segments,
-        row,
-        position,
-        meta?.true_track ?? 0,
-      );
-      flightState._icons.segmentWritten(row);
+      flightState._icons.update(id, _heldAt(position, meta?.true_track ?? 0), {
+        expiresAt: Infinity,
+      });
       moved += 1;
     }
     flightState._lastFleetTickMs = 0;
@@ -134,11 +137,12 @@ export function createEvidence({
     if (!FOCUS_EVIDENCE_DEV || !flightState._viewer) return [];
     const icons = flightState._icons;
     const { scene, camera } = flightState._viewer;
-    const occluder = horizonOccluder(camera);
+    const occluder = parts.icons._occluder();
     const cameraHeightM = camera.positionCartographic?.height;
     return [...flightState._focusEvidenceIds].map((id) => {
-      const row = icons?.row(id) ?? -1;
-      const position = row < 0 ? null : parts.icons._iconPosition(id);
+      const position = icons?.has(id)
+        ? parts.icons._iconPosition(id, new Cesium.Cartesian3())
+        : null;
       const cameraDistanceM = position
         ? Cesium.Cartesian3.distance(camera.positionWC, position)
         : null;
@@ -154,13 +158,13 @@ export function createEvidence({
         id,
         show:
           !!position &&
-          icons.shown(row) &&
-          parts.icons._aboveHorizon(row, position, occluder),
-        scale: factors ? icons.scale(row) * factors.scale : null,
+          icons.shown(id) &&
+          parts.icons._aboveHorizon(position, occluder),
+        scale: factors ? icons.scale(id) * factors.scale : null,
         alpha: position
           ? aircraftTreatmentAlpha({
-              baseAlpha: icons.alpha(row),
-              focusFactor: icons.focus(row),
+              baseAlpha: icons.alpha(id),
+              focusFactor: icons.focus(id),
               cameraDistanceM,
               cameraHeightM,
             })

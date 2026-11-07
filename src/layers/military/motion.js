@@ -25,6 +25,8 @@ import { readEntityRecord } from '../../data/entityRecords.js';
 import {
   aircraftMotionRegime,
   createMotionRegime,
+  fixEpochMs,
+  julianAt,
   fixSpeedMps,
   fixTrackDeg,
 } from '../../data/aircraftMotionRegime.js';
@@ -467,9 +469,14 @@ export function createMotion({
     flightState._cachedDRHold = false;
     flightState._trackedCourseMs = 0;
   }
+  /** The display instant `epochMs` as a JulianDate, for `_motionRegime`. */
+  const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
+
   return {
     _deadReckon,
     _motionRegime,
+    _displayTimeAt,
+    _fixEpochMs: fixEpochMs,
     _extrapolateFix,
     _isTrackWarmingUp,
     _trackedFocusSizePx,

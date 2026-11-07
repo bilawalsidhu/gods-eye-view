@@ -193,15 +193,14 @@ export function createEnrichment({
       );
       const cand = [];
       const icons = flightState._icons;
-      const tau = parts.icons._displayTau();
-      for (let row = 0; row < icons.count; row++) {
-        const icao24 = icons.idAt(row);
+      const t = parts.icons._displayMs();
+      for (const icao24 of icons.ids()) {
         if (flightState._enrichSeen.has(`t:${icao24}`)) continue; // answered / queued / negative this session
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         const position = icons.position(
-          row,
-          tau,
+          icao24,
+          t,
           flightState._scratchModelBS.center,
         );
         if (!occluder.isPointVisible(position)) continue; // beyond the limb

@@ -1,8 +1,10 @@
 import * as Cesium from 'cesium';
 import { AMBER_TRANSPARENT, TRACKED_ICON_COLOR } from './policy.js';
 import { createModelRecord } from '../../data/modelRecord.js';
-import { createIconSet } from '../../data/iconSet.js';
-import { aircraftIconTestSeams } from '../../data/aircraftIconLayer.js';
+import {
+  aircraftIconTestSeams,
+  createContactIcons,
+} from '../../data/aircraftIconLayer.js';
 
 export function createTesting({
   flightState,
@@ -45,9 +47,7 @@ export function createTesting({
   }) {
     flightState._viewer = viewer;
     flightState._modelCollection = modelCollection;
-    flightState._icons = createIconSet({
-      epoch: parts.icons._displayTime(new Cesium.JulianDate()),
-    });
+    flightState._icons = createContactIcons();
     flightState._icons.show = iconLayer?.show ?? true;
     _seedIconForTest(icao24, icon, tracked);
     flightState._models.clear();
@@ -148,7 +148,6 @@ export function createTesting({
     return parts.rendering._driveFleetModelHandoff(
       icao24,
       flightState._models.get(icao24),
-      flightState._icons.row(icao24),
       position,
       course,
     );

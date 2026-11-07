@@ -25,6 +25,21 @@ export function fixTrackDeg(fix, info, fields) {
     : (info && info[fields.track]) || 0;
 }
 
+/**
+ * The instant `epochMs` as a JulianDate (into `result` when given), for
+ * `aircraftMotionRegime`'s `renderTime`.
+ */
+export function julianAt(epochMs, result) {
+  return Cesium.JulianDate.fromDate(new Date(epochMs), result);
+}
+
+/** A history fix's time in epoch ms: its `epochMs`, else its `time`'s. */
+export function fixEpochMs(fix) {
+  return Number.isFinite(fix.epochMs)
+    ? fix.epochMs
+    : Cesium.JulianDate.toDate(fix.time).getTime();
+}
+
 /** A reusable result for `aircraftMotionRegime`. */
 export function createMotionRegime() {
   return {

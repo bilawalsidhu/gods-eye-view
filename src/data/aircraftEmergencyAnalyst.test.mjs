@@ -4,10 +4,12 @@ import { createRendering as civilRendering } from '../layers/flights/rendering.j
 import { createRendering as militaryRendering } from '../layers/military/rendering.js';
 import { createMilitarySnapshotRenderer } from '../layers/military/snapshotRenderer.js';
 import { createIcons as createMilitaryIcons } from '../layers/military/icons.js';
-import { createIconSet } from './iconSet.js';
+import { createContactIcons } from './aircraftIconLayer.js';
 import {
   aircraftMotionRegime,
   createMotionRegime,
+  fixEpochMs,
+  julianAt,
 } from './aircraftMotionRegime.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
 // Source-to-voice provenance, status retention/clearing, contact-time contracts,
@@ -471,7 +473,7 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
 test('GERMAN: an existing untracked military icon repaints each poll without losing its fade', () => {
   const { flightState, rendering } = renderHarness(militaryRendering);
   Object.assign(flightState, {
-    _icons: createIconSet(),
+    _icons: createContactIcons(),
     _models: new Map(),
     _positionHistory: new Map(),
     _displayCourse: new Map(),
@@ -500,6 +502,8 @@ test('GERMAN: an existing untracked military icon repaints each poll without los
           { speed: 'speedMps', track: 'track' },
           createMotionRegime(),
         ),
+      _displayTimeAt: julianAt,
+      _fixEpochMs: fixEpochMs,
     },
   };
   const icons = createMilitaryIcons({
@@ -507,11 +511,13 @@ test('GERMAN: an existing untracked military icon repaints each poll without los
     services: { focus: { focusPassIsNeeded: () => false } },
     parts,
   });
-  const row = flightState._icons.add('abc123', {
-    layer: 'military',
-    id: 'abc123',
+  const row = 'abc123';
+  flightState._icons.put({
+    id: row,
+    pos: { x: 0, y: 0, z: 0 },
+    meta: { layer: 'military', id: row },
   });
-  // The focus fade the fleet tick composes lives in its own column.
+  // The focus fade the fleet tick composes lives in its own field.
   flightState._icons.setFocus(row, 0.65);
   const apply = createMilitarySnapshotRenderer({
     flightState,
@@ -546,7 +552,7 @@ test('GERMAN: an existing untracked military icon repaints each poll without los
       { observedAtMs: NOW_MS },
     );
     apply(snapshot, {});
-    assert.equal(flightState._icons.color(row).green < 0.5, red);
+    assert.equal(flightState._icons.item(row).color[1] < 0.5, red);
     assert.ok(Math.abs(flightState._icons.focus(row) - 0.65) < 1e-6);
   }
 });

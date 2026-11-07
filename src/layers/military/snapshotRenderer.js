@@ -205,8 +205,7 @@ export function createMilitarySnapshotRenderer({
     // LANDED_MISSING_POLL_LIMIT — their disappearance means "landed", not a
     // feed gap, and the full grace left phantom planes parked at airports.
     const absentIds = [];
-    for (let row = 0; row < flightState._icons.count; row++) {
-      const icao24 = flightState._icons.idAt(row);
+    for (const icao24 of flightState._icons.ids()) {
       if (!currentIcaos.has(icao24)) absentIds.push(icao24);
     }
     for (const icao24 of absentIds) {
