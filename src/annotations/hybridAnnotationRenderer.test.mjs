@@ -5,6 +5,7 @@ import { createPinia } from 'pinia';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
+import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 
 /** A hybrid renderer whose screen board is presented to its own store. */
 function hybridWithBoard(viewer) {
@@ -110,7 +111,7 @@ function fakeViewer(lon, lat) {
   return {
     dataSources,
     frames,
-    viewer: {
+    viewer: bindFakeCesiumCredits({
       credits,
       creditDisplay: {
         addStaticCredit: (credit) => credits.add(credit),
@@ -130,7 +131,7 @@ function fakeViewer(lon, lat) {
           return index >= 0;
         },
       },
-    },
+    }),
   };
 }
 

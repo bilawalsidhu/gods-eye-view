@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DATA_CREDITS, NYC_DOT_DISCLAIMER } from './dataCredits.js';
+import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -60,13 +61,13 @@ test('inline OSM attribution persists until its last display owner leaves', asyn
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const visible = new Set();
-  const viewer = {
+  const viewer = bindFakeCesiumCredits({
     creditDisplay: {
       addStaticCredit: (c) => visible.add(c),
       removeStaticCredit: (c) => visible.delete(c),
     },
     scene: { requestRender() {} },
-  };
+  });
   assert.equal(showOsmCredit(viewer, 'alpr'), true);
   assert.equal(showOsmCredit(viewer, 'alpr'), false);
   assert.equal(visible.size, 1);
@@ -100,13 +101,13 @@ test('tile attribution follows source changes and viewers have independent owner
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   const create = () => {
     const credits = new Set();
-    return {
+    return bindFakeCesiumCredits({
       credits,
       creditDisplay: {
         addStaticCredit: (c) => credits.add(c),
         removeStaticCredit: (c) => credits.delete(c),
       },
-    };
+    });
   };
   const a = create(),
     b = create();

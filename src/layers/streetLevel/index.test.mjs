@@ -4,6 +4,7 @@ import * as Cesium from 'cesium';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
+import { creditFromMarkup } from '../../render/creditMarkup.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
 import { createKartaViewProvider } from './providers/kartaview/index.js';
 import {
@@ -67,13 +68,16 @@ const posingViewer = () =>
 
 test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (t) => {
   const { layer, viewer } = await startLayer(t);
-  const shown = () => viewer.credits.map((credit) => credit.html);
-  assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML], 'shown on enable');
+  const shown = () =>
+    viewer.credits.map((credit) => creditFromMarkup(credit.html).text);
+  const mapillary = creditFromMarkup(MAPILLARY_CREDIT_HTML).text;
+  assert.deepEqual(shown(), [mapillary], 'shown on enable');
+  assert.ok(viewer.credits[0].showOnScreen, 'on the map');
   assert.match(shown()[0], /CC BY-SA 4\.0/);
   layer.setParams({ mapillary: false });
   assert.deepEqual(shown(), [], 'hidden with the switch');
   layer.setParams({ mapillary: true });
-  assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML]);
+  assert.deepEqual(shown(), [mapillary]);
   layer.disable();
   assert.deepEqual(shown(), [], 'the credit goes with the layer');
 });

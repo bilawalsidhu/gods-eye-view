@@ -10,6 +10,8 @@ import { listenerList, toCartesian, uncaught } from './common.js';
 import { cameraFlightActive } from './internals.js';
 import { createCesiumFollow } from './follow.js';
 import { cameraOf, findCamera, provideUnboundCamera } from '../rendererOf.js';
+// Loads the factory an unbound viewer gets its credits port from.
+import './credits.js';
 
 /**
  * `cameraOf` and `findCamera`, for code that already reaches Cesium:

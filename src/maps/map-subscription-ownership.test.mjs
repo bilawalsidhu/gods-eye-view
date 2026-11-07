@@ -7,9 +7,6 @@ function fixture() {
       scene: {
         globe: { show: true },
         requestRender() {},
-        frameState: {
-          creditDisplay: { addStaticCredit() {}, removeStaticCredit() {} },
-        },
         primitives: { add() {}, remove() {} },
       },
       imageryLayers: { add() {}, remove() {} },

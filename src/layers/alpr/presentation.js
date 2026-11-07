@@ -28,6 +28,7 @@ import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { alprMarkers } from './markerState.js';
 import { heightsFor } from '../../queries/heights.js';
 import { cameraOf } from '../../render/cesium/camera.js';
+import { findCredits } from '../../render/rendererOf.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -326,8 +327,8 @@ export function createAlprPresentation({ state, services, source }) {
     services.credits?.hideOsmCredit?.(state.viewer, LAYER_ID);
     clearTimeout(state.creditTimer);
     state.creditTimer = null;
-    if (state.credit)
-      state.viewer?.creditDisplay?.removeStaticCredit(state.credit);
+    state.creditOff?.();
+    state.creditOff = null;
     governorRequestRender('alpr-credit');
   }
 
@@ -342,7 +343,8 @@ export function createAlprPresentation({ state, services, source }) {
     }
     if (!state.enabled || state.creditPresented || !state.credit) return;
     state.creditPresented = true;
-    state.viewer.creditDisplay?.addStaticCredit(state.credit);
+    state.creditOff =
+      findCredits(state.viewer)?.addStatic(state.credit) ?? null;
     state.creditTimer = setTimeout(hideOnMapCredit, CREDIT_DISPLAY_MS);
     governorRequestRender('alpr-credit');
   }

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { findCredits } from '../render/rendererOf.js';
 
 /**
  * Per-layer data attribution registered into Cesium's credit display.
@@ -36,6 +37,20 @@ export const OPENMAPTILES_CREDIT = {
 
 const osmDisplays = new WeakMap();
 
+/** The short inline OSM credits, as the renderer's credits port takes them. */
+const OSM_INLINE_CREDITS = Object.freeze({
+  osm: Object.freeze({
+    text: '© OpenStreetMap',
+    href: 'https://www.openstreetmap.org/copyright',
+    inline: true,
+  }),
+  tiles: Object.freeze({
+    text: '© OpenMapTiles',
+    href: 'https://openmaptiles.org',
+    inline: true,
+  }),
+});
+
 function updateOsmDisplay(viewer, state) {
   const osm = state.owners.size > 0;
   let tiles = false;
@@ -44,37 +59,27 @@ function updateOsmDisplay(viewer, state) {
     ['osm', osm],
     ['tiles', tiles],
   ]) {
-    if (state[key].visible === visible) continue;
-    state[key].visible = visible;
-    viewer.creditDisplay[visible ? 'addStaticCredit' : 'removeStaticCredit'](
-      state[key].credit,
-    );
-    viewer.scene?.requestRender?.();
+    if (Boolean(state.offs[key]) === visible) continue;
+    if (visible) {
+      // Looked up each time: a renderer bound later takes over.
+      const credits = findCredits(viewer);
+      if (credits) state.offs[key] = credits.addStatic(OSM_INLINE_CREDITS[key]);
+    } else {
+      state.offs[key]();
+      state.offs[key] = null;
+    }
   }
 }
 
-/** Keep one short inline credit while an OSM display owner has visible data. */
+/**
+ * Keep one short inline credit, through the renderer's credits port, while
+ * an OSM display owner has visible data.
+ */
 export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
-  if (!viewer?.creditDisplay?.addStaticCredit || !owner) return false;
+  if (!owner || !findCredits(viewer)) return false;
   let state = osmDisplays.get(viewer);
   if (!state) {
-    state = {
-      owners: new Map(),
-      osm: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
-          true,
-        ),
-      },
-      tiles: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a>',
-          true,
-        ),
-      },
-    };
+    state = { owners: new Map(), offs: { osm: null, tiles: null } };
     osmDisplays.set(viewer, state);
   }
   if (state.owners.get(owner) === openMapTiles) return false;

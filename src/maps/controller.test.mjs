@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
 import { createDefaultMapSources } from './defaultSources.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 function event() {
   const listeners = new Set();
@@ -28,16 +29,6 @@ function fixture(registry, options = {}) {
     scene: {
       globe: { show: true },
       requestRender() {},
-      frameState: {
-        creditDisplay: {
-          addStaticCredit(value) {
-            credits.add(value);
-          },
-          removeStaticCredit(value) {
-            credits.delete(value);
-          },
-        },
-      },
       primitives: {
         add(value) {
           primitives.push(value);
@@ -58,6 +49,14 @@ function fixture(registry, options = {}) {
       },
     },
   };
+  bindRenderer(viewer, {
+    credits: {
+      addStatic(credit) {
+        credits.add(credit);
+        return () => credits.delete(credit);
+      },
+    },
+  });
   const controller = new MapSourceController(viewer, {
     registry,
     createImageryLayer: (provider) => ({ provider }),
@@ -274,7 +273,10 @@ test('Esri construction fallback reports and attributes the source actually rend
 test('one Esri tile failure stays put, two fall back, and stale errors cannot replace a selection', async () => {
   const env = publicFixture();
   await env.controller.setStack('esri-imagery');
-  assert.equal(env.credits.size, 1);
+  assert.deepEqual(
+    [...env.credits],
+    [{ text: 'Powered by Esri', href: 'https://www.esri.com', inline: true }],
+  );
   const errorEvent = env.providers.get('esri-imagery').errorEvent;
   errorEvent.raise();
   await settle();
