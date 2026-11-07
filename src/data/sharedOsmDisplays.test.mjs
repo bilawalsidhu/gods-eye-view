@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
 import { showOsmCredit, hideOsmCredit } from './dataCredits.js';
+import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 import { createInfrastructureLayers } from './infrastructure.js';
 import { createBhoteKoshiLocatorLayer } from './bhoteKoshiLocator.js';
 import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
@@ -31,7 +32,7 @@ function viewer(t) {
     scene: { requestRender: noop, canvas: { addEventListener: noop, removeEventListener: noop }, preRender: new C.Event(),
       primitives: { add: (p) => p, remove: noop }, screenSpaceCameraController: { enableInputs: true } },
   };
-  return v;
+  return bindFakeCesiumCredits(v);
 }
 function assertCredit(v) {
   assert.ok(v.credits.some((credit) => credit.showOnScreen && credit.html.includes('>© OpenStreetMap<')));

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as credits from '../../data/dataCredits.js';
 import { createLifecycle } from './lifecycle.js';
 import { LAYER_ID } from './policy.js';
+import { bindFakeCesiumCredits } from '../../testSupport/fakeCreditsPort.mjs';
 
 for (const source of [
   { name: 'OpenStreetMap', id: 'tile:base' },
@@ -13,13 +14,13 @@ for (const source of [
   test(`enable restores cached installation credits before a refresh: ${source?.id || 'empty'}`, () => {
     const visibleCredits = new Set();
     const noop = () => {};
-    const viewer = {
+    const viewer = bindFakeCesiumCredits({
       camera: {},
       creditDisplay: {
         addStaticCredit: (credit) => visibleCredits.add(credit),
         removeStaticCredit: (credit) => visibleCredits.delete(credit),
       },
-    };
+    });
     const state = {
       viewer,
       records: source ? [{ id: 'base', sources: [source] }] : [],

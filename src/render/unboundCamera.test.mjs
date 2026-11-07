@@ -3,7 +3,8 @@
  * `cameraOf` a viewer of the consumer's own, with no renderer bound. The
  * bridge builds a camera port for it with the factory the Cesium adapter
  * provides as `render/cesium/camera.js` loads, so every such entry must load
- * that module too.
+ * that module too. It loads `render/cesium/credits.js`, whose factory
+ * builds `findCredits`' port for such a viewer the same way.
  *
  * The graph is every static import, re-export and literal dynamic import of
  * the entry's module and those it reaches, read by the parsers the Cesium
@@ -128,6 +129,12 @@ function reachable(entry, { eager = false } = {}) {
   }
   return seen;
 }
+
+test('the unbound camera factory loads the unbound credits factory', () => {
+  assert.ok(
+    reachable(FACTORY, { eager: true }).has('src/render/cesium/credits.js'),
+  );
+});
 
 test('every public entry that reaches the renderer bridge loads the unbound camera factory', () => {
   const missing = [];

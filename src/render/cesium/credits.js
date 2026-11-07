@@ -24,7 +24,8 @@ import {
   creditFromMarkup,
   safeUrl,
 } from '../creditMarkup.js';
-import { listenerList } from './common.js';
+import { provideUnboundCredits } from '../rendererOf.js';
+import { listenerList, uncaught } from './common.js';
 import { creditDisplayContents } from './internals.js';
 
 const CREDIT_KEYS = new Set(['text', 'href', 'logoUrl', 'inline']);
@@ -86,6 +87,9 @@ function copyCredit(credit) {
  */
 export function createCesiumCredits({ display, scene, report, requestRender }) {
   const listeners = listenerList(report);
+  // A consumer may destroy its viewer before the code holding credits lets
+  // them go; a destroyed display throws on every call.
+  const displayLive = () => Boolean(display) && !display.isDestroyed?.();
   /** Core's credits, in the order added: each `{credit, markup}`. */
   const added = [];
   /** Core's credits as Cesium shows them, by markup: `{credit, count}`. */
@@ -120,7 +124,9 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
    * leaves it out.
    */
   function shownCredits() {
-    const { statics, screen, lightbox, logo } = creditDisplayContents(display);
+    const { statics, screen, lightbox, logo } = creditDisplayContents(
+      displayLive() ? display : undefined,
+    );
     const out = [];
     const seen = new Set();
     const take = (credit) => {
@@ -204,7 +210,7 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
       entry = { credit: new Cesium.Credit(markup, inline), count: 0 };
       shown.set(key, entry);
       coreCredits.add(entry.credit);
-      display?.addStaticCredit(entry.credit);
+      if (displayLive()) display.addStaticCredit(entry.credit);
     }
     entry.count += 1;
     return key;
@@ -217,7 +223,7 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
     if (entry.count > 0) return;
     shown.delete(key);
     coreCredits.delete(entry.credit);
-    display?.removeStaticCredit(entry.credit);
+    if (displayLive()) display.removeStaticCredit(entry.credit);
   }
 
   let disposed = false;
@@ -251,15 +257,44 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
 
   return {
     port,
+    /** Detach from the scene and take Core's credits off the display. */
     dispose() {
       disposed = true;
       offFrame();
       listeners.clear();
-      if (!display?.isDestroyed?.())
+      if (displayLive())
         for (const { credit } of shown.values())
-          display?.removeStaticCredit(credit);
+          display.removeStaticCredit(credit);
       shown.clear();
       coreCredits.clear();
     },
+    /**
+     * Detach from the scene only: the credits added stay shown until their
+     * own Off, for a port another one supersedes.
+     */
+    release() {
+      offFrame();
+      listeners.clear();
+    },
   };
 }
+
+// A Cesium viewer of a consumer's own, with no renderer bound to it, gets a
+// credits port over its credit display when code first asks `findCredits`
+// for one. `camera.js` loads this module, so the entries that load the
+// unbound camera load this too.
+provideUnboundCredits((viewer) =>
+  // By shape, not `instanceof`: a consumer's viewer may come from another
+  // copy of Cesium.
+  typeof viewer.creditDisplay?.addStaticCredit === 'function' &&
+  typeof viewer.scene?.postRender?.addEventListener === 'function'
+    ? createCesiumCredits({
+        display: viewer.creditDisplay,
+        scene: viewer.scene,
+        report: uncaught,
+        requestRender: () => {
+          if (!viewer.scene.isDestroyed?.()) viewer.scene.requestRender?.();
+        },
+      })
+    : null,
+);

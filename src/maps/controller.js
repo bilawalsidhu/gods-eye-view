@@ -1,6 +1,9 @@
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
 import { createMapCredits } from './credits.js';
+// A viewer of a consumer's own gets its credits port (and camera) from the
+// factories this loads.
+import '../render/cesium/camera.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
 /**

@@ -7,6 +7,7 @@ import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from './resolver.js';
 import { polygonsContain } from '../data/adminBoundaries.js';
 import { streetFootprint } from './outlineRungs.js';
+import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 
 function viewerAt(lat, lon, height = 20_000) {
   return {
@@ -180,10 +181,10 @@ test('a geocoded city or neighborhood upgrades to the bundled outline', async ()
   const credits = [];
   const cancelled = await city.resolve(
     'Austin',
-    {
+    bindFakeCesiumCredits({
       ...viewerAt(39, -100, 5_000_000),
       creditDisplay: { addStaticCredit: (credit) => credits.push(credit) },
-    },
+    }),
     { signal: controller.signal },
   );
   const pending = cancelled.resolveOutline();

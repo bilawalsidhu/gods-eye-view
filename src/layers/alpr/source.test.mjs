@@ -8,7 +8,7 @@ import {
   createOverpassAlprSource,
   buildOverpassQuery,
 } from './source.js';
-import { validateAlprSnapshot, alprCreditMarkup } from './model.js';
+import { validateAlprSnapshot, alprCredit } from './model.js';
 const box = { south: 30, west: -98, north: 30.1, east: -97.9 };
 test('the source rejects invalid and unbounded queries before fetching', async () => {
   let calls = 0;
@@ -130,19 +130,28 @@ test('source snapshots reject malformed coordinates and duplicate identities', (
   );
 });
 
-test('provider attribution escapes markup and rejects executable links', () => {
-  assert.equal(alprCreditMarkup(null), null);
+test('provider attribution is plain text with a public HTTPS link only', () => {
+  assert.equal(alprCredit(null), null);
   assert.throws(
-    () => alprCreditMarkup({ text: 'test', href: 'javascript:alert(1)' }),
+    () => alprCredit({ text: 'test', href: 'javascript:alert(1)' }),
     /HTTPS/,
   );
-  const html = alprCreditMarkup({
-    text: '<img onerror=alert(1)>',
-    href: 'https://example.org/?a=1&b=2',
-  });
-  assert.ok(html.includes('&lt;img onerror=alert(1)&gt;'));
-  assert.ok(html.includes('?a=1&amp;b=2'));
-  assert.ok(!html.includes('<img'));
+  assert.throws(
+    () => alprCredit({ text: 'test', href: 'https://user:pw@example.org/' }),
+    /HTTPS/,
+  );
+  assert.deepEqual(
+    alprCredit({
+      text: '<img onerror=alert(1)>',
+      href: 'https://example.org/?a=1&b=2',
+    }),
+    {
+      text: 'ALPR: <img onerror=alert(1)>',
+      href: 'https://example.org/?a=1&b=2',
+      inline: true,
+    },
+    'left as text: the credits port escapes it',
+  );
 });
 
 test('wide detail view returns zoom guidance before any fetch and can retry a smaller view', async () => {

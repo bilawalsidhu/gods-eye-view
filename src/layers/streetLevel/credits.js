@@ -1,33 +1,31 @@
-import * as Cesium from 'cesium';
+import { creditFromMarkup } from '../../render/creditMarkup.js';
+import { findCredits } from '../../render/rendererOf.js';
 
 /**
- * One static Cesium credit per active provider: CC BY-SA imagery needs
- * visible attribution that goes away with the imagery.
+ * One on-map credit per active provider, through the renderer's credits
+ * port: CC BY-SA imagery needs visible attribution that goes away with the
+ * imagery. A provider's credit is markup with one link, read as the
+ * port's plain data.
  */
 export function createCredits() {
-  /** @type {Map<string, object>} provider id → Cesium.Credit */
+  /** @type {Map<string, () => void>} provider id → the credit's Off */
   const shown = new Map();
 
   function show(viewer, def) {
-    if (shown.has(def.id) || !viewer?.creditDisplay) return;
-    try {
-      const credit = new Cesium.Credit(def.credit.html, true);
-      viewer.creditDisplay.addStaticCredit(credit);
-      shown.set(def.id, credit);
-    } catch {
-      /* credit display unavailable */
-    }
+    if (shown.has(def.id)) return;
+    const credits = findCredits(viewer);
+    if (!credits) return;
+    shown.set(
+      def.id,
+      credits.addStatic({ ...creditFromMarkup(def.credit.html), inline: true }),
+    );
   }
 
-  function hide(viewer, def) {
-    const credit = shown.get(def.id);
-    if (!credit) return;
-    try {
-      viewer?.creditDisplay?.removeStaticCredit?.(credit);
-    } catch {
-      /* credit display already torn down */
-    }
+  function hide(_viewer, def) {
+    const off = shown.get(def.id);
+    if (!off) return;
     shown.delete(def.id);
+    off();
   }
 
   function hideAll(viewer) {

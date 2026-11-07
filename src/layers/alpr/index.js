@@ -12,7 +12,7 @@ import {
   boxContains,
   alprRetryDelayMs,
   validateAlprSnapshot,
-  alprCreditMarkup,
+  alprCredit,
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
 import { t, tn, msg } from '../../i18n/index.js';
@@ -44,6 +44,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     credit: null,
     creditTimer: null,
     creditPresented: false,
+    creditOff: null,
     enabled: false,
     records: [],
     recordById: new Map(),
@@ -297,10 +298,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       if (state.viewer) throw new Error('ALPR layer is already initialized');
       state.viewer = viewer;
       state.dataSource = new Cesium.CustomDataSource('alpr-cameras');
-      const creditMarkup = alprCreditMarkup(source.attribution);
-      state.credit = creditMarkup
-        ? new Cesium.Credit(creditMarkup, true)
-        : null;
+      state.credit = alprCredit(source.attribution);
       viewer.dataSources.add(state.dataSource);
       state.moveEndRemove =
         viewer.camera.moveEnd.addEventListener(scheduleLoad);

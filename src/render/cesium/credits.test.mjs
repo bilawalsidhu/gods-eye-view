@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createCesiumCredits, creditMarkup } from './credits.js';
+import { findCredits } from '../rendererOf.js';
 
 /** A credit display as Cesium keeps it: static credits and a frame's. */
 function fakeDisplay() {
@@ -271,6 +272,31 @@ test('dispose detaches from the frame and takes Core’s credits off', () => {
   assert.equal(t.renders(), 1, 'no render asked of a disposed scene');
 });
 
+test('a credit let go after its display is destroyed leaves the display alone', () => {
+  const t = setup();
+  const off = t.port.addStatic({ text: 'x' });
+  t.display.isDestroyed = () => true;
+  t.display.removeStaticCredit = () => {
+    throw new Error('destroyed');
+  };
+  off();
+  assert.deepEqual(t.port.list(), []);
+  t.part.dispose();
+});
+
+test('a released port stops following frames and keeps its credits until their Off', () => {
+  const t = setup();
+  const seen = [];
+  t.port.on('change', () => seen.push(1));
+  const off = t.port.addStatic({ text: 'x' });
+  t.part.release();
+  assert.equal(t.listeners.size, 0);
+  assert.equal(t.display._staticCredits.length, 1, 'still shown');
+  off();
+  assert.equal(t.display._staticCredits.length, 0);
+  assert.deepEqual(seen, [1], 'its listeners are gone');
+});
+
 test('credit markup escapes every value and links only web URLs', () => {
   assert.equal(
     creditMarkup({ text: 'a "b" & <c>' }),
@@ -288,4 +314,29 @@ test('credit markup escapes every value and links only web URLs', () => {
     creditMarkup({ text: 'x', href: 'https://example.com/?a=1&b="2"' }),
     '<a href="https://example.com/?a=1&amp;b=%222%22" target="_blank" rel="noopener">x</a>',
   );
+});
+
+test('a Cesium viewer with no renderer gets a credits port over its display', () => {
+  const display = fakeDisplay();
+  const listeners = new Set();
+  let renders = 0;
+  const viewer = {
+    creditDisplay: display,
+    scene: {
+      postRender: {
+        addEventListener(cb) {
+          listeners.add(cb);
+          return () => listeners.delete(cb);
+        },
+      },
+      requestRender: () => (renders += 1),
+    },
+  };
+  const port = findCredits(viewer);
+  assert.equal(findCredits(viewer), port);
+  port.addStatic({ text: 'Unbound' });
+  assert.equal(display._staticCredits.length, 1);
+  assert.equal(renders, 1);
+  assert.equal(listeners.size, 1);
+  assert.equal(findCredits({ creditDisplay: display }), null, 'no scene');
 });

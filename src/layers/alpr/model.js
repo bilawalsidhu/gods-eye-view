@@ -31,24 +31,16 @@ export function destinationPointDeg(latDeg, lonDeg, bearingDeg, distanceM) {
   };
 }
 
-/** Build a linked attribution from plain text and an HTTPS URL only. */
-export function alprCreditMarkup(attribution) {
+/**
+ * The on-map credit for the renderer's credits port, from plain text and an
+ * HTTPS URL only; the port escapes it as it shows it.
+ * @returns {{text: string, href: string, inline: true}|null}
+ */
+export function alprCredit(attribution) {
   if (!attribution?.text || !attribution?.href) return null;
   const href = new URL(attribution.href);
   if (href.protocol !== 'https:' || href.username || href.password) {
     throw new TypeError('Camera attribution requires a public HTTPS link');
   }
-  const escape = (value) =>
-    String(value).replace(
-      /[&<>"']/g,
-      (char) =>
-        ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-        })[char],
-    );
-  return `<span class="gev-alpr-credit">ALPR: <a href="${escape(href.href)}" target="_blank" rel="noopener">${escape(attribution.text)}</a></span>`;
+  return { text: `ALPR: ${attribution.text}`, href: href.href, inline: true };
 }

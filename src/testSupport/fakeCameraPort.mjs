@@ -6,6 +6,7 @@ import { createCameraEvents } from '../render/camera/events.js';
 import { toDegrees } from '../geo/index.js';
 import { bindRenderer, rendererOf } from '../render/rendererOf.js';
 import { createCesiumCamera } from '../render/cesium/camera.js';
+import { fakeCesiumCredits } from './fakeCreditsPort.mjs';
 
 const DEFAULT_POSE = Object.freeze({
   lon: 0,
@@ -72,8 +73,9 @@ export function fakeCameraPort({ pose = {}, viewRectangle = null } = {}) {
  * from what the fake has (`positionCartographic`, `heading`, `pitch`,
  * `roll`) and events come from the fake's own `changed`, `moveStart` and
  * `moveEnd`. A fake with `trackedEntityChanged` and `entities` follows
- * through the port, as the renderer does. Binding a viewer twice keeps the
- * first. Returns the viewer.
+ * through the port, as the renderer does. Its credits are the renderer's
+ * credits port over the fake's `creditDisplay`, if it has one. Binding a
+ * viewer twice keeps the first. Returns the viewer.
  * @template {{camera: object}} V
  * @param {V} viewer
  * @returns {V}
@@ -164,6 +166,6 @@ export function bindFakeCesiumCamera(viewer) {
       },
     },
   });
-  bindRenderer(viewer, { camera: port });
+  bindRenderer(viewer, { camera: port, credits: fakeCesiumCredits(viewer) });
   return viewer;
 }
