@@ -41,33 +41,46 @@ const DETAIL =
 /**
  * Each body is drawn in a centred frame (origin 0,0 = glyph centre), front
  * toward -Y, in the 96-unit space (half-extent up to ~45).
+ *
+ * Two sets. `HEADING_BODIES` is what a vehicle with a known course wears: every
+ * outline has a front that cannot be mistaken for its back at fleet size — a
+ * nose, a bow or a chamfered cab — because at twenty pixels a bus drawn as a
+ * near-symmetric box gives no hint which way it is going, and a hairline
+ * windscreen is far below one pixel. The front is part of the OUTLINE, not
+ * interior ink, so it survives the tint, the halo (which strokes the outline)
+ * and the sensor profiles (which keep only the outline).
+ *
+ * `NEUTRAL_BODIES` is what a vehicle with NO known course wears. Its billboard
+ * sits at rotation 0, so a pointed glyph would claim it is heading north; these
+ * outlines are the same footprint, symmetric end to end, and claim nothing.
  */
-const BODIES = {
-  // ── Bus: short, blunt, square-shouldered. The shape everything else reads
-  //    against, and the one most people will see most often.
+const HEADING_BODIES = {
+  // ── Bus: short, broad, square-shouldered behind an arrow-like nose. The
+  //    shape everything else reads against, and the one most people will see
+  //    most often, so it carries the boldest front.
   bus: `
-    <path d="M-17,-28 C-17,-32 -14,-34 0,-34 C14,-34 17,-32 17,-28
-             L17,28 C17,32 14,34 0,34 C-14,34 -17,32 -17,28 Z"
+    <path d="M0,-41 L17,-25 L17,28 C17,32 14,34 0,34 C-14,34 -17,32 -17,28
+             L-17,-25 Z"
           fill="white" ${STROKE}/>
-    <path d="M-11,-24 L11,-24" ${DETAIL}/>
+    <path d="M-11,-21 L11,-21" ${DETAIL}/>
     <path d="M-11,20 L11,20" ${DETAIL}/>`,
 
-  // ── Tram / light rail: longer and slimmer than a bus, with the two
-  //    articulation joints that make a modern low-floor tram unmistakable.
+  // ── Tram / light rail: longer and slimmer than a bus, a short pointed cab
+  //    and the two articulation joints of a modern low-floor tram.
   tram: `
-    <path d="M-10,-38 C-10,-41 -8,-42.5 0,-42.5 C8,-42.5 10,-41 10,-38
-             L10,38 C10,41 8,42.5 0,42.5 C-8,42.5 -10,41 -10,38 Z"
+    <path d="M0,-44 L10,-33 L10,38 C10,41 8,42.5 0,42.5 C-8,42.5 -10,41 -10,38
+             L-10,-33 Z"
           fill="white" ${STROKE}/>
     <path d="M-10,-13 L10,-13" ${DETAIL}/>
     <path d="M-10,13 L10,13" ${DETAIL}/>
-    <path d="M-8,-34 L8,-34" ${DETAIL}/>`,
+    <path d="M-8,-29 L8,-29" ${DETAIL}/>`,
 
-  // ── Metro / subway: squared off at both ends, wider than a tram, a single
-  //    cab line at the front. Reads as rolling stock, not a road vehicle.
+  // ── Metro / subway: squared off and wider than a tram, the cab end
+  //    chamfered to a narrow flat face; the rear stays square.
   subway: `
-    <path d="M-11.5,-40 L11.5,-40 L11.5,40 L-11.5,40 Z"
+    <path d="M-4,-40 L4,-40 L11.5,-30 L11.5,40 L-11.5,40 L-11.5,-30 Z"
           fill="white" ${STROKE}/>
-    <path d="M-11.5,-32 L11.5,-32" ${DETAIL}/>
+    <path d="M-11.5,-26 L11.5,-26" ${DETAIL}/>
     <path d="M-11.5,0 L11.5,0" ${DETAIL}/>
     <path d="M-11.5,32 L11.5,32" ${DETAIL}/>`,
 
@@ -90,8 +103,49 @@ const BODIES = {
           fill="white" ${STROKE}/>
     <path d="M-7.5,-6 L7.5,-6 L7.5,20 L-7.5,20 Z" ${DETAIL}/>`,
 
-  // ── Unknown: a plain rounded marker. Deliberately featureless, so an
+  // ── Unknown: a plain marker with a nose and nothing else, so an
   //    unclassified vehicle never pretends to be a mode it is not.
+  unknown: `
+    <path d="M0,-38 L10,-24 L10,26 C10,30 7,32 0,32 C-7,32 -10,30 -10,26
+             L-10,-24 Z"
+          fill="white" ${STROKE}/>`,
+};
+
+const NEUTRAL_BODIES = {
+  bus: `
+    <path d="M-17,-28 C-17,-32 -14,-34 0,-34 C14,-34 17,-32 17,-28
+             L17,28 C17,32 14,34 0,34 C-14,34 -17,32 -17,28 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-11,-20 L11,-20" ${DETAIL}/>
+    <path d="M-11,20 L11,20" ${DETAIL}/>`,
+
+  tram: `
+    <path d="M-10,-38 C-10,-41 -8,-42.5 0,-42.5 C8,-42.5 10,-41 10,-38
+             L10,38 C10,41 8,42.5 0,42.5 C-8,42.5 -10,41 -10,38 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-10,-13 L10,-13" ${DETAIL}/>
+    <path d="M-10,13 L10,13" ${DETAIL}/>`,
+
+  subway: `
+    <path d="M-11.5,-40 L11.5,-40 L11.5,40 L-11.5,40 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-11.5,-32 L11.5,-32" ${DETAIL}/>
+    <path d="M-11.5,0 L11.5,0" ${DETAIL}/>
+    <path d="M-11.5,32 L11.5,32" ${DETAIL}/>`,
+
+  rail: `
+    <path d="M-10.5,-40 C-10.5,-43 -8.5,-44.5 0,-44.5 C8.5,-44.5 10.5,-43 10.5,-40
+             L10.5,40 C10.5,43 8.5,44.5 0,44.5 C-8.5,44.5 -10.5,43 -10.5,40 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-10.5,-6 L10.5,-6" ${DETAIL}/>
+    <path d="M-10.5,6 L10.5,6" ${DETAIL}/>`,
+
+  ferry: `
+    <path d="M-12.5,-30 C-12.5,-36 -8,-38 0,-38 C8,-38 12.5,-36 12.5,-30
+             L12.5,30 C12.5,36 8,38 0,38 C-8,38 -12.5,36 -12.5,30 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-7.5,-13 L7.5,-13 L7.5,13 L-7.5,13 Z" ${DETAIL}/>`,
+
   unknown: `
     <path d="M-10,-26 C-10,-30 -7,-32 0,-32 C7,-32 10,-30 10,-26
              L10,26 C10,30 7,32 0,32 C-7,32 -10,30 -10,26 Z"
@@ -99,7 +153,7 @@ const BODIES = {
 };
 
 /** The modes this module can draw. */
-export const TRANSIT_ICON_KINDS = Object.freeze(Object.keys(BODIES));
+export const TRANSIT_ICON_KINDS = Object.freeze(Object.keys(HEADING_BODIES));
 
 const _iconCache = new Map();
 
@@ -155,8 +209,8 @@ export function transitIconCacheSize() {
 }
 
 /**
- * Data URI for one mode's silhouette, lazily built and cached per kind, size
- * and halo.
+ * Data URI for one mode's silhouette, lazily built and cached per kind, size,
+ * halo and whether the vehicle has a known course.
  *
  * With a halo, the body is drawn twice: first as a wide dark stroke, then as
  * the shipped white fill with its hairline edge on top, so the ring sits
@@ -166,11 +220,14 @@ export function transitIconCacheSize() {
  *
  * @param {string} kind One of TRANSIT_ICON_KINDS; anything else draws `unknown`.
  * @param {number} [px] Raster size.
- * @param {{haloScreenPx?: number, screenPx?: number}} [options]
+ * @param {{haloScreenPx?: number, screenPx?: number, style?: string,
+ *   heading?: boolean}} [options] `heading: false` draws the symmetric outline
+ *   for a vehicle whose course is unknown (its billboard is not rotated, so a
+ *   front would point north for no reason).
  * @returns {string} `data:image/svg+xml;base64,...`
  */
 export function transitIcon(kind, px = FLEET_RASTER_PX, options = {}) {
-  const k = BODIES[kind] ? kind : 'unknown';
+  const k = HEADING_BODIES[kind] ? kind : 'unknown';
   const selected = px > FLEET_RASTER_PX;
   px = selected ? SELECTED_ICON_PX : FLEET_RASTER_PX;
   const profile = transitStyleProfile(
@@ -185,16 +242,18 @@ export function transitIcon(kind, px = FLEET_RASTER_PX, options = {}) {
     profile === 'mono' ? 'thermal' : profile === 'crt' ? 'retro' : 'normal';
   const displayPx = (selected ? 30 : 20) * presetSpriteScale(style, selected);
   const frame = haloFrame(presetSpriteOutlinePx(style, selected), displayPx);
-  const key = `${k}:${selected ? 1 : 0}:${profile}`;
+  const heading = options.heading !== false;
+  const bodies = heading ? HEADING_BODIES : NEUTRAL_BODIES;
+  const key = `${k}:${selected ? 1 : 0}:${profile}:${heading ? 'h' : 'n'}`;
   let uri = _iconCache.get(key);
   if (!uri) {
     const size = VIEW + 2 * frame.pad;
     // Reuse the exact outer path. Sensors fill its interior without panel ink.
-    const silhouette = BODIES[k].match(/<path d="([^"]+)"/)[1];
+    const silhouette = bodies[k].match(/<path d="([^"]+)"/)[1];
     const body =
       profile === 'mono'
         ? `<path d="${silhouette}" fill="white" />`
-        : BODIES[k];
+        : bodies[k];
     const halo =
       frame.units > 0
         ? profile === 'mono'
