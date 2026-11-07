@@ -11,7 +11,6 @@
   "src/cyberSonarScene.js",
   "src/data/aircraftModelLayer.js",
   "src/data/aircraftMotionRegime.js",
-  "src/data/bhoteKoshiEmbeddedMedia.js",
   "src/data/bhoteKoshiEvent.js",
   "src/data/bhoteKoshiLocator.js",
   "src/data/cctvGizmo.js",
