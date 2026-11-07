@@ -266,9 +266,10 @@ one application, and only the globe-bound parts move to the next engine.
   tiles from a disk cache and a trap that fails any read of Cesium before it
   has loaded. Every catalog layer must be asserted on both engines. Point
   `PUPPETEER_EXECUTABLE_PATH` at an installed Chrome if Puppeteer's pinned
-  build is missing. With an OSM base map Navara lights the globe by the real
-  sun, so scenarios over Austin or San Francisco see a dark frame at local
-  night and fail their pixel checks; run them in local daylight.
+  build is missing. Navara lights the globe by the real sun; every base map,
+  street maps included, takes the night fill after dusk, so a scenario over
+  Austin or San Francisco at local night still sees a legible map, as on
+  Cesium (`src/globe/navara/look.js`).
 - **Navara 0.2.1 workaround.** The SDK never frees pick batch ids, and the
   mover banks rebuild their instanced meshes on each attach, so every switch
   leaked one id per instance of capacity (about 260 KiB of WebAssembly memory).

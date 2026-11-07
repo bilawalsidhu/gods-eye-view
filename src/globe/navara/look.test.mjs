@@ -248,6 +248,29 @@ test('inspection sunlight stays fixed through orbit, zoom and move end', () => {
   assert.equal(view.atmosphere.date, restored);
 });
 
+test('a street map keeps the night fill after dusk, as Cesium keeps it lit', () => {
+  // OSM over Austin at 12 km on the live sun: not a landscape, so the sun
+  // is the wall clock's and the map has no orbital fill.
+  const view = fakeView(0);
+  const look = warmCinematic(view);
+  const austin = { lat: 30.27, lng: -97.74 };
+  let elevation = 40;
+  view.atmosphere.getSunElevation = () => elevation;
+  look.frame(12_000, false, 0, austin, false);
+  const ambient = () =>
+    view.added.find(({ desc }) => Object.hasOwn(desc, 'ambient'));
+  assert.equal(ambient(), undefined, 'no fill in daylight');
+  elevation = -3;
+  look.frame(12_000, false, 0, austin, false);
+  assert.equal(ambient().desc.ambient.intensity, 0.5, 'half at dusk');
+  elevation = -40;
+  look.frame(12_000, false, 0, austin, false);
+  assert.equal(ambient().updates.at(-1).ambient.intensity, 1, 'full at night');
+  elevation = 10;
+  look.frame(12_000, false, 0, austin, false);
+  assert.equal(ambient().updates.at(-1).ambient.intensity, 0, 'none by day');
+});
+
 test('the sun follows the wall clock, a minute at most behind, only on drawn frames', () => {
   let now = 1_000_000;
   const view = fakeView(now);

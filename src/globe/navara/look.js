@@ -124,14 +124,17 @@ export function buildNavaraLook(
         ? atmosphere.getSunElevation(place)
         : Number.NaN;
     // Keep the map legible from orbit and when descending into darkness.
-    // At low altitude the fill increases from sunset to civil dusk.
+    // At low altitude the fill increases from sunset to civil dusk. Every
+    // base map takes the night fill: the tiles are lit by the sun and the
+    // sky, so a street map turned black after dusk, where Cesium (the
+    // reference) keeps it legible; the orbital fill stays the landscape's.
     const orbitalFill = Number.isFinite(height)
       ? Math.min(1, Math.max(0, (height - 50_000) / 250_000))
       : 0;
     const nightFill = Number.isFinite(elevation)
       ? Math.min(1, Math.max(0, -elevation / 6))
       : 0;
-    const nextFill = landscape ? Math.max(orbitalFill, nightFill) : 0;
+    const nextFill = landscape ? Math.max(orbitalFill, nightFill) : nightFill;
     if (nextFill !== fill) {
       fill = nextFill;
       if (fillLight) fillLight.update({ ambient: { intensity: fill } });
