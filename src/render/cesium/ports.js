@@ -347,6 +347,16 @@ export function createCesiumPorts(widget, { capabilities }) {
       targetFps = fps > 0 ? fps : 0;
       widget.targetFrameRate = targetFps || undefined;
     },
+    /**
+     * Moves the clock to `ms` and draws it. Whether the clock then runs on
+     * is its owner's: the application's clock keeps running if it was (a
+     * clock on Cesium's real-time step moves to its multiplier step, as
+     * setting its time does in Cesium).
+     */
+    setTime(ms) {
+      widget.clock.currentTime = Cesium.JulianDate.fromDate(new Date(ms));
+      frame.requestRender('time');
+    },
     time: () => Cesium.JulianDate.toDate(widget.clock.currentTime).getTime(),
   };
 

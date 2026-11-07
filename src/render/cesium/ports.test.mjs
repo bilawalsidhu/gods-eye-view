@@ -697,3 +697,18 @@ test('an icon draws its atlas slot once the atlas has it, and again when it chan
   );
   ports.dispose();
 });
+
+test('setTime moves scene time and draws it, leaving the clock running or not', () => {
+  const { widget, scene } = tickingWidget();
+  let requested = 0;
+  scene.requestRender = () => (requested += 1);
+  widget.clock.shouldAnimate = true;
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  const t = Date.UTC(2026, 5, 21, 12);
+  ports.frame.setTime(t);
+  assert.equal(ports.frame.time(), t);
+  assert.equal(widget.clock.shouldAnimate, true, 'still running');
+  assert.equal(requested, 1, 'one frame asked for');
+  assert.deepEqual(ports.frame.diagnostics().pendingReasons, ['time']);
+  ports.dispose();
+});

@@ -66,7 +66,8 @@ export async function createCesiumSceneRenderer({
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
   });
   const scene = widget.scene;
-  // A fixed time, so lighting is the same in every capture.
+  // A fixed time, so lighting is the same in every capture; `setTime`
+  // moves it and it stays there.
   widget.clock.shouldAnimate = false;
   widget.clock.currentTime = Cesium.JulianDate.fromIso8601(
     '2026-06-21T18:00:00Z',
@@ -95,14 +96,6 @@ export async function createCesiumSceneRenderer({
     query: ports.query,
     report: ports.report,
   });
-  const frame = {
-    ...ports.frame,
-    setTime(ms) {
-      widget.clock.currentTime = Cesium.JulianDate.fromDate(new Date(ms));
-      widget.clock.shouldAnimate = false;
-      scene.requestRender();
-    },
-  };
 
   // --- Globe -----------------------------------------------------------------
 
@@ -269,7 +262,7 @@ export async function createCesiumSceneRenderer({
     contractVersion: '0',
     capabilities,
     canvas: scene.canvas,
-    frame,
+    frame: ports.frame,
     globe,
     // A member of a capability left out is absent, not stubbed.
     draw: capabilities.has('models')
