@@ -24,7 +24,7 @@ export function createTrafficLayer({ services, source }) {
     ].every((key) => typeof source?.[key] === 'function')
   )
     throw new TypeError('A traffic source is required');
-  const state = createState({ services });
+  const state = createState({ services, source });
   const parts = {};
   const context = { state, services, parts, source };
   parts.style = createStyle(context);
