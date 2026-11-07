@@ -303,6 +303,62 @@ test('Space Missions reads the active catalog through the real proxy while unkno
   assert.deepEqual(fetched, ['active'], 'rejected groups never reach upstream');
 });
 
+test('SATCAT is proxied per core group for a day, separately from TLEs, and served stale on failure', async (t) => {
+  isolateDisk(t);
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(console, 'warn', () => {});
+  const csv =
+    'OBJECT_NAME,OBJECT_ID,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE,OWNER\nSL-16 R/B,1992-093B,22285,R/B,,CIS\n';
+  const fetched = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const parsed = new URL(url);
+    fetched.push(`${parsed.pathname}?${parsed.searchParams.get('GROUP')}`);
+    return new Response(csv);
+  });
+  const written = [];
+  t.mock.method(fsp, 'writeFile', async (file) => {
+    written.push(String(file).split(/[\\/]/).pop());
+  });
+  const request = install(celestrakProxy());
+  for (const group of ['/starlink', '/active', '/../visual', '/nope'])
+    assert.equal(
+      (await request('/api/celestrak-satcat', group)).status,
+      400,
+      group,
+    );
+  assert.deepEqual(fetched, [], 'rejected groups never reach upstream');
+
+  const first = await request('/api/celestrak-satcat', '/visual');
+  assert.equal(first.status, 200);
+  assert.equal(first.body, csv);
+  assert.equal(first.headers['x-satcat-cache'], 'MISS');
+  assert.deepEqual(fetched, ['/satcat/records.php?visual']);
+  assert.deepEqual(
+    written,
+    ['celestrak-satcat-visual.json'],
+    'its own disk cache',
+  );
+
+  now += 23 * 3600_000;
+  assert.equal(
+    (await request('/api/celestrak-satcat', '/visual')).headers[
+      'x-satcat-cache'
+    ],
+    'HIT',
+    'a day-long cache, unlike the 6 h TLEs',
+  );
+  now += 2 * 3600_000;
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('<html>busy</html>'),
+  );
+  const stale = await request('/api/celestrak-satcat', '/visual');
+  assert.equal(stale.body, csv, 'an error page never replaces good records');
+  assert.equal(stale.headers['x-satcat-cache'], 'STALE-ERROR');
+});
+
 test('CelesTrak admits a same-origin request behind the documented reverse proxy and refuses foreign origins', async (t) => {
   isolateDisk(t);
   let calls = 0;

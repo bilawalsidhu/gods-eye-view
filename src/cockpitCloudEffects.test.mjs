@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cockpitCloudRenderSize,
+  cockpitCloudsShowFor,
   cockpitWeatherRefreshDue,
   cockpitWeatherEnabledFromStoredValue,
 } from './cockpitCloudEffects.js';
@@ -21,6 +22,13 @@ test('cockpit weather defaults off and enables only from an explicit saved opt-i
   assert.equal(cockpitWeatherEnabledFromStoredValue(''), false);
   assert.equal(cockpitWeatherEnabledFromStoredValue('0'), false);
   assert.equal(cockpitWeatherEnabledFromStoredValue('1'), true);
+});
+
+test('the cloud pass stays off in orbit and runs for aircraft and bridges', () => {
+  assert.equal(cockpitCloudsShowFor('satellites'), false);
+  for (const layerId of ['flights', 'military', 'ais-live-vessels', null]) {
+    assert.equal(cockpitCloudsShowFor(layerId), true, String(layerId));
+  }
 });
 
 test('cockpit weather refreshes after time or meaningful movement', () => {

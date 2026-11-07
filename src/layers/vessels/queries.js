@@ -1,5 +1,8 @@
 import * as Cesium from 'cesium';
 import { t, msg } from '../../i18n/index.js';
+import { vesselCockpitInfo } from './cockpitSubject.js';
+import { vesselTypeCss } from '../../data/vesselLabels.js';
+import { greatCircleMeters } from '../../geoDistance.js';
 
 // ingestion.js is a portable export (package.json) and writes English labels
 // into state; translate the known ones here, pass anything else through.
@@ -20,6 +23,7 @@ import {
   AIS_STATUS_REASON,
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
+  VESSEL_LIFT_M,
 } from './policy.js';
 
 export function createQueries({
@@ -347,6 +351,58 @@ export function createQueries({
     },
 
     /**
+     * Vessels around a point for the Cockpit bridge radar, nearest first.
+     * The ship whose bridge the Cockpit occupies is left out. Distances are
+     * great-circle from the AIS positions, so no rendered visual is needed.
+     * @param {number} lat Latitude of the centre, degrees.
+     * @param {number} lon Longitude of the centre, degrees.
+     * @param {number} rangeM Max distance in metres.
+     * @param {number} [maxCount=60] Maximum entries to return.
+     * @returns {Array<{ id: string, name: string, latitude: number,
+     *   longitude: number, course: number|null, heading: number|null,
+     *   type: string, color: string, stale: boolean }>} Empty while the
+     *   layer is off.
+     */
+    getRadarContacts(lat, lon, rangeM, maxCount = 60) {
+      const records = state.records.all;
+      if (!state.feed.enabled || !Array.isArray(records) || !records.length)
+        return [];
+      if (!Number.isFinite(rangeM) || rangeM <= 0) return [];
+      const cap =
+        Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 60;
+      const center = { lat, lon };
+      const subject = state.cockpitSubjectMmsi;
+      const finite = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+      };
+
+      const entries = [];
+      for (const record of records) {
+        if (subject && String(record.mmsi) === subject) continue;
+        const distanceM = greatCircleMeters(center, {
+          lat: record.lat,
+          lon: record.lon,
+        });
+        if (!(distanceM <= rangeM)) continue;
+        entries.push({ record, distanceM });
+      }
+      entries.sort((a, b) => a.distanceM - b.distanceM);
+      return entries.slice(0, cap).map(({ record }) => ({
+        id: String(record.mmsi),
+        name: String(record.name || record.mmsi),
+        latitude: record.lat,
+        longitude: record.lon,
+        course: finite(record.course),
+        heading: finite(record.heading),
+        type: String(record.type || ''),
+        color: vesselTypeCss(record.type),
+        stale: (record.missedRefreshes || 0) > 0,
+      }));
+    },
+
+    /**
      * Get positions of all currently loaded vessels.
      * @param {number} [maxCount=800] Maximum entries to return.
      * @returns {Array<{ id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number }>}
@@ -460,6 +516,52 @@ export function createQueries({
         course: record.course,
         type: record.type,
       };
+    },
+
+    /**
+     * Describe the selected vessel for the Cockpit bridge view.
+     * @returns {object|null} `vesselCockpitInfo` fields plus `seaSurfaceHeightM`
+     *   (the local geoid height the sprite datum uses) and `markHeightM` (the
+     *   height the sprite is drawn at), or null when the layer is off or
+     *   nothing is selected.
+     */
+    getCockpitSubject() {
+      if (!state.feed.enabled) return null;
+      const info = vesselCockpitInfo(state.selectedRecord);
+      if (!info) return null;
+      const geoidN = components.tracking.currentGeoidN(
+        info.latitude,
+        info.longitude,
+      );
+      return {
+        ...info,
+        seaSurfaceHeightM: vesselDatumHeightM(geoidN, 0),
+        markHeightM: vesselDatumHeightM(geoidN, VESSEL_LIFT_M),
+      };
+    },
+
+    /**
+     * Mark the vessel whose bridge the Cockpit camera occupies, or release it.
+     * Its sprite, card and detection bracket stay hidden while it is held.
+     * @param {string|number|null} mmsi Subject MMSI, or null to release.
+     * @returns {boolean} Always true.
+     */
+    setCockpitSubject(mmsi) {
+      const next = normalizeSelectionMmsi(mmsi);
+      if (state.cockpitSubjectMmsi === next) return true;
+      state.cockpitSubjectMmsi = next;
+      components.rendering.updateVisibility(true);
+      return true;
+    },
+
+    /**
+     * Return the camera to the selected vessel's map view, as a click on it does.
+     * @returns {boolean} True when a selected vessel took the camera.
+     */
+    focusSelectedVessel() {
+      const record = state.selectedRecord;
+      if (!record || !state.feed.enabled) return false;
+      return components.selection.selectAndFocusVessel(record);
     },
 
     /**

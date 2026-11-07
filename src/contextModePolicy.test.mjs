@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  bridgeEntryAllowed,
+  orbitEntryAllowed,
   cockpitEntryAllowed,
   contextAllowedLayerIds,
   contextLayerEnableBlockReason,
@@ -426,6 +428,30 @@ test("cockpit entry needs only the tracked aircraft's own layer", () => {
     subjectLayerEnabled: false,
     contextModeChanging: false,
   }), false, 'there is no aircraft to ride');
+  assert.equal(cockpitEntryAllowed({
+    subjectLayerId: 'ais-live-vessels',
+    subjectLayerEnabled: true,
+    contextModeChanging: false,
+  }), false, "a vessel is the bridge gate's subject, not Cockpit's");
+});
+
+test('bridge entry needs only Live AIS Vessels', () => {
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: true, contextModeChanging: false }), true);
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: false, contextModeChanging: false }), false);
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: true, contextModeChanging: true }), false);
+});
+
+test('orbital entry needs only Satellites', () => {
+  assert.equal(orbitEntryAllowed({ satellitesEnabled: true, contextModeChanging: false }), true);
+  assert.equal(orbitEntryAllowed({ satellitesEnabled: false, contextModeChanging: false }), false);
+  assert.equal(orbitEntryAllowed({ satellitesEnabled: true, contextModeChanging: true }), false);
+});
+
+test('debris can be tracked but never ridden in orbit', () => {
+  const on = { satellitesEnabled: true, contextModeChanging: false };
+  assert.equal(orbitEntryAllowed({ ...on, subjectEnterable: false }), false);
+  assert.equal(orbitEntryAllowed({ ...on, subjectEnterable: true }), true);
+  assert.equal(orbitEntryAllowed(on), true, 'no subject read yet');
 });
 
 test('context teardown guard restores coordination state after success and failure', async () => {
