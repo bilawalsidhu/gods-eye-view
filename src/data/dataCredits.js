@@ -34,6 +34,14 @@ export const OPENMAPTILES_CREDIT = {
   html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
 };
 
+/** Conditional Salish Sea coverage; registered when its sightings first render. */
+export const ACARTIA_CREDIT = Object.freeze({
+  key: 'acartia',
+  html:
+    'Wildlife sightings: <a href="https://acartia.io" target="_blank" rel="noopener">Acartia</a> (CC BY 4.0; each provider credited per sighting) · ' +
+    '<a href="https://www.bewhalewise.org" target="_blank" rel="noopener">Be Whale Wise</a>',
+});
+
 const osmDisplays = new WeakMap();
 
 function updateOsmDisplay(viewer, state) {
@@ -188,6 +196,10 @@ export const DATA_CREDITS = [
       '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
       ' (prohibited and restricted zones; informational only)',
   },
+  {
+    key: 'inaturalist',
+    html: 'Wildlife sightings: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors (licences per record; photos credited on each card)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
@@ -308,6 +320,15 @@ export const DATA_CREDITS = [
       '<a href="https://transit.gencat.cat/" target="_blank" rel="noopener">Servei Català de Trànsit</a> ' +
       '(Llicència oberta d’ús d’informació - Catalunya); some cameras are supplied by partners ' +
       '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
+  },
+  {
+    key: 'iceland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Iceland): road camera images, fetched live, from the ' +
+      '<a href="https://www.vegagerdin.is/" target="_blank" rel="noopener">Icelandic Road and Coastal Administration (Vegagerðin)</a> — ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
+      '(<a href="https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur/terms-and-conditions" target="_blank" rel="noopener">terms</a>); ' +
+      'no endorsement by IRCA is implied',
   },
   {
     key: 'kingcounty-cctv',

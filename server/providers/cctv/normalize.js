@@ -460,6 +460,17 @@ export function isLikelyCataloniaCoordinate(lat, lon) {
   );
 }
 
+/** Iceland bounding box (mainland and nearby islands, with a margin). */
+export function isLikelyIcelandCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 63.0 &&
+    lat <= 66.7 &&
+    lon >= -25.0 &&
+    lon <= -13.0
+  );
+}
+
 /**
  * Decode numeric HTML character references, decimal ("&#237;") and hex
  * ("&#xED;") alike, the entity form the Catalonia feed uses for accented

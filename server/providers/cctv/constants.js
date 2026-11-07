@@ -309,6 +309,37 @@ export const CATALONIA_ANCHORS = [
   { lat: 41.5636, lon: 2.0111 }, // Terrassa
 ];
 
+/**
+ * Icelandic Road and Coastal Administration (Vegagerðin, IRCA) road cameras:
+ * one keyless JSON list, one row per camera view (about 500 views at roughly
+ * 170 stations, verified 2026-11-06). Frames are stills on the IRCA host, each
+ * rewritten by the publisher every few minutes. Camera images are published
+ * under CC BY 4.0 (IRCA terms of use, "Open data" section).
+ */
+export const ICELAND_CAMERAS_URL =
+  'https://gagnaveita.vegagerdin.is/api/vefmyndavelar2014_1';
+/** The only directory Iceland camera frames may come from. */
+export const ICELAND_IMAGE_ORIGIN =
+  'https://www.vegagerdin.is/vgdata/vefmyndavelar/';
+/** Byte ceiling for the Iceland catalog read (~150 KB observed 2026-11-06). */
+export const ICELAND_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Ground-elevation prior in metres: the feed carries none, and the country
+ * runs from sea level to highland passes. The client's ground snap corrects
+ * this on 3D-tile stacks. */
+export const ICELAND_GROUND_ELEVATION_M = 60;
+/** The feed lists about 500 views; the default keeps half so the shared
+ * catalog cap still leaves room for denser regions. */
+export const DEFAULT_ICELAND_MAX_SOURCES = 250;
+/** Prioritization anchors: Reykjavík and the regional centres, so a cap keeps
+ * every region's nearest cameras instead of only the capital's. */
+export const ICELAND_ANCHORS = [
+  { lat: 64.1466, lon: -21.9426 }, // Reykjavík
+  { lat: 65.6885, lon: -18.1262 }, // Akureyri
+  { lat: 65.2639, lon: -14.3948 }, // Egilsstaðir
+  { lat: 66.0749, lon: -23.1351 }, // Ísafjörður
+  { lat: 63.9331, lon: -20.9971 }, // Selfoss
+];
+
 /** Hong Kong Transport Department traffic snapshot cameras: keyless English
  * locations XML on DATA.GOV.HK; frames are stills on the TD CCTV host. */
 export const DEFAULT_HK_CAMERAS_URL =
