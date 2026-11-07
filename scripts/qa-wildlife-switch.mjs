@@ -16,7 +16,7 @@ import {
 // Wildlife Sightings over Cesium → Navara → Cesium → Navara: on each engine
 // the four fixture sightings are badges in engine.movers at their positions
 // (each one picks as itself), the density glow is its own sprite set, and
-// the obscured record's privacy cell is an outline on engine.lines; a
+// the obscured record's privacy cell is a fill and outline on engine.ground; a
 // pointer click on a badge selects that sighting and opens its card.
 //
 // The first two switches are made from the keyboard with the card open (Tab
@@ -30,7 +30,7 @@ import {
 const LAYER = 'wildlife-sightings';
 const BADGES = 'wildlife-sightings';
 const GLOW = 'wildlife-sightings-density';
-const CELL_LINE = 'wildlife-sightings-cell:';
+const CELL_SET = 'wildlife-sightings-cells';
 // One density cell per iNaturalist observation (Acartia has no grid).
 const GLOW_CELLS = WILDLIFE_SIGHTINGS.filter((s) =>
   s.id.startsWith('inat:'),
@@ -113,10 +113,10 @@ await strict.run({}, async (b) => {
             .filter((set) => set.id.startsWith('wildlife-sightings'))
             .map((set) => [set.id, { kind: set.kind, count: set.count }]),
         );
-        const cells = engine.lines
+        const cells = engine.ground
           .list()
-          .filter((line) => line.id.startsWith(prefix))
-          .map(({ points, shown }) => ({ points, shown }));
+          .filter((set) => set.id === prefix)
+          .map(({ kind, count, shown }) => ({ kind, count, shown }));
         const badges = ids.map((id) => {
           const position = window.qaWild.getSightingPosition(id);
           const screen =
@@ -149,7 +149,7 @@ await strict.run({}, async (b) => {
         return { sets, cells, badges };
       },
       [...byId.keys()],
-      CELL_LINE,
+      CELL_SET,
     );
   // Every badge in engine.movers and picked as itself, the glow drawn and
   // the privacy cell outlined (the engines draw a few frames after the data).
@@ -164,7 +164,8 @@ await strict.run({}, async (b) => {
       const ok =
         drawn.sets[BADGES]?.count === byId.size &&
         drawn.sets[GLOW]?.count === GLOW_CELLS &&
-        drawn.cells.length === CELLS.length &&
+        drawn.cells.length === 1 &&
+        drawn.cells[0].count === CELLS.length &&
         drawn.badges.every(
           (badge) => badge.picked?.id === `wildlife:${badge.id}`,
         );
@@ -417,9 +418,10 @@ await strict.run({}, async (b) => {
     await strict.check(
       p,
       LAYER,
-      'the obscured record’s privacy cell is a shown outline on engine.lines',
-      drawn.cells.length === CELLS.length &&
-        drawn.cells.every((line) => line.shown && line.points === 33),
+      'the obscured record’s privacy cell is a shown fill and outline on engine.ground',
+      drawn.cells.length === 1 &&
+        drawn.cells[0].count === CELLS.length &&
+        drawn.cells.every((set) => set.shown && set.kind === 'cell'),
       drawn.cells,
     );
     console.log(

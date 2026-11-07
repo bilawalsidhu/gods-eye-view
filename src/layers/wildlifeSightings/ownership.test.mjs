@@ -836,7 +836,22 @@ test('selection subscriptions retain omitted rows and clear on disable and destr
   unsubscribe();
 });
 
-test('privacy cells draw outlines on the engine, replace changed batches and release them', async () => {
+function watchCells(engine) {
+  let current;
+  const createSet = engine.ground.createSet.bind(engine.ground);
+  engine.ground.createSet = (options) => {
+    const set = createSet(options);
+    const { replace } = set;
+    set.replace = (items) => {
+      replace(items);
+      current = { set, items };
+    };
+    return set;
+  };
+  return () => current;
+}
+
+test('privacy cells draw on ground, replace changed batches and release them', async () => {
   let rows = [
     {
       ...base,
@@ -845,29 +860,27 @@ test('privacy cells draw outlines on the engine, replace changed batches and rel
     },
   ];
   const h = harness({ getSnapshot: async () => rows });
+  const cells = watchCells(h.engine);
   await h.update();
-  const first = h.engine.lines.list();
-  assert.equal(first.length, 1);
-  assert.equal(h.frameWork(), 0, 'outlines need no frame work');
+  const first = cells();
+  assert.equal(h.engine.ground.list().length, 1);
+  assert.equal(h.frameWork(), 0, 'static cells need no frame work');
   rows = [{ ...rows[0], iconic: 'Fungi' }];
   await h.update();
-  const second = h.engine.lines.list();
-  assert.equal(second.length, 1);
-  assert.notEqual(second[0].id, first[0].id, 'a new accent replaces the line');
-  assert.equal(h.engine.fake.line(first[0].id), undefined);
+  const second = cells();
+  assert.equal(h.engine.ground.list().length, 1);
+  assert.notEqual(second.set, first.set, 'a new accent replaces the geometry');
+  assert.notDeepEqual(second.items[0].fill, first.items[0].fill);
+  assert.throws(() => first.set.commit(), /destroyed/);
   h.layer.selectSighting(base.stableId);
   assert.equal(h.focus.at(-1).kind, 'sighting-area');
   const selectedRing = h.badges()[0];
   assert.deepEqual(selectedRing.color, [1, 1, 1, 1]);
   assert.equal(selectedRing.scale, 1);
   assert.match(h.badgeSet().options.sprite.atlas.url, /^data:image\/svg/);
-  assert.deepEqual(
-    h.engine.lines.list(),
-    second,
-    'selection reuses unchanged privacy geometry',
-  );
+  assert.equal(cells(), second, 'selection reuses unchanged privacy geometry');
   h.layer.disable();
-  assert.deepEqual(h.engine.lines.list(), []);
+  assert.deepEqual(h.engine.ground.list(), []);
   h.layer.destroy();
 });
 
@@ -2185,6 +2198,7 @@ test('an engine switch keeps the data and selection and redraws the same badges 
       fetchedAt: NOW,
     }),
   });
+  const firstCells = watchCells(h.engine);
   await h.update();
   assert.equal(h.layer.selectSighting('inat:1'), true);
   const drawn = (engine) =>
@@ -2221,12 +2235,13 @@ test('an engine switch keeps the data and selection and redraws the same badges 
   const beforeStyle = style(first);
   const beforeGlow = glow(first);
   assert.equal(beforeGlow.count, 1);
-  const outline = first.fake.line(first.lines.list()[0].id);
+  const cell = firstCells();
   const stats = h.layer.getStats();
 
   h.layer.detachRenderer();
   assert.deepEqual(first.movers.list(), [], 'nothing stays drawn');
   assert.deepEqual(first.lines.list(), []);
+  assert.deepEqual(first.ground.list(), []);
   assert.equal(first.camera.moveEnd.numberOfListeners, 0);
   assert.equal(first.frames.preRender.numberOfListeners, 0);
   assert.equal(first.frames.postRender.numberOfListeners, 0);
@@ -2236,14 +2251,17 @@ test('an engine switch keeps the data and selection and redraws the same badges 
 
   const other = ENGINE_KINDS.find((kind) => kind !== h.engine.kind);
   const next = h.globe(other);
+  const nextCells = watchCells(next);
   assert.equal(h.layer.attachRenderer(null, { engine: next }), true);
   h.flushIdle();
   assert.deepEqual(drawn(next), before, 'the same badges, drawn the same');
   assert.deepEqual(style(next), beforeStyle);
   assert.deepEqual(glow(next), beforeGlow);
-  const redrawn = next.fake.line(next.lines.list()[0].id);
-  assert.deepEqual(redrawn.options.color, outline.options.color);
-  assert.deepEqual([...redrawn.positions], [...outline.positions]);
+  assert.deepEqual(
+    nextCells().items,
+    cell.items,
+    'same draped cell colours and bounds',
+  );
   assert.equal(requests, 1, 'the retained view needs no new request');
   assert.equal(h.layer.getStats().count, stats.count);
   assert.equal(

@@ -28,44 +28,9 @@ import {
 export const WILDLIFE_BADGE_SET_ID = 'wildlife-sightings';
 export const WILDLIFE_BADGE_ORDER =
   SPRITE_LAYER_ORDER.indexOf('wildlife-sightings');
-const CELL_LINE_PREFIX = 'wildlife-sightings-cell:';
-const CELL_LINE_WIDTH_PX = 2;
-// Points per privacy-cell edge, so long edges follow the surface.
-const CELL_EDGE_STEPS = 8;
+export const WILDLIFE_CELL_SET_ID = 'wildlife-sightings-cells';
 
-/** The closed outline of a privacy cell at `height` metres, as flat ECEF. */
-export function wildlifeCellOutline({ south, west, north, east }, height = 0) {
-  const corners = [
-    [west, south],
-    [east, south],
-    [east, north],
-    [west, north],
-    [west, south],
-  ];
-  const flat = new Float64Array((4 * CELL_EDGE_STEPS + 1) * 3);
-  let at = 0;
-  const scratch = geo.cartesian3.create();
-  for (let edge = 0; edge < 4; edge++) {
-    const [lon0, lat0] = corners[edge];
-    const [lon1, lat1] = corners[edge + 1];
-    for (let step = 0; step < CELL_EDGE_STEPS + (edge === 3 ? 1 : 0); step++) {
-      const t = step / CELL_EDGE_STEPS;
-      geo.cartesian3.fromDegrees(
-        lon0 + (lon1 - lon0) * t,
-        lat0 + (lat1 - lat0) * t,
-        height,
-        undefined,
-        scratch,
-      );
-      flat[at++] = scratch.x;
-      flat[at++] = scratch.y;
-      flat[at++] = scratch.z;
-    }
-  }
-  return flat;
-}
-
-/** Own sighting badges, density glow and privacy-cell outlines on the engine. */
+/** Own sighting badges, density glow and draped privacy cells on the engine. */
 export function createRendering({ state, services, parts }) {
   const badgeSprites = services.badgeSprites ?? wildlifeSpriteCache();
   let batchDepth = 0;
@@ -73,7 +38,6 @@ export function createRendering({ state, services, parts }) {
   let billboards = null;
   let density = null;
   let cellsSignature = null;
-  let cellLineSerial = 0;
   let ambientAnchorIds = new Set();
   const badgeScreens = new Map();
   const crowdedBadgeIds = new Set();
@@ -177,14 +141,6 @@ export function createRendering({ state, services, parts }) {
         (!horizon || horizon.isPointVisible(anchor) === true);
       if (point.show === show) continue;
       point.show = show;
-      changed = true;
-    }
-    // A depth-free outline shows through the globe; keep only front ones.
-    for (const cell of state.cells) {
-      const shown = !horizon || horizon.isPointVisible(cell.center) === true;
-      if (cell.shown === shown) continue;
-      cell.shown = shown;
-      cell.line.show(shown);
       changed = true;
     }
     if (changed) requestRender('cull');
@@ -326,13 +282,12 @@ export function createRendering({ state, services, parts }) {
   }
 
   function clearCells() {
-    for (const cell of state.cells) cell.line.destroy();
+    for (const cell of state.cells) cell.destroy();
     state.cells = [];
     cellsSignature = null;
   }
 
-  // Privacy cells as outlines in their taxon accent. Outlines sit at the
-  // cell's sampled ground height and draw through the scene, as the badges do.
+  // Privacy cells drape their taxon fill and outline on terrain and tiles.
   function stageCells(rows) {
     const cellsVisible = state.band === 'cells' || state.band === 'cards';
     const unique = new Map();
@@ -349,25 +304,22 @@ export function createRendering({ state, services, parts }) {
     clearCells();
     cellsSignature = signature;
     if (!unique.size) return true;
-    const horizon = occluder();
-    for (const row of unique.values()) {
-      const { south, west, north, east } = row.cell;
-      const lat = (south + north) / 2;
-      const lon = (west + east) / 2;
-      const floor = services.groundFloor?.cachedGroundFloor?.(lat, lon);
-      const height = Number.isFinite(floor) ? floor : 0;
-      const line = state.engine.lines.createLine({
-        id: `${CELL_LINE_PREFIX}${++cellLineSerial}`,
-        widthPx: CELL_LINE_WIDTH_PX,
-        color: rgbaFromCss(wildlifeAccent(row.iconic)).withAlpha(0.8).rgba(),
-        depthFailAlpha: 1,
-      });
-      line.setPositions(wildlifeCellOutline(row.cell, height));
-      const center = geo.cartesian3.fromDegrees(lon, lat, height);
-      const shown = !horizon || horizon.isPointVisible(center) === true;
-      if (!shown) line.show(false);
-      state.cells.push({ line, center, shown });
-    }
+    const set = state.engine.ground.createSet({
+      id: WILDLIFE_CELL_SET_ID,
+      kind: 'cell',
+    });
+    state.cells.push(set);
+    set.replace(
+      [...unique.values()].map((row) => {
+        const tint = rgbaFromCss(wildlifeAccent(row.iconic));
+        return {
+          ...row.cell,
+          fill: tint.withAlpha(0.25).rgba(),
+          outline: { color: tint.withAlpha(0.8).rgba(), widthPx: 2 },
+        };
+      }),
+    );
+    set.commit();
     return true;
   }
 

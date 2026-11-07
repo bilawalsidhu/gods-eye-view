@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as geo from '../../geo/index.js';
+import {
+  createFakeGroundHarness,
+  createCesiumGroundHarness,
+} from '../../testSupport/groundDisplayEngines.mjs';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import {
   createRendering,
   WILDLIFE_BADGE_ORDER,
   WILDLIFE_BADGE_SET_ID,
+  WILDLIFE_CELL_SET_ID,
 } from './rendering.js';
 import { WILDLIFE_DENSITY_SET_ID } from './density.js';
 import { wildlifeNearFarValue } from './display.js';
@@ -33,9 +38,12 @@ const latOf = (position) =>
   (geo.cartographic.fromCartesian(position).latitude * 180) / Math.PI;
 
 /** The real rendering on a fake engine above the fixture, 100 px a degree. */
-function harness(rows = [base], { project, ...extra } = {}) {
-  const engine = createFakeEngine();
-  engine.fake.setPose({
+function harness(rows = [base], { project, groundHarness, ...extra } = {}) {
+  const engine = groundHarness?.engine ?? createFakeEngine();
+  engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(base.lon, base.lat, 30_000),
+  });
+  engine.fake?.setPose({
     longitude: degrees(base.lon),
     latitude: degrees(base.lat),
     height: 30_000,
@@ -44,7 +52,7 @@ function harness(rows = [base], { project, ...extra } = {}) {
     roll: 0,
   });
   let projections = 0;
-  engine.fake.script('worldToWindow', (position) => {
+  engine.projector.worldToWindow = (position) => {
     projections++;
     return project
       ? project(position)
@@ -52,7 +60,7 @@ function harness(rows = [base], { project, ...extra } = {}) {
           x: 100 + (lonOf(position) - base.lon) * 100,
           y: 100 - (latOf(position) - base.lat) * 100,
         };
-  });
+  };
   let visible = true;
   engine.projector.horizonVisible = () => visible;
   const counts = { created: 0, removed: 0, cleared: 0, writes: [] };
@@ -446,56 +454,81 @@ test('a selected observation remains rendered outside the viewport and observati
   h.rendering.destroy();
 });
 
-test('privacy cells draw accent outlines through the scene and release them', () => {
-  const cell = { south: 47.6, west: -122.4, north: 47.8, east: -122.2 };
-  const h = harness([{ ...base, obscured: true, cell }], {
-    groundFloor: { cachedGroundFloor: () => 250 },
+for (const make of [createFakeGroundHarness, createCesiumGroundHarness]) {
+  test(`privacy cells drape accent fills and outlines and release them (${make.name})`, () => {
+    const cell = { south: 47.6, west: -122.4, north: 47.8, east: -122.2 };
+    const groundHarness = make();
+    const h = harness(
+      [
+        { ...base, obscured: true, cell },
+        { ...base, stableId: 'duplicate', obscured: true, cell },
+      ],
+      { groundHarness, groundFloor: { cachedGroundFloor: () => 250 } },
+    );
+    h.rendering.rebuild();
+    const set = groundHarness.set(WILDLIFE_CELL_SET_ID);
+    assert.equal(set.options.kind, 'cell');
+    assert.equal(set.options.drape, 'both');
+    assert.equal(set.options.pickable, false);
+    assert.equal(set.items.length, 1, 'same bounds and taxon share a cell');
+    const item = set.items[0];
+    assert.deepEqual(
+      {
+        south: item.south,
+        west: item.west,
+        north: item.north,
+        east: item.east,
+      },
+      cell,
+    );
+    const tint = ICONIC_TINTS.Aves;
+    const rgb = [1, 3, 5].map((offset) =>
+      parseInt(tint.slice(offset, offset + 2), 16),
+    );
+    assert.deepEqual(
+      item.fill.map((v) => Math.round(v * 255)),
+      [...rgb, Math.round(0.25 * 255)],
+    );
+    assert.deepEqual(
+      item.outline.color.map((v) => Math.round(v * 255)),
+      [...rgb, Math.round(0.8 * 255)],
+    );
+    assert.equal(item.outline.widthPx, 2);
+    assert.equal(item.pickId, undefined, 'picks pass through the cell');
+    assert.equal(set.shown, true);
+    assert.deepEqual(h.engine.lines.list(), [], 'ground owns the outline');
+    if (groundHarness.cesium) {
+      const { fills, lines } = groundHarness.primitives(WILDLIFE_CELL_SET_ID);
+      assert.equal(fills.length, 1);
+      assert.equal(lines.length, 1);
+      assert.equal(fills[0].options.allowPicking, false);
+      assert.equal(lines[0].options.allowPicking, false);
+    }
+    h.rendering.rebuild();
+    assert.equal(
+      groundHarness.set(WILDLIFE_CELL_SET_ID).commits,
+      1,
+      'unchanged cells keep their geometry',
+    );
+    h.visible(false);
+    h.rendering.cull();
+    assert.equal(
+      groundHarness.set(WILDLIFE_CELL_SET_ID).shown,
+      true,
+      'ground handles horizon occlusion',
+    );
+    h.visible(true);
+    h.state.band = 'regional';
+    h.rendering.rebuild();
+    assert.deepEqual(h.engine.ground.list(), [], 'wide views draw no cells');
+    h.state.band = 'cards';
+    h.rendering.rebuild();
+    assert.equal(h.engine.ground.list().length, 1);
+    h.rendering.destroy();
+    assert.deepEqual(h.engine.ground.list(), []);
+    groundHarness.destroy();
   });
-  h.rendering.rebuild();
-  const lines = h.engine.lines.list();
-  assert.equal(lines.length, 1);
-  const line = h.engine.fake.line(lines[0].id);
-  assert.equal(line.options.widthPx, 2);
-  assert.equal(line.options.depthFailAlpha, 1);
-  const tint = ICONIC_TINTS.Aves;
-  assert.deepEqual(
-    line.color.map((value) => Math.round(value * 255)),
-    [
-      parseInt(tint.slice(1, 3), 16),
-      parseInt(tint.slice(3, 5), 16),
-      parseInt(tint.slice(5, 7), 16),
-      Math.round(0.8 * 255),
-    ],
-  );
-  const flat = line.positions;
-  const first = geo.cartesian3.create(flat[0], flat[1], flat[2]);
-  const last = geo.cartesian3.create(...flat.slice(-3));
-  assert.ok(geo.cartesian3.distance(first, last) < 1e-6, 'a closed ring');
-  assert.ok(Math.abs(lonOf(first) - cell.west) < 1e-9);
-  assert.ok(Math.abs(latOf(first) - cell.south) < 1e-9);
-  assert.ok(
-    Math.abs(geo.cartographic.fromCartesian(first).height - 250) < 1e-3,
-    'at the sampled ground height',
-  );
-  assert.equal(line.shown, true);
-  // An unchanged cell set keeps its lines.
-  h.rendering.rebuild();
-  assert.deepEqual(h.engine.lines.list(), lines);
-  h.visible(false);
-  h.rendering.cull();
-  assert.equal(line.shown, false, 'outlines behind the globe hide');
-  h.visible(true);
-  h.rendering.cull();
-  assert.equal(line.shown, true);
-  h.state.band = 'regional';
-  h.rendering.rebuild();
-  assert.deepEqual(h.engine.lines.list(), [], 'wide views draw no cells');
-  h.state.band = 'cards';
-  h.rendering.rebuild();
-  assert.equal(h.engine.lines.list().length, 1);
-  h.rendering.destroy();
-  assert.deepEqual(h.engine.lines.list(), []);
-});
+}
 
 test('font readiness swaps the atlas in place without badge recreation or position work', () => {
   const listeners = new Set();
