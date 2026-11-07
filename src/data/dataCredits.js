@@ -355,6 +355,14 @@ export const DATA_CREDITS = [
       '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
   },
   {
+    key: 'webcamromania-cctv',
+    html:
+      'Giroc camera (when configured): ' +
+      '<a href="https://webcamromania.ro/webcam-orase/webcam-giroc/" target="_blank" rel="noopener">Webcam Romania</a>. ' +
+      'Video rights remain with the camera operator; ' +
+      '<a href="https://webcamromania.ro/termeni-si-conditii/" target="_blank" rel="noopener">provider terms</a> apply.',
+  },
+  {
     key: 'vegvesen-cctv',
     html:
       'Road cameras (Norway): contains data under the ' +
