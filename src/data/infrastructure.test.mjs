@@ -208,6 +208,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'router.js',
     'scenePick.js',
     'sensorPick.js',
+    'styleStages.js',
     'vector.js',
   ]);
   assert.deepEqual(

@@ -1473,11 +1473,14 @@ remain unchanged.
 
 ## Visual effects ownership
 
-VisualEffects owns style-stage creation, crossfades, animation scheduling, bloom
-and sharpen. Display supplies actions and renders settings; effect execution has
-no DOM dependency. Existing presets and the 500 ms transition remain unchanged.
-Stopping the controller revokes animation before asynchronous UI teardown; final
-destruction removes its stages and restores the borrowed bloom configuration.
+VisualEffects keeps the records of the styles, their crossfades, bloom and
+sharpen, and drives them through the renderer's effects port: it defines each
+preset there as a style, and the renderer runs the passes and animates the
+animated ones. Display supplies actions and renders settings; effect execution
+has no DOM dependency. Existing presets and the 500 ms transition remain
+unchanged. Stopping the controller revokes animation before asynchronous UI
+teardown; final destruction removes its styles and turns bloom and sharpen off,
+and the renderer restores the scene's bloom configuration when it goes.
 Snow is no longer a visual preset. A share link that names it, in either the
 long or compact form, opens on Normal and drops the Snow shader parameters. A
 view passed to embed mode or `show_in_gods_eye_view`, and a saved scene shot,

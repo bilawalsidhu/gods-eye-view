@@ -1,22 +1,51 @@
-import { PostProcessStage } from 'cesium';
 import {
   bloomStrengthFromIntensity,
   clampBloomIntensity,
   BLOOM_INTENSITY_DEFAULT,
 } from '../bloom.js';
-import {
-  STYLES,
-  SHARPEN_SHADER,
-  TRANSITION_DURATION_MS,
-} from './visualPresets.js';
+import { registerStyleStages } from '../styles/styleStages.js';
+import { STYLES, TRANSITION_DURATION_MS } from './visualPresets.js';
 
-/** Own the post-process stages and their animation, without DOM dependencies. */
+/** Below this a style draws nothing, so it runs no pass. */
+const OFF = 0.001;
+
+/**
+ * A style as the renderer contract defines it
+ * (`src/render/contract/effects.d.ts`).
+ * @param {string} name
+ * @param {{fragmentShader: string, uniforms?: Record<string, {default: number, min: number, max: number}>}} shader
+ */
+export function styleDefinition(name, shader) {
+  return {
+    id: name,
+    params: Object.entries(shader.uniforms || {}).map(([key, meta]) => ({
+      key,
+      min: meta.min,
+      max: meta.max,
+      default: meta.default,
+    })),
+    animated: shader.fragmentShader.includes('uniform float time'),
+    shader: { glsl: shader.fragmentShader },
+  };
+}
+
+/**
+ * Core's records of the visual styles, bloom and sharpen, and their
+ * crossfades, driven onto the renderer's effects port. Each style's record
+ * (`stages[name]`) holds its intensity and parameter values in `uniforms`,
+ * written through to the renderer, and `enabled`, whether it draws. The
+ * renderer animates `time` for an animated style; this keeps only the
+ * crossfades' frames. No DOM dependencies.
+ */
 export class VisualEffects {
   /**
-   * @param {object} options - Viewer, render ownership callbacks and optional clocks.
-   * Construction is inert; initStyles/initPostProcess retain startup ordering.
+   * @param {object} options - The renderer's effects port (null: records
+   *   only), the viewer whose sky the anime style dims, render ownership
+   *   callbacks and optional clocks. Construction is inert;
+   *   initStyles/initPostProcess retain startup ordering.
    */
   constructor({
+    effects = null,
     viewer,
     requestRender,
     holdRender,
@@ -24,9 +53,8 @@ export class VisualEffects {
     requestFrame = (callback) => requestAnimationFrame(callback),
     cancelFrame = (id) => cancelAnimationFrame(id),
     now = () => performance.now(),
-    wallNow = () => Date.now(),
-    createStage = (options) => new PostProcessStage(options),
   }) {
+    this.effects = effects;
     this.viewer = viewer;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
@@ -34,93 +62,113 @@ export class VisualEffects {
     this.requestFrame = requestFrame;
     this.cancelFrame = cancelFrame;
     this.now = now;
-    this.wallNow = wallNow;
-    this.createStage = createStage;
     this.stages = {};
     this.transitions = new Map();
-    this.startTime = wallNow();
     this.bloomEnabled = false;
     this.sharpenEnabled = false;
     this.bloomIntensity = BLOOM_INTENSITY_DEFAULT;
     this.sharpenIntensity = 0.49;
-    this.bloomStage = null;
-    this.sharpenStage = null;
+    this.postProcessReady = false;
     this.frameId = null;
     this.stopped = false;
     this.destroyed = false;
     this.stageEntries = [];
-    this.previousBloom = null;
+    // What the renderer draws: its style, and the styles it replaced while
+    // they fade out (`EffectsPort.setStyle`).
+    this.rendererStyle = null;
+    this.drawn = new Set();
+    this.offs = [];
+    this.forgetStages = () => {};
   }
 
   initStyles() {
     if (this.stopped || this.stageEntries.length) return;
     for (const [name, shader] of Object.entries(STYLES)) {
-      const uniforms = { intensity: 0.0 };
-      if (shader.fragmentShader.includes('uniform float time'))
-        uniforms.time = 0.0;
-      for (const [name, meta] of Object.entries(shader.uniforms || {}))
-        uniforms[name] = meta.default;
-      const stage = this.createStage({
-        name: `godsEyeView_${name}`,
-        fragmentShader: shader.fragmentShader,
-        uniforms,
-      });
-      stage.enabled = false;
-      this.viewer.scene.postProcessStages.add(stage);
-      this.stages[name] = stage;
+      const definition = styleDefinition(name, shader);
+      const off = this.effects?.defineStyle(definition);
+      if (off) this.offs.push(off);
+      this.effects?.setStyleIntensity(name, 0);
+      this.stages[name] = this.styleRecord(name, definition);
     }
     this.stageEntries = Object.entries(this.stages);
+    this.forgetStages = registerStyleStages(this.viewer?.scene, this.stages);
+  }
+
+  /** A style's record, its uniforms written through to the renderer. */
+  styleRecord(name, definition) {
+    let intensity = 0;
+    const values = Object.fromEntries(
+      definition.params.map((p) => [p.key, p.default]),
+    );
+    const uniforms = {};
+    Object.defineProperty(uniforms, 'intensity', {
+      enumerable: true,
+      get: () => intensity,
+      set: (value) => {
+        intensity = value;
+        this.pushIntensity(name, value);
+      },
+    });
+    for (const { key } of definition.params)
+      Object.defineProperty(uniforms, key, {
+        enumerable: true,
+        get: () => values[key],
+        set: (value) => {
+          values[key] = value;
+          if (!this.destroyed)
+            this.effects?.setStyleParams(name, { [key]: value });
+        },
+      });
+    return { name, enabled: false, uniforms };
+  }
+
+  /**
+   * A style's intensity on the renderer. Raised from nothing, it becomes
+   * the renderer's style, so it draws; the style it replaces fades out
+   * there at the intensity this keeps writing, as every stage with an
+   * intensity drew before.
+   */
+  pushIntensity(name, value) {
+    if (this.destroyed || !this.effects) return;
+    this.effects.setStyleIntensity(name, value);
+    // Once stopped, a write only tunes what already draws.
+    if (this.stopped) return;
+    if (value > OFF) {
+      if (!this.drawn.has(name)) {
+        const previous = this.rendererStyle;
+        if (previous && !(this.stages[previous]?.uniforms.intensity > OFF))
+          this.drawn.delete(previous);
+        this.effects.setStyle(name);
+        this.rendererStyle = name;
+        this.drawn.add(name);
+      }
+    } else if (name !== this.rendererStyle) {
+      this.drawn.delete(name);
+    }
   }
 
   initPostProcess(sharpenIntensity = this.sharpenIntensity) {
-    if (this.stopped || this.sharpenStage) return;
-    this.bloomStage = this.viewer.scene.postProcessStages.bloom;
-    const names = [
-      'glowOnly',
-      'contrast',
-      'brightness',
-      'delta',
-      'sigma',
-      'stepSize',
-    ];
-    this.previousBloom = {
-      enabled: this.bloomStage.enabled,
-      uniforms: Object.fromEntries(
-        names.map((name) => [name, this.bloomStage.uniforms[name]]),
-      ),
-    };
-    this.bloomStage.enabled = false;
-    Object.assign(this.bloomStage.uniforms, {
-      glowOnly: false,
-      contrast: 256.0,
-      brightness: -0.35,
-      delta: 0.25,
-      sigma: 0.35,
-      stepSize: 1.0,
+    if (this.stopped || this.postProcessReady) return;
+    this.postProcessReady = true;
+    this.effects?.bloom({
+      enabled: false,
+      strength: bloomStrengthFromIntensity(this.bloomIntensity),
     });
-    this.sharpenStage = this.createStage({
-      name: 'godsEyeView_sharpen',
-      fragmentShader: SHARPEN_SHADER,
-      uniforms: { amount: 1.3 },
-    });
-    this.sharpenStage.enabled = false;
-    this.viewer.scene.postProcessStages.add(this.sharpenStage);
+    this.effects?.sharpen({ enabled: false, amount: sharpenIntensity });
     this.applySharpenIntensity(sharpenIntensity);
   }
 
   setStageIntensity(stage, value) {
     if (this.stopped || !stage) return;
     stage.uniforms.intensity = value;
-    stage.enabled = value > 0.001;
+    stage.enabled = value > OFF;
     // Anime's bands turn the faint Milky Way into blotches, and depth cannot
     // tell the sky from far geometry, so the glow fades with the style.
     if (
       stage === this.stages.anime &&
-      this.viewer.scene.skyBox?.milkyWayVisibility !== undefined
+      this.viewer?.scene?.skyBox?.milkyWayVisibility !== undefined
     )
       this.viewer.scene.skyBox.milkyWayVisibility = 1 - value;
-    if (stage.enabled && stage.uniforms.time !== undefined)
-      this.startAnimationLoop();
     this.requestRender('style-stage');
   }
 
@@ -130,26 +178,19 @@ export class VisualEffects {
   }
 
   syncBloomEnabled() {
-    if (this.stopped || !this.bloomStage) return;
-    this.bloomStage.enabled =
-      this.bloomEnabled &&
-      bloomStrengthFromIntensity(this.bloomIntensity) > 0.06;
+    if (this.stopped || !this.postProcessReady) return;
+    this.effects?.bloom({ enabled: this.bloomEnabled });
   }
 
   applyBloomIntensity(intensity) {
     if (this.stopped) return;
     this.bloomIntensity = clampBloomIntensity(intensity);
     this.requestRender('bloom');
-    if (!this.bloomStage) return;
-    const rawStrength = bloomStrengthFromIntensity(this.bloomIntensity);
-    const strength = rawStrength <= 0.06 ? 0.0 : (rawStrength - 0.06) / 0.94;
-    const eased = strength * strength * (3.0 - 2.0 * strength);
-    this.bloomStage.uniforms.contrast = 255.0 - eased * 168.0;
-    this.bloomStage.uniforms.brightness = -0.5 + eased * 0.36;
-    this.bloomStage.uniforms.sigma = 0.28 + eased * 6.3;
-    this.bloomStage.uniforms.delta = 0.2 + eased * 2.25;
-    this.bloomStage.uniforms.stepSize = 1.0 + eased * 1.25;
-    this.syncBloomEnabled();
+    if (!this.postProcessReady) return;
+    this.effects?.bloom({
+      enabled: this.bloomEnabled,
+      strength: bloomStrengthFromIntensity(this.bloomIntensity),
+    });
   }
 
   setBloomEnabled(enabled) {
@@ -162,20 +203,18 @@ export class VisualEffects {
   /**
    * Sharpen runs only when it is on and its slider is above 0, as the style
    * stages do: the pass costs the same at any amount (~1.5 ms GPU per frame
-   * on the Arc, 2026-10-24), and `0.1 + value * 2` still sharpened at 0.
+   * on the Arc, 2026-10-24), and its gain still sharpened at 0.
    */
   syncSharpenEnabled() {
-    if (this.stopped || !this.sharpenStage) return;
-    this.sharpenStage.enabled =
-      this.sharpenEnabled && this.sharpenIntensity > 0.001;
+    if (this.stopped || !this.postProcessReady) return;
+    this.effects?.sharpen({ enabled: this.sharpenEnabled });
   }
 
   applySharpenIntensity(value) {
     if (this.stopped) return;
     this.sharpenIntensity = value;
-    if (this.sharpenStage)
-      this.sharpenStage.uniforms.amount = 0.1 + value * 2.0;
-    this.syncSharpenEnabled();
+    if (this.postProcessReady)
+      this.effects?.sharpen({ enabled: this.sharpenEnabled, amount: value });
     this.requestRender('sharpen');
   }
 
@@ -192,12 +231,12 @@ export class VisualEffects {
     this.startAnimationLoop();
   }
 
+  /** Steps the crossfades each frame, holding frames while one runs. */
   startAnimationLoop() {
     if (this.stopped || this.frameId !== null) return;
     const update = () => {
       if (this.stopped) return;
       const now = this.now();
-      const elapsedSec = (this.wallNow() - this.startTime) / 1000.0;
       for (const [name, transition] of this.transitions) {
         const t = Math.min(
           (now - transition.start) / TRANSITION_DURATION_MS,
@@ -213,14 +252,7 @@ export class VisualEffects {
           this.transitions.delete(name);
         }
       }
-      let animatedStageVisible = false;
-      for (const [, stage] of this.stageEntries) {
-        if (stage.enabled && stage.uniforms.time !== undefined) {
-          stage.uniforms.time = elapsedSec;
-          if (stage.uniforms.intensity > 0.001) animatedStageVisible = true;
-        }
-      }
-      const needed = this.transitions.size > 0 || animatedStageVisible;
+      const needed = this.transitions.size > 0;
       if (needed) this.holdRender('style-anim');
       else this.releaseRender('style-anim');
       this.frameId = needed ? this.requestFrame(update) : null;
@@ -228,7 +260,7 @@ export class VisualEffects {
     this.frameId = this.requestFrame(update);
   }
 
-  /** Revoke animation synchronously while callers finish releasing the stages. */
+  /** Revoke animation synchronously while callers finish releasing the styles. */
   stop() {
     if (this.stopped) return;
     this.stopped = true;
@@ -238,17 +270,17 @@ export class VisualEffects {
     this.transitions.clear();
   }
 
-  /** Remove owned stages and restore the borrowed bloom stage after callers release it. */
+  /** Remove the styles from the renderer and turn bloom and sharpen off. */
   destroy() {
     if (this.destroyed) return;
     this.stop();
     this.destroyed = true;
-    const stages = this.viewer.scene.postProcessStages;
-    for (const [, stage] of this.stageEntries) stages.remove(stage);
-    if (this.sharpenStage) stages.remove(this.sharpenStage);
-    if (this.bloomStage && this.previousBloom) {
-      Object.assign(this.bloomStage.uniforms, this.previousBloom.uniforms);
-      this.bloomStage.enabled = this.previousBloom.enabled;
+    this.forgetStages();
+    for (const off of this.offs) off();
+    this.offs = [];
+    if (this.postProcessReady) {
+      this.effects?.bloom({ enabled: false });
+      this.effects?.sharpen({ enabled: false });
     }
   }
 }

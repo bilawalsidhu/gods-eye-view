@@ -44,6 +44,7 @@ import {
 } from '../../renderGovernor.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
+import { registerStyleStages } from '../../styles/styleStages.js';
 
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
 
@@ -3446,12 +3447,16 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
   };
   const uniforms = { intensity: 1, pixelation: 1 };
   let preset = 'surveillance';
-  scene.postProcessStages = {
-    getStageByName: (name) =>
-      name === `godsEyeView_${preset}`
-        ? { enabled: true, uniforms }
-        : undefined,
-  };
+  const stage = (name) =>
+    name === preset ? { enabled: true, uniforms } : undefined;
+  registerStyleStages(scene, {
+    get surveillance() {
+      return stage('surveillance');
+    },
+    get thermal() {
+      return stage('thermal');
+    },
+  });
   const click = (position) => app.input.click(position);
   click(new Cesium.Cartesian2(1440, 540));
   assert.ok(Math.abs(actual.x - 1472) < 1e-6);
