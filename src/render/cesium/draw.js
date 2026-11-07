@@ -1442,9 +1442,9 @@ export function createCesiumDraw({
    * the set's pending one (or drawn alone); one that moves is built anew
    * at once, which needs Cesium's terrain heights loaded.
    */
-  function drapedPatchable(record, was, item) {
+  function drapedPatchable(record, was, flat) {
     if (was.ground?.isDestroyed() || was.batch?.isDestroyed()) return false;
-    if (!samePositions(flatPositions(item.positions), was.positions))
+    if (!samePositions(flat, was.positions))
       return groundSyncs() && typeof record.host?.add === 'function';
     if (was.solo) return true;
     return was.ground.ready || record.pending?.includes(was.ground);
@@ -1462,12 +1462,17 @@ export function createCesiumDraw({
   function patchLines(record, list) {
     const parts = record.lineParts;
     if (record.kind !== 'lines' || !parts) return false;
+    // Each draped line's positions, flattened once for both passes.
+    const flats = new Map();
     for (const item of list) {
       const was = parts.get(item.id);
       if (!was || was.look !== lineLook(item)) return false;
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
-      if (was.clampTo && !drapedPatchable(record, was, item)) return false;
+      if (!was.clampTo) continue;
+      const flat = flatPositions(item.positions);
+      if (!drapedPatchable(record, was, flat)) return false;
+      flats.set(item.id, flat);
     }
     for (const item of list) {
       const was = parts.get(item.id);
@@ -1499,7 +1504,7 @@ export function createCesiumDraw({
         continue;
       }
       was.id.meta = item.meta;
-      const flat = flatPositions(item.positions);
+      const flat = flats.get(item.id);
       if (!samePositions(flat, was.positions)) {
         moveDraped(record, was, item, flat);
         continue;
