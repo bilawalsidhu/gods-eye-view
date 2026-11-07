@@ -18,6 +18,11 @@ import { getLocale, setLocale } from '../i18n/index.js';
 import { reportMeshFloorCell, setMeshFloorPreferred } from './groundFloor.js';
 import { createCesiumMoversEngine } from '../testSupport/cesiumMoversEngine.mjs';
 import { createFakeEventHandlers } from '../globe/cesium/testing/fakeViewer.mjs';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const NOW = Date.UTC(2026, 6, 17, 4, 0);
 const H = 3600000;

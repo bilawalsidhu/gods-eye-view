@@ -1,4 +1,4 @@
-import { bindCctvWorldClickGesture } from '../../layers/cctv/render/display.js';
+import { bindCctvWorldClickGesture } from '../../layers/cctv/worldClick.js';
 import { createCctvLayer } from '../../layers/cctv/index.js';
 import { rendererFor } from './renderers.js';
 import * as credits from '../../data/dataCredits.js';

@@ -6,14 +6,16 @@
 // One entry per layer of the directory (src/app/layers/directory.js), in
 // its order, of one of three kinds:
 //
-// - `display(factory, needs, backends)`: the layer's render/display.js, the
+// - `display(name, needs, backends)`: the layer's render/display.js, the
 //   same factory `(engine, options) => renderer` on every engine, drawn
 //   through the contract primitives in `needs` (docs/GLOBE-PRIMITIVES.md).
-//   `backends` is the display's engine-specific option, keyed by engine
-//   kind: an import() loader of `{ option: value }` merged into the
-//   display's options on that engine (CCTV's meshes, Global Context's
-//   pulses on Navara). The displays are static (the main chunk, as before):
-//   the layers build their renderers synchronously.
+//   The factory is the export `name` of ./displays.js, one chunk loaded
+//   through import() on every engine kind, outside the Cesium-mode main
+//   chunk (but for the displays a layer package also imports as its
+//   default); the entry's `display` is its loader. `backends` is the
+//   display's engine-specific option, keyed by engine kind: an import()
+//   loader of `{ option: value }` merged into the display's options on that
+//   engine (CCTV's meshes, Global Context's pulses on Navara).
 // - `drawsItself(needs)`: no renderer; the layer draws itself through the
 //   contract primitives in `needs` (Wildlife Sightings).
 // - `perEngine({ [kind]: loader | DRAWS_ITSELF })`: a layer with no display
@@ -24,7 +26,8 @@
 //
 // Every import() here is resolved by `loadLayerRenderers(kind)`, which the
 // page awaits before it builds an engine's catalog (src/standalone/
-// application.js), so a Cesium page fetches none of the Navara ones.
+// application.js), so a Cesium page fetches its displays and none of the
+// Navara renderers.
 // `rendererFor(id, engine, options)` then answers synchronously: the
 // layer's renderer on that engine, or null when it draws itself or the
 // engine cannot show it.
@@ -47,34 +50,6 @@
 
 import { ENGINE_KINDS } from '../../globe/contract.js';
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
-import { createFlightsDisplay } from '../../layers/flights/render/display.js';
-import { createMilitaryDisplay } from '../../layers/military/render/display.js';
-import { createLocalAdsbDisplay } from '../../layers/localAdsb/render/display.js';
-import { createSatellitesDisplay } from '../../layers/satellites/render/display.js';
-import { createVesselsDisplay } from '../../layers/vessels/render/display.js';
-import { createLaunchesDisplay } from '../../layers/launches/render/display.js';
-import { createOsmPlacesDisplay } from '../../layers/osmPlaces/render/display.js';
-import { createAlprDisplay } from '../../layers/alpr/render/display.js';
-import { createBikeshareDisplay } from '../../layers/bikeshare/render/display.js';
-import { createRadioDisplay } from '../../layers/radio/render/display.js';
-import { createTransitDisplay } from '../../layers/transit/render/display.js';
-import { createCctvDisplay } from '../../layers/cctv/render/display.js';
-import { createEarthquakesDisplay } from '../../layers/earthquakes/render/display.js';
-import { createAirQualityDisplay } from '../../layers/airQuality/render/display.js';
-import { createGnssDisplay } from '../../layers/gnss/render/display.js';
-import { createPerimetersDisplay } from '../../layers/perimeters/render/display.js';
-import { createDroneAirspaceDisplay } from '../../layers/droneAirspace/render/display.js';
-import { createFirmsDisplay } from '../../layers/firms/render/display.js';
-import { createGhostMapsDisplay } from '../../layers/ghostMaps/render/display.js';
-import { createCyclonesDisplay } from '../../layers/cyclones/render/display.js';
-import { createCablesDisplay } from '../../layers/submarineCables/render/display.js';
-import { createInfrastructureDisplay } from '../../layers/infrastructure/render/display.js';
-import { createInstallationsDisplay } from '../../layers/installations/render/display.js';
-import { createAwarenessDisplay } from '../../layers/awareness/render/display.js';
-import { createStreetLevelDisplay } from '../../layers/streetLevel/render/display.js';
-import { createTrafficDisplay } from '../../layers/traffic/render/display.js';
-import { createDirectionsDisplay } from '../../layers/directions/render/display.js';
-import { createRecentImageryDisplay } from '../../layers/recentImagery/render/display.js';
 
 /**
  * The contract's drawing primitives (docs/GLOBE-PRIMITIVES.md). They are
@@ -119,11 +94,16 @@ const checkLoaders = (loaders, allowDrawsItself) => {
 };
 
 /** A layer drawn by its display on every engine (see the module comment). */
-function display(factory, needs, backends = {}) {
-  if (typeof factory !== 'function')
-    throw new TypeError('A layer display is a factory');
+function display(name, needs, backends = {}) {
+  if (typeof name !== 'string')
+    throw new TypeError('A layer display is named by its export');
   return Object.freeze({
-    display: factory,
+    display: async () => {
+      const factory = (await displays())[name];
+      if (typeof factory !== 'function')
+        throw new TypeError(`No layer display ${name} in ./displays.js`);
+      return factory;
+    },
     needs: checkNeeds(needs),
     backends: checkLoaders(backends, false),
   });
@@ -150,6 +130,9 @@ const navaraWeather = async () => {
 const navaraOnly = (navara, others = DRAWS_ITSELF) =>
   perEngine({ cesium: others, navara });
 
+// The layers' displays (./displays.js), one chunk.
+const displays = () => import('./displays.js');
+
 /** How every application layer draws, by id, in directory order. */
 export const LAYER_MANIFEST = Object.freeze({
   // The Bhote Koshi event and locator draw themselves on Cesium
@@ -166,44 +149,47 @@ export const LAYER_MANIFEST = Object.freeze({
       drawStorySource(engine, navaraNative(engine), data);
   }),
   // The aircraft family.
-  flights: display(createFlightsDisplay, ['movers', 'lines']),
-  military: display(createMilitaryDisplay, ['movers', 'lines']),
-  'local-adsb': display(createLocalAdsbDisplay, ['movers', 'lines']),
-  earthquakes: display(createEarthquakesDisplay, ['ground']),
-  'air-quality': display(createAirQualityDisplay, ['ground']),
-  'fire-perimeters': display(createPerimetersDisplay, ['ground']),
-  'gnss-integrity': display(createGnssDisplay, ['ground']),
-  's2-ghostmaps': display(createGhostMapsDisplay, ['movers', 'ground']),
-  'drone-airspace': display(createDroneAirspaceDisplay, ['ground']),
+  flights: display('createFlightsDisplay', ['movers', 'lines']),
+  military: display('createMilitaryDisplay', ['movers', 'lines']),
+  'local-adsb': display('createLocalAdsbDisplay', ['movers', 'lines']),
+  earthquakes: display('createEarthquakesDisplay', ['ground']),
+  'air-quality': display('createAirQualityDisplay', ['ground']),
+  'fire-perimeters': display('createPerimetersDisplay', ['ground']),
+  'gnss-integrity': display('createGnssDisplay', ['ground']),
+  's2-ghostmaps': display('createGhostMapsDisplay', ['movers', 'ground']),
+  'drone-airspace': display('createDroneAirspaceDisplay', ['ground']),
   // Draws itself through the globe contract (engine.movers, engine.lines).
   'wildlife-sightings': drawsItself(['movers', 'lines']),
-  'alpr-cameras': display(createAlprDisplay, ['movers']),
-  'street-level': display(createStreetLevelDisplay, ['movers', 'ground']),
-  satellites: display(createSatellitesDisplay, ['movers', 'lines']),
-  'rocket-launches': display(createLaunchesDisplay, ['movers', 'lines']),
-  traffic: display(createTrafficDisplay, ['movers', 'ground']),
+  'alpr-cameras': display('createAlprDisplay', ['movers']),
+  'street-level': display('createStreetLevelDisplay', ['movers', 'ground']),
+  satellites: display('createSatellitesDisplay', ['movers', 'lines']),
+  'rocket-launches': display('createLaunchesDisplay', ['movers', 'lines']),
+  traffic: display('createTrafficDisplay', ['movers', 'ground']),
   // CCTV's display, with the Navara backend of its plane and volume
   // (render/meshes.js).
-  cctv: display(createCctvDisplay, ['movers', 'lines'], {
+  cctv: display('createCctvDisplay', ['movers', 'lines'], {
     navara: async () => ({
       navaraMeshes: (await import('../../layers/cctv/render/navaraMeshes.js'))
         .createCctvNavaraMeshes,
     }),
   }),
-  radio: display(createRadioDisplay, ['movers']),
-  transit: display(createTransitDisplay, ['movers', 'lines']),
-  bikeshare: display(createBikeshareDisplay, ['movers']),
-  directions: display(createDirectionsDisplay, ['movers', 'ground']),
-  'recent-imagery': display(createRecentImageryDisplay, ['ground', 'imagery']),
-  'osm-places': display(createOsmPlacesDisplay, ['movers']),
-  'ais-live-vessels': display(createVesselsDisplay, ['movers', 'lines']),
-  'military-installations': display(createInstallationsDisplay, [
+  radio: display('createRadioDisplay', ['movers']),
+  transit: display('createTransitDisplay', ['movers', 'lines']),
+  bikeshare: display('createBikeshareDisplay', ['movers']),
+  directions: display('createDirectionsDisplay', ['movers', 'ground']),
+  'recent-imagery': display('createRecentImageryDisplay', [
+    'ground',
+    'imagery',
+  ]),
+  'osm-places': display('createOsmPlacesDisplay', ['movers']),
+  'ais-live-vessels': display('createVesselsDisplay', ['movers', 'lines']),
+  'military-installations': display('createInstallationsDisplay', [
     'movers',
     'ground',
   ]),
   // Global Context's display, with the Navara backend of its range pulses
   // (render/pulseDisc.js).
-  'military-awareness': display(createAwarenessDisplay, ['lines'], {
+  'military-awareness': display('createAwarenessDisplay', ['lines'], {
     navara: async () => ({
       navaraPulses: (
         await import('../../layers/awareness/render/navaraPulses.js')
@@ -220,27 +206,27 @@ export const LAYER_MANIFEST = Object.freeze({
   'weather-radar': navaraOnly(navaraWeather),
   'weather-satellite': navaraOnly(navaraWeather),
   'weather-lightning': navaraOnly(navaraWeather),
-  'weather-cyclones': display(createCyclonesDisplay, ['movers', 'ground']),
+  'weather-cyclones': display('createCyclonesDisplay', ['movers', 'ground']),
   // The open map overlays drape themselves: Cesium imagery on the viewer,
   // engine.maps.addOverlay on Navara (src/data/osmOverlays.js).
   'sea-marks': perEngine({ cesium: DRAWS_ITSELF, navara: DRAWS_ITSELF }),
   'ski-pistes': perEngine({ cesium: DRAWS_ITSELF, navara: DRAWS_ITSELF }),
-  'local-datacenters': display(createInfrastructureDisplay, [
+  'local-datacenters': display('createInfrastructureDisplay', [
     'movers',
     'lines',
     'ground',
   ]),
-  'local-dams': display(createInfrastructureDisplay, [
+  'local-dams': display('createInfrastructureDisplay', [
     'movers',
     'lines',
     'ground',
   ]),
-  'telegeography-submarine-cables': display(createCablesDisplay, [
+  'telegeography-submarine-cables': display('createCablesDisplay', [
     'movers',
     'lines',
     'ground',
   ]),
-  'local-firms': display(createFirmsDisplay, ['movers', 'ground', 'imagery']),
+  'local-firms': display('createFirmsDisplay', ['movers', 'ground', 'imagery']),
 });
 
 /** The manifest entry of a layer, or null. */
@@ -257,21 +243,42 @@ const entryAvailableOn = (entry, engineKind) => {
   return Object.hasOwn(entry.engines, engineKind);
 };
 
-/** The import() loader of a layer on an engine kind, or null. */
+/** The engine-specific import() loader of a layer on an engine kind, or null. */
 const loaderOf = (entry, engineKind) => {
   const loader = entry.backends?.[engineKind] ?? entry.engines?.[engineKind];
   return typeof loader === 'function' ? loader : null;
 };
 
-// What loadLayerRenderers resolved: engine kind → layer id → value (the
-// backend's options, or the engine-specific factory).
+/** Whether a layer has an import() to load on an engine kind. */
+const loadsOn = (entry, engineKind) =>
+  entryAvailableOn(entry, engineKind) &&
+  Boolean(entry.display || loaderOf(entry, engineKind));
+
+/**
+ * What a layer's import()s resolve to on an engine kind: its display with
+ * the backend's options (`{ display, options }`), or the engine-specific
+ * factory.
+ */
+const loadEntry = async (entry, engineKind) => {
+  const loader = loaderOf(entry, engineKind);
+  if (!entry.display) return loader();
+  const [factory, options] = await Promise.all([
+    entry.display(),
+    loader ? loader() : {},
+  ]);
+  return { display: factory, options };
+};
+
+// What loadLayerRenderers resolved: engine kind → layer id → value
+// (loadEntry's).
 const loaded = new Map();
 const loading = new Map();
 
 /**
- * Loads every import() the manifest has for `engineKind`, once per page:
- * concurrent calls share the load, and after a failure the next call loads
- * what is still missing.
+ * Loads every import() the manifest has for `engineKind` (the displays and
+ * that engine's renderers and backends), once per page: concurrent calls
+ * share the load, and after a failure the next call loads what is still
+ * missing.
  * @param {string} engineKind One of ENGINE_KINDS.
  * @returns {Promise<void>}
  */
@@ -283,8 +290,8 @@ export function loadLayerRenderers(engineKind) {
   const done = loaded.get(engineKind);
   const load = Promise.all(
     Object.entries(LAYER_MANIFEST).map(async ([id, entry]) => {
-      const loader = loaderOf(entry, engineKind);
-      if (loader && !done.has(id)) done.set(id, await loader());
+      if (loadsOn(entry, engineKind) && !done.has(id))
+        done.set(id, await loadEntry(entry, engineKind));
     }),
   ).then(
     () => {
@@ -338,15 +345,15 @@ export function rendererFor(layerId, engine, options = {}) {
   const standIn = standIns.get(engineKind)?.get(layerId);
   if (standIn) return standIn(engine, options);
   const entry = entryOf(LAYER_MANIFEST, layerId);
-  if (!entryAvailableOn(entry, engineKind)) return null;
-  const loader = loaderOf(entry, engineKind);
-  const value = loader ? loaded.get(engineKind)?.get(layerId) : undefined;
-  if (loader && value === undefined)
+  if (!loadsOn(entry, engineKind)) return null;
+  const value = loaded.get(engineKind)?.get(layerId);
+  if (value === undefined)
     throw new Error(
       `Layer ${layerId} on ${engineKind}: its renderer is not loaded (loadLayerRenderers)`,
     );
-  if (entry.display) return entry.display(engine, { ...options, ...value });
-  return typeof value === 'function' ? value(engine, options) : null;
+  if (entry.display)
+    return value.display(engine, { ...options, ...value.options });
+  return value(engine, options);
 }
 
 /** Whether the application can show a layer on an engine kind. */

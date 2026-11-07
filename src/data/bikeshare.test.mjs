@@ -10,6 +10,11 @@ import {
   _setBikeshareSelectionStateForTest,
   createBikeshareSelectedOverlayEntry,
 } from './bikeshare.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 function makeRecord() {
   return {

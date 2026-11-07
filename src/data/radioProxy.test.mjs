@@ -20,6 +20,11 @@ import {
 import { RADIO_REJECTED_STATION_COUNT_MAX as SERVER_REJECTED_MAX } from '../../server/providers/radio/constants.js';
 import { RADIO_REJECTED_STATION_COUNT_MAX as CLIENT_REJECTED_MAX } from '../layers/radio/policy.js';
 import { radioTestEngine } from '../testSupport/radioTestEngine.mjs';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const UUID = '12345678-1234-4234-8234-123456789abc';
 const publicLookup = async () => [{ address: '93.184.216.34', family: 4 }];

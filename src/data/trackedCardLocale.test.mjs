@@ -9,6 +9,11 @@ import {
 } from './satellites.js';
 import { setLocale } from '../i18n/index.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';

@@ -181,6 +181,10 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       }],
     });
     const traffic = await server.ssrLoadModule('/src/data/traffic.js');
+    // The layer draws with the manifest's display, which loads through
+    // import() (src/app/layers/renderers.js), in this server's module graph.
+    const renderers = await server.ssrLoadModule('/src/app/layers/renderers.js');
+    await renderers.loadLayerRenderers('cesium');
     trafficLayer = traffic.default;
 
     globalThis.document = { documentElement: { dataset: {} } };

@@ -6,6 +6,7 @@ import {
   LAYER_MANIFEST,
   createLayerAvailability,
   layerAvailableOn,
+  loadLayerRenderers,
   registerLayerRenderers,
   rendererFor,
 } from './renderers.js';
@@ -118,6 +119,23 @@ test('the layers drawn through one display, and the ones that draw without one',
   });
 });
 
+test('a display or an engine-specific renderer answers only after its engine loaded them', () => {
+  const engine = createFakeEngine({ kind: 'navara' });
+  // Nothing is loaded yet: the later tests load them.
+  assert.throws(
+    () => rendererFor('weather-radar', engine),
+    /weather-radar on navara: its renderer is not loaded/,
+  );
+  assert.throws(() => rendererFor('cctv', engine), /not loaded/);
+  const cesium = createFakeEngine();
+  assert.throws(
+    () => rendererFor('flights', cesium),
+    /flights on cesium: its renderer is not loaded/,
+  );
+  cesium.destroy();
+  engine.destroy();
+});
+
 test('the layers drawn through one display get the same factory on every engine', async () => {
   const displays = {
     flights: ['flights', 'createFlightsDisplay'],
@@ -164,11 +182,12 @@ test('the layers drawn through one display get the same factory on every engine'
     const factory = (
       await import(`../../layers/${directory}/render/display.js`)
     )[name];
-    assert.equal(LAYER_MANIFEST[id].display, factory, id);
+    assert.equal(await LAYER_MANIFEST[id].display(), factory, id);
     // Each display's own tests build it with its services; the aircraft
     // family needs none beyond an atlas.
     if (!['flights', 'military', 'local-adsb'].includes(id)) continue;
     for (const kind of ENGINE_KINDS) {
+      await loadLayerRenderers(kind);
       const engine = createFakeEngine({ kind });
       const display = rendererFor(id, engine, { drawAtlas });
       assert.equal(display.engine, engine, `${id} on ${kind}`);
@@ -191,17 +210,6 @@ test('a layer that draws itself has no renderer; an unknown engine none either',
     assert.equal(rendererFor(id, engine), null, id);
   assert.equal(rendererFor('flights', null), null);
   assert.equal(rendererFor('flights', { kind: 'vulkan' }), null);
-  engine.destroy();
-});
-
-test('an engine-specific renderer answers only after its engine loaded them', () => {
-  const engine = createFakeEngine({ kind: 'navara' });
-  // This test file never loads Navara's renderers.
-  assert.throws(
-    () => rendererFor('weather-radar', engine),
-    /weather-radar on navara: its renderer is not loaded/,
-  );
-  assert.throws(() => rendererFor('cctv', engine), /not loaded/);
   engine.destroy();
 });
 

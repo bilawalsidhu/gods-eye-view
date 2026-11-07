@@ -83,6 +83,11 @@ import {
   IDLE_CAMERA_COLOR,
   LIVE_CAMERA_COLOR,
 } from '../layers/cctv/policy.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const ASPECT = 16 / 9;
 const toRad = (deg) => (deg * Math.PI) / 180;

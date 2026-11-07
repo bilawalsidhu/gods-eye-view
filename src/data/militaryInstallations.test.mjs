@@ -26,6 +26,11 @@ import {
 import * as Cesium from 'cesium';
 import { getContextStore, registerEntityContext, selectEntityContext, getSelectedEntityContext, clearSelectedEntityContextForLayer } from './contextStore.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const LAYER_ID = 'military-installations';
 

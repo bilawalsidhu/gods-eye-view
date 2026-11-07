@@ -1291,6 +1291,11 @@ test('unsupported ALPR coverage suppresses the nearby count and names the extrac
 import { createGroundFloor } from '../services/groundFloor.js';
 import { createTerrainHeights } from '../services/terrainHeights.js';
 import { createApplicationRequestServices } from '../services/requests.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 test('slow ALPR floors share real terrain requests across preparation, render and pans; disable aborts', async () => {
   const requests = [];

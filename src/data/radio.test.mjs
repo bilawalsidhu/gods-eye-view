@@ -53,6 +53,11 @@ import {
 } from './radio.js';
 import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
 import { radioSelectedMarker, radioTestEngine } from '../testSupport/radioTestEngine.mjs';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const stations = [
   { id: 'news', tags: ['News', 'Weather Radio', 'air traffic'] },

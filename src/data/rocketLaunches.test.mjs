@@ -66,6 +66,11 @@ import {
   satelliteCatalogModeChanged,
   scoreSatelliteNameMatch,
 } from './satellites.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const NOW = new Date('2026-07-27T00:00:00Z');
 

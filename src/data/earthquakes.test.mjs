@@ -20,6 +20,11 @@ import {
   installRenderGovernor,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { loadLayerRenderers } from '../app/layers/renderers.js';
+
+// The layers draw with the manifest's displays, which load through
+// import() (src/app/layers/renderers.js).
+await loadLayerRenderers('cesium');
 
 const FULL_RAW = {
   id: 'us7000abcd',

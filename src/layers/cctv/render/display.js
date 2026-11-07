@@ -15,12 +15,9 @@
 // choices (../rendering.js, ./style.js).
 
 import * as geo from '../../../geo/index.js';
-import {
-  bindTrackingClickGesture,
-  isTrackingClickGesture,
-} from '../../../data/trackingClickGesture.js';
 import { GIZMO_ID_PREFIX } from '../../../data/cctvGizmo.js';
 import { CAMERA_ICON, IDLE_CAMERA_COLOR } from '../policy.js';
+import { bindCctvWorldClickGesture } from '../worldClick.js';
 import { createCctvMeshes } from './meshes.js';
 import {
   COVERAGE_DASH,
@@ -85,18 +82,6 @@ export function planeOutline(shape, positions, orientation) {
     );
   const tl = corner(-1, 1);
   return [tl, corner(1, 1), corner(1, -1), corner(-1, -1), tl];
-}
-
-/** The tracking click gesture over engine.input (the CCTV world click). */
-export function bindCctvWorldClickGesture(handler, onClick, options = {}) {
-  bindTrackingClickGesture(
-    handler,
-    (click, gesture) => {
-      if (!isTrackingClickGesture(gesture)) return;
-      onClick(click);
-    },
-    options,
-  );
 }
 
 /**
