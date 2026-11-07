@@ -12,6 +12,7 @@ import ledgerRows from './ledger.json' with { type: 'json' };
 import akStatewideImagery from './entries/ak-statewide-imagery.json' with { type: 'json' };
 import arStatewideImagery from './entries/ar-statewide-imagery.json' with { type: 'json' };
 import azStatewideImagery from './entries/az-statewide-imagery.json' with { type: 'json' };
+import amsterdamTrafficCameras from './entries/amsterdam-traffic-cameras.json' with { type: 'json' };
 import bangorMe from './entries/bangor-me.json' with { type: 'json' };
 import basemapAtOrthofoto from './entries/basemap-at-orthofoto.json' with { type: 'json' };
 import bayernDop40 from './entries/bayern-dop40.json' with { type: 'json' };
@@ -119,6 +120,7 @@ import wvStatewideImagery from './entries/wv-statewide-imagery.json' with { type
 /** Raw manifests in file-name order; the validated form is below. */
 export const LIBRARY_MANIFESTS = Object.freeze([
   akStatewideImagery,
+  amsterdamTrafficCameras,
   arStatewideImagery,
   azStatewideImagery,
   bangorMe,

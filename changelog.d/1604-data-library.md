@@ -8,7 +8,9 @@
   generic `/api/library` proxy serves entries without CORS. Seeded with NASA
   EONET events, EIA and WRI power plants, NWS alerts, NOAA tide stations,
   Smithsonian volcanoes, NASA Black Marble, OpenSeaMap seamarks, and the
-  opt-in IMF PortWatch and CCTV packs. FEMA USA Structures and the
+  opt-in IMF PortWatch and CCTV packs, plus the City of Amsterdam's
+  traffic and ANPR camera positions (opt-in; contributed by @Maher-Reven in
+  #251). FEMA USA Structures and the
   National Bridge Inventory load what is in view once you zoom in, and
   Addresscloud's EPC ratings stream from Source Cooperative's GeoParquet on
   S3, coloured A–G with live legend counts. Open tile overlays (geology,
