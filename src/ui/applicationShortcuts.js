@@ -27,6 +27,11 @@ export function bindApplicationShortcuts({
       event.target?.matches?.('select, input, textarea') ||
       event.target === searchInput;
     if (isFormControl && event.key !== 'Escape') return;
+    // Browser and OS shortcuts (Cmd+C, Ctrl+F, Alt+1…) are not ours.
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      if (event.key === 'Escape') actions.dismissSearch();
+      return;
+    }
 
     if (STYLE_KEYS[event.key]) actions.setStyle(STYLE_KEYS[event.key]);
     if (event.key === 'Escape') actions.dismissSearch();
