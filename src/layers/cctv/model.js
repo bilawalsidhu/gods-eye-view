@@ -96,6 +96,11 @@ export function createModel({ state: layerState, services, parts, source }) {
     return feedType === 'mp4' || feedType === 'hls' || feedType === 'webm';
   }
 
+  /** 'none' = location-only camera (the server found no public picture). */
+  function isNoFeedType(feedType) {
+    return normalizeFeedType(feedType) === 'none';
+  }
+
   /**
    * Coerces a value to a finite number or returns the fallback.
    *
@@ -553,6 +558,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     angularDeltaAbs,
     normalizeFeedType,
     isVideoFeedType,
+    isNoFeedType,
     safeNumber,
     headingFromId,
     quantize,
