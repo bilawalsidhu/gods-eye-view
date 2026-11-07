@@ -1,5 +1,5 @@
 import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf, findCamera } from '../../render/rendererOf.js';
 import { clone, distance } from '../../geo/index.js';
 
 export function createFocus({ state: layerState, services, parts, source }) {
@@ -113,7 +113,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
 
   function closestToCurrentView(candidates) {
     if (!Array.isArray(candidates) || !candidates.length) return null;
-    const cameraPosition = layerState.viewer?.camera?.positionWC;
+    const cameraPosition = findCamera(layerState.viewer)?.pose()?.position;
     if (!cameraPosition)
       return candidates.find((candidate) => candidate?.position) || null;
 

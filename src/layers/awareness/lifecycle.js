@@ -1,4 +1,4 @@
-import { cameraPoseSignature } from '../../data/iconOrientation.js';
+import { findCamera, findFrame } from '../../render/rendererOf.js';
 
 export function createLifecycle({
   state: layerState,
@@ -9,16 +9,22 @@ export function createLifecycle({
   const { holdContinuousRender, releaseContinuousRender } = services.render;
 
   /**
-   * Quantized camera-pose signature, or '' when the camera cannot report a full
-   * pose yet. An unknown pose reads as PARKED, so a camera that is still coming
-   * up can never be mistaken for continuous movement.
-   * @param {Cesium.Camera|null|undefined} camera
+   * Quantized camera-pose signature (position to ~10 m, angles to ~0.06
+   * degrees), or '' when the camera cannot report a full pose yet. An unknown
+   * pose reads as PARKED, so a camera that is still coming up can never be
+   * mistaken for continuous movement.
+   * @param {object|null|undefined} viewer
    * @returns {string}
    */
 
-  function cameraMotionSignature(camera) {
-    if (!camera?.positionWC || !Number.isFinite(camera.heading)) return '';
-    return cameraPoseSignature(camera);
+  function cameraMotionSignature(viewer) {
+    const pose = findCamera(viewer)?.pose();
+    const p = pose?.position;
+    if (!p || !Number.isFinite(pose.heading)) return '';
+    return (
+      `${Math.round(p.x / 10)}:${Math.round(p.y / 10)}:${Math.round(p.z / 10)}:` +
+      `${pose.heading.toFixed(3)}:${pose.pitch.toFixed(3)}:${pose.roll.toFixed(3)}`
+    );
   }
 
   /**
@@ -50,15 +56,17 @@ export function createLifecycle({
       'gev:awareness-subject-cleared',
       layerState.subjectClearListener,
     );
-    layerState.preRenderRemover =
-      layerState.viewer.scene.preRender.addEventListener(() => {
+    layerState.preRenderRemover = findFrame(layerState.viewer)?.on(
+      'preRender',
+      () => {
         if (!layerState.enabled) return;
         const now = Date.now();
-        // "Did the camera move" uses the SAME quantized pose signature the fleet
-        // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
+        // "Did the camera move" uses the same quantization as the fleet
+        // rotation pass's iconOrientation.cameraPoseSignature (keep the two
+        // in step), read from the camera port's pose, rather than
         // camera.changed, whose granularity is globally degraded by other layers
         // mutating camera.percentageChanged.
-        const poseSig = cameraMotionSignature(layerState.viewer.camera);
+        const poseSig = cameraMotionSignature(layerState.viewer);
         if (poseSig !== layerState.lastCameraPoseSig) {
           layerState.lastCameraPoseSig = poseSig;
           layerState.lastCameraPoseChangeMs = now;
@@ -86,7 +94,8 @@ export function createLifecycle({
         } else {
           parts.rendering.scheduleDirectionOverlayUpdate();
         }
-      });
+      },
+    );
     layerState.runtimeListenersAttached = true;
   }
 

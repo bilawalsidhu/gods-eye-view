@@ -49,6 +49,8 @@ import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 import { withEntityRecord } from './entityRecords.js';
 import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 const militaryAwarenessSource = readLayerSource(
@@ -185,7 +187,10 @@ function installAwarenessRuntime({
     },
     container: new FakeElement(),
   };
-  bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() });
+  bindFakeCesiumCamera(viewer, {
+    draw: fakeDrawPort(),
+    frame: fakeSceneFrame(viewer),
+  });
   const layers = new Map(
     AWARENESS_DEPENDENCIES.map((layerId) => [
       layerId,
@@ -2166,7 +2171,7 @@ test('Context entry tracks a nearer civilian aircraft over a farther military ai
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -2203,7 +2208,7 @@ test('Context entry prefers military aircraft on an exact nearest-distance tie',
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -2238,7 +2243,7 @@ test('Context entry retries once on the next refresh after initially empty feeds
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -2275,7 +2280,7 @@ test('user deselect cancels a pending Context entry auto-focus retry', async () 
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -3719,6 +3724,7 @@ test('runtime listeners exist only while the awareness layer is enabled', () => 
     entities: { remove() {} },
     container: new FakeElement(),
   };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
 
   globalThis.window = fakeWindow;
   globalThis.document = {
@@ -3889,12 +3895,12 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
   try {
     Date.now = () => clockMs;
     installRenderGovernor(framePortFor(runtime.viewer.scene));
-    runtime.viewer.camera = {
+    Object.assign(runtime.viewer.camera, {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
       pitch: -0.4,
       roll: 0,
-    };
+    });
 
     // 1. Enabled, nothing selected, camera parked — Contacts must not be a
     //    reason the whole scene keeps repainting.
@@ -4025,12 +4031,12 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
   try {
     Date.now = () => clockMs;
     installRenderGovernor(framePortFor(runtime.viewer.scene));
-    runtime.viewer.camera = {
+    Object.assign(runtime.viewer.camera, {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
       pitch: -0.4,
       roll: 0,
-    };
+    });
     runtime.dispatch(
       'gev:awareness-subject-selected',
       awarenessSubject('flights', 'subject-flight', position),
@@ -4073,12 +4079,12 @@ test('a moving camera refreshes Contacts more than once inside one parked interv
 
   try {
     Date.now = () => clockMs;
-    runtime.viewer.camera = {
+    Object.assign(runtime.viewer.camera, {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
       pitch: -0.4,
       roll: 0,
-    };
+    });
     replaceMethod(
       flightsLayer,
       'getAllPositions',
