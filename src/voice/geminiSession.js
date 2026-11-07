@@ -1,3 +1,4 @@
+import { createGeminiTextChat } from './geminiTextChat.js';
 import { getLocale, t, translateKnown } from '../i18n/index.js';
 import { msg } from '../i18n/marker.js';
 import { createGeminiAudio } from './geminiAudio.js';
@@ -186,6 +187,9 @@ export class GeminiSessionController {
     this.model = null;
     this.epoch = 0;
     this.turn = 0;
+    // Identifies one turn's tool calls to the runner as one reply; a new
+    // object each turn, so no two sessions or turns share it.
+    this.turnReply = {};
     this.globeToolsBlocked = false;
     this.globeResetFailed = false;
     this.inputGeneration = 0;
@@ -981,6 +985,7 @@ export class GeminiSessionController {
     const tools = [...this.tools.values()];
     this.turnAbort = new AbortController();
     this.turn++;
+    this.turnReply = {};
     this.typedIntent = null;
     this.radioStrongerCommit = null;
     this.pruneControls();
@@ -1554,6 +1559,7 @@ export class GeminiSessionController {
     )
       throw new Error(msg('Gemini requested too many simultaneous actions'));
     const turn = this.turn;
+    const reply = this.turnReply;
     this.userTurnPending = false;
     this.modelComplete = false;
     // Admit each valid native call ID once per connection.
@@ -1575,6 +1581,7 @@ export class GeminiSessionController {
       const action = new AbortController();
       action.call = { id: call.id, name: call.name };
       action.sequence = ++this.toolSequence;
+      action.reply = reply;
       this.tools.set(call.id, action);
       const priorTools = this.toolQueue;
       const args =
@@ -1684,6 +1691,9 @@ export class GeminiSessionController {
         this.runAction(call.name, args, {
           signal: toolSignal,
           callId: call.id,
+          // Calls run one by one, so a motion can follow a fly-to of the
+          // same reply that already found nothing.
+          reply: action.reply,
           progress: (update) => {
             if (actionCurrent()) this.narration.progress(call.id, update);
           },
@@ -2538,7 +2548,7 @@ export class GeminiSessionController {
       this.input.detachBindings();
       this.radio.detachObservers();
       this.signal?.removeEventListener('abort', this.lifetimeAbort);
-      this.ui?.root?.remove();
+      this.ui?.remove();
       this.emit({ type: 'disposed' });
     } else if (!preserveStatus) this.setStatus('idle', msg('Voice off'));
   }
@@ -2546,6 +2556,21 @@ export class GeminiSessionController {
 
 export function createGeminiSession(options) {
   const controller = new GeminiSessionController(options);
+  const chat = createGeminiTextChat({
+    ...options,
+    emit: (event) => {
+      if (event.type === 'state') controller.status = event.state;
+      options.emit(event);
+    },
+  });
+  let textOnly = false;
+  const startVoice = (settings) => {
+    chat.stop({ preserveStatus: true });
+    textOnly = false;
+    return controller.start(settings);
+  };
+  controller.input.start = startVoice;
+  controller.radio.isActive = () => !textOnly && controller.isActive();
   return {
     controller,
     capabilities: {
@@ -2555,13 +2580,24 @@ export function createGeminiSession(options) {
         'Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.',
       ),
     },
-    start: (settings) => controller.start(settings),
+    start: (settings) => {
+      textOnly = Boolean(settings?.textOnly);
+      return textOnly ? chat.start() : startVoice(settings);
+    },
     getStartOptions: () => ({
       pushToTalk: Boolean(controller.input.pushToTalkMode),
+      ...(textOnly ? { textOnly: true } : {}),
     }),
-    stop: (settings) => controller.stop(settings),
-    sendText: (text) => controller.sendTextCommand(text),
-    sendMapEvent: (event) => controller.notifyMapEvent(event),
+    stop: (settings) => {
+      chat.stop({ ...settings, preserveStatus: true });
+      controller.stop(settings);
+    },
+    // Chat Stop: abort the reply in progress, keep the conversation.
+    cancelTurn: () => textOnly && chat.cancelTurn(),
+    sendText: (text) =>
+      textOnly ? chat.sendText(text) : controller.sendTextCommand(text),
+    sendMapEvent: (event) =>
+      textOnly ? chat.sendMapEvent(event) : controller.notifyMapEvent(event),
     ignoreButtonClick: () => Boolean(controller.spaceKeyHeld),
     bindControls: () => controller.input.bindPushToTalkShortcut(),
   };

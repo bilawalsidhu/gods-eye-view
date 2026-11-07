@@ -79,10 +79,17 @@ export function createSelection({
         record,
       )
     ) {
+      // Browser-only feeds have a separate player; a reselect retries it
+      // without re-running activation or touching the projection geometry.
+      if (parts.model.isBrowserOverlayCamera(record.camera)) {
+        layerState._activeCameraReselection += 1;
+        parts.presentation.notifyListeners();
+      }
       return CCTV_ACTIVATION_RESULT.UNCHANGED;
     }
     layerState._activeCameraId = cameraId;
     layerState._autoHopSuspended = false;
+    layerState._openingCameraProvisional = false;
     // A real activation creates projection work — wake the self-stopping loop.
     parts.projection.startProjectionLoop();
     if (previousActiveRecord && previousActiveRecord !== record) {
@@ -141,6 +148,11 @@ export function createSelection({
     void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;
     parts.rendering.refreshCoverageStyles();
+    // The active camera's icon always shows; the previously active one
+    // competes for its cell again. Its coverage neighbours join the working
+    // set and are queued for grounding.
+    parts.rendering.refreshHorizonCulling();
+    parts.geometryQueue.enqueueViewGeometry();
     // The newly active camera leaves the ambient ring (its monitor plane takes
     // over); the freed slot re-fills on this same pass.
     parts.cards.refreshAmbientCards();
@@ -164,6 +176,7 @@ export function createSelection({
     if (!record) return false;
     layerState._activeCameraId = null;
     layerState._autoHopSuspended = true;
+    layerState._openingCameraProvisional = false;
     record.activationDone = false;
     parts.geometry.clearProbeClampOnDeactivation(record, (previous) => {
       parts.geometry.applyFrustumGeometry(
@@ -171,7 +184,9 @@ export function createSelection({
         parts.ground.groundAltFor(previous),
       );
     });
+    parts.rendering.refreshHorizonCulling();
     parts.rendering.refreshCoverageStyles();
+    parts.geometryQueue.enqueueViewGeometry();
     parts.cards.refreshAmbientCards();
     layerState._gizmo?.refresh();
     parts.presentation.notifyListeners();

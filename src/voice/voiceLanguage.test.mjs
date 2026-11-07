@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale } from '../i18n/index.js';
-import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
+import {
+  realtimeDirectives,
+  realtimeInstructions,
+} from '../../server/providers/openai/instructions.js';
 import { createRealtimeBackend } from './realtimeBackend.js';
 import { RealtimeTurns } from './realtimeTurns.js';
 import { progressLine } from './speech.js';
@@ -13,10 +16,13 @@ import {
 test('only a shipped non-English locale is a voice language', () => {
   assert.equal(resolveVoiceLanguage('es'), 'es');
   assert.equal(resolveVoiceLanguage(' RU '), 'ru');
-  for (const value of ['en', 'fr', '', 'es\nignore', null, undefined, 42, {}])
+  // 'ko' is a locale the app does not ship.
+  for (const value of ['en', 'ko', '', 'es\nignore', null, undefined, 42, {}])
     assert.equal(resolveVoiceLanguage(value), null, String(value));
   assert.equal(voiceLanguageInstruction('en'), '');
-  assert.equal(voiceLanguageInstruction('fr'), '');
+  assert.equal(voiceLanguageInstruction('ko'), '');
+  assert.match(voiceLanguageInstruction('fr'), /Speak French,/);
+  assert.match(voiceLanguageInstruction('ja'), /Speak Japanese,/);
   assert.match(voiceLanguageInstruction('es'), /^LANGUAGE: .* Speak Spanish,/);
   assert.match(voiceLanguageInstruction('ru'), /Speak Russian,/);
 });
@@ -26,7 +32,8 @@ test('a voice language is the canonical shipped code, as the app resolves ?lang=
     assert.equal(resolveVoiceLanguage(value), 'zh-CN', value);
   // Traditional Chinese readers are not given Simplified, as in locale.js.
   for (const value of ['zh-Hant', 'zh-TW', 'zh-HK'])
-    assert.equal(resolveVoiceLanguage(value), null, value);
+    assert.equal(resolveVoiceLanguage(value), 'zh-Hant', value);
+  assert.match(voiceLanguageInstruction('zh-TW'), /Speak Traditional Chinese/);
   assert.equal(resolveVoiceLanguage('es-MX'), 'es');
   assert.equal(resolveVoiceLanguage('en-GB'), null);
   assert.match(voiceLanguageInstruction('zh-CN'), /Speak Chinese/);
@@ -36,7 +43,7 @@ test('session instructions only gain a closing LANGUAGE line for a voice languag
   const english = realtimeInstructions();
   assert.equal(realtimeInstructions(undefined, {}), english);
   assert.equal(realtimeInstructions(undefined, { language: 'en' }), english);
-  assert.equal(realtimeInstructions(undefined, { language: 'fr' }), english);
+  assert.equal(realtimeInstructions(undefined, { language: 'ko' }), english);
   assert.doesNotMatch(english, /^LANGUAGE: /m);
   assert.equal(
     realtimeInstructions(undefined, { language: 'es' }),
@@ -55,7 +62,7 @@ test('the token request names the interface language only when it is not English
       });
     },
   });
-  for (const language of [undefined, 'en', 'fr', 'es'])
+  for (const language of [undefined, 'en', 'ko', 'es'])
     await backend.requestToken({ language });
   assert.deepEqual(calls, [
     '/api/realtime/token?tier=standard',
@@ -120,4 +127,51 @@ test('progress lines are spoken in the interface language, and English is unchan
     'Buscando Austin en el mapa.',
   );
   assert.equal(progressLine('refresh'), 'Cargando las aeronaves de la zona.');
+});
+
+test('the imagery and OpenStreetMap progress lines follow the interface language too', (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('en');
+  assert.equal(progressLine('draw', 'Austin'), 'Outlining Austin.');
+  assert.equal(progressLine('catalog'), 'Searching the imagery catalog.');
+  assert.equal(progressLine('drape'), 'Loading the image.');
+  assert.equal(
+    progressLine('osm', 'Austin'),
+    'Searching OpenStreetMap for Austin.',
+  );
+  assert.equal(progressLine('osm'), 'Searching OpenStreetMap.');
+  setLocale('es');
+  assert.equal(
+    progressLine('draw', 'Austin'),
+    'Trazando el contorno de Austin.',
+  );
+  assert.equal(progressLine('catalog'), 'Buscando en el catálogo de imágenes.');
+  assert.equal(progressLine('drape'), 'Cargando la imagen.');
+  assert.equal(
+    progressLine('osm', 'Austin'),
+    'Buscando Austin en OpenStreetMap.',
+  );
+  assert.equal(progressLine('osm'), 'Buscando en OpenStreetMap.');
+});
+
+test('the language line is voice-only and rides on top of the Overpass directives', () => {
+  const line = voiceLanguageInstruction('es');
+  for (const overpass of [false, true]) {
+    const base = realtimeInstructions(undefined, { overpass });
+    assert.equal(
+      realtimeInstructions(undefined, { overpass, language: 'es' }),
+      `${base}\n${line}`,
+      `overpass ${overpass}`,
+    );
+  }
+  assert.notEqual(
+    realtimeInstructions(undefined, { overpass: true }),
+    realtimeInstructions(undefined, { overpass: false }),
+  );
+  // Text chat reuses these directives; it must never be told to speak.
+  assert.doesNotMatch(realtimeDirectives().join('\n'), /^LANGUAGE: /m);
+  assert.equal(
+    realtimeInstructions(undefined, { language: 'es' }).split('\n').at(-1),
+    line,
+  );
 });

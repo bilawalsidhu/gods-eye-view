@@ -101,7 +101,8 @@ test('ordinary microphone keeps its default setup and automatic stream-end messa
 test('the token request names the interface language only when it is not English', async () => {
   for (const [language, url] of [
     ['en', '/api/gemini/token'],
-    ['fr', '/api/gemini/token'],
+    ['ko', '/api/gemini/token'],
+    ['fr', '/api/gemini/token?lang=fr'],
     ['es', '/api/gemini/token?lang=es'],
     ['zh-CN', '/api/gemini/token?lang=zh-CN'],
   ]) {
@@ -1259,6 +1260,34 @@ test('successful stronger Radio stop still invalidates the prepared group', asyn
   await tick();
   assert.equal(h.state.playing, 0);
   assert.equal(h.c.status, 'listening');
+  h.c.stop();
+});
+
+test('Gemini tools of one turn share a reply identity, and a new turn gets another', async () => {
+  const replies = [];
+  const h = harness({
+    runAction: (name, _args, next) => {
+      replies.push([name, next.reply]);
+      return { ok: true, action: name };
+    },
+  });
+  await h.c.start({ pushToTalk: true });
+  h.c.sendTextCommand('Fly to Xyzzyville and pan left');
+  const ws = h.sockets[0];
+  requestTool(ws, 'fly', 'fly_to_location', { query: 'Xyzzyville' });
+  requestTool(ws, 'pan', 'move_camera', { motion: 'pan', direction: 'left' });
+  await h.c.toolQueue;
+  assert.equal(replies.length, 2);
+  assert.ok(replies[0][1], 'a sequentially run call carries its reply');
+  assert.equal(replies[1][1], replies[0][1]);
+  drainRadioReply(h);
+  await tick();
+  assert.equal(h.c.sendTextCommand('Pan left'), true);
+  requestTool(ws, 'pan-2', 'move_camera', { motion: 'pan', direction: 'left' });
+  await h.c.toolQueue;
+  assert.equal(replies.length, 3);
+  assert.ok(replies[2][1]);
+  assert.notEqual(replies[2][1], replies[0][1]);
   h.c.stop();
 });
 
@@ -3477,10 +3506,7 @@ for (const reply of ['typed', 'push-to-talk', 'open-mic']) {
       assert.equal(repeated.ok, false);
       assert.equal(repeated.skipped, true);
       assert.match(repeated.responseGuidance, /did not run/i);
-      assert.doesNotMatch(
-        repeated.responseGuidance,
-        /confirm.*completed/i,
-      );
+      assert.doesNotMatch(repeated.responseGuidance, /confirm.*completed/i);
 
       if (reply === 'typed') {
         const stimuli = [

@@ -14,7 +14,8 @@ import {
 } from './constants.js';
 import { resolveVoiceLanguage } from '../../../src/voice/voiceLanguage.js';
 import { realtimeInstructions } from './instructions.js';
-import { GEV_REALTIME_TOOLS } from './tools.js';
+import { GEV_REALTIME_TOOLS, offeredTools } from './tools.js';
+import { resolveOverpassUpstreams } from '../overpass/constants.js';
 import {
   preferCodexOAuth,
   readCodexOAuthAccessToken,
@@ -137,6 +138,8 @@ function createRealtimeTokenHandler({
   environment = process.env,
   models = {},
   tools = GEV_REALTIME_TOOLS,
+  // osm_query is offered only when an operator configured Overpass.
+  overpassConfigured = () => resolveOverpassUpstreams().length > 0,
 } = {}) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -283,6 +286,7 @@ function createRealtimeTokenHandler({
               ...(language ? { language } : {}),
             },
           };
+    const overpass = overpassConfigured();
     const sessionConfig = {
       session: {
         type: 'realtime',
@@ -308,8 +312,11 @@ function createRealtimeTokenHandler({
           },
           output: { voice },
         },
-        instructions: realtimeInstructions(annotationGuidance, { language }),
-        tools,
+        instructions: realtimeInstructions(annotationGuidance, {
+          overpass,
+          language,
+        }),
+        tools: offeredTools(tools, { overpass }),
         tool_choice: 'auto',
       },
     };

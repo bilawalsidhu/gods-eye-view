@@ -19,6 +19,73 @@ const parseCapacity = (fields) =>
   parseStationInformation({ data: { stations: [station(fields)] } }).get('s1')
     .capacity;
 
+test('station information skips missing, blank and malformed coordinates', () => {
+  for (const field of ['lat', 'lon', 'latitude', 'longitude']) {
+    for (const value of [
+      undefined,
+      null,
+      '',
+      ' \t ',
+      false,
+      true,
+      [],
+      [0],
+      {},
+      'bad',
+      NaN,
+      Infinity,
+    ]) {
+      const raw = { station_id: 'bad', lat: 0, lon: 0 };
+      if (field === 'latitude') delete raw.lat;
+      if (field === 'longitude') delete raw.lon;
+      raw[field] = value;
+      const parsed = parseStationInformation({
+        data: { stations: [raw, station({ station_id: 'good' })] },
+      });
+      assert.deepEqual(
+        [...parsed.keys()],
+        ['good'],
+        `${field} = ${JSON.stringify(value)}`,
+      );
+    }
+  }
+});
+
+test('station information skips coordinates outside latitude and longitude bounds', () => {
+  for (const fields of [
+    { lat: 90.001 },
+    { lat: -90.001 },
+    { lon: 180.001 },
+    { lon: -180.001 },
+    { lat: undefined, latitude: '91' },
+    { lon: undefined, longitude: '-181' },
+  ]) {
+    const parsed = parseStationInformation({
+      data: { stations: [station(fields)] },
+    });
+    assert.equal(parsed.size, 0, JSON.stringify(fields));
+  }
+});
+
+test('station information preserves zero, boundary coordinates and numeric aliases', () => {
+  for (const [fields, expected] of [
+    [{ lat: 0, lon: 0 }, [0, 0]],
+    [{ lat: ' 0 ', lon: '0' }, [0, 0]],
+    [{ lat: 90, lon: 180 }, [90, 180]],
+    [{ lat: '-90', lon: '-180' }, [-90, -180]],
+    [
+      { lat: null, lon: undefined, latitude: '30.2681', longitude: '-97.7469' },
+      [30.2681, -97.7469],
+    ],
+  ]) {
+    const parsed = parseStationInformation({
+      data: { stations: [station(fields)] },
+    }).get('s1');
+    assert.ok(parsed, JSON.stringify(fields));
+    assert.deepEqual([parsed.lat, parsed.lon], expected);
+  }
+});
+
 test('capacity counts docks, not the geofenced area PBSC adds to it', () => {
   // Bilbao Bizi, BiciMAD and Dbizi as published on 2026-10-17.
   assert.equal(parseCapacity({ capacity: 839, geofenced_capacity: 800 }), 39);

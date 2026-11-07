@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import { createRealtimeBackend } from './realtimeBackend.js';
 import { GevRealtimeController } from './realtimeController.js';
 
@@ -131,11 +132,7 @@ test('controller lifetime stops pending transport and releases resources through
     runner: async () => ({}),
     signal: lifetime.signal,
     debugSink: null,
-    ui: {
-      root: { dataset: {}, querySelectorAll: () => [], remove() {} },
-      status: {},
-      detail: {},
-    },
+    ui: createTestVoiceUi(),
   });
   controller.connectionAbort = new AbortController();
   const connection = controller.connectionAbort.signal;
