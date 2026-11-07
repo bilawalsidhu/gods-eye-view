@@ -80,7 +80,7 @@ function normalizeKey(text) {
  * @param {string} value
  * @returns {{lat:number, lon:number}}
  */
-function parsePointString(value) {
+export function parsePointString(value) {
   const match = String(value || '').match(
     /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
   );
@@ -442,6 +442,17 @@ export function isLikelyA22Coordinate(lat, lon) {
     lon >= 10.5 &&
     lon <= 11.8
   );
+}
+
+/**
+ * Does this footprint fall roughly inside Sweden? Limits errant points from
+ * pulling the map far out to sea or into another country.
+ */
+export function isLikelySwedenCoordinate(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  // Broad bbox around Sweden, from Skåne to Treriksröset. The west edge sits
+  // at 11.0 E (Koster islands ~11.0, Strömstad 11.17) so Oslo (10.75 E) is out.
+  return lat >= 55.0 && lat <= 69.1 && lon >= 11.0 && lon <= 24.2;
 }
 
 export function isLikelyFinlandCoordinate(lat, lon) {

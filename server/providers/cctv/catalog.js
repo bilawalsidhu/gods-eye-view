@@ -31,6 +31,7 @@ import {
   loadFloridaSourcesFromOpenData,
   loadHoustonSourcesFromOpenData,
   loadA22SourcesFromOpenDataHub,
+  loadTrafikverketSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -182,6 +183,11 @@ const LIVE_PACKS = [
     name: 'a22',
     enabled: () => envEnabled('CCTV_A22_ENABLED'),
     load: loadA22SourcesFromOpenDataHub,
+  },
+  {
+    name: 'trafikverket',
+    enabled: () => envEnabled('CCTV_TRAFIKVERKET_ENABLED'),
+    load: loadTrafikverketSourcesFromOpenData,
   },
 ];
 /**
