@@ -9,7 +9,11 @@ import {
   ICON_RECEDES,
   ICON_ROTATES,
 } from '../../data/iconSet.js';
-import { motionPosition } from '../stub/motion.js';
+import {
+  iconCourse,
+  iconPosition,
+  motionPosition,
+} from '../motion/iconMotion.js';
 
 /** A scene with what the draw port touches, and a frame time to set. */
 function fakeScene() {
@@ -547,4 +551,130 @@ test('a write that moves a row as it already moves keeps its segment', () => {
   assert.ok(!rowsSet.dirty.style.empty, 'its focus is');
   set.upsert([{ ...item, motion: { kind: 'hold', courseDeg: 41 } }]);
   assert.ok(!rowsSet.dirty.segments.empty, 'a new course is');
+});
+
+test('rows draw where the shared evaluator puts them, with the course it gives', () => {
+  const t0 = Date.now();
+  const fix = ecef(Cesium.Cartesian3.fromDegrees(-97.04, 32.9, 10_500));
+  const to = { x: fix.x + 4000, y: fix.y - 2500, z: fix.z + 1200 };
+  const items = [
+    icon('hold', {
+      motion: { kind: 'hold', courseDeg: 300 },
+      courseGlide: { fromCourseDeg: 10, t0, rateDps: 7 },
+    }),
+    icon('lerp', {
+      course: 15,
+      motion: {
+        kind: 'lerp',
+        from: fix,
+        to,
+        t0: t0 - 3000,
+        t1: t0 + 9000,
+        courseSlopeDeg: -40,
+      },
+    }),
+    icon('step', {
+      motion: { kind: 'lerp', from: fix, to, t0: t0 + 2000, t1: t0 },
+    }),
+    icon('arc', {
+      motion: {
+        kind: 'arc',
+        fix,
+        t0,
+        speedMps: 240,
+        trackDeg: 355,
+        turnRateDps: -3,
+        climbMps: 12,
+        minDtS: -30,
+        maxDtS: 90,
+      },
+      courseGlide: { fromCourseDeg: 200, t0: t0 + 1000, rateDps: 4 },
+    }),
+    icon('straight', {
+      motion: {
+        kind: 'arc',
+        fix,
+        t0,
+        speedMps: 80,
+        trackDeg: 45,
+        turnRateDps: 0.003,
+        minDtS: 0,
+        maxDtS: 60,
+      },
+      courseGlide: { fromCourseDeg: 90, t0, rateDps: 0 },
+    }),
+    // An exact half turn: either way is a turn; both read the same one.
+    icon('half', {
+      motion: { kind: 'hold', courseDeg: 0.7 },
+      courseGlide: { fromCourseDeg: 180.7, t0, rateDps: 10 },
+    }),
+  ];
+  const { part, draw } = drawOver();
+  const set = draw.icons({ id: 'gpu:shared', motionClock: { kind: 'scene' } });
+  set.set(items);
+  const { position, course } = rows(part, 'gpu:shared');
+  for (const item of items)
+    for (const dt of [
+      -40_000, -1000, 0, 1, 1500, 2001, 5000, 30_000, 200_000,
+    ]) {
+      const t = t0 + dt;
+      const drawnAt = position(item.id, t);
+      const shared = iconPosition(item, t);
+      assert.ok(
+        distance(drawnAt, shared) < 0.1,
+        `${item.id} at ${dt} ms: ${distance(drawnAt, shared)} m apart`,
+      );
+      const turn = Math.abs(
+        ((course(item.id, t) - iconCourse(item, t) + 540) % 360) - 180,
+      );
+      assert.ok(turn < 1e-3, `${item.id} at ${dt} ms: ${turn}° apart`);
+    }
+});
+
+test('a course blend starts from the course shown, as the shared evaluator reads it', () => {
+  const t0 = Date.now();
+  const { part, draw } = drawOver();
+  const set = draw.icons({ id: 'gpu:blend-parity' });
+  const motion = { kind: 'hold', courseDeg: 0 };
+  const item = (courseDeg) =>
+    icon('a', {
+      motion: { ...motion, courseDeg },
+      rotationMode: 'course',
+      courseBlendMs: 4000,
+    });
+  set.set([item(0)]);
+  set.upsert([item(80)]);
+  const { course } = rows(part, 'gpu:blend-parity');
+  // Partway through, a new course: the next blend starts where this one is.
+  const before = course('a', Date.now());
+  set.upsert([item(150)]);
+  const at = Date.now();
+  const turn = (x, y) => Math.abs(((x - y + 540) % 360) - 180);
+  assert.ok(
+    turn(course('a', at), before) < 0.5,
+    `no jump: ${before} then ${course('a', at)}`,
+  );
+  assert.ok(Math.abs(course('a', at + 10_000) - 150) < 0.01, 'then there');
+  assert.ok(at - t0 < 4000, 'the test ran inside the first blend');
+});
+
+test('a row keeps the course it showed when its item’s motion is changed in place', () => {
+  const { part, draw } = drawOver();
+  const set = draw.icons({ id: 'gpu:in-place' });
+  const motion = { kind: 'hold', courseDeg: 0 };
+  const item = icon('a', {
+    motion,
+    rotationMode: 'course',
+    courseBlendMs: 2000,
+  });
+  set.set([item]);
+  motion.courseDeg = 90;
+  set.upsert([item]);
+  const { course } = rows(part, 'gpu:in-place');
+  const at = Date.now();
+  assert.ok(
+    course('a', at) < 1,
+    `blends from 0, not from 90: ${course('a', at)}`,
+  );
+  assert.ok(Math.abs(course('a', at + 2500) - 90) < 0.01, 'there by 2 s');
 });

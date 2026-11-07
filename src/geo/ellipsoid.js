@@ -110,6 +110,16 @@ export function fromRadians(lon, lat, height = 0) {
 export const fromDegrees = (lon, lat, height = 0) =>
   fromRadians(toRadians(lon), toRadians(lat), height);
 
+/**
+ * A position as ECEF (a new object): `{lon, lat, height?}` (degrees, metres
+ * above the ellipsoid) or `{x, y, z}`, the render contract's `Position`.
+ */
+export function positionToEcef(position) {
+  if ('lon' in position && 'lat' in position)
+    return fromDegrees(position.lon, position.lat, position.height ?? 0);
+  return vec(position.x, position.y, position.z);
+}
+
 /** The point on the ellipsoid along the geodetic normal, or null at the centre. */
 export function scaleToGeodeticSurface(p, ellipsoid) {
   const e = ellipsoidArg(ellipsoid);

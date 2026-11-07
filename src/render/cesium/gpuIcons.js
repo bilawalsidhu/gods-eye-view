@@ -43,7 +43,6 @@ import {
   ICON_ROTATES,
 } from '../../data/iconSet.js';
 import {
-  segmentCourse,
   writeArcSegment,
   writeCourseGlide,
   writeHoldSegment,
@@ -51,7 +50,13 @@ import {
 } from '../../data/iconSegment.js';
 import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
 import { iconAtlas, MAX_ICON_SLOTS } from '../../data/iconAtlas.js';
-import { norm180 } from '../../data/motionModel.js';
+import {
+  glideOffset,
+  iconCourse,
+  LERP_STEP_MS,
+  motionEndsAt,
+  norm180,
+} from '../motion/iconMotion.js';
 import { toCartesian } from './common.js';
 
 /** The capabilities GPU icon sets bring. */
@@ -246,6 +251,10 @@ export function createGpuIcons({
     const blends = new Map();
     // What each row's segment was last written from, by id.
     const written = new Map();
+    // What each row is drawn along now, by id: its position, course and
+    // motion as the renderer reads them, and the course glide in effect
+    // (`iconMotion` evaluates it as the GPU does).
+    const drawn = new Map();
     // The ids of the last columns, while no other write came after them.
     let columnIds = null;
     // Written in full on the first write.
@@ -270,7 +279,7 @@ export function createGpuIcons({
       return item.course ?? 0;
     }
 
-    /** Write a row's segment; when it stops moving, epoch ms (-Infinity: holds). */
+    /** Write a row's segment. */
     function writeMotion(row, item) {
       const seg = set.segments;
       const motion = can('motionSegments') ? item.motion : undefined;
@@ -279,7 +288,7 @@ export function createGpuIcons({
         case 'lerp': {
           const t0 = tauOf(motion.t0);
           // Not after t0: a step 1 ms after it.
-          const t1 = Math.max(tauOf(motion.t1), t0 + 0.001);
+          const t1 = Math.max(tauOf(motion.t1), t0 + LERP_STEP_MS / 1000);
           writeLerpSegment(seg, row, {
             from: toCartesian(motion.from),
             to: toCartesian(motion.to),
@@ -288,7 +297,7 @@ export function createGpuIcons({
             course0Deg: courseOf(item),
             courseSlopeDeg: motion.courseSlopeDeg ?? 0,
           });
-          return Math.max(motion.t1, motion.t0 + 1);
+          return;
         }
         case 'arc': {
           const t0 = tauOf(motion.t0);
@@ -302,11 +311,10 @@ export function createGpuIcons({
             turnRateDps: motion.turnRateDps,
             climbMps: motion.climbMps ?? 0,
           });
-          return motion.t0 + motion.maxDtS * 1000;
+          return;
         }
         default:
           writeHoldSegment(seg, row, pos, courseOf(item));
-          return -Infinity;
       }
     }
 
@@ -319,10 +327,12 @@ export function createGpuIcons({
       let row = set.row(item.id);
       const added = row < 0;
       if (added) row = set.add(item.id);
-      const tau = set.seconds(clockTime());
+      const now = clockMs();
       // The course on screen before this write, to ease from.
       const shownCourse =
-        added || set.expires(row) === -Infinity ? null : set.course(row, tau);
+        added || !drawn.has(item.id)
+          ? null
+          : iconCourse(drawn.get(item.id), now);
       const [width = 0, height = 0] = item.size ?? [];
       const rasterPx = rasterPxOf(item);
       const far = slotOf(item.image, rasterPx);
@@ -358,22 +368,32 @@ export function createGpuIcons({
       const from = motionOf(item);
       if (!added && sameMotion(written.get(item.id), from)) return;
       written.set(item.id, from);
-      let end = writeMotion(row, item);
-      const glide = can('courseGlide') ? item.courseGlide : undefined;
-      if (glide) {
+      writeMotion(row, item);
+      // The row as the renderer reads it (copies, as `written`'s are): its
+      // motion, without a glide yet.
+      const along = {
+        pos: from.pos,
+        course: from.course,
+        motion: can('motionSegments') ? from.motion : undefined,
+      };
+      // A glide written with the offset the app reads, so a half turn goes the
+      // way `iconMotion` says.
+      const writeGlide = (g) =>
         writeCourseGlide(
           set.segments,
           row,
-          glide.fromCourseDeg,
-          tauOf(glide.t0),
-          glide.rateDps,
+          g.fromCourseDeg,
+          tauOf(g.t0),
+          g.rateDps,
+          glideOffset(along.motion, along.course, g),
         );
-        // Turning at most half a turn at its rate.
-        if (glide.rateDps > 0)
-          end = Math.max(end, glide.t0 + (180 / glide.rateDps) * 1000);
+      let end = motionEndsAt(along);
+      let glide = can('courseGlide') ? from.courseGlide : undefined;
+      if (glide) {
+        writeGlide(glide);
+        end = motionEndsAt({ ...along, courseGlide: glide });
       } else if (item.courseBlendMs > 0 && shownCourse !== null) {
-        const target = segmentCourse(set.segments, row, tau);
-        const now = clockMs();
+        const target = iconCourse(along, now);
         let blend = blends.get(item.id);
         // The same course as the blend under way heads for: it goes on.
         if (!blend || blend.target !== target) {
@@ -393,16 +413,16 @@ export function createGpuIcons({
           else blends.delete(item.id);
         }
         if (blend) {
-          writeCourseGlide(
-            set.segments,
-            row,
-            blend.from,
-            tauOf(blend.t0),
-            blend.rate,
-          );
+          glide = {
+            fromCourseDeg: blend.from,
+            t0: blend.t0,
+            rateDps: blend.rate,
+          };
+          writeGlide(glide);
           end = Math.max(end, blend.until);
         }
       } else blends.delete(item.id);
+      drawn.set(item.id, { ...along, courseGlide: glide });
       set.segmentWritten(row);
       if (end > movingUntil) movingUntil = end;
     }
@@ -420,6 +440,7 @@ export function createGpuIcons({
           set.remove(id);
           blends.delete(id);
           written.delete(id);
+          drawn.delete(id);
         }
       }
       for (const item of record.items.values()) writeRow(item);
@@ -443,6 +464,7 @@ export function createGpuIcons({
           set.remove(id);
           blends.delete(id);
           written.delete(id);
+          drawn.delete(id);
         }
         if (record.items.size === 0) movingUntil = -Infinity;
       },
@@ -467,6 +489,7 @@ export function createGpuIcons({
               set.remove(id);
               blends.delete(id);
               written.delete(id);
+              drawn.delete(id);
             }
         }
         const runs =

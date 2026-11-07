@@ -153,12 +153,22 @@ export function writeArcSegment(out, row, segment) {
  * @param {number} fromCourseDeg
  * @param {number} t0
  * @param {number} rateDps
+ * @param {number} [offsetDeg] The glide's start offset from the segment's
+ *   course, when the caller has it (render/motion/iconMotion's
+ *   `glideOffset`): its sign then picks the way an exact half turn goes.
  */
-export function writeCourseGlide(out, row, fromCourseDeg, t0, rateDps) {
+export function writeCourseGlide(
+  out,
+  row,
+  fromCourseDeg,
+  t0,
+  rateDps,
+  offsetDeg,
+) {
   const o = row * SEGMENT_STRIDE;
   out[o + SLEW_OFFSET] = 0;
   const target = targetCourse(out, o, t0);
-  out[o + SLEW_OFFSET] = norm180(fromCourseDeg - target);
+  out[o + SLEW_OFFSET] = offsetDeg ?? norm180(fromCourseDeg - target);
   out[o + SLEW_T0] = t0;
   out[o + SLEW_RATE] = rateDps > 0 ? rateDps : -1;
 }

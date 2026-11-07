@@ -7,14 +7,11 @@
  * skylight (https://github.com/cpaczek/skylight, MIT) shared/src/aim.ts.
  */
 import * as Cesium from 'cesium';
+import { norm180, norm360 } from '../geo/vector.js';
 
 const DEG = Math.PI / 180;
 const _mmCarto = new Cesium.Cartographic();
 const _mmCandidateCarto = new Cesium.Cartographic();
-
-export function norm360(deg) {
-  return ((deg % 360) + 360) % 360;
-}
 
 /**
  * Lift a repeated grounded fix to a newly resolved render floor without
@@ -49,11 +46,8 @@ export function liftRepeatedGroundFix(newest, candidatePosition, onGround) {
   return true;
 }
 
-/** Normalize to (−180, 180]. */
-export function norm180(deg) {
-  const n = norm360(deg);
-  return n > 180 ? n - 360 : n;
-}
+/** Degrees in [0, 360) and (−180, 180]. */
+export { norm180, norm360 };
 
 /**
  * Course over ground (deg from north, clockwise) of the chord from → to,

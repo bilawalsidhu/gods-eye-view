@@ -13,7 +13,7 @@ import { horizonFrom } from '../../geo/horizon.js';
 import { createInputRouter } from '../input/router.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
-import { motionPosition } from './motion.js';
+import { motionPosition } from '../motion/iconMotion.js';
 import { orbitPosition } from './orbits.js';
 import { computeViewRectangle } from './viewRectangle.js';
 import {

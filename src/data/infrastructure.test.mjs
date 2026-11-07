@@ -205,6 +205,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'heights.js',
     'horizon.js',
     'iconAtlas.js',
+    'iconMotion.js',
     'iconSegment.js',
     'iconSet.js',
     'iconSetPrimitive.js',

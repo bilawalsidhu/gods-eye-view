@@ -56,6 +56,13 @@ export const DEGREES_PER_RADIAN = 180 / Math.PI;
 export const toRadians = (degrees) => degrees * RADIANS_PER_DEGREE;
 export const toDegrees = (radians) => radians * DEGREES_PER_RADIAN;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** Degrees in [0, 360). */
+export const norm360 = (deg) => ((deg % 360) + 360) % 360;
+/** Degrees in (-180, 180]. */
+export function norm180(deg) {
+  const n = norm360(deg);
+  return n > 180 ? n - 360 : n;
+}
 export const acosClamped = (v) => Math.acos(clamp(v, -1, 1));
 export const equalsEpsilon = (a, b, eps) => Math.abs(a - b) <= eps;
 

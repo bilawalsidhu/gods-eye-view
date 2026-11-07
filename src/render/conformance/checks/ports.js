@@ -19,6 +19,7 @@ import {
   twoline2satrec,
 } from 'satellite.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
+import { iconPosition } from '../../motion/iconMotion.js';
 
 /** 1 × 1 PNGs (red, green, blue), so imagery checks load nothing from the network. */
 const PIXEL_PNGS = [
@@ -920,6 +921,87 @@ export function portChecks() {
               `${name}: at the formula's position`,
             );
           ok(!find(id, flat), `${name}: not at the fix's height`);
+        }
+        set.dispose();
+      },
+      { capability: 'motionSegments' },
+    ),
+    check(
+      'draw.motion.shared',
+      'icons are drawn where the shared motion evaluator puts them',
+      async (h, r) => {
+        await overAustin(h, r, 30000);
+        const t0 = r.frame.time();
+        const fix = h.toEcef({ ...AUSTIN, height: 9000 });
+        const to = h.toEcef({
+          ...AUSTIN,
+          lon: AUSTIN.lon + 0.03,
+          height: 9000,
+        });
+        const items = [
+          {
+            id: 'arc',
+            pos: fix,
+            image: DOT,
+            size: [16, 16],
+            motion: {
+              kind: 'arc',
+              fix,
+              t0,
+              speedMps: 180,
+              trackDeg: 200,
+              turnRateDps: -2.5,
+              climbMps: 100,
+              minDtS: -20,
+              maxDtS: 15,
+            },
+          },
+          {
+            id: 'step',
+            pos: fix,
+            image: DOT,
+            size: [16, 16],
+            // No span: at `from` until t0, at `to` after it.
+            motion: { kind: 'lerp', from: fix, to, t0: t0 + 4000, t1: t0 },
+          },
+        ];
+        const set = r.draw.icons({
+          id: 'conf:shared',
+          motionClock: { kind: 'scene' },
+        });
+        set.set(items);
+        const find = (id, p) => {
+          const s = r.query.project(p);
+          return r.query
+            .drillPick(s.x, s.y)
+            .find((x) => x.set === 'conf:shared' && x.id === id);
+        };
+        const apart = (a, b) => {
+          const sa = r.query.project(a);
+          const sb = r.query.project(b);
+          return Math.hypot(sa.x - sb.x, sa.y - sb.y);
+        };
+        // Each sample against where the item is at another of them: the
+        // evaluator's answer, and not the other.
+        const samples = [-30, 9, 40];
+        for (const [k, dtS] of samples.entries()) {
+          const t = t0 + dtS * 1000;
+          const other = t0 + samples[(k + 1) % samples.length] * 1000;
+          r.frame.setTime(t);
+          await drawn(h, r);
+          for (const item of items) {
+            const want = iconPosition(item, t);
+            const elsewhere = iconPosition(item, other);
+            if (apart(want, elsewhere) < 20) continue;
+            const hit = find(item.id, want);
+            ok(hit, `${item.id} at ${dtS} s: picked there`);
+            if (hit?.position)
+              nearVec(hit.position, want, 50, `${item.id} at ${dtS} s: there`);
+            ok(
+              !find(item.id, elsewhere),
+              `${item.id} at ${dtS} s: not elsewhere`,
+            );
+          }
         }
         set.dispose();
       },

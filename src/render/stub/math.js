@@ -14,8 +14,6 @@ import {
   clamp,
   equalsEpsilon,
   negate,
-  clone,
-  fromDegrees,
   rotate,
   scale,
   vec,
@@ -25,11 +23,7 @@ import {
 export * from '../../geo/index.js';
 
 /** A contract `Position` (`Ecef` or `LonLatH`, degrees), as ECEF. */
-export function toEcef(position) {
-  if ('lon' in position && 'lat' in position)
-    return fromDegrees(position.lon, position.lat, position.height ?? 0);
-  return clone(position);
-}
+export { positionToEcef as toEcef } from '../../geo/ellipsoid.js';
 
 const EPSILON3 = 1e-3;
 const EPSILON10 = 1e-10;
