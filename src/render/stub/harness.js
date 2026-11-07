@@ -23,5 +23,7 @@ export function createStubHarness(name = 'stub') {
     pointer: (r, type, x, y, extra) => r.testing.pointer(type, x, y, extra),
     scriptHeights: (r, fn) => r.testing.setHeights(fn),
     wallTime: (r) => r.testing.wallTime(),
+    // The stub loads nothing: any url is a model it draws.
+    assets: { model: 'stub:model.glb' },
   };
 }

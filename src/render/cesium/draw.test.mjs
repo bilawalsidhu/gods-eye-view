@@ -3623,3 +3623,271 @@ test('a segmented line, then plain and moved while its set rebuilds, is hidden s
       set.dispose();
     }),
   ));
+
+/** `Cesium.Model.fromGltfAsync` replaced by loads a test resolves. */
+function fakeModelLoads() {
+  const loads = [];
+  const real = Cesium.Model.fromGltfAsync;
+  Cesium.Model.fromGltfAsync = (options) =>
+    new Promise((resolve, reject) => {
+      const model = {
+        ...options,
+        modelMatrix: Cesium.Matrix4.clone(options.modelMatrix),
+        ready: false,
+        color: undefined,
+        colorBlendMode: Cesium.ColorBlendMode.HIGHLIGHT,
+        colorBlendAmount: 0.5,
+        environmentMapManager: {
+          enabled: options.environmentMapOptions?.enabled ?? true,
+        },
+        readyEvent: new Cesium.Event(),
+        errorEvent: new Cesium.Event(),
+        boundingSphere: { radius: 10 * (options.scale ?? 1) },
+        destroyed: false,
+        destroy() {
+          this.destroyed = true;
+        },
+        isDestroyed() {
+          return this.destroyed;
+        },
+        update() {},
+      };
+      loads.push({
+        options,
+        model,
+        resolve: () => resolve(model),
+        reject,
+        ready() {
+          model.ready = true;
+          model.readyEvent.raiseEvent(model);
+        },
+      });
+    });
+  return { loads, restore: () => (Cesium.Model.fromGltfAsync = real) };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('models re-pose and restyle in place; only a new url loads again', async () => {
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'planes' });
+    const ready = [];
+    set.on('ready', (id) => ready.push(id));
+    const plane = (extra = {}) => ({
+      id: 'p',
+      pos: { lon: 10, lat: 20, height: 100 },
+      url: 'a.glb',
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+      environmentMap: false,
+      meta: { n: 1 },
+      ...extra,
+    });
+    set.set([plane()]);
+    assert.equal(loads.length, 1);
+    assert.equal(loads[0].options.environmentMapOptions.enabled, false);
+    assert.equal(loads[0].options.show, false, 'hidden until ready');
+    const host = scene.added[0];
+    assert.equal(host.loading, 1, 'loading');
+    loads[0].resolve();
+    await settle();
+    const model = loads[0].model;
+    assert.equal(model.show, false, 'loaded, not yet ready');
+    loads[0].ready();
+    assert.deepEqual(ready, ['p'], 'ready once loaded and posed');
+    assert.equal(model.show, true);
+    assert.equal(host.loading, 0);
+    assert.deepEqual(model.id, {
+      set: 'planes',
+      id: 'p',
+      meta: { n: 1 },
+      lodGroup: undefined,
+    });
+
+    // Moved, turned and restyled: the same model, no load, no ready.
+    set.upsert([
+      plane({
+        pos: { lon: 11, lat: 21, height: 200 },
+        orientation: { heading: 1, pitch: 0.1, roll: 0.2 },
+        tint: [1, 0, 0, 0.5],
+        colorBlend: { mode: 'mix', amount: 0.8 },
+        shading: 'unlit',
+        environmentMap: true,
+        scale: 2,
+        minPixelSize: 32,
+        maxScale: 50,
+        meta: { n: 2 },
+      }),
+    ]);
+    assert.equal(loads.length, 1, 'not loaded again');
+    assert.deepEqual(ready, ['p'], 'no second ready');
+    const expected = Cesium.Transforms.headingPitchRollToFixedFrame(
+      Cesium.Cartesian3.fromDegrees(11, 21, 200),
+      new Cesium.HeadingPitchRoll(1, 0.1, 0.2),
+    );
+    assert.ok(Cesium.Matrix4.equalsEpsilon(model.modelMatrix, expected, 1e-6));
+    assert.deepEqual(
+      [model.color.red, model.color.green, model.color.blue, model.color.alpha],
+      [1, 0, 0, 0.5],
+    );
+    assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.MIX);
+    assert.equal(model.colorBlendAmount, 0.8);
+    assert.ok(model.customShader instanceof Cesium.CustomShader, 'unlit');
+    assert.equal(model.environmentMapManager.enabled, true);
+    assert.equal(model.scale, 2);
+    assert.equal(model.minimumPixelSize, 32);
+    assert.equal(model.maximumScale, 50);
+    assert.deepEqual(model.id.meta, { n: 2 }, 'the pick id follows');
+    set.upsert([
+      plane({ shading: 'pbr', tint: '#00f', colorBlend: { mode: 'replace' } }),
+    ]);
+    assert.equal(model.customShader, undefined, 'lit again');
+    assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.REPLACE);
+    set.upsert([plane({ colorBlend: { mode: 'replace' } })]);
+    assert.equal(
+      model.colorBlendMode,
+      Cesium.ColorBlendMode.HIGHLIGHT,
+      'no tint to blend in: its own colour',
+    );
+    assert.equal(model.color.alpha, 1);
+    set.upsert([plane({ show: false })]);
+    assert.equal(model.show, false, 'hidden in place');
+
+    // A new url loads; the old model draws until the new one is ready.
+    set.upsert([plane({ url: 'b.glb' })]);
+    assert.equal(loads.length, 2);
+    loads[1].resolve();
+    await settle();
+    assert.ok(host.contains(model), 'the old model still draws');
+    loads[1].ready();
+    assert.equal(host.contains(model), false, 'swapped once ready');
+    assert.ok(host.contains(loads[1].model));
+    assert.deepEqual(ready, ['p', 'p']);
+
+    // Away and back before the other loads: no second load of the first.
+    set.upsert([plane({ url: 'c.glb' })]);
+    set.upsert([plane({ url: 'b.glb', pos: { lon: 12, lat: 22 } })]);
+    assert.equal(loads.length, 3);
+    assert.equal(host.loading, 0, 'the load in between is let go');
+    const moved = Cesium.Matrix4.getTranslation(
+      loads[1].model.modelMatrix,
+      new Cesium.Cartesian3(),
+    );
+    assert.ok(
+      Cesium.Cartesian3.distance(moved, Cesium.Cartesian3.fromDegrees(12, 22)) <
+        1e-3,
+      'the drawn model kept moving',
+    );
+
+    set.remove(['p']);
+    assert.equal(host.length, 0, 'removed');
+    assert.equal(set.size(), 0);
+    set.dispose();
+  } finally {
+    restore();
+  }
+});
+
+test('a model load superseded or failed settles once', async () => {
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'm' });
+    const item = (url) => ({
+      id: 'a',
+      pos: { lon: 0, lat: 0 },
+      url,
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+    });
+    set.set([item('a.glb')]);
+    const host = scene.added[0];
+    set.upsert([item('b.glb')]);
+    assert.equal(host.loading, 1, 'the first is superseded');
+    loads[0].resolve();
+    await settle();
+    assert.equal(loads[0].model.destroyed, true, 'a stale load is let go');
+    loads[1].reject(new Error('no such model'));
+    await settle();
+    assert.equal(host.loading, 0);
+    assert.equal(host.failed, 1, 'kept for whenSettled');
+    // A model that fails as it loads is let go once its update is done.
+    set.upsert([item('c.glb')]);
+    assert.equal(host.failed, 0, 'a new url clears the failure');
+    loads[2].resolve();
+    await settle();
+    const bad = loads[2].model;
+    bad.errorEvent.raiseEvent(new Error('bad texture'));
+    assert.ok(host.contains(bad), 'not destroyed inside its own update');
+    assert.equal(host.failed, 1);
+    await settle();
+    assert.equal(host.contains(bad), false, 'then let go');
+    set.clear();
+    assert.equal(host.failed, 0, 'gone with its item');
+    set.dispose();
+  } finally {
+    restore();
+  }
+});
+
+test('a model past its pixel cap is scaled down each frame; fades and culls too', async () => {
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const scene = fakeScene();
+    scene.drawingBufferWidth = 1000;
+    scene.drawingBufferHeight = 500;
+    let metresPerPixel = 0.1;
+    scene.camera.getPixelSize = () => metresPerPixel;
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'm', horizonCull: true });
+    const eye = scene.camera.positionWC;
+    const at = Cesium.Cartesian3.fromDegrees(0, 0, 1000);
+    const distance = Cesium.Cartesian3.distance(eye, at);
+    set.set([
+      {
+        id: 'a',
+        pos: { lon: 0, lat: 0, height: 1000 },
+        url: 'a.glb',
+        orientation: { heading: 0, pitch: 0, roll: 0 },
+        scale: 4,
+        maxPixelSize: 100,
+        fadeByDistance: {
+          near: distance - 10,
+          nearValue: 1,
+          far: distance + 10,
+          farValue: 0,
+        },
+      },
+    ]);
+    loads[0].resolve();
+    await settle();
+    const model = loads[0].model;
+    loads[0].ready();
+    part.beforeRender();
+    // Radius 10 m at scale 1: 100 px at 0.1 m/px is 10 m across, scale 0.5.
+    assert.ok(Math.abs(model.scale - 0.5) < 1e-9, `capped: ${model.scale}`);
+    assert.ok(Math.abs(model.color.alpha - 0.5) < 1e-6, 'faded halfway');
+    metresPerPixel = 10;
+    part.beforeRender();
+    assert.equal(model.scale, 4, 'under the cap: its own scale');
+    assert.equal(model.show, true);
+    // Behind the earth from an eye on the far side.
+    scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
+    part.beforeRender();
+    assert.equal(model.show, false, 'culled past the horizon');
+    set.dispose();
+  } finally {
+    restore();
+  }
+});

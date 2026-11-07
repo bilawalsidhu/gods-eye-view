@@ -3,7 +3,8 @@
  * @description The Cesium renderer's draw port
  * (`src/render/contract/draw.d.ts`): batched sets of items, each set one
  * primitive collection in the scene, rebuilt when its items change (icon
- * sets, and unclamped points restyled or moved, change in place). Every
+ * sets, unclamped points restyled or moved, and models, change in place;
+ * `drawModels.js`). Every
  * item carries a pick id `{set, id, meta, lodGroup}`, which the query port
  * (`ports.js`) reads picks back through.
  *
@@ -30,6 +31,7 @@ import { alongLength } from '../../geo/polyline.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
+import { createModelSets } from './drawModels.js';
 
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {
@@ -324,7 +326,11 @@ export function createCesiumDraw({
         }
         // Points restyled or moved, and lines that only change how they show
         // or where an undraped one runs, are changed where they are.
-        if (patchPoints(record, list) || patchLines(record, list)) {
+        if (
+          patchPoints(record, list) ||
+          patchLines(record, list) ||
+          (kind === 'models' && modelSets.upsert(record, list))
+        ) {
           for (const item of list) items.set(item.id, item);
           if (kind === 'lines') noteFlows(record);
           setsVersion += 1;
@@ -384,6 +390,7 @@ export function createCesiumDraw({
         // while the new builds, it would keep hiding the ground from picks.
         if (pickable && spec.pickable === false) retire(record);
         record.gpu?.restyle();
+        if (kind === 'models') modelSets.restyle(record);
         setsVersion += 1;
         showHosts(record);
         // No longer culled: what the cull hid comes back.
@@ -2029,52 +2036,15 @@ export function createCesiumDraw({
     replaceHost(record, collect(host, ground), ground, host);
   }
 
-  function buildModels(record) {
-    const host = new Cesium.PrimitiveCollection();
-    replaceHost(record, host);
-    // A model counts as loading until it is ready or fails, not when added;
-    // each model settles once, and a failure is kept for `whenSettled`.
-    host.loading = record.items.size;
-    host.failed = 0;
-    for (const item of record.items.values()) {
-      let settled = false;
-      const settle = (failed) => {
-        if (settled) return;
-        settled = true;
-        host.loading -= 1;
-        if (failed) host.failed += 1;
-        scene.requestRender();
-      };
-      const o = item.orientation;
-      const modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(
-        toCartesian(item.pos),
-        new Cesium.HeadingPitchRoll(o.heading, o.pitch, o.roll),
-      );
-      Cesium.Model.fromGltfAsync({
-        url: item.url,
-        modelMatrix,
-        scale: item.scale ?? 1,
-        minimumPixelSize: item.minPixelSize ?? 0,
-        // All textures before ready, so a settled capture is the whole model.
-        incrementallyLoadTextures: false,
-        id: pickId(record, item),
-      }).then(
-        (model) => {
-          // Rebuilt, disposed, or the renderer is gone.
-          if (record.host !== host || host.isDestroyed())
-            return model.destroy();
-          host.add(model);
-          model.readyEvent.addEventListener(() => {
-            settle(false);
-            record.listeners.ready.fire(item.id);
-          });
-          model.errorEvent.addEventListener(() => settle(true));
-          scene.requestRender();
-        },
-        () => settle(true),
-      );
-    }
-  }
+  const modelSets = createModelSets({
+    scene,
+    toColor,
+    pickId,
+    replaceHost,
+    horizonNow,
+    requestRender,
+  });
+  const buildModels = (record) => modelSets.build(record);
 
   /** The 3D tilesets in the scene, shown or not. */
   function tilesets() {
@@ -2154,6 +2124,7 @@ export function createCesiumDraw({
     beforeRender() {
       cullHorizon();
       runFlows();
+      modelSets.beforeRender(sets.values());
     },
     /** Each frame, after it drew: clamp state, and ground swaps. */
     afterRender() {

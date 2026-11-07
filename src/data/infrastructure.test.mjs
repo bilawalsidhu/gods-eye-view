@@ -198,6 +198,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'dispatcher.js',
     'draw.js',
     'drawHit.js',
+    'drawModels.js',
     'events.js',
     'follow.js',
     'frame.js',

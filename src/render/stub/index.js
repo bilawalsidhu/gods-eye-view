@@ -12,6 +12,7 @@
 import { horizonFrom } from '../../geo/horizon.js';
 import { alongLength } from '../../geo/polyline.js';
 import { createInputRouter } from '../input/router.js';
+import { cssColor } from '../color.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
@@ -316,24 +317,35 @@ export function createStubRenderer(options = {}) {
     };
     sets.set(spec.id, record);
     log('draw', kind, [spec]);
+    // A model is ready once per load: when it is new or its url changes,
+    // not when it is moved or restyled.
+    const loads = (items) =>
+      kind === 'models'
+        ? items
+            .filter(
+              (item) => record.items.get(String(item.id))?.url !== item.url,
+            )
+            .map((item) => String(item.id))
+        : [];
     const ready = (ids) => {
-      if (kind !== 'models') return;
       for (const id of ids) deliver(record.readyListeners, id);
     };
     const handle = {
       id: spec.id,
       set(items) {
+        const loading = loads(items);
         record.items.clear();
         for (const item of items)
           record.items.set(String(item.id), { ...item });
         requestRender('draw');
-        ready(items.map((item) => String(item.id)));
+        ready(loading);
       },
       upsert(items) {
+        const loading = loads(items);
         for (const item of items)
           record.items.set(String(item.id), { ...item });
         requestRender('draw');
-        ready(items.map((item) => String(item.id)));
+        ready(loading);
       },
       remove(ids) {
         for (const id of ids) record.items.delete(String(id));
@@ -544,6 +556,67 @@ export function createStubRenderer(options = {}) {
     )
       return motionPosition(item.motion, base, motionTime(set) + aheadMs);
     return base;
+  }
+
+  /**
+   * The shown models as the stub draws them: a square as wide as a pick
+   * takes (at most `maxPixelSize`, at least `minPixelSize`), far
+   * ones first, in white shading blended with the tint by `colorBlend`.
+   */
+  function modelSquares() {
+    const squares = [];
+    for (const set of sets.values()) {
+      if (set.kind !== 'models' || !set.show) continue;
+      for (const item of set.items.values()) {
+        if (item.show === false) continue;
+        const p = itemPosition(set, item);
+        if (!p || isOccluded(p)) continue;
+        const distance = magnitude(sub(p, eye().position));
+        if (item.displayRange) {
+          const [nearM, farM] = item.displayRange;
+          if (distance < nearM || distance >= farM) continue;
+        }
+        const s = project(p);
+        if (!s) continue;
+        // The pixel floor wins over the cap, as Cesium's does.
+        let side = 10;
+        if (item.maxPixelSize > 0) side = Math.min(side, item.maxPixelSize);
+        side = Math.max(side, item.minPixelSize ?? 0);
+        squares.push({
+          x: s.x,
+          y: s.y,
+          half: side / 2,
+          distance,
+          rgba: modelColor(item),
+        });
+      }
+    }
+    return squares.sort((a, b) => b.distance - a.distance);
+  }
+
+  /** A model's colour: white shading, the tint blended in by `colorBlend`. */
+  function modelColor(item) {
+    const shaded = [1, 1, 1];
+    const tint =
+      item.tint === undefined || item.tint === null
+        ? null
+        : typeof item.tint === 'string'
+          ? cssColor(item.tint)
+          : item.tint;
+    let rgb = shaded;
+    if (tint) {
+      const mode = item.colorBlend?.mode ?? 'highlight';
+      const amount =
+        mode === 'replace'
+          ? 1
+          : mode === 'mix'
+            ? (item.colorBlend.amount ?? 0.5)
+            : null;
+      rgb = shaded.map((c, i) =>
+        amount === null ? c * tint[i] : c + (tint[i] - c) * amount,
+      );
+    }
+    return [...rgb.map((c) => Math.round(c * 255)), 255];
   }
 
   /** Where a drawn item is now (or `aheadMs` from now), or null. */
@@ -1260,18 +1333,30 @@ export function createStubRenderer(options = {}) {
       return new Blob([], { type: `image/${opts.type ?? 'png'}` });
     },
     readPixels(opts = {}) {
-      const width = Math.round(
-        (opts.crop?.width ?? viewport.width) * (opts.scale ?? 1),
-      );
-      const height = Math.round(
-        (opts.crop?.height ?? viewport.height) * (opts.scale ?? 1),
-      );
+      const crop = opts.crop ?? {
+        x: 0,
+        y: 0,
+        width: viewport.width,
+        height: viewport.height,
+      };
+      const k = opts.scale ?? 1;
+      const width = Math.round(crop.width * k);
+      const height = Math.round(crop.height * k);
+      const data = new Uint8ClampedArray(width * height * 4);
+      // Models are the only things the stub draws into pixels.
+      for (const square of modelSquares()) {
+        for (let row = 0; row < height; row++) {
+          const y = crop.y + (row + 0.5) / k;
+          if (Math.abs(y - square.y) > square.half) continue;
+          for (let col = 0; col < width; col++) {
+            const x = crop.x + (col + 0.5) / k;
+            if (Math.abs(x - square.x) > square.half) continue;
+            data.set(square.rgba, (row * width + col) * 4);
+          }
+        }
+      }
       return /** @type {ImageData} */ (
-        /** @type {unknown} */ ({
-          width,
-          height,
-          data: new Uint8ClampedArray(width * height * 4),
-        })
+        /** @type {unknown} */ ({ width, height, data })
       );
     },
     async whenSettled() {

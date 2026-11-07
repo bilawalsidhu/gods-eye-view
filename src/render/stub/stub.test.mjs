@@ -14,8 +14,7 @@ test('the stub passes the conformance suite', async () => {
   const skipped = report.results
     .filter((r) => r.status === 'skip')
     .map((r) => r.id);
-  // Only the model check, which needs a glTF asset the stub has no use for.
-  assert.deepEqual(skipped, ['draw.models']);
+  assert.deepEqual(skipped, []);
 });
 
 test('a frame runs the contract’s steps in order', () => {

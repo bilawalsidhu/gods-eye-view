@@ -1754,6 +1754,148 @@ export function portChecks() {
       },
       { capability: 'models' },
     ),
+    check(
+      'draw.models.update',
+      'a model moves, turns and restyles in place; only a new url loads it again',
+      async (h, r) => {
+        if (!h.assets?.model) return { skip: 'no model asset in this harness' };
+        await overAustin(h, r);
+        const set = r.draw.models({ id: 'conf:models.update' });
+        const ready = [];
+        set.on('ready', (id) => ready.push(id));
+        const here = h.toEcef({ ...AUSTIN, height: 0 });
+        const there = h.toEcef({
+          lon: AUSTIN.lon + 0.004,
+          lat: AUSTIN.lat,
+          height: 0,
+        });
+        const model = (pos, extra = {}) => ({
+          id: 'm',
+          pos,
+          url: h.assets.model,
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          minPixelSize: 96,
+          ...extra,
+        });
+        const untilReady = async (count) => {
+          for (let i = 0; i < 600 && ready.length < count; i++)
+            await drawn(h, r, 1);
+        };
+        const picked = (pos) => {
+          const s = r.query.project(pos);
+          return (
+            s !== null &&
+            r.query.drillPick(s.x, s.y).some((hit) => hit.set === set.id)
+          );
+        };
+        set.set([model(here)]);
+        await untilReady(1);
+        deepEqual(ready, ['m'], 'ready once loaded');
+        await drawn(h, r);
+        await settled(r);
+        ok(picked(here), 'picked where it is');
+        set.upsert([
+          model(there, {
+            orientation: { heading: 1.2, pitch: 0.1, roll: 0.2 },
+            scale: 2,
+            shading: 'unlit',
+            tint: '#00ff00',
+            colorBlend: { mode: 'mix', amount: 0.5 },
+            environmentMap: false,
+            meta: { n: 2 },
+          }),
+        ]);
+        await drawn(h, r, 4);
+        await settled(r);
+        deepEqual(ready, ['m'], 'moved and restyled without loading again');
+        ok(picked(there), 'picked where it moved to');
+        ok(!picked(here), 'not where it was');
+        const s = r.query.project(there);
+        const hit = r.query.drillPick(s.x, s.y).find((x) => x.set === set.id);
+        deepEqual(hit?.meta, { n: 2 }, 'its new meta');
+        set.upsert([model(there, { url: `${h.assets.model}?again` })]);
+        await untilReady(2);
+        deepEqual(ready, ['m', 'm'], 'a new url loads again');
+        await drawn(h, r);
+        await settled(r);
+        ok(picked(there), 'the new model is drawn');
+        equal(set.size(), 1, 'one model');
+        set.dispose();
+      },
+      { capability: 'models' },
+    ),
+    check(
+      'draw.models.tint',
+      'a model’s tint and colour blend change live',
+      async (h, r) => {
+        if (!h.assets?.model) return { skip: 'no model asset in this harness' };
+        await overAustin(h, r);
+        const set = r.draw.models({ id: 'conf:models.tint' });
+        const ready = [];
+        set.on('ready', (id) => ready.push(id));
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const model = (extra) => ({
+          id: 'm',
+          pos,
+          url: h.assets.model,
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          minPixelSize: 160,
+          environmentMap: false,
+          ...extra,
+        });
+        set.set([model({ shading: 'pbr' })]);
+        for (let i = 0; i < 600 && !ready.length; i++) await drawn(h, r, 1);
+        deepEqual(ready, ['m'], 'ready');
+        const s = r.query.project(pos);
+        // How many pixels of a patch at the model's centre `like` holds.
+        const count = async (like) => {
+          await drawn(h, r, 3);
+          await settled(r);
+          r.frame.renderNow();
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x) - 4,
+              y: Math.round(s.y) - 4,
+              width: 9,
+              height: 9,
+            },
+          });
+          let n = 0;
+          for (let i = 0; i < image.data.length; i += 4)
+            if (like(image.data[i], image.data[i + 1], image.data[i + 2])) n++;
+          return n;
+        };
+        const red = (r0, g, b) => r0 > 180 && g < 70 && b < 70;
+        const blue = (r0, g, b) => b > 180 && r0 < 70 && g < 70;
+        set.upsert([
+          model({
+            shading: 'unlit',
+            tint: '#ff0000',
+            colorBlend: { mode: 'replace' },
+          }),
+        ]);
+        ok((await count(red)) >= 40, 'replaced by a red tint');
+        set.upsert([
+          model({
+            shading: 'unlit',
+            tint: '#0000ff',
+            colorBlend: { mode: 'replace' },
+          }),
+        ]);
+        ok((await count(blue)) >= 40, 'the tint changes live');
+        set.upsert([
+          model({
+            shading: 'unlit',
+            tint: '#0000ff',
+            colorBlend: { mode: 'mix', amount: 0 },
+          }),
+        ]);
+        equal(await count(blue), 0, 'mixed in at none, its own colour');
+        deepEqual(ready, ['m'], 'restyled without loading again');
+        set.dispose();
+      },
+      { capability: 'models' },
+    ),
 
     // --- Query -------------------------------------------------------------
     check(
