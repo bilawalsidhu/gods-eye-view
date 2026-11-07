@@ -5,7 +5,9 @@ import { createPinia } from 'pinia';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
-import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
+import { bindFakeCesiumCredits, fakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 
 /** A hybrid renderer whose screen board is presented to its own store. */
 function hybridWithBoard(viewer) {
@@ -90,6 +92,17 @@ function installBrowserGlobals(t) {
   });
 }
 
+/**
+ * `viewer` with the fake scene's camera, query, frame and draw ports and the
+ * fake credits bound over it as one renderer.
+ */
+function withScenePorts(viewer) {
+  const { unbind, ...ports } = bindFakeCesiumScene(viewer);
+  unbind();
+  bindRenderer(viewer, { ...ports, credits: fakeCesiumCredits(viewer) });
+  return viewer;
+}
+
 /** A viewer whose scene/camera is just enough for both sub-renderers. */
 function fakeViewer(lon, lat) {
   const credits = new Set();
@@ -111,7 +124,7 @@ function fakeViewer(lon, lat) {
   return {
     dataSources,
     frames,
-    viewer: bindFakeCesiumCredits({
+    viewer: withScenePorts({
       credits,
       creditDisplay: {
         addStaticCredit: (credit) => credits.add(credit),
@@ -119,6 +132,7 @@ function fakeViewer(lon, lat) {
       },
       scene,
       camera,
+      canvas: scene.canvas,
       trackedEntity: null,
       dataSources: {
         add(dataSource) {
@@ -207,6 +221,7 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
   const viewer = {
     scene,
     camera,
+    canvas: scene.canvas,
     trackedEntity: null,
     dataSources: {
       add(dataSource) {
@@ -220,6 +235,8 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
       },
     },
   };
+  // The screen board projects through the renderer's camera and query.
+  bindFakeCesiumScene(viewer);
   const { store, renderer } = hybridWithBoard(viewer);
   const anno = {
     id: 'anno-hybrid-fb3',
@@ -783,6 +800,7 @@ test('a deadline passed during caption conversion leaves a drawn pending point',
   const live = annotationGroups(store).filter((mark) => !mark.className?.includes('gev-out'));
   assert.equal(live.length, 1);
   assert.ok(childrenWithClass(live[0], 'gev-anno-ring').length > 0, 'the pending point still draws');
+  assert.notEqual(live[0].display, 'none', 'and is on screen');
   renderer.remove(anno);
   renderer.destroy();
 });

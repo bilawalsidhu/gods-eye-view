@@ -197,6 +197,9 @@ export function createCesiumQuery({
   let occluderEllipsoid = null;
   const occluderEye = new Cesium.Cartesian3(NaN, NaN, NaN);
   const occludedPoint = new Cesium.Cartesian3();
+  /** `project`'s scratch point and window position. */
+  const projectedPoint = new Cesium.Cartesian3();
+  const projectedWindow = new Cesium.Cartesian2();
 
   const query = {
     pick(x, y, window = {}) {
@@ -233,9 +236,13 @@ export function createCesiumQuery({
       return { origin: ecef(ray.origin), direction: ecef(ray.direction) };
     },
     project(position) {
+      projectedPoint.x = position.x;
+      projectedPoint.y = position.y;
+      projectedPoint.z = position.z;
       const s = Cesium.SceneTransforms.worldToWindowCoordinates(
         scene,
-        toCartesian(position),
+        projectedPoint,
+        projectedWindow,
       );
       return s ? { x: s.x, y: s.y } : null;
     },
