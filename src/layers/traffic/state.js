@@ -1,14 +1,17 @@
-import { normalizeRoadMode } from './roadModes.js';
+import { normalizeRoadMode, normalizeRoadModes } from './roadModes.js';
 import * as Cesium from 'cesium';
 import { FLOW_BUCKET_COLORS } from './policy.js';
 
-export function createState({ services }) {
+export function createState({ services, source }) {
   const layerState = {};
+  /** The host's offered road sources (createTrafficSource `roadModes`). */
+  layerState._roadModes = normalizeRoadModes(source?.roadModes);
   layerState._roadMode =
     typeof location === 'undefined'
       ? null
       : normalizeRoadMode(
           new URLSearchParams(location.search).get('trafficRoads'),
+          layerState._roadModes,
         );
   // The query override is consumed at construction and shields passive restoration.
   layerState._roadModeUrlOverride = layerState._roadMode;
@@ -168,6 +171,14 @@ export function createState({ services }) {
   layerState._jamViz = 'density';
 
   /**
+   * Row toggles (`lines` / `dots` params): flow-colored road lines draped on
+   * the surface, and the moving dots. Live mode only for lines — the keyless
+   * simulation has no flow to color them with.
+   */
+  layerState._showLines = false;
+  layerState._showDots = true;
+
+  /**
    * Congestion heat-lines are GroundPolylinePrimitive batches draped onto the
    * rendered 3D tiles (ClassificationType.CESIUM_3D_TILE). One
    * primitive per bucket so the jam batch can pulse via a single shared
@@ -180,6 +191,14 @@ export function createState({ services }) {
   /** @type {Cesium.GroundPolylinePrimitive|null} Slow-bucket heat-line batch. */
 
   layerState._heatSlowPrim = null;
+
+  /** @type {Cesium.GroundPolylinePrimitive|null} Free-flow road-line batch (`lines` only). */
+
+  layerState._heatFreePrim = null;
+
+  /** @type {Cesium.GroundPolylinePrimitive[]} Replaced lines kept until successors are ready. */
+
+  layerState._heatRetired = [];
 
   /** @type {number} Heat-lines in the current render (stats). */
 

@@ -341,6 +341,9 @@ const OPTION_GROUPS = Object.freeze({
       osm: 'o',
       hybrid: 'h',
     }),
+    // Street Traffic row toggles: flow-colored road lines, moving dots.
+    booleanOption('lines', 'l', false),
+    booleanOption('dots', 'd', true),
   ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
