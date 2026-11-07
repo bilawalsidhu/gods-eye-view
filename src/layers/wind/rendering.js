@@ -5,14 +5,29 @@ import {
 import { createWindRelief } from './relief.js';
 import { orderWeatherImagery } from '../weather/imageryOrder.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
+import { msg } from '../../i18n/index.js';
 import { createWindGpuRendering } from './gpuRendering.js';
 import { advectParticle, sampleWind } from './model.js';
 import {
   createFieldRaster,
+  SCALAR_UNAVAILABLE,
   trailEraseAlpha,
   windTrailColor,
 } from './fields.js';
 
+// English for diagnostics; the row status shows it translated (index.js). The
+// scalar texts are the source's own; setOptions accepts only these overlays.
+const FIELD_UNAVAILABLE = Object.freeze({
+  speed: msg('Wind speed field unavailable'),
+  ...SCALAR_UNAVAILABLE,
+});
+
+/** English status for a scalar overlay with no drawable field. */
+export function fieldUnavailableText(overlay) {
+  return Object.hasOwn(FIELD_UNAVAILABLE, overlay)
+    ? FIELD_UNAVAILABLE[overlay]
+    : null;
+}
 const WIND_FIELD_FADE_HIGH_METERS = 1_200_000;
 const WIND_FIELD_FADE_LOW_METERS = 200_000;
 const WIND_FIELD_LOG_RANGE = Math.log(
@@ -336,7 +351,7 @@ export function createWindRendering({
     }
     const raster = createFieldRaster(snapshot, overlay);
     if (!raster) {
-      imageryError = `${overlay} field unavailable`;
+      imageryError = fieldUnavailableText(overlay);
       return;
     }
     if (
@@ -344,7 +359,7 @@ export function createWindRendering({
         ? !cesium.Primitive
         : !collection || !cesium.SingleTileImageryProvider
     ) {
-      imageryError = 'Globe imagery unavailable';
+      imageryError = msg('Globe imagery unavailable');
       return;
     }
     try {
@@ -384,12 +399,12 @@ export function createWindRendering({
       imagery.alpha = overlay === 'temperature' ? 1 : 0.85;
       if (gpuActive) updateImageryFade(viewer.scene.camera, true);
       imageryErrorRemove = provider.errorEvent?.addEventListener(() => {
-        imageryError = 'Globe field image unavailable';
+        imageryError = msg('Globe field image unavailable');
       });
       viewer.scene?.requestRender?.();
     } catch {
       removeImagery();
-      imageryError = 'Globe field image unavailable';
+      imageryError = msg('Globe field image unavailable');
     }
   }
 

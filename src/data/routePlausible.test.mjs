@@ -1,14 +1,15 @@
 // src/data/routePlausible.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { routePlausible, greatCircleKm } from './routePlausible.js';
+import { greatCircleKm } from '../geoDistance.js';
+import { routePlausible } from './routePlausible.js';
 
 const SFO = { lat: 37.6188, lon: -122.3754 };
 const LAX = { lat: 33.9416, lon: -118.4085 };
 const JFK = { lat: 40.6413, lon: -73.7781 };
 
 test('greatCircleKm sanity: SFO→LAX ≈ 543 km', () => {
-  const d = greatCircleKm(SFO.lat, SFO.lon, LAX.lat, LAX.lon);
+  const d = greatCircleKm(SFO, LAX);
   assert.ok(Math.abs(d - 543) < 15, `got ${d}`);
 });
 
@@ -40,5 +41,9 @@ test('missing data never hides a route (cannot judge → allow)', () => {
   assert.equal(routePlausible({
     latDeg: 51.5, lonDeg: -0.12,
     origin: { lat: null, lon: null }, destination: null,
+  }), true);
+  assert.equal(routePlausible({
+    latDeg: 95, lonDeg: 0,
+    origin: SFO, destination: LAX,
   }), true);
 });

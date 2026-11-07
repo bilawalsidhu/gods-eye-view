@@ -1,9 +1,6 @@
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
-import {
-  AIS_FIRST_CONNECT_GRACE_MS,
-  AIS_FIRST_CONNECT_LABEL,
-  AIS_HEALTHY_STATUSES,
-} from './policy.js';
+import { msg, t } from '../../i18n/index.js';
+import { AIS_FIRST_CONNECT_GRACE_MS, AIS_HEALTHY_STATUSES } from './policy.js';
 
 export function createLifecycle({
   vesselState,
@@ -14,7 +11,7 @@ export function createLifecycle({
 }) {
   const { state } = vesselState;
   const { restoreSpriteOrder, restoreSpriteOrderOnEnable } = services.sprites;
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const { releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -41,7 +38,7 @@ export function createLifecycle({
     state.feed.firstConnectStartedAt = startedAt;
     state.feed.firstConnectDeadline = startedAt + AIS_FIRST_CONNECT_GRACE_MS;
     state.feed.error = null;
-    state.feed.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+    state.feed.loadingLabel = t('awaiting first AIS position…');
     scheduleFirstConnectExpiry(sessionId, AIS_FIRST_CONNECT_GRACE_MS);
   }
 
@@ -63,8 +60,8 @@ export function createLifecycle({
       state.feed.firstConnectPhase = 'unavailable';
       state.feed.loadingLabel = '';
       state.feed.error = state.feed.lastMessageAt
-        ? 'awaiting usable AIS positions…'
-        : 'awaiting first AIS message…';
+        ? t('awaiting usable AIS positions…')
+        : t('awaiting first AIS message…');
       state.feed.stale = state.feed.count > 0;
     }, delayMs);
   }
@@ -85,7 +82,7 @@ export function createLifecycle({
 
   function markAisUnavailable(reason) {
     settleFirstConnectPhase('unavailable');
-    state.feed.error = reason || 'AIS live load failed';
+    state.feed.error = reason || msg('AIS live load failed');
     state.feed.stale = state.feed.count > 0;
   }
 
@@ -128,6 +125,7 @@ export function createLifecycle({
     state.interactionHandlerFactory = null;
     state.interactionKeyTarget = null;
     state.preRenderRemover = null;
+    components.rendering.cancelTrailingVisibilityPass();
     state.lastVisibilityUpdate = 0;
     state.lastFocusUpdate = 0;
     state.activeFocusCount = 0;
@@ -167,7 +165,6 @@ export function createLifecycle({
       const wasEnabled = state.feed.enabled;
       state.feed.enabled = true;
       if (!wasEnabled) beginAisSession();
-      holdContinuousRender('ais-vessels'); // per-frame animator (perf wave 2)
       const activeViewer = viewer || state.viewer;
       components.rendering.ensureCollections(activeViewer);
       components.selection.installInteraction(activeViewer);
@@ -196,13 +193,22 @@ export function createLifecycle({
         state.records.byMmsi.has(pickedId),
       );
       restoreSpriteOrderOnEnable('ais', activeViewer);
+      // Vessels are asked for by view, so ask again when the view moves away.
+      removeViewListener();
+      const moveEnd = activeViewer?.camera?.moveEnd;
+      if (typeof moveEnd?.addEventListener === 'function')
+        state.feed.removeViewListener = moveEnd.addEventListener(() => {
+          components.ingestion.refreshIfMoved(activeViewer);
+        });
       return components.ingestion.loadLivePositions(activeViewer);
     },
 
     disable() {
+      removeViewListener();
       state.feed.enabled = false;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels');
+      components.rendering.cancelTrailingVisibilityPass();
       unregisterPickOwner('ais-live-vessels');
       components.rendering.setVisible(false);
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
@@ -218,9 +224,11 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      removeViewListener();
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
+      components.rendering.cancelTrailingVisibilityPass();
       if (state.feed.abort) state.feed.abort.abort();
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
@@ -240,6 +248,12 @@ export function createLifecycle({
       resetState();
     },
   };
+
+  function removeViewListener() {
+    const remove = state.feed.removeViewListener;
+    state.feed.removeViewListener = null;
+    if (typeof remove === 'function') remove();
+  }
 
   return {
     clearFirstConnectTimer,

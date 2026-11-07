@@ -1,10 +1,58 @@
 import {
+  normalizeRoadMode,
+  resolveRoadMode,
+  roadModesSimulate,
+} from './roadModes.js';
+import {
   trafficBucketTier,
   trafficStyleProfile,
 } from '../../data/trafficPresetStyle.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { t, translateKnown } from '../../i18n/index.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
+  /** One status line: feed, drawn road source, then degraded-coverage notes. */
+  function roadStatusLabel(feed) {
+    const source = layerState._roadSource;
+    if (layerState._roadError)
+      return t('UNAVAILABLE · {source} · Roads unavailable', { source });
+    const notes = [feed.loadingLabel];
+    if (!layerState._liveMode || feed.error)
+      notes.push(t('Roads: {source}', { source }));
+    // An explicit TomTom or Hybrid choice without a key draws OpenStreetMap;
+    // a host without OpenStreetMap draws nothing.
+    const requested = roadModesSimulate(layerState._roadModes)
+      ? layerState._roadMode
+      : resolveRoadMode(layerState._roadMode, true, layerState._roadModes);
+    // A host without OpenStreetMap waits for the probe before naming a key.
+    if (
+      !layerState._liveMode &&
+      ['tomtom', 'hybrid'].includes(requested) &&
+      (roadModesSimulate(layerState._roadModes) || layerState._flowStatusKnown)
+    )
+      notes.push(
+        layerState._flowStatusUnavailable
+          ? requested === 'tomtom'
+            ? t(
+                'TomTom roads unavailable while the traffic service is unreachable',
+              )
+            : t('Hybrid unavailable while the traffic service is unreachable')
+          : requested === 'tomtom'
+            ? t('TomTom roads need a TomTom key')
+            : t('Hybrid needs a TomTom key'),
+      );
+    if (layerState._surfacePending)
+      notes.push(t('Local surface still loading'));
+    // The warning is a road-source message (source.js marks the known ones).
+    if (layerState._roadWarning)
+      notes.push(translateKnown(layerState._roadWarning));
+    else if (layerState._roadPartial) notes.push(t('Partial coverage'));
+    if (layerState._detailError) notes.push(t('Detailed roads unavailable'));
+    else if (layerState._detailLimited)
+      notes.push(t('Reduced detail coverage'));
+    return notes.join(' · ');
+  }
+
   const { getFlowSessionStats } = source;
 
   const methods = {
@@ -14,19 +62,77 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     icon: '🚗',
 
-    source: 'OpenStreetMap',
+    source: 'OpenStreetMap / TomTom',
 
     /** @type {number} Zero — layer is self-managed via camera listener + preRender */
     updateInterval: 0,
 
     /**
-     * Update user-adjustable parameters (density and speed scaling).
+     * Update user-adjustable parameters (road source, row toggles, density and
+     * speed scaling).
      *
      * @param {Object}  [params]
+     * @param {'tomtom'|'osm'|'hybrid'|null} [params.roadMode] - Road source; null = default; outside the host's modes = ignored.
+     * @param {boolean} [params.lines] - Draw flow-colored road lines (live mode).
+     * @param {boolean} [params.dots]  - Draw the moving dots.
      * @param {number}  [params.densityScale] - Dot density multiplier (clamped 0.2–2.5).
      * @param {number}  [params.speedScale]   - Dot speed multiplier (clamped 0.3–3.0).
+     * @param {{origin?:string}} [options] - Intent origin; restores never beat `?trafficRoads=`.
      */
-    setParams(params = {}) {
+    setParams(params = {}, { origin } = {}) {
+      const previousDensity = layerState._densityScale;
+      const previousSpeed = layerState._speedScale;
+      if (
+        Object.hasOwn(params, 'roadMode') &&
+        (params.roadMode === null ||
+          normalizeRoadMode(params.roadMode, layerState._roadModes))
+      ) {
+        const explicit = ['user', 'voice', 'tool'].includes(origin);
+        const mode =
+          !explicit && layerState._roadModeUrlOverride
+            ? layerState._roadModeUrlOverride
+            : params.roadMode;
+        if (explicit) layerState._roadModeUrlOverride = null;
+        if (mode !== layerState._roadMode) {
+          layerState._roadMode = mode;
+          // Redraw from scratch: a different source means different roads.
+          parts.ingestion.cancelActiveFetch();
+          clearTimeout(layerState._retryTimer);
+          layerState._retryTimer = null;
+          layerState._loadGeneration++;
+          layerState._fetching = false;
+          layerState._lastBounds = null;
+          layerState._lastViewCenter = null;
+          parts.animation.clearDots();
+          if (layerState._enabled)
+            parts.viewport.onCameraChanged({ immediate: true });
+        }
+      }
+      if (
+        typeof params.lines === 'boolean' &&
+        params.lines !== layerState._showLines
+      ) {
+        layerState._showLines = params.lines;
+        // Rebuild in place from the roads on screen: no refetch, no respawn.
+        if (layerState._enabled)
+          parts.rendering.rebuildHeatLines(
+            parts.rendering.visibleRoadsForAltitude(
+              layerState._roads,
+              layerState._lastRenderAltitude,
+            ),
+          );
+      }
+      if (
+        typeof params.dots === 'boolean' &&
+        params.dots !== layerState._showDots
+      ) {
+        layerState._showDots = params.dots;
+        // Hidden dots are kept, so showing them again is instant.
+        if (layerState._enabled && layerState._pointCollection)
+          layerState._pointCollection.show = params.dots;
+        parts.animation.syncRenderDemand();
+        layerState._viewer?.scene?.requestRender?.();
+      }
       if (typeof params.densityScale === 'number') {
         layerState._densityScale = Math.max(
           0.2,
@@ -39,6 +145,23 @@ export function createControls({ state: layerState, services, parts, source }) {
           Math.min(3.0, params.speedScale),
         );
       }
+      if (layerState._speedScale !== previousSpeed) {
+        const ratio = layerState._speedScale / previousSpeed;
+        for (const dot of layerState._dots) {
+          dot.baseMps *= ratio;
+          dot.mps *= ratio;
+        }
+      }
+      if (
+        layerState._densityScale !== previousDensity &&
+        layerState._enabled &&
+        layerState._roads.length
+      )
+        parts.rendering.renderRoadsForAltitude(
+          layerState._roads,
+          layerState._lastRenderAltitude,
+          'Density',
+        );
       // Live-mode treatment of roads TomTom has no flow data for:
       // 'sim' (default) keeps them as today's white ambient dots — colored =
       // real data, white = simulation; 'hide' spawns nothing on them (strict
@@ -66,15 +189,77 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Return the current user-adjustable parameters.
-     * @returns {{densityScale:number, speedScale:number}}
+     * @returns {{roadMode:string|null, lines:boolean, dots:boolean,
+     *   densityScale:number, speedScale:number}}
      */
     getParams() {
       return {
+        roadMode: layerState._roadMode,
+        lines: layerState._showLines,
+        dots: layerState._showDots,
         densityScale: layerState._densityScale,
         speedScale: layerState._speedScale,
         uncoveredRoads: layerState._uncoveredMode,
         jamViz: layerState._jamViz,
         presetDots: layerState._presetDots,
+      };
+    },
+
+    /**
+     * Street Traffic row chips: a road-source chip per offered mode (none for
+     * a single mode), then Lines and Dots toggles while live flow colors them.
+     */
+    getRowControls() {
+      const modes = layerState._roadModes;
+      const selected =
+        layerState._roadMode ||
+        resolveRoadMode(null, layerState._liveMode, modes);
+      const live = layerState._liveMode;
+      const titles = {
+        tomtom: live
+          ? t('TomTom roads only, each with its live flow')
+          : t(
+              'TomTom roads only, each with its live flow (needs a TomTom key)',
+            ),
+        osm: t('OpenStreetMap roads, with TomTom flow matched when available'),
+        hybrid: live
+          ? t('TomTom roads first; OpenStreetMap fills the rest, simulated')
+          : t(
+              'TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)',
+            ),
+      };
+      // TomTom and OSM are provider names and stay as they are.
+      const labels = { tomtom: 'TomTom', osm: 'OSM', hybrid: t('Hybrid') };
+      const lines = {
+        id: 'lines',
+        label: t('Lines'),
+        title: t('Road lines colored by live flow: green to red'),
+        active: layerState._showLines,
+        params: { lines: !layerState._showLines },
+      };
+      const dots = {
+        id: 'dots',
+        label: t('Dots'),
+        title: live ? t('Moving dots colored by live flow') : t('Moving dots'),
+        active: layerState._showDots,
+        params: { dots: !layerState._showDots },
+      };
+      // Lines need live flow. Dots, once hidden (a live choice, a restore or
+      // a share link), stay offered so they can always be shown again.
+      const toggles = live ? [lines, dots] : layerState._showDots ? [] : [dots];
+      return {
+        chips: [
+          ...(modes.length > 1
+            ? modes.map((mode) => ({
+                id: `roads-${mode}`,
+                label: labels[mode],
+                title: titles[mode],
+                active: mode === selected,
+                params: { roadMode: mode },
+              }))
+            : []),
+          ...toggles,
+        ],
       };
     },
 
@@ -91,7 +276,13 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
      */
     getDetectableObjects(options = {}) {
-      if (!layerState._enabled || layerState._dots.length === 0) return [];
+      // Hidden dots are not on screen to detect.
+      if (
+        !layerState._enabled ||
+        !layerState._showDots ||
+        layerState._dots.length === 0
+      )
+        return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
         : layerState._dots.length;
@@ -106,7 +297,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         if (!pos) continue;
         const entry = {
           position: pos,
-          id: `VEH-${String(i).padStart(4, '0')}`,
+          id: `VEH-${String(layerState._dots[i].id).padStart(4, '0')}`,
           type: 'VEH',
         };
         // Live mode: the detection bracket carries the congestion signal —
@@ -124,38 +315,120 @@ export function createControls({ state: layerState, services, parts, source }) {
       return result;
     },
 
+    /** Visit stable dot identities and their owning geometry without allocating snapshots. */
+    visitMotionDots(visitor) {
+      for (let i = 0; i < layerState._dots.length; i++) {
+        const dot = layerState._dots[i];
+        visitor(dot.id, dot.road.key, dot.point, dot.road);
+      }
+    },
+
     /**
      * Return current layer statistics for UI status chips.
      * `mode` is the CONFIGURED source — 'live' (a TomTom key is present) or
      * 'sim' (keyless simulation, which the manager renders as a FALLBACK chip);
      * `error` carries this instant's health, so a live-configured layer whose
      * flow feed went down reads DEGRADED with the reason instead of a stale
-     * LIVE coverage number. `flowCoveragePct` is matched roads / roads with any
-     * flow candidates (0–100 int); `tilesFetched` counts flow-tile requests
+     * LIVE coverage number. `flowCoveragePct` is shown dots on matched roads /
+     * all shown dots (0–100 int, kept within 1–99 while both kinds are shown),
+     * excluding closures; `tilesFetched` counts flow-tile requests
      * issued to the proxy this session (decode-cache hits excluded).
      * @returns {{count:number, lastUpdate:number|null, loading:boolean,
      *   mode:'live'|'sim', error:string|null, flowCoveragePct:number,
      *   tilesFetched:number}}
      */
+    getLoadingDiagnostics() {
+      let movingWaypoints = 0,
+        maxResidualM = 0;
+      for (const road of layerState._roads) {
+        if (!road.heightMoving) continue;
+        for (let i = 0; i < road.waypoints.length; i++) {
+          const a = road.waypoints[i],
+            b = road.targetWaypoints[i];
+          const residual = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+          if (residual >= 0.01) movingWaypoints++;
+          maxResidualM = Math.max(maxResidualM, residual);
+        }
+      }
+      return {
+        fetching: Boolean(layerState._fetching),
+        flowPending: layerState._flowPending,
+        surfaceRefining: Boolean(layerState._surfaceRefining),
+        populationPending: Boolean(layerState._populationPending),
+        heightPending: Boolean(layerState._heightPending),
+        generation: layerState._loadGeneration,
+        surfaceRevision: layerState._surfaceRevision,
+        lastPaintStage: layerState._lastPaintStage || null,
+        movingWaypoints,
+        maxResidualM,
+      };
+    },
+
     getStats() {
       // Outstanding flow work counts as loading: the paint race can leave a
       // TomTom request in flight after the roads have settled, and the shared
       // loading batch has to stay open long enough to announce its failure.
-      const loading = layerState._fetching || layerState._flowPending > 0;
+      const loading =
+        layerState._fetching ||
+        layerState._flowPending > 0 ||
+        Boolean(layerState._surfaceRefining) ||
+        Boolean(layerState._populationPending) ||
+        Boolean(layerState._heightPending);
+      const { free, slow, jam, sim } = layerState._bucketCounts;
+      const matched = free + slow + jam;
+      // The label reads 0 as "no matches" and 100 as nothing simulated, so
+      // rounding must not reach either while both kinds of dot are shown.
+      const flowCoveragePct =
+        matched + sim > 0
+          ? Math.min(
+              sim > 0 ? 99 : 100,
+              Math.max(
+                matched > 0 ? 1 : 0,
+                Math.round((100 * matched) / (matched + sim)),
+              ),
+            )
+          : 0;
       const feed = parts.model.trafficFeedPresentation({
         liveMode: layerState._liveMode,
         fetching: loading,
         flowError: layerState._flowError,
-        coveragePct: layerState._flowCoveragePct,
+        stale: layerState._flowStale,
+        coveragePct: flowCoveragePct,
         statusUnavailable: layerState._flowStatusUnavailable,
+        roadSource: layerState._roadSource,
       });
       return {
         count: layerState._count,
+        motion: { ...layerState._motion },
+        surfaceBudgetOmitted: layerState._surfaceBudgetOmitted || 0,
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
-        error: layerState._roadError || feed.error,
-        flowCoveragePct: layerState._flowCoveragePct,
+        // Cached proxy tiles (TomTom budget spent or upstream failing): the
+        // manager reads this as STALE. Any error (flow, roads, detail) reads
+        // DEGRADED instead.
+        stale: Boolean(
+          layerState._liveMode &&
+          layerState._flowStale &&
+          !(
+            layerState._roadError ||
+            layerState._roadWarning ||
+            layerState._detailError ||
+            feed.error
+          ),
+        ),
+        oldestTileAt: layerState._flowOldestTileAt ?? null,
+        error:
+          layerState._roadError ||
+          layerState._roadWarning ||
+          layerState._detailError ||
+          feed.error,
+        roadBounds: layerState._lastBounds,
+        surfacePending: layerState._surfacePending || 0,
+        roadWarning: layerState._roadWarning || null,
+        detailError: layerState._detailError || null,
+        detailLimited: Boolean(layerState._detailLimited),
+        flowCoveragePct,
         tilesFetched: getFlowSessionStats().tilesFetched,
         ...(TRAFFIC_TIMING_ENABLED
           ? { trafficTiming: parts.timing.getTrafficTimingDiagnostics() }
@@ -180,7 +453,15 @@ export function createControls({ state: layerState, services, parts, source }) {
         // in one had better be the honest one. This is also where LIVE vs
         // SIMULATED mode is surfaced, and it must never imply a live feed the
         // layer does not have.
-        loadingLabel: feed.loadingLabel,
+        roadMode: resolveRoadMode(
+          layerState._roadMode,
+          layerState._liveMode,
+          layerState._roadModes,
+        ),
+        roadModeRequested: layerState._roadMode,
+        roadSource: layerState._roadSource,
+        source: layerState._roadSource,
+        loadingLabel: roadStatusLabel(feed),
       };
     },
   };

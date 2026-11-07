@@ -57,7 +57,7 @@ try {
       persist: false,
       syncShare: false,
     });
-    manager._sliderPanel.classList.remove('collapsed');
+    manager._presentPanel(manager._sliderPanel, { collapsed: false });
     const slider = manager._sliderContainer.querySelector('input');
     window.__qaOldSlider = slider;
     const name = 'pixelation';
@@ -140,9 +140,11 @@ try {
       hudBefore,
     ),
   );
-  const displayBefore = await page.evaluate(() => {
+  const displayBefore = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     manager._setBloomEnabled(true);
+    // The Display view shows the slider row on its next render.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     manager._bloomSlider.value = '80';
     manager._bloomSlider.dispatchEvent(new Event('input', { bubbles: true }));
     manager._bloomSlider.focus();
@@ -183,6 +185,38 @@ try {
       return manager.bloomEnabled !== before;
     }),
   );
+  const sliders = await page.evaluate(() => {
+    const ordinary = [
+      ...document.querySelectorAll('input[type="range"]'),
+    ].filter(
+      (input) => !input.matches('#radio-tuner-slider, .bhote-event-range'),
+    );
+    return {
+      count: ordinary.length,
+      shared: ordinary.every((input) =>
+        input.classList.contains('gev-quantitative-slider'),
+      ),
+      surface: ordinary.every((input) => {
+        const style = getComputedStyle(input);
+        return (
+          style.height === '18px' &&
+          style.appearance === 'none' &&
+          style.padding === '0px' &&
+          style.borderWidth === '0px' &&
+          (!input.disabled ||
+            (style.opacity === '0.42' && style.cursor === 'not-allowed'))
+        );
+      }),
+      tunerSeparate: !document
+        .getElementById('radio-tuner-slider')
+        .classList.contains('gev-quantitative-slider'),
+    };
+  });
+  check(
+    'ordinary sliders share one native surface',
+    sliders.count > 10 && sliders.shared && sliders.surface,
+  );
+  check('radio tuning keeps its specialized control', sliders.tunerSeparate);
   fs.mkdirSync('qa-shots/visual-input', { recursive: true });
   await page.screenshot({ path: 'qa-shots/visual-input/desktop.png' });
   await page.setViewport({ width: 620, height: 900 });
@@ -231,7 +265,7 @@ try {
     'destroyed Display controls cannot change settings',
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
-      manager._displayControls.destroy();
+      manager._displayBindings._detachDisplayControls();
       const before = manager.bloomEnabled;
       const contrast = manager._bloomStage.uniforms.contrast;
       manager._bloomBtn.click();

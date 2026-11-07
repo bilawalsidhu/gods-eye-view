@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
+import { createTracking } from './tracking.js';
 
 function services() {
   const names = [
@@ -24,6 +25,29 @@ function services() {
   return {
     ...Object.fromEntries(names.map((name) => [name, {}])),
     groundSnap: { createGroundSnap: () => ({ clear() {} }) },
+  };
+}
+
+// The application's own scene services, as src/app/layers/militaryFlights.js
+// composes them; only the surface samplers and registry are stubbed.
+async function sceneServices() {
+  return {
+    picking: await import('../../data/pickRegistry.js'),
+    sprites: await import('../../data/spriteOrder.js'),
+    trails: await import('../../data/trailRenderer.js'),
+    aircraftPresentation: await import('../../data/tr3bRegistry.js'),
+    camera: await import('../../data/trackedCamera.js'),
+    labels: await import('../../data/detectionDraw.js'),
+    geoid: await import('../../data/geoid.js'),
+    focus: await import('../../data/focusDeemphasis.js'),
+    readout: await import('../../data/trackedReadout.js'),
+    context: await import('../../data/contextStore.js'),
+    render: await import('../../renderGovernor.js'),
+    recession: await import('../../data/aircraftRecession.js'),
+    groundFloor: await import('../../data/groundFloor.js'),
+    groundSnap: await import('../../data/groundSnap.js'),
+    meshFloor: { sampleMeshFloorCells: () => {} },
+    militaryRegistry: { registerMilitaryIcaos: () => {} },
   };
 }
 
@@ -112,4 +136,156 @@ test('a normalized source can retain its stale reason without changing standalon
   await layer.update({});
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getStats().stale, true);
+});
+
+test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
+  // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
+  // contact's first displayed position is its fix projected back to that
+  // delayed time. Creating the billboard at the raw fix drew it ahead until
+  // the next fleet tick jumped it back.
+  const Cesium = await import('cesium');
+  const { RENDER_DELAY_SEC } = await import('./policy.js');
+  const supplied = await sceneServices();
+  const fixLon = -97.6;
+  const fixLat = 30.3;
+  const speedMps = 200;
+  const fixAgeMs = 2_000;
+  const nowMs = Date.now();
+  const layer = createMilitaryFlightLayer({
+    services: supplied,
+    source: {
+      label: 'Fixture aircraft',
+      async getSnapshot() {
+        return {
+          source: 'Fixture aircraft',
+          complete: true,
+          observedAtMs: nowMs,
+          records: [
+            {
+              id: 'ae0001',
+              latitude: fixLat,
+              longitude: fixLon,
+              onGround: false,
+              baroAltitudeM: 9_000,
+              courseDeg: 90,
+              speedMps,
+              positionTimeMs: nowMs - fixAgeMs,
+              contactTimeMs: nowMs - fixAgeMs,
+            },
+          ],
+        };
+      },
+    },
+  });
+  const added = [];
+  layer.testing._setTrackedMilitaryRefreshStateForTest({
+    icao24: 'seed00',
+    entity: null,
+    meta: { rawLat: 0, rawLon: 0, onGround: false },
+    billboard: {
+      show: false,
+      position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+    },
+    billboardCollection: {
+      show: false,
+      add(options) {
+        const billboard = { ...options };
+        added.push(billboard);
+        return billboard;
+      },
+      remove() {},
+    },
+    viewer: { camera: { positionCartographic: null }, scene: {} },
+    tracked: false,
+  });
+  await layer.update({ camera: { positionCartographic: null }, scene: {} });
+  const billboard = added.find((entry) => entry.id === 'ae0001');
+  assert.ok(billboard, 'the new contact gets a billboard');
+  const shown = Cesium.Cartographic.fromCartesian(billboard.position);
+  const behindM = Cesium.Cartesian3.distance(
+    Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 0),
+    Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 0),
+  );
+  const expectedM = speedMps * (RENDER_DELAY_SEC - fixAgeMs / 1000);
+  assert.ok(
+    Cesium.Math.toDegrees(shown.longitude) < fixLon,
+    'drawn behind the fix',
+  );
+  assert.ok(
+    Math.abs(behindM - expectedM) < speedMps * 3,
+    `expected about ${Math.round(expectedM)} m behind the fix, got ${Math.round(behindM)} m`,
+  );
+});
+
+test('a vanished military contact fades while position-less rows keep theirs', async () => {
+  // About a third of a live adsb.lol /v2/mil fetch is contacts without a
+  // position. Those rows marked every snapshot partial, so an aircraft that
+  // left the feed stayed at full opacity for five minutes.
+  const Cesium = await import('cesium');
+  const { readsbSnapshot } = await import('../../sources/live/aircraft.js');
+  const nowMs = Date.now();
+  const row = (hex, lon) => ({
+    hex,
+    lat: 30.3,
+    lon,
+    alt_baro: 20_000,
+    gs: 300,
+    track: 90,
+    seen_pos: 1,
+  });
+  const polls = [
+    [row('ae0001', -97.6), row('ae0002', -96.6), row('ae0003', -95.6)],
+    [row('ae0001', -97.5), { hex: 'ae0003' }],
+  ];
+  // Every poll also lists a contact that never has a position.
+  for (const poll of polls) poll.push({ hex: 'ae0009', type: 'mode_s' });
+  const layer = createMilitaryFlightLayer({
+    services: await sceneServices(),
+    source: {
+      label: 'Fixture aircraft',
+      getSnapshot: async () =>
+        readsbSnapshot(
+          { ac: polls.shift() },
+          { observedAtMs: nowMs, now: nowMs },
+        ),
+    },
+  });
+  const viewer = { camera: { positionCartographic: null }, scene: {} };
+  layer.testing._setTrackedMilitaryRefreshStateForTest({
+    icao24: 'seed00',
+    entity: null,
+    meta: { rawLat: 0, rawLon: 0, onGround: false },
+    billboard: { show: false, position: Cesium.Cartesian3.fromDegrees(0, 0) },
+    billboardCollection: { show: true, add: (options) => ({ ...options }) },
+    viewer,
+    tracked: false,
+  });
+  await layer.update(viewer);
+  await layer.update(viewer);
+  assert.equal(layer.findByQuery('ae0002')?.stale, true, 'vanished: fading');
+  assert.equal(layer.findByQuery('ae0003')?.stale, false, 'still listed');
+});
+
+test('voice context reads a track that rounds to north as 0°, not 360°', () => {
+  const stubs = services();
+  stubs.aircraftPresentation = { tr3bTypeLabel: (id, type) => type };
+  const tracking = createTracking({
+    flightState: {
+      feed: { _lastSource: 'Fixture aircraft' },
+      records: { data: new Map() },
+    },
+    services: stubs,
+    parts: {
+      queries: {
+        _describeFlight: () => ({ track: 359.6, callsign: 'RCH123' }),
+        _toCleanText: (value) => value || '',
+        _formatAltitude: () => '',
+      },
+    },
+    layer: {},
+  });
+  assert.equal(
+    tracking._contextSubjectMetadata('ae1234').properties.heading,
+    '0°',
+  );
 });

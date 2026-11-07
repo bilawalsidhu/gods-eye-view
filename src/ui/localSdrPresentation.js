@@ -1,17 +1,89 @@
 import { localReceiverFeedName } from '../layers/localAdsb/feedNames.js';
+import { formatNumber, msg, t, tn } from '../i18n/index.js';
+import { formatQuantity } from './unitLabels.js';
 
 /**
  * Pure presentation of the Local RTL-SDR card in the Radio panel. Receives the
  * receiver session snapshot and returns what each control should show.
  */
 
+// Receiver status codes shown on the connection chip and the connect button.
+const STATUS_LABELS = Object.freeze({
+  idle: msg('IDLE'),
+  connecting: msg('CONNECTING'),
+  tuning: msg('TUNING'),
+  streaming: msg('STREAMING'),
+  error: msg('ERROR'),
+  unsupported: msg('UNSUPPORTED'),
+});
+
+function statusLabel(status) {
+  const key = String(status || 'idle');
+  return STATUS_LABELS[key] ? t(STATUS_LABELS[key]) : key.toUpperCase();
+}
+
+// AudioContext.state values (plus the controller's "idle") as shown in the
+// FM status line; the value itself stays machine.
+const AUDIO_STATE_LABELS = Object.freeze({
+  idle: msg('idle'),
+  running: msg('running'),
+  suspended: msg('suspended'),
+  closed: msg('closed'),
+});
+
+function audioStateLabel(audioState) {
+  const key = String(audioState || 'idle');
+  return AUDIO_STATE_LABELS[key] ? t(AUDIO_STATE_LABELS[key]) : key;
+}
+
+// Decoder feed statuses from the server route, as shown on the card. They
+// carry their own context: the word agrees with "feed" (es "fuente no válida"),
+// unlike the shared "invalid" / "stale" elsewhere.
+function feedStatusLabel(status) {
+  const key = String(status || 'unreachable');
+  switch (key) {
+    case 'live':
+      return t('live', { context: 'feed status' });
+    case 'stale':
+      return t('stale', { context: 'feed status' });
+    case 'unreachable':
+      return t('unreachable', { context: 'feed status' });
+    case 'invalid':
+      return t('invalid', { context: 'feed status' });
+    default:
+      return key;
+  }
+}
+
+/**
+ * Text for a numeric gain option: the option value stays the machine value
+ * ("28.0"); only the label follows the locale ("28,0 дБ").
+ */
+export function localSdrGainOptionLabel(value) {
+  const gain = Number(value);
+  if (!Number.isFinite(gain)) return String(value);
+  return formatQuantity(gain, 'dB', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
 function formatGain(gain) {
   return gain === 'auto' || !Number.isFinite(gain) ? 'auto' : gain.toFixed(1);
 }
 
+/** A reading with a fixed number of decimals, in the UI language ("2,40"). */
+function fixed(value, digits) {
+  return formatNumber(value, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
+}
+
 function formatIq(state) {
   return Number.isFinite(state.iqLevelDbfs)
-    ? `${state.iqLevelDbfs.toFixed(1)} dBFS`
+    ? `${fixed(state.iqLevelDbfs, 1)} dBFS`
     : '--';
 }
 
@@ -19,11 +91,16 @@ function statusText(state) {
   const fmActive = state.mode === 'fm';
   const iqStatus =
     state.samplesPerSecond > 0
-      ? `${(state.samplesPerSecond / 1_000_000).toFixed(2)} MS/s IQ`
-      : 'waiting for IQ';
+      ? `${fixed(state.samplesPerSecond / 1_000_000, 2)} MS/s IQ`
+      : t('waiting for IQ');
   const device = state.deviceLabel ? ` · ${state.deviceLabel}` : '';
   if (state.connected && !fmActive) {
-    return `${state.message}${device} · ${iqStatus} · ${state.decodedMessages} messages`;
+    const decoded = tn(
+      state.decodedMessages,
+      '{count} message',
+      '{count} messages',
+    );
+    return `${state.message}${device} · ${iqStatus} · ${decoded}`;
   }
   const detail = state.seeking
     ? state.seekMessage
@@ -31,13 +108,16 @@ function statusText(state) {
   if (state.connected && fmActive) {
     const workerStatus =
       state.workerBlocks > 0
-        ? `DSP ${state.workerBlocks} blocks`
-        : 'DSP waiting';
+        ? tn(state.workerBlocks, 'DSP {count} block', 'DSP {count} blocks')
+        : t('DSP waiting');
     const rfStatus = `RF ${formatIq(state)}`;
     const audioSignal = Number.isFinite(state.audioLevelDbfs)
-      ? `${state.audioLevelDbfs.toFixed(1)} dBFS audio`
-      : 'audio signal --';
-    return `${detail}${device} · ${iqStatus} · ${workerStatus} · ${rfStatus} · ${audioSignal} · audio ${state.audioState}`;
+      ? t('{level} dBFS audio', { level: fixed(state.audioLevelDbfs, 1) })
+      : t('audio signal --');
+    const audio = t('audio {state}', {
+      state: audioStateLabel(state.audioState),
+    });
+    return `${detail}${device} · ${iqStatus} · ${workerStatus} · ${rfStatus} · ${audioSignal} · ${audio}`;
   }
   return detail;
 }
@@ -57,15 +137,15 @@ export function localSdrCardView(state) {
   return {
     connectionLabel: state.connected
       ? adsbActive
-        ? `${state.aircraftHeard || 0} HEARD`
-        : 'STREAMING'
-      : String(state.status || 'idle').toUpperCase(),
+        ? tn(state.aircraftHeard || 0, '{count} HEARD', '{count} HEARD')
+        : t('STREAMING')
+      : statusLabel(state.status),
     connectionActive: Boolean(state.connected),
     connectLabel: transitional
-      ? String(state.status).toUpperCase()
+      ? statusLabel(state.status)
       : state.connected
-        ? 'DISCONNECT'
-        : 'CONNECT',
+        ? t('DISCONNECT')
+        : t('CONNECT'),
     connectDisabled: transitional || !state.webUsbSupported,
     connectPressed: Boolean(state.connected),
     fmActive,
@@ -73,10 +153,10 @@ export function localSdrCardView(state) {
     modeDisabled: transitional,
     locateLabel:
       state.locationStatus === 'requesting'
-        ? 'LOCATING…'
+        ? t('LOCATING…')
         : state.locationStatus === 'ready'
-          ? 'LOCATED'
-          : 'LOCATE',
+          ? t('LOCATED')
+          : t('LOCATE'),
     locateDisabled: state.locationStatus === 'requesting',
     locateActive: state.locationStatus === 'ready',
     changeDeviceDisabled: transitional || !state.webUsbSupported,
@@ -85,7 +165,7 @@ export function localSdrCardView(state) {
     statsHidden: !(adsbActive && state.connected),
     stats: {
       rate: Number.isFinite(state.messagesPerSecond)
-        ? state.messagesPerSecond.toFixed(1)
+        ? fixed(state.messagesPerSecond, 1)
         : '--',
       heard: String(state.aircraftHeard || 0),
       positioned: String(state.aircraftPositioned || 0),
@@ -138,9 +218,9 @@ export function localSdrFeedLine(feedState) {
   const names = feeds.map((feed) => {
     const name = localReceiverFeedName(feed, feeds);
     return feedState.polling || feed?.status === 'invalid'
-      ? `${name} ${feed?.status || 'unreachable'}`
+      ? `${name} ${feedStatusLabel(feed?.status)}`
       : name;
   });
-  const suffix = feedState.polling ? '' : ' · read while Local ADS-B is on';
-  return `Decoder feeds: ${names.join(' · ')}${suffix}`;
+  const suffix = feedState.polling ? '' : t(' · read while Local ADS-B is on');
+  return `${t('Decoder feeds: {feeds}', { feeds: names.join(' · ') })}${suffix}`;
 }

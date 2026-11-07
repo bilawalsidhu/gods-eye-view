@@ -5,6 +5,21 @@ export function createTransitSource({
   fetchImpl = (...args) => fetch(...args),
 } = {}) {
   return {
+    /** Read the public catalog of enabled feeds. */
+    async getFeeds({ signal } = {}) {
+      signal?.throwIfAborted();
+      const response = await fetchImpl('/api/transit/feeds', {
+        signal,
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok)
+        throw new Error('Transit feeds HTTP ' + response.status);
+      const body = await response.json();
+      signal?.throwIfAborted();
+      if (!Array.isArray(body?.feeds))
+        throw new Error('Malformed transit feed catalog');
+      return body.feeds;
+    },
     getHistory(feedId, vehicleId, { signal } = {}) {
       signal?.throwIfAborted();
       return fetchTransitHistory(feedId, vehicleId, signal, fetchImpl);
