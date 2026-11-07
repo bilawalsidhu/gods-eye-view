@@ -606,11 +606,10 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
   const environmental = FIRST_RUN_MISSIONS.environmental;
   assert.deepEqual(environmental.layerIds, ['earthquakes', 'local-firms']);
 
-  // Keyless, the honest surface is the LAYER ROW ("KEY REQUIRED"), which the
-  // FIRMS layer already reports. The misleading part is the GLOBAL chip folding
-  // that row into LOAD FAILED — a defect in the shared state machine, ledgered
-  // post-launch, and the note must stay where the next editor will read it
-  // rather than being re-discovered as a launcher bug.
+  // Keyless, the LAYER ROW reads "KEY REQUIRED", and the global chip now ends
+  // on KEY REQUIRED as well instead of LOAD FAILED (src/loadingFeedback.js,
+  // covered in loadingFeedback.test.mjs). The note says so where the next
+  // editor will read it.
   const module = fs.readFileSync(
     new URL('./firstRunExperience.js', import.meta.url),
     'utf8',
@@ -621,7 +620,7 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
   );
   assert.match(table, /KEY REQUIRED/);
   assert.match(table, /src\/loadingFeedback\.js/);
-  assert.match(table, /LEDGERED post-launch/);
+  assert.match(table, /rather than LOAD FAILED/);
 });
 
 test('every visitor gets the same tile — there is no degraded keyless variant', async () => {

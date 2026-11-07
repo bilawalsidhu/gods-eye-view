@@ -98,15 +98,9 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     // for the FULLY CONFIGURED experience (owner ruling, 2026-08-23): the tile
     // promises both, so it turns on both, and the subcopy in index.html says so.
     //
-    // Keyless, FIRMS is honest where it counts — its own layer row reads
-    // "UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED", and the quakes half of
-    // the tile still delivers in full. What is NOT honest is the GLOBAL status
-    // chip, which has no key-required terminal state and folds that row into
-    // "LOAD FAILED". That aggregation is the defect, not this preset: fixing it
-    // means a KEY REQUIRED terminal state in src/loadingFeedback.js, a state
-    // machine shared by every layer and not a thing to refactor the night
-    // before a launch. LEDGERED post-launch. Until it lands, keyless visitors
-    // are judged on the layer row, which tells them the truth.
+    // Keyless, FIRMS's own row reads "KEY REQUIRED", and the quakes half of
+    // the tile still delivers in full; the global status chip ends on KEY
+    // REQUIRED too (src/loadingFeedback.js) rather than LOAD FAILED.
     layerIds: Object.freeze(['earthquakes', 'local-firms']),
     busyKey: msg('Scanning active events…'),
   }),

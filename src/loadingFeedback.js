@@ -85,13 +85,18 @@ export function normalizeLayerLoading(layer = {}) {
 function terminalFromParticipantStats(summary, participantIds) {
   if (!participantIds?.length) return null;
   const participants = new Set(participantIds);
-  return summary.records.some(
-    (record) =>
-      participants.has(record.id) &&
-      (record.error || record.unavailable || record.keyRequired),
+  const records = summary.records.filter((record) =>
+    participants.has(record.id),
+  );
+  // A layer waiting for a key did not fail: its row names the key. Only an
+  // actual error makes the whole batch read LOAD FAILED.
+  if (
+    records.some(
+      (record) => !record.keyRequired && (record.error || record.unavailable),
+    )
   )
-    ? 'error'
-    : null;
+    return 'error';
+  return records.some((record) => record.keyRequired) ? 'key' : null;
 }
 
 /** Aggregate all manager layers without changing their lifecycle authority. */
@@ -282,7 +287,7 @@ function terminalFromEvent(event) {
 }
 
 function mergeTerminalOutcome(current, next) {
-  const severity = { complete: 1, cancelled: 2, error: 3 };
+  const severity = { complete: 1, key: 2, cancelled: 3, error: 4 };
   if (!next) return current || null;
   if (!current || severity[next] > severity[current]) return next;
   return current;
@@ -424,6 +429,7 @@ export function presentLoadingFeedback(state, summary, nowMs) {
     const labels = {
       complete: 'LOAD COMPLETE',
       cancelled: 'LOAD CANCELLED',
+      key: 'KEY REQUIRED',
       error: 'LOAD FAILED',
     };
     const label =
