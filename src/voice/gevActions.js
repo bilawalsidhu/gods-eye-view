@@ -1,4 +1,5 @@
 import { interruptGlobeRotation } from '../cameraVerbs.js';
+import { singleLine, SAFE_TEXT_MAX } from '../textSafety.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -5068,13 +5069,9 @@ function uniqueStrings(values) {
  * @returns {string} Sanitized single-line label (max 120 chars).
  */
 function sanitizeLabel(value) {
-  const text = String(value || '');
-  let out = '';
-  for (const ch of text) {
-    const code = ch.codePointAt(0);
-    out += code < 0x20 || code === 0x7f ? ' ' : ch; // drop control chars incl. newlines
-  }
-  return out.replace(/\s+/g, ' ').trim().slice(0, 120);
+  // Shared with the ALPR and tool-output paths so scene labels and model-facing
+  // strings cannot drift apart on what "one line" means.
+  return singleLine(value, 120);
 }
 
 function cachePrecision(service) {
@@ -5192,9 +5189,13 @@ function compactProperties(props) {
 
 function cleanText(value) {
   if (value == null || typeof value === 'object') return '';
-  const text = String(value).trim();
+  // Capping length without flattening left newlines in place, which is the whole
+  // injection shape: a tag could stay under the cap and still add a "line".
+  const text = singleLine(value, Infinity);
   if (!text || text === 'undefined' || text === 'null') return '';
-  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  return text.length > SAFE_TEXT_MAX
+    ? `${text.slice(0, SAFE_TEXT_MAX - 3).trimEnd()}...`
+    : text;
 }
 
 function layerTitle(layerId) {
@@ -5375,8 +5376,13 @@ const ANALYST_IDENTITY_FIELDS = Object.freeze([
 function compactAnalystItem(r) {
   const compact = { layerKey: r.layerKey, id: r.id };
   const present = (value) => value !== null && value !== undefined;
+  // Fields here are copied straight into tool output with no cap at all, so a
+  // GBFS name of 3k characters or an OSM `operator` carrying newlines reached the
+  // model verbatim. Strings are flattened and capped; numbers pass through.
+  const safe = (value) =>
+    typeof value === 'string' ? singleLine(value, SAFE_TEXT_MAX) : value;
   for (const key of ANALYST_IDENTITY_FIELDS)
-    if (present(r[key])) compact[key] = r[key];
+    if (present(r[key])) compact[key] = safe(r[key]);
   if (Number.isFinite(r.lat) && Number.isFinite(r.lon)) {
     compact.lat = Math.round(r.lat * 1e4) / 1e4;
     compact.lon = Math.round(r.lon * 1e4) / 1e4;
@@ -5393,7 +5399,7 @@ function compactAnalystItem(r) {
         if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
         else compact.time = time.toISOString();
       }
-    } else compact[key] = r[key];
+    } else compact[key] = safe(r[key]);
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;
   return compact;
