@@ -321,5 +321,4 @@ const EXPECTED_MISSING = [
   'renderer.globe',
   'renderer.readPixels',
   'renderer.releaseUnused',
-  'renderer.whenSettled',
 ].map((member) => `${member} is missing`);

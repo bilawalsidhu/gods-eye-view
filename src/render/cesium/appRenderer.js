@@ -7,10 +7,11 @@
  * The renderer it makes is transitional. Its ports are the shared Cesium
  * ports (`ports.js`), the ones the conformance renderer is checked with,
  * less the members that would not be true of the application yet: the
- * globe (it draws photoreal tiles the port does not know) and
- * `whenSettled` (it would not wait for them). Those arrive with the layer
- * families that need them (phase 2 of the renderer plan);
- * `checkRendererShape` lists what is still missing.
+ * globe (it draws photoreal tiles the port does not know). Those arrive
+ * with the layer families that need them (phase 2 of the renderer plan);
+ * `checkRendererShape` lists what is still missing. `whenSettled` waits
+ * for the globe, the scene's 3D tiles and what the draw sets hold, not for
+ * what layers still draw through the viewer themselves.
  * Until a family is ported, its code reaches the Cesium viewer through
  * `cesiumViewerOf`, never through a renderer member, so no engine type
  * crosses the contract and each call marks code still to port. Ported code
@@ -27,8 +28,7 @@ import { cesiumCapabilities, createCesiumPorts } from './ports.js';
  * @typedef {Pick<import('../contract/renderer').Renderer,
  *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'frame' | 'draw'
  *   | 'camera' | 'query' | 'input' | 'effects' | 'quality' | 'capture'
- *   | 'credits'
- *   | 'on' | 'resize' | 'destroy'>}
+ *   | 'credits' | 'whenSettled' | 'on' | 'resize' | 'destroy'>}
  *   TransitionalRenderer
  */
 
@@ -118,6 +118,7 @@ export function createCesiumRendererPlugin({
         quality: ports.quality,
         capture: ports.capture,
         credits: ports.credits,
+        whenSettled: ports.whenSettled,
         on: ports.on,
         resize() {
           viewer.resize();

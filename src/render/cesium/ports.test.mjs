@@ -712,3 +712,61 @@ test('setTime moves scene time and draws it, leaving the clock running or not', 
   assert.deepEqual(ports.frame.diagnostics().pendingReasons, ['time']);
   ports.dispose();
 });
+
+test('whenSettled waits for shown 3D tiles, not for a hidden globe', async () => {
+  const { widget, scene, raise } = tickingWidget();
+  const list = [];
+  scene.primitives = listedPrimitives(list);
+  scene.globe = { show: false, tilesLoaded: false };
+  // Each asked-for frame is drawn soon after.
+  scene.requestRender = () => setTimeout(() => raise('postRender'), 1);
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  const tileset = Object.create(Cesium.Cesium3DTileset.prototype);
+  Object.defineProperty(tileset, 'tilesLoaded', { value: false });
+  tileset.show = true;
+  list.push(tileset);
+  const result = await ports.whenSettled({ timeoutMs: 60 });
+  assert.equal(result.state, 'timeout');
+  assert.ok(result.blockers.includes('tiles'), result.blockers.join());
+  assert.ok(!result.blockers.includes('globe'), 'a hidden globe loads nothing');
+  tileset.show = false;
+  scene.globe.show = true;
+  const shown = await ports.whenSettled({ timeoutMs: 60 });
+  assert.ok(!shown.blockers.includes('tiles'), 'hidden tiles load nothing');
+  assert.ok(shown.blockers.includes('globe'), 'a shown globe still loading');
+  ports.dispose();
+});
+
+test('whenSettled under way fails as destroyed once the ports are disposed', async () => {
+  const { widget, scene, raise } = tickingWidget();
+  scene.primitives = listedPrimitives([]);
+  scene.requestRender = () => setTimeout(() => raise('postRender'), 1);
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  const pending = ports.whenSettled({ timeoutMs: 5000 });
+  setTimeout(() => ports.dispose(), 5);
+  assert.deepEqual(await pending, { state: 'failed', blockers: ['destroyed'] });
+});
+
+test('whenSettled settles once shown tiles have loaded under a hidden globe', async () => {
+  const { widget, scene, raise } = tickingWidget();
+  const list = [];
+  scene.primitives = listedPrimitives(list);
+  scene.globe = { show: false, tilesLoaded: false };
+  scene.requestRender = () => setTimeout(() => raise('postRender'), 1);
+  const tileset = Object.create(Cesium.Cesium3DTileset.prototype);
+  Object.defineProperty(tileset, 'tilesLoaded', { value: true });
+  tileset.show = true;
+  list.push(tileset);
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  // The loop ticks without drawing.
+  const ticker = setInterval(() => raise('preUpdate'), 5);
+  try {
+    assert.deepEqual(await ports.whenSettled({ timeoutMs: 2000 }), {
+      state: 'settled',
+      blockers: [],
+    });
+  } finally {
+    clearInterval(ticker);
+    ports.dispose();
+  }
+});
