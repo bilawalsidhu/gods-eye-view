@@ -180,7 +180,7 @@ async function installDeterministicDevEndpoints(page) {
       });
       return;
     }
-    if (url.pathname === '/api/ais-live') {
+    if (url.pathname === '/api/vessels') {
       await request.respond({
         status: 200,
         contentType: 'application/json',

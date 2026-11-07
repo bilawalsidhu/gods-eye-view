@@ -204,6 +204,10 @@ export function createFlightState({ source, services }) {
 
   flightState._lastFleetTickMs = 0;
 
+  /** @type {number} Fleet ticks run; selects which hidden contacts re-reckon */
+
+  flightState._fleetTickSeq = 0;
+
   /** @type {string} Camera pose signature at the last rotation pass */
 
   flightState._lastCamPoseSig = '';
@@ -242,11 +246,11 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchCarto = new Cesium.Cartographic();
 
-  flightState._scratchEnu = new Cesium.Matrix4();
-
   flightState._scratchArc = { east: 0, north: 0, endCourseDeg: 0 };
 
   flightState._scratchRenderTime = new Cesium.JulianDate();
+
+  flightState._scratchFleetRenderTime = new Cesium.JulianDate();
 
   flightState._scratchFleetPos = new Cesium.Cartesian3();
 

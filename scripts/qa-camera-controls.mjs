@@ -370,6 +370,9 @@ try {
   await page.screenshot({ path: 'qa-shots/camera-controls/angle.png' });
   await page.setViewport({ width: 390, height: 844 });
   await new Promise((resolve) => setTimeout(resolve, 700));
+  // Phones present CCTV in the Cameras tab's sheet.
+  await page.click('#mobile-tab-bar [data-mobile-sheet="cameras"]');
+  await new Promise((resolve) => setTimeout(resolve, 400));
   await page.screenshot({ path: 'qa-shots/camera-controls/narrow.png' });
   check(
     'narrow camera panel remains within the viewport',

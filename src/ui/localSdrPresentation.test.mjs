@@ -6,7 +6,9 @@ import {
   localSdrCardView,
   localSdrFeedLine,
   localSdrFmAudioActive,
+  localSdrGainOptionLabel,
 } from './localSdrPresentation.js';
+import { setLocale } from '../i18n/index.js';
 
 const idle = Object.freeze({
   webUsbSupported: true,
@@ -152,4 +154,16 @@ test('two feeds on one band are told apart by their ordinal labels', () => {
     localSdrFeedLine({ configured: true, polling: false, feeds }),
     'Decoder feeds: 1090 · 978 MHz UAT #1 · 978 MHz UAT #2 · read while Local ADS-B is on',
   );
+});
+
+test('gain option labels follow the page language; values stay numeric', () => {
+  try {
+    setLocale('en');
+    assert.equal(localSdrGainOptionLabel('28.0'), '28.0\u00a0dB');
+    assert.equal(localSdrGainOptionLabel('0.9'), '0.9\u00a0dB');
+    setLocale('ru');
+    assert.match(localSdrGainOptionLabel('28.0'), /^28,0\u00a0\S+$/);
+  } finally {
+    setLocale('en');
+  }
 });
