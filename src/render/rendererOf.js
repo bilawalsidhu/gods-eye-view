@@ -65,6 +65,7 @@ const unboundGlobes = unboundPorts('globe');
 const unboundCredits = unboundPorts('credits');
 /** Draw ports are `{port, dispose, release}`, as credits ports are. */
 const unboundDraws = unboundPorts('draw');
+const unboundQueries = unboundPorts('query');
 
 /**
  * Provide the factory `cameraOf` builds a camera port with for a scene
@@ -97,6 +98,16 @@ export function provideUnboundCredits(build) {
  */
 export function provideUnboundDraw(build) {
   unboundDraws.provide(build);
+}
+
+/**
+ * Provide the factory `findQuery` builds a query port with for a scene
+ * object no renderer is bound to, as `provideUnboundCamera` does. It answers
+ * over the sets drawn through `findDraw` on the same scene object.
+ * @param {(host: object) => ({port: object, dispose: () => void} | null)} build
+ */
+export function provideUnboundQuery(build) {
+  unboundQueries.provide(build);
 }
 
 /**
@@ -151,6 +162,7 @@ export function bindRenderer(host, renderer) {
   unboundGlobes.supersede(host);
   unboundCredits.supersede(host);
   unboundDraws.supersede(host);
+  unboundQueries.drop(host);
   renderers.set(host, renderer);
   return () => {
     if (renderers.get(host) === renderer) renderers.delete(host);
@@ -235,6 +247,16 @@ export function findDraw(host) {
   return unboundDraws.find(host);
 }
 
+/** Why `host` has no port to `what` (draw with, query). */
+const noPort = (host, what) =>
+  new Error(
+    host?.isDestroyed?.()
+      ? 'This scene has been destroyed'
+      : `This scene has no renderer to ${what}: bind one, or load the ` +
+          "Cesium adapter's factories (the ./render/cesium/unbound export) for a viewer " +
+          'with no renderer bound',
+  );
+
 /**
  * `findDraw`, for code that cannot start without one.
  * @param {object} host
@@ -244,13 +266,33 @@ export function findDraw(host) {
 export function drawOf(host) {
   const draw = findDraw(host);
   if (draw) return draw;
-  throw new Error(
-    host?.isDestroyed?.()
-      ? 'This scene has been destroyed'
-      : 'This scene has no renderer to draw with: bind one, or load the ' +
-          "Cesium adapter's factories (the ./render/cesium/unbound export) for a viewer " +
-          'with no renderer bound',
-  );
+  throw noPort(host, 'draw with');
+}
+
+/**
+ * The query port of the renderer bound to `host`; with no renderer bound,
+ * one built over `host` by the provided factory and kept with it while
+ * `host` lives, as `findCamera` does. A built one picks, and its height
+ * queries see through, the sets drawn through `findDraw` on `host`; one
+ * kept from before a renderer was bound answers as it did, while new
+ * callers get the renderer's.
+ * @param {object|null|undefined} host
+ * @returns {import('./contract/query').QueryPort | null}
+ */
+export function findQuery(host) {
+  return unboundQueries.find(host);
+}
+
+/**
+ * `findQuery`, for code that cannot start without one.
+ * @param {object} host
+ * @returns {import('./contract/query').QueryPort}
+ * @throws When there is no query port for `host`.
+ */
+export function queryOf(host) {
+  const query = findQuery(host);
+  if (query) return query;
+  throw noPort(host, 'query');
 }
 
 /**

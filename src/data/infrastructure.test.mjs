@@ -209,6 +209,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'localGeojsonCore.js',
     'localGeojsonLod.js',
     'pickRegistry.js',
+    'query.js',
     'rendererOf.js',
     'router.js',
     'scenePick.js',

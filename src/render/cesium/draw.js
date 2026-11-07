@@ -1394,6 +1394,18 @@ export function createCesiumDraw({ scene, report }) {
   };
 }
 
+/** The parts of the draw ports built for viewers with no renderer, by port. */
+const unboundParts = new WeakMap();
+
+/**
+ * The draw port part (its sets) behind a port built for a viewer with no
+ * renderer, for that viewer's query port to pick and see through; null for
+ * any other port.
+ * @param {object|null|undefined} port
+ */
+export const unboundDrawPart = (port) =>
+  (port && unboundParts.get(port)) ?? null;
+
 // A Cesium viewer with no renderer bound to it gets a
 // draw port over its scene when code first asks `findDraw` for one. A
 // renderer bound later supersedes it: released, its sets keep drawing until
@@ -1409,6 +1421,7 @@ provideUnboundDraw((viewer) => {
   )
     return null;
   const part = createCesiumDraw({ scene, report: uncaught });
+  unboundParts.set(part.port, part);
   const offs = [
     scene.preRender?.addEventListener?.(() => part.beforeRender()),
     scene.postRender.addEventListener(() => part.afterRender()),

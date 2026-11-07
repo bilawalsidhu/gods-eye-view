@@ -13,14 +13,13 @@
  * absent, never stubbed.
  */
 import * as Cesium from 'cesium';
-import { heightsFor } from '../../queries/heights.js';
 import { createCesiumCamera } from './camera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
-import { drawHitOf } from './drawHit.js';
 import { createCesiumEffects } from './effects.js';
 import { createCesiumGlobe } from './globe.js';
+import { createCesiumQuery, queryCapabilities } from './query.js';
 import { createCesiumQuality } from './quality.js';
 import {
   atEndOfTick,
@@ -104,10 +103,14 @@ const GLOBE_CAPABILITIES = [
  * @returns {string[]}
  */
 export function cesiumCapabilities(scene, only) {
-  const all = ['models', 'styles', 'bloom', 'sharpen', ...GLOBE_CAPABILITIES];
-  if (scene.pickPositionSupported) all.push('pickPosition');
-  if (scene.sampleHeightSupported)
-    all.push('sampleHeight', 'finestHeights', 'rayCast');
+  const all = [
+    'models',
+    'styles',
+    'bloom',
+    'sharpen',
+    ...GLOBE_CAPABILITIES,
+    ...queryCapabilities(scene),
+  ];
   const allowed = only && new Set(only);
   return all.filter((c) => !allowed || allowed.has(c));
 }
@@ -391,296 +394,12 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
 
   // --- Query -----------------------------------------------------------------
 
-  const screen = (x, y) => new Cesium.Cartesian2(x, y);
-  const ecef = (c) => (c ? { x: c.x, y: c.y, z: c.z } : null);
-  const finite = (p) =>
-    Number.isFinite(p?.x) && Number.isFinite(p?.y) && Number.isFinite(p?.z);
-  const cesiumRay = (ray) =>
-    new Cesium.Ray(toCartesian(ray.origin), toCartesian(ray.direction));
-
-  /** The live set and item a picked object belongs to, or null. */
-  function ownerOf(picked) {
-    const id = picked?.id;
-    if (!id || typeof id.set !== 'string') return null;
-    const record = sets.get(id.set);
-    const item = record?.items.get(id.id);
-    return record && item ? { record, item, id } : null;
-  }
-
-  const pickable = ({ record, item }) =>
-    record.host?.show !== false &&
-    record.spec.pickable !== false &&
-    item.show !== false &&
-    item.pickable !== false;
-
-  const hitOf = ({ id }) => drawHitOf({ id });
-
-  /** The globe (or ellipsoid) under a pixel, as a surface hit. */
-  function surfaceHit(x, y) {
-    const position = query.pickPosition(x, y) ?? query.pickEllipsoid(x, y);
-    return position ? { set: '', id: '', surface: true, position } : null;
-  }
-
-  /**
-   * The pickable draw-set items under a pixel, nearest first, once each (a
-   * shape's fill and outline share one id). `untilForeign` stops at the first
-   * thing that is not a draw-set item (a tile, the app's own primitives):
-   * what is behind it is hidden.
-   */
-  function drill(x, y, { width = 3, height = 3, limit, untilForeign } = {}) {
-    const hits = [];
-    if (limit === 0) return hits;
-    const seen = new Set();
-    for (const picked of scene.drillPick(
-      screen(x, y),
-      undefined,
-      width,
-      height,
-    )) {
-      const owner = ownerOf(picked);
-      if (!owner) {
-        if (untilForeign) break;
-        continue;
-      }
-      const key = `${owner.id.set}\u0000${owner.id.id}`;
-      if (!pickable(owner) || seen.has(key)) continue;
-      seen.add(key);
-      hits.push(hitOf(owner));
-      if (limit !== undefined && hits.length >= limit) break;
-    }
-    return hits;
-  }
-
-  // What height queries see through, by their items' pick ids: the sets not
-  // drawn as ground, and the sets a caller excludes. Built once per change
-  // to the sets, not per query.
-  const seeThroughCache = new Map();
-  let seeThroughVersion = -1;
-  function seeThrough(exclude, { allSets = false } = {}) {
-    if (seeThroughVersion !== drawPart.version()) {
-      seeThroughCache.clear();
-      seeThroughVersion = drawPart.version();
-    }
-    const key = `${allSets}\u0000${exclude?.join('\u0000') ?? ''}`;
-    let out = seeThroughCache.get(key);
-    if (!out) {
-      out = [];
-      for (const record of sets.values())
-        if (
-          allSets ||
-          !record.spec.includeInHeightQueries ||
-          exclude?.includes(record.spec.id)
-        )
-          for (const id of record.pickIds) out.push(id);
-      seeThroughCache.set(key, out);
-    }
-    return out;
-  }
-
-  /** Whether a set drawn as ground is in the scene, other than `exclude`. */
-  const groundSets = (exclude) =>
-    [...sets.values()].some(
-      (record) =>
-        record.spec.includeInHeightQueries &&
-        record.host?.show !== false &&
-        !exclude?.includes(record.spec.id),
-    );
-
-  const heights = () => heightsFor(scene);
-  const can = (capability) => capabilities.has(capability);
-  const globeShown = () => Boolean(scene.globe?.show);
-
-  /**
-   * `fn` with the globe hidden, so a pick or sample sees tiles and sets
-   * alone. Synchronous: the globe is shown again before anything draws.
-   */
-  function withoutGlobe(fn) {
-    if (!globeShown()) return fn();
-    scene.globe.show = false;
-    try {
-      return fn();
-    } finally {
-      scene.globe.show = true;
-    }
-  }
-
-  /** A height now from what is loaded, against the surface asked for. */
-  function heightNow(point, against, excluded) {
-    if (against === 'terrain')
-      return heights().now(point, { against: 'terrain' });
-    const sample = () => heights().now(point, { exclude: excluded });
-    return against === 'tiles' ? withoutGlobe(sample) : sample();
-  }
-
-  const close = (a, b) => a !== null && b !== null && Math.abs(a - b) <= 0.01;
-  const ellipsoidTerrain = () =>
-    scene.terrainProvider instanceof Cesium.EllipsoidTerrainProvider;
-
-  /**
-   * Where a height came from, told apart by sampling again without the
-   * ground sets and against the terrain alone.
-   */
-  function sourceOf(point, height, against, exclude) {
-    const terrain = () => (ellipsoidTerrain() ? 'ellipsoid' : 'terrain');
-    if (against === 'terrain') return terrain();
-    if (groundSets(exclude)) {
-      const bare = heightNow(
-        point,
-        against,
-        seeThrough(exclude, { allSets: true }),
-      );
-      if (!close(bare, height)) return 'set';
-    }
-    if (against === 'tiles' || !globeShown()) return 'tiles';
-    return close(heights().now(point, { against: 'terrain' }), height)
-      ? terrain()
-      : 'tiles';
-  }
-
-  const query = {
-    pick(x, y, window = {}) {
-      const owner = ownerOf(
-        scene.pick(screen(x, y), window.width ?? 3, window.height ?? 3),
-      );
-      if (owner && pickable(owner)) return hitOf(owner);
-      // Something unpickable is on top: the first pickable item under it,
-      // unless something else hides it.
-      if (owner) {
-        const [under] = drill(x, y, {
-          ...window,
-          limit: 1,
-          untilForeign: true,
-        });
-        if (under) return under;
-      }
-      return surfaceHit(x, y);
-    },
-    drillPick: (x, y, options = {}) =>
-      drill(x, y, { ...options, untilForeign: false }),
-    pickPosition(x, y) {
-      if (!can('pickPosition') || !scene.pickPositionSupported) return null;
-      return ecef(scene.pickPosition(screen(x, y)));
-    },
-    pickEllipsoid(x, y) {
-      return ecef(camera.pickEllipsoid(screen(x, y)));
-    },
-    pickGlobe(ray) {
-      return ecef(scene.globe?.pick(cesiumRay(ray), scene));
-    },
-    pickRay(x, y) {
-      const ray = camera.getPickRay(screen(x, y));
-      return { origin: ecef(ray.origin), direction: ecef(ray.direction) };
-    },
-    project(position) {
-      const s = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        toCartesian(position),
-      );
-      return s ? { x: s.x, y: s.y } : null;
-    },
-    projectMany(source, out) {
-      const p = new Cesium.Cartesian3();
-      const s = new Cesium.Cartesian2();
-      for (let i = 0, j = 0; i + 2 < source.length; i += 3, j += 2) {
-        p.x = source[i];
-        p.y = source[i + 1];
-        p.z = source[i + 2];
-        const w = Cesium.SceneTransforms.worldToWindowCoordinates(scene, p, s);
-        out[j] = w ? w.x : NaN;
-        out[j + 1] = w ? w.y : NaN;
-      }
-    },
-    isOccluded(position) {
-      const occluder = new Cesium.EllipsoidalOccluder(
-        scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84,
-        camera.positionWC,
-      );
-      return !occluder.isPointVisible(toCartesian(position));
-    },
-    sampleHeightNow(point, { against = 'surface', exclude } = {}) {
-      if (!can('sampleHeight')) return null;
-      return heightNow(point, against, seeThrough(exclude));
-    },
-    sampleHeightNowMany(points, out, { against = 'surface', exclude } = {}) {
-      const excluded = can('sampleHeight') && seeThrough(exclude);
-      const point = { lon: 0, lat: 0 };
-      for (let i = 0; i < out.length; i++) {
-        point.lon = points[i * 2];
-        point.lat = points[i * 2 + 1];
-        out[i] = excluded ? (heightNow(point, against, excluded) ?? NaN) : NaN;
-      }
-    },
-    /**
-     * Cesium streams the finest tiles for every sample, `mostDetailed` or
-     * not. Against `tiles` it streams them, then samples them with the
-     * globe hidden, which only a synchronous sample can do.
-     */
-    async sampleHeight(points, { against = 'surface', exclude } = {}) {
-      if (!can('sampleHeight')) return points.map(() => null);
-      const excluded = seeThrough(exclude);
-      let found = await heights().batch(
-        points,
-        against === 'terrain' ? { against: 'terrain' } : { exclude: excluded },
-      );
-      if (against === 'tiles')
-        found = points.map((point) => heightNow(point, 'tiles', excluded));
-      const lod = can('finestHeights') ? 'finest' : 'visible';
-      return found.map((height, i) =>
-        height === null
-          ? null
-          : {
-              height,
-              confidence: 1,
-              source: sourceOf(points[i], height, against, exclude),
-              lod,
-            },
-      );
-    },
-    async clampToSurface(positions, options = {}) {
-      const points = positions.map((p) => {
-        const c =
-          finite(p) && Cesium.Cartographic.fromCartesian(toCartesian(p));
-        return c
-          ? {
-              lon: Cesium.Math.toDegrees(c.longitude),
-              lat: Cesium.Math.toDegrees(c.latitude),
-            }
-          : null;
-      });
-      const samples = await query.sampleHeight(
-        points.map((p) => p ?? { lon: NaN, lat: NaN }),
-        options,
-      );
-      return samples.map((sample, i) =>
-        sample && points[i]
-          ? ecef(
-              Cesium.Cartesian3.fromDegrees(
-                points[i].lon,
-                points[i].lat,
-                sample.height,
-              ),
-            )
-          : null,
-      );
-    },
-    async rayCast(
-      ray,
-      { against = 'surface', exclude, maxDistance = Infinity } = {},
-    ) {
-      if (!can('rayCast')) return null;
-      const r = cesiumRay(ray);
-      let position;
-      if (against === 'terrain') position = scene.globe?.pick(r, scene);
-      else {
-        const cast = () => scene.pickFromRay(r, seeThrough(exclude))?.position;
-        position = against === 'tiles' ? withoutGlobe(cast) : cast();
-      }
-      if (!position) return null;
-      return Cesium.Cartesian3.distance(r.origin, position) <= maxDistance
-        ? ecef(position)
-        : null;
-    },
-  };
+  const query = createCesiumQuery({
+    scene,
+    camera,
+    draw: drawPart,
+    capabilities,
+  });
 
   async function capture({ type = 'png' } = {}) {
     scene.render(widget.clock.currentTime);
