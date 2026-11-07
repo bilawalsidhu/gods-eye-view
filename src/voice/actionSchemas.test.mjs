@@ -45,7 +45,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
-    // S2 GhostMaps extends the generated layer enums.
+    // S2 GhostMaps and USGS water levels (rivers, lakes, springs) extend the generated layer enums.
     // The Utilities panel (Directions, Draw, Import) adds one panel target.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
@@ -57,8 +57,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // tightened area tool wording follow review.
     // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
-    // absolute with its -45 default, with steps sent as a direction.
-    '6a0d154e68beb787c4e20f12d29a5c86577dc343f3e71d8b5651998ea45d8c3c',
+    // absolute with its -45 default, with steps sent as a direction. The USGS
+    // water layers add three generated layer ids.
+    '85b7eecf122b58068945e7764035ea59e1df9095d919f640272bd98cafc577b3',
   );
 });
 

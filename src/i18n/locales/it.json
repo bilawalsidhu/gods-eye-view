@@ -3255,5 +3255,10 @@
   "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} giorni; indicatori senza data mantenuti",
   "event age filter|All": "Tutti",
   "Event age": "Età degli eventi",
-  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti"
+  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti",
+  "Zoom in to a region to load river gauges": "Ingrandisci una regione per caricare i misuratori dei fiumi",
+  "USGS Rivers & Streams": "USGS: fiumi e torrenti",
+  "USGS Lakes & Reservoirs": "USGS: laghi e bacini",
+  "USGS Springs": "USGS: sorgenti",
+  "Water": "Acqua"
 }

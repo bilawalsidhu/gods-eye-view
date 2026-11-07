@@ -37,11 +37,17 @@ const CHECKER_PATH = fileURLToPath(
 const NEXT_PATH = fileURLToPath(
   new URL('../../scripts/next-layer-state-token.mjs', import.meta.url),
 );
-const reservationRows = JSON.parse(
+const allReservationRows = JSON.parse(
   readFileSync(
     new URL('./layerStateTokenReservations.json', import.meta.url),
     'utf8',
   ),
+);
+// The allocation scenarios below start from the ledger as main published it,
+// before the USGS water layers took 00, 01 and 02, so each scenario still
+// exercises "the next free token is 9" or "00" exactly as on main.
+const reservationRows = allReservationRows.filter(
+  ([id]) => !id.startsWith('local-usgs-'),
 );
 
 test('pre-ledger published ownership is independent of the candidate mapping', () => {
@@ -108,7 +114,11 @@ function writeCodecFixture(cwd, rows, entries) {
     providerCodec,
     readFileSync(new URL('./idSwitches.js', import.meta.url)),
   );
-  let source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
+  // The fixtures model the codec as main published it, without the USGS layers.
+  let source = readFileSync(CODEC_SOURCE_PATH, 'utf8').replace(
+    /\n {2}Object\.freeze\(\{\s*id: 'local-usgs-[^}]*\}\),/g,
+    '',
+  );
   if (!rows.some(([id]) => id === 'wildlife-sightings'))
     source = source.replace(
       /  Object\.freeze\(\{\s*id: 'wildlife-sightings',[\s\S]*?\}\),\n/,
@@ -134,10 +144,10 @@ function writeCodecFixture(cwd, rows, entries) {
 
 test('reservation ledger is complete, pinned, and rejects duplicate or malformed rows', () => {
   assert.deepEqual(
-    { ...parseLayerStateTokenReservations(reservationRows) },
+    { ...parseLayerStateTokenReservations(allReservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 36);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 39);
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
     {
@@ -150,6 +160,9 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       'ski-pistes': '7',
       'drone-airspace': '8',
       'wildlife-sightings': '9',
+      'local-usgs-lakes': '00',
+      'local-usgs-springs': '01',
+      'local-usgs-water': '02',
     },
   );
   assert.throws(
