@@ -21,6 +21,7 @@ import { writeHoldSegment } from '../../data/iconSegment.js';
 import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
 import { iconAtlas } from '../../data/iconAtlas.js';
 import { cctvPicks } from './pickState.js';
+import { horizonOccluder } from '../../data/iconOrientation.js';
 import { frustumVolumeGeometryData } from '../../data/cctvViewshed.js';
 import { entityRecord } from '../../data/entityRecords.js';
 import { toColor } from '../../render/cesium/draw.js';
@@ -810,13 +811,119 @@ export function createRendering({
    * layer's own entities).
    * @param {{x: number, y: number, z: number}} origin - ECEF ray origin.
    * @param {{x: number, y: number, z: number}} direction - Unit ECEF direction.
-   * @param {Object[]} exclude - Entities to see through.
-   * @returns {{position?: object}|undefined}
+   * @returns {{position?: object}|undefined} Undefined as well when the
+   *   scene cannot pick along a ray.
    */
 
-  function pickFromRay(origin, direction, exclude) {
-    const scene = layerState._viewer.scene;
+  function obstructionHit(origin, direction) {
+    const scene = layerState._viewer?.scene;
+    if (!scene || typeof scene.pickFromRay !== 'function') return undefined;
+    // Exclude everything the layer itself draws so the probe can only hit the
+    // world (3D tiles), not our own polylines/planes. Icons never draw into
+    // ray picks.
+    const exclude = [...layerState._coverageEntities];
+    for (const runtime of layerState._projectionEntities) {
+      if (runtime?.planeEntity) exclude.push(runtime.planeEntity);
+    }
     return scene.pickFromRay(new Cesium.Ray(origin, direction), exclude);
+  }
+
+  /** Whether the scene can pick along a ray (the activation probe needs it). */
+  function canPickFromRay() {
+    return typeof layerState._viewer?.scene?.pickFromRay === 'function';
+  }
+
+  /** Removes the layer's coverage entities from the scene. */
+  function removeCoverageEntities() {
+    const viewer = layerState._viewer;
+    if (!viewer) return;
+    for (const entity of layerState._coverageEntities) {
+      viewer.entities.remove(entity);
+    }
+  }
+
+  /**
+   * Extracts a camera ID from a scene pick result by checking icon row IDs,
+   * primitive IDs, and the camera ids the layer keeps for its coverage entities.
+   * @param {Object|null} picked - Result from scene.pick().
+   * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.
+   */
+
+  function extractPickedCameraId(picked) {
+    if (!picked) return null;
+
+    const entity = cctvPicks.read(picked.id)
+      ? picked.id
+      : cctvPicks.read(picked.primitive?.id)
+        ? picked.primitive.id
+        : null;
+    const value = cctvPicks.read(entity)?.cameraId;
+    if (value !== undefined) {
+      const record =
+        typeof value === 'string' ? layerState._recordById.get(value) : null;
+      const ownsCoverageEntity = Boolean(
+        record?.coverageEntities?.includes(entity),
+      );
+      const ownsProjectionEntity =
+        record?.projection?.planeEntity === entity ||
+        layerState._projectionEntities.some(
+          (runtime) =>
+            runtime?.cameraId === value && runtime.planeEntity === entity,
+        );
+      if (record && (ownsCoverageEntity || ownsProjectionEntity)) return value;
+    }
+
+    // Camera icon row IDs are intentionally the upstream camera ID, so a
+    // sibling may legitimately use the same string. A bare ID match is not
+    // ownership proof: require that this layer's icon set drew the pick.
+    const directId =
+      typeof picked.id === 'string'
+        ? picked.id
+        : typeof picked.primitive?.id === 'string'
+          ? picked.primitive.id
+          : null;
+    const record =
+      directId === null ? null : layerState._recordById.get(directId);
+    if (!record) return null;
+    return layerState._icons && picked.iconSet === layerState._icons
+      ? directId
+      : null;
+  }
+
+  /**
+   * The camera whose icon or coverage is under a screen position (CSS px),
+   * from one scene pick; null when none is, or the pick throws.
+   * @param {{x: number, y: number}} position
+   * @returns {string|null}
+   */
+  function pickCameraIdAt(position) {
+    let picked = null;
+    try {
+      picked = layerState._viewer.scene.pick(position);
+    } catch {
+      picked = null;
+    }
+    return extractPickedCameraId(picked);
+  }
+
+  /**
+   * Where the ambient cards can go this pass: the canvas size, and the
+   * canvas position of a world point on the near side of the horizon (null
+   * behind it or off the projection).
+   * @returns {{width: number, height: number,
+   *   screenOf: (position: object) => ({x: number, y: number}|undefined|null)}}
+   */
+  function cardView() {
+    const { camera, scene } = layerState._viewer;
+    const occluder = horizonOccluder(camera);
+    return {
+      width: scene.canvas.clientWidth || scene.canvas.width || 0,
+      height: scene.canvas.clientHeight || scene.canvas.height || 0,
+      screenOf: (position) =>
+        occluder.isPointVisible(position)
+          ? scene.cartesianToCanvasCoordinates(position)
+          : null,
+    };
   }
 
   /**
@@ -868,7 +975,12 @@ export function createRendering({
     projectionTilesReady,
     frustumCartesians,
     buildCoverageEntities,
-    pickFromRay,
+    obstructionHit,
+    canPickFromRay,
+    removeCoverageEntities,
+    extractPickedCameraId,
+    pickCameraIdAt,
+    cardView,
     destroyViewshedVolume,
     rebuildViewshedVolume,
     createCameraIcons,

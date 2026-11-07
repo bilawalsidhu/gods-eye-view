@@ -111,3 +111,64 @@ test('icons leave the scene they were added to, whichever viewer tears down', ()
   assert.equal(current.isDestroyed(), true);
   assert.equal(state._icons, null);
 });
+
+test('the obstruction probe sees through the layer and needs a ray pick', () => {
+  const coverage = [{ id: 'cov' }];
+  const plane = { id: 'plane' };
+  const calls = [];
+  const state = {
+    _viewer: {
+      scene: {
+        pickFromRay(ray, exclude) {
+          calls.push({ ray, exclude });
+          return { position: { x: 1, y: 2, z: 3 } };
+        },
+      },
+    },
+    _coverageEntities: coverage,
+    _projectionEntities: [{ planeEntity: plane }, null, {}],
+  };
+  const rendering = createRendering({
+    state,
+    services: { focus: {} },
+    parts: {},
+  });
+  assert.equal(rendering.canPickFromRay(), true);
+  const hit = rendering.obstructionHit(
+    { x: 0, y: 0, z: 0 },
+    { x: 1, y: 0, z: 0 },
+  );
+  assert.deepEqual(hit.position, { x: 1, y: 2, z: 3 });
+  assert.deepEqual(calls[0].exclude, [...coverage, plane]);
+  assert.ok(calls[0].ray instanceof Cesium.Ray);
+  state._viewer = { scene: {} };
+  assert.equal(rendering.canPickFromRay(), false);
+  assert.equal(
+    rendering.obstructionHit({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }),
+    undefined,
+  );
+});
+
+test('cards go only where the horizon lets the camera see', () => {
+  const eye = Cesium.Cartesian3.fromDegrees(0, 0, 20_000_000);
+  const front = Cesium.Cartesian3.fromDegrees(0, 0);
+  const back = Cesium.Cartesian3.fromDegrees(180, 0);
+  const state = {
+    _viewer: {
+      camera: { positionWC: eye },
+      scene: {
+        canvas: { clientWidth: 800, clientHeight: 0, height: 600 },
+        cartesianToCanvasCoordinates: () => ({ x: 10, y: 20 }),
+      },
+    },
+  };
+  const view = createRendering({
+    state,
+    services: { focus: {} },
+    parts: {},
+  }).cardView();
+  assert.equal(view.width, 800);
+  assert.equal(view.height, 600);
+  assert.deepEqual(view.screenOf(front), { x: 10, y: 20 });
+  assert.equal(view.screenOf(back), null);
+});

@@ -1,5 +1,4 @@
 import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
-import { cctvPicks } from './pickState.js';
 
 export function createSelection({
   state: layerState,
@@ -198,51 +197,14 @@ export function createSelection({
   }
 
   /**
-   * Extracts a camera ID from a scene pick result by checking icon row IDs,
-   * primitive IDs, and the camera ids the layer keeps for its coverage entities.
-   * @param {Object|null} picked - Result from scene.pick().
-   * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.
+   * The camera a scene pick result is, or null: read by the rendering part,
+   * which owns the scene objects the pick names.
+   * @param {Object|null} picked - Result from a scene pick.
+   * @returns {string|null}
    */
 
   function extractPickedCameraId(picked) {
-    if (!picked) return null;
-
-    const entity = cctvPicks.read(picked.id)
-      ? picked.id
-      : cctvPicks.read(picked.primitive?.id)
-        ? picked.primitive.id
-        : null;
-    const value = cctvPicks.read(entity)?.cameraId;
-    if (value !== undefined) {
-      const record =
-        typeof value === 'string' ? layerState._recordById.get(value) : null;
-      const ownsCoverageEntity = Boolean(
-        record?.coverageEntities?.includes(entity),
-      );
-      const ownsProjectionEntity =
-        record?.projection?.planeEntity === entity ||
-        layerState._projectionEntities.some(
-          (runtime) =>
-            runtime?.cameraId === value && runtime.planeEntity === entity,
-        );
-      if (record && (ownsCoverageEntity || ownsProjectionEntity)) return value;
-    }
-
-    // Camera icon row IDs are intentionally the upstream camera ID, so a
-    // sibling may legitimately use the same string. A bare ID match is not
-    // ownership proof: require that this layer's icon set drew the pick.
-    const directId =
-      typeof picked.id === 'string'
-        ? picked.id
-        : typeof picked.primitive?.id === 'string'
-          ? picked.primitive.id
-          : null;
-    const record =
-      directId === null ? null : layerState._recordById.get(directId);
-    if (!record) return null;
-    return layerState._icons && picked.iconSet === layerState._icons
-      ? directId
-      : null;
+    return parts.rendering.extractPickedCameraId(picked);
   }
   return {
     getActiveRecord,

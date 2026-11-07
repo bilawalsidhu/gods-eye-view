@@ -97,6 +97,58 @@ export function createLifecycle({
     layerState._viewMotionTimer = 0;
   }
 
+  /**
+   * Listen for the camera's moves on the viewer's camera port: hover picking
+   * pauses while it moves, and the view pass reruns on an interval until the
+   * move ends, then once more. A re-init against a new viewer moves the
+   * listeners to its camera; one against the same viewer keeps them.
+   */
+  function attachViewListeners() {
+    const viewCamera = findCamera(layerState._viewer);
+    if (
+      layerState._viewListenerCamera &&
+      layerState._viewListenerCamera !== viewCamera
+    ) {
+      layerState._horizonCullListener?.();
+      layerState._moveStartListener?.();
+      layerState._horizonCullListener = null;
+      layerState._moveStartListener = null;
+      layerState._cameraMoving = false;
+    }
+    layerState._viewListenerCamera = viewCamera;
+    if (!layerState._horizonCullListener && viewCamera) {
+      // Ambient cards piggyback the same settle event: moveEnd-driven
+      // reselection only, never per frame (refreshAmbientCards no-ops while
+      // the layer is disabled).
+      layerState._horizonCullListener = viewCamera.on('moveEnd', () => {
+        layerState._cameraMoving = false;
+        stopViewMotionTimer();
+        settleView();
+      });
+    }
+    if (!layerState._moveStartListener && viewCamera) {
+      // Item B: hover picking pauses while the camera is in motion. A long
+      // move (cockpit flight, a drag) never settles, so the view pass also
+      // reruns on an interval until it does.
+      layerState._moveStartListener = viewCamera.on('moveStart', () => {
+        layerState._cameraMoving = true;
+        // enable() starts it for a move already under way.
+        if (layerState._enabled) startViewMotionTimer();
+      });
+    }
+  }
+
+  /** Drop the move listeners; nothing reports the end of a move after it. */
+  function detachViewListeners() {
+    layerState._horizonCullListener?.();
+    layerState._horizonCullListener = null;
+    layerState._moveStartListener?.();
+    layerState._moveStartListener = null;
+    layerState._cameraMoving = false;
+    layerState._viewListenerCamera = null;
+    stopViewMotionTimer();
+  }
+
   /** Resets all module-scoped runtime state to initial values. */
 
   function clearRuntimeState() {
@@ -310,51 +362,7 @@ export function createLifecycle({
       // Field-test fix (2026-07-06): horizon-cull on camera settle (pairs with
       // the icons' always-on-top drawing) + one initial pass so the
       // first paint is already culled.
-      // A re-init against a new viewer moves the move listeners to its camera.
-      if (
-        layerState._viewListenerCamera &&
-        layerState._viewListenerCamera !== layerState._viewer.camera
-      ) {
-        const previous = layerState._viewListenerCamera;
-        if (layerState._horizonCullListener)
-          previous.moveEnd?.removeEventListener(
-            layerState._horizonCullListener,
-          );
-        if (layerState._moveStartListener)
-          previous.moveStart?.removeEventListener(
-            layerState._moveStartListener,
-          );
-        layerState._horizonCullListener = null;
-        layerState._moveStartListener = null;
-        layerState._cameraMoving = false;
-      }
-      layerState._viewListenerCamera = layerState._viewer.camera;
-      if (!layerState._horizonCullListener) {
-        // Ambient cards piggyback the same settle event: moveEnd-driven
-        // reselection only, never per frame (refreshAmbientCards no-ops while
-        // the layer is disabled).
-        layerState._horizonCullListener = () => {
-          layerState._cameraMoving = false;
-          stopViewMotionTimer();
-          settleView();
-        };
-        layerState._viewer.camera.moveEnd.addEventListener(
-          layerState._horizonCullListener,
-        );
-      }
-      if (!layerState._moveStartListener) {
-        // Item B: hover picking pauses while the camera is in motion. A long
-        // move (cockpit flight, a drag) never settles, so the view pass also
-        // reruns on an interval until it does.
-        layerState._moveStartListener = () => {
-          layerState._cameraMoving = true;
-          // enable() starts it for a move already under way.
-          if (layerState._enabled) startViewMotionTimer();
-        };
-        layerState._viewer.camera.moveStart.addEventListener(
-          layerState._moveStartListener,
-        );
-      }
+      attachViewListeners();
       // A resize or rotation changes what is on screen without moving the
       // camera.
       const canvas = layerState._viewer.scene?.canvas;
@@ -538,10 +546,10 @@ export function createLifecycle({
 
     /**
      * Tears down the layer: destroys click handler, projection loop, coverage
-     * entities, icons, and clears all runtime state and subscribers.
-     * @param {object} [viewer] - Viewer instance (falls back to stored ref).
+     * entities, icons, and clears all runtime state and subscribers. It
+     * releases what init attached, whichever viewer it is handed.
      */
-    destroy(viewer) {
+    destroy() {
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._sourceAbort?.abort();
       if (typeof document !== 'undefined')
@@ -557,23 +565,7 @@ export function createLifecycle({
         );
         layerState._mapStackListener = null;
       }
-      const teardownViewer = viewer || layerState._viewer;
-      if (layerState._horizonCullListener && teardownViewer?.camera?.moveEnd) {
-        teardownViewer.camera.moveEnd.removeEventListener(
-          layerState._horizonCullListener,
-        );
-        layerState._horizonCullListener = null;
-      }
-      if (layerState._moveStartListener && teardownViewer?.camera?.moveStart) {
-        teardownViewer.camera.moveStart.removeEventListener(
-          layerState._moveStartListener,
-        );
-        layerState._moveStartListener = null;
-      }
-      // The move listeners are gone; nothing will report the end of a move.
-      layerState._cameraMoving = false;
-      layerState._viewListenerCamera = null;
-      stopViewMotionTimer();
+      detachViewListeners();
       layerState._viewResizeObserver?.disconnect();
       layerState._viewResizeObserver = null;
       layerState._viewResizeCanvas = null;
@@ -601,5 +593,10 @@ export function createLifecycle({
     },
   };
 
-  return { clearRuntimeState, methods };
+  return {
+    clearRuntimeState,
+    attachViewListeners,
+    detachViewListeners,
+    methods,
+  };
 }

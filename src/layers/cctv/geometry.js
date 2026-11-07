@@ -540,8 +540,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function runActivationObstructionProbe(record) {
     record.probeClampRangeM = null;
-    const scene = layerState._viewer?.scene;
-    if (!scene || typeof scene.pickFromRay !== 'function') return;
+    if (!parts.rendering.canPickFromRay()) return;
     const camera = record.camera;
     const rangeScale = parts.calibration.normalizeCalibration(
       camera.calibration,
@@ -551,14 +550,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       const mountAlt = parts.ground.groundAltFor(record) + camera.mountHeightM;
       const mountPos = fromDegrees(camera.lon, camera.lat, mountAlt);
       const { dir } = frustumFrameEcef(camera, mountPos);
-      // Exclude everything the layer itself draws so the probe can only hit the
-      // world (3D tiles), not our own polylines/planes. Icons never draw into
-      // ray picks.
-      const exclude = [...layerState._coverageEntities];
-      for (const runtime of layerState._projectionEntities) {
-        if (runtime?.planeEntity) exclude.push(runtime.planeEntity);
-      }
-      const hit = parts.rendering.pickFromRay(mountPos, dir, exclude);
+      // The rendering part sees through everything the layer draws.
+      const hit = parts.rendering.obstructionHit(mountPos, dir);
       if (!hit?.position) return;
       const dist = distance(mountPos, hit.position);
       record.probeClampRangeM = activationProbeClampRange(camera.rangeM, dist);
@@ -666,9 +659,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function destroyCoverageEntities() {
     if (!layerState._viewer) return;
-    for (const entity of layerState._coverageEntities) {
-      layerState._viewer.entities.remove(entity);
-    }
+    parts.rendering.removeCoverageEntities();
     layerState._coverageEntities = [];
 
     for (const record of layerState._records) {

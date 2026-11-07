@@ -106,7 +106,7 @@ export function createState({ services }) {
 
   layerState._viewResizeCanvas = null;
 
-  // The camera the moveStart/moveEnd listeners are attached to.
+  // The camera port the moveStart/moveEnd listeners are on.
 
   layerState._viewListenerCamera = null;
 
@@ -185,8 +185,8 @@ export function createState({ services }) {
 
   layerState._mapStackListener = null;
 
-  // Field-test fix (2026-07-06): camera.moveEnd handle for the horizon-culling
-  // pass (removed in destroy). Event-driven only — never a per-frame loop, so
+  // Field-test fix (2026-07-06): the Off of the camera's moveEnd listener for
+  // the horizon-culling pass (called in destroy). Event-driven only — never a per-frame loop, so
   // the zero-steady-state-work invariant holds.
 
   layerState._horizonCullListener = null;
@@ -261,6 +261,7 @@ export function createState({ services }) {
 
   layerState._cameraMoving = false;
 
+  // The Off of the camera's moveStart listener.
   layerState._moveStartListener = null;
   layerState._sourceAbort = null;
   return layerState;
