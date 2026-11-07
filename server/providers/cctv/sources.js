@@ -86,6 +86,17 @@ import {
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
   DELDOT_ANCHORS,
+  DRIVENC_MAP_ICONS_URL,
+  DRIVENC_TOOLTIP_URL,
+  DRIVENC_CAMERAS_URL,
+  DRIVENC_IMAGE_ORIGIN,
+  DEFAULT_DRIVENC_MAX_SOURCES,
+  DRIVENC_ANCHORS,
+  DRIVENC_MAX_CATALOG_BYTES,
+  DRIVENC_MAX_TOOLTIP_BYTES,
+  DRIVENC_TOOLTIP_CONCURRENCY,
+  DRIVENC_TOOLTIP_SWEEP_TIMEOUT_MS,
+  DRIVENC_GROUND_ELEVATION_M,
   KING_COUNTY_CAMERAS_URL,
   KING_COUNTY_IMAGE_ORIGIN,
   DEFAULT_KING_COUNTY_MAX_SOURCES,
@@ -166,6 +177,7 @@ import {
   isLikelyNorwayCoordinate,
   isLikelyTorontoCoordinate,
   isLikelyA22Coordinate,
+  isLikelyNorthCarolinaCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -2521,6 +2533,494 @@ export async function loadDelDOTSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] DelDOT source download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * The side-of-road letter a DriveNC camera code ends its mile marker with, as
+ * a heading in degrees: `CCTV05-I40-273E_NC54` sits beside the eastbound
+ * carriageway of I-40 at mile 273.
+ */
+const DRIVENC_SIDE_HEADINGS = Object.freeze({ N: 0, E: 90, S: 180, W: 270 });
+
+/**
+ * Split an NCDOT camera code into its parts. Codes follow
+ * `CCTV<division>-<road>-<mile marker><side>_<cross street>`, as in
+ * `CCTV05-I40-273E_NC54`: Division 5, I-40, mile 273 on the eastbound side,
+ * at NC 54. The side letter and the cross street are optional
+ * (`CCTV05-I87-5S`, `CCTV05-NC147-1N`). About one code in five departs from
+ * the pattern (`CCTV05-EDWARDSMILL_DURALEIGH`, `CCTV05-US70BUS_GUY`) and
+ * yields null, so the caller keeps the code itself as the label.
+ *
+ * @param {string} code - NCDOT camera code.
+ * @returns {{road:string, mile:string, side:string, cross:string}|null}
+ */
+export function parseDriveNcCameraCode(code) {
+  const match =
+    /^P?CCTV\d*-([A-Z]+\d+[A-Z]*)-(\d+(?:\.\d+)?)([A-Z])?(?:_([A-Z0-9][A-Z0-9_.-]*))?$/.exec(
+      String(code || '')
+        .trim()
+        .toUpperCase(),
+    );
+  if (!match) return null;
+  return {
+    road: match[1],
+    mile: match[2],
+    side: match[3] || '',
+    cross: match[4] || '',
+  };
+}
+
+/**
+ * A route token as a road name: `I40` -> `I-40`, `US64BUS` -> `US-64 BUS`,
+ * `US15-501` -> `US-15-501`. Anything else (a street name such as
+ * `CORNWALLIS`) is returned as written.
+ *
+ * @param {string} token
+ * @returns {string}
+ */
+function driveNcRouteLabel(token) {
+  const match = /^(I|US|NC|SR)(\d+)([A-Z]*)(.*)$/.exec(token);
+  if (!match) return token;
+  const [, system, number, suffix, rest] = match;
+  return `${system}-${number}${suffix ? ` ${suffix}` : ''}${rest}`;
+}
+
+/**
+ * Human label for an NCDOT camera code: `CCTV05-I40-273E_NC54` reads
+ * `I-40 MM 273 E at NC-54`; a code outside the pattern is kept as written.
+ *
+ * @param {string} code - NCDOT camera code.
+ * @returns {string}
+ */
+export function driveNcCameraLabel(code) {
+  const parts = parseDriveNcCameraCode(code);
+  if (!parts) return String(code || '').trim();
+  const marker = `MM ${parts.mile}${parts.side ? ` ${parts.side}` : ''}`;
+  const cross = parts.cross ? ` at ${driveNcRouteLabel(parts.cross)}` : '';
+  return `${driveNcRouteLabel(parts.road)} ${marker}${cross}`;
+}
+
+/**
+ * Heading prior from the side-of-road letter of a camera code, or NaN. The
+ * letter names the carriageway the camera sits beside, not where its
+ * pan-tilt-zoom head points, so callers register it at low confidence.
+ *
+ * @param {string} code - NCDOT camera code.
+ * @returns {number}
+ */
+export function driveNcHeadingFromCode(code) {
+  const side = parseDriveNcCameraCode(code)?.side;
+  return side ? (DRIVENC_SIDE_HEADINGS[side] ?? NaN) : NaN;
+}
+
+/**
+ * The NCDOT camera code and still-view id from one DriveNC tooltip page, the
+ * HTML fragment the drivenc.gov map shows for a camera. The code sits in
+ * `<td id="CameraTooltipDescriptionColumn"><strong>…</strong>` and the still
+ * is lazy-loaded from `data-lazy="/map/Cctv/<viewId>"`. Only a view id of
+ * plain characters under that exact path is accepted, so the frame URL built
+ * from it cannot leave the pinned directory.
+ *
+ * @param {string} html - Tooltip page body.
+ * @returns {{code:string, viewId:string}|null} Null without a usable still.
+ */
+export function parseDriveNcTooltip(html) {
+  const text = String(html || '');
+  const view = /\bdata-lazy="\/map\/Cctv\/([A-Za-z0-9_.-]+)"/.exec(text);
+  if (!view) return null;
+  const code =
+    /id="CameraTooltipDescriptionColumn"[^>]*>\s*<strong>\s*([^<]*?)\s*<\/strong>/.exec(
+      text,
+    );
+  return {
+    code: decodeNumericEntities(code?.[1] || '').replace(/\s+/g, ' '),
+    viewId: view[1],
+  };
+}
+
+/**
+ * The first enabled still view of a DriveNC API row that lives under the
+ * official still directory, as its view id; '' when there is none. The API
+ * answers in the Ontario 511 shape (both are TravelIQ sites).
+ *
+ * @param {Array<object>} views
+ * @returns {string}
+ */
+function pickDriveNcViewId(views) {
+  for (const view of Array.isArray(views) ? views : []) {
+    const status = String(view?.Status ?? view?.status ?? 'Enabled')
+      .trim()
+      .toLowerCase();
+    if (status !== 'enabled') continue;
+    let url;
+    try {
+      url = new URL(String(view?.Url ?? view?.url ?? '').trim());
+    } catch {
+      continue;
+    }
+    const host = url.hostname.toLowerCase();
+    const match = /^\/map\/Cctv\/([A-Za-z0-9_.-]+)$/.exec(url.pathname);
+    if (
+      url.protocol !== 'https:' ||
+      (host !== 'www.drivenc.gov' && host !== 'drivenc.gov') ||
+      !match
+    )
+      continue;
+    return match[1];
+  }
+  return '';
+}
+
+/**
+ * One DriveNC camera as a catalog source. The frame URL is built from the
+ * validated view id under the official still directory, never read from
+ * upstream text, and must still resolve inside that directory (a view id of
+ * `.` or `..` would normalize out of it), or the camera is dropped.
+ *
+ * @param {{id:string, lat:number, lon:number, code:string, viewId:string, heading:number, headingConfidence:string}} camera
+ * @returns {object|null}
+ */
+function driveNcCameraToSource({
+  id,
+  lat,
+  lon,
+  code,
+  viewId,
+  heading,
+  headingConfidence,
+}) {
+  const cameraId = `nc-${id}`;
+  const imageUrl = pinnedCameraUrl(
+    `${DRIVENC_IMAGE_ORIGIN}${encodeURIComponent(viewId)}`,
+    DRIVENC_IMAGE_ORIGIN,
+  );
+  if (!imageUrl || imageUrl === DRIVENC_IMAGE_ORIGIN) return null;
+  const hasHeading = Number.isFinite(heading);
+  // Only a dedicated direction field earns the confident pose personality;
+  // the code's side-of-road letter keeps the low one, like a headingless pack.
+  const confident = hasHeading && headingConfidence === 'high';
+  return {
+    id: cameraId,
+    name: driveNcCameraLabel(code) || `DriveNC camera ${id}`,
+    // One statewide category in the camera picker, like Norway and Finland;
+    // the road and mile marker are already in the name.
+    city: 'North Carolina',
+    cityId: 'north-carolina',
+    provider: 'NCDOT DriveNC',
+    lat,
+    lon,
+    headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+    headingConfidence: confident ? 'high' : 'low',
+    // Same two pose personalities as the other packs: raw priors that the
+    // client's ground snap and manual calibration refine.
+    pitchDeg: confident ? -24 : -18,
+    fovDeg: confident ? 56 : 44,
+    rangeM: confident ? 210 : 145,
+    mountHeightM: confident ? 10 : 8,
+    groundElevationM: DRIVENC_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'drivenc-open-data',
+    license:
+      'Public NCDOT DriveNC traffic camera frame (drivenc.gov); images are neither stored nor recorded',
+    // The NCDOT code is the unselected label, as the DriveNC map shows it.
+    code: cameraDisplayCode(code),
+  };
+}
+
+/**
+ * NCDOT code and still-view id by DriveNC camera id. Both are fixed per
+ * camera, so a catalog refresh asks only about cameras it has not seen yet; a
+ * failed lookup is not remembered and is retried on the next refresh. Bounded
+ * well above the ~1,024 cameras the state publishes.
+ */
+const driveNcTooltipCache = new Map();
+const DRIVENC_TOOLTIP_CACHE_LIMIT = 4000;
+
+/** Test seam: forget every remembered tooltip. */
+export function _clearDriveNcTooltipCacheForTest() {
+  driveNcTooltipCache.clear();
+}
+
+/** Fetch one tooltip page; null when it is refused, redirected or unusable. */
+async function fetchDriveNcTooltip(id, signal) {
+  const resp = await fetch(DRIVENC_TOOLTIP_URL(id), {
+    headers: {
+      Accept: 'text/html',
+      'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+    },
+    redirect: 'manual',
+    signal,
+  });
+  if (!resp.ok) {
+    try {
+      await resp.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    return null;
+  }
+  return parseDriveNcTooltip(
+    await readResponseTextCapped(resp, DRIVENC_MAX_TOOLTIP_BYTES, signal),
+  );
+}
+
+/**
+ * Look up the code and view id of each camera id, from the cache where
+ * possible and otherwise from its tooltip page, DRIVENC_TOOLTIP_CONCURRENCY
+ * pages at a time under one shared deadline. Cameras the deadline or an
+ * upstream error leaves unresolved are reported once and left out.
+ *
+ * @param {Array<string>} ids
+ * @returns {Promise<Map<string, {code:string, viewId:string}>>}
+ */
+async function lookupDriveNcTooltips(ids) {
+  const details = new Map();
+  const pending = [];
+  for (const id of ids) {
+    const known = driveNcTooltipCache.get(id);
+    if (known) details.set(id, known);
+    else pending.push(id);
+  }
+  if (!pending.length) return details;
+  const deadline = AbortSignal.timeout(DRIVENC_TOOLTIP_SWEEP_TIMEOUT_MS);
+  let next = 0;
+  const worker = async () => {
+    while (next < pending.length && !deadline.aborted) {
+      const id = pending[next++];
+      try {
+        const detail = await fetchDriveNcTooltip(
+          id,
+          AbortSignal.any([
+            deadline,
+            AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+          ]),
+        );
+        if (!detail) continue;
+        if (driveNcTooltipCache.size >= DRIVENC_TOOLTIP_CACHE_LIMIT)
+          driveNcTooltipCache.clear();
+        driveNcTooltipCache.set(id, detail);
+        details.set(id, detail);
+      } catch {
+        /* counted below as unresolved */
+      }
+    }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(DRIVENC_TOOLTIP_CONCURRENCY, pending.length) },
+      worker,
+    ),
+  );
+  const unresolved = ids.length - details.size;
+  if (unresolved > 0) {
+    console.warn(
+      `[CCTV] DriveNC: ${unresolved} of ${ids.length} camera tooltips unavailable this refresh${deadline.aborted ? ' (lookup deadline)' : ''}`,
+    );
+  }
+  return details;
+}
+
+/**
+ * Fetch the DriveNC camera catalog with a developer key. DriveNC is a TravelIQ
+ * site like Ontario 511, so `api/v2/get/cameras` answers in the Ontario shape
+ * (Id, Latitude, Longitude, Location, Direction, Views[].Url). The key stays
+ * on this server-side request: it is never written to a record or a log line.
+ * Resolves null when the API cannot be used, so the keyless catalog loads
+ * instead.
+ *
+ * @param {string} key - DRIVENC_API_KEY.
+ * @param {number} maxCount - Pack cap.
+ * @returns {Promise<Array<object>|null>}
+ */
+async function loadDriveNcSourcesFromApi(key, maxCount) {
+  try {
+    const url = new URL(DRIVENC_CAMERAS_URL);
+    url.searchParams.set('key', key);
+    const resp = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      // The API answers 400 "Invalid Key" to a wrong or revoked key.
+      const keyHint =
+        resp.status === 400 || resp.status === 401 || resp.status === 403
+          ? ' (check DRIVENC_API_KEY)'
+          : '';
+      console.warn(
+        `[CCTV] DriveNC camera API download failed: ${resp.status}${keyHint}; using the keyless catalog`,
+      );
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return null;
+    }
+    const rows = await readResponseJsonCapped(resp, DRIVENC_MAX_CATALOG_BYTES);
+    if (!Array.isArray(rows)) return null;
+    const cameras = [];
+    const seen = new Set();
+    for (const row of rows) {
+      const id = String(row?.Id ?? row?.id ?? '').trim();
+      if (!/^\d{1,8}$/.test(id) || seen.has(id)) continue;
+      const lat = toFiniteNumber(row?.Latitude ?? row?.latitude);
+      const lon = toFiniteNumber(row?.Longitude ?? row?.longitude);
+      if (!isLikelyNorthCarolinaCoordinate(lat, lon)) continue;
+      const viewId = pickDriveNcViewId(row?.Views || row?.views);
+      if (!viewId) continue;
+      const code = String(row?.Location ?? row?.location ?? '').trim();
+      let heading = directionToHeading(row?.Direction ?? row?.direction, true);
+      let headingConfidence = 'high';
+      if (!Number.isFinite(heading)) {
+        heading = driveNcHeadingFromCode(code);
+        headingConfidence = 'low';
+      }
+      const source = driveNcCameraToSource({
+        id,
+        lat,
+        lon,
+        code,
+        viewId,
+        heading,
+        headingConfidence,
+      });
+      if (!source) continue;
+      seen.add(id);
+      cameras.push(source);
+    }
+    const prioritized = prioritizeSources(cameras, maxCount, DRIVENC_ANCHORS);
+    console.log(
+      `[CCTV] Loaded DriveNC camera sources: ${cameras.length} from the keyed API (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] DriveNC camera API download error (using the keyless catalog):',
+      error?.message || error,
+    );
+    return null;
+  }
+}
+
+/**
+ * Fetch NCDOT DriveNC cameras (North Carolina). Keyless: the camera list is
+ * the catalog the drivenc.gov map itself loads, every camera's id and
+ * position in one request, and each camera's NCDOT code and still-view id
+ * come from its tooltip page. The list is sorted nearest the anchors first
+ * and only the cameras under the pack cap are looked up, a few pages at a
+ * time; a camera whose tooltip does not answer is left out of this refresh
+ * and asked about again on the next one. Frame URLs are built from the view
+ * id under the official still directory and are never read from the payload.
+ * Catalog and tooltip fetches refuse redirects and cap the bodies they read.
+ *
+ * DriveNC's HLS streams need HTTP Basic credentials the site holds, so the
+ * pack is stills-only. With DRIVENC_API_KEY set, the keyed TravelIQ catalog
+ * (one request) replaces the tooltip sweep.
+ *
+ * @param {object} [_options] The catalog's loader options (unused).
+ * @param {object} [env] Environment to read the key and the source cap from.
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadDriveNcSourcesFromOpenData(
+  _options = {},
+  env = process.env,
+) {
+  const maxRaw = Number(
+    env.CCTV_DRIVENC_MAX_SOURCES || DEFAULT_DRIVENC_MAX_SOURCES,
+  );
+  // Up to the catalog ceiling, so a North Carolina setup can load the whole
+  // state (~1,024 cameras).
+  const maxCount = Number.isFinite(maxRaw)
+    ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
+    : DEFAULT_DRIVENC_MAX_SOURCES;
+  const key = String(env.DRIVENC_API_KEY ?? '').trim();
+  if (key) {
+    const keyed = await loadDriveNcSourcesFromApi(key, maxCount);
+    if (keyed) return keyed;
+  }
+  try {
+    const resp = await fetch(DRIVENC_MAP_ICONS_URL, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn(
+        resp.status >= 300 && resp.status < 400
+          ? '[CCTV] DriveNC catalog redirected; redirects are not followed'
+          : `[CCTV] DriveNC camera download failed: ${resp.status}`,
+      );
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      DRIVENC_MAX_CATALOG_BYTES,
+    );
+    const listed = new Map();
+    for (const row of Array.isArray(payload?.item2) ? payload.item2 : []) {
+      const id = String(row?.itemId ?? '').trim();
+      if (!/^\d{1,8}$/.test(id) || listed.has(id)) continue;
+      // Map-icon order: [latitude, longitude].
+      const [lat, lon] = Array.isArray(row?.location)
+        ? row.location.map((value) => toFiniteNumber(value))
+        : [];
+      if (!isLikelyNorthCarolinaCoordinate(lat, lon)) continue;
+      listed.set(id, { id, lat, lon });
+    }
+    // Nearest the anchors first, and only those under the cap get a tooltip
+    // request: the sweep costs one page per registered camera, not per
+    // listed one.
+    const nearest = prioritizeSources(
+      Array.from(listed.values()),
+      maxCount,
+      DRIVENC_ANCHORS,
+    );
+    const details = await lookupDriveNcTooltips(
+      nearest.map((camera) => camera.id),
+    );
+    const cameras = [];
+    for (const { id, lat, lon } of nearest) {
+      const detail = details.get(id);
+      if (!detail) continue;
+      const source = driveNcCameraToSource({
+        id,
+        lat,
+        lon,
+        code: detail.code,
+        viewId: detail.viewId,
+        heading: driveNcHeadingFromCode(detail.code),
+        headingConfidence: 'low',
+      });
+      if (source) cameras.push(source);
+    }
+    // What the pack offered before its own cap, for the coverage report.
+    Object.defineProperty(cameras, 'available', { value: listed.size });
+    Object.defineProperty(cameras, 'region', { value: nearest.region });
+    console.log(
+      `[CCTV] Loaded DriveNC camera sources: ${listed.size} listed (using nearest ${cameras.length})`,
+    );
+    return cameras;
+  } catch (error) {
+    console.warn(
+      '[CCTV] DriveNC camera download error:',
       error?.message || error,
     );
     return [];
