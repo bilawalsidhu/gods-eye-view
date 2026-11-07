@@ -1,8 +1,4 @@
-import * as Cesium from 'cesium';
 import { createWindRendering } from './rendering.js';
-// The renderer drapes through `findGlobe`; a viewer with no renderer bound
-// gets its globe port from the factory this module provides.
-import '../../render/cesium/globe.js';
 import { WIND_FIELDS } from './fields.js';
 import {
   formatWindReading,
@@ -11,6 +7,7 @@ import {
 } from './presentation.js';
 import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
 import { createWindInspectionMarker } from './inspectionMarker.js';
+import { findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 
@@ -57,7 +54,6 @@ export function windStats(manifest) {
 export function createWindLayer({
   feed,
   clock,
-  cesium = Cesium,
   container,
   createRendering = createWindRendering,
 } = {}) {
@@ -84,7 +80,10 @@ export function createWindLayer({
     inspectionMarker?.clear();
   };
   const sample = (position) => {
-    reading = inspectWindAtCenter(manifest, viewer, cesium, {
+    const view = viewer
+      ? { query: findQuery(viewer), canvas: viewer.scene?.canvas }
+      : {};
+    reading = inspectWindAtCenter(manifest, view, {
       position,
       units,
       overlay,
@@ -116,14 +115,10 @@ export function createWindLayer({
     init(nextViewer) {
       viewer = nextViewer;
       rendering = createRendering({
-        cesium,
         container: container ?? nextViewer.container,
         getViewer: () => viewer,
-        getHost: () =>
-          imageryHost?.() ?? {
-            collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-            kind: 'globe',
-          },
+        // Without a host from the shell, the rendering drapes on the globe.
+        getHost: () => imageryHost?.(),
         onStatusChange: notify,
       });
       rendering.attach();
@@ -132,7 +127,6 @@ export function createWindLayer({
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,
-        cesium,
       });
     },
     attachShellServices(services) {

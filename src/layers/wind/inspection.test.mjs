@@ -5,6 +5,7 @@ import {
   formatWindSpeed,
   inspectWindAtCenter,
 } from './inspection.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 
 test('wind directions describe the source of the flow and calm is not north', () => {
   assert.equal(windFrom(10, 0), 'W');
@@ -26,22 +27,18 @@ test('center inspection uses a fixed forecast reading without double-converting 
       values: Float32Array.from([20, 20, 20, 20]),
     },
   };
-  const viewer = {
-    camera: { pickEllipsoid: () => ({ longitude: 0, latitude: 0 }) },
-    scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
-  };
-  const cesium = {
-    Cartesian2: class {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-      }
+  let center = fromDegrees(0, 0);
+  const picks = [];
+  const view = {
+    canvas: { clientWidth: 800, clientHeight: 600 },
+    query: {
+      pickEllipsoid(x, y) {
+        picks.push([x, y]);
+        return center;
+      },
     },
-    Ellipsoid: { WGS84: {} },
-    Cartographic: { fromCartesian: (p) => p },
-    Math: { toDegrees: (x) => (x * 180) / Math.PI },
   };
-  const result = inspectWindAtCenter(snapshot, viewer, cesium, {
+  const result = inspectWindAtCenter(snapshot, view, {
     overlay: 'temperature',
     units: 'km/h',
     model: 'GFS',
@@ -52,9 +49,21 @@ test('center inspection uses a fixed forecast reading without double-converting 
   assert.equal(result.scalarValue, '20.0 °C');
   assert.equal(result.validTime, 'fixed');
   assert.equal(result.coordinates, '0.00°N · 0.00°E');
-  viewer.camera.pickEllipsoid = () => null;
+  assert.deepEqual(picks, [[400, 300]], 'the pick is at the canvas center');
+  assert.equal(result.position, center);
+  center = fromDegrees(70, 20);
   assert.equal(
-    inspectWindAtCenter(snapshot, viewer, cesium).coordinates,
+    inspectWindAtCenter(snapshot, view).coordinates,
+    '20.00°N · 70.00°E',
+  );
+  center = null;
+  assert.equal(
+    inspectWindAtCenter(snapshot, view).coordinates,
     'No surface reading',
+  );
+  assert.equal(
+    inspectWindAtCenter(snapshot, { query: view.query }).coordinates,
+    'No surface reading',
+    'no canvas, no reading',
   );
 });

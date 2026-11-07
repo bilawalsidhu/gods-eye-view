@@ -1,3 +1,9 @@
+import * as Cesium from 'cesium';
+// The renderer drapes through `findGlobe`, and the layer's inspection marker
+// reads `findQuery` and `findFrame`; a viewer with no renderer bound gets
+// those ports from the factories these modules provide.
+import '../../render/cesium/globe.js';
+import '../../render/cesium/camera.js';
 import {
   createShellSurface,
   WEATHER_SHELL_HEIGHTS,
@@ -60,19 +66,22 @@ function sameWind(previous, next, previousField, nextField) {
 /** Globe-projected surface flow plus one owned, static colour field: globe
  * imagery on the globe host, a raised shell on the 3D Tiles host. */
 export function createWindRendering({
-  cesium,
+  cesium = Cesium,
   container,
   getViewer,
-  getHost = () => ({
-    collection:
-      getViewer?.()?.imageryLayers ?? getViewer?.()?.scene?.imageryLayers,
-    kind: 'globe',
-  }),
+  getHost: hostOf,
   eventTarget = globalThis.window,
   createGpuRendering = createWindGpuRendering,
   globeOf = findGlobe,
   onStatusChange,
 } = {}) {
+  // The host the shell names, else the viewer's globe imagery.
+  const getHost = () =>
+    hostOf?.() ?? {
+      collection:
+        getViewer?.()?.imageryLayers ?? getViewer?.()?.scene?.imageryLayers,
+      kind: 'globe',
+    };
   let canvas = null;
   let context = null;
   let snapshot = null;

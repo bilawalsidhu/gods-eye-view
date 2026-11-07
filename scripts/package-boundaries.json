@@ -5860,6 +5860,7 @@
       "src/data/satellitePass.js",
       "src/tools/queries/atmosphere.js",
       "src/layers/wind/inspection.js",
+      "src/geo/ellipsoid.js",
       "src/layers/wind/model.js",
       "src/layers/wind/fields.js",
       "src/i18n/marker.js",
@@ -5884,7 +5885,8 @@
       "src/tools/globePanel.js",
       "src/tools/queries/panelRequest.js",
       "src/geoDistance.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/geo/vector.js"
     ],
     "external": ["satellite.js"]
   },
