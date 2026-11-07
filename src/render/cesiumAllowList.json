@@ -53,7 +53,6 @@
   "src/layers/launches/rendering.js",
   "src/layers/localAdsb/index.js",
   "src/layers/localAdsb/models.js",
-  "src/layers/localAdsb/motion.js",
   "src/layers/military/lifecycle.js",
   "src/layers/military/motion.js",
   "src/layers/military/policy.js",
