@@ -1269,23 +1269,64 @@ export function createCesiumDraw({
     const host = new Cesium.PrimitiveCollection();
     const outlines = new Cesium.PolylineCollection();
     const clamped = [];
+    // Image fills' materials hold their textures, which primitives leave
+    // alone: the host destroys them as it goes.
+    const materials = [];
+    const ownMaterial = (material) => {
+      if (!materials.length) {
+        const destroyHost = host.destroy.bind(host);
+        host.destroy = () => {
+          for (const owned of materials.splice(0))
+            if (!owned.isDestroyed()) owned.destroy();
+          return destroyHost();
+        };
+      }
+      materials.push(material);
+      return material;
+    };
     for (const item of record.items.values()) {
       if (item.show === false) continue;
       if (item.height === 'clampGround') {
         clamped.push(item);
         continue;
       }
-      if (
-        item.fill &&
-        typeof item.fill === 'object' &&
-        !Array.isArray(item.fill)
-      )
+      const imageFill =
+        item.fill && typeof item.fill === 'object' && !Array.isArray(item.fill)
+          ? item.fill
+          : null;
+      if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
       const shape = shapeGeometry(item);
       const id = pickId(record, item);
       const solid =
         item.extrudeHeight !== undefined || item.geometry.kind === 'box';
-      if (item.fill && !item.outlineOnly) {
+      if (imageFill && !item.outlineOnly) {
+        const material = ownMaterial(
+          Cesium.Material.fromType('Image', {
+            image: toImage(imageFill.image),
+            repeat: new Cesium.Cartesian2(...(imageFill.repeat ?? [1, 1])),
+          }),
+        );
+        host.add(
+          new Cesium.Primitive({
+            geometryInstances: new Cesium.GeometryInstance({
+              geometry: shape.fill,
+              modelMatrix: shape.modelMatrix,
+              id,
+            }),
+            appearance: new Cesium.MaterialAppearance({
+              material,
+              materialSupport:
+                Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
+              translucent: true,
+              closed: solid,
+              flat: !solid,
+              faceForward: !solid,
+            }),
+            asynchronous: false,
+          }),
+        );
+      } else if (item.fill && !item.outlineOnly) {
         const color = toColor(item.fill);
         host.add(
           new Cesium.Primitive({

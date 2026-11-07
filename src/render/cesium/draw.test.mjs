@@ -2033,3 +2033,183 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     unbind();
   }
 });
+test('an unclamped shape filled with an image draws a textured primitive and frees its material with its host', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const draw = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    }).port;
+    const set = draw.shapes({ id: 'images' });
+    set.set([
+      {
+        id: 'image',
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 2, south: 1, east: 2.1, north: 1.1 },
+          height: 200,
+        },
+        fill: { image: 'picture.png', repeat: [2, 3] },
+      },
+    ]);
+    const host = scene.added[0];
+    const primitive = host.get(0);
+    assert.ok(primitive instanceof Cesium.Primitive);
+    const { appearance, geometryInstances } = primitive;
+    assert.ok(appearance instanceof Cesium.MaterialAppearance);
+    assert.equal(appearance.material.type, 'Image');
+    assert.equal(appearance.material.uniforms.image, 'picture.png');
+    assert.deepEqual(
+      appearance.material.uniforms.repeat,
+      new Cesium.Cartesian2(2, 3),
+    );
+    assert.deepEqual(
+      [appearance.flat, appearance.faceForward, appearance.translucent],
+      [true, true, true],
+    );
+    assert.ok(geometryInstances.geometry instanceof Cesium.RectangleGeometry);
+    assert.equal(geometryInstances.id.id, 'image');
+    assert.equal(
+      drawHitOf({ primitive, id: geometryInstances.id }).set,
+      'images',
+    );
+    const material = appearance.material;
+    // As Cesium's collection does, a removed host is destroyed; a
+    // rebuild's old host goes with its material.
+    scene.primitives.remove = (primitive) => {
+      const at = scene.added.indexOf(primitive);
+      if (at >= 0) scene.added.splice(at, 1);
+      primitive.destroy();
+      return at >= 0;
+    };
+    set.upsert([
+      {
+        id: 'image',
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 2, south: 1, east: 2.2, north: 1.1 },
+        },
+        fill: { image: 'picture.png' },
+      },
+    ]);
+    assert.equal(material.isDestroyed(), true);
+    const next = scene.added[0].get(0).appearance.material;
+    assert.equal(next.isDestroyed(), false);
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+    assert.equal(next.isDestroyed(), true);
+    assert.throws(
+      () =>
+        draw.shapes({ id: 'patterns' }).set([
+          {
+            id: 'p',
+            geometry: {
+              kind: 'rectangle',
+              rect: { west: 0, south: 0, east: 1, north: 1 },
+            },
+            fill: {
+              preset: 'radialRim',
+              color: '#fff',
+              rimColor: '#000',
+              rimWidth: 1,
+            },
+          },
+        ]),
+      /colours only/,
+    );
+  }));
+
+test('scene data packs draw their geometry and media marker through the Cesium draw port on a viewer of its own', async (t) => {
+  const names = [
+    'HTMLCanvasElement',
+    'HTMLImageElement',
+    'ImageBitmap',
+    'OffscreenCanvas',
+  ];
+  const real = names.map((name) => globalThis[name]);
+  for (const name of names) globalThis[name] ??= class {};
+  t.after(() => names.forEach((name, i) => (globalThis[name] = real[i])));
+  const { createPackPresentations } =
+    await import('../../scenes/dataPacks/presentation.js');
+  const scene = fakeScene();
+  const viewer = { scene, container: {} };
+  const targets = new Map();
+  const presentations = createPackPresentations(viewer, targets, {
+    store: { publish() {} },
+    overlayHost: { setEntries() {}, clearSource() {} },
+  });
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: 'point',
+          geometry: { type: 'Point', coordinates: [2, 1, 10] },
+        },
+        {
+          type: 'Feature',
+          id: 'line',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [2, 1, 5],
+              [2.1, 1.1, 5],
+            ],
+          },
+        },
+        {
+          type: 'Feature',
+          id: 'area',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [2, 1, 50],
+                [2.1, 1, 50],
+                [2.1, 1.1, 50],
+                [2, 1, 50],
+              ],
+            ],
+          },
+        },
+      ],
+    }),
+  );
+  const pack = { id: 'data', attribution: { text: 'Example', license: 'CC0' } };
+  const geometry = await presentations.geojson({
+    pack,
+    asset: { bytes, mimeType: 'application/geo+json' },
+    signal: new AbortController().signal,
+  });
+  const [points, lines, shapes] = scene.added;
+  assert.ok(points instanceof Cesium.PointPrimitiveCollection);
+  assert.equal(points.get(0).pixelSize, 12);
+  assert.equal(points.get(0).outlineWidth, 2);
+  assert.ok(Cesium.Color.CYAN.equals(points.get(0).color));
+  assert.ok(lines instanceof Cesium.PolylineCollection);
+  assert.equal(lines.get(0).width, 4);
+  const fill = shapes.get(0);
+  assert.ok(fill.geometryInstances.geometry instanceof Cesium.PolygonGeometry);
+  assert.equal(fill.appearance.translucent, true);
+  assert.equal(fill.appearance.flat, true);
+  // A click names the feature's set and item, which the targets hold.
+  const hit = drawHitOf({ primitive: lines.get(0), id: lines.get(0).id });
+  assert.deepEqual(targets.get(JSON.stringify(['data', 'line'])), {
+    set: hit.set,
+    id: hit.id,
+  });
+  const media = await presentations.media({
+    pack: { ...pack, id: 'sound', placement: { anchorId: 'here' } },
+    anchors: [{ id: 'here', lon: 2, lat: 1, alt: 5 }],
+    asset: { bytes: new Uint8Array(4), mimeType: 'audio/mpeg' },
+    signal: new AbortController().signal,
+  });
+  const marker = scene.added[3].get(0);
+  assert.equal(marker.pixelSize, 16);
+  assert.ok(Cesium.Color.fromCssColorString('#ffff00').equals(marker.color));
+  geometry.dispose();
+  media.dispose();
+  assert.equal(scene.added.length, 0);
+  assert.equal(targets.size, 0);
+});

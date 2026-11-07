@@ -1,77 +1,72 @@
-import * as Cesium from 'cesium';
 import { decodePackGeoJSON } from '../../director/packs/geojson.js';
-const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
+import { fromDegrees } from '../../geo/ellipsoid.js';
 
-/** Render a bounded geometry pack in owned batches; no asynchronous entity geometry or update loop. */
+const CYAN = [0, 1, 1, 1];
+const BLACK = [0, 0, 0, 1];
+const lonLatHeight = ([lon, lat, height]) => ({ lon, lat, height });
+
+/**
+ * A feature's item id. Code that reads a pick's bare item id (the pick
+ * registry, vessel and flight lookups) must never take a pack feature for a
+ * live contact, so the id is namespaced, never the feature's own.
+ */
+export const packItemId = (packId, featureId) =>
+  `data-pack:${JSON.stringify([packId, featureId])}`;
+
+/**
+ * Render a bounded geometry pack as one draw set per kind (points, lines,
+ * polygons); no asynchronous geometry or update loop. Each feature's pick
+ * target is its set and item id.
+ */
 export function renderPackGeometry({ asset, pack }, handle) {
   if (!['application/json', 'application/geo+json'].includes(asset.mimeType))
     throw new Error('Expected GeoJSON');
   const features = decodePackGeoJSON(asset.bytes);
-  const polygons = [];
-  let lines;
+  const items = { points: [], lines: [], shapes: [] };
+  const kinds = new Map();
   for (const feature of features) {
-    const id = { packId: pack.id, featureId: feature.id };
+    const id = packItemId(pack.id, feature.id);
     if (feature.type === 'Point') {
-      const entity = handle.add({
-        name: `${pack.id} / ${feature.id}`,
-        position: xyz(feature.coordinates),
-        point: {
-          pixelSize: 12,
-          color: Cesium.Color.CYAN,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 2,
-        },
-      });
-      handle.feature?.(id, entity);
-    } else if (feature.type === 'LineString') {
-      handle.feature?.(id, id);
-      if (!lines) {
-        lines = new Cesium.PolylineCollection();
-        handle.primitive(lines);
-      }
-      lines.add({
+      kinds.set(feature.id, 'points');
+      items.points.push({
         id,
-        positions: feature.coordinates.map(xyz),
-        width: 4,
-        material: Cesium.Material.fromType('Color', {
-          color: Cesium.Color.CYAN,
-        }),
+        pos: lonLatHeight(feature.coordinates),
+        pixelSize: 12,
+        color: CYAN,
+        outlineColor: BLACK,
+        outlineWidth: 2,
+      });
+    } else if (feature.type === 'LineString') {
+      kinds.set(feature.id, 'lines');
+      items.lines.push({
+        id,
+        positions: feature.coordinates.map((p) => fromDegrees(...p)),
+        widthPx: 4,
+        mode: '3d',
+        style: { kind: 'solid', color: CYAN },
       });
     } else {
-      handle.feature?.(id, id);
-      polygons.push(
-        new Cesium.GeometryInstance({
-          id,
-          geometry: new Cesium.PolygonGeometry({
-            polygonHierarchy: new Cesium.PolygonHierarchy(
-              feature.coordinates[0].map(xyz),
-              feature.coordinates
-                .slice(1)
-                .map((ring) => new Cesium.PolygonHierarchy(ring.map(xyz))),
-            ),
-            perPositionHeight: true,
-            vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
-            arcType: Cesium.ArcType.GEODESIC,
-          }),
-          attributes: {
-            color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-              Cesium.Color.CYAN.withAlpha(0.35),
-            ),
-          },
-        }),
-      );
+      kinds.set(feature.id, 'shapes');
+      items.shapes.push({
+        id,
+        geometry: {
+          kind: 'polygon',
+          rings: feature.coordinates.map((ring) => ring.map(lonLatHeight)),
+          perPositionHeight: true,
+        },
+        fill: [0, 1, 1, 0.35],
+      });
     }
   }
-  if (polygons.length)
-    handle.primitive(
-      new Cesium.Primitive({
-        asynchronous: false,
-        geometryInstances: polygons,
-        appearance: new Cesium.PerInstanceColorAppearance({
-          translucent: true,
-          flat: true,
-          closed: false,
-        }),
-      }),
+  const sets = {};
+  for (const kind of ['points', 'lines', 'shapes'])
+    if (items[kind].length) sets[kind] = handle.draw(kind, items[kind]);
+  for (const feature of features)
+    handle.feature?.(
+      { packId: pack.id, featureId: feature.id },
+      {
+        set: sets[kinds.get(feature.id)],
+        id: packItemId(pack.id, feature.id),
+      },
     );
 }

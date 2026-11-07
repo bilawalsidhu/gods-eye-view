@@ -119,13 +119,15 @@ export function createSceneInteractions(
       session.activate(items);
       unsubscribeClick = inputFor(viewer).onClick((event) => {
         if (panel?.owner !== owner || !shown() || !available()) return;
-        const picked = event.pick?.id;
-        const matches = items.filter(
-          (item) =>
-            targets.get(
-              JSON.stringify([item.target.packId, item.target.featureId]),
-            ) === picked,
-        );
+        // A pack feature is its draw set's item (see dataPacks/presentation.js).
+        const hit = event.drawHit;
+        if (!hit) return;
+        const matches = items.filter((item) => {
+          const target = targets.get(
+            JSON.stringify([item.target.packId, item.target.featureId]),
+          );
+          return target?.set === hit.set && target.id === hit.id;
+        });
         if (!matches.length) return;
         update({
           outlined: matches.map((item) => item.id),

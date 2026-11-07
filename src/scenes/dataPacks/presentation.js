@@ -1,9 +1,8 @@
-import * as Cesium from 'cesium';
-import { renderPackGeometry } from './geometry.js';
+import { packItemId, renderPackGeometry } from './geometry.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf, findFrame } from '../../render/rendererOf.js';
 import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
 import { applicationPinia } from '../../ui/vueRuntime.js';
-
-const xyz = (p) => Cesium.Cartesian3.fromDegrees(...p);
 
 const MEDIA_MARKER_CSS = '#ffff00';
 
@@ -11,6 +10,9 @@ const MEDIA_MARKER_CSS = '#ffff00';
 // one's DOM.
 let panelKeys = 0,
   cardKeys = 0;
+
+// Draw sets, one per pack resource and kind, unique among the renderer's.
+let drawSets = 0;
 
 // Label overlay sources, one per pack resource while it shows text, so two
 // presentations of one pack never share or clear each other's labels. The host
@@ -21,8 +23,10 @@ const freeLabelSources = [];
 
 /**
  * Create rendering adapters; data acquisition and authored placement stay
- * independent. Each pack's attribution card is presented to the data packs
- * store, which its view renders inside the viewer's container.
+ * independent. Packs draw through the viewer's draw port (`drawOf`); a
+ * feature's pick target is its draw set and item id. Each pack's attribution
+ * card is presented to the data packs store, which its view renders inside
+ * the viewer's container.
  */
 export function createPackPresentations(
   viewer,
@@ -30,6 +34,7 @@ export function createPackPresentations(
   { store = useDataPacksStore(applicationPinia()), overlayHost = null } = {},
 ) {
   const owner = {};
+  const requestRender = () => findFrame(viewer)?.requestRender('data-pack');
   let key,
     cards = [];
   function present() {
@@ -62,9 +67,7 @@ export function createPackPresentations(
     present();
   }
   function resource(pack) {
-    const entities = [],
-      primitives = [],
-      materials = [],
+    const sets = [],
       urls = [],
       labels = [];
     const featureKeys = [];
@@ -77,11 +80,17 @@ export function createPackPresentations(
         targets.set(key, pickedId);
         featureKeys.push(key);
       },
-      add(spec) {
-        const entity = viewer.entities.add(spec);
-        entities.push(entity);
-        viewer.scene.requestRender();
-        return entity;
+      /**
+       * Draw `items` as a new set of `kind` (`points`, `lines`, `shapes`)
+       * owned by this resource.
+       * @returns {string} The set's id.
+       */
+      draw(kind, items) {
+        const set = drawOf(viewer)[kind]({ id: `data-pack:${++drawSets}` });
+        sets.push(set);
+        set.set(items);
+        requestRender();
+        return set.id;
       },
       /**
        * World text for this pack, as a label-overlay entry in the pack's own
@@ -96,13 +105,7 @@ export function createPackPresentations(
           freeLabelSources.pop() ?? `data-pack-labels:${++labelSources}`;
         labels.push(entry);
         overlayHost.setEntries(labelSource, labels.slice());
-        viewer.scene.requestRender();
-      },
-      primitive(value) {
-        primitives.push(viewer.scene.primitives.add(value));
-        if (value.appearance?.material)
-          materials.push(value.appearance.material);
-        viewer.scene.requestRender();
+        requestRender();
       },
       card() {
         card ||= addCard(pack);
@@ -123,20 +126,15 @@ export function createPackPresentations(
         for (const key of featureKeys.splice(0)) targets.delete(key);
         // The view stops a removed card's player as it goes.
         if (card) removeCard(card);
-        for (const entity of entities.splice(0)) viewer.entities.remove(entity);
+        for (const set of sets.splice(0)) set.dispose();
         if (labelSource) {
           labels.length = 0;
           overlayHost.clearSource(labelSource);
           freeLabelSources.push(labelSource);
           labelSource = null;
         }
-        for (const primitive of primitives.splice(0))
-          viewer.scene.primitives.remove(primitive);
-        for (const material of materials.splice(0)) {
-          if (!material.isDestroyed()) material.destroy();
-        }
         for (const url of urls.splice(0)) URL.revokeObjectURL(url);
-        viewer.scene.requestRender();
+        requestRender();
       },
     };
   }
@@ -194,27 +192,24 @@ export function createPackPresentations(
       signal.throwIfAborted();
       if (image.naturalWidth * image.naturalHeight > 16 * 1024 * 1024)
         throw new Error('Image dimensions exceed limit');
-      handle.primitive(
-        new Cesium.Primitive({
-          asynchronous: false,
-          geometryInstances: new Cesium.GeometryInstance({
-            id: { packId: pack.id },
-            geometry: new Cesium.RectangleGeometry({
-              rectangle: Cesium.Rectangle.fromDegrees(...pack.placement.bounds),
-              height: pack.placement.height,
-              vertexFormat:
-                Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
-            }),
-          }),
-          appearance: new Cesium.MaterialAppearance({
-            material: Cesium.Material.fromType('Image', { image }),
-            materialSupport: Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
-            flat: true,
-            faceForward: true,
-            translucent: true,
-          }),
-        }),
-      );
+      // The draw port takes images as URLs, SVG or canvases; a canvas
+      // keeps the decoded pixels, so nothing loads again.
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      const [west, south, east, north] = pack.placement.bounds;
+      handle.draw('shapes', [
+        {
+          id: packItemId(pack.id, 'image'),
+          geometry: {
+            kind: 'rectangle',
+            rect: { west, south, east, north },
+            height: pack.placement.height,
+          },
+          fill: { image: { canvas, key: image.src } },
+        },
+      ]);
     }),
     media: guarded(({ asset, pack, anchors }, handle) => {
       if (
@@ -232,15 +227,15 @@ export function createPackPresentations(
         (item) => item.id === pack.placement.anchorId,
       );
       if (!anchor) throw new Error('Missing media anchor');
-      const position = xyz([anchor.lon, anchor.lat, anchor.alt]);
-      handle.add({
-        name: pack.id,
-        position,
-        point: {
+      const position = fromDegrees(anchor.lon, anchor.lat, anchor.alt);
+      handle.draw('points', [
+        {
+          id: packItemId(pack.id, 'media'),
+          pos: position,
           pixelSize: 16,
-          color: Cesium.Color.fromCssColorString(MEDIA_MARKER_CSS),
+          color: MEDIA_MARKER_CSS,
         },
-      });
+      ]);
       handle.label({
         id: 'media',
         position,

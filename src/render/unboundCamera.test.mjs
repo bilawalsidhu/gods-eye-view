@@ -84,6 +84,9 @@ const DRAW_FROM_CALLER = new Set([
   './layers/street-level/kartaview',
   './layers/street-level/panoramax',
   './layers/air-quality',
+  // Its data packs draw through `drawOf`; its flights ask `cameraOf`, which
+  // throws until then too.
+  './scenes',
   // Asks `findQuery` instead, and answers null rather than throw until the
   // caller has loaded the factory.
   './queries/heights',
@@ -96,10 +99,6 @@ const DRAW_FROM_CALLER = new Set([
  * `./render/cesium/unbound`.
  */
 const CAMERA_FROM_CALLER = new Set([
-  // Not Cesium-free yet: its data packs still draw through Cesium in their
-  // own listed modules. Its flights ask `cameraOf`, which throws until the
-  // caller has loaded the export.
-  './scenes',
   './ui/navigation',
   './voice/commands',
   './voice/controller',

@@ -79,8 +79,6 @@
   "src/maps/imagery.js",
   "src/maps/terrain.js",
   "src/sceneCommandRelease.js",
-  "src/scenes/dataPacks/geometry.js",
-  "src/scenes/dataPacks/presentation.js",
   "src/services/groundSnap.js",
   "src/services/meshFloorSampler.js",
   "src/sky/starrySky.js",
