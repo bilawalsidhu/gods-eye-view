@@ -81,7 +81,7 @@ await strict.run({}, async (b) => {
   });
   await p.waitForFunction(
     () =>
-      window.qaWind.getDiagnostics().surface?.ready &&
+      window.qaWind.getDiagnostics().imageryActive &&
       window.qaWind.getDiagnostics().gpu?.ready,
   );
   await p.evaluate(() => window.qaWind.setParams({ inspect: true }));

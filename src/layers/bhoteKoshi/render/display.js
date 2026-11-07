@@ -44,11 +44,11 @@ export function createBhoteKoshiDisplay(engine) {
       };
     },
     /**
-     * The before and after images over `box` (degrees); resolves once both
-     * draw, rejects when one would not load (unless replaced or cleared
-     * first).
+     * The before and after images over `box` (degrees), each a URL or an
+     * image already decoded; resolves once both draw, rejects when one
+     * would not load (unless replaced or cleared first).
      */
-    async loadImages(box, urls, credit = null) {
+    async loadImages(box, images, credit = null) {
       if (destroyed) return;
       clear();
       const load = loads;
@@ -60,7 +60,7 @@ export function createBhoteKoshiDisplay(engine) {
       };
       // Each layer stages its image over an empty one, which tells whether
       // the image loaded.
-      layers = urls.map((_url, index) =>
+      layers = images.map((_image, index) =>
         engine.imagery.createLayer({
           id: `${id}-${SIDES[index]}`,
           order: IMAGERY_ORDER,
@@ -75,7 +75,9 @@ export function createBhoteKoshiDisplay(engine) {
           layer.setSource(
             {
               kind: 'image',
-              url: urls[index],
+              ...(typeof images[index] === 'string'
+                ? { url: images[index] }
+                : { image: images[index] }),
               rectangle,
               ...(credit ? { credit } : {}),
             },

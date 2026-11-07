@@ -1010,6 +1010,7 @@ export function createBhoteKoshiEventLayer({
   imageryProviderFactory = DEFAULT_IMAGERY_PROVIDER_FACTORY,
   terrainSampler = DEFAULT_TERRAIN_SAMPLER,
   mediaLoader = DEFAULT_MEDIA_LOADER,
+  imageLoader = DEFAULT_MEDIA_LOADER,
   evidenceFrameFactory = createEvidenceFrame,
   evidenceFrameUpdater = updateEvidenceFrame,
   videoFactory = DEFAULT_VIDEO_FACTORY,
@@ -1022,6 +1023,9 @@ export function createBhoteKoshiEventLayer({
   let _native = null;
   let _nativeFlood = null;
   let _providers = null;
+  // The before and after images, decoded once for every engine the event
+  // is drawn on (as Cesium's providers were kept across switches).
+  let _imageryImages = null;
   const cameraForScene = () => _engine?.camera ?? _viewer?.camera;
   const canvasForScene = () => _engine?.host.canvas ?? _viewer?.scene?.canvas;
   let _dataManager = null;
@@ -1183,12 +1187,21 @@ export function createBhoteKoshiEventLayer({
   async function createImagery(event, current = () => true) {
     if (_native) {
       // The engine's display draws the images through engine.imagery.
+      _imageryImages ??= Promise.all(
+        [event.imagery.before.path, event.imagery.after.path].map((path) =>
+          imageLoader(eventAsset(path)),
+        ),
+      );
+      let images;
+      try {
+        images = await _imageryImages;
+      } catch {
+        _imageryImages = null;
+        throw new Error('Bhote Koshi imagery unavailable');
+      }
       await _native.loadImages(
         event.imagery.rectangle,
-        [
-          eventAsset(event.imagery.before.path),
-          eventAsset(event.imagery.after.path),
-        ],
+        images,
         'Vantor WorldView Open Data · CC BY-NC 4.0',
       );
       if (_enabled && current()) setSplit(_split);
@@ -3793,6 +3806,7 @@ export function createBhoteKoshiEventLayer({
     _nativeFlood = null;
     _native?.clear();
     _providers = null;
+    _imageryImages = null;
     if (_floodDataSource && _viewer)
       _viewer.dataSources.remove(_floodDataSource, true);
     _floodDataSource = null;
