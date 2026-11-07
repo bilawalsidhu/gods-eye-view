@@ -33,6 +33,8 @@ export const CESIUM_CHECKS = new Set([
   'camera.trace.view and projection matrices',
   'credits',
   'credits.listenerRules',
+  'draw.atlas',
+  'draw.clampState',
   'draw.drillPick',
   'draw.ids',
   'draw.models',

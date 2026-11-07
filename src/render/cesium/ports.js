@@ -223,6 +223,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     scene.preRender.addEventListener(onPhase('preRender')),
     scene.postRender.addEventListener(drew),
     scene.postRender.addEventListener(onPhase('postRender')),
+    scene.postRender.addEventListener(() => watchClamp()),
   ];
 
   /**
@@ -363,6 +364,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       build(record);
       setsVersion += 1;
     };
+    record.rebuild = rebuild;
     const handle = {
       id: spec.id,
       set(list) {
@@ -437,13 +439,34 @@ export function createCesiumPorts(widget, { capabilities }) {
     scene.primitives.add(host);
   }
 
+  // Atlases icons name images from, by id: `{atlas, slot}` reads the slot
+  // when its set is built, and registering an atlas again rebuilds the icon
+  // sets that drew from it.
+  const atlases = new Map();
+
+  /**
+   * An icon's image: an atlas slot read through its atlas, or undefined
+   * while its atlas or slot is not registered (it draws once it is).
+   */
+  function iconImage(record, image) {
+    if (typeof image?.atlas !== 'string') return image;
+    record.atlases.add(image.atlas);
+    return atlases.get(image.atlas)?.[image.slot];
+  }
+
   function buildIcons(record) {
     const host = new Cesium.BillboardCollection({ scene });
+    record.atlases = new Set();
     for (const item of record.items.values()) {
+      const image = iconImage(record, item.image);
+      if (image === undefined) continue;
+      // A generated image is one texture under its key, however many icons
+      // draw it.
+      const keyed = image?.canvas && typeof image.key === 'string';
       const position = toCartesian(item.pos);
       const options = {
         position,
-        image: toImage(item.image),
+        ...(keyed ? {} : { image: toImage(image) }),
         width: item.size[0] * (item.scale ?? 1),
         height: item.size[1] * (item.scale ?? 1),
         color: toColor(item.color, item.alpha ?? 1),
@@ -462,7 +485,8 @@ export function createCesiumPorts(widget, { capabilities }) {
         );
         options.rotation = -Cesium.Math.toRadians(item.course ?? 0);
       }
-      host.add(options);
+      const billboard = host.add(options);
+      if (keyed) billboard.setImage(image.key, image.canvas);
     }
     replaceHost(record, host);
   }
@@ -728,12 +752,59 @@ export function createCesiumPorts(widget, { capabilities }) {
     }
   }
 
+  /** The 3D tilesets in the scene, shown or not. */
+  function tilesets() {
+    const found = [];
+    const primitives = scene.primitives;
+    const n = primitives?.length ?? 0;
+    for (let i = 0; i < n; i++) {
+      const primitive = primitives.get(i);
+      if (primitive instanceof Cesium.Cesium3DTileset) found.push(primitive);
+    }
+    return found;
+  }
+
+  /**
+   * The Cesium port draws clamped items where it is given them; it does not
+   * drape them onto 3D tiles yet, so over shown tiles it is `overlay`.
+   * Terrain and the ellipsoid always take draped items.
+   */
+  const clampState = () =>
+    tilesets().some((tileset) => tileset.show) ? 'overlay' : 'draped';
+  const clampListeners = listenerList(report);
+  // The state last told, while anyone listens; measured after each drawn
+  // frame, when what the base holds can have changed.
+  let toldClamp = null;
+  function watchClamp() {
+    if (clampListeners.size === 0) return;
+    const state = clampState();
+    if (state === toldClamp) return;
+    toldClamp = state;
+    clampListeners.fire(state);
+  }
+
   const draw = {
     icons: (spec) => makeSet('icons', { ...spec }, buildIcons),
     points: (spec) => makeSet('points', { ...spec }, buildPoints),
     lines: (spec) => makeSet('lines', { ...spec }, buildLines),
     shapes: (spec) => makeSet('shapes', { ...spec }, buildShapes),
     models: (spec) => makeSet('models', { ...spec }, buildModels),
+    clampState,
+    on(event, cb) {
+      if (event !== 'clampState') return () => {};
+      if (clampListeners.size === 0) toldClamp = clampState();
+      return clampListeners.on(cb);
+    },
+    atlas(id, images) {
+      atlases.set(id, { ...images });
+      let rebuilt = false;
+      for (const record of [...sets.values()])
+        if (record.kind === 'icons' && record.atlases?.has(id)) {
+          record.rebuild();
+          rebuilt = true;
+        }
+      if (rebuilt) scene.requestRender();
+    },
   };
 
   const cameraPart = createCesiumCamera({ scene, camera, report, widget });
@@ -1116,6 +1187,7 @@ export function createCesiumPorts(widget, { capabilities }) {
       // A listener that disposes the renderer stops the rest of its event.
       for (const list of Object.values(rendererListeners)) list.clear();
       for (const list of Object.values(frameListeners)) list.clear();
+      clampListeners.clear();
       cameraPart.dispose();
       creditsPart.dispose();
       effectsPart.dispose();

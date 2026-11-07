@@ -1126,6 +1126,52 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.atlas',
+      'icons draw slots of an atlas registered after them, and are picked',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({ id: 'conf:atlas' });
+        const at = (lon) => h.toEcef({ lon, lat: AUSTIN.lat, height: 0 });
+        // A generated slot too, where there is a page to make it in.
+        const canvas = globalThis.document?.createElement('canvas');
+        const slots = { svg: ['dot', DOT, AUSTIN.lon - 0.002] };
+        if (canvas) {
+          canvas.width = canvas.height = 16;
+          const g = canvas.getContext('2d');
+          g.fillStyle = '#fff';
+          g.fillRect(0, 0, 16, 16);
+          slots.canvas = [
+            'square',
+            { canvas, key: 'conf:square' },
+            AUSTIN.lon + 0.002,
+          ];
+        }
+        set.set(
+          Object.entries(slots).map(([id, [slot, , lon]]) => ({
+            id,
+            pos: at(lon),
+            image: { atlas: 'conf:atlas', slot },
+            size: [24, 24],
+          })),
+        );
+        await drawn(h, r);
+        r.draw.atlas(
+          'conf:atlas',
+          Object.fromEntries(
+            Object.values(slots).map(([slot, image]) => [slot, image]),
+          ),
+        );
+        await drawn(h, r);
+        await settled(r);
+        for (const [id, [, , lon]] of Object.entries(slots)) {
+          const s = r.query.project(at(lon));
+          ok(s, `${id} projects`);
+          equal(r.query.pick(s.x, s.y)?.id, id, `${id} slot drawn and picked`);
+        }
+        set.dispose();
+      },
+    ),
+    check(
       'draw.columns',
       'column updates are rows: sized, picked, removed',
       async (h, r) => {
