@@ -1,4 +1,5 @@
-import { createNamedMarkers } from '../layers/installations/render/cesium/namedMarkers.js';
+import { createNamedMarkers } from '../layers/installations/render/namedMarkers.js';
+import { rgbaFromCss } from '../layers/shared/color.js';
 import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
@@ -2423,27 +2424,24 @@ test('diagnostics facade preserves the complete binding shape', () => {
 });
 
 
-test('installation titles share persistent card arbitration and retain a bounded Contacts cohort', (t) => {
-  const env = installMockEnvironment({ width: 1600, height: 1000 });
+test('installation titles share persistent card arbitration and retain a bounded Contacts cohort', async (t) => {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const env = installMockEnvironment({ width: 1600, height: 1000, dpr: 1 });
+  const engine = createFakeEngine({ width: 1600, height: 1000, container: env.viewer.container });
   t.after(() => env.cleanup());
-  const scene = env.viewer.scene;
-  scene.canvas = env.viewer.canvas;
-  scene.preRender = new Cesium.Event();
-  scene.primitives = { add: (value) => value, remove() {} };
-  env.viewer.camera.changed = new Cesium.Event();
-  t.mock.method(Cesium.Cartesian3, 'fromDegrees', (lon, lat) => new Cesium.Cartesian3(lon, lat, 0));
-  t.mock.method(Cesium.EllipsoidalOccluder.prototype, 'isPointVisible', () => true);
-  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => {
-    scratch.x = scratch.y = 100; return scratch;
-  });
-  const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
-  const markers = createNamedMarkers({ state,
+  // Looking straight down on the sites, about two degrees across.
+  let longitude = 0;
+  let height = 200_000;
+  const look = () => engine.fake.setPose({ longitude: Cesium.Math.toRadians(longitude), latitude: 0, height, heading: 0, pitch: -Math.PI / 2, roll: 0 });
+  look();
+  const state = { enabled: true, contextAnchor: {} };
+  const markers = createNamedMarkers(engine, { state,
     services: { render: { governorRequestRender() {} } },
-    parts: { model: { colorFor: () => Cesium.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0 } },
+    parts: { model: { colorFor: () => rgbaFromCss('#ff8000'), installationSurfaceHeightM: () => 0 } },
     overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
       setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
   });
-  initWorldOverlay(env.engine);
+  initWorldOverlay(engine);
   markers.enable();
   const records = Array.from({ length: 40 }, (_, i) => ({ id: `site:${i}`, name: `Base ${i}`,
     namedArea: true, pointOnly: i % 2 === 0, areaM2: 1000 - i,
@@ -2454,27 +2452,27 @@ test('installation titles share persistent card arbitration and retain a bounded
   records[1].longitude = records[0].longitude + 0.03;
   records[1].latitude = records[0].latitude;
   markers.sync(records);
-  env.postRender.raise();
+  engine.fake.frame();
   const source = 'military-installations';
-  env.advanceTime(250); env.postRender.raise();
+  env.advanceTime(250); engine.fake.frame();
   assert.equal(markers.stats().labelsOnScreen, 24);
   assert.ok(getOverlayPaintRect(source, 'site:0'));
   assert.equal(getOverlayPaintRect(source, 'small'), null);
   for (let i = 0; i < 30; i++) {
-    env.viewer.camera.viewMatrix[12] -= 0.003;
-    if (i > 15) env.viewer.camera.viewMatrix[0] = env.viewer.camera.viewMatrix[5] = 0.03;
-    scene.preRender.raiseEvent(); env.advanceTime(16); env.postRender.raise();
+    longitude -= 0.003;
+    if (i > 15) height = 4_000_000;
+    look(); env.advanceTime(16); engine.fake.frame();
     assert.ok(markers.stats().labelsOnScreen > 0 && markers.stats().labelsOnScreen <= 24);
     // Incumbents persist through collisions during a pan, as for Data Centers.
     if (i < 10) assert.ok(getOverlayPaintRect(source, 'site:0'));
   }
-  state.enabled = false; markers.hide(); env.postRender.raise();
+  state.enabled = false; markers.hide(); engine.fake.frame();
   assert.equal(getWorldOverlayDiagnostics().entriesBySource[source], 0);
   assert.equal(markers.stats().labelsOnScreen, 0);
-  state.enabled = true; markers.enable(); env.postRender.raise();
-  env.advanceTime(250); env.postRender.raise();
+  state.enabled = true; markers.enable(); engine.fake.frame();
+  env.advanceTime(250); engine.fake.frame();
   assert.ok(markers.stats().labelsOnScreen > 0);
-  markers.destroy(); env.postRender.raise();
+  markers.destroy(); engine.fake.frame();
   assert.equal(getWorldOverlayDiagnostics().entriesBySource[source], 0);
 });
 

@@ -1,4 +1,3 @@
-import { createAwarenessCesiumRenderer } from './render/cesium.js';
 import { cameraPoseSignature } from '../../data/iconOrientation.js';
 import { AWARENESS_RANGE_PULSE } from './policy.js';
 
@@ -281,12 +280,11 @@ export function createLifecycle({
       if (viewer || engine) this.attachRenderer(viewer, { engine });
     },
 
-    attachRenderer(viewer, { engine = null } = {}) {
+    attachRenderer(_scene, { engine = null } = {}) {
       detachRuntimeListeners();
       layerState.display?.destroy?.();
-      layerState.display = viewer
-        ? createAwarenessCesiumRenderer(viewer)
-        : (services.renderer?.(engine) ?? null);
+      // The engine's display from the registry (render/display.js).
+      layerState.display = services.renderer?.(engine) ?? null;
       if (layerState.enabled) {
         attachRuntimeListeners();
         if (layerState.subject)

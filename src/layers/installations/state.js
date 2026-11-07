@@ -10,7 +10,6 @@ export function createState({ services }) {
   Object.assign(state, {
     viewer: null,
     engine: null,
-    dataSource: null,
     enabled: false,
     records: [],
     recordById: new Map(),
@@ -30,7 +29,6 @@ export function createState({ services }) {
     retryAt: 0,
     failureReason: null,
     moveEndRemove: null,
-    clickHandler: null,
     timer: null,
     googleSearchRequested: false,
     /** Contacts subject position; when set, it replaces the camera viewport. */
@@ -39,8 +37,6 @@ export function createState({ services }) {
     contextPosition: null,
     /** Coverage of the last successful load: viewport, or radius around a subject. */
     coverage: { kind: 'viewport' },
-    /** Per-record geometry keys of the rendered entities, for in-place updates. */
-    renderedKeys: new Map(),
   });
   return state;
 }

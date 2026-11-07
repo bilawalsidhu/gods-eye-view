@@ -47,6 +47,32 @@ import {
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
+import { registerLayerRenderers } from '../app/layers/renderers.js';
+
+// The layer's view of a stub viewer (render/display.js's interface), drawn
+// by nothing: these tests drive the layer's logic, not the ring. It reaches
+// the layer through the renderer registry, under an engine kind of its own.
+const VIEWER_ENGINE = 'awareness-viewer-test';
+registerLayerRenderers(VIEWER_ENGINE, {
+  'military-awareness': ({ viewer }) => ({
+    container: viewer.container,
+    canvas: viewer.canvas,
+    get camera() {
+      return viewer.camera;
+    },
+    get trackedEntity() {
+      return viewer.trackedEntity;
+    },
+    cameraHeight: () => viewer.camera?.positionCartographic?.height ?? NaN,
+    onFrame: (run) => viewer.scene.preRender.addEventListener(run),
+    onFrameEnd: () => () => {},
+    frameContact: (center, radius, duration) =>
+      viewer.camera.flyToBoundingSphere({ center, radius }, { duration }),
+    createRim: () => ({ move() {}, setAlpha() {}, destroy() {} }),
+    createPulses: () => null,
+  }),
+});
+const viewerEngine = (viewer) => ({ kind: VIEWER_ENGINE, viewer });
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -220,7 +246,7 @@ function installAwarenessRuntime({
     ...(subscribe ? { subscribe } : {}),
   });
   militaryAwarenessLayer.setParams({ passive: true });
-  militaryAwarenessLayer.init(viewer);
+  militaryAwarenessLayer.init(viewer, { engine: viewerEngine(viewer) });
   const panelViews = [];
   const unsubscribePanel = militaryAwarenessLayer.subscribePanel((view) =>
     panelViews.push(view),
@@ -3747,7 +3773,7 @@ test('runtime listeners exist only while the awareness layer is enabled', () => 
 
   try {
     militaryAwarenessLayer.setParams({ passive: true });
-    militaryAwarenessLayer.init(viewer);
+    militaryAwarenessLayer.init(viewer, { engine: viewerEngine(viewer) });
     assert.equal(
       [...listeners.values()].reduce((count, set) => count + set.size, 0),
       0,

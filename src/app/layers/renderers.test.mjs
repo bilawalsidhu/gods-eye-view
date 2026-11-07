@@ -74,6 +74,8 @@ test('the layers with extracted renderers', () => {
     's2-ghostmaps',
     'weather-cyclones',
     'telegeography-submarine-cables',
+    'local-datacenters',
+    'local-dams',
     'rocket-launches',
     'satellites',
     'flights',
@@ -81,6 +83,8 @@ test('the layers with extracted renderers', () => {
     'local-adsb',
     'ais-live-vessels',
     'cctv',
+    'military-installations',
+    'military-awareness',
   ]);
 });
 
@@ -104,6 +108,9 @@ test('the layers drawn through one display get the same factory on every engine'
     'drone-airspace': ['droneAirspace', 'createDroneAirspaceDisplay'],
     's2-ghostmaps': ['ghostMaps', 'createGhostMapsDisplay'],
     'weather-cyclones': ['cyclones', 'createCyclonesDisplay'],
+    'local-datacenters': ['infrastructure', 'createInfrastructureDisplay'],
+    'local-dams': ['infrastructure', 'createInfrastructureDisplay'],
+    'military-installations': ['installations', 'createInstallationsDisplay'],
     'telegeography-submarine-cables': [
       'submarineCables',
       'createCablesDisplay',

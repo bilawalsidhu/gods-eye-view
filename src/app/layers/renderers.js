@@ -46,6 +46,9 @@ import { createFirmsDisplay } from '../../layers/firms/render/display.js';
 import { createGhostMapsDisplay } from '../../layers/ghostMaps/render/display.js';
 import { createCyclonesDisplay } from '../../layers/cyclones/render/display.js';
 import { createCablesDisplay } from '../../layers/submarineCables/render/display.js';
+import { createInfrastructureDisplay } from '../../layers/infrastructure/render/display.js';
+import { createInstallationsDisplay } from '../../layers/installations/render/display.js';
+import { createAwarenessDisplay } from '../../layers/awareness/render/display.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -119,6 +122,8 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   's2-ghostmaps': createGhostMapsDisplay,
   'weather-cyclones': createCyclonesDisplay,
   'telegeography-submarine-cables': createCablesDisplay,
+  'local-datacenters': createInfrastructureDisplay,
+  'local-dams': createInfrastructureDisplay,
   'rocket-launches': createLaunchesDisplay,
   satellites: createSatellitesDisplay,
   flights: createFlightsDisplay,
@@ -126,6 +131,8 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   'local-adsb': createLocalAdsbDisplay,
   'ais-live-vessels': createVesselsDisplay,
   cctv: createCctvDisplay,
+  'military-installations': createInstallationsDisplay,
+  'military-awareness': createAwarenessDisplay,
 });
 
 // The other application layers still draw themselves on Cesium.

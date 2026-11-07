@@ -4,12 +4,11 @@ import {
   mapAnalystRecord,
   parseGeojsonLines,
 } from '../../sources/infrastructureData.js';
-import {
-  createLocalGeoJsonLayer,
-  localDatasetError,
-} from '../../data/localGeojsonCore.js';
+import { localDatasetError } from '../../data/localGeojsonCore.js';
+import { createInfrastructureDisplay } from './render/display.js';
 
-// Split multipart features exactly as the Cesium entity collection does, with stable IDs on both globes.
+// Split multipart features as Cesium's GeoJsonDataSource names its entities
+// (a repeated id gets `_2`, `_3`, ...), with stable ids on every globe.
 function dataset(raw) {
   const features = [],
     records = [],
@@ -61,11 +60,18 @@ function dataset(raw) {
   return { features, records };
 }
 
-/** The parsed local file and the selected feature outlive any one scene. */
+/**
+ * One datacenter or dam layer. The parsed local file and the selected
+ * feature outlive any one scene; `createDisplay(engine, config, services)`
+ * draws them on each attached engine (show(dataset), select(featureId),
+ * hide(), destroy(), lod()), by default the contract display
+ * (render/display.js).
+ */
 export function createInfrastructureSessionLayer(
   config,
   services,
-  nativeFactory,
+  createDisplay = (engine) =>
+    createInfrastructureDisplay(engine, { config, services }),
 ) {
   const { id, name, icon, source, url } = config;
   let data = null,
@@ -129,27 +135,12 @@ export function createInfrastructureSessionLayer(
     source,
     updateInterval: 0,
     statsRefreshInterval: 1000,
-    init(viewer, options = {}) {
-      if (viewer || options.engine) return this.attachRenderer(viewer, options);
+    init(_viewer, options = {}) {
+      if (options.engine) return this.attachRenderer(_viewer, options);
     },
-    attachRenderer(viewer, { engine = null, signal = null } = {}) {
+    attachRenderer(_viewer, { engine = null, signal = null } = {}) {
       if (display) throw Error('Infrastructure display already attached');
-      if (viewer) {
-        const legacy = createLocalGeoJsonLayer(
-          { ...config, readFeatures: async () => (await read()).features },
-          services,
-        );
-        display = {
-          show: async () => {
-            await legacy.enable(viewer);
-            error = legacy.getStats().error;
-          },
-          select: (key) => legacy.restoreFeatureSelection(viewer, key),
-          hide: () => legacy.disable(viewer),
-          destroy: () => legacy.destroy(viewer),
-          lod: legacy.getLodDiagnostics,
-        };
-      } else display = nativeFactory(engine, config, services);
+      display = engine ? createDisplay(engine, config, services) : null;
       // The dataset load belongs to the session and keeps running; only this
       // scene's wait for it ends when the scene is released. A released
       // display is destroyed and ignores what arrives later.
@@ -168,8 +159,7 @@ export function createInfrastructureSessionLayer(
       display.destroy();
       display = null;
     },
-    enable(viewer) {
-      if (!display && viewer) this.attachRenderer(viewer);
+    enable() {
       enabled = true;
       return show();
     },

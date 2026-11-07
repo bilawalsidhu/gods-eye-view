@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 1011,
-    "navaraLayerRendererLines": 4832,
-    "cesiumImportFiles": 53,
-    "viewerLines": 1745,
-    "navaraKindChecks": 9,
+    "cesiumLayerRendererLines": 351,
+    "navaraLayerRendererLines": 3349,
+    "cesiumImportFiles": 51,
+    "viewerLines": 1591,
+    "navaraKindChecks": 8,
     "engineSniffCalls": 14,
-    "engineExtensionReads": 19,
-    "groundEffectPasses": 5,
+    "engineExtensionReads": 18,
+    "groundEffectPasses": 4,
     "cesiumSdkLoads": 6,
-    "screenSpaceHandlerFiles": 8,
-    "engineNameLines": 108
+    "screenSpaceHandlerFiles": 6,
+    "engineNameLines": 101
   },
-  "measuredAt": "after the ground layers (earthquakes, air quality, GNSS, perimeters, drone airspace, FIRMS, GhostMaps, cyclones, cables), 2026-11-07"
+  "measuredAt": "after the installations, Global Context and infrastructure displays, 2026-11-07"
 }

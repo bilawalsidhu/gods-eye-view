@@ -3,16 +3,16 @@
  * @module localGeojsonLod
  *
  * Pure selection policy for the bundled local-infrastructure layers
- * (`local-datacenters`, `local-dams`, and any future `createLocalGeoJsonLayer`
- * dataset). Cesium-specific projection, occlusion, and stem geometry stay in
- * `localGeojsonCore.js`; this module turns the resulting in-view records into a
+ * (`local-datacenters`, `local-dams`). Projection, occlusion, and stem
+ * geometry stay in `src/layers/infrastructure/render/display.js`; this module
+ * turns the resulting in-view records into a
  * bounded "active" set — the only records that layer should spend per-frame
  * stem-geometry and ground-sample work on.
  *
  * The screen-space label overlay is already decluttered
  * (LOCAL_OVERLAY_COHORT_LIMIT); this also bounds world-space stems and their
  * geometry/ground-sampling work. It does not reduce the number of materialized
- * entities. Submarine cables use their own renderer and are not changed here.
+ * records. Submarine cables use their own renderer and are not changed here.
  * Performance must be measured against the current renderer, not inferred
  * from the number of hidden stems.
  *
@@ -297,7 +297,7 @@ export function applyInfraEvictionGrace({
  * ------------------------------------------------------------------ */
 
 /**
- * Probe window for the motion fallback. `localGeojsonCore.js` marks its selection
+ * Probe window for the motion fallback. The infrastructure display marks its selection
  * dirty on `moveEnd`, which covers drags, one-shot `setView`, and voice
  * `flyTo` — but a tracked-entity follow camera, a Cockpit view, a route
  * flight, or a continuous orbit never emits one. Without a fallback the
@@ -377,7 +377,7 @@ export function infraLodMotionEpsilonM(
  * creeping camera probes on a fixed cadence instead of on every walk.
  *
  * Travel arrives SQUARED so the caller can hand over
- * `Cesium.Cartesian3.distanceSquared` and spend no sqrt on a per-walk probe,
+ * `cartesian3.distanceSquared` and spend no sqrt on a per-walk probe,
  * the same trade `createCableReferenceSweepGate` makes.
  *
  * @param {object} [input]

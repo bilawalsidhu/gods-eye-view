@@ -182,40 +182,30 @@ export async function registerNavaraLayerRenderers() {
     'weather-cyclones': async () =>
       (await import('../layers/cyclones/render/display.js'))
         .createCyclonesDisplay,
-    ...Object.fromEntries(
-      ['local-datacenters', 'local-dams'].map((id) => [
-        id,
-        async () => {
-          const { createInfrastructureNavaraRenderer } =
-            await import('../layers/infrastructure/render/navara.js');
-          return (engine, { config, services }) =>
-            createInfrastructureNavaraRenderer(
-              engine,
-              engine.extensions.navara,
-              config,
-              services,
-            );
-        },
-      ]),
-    ),
+    'local-datacenters': async () =>
+      (await import('../layers/infrastructure/render/display.js'))
+        .createInfrastructureDisplay,
+    'local-dams': async () =>
+      (await import('../layers/infrastructure/render/display.js'))
+        .createInfrastructureDisplay,
     's2-ghostmaps': async () =>
       (await import('../layers/ghostMaps/render/display.js'))
         .createGhostMapsDisplay,
+    // Global Context's display, with the Navara backend of its range pulses.
     'military-awareness': async () => {
-      const { createAwarenessNavaraRenderer } =
-        await import('../layers/awareness/render/navara.js');
+      const [{ createAwarenessDisplay }, { createAwarenessPulseDisc }] =
+        await Promise.all([
+          import('../layers/awareness/render/display.js'),
+          import('../layers/awareness/render/navaraPulses.js'),
+        ]);
       return (engine) =>
-        createAwarenessNavaraRenderer(engine, engine.extensions.navara);
-    },
-    'military-installations': async () => {
-      const { createInstallationsNavaraRenderer } =
-        await import('../layers/installations/render/navara.js');
-      return (engine, options) =>
-        createInstallationsNavaraRenderer(engine, {
-          ...options,
-          ...engine.extensions.navara,
+        createAwarenessDisplay(engine, {
+          navaraPulses: createAwarenessPulseDisc,
         });
     },
+    'military-installations': async () =>
+      (await import('../layers/installations/render/display.js'))
+        .createInstallationsDisplay,
     // The FIRMS display, with the Navara backend of its heatmap.
     'local-firms': async () => {
       const [{ createFirmsDisplay }, { createFirmsHeatDrape }] =

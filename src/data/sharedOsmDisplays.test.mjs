@@ -39,14 +39,18 @@ function assertCredit(v) {
   assert.ok(v.credits.some((credit) => credit.showOnScreen && credit.html.includes('>© OpenStreetMap<')));
 }
 for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce the shared OSM credit when data displays`, async (t) => {
-  const v = viewer(t);
+  const before = globalThis.window;
+  globalThis.window = { dispatchEvent: noop };
+  t.after(() => { if (before === undefined) delete globalThis.window; else globalThis.window = before; });
+  const engine = createFakeEngine();
   t.mock.method(globalThis, 'fetch', async () => ({ ok: true, text: async () => JSON.stringify({ type: 'Feature', id: 'test', properties: { name: 'Site' }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [0.01, 0], [0, 0.01], [0, 0]]] } }) }));
-  const layer = createInfrastructureLayers({ overlayHost, registerEntityContext: noop, selectEntityContext: noop, clearSelectedEntityContextForLayer: noop, removeEntityContextsForLayer: noop, governorRequestRender: noop, showOsmCredit, hideOsmCredit })[index];
-  await layer.enable(v);
+  const layer = createInfrastructureLayers({ overlayHost, registerEntityContext: noop, selectEntityContext: noop, clearSelectedEntityContextForLayer: noop, removeEntityContextsForLayer: noop, showOsmCredit, hideOsmCredit })[index];
+  layer.init(null, { engine });
+  await layer.enable();
   assert.equal(layer.getStats().count, 1);
-  assertCredit(v);
-  layer.destroy(v);
-  assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
+  assert.ok(engine.fake.credits.some((credit) => credit.onScreen && credit.html.includes('>© OpenStreetMap<')));
+  layer.destroy();
+  assert.equal(engine.fake.credits.filter((credit) => credit.onScreen).length, 0);
 });
 
 test('Nepal locator introduces the shared OSM credit', async (t) => {

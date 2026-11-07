@@ -284,11 +284,11 @@ test('tracking layers write gevLabelModel and expose only their cached display p
     assert.ok(source.includes('.gevDisplayPosition ='), `${name} exposes a display-position cache`);
   }
   const installations = await readFile(
-    new URL('../layers/installations/render/cesium/rendering.js', import.meta.url),
+    new URL('../layers/installations/render/display.js', import.meta.url),
     'utf8',
   );
-  assert.ok(installations.includes('entity.gevLabelModel ='));
-  assert.ok(installations.includes('entity.gevDisplayPosition = () => displayPosition'));
+  assert.ok(installations.includes('      gevLabelModel: {'));
+  assert.ok(installations.includes('handle.gevDisplayPosition = () => handle.position'));
   assert.match(sources['flights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
   assert.match(sources['militaryFlights.js'], /gevDisplayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
   assert.ok(sources['satellites.js'].includes('gevDisplayPosition = _trackedDisplayCached'));
