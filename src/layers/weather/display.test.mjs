@@ -8,6 +8,7 @@ import { createShellScene } from './shellFixture.mjs';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 
 const times = ['2026-09-15T20:00:00.000Z', '2026-09-15T20:05:00.000Z'];
@@ -61,20 +62,23 @@ async function shownLayer(id, manifest, params, view = {}) {
     }),
   });
   layer.init(
-    bindFakeCesiumCamera({
-      camera: {
-        moveEnd: { addEventListener: () => () => {} },
-        flyTo: ({ destination }) => flights.push(destination),
-        pickEllipsoid: () =>
-          view.center
-            ? Cesium.Cartesian3.fromDegrees(...view.center)
-            : undefined,
+    bindFakeCesiumCamera(
+      {
+        camera: {
+          moveEnd: { addEventListener: () => () => {} },
+          flyTo: ({ destination }) => flights.push(destination),
+        },
+        scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
       },
-      scene: {
-        canvas: { clientWidth: 800, clientHeight: 600 },
-        globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
+      {
+        query: {
+          pickEllipsoid: (x, y) =>
+            x === 400 && y === 300 && view.center
+              ? fromDegrees(...view.center)
+              : null,
+        },
       },
-    }),
+    ),
   );
   if (params) layer.setParams(params);
   layer.enable();

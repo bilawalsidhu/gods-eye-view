@@ -1,7 +1,23 @@
+import * as Cesium from 'cesium';
+// The weather layers fly through `cameraOf`, drape through `findGlobe` and
+// read `findCamera` and `findQuery`; this module is their Cesium side, so it
+// brings the factories a viewer with no renderer bound gets those ports from.
+import '../../render/cesium/camera.js';
+import '../../render/cesium/globe.js';
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
+
+/**
+ * The viewer's own globe imagery, as a weather imagery host: where a layer
+ * drapes when the application shell names no host of its own.
+ * @param {object|null|undefined} viewer A Cesium viewer.
+ * @returns {{collection: object|undefined, kind: 'globe'}}
+ */
+export function globeImageryHost(viewer) {
+  return { collection: viewer?.imageryLayers, kind: 'globe' };
+}
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
@@ -394,7 +410,7 @@ export function detailWindow(footprint, bounds, previous = null) {
  * that area, so the two images share one mesh and never blend. */
 export function createWeatherShell({
   viewer,
-  cesium,
+  cesium = Cesium,
   product,
   height = WEATHER_SHELL_HEIGHTS[product],
   getHost = () => ({ collection: null, kind: 'tileset' }),

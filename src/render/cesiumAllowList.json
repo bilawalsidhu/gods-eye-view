@@ -94,7 +94,6 @@
   "src/layers/transit/lifecycle.js",
   "src/layers/transit/rendering.js",
   "src/layers/transit/testing.js",
-  "src/layers/weather/index.js",
   "src/layers/weather/shellRendering.js",
   "src/layers/wind/gpuRendering.js",
   "src/layers/wind/relief.js",

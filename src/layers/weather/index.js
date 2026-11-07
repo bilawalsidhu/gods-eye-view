@@ -1,6 +1,5 @@
-import * as Cesium from 'cesium';
 import { createWeatherRendering } from './rendering.js';
-import { createWeatherShell } from './shellRendering.js';
+import { createWeatherShell, globeImageryHost } from './shellRendering.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
@@ -11,10 +10,8 @@ import {
 } from './clock.js';
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
-import { cameraOf } from '../../render/cesium/camera.js';
-// The renderer drapes through `findGlobe`; a viewer with no renderer bound
-// gets its globe port from the factory this module provides.
-import '../../render/cesium/globe.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import { cameraOf, findCamera, findQuery } from '../../render/rendererOf.js';
 
 /**
  * A stored (English) failure in the language. HTTP failures from source.js
@@ -62,7 +59,6 @@ export function createWeatherLayer({
   feed,
   clock,
   id = 'weather-radar',
-  cesium = Cesium,
   createRendering = createWeatherRendering,
   documentRef = globalThis.document,
   eventTarget = globalThis.window,
@@ -108,8 +104,7 @@ export function createWeatherLayer({
           : REGIONAL_INFRARED_MAX_GAP_MS;
   const isLatest = () =>
     clock ? clock.getState().mode === 'latest' : followLatest;
-  const getHost = () =>
-    imageryHost?.() ?? { collection: viewer?.imageryLayers, kind: 'globe' };
+  const getHost = () => imageryHost?.() ?? globeImageryHost(viewer);
   const notify = () => listener?.();
   const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
   const unsubscribeClock = clock?.subscribe(() => {
@@ -288,7 +283,7 @@ export function createWeatherLayer({
       viewer = nextViewer;
       rendering = createRendering({
         viewer,
-        createShell: (options) => createWeatherShell({ ...options, cesium }),
+        createShell: createWeatherShell,
         getHost,
         onChange: notify,
       });
@@ -318,10 +313,11 @@ export function createWeatherLayer({
     enable() {
       enabled = true;
       if (!removeCamera) {
-        removeCamera = viewer.camera.moveEnd?.addEventListener(() => {
-          checkHost();
-          notify();
-        });
+        removeCamera =
+          findCamera(viewer)?.on('moveEnd', () => {
+            checkHost();
+            notify();
+          }) ?? null;
       }
       registerClock();
     },
@@ -587,18 +583,13 @@ export function createWeatherLayer({
       const canvas = viewer?.scene?.canvas;
       const point =
         canvas &&
-        viewer.camera.pickEllipsoid?.(
-          new cesium.Cartesian2(
-            canvas.clientWidth / 2,
-            canvas.clientHeight / 2,
-          ),
-          viewer.scene.globe.ellipsoid,
+        findQuery(viewer)?.pickEllipsoid(
+          canvas.clientWidth / 2,
+          canvas.clientHeight / 2,
         );
-      const camera = point
-        ? cesium.Cartographic.fromCartesian(point, viewer.scene.globe.ellipsoid)
-        : null;
-      const lon = camera ? cesium.Math.toDegrees(camera.longitude) : 0;
-      const lat = camera ? cesium.Math.toDegrees(camera.latitude) : 0;
+      const camera = point ? toLonLatH(point) : null;
+      const lon = camera ? camera.lon : 0;
+      const lat = camera ? camera.lat : 0;
       const outside =
         b &&
         camera &&

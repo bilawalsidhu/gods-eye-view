@@ -11,6 +11,7 @@ import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 import { createCesiumGlobe } from '../../render/cesium/globe.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 import {
   createShellCesium,
   createShellScene,
@@ -598,6 +599,7 @@ function layerHarness({
     }),
   };
   const viewer = { camera: { moveEnd } };
+  bindRenderer(viewer, { camera: cameraOver(viewer) });
   const layer = createWeatherLayer({
     clock,
     id,
@@ -1411,6 +1413,7 @@ for (const [id, product] of [
       positionCartographic: { height: 1200 },
     };
     h.viewer.camera = camera;
+    bindRenderer(h.viewer, { camera: cameraOver(h.viewer) });
     const events = target();
     const layer = createWeatherLayer({
       id,
