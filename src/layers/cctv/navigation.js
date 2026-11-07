@@ -1,7 +1,6 @@
 import { isFollowing } from '../../data/followed.js';
-import * as Cesium from 'cesium';
 import { CCTV_FOCUS_RESULT } from './policy.js';
-import { cameraOf } from '../../render/cesium/camera.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createNavigation({
   state: layerState,
@@ -10,15 +9,14 @@ export function createNavigation({
   source,
 }) {
   /**
-   * Finds the camera closest to the Cesium viewer's current position.
+   * Finds the camera closest to the viewer's current position.
    * @returns {string|null} Camera ID of the nearest camera, or null.
    */
 
   function nearestCameraIdToViewer() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
-    if (!carto || !layerState._records.length) return null;
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
+    const pose = parts.model.eyePose();
+    if (!pose || !layerState._records.length) return null;
+    const { lat, lon } = pose;
 
     let best = null;
     for (const record of layerState._records) {
@@ -36,9 +34,9 @@ export function createNavigation({
   }
 
   /**
-   * Flies the Cesium viewer camera to frame the specified CCTV camera,
+   * Flies the viewer's camera to frame the specified CCTV camera,
    * looking along its heading from above.
-   * @param {Cesium.Viewer|null} viewer Cesium viewer that owns the camera.
+   * @param {object|null} viewer The viewer that owns the camera.
    * @param {Object|null} record CCTV camera runtime record.
    * @param {number} [duration=2.2] - Flight duration in seconds.
    * @returns {'focused'|'no-active-camera'|'tracking-holds-view'|'cockpit-active'} Focus result.

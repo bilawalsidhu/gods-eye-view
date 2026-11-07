@@ -8,7 +8,6 @@ import {
   CCTV_FRAME_CANVAS_H,
   applyFrameResult,
 } from '../../data/cctvCards.js';
-import * as Cesium from 'cesium';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import { selectCctvLod, applyEvictionGrace } from '../../data/cctvLod.js';
 import {
@@ -84,9 +83,10 @@ export function createCards({ state: layerState, services, parts, source }) {
       return;
     }
     const scene = layerState._viewer.scene;
-    const carto = layerState._viewer.camera.positionCartographic;
-    const viewerLat = carto ? Cesium.Math.toDegrees(carto.latitude) : 0;
-    const viewerLon = carto ? Cesium.Math.toDegrees(carto.longitude) : 0;
+    // An eye with no geographic position (the earth's centre) measures from 0, 0.
+    const pose = parts.model.eyePose();
+    const viewerLat = pose ? pose.lat : 0;
+    const viewerLon = pose ? pose.lon : 0;
     // The active camera is excluded from ambient selection ALWAYS (not just
     // after its async activation settles). It is published separately in the
     // protected lane below, and grace never applies to it.
@@ -146,7 +146,7 @@ export function createCards({ state: layerState, services, parts, source }) {
     // the budget fill through the screen-distribution grid, so periphery
     // cells hold cards instead of everything clustering at screen center.
     const { cardIds, budgets } = selectCctvLod(candidates, {
-      cameraHeightM: carto?.height,
+      cameraHeightM: pose?.height,
       incumbentIds: layerState._cardIds,
       viewW: width,
       viewH: height,

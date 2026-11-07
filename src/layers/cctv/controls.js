@@ -202,7 +202,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {Object} [options={}]
      * @param {number} [options.maxCount] - Maximum number of objects to return.
      * @param {number} [options.seed] - Offset seed for deterministic stride sampling.
-     * @returns {{ position: Cesium.Cartesian3, id: string, type: string }[]}
+     * @returns {{ position: {x: number, y: number, z: number}, id: string, type: string }[]}
      */
     getDetectableObjects(options = {}) {
       // The cameras the view pass shows, not icons it has hidden.

@@ -334,10 +334,20 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @returns {string} Grid key in the form "zoomBucket:latGrid:lonGrid".
    */
 
-  function currentViewContext() {
+  /**
+   * The eye's pose from the camera port, or null when there is no camera or
+   * the eye has no geographic position (the earth's centre).
+   * @returns {object|null}
+   */
+
+  function eyePose() {
     const pose = findCamera(layerState._viewer)?.pose();
-    // An eye at the earth's centre has no geographic position.
-    if (!pose || !Number.isFinite(pose.lat)) return 'none';
+    return Number.isFinite(pose?.lat) ? pose : null;
+  }
+
+  function currentViewContext() {
+    const pose = eyePose();
+    if (!pose) return 'none';
     const { lat, lon } = pose;
     const alt = pose.height || 0;
     const zoomBucket =
@@ -505,6 +515,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     return cameraId !== activeCameraId || record?.activationDone !== true;
   }
   return {
+    eyePose,
     toRad,
     normalizeHeading,
     clamp,

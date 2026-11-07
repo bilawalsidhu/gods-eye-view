@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { distance, dot } from '../../geo/vector.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
@@ -45,12 +47,11 @@ export function createLifecycle({
 
   /** Records the camera pose the last view pass ran at. */
   function noteViewPose() {
-    const camera = layerState._viewer?.camera;
-    if (!camera?.positionWC) return;
+    const pose = findCamera(layerState._viewer)?.pose();
+    if (!pose) return;
     layerState._viewPose = {
-      position: Cesium.Cartesian3.clone(camera.positionWC),
-      direction:
-        camera.directionWC && Cesium.Cartesian3.clone(camera.directionWC),
+      position: pose.position,
+      direction: pose.direction,
     };
   }
 
@@ -60,16 +61,14 @@ export function createLifecycle({
    * would otherwise rerun the full pass on every tick.
    */
   function viewPoseChanged() {
-    const camera = layerState._viewer?.camera;
+    const now = findCamera(layerState._viewer)?.pose();
     const pose = layerState._viewPose;
-    if (!pose || !camera?.positionWC) return true;
-    const height = Math.max(1, camera.positionCartographic?.height ?? 0);
-    const moved = Cesium.Cartesian3.distance(camera.positionWC, pose.position);
+    if (!pose || !now) return true;
+    // An eye with no geographic position (the earth's centre) has no height.
+    const height = Math.max(1, Number.isFinite(now.height) ? now.height : 0);
+    const moved = distance(now.position, pose.position);
     if (moved > height * VIEW_MOTION_MIN_MOVE_FRACTION) return true;
-    if (!pose.direction || !camera.directionWC) return false;
-    return (
-      Cesium.Cartesian3.dot(camera.directionWC, pose.direction) < MIN_TURN_COS
-    );
+    return dot(now.direction, pose.direction) < MIN_TURN_COS;
   }
 
   function viewMotionTick() {
@@ -134,7 +133,7 @@ export function createLifecycle({
      * Initializes the CCTV layer: loads camera sources, builds the catalog,
      * restores calibration from localStorage, creates camera icons, sets up click
      * handling, and performs initial health sync. Coverage entities stay lazy.
-     * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
+     * @param {object} viewer - The viewer.
      */
     async init(viewer) {
       layerState._sourceAbort?.abort();
@@ -225,7 +224,7 @@ export function createLifecycle({
           ? groundPrior.ellipsoid
           : Number(camera.groundElevationM) || 0;
         camera.absoluteHeightM = priorGround + camera.mountHeightM;
-        const position = Cesium.Cartesian3.fromDegrees(
+        const position = fromDegrees(
           camera.lon,
           camera.lat,
           camera.absoluteHeightM,
@@ -406,7 +405,7 @@ export function createLifecycle({
           // Item A (owner round 2): the scene pick found no camera — try the
           // painted ambient cards. The cards canvas is pointer-events:none (this
           // handler owns the events), so a click landing on a card's rect selects
-          // its camera exactly like a click on the icon. Cesium click positions
+          // its camera exactly like a click on the icon. Click positions
           // and the recorded rects are both CSS px — direct comparison.
           const cardId = layerState._cctvOverlayHost.hitTest(
             event.screenPosition.x,
@@ -540,7 +539,7 @@ export function createLifecycle({
     /**
      * Tears down the layer: destroys click handler, projection loop, coverage
      * entities, icons, and clears all runtime state and subscribers.
-     * @param {Cesium.Viewer} [viewer] - Viewer instance (falls back to stored ref).
+     * @param {object} [viewer] - Viewer instance (falls back to stored ref).
      */
     destroy(viewer) {
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');

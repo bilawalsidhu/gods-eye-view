@@ -1,5 +1,4 @@
 import { followedOf } from '../../data/followed.js';
-import * as Cesium from 'cesium';
 import {
   GEO_PROGRESS_NOTIFY_INTERVAL_MS,
   GEO_PROGRESS_NOTIFY_BATCH_LIMIT,
@@ -304,13 +303,9 @@ export function createGeometryQueue({
     layerState._tilesReadyReenqueued = false;
     if (!layerState._records.length) return;
     const active = parts.selection.getActiveRecord();
-    const carto = layerState._viewer?.camera?.positionCartographic;
-    const refLat = carto
-      ? Cesium.Math.toDegrees(carto.latitude)
-      : (active?.camera.lat ?? 0);
-    const refLon = carto
-      ? Cesium.Math.toDegrees(carto.longitude)
-      : (active?.camera.lon ?? 0);
+    const pose = parts.model.eyePose();
+    const refLat = pose ? pose.lat : (active?.camera.lat ?? 0);
+    const refLon = pose ? pose.lon : (active?.camera.lon ?? 0);
     const pending = geometryWorkingSet()
       .filter((record) => record !== active)
       .map((record) => ({
