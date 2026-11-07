@@ -63,6 +63,8 @@ const unboundEffects = unboundPorts('effects');
 const unboundGlobes = unboundPorts('globe');
 /** Credits ports are `{port, dispose, release}`: see `bindRenderer`. */
 const unboundCredits = unboundPorts('credits');
+/** Draw ports are `{port, dispose, release}`, as credits ports are. */
+const unboundDraws = unboundPorts('draw');
 
 /**
  * Provide the factory `cameraOf` builds a camera port with for a scene
@@ -83,6 +85,18 @@ export function provideUnboundCamera(build) {
  */
 export function provideUnboundCredits(build) {
   unboundCredits.provide(build);
+}
+
+/**
+ * Provide the factory `findDraw` builds a draw port with for a scene object
+ * no renderer is bound to, as `provideUnboundCredits` does: a bound
+ * renderer releases it, and the sets made through it keep drawing until
+ * their owners dispose them.
+ * @param {(host: object) => ({port: object, dispose: () => void,
+ *   release: () => void} | null)} build
+ */
+export function provideUnboundDraw(build) {
+  unboundDraws.provide(build);
 }
 
 /**
@@ -123,7 +137,8 @@ export function releaseUnboundEffects(host, port) {
  * A credits port `findCredits` built is released, not disposed: the
  * credits added through it stay shown until their own Off. A globe port
  * `findGlobe` built is released too: its imagery stays drawn, following the
- * base, until its callers remove it.
+ * base, until its callers remove it. So is a draw port `findDraw` built: its
+ * sets keep drawing until disposed.
  * @param {object} host The scene object callers hold.
  * @param {object} renderer
  * @returns {() => void} Unbinds, if the binding is still this one.
@@ -135,6 +150,7 @@ export function bindRenderer(host, renderer) {
   unboundEffects.drop(host);
   unboundGlobes.supersede(host);
   unboundCredits.supersede(host);
+  unboundDraws.supersede(host);
   renderers.set(host, renderer);
   return () => {
     if (renderers.get(host) === renderer) renderers.delete(host);
@@ -194,6 +210,47 @@ export function findGlobe(host) {
  */
 export function findCredits(host) {
   return unboundCredits.find(host);
+}
+
+/**
+ * The draw port of the renderer bound to `host`; with no renderer bound,
+ * one built over `host` by the provided factory and kept with it while
+ * `host` lives, as `findCamera` does.
+ *
+ * This is how a layer that is handed the scene object (a viewer) draws:
+ * it asks once, as it starts (`init`), and keeps the sets it makes; it
+ * reaches the camera through `cameraOf` the same way. A layer whose
+ * package is exported must tell a caller whose viewer has no renderer and
+ * no adapter factory loaded that it cannot draw, rather than do nothing
+ * (`drawOf`).
+ *
+ * A port built for a viewer with no renderer is released when a renderer
+ * is bound to it later: the sets already made through it keep drawing
+ * until disposed, but the renderer's own ports (its picks, height queries,
+ * `whenSettled`) do not see them. Bind the renderer before anything draws.
+ * @param {object|null|undefined} host
+ * @returns {import('./contract/draw').DrawPort | null}
+ */
+export function findDraw(host) {
+  return unboundDraws.find(host);
+}
+
+/**
+ * `findDraw`, for code that cannot start without one.
+ * @param {object} host
+ * @returns {import('./contract/draw').DrawPort}
+ * @throws When there is no draw port for `host`.
+ */
+export function drawOf(host) {
+  const draw = findDraw(host);
+  if (draw) return draw;
+  throw new Error(
+    host?.isDestroyed?.()
+      ? 'This scene has been destroyed'
+      : 'This scene has no renderer to draw with: bind one, or load the ' +
+          "Cesium adapter's draw port (render/cesium/draw.js) for a viewer " +
+          'with no renderer bound',
+  );
 }
 
 /**

@@ -1668,6 +1668,29 @@
     ],
     "external": ["cesium"]
   },
+  "render-cesium-draw": {
+    "exports": ["./render/cesium/draw"],
+    "modules": [
+      "src/render/cesium/draw.js",
+      "src/render/cesium/camera.js",
+      "src/render/camera/events.js",
+      "src/geo/index.js",
+      "src/geo/celestial.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/quaternion.js",
+      "src/geo/frames.js",
+      "src/geo/vector.js",
+      "src/render/cesium/credits.js",
+      "src/render/creditMarkup.js",
+      "src/render/cesium/cameraControls.js",
+      "src/render/cesium/cameraInput.js",
+      "src/render/cesium/follow.js",
+      "src/render/cesium/internals.js",
+      "src/render/cesium/common.js",
+      "src/render/rendererOf.js"
+    ],
+    "external": ["cesium"]
+  },
   "earthquakes": {
     "exports": ["./layers/earthquakes"],
     "modules": [
@@ -2785,6 +2808,7 @@
       "src/render/rendererOf.js",
       "src/render/cesium/ports.js",
       "src/render/cesium/globe.js",
+      "src/render/cesium/draw.js",
       "src/render/cesium/quality.js",
       "src/render/cesium/credits.js",
       "src/render/cesium/effects.js",

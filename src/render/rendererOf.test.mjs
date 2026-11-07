@@ -3,11 +3,14 @@ import test from 'node:test';
 import {
   bindRenderer,
   cameraOf,
+  drawOf,
   findCamera,
   findCredits,
+  findDraw,
   findEffects,
   provideUnboundCamera,
   provideUnboundCredits,
+  provideUnboundDraw,
   provideUnboundEffects,
   rendererOf,
 } from './rendererOf.js';
@@ -164,4 +167,37 @@ test('with no renderer bound, findEffects builds one effects port per scene unti
   destroyed = true;
   assert.equal(findEffects(gone), null);
   assert.equal(built[2].disposed, 1, 'let go with its scene');
+});
+
+test('with no renderer bound, findDraw builds one draw port per scene; a renderer releases it', (t) => {
+  t.after(() => provideUnboundDraw(null));
+  const built = [];
+  provideUnboundDraw((host) => {
+    if (!host.scene) return null;
+    const entry = { port: { id: built.length }, disposed: 0, released: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    entry.release = () => (entry.released += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  assert.equal(findDraw(viewer), built[0].port);
+  assert.equal(drawOf(viewer), built[0].port, 'kept, not rebuilt');
+  assert.equal(findDraw({}), null, 'nothing to build over');
+  assert.throws(() => drawOf({}), /no renderer to draw with/);
+  assert.equal(findDraw(null), null);
+
+  const draw = { icons() {} };
+  const unbind = bindRenderer(viewer, { draw });
+  assert.equal(drawOf(viewer), draw);
+  assert.equal(built[0].disposed, 0, 'its sets keep drawing until disposed');
+  assert.equal(built[0].released, 1);
+  unbind();
+
+  let destroyed = false;
+  const gone = { scene: {}, isDestroyed: () => destroyed };
+  const port = findDraw(gone);
+  destroyed = true;
+  assert.throws(() => drawOf(gone), /destroyed/);
+  assert.equal(built.find((entry) => entry.port === port).disposed, 1);
 });
