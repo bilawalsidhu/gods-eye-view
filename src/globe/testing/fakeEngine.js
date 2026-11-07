@@ -50,6 +50,7 @@ import {
   viewRectangle,
 } from '../cameraMath.js';
 import { createGroundPicks, createGroundRegistry } from '../ground.js';
+import { createImageryRegistry } from '../imagery.js';
 import { createLineRegistry } from '../lines.js';
 import { createMoverRegistry } from '../movers.js';
 import { createCpuPicker } from '../cpuPicks.js';
@@ -268,6 +269,27 @@ export function createFakeEngine(options = {}) {
     },
     destroy() {},
   }));
+  // Imagery layers keep their state for tests; every change is a render
+  // request. They drape on the globe, or on tiles while photoreal shows.
+  const imageryRegistry = createImageryRegistry(
+    () => ({
+      source() {
+        fake.renderRequests++;
+      },
+      look() {
+        fake.renderRequests++;
+      },
+      destroy() {
+        fake.renderRequests++;
+      },
+    }),
+    {
+      splitPosition() {
+        fake.renderRequests++;
+      },
+      surface: () => (fake.maps.photoreal != null ? 'tiles' : 'globe'),
+    },
+  );
   const inputs = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   const livePosition = cartesian3.create();
   let lastBaseImagery = null;
@@ -664,6 +686,7 @@ export function createFakeEngine(options = {}) {
     movers: moverRegistry.movers,
     lines: lineRegistry.lines,
     ground: groundRegistry.ground,
+    imagery: imageryRegistry.imagery,
     clock: {
       now: () => appClock.now(),
       frameTime: () => appClock.frameTime(),
@@ -802,6 +825,7 @@ export function createFakeEngine(options = {}) {
       moverRegistry.destroyAll();
       lineRegistry.destroyAll();
       groundRegistry.destroyAll();
+      imageryRegistry.destroyAll();
       fake.destroyed = true;
     },
     isDestroyed: () => fake.destroyed,
@@ -889,6 +913,24 @@ export function createFakeEngine(options = {}) {
           }
         : undefined;
     },
+    /**
+     * A live imagery layer's state, by id: { options, source, alpha, shown,
+     * split }; `layers()` all of them in draw order.
+     */
+    imageryLayer(id) {
+      const state = imageryRegistry.live.get(id);
+      return state
+        ? {
+            options: state.options,
+            source: state.source,
+            alpha: state.alpha,
+            shown: state.shown,
+            split: state.split,
+          }
+        : undefined;
+    },
+    imageryLayers: () =>
+      imageryRegistry.ordered().map(({ options }) => options.id),
     /** The app clock the engine clock reads (freeze/offset/rate for tests). */
     appClock,
     /** Moves the fake wall clock without a frame (own app clock only). */

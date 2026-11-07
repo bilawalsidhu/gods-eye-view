@@ -513,6 +513,78 @@
  * @property {(options: GroundSetOptions) => GroundSet} createSet
  * @property {() => { id: string, kind: string, count: number, shown: boolean, order: number }[]} list
  *
+ * @typedef {{ west: number, south: number, east: number, north: number }} DegreeRectangle
+ *   Degrees; south below north; west > east crosses the antimeridian.
+ *
+ * @typedef {object} ImagerySource
+ *   What an imagery layer draws, and where (src/globe/imagery.js checks and
+ *   defaults these). Two kinds:
+ *   - tiles: `{ kind: 'tiles', url, subdomains?, minLevel?, maxLevel?,
+ *     tileSize?, rectangle?, credit?, opaque?, maxRequests? }`, XYZ tiles in
+ *     Web Mercator; `url` holds {z}, {x} and {y}, and {s} for one of
+ *     `subdomains` (['a', 'b', 'c']); levels 0..18 and 256 px tiles by
+ *     default; `opaque` tiles have no alpha (Cesium uploads them as RGB);
+ *     `maxRequests` caps the layer's tile requests in flight (Cesium:
+ *     unbounded by default; Navara loads 6 at a time);
+ *   - image: `{ kind: 'image', image | url, rectangle?, credit? }`, one
+ *     image stretched over the rectangle in longitude and latitude
+ *     (equirectangular, row 0 on the north edge): a canvas, an ImageBitmap
+ *     or image element, `{ width, height, data }` RGBA bytes, or an image
+ *     URL the engine loads.
+ *   `rectangle` (DegreeRectangle) bounds what draws: the globe when omitted
+ *   (Web Mercator tiles stop at ±85.05°). `credit` is HTML, shown while the
+ *   layer is.
+ * @property {'tiles'|'image'} kind
+ *
+ * @typedef {object} ImageryLayerOptions
+ *   A raster layer draped on the ground: on terrain and 3D tiles, following
+ *   their relief, under every ground fill, mover, line and model; colours are
+ *   the image's own, blended by its alpha times the layer's (Cesium: an
+ *   ImageryLayer on the imagery stack of the surface shown).
+ * @property {string} id Unique among the engine's live imagery layers.
+ * @property {ImagerySource} source
+ * @property {number} [alpha] 0..1, 1 by default.
+ * @property {boolean} [show] Shown when created unless false.
+ * @property {'none'|'left'|'right'} [split] The side of the split position
+ *   the layer draws on ('none', the default: both). Cesium splits on the
+ *   globe only.
+ * @property {number} [order] Draw order among imagery layers (higher draws
+ *   later, on top); 0 by default, then creation order. Every imagery layer
+ *   draws above the base imagery.
+ *
+ * @typedef {object} ImageryLayer
+ * @property {string} id
+ * @property {(source: ImagerySource) => void} setSource Draws `source` in
+ *   place of the last one, at the layer's place in the order; the same
+ *   canvas again draws its new pixels.
+ * @property {() => object} source The checked source drawn.
+ * @property {(alpha: number) => void} setAlpha A fade: at 0 the layer draws
+ *   nothing but stays on its surface (Cesium keeps its tiles mapped), so it
+ *   comes back without a gap.
+ * @property {() => number} alpha
+ * @property {(visible: boolean) => void} show Shows or hides the layer
+ *   (Cesium unmaps a hidden layer's tiles: hide with show, fade with alpha).
+ * @property {() => boolean} shown
+ * @property {(side: 'none'|'left'|'right') => void} setSplit
+ * @property {() => 'none'|'left'|'right'} split
+ * @property {() => boolean} ready Whether the source is built and drawn
+ *   from the next frame (an image URL loaded); tiles arrive after it.
+ * @property {() => void} destroy
+ *   Every call requests a render; nothing animates on its own.
+ *
+ * @typedef {object} GlobeImagery
+ * @property {(options: ImageryLayerOptions) => ImageryLayer} createLayer
+ * @property {() => { id: string, kind: string, shown: boolean, alpha: number, split: string, order: number }[]} list
+ *   In draw order, bottom first.
+ * @property {(fraction: number) => void} setSplitPosition Where the split
+ *   runs: a fraction of the canvas width from its left edge (0..1); layers
+ *   split 'left' draw left of it, 'right' right of it. One per engine
+ *   (Cesium's scene.splitPosition).
+ * @property {() => number} splitPosition 0.5 until set.
+ * @property {() => 'globe'|'tiles'|'none'} surface Where imagery drapes
+ *   now: the globe, 3D tiles, or nothing (a Cesium stack with neither
+ *   draws no imagery until one shows; the layers wait).
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
@@ -537,6 +609,7 @@
  *   points, models), drawn by the engine.
  * @property {GlobeLines} lines The layers' dynamic polylines.
  * @property {GlobeGround} ground The layers' fills on the ground.
+ * @property {GlobeImagery} imagery The layers' rasters on the ground.
  * @property {() => void} destroy
  * @property {() => boolean} isDestroyed True once destroy() has run.
  * @property {{ cesium?: object, navara?: object }} [extensions]
@@ -745,6 +818,13 @@ const SHAPE = {
   movers: { createSet: isFunction, list: isFunction },
   lines: { createLine: isFunction, list: isFunction },
   ground: { createSet: isFunction, list: isFunction },
+  imagery: {
+    createLayer: isFunction,
+    list: isFunction,
+    setSplitPosition: isFunction,
+    splitPosition: isFunction,
+    surface: isFunction,
+  },
   maps: {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
@@ -785,7 +865,7 @@ const OPTIONAL_SHAPE = {
 
 // Required capabilities engineCapabilities reports as well: true for an
 // engine that has them whole, as every valid engine does.
-const REPORTED_REQUIRED = ['movers', 'lines', 'ground'];
+const REPORTED_REQUIRED = ['movers', 'lines', 'ground', 'imagery'];
 
 const memberAt = (engine, path) =>
   path.split('.').reduce((value, key) => value?.[key], engine);
@@ -794,8 +874,8 @@ const memberAt = (engine, path) =>
  * Which optional capabilities an engine has: { visualStyles, ... } as
  * booleans. A caller that refuses a feature on an engine without a Cesium
  * viewer (voice, say) asks here instead: Cesium draws these through the app's
- * own stages and reports false. `movers`, `lines` and `ground` are
- * required; they are reported too, true for every valid engine.
+ * own stages and reports false. `movers`, `lines`, `ground` and `imagery`
+ * are required; they are reported too, true for every valid engine.
  */
 export function engineCapabilities(engine) {
   const whole = (members, prefix = '') =>

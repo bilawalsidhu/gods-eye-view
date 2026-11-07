@@ -328,6 +328,21 @@ test('ground is required and reported as a capability', () => {
   assert.throws(() => assertGlobeEngine(half), /ground\.list/);
 });
 
+test('imagery is required and reported as a capability', () => {
+  const engine = createFakeEngine();
+  assert.equal(engineCapabilities(engine).imagery, true);
+  const without = { ...engine };
+  delete without.imagery;
+  assert.throws(() => assertGlobeEngine(without), /\bimagery\b/);
+  assert.equal(engineCapabilities(without).imagery, false);
+  const half = { ...engine, imagery: { createLayer: () => {} } };
+  assert.throws(() => assertGlobeEngine(half), /imagery\.list/);
+  const names = createContractSuite(engine, {
+    waitFrames: async () => {},
+  }).map(({ name }) => name);
+  assert.ok(names.some((name) => name.startsWith('imagery:')));
+});
+
 test('engineCapabilities names the optional capabilities an engine has whole', () => {
   const plain = createFakeEngine();
   for (const flag of ['visualStyles', 'bloom', 'cloudCover', 'contactSonar'])

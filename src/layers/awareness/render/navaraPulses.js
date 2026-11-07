@@ -88,12 +88,10 @@ const pulseEffect = defineGroundEffect({
   name: 'GevAwarenessPulses',
   fragmentShader,
   insertAfter: [
-    'gevEarthquakeGround',
+    'gevGround',
     'gevObservedWeather',
     'gevNepalEvent',
-    'gevRecentImagery',
-    'gevFirmsHeat',
-    'gevFirmsGround',
+    'gevImagery',
     'toneMapping',
   ],
   insertBefore: [

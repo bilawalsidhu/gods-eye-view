@@ -54,6 +54,15 @@ const NO_GROUND = Object.freeze({
   },
   list: () => [],
 });
+const NO_IMAGERY = Object.freeze({
+  createLayer() {
+    throw new Error("Navara imagery needs the view's three runtime (imagery/)");
+  },
+  list: () => [],
+  setSplitPosition() {},
+  splitPosition: () => 0.5,
+  surface: () => 'globe',
+});
 
 // Navara's drawn camera (view.camera.raw, a three PerspectiveCamera in
 // Earth-fixed metres): matrixWorld columns are right, up, back, position.
@@ -73,6 +82,7 @@ function readCamera(raw) {
  * @param {object} view An initialised Navara ThreeView.
  * @param {{
  *   hooks: { tileRoots: Function, isIdle: Function, retainTileGeometry: Function, dropOrphanFeatureChanges?: Function },
+ *   imagery?: (parts: { camera: object, size: Function, credits: object, photorealActive: () => boolean }) => { imagery: object, diagnostics: Function, destroy: Function },
  *   container?: HTMLElement,
  *   fetch?: typeof fetch,
  *   clock?: object,
@@ -97,7 +107,9 @@ function readCamera(raw) {
  *   `movers` is engine.movers on the view's three runtime (movers/index.js;
  *   without it createSet throws), `lines` engine.lines (lines/index.js;
  *   likewise), `ground` engine.ground (ground/index.js; likewise), all
- *   destroyed with the engine;
+ *   destroyed with the engine; `imagery` makes engine.imagery from the
+ *   engine's camera, size, credits and photoreal state (imagery/index.js;
+ *   without it createLayer throws), destroyed with the engine;
  *   `fetch` and `clock` (the camera model's timers) are test seams.
  * @returns {import('../contract.js').GlobeEngine}
  */
@@ -112,6 +124,7 @@ export function createNavaraEngine(
     movers: moversPort = null,
     lines: linesPort = null,
     ground: groundPort = null,
+    imagery: imageryPort = null,
     sharpen: sharpenPort = null,
     styles: stylesPort = null,
     bloom: bloomPort = null,
@@ -223,6 +236,13 @@ export function createNavaraEngine(
   });
   const credits = createNavaraCredits(view);
   const maps = createNavaraMaps(view, fetch ? { fetch } : {});
+  const imagery =
+    imageryPort?.({
+      camera: model.camera,
+      size,
+      credits: credits.credits,
+      photorealActive: () => maps.maps.photorealActive(),
+    }) ?? null;
   const { surface } = createNavaraSurface(view, hooks);
   // Navara's controller zooms through the ground; keep the camera above it.
   // With the camera inputs off nothing zooms, and the app places the camera
@@ -414,6 +434,7 @@ export function createNavaraEngine(
     movers: moversPort?.movers ?? NO_MOVERS,
     lines: linesPort?.lines ?? NO_LINES,
     ground: groundPort?.ground ?? NO_GROUND,
+    imagery: imagery?.imagery ?? NO_IMAGERY,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -424,6 +445,7 @@ export function createNavaraEngine(
       input.destroy();
       removeGroundPicks();
       picking.destroy();
+      imagery?.destroy();
       credits.destroy();
       maps.destroy();
       sharpenPort?.destroy();
@@ -450,6 +472,8 @@ export function createNavaraEngine(
     },
     // Navara only, not contract: what the ground pass holds (QA reads it).
     groundDiagnostics: () => groundPort?.diagnostics?.() ?? null,
+    // Navara only, not contract: what each imagery layer holds.
+    imageryDiagnostics: () => imagery?.diagnostics?.() ?? null,
     // Navara only, not contract: the ground the floor last sampled under
     // the camera and the margin it keeps above it (QA measures against it).
     groundFloor: {

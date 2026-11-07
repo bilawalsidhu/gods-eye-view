@@ -5,8 +5,10 @@ import {
 } from '../../shared/render/navaraGroundSurface.js';
 import { defineGroundEffect } from '../../shared/render/navaraGroundEffect.js';
 
-const KEY = 'gevRecentImagery',
-  effects = new Map();
+// Two images under a swipe on a Navara surface pass. Recent Imagery draws
+// through engine.imagery now; the Nepal event imagery (bhoteKoshi) still
+// draws here until it moves there too.
+const effects = new Map();
 const shader = /* glsl */ `
 uniform sampler2D tAllDepth,tSurfaceDepth,tA,tB;
 uniform mat4 uInverseProjection,uWorld;
@@ -57,19 +59,17 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 const boxVector = (b) =>
   b ? [b.west, b.south, b.east, b.north] : [0, 0, 0, 0];
 
-// Another key (the Nepal event imagery) draws over the recent imagery.
+// Over engine.imagery's layers (src/globe/navara/imagery/pass.js).
 const imageryEffect = (key) =>
   defineGroundEffect({
     key,
-    name: 'GevRecentImagery',
+    name: 'GevEventImagery',
     fragmentShader: shader,
-    insertAfter:
-      key === KEY ? ['toneMapping'] : ['gevRecentImagery', 'toneMapping'],
+    insertAfter: ['gevImagery', 'toneMapping'],
     insertBefore: [
-      'gevNepalEvent',
       'gevObservedWeather',
       'gevEarthquakeGround',
-      'gevFirmsGround',
+      'gevGround',
       'gevPreSharpenOverlay',
       'gevSharpen',
       'smaa',
@@ -122,7 +122,7 @@ export function createImageryGround(
   engine,
   { view, EffectDesc, NavaraEffect },
   owner,
-  key = KEY,
+  key,
 ) {
   if (!effects.has(key)) effects.set(key, imageryEffect(key));
   effects.get(key).register(view, { EffectDesc, NavaraEffect });

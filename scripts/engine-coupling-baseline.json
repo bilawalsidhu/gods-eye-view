@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 351,
-    "navaraLayerRendererLines": 2767,
-    "cesiumImportFiles": 32,
-    "viewerLines": 1373,
-    "navaraKindChecks": 7,
+    "cesiumLayerRendererLines": 330,
+    "navaraLayerRendererLines": 2304,
+    "cesiumImportFiles": 31,
+    "viewerLines": 1367,
+    "navaraKindChecks": 6,
     "engineSniffCalls": 14,
-    "engineExtensionReads": 15,
-    "groundEffectPasses": 4,
+    "engineExtensionReads": 12,
+    "groundEffectPasses": 3,
     "cesiumSdkLoads": 4,
     "screenSpaceHandlerFiles": 4,
-    "engineNameLines": 81
+    "engineNameLines": 78
   },
-  "measuredAt": "after the Street Level, traffic and directions displays, 2026-11-07"
+  "measuredAt": "after engine.imagery with FIRMS heat and Recent Imagery on it, 2026-11-07"
 }

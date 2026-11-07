@@ -2747,6 +2747,7 @@ export function createContractSuite(
   ];
   checks.push(
     ...groundChecks(engine, { settle, until, nadirView, readRegion, pointer }),
+    ...imageryChecks(engine, { settle, until, nadirView, readRegion }),
   );
   if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
     checks.push(...mapChecks(engine.maps, mapSources));
@@ -3236,6 +3237,350 @@ function groundChecks(
           corridors.destroy();
           for (const set of extra) set.destroy();
         }
+      },
+    ],
+  ];
+}
+
+// engine.imagery: raster layers on the ground (every engine).
+function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
+  const { imagery } = engine;
+  const throwsType = (run, label) => {
+    let error = null;
+    try {
+      run();
+    } catch (caught) {
+      error = caught;
+    }
+    ensure(error instanceof TypeError, `${label} did not throw a TypeError`);
+  };
+  // A flat colour as RGBA bytes (no canvas needed), size × size texels.
+  const flat = (rgba, size = 8) => {
+    const data = new Uint8Array(size * size * 4);
+    for (let i = 0; i < data.length; i += 4) data.set(rgba, i);
+    return { width: size, height: size, data };
+  };
+  const box = { west: 19, south: 9.5, east: 20, north: 10.5 };
+  const listed = (id) => imagery.list().find((entry) => entry.id === id);
+  return [
+    [
+      'imagery: layers are created, listed, restyled, ordered and destroyed',
+      async () => {
+        const source = { kind: 'image', image: flat([255, 0, 255, 255]) };
+        throwsType(
+          () =>
+            imagery.createLayer({ id: 'contract-bad', source: { kind: 'x' } }),
+          'an unknown source kind',
+        );
+        throwsType(
+          () =>
+            imagery.createLayer({
+              id: 'contract-bad',
+              source: {
+                kind: 'tiles',
+                url: 'https://example.test/{z}/{x}.png',
+              },
+            }),
+          'a template without {y}',
+        );
+        throwsType(
+          () =>
+            imagery.createLayer({
+              id: 'contract-bad',
+              source: {
+                kind: 'image',
+                image: { width: 2, height: 2, data: new Uint8Array(3) },
+              },
+            }),
+          'RGBA bytes of the wrong length',
+        );
+        throwsType(
+          () => imagery.createLayer({ id: 'contract-bad', source, alpha: 2 }),
+          'an alpha above 1',
+        );
+        throwsType(
+          () =>
+            imagery.createLayer({ id: 'contract-bad', source, split: 'up' }),
+          'an unknown split',
+        );
+        throwsType(
+          () =>
+            imagery.createLayer({
+              id: 'contract-bad',
+              source: {
+                ...source,
+                rectangle: { west: 0, south: 5, east: 1, north: 4 },
+              },
+            }),
+          'a rectangle upside down',
+        );
+        ensure(!listed('contract-bad'), 'a refused layer is listed');
+        ensure(
+          ['globe', 'tiles', 'none'].includes(imagery.surface()),
+          `surface() ${imagery.surface()}`,
+        );
+        const top = imagery.createLayer({
+          id: 'contract-imagery-top',
+          source,
+          order: 2,
+        });
+        const bottom = imagery.createLayer({
+          id: 'contract-imagery-bottom',
+          source: {
+            kind: 'image',
+            image: flat([0, 255, 0, 255]),
+            rectangle: box,
+          },
+          alpha: 0.5,
+          show: false,
+          split: 'left',
+        });
+        const split = imagery.splitPosition();
+        try {
+          let duplicate = null;
+          try {
+            imagery.createLayer({ id: 'contract-imagery-top', source });
+          } catch (error) {
+            duplicate = error;
+          }
+          ensure(duplicate, 'a second live layer with the same id');
+          ensure(top.id === 'contract-imagery-top', `id ${top.id}`);
+          const ids = imagery.list().map(({ id }) => id);
+          ensure(
+            ids.indexOf('contract-imagery-bottom') <
+              ids.indexOf('contract-imagery-top'),
+            `list() is not in draw order: ${ids.join(', ')}`,
+          );
+          ensure(
+            listed('contract-imagery-bottom')?.kind === 'image' &&
+              listed('contract-imagery-bottom').shown === false &&
+              listed('contract-imagery-bottom').alpha === 0.5 &&
+              listed('contract-imagery-bottom').split === 'left' &&
+              listed('contract-imagery-top').order === 2,
+            `list(): ${JSON.stringify(imagery.list())}`,
+          );
+          ensure(
+            bottom.shown() === false &&
+              bottom.alpha() === 0.5 &&
+              bottom.split() === 'left',
+            'the options are not the layer state',
+          );
+          bottom.show(true);
+          bottom.setAlpha(0.25);
+          bottom.setSplit('right');
+          ensure(
+            bottom.shown() === true &&
+              bottom.alpha() === 0.25 &&
+              bottom.split() === 'right' &&
+              listed('contract-imagery-bottom').alpha === 0.25,
+            'a restyle is not reported',
+          );
+          throwsType(() => bottom.setAlpha(-1), 'a negative alpha');
+          throwsType(() => bottom.setSplit('down'), 'an unknown side');
+          throwsType(
+            () => bottom.setSource({ kind: 'image' }),
+            'an empty source',
+          );
+          ensure(
+            bottom.source().kind === 'image',
+            'a refused source replaced it',
+          );
+          bottom.setSource({
+            kind: 'tiles',
+            url: 'https://tiles.invalid/{z}/{x}/{y}.png',
+            maxLevel: 3,
+            rectangle: box,
+          });
+          ensure(
+            bottom.source().kind === 'tiles' &&
+              listed('contract-imagery-bottom').kind === 'tiles',
+            'setSource() did not replace the source',
+          );
+          imagery.setSplitPosition(0.25);
+          ensure(imagery.splitPosition() === 0.25, 'the split position');
+          throwsType(
+            () => imagery.setSplitPosition(1.5),
+            'a split outside 0..1',
+          );
+          await until(() => top.ready(), 'the image layer ready');
+          await settle();
+        } finally {
+          imagery.setSplitPosition(split);
+          top.destroy();
+          bottom.destroy();
+        }
+        ensure(!listed('contract-imagery-top'), 'a destroyed layer is listed');
+        ensure(!top.ready(), 'a destroyed layer is ready');
+        top.destroy();
+        let refused = null;
+        try {
+          top.setAlpha(1);
+        } catch (error) {
+          refused = error;
+        }
+        ensure(refused, 'a destroyed layer took a restyle');
+      },
+    ],
+    [
+      'imagery: images draw on the ground by alpha, show, order and split (pixels)',
+      async () => {
+        if (!readRegion) return;
+        await nadirView(1e6);
+        const MAGENTA = [255, 0, 255];
+        const GREEN = [0, 255, 0];
+        const screenOf = (lon, lat) =>
+          engine.projector.worldToWindow(cartesian3.fromDegrees(lon, lat));
+        // The mean colour in a box centred on a ground point.
+        const meanAt = (lon, lat, half = 6) => {
+          const { x, y } = screenOf(lon, lat);
+          const data = readRegion(
+            Math.round(x) - half,
+            Math.round(y) - half,
+            2 * half,
+            2 * half,
+          );
+          const mean = [0, 0, 0];
+          for (let i = 0; i < data.length; i += 4)
+            for (let k = 0; k < 3; k++) mean[k] += data[i + k];
+          return mean.map((sum) => sum / (data.length / 4));
+        };
+        const near = (actual, expected, tolerance = 40) =>
+          actual.every(
+            (value, k) => Math.abs(value - expected[k]) <= tolerance,
+          );
+        const show = (colour) =>
+          colour.map((value) => value.toFixed(0)).join(',');
+        // The map's own tiles loaded: what lies under the layers holds still.
+        await until(() => engine.surface.tilesLoaded(), 'the map tiles loaded');
+        await settle(4);
+        const base = meanAt(19.5, 10);
+        ensure(!near(base, MAGENTA), 'the globe is already magenta there');
+        const magenta = imagery.createLayer({
+          id: 'contract-paint-magenta',
+          source: {
+            kind: 'image',
+            image: flat([...MAGENTA, 255]),
+            rectangle: box,
+          },
+        });
+        const layers = [magenta];
+        try {
+          await until(() => magenta.ready(), 'the magenta layer ready');
+          await until(
+            () => near(meanAt(19.5, 10), MAGENTA),
+            'the magenta layer drawn',
+          );
+          ensure(
+            near(meanAt(21, 10), base, 60) || !near(meanAt(21, 10), MAGENTA),
+            'the layer spills outside its rectangle',
+          );
+          // Alpha: at 0 the globe under it, at 0.5 half way to magenta.
+          magenta.setAlpha(0);
+          await until(() => !near(meanAt(19.5, 10), MAGENTA), 'alpha 0 drawn');
+          await settle(2);
+          const below = meanAt(19.5, 10);
+          magenta.setAlpha(0.5);
+          const half = below.map((value, k) => (value + MAGENTA[k]) / 2);
+          await until(
+            () => near(meanAt(19.5, 10), half, 30),
+            `alpha 0.5 drawn (${show(half)} wanted)`,
+          );
+          magenta.setAlpha(1);
+          magenta.show(false);
+          await until(
+            () => near(meanAt(19.5, 10), below, 30),
+            'the hidden layer gone',
+          );
+          magenta.show(true);
+          await until(
+            () => near(meanAt(19.5, 10), MAGENTA),
+            'the layer shown again',
+          );
+          // Order: a higher order draws on top, a lower one under it.
+          const green = imagery.createLayer({
+            id: 'contract-paint-green',
+            source: {
+              kind: 'image',
+              image: flat([...GREEN, 255]),
+              rectangle: box,
+            },
+            order: 1,
+          });
+          layers.push(green);
+          const lower = imagery.createLayer({
+            id: 'contract-paint-under',
+            source: {
+              kind: 'image',
+              image: flat([0, 255, 255, 255]),
+              rectangle: box,
+            },
+            order: -1,
+          });
+          layers.push(lower);
+          await until(
+            () => near(meanAt(19.5, 10), GREEN),
+            'the higher order on top',
+          );
+          green.destroy();
+          await until(
+            () => near(meanAt(19.5, 10), MAGENTA),
+            'the destroyed layer gone',
+          );
+          // A new source in place: the same layer, another colour.
+          magenta.setSource({
+            kind: 'image',
+            image: flat([...GREEN, 255]),
+            rectangle: box,
+          });
+          await until(
+            () => near(meanAt(19.5, 10), GREEN),
+            'the new source drawn',
+          );
+          magenta.setSource({
+            kind: 'image',
+            image: flat([...MAGENTA, 255]),
+            rectangle: box,
+          });
+          lower.destroy();
+          // Split: a left layer draws only left of the split position.
+          const width = engine.host.size().width;
+          const middle = screenOf(19.5, 10).x;
+          imagery.setSplitPosition(middle / width);
+          magenta.setSplit('left');
+          const left = screenOf(19.25, 10);
+          const right = screenOf(19.75, 10);
+          const at = ({ x, y }) => {
+            const data = readRegion(Math.round(x) - 3, Math.round(y) - 3, 6, 6);
+            const mean = [0, 0, 0];
+            for (let i = 0; i < data.length; i += 4)
+              for (let k = 0; k < 3; k++) mean[k] += data[i + k] / 36;
+            return mean;
+          };
+          await until(
+            () => near(at(left), MAGENTA) && !near(at(right), MAGENTA),
+            `the left split drawn (left ${show(at(left))}, right ${show(at(right))})`,
+          );
+          magenta.setSplit('right');
+          await until(
+            () => !near(at(left), MAGENTA) && near(at(right), MAGENTA),
+            'the right split drawn',
+          );
+          magenta.setSplit('none');
+          await until(
+            () => near(at(left), MAGENTA) && near(at(right), MAGENTA),
+            'the unsplit layer drawn',
+          );
+        } finally {
+          imagery.setSplitPosition(0.5);
+          for (const layer of layers) layer.destroy();
+        }
+        await until(
+          () =>
+            [MAGENTA, GREEN, [0, 255, 255]].every(
+              (colour) => !near(meanAt(19.5, 10), colour),
+            ),
+          'every layer gone',
+        );
       },
     ],
   ];

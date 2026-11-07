@@ -44,6 +44,13 @@ function makeFire(overrides = {}) {
   };
 }
 
+/** The globe's imagery stack, shown: where the engine drapes the heatmap. */
+function globeImagery(viewer) {
+  viewer.imageryLayers = new Cesium.ImageryLayerCollection();
+  viewer.scene.globe.show = true;
+  return viewer.imageryLayers;
+}
+
 /**
  * Stand the layer up far enough to drive one click. `cardHit` is what the
  * overlay host reports under the click position — the real host only publishes
@@ -543,28 +550,15 @@ test('the heatmap is preloaded under the markers before the first zoom-out', asy
   const h = harness({
     cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 1_000_000),
   });
-  const added = [];
+  // The engine drapes the heatmap on the globe's own imagery.
+  const added = globeImagery(h.viewer);
   try {
-    h.layer.attachShellServices({
-      imageryHost: () => ({
-        kind: 'globe',
-        collection: {
-          addImageryProvider: (provider) => {
-            const layer = { provider, show: true, alpha: 1 };
-            added.push(layer);
-            return layer;
-          },
-          remove() {},
-          raiseToTop() {},
-        },
-      }),
-    });
     h.layer._renderLodForTest('close');
     assert.equal(added.length, 0, 'the markers paint first; the build trails');
     t.mock.timers.tick(HEAT_REBUILD_MS);
     assert.equal(added.length, 1, 'then the heatmap is draped');
-    assert.equal(added[0].alpha, 0, 'invisible until the hand-off');
-    assert.equal(added[0].show, true, 'but mapped onto the globe tiles');
+    assert.equal(added.get(0).alpha, 0, 'invisible until the hand-off');
+    assert.equal(added.get(0).show, true, 'but mapped onto the globe tiles');
   } finally {
     h.cleanup();
     if (priorDocument === undefined) delete globalThis.document;
@@ -596,8 +590,9 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
     fires: [makeFire(), makeFire({ index: 8, lat: 30.6, lon: -98.3, frp: 12 })],
     cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 12_000_000),
   });
-  const added = [];
+  const added = globeImagery(h.viewer);
   const removed = [];
+  added.layerRemoved.addEventListener((layer) => removed.push(layer));
   // The markers as drawn: how many the sprite set draws, and their alphas.
   const drawn = () => {
     const count =
@@ -607,23 +602,12 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
     return Array.from({ length: count }, (_, i) => markers.get(i).color.alpha);
   };
   try {
-    const collection = {
-      addImageryProvider: (provider) => {
-        const layer = { provider, show: true, alpha: 1 };
-        added.push(layer);
-        return layer;
-      },
-      remove: (layer, destroy) => removed.push({ layer, destroy }),
-      raiseToTop() {},
-    };
-    h.layer.attachShellServices({
-      imageryHost: () => ({ kind: 'globe', collection }),
-    });
     h.layer._renderLodForTest('global');
     await settle();
     assert.equal(added.length, 1, 'one heat imagery layer');
-    assert.equal(added[0].show, true);
-    assert.equal(added[0].alpha, 1);
+    const heat = added.get(0);
+    assert.equal(heat.show, true);
+    assert.equal(heat.alpha, 1);
     assert.equal(h.layer._cellCountForTest(), 0, 'no ground cells');
     assert.ok(h.published.length > 0, 'the far band still paints cards');
     assert.deepEqual(drawn(), [], 'no marker drawn while the heatmap is whole');
@@ -643,34 +627,33 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
 
     h.layer._renderLodForTest('regional');
     assert.equal(added.length, 1, 'switching far bands reuses the raster');
+    assert.equal(added.get(0), heat);
 
     h.setHeight(1_000_000);
     h.layer._renderLodForTest('close');
     await settle();
-    assert.equal(added.length, 1, 'the markers band keeps the same heat layer');
-    assert.equal(added[0].show, true, 'still mapped onto the globe tiles');
-    assert.equal(added[0].alpha, 0, 'faded out under the markers');
+    assert.equal(added.get(0), heat, 'the markers band keeps the same layer');
+    assert.equal(heat.show, true, 'still mapped onto the globe tiles');
+    assert.equal(heat.alpha, 0, 'faded out under the markers');
     assert.deepEqual(drawn(), [1, 1]);
 
     // Mid hand-off both are drawn, half each, in either band.
     h.setHeight(4_500_000);
     h.layer._applyHandoffFadeForTest();
     await settle();
-    assert.equal(added[0].alpha, 0.5);
+    assert.equal(heat.alpha, 0.5);
     assert.deepEqual(drawn(), [0.5, 0.5]);
     h.layer._renderLodForTest('regional');
     await settle();
-    assert.equal(added[0].alpha, 0.5);
+    assert.equal(heat.alpha, 0.5);
     assert.deepEqual(drawn(), [0.5, 0.5], 'rebuilt markers get the fade');
 
     h.layer.disable();
-    assert.equal(added[0].show, false, 'disable hides the heatmap');
+    assert.equal(heat.show, false, 'disable hides the heatmap');
 
     h.layer.destroy();
-    assert.deepEqual(
-      removed.map((entry) => [entry.layer, entry.destroy]),
-      [[added[0], true]],
-    );
+    assert.deepEqual(removed, [heat]);
+    assert.equal(heat.isDestroyed(), true);
   } finally {
     h.cleanup();
     restoreDocument();

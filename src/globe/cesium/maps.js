@@ -66,7 +66,7 @@ const dispose = (value) => {
  *   credits?: object,
  *   loadPhotorealTileset?: (credentials: object) => Promise<{ tileset: object | null, errors: Error[] }>,
  * }} [options] `tilesetRef` names the startup Google tileset the app added.
- * @returns {{ maps: object, destroy: () => void }}
+ * @returns {{ maps: object, tilesets: () => object[], destroy: () => void }}
  */
 export function createCesiumMaps(
   viewer,
@@ -221,6 +221,8 @@ export function createCesiumMaps(
 
   return {
     maps,
+    /** Every tileset the map may show (engine.imagery drapes on a shown one). */
+    tilesets,
     destroy() {
       if (destroyed) return;
       destroyed = true;

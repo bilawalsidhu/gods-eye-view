@@ -95,10 +95,10 @@ function weatherPass(engine, { view, EffectDesc, NavaraEffect }) {
     empty = null;
   class WeatherEffect extends EffectDesc {
     static key = KEY;
-    static insertAfter = ['gevNepalEvent', 'gevRecentImagery', 'toneMapping'];
+    static insertAfter = ['gevNepalEvent', 'gevImagery', 'toneMapping'];
     static insertBefore = [
       'gevEarthquakeGround',
-      'gevFirmsGround',
+      'gevGround',
       'gevPreSharpenOverlay',
       'gevSharpen',
       'smaa',

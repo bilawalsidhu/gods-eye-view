@@ -4,7 +4,6 @@ import * as geo from '../../geo/index.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createFirmsHeatmapLayer } from './index.js';
 import { createFirmsDisplay } from './render/display.js';
-import { createFirmsHeatDrape } from './render/navaraHeat.js';
 
 const settle = async () => {
   for (let i = 0; i < 5; i++)
@@ -64,32 +63,6 @@ function fixture() {
       roll: 0,
     });
   pose(12_000_000);
-  const effects = [];
-  const native = {
-    view: {
-      camera: {},
-      registerEffect() {},
-      addEffect(config) {
-        const handle = {
-          config,
-          visible: config.visible,
-          deleted: false,
-          update(next) {
-            if ('visible' in next) handle.visible = next.visible;
-          },
-          delete() {
-            handle.deleted = true;
-          },
-        };
-        effects.push(handle);
-        return handle;
-      },
-    },
-    EffectDesc: class {},
-    NavaraEffect: class {},
-  };
-  // The heatmap draws through the Navara backend on this view.
-  engine.extensions = { navara: native };
   const noop = () => {};
   const layer = createFirmsHeatmapLayer({
     id: 'local-firms',
@@ -117,8 +90,7 @@ function fixture() {
     },
     overlayHost: { setEntries: noop, setVisible: noop, clearSource: noop },
     renderer: {
-      create: ({ engine: target, id }) =>
-        createFirmsDisplay(target, { id, navaraHeat: createFirmsHeatDrape }),
+      create: ({ engine: target, id }) => createFirmsDisplay(target, { id }),
     },
   });
   layer.init(null, { engine });
@@ -129,18 +101,15 @@ function fixture() {
     engine,
     layer,
     pose,
-    // The heatmap as drawn: its raster's alpha at the fire, 0 when the
-    // drape is hidden, faded out or unpainted.
+    // The heatmap as drawn: its raster's alpha at the fire times the
+    // layer's, 0 when the imagery layer is hidden, faded out or unpainted.
     drawnHeat() {
-      const handle = effects.find(
-        (effect) => effect.config.gevFirmsHeat && !effect.deleted,
-      );
-      const owner = handle?.config.gevFirmsHeat.owner;
-      if (!handle?.visible || !owner?.texture || !(owner.opacity > 0)) return 0;
-      const { data, width, height } = owner.texture.image;
+      const heat = engine.fake.imageryLayer('local-firms:heat');
+      if (!heat?.shown || !(heat.alpha > 0)) return 0;
+      const { data, width, height } = heat.source.image;
       const x = Math.floor(((FIRE.lon + 180) / 360) * width);
       const y = Math.floor(((90 - FIRE.lat) / 180) * height);
-      return (data[(y * width + x) * 4 + 3] / 255) * owner.opacity;
+      return (data[(y * width + x) * 4 + 3] / 255) * heat.alpha;
     },
     cards: () => layer.getStats().cells,
     // Fire sprites actually drawn (shown instances of the engine set).

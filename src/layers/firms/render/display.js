@@ -5,15 +5,17 @@
 //   without an outline, not pickable;
 // - clicks: the engine's selection dispatcher, with the pick under the click;
 // - the camera, projection, view rectangle and horizon the layer reads: the
-//   engine's (engine.camera, engine.projector).
-// The far-zoom heatmap is a draped raster, which the contract has no
-// primitive for; it sits behind render/heatField.js.
+//   engine's (engine.camera, engine.projector);
+// - the far-zoom heatmap: one engine.imagery layer, the heat raster as RGBA
+//   bytes over the whole globe, faded by its alpha for the hand-off.
 
 import { createEngineLayerView } from '../../shared/render/engineView.js';
 import { selectionDispatcherFor } from '../../../data/selectionDispatcher.js';
 import { LOD_LEVELS } from '../policy.js';
 import { createFirmsSpriteBank } from './sprites.js';
-import { createFirmsHeatField } from './heatField.js';
+
+// Above imagery layers of the default order (a pinned Recent Imagery day).
+const HEAT_ORDER = 1;
 
 const rgbaOf = (color) => [
   color?.red ?? 1,
@@ -23,24 +25,88 @@ const rgbaOf = (color) => [
 ];
 
 /**
+ * The heatmap on engine.imagery: setRaster (data/firmsHeatRaster.js's
+ * equirectangular RGBA over the globe; a new one replaces the image in
+ * place), hasRaster, setShow (the layer on or off), setOpacity (the
+ * hand-off fade, 0..1: a faded layer stays on its surface, so it comes
+ * back without a gap) and destroy. The engine layer is made with the first
+ * raster.
+ */
+function createHeatImagery(engine, id, onDestroy) {
+  let layer = null,
+    raster = null,
+    show = true,
+    opacity = 1,
+    destroyed = false;
+  const heat = {
+    setRaster(next) {
+      if (destroyed) return;
+      raster = next ?? null;
+      if (!raster) {
+        layer?.destroy();
+        layer = null;
+        return;
+      }
+      const source = {
+        kind: 'image',
+        image: {
+          width: raster.width,
+          height: raster.height,
+          data: raster.rgba,
+        },
+      };
+      if (layer) layer.setSource(source);
+      else
+        layer = engine.imagery.createLayer({
+          id,
+          source,
+          alpha: opacity,
+          show,
+          order: HEAT_ORDER,
+        });
+    },
+    /** True once a raster was handed over. */
+    hasRaster: () => raster !== null,
+    setShow(value) {
+      if (destroyed) return;
+      show = Boolean(value);
+      layer?.show(show);
+    },
+    setOpacity(value) {
+      if (destroyed) return;
+      opacity = Math.min(1, Math.max(0, Number(value) || 0));
+      layer?.setAlpha(opacity);
+    },
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      layer?.destroy();
+      layer = null;
+      raster = null;
+      onDestroy(heat);
+    },
+  };
+  return heat;
+}
+
+/**
  * The renderer the fire layer draws through (lifecycle.js, rendering.js).
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
- * @param {{ id?: string, navaraHeat?: Function, loadImage?: Function,
- *   createCanvas?: Function }} [options] `navaraHeat` is the heatmap's Navara
- *   backend (render/navaraHeat.js), which the Navara mode passes in;
+ * @param {{ id?: string, loadImage?: Function, createCanvas?: Function }} [options]
  *   `loadImage` and `createCanvas` are the sprite atlas's test seams.
  */
 export function createFirmsDisplay(
   engine,
-  { id = 'local-firms', navaraHeat, loadImage, createCanvas } = {},
+  { id = 'local-firms', loadImage, createCanvas } = {},
 ) {
-  if (!engine?.movers || !engine?.ground)
+  if (!engine?.movers || !engine?.ground || !engine?.imagery)
     throw new TypeError('The FIRMS display needs a globe engine');
   let destroyed = false,
     visible = false,
     cellItems = [],
     cellsQueued = false,
-    sprites = null;
+    sprites = null,
+    heat = null;
   // The layer's visibility as the context store reads a data source's.
   const dataSource = { show: false };
   const clickRemovers = new Set();
@@ -144,14 +210,16 @@ export function createFirmsDisplay(
     /** The mover set drawing the glows, for tests and QA (null before any). */
     spriteSet: () => sprites?.set ?? null,
     /**
-     * The far-zoom heatmap draped on this globe (render/heatField.js): on
-     * Cesium on the active map stack's imagery host (`imageryHost()`), else
-     * on the viewer's imagery layers.
+     * The far-zoom heatmap on this globe's imagery (createHeatImagery
+     * above); one at a time, destroyed with the display.
      */
-    createHeatImagery(imageryHost) {
-      return destroyed
-        ? null
-        : createFirmsHeatField(engine, { imageryHost, navaraHeat });
+    createHeatImagery() {
+      if (destroyed) return null;
+      heat?.destroy();
+      heat = createHeatImagery(engine, `${id}:heat`, (gone) => {
+        if (heat === gone) heat = null;
+      });
+      return heat;
     },
     /** The hand-off fade: every marker at `alpha`, shown while `show`. */
     fadeSprites(alpha, show) {
@@ -165,6 +233,7 @@ export function createFirmsDisplay(
       cellItems = [];
       for (const release of [...clickRemovers]) release();
       removeSprites();
+      heat?.destroy();
       cells.destroy();
       layerView.destroy();
       engine.render.request('firms-destroy');

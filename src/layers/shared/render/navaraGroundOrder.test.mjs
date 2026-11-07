@@ -7,9 +7,10 @@ import { createImageryGround } from '../../recentImagery/render/navaraGround.js'
 // actual renderer declarations under every activation order, including the
 // minimal look, whose pipeline has no toneMapping anchor.
 const declarations = [
-  'gevRecentImagery',
+  'gevImagery',
   'gevNepalEvent',
   'gevObservedWeather',
+  'gevGround',
   'gevPreSharpenOverlay',
 ];
 // The descriptor a renderer registers; its setup stops there.
@@ -39,12 +40,25 @@ async function declared(key, path, className) {
         .match(new RegExp(`static ${name} = \\[([^\\]]*)\\]`))[1]
         .matchAll(/'([^']+)'/g),
     ].map((m) => m[1]);
-  return { key, after: anchors('insertAfter'), before: anchors('insertBefore') };
+  return {
+    key,
+    after: anchors('insertAfter'),
+    before: anchors('insertBefore'),
+  };
 }
 const specs = [
-  registered((sdk) => createImageryGround({}, sdk, {})),
+  await declared(
+    'gevImagery',
+    '../../../globe/navara/imagery/pass.js',
+    'ImageryEffectDesc',
+  ),
   registered((sdk) => createImageryGround({}, sdk, {}, 'gevNepalEvent')),
   await declared('gevObservedWeather', '../../weather/render/navaraSurface.js'),
+  await declared(
+    'gevGround',
+    '../../../globe/navara/ground/pass.js',
+    'GroundEffectDesc',
+  ),
   await declared(
     'gevPreSharpenOverlay',
     '../../../globe/navara/overlay.js',

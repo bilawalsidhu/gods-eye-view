@@ -23,21 +23,6 @@ export function createLifecycle({
   }
 
   const methods = {
-    /**
-     * Shell services: `imageryHost()` resolves where draped imagery goes on
-     * the active map stack (globe or 3D tiles, src/maps/imageryHost.js). The
-     * heatmap moves with it; without a host it drapes on the globe's own
-     * imagery (render/heatField.js).
-     * @param {{imageryHost?: () => {collection: ?Object, kind: string}}|null} services
-     */
-    attachShellServices(services) {
-      layerState._imageryHost =
-        typeof services?.imageryHost === 'function'
-          ? services.imageryHost
-          : null;
-      layerState._heatImagery?.rehome();
-    },
-
     init(viewer, options) {
       this.attachRenderer(viewer, options);
     },
@@ -161,7 +146,6 @@ export function createLifecycle({
       layerState._cellCacheByGrid.clear();
       layerState.glowSpriteCache.clear();
       releaseHeat();
-      layerState._imageryHost = null;
       layerState._count = 0;
       layerState._totalCount = 0;
       layerState._rowControlsListener = null;

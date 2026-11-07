@@ -52,6 +52,7 @@ import { createAwarenessDisplay } from '../../layers/awareness/render/display.js
 import { createStreetLevelDisplay } from '../../layers/streetLevel/render/display.js';
 import { createTrafficDisplay } from '../../layers/traffic/render/display.js';
 import { createDirectionsDisplay } from '../../layers/directions/render/display.js';
+import { createRecentImageryDisplay } from '../../layers/recentImagery/render/display.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -139,6 +140,7 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   'street-level': createStreetLevelDisplay,
   traffic: createTrafficDisplay,
   directions: createDirectionsDisplay,
+  'recent-imagery': createRecentImageryDisplay,
 });
 
 // The other application layers still draw themselves on Cesium.

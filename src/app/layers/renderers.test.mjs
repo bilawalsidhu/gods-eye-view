@@ -88,6 +88,7 @@ test('the layers with extracted renderers', () => {
     'street-level',
     'traffic',
     'directions',
+    'recent-imagery',
   ]);
 });
 
@@ -117,6 +118,8 @@ test('the layers drawn through one display get the same factory on every engine'
     'street-level': ['streetLevel', 'createStreetLevelDisplay'],
     traffic: ['traffic', 'createTrafficDisplay'],
     directions: ['directions', 'createDirectionsDisplay'],
+    'local-firms': ['firms', 'createFirmsDisplay'],
+    'recent-imagery': ['recentImagery', 'createRecentImageryDisplay'],
     'telegeography-submarine-cables': [
       'submarineCables',
       'createCablesDisplay',

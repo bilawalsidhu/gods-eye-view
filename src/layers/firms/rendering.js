@@ -168,13 +168,11 @@ export function createRendering({
     return clipped;
   }
 
-  /** The renderer's heat imagery adapter, created on first use. */
+  /** The renderer's heat imagery layer, created on first use. */
 
   function heatImagery() {
     layerState._heatImagery ??=
-      layerState._renderer?.createHeatImagery?.(
-        () => layerState._imageryHost?.() ?? null,
-      ) ?? null;
+      layerState._renderer?.createHeatImagery?.() ?? null;
     return layerState._heatImagery;
   }
 
@@ -210,15 +208,14 @@ export function createRendering({
   }
 
   /**
-   * Keep the heatmap draped on the current map stack and current with the
-   * shown set in every band; the hand-off fade decides how much of it shows.
+   * Keep the heatmap current with the shown set in every band (the engine
+   * keeps it on the map's surface); the hand-off fade decides how much of
+   * it shows.
    * @param {boolean} now The camera is in a far band.
    */
 
   function prepareHeat(now) {
     const imagery = heatImagery();
-    // The map stack may have changed since the last render.
-    imagery.rehome();
     ensureHeatRaster(now);
     imagery.setShow(layerState._enabled);
   }

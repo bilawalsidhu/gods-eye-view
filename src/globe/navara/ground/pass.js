@@ -230,7 +230,7 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
     'gevEarthquakeGround',
     'gevObservedWeather',
     'gevNepalEvent',
-    'gevRecentImagery',
+    'gevImagery',
     'toneMapping',
   ];
   static insertBefore = [

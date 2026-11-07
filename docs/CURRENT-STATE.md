@@ -183,8 +183,10 @@ one application, and only the globe-bound parts move to the next engine.
   `node scripts/qa-contract-suite.mjs <origin>` runs them in headless Chrome
   on the real Cesium and Navara of a keyless dev server, with a real pointer
   and real canvases; checks of state the app drives itself (contact sonar)
-  are skipped and named. On November 7, 2026 Cesium passed 66 of 66 and
-  Navara 69 of 69. `movers` and `lines` are required of every engine: Cesium
+  are skipped and named. On November 7, 2026, with the imagery checks,
+  Cesium passed 68 of 68 and Navara 71 of 71 (the camera-events check now
+  and then misses its moveEnd on a busy machine on either engine and passes
+  when run again). `movers` and `lines` are required of every engine: Cesium
   draws them with billboards, points, models and polyline primitives
   (`src/globe/cesium/movers.js`, `lines.js`).
 - **Fills on the ground** (`engine.ground`) are required of every engine
@@ -202,6 +204,26 @@ one application, and only the globe-bound parts move to the next engine.
     perimeters have prototypes in `render/ground.js`.
   - On November 7, 2026, `scripts/qa-ground-suite.mjs` (the ground checks
     with pixels) passed 3 of 3 on both engines.
+- **Rasters on the ground** (`engine.imagery`) are required of every engine
+  too: layers of Web Mercator tiles from a URL template or of one image (a
+  canvas, an image, RGBA bytes or an image URL) over a rectangle, each with
+  its alpha, show, split side and draw `order`, and one split position per
+  engine (`docs/GLOBE-PRIMITIVES.md`).
+  - Cesium draws each as an `ImageryLayer` on the imagery stack of the
+    surface shown (the globe, or the shown 3D tileset's), and follows it
+    (`src/globe/cesium/imagery.js`).
+  - Navara draws them in one screen pass after tone mapping, classified on
+    the scene depth (`src/globe/navara/imagery/`).
+  - Active Fires' far-zoom heatmap and Recent Imagery draw through it;
+    weather, wind and the Bhote Koshi event imagery do not yet.
+  - `engine.maps.addOverlay` (Navara's native raster layers for Sea Marks
+    and Ski Pistes) stays until those overlays move to `engine.imagery`.
+  - On November 7, 2026, `scripts/qa-ground-suite.mjs --only=imagery:` (the
+    imagery checks with pixels) passed 2 of 2 on both engines, and
+    `scripts/qa-imagery-compare.mjs` found the heatmap and Recent Imagery
+    drawn as before on Cesium (no pixel changed where they draw) and on
+    Navara (no channel off by more than 1 of 255, but for the heatmap from
+    orbit, which Navara now mipmaps as Cesium does).
 - **Engine coupling.** `node scripts/report-engine-coupling.mjs` counts the
   engine-specific code outside the engines: renderer lines per engine, Cesium
   imports, `viewer` mentions, engine-name checks, raw Navara reads, Navara
@@ -233,11 +255,9 @@ one application, and only the globe-bound parts move to the next engine.
   `src/layers/awareness/render/pulseDisc.js` (`render/cesiumPulses.js`, a
   material disc, on Cesium; `render/navaraPulses.js`, a surface pass that the
   Navara mode loads and passes in).
-  The Active Fires far-zoom heatmap, a raster draped on the ground that the
-  contract has no primitive for yet, draws behind one seam,
-  `src/layers/firms/render/heatField.js` (`render/cesiumHeat.js`, an imagery
-  layer, on Cesium; `render/navaraHeat.js`, a surface pass that the Navara
-  mode loads and passes in). CCTV's monitor plane and viewshed volume, which the
+  The Active Fires far-zoom heatmap is an `engine.imagery` layer, and Recent
+  Imagery draws its days through `engine.imagery` from its own
+  `render/display.js`. CCTV's monitor plane and viewshed volume, which the
   contract has no primitive for yet, draw behind one seam,
   `src/layers/cctv/render/meshes.js` (`render/cesiumMeshes.js` on Cesium;
   `render/navaraMeshes.js`, which the Navara mode loads and passes in). Cesium

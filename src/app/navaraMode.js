@@ -94,15 +94,9 @@ const NAVARA_CREDIT_KEYS = new Set([
  */
 export async function registerNavaraLayerRenderers() {
   const loaders = {
-    'recent-imagery': async () => {
-      const { createRecentImageryNavaraRenderer } =
-        await import('../layers/recentImagery/render/navara.js');
-      return (engine, options) =>
-        createRecentImageryNavaraRenderer(engine, {
-          ...options,
-          ...engine.extensions.navara,
-        });
-    },
+    'recent-imagery': async () =>
+      (await import('../layers/recentImagery/render/display.js'))
+        .createRecentImageryDisplay,
     transit: async () =>
       (await import('../layers/transit/render/display.js'))
         .createTransitDisplay,
@@ -198,19 +192,8 @@ export async function registerNavaraLayerRenderers() {
     'military-installations': async () =>
       (await import('../layers/installations/render/display.js'))
         .createInstallationsDisplay,
-    // The FIRMS display, with the Navara backend of its heatmap.
-    'local-firms': async () => {
-      const [{ createFirmsDisplay }, { createFirmsHeatDrape }] =
-        await Promise.all([
-          import('../layers/firms/render/display.js'),
-          import('../layers/firms/render/navaraHeat.js'),
-        ]);
-      return (engine, options) =>
-        createFirmsDisplay(engine, {
-          ...options,
-          navaraHeat: createFirmsHeatDrape,
-        });
-    },
+    'local-firms': async () =>
+      (await import('../layers/firms/render/display.js')).createFirmsDisplay,
     'osm-places': async () =>
       (await import('../layers/osmPlaces/render/display.js'))
         .createOsmPlacesDisplay,

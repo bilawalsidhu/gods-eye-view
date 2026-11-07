@@ -5,13 +5,15 @@
 // engine clock's frame latch on viewer.clock.onTick (clock.js), attached at
 // creation so it runs before onTick listeners added later. Mover sets and
 // lines join the scene in one engine-owned collection each, with the first
-// set or line; ground sets join scene.groundPrimitives the same way.
+// set or line; ground sets join scene.groundPrimitives the same way, and
+// imagery layers the imagery stack of the shown surface.
 
 import { createCesiumCamera } from './camera.js';
 import { createCesiumClock } from './clock.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumFrames } from './frames.js';
 import { createCesiumGround } from './ground.js';
+import { createCesiumImagery } from './imagery.js';
 import { createCesiumInput } from './input.js';
 import { createCesiumLines } from './lines.js';
 import { createCesiumMaps } from './maps.js';
@@ -33,9 +35,11 @@ import { createCesiumSurface } from './surface.js';
  *   moverFactories?: object,
  *   lineFactories?: object,
  *   groundFactories?: object,
+ *   imageryFactories?: object,
  * }} [options] `requestRender` defaults to the render governor; `appClock`
  *   to the page's app clock; the `create*`/`load*` options and the mover and
- *   line and ground factories (movers.js, lines.js, ground.js) are test seams.
+ *   line, ground and imagery factories (movers.js, lines.js, ground.js,
+ *   imagery.js) are test seams.
  *
  * `render.setContinuous` takes a hold on the app's singleton renderGovernor
  * (src/renderGovernor.js), which governs the one viewer it was installed on;
@@ -60,6 +64,11 @@ export function createCesiumEngine(viewer, options = {}) {
     requestRender,
     ...(options.groundFactories ? { factories: options.groundFactories } : {}),
   });
+  const maps = createCesiumMaps(viewer, {
+    ...options,
+    credits: credits.credits,
+    requestRender,
+  });
   // Picks name the mover set, line or ground set they hit, with its pickId.
   const picker = createCesiumPicker(viewer, {
     identify: (picked) =>
@@ -83,11 +92,15 @@ export function createCesiumEngine(viewer, options = {}) {
     }),
     input: createCesiumInput(viewer, { ...options, picker: picker.picker }),
     credits,
-    maps: createCesiumMaps(viewer, {
-      ...options,
-      credits: credits.credits,
+    // Before the maps: its layers leave the tilesets before they go.
+    imagery: createCesiumImagery(viewer, {
       requestRender,
+      tilesets: maps.tilesets,
+      ...(options.imageryFactories
+        ? { factories: options.imageryFactories }
+        : {}),
     }),
+    maps,
   };
   let destroyed = false;
   return {

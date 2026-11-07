@@ -148,13 +148,9 @@ export function createFirmsState({ services, config }) {
 
   layerState._handoffHeat = -1;
 
-  /** Imagery adapter (heatImagery.js), created on the first far render. */
+  /** The heatmap's imagery layer (render/display.js), made on the first far render. */
 
   layerState._heatImagery = null;
-
-  /** Shell-provided imagery host resolver; falls back to viewer.imageryLayers. */
-
-  layerState._imageryHost = null;
 
   /** Camera idle snapshot so the throttled LOD check is ~free when parked. */
 

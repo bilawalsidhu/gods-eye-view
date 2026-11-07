@@ -1,13 +1,14 @@
 # Globe primitives
 
 A layer draws through the globe-engine contract (`src/globe/contract.js`),
-not through Cesium or Navara. The contract has three drawing primitives:
+not through Cesium or Navara. The contract has four drawing primitives:
 
 - `engine.movers`: things at points;
 - `engine.lines`: lines in the air;
-- `engine.ground`: fills on the ground.
+- `engine.ground`: fills on the ground;
+- `engine.imagery`: rasters on the ground.
 
-Each engine implements all three. Cesium's are in `src/globe/cesium/`,
+Each engine implements all four. Cesium's are in `src/globe/cesium/`,
 Navara's in `src/globe/navara/`, and the fake engine's in
 `src/globe/testing/fakeEngine.js`. The checks every engine must pass are in
 `src/globe/testing/contractSuite.mjs`.
@@ -211,6 +212,118 @@ take 135 ms. A layer with more lines than that (Street Level's up to 14 400
 sequences) needs a set-wide grid of bins first, as areas have, before it
 moves to `engine.ground`.
 
+## Imagery: rasters on the ground
+
+`engine.imagery.createLayer({ id, source, alpha, show, split, order })`
+makes one raster layer draped over the terrain and the 3D tiles, under
+every ground fill, mover, line and model. Its colours are the image's own,
+blended by the texel's alpha times the layer's `alpha`.
+
+There are two kinds of source:
+
+| kind    | source                                                                                                | for                                                      |
+| ------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `tiles` | `url` with `{z}`, `{x}`, `{y}` (and `{s}` of `subdomains`), `minLevel`, `maxLevel`, `tileSize`        | Recent Imagery's GIBS days, weather tiles, open overlays |
+| `image` | `image`: a canvas, an ImageBitmap or image element, or `{ width, height, data }` RGBA bytes; or `url` | the FIRMS heat raster, a field image, event imagery      |
+
+Both take:
+
+- `rectangle` (`{ west, south, east, north }` in degrees; west > east
+  crosses the antimeridian): where the layer draws, the globe when omitted;
+- `credit`: HTML shown while the layer is.
+
+Tiles are Web Mercator XYZ tiles and stop at ±85.05°. `opaque` tiles have
+no alpha channel, and `maxRequests` caps the layer's tile requests in
+flight. An image is stretched over its rectangle in longitude and latitude,
+row 0 on the north edge; one over the whole globe wraps across 180°.
+
+Work with a layer like this:
+
+- `setSource(source)` draws another source in its place, at its place in
+  the order; the same canvas or bytes again draw their new pixels;
+- `setAlpha(alpha)` fades it: at 0 it draws nothing but stays on its
+  surface, so it comes back without a gap (the FIRMS hand-off);
+- `show(visible)` shows or hides it (Cesium unmaps a hidden layer's tiles);
+- `setSplit('left' | 'right' | 'none')` puts it on one side of the split;
+- `ready()` says the source is built (an image URL loaded); tiles arrive
+  after it;
+- `destroy()`.
+
+On the engine:
+
+- `list()` names the layers in draw order, bottom first: a higher `order`
+  draws on top, then the later layer;
+- `setSplitPosition(fraction)` sets where the split runs, a fraction of the
+  canvas width from the left (one per engine, Cesium's
+  `scene.splitPosition`); `splitPosition()` reads it;
+- `surface()` says where imagery drapes now: `'globe'`, `'tiles'` (3D tiles)
+  or `'none'`.
+
+### How each engine draws imagery
+
+**Cesium** (`src/globe/cesium/imagery.js`) gives each layer one
+`ImageryLayer`:
+
+- on the globe's imagery layers while the globe shows, else on the shown 3D
+  tileset's own imagery layers (Cesium drapes imagery on tiles there), as
+  `src/maps/imageryHost.js` resolves it for the shell; with neither, the
+  layers wait;
+- the engine checks the surface on every frame while it holds a layer, and
+  builds each layer again on the new stack after a switch;
+- above the base imagery, in order among the engine's layers; imagery other
+  code adds stays where it was put;
+- tiles: a `UrlTemplateImageryProvider` in Web Mercator, bounded to the
+  rectangle; `maxRequests` gates `requestImage`, and a request the gate or
+  the provider defers asks for one delayed frame, never one per frame;
+- an image: one geographic tile over the rectangle (as
+  `SingleTileImageryProvider`), handed to Cesium as the canvas or image
+  itself, with no PNG round trip;
+- `split` is the layer's `splitDirection`; Cesium splits on the globe only.
+
+**Navara** (`src/globe/navara/imagery/`) draws every shown layer in one
+screen pass right after tone mapping, under the other drapes and
+`engine.ground`:
+
+- each pixel's ground position comes from the scene depth (terrain and 3D
+  tiles), as `engine.ground`'s pass finds it;
+- up to 8 layers are sampled in draw order at its longitude and latitude,
+  each in its rectangle and on its side of the split (the top 8 when more
+  are shown);
+- an image is one mipmapped texture, sampled in longitude and latitude;
+- tiles are an atlas of at most 8×8 Web Mercator tiles over the part of the
+  rectangle in view, at the level the camera's height asks for; it is
+  rebuilt when the camera moves to another plan and filled as tiles arrive,
+  6 loads at a time (or `maxRequests`);
+- texels are blended in display space, as Cesium's globe blends imagery;
+  mip levels come from the derivatives of the ground position, taken
+  before any branch, so rectangle edges and the antimeridian show no seams.
+
+`engine.imagery` is the successor of `engine.maps.addOverlay`, Navara's
+undocumented extension for the open map overlays (Sea Marks, Ski Pistes).
+That one adds a native Navara raster layer: Navara's own per-tile levels on
+the terrain, lit like the base map, but no rectangle, split, alpha or order,
+and nothing on 3D tiles. It stays until those overlays move, which needs a
+finer Navara tiles path first: a global overlay seen obliquely gets coarse
+near the camera from one 8×8 atlas over the whole view.
+
+### What is still to move
+
+- **Weather radar, satellite clouds and lightning** (`src/layers/weather/`):
+  tile templates in geographic and Web Mercator tilings, decoded canvases
+  tiled into a provider, staged frames (a new frame loads under the shown
+  one at alpha 0 and replaces it once its tiles are in), a per-tile image
+  transform (the infrared mask), a detail window over the global image,
+  and the raised shells Cesium draws over 3D tiles at a height. They need a
+  geographic `tiles` scheme, a staged `setSource` (or `ready()` per tile
+  set) and a tile transform; the raised shell is a separate primitive.
+- **The wind field** (`src/layers/wind/`): one image over the globe at a
+  fixed alpha, faded by camera height — an `image` layer — and the same
+  raised shell on 3D tiles.
+- **The Bhote Koshi event imagery** (`src/layers/bhoteKoshi/`, Cesium in
+  `src/data/bhoteKoshiEvent.js`): two image URLs over one rectangle, split
+  left and right, alpha 0.96 — two `image` layers with `url` and `split`.
+  Navara still draws them with `src/layers/recentImagery/render/navaraGround.js`.
+
 ### Choosing a primitive
 
 - **A position and an on-screen size:** a mover.
@@ -224,3 +337,5 @@ moves to `engine.ground`.
 - Group items that change together into one set, and replace them in bulk.
   A ground set is rebuilt on every commit, so an animated fill (a pulse, a
   flowing route) is not a ground set yet.
+- **Pixels on the ground** (tiles, a raster, a photo): an imagery layer.
+  Fade it with `setAlpha`, and give a new raster to `setSource`.

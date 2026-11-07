@@ -509,110 +509,99 @@ test('the fake engine: clearing rows during a decode commits only the replacemen
   }
 });
 
-test('the heatmap: the Cesium engine drapes one imagery layer on the viewer, the host when there is one', () => {
-  const priorDocument = globalThis.document;
+// A 2D canvas for the Cesium engine's image upload (RGBA bytes go on one).
+function stubDocument() {
+  const prior = globalThis.document;
   globalThis.document = {
     createElement: () => ({
+      width: 0,
+      height: 0,
       getContext: () => ({
         createImageData: (w, hh) => ({
           data: new Uint8ClampedArray(w * hh * 4),
         }),
         putImageData() {},
       }),
-      toDataURL: () => 'data:image/png;base64,AAAA',
     }),
   };
-  const h = cesiumHarness();
-  try {
-    const layers = (added) => ({
-      addImageryProvider(provider) {
-        const layer = { provider, show: true, alpha: 1 };
-        added.push(layer);
-        return layer;
-      },
-      remove: (layer) => added.splice(added.indexOf(layer), 1),
-      raiseToTop() {},
-    });
-    const onViewer = [];
-    h.viewer.imageryLayers = layers(onViewer);
-    const onHost = [];
-    let host = null;
-    const r = display(h);
-    const heat = r.createHeatImagery(() => host);
-    const raster = { width: 2, height: 1, rgba: new Uint8ClampedArray(8) };
-    heat.setRaster(raster);
-    assert.equal(heat.hasRaster(), true);
-    assert.equal(onViewer.length, 1, 'no host: the viewer’s imagery layers');
-    assert.ok(onViewer[0].provider instanceof Cesium.SingleTileImageryProvider);
-    heat.setOpacity(0.5);
-    heat.setShow(false);
-    assert.deepEqual([onViewer[0].alpha, onViewer[0].show], [0.5, false]);
-    host = { kind: 'tiles', collection: layers(onHost) };
-    heat.rehome();
-    assert.deepEqual(
-      [onViewer.length, onHost.length],
-      [0, 1],
-      'it follows the host',
-    );
-    assert.deepEqual([onHost[0].alpha, onHost[0].show], [0.5, false]);
-    heat.destroy();
-    assert.equal(onHost.length, 0);
-    r.destroy();
-  } finally {
-    h.destroy();
-    if (priorDocument === undefined) delete globalThis.document;
-    else globalThis.document = priorDocument;
-  }
-});
+  return () => {
+    if (prior === undefined) delete globalThis.document;
+    else globalThis.document = prior;
+  };
+}
 
-test('the heatmap: Navara draws through the backend the mode passes in; an engine without one keeps the state', () => {
-  const h = fakeHarness();
-  try {
-    const first = display(h);
-    const plain = first.createHeatImagery();
-    plain.setRaster({ width: 1, height: 1, rgba: new Uint8ClampedArray(4) });
-    plain.setOpacity(2);
-    plain.setShow(false);
-    plain.rehome();
-    assert.equal(plain.hasRaster(), true);
-    assert.deepEqual(
-      { ...plain.state(), raster: Boolean(plain.state().raster) },
-      { raster: true, show: false, opacity: 1, drawn: false },
-    );
-    plain.destroy();
-    first.destroy();
-
-    const native = { view: {} };
-    h.engine.extensions = { navara: native };
-    const calls = [];
-    const navaraHeat = (engine, navara) => {
-      calls.push(['create', engine === h.engine, navara === native]);
-      return {
-        setRaster: (raster) => calls.push(['raster', raster.width]),
-        setShow: (show) => calls.push(['show', show]),
-        setOpacity: (opacity) => calls.push(['opacity', opacity]),
-        rehome: () => calls.push(['rehome']),
-        destroy: () => calls.push(['destroy']),
-      };
-    };
-    const second = display(h, { navaraHeat });
-    const heat = second.createHeatImagery();
-    heat.setRaster({ width: 3, height: 1, rgba: new Uint8ClampedArray(12) });
-    heat.setOpacity(0.25);
-    heat.setShow(true);
-    heat.rehome();
-    heat.destroy();
-    heat.setShow(false);
-    assert.deepEqual(calls, [
-      ['create', true, true],
-      ['raster', 3],
-      ['opacity', 0.25],
-      ['show', true],
-      ['rehome'],
-      ['destroy'],
-    ]);
-    second.destroy();
-  } finally {
-    h.destroy();
-  }
-});
+for (const make of HARNESSES) {
+  const name = make().name;
+  test(`${name}: the heatmap is one imagery layer over the globe, faded by its alpha`, () => {
+    const restore = stubDocument();
+    const h = make();
+    // Cesium drapes it on the globe's own imagery stack.
+    const stack = new Cesium.ImageryLayerCollection();
+    if (h.viewer) {
+      h.viewer.imageryLayers = stack;
+      h.viewer.scene.globe.show = true;
+    }
+    try {
+      const r = display(h);
+      const heat = r.createHeatImagery();
+      const listed = () => h.engine.imagery.list();
+      assert.equal(heat.hasRaster(), false);
+      assert.deepEqual(listed(), [], 'no layer before the first raster');
+      heat.setOpacity(0);
+      const raster = { width: 4, height: 2, rgba: new Uint8ClampedArray(32) };
+      heat.setRaster(raster);
+      assert.equal(heat.hasRaster(), true);
+      assert.deepEqual(listed(), [
+        {
+          id: 'firms-fixture:heat',
+          kind: 'image',
+          shown: true,
+          alpha: 0,
+          split: 'none',
+          order: 1,
+        },
+      ]);
+      if (h.viewer) {
+        assert.equal(stack.length, 1, 'one imagery layer on the globe');
+        assert.equal(stack.get(0).alpha, 0);
+        assert.equal(stack.get(0).show, true, 'a faded layer stays mapped');
+      } else {
+        const drawn = h.engine.fake.imageryLayer('firms-fixture:heat');
+        assert.equal(drawn.source.image.data, raster.rgba);
+        assert.deepEqual(drawn.source.rectangle, {
+          west: -180,
+          south: -90,
+          east: 180,
+          north: 90,
+        });
+      }
+      heat.setOpacity(7);
+      heat.setShow(false);
+      assert.deepEqual(
+        [listed()[0].alpha, listed()[0].shown],
+        [1, false],
+        'the opacity clamps; show hides',
+      );
+      heat.setRaster({ ...raster, rgba: new Uint8ClampedArray(32) });
+      assert.equal(listed().length, 1, 'a new raster replaces the image');
+      assert.deepEqual([listed()[0].alpha, listed()[0].shown], [1, false]);
+      if (h.viewer) {
+        assert.equal(stack.length, 1);
+        assert.equal(stack.get(0).show, false);
+      }
+      heat.destroy();
+      heat.destroy();
+      assert.deepEqual(listed(), []);
+      if (h.viewer) assert.equal(stack.length, 0);
+      // The display takes its heatmap with it.
+      r.createHeatImagery().setRaster(raster);
+      assert.equal(listed().length, 1);
+      r.destroy();
+      assert.deepEqual(listed(), []);
+      assert.equal(r.createHeatImagery(), null);
+    } finally {
+      h.destroy();
+      restore();
+    }
+  });
+}
