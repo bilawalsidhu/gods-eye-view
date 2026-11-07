@@ -2,6 +2,7 @@
 
 import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
+import { horizonEllipsoidRadii } from '../contract.js';
 
 /**
  * @param {Cesium.Viewer} viewer
@@ -25,6 +26,7 @@ export function createCesiumProjector(
   let occluderY = Number.NaN;
   let occluderZ = Number.NaN;
 
+  let custom = null;
   const projector = {
     worldToWindow(position, result) {
       // Cesium returns undefined in front of the near plane or behind the camera.
@@ -47,8 +49,25 @@ export function createCesiumProjector(
         result[index] = scratchMatrix[index];
       return result;
     },
-    horizonVisible(position) {
+    horizonVisible(position, options) {
       const { positionWC } = camera;
+      const radii = horizonEllipsoidRadii(options);
+      if (radii) {
+        if (
+          !custom ||
+          custom.radii.x !== radii.x ||
+          custom.radii.y !== radii.y ||
+          custom.radii.z !== radii.z
+        )
+          custom = {
+            radii: { ...radii },
+            occluder: new Cesium.EllipsoidalOccluder(
+              new Cesium.Ellipsoid(radii.x, radii.y, radii.z),
+            ),
+          };
+        custom.occluder.cameraPosition = positionWC;
+        return custom.occluder.isPointVisible(position);
+      }
       if (
         positionWC.x !== occluderX ||
         positionWC.y !== occluderY ||

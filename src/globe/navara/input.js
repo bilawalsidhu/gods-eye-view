@@ -50,10 +50,27 @@ export function createNavaraInput(
   let last = null;
 
   const pointer = createExclusivePointer();
+  const gestures = new WeakMap();
   const delivery = createPickDelivery({
-    pick: (position, type) =>
-      type === 'move' ? picker?.pick(position) : picker?.clickPick(position),
-    drill: (position, limit) => picker?.drillPick(position, limit) ?? [],
+    pick: (position, type, window) => {
+      if (type === 'move' || type === 'down')
+        return picker?.pick(position, window?.width, window?.height);
+      let gesture = gestures.get(position);
+      if (!gesture) {
+        gesture = Promise.resolve(picker?.clickPick(position));
+        gestures.set(position, gesture);
+      }
+      if (!window) return gesture;
+      return gesture.then(
+        (hit) =>
+          hit ??
+          (window
+            ? picker?.pick(position, window.width, window.height)
+            : undefined),
+      );
+    },
+    drill: (position, limit, window) =>
+      picker?.drillPick(position, limit, window?.width, window?.height) ?? [],
     schedule: (run) => scheduleFrame(() => !destroyed && run()),
   });
   const positionOf = (event) => {
@@ -126,7 +143,10 @@ export function createNavaraInput(
   const input = {
     acquirePointer: () => pointer.acquire(),
     on(type, listener, options = {}) {
-      const { modifier, pick, drill } = normalizeInputOptions(type, options);
+      const { modifier, pick, drill, pickWindow } = normalizeInputOptions(
+        type,
+        options,
+      );
       if (destroyed) return () => {};
       if (!attached) {
         attached = true;
@@ -138,6 +158,7 @@ export function createNavaraInput(
         modifier,
         pick,
         drill,
+        pickWindow,
         pointer: options.pointer,
       };
       listeners.get(type).add(entry);

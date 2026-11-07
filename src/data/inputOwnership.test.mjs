@@ -119,7 +119,7 @@ test('every scene click handler consults ownership before it picks', () => {
       'src/layers/infrastructure/render/display.js',
       'const picked = event.picked;',
     ],
-    ['src/data/cctvGizmo.js', 'pickGizmoPart(event.position)'],
+    ['src/data/cctvGizmo.js', 'pickGizmoPart(event)'],
     // ALPR and bikeshare take the engine's click with its pick.
     ['src/layers/alpr/render/display.js', 'overlay.pick(position) ||'],
     ['src/layers/bikeshare/render/display.js', 'const picked = event.picked;'],

@@ -102,8 +102,9 @@ export function createNavaraPicking({
       meshPickers.add(pick);
       return () => meshPickers.delete(pick);
     },
-    pick: (at) => drillPick(at, 1)[0],
-    drillPick: (at, limit) => drillPick(at, limit ?? Infinity),
+    pick: (at, width, height) => drillPick(at, 1, { width, height })[0],
+    drillPick: (at, limit, width, height) =>
+      drillPick(at, limit ?? Infinity, { width, height }),
     /** The answer for a click at `at`: the GPU pick of its gesture. */
     clickPick(at) {
       const gesture = early;

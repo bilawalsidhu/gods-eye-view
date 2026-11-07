@@ -56,8 +56,6 @@ const sameColor = (a, b) =>
   a.green === b.green &&
   a.blue === b.blue &&
   a.alpha === b.alpha;
-const gizmoDebug = () =>
-  typeof window !== 'undefined' && window.__gevGizmoDebug;
 
 const scratchRotation = geo.matrix3.create();
 const scratchCorner = geo.cartesian3.create();
@@ -504,46 +502,12 @@ export function createCctvDisplay(engine, { state, services = {} } = {}) {
       },
       // Handles draw over the scene: the single pick usually finds one,
       // and a drill covers what overlaps them.
-      pickPart(position) {
-        try {
-          const part = partFrom(
-            engine.picker.pick(position, GIZMO_PICK_PX, GIZMO_PICK_PX),
-          );
-          if (part) return part;
-        } catch (error) {
-          if (gizmoDebug())
-            console.debug('[CCTV:gizmo] pick threw:', error?.message || error);
-        }
-        let results = [];
-        try {
-          results =
-            engine.picker.drillPick(
-              position,
-              GIZMO_DRILL_LIMIT,
-              GIZMO_PICK_PX,
-              GIZMO_PICK_PX,
-            ) || [];
-        } catch (error) {
-          if (gizmoDebug())
-            console.debug(
-              '[CCTV:gizmo] drillPick threw:',
-              error?.message || error,
-            );
-          return null;
-        }
-        if (gizmoDebug())
-          console.debug(
-            '[CCTV:gizmo] drillPick @',
-            position?.x,
-            position?.y,
-            '→',
-            JSON.stringify(results.map((result) => String(result?.id))),
-          );
-        for (const picked of results) {
-          const part = partFrom(picked);
-          if (part) return part;
-        }
-        return null;
+      pickPart(event) {
+        return (
+          partFrom(event.picked) ||
+          (event.drilled ?? []).map(partFrom).find(Boolean) ||
+          null
+        );
       },
       pickRay(position) {
         try {
@@ -556,7 +520,19 @@ export function createCctvDisplay(engine, { state, services = {} } = {}) {
       on(type, listener) {
         if (destroyed) return;
         if (type !== 'cancel') {
-          gizmoRemovers.push(engine.input.on(type, listener));
+          gizmoRemovers.push(
+            engine.input.on(
+              type,
+              listener,
+              type === 'down' || type === 'move'
+                ? {
+                    pick: true,
+                    drill: GIZMO_DRILL_LIMIT,
+                    pickWindow: { width: GIZMO_PICK_PX, height: GIZMO_PICK_PX },
+                  }
+                : {},
+            ),
+          );
           return;
         }
         const target = canvas();

@@ -67,12 +67,28 @@ function fakeHarness(options = {}) {
 
 function cesiumHarness() {
   const handlers = createFakeEventHandlers();
+  const groundPrimitives = [];
+  const groundPrimitive = (options) => {
+    const primitive = {
+      ...options,
+      ready: true,
+      destroy() {},
+      isDestroyed: () => false,
+    };
+    groundPrimitives.push(primitive);
+    return primitive;
+  };
   const { engine, viewer, frame, primitive } = createCesiumMoversEngine({
     engineOptions: {
       createEventHandler: handlers.create,
       scheduleFrame: (run) => run(),
+      groundFactories: {
+        lines: groundPrimitive,
+        fills: groundPrimitive,
+      },
     },
   });
+  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
   let native;
   let picked = [];
   viewer.scene.pick = (position) => {
@@ -86,6 +102,7 @@ function cesiumHarness() {
     cesium: true,
     engine,
     viewer,
+    groundPrimitives,
     frame,
     primitive,
     picked: () => picked,
@@ -139,6 +156,40 @@ function setup(
   { vehicles = new Map(), credits = [], mesh = [] } = {},
 ) {
   const h = makeHarness();
+  const groundRecords = new Map();
+  const createSet = h.engine.ground.createSet;
+  h.engine.ground.createSet = (options) => {
+    const set = createSet(options);
+    const record = { options, commits: 0, fraction: 1 };
+    groundRecords.set(options.id, record);
+    const { replace, commit, setReveal } = set;
+    set.replace = (items) => {
+      record.items = items;
+      replace(items);
+    };
+    set.commit = () => {
+      record.commits++;
+      commit();
+    };
+    set.setReveal = (fraction) => {
+      record.fraction = fraction;
+      setReveal(fraction);
+    };
+    return set;
+  };
+  h.trailLines = () =>
+    h.engine.ground.list().map((set) => ({
+      ...set,
+      points: groundRecords.get(set.id).items?.[0]?.positions.length ?? 0,
+    }));
+  h.trailLine = (id) => {
+    const record = groundRecords.get(id);
+    return {
+      ...record.items[0],
+      ...record,
+      points: record.items[0].positions.length,
+    };
+  };
   h.engine.camera.setView({
     destination: geo.cartesian3.fromDegrees(AUSTIN.lon, AUSTIN.lat, 2000),
   });
@@ -559,7 +610,7 @@ for (const makeHarness of HARNESSES) {
       ],
     });
     assert.deepEqual(
-      f.engine.lines.list(),
+      f.trailLines(),
       [],
       'nothing before the clock passes a segment',
     );
@@ -571,11 +622,19 @@ for (const makeHarness of HARNESSES) {
     );
     const sample = { displayT: 15000, fromSeq: 0, toSeq: 1, fraction: 0.75 };
     for (let i = 0; i < 120; i++) trail.setDisplaySample(sample, marker);
-    const lines = f.engine.lines.list();
-    // The first segment (two lanes) and the head (two lanes).
-    assert.equal(lines.length, 4);
-    const lanes = lines.map(({ id }) => ({ id, ...f.line(id) }));
-    const [bodyBacking, bodyLane, headBacking, headLane] = lanes;
+    const lines = f.trailLines();
+    // The first segment (two lanes) and one backed reveal head.
+    assert.equal(lines.length, 3);
+    const lanes = lines.map(({ id }) => ({ id, ...f.trailLine(id) }));
+    assert.ok(lanes.every((lane) => lane.options.dynamic));
+    if (f.cesium) {
+      assert.equal(f.groundPrimitives.length, 3);
+      assert.ok(
+        f.groundPrimitives.every((primitive) => !primitive.asynchronous),
+        'history and head build immediately without worker jobs',
+      );
+    }
+    const [bodyBacking, bodyLane, headLane] = lanes;
     assert.equal(bodyBacking.points, 2);
     assert.equal(bodyLane.points, 2);
     near(bodyBacking.color[0], 0.02, 'dark edge');
@@ -587,18 +646,13 @@ for (const makeHarness of HARNESSES) {
       'age alpha',
     );
     near(headLane.color[3], 0.8, 'head alpha');
-    near(headLane.depthFailAlpha, 0.55 / 0.8, 'hidden head at 0.55');
-    near(
-      bodyLane.depthFailAlpha * bodyLane.color[3],
-      0.55,
-      'hidden body at 0.55',
-      1e-3,
-    );
-    assert.equal(
-      headBacking.depthFailAlpha,
-      0,
-      'the dark edge does not draw hidden',
-    );
+    assert.deepEqual(headLane.backing, {
+      widthPx: 5,
+      color: [0.02, 0.03, 0.05, 0.8],
+    });
+    assert.equal(headLane.fraction, 0.5);
+    assert.equal(headLane.commits, 1, 'head geometry built once');
+    assert.equal(headLane.options.pickable, undefined, 'picks pass through');
     if (!f.cesium) {
       assert.equal(bodyBacking.widthPx, 5);
       assert.equal(bodyLane.widthPx, 3);
@@ -614,20 +668,23 @@ for (const makeHarness of HARNESSES) {
     assert.equal(result.backing.width, 5);
     assert.equal(result.head.positions.length, 2);
     assert.ok(geo.cartesian3.equals(result.head.positions.at(-1), marker));
-    assert.equal(result.ground, false);
+    assert.equal(result.ground, true);
+    trail.setDisplaySample({ ...sample, displayT: 16000 }, marker);
+    assert.equal(f.trailLine(headLane.id).commits, 1);
+    assert.equal(f.trailLine(headLane.id).fraction, 0.6);
     // Rewind: the passed segment is future again.
     trail.setDisplaySample(
       { ...sample, displayT: 5000, fraction: 0.25 },
       positions[0],
     );
-    assert.equal(f.engine.lines.list().length, 2, 'only the head');
+    assert.equal(f.trailLines().length, 1, 'only the head');
     // Past the end the head goes too; long after, both segments share the
     // oldest band.
     trail.setDisplaySample(
       { ...sample, displayT: 2_000_000, fraction: 1, fromSeq: 1, toSeq: 1 },
       positions[2],
     );
-    const done = f.engine.lines.list();
+    const done = f.trailLines();
     assert.equal(
       done.filter((line) => line.shown).length,
       2,
@@ -639,11 +696,11 @@ for (const makeHarness of HARNESSES) {
       'joined segments are one line',
     );
     trail.setVisible(false);
-    assert.ok(f.engine.lines.list().every((line) => !line.shown));
+    assert.ok(f.trailLines().every((line) => !line.shown));
     trail.setVisible(true);
     trail.destroy();
     trail.destroy();
-    assert.deepEqual(f.engine.lines.list(), []);
+    assert.deepEqual(f.trailLines(), []);
     f.display.destroy();
     f.engine.destroy();
   });
@@ -666,7 +723,7 @@ for (const makeHarness of HARNESSES) {
       });
     }
     trail.replaceHistory({ revision: 1, segments });
-    const shownLines = () => f.engine.lines.list().filter((line) => line.shown);
+    const shownLines = () => f.trailLines().filter((line) => line.shown);
     // Ten minutes on, the passed history spans several bands; across the gap
     // it is two runs.
     const display = (displayT) =>
@@ -678,7 +735,7 @@ for (const makeHarness of HARNESSES) {
     const bands = new Set();
     let points = 0;
     for (const { id, points: count } of shownLines()) {
-      const { color } = f.line(id);
+      const { color } = f.trailLine(id);
       if (color[0] > 0.1) {
         bands.add(color[3]);
         points += count;
@@ -686,18 +743,18 @@ for (const makeHarness of HARNESSES) {
     }
     assert.ok(bands.size >= 1);
     assert.equal(points, 101 + 11 + (bands.size - 1) * 1, 'each band one span');
-    const listed = f.engine.lines.list().map(({ id }) => id);
+    const listed = f.trailLines().map(({ id }) => id);
     // Within the same second nothing is rewritten.
     display(55000 + 120400);
     assert.deepEqual(
-      f.engine.lines.list().map(({ id }) => id),
+      f.trailLines().map(({ id }) => id),
       listed,
     );
     // A new style recolours the colour lanes, not the dark edges.
     trail.setStyle('#FF4538');
     const red = rgbaFromCss('#FF4538').rgba();
     for (const { id } of shownLines()) {
-      const { color } = f.line(id);
+      const { color } = f.trailLine(id);
       if (color[0] > 0.1) near(color[0], red[0], 'restyled');
       else near(color[0], 0.02, 'dark edge kept');
     }
@@ -705,7 +762,8 @@ for (const makeHarness of HARNESSES) {
     display(55000 + 2_000_000);
     const old = shownLines();
     assert.equal(old.length, 4, 'two runs, two lanes each');
-    for (const { id } of old) near(f.line(id).color[3], 0.08, 'oldest alpha');
+    for (const { id } of old)
+      near(f.trailLine(id).color[3], 0.08, 'oldest alpha');
     trail.destroy();
     f.display.destroy();
     f.engine.destroy();

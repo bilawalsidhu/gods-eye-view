@@ -46,7 +46,7 @@ const E2 =
 /** Item looks as the shader reads them: glow, pulse and dash bits. */
 export const LOOK = Object.freeze({ glow: 1, pulse: 2, dash: 4, pattern: 8 });
 /** RGBA32F texels per corridor item. */
-export const ITEM_TEXELS = 5;
+export const ITEM_TEXELS = 7;
 
 const wrap180 = (degrees) => degrees - 360 * Math.round(degrees / 360);
 const geodetic = (latcDeg) =>
@@ -54,7 +54,7 @@ const geodetic = (latcDeg) =>
     ? latcDeg
     : Math.atan(Math.tan(latcDeg * DEG) / (1 - E2)) / DEG;
 
-/** One item's look: five texels (colour, widths, glow/pulse, dash). */
+/** One item's look: colour, widths, glow/pulse, dash and reveal. */
 function itemTexels(item, lengthM) {
   const { glow, pulse, dash, pattern } = item.animation ?? {};
   const flags =
@@ -64,7 +64,7 @@ function itemTexels(item, lengthM) {
     (pattern ? LOOK.pattern : 0);
   return [
     ...item.fill,
-    item.widthPx ?? 0,
+    item.animation?.backing?.widthPx ?? item.widthPx ?? 0,
     item.widthM ?? 0,
     lengthM,
     flags,
@@ -80,6 +80,11 @@ function itemTexels(item, lengthM) {
     dash?.emission ?? 0,
     pattern?.lengthPx ?? 0,
     pattern?.pattern ?? 0,
+    1,
+    item.widthPx / (item.animation?.backing?.widthPx ?? item.widthPx) || 1,
+    0,
+    0,
+    ...(item.animation?.backing?.color ?? [0, 0, 0, 0]),
   ];
 }
 

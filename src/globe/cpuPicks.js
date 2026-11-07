@@ -67,6 +67,46 @@ export function distanceScale(scaleByDistance, distance) {
   return nearScale + (farScale - nearScale) * t;
 }
 
+// Distance from a projected segment to a rectangular pick window.
+function distanceToWindow(at, a, b, halfWidth, halfHeight) {
+  if (!halfWidth && !halfHeight) return distanceToSegment(at, a, b);
+  let enter = 0,
+    leave = 1;
+  for (const [axis, half] of [
+    ['x', halfWidth],
+    ['y', halfHeight],
+  ]) {
+    const start = a[axis] - at[axis],
+      delta = b[axis] - a[axis];
+    if (delta === 0) {
+      if (Math.abs(start) > half) {
+        enter = 1;
+        leave = 0;
+        break;
+      }
+    } else {
+      const first = (-half - start) / delta,
+        last = (half - start) / delta;
+      enter = Math.max(enter, Math.min(first, last));
+      leave = Math.min(leave, Math.max(first, last));
+    }
+  }
+  if (enter <= leave) return 0;
+  const distance = (point) =>
+    Math.hypot(
+      Math.max(0, Math.abs(point.x - at.x) - halfWidth),
+      Math.max(0, Math.abs(point.y - at.y) - halfHeight),
+    );
+  let nearest = Math.min(distance(a), distance(b));
+  for (const dx of [-halfWidth, halfWidth])
+    for (const dy of [-halfHeight, halfHeight])
+      nearest = Math.min(
+        nearest,
+        distanceToSegment({ x: at.x + dx, y: at.y + dy }, a, b),
+      );
+  return nearest;
+}
+
 function moverRadius(options, scale, distance, modelRadiusPx = null) {
   if (options.kind === 'model' && modelRadiusPx != null)
     return Math.max(modelRadiusPx, PICK_RADIUS_PX) + PICK_RADIUS_PX;
@@ -117,7 +157,7 @@ export function createCpuPicker({
   const depthOf = (position) =>
     geo.cartesian3.distance(position, camera.livePosition);
 
-  function moverHits(at, hits) {
+  function moverHits(at, hits, halfWidth, halfHeight) {
     for (const { options, store, pickRadiusPx } of movers()) {
       if (!options.pickable) continue;
       const onTop = options.depthTest === 'always' ? 1 : 0;
@@ -133,7 +173,10 @@ export function createCpuPicker({
         );
         const screen = projector.worldToWindow(scratch, scratchScreen);
         if (!screen || !projector.horizonVisible(scratch)) continue;
-        const distance = Math.hypot(screen.x - at.x, screen.y - at.y);
+        const distance = Math.hypot(
+          Math.max(0, Math.abs(screen.x - at.x) - halfWidth),
+          Math.max(0, Math.abs(screen.y - at.y) - halfHeight),
+        );
         const depth = depthOf(scratch);
         if (
           distance >
@@ -150,7 +193,7 @@ export function createCpuPicker({
     }
   }
 
-  function lineHits(at, hits) {
+  function lineHits(at, hits, halfWidth, halfHeight) {
     for (const { options, flat, modelMatrix } of lines()) {
       if (options.pickId === undefined) continue;
       const limit = Math.max(
@@ -166,7 +209,8 @@ export function createCpuPicker({
         const sa = projector.worldToWindow(a, scratchScreen);
         const sb = sa && projector.worldToWindow(b, scratchScreenB);
         if (!sa || !sb) continue;
-        if (distanceToSegment(at, sa, sb) > limit) continue;
+        if (distanceToWindow(at, sa, sb, halfWidth, halfHeight) > limit)
+          continue;
         const t = segmentT(at, sa, sb);
         const depth = depthOf(
           geo.cartesian3.lerp(a, b, t, geo.cartesian3.create()),
@@ -187,16 +231,47 @@ export function createCpuPicker({
   const drill = (
     at,
     limit = Infinity,
-    { includeMovers = true, includeLines = true, includeMeshes = true } = {},
+    {
+      includeMovers = true,
+      includeLines = true,
+      includeMeshes = true,
+      width = 1,
+      height = 1,
+    } = {},
   ) => {
     const hits = [];
-    if (includeMovers) moverHits(at, hits);
-    if (includeLines) lineHits(at, hits);
-    if (includeMeshes) hits.push(...meshes(at));
+    const halfWidth = (width - 1) / 2,
+      halfHeight = (height - 1) / 2;
+    if (includeMovers) moverHits(at, hits, halfWidth, halfHeight);
+    if (includeLines) lineHits(at, hits, halfWidth, halfHeight);
+    // Mesh and ground pickers answer points, so sample each pixel of the
+    // requested window; the projected movers and lines above are tested once.
+    if (includeMeshes)
+      for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) {
+          const sample =
+            width === 1 && height === 1
+              ? at
+              : { x: at.x + x - halfWidth, y: at.y + y - halfHeight };
+          hits.push(...meshes(sample));
+        }
     hits.sort(
       (a, b) => b.onTop - a.onTop || b.order - a.order || a.depth - b.depth,
     );
-    return hits.slice(0, limit).map(({ result }) => result);
+    const results = [];
+    for (const { result } of hits) {
+      if (results.length >= limit) break;
+      if (
+        !results.some(
+          (hit) =>
+            hit.owner === result.owner &&
+            hit.instance === result.instance &&
+            hit.id === result.id,
+        )
+      )
+        results.push(result);
+    }
+    return results;
   };
   /**
    * Whether a mover instance is drawn near a window position: within its

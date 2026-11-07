@@ -84,3 +84,48 @@ test('asynchronous picks resolve before delivery; removed listeners get nothing'
   );
   assert.deepEqual(seen[0][1].drilled, [{ id: 'later' }]);
 });
+
+test('pick windows partition sharing, preserve drill limits and copy the latest move', async () => {
+  const picks = [],
+    drills = [],
+    seen = [];
+  let frame;
+  const delivery = createPickDelivery({
+    pick: (at, type, window) => {
+      picks.push([at.x, window]);
+      return { id: window?.width };
+    },
+    drill: (at, limit, window) => {
+      drills.push([limit, window]);
+      return Array.from({ length: limit }, (_, id) => ({ id }));
+    },
+    schedule: (run) => {
+      frame = run;
+    },
+  });
+  const small = { width: 9, height: 3 },
+    large = { width: 17, height: 11 };
+  const listeners = [
+    entry(seen, 'a', { pick: true, drill: 2, pickWindow: small }),
+    entry(seen, 'b', { pick: true, drill: 4, pickWindow: { ...small } }),
+    entry(seen, 'c', { pick: true, drill: 1, pickWindow: large }),
+  ];
+  await delivery.deliver('down', { position: { x: 1, y: 2 } }, listeners);
+  assert.equal(picks.length, 2);
+  assert.deepEqual(drills, [
+    [4, small],
+    [1, large],
+  ]);
+  assert.deepEqual(
+    seen.map(([, event]) => event.drilled.length),
+    [2, 4, 1],
+  );
+  picks.length = 0;
+  delivery.deliver('move', { endPosition: { x: 3, y: 0 } }, listeners);
+  delivery.deliver('move', { endPosition: { x: 4, y: 0 } }, listeners);
+  frame();
+  assert.deepEqual(
+    picks.map(([x]) => x),
+    [4, 4],
+  );
+});

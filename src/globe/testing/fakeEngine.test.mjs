@@ -431,7 +431,40 @@ test('input listeners asking for picks get the pick and the drill in the payload
     TypeError,
   );
   assert.throws(
-    () => engine.input.on('down', () => {}, { pick: true }),
+    () => engine.input.on('up', () => {}, { pick: true }),
     TypeError,
   );
+});
+
+test('input rejects invalid pick windows and forwards copied windows on down and move', () => {
+  const engine = createFakeEngine();
+  for (const pickWindow of [
+    null,
+    {},
+    { width: 0, height: 9 },
+    { width: 9, height: 0.5 },
+    { width: Infinity, height: 1 },
+  ])
+    assert.throws(
+      () => engine.input.on('click', () => {}, { pick: true, pickWindow }),
+      TypeError,
+    );
+  assert.throws(
+    () =>
+      engine.input.on('click', () => {}, {
+        pickWindow: { width: 9, height: 9 },
+      }),
+    TypeError,
+  );
+  const picked = [];
+  engine.fake.script('pick', (at, w, h) => ({ id: `${w}:${h}` }));
+  const pickWindow = { width: 11, height: 7 };
+  engine.input.on('down', (event) => picked.push(event.picked.id), {
+    pick: true,
+    pickWindow,
+  });
+  pickWindow.width = 1;
+  engine.fake.input('down', { position: { x: 2, y: 3 } });
+  assert.deepEqual(picked, ['11:7']);
+  engine.destroy();
 });

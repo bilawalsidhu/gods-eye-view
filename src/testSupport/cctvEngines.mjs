@@ -104,8 +104,13 @@ const CESIUM_TYPES = {
 export function cesiumCctvHarness() {
   const handler = testEventHandler();
   const { engine, viewer, frame, primitive } = createCesiumMoversEngine({
-    engineOptions: { createEventHandler: () => handler },
+    engineOptions: {
+      createEventHandler: () => handler,
+      scheduleFrame: (run) => run(),
+    },
   });
+  viewer.scene.pick = () => undefined;
+  viewer.scene.drillPick = () => [];
   const canvas = viewer.scene.canvas;
   canvas.style = {};
   canvas.ownerDocument = { defaultView: new EventTarget() };

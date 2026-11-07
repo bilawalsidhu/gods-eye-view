@@ -2,7 +2,7 @@
 // engine, through the engine contract only: engine.movers (the launch-site,
 // recovery and payload dots, the hover reticle), engine.lines (trajectories,
 // recovery and re-entry paths, the transfer, the orbits in the tactical
-// pattern, the pad zone's rim), the selection dispatcher on engine.input
+// pattern), engine.ground (the pad zones), the selection dispatcher on engine.input
 // (clicks), engine.picker (the hover cursor), engine.projector and the frame
 // events. The layer keeps its own records and moves the camera itself
 // (engine.camera); the engine draws.
@@ -25,49 +25,10 @@ const HOVER_PICK_INTERVAL_MS = 120;
 const PICK_DEPTH = 12;
 const RETICLE_SIZE_PX = 24;
 const RETICLE_CELL = 'reticle';
-// The pad zone's rim: a closed ring through the middle of the style's rim
-// band, in the rim's colour with its emission and alpha.
-const PAD_RING_SEGMENTS = 128;
-const PAD_RING_WIDTH_PX = 2;
-
 const rgbaOf = (color) =>
   Array.isArray(color)
     ? [...color]
     : [color?.red ?? 1, color?.green ?? 1, color?.blue ?? 1, color?.alpha ?? 1];
-
-/** The pad zone's rim colour: Cesium's rim emission over the zone colour. */
-export function padRimColor() {
-  const [red, green, blue] = rgbaFromCss(LAUNCH_PAD_ZONE_STYLE.color).rgba();
-  const gain = 1 + LAUNCH_PAD_ZONE_STYLE.emission;
-  return [
-    Math.min(1, red * gain),
-    Math.min(1, green * gain),
-    Math.min(1, blue * gain),
-    LAUNCH_PAD_ZONE_STYLE.rimAlpha,
-  ];
-}
-
-/** The pad zone's rim radius: the middle of the style's rim band, metres. */
-export const PAD_RIM_RADIUS_M =
-  (LAUNCH_PAD_ZONE_RADIUS_M *
-    (LAUNCH_PAD_ZONE_STYLE.rimStart + LAUNCH_PAD_ZONE_STYLE.rimEnd)) /
-  2;
-
-/** The pad zone's rim positions around `launch` at `heightM`. */
-export function padRingPositions(launch, heightM = 0) {
-  const frame = geo.transforms.eastNorthUpToFixedFrame(
-    geo.cartesian3.fromDegrees(launch.lon, launch.lat, heightM),
-    geo.ellipsoid.WGS84,
-  );
-  const local = geo.cartesian3.create();
-  return Array.from({ length: PAD_RING_SEGMENTS + 1 }, (_, index) => {
-    const angle = (index / PAD_RING_SEGMENTS) * geo.math.TWO_PI;
-    local.x = PAD_RIM_RADIUS_M * Math.cos(angle);
-    local.y = PAD_RIM_RADIUS_M * Math.sin(angle);
-    local.z = 0;
-    return geo.matrix4.multiplyByPoint(frame, local, geo.cartesian3.create());
-  });
-}
 
 /**
  * Bound hover picking independently of precise click selection. A move inside
@@ -194,6 +155,7 @@ export function createLaunchesDisplay(engine, { layerId = LAYER_ID } = {}) {
   let lineSeq = 0;
   let frameNumber = 0;
   const removers = [];
+  const pads = new Set();
 
   // --- commits: once per frame listener, or in a microtask -----------------
   const pending = new Set();
@@ -425,6 +387,7 @@ export function createLaunchesDisplay(engine, { layerId = LAYER_ID } = {}) {
       next = Boolean(next) && !destroyed;
       if (next === visible) return;
       visible = next;
+      for (const pad of pads) pad.refresh();
       frame(() => {
         for (const bank of banks.values()) bank.setVisible(visible);
         if (visible) for (const marker of markers) refresh(marker);
@@ -455,35 +418,39 @@ export function createLaunchesDisplay(engine, { layerId = LAYER_ID } = {}) {
      * modelMatrix?, depthFailAlpha? } (engine.lines options).
      */
     addLine: (options) => new LineHandle(options),
-    /**
-     * The pad zone of a launch: its rim on the terrain under the pad, drawn
-     * over the scene. Picks pass through it, as Cesium's clicks and hover
-     * passed over the zone.
-     */
+    /** The launch pad's radial fill, draped on terrain and tiles. */
     createPad(launch) {
-      const terrain = engine.surface.terrainHeightSupported
-        ? engine.surface.terrainHeight(
-            geo.cartographic.fromDegrees(launch.lon, launch.lat, 0),
-          )
-        : undefined;
-      const heightM = Number.isFinite(terrain) ? terrain : 0;
-      const ring = new LineHandle({
+      const set = engine.ground.createSet({
         id: `rocket-pad-zone:${launch.id}`,
-        positions: padRingPositions(launch, heightM),
-        widthPx: PAD_RING_WIDTH_PX,
-        color: padRimColor(),
-        depthFailAlpha: 1,
+        kind: 'disc',
       });
-      return {
-        heightM,
+      const { color, ...radial } = LAUNCH_PAD_ZONE_STYLE;
+      set.replace([
+        {
+          center: [launch.lon, launch.lat],
+          radiusM: LAUNCH_PAD_ZONE_RADIUS_M,
+          fill: rgbaFromCss(color).rgba(),
+          radial,
+        },
+      ]);
+      set.commit();
+      let shown = true;
+      const pad = {
         get show() {
-          return ring.show;
+          return shown;
         },
         set show(value) {
-          ring.show = value;
+          shown = value !== false;
+          pad.refresh();
         },
-        destroy: () => ring.remove(),
+        refresh: () => set.show(visible && shown),
+        destroy() {
+          if (pads.delete(pad)) set.destroy();
+        },
       };
+      pads.add(pad);
+      pad.refresh();
+      return pad;
     },
     project: (position, result) =>
       engine.projector.worldToWindow(position, result),
@@ -531,6 +498,7 @@ export function createLaunchesDisplay(engine, { layerId = LAYER_ID } = {}) {
       banks.clear();
       pending.clear();
       for (const handle of [...lines]) handle.remove();
+      for (const pad of [...pads]) pad.destroy();
       pickIds.clear();
     },
   };

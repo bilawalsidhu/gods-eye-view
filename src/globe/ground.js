@@ -47,6 +47,13 @@ export function normalizeGroundSetOptions(options) {
     fail('pickable must be a boolean');
   if (options.dynamic !== undefined && typeof options.dynamic !== 'boolean')
     fail('dynamic must be a boolean');
+  if (
+    options.reveal !== undefined &&
+    (typeof options.reveal !== 'boolean' ||
+      kind !== 'corridor' ||
+      options.pickable)
+  )
+    fail('reveal needs an unpickable corridor set');
   const drape = options.drape ?? 'both';
   if (!GROUND_DRAPES.includes(drape))
     fail(`drape must be one of ${GROUND_DRAPES.join(', ')}: ${drape}`);
@@ -57,6 +64,7 @@ export function normalizeGroundSetOptions(options) {
     pickable: options.pickable === true,
     drape,
     ...(options.dynamic ? { dynamic: true } : {}),
+    ...(options.reveal ? { reveal: true } : {}),
   };
 }
 
@@ -117,6 +125,22 @@ function outlineOf(item) {
   return { color: Float32Array.from(outline.color), widthPx: outline.widthPx };
 }
 
+// A disc's radius fractions and alpha envelope, independent of its colour.
+function radialOf(item) {
+  if (item.radial == null) return null;
+  const { fillAlpha, rimAlpha, rimStart, rimEnd, emission } = item.radial;
+  if (
+    !item.fill ||
+    ![fillAlpha, rimAlpha, rimStart, rimEnd].every(unit) ||
+    !(rimStart < rimEnd && rimEnd < 1) ||
+    !(isFiniteNumber(emission) && emission >= 0)
+  )
+    fail(
+      'radial needs fill, alpha in 0..1, 0 <= rimStart < rimEnd < 1 and emission >= 0',
+    );
+  return Object.freeze({ fillAlpha, rimAlpha, rimStart, rimEnd, emission });
+}
+
 function boundsOf(paths) {
   let west = Infinity;
   let east = -Infinity;
@@ -144,6 +168,7 @@ const DEGREE_M = (Math.PI / 180) * EARTH_RADIUS;
 export function normalizeGroundItem(kind, item, index = 0) {
   if (!isObject(item)) fail(`item ${index} must be an object`);
   const base = { pickId: item.pickId };
+  if (item.radial != null && kind !== 'disc') fail('radial needs a disc');
   if (kind === 'polygon') {
     if (!Array.isArray(item.rings) || !item.rings.length)
       fail(`item ${index} needs rings: [outer, ...holes]`);
@@ -173,6 +198,7 @@ export function normalizeGroundItem(kind, item, index = 0) {
       ...base,
       center: [center[0], center[1]],
       radiusM: item.radiusM,
+      radial: radialOf(item),
       fill: fillOf(item),
       outline: outlineOf(item),
       bounds: {
@@ -244,8 +270,14 @@ const unit = (value) => isFiniteNumber(value) && value >= 0 && value <= 1;
 // alpha going up and down, `dash` the annotation route's flowing dashes.
 // Null without any.
 function animationOf(item, index) {
-  const { glow, pulse, dash, dashPattern } = item;
-  if (glow == null && pulse == null && dash == null && dashPattern == null)
+  const { glow, pulse, dash, dashPattern, backing } = item;
+  if (
+    glow == null &&
+    pulse == null &&
+    dash == null &&
+    dashPattern == null &&
+    backing == null
+  )
     return null;
   if (dashPattern != null) {
     if (
@@ -257,7 +289,7 @@ function animationOf(item, index) {
     const pattern = dashPattern.pattern ?? 255;
     if (!Number.isInteger(pattern) || pattern < 0 || pattern > 65535)
       fail(`item ${index} dashPattern.pattern must be a 16-bit integer`);
-    if (glow != null || pulse != null || dash != null)
+    if (glow != null || pulse != null || dash != null || backing != null)
       fail(
         `item ${index} dashPattern cannot combine with other corridor looks`,
       );
@@ -306,7 +338,28 @@ function animationOf(item, index) {
       fail(`${label} dash.emission must be a number >= 0: ${emission}`);
     dashOut = Object.freeze({ cells, duty, speed, gapAlpha, emission });
   }
-  return Object.freeze({ glow: glowOut, pulse: pulseOut, dash: dashOut });
+  let backingOut = null;
+  if (backing != null) {
+    if (
+      !isObject(backing) ||
+      !isColor(backing.color) ||
+      !isFiniteNumber(backing.widthPx) ||
+      !(backing.widthPx > item.widthPx)
+    )
+      fail(
+        `${label} backing needs a colour and a widthPx larger than the core`,
+      );
+    backingOut = Object.freeze({
+      color: Object.freeze([...backing.color]),
+      widthPx: backing.widthPx,
+    });
+  }
+  return Object.freeze({
+    glow: glowOut,
+    pulse: pulseOut,
+    dash: dashOut,
+    ...(backingOut ? { backing: backingOut } : {}),
+  });
 }
 
 /** Whether a checked item changes over time (a pulse or a dash). */
@@ -423,6 +476,7 @@ export function createGroundRegistry(build, { pulseField } = {}) {
         // What the last commit drew: picks read it.
         items: [],
         shown: true,
+        reveal: 1,
         // Whether the last commit has a pulse or a dash.
         animated: false,
         destroyed: false,
@@ -435,9 +489,15 @@ export function createGroundRegistry(build, { pulseField } = {}) {
         replace(items) {
           alive();
           if (!Array.isArray(items)) fail('items must be an array');
-          state.pending = items.map((item, index) =>
-            normalizeGroundItem(options.kind, item, index),
-          );
+          state.pending = items.map((item, index) => {
+            const checked = normalizeGroundItem(options.kind, item, index);
+            if (options.reveal) {
+              if (!checked.widthPx || checked.animation?.pattern)
+                fail('reveal needs pixel corridors without dashPattern');
+              checked.animation ??= {};
+            }
+            return checked;
+          });
         },
         commit() {
           alive();
@@ -449,6 +509,14 @@ export function createGroundRegistry(build, { pulseField } = {}) {
           alive();
           state.shown = Boolean(visible);
           part.show(state.shown);
+        },
+        setReveal(fraction) {
+          alive();
+          if (!options.reveal || !unit(fraction))
+            fail('setReveal needs a reveal set and fraction in 0..1');
+          if (state.reveal === fraction) return;
+          state.reveal = fraction;
+          part.reveal?.(fraction);
         },
         shown: () => state.shown,
         count: () => state.items.length,

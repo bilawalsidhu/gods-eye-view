@@ -655,12 +655,12 @@ export async function runTrailVisibility({
           ),
           orientation: { heading: 0, pitch: (-pitch * Math.PI) / 180, roll: 0 },
         });
-      // The trail draws through engine.lines (render/display.js); keep the
+      // The trail draws through engine.ground (render/display.js); keep the
       // renderer the selection below creates, the handle that shows and
       // hides the whole trail.
-      const createLine = app.engine.lines.createLine.bind(app.engine.lines);
+      const createLine = app.engine.ground.createSet.bind(app.engine.ground);
       window.__qaTransitLineKinds = new Map();
-      app.engine.lines.createLine = (options) => {
+      app.engine.ground.createSet = (options) => {
         const line = createLine(options);
         if (options.id.startsWith('transit-trail-'))
           window.__qaTransitLineKinds.set(
@@ -670,7 +670,7 @@ export async function runTrailVisibility({
         return line;
       };
       window.__restoreTransitLines = () => {
-        app.engine.lines.createLine = createLine;
+        app.engine.ground.createSet = createLine;
       };
       const createTrailRenderer = parts.renderer.createTrailRenderer;
       parts.renderer.createTrailRenderer = (...args) => {
@@ -796,12 +796,13 @@ export async function runTrailVisibility({
       const walk = (collection) => {
         for (let i = 0; i < collection.length; i++) {
           const primitive = collection.get(i);
-          const kind = window.__qaTransitLineKinds.get(primitive?.gevLine);
+          const kind = window.__qaTransitLineKinds.get(primitive?.gevGroundSet);
           if (kind) wrap(primitive, kind);
           else if (typeof primitive?.get === 'function') walk(primitive);
         }
       };
       walk(scene.primitives);
+      walk(scene.groundPrimitives);
     });
     const post = scene.postRender.addEventListener(() => {
       frames++;
@@ -907,7 +908,7 @@ export async function runTrailVisibility({
         const item = collection.get(i);
         if (
           String(item?.gevMoverSet ?? '').startsWith('transit') ||
-          String(item?.gevLine ?? '').startsWith('transit-trail-')
+          String(item?.gevGroundSet ?? '').startsWith('transit-trail-')
         )
           drawnByTransit.push(item);
         else if (typeof item?.get === 'function' && 'length' in item)
@@ -915,6 +916,7 @@ export async function runTrailVisibility({
       }
     };
     walk(scene.primitives);
+    walk(scene.groundPrimitives);
     const lengths = [0];
     for (let i = 1; i < points.length; i++)
       lengths.push(lengths.at(-1) + V.distance(points[i - 1], points[i]));

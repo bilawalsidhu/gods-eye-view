@@ -100,7 +100,7 @@ try {
         ),
         orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
       });
-    // The trail draws through engine.lines (render/display.js); its renderer
+    // The trail draws through engine.ground (render/display.js); its renderer
     // is the handle that shows and hides the whole trail. Keep the one the
     // selection below creates.
     let trailRenderer = null;
@@ -320,8 +320,8 @@ try {
         scene.globe.tilesLoaded &&
         parts.trails.diagnostics().body === trail.body,
       elapsedMs: performance.now() - started,
-      // The trail's engine lines (age bands and head, each with a backing).
-      lines: app.engine.lines
+      // The trail's ground corridors (age bands and head, each with a backing).
+      lines: app.engine.ground
         .list()
         .filter(({ id }) => id.startsWith('transit-trail-')),
     };
@@ -337,9 +337,8 @@ try {
   const pass =
     result.before?.shown === false &&
     result.before?.phase === 'playing' &&
-    // preparedAtSelection is reported, not required: the trail is engine
-    // lines in the air now (render/display.js), not a draped ground
-    // polyline, so it has no geometry until the floors it waits on arrive.
+    // Ground history is prepared even while marker floors are unresolved.
+    result.preparedAtSelection &&
     result.markerShow &&
     result.body &&
     result.bodyShow &&

@@ -140,8 +140,8 @@ test('a click picks in a window a few pixels wide, through engine.input and engi
     const { fake } = h.map.engine;
     assert.deepEqual(
       fake.callsOf('input.on').map(({ args }) => args),
-      [['click', {}]],
-      'one click listener, without its own pick',
+      [['click', { pick: true, pickWindow: { width: 9, height: 9 } }]],
+      'one click listener with its pick window',
     );
     h.scene.under = 'mly:seq:abc';
     h.click(30);

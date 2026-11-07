@@ -754,6 +754,7 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
     'a poll from the disabled generation never lands',
   );
   assert.equal(app.state()._inFlight.size, 0);
+  assert.deepEqual(app.engine.ground.list(), []);
   assert.equal(app.holds().includes('transit'), false);
 
   // Re-enabling starts a clean generation and does take data.
@@ -3184,7 +3185,7 @@ for (const count of [800, 3000]) {
   });
 }
 
-test('click handler selects a migrated scripted billboard and prepares a valid depth-fail trail', async (t) => {
+test('click handler selects a migrated scripted billboard and prepares a draped trail', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
@@ -3199,11 +3200,12 @@ test('click handler selects a migrated scripted billboard and prepares a valid d
   const { body } = app.layer._transitPartsForTest().trails.diagnostics();
   assert.ok(body.lines > 0);
   app.frame();
-  // Where the scene hides the trail, its colour lane still draws, dimmed.
-  const lanes = app.engine.lines
+  const lanes = app.engine.ground
     .list()
-    .map(({ id }) => app.engine.fake.line(id));
-  assert.ok(lanes.some((line) => line.options.depthFailAlpha > 0));
+    .map(({ id }) => app.engine.fake.groundSet(id));
+  assert.ok(lanes.length > 0);
+  assert.ok(lanes.every((lane) => lane.options.drape === 'both'));
+  assert.deepEqual(app.engine.lines.list(), []);
   assert.ok(entry.trailSegments.length > 0);
   app.run(1000, 16);
   assert.equal(entry.marker.show, true);
@@ -3839,7 +3841,7 @@ test('selected history is prepared while its head is hidden and remains shown ou
   app.state()._vehicles.set(entry.key, entry);
 });
 
-test('selected history waits for its surface heights: lines are not draped', async (t) => {
+test('selected history drapes before floors resolve while marker corridors still wait', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(1, BOSTON);
@@ -3850,9 +3852,9 @@ test('selected history waits for its surface heights: lines are not draped', asy
   entry.heightPending = true;
   parts.selection.selectVehicle(entry.key);
   const trail = parts.trails.diagnostics();
-  assert.equal(trail.ground, false);
-  assert.equal(trail.segments, 0, 'no history before its floors resolve');
-  assert.equal(trail.body, null);
+  assert.equal(trail.ground, true);
+  assert.ok(trail.segments > 0, 'ground history does not wait for floors');
+  assert.ok(trail.body);
   assert.deepEqual(app.engine.lines.list(), []);
   assert.equal(
     entry.displayPaths.size,

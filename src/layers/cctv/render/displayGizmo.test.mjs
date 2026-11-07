@@ -120,6 +120,28 @@ for (const makeHarness of CCTV_HARNESSES) {
     });
   }
 
+  test(`gizmo input uses its window and drill to reach an overlapping handle (${name})`, (t) => {
+    const h = setup(makeHarness, t);
+    h.choose();
+    const calls = [];
+    const drill = h.engine.picker.drillPick;
+    h.engine.picker.pick = (at, width, height) => {
+      calls.push(['pick', width, height]);
+      return { id: 'foreign', owner: 'foreign' };
+    };
+    h.engine.picker.drillPick = (at, limit, width, height) => {
+      calls.push(['drill', limit, width, height]);
+      return drill(at, limit, width, height);
+    };
+    h.event('down');
+    assert.equal(h.gizmo.isDragging(), true);
+    assert.deepEqual(calls, [
+      ['pick', 14, 14],
+      ['drill', 6, 14, 14],
+    ]);
+    h.event('up');
+  });
+
   test(`the gizmo needs its own handle, not a sibling with its id (${name})`, (t) => {
     const h = setup(makeHarness, t);
     const sibling = h.engine.lines.createLine({

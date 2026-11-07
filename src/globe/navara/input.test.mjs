@@ -265,3 +265,63 @@ test('exclusive pointer drops deferred picks across ownership changes and releas
   next.release();
   assert.equal(input.acquirePointer(), null);
 });
+
+test('custom windows keep down synchronous, moves coalesced and clicks on one GPU gesture', async () => {
+  const canvas = fakeCanvas();
+  const calls = [],
+    seen = [];
+  let resolve,
+    frame,
+    clicks = 0;
+  const { input, destroy } = createNavaraInput(
+    { canvas, camera: {} },
+    {
+      picker: {
+        pick: (at, w, h) => {
+          calls.push(['pick', w, h]);
+          return { id: 'cpu' };
+        },
+        drillPick: (at, limit, w, h) => {
+          calls.push(['drill', limit, w, h]);
+          return [{ id: 'cpu' }];
+        },
+        clickPick: () => {
+          clicks++;
+          return new Promise((done) => {
+            resolve = done;
+          });
+        },
+      },
+      scheduleFrame: (run) => {
+        frame = run;
+      },
+    },
+  );
+  const options = { drill: 6, pickWindow: { width: 11, height: 7 } };
+  input.on('down', (event) => seen.push(event), options);
+  input.on('move', (event) => seen.push(event), options);
+  input.on('click', (event) => seen.push(event), options);
+  input.on('click', (event) => seen.push(event), { pick: true });
+  canvas.dispatchEvent(pointer('pointerdown', 110, 60));
+  assert.equal(seen[0].picked.id, 'cpu');
+  assert.deepEqual(calls, [
+    ['pick', 11, 7],
+    ['drill', 6, 11, 7],
+  ]);
+  canvas.dispatchEvent(pointer('pointermove', 111, 60));
+  canvas.dispatchEvent(pointer('pointermove', 112, 60));
+  assert.equal(seen.length, 1);
+  frame();
+  assert.equal(seen.length, 2);
+  assert.equal(seen[1].endPosition.x, 12);
+  canvas.dispatchEvent(pointer('pointerup', 112, 60));
+  assert.equal(clicks, 1);
+  assert.equal(seen.length, 2);
+  resolve({ id: 'gpu' });
+  await new Promise((done) => setTimeout(done, 0));
+  assert.deepEqual(
+    seen.slice(2).map((event) => event.picked.id),
+    ['gpu', 'gpu'],
+  );
+  destroy();
+});

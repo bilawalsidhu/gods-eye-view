@@ -195,7 +195,7 @@ const OPEN = 1e30;
 // anti-aliasing in pixels; a metre one its half width in metres and the
 // half pixel.
 const reachOf = (item) => [
-  (item.widthPx ?? 0) / 2 + 0.5,
+  (item.animation?.backing?.widthPx ?? item.widthPx ?? 0) / 2 + 0.5,
   (item.widthM ?? 0) / 2,
 ];
 
@@ -351,6 +351,13 @@ export function packSet(
         const frame = frameAt(item.center[0], item.center[1]);
         const radius = frame.radius * Math.tan(item.radiusM / frame.radius);
         style.shape = [KIND.disc, item.outline?.widthPx ?? 0, 0, radius];
+        if (item.radial) {
+          const { fillAlpha, rimAlpha, rimStart, rimEnd, emission } =
+            item.radial;
+          style.shape[2] = 1;
+          style.bins = [fillAlpha, rimAlpha, rimStart, rimEnd];
+          style.origin = [emission, 0, 0, 0];
+        }
         emit(
           frame,
           style,

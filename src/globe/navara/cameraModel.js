@@ -420,7 +420,8 @@ export function createCameraModel({
     worldToWindow: (position, result) =>
       projectToWindow(view(), position, result),
     viewProjection: (result) => viewProjection(view(), result),
-    horizonVisible: (position) => horizonVisible(state.position, position),
+    horizonVisible: (position, options) =>
+      horizonVisible(state.position, position, options),
     destroy() {
       if (destroyed) return;
       cancelCurrentFlight();

@@ -30,10 +30,12 @@ const WHITE = Object.freeze([1, 1, 1, 1]);
  * (NYC −22 m), and an occluder at 0 m would hide the cones around it.
  */
 const HORIZON_CULL_DEPTH_M = 1000;
-const CULL_RADII = Object.freeze({
-  x: geo.ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
-  y: geo.ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
-  z: geo.ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
+const HORIZON_OPTIONS = Object.freeze({
+  ellipsoid: geo.ellipsoid.create(
+    geo.ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
+    geo.ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
+    geo.ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
+  ),
 });
 
 const finitePoint = (point) =>
@@ -46,28 +48,6 @@ const finitePoint = (point) =>
 export function lineColor(css, alpha) {
   const rgba = rgbaFromCss(css);
   return [rgba.red, rgba.green, rgba.blue, alpha ?? rgba.alpha];
-}
-
-/**
- * Whether `position` is in front of the horizon seen from `eye`, for an
- * ellipsoid HORIZON_CULL_DEPTH_M under WGS84 (Cesium's
- * EllipsoidalOccluder.isPointVisible on that ellipsoid).
- */
-export function aboveHorizon(eye, position) {
-  const cx = eye.x / CULL_RADII.x;
-  const cy = eye.y / CULL_RADII.y;
-  const cz = eye.z / CULL_RADII.z;
-  const limbSquared = cx * cx + cy * cy + cz * cz - 1;
-  const vx = position.x / CULL_RADII.x - cx;
-  const vy = position.y / CULL_RADII.y - cy;
-  const vz = position.z / CULL_RADII.z - cz;
-  const vtDotVc = -(vx * cx + vy * cy + vz * cz);
-  const occluded =
-    limbSquared < 0
-      ? vtDotVc > 0
-      : vtDotVc > limbSquared &&
-        (vtDotVc * vtDotVc) / (vx * vx + vy * vy + vz * vz) > limbSquared;
-  return !occluded;
 }
 
 const scratchEnu = geo.matrix4.create();
@@ -215,7 +195,6 @@ export function createStreetLevelDisplay(engine) {
       tiles = nowTiles;
       if (!rows.size && !dirty) return;
       const pose = engine.camera.pose();
-      const eye = pose.position;
       const signature = [
         pose.position.x,
         pose.position.y,
@@ -260,7 +239,10 @@ export function createStreetLevelDisplay(engine) {
             color: WHITE,
             cell: 'glyph',
             pickId: row.pickId,
-            show: aboveHorizon(eye, row.position),
+            show: engine.projector.horizonVisible(
+              row.position,
+              HORIZON_OPTIONS,
+            ),
           });
         });
         bank.setCount(group.length);

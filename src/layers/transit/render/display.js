@@ -6,7 +6,7 @@
 //   (position, image, width, color, rotation, show); the writes of a frame
 //   are committed once, at the end of the frame listener that made them (in
 //   a microtask for writes outside a frame);
-// - the selected vehicle's trail: engine.lines, its completed history in
+// - the selected vehicle's trail: engine.ground, its completed history in
 //   alpha bands by age and its live head up to the marker;
 // - the camera, surface and credits through engine.camera, engine.surface
 //   and engine.credits; clicks through engine.input and engine.picker.
@@ -37,7 +37,6 @@ import {
   TRAIL_BACKING_WIDTH_PX,
   TRAIL_DEFAULT_CSS,
   TRAIL_HEAD_ALPHA,
-  TRAIL_OCCLUDED_ALPHA,
   TRAIL_WIDTH_PX,
   markerOrder,
   trailAlpha,
@@ -316,7 +315,7 @@ const samePosition = (a, b) =>
   (a === b || geo.cartesian3.distanceSquared(a, b) < JOIN_DISTANCE_SQ);
 
 /**
- * The selected vehicle's trail on engine.lines. The history is the
+ * The selected vehicle's trail on engine.ground. The history is the
  * layer's prepared segments ({ fromT, toT, fromSeq, toSeq, positions: [a,
  * b] }, in time order); the segments the display clock has passed draw in
  * two lanes (a dark edge under the colour), one line per lane for each run
@@ -346,37 +345,53 @@ function createTrail(engine, { id }) {
     positions: [],
     width: TRAIL_BACKING_WIDTH_PX,
   };
-  const lineOf = (widthPx, color, depthFailAlpha, order) => {
-    const line = engine.lines.createLine({
+  const lineOf = (widthPx, color, order, reveal = false, backing) => {
+    const set = engine.ground.createSet({
       id: `${id}-${++seq}`,
-      widthPx,
-      color,
-      depthFailAlpha,
+      kind: 'corridor',
+      dynamic: true,
       order,
+      reveal,
     });
-    line.show(visible);
-    return line;
+    let positions = [];
+    const commit = () => {
+      set.replace(
+        positions.length
+          ? [{ positions, widthPx, color, ...(backing ? { backing } : {}) }]
+          : [],
+      );
+      set.commit();
+    };
+    set.show(visible);
+    return {
+      show: set.show,
+      destroy: set.destroy,
+      setReveal: set.setReveal,
+      setPositions(points) {
+        positions = points.map((point) => {
+          const carto = geo.cartographic.fromCartesian(point);
+          return [
+            geo.math.toDegrees(carto.longitude),
+            geo.math.toDegrees(carto.latitude),
+          ];
+        });
+        commit();
+      },
+      setColor(next) {
+        color = next;
+        commit();
+      },
+    };
   };
   const laneColor = (alpha) => [...rgb, alpha];
   const backingColor = (alpha) => [...TRAIL_BACKING_RGB, alpha];
-  // Where the scene hides the trail, its colour at TRAIL_OCCLUDED_ALPHA.
-  const occluded = (alpha) => Math.min(1, TRAIL_OCCLUDED_ALPHA / alpha);
   let headLines = null;
   const ensureHead = () =>
     (headLines ??= {
-      backing: lineOf(
-        TRAIL_BACKING_WIDTH_PX,
-        backingColor(TRAIL_HEAD_ALPHA),
-        0,
-        2,
-      ),
-      line: lineOf(
-        TRAIL_WIDTH_PX,
-        laneColor(TRAIL_HEAD_ALPHA),
-        occluded(TRAIL_HEAD_ALPHA),
-        3,
-      ),
-      drawn: [],
+      line: lineOf(TRAIL_WIDTH_PX, laneColor(TRAIL_HEAD_ALPHA), 3, true, {
+        widthPx: TRAIL_BACKING_WIDTH_PX,
+        color: backingColor(TRAIL_HEAD_ALPHA),
+      }),
     });
   const dropGroup = (group) => {
     group.backing.destroy();
@@ -417,8 +432,8 @@ function createTrail(engine, { id }) {
         const alpha = trailBandAlpha(level);
         group = {
           level,
-          backing: lineOf(TRAIL_BACKING_WIDTH_PX, backingColor(alpha), 0, 0),
-          line: lineOf(TRAIL_WIDTH_PX, laneColor(alpha), occluded(alpha), 1),
+          backing: lineOf(TRAIL_BACKING_WIDTH_PX, backingColor(alpha), 0),
+          line: lineOf(TRAIL_WIDTH_PX, laneColor(alpha), 1),
           from: -1,
           to: -1,
         };
@@ -439,7 +454,6 @@ function createTrail(engine, { id }) {
   function hideHead() {
     head.show = backing.show = false;
     if (headLines) {
-      headLines.backing.show(false);
       headLines.line.show(false);
     }
   }
@@ -501,22 +515,23 @@ function createTrail(engine, { id }) {
         hideHead();
         return;
       }
-      active = segment;
       const lines = ensureHead();
-      lines.backing.show(true);
       lines.line.show(true);
       const positions = [segment.positions[0], renderedPosition];
       head.positions = backing.positions = positions;
-      if (
-        lines.drawn.length !== 2 ||
-        !geo.cartesian3.equals(lines.drawn[0], positions[0]) ||
-        !geo.cartesian3.equals(lines.drawn[1], positions[1])
-      ) {
-        lines.drawn = positions.map((p) => geo.cartesian3.clone(p));
-        lines.backing.setPositions(lines.drawn);
-        lines.line.setPositions(lines.drawn);
+      if (active !== segment) {
+        active = segment;
+        lines.line.setPositions(segment.positions);
         headRebuilds++;
       }
+      const fraction = Math.max(
+        0,
+        Math.min(
+          1,
+          (sample.displayT - segment.fromT) / (segment.toT - segment.fromT),
+        ),
+      );
+      lines.line.setReveal(fraction);
     },
     setStyle(next) {
       if (destroyed || next === css) return;
@@ -536,7 +551,6 @@ function createTrail(engine, { id }) {
         group.line.show(next);
       }
       const headShown = next && head.show;
-      headLines?.backing.show(headShown);
       headLines?.line.show(headShown);
       engine.render.request('transit-trail-visible');
     },
@@ -545,7 +559,6 @@ function createTrail(engine, { id }) {
       destroyed = true;
       clearBody();
       if (headLines) {
-        headLines.backing.destroy();
         headLines.line.destroy();
         headLines = null;
       }
@@ -561,8 +574,8 @@ function createTrail(engine, { id }) {
       backing,
       headPrimitive: null,
       active,
-      ground: false,
-      headStrategy: 'engine lines: age bands and a head to the marker',
+      ground: true,
+      headStrategy: 'ground corridors: age bands and a segment reveal head',
       headRebuilds,
       entitiesAdded: 0,
     }),

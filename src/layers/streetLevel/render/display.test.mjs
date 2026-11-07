@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as geo from '../../../geo/index.js';
 import {
-  aboveHorizon,
   createStreetLevelDisplay,
   lineColor,
   screenRotation,
@@ -312,31 +311,6 @@ test('a bearing straight into the screen keeps the last rotation', () => {
   assert.ok(
     Math.abs(screenRotation(position, 90, pose, 0.7) + Math.PI / 2) < 1e-9,
   );
-});
-
-const at = (lon, lat, height) => geo.cartesian3.fromDegrees(lon, lat, height);
-
-test('cones and the marker stay visible on ground below the WGS84 ellipsoid', () => {
-  // NYC at street level: eye 2.4 m above ground at -22 m, a cone 10 m away.
-  assert.equal(
-    aboveHorizon(at(-74.006, 40.7128, -19.6), at(-74.006, 40.71289, -22)),
-    true,
-  );
-  // Colombo framing view: camera at -21 m, cones at -95 m about 80 m away.
-  const colombo = at(79.8612, 6.9271, -21);
-  assert.equal(aboveHorizon(colombo, at(79.8612, 6.92782, -95)), true);
-  assert.equal(aboveHorizon(colombo, at(79.86192, 6.9271, -95)), true);
-  // Austin, ground well above the ellipsoid.
-  assert.equal(
-    aboveHorizon(at(-97.7431, 30.2672, 132), at(-97.7431, 30.2681, 130)),
-    true,
-  );
-});
-
-test('the horizon cull still hides the far side of the Earth from orbit', () => {
-  const orbit = at(0, 0, 20_000_000);
-  assert.equal(aboveHorizon(orbit, at(10, 10, 0)), true);
-  assert.equal(aboveHorizon(orbit, at(180, 0, 0)), false);
 });
 
 test('destroying the display takes everything it still draws', () => {

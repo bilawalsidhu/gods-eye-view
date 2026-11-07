@@ -19,7 +19,7 @@ for (const name of [
 const items = (kind, list) =>
   list.map((item, index) => normalizeGroundItem(kind, item, index));
 
-test('dynamic reveals wait for height bounds, draw the latest path and cancel on release', async (t) => {
+test('reveal and dynamic sets wait for height bounds, draw the latest path and cancel on release', async (t) => {
   const viewer = createFakeViewer();
   viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
   let resolve;
@@ -44,7 +44,7 @@ test('dynamic reveals wait for height bounds, draw the latest path and cancel on
   const reveal = part.ground.createSet({
     id: 'reveal',
     kind: 'corridor',
-    dynamic: true,
+    reveal: true,
   });
   const cancelled = part.ground.createSet({
     id: 'cancelled',
@@ -69,6 +69,7 @@ test('dynamic reveals wait for height bounds, draw the latest path and cancel on
   assert.equal(reveal.ready(), false);
   reveal.replace(path(2));
   reveal.commit();
+  reveal.setReveal(0.25);
   cancelled.destroy();
   resolve();
   await Promise.resolve();
@@ -80,6 +81,7 @@ test('dynamic reveals wait for height bounds, draw the latest path and cancel on
   );
   const primitive = root.get(0).get(0);
   assert.equal(primitive.asynchronous, false);
+  assert.equal(primitive.appearance.material.uniforms.reveal, 0.25);
   const end = primitive.geometryInstances[0].geometry._positions.at(-1);
   assert.ok(
     Math.abs(
@@ -88,6 +90,89 @@ test('dynamic reveals wait for height bounds, draw the latest path and cancel on
     ) < 1e-9,
   );
 });
+
+for (const kind of ['disc', 'corridor']) {
+  test(`${kind} material readiness includes the globe depth after a camera move`, () => {
+    const viewer = createFakeViewer();
+    viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
+    viewer.scene.globe.tilesLoaded = false;
+    const made = [];
+    const make = (options) => {
+      const primitive = {
+        ...options,
+        ready: true,
+        destroy() {},
+        isDestroyed: () => false,
+      };
+      made.push(primitive);
+      return primitive;
+    };
+    const renders = [];
+    const port = createCesiumGround(viewer, {
+      requestRender: (reason) => renders.push(reason),
+      factories: { fills: make, lines: make },
+    });
+    const set = port.ground.createSet({
+      id: kind,
+      kind,
+      ...(kind === 'corridor' ? { reveal: true } : {}),
+    });
+    assert.equal(set.ready(), true, 'an empty set needs no surface');
+    set.replace([
+      kind === 'disc'
+        ? {
+            center: [20, 10],
+            radiusM: 40000,
+            fill: [0, 1, 1, 1],
+            radial: {
+              fillAlpha: 0.105,
+              rimAlpha: 0.72,
+              rimStart: 0.952,
+              rimEnd: 0.985,
+              emission: 0.35,
+            },
+          }
+        : {
+            positions: [
+              [19.7, 10],
+              [20.3, 10],
+            ],
+            color: [1, 0, 1, 1],
+            widthPx: 12,
+          },
+    ]);
+    set.commit();
+    if (kind === 'corridor') set.setReveal(0.25);
+    const material = made[0].appearance.material;
+    assert.equal(set.ready(), false, 'built geometry needs a loaded surface');
+    viewer.scene.postRender.raiseEvent();
+    assert.ok(renders.includes('ground-build'));
+    viewer.scene.globe.tilesLoaded = true;
+    viewer.scene.postRender.raiseEvent();
+    assert.equal(set.ready(), true);
+    assert.ok(renders.includes('ground-ready'));
+    renders.length = 0;
+    viewer.scene.postRender.raiseEvent();
+    assert.deepEqual(
+      renders,
+      [],
+      'a ready static material stops requesting frames',
+    );
+    viewer.scene.globe.tilesLoaded = false;
+    assert.equal(set.ready(), false, 'camera changes can load another surface');
+    viewer.scene.globe.tilesLoaded = true;
+    assert.equal(set.ready(), true);
+    assert.equal(made.length, 1, 'surface loading never rebuilds geometry');
+    assert.equal(made[0].appearance.material, material);
+    if (kind === 'corridor') assert.equal(material.uniforms.reveal, 0.25);
+    else {
+      assert.equal(material.uniforms.rimAlpha, 0.72);
+      assert.equal(material.uniforms.fillAlpha, 0.105);
+    }
+    port.destroy();
+    assert.equal(viewer.scene.postRender.numberOfListeners, 0);
+  });
+}
 
 test('fills batch into GroundPrimitive instances, outlines into ground polylines', () => {
   const options = { id: 'zones', kind: 'polygon' };
@@ -315,4 +400,50 @@ test('a glow, a pulse or a dash draws through its own material, timed every fram
   viewer.scene.postRender.raiseEvent();
   assert.ok(!renders.includes('ground-animate'), 'none once destroyed');
   part.destroy();
+});
+
+test('corridor reveal mutates the live material and retains it through a geometry commit', () => {
+  const viewer = createFakeViewer();
+  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
+  const built = [];
+  const make = (options) => {
+    const primitive = {
+      ...options,
+      ready: true,
+      destroy() {},
+      isDestroyed: () => false,
+    };
+    built.push(primitive);
+    return primitive;
+  };
+  const port = createCesiumGround(viewer, {
+    factories: { lines: make, fills: make },
+  });
+  const set = port.ground.createSet({
+    id: 'head',
+    kind: 'corridor',
+    reveal: true,
+  });
+  const items = [
+    {
+      positions: [
+        [20, 10],
+        [20.001, 10],
+      ],
+      widthPx: 5,
+      color: [0, 1, 0, 0.8],
+    },
+  ];
+  set.replace(items);
+  set.commit();
+  const geometry = built[0].geometryInstances;
+  set.setReveal(0.25);
+  set.setReveal(0.5);
+  assert.equal(built.length, 1);
+  assert.equal(built[0].geometryInstances, geometry);
+  assert.equal(built[0].appearance.material.uniforms.reveal, 0.5);
+  set.replace(items);
+  set.commit();
+  assert.equal(built[1].appearance.material.uniforms.reveal, 0.5);
+  port.destroy();
 });

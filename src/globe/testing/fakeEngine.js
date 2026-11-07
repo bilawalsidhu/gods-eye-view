@@ -272,6 +272,9 @@ export function createFakeEngine(options = {}) {
     destroy() {},
   }));
   const groundRegistry = createGroundRegistry(() => ({
+    reveal() {
+      fake.renderRequests++;
+    },
     commit() {
       fake.renderRequests++;
     },
@@ -716,12 +719,16 @@ export function createFakeEngine(options = {}) {
     picker: {
       pick(screen, w, h) {
         record('picker.pick', [screen, w, h]);
-        return scripted('pick', [screen, w, h], () => cpuPick(screen, 1)[0]);
+        return scripted(
+          'pick',
+          [screen, w, h],
+          () => cpuPick(screen, 1, { width: w, height: h })[0],
+        );
       },
       drillPick(screen, limit, w, h) {
         record('picker.drillPick', [screen, limit, w, h]);
         return scripted('drillPick', [screen, limit, w, h], () =>
-          cpuPick(screen, limit ?? Infinity),
+          cpuPick(screen, limit ?? Infinity, { width: w, height: h }),
         );
       },
       pickPosition(screen) {
@@ -748,7 +755,8 @@ export function createFakeEngine(options = {}) {
         return value;
       },
       viewProjection: (result) => viewProjection(cameraView(), result),
-      horizonVisible: (position) => horizonVisible(state.position, position),
+      horizonVisible: (position, options) =>
+        horizonVisible(state.position, position, options),
     },
     movers: moverRegistry.movers,
     lines: lineRegistry.lines,
@@ -824,7 +832,7 @@ export function createFakeEngine(options = {}) {
       acquirePointer: () => pointer.acquire(),
       on(type, listener, inputOptions = {}) {
         record('input.on', [type, inputOptions]);
-        const { modifier, pick, drill } = normalizeInputOptions(
+        const { modifier, pick, drill, pickWindow } = normalizeInputOptions(
           type,
           inputOptions,
         );
@@ -834,6 +842,7 @@ export function createFakeEngine(options = {}) {
           modifier,
           pick,
           drill,
+          pickWindow,
           pointer: inputOptions.pointer,
         };
         listeners.add(entry);
@@ -978,9 +987,20 @@ export function createFakeEngine(options = {}) {
         const at = event.position ?? event.endPosition;
         entry.listener({
           ...event,
-          picked: engine.picker.pick(at),
+          picked: engine.picker.pick(
+            at,
+            entry.pickWindow?.width,
+            entry.pickWindow?.height,
+          ),
           ...(entry.drill
-            ? { drilled: engine.picker.drillPick(at, entry.drill) }
+            ? {
+                drilled: engine.picker.drillPick(
+                  at,
+                  entry.drill,
+                  entry.pickWindow?.width,
+                  entry.pickWindow?.height,
+                ),
+              }
             : {}),
         });
       }
@@ -998,6 +1018,7 @@ export function createFakeEngine(options = {}) {
     /** A live line's options, positions, colour, matrix and visibility, by id. */
     line: (id) => fakeLines.get(id),
     /** A live mover set's options, store and commit count, by id. */
+    groundSet: (id) => groundRegistry.live.get(id),
     groundPulse(id) {
       return groundRegistry.pulses.get(id);
     },

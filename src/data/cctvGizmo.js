@@ -240,7 +240,7 @@ export function createCalibrationGizmo({
   const entities = new Map(); // part -> Entity
 
   const { pickRay, setCursor } = renderer;
-  const pickGizmoPart = (position) => renderer.pickPart(position);
+  const pickGizmoPart = (event) => renderer.pickPart(event);
   const polylinePart = (part, ...args) =>
     entities.set(part, renderer.createLine(part, ...args));
   const pointPart = (part, ...args) =>
@@ -530,7 +530,7 @@ export function createCalibrationGizmo({
     // A tool owns the pointer (src/data/inputOwnership.js): yield the press.
     if (!isPointerFree()) return;
     if (!enabled || drag) return;
-    const part = pickGizmoPart(event.position);
+    const part = pickGizmoPart(event);
     debugLog('LEFT_DOWN', event.position, 'part:', part);
     if (!part) return;
     const started = beginDrag(part, event.position);
@@ -563,7 +563,7 @@ export function createCalibrationGizmo({
     }
     if (now - lastHoverAt < HOVER_THROTTLE_MS) return;
     lastHoverAt = now;
-    setHovered(pickGizmoPart(event.endPosition));
+    setHovered(pickGizmoPart(event));
   });
 
   renderer.on('up', () => {

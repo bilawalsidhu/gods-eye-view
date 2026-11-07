@@ -12,6 +12,7 @@
 
 import { createGroundRegistry } from '../../ground.js';
 import { composeGround, packHeights, packSet } from './pack.js';
+import { ITEM_TEXELS } from './corridors.js';
 
 // Frames before the first new try at a set's missing terrain heights; each
 // later try waits twice as long, up to RETRIES tries.
@@ -60,6 +61,8 @@ export function createNavaraGround(
   };
   const pack = (entry) => {
     entry.pack = packSet(entry.options.kind, entry.items, { terrainHeight });
+    for (let at = 20; at < entry.pack.items.length; at += ITEM_TEXELS * 4)
+      entry.pack.items[at] = entry.fraction;
     entry.wait = entry.pack.heights.some(Number.isNaN) ? RETRY_FRAMES : 0;
   };
   const sampleAgain = (entry) => {
@@ -70,6 +73,12 @@ export function createNavaraGround(
     const drawn = [...entries]
       .filter((entry) => entry.shown && entry.pack?.count)
       .sort((a, b) => a.options.order - b.options.order);
+    for (const entry of entries) entry.offset = null;
+    let offset = 0;
+    for (const entry of drawn) {
+      entry.offset = offset;
+      offset += entry.pack.items.length;
+    }
     pass.set(
       drawn.length ? composeGround(drawn.map(({ pack }) => pack)) : null,
     );
@@ -94,6 +103,8 @@ export function createNavaraGround(
     const entry = {
       options,
       shown: true,
+      fraction: 1,
+      offset: null,
       items: [],
       pack: null,
       tries: 0,
@@ -106,6 +117,21 @@ export function createNavaraGround(
         entry.tries = 0;
         pack(entry);
         compose();
+      },
+      reveal(fraction) {
+        if (entry.fraction === fraction) return;
+        entry.fraction = fraction;
+        if (entry.pack) {
+          for (let at = 20; at < entry.pack.items.length; at += ITEM_TEXELS * 4)
+            entry.pack.items[at] = fraction;
+          if (entry.offset !== null)
+            pass.reveal(
+              entry.offset,
+              entry.pack.items.length / (ITEM_TEXELS * 4),
+              fraction,
+            );
+        }
+        view.forceUpdate();
       },
       show(visible) {
         if (entry.shown === visible) return;

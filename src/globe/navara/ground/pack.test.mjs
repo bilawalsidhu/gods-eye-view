@@ -480,3 +480,25 @@ test('screen-space dash masks keep their CSS length and all sixteen bits in the 
   assert.deepEqual(Array.from(pack.items.slice(18, 20)), [18, 0xa55a]);
   assert.equal(pack.items.length, ITEM_TEXELS * 4);
 });
+
+test('radial discs pack both transitions, alpha and emission without segment data', () => {
+  const radial = {
+    fillAlpha: 0.105,
+    rimAlpha: 0.72,
+    rimStart: 0.952,
+    rimEnd: 0.985,
+    emission: 0.35,
+  };
+  const pack = packSet(
+    'disc',
+    items('disc', [
+      { center: [20, 10], radiusM: 100, fill: [0, 1, 1, 1], radial },
+    ]),
+  );
+  assert.equal(pack.styles[10], 1);
+  assert.deepEqual(
+    Array.from(pack.styles.slice(16, 21)),
+    Array.from(Float32Array.of(0.105, 0.72, 0.952, 0.985, 0.35)),
+  );
+  assert.equal(pack.segments.length, 0);
+});

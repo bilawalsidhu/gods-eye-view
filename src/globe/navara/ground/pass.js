@@ -11,7 +11,7 @@
 // blended in display space, in draw order, as Cesium blends translucent
 // ground primitives; a corridor's glow, pulse and dash follow Cesium's
 // materials, from the time uniform (src/globe/ground.js groundSeconds).
-// Costs nothing while no item is drawn (the effect is hidden).
+// No effect remains in the chain while no item is drawn.
 
 import { EffectDesc, Effect as NavaraEffect } from '@navaramap/three';
 import { Effect, EffectAttribute } from 'postprocessing';
@@ -72,6 +72,7 @@ vec3 toLinear(vec3 c) {
 vec3 blendCorridor(vec3 color, int item, float nearest, vec2 normal, float along, vec2 localDx, vec2 localDy) {
   int at = item * ${ITEM_TEXELS};
   vec4 shape = atSlot(tItems, at + 1);
+  if (along / max(shape.z, 1e-6) > atSlot(tItems, at + 5).x) return color;
   // Metres a pixel spans across the line (the screen gradient of the
   // distance to it): its width in pixels the same at any angle, as Cesium's.
   float pixel = max(length(vec2(dot(normal, localDx), dot(normal, localDy))), 1e-4);
@@ -109,6 +110,12 @@ vec3 blendCorridor(vec3 color, int item, float nearest, vec2 normal, float along
       rgb *= 1.0 + dash.y * on;
       alpha *= max(on, dash.x);
     }
+  }
+  float core = atSlot(tItems, at + 5).y;
+  if (core < 1.0 && nearest / max(halfWidth, 1e-6) > core) {
+    vec4 backing = atSlot(tItems, at + 6);
+    rgb = backing.rgb;
+    alpha = backing.a * cover;
   }
   return min(color * (1.0 - alpha) + min(rgb * alpha, vec3(1.0)), vec3(1.0));
 }
@@ -301,6 +308,15 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     // Metres one pixel spans across the boundary.
     float pixel = max(abs(dot(normal, localDx)) + abs(dot(normal, localDy)), 1e-4);
     float inward = inside ? nearest : -nearest;
+    if (kind == ${KIND.disc} && shape.z > 0.5) {
+      vec4 radial = atSlot(tStyles, id * ${STYLE_TEXELS} + 4);
+      float emission = atSlot(tStyles, id * ${STYLE_TEXELS} + 5).x;
+      float radius = length(local) / shape.w;
+      float inside = 1.0 - smoothstep(radial.w, 1.0, radius);
+      float rim = smoothstep(radial.z, radial.w, radius) * inside;
+      float alpha = fillColor.a * inside * mix(radial.x, radial.y, rim);
+      color = min(color * (1.0 - alpha) + fillColor.rgb * (1.0 + rim * emission) * alpha, vec3(1.0));
+    } else
     if (fillColor.a > 0.0)
       color = mix(color, fillColor.rgb, fillColor.a * clamp(inward / pixel + 0.5, 0.0, 1.0));
     if (lineColor.a > 0.0 && shape.y > 0.0)
@@ -465,7 +481,7 @@ const registered = new WeakSet();
 
 /**
  * The pass of one view: set(state) shows a composed state (null: nothing,
- * the effect hidden) and disposes the one before.
+ * the effect removed) and disposes the one before.
  */
 export function createGroundPass(view) {
   if (!registered.has(view)) {
@@ -481,13 +497,22 @@ export function createGroundPass(view) {
       owner.state = state && state.count ? state : null;
       owner.textures = owner.state ? texturesFor(owner.state) : null;
       const visible = owner.state !== null;
-      if (visible && !handle)
+      if (!visible) {
+        handle?.delete();
+        handle = null;
+      } else if (!handle)
         handle = view.addEffect({
           [GROUND_EFFECT_KEY]: { owner },
           visible: true,
         });
       else handle?.update({ visible });
       previous?.dispose();
+    },
+    reveal(offset, count, fraction) {
+      if (!owner.state) return;
+      for (let i = 0; i < count; i++)
+        owner.state.items.data[offset + i * ITEM_TEXELS * 4 + 20] = fraction;
+      owner.textures.items.needsUpdate = true;
     },
     textureBytes: () => textureBytes(owner.state),
     destroy() {

@@ -264,3 +264,40 @@ test('exclusive pointer suppresses ambient and stock clicks, restores exact acti
   assert.equal(actions.get(Type.LEFT_DOUBLE_CLICK), double);
   assert.equal(input.acquirePointer(), null);
 });
+
+test('input forwards each rectangular pick window and drill limit synchronously on down', () => {
+  const handlers = createFakeEventHandlers();
+  const calls = [],
+    seen = [];
+  const { input, destroy } = createCesiumInput(createFakeViewer(), {
+    createEventHandler: handlers.create,
+    picker: {
+      pick: (...args) => {
+        calls.push(['pick', ...args]);
+        return { id: 'handle' };
+      },
+      drillPick: (...args) => {
+        calls.push(['drill', ...args]);
+        return [{ id: 'handle' }];
+      },
+    },
+  });
+  const pickWindow = { width: 11, height: 7 };
+  input.on('down', (event) => seen.push(event), {
+    pick: true,
+    drill: 8,
+    pickWindow,
+  });
+  pickWindow.width = 99;
+  handlers.handlers[0].fire(Type.LEFT_DOWN, { position: { x: 1, y: 2 } });
+  assert.equal(seen.length, 1);
+  assert.deepEqual(
+    calls.map((call) => call.slice(2)),
+    [
+      [11, 7],
+      [8, 11, 7],
+    ],
+  );
+  assert.equal(seen[0].picked.id, 'handle');
+  destroy();
+});

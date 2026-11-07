@@ -2143,7 +2143,8 @@
       "src/geo/",
       "src/layers/shared/color.js",
       "src/globe/cameraMath.js",
-      "src/layers/streetLevel/render/display.js"
+      "src/layers/streetLevel/render/display.js",
+      "src/globe/contract.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile", "mapillary-js"]
   },

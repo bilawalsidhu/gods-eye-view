@@ -47,9 +47,17 @@ async function runOn(browser, kind) {
     { timeout: 300_000, polling: 250 },
     kind,
   );
+  // The app restores the view in the link with a flight that can start
+  // after the loading screen goes: wait until the camera is there and still,
+  // or that flight lands in the middle of a check.
   await page.waitForFunction(
-    () => !window.__godsEyeView.engine.camera.flightActive(),
-    { timeout: 60_000, polling: 250 },
+    () => {
+      const { camera } = window.__godsEyeView.engine;
+      return (
+        !camera.flightActive() && Math.abs(camera.height() - 1_000_000) < 1000
+      );
+    },
+    { timeout: 120_000, polling: 250 },
   );
   // The globe drawn and its tiles loaded: a restored view hides the globe
   // for a moment after the loading screen goes.

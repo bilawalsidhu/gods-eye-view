@@ -71,3 +71,33 @@ test('distanceScale is Cesium.NearFarScalar interpolation', async () => {
     );
   }
 });
+
+test('rectangular windows include nearby hits once and keep draw order and drill limit', () => {
+  const picker = createCpuPicker({
+    projector: {},
+    camera: {},
+    movers: () => [],
+    lines: () => [],
+    meshes: (at) =>
+      Math.abs(at.x - 4) < 0.1 && Math.abs(at.y) < 0.1
+        ? [
+            {
+              onTop: 0,
+              order: 0,
+              depth: 1,
+              result: { id: 'behind', owner: 'b' },
+            },
+            { onTop: 1, order: 0, depth: 2, result: { id: 'top', owner: 'a' } },
+          ]
+        : [],
+  });
+  assert.deepEqual(picker({ x: 0, y: 0 }), []);
+  assert.deepEqual(picker({ x: 0, y: 0 }, 1, { width: 9, height: 3 }), [
+    { id: 'top', owner: 'a' },
+  ]);
+  assert.deepEqual(
+    picker({ x: 0, y: 0 }, 8, { width: 9, height: 3 }).map((hit) => hit.id),
+    ['top', 'behind'],
+  );
+  assert.deepEqual(picker({ x: 0, y: 0 }, 8, { width: 3, height: 9 }), []);
+});

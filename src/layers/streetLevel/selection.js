@@ -3,8 +3,7 @@ import { CLICK_PICK_WINDOW_PX, STREET_LEVEL_LAYER_ID } from './policy.js';
 
 /**
  * One click handler for every provider's lines and cones, and the marker,
- * on the display's engine (engine.input for the click, engine.picker for
- * the pick: the input's own pick has no pick window).
+ * on the display's engine, with a wider input pick window for thin lines.
  */
 export function createSelection({ state, parts }) {
   const { picking, input } = state.services;
@@ -14,11 +13,7 @@ export function createSelection({ state, parts }) {
     const engine = state.map?.engine;
     if (!engine || !state.enabled || !click?.position) return;
     if (input?.isPointerFree && !input.isPointerFree()) return;
-    const picked = engine.picker.pick(
-      click.position,
-      CLICK_PICK_WINDOW_PX,
-      CLICK_PICK_WINDOW_PX,
-    );
+    const picked = click.picked;
     const id = picking?.resolvePickId
       ? picking.resolvePickId(picked)
       : picked?.id;
@@ -72,7 +67,10 @@ export function createSelection({ state, parts }) {
 
   function install(map) {
     if (state.clickHandler || !map?.engine) return;
-    state.clickHandler = map.engine.input.on('click', onClick);
+    state.clickHandler = map.engine.input.on('click', onClick, {
+      pick: true,
+      pickWindow: { width: CLICK_PICK_WINDOW_PX, height: CLICK_PICK_WINDOW_PX },
+    });
     document.addEventListener('keydown', onKeyDown);
     picking?.registerPickOwner?.(
       STREET_LEVEL_LAYER_ID,

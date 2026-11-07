@@ -1,5 +1,5 @@
 // Delivers input events to listeners that asked for picks (input.on with
-// { pick, drill }), for every engine: one pick (and one drill, as deep as
+// { pick, drill }), for every engine: one pick per window (and one drill, as deep as
 // the deepest listener asked) per event, shared by its listeners; moves are
 // coalesced to one delivery per frame with the latest position. Picks may
 // be asynchronous (Navara answers clicks from its GPU pick of the gesture):
@@ -16,25 +16,45 @@ const settle = (value, then) =>
 export function createPickDelivery({ pick, drill, schedule }) {
   let pendingMove = null;
 
-  function run(type, event, entries, isLive) {
+  function runWindow(type, event, entries, isLive) {
     const at = event.position ?? event.endPosition;
     const depth = entries.reduce(
       (most, entry) => Math.max(most, entry.drill),
       0,
     );
-    return settle(pick(at, type), (picked) =>
-      settle(depth ? drill(at, depth) : undefined, (drilled) => {
-        for (const entry of entries) {
-          if (!isLive(entry)) continue;
-          entry.listener({
-            ...event,
-            picked,
-            ...(entry.drill
-              ? { drilled: (drilled ?? []).slice(0, entry.drill) }
-              : {}),
-          });
-        }
-      }),
+    return settle(pick(at, type, entries[0].pickWindow), (picked) =>
+      settle(
+        depth ? drill(at, depth, entries[0].pickWindow) : undefined,
+        (drilled) => {
+          for (const entry of entries) {
+            if (!isLive(entry)) continue;
+            entry.listener({
+              ...event,
+              picked,
+              ...(entry.drill
+                ? { drilled: (drilled ?? []).slice(0, entry.drill) }
+                : {}),
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  function run(type, event, entries, isLive) {
+    const windows = new Map();
+    for (const entry of entries) {
+      if (!isLive(entry)) continue;
+      const key = entry.pickWindow
+        ? `${entry.pickWindow.width}:${entry.pickWindow.height}`
+        : 'default';
+      if (!windows.has(key)) windows.set(key, []);
+      windows.get(key).push(entry);
+    }
+    return Promise.all(
+      [...windows.values()].map((group) =>
+        runWindow(type, event, group, isLive),
+      ),
     );
   }
 

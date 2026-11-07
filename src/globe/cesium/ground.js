@@ -78,6 +78,7 @@ const CORRIDOR_SOURCE = /* glsl */ `
 czm_material czm_getMaterial(czm_materialInput materialInput) {
   czm_material material = czm_getDefaultMaterial(materialInput);
   vec2 st = materialInput.st;
+  if (st.s > reveal) discard;
   vec3 rgb = color.rgb;
   float alpha = color.a;
   if (pulsePeriod > 0.0)
@@ -95,7 +96,11 @@ czm_material czm_getMaterial(czm_materialInput materialInput) {
     rgb *= 1.0 + dashEmission * on;
     alpha *= max(on, dashGap);
   }
-  material.emission = rgb;
+  if (abs(st.t - 0.5) > coreFraction * 0.5) {
+    rgb = backingColor.rgb;
+    alpha = backingColor.a;
+  }
+  material.emission = coreFraction < 1.0 ? czm_gammaCorrect(rgb) : rgb;
   material.alpha = alpha;
   return material;
 }`;
@@ -106,6 +111,10 @@ export function corridorUniforms(item) {
   return {
     color: colorOf(item.fill),
     time: 0,
+    reveal: 1,
+    coreFraction:
+      item.widthPx / (item.animation.backing?.widthPx ?? item.widthPx),
+    backingColor: colorOf(item.animation.backing?.color ?? [0, 0, 0, 0]),
     glowPower: glow?.power ?? 0,
     taperPower: glow?.taper ?? 1,
     pulsePeriod: pulse ? pulse.periodMs / 1000 : 0,
@@ -136,6 +145,28 @@ const corridorMaterial = (item) =>
         translucent: true,
       });
 
+/** The radial disc material, including its soft outside edge. */
+export function radialMaterial(item) {
+  return new Cesium.Material({
+    fabric: {
+      type: 'GevGroundRadial',
+      uniforms: { color: colorOf(item.fill), ...item.radial },
+      source: `
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  czm_material material = czm_getDefaultMaterial(materialInput);
+  float radius = length((materialInput.st - vec2(0.5)) * 2.0);
+  float inside = 1.0 - smoothstep(rimEnd, 1.0, radius);
+  float rim = smoothstep(rimStart, rimEnd, radius) * inside;
+  material.diffuse = color.rgb;
+  material.emission = color.rgb * rim * emission;
+  material.alpha = color.a * inside * mix(fillAlpha, rimAlpha, rim);
+  return material;
+}`,
+    },
+    translucent: true,
+  });
+}
+
 // Items of one look and colour share a primitive.
 const lookKey = (item) =>
   JSON.stringify([Array.from(item.fill), item.animation]);
@@ -151,12 +182,15 @@ const longitude = (degrees) => degrees - 360 * Math.round(degrees / 360);
 
 /** The fill geometry of one item of a set of `kind` (pure, for tests). */
 export function fillGeometry(kind, item) {
-  const vertexFormat = Cesium.PerInstanceColorAppearance.FLAT_VERTEX_FORMAT;
+  const vertexFormat = item.radial
+    ? Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat
+    : Cesium.PerInstanceColorAppearance.FLAT_VERTEX_FORMAT;
   if (kind === 'disc')
     return new Cesium.EllipseGeometry({
       center: Cesium.Cartesian3.fromDegrees(item.center[0], item.center[1]),
       semiMajorAxis: item.radiusM,
       semiMinorAxis: item.radiusM,
+      ...(item.radial ? { granularity: Cesium.Math.toRadians(0.08) } : {}),
       vertexFormat,
     });
   if (kind === 'cell') {
@@ -198,6 +232,7 @@ export function groundInstances(options, items) {
   const fills = [];
   const lines = [];
   const looks = new Map();
+  const radial = [];
   items.forEach((item, instance) => {
     const id = { gevGroundSet: options.id, instance };
     const attributes = (rgba) => ({
@@ -211,7 +246,7 @@ export function groundInstances(options, items) {
           new Cesium.GeometryInstance({
             geometry: new Cesium.GroundPolylineGeometry({
               positions: positionsOf(item.path),
-              width: item.widthPx,
+              width: item.animation.backing?.widthPx ?? item.widthPx,
             }),
             id,
           }),
@@ -237,7 +272,15 @@ export function groundInstances(options, items) {
         );
       return;
     }
-    if (item.fill)
+    if (item.radial)
+      radial.push({
+        item,
+        instance: new Cesium.GeometryInstance({
+          geometry: fillGeometry(options.kind, item),
+          id,
+        }),
+      });
+    else if (item.fill)
       fills.push(
         new Cesium.GeometryInstance({
           geometry: fillGeometry(options.kind, item),
@@ -261,7 +304,7 @@ export function groundInstances(options, items) {
           }),
         );
   });
-  return { fills, lines, animated: [...looks.values()] };
+  return { fills, lines, animated: [...looks.values()], radial };
 }
 
 /**
@@ -286,12 +329,15 @@ export function createCesiumGround(
   const ordered = [];
   const building = new Set();
   let removeWatch = null;
+  // Classification reads the current globe depth, including after a camera move.
+  const surfaceReady = () =>
+    scene.globe?.show === false || scene.globe?.tilesLoaded !== false;
   // Frames until every committed primitive has been built and drawn.
   const watch = () => {
     if (removeWatch || !scene.postRender) return;
     removeWatch = scene.postRender.addEventListener(() => {
       for (const primitive of building)
-        if (primitive.ready || primitive.isDestroyed?.())
+        if ((primitive.ready && surfaceReady()) || primitive.isDestroyed?.())
           building.delete(primitive);
       if (building.size) requestRender('ground-build');
       else {
@@ -341,8 +387,10 @@ export function createCesiumGround(
     rootCollection().add(slot, at);
     let drawn = [];
     let looks = [];
+    let fraction = 1;
     const classificationType = classificationOf(options.drape);
     const allowPicking = options.pickable;
+    const synchronous = options.dynamic || options.reveal;
     let pending = null;
     let waiting = false;
     let destroyed = false;
@@ -355,7 +403,7 @@ export function createCesiumGround(
     const part = {
       commit(items) {
         pending = items;
-        if (options.dynamic && !heightsReady) {
+        if (synchronous && !heightsReady) {
           if (!waiting) {
             waiting = true;
             heightsPromise ??=
@@ -376,7 +424,10 @@ export function createCesiumGround(
         }
         forget();
         slot.removeAll();
-        const { fills, lines, animated } = groundInstances(options, items);
+        const { fills, lines, animated, radial } = groundInstances(
+          options,
+          items,
+        );
         if (fills.length)
           drawn.push(
             make.fills({
@@ -387,7 +438,29 @@ export function createCesiumGround(
               }),
               classificationType,
               allowPicking,
-              asynchronous: !options.dynamic,
+              asynchronous: !synchronous,
+            }),
+          );
+        for (const { item, instance } of radial)
+          drawn.push(
+            make.fills({
+              geometryInstances: instance,
+              appearance: new Cesium.MaterialAppearance({
+                material: radialMaterial(item),
+                translucent: true,
+                closed: false,
+                faceForward: true,
+                flat: true,
+                renderState: {
+                  depthTest: { enabled: true },
+                  depthMask: false,
+                  polygonOffset: { enabled: true, factor: -1, units: -4 },
+                  blending: Cesium.BlendingState.ALPHA_BLEND,
+                },
+              }),
+              classificationType,
+              allowPicking,
+              asynchronous: !synchronous,
             }),
           );
         if (lines.length)
@@ -397,12 +470,13 @@ export function createCesiumGround(
               appearance: new Cesium.PolylineColorAppearance(),
               classificationType,
               allowPicking,
-              asynchronous: !options.dynamic,
+              asynchronous: !synchronous,
             }),
           );
         for (const { item, instances } of animated) {
           const material = corridorMaterial(item);
           material.uniforms.time = groundSeconds();
+          material.uniforms.reveal = fraction;
           looks.push(material);
           materials.add(material);
           drawn.push(
@@ -411,7 +485,7 @@ export function createCesiumGround(
               appearance: new Cesium.PolylineMaterialAppearance({ material }),
               classificationType,
               allowPicking,
-              asynchronous: !options.dynamic,
+              asynchronous: !synchronous,
             }),
           );
         }
@@ -424,14 +498,20 @@ export function createCesiumGround(
         animate();
         requestRender('ground');
       },
+      reveal(value) {
+        fraction = value;
+        for (const material of looks) material.uniforms.reveal = value;
+        requestRender('ground-reveal');
+      },
       show(visible) {
         slot.show = visible;
         animate();
         requestRender('ground');
       },
       ready: () =>
-        (!options.dynamic || heightsReady) &&
+        (!synchronous || heightsReady) &&
         !waiting &&
+        (drawn.length === 0 || surfaceReady()) &&
         drawn.every((primitive) => primitive.ready === true),
       destroy() {
         destroyed = true;

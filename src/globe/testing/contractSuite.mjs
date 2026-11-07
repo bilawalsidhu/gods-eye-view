@@ -28,6 +28,11 @@ class ContractError extends Error {
   }
 }
 
+// The radial ground look's disc in the contract checks, a launch pad's radius.
+const RADIAL_RADIUS_M = 500;
+// The camera height that shows that disc and its rim a few pixels wide.
+const RADIAL_VIEW_M = 4000;
+
 function ensure(condition, message) {
   if (!condition) throw new ContractError(message);
 }
@@ -926,6 +931,7 @@ export function createContractSuite(
           engine.input.on('click', (event) => clicks.push(event), {
             pick: true,
             drill: 8,
+            pickWindow: { width: 9, height: 9 },
           }),
           engine.input.on('move', (event) => moves.push(event), {
             pick: true,
@@ -3029,6 +3035,81 @@ function groundChecks(
   };
   return [
     [
+      'projector: a lowered horizon ellipsoid keeps below-sea-level ground visible',
+      async () => {
+        const eye = cartesian3.fromDegrees(-74.006, 40.7128, -19.6);
+        engine.camera.setView({ destination: eye });
+        await settle();
+        const point = cartesian3.fromDegrees(-74.006, 40.71289, -22);
+        const options = {
+          ellipsoid: {
+            radii: { x: 6377137, y: 6377137, z: 6355752.314245179 },
+          },
+        };
+        ensure(
+          engine.projector.horizonVisible(point, options),
+          'nearby ground below WGS84 stays visible',
+        );
+        ensure(
+          !engine.projector.horizonVisible(
+            cartesian3.fromDegrees(105.994, -40.7128),
+            options,
+          ),
+          'far side stays hidden',
+        );
+        throwsType(
+          () =>
+            engine.projector.horizonVisible(point, {
+              ellipsoid: { radii: { x: 0, y: 1, z: 1 } },
+            }),
+          'zero horizon radius',
+        );
+        await nadirView(1e6);
+      },
+    ],
+    [
+      'ground: corridor reveals advance without replacing their path',
+      async () => {
+        const set = ground.createSet({
+          id: 'contract-reveal',
+          kind: 'corridor',
+          reveal: true,
+        });
+        try {
+          set.replace([
+            {
+              positions: [
+                [19.7, 10],
+                [20.3, 10],
+              ],
+              widthPx: 12,
+              color: [1, 0, 1, 1],
+            },
+          ]);
+          set.commit();
+          set.setReveal(0.25);
+          throwsType(() => set.setReveal(-1), 'negative reveal');
+          throwsType(() => set.setReveal(2), 'large reveal');
+          if (!readRegion) return;
+          await nadirView(350000);
+          await until(() => set.ready(), 'reveal ground ready');
+          await settle();
+          const magenta = (lon) => {
+            const { x, y } = screenOf(lon, 10);
+            const p = readRegion(Math.round(x), Math.round(y), 1, 1);
+            return Math.min(p[0], p[2]) - p[1];
+          };
+          ensure(magenta(19.8) > 60, 'revealed start draws');
+          ensure(magenta(20.2) < 60, 'unrevealed end is hidden');
+          set.setReveal(0.9);
+          await settle();
+          ensure(magenta(20.2) > 60, 'reveal advances over the existing path');
+        } finally {
+          set.destroy();
+        }
+      },
+    ],
+    [
       'ground: pulse fields update fronts, move, hide and release without a clock',
       async () => {
         const options = {
@@ -3078,6 +3159,13 @@ function groundChecks(
       async () => {
         if (!readRegion) return;
         await nadirView(1e6);
+        // The base frame must be the settled surface: a check before this one
+        // can leave tiles of another view still loading.
+        await until(
+          () => engine.surface.tilesLoaded?.() !== false,
+          'surface settles',
+        );
+        await settle(5);
         const at = engine.projector.worldToWindow(
           cartesian3.fromDegrees(20.9, 10, 2500),
         );
@@ -3772,6 +3860,108 @@ function groundChecks(
           glowing.destroy();
           pulsing.destroy();
           dashed.destroy();
+        }
+      },
+    ],
+    [
+      'ground: radial discs retain their look and draw a brighter rim than fill',
+      async () => {
+        const background = ground.createSet({
+          id: 'contract-radial-background',
+          kind: 'cell',
+        });
+        const disc = ground.createSet({
+          id: 'contract-radial',
+          kind: 'disc',
+          order: 1,
+        });
+        try {
+          background.replace([
+            { west: 19, south: 9, east: 21, north: 11, fill: [0, 0, 0, 1] },
+          ]);
+          background.commit();
+          disc.replace([
+            {
+              center: [20, 10],
+              // A launch pad's size: Cesium maps a large ground disc's
+              // texture coordinates differently, and only pads use this look.
+              radiusM: RADIAL_RADIUS_M,
+              fill: [0, 1, 1, 1],
+              radial: {
+                fillAlpha: 0.105,
+                rimAlpha: 0.72,
+                rimStart: 0.952,
+                rimEnd: 0.985,
+                emission: 0.35,
+              },
+            },
+          ]);
+          disc.commit();
+          ensure(
+            ground.list().find((set) => set.id === 'contract-radial').count ===
+              1,
+            'radial disc committed',
+          );
+          if (!readRegion) return;
+          await nadirView(RADIAL_VIEW_M);
+          await until(
+            () => disc.ready() && background.ready(),
+            'radial ground ready',
+          );
+          await settle();
+          const metresPerDegree = 111319.49 * Math.cos((10 * Math.PI) / 180);
+          const at = (radius, angle) => {
+            const { x, y } = screenOf(
+              20 + (radius * Math.cos(angle)) / metresPerDegree,
+              10 + (radius * Math.sin(angle)) / 110574,
+            );
+            const bytes = readRegion(Math.round(x), Math.round(y), 1, 1);
+            return bytes[1] + bytes[2];
+          };
+          // Cesium leaves part of a small ground disc's fill undrawn (its
+          // old launch pad shows the same gap): the brightest inner sample.
+          const fillAt = () =>
+            Math.max(
+              ...[0, 1, 2, 3, 4, 5].map((k) =>
+                at(RADIAL_RADIUS_M * 0.5, (k * Math.PI) / 3),
+              ),
+            );
+          // Cesium classifies onto the terrain loaded at this height, which
+          // can take longer than the usual frame budget after the descent.
+          // The app's own arrival flight can land after the view was set:
+          // the view is set again until the disc draws.
+          // Pixels come from the last drawn frame, screen positions from the
+          // camera now: both must be at the view, with no flight under way.
+          const away = () =>
+            engine.camera.flightActive() ||
+            engine.camera.height() > RADIAL_VIEW_M * 1.5;
+          for (
+            let frame = 0;
+            frame < 1200 && (away() || fillAt() <= 5);
+            frame++
+          ) {
+            if (away()) {
+              engine.camera.cancelFlight();
+              await nadirView(RADIAL_VIEW_M);
+            }
+            await settle(1);
+          }
+          const fill = fillAt();
+          // The rim is a few pixels wide: its brightest sample across it.
+          let rim = 0;
+          for (let step = 0; step <= 25; step++)
+            rim = Math.max(rim, at(RADIAL_RADIUS_M * (0.85 + step * 0.01), 0));
+          ensure(fill > 5, `radial fill is visible: ${fill}`);
+          ensure(
+            rim > fill + 50,
+            `radial rim ${rim} is brighter than fill ${fill}`,
+          );
+          disc.show(false);
+          await settle();
+          ensure(fillAt() < fill, 'hidden radial fill clears');
+        } finally {
+          disc.destroy();
+          background.destroy();
         }
       },
     ],

@@ -66,9 +66,17 @@ async function runOn(browser, kind) {
   );
   // The suite owns the globe: no camera flight running, and the app's panels
   // let the pointer through to the canvas.
+  // The app restores the view in the link with a flight that can start
+  // after the loading screen goes: wait until the camera is there and still,
+  // or that flight lands in the middle of a check.
   await page.waitForFunction(
-    () => !window.__godsEyeView.engine.camera.flightActive(),
-    { timeout: 60_000, polling: 250 },
+    () => {
+      const { camera } = window.__godsEyeView.engine;
+      return (
+        !camera.flightActive() && Math.abs(camera.height() - 1_000_000) < 1000
+      );
+    },
+    { timeout: 120_000, polling: 250 },
   );
   // Only the engine's canvas takes the pointer: the world overlay draws on a
   // canvas of its own above it.

@@ -15,11 +15,8 @@ import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngin
 import { dashPattern } from '../../../globe/cesium/lines.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import { LAUNCH_PAD_ZONE_RADIUS_M, LAUNCH_PAD_ZONE_STYLE } from '../policy.js';
-import {
-  PAD_RIM_RADIUS_M,
-  createLaunchesDisplay,
-  padRimColor,
-} from './display.js';
+import { createLaunchesDisplay } from './display.js';
+import { GROUND_HARNESSES } from '../../../testSupport/groundDisplayEngines.mjs';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const reticle = { width: 48, height: 48, getContext: () => null };
@@ -35,7 +32,19 @@ function fakeHarness() {
 }
 
 function cesiumHarness() {
-  const { engine, viewer, ...rest } = createCesiumMoversEngine();
+  const { engine, viewer, ...rest } = createCesiumMoversEngine({
+    engineOptions: {
+      groundFactories: {
+        fills: (options) => ({
+          ...options,
+          ready: true,
+          destroy() {},
+          isDestroyed: () => false,
+        }),
+      },
+    },
+  });
+  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
   viewer.scene.globe.getHeight = () => 7;
   return {
     name: 'the Cesium engine',
@@ -72,23 +81,6 @@ const ORBIT = [
 
 test('the display needs a globe engine', () => {
   assert.throws(() => createLaunchesDisplay(null), TypeError);
-});
-
-test("the pad zone's rim is the middle of the style's rim band in the rim's colour", () => {
-  near(
-    PAD_RIM_RADIUS_M,
-    LAUNCH_PAD_ZONE_RADIUS_M *
-      ((LAUNCH_PAD_ZONE_STYLE.rimStart + LAUNCH_PAD_ZONE_STYLE.rimEnd) / 2),
-    'radius',
-  );
-  const [red, green, blue] = rgbaFromCss(LAUNCH_PAD_ZONE_STYLE.color).rgba();
-  const gain = 1 + LAUNCH_PAD_ZONE_STYLE.emission;
-  assert.deepEqual(padRimColor(), [
-    Math.min(1, red * gain),
-    Math.min(1, green * gain),
-    Math.min(1, blue * gain),
-    LAUNCH_PAD_ZONE_STYLE.rimAlpha,
-  ]);
 });
 
 for (const makeHarness of HARNESSES) {
@@ -329,73 +321,6 @@ for (const makeHarness of HARNESSES) {
     h.destroy();
   });
 
-  test(`the pad zone is its rim on the terrain, drawn over the scene, not picked (${name})`, () => {
-    const h = setup(makeHarness);
-    const { engine, display } = h;
-    if (!h.cesium) engine.fake.script('terrainHeight', 7);
-    display.setVisible(true);
-    const zone = display.createPad({ id: 'a', lon: -80.6, lat: 28.6 });
-    assert.equal(zone.heightM, 7);
-    assert.equal(
-      engine.fake?.callsOf('surface.sampleHeight').length ?? 0,
-      0,
-      'no tile height is sampled',
-    );
-    const [listed] = engine.lines.list();
-    assert.equal(listed.points, 129, 'a closed ring');
-    const center = geo.cartesian3.fromDegrees(-80.6, 28.6, 7);
-    const ringPoint = (flat, index) =>
-      geo.cartesian3.create(
-        flat[index * 3],
-        flat[index * 3 + 1],
-        flat[index * 3 + 2],
-      );
-    if (h.cesium) {
-      const primitive = h.primitive(listed.id);
-      assert.equal(primitive.allowPicking, false);
-      const positions = primitive.geometryInstances.geometry._positions;
-      near(
-        Cesium.Cartesian3.distance(positions[0], center),
-        PAD_RIM_RADIUS_M,
-        'rim radius',
-        1e-3,
-      );
-      const { color } = primitive.appearance.material.uniforms;
-      near(color.alpha, LAUNCH_PAD_ZONE_STYLE.rimAlpha, 'rim alpha');
-      near(
-        primitive.depthFailAppearance.material.uniforms.color.alpha,
-        LAUNCH_PAD_ZONE_STYLE.rimAlpha,
-        'drawn where the scene hides it',
-      );
-    } else {
-      const line = engine.fake.line(listed.id);
-      assert.equal(line.options.pickId, undefined);
-      assert.equal(line.options.depthFailAlpha, 1);
-      assert.deepEqual(line.options.color, padRimColor());
-      near(
-        geo.cartesian3.distance(ringPoint(line.positions, 0), center),
-        PAD_RIM_RADIUS_M,
-        'rim radius',
-        1e-3,
-      );
-      near(
-        geo.cartesian3.distance(ringPoint(line.positions, 64), center),
-        PAD_RIM_RADIUS_M,
-        'rim radius',
-        1e-3,
-      );
-    }
-    zone.show = false;
-    assert.equal(engine.lines.list()[0].shown, false);
-    zone.show = true;
-    assert.equal(engine.lines.list()[0].shown, true);
-    zone.destroy();
-    zone.destroy();
-    assert.deepEqual(engine.lines.list(), []);
-    display.destroy();
-    h.destroy();
-  });
-
   test(`teardown releases every set, line and frame listener (${name})`, async () => {
     const h = setup(makeHarness);
     const { engine, display } = h;
@@ -417,6 +342,7 @@ for (const makeHarness of HARNESSES) {
     display.destroy();
     display.destroy();
     assert.deepEqual(engine.movers.list(), []);
+    assert.deepEqual(engine.ground.list(), []);
     assert.deepEqual(engine.lines.list(), []);
     h.frame();
     assert.equal(frames, 1);
@@ -478,3 +404,54 @@ test("the hover cursor is the engine canvas's pointer over a mission", () => {
   display.destroy();
   engine.destroy();
 });
+
+for (const makeHarness of GROUND_HARNESSES) {
+  test(`launch pads retain radial fills, draping and lifecycle (${makeHarness.name})`, () => {
+    const h = makeHarness();
+    const display = createLaunchesDisplay(h.engine);
+    const pad = display.createPad({ id: 'a', lon: -80.6, lat: 28.6 });
+    const id = 'rocket-pad-zone:a';
+    const record = h.set(id);
+    const { color, ...radial } = LAUNCH_PAD_ZONE_STYLE;
+    assert.deepEqual(record.items, [
+      {
+        center: [-80.6, 28.6],
+        radiusM: LAUNCH_PAD_ZONE_RADIUS_M,
+        fill: rgbaFromCss(color).rgba(),
+        radial,
+      },
+    ]);
+    assert.equal(record.options.drape, 'both');
+    assert.equal(record.options.pickable, false);
+    assert.equal(record.shown, false);
+    display.setVisible(true);
+    assert.equal(h.set(id).shown, true);
+    if (h.cesium) {
+      const [primitive] = h.primitives(id).fills;
+      assert.equal(
+        primitive.options.classificationType,
+        Cesium.ClassificationType.BOTH,
+      );
+      assert.equal(primitive.options.allowPicking, false);
+      const appearance = primitive.options.appearance;
+      assert.equal(appearance.flat, true);
+      assert.equal(appearance.renderState.polygonOffset.factor, -1);
+      for (const [key, value] of Object.entries(radial))
+        assert.equal(appearance.material.uniforms[key], value);
+    }
+    pad.show = false;
+    display.setVisible(false);
+    display.setVisible(true);
+    assert.equal(h.set(id).shown, false);
+    pad.show = true;
+    assert.equal(h.set(id).shown, true);
+    assert.equal(h.set(id).commits, 1);
+    pad.destroy();
+    pad.destroy();
+    assert.equal(h.set(id), undefined);
+    display.createPad({ id: 'b', lon: 1, lat: 2 });
+    display.destroy();
+    assert.equal(h.sets(), 0);
+    h.destroy();
+  });
+}

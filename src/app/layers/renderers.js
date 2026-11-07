@@ -165,11 +165,15 @@ export const LAYER_MANIFEST = Object.freeze({
   'alpr-cameras': display('createAlprDisplay', ['movers']),
   'street-level': display('createStreetLevelDisplay', ['movers', 'ground']),
   satellites: display('createSatellitesDisplay', ['movers', 'lines']),
-  'rocket-launches': display('createLaunchesDisplay', ['movers', 'lines']),
+  'rocket-launches': display('createLaunchesDisplay', [
+    'movers',
+    'lines',
+    'ground',
+  ]),
   traffic: display('createTrafficDisplay', ['movers', 'ground']),
   cctv: display('createCctvDisplay', ['movers', 'lines', 'meshes']),
   radio: display('createRadioDisplay', ['movers']),
-  transit: display('createTransitDisplay', ['movers', 'lines']),
+  transit: display('createTransitDisplay', ['movers', 'ground']),
   bikeshare: display('createBikeshareDisplay', ['movers']),
   directions: display('createDirectionsDisplay', ['movers', 'ground']),
   'recent-imagery': display('createRecentImageryDisplay', [

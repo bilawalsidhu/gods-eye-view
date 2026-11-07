@@ -235,7 +235,8 @@ export function createNavaraEngine(
     projector: {
       worldToWindow: (position, result) =>
         model.worldToWindow(position, result),
-      horizonVisible: (position) => model.horizonVisible(position),
+      horizonVisible: (position, options) =>
+        model.horizonVisible(position, options),
     },
     camera: model.camera,
     movers: () => moversPort?.pickables?.() ?? [],
@@ -285,8 +286,9 @@ export function createNavaraEngine(
     registerMeshPicker: (pick) => picking.registerMeshPicker(pick),
     // The CPU pick of movers and lines (picking.js); 3D tiles carry no ids.
     // Clicks with { pick } get Navara's GPU pick of the gesture instead.
-    pick: (screen) => picking.pick(screen),
-    drillPick: (screen, limit) => picking.drillPick(screen, limit),
+    pick: (screen, width, height) => picking.pick(screen, width, height),
+    drillPick: (screen, limit, width, height) =>
+      picking.drillPick(screen, limit, width, height),
     pickPosition(screen) {
       const rect = canvas.getBoundingClientRect();
       const hit = view.pickDepthPosition(
@@ -416,7 +418,8 @@ export function createNavaraEngine(
       worldToWindow: (position, result) =>
         model.worldToWindow(position, result),
       viewProjection: (result) => model.viewProjection(result),
-      horizonVisible: (position) => model.horizonVisible(position),
+      horizonVisible: (position, options) =>
+        model.horizonVisible(position, options),
     },
     frames,
     render: {

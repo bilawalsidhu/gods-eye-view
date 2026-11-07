@@ -68,15 +68,20 @@ export function createCesiumInput(
     };
   });
   const delivery = createPickDelivery({
-    pick: (position) => picker?.pick(position),
-    drill: (position, limit) => picker?.drillPick(position, limit) ?? [],
+    pick: (position, type, window) =>
+      picker?.pick(position, window?.width, window?.height),
+    drill: (position, limit, window) =>
+      picker?.drillPick(position, limit, window?.width, window?.height) ?? [],
     schedule: (run) => scheduleFrame(() => !destroyed && run()),
   });
 
   const input = {
     acquirePointer: () => pointer.acquire(),
     on(type, listener, options = {}) {
-      const { modifier, pick, drill } = normalizeInputOptions(type, options);
+      const { modifier, pick, drill, pickWindow } = normalizeInputOptions(
+        type,
+        options,
+      );
       if (destroyed) return () => {};
       handler ??= createEventHandler(scene.canvas);
       const key = `${type}:${modifier}`;
@@ -95,7 +100,13 @@ export function createCesiumInput(
           KEYS[modifier],
         );
       }
-      const entry = { listener, pick, drill, pointer: options.pointer };
+      const entry = {
+        listener,
+        pick,
+        drill,
+        pickWindow,
+        pointer: options.pointer,
+      };
       listeners.add(entry);
       return () => {
         if (!listeners.delete(entry) || listeners.size) return;

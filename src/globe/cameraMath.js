@@ -7,6 +7,7 @@
 // keeps Navara's camera on the same pose and fov.
 
 import * as geo from '../geo/index.js';
+import { horizonEllipsoidRadii } from './contract.js';
 
 const { cartesian2, cartesian3, cartographic, math, matrix4 } = geo;
 const WGS84 = geo.ellipsoid.WGS84;
@@ -238,18 +239,19 @@ const horizonTarget = cartesian3.create();
 const horizonVt = cartesian3.create();
 
 /** Cesium's EllipsoidalOccluder.isPointVisible from `eye`. */
-export function horizonVisible(eye, position) {
+export function horizonVisible(eye, position, options) {
+  const radii = horizonEllipsoidRadii(options) ?? RADII;
   const camera = cartesian3.fromElements(
-    eye.x / RADII.x,
-    eye.y / RADII.y,
-    eye.z / RADII.z,
+    eye.x / radii.x,
+    eye.y / radii.y,
+    eye.z / radii.z,
     horizonCamera,
   );
   const limbSquared = cartesian3.magnitudeSquared(camera) - 1;
   const target = cartesian3.fromElements(
-    position.x / RADII.x,
-    position.y / RADII.y,
-    position.z / RADII.z,
+    position.x / radii.x,
+    position.y / radii.y,
+    position.z / radii.z,
     horizonTarget,
   );
   const vt = cartesian3.subtract(target, camera, horizonVt);

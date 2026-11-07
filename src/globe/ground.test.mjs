@@ -401,3 +401,69 @@ test('CPU picks find the item under the picked ground, on top first', () => {
   low.show(false);
   assert.deepEqual(ids(), []);
 });
+
+test('radial discs copy and validate their alpha envelope', () => {
+  const radial = {
+    fillAlpha: 0.105,
+    rimAlpha: 0.72,
+    rimStart: 0.952,
+    rimEnd: 0.985,
+    emission: 0.35,
+  };
+  const item = { center: [20, 10], radiusM: 100, fill: [0, 1, 1, 1], radial };
+  const checked = normalizeGroundItem('disc', item);
+  assert.deepEqual(checked.radial, radial);
+  assert.notEqual(checked.radial, radial);
+  for (const patch of [
+    { fillAlpha: -1 },
+    { rimAlpha: 2 },
+    { rimStart: 0.99 },
+    { rimEnd: 1 },
+    { emission: NaN },
+  ])
+    assert.throws(
+      () =>
+        normalizeGroundItem('disc', {
+          ...item,
+          radial: { ...radial, ...patch },
+        }),
+      TypeError,
+    );
+  assert.throws(
+    () => normalizeGroundItem('disc', { ...item, fill: null }),
+    TypeError,
+  );
+  assert.throws(() => normalizeGroundItem('cell', item), TypeError);
+});
+
+test('pixel corridor backing keeps a wider edge and rejects invalid combinations', () => {
+  const item = {
+    positions: [
+      [0, 0],
+      [1, 1],
+    ],
+    widthPx: 3,
+    color: [0, 1, 0, 0.8],
+    backing: { widthPx: 5, color: [0.02, 0.03, 0.05, 0.8] },
+  };
+  assert.deepEqual(
+    normalizeGroundItem('corridor', item).animation.backing,
+    item.backing,
+  );
+  for (const backing of [
+    { widthPx: 3, color: [0, 0, 0, 1] },
+    { widthPx: 5, color: [0, 0, 0, 2] },
+  ])
+    assert.throws(
+      () => normalizeGroundItem('corridor', { ...item, backing }),
+      TypeError,
+    );
+  assert.throws(
+    () =>
+      normalizeGroundItem('corridor', {
+        ...item,
+        dashPattern: { lengthPx: 16 },
+      }),
+    TypeError,
+  );
+});

@@ -182,9 +182,12 @@
  * @typedef {object} InputOptions
  * @property {{ release: () => void }} [pointer] The live exclusive pointer claim.
  * @property {InputModifier} [modifier]
- * @property {boolean} [pick] click, doubleClick and move only. A move
+ * @property {boolean} [pick] click, doubleClick, down and move only. A move
  *   listener with pick gets at most one payload per frame (the latest).
- * @property {number} [drill] A positive integer (click and doubleClick).
+ * @property {number} [drill] A positive integer; moves coalesce with their picks.
+ * @property {{ width: number, height: number }} [pickWindow] Positive integer
+ *   pick dimensions in pixels, passed to the picker. Omitted: engine default.
+ *   Down picks are synchronous; click delivery keeps the engine's gesture pick.
  *
  * @typedef {object} GlobeProjector
  * @property {(position: Cartesian3, result?: Cartesian2) => (Cartesian2 | undefined)} worldToWindow
@@ -193,9 +196,10 @@
  *   World → clip matrix consistent with worldToWindow: clip = M·[x, y, z, 1],
  *   in front when clip.w > 0, window = ((clip.x/clip.w + 1)/2 · width,
  *   (1 − clip.y/clip.w)/2 · height).
- * @property {(position: Cartesian3) => boolean} horizonVisible
+ * @property {(position: Cartesian3, options?: { ellipsoid?: { radii: Cartesian3 } }) => boolean} horizonVisible
  *   False when the WGS84 ellipsoid hides the point from the camera
- *   (Cesium's EllipsoidalOccluder.isPointVisible).
+ *   (Cesium's EllipsoidalOccluder.isPointVisible). An optional ellipsoid
+ *   supplies positive finite radii in metres; omitted means WGS84.
  *
  * @typedef {object} GlobeSurface
  * @property {(cartographic: Cartographic, exclude?: any[]) => (number | undefined)} sampleHeight
@@ -513,6 +517,7 @@
  *   following their relief, under every mover, line and model (Cesium:
  *   GroundPrimitive and GroundPolylinePrimitive; src/globe/ground.js checks
  *   and defaults these). Nothing is extruded.
+ * @property {boolean} [reveal] Unpickable pixel corridors support a mutable reveal fraction.
  * @property {string} id Unique among the engine's live ground sets.
  * @property {'polygon'|'disc'|'cell'|'corridor'} kind One kind of item per
  *   set (GroundItem).
@@ -527,6 +532,14 @@
  *   terrain and 3D tiles ('both', the default), or only one of them
  *   (Cesium's classificationType). Navara drapes on whatever surface it
  *   draws.
+ *
+ * @typedef {object} GroundRadial
+ * @property {number} fillAlpha Interior alpha multiplier, 0..1.
+ * @property {number} rimAlpha Rim alpha multiplier, 0..1.
+ * @property {number} rimStart Start of the smooth rim, fraction of radius.
+ * @property {number} rimEnd End of the smooth rim; 0 <= rimStart < rimEnd < 1.
+ *   The outer edge fades smoothly from rimEnd to 1.
+ * @property {number} emission Nonnegative rim colour gain.
  *
  * @typedef {object} GroundItem
  *   One fill, by its set's kind. Positions are [longitude, latitude] in
@@ -551,6 +564,9 @@
  *     alpha times `gapAlpha`; a lit dash brightened by `emission` times its
  *     colour). A shown set with a pulse or a dash keeps the engine drawing
  *     a frame after every frame, as Cesium's continuous render did.
+ *   A pixel corridor may take `backing: { widthPx, color }`, wider than its
+ *   core. The edge uses the backing colour and alpha; the core is blended
+ *   once, without a second layer underneath it.
  *   A corridor may instead take `dashPattern` ({ lengthPx, pattern = 255 }):
  *   a static 16-bit mask repeated every lengthPx CSS pixels, with clear
  *   gaps, as PolylineDash. It cannot combine with the other looks.
@@ -559,8 +575,12 @@
  *   omitted: none). Every kind takes `pickId`: what a pick of the item
  *   returns (an item without one is not picked).
  *
+ * @property {GroundRadial} [radial] Disc with fill: radial alpha and emission.
+ *
  * @typedef {object} GroundSet
  * @property {string} id
+ * @property {(fraction: number) => void} setReveal Reveal each corridor from 0..1
+ *   of its length without rebuilding geometry; requires reveal: true.
  * @property {(items: GroundItem[]) => void} replace Checks and stores every
  *   item at once (the previous items go); drawn after commit().
  * @property {() => void} commit Draws the stored items in place of the last
@@ -768,14 +788,19 @@ export const INPUT_TYPES = Object.freeze([
 ]);
 export const MODIFIERS = Object.freeze(['ctrl', 'shift', 'alt']);
 /** Input types whose listeners may ask for picks. */
-const PICK_INPUT_TYPES = Object.freeze(['click', 'doubleClick', 'move']);
+const PICK_INPUT_TYPES = Object.freeze([
+  'click',
+  'doubleClick',
+  'move',
+  'down',
+]);
 
 /**
  * input.on options checked and defaulted: { modifier, pick, drill } (drill
  * 0 when not asked), or a TypeError.
  */
 export function normalizeInputOptions(type, options = {}) {
-  const { modifier, pick = false, drill = 0 } = options ?? {};
+  const { modifier, pick = false, drill = 0, pickWindow } = options ?? {};
   if (!INPUT_TYPES.includes(type))
     throw new TypeError(`Unknown input type: ${type}`);
   if (modifier !== undefined && !MODIFIERS.includes(modifier))
@@ -786,8 +811,49 @@ export function normalizeInputOptions(type, options = {}) {
     throw new TypeError(`Input drill must be a whole number: ${drill}`);
   if ((pick || drill) && !PICK_INPUT_TYPES.includes(type))
     throw new TypeError(`Input ${type} cannot pick`);
-  if (drill && type === 'move') throw new TypeError('A move cannot drill');
-  return { modifier, pick: pick || drill > 0, drill };
+  if (
+    pickWindow !== undefined &&
+    (!pickWindow ||
+      !Number.isInteger(pickWindow.width) ||
+      pickWindow.width <= 0 ||
+      !Number.isInteger(pickWindow.height) ||
+      pickWindow.height <= 0)
+  )
+    throw new TypeError(
+      'Input pickWindow needs positive integer width and height',
+    );
+  if (pickWindow && !(pick || drill))
+    throw new TypeError('Input pickWindow needs pick or drill');
+  return {
+    modifier,
+    pick: pick || drill > 0,
+    drill,
+    ...(pickWindow
+      ? {
+          pickWindow: Object.freeze({
+            width: pickWindow.width,
+            height: pickWindow.height,
+          }),
+        }
+      : {}),
+  };
+}
+
+/** Validated optional horizon ellipsoid radii; undefined selects WGS84. */
+export function horizonEllipsoidRadii(options) {
+  if (options?.ellipsoid === undefined) return undefined;
+  const radii = options.ellipsoid?.radii;
+  if (
+    !radii ||
+    !Number.isFinite(radii.x) ||
+    radii.x <= 0 ||
+    !Number.isFinite(radii.y) ||
+    radii.y <= 0 ||
+    !Number.isFinite(radii.z) ||
+    radii.z <= 0
+  )
+    throw new TypeError('Horizon ellipsoid needs positive finite radii');
+  return radii;
 }
 
 const ENGINE_EVENT = Symbol('gev.globe.engineEvent');
