@@ -67,8 +67,6 @@
   "src/layers/cctv/selection.js",
   "src/layers/cctv/state.js",
   "src/layers/cctv/testing.js",
-  "src/layers/cyclones/index.js",
-  "src/layers/cyclones/rendering.js",
   "src/layers/directions/index.js",
   "src/layers/firms/cards.js",
   "src/layers/firms/lifecycle.js",

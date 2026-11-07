@@ -82,6 +82,44 @@ test('a click on nothing is picked once, however its hit is read', (t) => {
   assert.equal(h.calls.pick, 1);
 });
 
+test('a click on a draw-set item reads as its hit; anything else as none', (t) => {
+  let picked = {
+    id: { set: 'quakes:1', id: 'quake:a', meta: { mag: 5 } },
+    primitive: {},
+  };
+  const h = harness({ pick: () => picked });
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onClick((event) => seen.push([event.drawHit, event.drawHit]));
+  h.click();
+  assert.equal(h.calls.pick, 1, 'one pick serves the hit');
+  assert.deepEqual(seen[0][0], {
+    set: 'quakes:1',
+    id: 'quake:a',
+    meta: { mag: 5 },
+    surface: false,
+  });
+  assert.equal(seen[0][0], seen[0][1], 'read once per click');
+  picked = { id: { set: 'quakes:1', id: 'quake:b', lodGroup: 'near' } };
+  h.click();
+  assert.deepEqual(seen.at(-1)[0], {
+    set: 'quakes:1',
+    id: 'quake:b',
+    lodGroup: 'near',
+    surface: false,
+  });
+  for (picked of [
+    { id: 'plane-1' },
+    { id: { id: 'entity' } },
+    { id: { set: 'quakes:1', id: 7 } },
+    { id: { set: null, id: 'quake:c' } },
+    undefined,
+  ]) {
+    h.click();
+    assert.equal(seen.at(-1)[0], null);
+  }
+});
+
 test('a click nobody reads is never picked', (t) => {
   const h = harness();
   t.after(() => h.input.destroy());

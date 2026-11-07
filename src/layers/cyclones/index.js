@@ -1,7 +1,7 @@
-import * as Cesium from 'cesium';
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isSurfacePick } from '../../data/scenePick.js';
 import {
   registerPickOwner,
   unregisterPickOwner,
@@ -23,7 +23,7 @@ import {
   translateKnown,
 } from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
-import { cameraOf } from '../../render/cesium/camera.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 // "10-12 15:00 UTC" never breaks across lines: no-break spaces, and a word
 // joiner after the hyphen (JetBrains Mono has no U+2011 non-breaking hyphen).
@@ -68,7 +68,6 @@ export function createCyclonesLayer({
   feed,
   hitTestOverlay = hitTestWorldOverlay,
   overlayHost,
-  cesium = Cesium,
   createRendering = createCycloneRendering,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   openLink = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
@@ -98,14 +97,6 @@ export function createCyclonesLayer({
     selectedId = id;
     rendering?.setSelection(id);
   }
-  // Photorealistic 3D Tiles pick as tileset content without an entity id;
-  // that is empty map, the same as no pick at all on the globe.
-  const isSurfacePick = (picked) =>
-    !picked ||
-    (picked.id === undefined &&
-      (picked.content !== undefined ||
-        (typeof cesium.Cesium3DTileset === 'function' &&
-          picked.primitive instanceof cesium.Cesium3DTileset)));
   function installSelection() {
     if (selectionOwner || !viewer?.scene?.canvas) return;
     const owner = {};
@@ -176,10 +167,11 @@ export function createCyclonesLayer({
         if (id) layer.setParams({ stormId: id });
         return;
       }
-      const picked = event.pick;
-      const id = rendering?.pickStorm(picked);
+      // A storm's own drawing names it; empty map (the globe, or 3D tiles,
+      // which pick as tileset content without an id) clears the selection.
+      const id = rendering?.pickStorm(event.drawHit);
       if (id) layer.setParams({ stormId: id });
-      else if (isSurfacePick(picked)) layer.setParams({ clear: true });
+      else if (isSurfacePick(event.pick)) layer.setParams({ clear: true });
     });
     owner.unsubscribe = unsubscribe;
   }
@@ -198,7 +190,7 @@ export function createCyclonesLayer({
     updateInterval: 300_000,
     init(nextViewer) {
       viewer = nextViewer;
-      rendering = createRendering({ viewer, cesium, overlayHost });
+      rendering = createRendering({ viewer, overlayHost });
     },
     attachShellServices(services) {
       runNavigation =

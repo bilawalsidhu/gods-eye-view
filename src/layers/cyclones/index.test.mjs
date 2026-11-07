@@ -76,8 +76,16 @@ const deferred = () => {
 
 test('map selection yields to pointer owners and owns only its enabled handler', async () => {
   const handlers = [],
-    pickedEntity = {},
-    foreignEntity = {};
+    // A pick of an item in one of the layer's draw sets, and one of another
+    // layer's set: the dispatcher hands each to pickStorm as a draw hit.
+    pickedEntity = {
+      set: 'weather-cyclones:1:points',
+      id: 'cyclone:ep162026:center',
+    },
+    foreignEntity = {
+      set: 'other-layer:points',
+      id: 'cyclone:ep162026:center',
+    };
   let picked = { id: pickedEntity },
     overlayHit = null,
     overlayTests = 0,
@@ -88,16 +96,15 @@ test('map selection yields to pointer owners and owns only its enabled handler',
     setSelection() {},
     clear() {},
     destroy() {},
-    pickStorm: (value) => (value?.id === pickedEntity ? 'ep162026' : null),
+    pickStorm: (hit) =>
+      hit?.set === pickedEntity.set && hit.id === pickedEntity.id
+        ? 'ep162026'
+        : null,
     ownsPickId: (id) => id === 'cyclone:ep162026:center',
     getDiagnostics: () => ({}),
   };
-  const cesium = {
-    ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-  };
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium,
     createRendering: () => rendering,
     hitTestOverlay: () => {
       overlayTests++;
@@ -283,9 +290,6 @@ test('a click on a storm card or lead-hour label selects that storm without pick
     hostArgument;
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium: {
-      ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-    },
     overlayHost: 'host',
     createRendering: ({ overlayHost }) => {
       hostArgument = overlayHost;

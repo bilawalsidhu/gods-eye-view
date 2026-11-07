@@ -18,6 +18,7 @@ import { createCesiumCamera } from './camera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
+import { drawHitOf } from './drawHit.js';
 import { createCesiumEffects } from './effects.js';
 import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuality } from './quality.js';
@@ -412,15 +413,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     item.show !== false &&
     item.pickable !== false;
 
-  function hitOf({ id }) {
-    return {
-      set: id.set,
-      id: id.id,
-      ...(id.meta === undefined ? {} : { meta: id.meta }),
-      ...(id.lodGroup === undefined ? {} : { lodGroup: id.lodGroup }),
-      surface: false,
-    };
-  }
+  const hitOf = ({ id }) => drawHitOf({ id });
 
   /** The globe (or ellipsoid) under a pixel, as a surface hit. */
   function surfaceHit(x, y) {

@@ -38,6 +38,7 @@ import * as Cesium from 'cesium';
 import { isLeaseCurrent, isPointerFree } from '../data/inputOwnership.js';
 import { acquireCameraInput } from '../render/cesium/cameraInput.js';
 import { cesiumInputOf, createCesiumInput } from '../render/cesium/input.js';
+import { drawHitOf } from '../render/cesium/drawHit.js';
 import {
   findPickOwner,
   pickContact,
@@ -95,6 +96,9 @@ const dispatchers = new WeakMap();
  *   (corrected for sensor styles; see sensorPick.js).
  * @property {ClickGesture} gesture
  * @property {object|undefined} pick `scene.pick` at `position`.
+ * @property {import('../render/contract/query').Hit|null} drawHit `pick` as
+ *   the contract's `Hit`, when it is an item of a renderer draw set; null
+ *   for anything else. What layers on the draw port read a click by.
  * @property {object|undefined} hit `pick`, or on a coarse pointer the first
  *   registered contact under a surface pick (`pickContact`).
  * @property {string|null} id The hit's canonical pick id.
@@ -312,6 +316,9 @@ function createClickEvent(viewer, click, gesture) {
     gesture,
     get pick() {
       return once('pick', () => pickThroughFollowHelper(scene.pick(position)));
+    },
+    get drawHit() {
+      return once('drawHit', () => drawHitOf(this.pick));
     },
     get hit() {
       return once('hit', () =>

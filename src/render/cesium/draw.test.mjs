@@ -359,3 +359,92 @@ test('the earthquakes layer draws its discs as ground fills on a viewer of its o
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
+
+test('the cyclones layer draws clamped dots, draped tracks and holed cones on a viewer of its own', async () => {
+  const { createCycloneRendering } =
+    await import('../../layers/cyclones/rendering.js');
+  const { scene, frame } = drawOver();
+  const rendering = createCycloneRendering({
+    viewer: { scene },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  const storm = (id, lon) => ({
+    id,
+    name: id,
+    advisoryNumber: '1',
+    geometryAdvisoryNumber: '1',
+    geometryStatus: 'current',
+    position: { longitude: lon, latitude: 0 },
+    forecastPoints: [
+      { position: { longitude: lon, latitude: 1 }, tauHours: 12 },
+    ],
+    track: {
+      type: 'LineString',
+      coordinates: [
+        [lon, 0],
+        [lon, 1],
+      ],
+    },
+    cone: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [lon - 2, -2],
+          [lon + 2, -2],
+          [lon + 2, 2],
+          [lon - 2, 2],
+          [lon - 2, -2],
+        ],
+        [
+          [lon - 1, -1],
+          [lon + 1, -1],
+          [lon + 1, 1],
+          [lon - 1, -1],
+        ],
+      ],
+    },
+  });
+  await rendering.setSnapshot({
+    storms: [storm('near', 0), storm('far', 180)],
+  });
+  const all = (host, out = []) => {
+    out.push(host);
+    if (host instanceof Cesium.PrimitiveCollection)
+      for (let i = 0; i < host.length; i++) all(host.get(i), out);
+    return out;
+  };
+  const primitives = scene.added.flatMap((host) => all(host));
+  const of = (type) => primitives.filter((p) => p instanceof type);
+  const [dots] = of(Cesium.BillboardCollection);
+  assert.equal(dots.length, 4, 'two centers, two forecast points');
+  for (let i = 0; i < dots.length; i++) {
+    const dot = dots.get(i);
+    assert.equal(dot.heightReference, Cesium.HeightReference.CLAMP_TO_GROUND);
+    assert.equal(dot.disableDepthTestDistance, Infinity);
+  }
+  const [tracks] = of(Cesium.GroundPolylinePrimitive);
+  assert.equal(tracks.classificationType, Cesium.ClassificationType.BOTH);
+  assert.equal(tracks.geometryInstances.length, 6, 'tracks and ring outlines');
+  const cones = of(Cesium.GroundPrimitive);
+  const instances = cones.flatMap((cone) => cone.geometryInstances);
+  assert.deepEqual(instances.map((instance) => instance.id.id).sort(), [
+    'cyclone:far:cone:0',
+    'cyclone:near:cone:0',
+  ]);
+  for (const { geometry } of instances)
+    assert.equal(geometry._polygonHierarchy.holes.length, 1, 'the hole stays');
+
+  // Past the horizon the dots go; their storms' shapes are the globe's to hide.
+  frame();
+  const shown = [];
+  for (let i = 0; i < dots.length; i++)
+    shown.push([dots.get(i).id.id, dots.get(i).show]);
+  assert.deepEqual(shown.sort(), [
+    ['cyclone:far:center', false],
+    ['cyclone:far:forecast:0', false],
+    ['cyclone:near:center', true],
+    ['cyclone:near:forecast:0', true],
+  ]);
+  rendering.destroy();
+  assert.equal(scene.added.length, 0);
+});
