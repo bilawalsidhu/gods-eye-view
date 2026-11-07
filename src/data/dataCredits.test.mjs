@@ -177,3 +177,17 @@ test('the News layer credits its built-in sources', () => {
   );
   assert.doesNotMatch(credit('news').html, /No single provider/);
 });
+
+test('the PR #1506 camera packs are credited with their sources and terms', () => {
+  const html = (key) => DATA_CREDITS.find((entry) => entry.key === key)?.html;
+  assert.match(html('ottawa-cctv') || '', /traffic\.ottawa\.ca/);
+  assert.match(html('quebec-cctv') || '', /CC BY 4\.0/);
+  assert.match(html('quebec-cctv') || '', /OpenStreetMap contributors/);
+  assert.match(html('tripcheck-cctv') || '', /courtesy of ODOT/);
+  // MLIT's terms ask for the source in this form, with the page link.
+  assert.match(html('mlit-river-cctv') || '', /出典：国土交通省/);
+  assert.match(
+    html('mlit-river-cctv') || '',
+    /href="https:\/\/www\.river\.go\.jp\//,
+  );
+});

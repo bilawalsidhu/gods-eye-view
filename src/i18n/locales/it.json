@@ -1193,6 +1193,11 @@
   "TomTom roads first; OpenStreetMap fills the rest, simulated": "Prima le strade TomTom; OpenStreetMap completa il resto, simulato",
   "TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)": "Prima le strade TomTom; OpenStreetMap completa il resto, simulato (richiede una chiave TomTom)",
   "Hybrid": "Ibrido",
+  "Lines": "Linee",
+  "Dots": "Punti",
+  "Road lines colored by live flow: green to red": "Strade colorate in base al traffico in tempo reale: dal verde al rosso",
+  "Moving dots colored by live flow": "Punti in movimento colorati in base al traffico in tempo reale",
+  "Moving dots": "Punti in movimento",
   "TomTom key unavailable": "Chiave TomTom non disponibile",
   "TomTom daily budget reached": "Budget giornaliero TomTom esaurito",
   "Monthly traffic allowance used": "Quota mensile del traffico esaurita",
@@ -2896,6 +2901,8 @@
   "AVAILABLE MISSIONS": "MISSIONI DISPONIBILI",
   "SELECT A MISSION TO INSPECT": "SELEZIONA UNA MISSIONE DA ESAMINARE",
   "LOADING 30-DAY MISSION INDEX": "CARICAMENTO INDICE MISSIONI A 30 GIORNI",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "Missioni spaziali non disponibili: impossibile caricare l’indice delle missioni. Riprova più tardi.",
+  "30-DAY MISSION INDEX UNAVAILABLE": "INDICE MISSIONI A 30 GIORNI NON DISPONIBILE",
   "TAB PREVIEWS · ENTER / SPACE SELECTS": "TAB: ANTEPRIMA · ENTER / SPACE: SELEZIONA",
   "Internet radio and local SDR": "Radio internet e SDR locale",
   "STATION TAG": "TAG STAZIONE",
@@ -3354,5 +3361,9 @@
   "Maximum event age: {days}d; undated markers are kept": "Età massima degli eventi: {days} giorni; indicatori senza data mantenuti",
   "event age filter|All": "Tutti",
   "Event age": "Età degli eventi",
-  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti"
+  "Event age: {days}d · undated kept": "Età degli eventi: {days} giorni · senza data mantenuti",
+  "Close camera preview": "Chiudi anteprima della telecamera",
+  "Refresh map still": "Aggiorna immagine fissa sulla mappa",
+  "The map still uses a separate request and may show a different moment.": "L’immagine sulla mappa usa una richiesta separata e può mostrare un momento diverso.",
+  "Video plays from Québec 511, which sees your IP address.": "Il video viene riprodotto da Québec 511, che vede il tuo indirizzo IP."
 }

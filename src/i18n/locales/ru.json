@@ -816,6 +816,8 @@
   "Contact Context actions": "Действия контекста контакта",
   "Available Space Missions": "Доступные космические миссии",
   "LOADING 30-DAY MISSION INDEX": "ЗАГРУЗКА ИНДЕКСА МИССИЙ ЗА 30 ДНЕЙ",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "Космические миссии недоступны: не удалось загрузить список миссий. Повторите попытку позже.",
+  "30-DAY MISSION INDEX UNAVAILABLE": "ИНДЕКС МИССИЙ ЗА 30 ДНЕЙ НЕДОСТУПЕН",
   "Radio playback": "Воспроизведение радио",
   "Radio volume": "Громкость радио",
   "STATION TAG": "ТЕГ СТАНЦИИ",
@@ -2849,6 +2851,11 @@
   "Zoom in for vector tile coverage": "Приблизьте карту, чтобы загрузить векторные тайлы",
   "Camera coverage unavailable": "Покрытие камер недоступно",
   "Hybrid": "Гибрид",
+  "Lines": "Линии",
+  "Dots": "Точки",
+  "Road lines colored by live flow: green to red": "Линии дорог по потоку онлайн: от зелёного к красному",
+  "Moving dots colored by live flow": "Движущиеся точки, окрашенные по потоку онлайн",
+  "Moving dots": "Движущиеся точки",
   "TomTom roads only, each with its live flow": "Только дороги TomTom, у каждой — свой поток онлайн",
   "TomTom roads only, each with its live flow (needs a TomTom key)": "Только дороги TomTom, у каждой — свой поток онлайн (нужен ключ TomTom)",
   "OpenStreetMap roads, with TomTom flow matched when available": "Дороги OpenStreetMap; поток TomTom сопоставляется, где он есть",
@@ -3432,5 +3439,9 @@
   "Maximum event age: {days}d; undated markers are kept": "Максимальный возраст события: {days} дн.; метки без даты сохранены",
   "event age filter|All": "Все",
   "Event age": "Возраст события",
-  "Event age: {days}d · undated kept": "Возраст события: {days} дн. · метки без даты сохранены"
+  "Event age: {days}d · undated kept": "Возраст события: {days} дн. · метки без даты сохранены",
+  "Close camera preview": "Закрыть просмотр камеры",
+  "Refresh map still": "Обновить кадр на карте",
+  "The map still uses a separate request and may show a different moment.": "Кадр на карте запрашивается отдельно и может показывать другой момент.",
+  "Video plays from Québec 511, which sees your IP address.": "Видео воспроизводится с Québec 511, который видит ваш IP-адрес."
 }
