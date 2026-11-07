@@ -1547,6 +1547,56 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.segments',
+      'a draped line takes segment colours and shows, changed every frame in place, without stopping the frame or picks',
+      async (h, r) => {
+        await overAustin(h, r);
+        const lines = r.draw.lines({
+          id: 'conf:line-segments',
+          pickable: false,
+        });
+        const at = (dLon) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat, height: 0 });
+        const trail = (frame) => ({
+          id: 'trail',
+          positions: [at(-0.003), at(-0.001), at(0.001), at(0.003)],
+          widthPx: 5,
+          mode: 'draped',
+          clampTo: 'both',
+          style: { kind: 'solid', color: '#ffffff' },
+          segmentColors: [0, 1, 2].map((i) => [
+            0.2,
+            0.9,
+            0.5,
+            ((frame + i) % 4) / 4 + 0.2,
+          ]),
+          segmentShow: [0, 1, 2].map((i) => i <= frame % 3),
+        });
+        lines.set([trail(0)]);
+        await settled(r);
+        for (let i = 1; i < 5; i++) {
+          lines.upsert([trail(i)]);
+          await drawn(h, r, 1);
+        }
+        equal(lines.size(), 1, 'changed in place, not added');
+        const points = r.draw.points({ id: 'conf:line-segments-points' });
+        const pos = at(0);
+        points.set([{ id: 'p', pos, pixelSize: 16, color: '#ff0000' }]);
+        await drawn(h, r);
+        const s = r.query.project(pos);
+        ok(s, 'the point projects');
+        equal(
+          r.query
+            .drillPick(s.x, s.y)
+            .find((hit) => hit.set === 'conf:line-segments-points')?.id,
+          'p',
+          'picks still find what is drawn over the line',
+        );
+        points.dispose();
+        lines.dispose();
+      },
+    ),
+    check(
       'draw.points.update',
       'an upserted point is drawn where it now is once drawn again, and shows only within its display range',
       async (h, r) => {

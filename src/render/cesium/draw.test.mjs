@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test from 'node:test';
 import { bindRenderer, drawOf, findDraw } from '../rendererOf.js';
-import { createCesiumDraw, revealUniform } from './draw.js';
+import { createCesiumDraw, revealUniform, unboundDrawPart } from './draw.js';
 import { drawHitOf } from './drawHit.js';
 
 // Node has no WebGL context to report line-width limits.
@@ -1529,6 +1529,138 @@ test('lines that change only whether they show, or where an undraped one runs, c
     third.get(1).destroy();
     set.upsert([draped('a', false)]);
     assert.notEqual(scene.added.at(-1), third, 'its ground destroyed');
+    set.dispose();
+  }));
+
+test('a draped line with segment colours and shows draws a ground instance a segment, changed in place', () =>
+  withImageClasses(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.lines({ id: 'segments', pickable: false });
+    const trail = (alpha, shows) => ({
+      id: 'trail',
+      positions: [
+        { lon: 0, lat: 0 },
+        { lon: 0.001, lat: 0 },
+        { lon: 0.001, lat: 0 },
+        { lon: 0.002, lat: 0 },
+      ],
+      widthPx: 3,
+      mode: 'draped',
+      style: { kind: 'solid', color: '#ffffff' },
+      segmentColors: [
+        [0, 1, 0, alpha],
+        [0, 1, 0, alpha],
+        [1, 0, 0, alpha],
+      ],
+      segmentShow: shows,
+    });
+    set.set([
+      trail(0.8, [true, false, false]),
+      {
+        id: 'plain',
+        positions: [
+          { lon: 1, lat: 0 },
+          { lon: 1.001, lat: 0 },
+        ],
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: '#7fe6ed' },
+      },
+    ]);
+    const host = scene.added[0];
+    const ground = host.get(1);
+    assert.ok(ground instanceof Cesium.GroundPolylinePrimitive);
+    assert.equal(ground.allowPicking, false);
+    // Two segments with length, and the plain line, in one primitive.
+    const instances = ground.geometryInstances;
+    assert.equal(instances.length, 3);
+    const [first, last] = instances;
+    assert.equal(first.id.id, 'trail', 'picks read as the line');
+    assert.equal(first.id.set, 'segments');
+    assert.notEqual(first.id, last.id);
+    assert.deepEqual(
+      [...first.attributes.color.value],
+      [0, 255, 0, Math.round(0.8 * 255)],
+    );
+    assert.deepEqual([...first.attributes.show.value], [1]);
+    assert.deepEqual([...last.attributes.color.value].slice(0, 3), [255, 0, 0]);
+    assert.deepEqual([...last.attributes.show.value], [0]);
+    const attributes = new Map(
+      instances.map((instance) => [
+        instance.id,
+        {
+          color: Uint8Array.from(instance.attributes.color.value),
+          show: Uint8Array.from(instance.attributes.show.value),
+        },
+      ]),
+    );
+    let writes = 0;
+    ground.getGeometryInstanceAttributes = (id) => {
+      writes += 1;
+      return attributes.get(id);
+    };
+    // Still building: queued, and written as it swaps in.
+    set.upsert([trail(0.5, [true, false, true])]);
+    assert.equal(scene.added[0], host, 'not rebuilt');
+    assert.equal(writes, 0);
+    Object.defineProperty(ground, 'ready', { value: true });
+    frame();
+    assert.equal(attributes.get(last.id).color[3], Math.round(0.5 * 255));
+    assert.deepEqual([...attributes.get(last.id).show], [1]);
+    // Ready: only what changed is written.
+    writes = 0;
+    set.upsert([trail(0.5, [false, false, true])]);
+    assert.equal(scene.added[0], host);
+    assert.equal(writes, 1);
+    assert.deepEqual([...attributes.get(first.id).show], [0]);
+    writes = 0;
+    set.upsert([trail(0.5, [false, false, true])]);
+    assert.equal(writes, 0, 'nothing changed, nothing written');
+    // Shown in place after a queued write: the queued one does not return.
+    const again = draw.lines({ id: 'segments-again' });
+    again.set([trail(0.8, [true, true, true])]);
+    const queued = scene.added.at(-1).get(1);
+    const shows = new Map(
+      queued.geometryInstances.map((instance) => [
+        instance.id,
+        { color: new Uint8Array(4), show: new Uint8Array([1]) },
+      ]),
+    );
+    queued.getGeometryInstanceAttributes = (id) => shows.get(id);
+    again.upsert([trail(0.8, [false, false, false])]);
+    Object.defineProperty(queued, 'ready', { value: true });
+    again.upsert([trail(0.8, [true, true, true])]);
+    frame();
+    for (const { show } of shows.values()) assert.deepEqual([...show], [1]);
+    again.dispose();
+    // A line of no length draws nothing and holds no swap.
+    const none = draw.lines({ id: 'segments-none' });
+    const still = {
+      ...trail(1, [true]),
+      positions: [
+        { lon: 3, lat: 0 },
+        { lon: 3, lat: 0 },
+      ],
+      segmentColors: ['#fff'],
+    };
+    none.set([still]);
+    const empty = scene.added.at(-1);
+    assert.ok(
+      empty instanceof Cesium.PolylineCollection,
+      'no ground primitive',
+    );
+    none.upsert([{ ...still, positions: trail(1, []).positions }]);
+    assert.notEqual(scene.added.at(-1), empty, 'drawn once it has length');
+    none.dispose();
+    // Height queries see through every segment.
+    const { pickIds } = unboundDrawPart(draw).sets.get('segments');
+    assert.ok(pickIds.includes(first.id) && pickIds.includes(last.id));
+    // Undraped segmented lines are refused, and the set keeps drawing.
+    assert.throws(
+      () => set.upsert([{ ...trail(1, [true, true, true]), mode: '3d' }]),
+      /segments of draped solid lines only/,
+    );
+    assert.equal(scene.added[0], host);
     set.dispose();
   }));
 
@@ -3319,7 +3451,10 @@ test('a contact trail draws its history and moving head as depth-fail geodesic l
       Cesium.Cartesian3.fromDegrees(-63, 30, 10000),
     ]);
     const mixed = deep.get(0).geometryInstances.geometry._positions;
-    assert.ok(mixed.length > 400 + 25 && mixed.length < 400 + 40, `${mixed.length}`);
+    assert.ok(
+      mixed.length > 400 + 25 && mixed.length < 400 + 40,
+      `${mixed.length}`,
+    );
     // The head moves every frame alone, under one pick id.
     const head = (lon) => [
       Cesium.Cartesian3.fromDegrees(-120, 30, 10000),

@@ -1317,6 +1317,15 @@ export function createCesiumDraw({
         throw new Error(
           'the Cesium renderer drapes solid, glow, dash and flow lines only',
         );
+      else if (
+        segmented(item) &&
+        (item.mode !== 'draped' ||
+          item.style.kind !== 'solid' ||
+          revealed(item))
+      )
+        throw new Error(
+          'the Cesium renderer colours and shows segments of draped solid lines only',
+        );
     const polylines = new Cesium.PolylineCollection();
     const draped = new Map();
     // Draped lines a batch cannot draw, each with a primitive of its own.
@@ -1349,6 +1358,15 @@ export function createCesiumDraw({
           solo: false,
         };
         parts.set(item.id, part);
+        if (segmented(item)) {
+          // A line of no length builds no ground primitive (it would
+          // never be ready, and hold the swap).
+          const instances = segmentInstances(record, item, part);
+          if (!instances.length) continue;
+          if (!draped.has(clampTo)) draped.set(clampTo, []);
+          draped.get(clampTo).push(...instances);
+          continue;
+        }
         if (!batchable(item)) {
           alone.push({ item, part });
           continue;
@@ -1430,8 +1448,9 @@ export function createCesiumDraw({
       item.clampTo,
       item.style,
       item.depthFailColor,
-      item.segmentColors,
-      item.segmentShow,
+      // Segment colours and shows change in place.
+      item.segmentColors != null,
+      item.segmentShow != null,
       revealed(item),
       item.frame,
     ]);
@@ -1480,10 +1499,14 @@ export function createCesiumDraw({
     for (const item of list) {
       const was = parts.get(item.id);
       if (!was || was.look !== lineLook(item)) return false;
+      // A segmented line that drew nothing is built anew.
+      if (was.segments && !was.ground) return false;
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
       if (!was.clampTo) continue;
       const flat = flatPositions(item.positions);
+      // A segmented line that moves is built anew, segment by segment.
+      if (was.segments && !samePositions(flat, was.positions)) return false;
       if (!drapedPatchable(record, was, flat)) return false;
       flats.set(item.id, flat);
     }
@@ -1517,6 +1540,12 @@ export function createCesiumDraw({
         continue;
       }
       was.id.meta = item.meta;
+      if (was.segments) {
+        // A newer write supersedes one queued while the ground built.
+        was.pendingItem = was.ground.ready ? undefined : item;
+        if (was.ground.ready) writeSegments(was, item);
+        continue;
+      }
       const flat = flats.get(item.id);
       if (!samePositions(flat, was.positions)) {
         moveDraped(record, was, item, flat);
@@ -1614,6 +1643,85 @@ export function createCesiumDraw({
         showPart(part, part.pendingShow);
         part.pendingShow = undefined;
       }
+      if (part.pendingItem && part.ground && !part.ground.isDestroyed()) {
+        writeSegments(part, part.pendingItem);
+        part.pendingItem = undefined;
+      }
+    }
+  }
+
+  /** Whether a line is drawn segment by segment, in colours or shows of their own. */
+  const segmented = (item) =>
+    item.segmentColors != null || item.segmentShow != null;
+
+  /** A segment's colour and whether it shows. */
+  const segmentLook = (item, j) => ({
+    color: toColor(item.segmentColors?.[j] ?? item.style.color),
+    show: item.show !== false && item.segmentShow?.[j] !== false,
+  });
+
+  /** What a segment draws, to tell whether an upsert changes it. */
+  const segmentKey = ({ color, show }) =>
+    `${color.red},${color.green},${color.blue},${color.alpha},${show}`;
+
+  /**
+   * A draped line drawn segment by segment: a ground polyline instance a
+   * segment, each with a pick id of its own that reads as the line's (and
+   * that height queries see through), so its colour and show change in
+   * place. A segment of no length draws nothing.
+   */
+  function segmentInstances(record, item, part) {
+    const points = linePositions(item);
+    const instances = [];
+    part.segments = [];
+    part.drawn = [];
+    for (let j = 0; j + 1 < points.length; j++) {
+      if (Cesium.Cartesian3.equals(points[j], points[j + 1])) {
+        part.segments.push(null);
+        part.drawn.push(null);
+        continue;
+      }
+      const id = Object.create(part.id);
+      record.pickIds.push(id);
+      const look = segmentLook(item, j);
+      part.segments.push(id);
+      part.drawn.push(segmentKey(look));
+      instances.push(
+        new Cesium.GeometryInstance({
+          geometry: new Cesium.GroundPolylineGeometry({
+            positions: [points[j], points[j + 1]],
+            width: item.widthPx,
+            arcType: Cesium.ArcType.GEODESIC,
+          }),
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(look.color),
+            show: new Cesium.ShowGeometryInstanceAttribute(look.show),
+          },
+          id,
+        }),
+      );
+    }
+    return instances;
+  }
+
+  /** A segmented line's colours and shows, on its ready ground primitive. */
+  function writeSegments(part, item) {
+    for (let j = 0; j < part.segments.length; j++) {
+      const id = part.segments[j];
+      if (!id) continue;
+      const look = segmentLook(item, j);
+      const key = segmentKey(look);
+      if (key === part.drawn[j]) continue;
+      part.drawn[j] = key;
+      const attributes = part.ground.getGeometryInstanceAttributes(id);
+      attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
+        look.color,
+        attributes.color,
+      );
+      attributes.show = Cesium.ShowGeometryInstanceAttribute.toValue(
+        look.show,
+        attributes.show,
+      );
     }
   }
 
