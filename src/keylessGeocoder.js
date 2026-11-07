@@ -1,3 +1,5 @@
+import { foldPlaceText } from './data/placeNames.js';
+
 /** Photon/OpenStreetMap place-search adapter. */
 const PHOTON_ENDPOINT = 'https://photon.komoot.io/api/';
 
@@ -233,19 +235,15 @@ export function photonSearchUrl(
 }
 
 /**
- * Place name reduced to comparable form: unaccented, lowercased, punctuation
- * collapsed to single spaces. "Huế" and "Hue" have to compare equal, because a
- * user typing either means the same city.
+ * Place name reduced to comparable form: lowercased, Latin accents removed,
+ * other scripts preserved, and punctuation collapsed to single spaces. "Huế"
+ * and "Hue" have to compare equal, because a user typing either means the same
+ * city.
  * @param {string} text
  * @returns {string}
  */
 export function normalizeToponym(text) {
-  return String(text ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+  return foldPlaceText(text);
 }
 
 /**

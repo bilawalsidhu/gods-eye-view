@@ -77,8 +77,11 @@ native CSP already permits HTTPS; this patch does not widen it or change CORS.
 
 ## Contribution checks
 
-The provisional unpublished well-layer token is **8**. Published tokens **5**,
-**6** and **7** remain owned by S2 GhostMaps, Sea Marks and Ski Pistes. Re-run
+The unpublished well-layer token is **00**, the first two-character token.
+Published tokens **5**, **6** and **7** remain owned by S2 GhostMaps, Sea Marks
+and Ski Pistes; on the merge-time published ledger every single-digit token
+**0** through **9** is reserved, including **8** (Drone Airspace) and **9**
+(Wildlife Sightings), so the two-character namespace starts at **00**. Re-run
 the allocator/checker against merge-time main.
 Focused source/selection tests are beside the layer and application assembly.
 The offline component browser gate is `scripts/qa-us-groundwater-offline.mjs`;

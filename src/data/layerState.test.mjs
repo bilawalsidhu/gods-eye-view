@@ -29,6 +29,7 @@ import radioLayer from './radio.js';
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { MAX_SINCE_DAYS } from '../layers/streetLevel/policy.js';
 import { SINCE_STOPS } from '../ui/streetLevelPresentation.js';
+import { FIRMS_CONFIDENCE_MODES, MIN_FRP_MW_MAX } from './firmsIntensity.js';
 
 function deferred() {
   let resolve;
@@ -202,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 35);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 35);
+  assert.equal(REGISTERED_LAYER_IDS.length, 37);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 37);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.ok(REGISTERED_LAYER_IDS.includes('us-groundwater'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
@@ -243,20 +244,20 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '9');
+  assert.equal(nextLayerStateToken(), '01');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '8',
-      bravo: '9',
+      alpha: '9',
+      bravo: '00',
     }),
-    '00',
+    '01',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries([...'89'].map((digit) => [`prior-${digit}`, digit])),
+    ...Object.fromEntries([...'9'].map((digit) => [`prior-${digit}`, digit])),
   };
-  assert.equal(nextLayerStateToken(digitsExhausted), '00');
+  assert.equal(nextLayerStateToken(digitsExhausted), '01');
   assert.equal(
     nextLayerStateToken({ ...digitsExhausted, retired: '00', used: '01' }),
     '02',
@@ -306,8 +307,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '9',
-      next: '00',
+      future: '01',
+      next: '02',
     }),
     true,
   );
@@ -315,12 +316,14 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () =>
       validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
         ...LAYER_STATE_TOKEN_RESERVATIONS,
-        future: '00',
+        future: '02',
       }),
-    /next free token 9/,
+    /next free token 01/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
+  delete beforeLastDigit['wildlife-sightings'];
+  delete beforeLastDigit['us-groundwater'];
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,
@@ -332,18 +335,18 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(digitsExhausted, {
       ...digitsExhausted,
-      pairB: '01',
-      pairA: '00',
+      pairB: '02',
+      pairA: '01',
     }),
     true,
   );
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8', competing: '8' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9', competing: '9' },
       ),
-    /next free token 9/,
+    /next free token 01/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -499,7 +502,9 @@ test('unknown enabled-layer tokens reject the payload instead of becoming an emp
 });
 
 test('malformed enabled-layer lists reject the entire payload', () => {
-  for (const value of ['.c', 'c.', 'c..e', 'c.c', '00', 'c.00']) {
+  // '00' is a real assignment now (us-groundwater), so the malformed cases
+  // use a three-character token instead of an unassigned two-character one.
+  for (const value of ['.c', 'c.', 'c..e', 'c.c', '000', 'c.000']) {
     assert.equal(
       decodeLayerStateParams(new URLSearchParams(`v=2&l=${value}`)),
       null,
@@ -2695,6 +2700,48 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
   );
 });
 
+test('wildlife confirmed and every taxa preset round-trip through the full share codec', () => {
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'wildlife-sightings').token,
+    '9',
+  );
+  for (const taxa of [
+    'all',
+    'Aves',
+    'Mammalia',
+    'whales',
+    'Insecta',
+    'Plantae',
+  ]) {
+    const state = normalizeLayerState({
+      enabledLayerIds: ['wildlife-sightings'],
+      options: { 'wildlife-sightings': { confirmed: true, taxa } },
+    });
+    const encoded = encode(state);
+    assert.doesNotMatch(encoded, /undefined/);
+    assert.deepEqual(
+      decodeLayerStateParams(new URLSearchParams(encoded)),
+      state,
+    );
+  }
+});
+
+test('drone restrictions uses digit 8 without colliding with fire perimeters', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=8.2'));
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'drone-airspace',
+    'fire-perimeters',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'drone-airspace').token,
+    '8',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
+  );
+});
+
 test('GNSS interference uses digit 3 without colliding with other digit tokens', () => {
   const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=3.2.1'));
   assert.deepEqual(decoded.enabledLayerIds, [
@@ -3000,4 +3047,81 @@ test('Clear All cancels a saved restore still waiting to start', async () => {
   assert.deepEqual([...manager.getEnabledLayerIds()], []);
   assert.equal(enabledLayerParam(sink), '');
   coordinator.destroy();
+});
+
+/** Active Fires options decoded from a v2 link with these `lo` assignments. */
+function firmsOptions(lo) {
+  const params = new URLSearchParams([
+    ['v', '2'],
+    ['l', 'w'],
+  ]);
+  if (lo) params.set('lo', lo);
+  return decodeLayerStateParams(params).options['local-firms'];
+}
+
+test('Active Fires: the intensity filter rides share token w and round-trips', () => {
+  const state = createDefaultLayerState();
+  assert.deepEqual(state.options['local-firms'], {
+    minFrp: 0,
+    confidence: 'all',
+  });
+  state.enabledLayerIds = ['local-firms'];
+  state.options['local-firms'] = { minFrp: 20, confidence: 'high' };
+  const encoded = encode(state);
+  assert.equal(new URLSearchParams(encoded).get('l'), 'w');
+  // Other owners write their own explicit defaults into `lo` too (flights 3D,
+  // wind overlay); the fire assignments ride beside them.
+  const assignments = new URLSearchParams(encoded).get('lo').split('_');
+  assert.ok(assignments.includes('w.f.20'), assignments.join(' '));
+  assert.ok(assignments.includes('w.c.h'), assignments.join(' '));
+  const decoded = decodeLayerStateParams(new URLSearchParams(encoded));
+  assert.deepEqual(decoded.options['local-firms'], {
+    minFrp: 20,
+    confidence: 'high',
+  });
+  assert.deepEqual(
+    parseStoredLayerState(serializeStoredLayerState(state)).options[
+      'local-firms'
+    ],
+    state.options['local-firms'],
+  );
+  // Defaults are omitted from the link: a plain `l=w` is "show everything".
+  const plain = createDefaultLayerState();
+  plain.enabledLayerIds = ['local-firms'];
+  assert.equal(
+    new URLSearchParams(encode(plain))
+      .get('lo')
+      .split('_')
+      .filter((assignment) => assignment.startsWith('w.')).length,
+    0,
+  );
+  assert.deepEqual(firmsOptions(''), { minFrp: 0, confidence: 'all' });
+});
+
+test('Active Fires: the codec accepts whole megawatts in bounds and the three confidence codes', () => {
+  // The codec spells its bounds out (it runs in isolation in the ledger
+  // tests); they must stay the layer's.
+  assert.equal(MIN_FRP_MW_MAX, 10000);
+  assert.deepEqual([...FIRMS_CONFIDENCE_MODES], ['all', 'nominal', 'high']);
+  assert.equal(firmsOptions('w.f.300').minFrp, 300);
+  assert.equal(firmsOptions('w.f.10000').minFrp, 10000);
+  assert.equal(firmsOptions('w.f.10001').minFrp, 0, 'out of bounds → default');
+  assert.equal(firmsOptions('w.f.-5').minFrp, 0);
+  assert.equal(
+    firmsOptions('w.f.2.5').minFrp,
+    0,
+    'a third segment is rejected',
+  );
+  assert.equal(firmsOptions('w.c.a').confidence, 'all');
+  assert.equal(firmsOptions('w.c.n').confidence, 'nominal');
+  assert.equal(firmsOptions('w.c.h').confidence, 'high');
+  assert.equal(
+    firmsOptions('w.c.x').confidence,
+    'all',
+    'unknown code → default',
+  );
+  assert.deepEqual(firmsOptions('w.c.n_w.f.5'), {
+    minFrp: 5,
+    confidence: 'nominal',
+  });
 });

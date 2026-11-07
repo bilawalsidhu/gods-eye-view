@@ -298,6 +298,37 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  // Active Fires intensity filter (HAL-676). `minFrp` is whole megawatts on
+  // the codec side; the panel's log slider rounds to it. Both default to
+  // "show everything": many of the strongest fires are rated low confidence.
+  // The bounds and modes mirror MIN_FRP_MW_MAX / FIRMS_CONFIDENCE_MODES in
+  // firmsIntensity.js (pinned by layerState.test); spelled out here because
+  // this file runs in isolation in the token-ledger tests.
+  'local-firms': Object.freeze([
+    boundedIntegerOption('minFrp', 'f', 0, { min: 0, max: 10000 }),
+    enumOption('confidence', 'c', 'all', ['all', 'nominal', 'high'], {
+      all: 'a',
+      nominal: 'n',
+      high: 'h',
+    }),
+  ]),
+  'wildlife-sightings': Object.freeze([
+    booleanOption('confirmed', 'c', false),
+    enumOption(
+      'taxa',
+      't',
+      'all',
+      ['all', 'Aves', 'Mammalia', 'whales', 'Insecta', 'Plantae'],
+      {
+        all: 'a',
+        Aves: 'b',
+        Mammalia: 'm',
+        whales: 'w',
+        Insecta: 'i',
+        Plantae: 'p',
+      },
+    ),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -598,6 +629,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'cctv',
   }),
   Object.freeze({ id: 'directions', token: 'n', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'drone-airspace',
+    token: '8',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'fire-perimeters',
@@ -621,7 +657,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'd',
     disposition: 'enabled-only',
   }),
-  Object.freeze({ id: 'local-firms', token: 'w', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'local-firms',
+    token: 'w',
+    disposition: 'enabled+options',
+    optionOwner: 'local-firms',
+  }),
   Object.freeze({
     id: 'military',
     token: 'm',
@@ -688,7 +729,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'us-groundwater',
-    token: '8',
+    token: '00',
     disposition: 'enabled-only',
   }),
   Object.freeze({
@@ -713,6 +754,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'o',
     disposition: 'enabled+options',
     optionOwner: 'weather-satellite',
+  }),
+  Object.freeze({
+    id: 'wildlife-sightings',
+    token: '9',
+    disposition: 'enabled+options',
+    optionOwner: 'wildlife-sightings',
   }),
   Object.freeze({
     id: 'wind',

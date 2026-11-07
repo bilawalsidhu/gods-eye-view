@@ -7,6 +7,7 @@ import {
   LAYER_NAME_KEYS,
   PANEL_LABEL_KEYS,
   sourceLabel,
+  sourceStatusLabel,
 } from './layerNames.js';
 
 // Layers whose module name is a proper name and stays as it is in every
@@ -72,3 +73,18 @@ for (const locale of ['en', 'es', 'ru', 'zh-CN']) {
     }
   });
 }
+test('a provider name carries the fallback or stale state it answered in', () => {
+  assert.equal(sourceStatusLabel('Plane Finder', null), 'Plane Finder');
+  assert.equal(sourceStatusLabel('adsb.lol', 'fallback'), 'adsb.lol · FALLBACK');
+  assert.equal(sourceStatusLabel('OpenSky Network', 'stale'), 'OpenSky Network · STALE');
+  setLocale('ru');
+  try {
+    assert.equal(
+      sourceStatusLabel('adsb.lol', 'fallback'),
+      `adsb.lol · ${t('FALLBACK')}`,
+    );
+    assert.notEqual(t('FALLBACK'), 'FALLBACK');
+  } finally {
+    setLocale('en');
+  }
+});
