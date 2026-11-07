@@ -67,6 +67,7 @@ const FALLS_BACK = new Set(['src/data/followed.js']);
 const DRAW_FROM_CALLER = new Set([
   './layers/earthquakes',
   './layers/bikeshare',
+  './layers/gnss',
   './layers/perimeters',
 ]);
 

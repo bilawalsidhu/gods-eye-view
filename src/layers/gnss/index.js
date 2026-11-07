@@ -1,4 +1,8 @@
-import * as Cesium from 'cesium';
+import { rayEllipsoid, toLonLatH } from '../../geo/ellipsoid.js';
+import { rectangleCenter } from '../../geo/rectangle.js';
+import { toDegrees, toRadians } from '../../geo/vector.js';
+import { drawOf, findCamera } from '../../render/rendererOf.js';
+import { hexColor } from '../../render/color.js';
 import { formatNumber, msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
@@ -14,15 +18,11 @@ export * from './records.js';
 export { createAdsbGnssSource } from './source.js';
 
 /**
- * GroundPrimitive allowPicking:false suppresses ids but still submits stencil
- * commands in Cesium's pick pass, erasing picks of overlapping ground geometry.
- * This fill participates only in rendering, so sibling polygons remain pickable.
+ * The draw set the cells are drawn in starts with this; each layer has its
+ * own (`gnss-integrity:1`, …), so several can share a renderer.
  */
-class GnssGroundFill extends Cesium.GroundPrimitive {
-  update(frameState) {
-    if (!frameState.passes.pick) super.update(frameState);
-  }
-}
+export const GNSS_SET_PREFIX = 'gnss-integrity';
+let instances = 0;
 
 /** Low stays visible over land so coverage reads apart from no data. */
 const FILL_ALPHA = Object.freeze({ low: 0.3, medium: 0.42, high: 0.55 });
@@ -32,29 +32,41 @@ const LEVEL_LABELS = Object.freeze({
   high: msg('Low-accuracy score > 10%'),
 });
 
-/** Degrees at the centre of the current view, or null before the camera settles. */
+/** The middle of a degree rectangle, across the antimeridian too. */
+function degreesCentre(rect) {
+  const { lon, lat } = rectangleCenter({
+    west: toRadians(rect.west),
+    south: toRadians(rect.south),
+    east: toRadians(rect.east),
+    north: toRadians(rect.north),
+  });
+  return { lon: toDegrees(lon), lat: toDegrees(lat) };
+}
+
+/**
+ * Degrees at the centre of the current view, or null before the camera
+ * settles: where the eye's line of sight (the ray through the screen
+ * centre) meets the ellipsoid, else the middle of the view rectangle, else
+ * the point under the eye.
+ */
 export function defaultGnssViewAnchor(viewer) {
-  const canvas = viewer?.scene?.canvas;
-  const ellipsoid = viewer?.scene?.globe?.ellipsoid;
+  const camera = findCamera(viewer);
+  if (!camera) return null;
+  const pose = camera.pose();
   // At globe scale the visible rectangle can be the whole world, whose
   // midpoint is unrelated to the place under the screen centre.
-  const centre =
-    canvas?.clientWidth > 0 &&
-    canvas.clientHeight > 0 &&
-    viewer.camera?.pickEllipsoid?.(
-      new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
-      ellipsoid,
-    );
-  const rectangle =
-    !centre && viewer?.camera?.computeViewRectangle?.(ellipsoid);
-  const carto = centre
-    ? (ellipsoid || Cesium.Ellipsoid.WGS84).cartesianToCartographic(centre)
+  const centre = rayEllipsoid({
+    origin: pose.position,
+    direction: pose.direction,
+  });
+  const rectangle = !centre && camera.viewRectangle();
+  const at = centre
+    ? toLonLatH(centre)
     : rectangle
-      ? Cesium.Rectangle.center(rectangle)
-      : viewer?.camera?.positionCartographic;
-  if (!carto) return null;
-  const latitude = Cesium.Math.toDegrees(carto.latitude);
-  const longitude = Cesium.Math.toDegrees(carto.longitude);
+      ? degreesCentre(rectangle)
+      : pose;
+  const latitude = at?.lat;
+  const longitude = at?.lon;
   return Number.isFinite(latitude) && Number.isFinite(longitude)
     ? { latitude, longitude }
     : null;
@@ -81,7 +93,7 @@ export function createGnssIntegrityLayer({
       ? requestedWindowMs
       : GNSS_WINDOW_MS;
   let _viewer = null;
-  let _primitives = null;
+  let _fills = null;
   let _request = null;
   let _enabled = false;
   let _cells = [];
@@ -109,7 +121,7 @@ export function createGnssIntegrityLayer({
       : null;
 
   function scheduleCameraRefresh() {
-    if (!_enabled || !_primitives) return;
+    if (!_enabled || !_fills) return;
     if (now() < _retryAt) return;
     const key = queryKey(viewAnchor(_viewer));
     if (!key || key === _lastQueryKey) return;
@@ -175,44 +187,22 @@ export function createGnssIntegrityLayer({
     );
     if (signature === _signature) return;
     _signature = signature;
-    _primitives.removeAll();
-    if (_cells.length) {
-      _primitives.add(
-        new GnssGroundFill({
-          geometryInstances: _cells.map(
-            (cell) =>
-              new Cesium.GeometryInstance({
-                id: `${layer.id}:${cell.id}`,
-                geometry: new Cesium.RectangleGeometry({
-                  rectangle: Cesium.Rectangle.fromDegrees(
-                    cell.west,
-                    cell.south,
-                    cell.east,
-                    cell.north,
-                  ),
-                  vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
-                }),
-                attributes: {
-                  color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                    Cesium.Color.fromCssColorString(
-                      GNSS_LEVEL_COLORS[cell.level],
-                    ).withAlpha(FILL_ALPHA[cell.level]),
-                  ),
-                },
-              }),
-          ),
-          appearance: new Cesium.PerInstanceColorAppearance({
-            flat: true,
-            translucent: true,
-          }),
-          classificationType: Cesium.ClassificationType.BOTH,
-          allowPicking: false,
-          // Retain the compact rectangle descriptors for inspection, not Entity visualizers.
-          releaseGeometryInstances: false,
-        }),
-      );
-    }
-    _viewer?.scene?.requestRender?.();
+    _fills.set(
+      _cells.map((cell) => ({
+        id: `${layer.id}:${cell.id}`,
+        geometry: {
+          kind: 'rectangle',
+          rect: {
+            west: cell.west,
+            south: cell.south,
+            east: cell.east,
+            north: cell.north,
+          },
+        },
+        fill: hexColor(GNSS_LEVEL_COLORS[cell.level], FILL_ALPHA[cell.level]),
+        height: 'clampGround',
+      })),
+    );
   }
 
   const layer = {
@@ -231,25 +221,27 @@ export function createGnssIntegrityLayer({
     init(viewer) {
       if (_viewer)
         throw new Error('GNSS integrity layer is already initialized');
+      // The cells never take part in picks: ground geometry under them
+      // (another layer's polygons) stays pickable.
+      _fills = drawOf(viewer).shapes({
+        id: `${GNSS_SET_PREFIX}:${++instances}`,
+        clampTo: 'both',
+        pickable: false,
+        show: false,
+      });
       _viewer = viewer;
-      _primitives = new Cesium.PrimitiveCollection();
-      _primitives.id = layer.id;
-      _primitives.show = false;
-      viewer.scene.groundPrimitives.add(_primitives);
-      _removeCameraEnd = viewer.camera?.moveEnd?.addEventListener(
-        scheduleCameraRefresh,
-      );
-      _removeCameraChanged = viewer.camera?.changed?.addEventListener(
-        scheduleCameraRefresh,
-      );
+      const camera = findCamera(viewer);
+      _removeCameraEnd = camera?.on('moveEnd', scheduleCameraRefresh) ?? null;
+      _removeCameraChanged =
+        camera?.on('changed', scheduleCameraRefresh) ?? null;
     },
 
     enable() {
       _enabled = true;
       // Cells left from before a long disable must not reappear past the window.
-      if (_primitives) {
+      if (_fills) {
         expire();
-        _primitives.show = true;
+        _fills.show = true;
       }
     },
 
@@ -263,11 +255,11 @@ export function createGnssIntegrityLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_primitives) _primitives.show = false;
+      if (_fills) _fills.show = false;
     },
 
     async update(_viewerArg, { signal } = {}) {
-      if (!_enabled || !_primitives || signal?.aborted) return false;
+      if (!_enabled || !_fills || signal?.aborted) return false;
       if (now() < _retryAt) {
         expire();
         scheduleRetry();
@@ -352,7 +344,7 @@ export function createGnssIntegrityLayer({
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       layer.disable();
       _removeCameraEnd?.();
       _removeCameraChanged?.();
@@ -361,10 +353,8 @@ export function createGnssIntegrityLayer({
       _observations.clear();
       _cells = [];
       _signature = null;
-      if (_primitives) {
-        viewer.scene.groundPrimitives.remove(_primitives);
-        _primitives = null;
-      }
+      _fills?.dispose();
+      _fills = null;
       _viewer = null;
       _lastUpdate = null;
       _lastError = null;

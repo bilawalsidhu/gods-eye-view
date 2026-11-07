@@ -9,7 +9,7 @@
  * stub that route in the page so they are deterministic.
  *
  *   (i)   LIVE — over Poland and the southern Baltic the layer settles with no error,
- *         one geometry per cell and legend band counts that sum to the cell
+ *         its cells drawn and legend band counts that sum to the cell
  *         count; cells are required only when the returned rows, binned
  *         with the layer's own rules, reach the per-cell minimum (live
  *         traffic varies by hour). Requires a non-stale response no older than 60 s.
@@ -24,7 +24,7 @@
  *         CAMERA/GLOBE verify automatic sampling and the screen-centre anchor.
  *   (iii) FAILURE — the route stubbed to 502: stats.error is set and the
  *         cells already on the globe are kept.
- *   (iv)  DISABLE — owned ground primitives are hidden.
+ *   (iv)  DISABLE — the cells' ground primitives are hidden.
  *   (v)   KEYBOARD — the row's toggle button, focused, turns the layer on
  *         with Enter and off with Space, keeps focus and names its state.
  *   (vi)  VIEWPORT — at a 390x844 phone viewport the open row and its legend
@@ -114,10 +114,34 @@ async function boot(page, { lon, lat, height }) {
   );
 }
 
+/**
+ * In the page: the GNSS cells' ground primitives, each with the collection
+ * drawing it. The layer draws them through the renderer's draw port as
+ * ground fills that never take part in picks, the only such fills the app
+ * draws, so they are found by that.
+ */
+function gnssGround() {
+  const out = [];
+  const walk = (collection) => {
+    for (let i = 0; i < collection.length; i++) {
+      const item = collection.get(i);
+      if (typeof item?.length === 'number' && typeof item.get === 'function')
+        walk(item);
+      else if (
+        item?.allowPicking === false &&
+        item.classificationType !== undefined
+      )
+        out.push({ primitive: item, host: collection });
+    }
+  };
+  walk(window.__godsEyeView.viewer.scene.primitives);
+  return out;
+}
+
 /** Enable (or refresh) the layer and poll until it settles. */
 async function enableAndSettle(page, { refresh = false } = {}) {
   return page.evaluate(
-    async (id, again) => {
+    async (id, again, findGround) => {
       const dm = window.__godsEyeView.dataManager;
       const layer = dm.layers.get(id).module;
       if (again) await dm.refreshLayer(id);
@@ -129,22 +153,21 @@ async function enableAndSettle(page, { refresh = false } = {}) {
       const rowName =
         document.querySelector(`[data-layer-id="${id}"] .data-name`)
           ?.textContent ?? '';
-      const all = window.__godsEyeView.viewer.scene.groundPrimitives;
-      const ds = Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-        (item) => item.id === id,
-      );
+      // eslint-disable-next-line no-new-func
+      const ground = new Function(`return (${findGround})()`)();
       return {
         stats,
         legend,
         blurb,
         rowName,
         name: layer.name,
-        entities: ds?.get(0)?.geometryInstances.length ?? 0,
-        shown: ds?.show ?? null,
+        drawn: ground.length > 0,
+        shown: ground[0]?.host.show ?? null,
       };
     },
     LAYER_ID,
     refresh,
+    String(gnssGround),
   );
 }
 
@@ -184,31 +207,21 @@ async function shoot(page, name) {
   await page.screenshot({ path: path.join(SHOTS_DIR, `gnss-${name}.png`) });
 }
 
-/** Bounding-sphere state of every GNSS cell: DONE = 0, PENDING = 1, FAILED = 2. */
-function cellStates(id) {
-  const { viewer } = window.__godsEyeView;
-  const all = viewer.scene.groundPrimitives;
-  const ds = Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-    (item) => item.id === id,
-  );
-  if (!ds?.length) return [];
-  return [ds.get(0).ready ? 0 : 1];
-}
+/** Build state of every GNSS ground primitive: DONE = 0, PENDING = 1. */
+const cellStates = `() => (${gnssGround})().map(({ primitive }) => (primitive.ready ? 0 : 1))`;
 
 /** Wait until every GNSS cell's ground rectangle has finished building. */
 async function waitForBuiltCells(page, timeoutMs = 60000) {
   const built = await page
-    .waitForFunction(
-      `(${cellStates})(${JSON.stringify(LAYER_ID)}).every((state) => state === 0)`,
-      { timeout: timeoutMs, polling: 250 },
-    )
+    .waitForFunction(`(${cellStates})().every((state) => state === 0)`, {
+      timeout: timeoutMs,
+      polling: 250,
+    })
     .then(
       () => true,
       () => false,
     );
-  const states = await page.evaluate(
-    `(${cellStates})(${JSON.stringify(LAYER_ID)})`,
-  );
+  const states = await page.evaluate(`(${cellStates})()`);
   return { built, detail: `states=${JSON.stringify(states)}` };
 }
 
@@ -417,9 +430,9 @@ async function main() {
     }
     const expectedCells = binGnssCells(expectedStore).length;
     record(
-      'LIVE: no error, one geometry per cell',
-      !l.stats.error && l.entities === l.stats.count,
-      `cells=${l.stats.count} entities=${l.entities} error=${JSON.stringify(l.stats.error)}`,
+      'LIVE: no error, cells drawn when there are any',
+      !l.stats.error && l.drawn === l.stats.count > 0,
+      `cells=${l.stats.count} drawn=${l.drawn} error=${JSON.stringify(l.stats.error)}`,
     );
     if (expectedCells > 0) {
       record(
@@ -463,8 +476,8 @@ async function main() {
       f.legend.find(({ label }) => label.startsWith(prefix))?.count;
     record(
       'BANDS: 4 cells shown, the 2-aircraft cell withheld',
-      f.stats.count === 4 && f.entities === 4,
-      `cells=${f.stats.count} entities=${f.entities}`,
+      f.stats.count === 4 && f.drawn,
+      `cells=${f.stats.count} drawn=${f.drawn}`,
     );
     record(
       'BANDS: 5/10 is high, 2/30 is medium, 1/3 and 0/4 are low',
@@ -769,20 +782,22 @@ async function main() {
     const e = await enableAndSettle(page, { refresh: true });
     record(
       'FAILURE: error surfaced, cells kept',
-      Boolean(e.stats.error) && e.stats.count === 4 && e.entities === 4,
+      Boolean(e.stats.error) && e.stats.count === 4 && e.drawn,
       `error=${JSON.stringify(e.stats.error)} cells=${e.stats.count}`,
     );
     await shoot(page, 'failure');
 
     // ── (iv) DISABLE ──────────────────────────────────────────────────────
     console.log('\n(iv) DISABLE...');
-    const shown = await page.evaluate(async (id) => {
-      await window.__godsEyeView.dataManager.setEnabled(id, false);
-      const all = window.__godsEyeView.viewer.scene.groundPrimitives;
-      return Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-        (item) => item.id === id,
-      )?.show;
-    }, LAYER_ID);
+    const shown = await page.evaluate(
+      async (id, findGround) => {
+        await window.__godsEyeView.dataManager.setEnabled(id, false);
+        // eslint-disable-next-line no-new-func
+        return new Function(`return (${findGround})()`)()[0]?.host.show;
+      },
+      LAYER_ID,
+      String(gnssGround),
+    );
     record('DISABLE: data source hidden', shown === false, `show=${shown}`);
     await shoot(page, 'disabled');
 
@@ -948,8 +963,8 @@ async function main() {
     const old = await enableAndSettle(aged, {});
     record(
       'AGE: a snapshot observed 31 min ago adds no cells and is not an error',
-      old.stats.count === 0 && old.entities === 0 && !old.stats.error,
-      `cells=${old.stats.count} entities=${old.entities} error=${JSON.stringify(old.stats.error)}`,
+      old.stats.count === 0 && !old.drawn && !old.stats.error,
+      `cells=${old.stats.count} drawn=${old.drawn} error=${JSON.stringify(old.stats.error)}`,
     );
     await aged.evaluate(() => {
       window.__gnssQaAgeMs = 29 * 60_000;
@@ -957,8 +972,8 @@ async function main() {
     const recent = await enableAndSettle(aged, { refresh: true });
     record(
       'AGE: the same snapshot observed 29 min ago is still inside the window',
-      recent.stats.count === 4 && recent.entities === 4,
-      `cells=${recent.stats.count} entities=${recent.entities}`,
+      recent.stats.count === 4 && recent.drawn,
+      `cells=${recent.stats.count} drawn=${recent.drawn}`,
     );
     await aged.close();
     record(

@@ -800,3 +800,54 @@ test('the fire perimeters layer draws holed ground fills and draped fire lines o
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
+
+test('the GNSS layer draws its cells as ground fills that stay out of the pick pass', async (t) => {
+  const { createGnssIntegrityLayer } =
+    await import('../../layers/gnss/index.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const row = (hex, lat, degraded) => ({
+    hex,
+    lat,
+    lon: 30.2,
+    nic: degraded ? 0 : 8,
+    nacp: degraded ? 0 : 10,
+    gpsLost: false,
+    degraded,
+  });
+  const layer = createGnssIntegrityLayer({
+    source: {
+      getSnapshot: async () => ({
+        ageMs: 0,
+        rows: [row('a1', 50.1, true), row('a2', 50.1, true), row('a3', 50.2)],
+      }),
+    },
+    viewAnchor: () => ({ latitude: 50, longitude: 30 }),
+  });
+  layer.init(viewer);
+  layer.enable();
+  assert.equal(await layer.update(), true);
+  const host = scene.added[0];
+  const grounds = [];
+  for (let i = 0; i < host.length; i++)
+    if (host.get(i) instanceof Cesium.GroundPrimitive)
+      grounds.push(host.get(i));
+  assert.equal(grounds.length, 1);
+  const [fill] = grounds;
+  assert.equal(fill.allowPicking, false);
+  assert.equal(fill.classificationType, Cesium.ClassificationType.BOTH);
+  const [instance] = fill.geometryInstances;
+  assert.ok(instance.geometry instanceof Cesium.RectangleGeometry);
+  assert.equal(instance.id.id, 'gnss-integrity:280:420');
+  // A ground primitive draws its stencil in the pick pass even unpickable,
+  // erasing picks of ground geometry under it; these skip that pass.
+  let updates = 0;
+  t.mock.method(Cesium.GroundPrimitive.prototype, 'update', () => updates++);
+  fill.update({ passes: { pick: true } });
+  assert.equal(updates, 0);
+  fill.update({ passes: { render: true, pick: false } });
+  assert.equal(updates, 1);
+  t.mock.restoreAll();
+  layer.destroy();
+  assert.equal(scene.added.length, 0);
+});
