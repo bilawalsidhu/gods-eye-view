@@ -54,6 +54,13 @@ export class FlightRecords {
     // regressing to the ICAO hex / a 0° (north) heading. Bounded by the
     // MISSING_POLL_LIMIT eviction below, which deletes the whole entry.
     const prevMeta = this.data.get(icao24);
+    const effectiveCallsign = stickyText(callsign, prevMeta?.callsign);
+    // An actual callsign switch starts a new route association. A blank feed
+    // value alone must not erase the identity (OpenSky drops them transiently).
+    const callsignChanged =
+      Boolean(prevMeta?.callsign && effectiveCallsign) &&
+      prevMeta.callsign.trim().toUpperCase() !==
+        effectiveCallsign.trim().toUpperCase();
     // Grounded planes with no baro reading sit at 0 m, not the 10 km
     // airborne default (a parked plane must never float).
     // NOTE (height-datum fix): `alt` stays the AVIATION field — the sticky
@@ -201,7 +208,7 @@ export class FlightRecords {
     const meta = {
       sourceReference: observation.reference,
       observedReceiptMs: Date.now(),
-      callsign: stickyText(callsign, prevMeta?.callsign),
+      callsign: effectiveCallsign,
       altitude: alt,
       // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
       // untouched aviation `altitude` — never rename/replace it (labels,
@@ -256,8 +263,8 @@ export class FlightRecords {
       typeCode: prevMeta?.typeCode ?? null,
       typeName: prevMeta?.typeName ?? null,
       registration: prevMeta?.registration ?? null,
-      airline: prevMeta?.airline ?? null,
-      route: prevMeta?.route ?? null,
+      airline: callsignChanged ? null : (prevMeta?.airline ?? null),
+      route: callsignChanged ? null : (prevMeta?.route ?? null),
       // The RAW poll fix lat/lon (this tick's OpenSky state-vector
       // coords, pre-dead-reckon) — kept distinct from the continuously
       // dead-reckoned billboard position for any consumer that needs the
