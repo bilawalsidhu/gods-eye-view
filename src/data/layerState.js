@@ -312,12 +312,32 @@ const OPTION_GROUPS = Object.freeze({
       high: 'h',
     }),
   ]),
+  'wildlife-sightings': Object.freeze([
+    booleanOption('confirmed', 'c', false),
+    enumOption(
+      'taxa',
+      't',
+      'all',
+      ['all', 'Aves', 'Mammalia', 'whales', 'Insecta', 'Plantae'],
+      {
+        all: 'a',
+        Aves: 'b',
+        Mammalia: 'm',
+        whales: 'w',
+        Insecta: 'i',
+        Plantae: 'p',
+      },
+    ),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
       osm: 'o',
       hybrid: 'h',
     }),
+    // Street Traffic row toggles: flow-colored road lines, moving dots.
+    booleanOption('lines', 'l', false),
+    booleanOption('dots', 'd', true),
   ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
@@ -732,6 +752,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'o',
     disposition: 'enabled+options',
     optionOwner: 'weather-satellite',
+  }),
+  Object.freeze({
+    id: 'wildlife-sightings',
+    token: '9',
+    disposition: 'enabled+options',
+    optionOwner: 'wildlife-sightings',
   }),
   Object.freeze({
     id: 'wind',
