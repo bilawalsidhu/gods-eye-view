@@ -16,6 +16,7 @@ import {
   FLEET_DR_INTERVAL_MS,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { ICONS } from '../../icons.js';
 
 export function createQueries({
   flightState,
@@ -295,7 +296,9 @@ export function createQueries({
 
     name: 'Live Flights',
 
-    icon: '✈️',
+    icon: '',
+
+    iconSvg: ICONS.plane,
 
     source: flightState.feed._lastSource,
 

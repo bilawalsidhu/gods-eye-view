@@ -40,9 +40,18 @@ const nextBodyId = () => ++bodies;
       @click="select"
       ><span class="rail-card-labels"
         ><span class="rail-card-heading"
-          ><span class="data-icon" aria-hidden="true" :hidden="!card.icon">{{
-            card.icon || ''
-          }}</span
+          ><span
+            v-if="card.iconSvg"
+            class="data-icon"
+            aria-hidden="true"
+            v-html="card.iconSvg"
+          ></span
+          ><span
+            v-else
+            class="data-icon"
+            aria-hidden="true"
+            :hidden="!card.icon"
+            >{{ card.icon || '' }}</span
           ><span class="rail-card-title rail-card-nowrap" :title="card.title">{{
             card.title
           }}</span></span

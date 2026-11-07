@@ -6,6 +6,7 @@ import {
 } from '../sources/infrastructureData.js';
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { isPointerFree } from './inputOwnership.js';
+import { ICONS } from '../icons.js';
 import {
   selectInfraLod,
   applyInfraEvictionGrace,
@@ -304,7 +305,8 @@ export function createLocalGeoJsonLayer(
     url,
     name,
     color,
-    icon = '📍',
+    icon = '',
+    iconSvg = ICONS.pin,
     source = 'Local JSONL',
     osmDerived = false,
     labels = true,
@@ -481,6 +483,7 @@ export function createLocalGeoJsonLayer(
     id,
     name,
     icon,
+    iconSvg,
     source,
     updateInterval: 0,
     statsRefreshInterval: 1000,

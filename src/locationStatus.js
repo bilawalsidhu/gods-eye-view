@@ -10,7 +10,7 @@
  * readout reporting "Location: --" while the camera sat over the destination.
  */
 
-const EMPTY = Object.freeze({ city: '📍 Location: --', poi: 'Landmark: --' });
+const EMPTY = Object.freeze({ city: 'Location: --', poi: 'Landmark: --' });
 
 /** Split a geocoder `formatted_address` into its trimmed, non-empty segments. */
 export function addressSegments(label) {
@@ -43,7 +43,7 @@ export function locationMiniStatus({
   if (city?.name) {
     const fallbackPoi = city.pois?.[0] || null;
     return {
-      city: `📍 ${city.name}`,
+      city: city.name,
       poi: currentPoi?.name || fallbackPoi?.name || '--',
     };
   }
@@ -51,7 +51,7 @@ export function locationMiniStatus({
   const segments = addressSegments(searchedLabel);
   if (segments.length) {
     return {
-      city: `📍 ${segments[0]}`,
+      city: segments[0],
       // The remaining address is the place's context ("Japan", "Minato City,
       // Tokyo, Japan"); the readout is ellipsised in CSS, so a long tail is
       // safe. A one-segment geocode ("Japan") has no context to show.

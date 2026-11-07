@@ -72,6 +72,6 @@ test('ru: location pills and the mini-status show the translated city', () => {
   });
   assert.equal(views.at(-1).cities[0].label, 'Токио');
   controls.renderStatus({ city: CITY_POIS.tokyo, currentPoi: null });
-  assert.equal(views.at(-1).status.city, '📍 Токио');
+  assert.equal(views.at(-1).status.city, 'Токио');
   assert.equal(CITY_POIS.tokyo.name, 'Tokyo');
 });

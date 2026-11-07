@@ -104,7 +104,7 @@ test('the tray presents its cities, empty status and no landmarks at first', () 
     poiCity: null,
     pois: [],
     poisExpanded: false,
-    status: { city: '📍 Location: --', poi: 'Landmark: --' },
+    status: { city: 'Location: --', poi: 'Landmark: --' },
     searchError: null,
     searchExpanded: false,
     searching: false,
@@ -180,7 +180,7 @@ test('the mini status shows the city, a landmark or a searched place', () => {
   assert.equal(f.view().status.poi, 'Searched location');
   f.controls.renderStatus({});
   assert.deepEqual(f.view().status, {
-    city: '📍 Location: --',
+    city: 'Location: --',
     poi: 'Landmark: --',
   });
 });

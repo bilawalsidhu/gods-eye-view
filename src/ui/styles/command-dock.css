@@ -157,6 +157,35 @@
   font-size: 16px;
 }
 
+/* SVG-mask icons replace the old emoji glyphs on NVG/FLIR style buttons. */
+#command-dock .btn-icon-mask {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: var(--text-secondary);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  transition: background-color var(--transition-fast);
+}
+
+#command-dock .style-btn.active .btn-icon-mask {
+  background: var(--accent);
+}
+
+#command-dock .btn-icon-moon {
+  mask-image: url('/icon-moon.svg');
+  -webkit-mask-image: url('/icon-moon.svg');
+}
+
+#command-dock .btn-icon-thermal {
+  mask-image: url('/icon-thermal.svg');
+  -webkit-mask-image: url('/icon-thermal.svg');
+}
+
 #command-dock .btn-label {
   font-family: var(--font-mono);
   font-size: 8px;

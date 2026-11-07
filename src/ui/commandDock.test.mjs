@@ -200,7 +200,7 @@ test('the ORBIT indicator sits on the body while offered and lights while orbiti
 
 test('the location tray renders what LocationControls publishes', async (t) => {
   const { $, pinia } = fixture(t);
-  assert.equal($('#location-mini-city').textContent, '📍 Location: --');
+  assert.equal($('#location-mini-city').textContent, 'Location: --');
   assert.equal($('#location-mini-poi').textContent, 'Landmark: --');
   const store = useLocationStore(pinia);
   const calls = [];
