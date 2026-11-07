@@ -1,5 +1,5 @@
 import { toRadians } from './geo/index.js';
-import { cameraOf, findCamera } from './render/rendererOf.js';
+import { cameraOf, findCamera, frameOf } from './render/rendererOf.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -7,7 +7,7 @@ import {
 
 /**
  * OrbitController — smooth orbit around a target point.
- * Uses scene.preRender for frame-rate-independent 60fps updates.
+ * Uses the frame port's preRender for frame-rate-independent 60fps updates.
  * Toggle with O key; auto-stops on POI/city change.
  */
 export class OrbitController {
@@ -50,7 +50,7 @@ export class OrbitController {
     this.angle = pose.heading;
 
     let lastTime = Date.now();
-    this._removeListener = this.viewer.scene.preRender.addEventListener(() => {
+    this._removeListener = frameOf(this.viewer).on('preRender', () => {
       if (!this.active) return;
 
       const now = Date.now();
