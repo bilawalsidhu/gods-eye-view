@@ -224,8 +224,11 @@ export function createHorizonCull({ getViewer, items, onChange }) {
   let from = null;
   let stopListening = null;
 
-  /** Show what is in front of the horizon, hide the rest; the count seen. */
-  function cull(list, position) {
+  /**
+   * Show what is in front of the horizon, hide the rest; the count seen.
+   * `quiet`: `onChange` is not told (the caller draws them next anyway).
+   */
+  function cull(list, position, quiet = false) {
     const horizon = horizonFrom(position, HORIZON_CULL_ELLIPSOID);
     let seen = 0;
     const changed = [];
@@ -237,7 +240,7 @@ export function createHorizonCull({ getViewer, items, onChange }) {
         changed.push(item);
       }
     }
-    if (changed.length) onChange?.(changed);
+    if (changed.length && !quiet) onChange?.(changed);
     return seen;
   }
 
@@ -256,11 +259,15 @@ export function createHorizonCull({ getViewer, items, onChange }) {
     if (!cullAll(position)) stop();
   }
 
-  /** Cull `added` items (or all) now, then all again whenever the camera moves. */
-  function update(added) {
+  /**
+   * Cull `added` items (or all) now, then all again whenever the camera
+   * moves. `quiet`: this first cull of `added` does not call `onChange`,
+   * for items about to be drawn with their `show`.
+   */
+  function update(added, { quiet = false } = {}) {
     const viewer = getViewer();
     const position = eyeOf(viewer);
-    if (position && !(added ? cull(added, position) : cullAll(position)))
+    if (position && !(added ? cull(added, position, quiet) : cullAll(position)))
       return;
     stopListening ||=
       (viewer && findFrame(viewer)?.on('preRender', onPreRender)) || null;

@@ -337,11 +337,6 @@ function fakeViewer() {
     flights,
     scene: {
       canvas,
-      primitives: { add: (p) => p, remove() {} },
-      // Enough of a scene for the position marker to clamp to the ground.
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
     },
     camera: {
       changed: new Cesium.Event(),

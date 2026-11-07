@@ -99,7 +99,8 @@ export function createKartaViewProvider({
         sequence: {
           selectedId: null,
           images: [],
-          collection: null,
+          set: null,
+          sprite: null,
           loading: false,
           error: null,
           abort: null,

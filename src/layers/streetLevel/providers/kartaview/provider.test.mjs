@@ -15,9 +15,11 @@ import {
 import { validateProviders } from '../../registry.js';
 import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
+  bindStreetViewer,
   coverageViewer,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
+import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
 
 /** A photo record `metres` east of (42.3314, -83.0458), in sequence `seq` at `index`. */
 function photoRecord(id, { metres = 0, seq = '14010', index = 0 } = {}) {
@@ -411,24 +413,24 @@ async function withCones(t, env) {
     createElement: () => ({ getContext: () => drawing }),
   };
   t.after(() => (globalThis.document = saved));
-  let collection = null;
-  env.instance.init({
-    scene: {
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      primitives: { add: (c) => (collection = c), remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-    camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
-  });
+  const draw = fakeDrawPort();
+  env.instance.init(
+    bindStreetViewer(
+      {
+        scene: { preRender: { addEventListener: () => () => {} } },
+        camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
+      },
+      { draw },
+    ),
+  );
+  const drawn = () => [
+    ...(draw.find('street-level:kartaview-cones:')?.items.values() ?? []),
+  ];
   const cones = () => {
-    const indexes = [];
-    for (let i = 0; i < collection.length; i++)
-      indexes.push(Number(collection.get(i).id.split('-').at(-1)));
+    const indexes = drawn().map((cone) => Number(cone.id.split('-').at(-1)));
     return [Math.min(...indexes), Math.max(...indexes)];
   };
-  cones.count = () => collection?.length ?? 0;
+  cones.count = () => drawn().length;
   return cones;
 }
 

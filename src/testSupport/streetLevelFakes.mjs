@@ -1,6 +1,8 @@
 /** Shared Street Level test stand-ins: provider snapshot and provider, Mapillary source, photo viewer, Cesium viewer, ray-casting camera. */
 import * as Cesium from 'cesium';
 import { bindFakeCesiumCamera } from './fakeCameraPort.mjs';
+import { fakeDrawPort } from './fakeDrawPort.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
 import { MAPILLARY_CREDIT_HTML } from '../layers/streetLevel/providers/mapillary/policy.js';
 import {
   latToTileY,
@@ -284,12 +286,16 @@ export function rayCamera({
  * through what its `pickEllipsoid` hits), heights from its scene's
  * `sampleHeight` (3D tiles: only while its globe is hidden) and its
  * globe's `getHeight` (terrain), and pre-render from its scene's
- * `preRender`. `draw` adds a draw port. For `bindFakeCesiumCamera`'s
- * `ports`.
+ * `preRender`; drawing goes to `draw` (a fake draw port by default), and
+ * with `camera` the camera is `liveCamera`'s. For `bindFakeCesiumCamera`'s
+ * `ports`, or `bindRenderer`.
  * @param {object} viewer
  * @param {{draw?: object}} [options]
  */
-export function streetPorts(viewer, { draw, camera = false } = {}) {
+export function streetPorts(
+  viewer,
+  { draw = fakeDrawPort(), camera = false } = {},
+) {
   const finite = (height) => (Number.isFinite(height) ? height : null);
   const cartographic = ({ lon, lat }) => ({
     longitude: lon * RAD,
@@ -328,9 +334,26 @@ export function streetPorts(viewer, { draw, camera = false } = {}) {
         return event?.addEventListener?.(cb) ?? (() => {});
       },
     },
-    ...(draw ? { draw } : {}),
+    draw,
     ...(camera ? { camera: liveCamera(viewer) } : {}),
   };
+}
+
+/**
+ * Bind `viewer` (a Cesium-shaped double) to `streetPorts` with its live
+ * camera, as the app binds its renderer; `draw` is the draw port it draws
+ * through (a fake one by default). Returns the viewer.
+ * @template V
+ * @param {V} viewer
+ * @param {{draw?: object}} [options]
+ * @returns {V}
+ */
+export function bindStreetViewer(viewer, { draw } = {}) {
+  bindRenderer(
+    viewer,
+    streetPorts(viewer, { camera: true, ...(draw ? { draw } : {}) }),
+  );
+  return viewer;
 }
 
 /**

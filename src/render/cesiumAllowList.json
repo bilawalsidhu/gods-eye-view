@@ -87,8 +87,6 @@
   "src/layers/satellites/testing.js",
   "src/layers/satellites/tracking.js",
   "src/layers/streetLevel/lineCoverage.js",
-  "src/layers/streetLevel/marker.js",
-  "src/layers/streetLevel/sequenceCones.js",
   "src/layers/traffic/animation.js",
   "src/layers/traffic/lifecycle.js",
   "src/layers/traffic/rendering.js",

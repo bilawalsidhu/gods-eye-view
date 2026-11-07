@@ -16,9 +16,11 @@ import { validateProviders } from '../../registry.js';
 import { tileBounds } from '../../tileMath.js';
 import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
+  bindStreetViewer,
   coverageViewer,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
+import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
 import {
   encodePanoramaxTile,
   stacItem,
@@ -357,23 +359,22 @@ async function withCones(t, env) {
     createElement: () => ({ getContext: () => drawing }),
   };
   t.after(() => (globalThis.document = saved));
-  let collection = null;
-  env.instance.init({
-    scene: {
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      primitives: { add: (c) => (collection = c), remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-    camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
-  });
+  const draw = fakeDrawPort();
+  env.instance.init(
+    bindStreetViewer(
+      {
+        scene: { preRender: { addEventListener: () => () => {} } },
+        camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
+      },
+      { draw },
+    ),
+  );
+  const drawn = () => [
+    ...(draw.find('street-level:panoramax-cones:')?.items.values() ?? []),
+  ];
   return {
-    count: () => collection?.length ?? 0,
-    ids: () =>
-      Array.from({ length: collection?.length ?? 0 }, (_, i) =>
-        String(collection.get(i).id).replace(PICK_PREFIX.image, ''),
-      ),
+    count: () => drawn().length,
+    ids: () => drawn().map((cone) => cone.id.replace(PICK_PREFIX.image, '')),
   };
 }
 
@@ -455,13 +456,12 @@ test('a line clicked from high up looks for its sequence further off; the radius
   ];
   const { instance, source } = setup({ items });
   const height = (h) =>
-    instance.init({
-      camera: { positionCartographic: { height: h } },
-      scene: {
-        primitives: { add() {}, remove() {} },
-        preRender: { addEventListener: () => () => {} },
-      },
-    });
+    instance.init(
+      bindStreetViewer({
+        camera: { positionCartographic: { height: h } },
+        scene: { preRender: { addEventListener: () => () => {} } },
+      }),
+    );
   const click = () =>
     instance.handlePick(`${PICK_PREFIX.sequence}line`, {
       groundPoint: () => east(0),
@@ -821,13 +821,12 @@ test('a line clicked from low down still searches its own sequence within 50 m',
     ...sequence('clicked', 1, { offset: 30 }),
   ];
   const { instance, source } = setup({ items });
-  instance.init({
-    camera: { positionCartographic: { height: 300 } },
-    scene: {
-      primitives: { add() {}, remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-  });
+  instance.init(
+    bindStreetViewer({
+      camera: { positionCartographic: { height: 300 } },
+      scene: { preRender: { addEventListener: () => () => {} } },
+    }),
+  );
   instance.handlePick(`${PICK_PREFIX.sequence}clicked`, {
     groundPoint: () => east(0),
   });
