@@ -28,7 +28,8 @@ import { cesiumCapabilities, createCesiumPorts } from './ports.js';
  * @typedef {Pick<import('../contract/renderer').Renderer,
  *   'id' | 'contractVersion' | 'capabilities' | 'canvas' | 'frame' | 'draw'
  *   | 'camera' | 'query' | 'input' | 'effects' | 'quality' | 'capture'
- *   | 'credits' | 'whenSettled' | 'on' | 'resize' | 'destroy'>}
+ *   | 'credits' | 'readPixels' | 'releaseUnused' | 'whenSettled' | 'on'
+ *   | 'resize' | 'destroy'>}
  *   TransitionalRenderer
  */
 
@@ -117,6 +118,8 @@ export function createCesiumRendererPlugin({
         effects: ports.effects,
         quality: ports.quality,
         capture: ports.capture,
+        readPixels: ports.readPixels,
+        releaseUnused: ports.releaseUnused,
         credits: ports.credits,
         whenSettled: ports.whenSettled,
         on: ports.on,

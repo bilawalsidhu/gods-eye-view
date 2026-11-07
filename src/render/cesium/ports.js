@@ -26,6 +26,7 @@ import {
   lastSeenCamera,
   onEngineWorkCompleted,
   renderPending,
+  trimGlobeTiles,
 } from './internals.js';
 
 export { listenerList, toCartesian };
@@ -225,6 +226,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     scene.postRender.addEventListener(drew),
     scene.postRender.addEventListener(onPhase('postRender')),
     scene.postRender.addEventListener(() => watchClamp()),
+    scene.postRender.addEventListener(() => trimGlobeAfterDraw()),
   ];
 
   /**
@@ -1148,6 +1150,74 @@ export function createCesiumPorts(widget, { capabilities }) {
     );
   }
 
+  // The 2D canvas frames are read through, made on the first read.
+  let reader = null;
+
+  /**
+   * The drawn frame's pixels, `crop` in CSS pixels and `scale` relative to
+   * the canvas's CSS size. Read straight off the canvas: the application
+   * and conformance widgets keep their drawing buffers, and a read right
+   * after a draw sees it either way.
+   */
+  function readPixels({ crop, scale = 1 } = {}) {
+    const canvas = scene.canvas;
+    const cssWidth = canvas.clientWidth || canvas.width;
+    const cssHeight = canvas.clientHeight || canvas.height;
+    const rect = crop ?? { x: 0, y: 0, width: cssWidth, height: cssHeight };
+    const width = Math.max(1, Math.round(rect.width * scale));
+    const height = Math.max(1, Math.round(rect.height * scale));
+    const made =
+      reader ??
+      document
+        .createElement('canvas')
+        .getContext('2d', { willReadFrequently: true });
+    // Disposed ports keep nothing to free.
+    if (!disposed) reader = made;
+    made.canvas.width = width;
+    made.canvas.height = height;
+    // A canvas with no size has drawn nothing: the read is blank.
+    if (!canvas.width || !canvas.height)
+      return made.getImageData(0, 0, width, height);
+    const sx = canvas.width / cssWidth;
+    const sy = canvas.height / cssHeight;
+    made.drawImage(
+      canvas,
+      rect.x * sx,
+      rect.y * sy,
+      rect.width * sx,
+      rect.height * sy,
+      0,
+      0,
+      width,
+      height,
+    );
+    return made.getImageData(0, 0, width, height);
+  }
+
+  // A release asked for whose globe trim waits for the next drawn frame.
+  let trimGlobe = false;
+
+  /**
+   * Frees the tiles the last frame did not draw: each 3D tileset trims its
+   * cache, and a shown globe its own after the next drawn frame. The reader
+   * pixels are read through goes too.
+   */
+  function releaseUnused() {
+    if (disposed) return;
+    for (const tileset of tilesets()) tileset.trimLoadedTiles();
+    if (scene.globe?.show) trimGlobe = true;
+    if (reader) {
+      reader.canvas.width = reader.canvas.height = 0;
+      reader = null;
+    }
+    frame.requestRender('releaseUnused');
+  }
+  function trimGlobeAfterDraw() {
+    if (!trimGlobe) return;
+    trimGlobe = false;
+    if (scene.globe?.show) trimGlobeTiles(scene.globe);
+  }
+
   /** The live model sets, for `whenSettled`. */
   const modelSets = () =>
     [...sets.values()].filter((r) => r.kind === 'models' && r.host);
@@ -1327,11 +1397,16 @@ export function createCesiumPorts(widget, { capabilities }) {
     effects: effectsPart.port,
     quality: qualityPart.port,
     capture,
+    readPixels,
+    releaseUnused,
     whenSettled,
     /** Detach from the scene; the widget's owner destroys the widget. */
     dispose() {
       disposed = true;
       for (const finish of [...watching]) finish('ended');
+      trimGlobe = false;
+      if (reader) reader.canvas.width = reader.canvas.height = 0;
+      reader = null;
       // The tick under way is no longer seen through: it is not claimed.
       settleTick(false);
       for (const off of removers) off();

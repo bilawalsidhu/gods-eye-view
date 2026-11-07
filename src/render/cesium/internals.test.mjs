@@ -19,6 +19,7 @@ import {
   onEngineWorkCompleted,
   pickOffscreenView,
   renderPending,
+  trimGlobeTiles,
   updateCameraChanged,
   webglContext,
 } from './internals.js';
@@ -55,6 +56,8 @@ test('every private field Core reaches is still declared by the installed Cesium
     [ENGINE, 'Scene/Scene.js', '_view'],
     [ENGINE, 'Scene/View.js', '_cameraClone'],
     [ENGINE, 'Scene/Scene.js', '_frameState'],
+    [ENGINE, 'Scene/Globe.js', '_surface'],
+    [ENGINE, 'Scene/QuadtreePrimitive.js', '_tileReplacementQueue'],
     [ENGINE, 'Scene/CreditDisplay.js', '_staticCredits'],
     [ENGINE, 'Scene/CreditDisplay.js', '_currentFrameCredits'],
     [ENGINE, 'Scene/CreditDisplay.js', '_currentCesiumCredit'],
@@ -258,4 +261,13 @@ test('private Cesium fields are reached only through internals.js', () => {
         if (cesiumPrivate.has(name)) offenders.push(`${file} ._${name}`);
   }
   assert.deepEqual([...new Set(offenders)], []);
+});
+
+test('trimGlobeTiles empties the globe cache of what the frame did not draw', () => {
+  const trims = [];
+  trimGlobeTiles({
+    _surface: { _tileReplacementQueue: { trimTiles: (n) => trims.push(n) } },
+  });
+  trimGlobeTiles(undefined);
+  assert.deepEqual(trims, [0]);
 });

@@ -770,3 +770,38 @@ test('whenSettled settles once shown tiles have loaded under a hidden globe', as
     ports.dispose();
   }
 });
+
+test('releaseUnused trims the tiles caches, the globe after the next drawn frame', () => {
+  const { widget, scene, raise } = tickingWidget();
+  const list = [];
+  scene.primitives = listedPrimitives(list);
+  const trimmed = [];
+  scene.globe = {
+    show: true,
+    _surface: {
+      _tileReplacementQueue: { trimTiles: (n) => trimmed.push(`globe ${n}`) },
+    },
+  };
+  const tileset = Object.create(Cesium.Cesium3DTileset.prototype);
+  tileset.trimLoadedTiles = () => trimmed.push('tileset');
+  list.push(tileset);
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  ports.releaseUnused();
+  ports.releaseUnused();
+  assert.deepEqual(trimmed, ['tileset', 'tileset'], 'the globe waits');
+  assert.ok(ports.frame.diagnostics().pendingReasons.includes('releaseUnused'));
+  raise('postRender');
+  raise('postRender');
+  assert.deepEqual(trimmed, ['tileset', 'tileset', 'globe 0'], 'once');
+  scene.globe.show = false;
+  ports.releaseUnused();
+  raise('postRender');
+  assert.equal(trimmed.at(-1), 'tileset', 'a hidden globe is left alone');
+  scene.globe.show = true;
+  ports.releaseUnused();
+  ports.dispose();
+  raise('postRender');
+  assert.equal(trimmed.at(-1), 'tileset', 'nothing once disposed');
+  ports.releaseUnused();
+  assert.equal(trimmed.length, 5, 'nor a release after');
+});
