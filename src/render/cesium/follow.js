@@ -23,6 +23,21 @@ import { trackedEntityViewEntity } from './internals.js';
 const MAX_FRAME_ATTEMPTS = 120;
 const TRANSPARENT = new Cesium.Color(0, 0, 0, 0);
 const ZOOM_STATES = new WeakMap();
+/** Each helper entity's FollowTarget. */
+const HELPER_TARGETS = new WeakMap();
+
+/**
+ * A pick as the follow's helper entity should not make it: a hit on a helper
+ * is a hit on its target's drawn `entity`, or no hit when it has none. Any
+ * other pick comes back as it was.
+ * @param {object|undefined} picked What `scene.pick` or `drillPick` gave.
+ * @returns {object|undefined}
+ */
+export function pickThroughFollowHelper(picked) {
+  const target = picked?.id && HELPER_TARGETS.get(picked.id);
+  if (!target) return picked;
+  return target.entity ? { ...picked, id: target.entity } : undefined;
+}
 
 /**
  * Turn zoom coasting off and raise the zoom floor to `minRange` while any
@@ -186,14 +201,20 @@ export function createCesiumFollow({ widget, scene, camera, onChanged }) {
       : target.viewFrom;
 
   function helperFor(target) {
-    return widget.entities.add({
+    const helper = widget.entities.add({
       position: new Cesium.CallbackProperty((time, result) => {
         const p = target.position(msOf(time));
         return p ? Cesium.Cartesian3.fromElements(p.x, p.y, p.z, result) : p;
       }, false),
       // EntityView tracks an entity only once its bounding sphere is
       // ready, and an entity without graphics has none.
-      point: { pixelSize: 1, color: TRANSPARENT },
+      // Outline too: Cesium blends an opaque default outline into the edge.
+      point: {
+        pixelSize: 1,
+        color: TRANSPARENT,
+        outlineColor: TRANSPARENT,
+        outlineWidth: 0,
+      },
       viewFrom: new Cesium.CallbackProperty((time, result) => {
         const v = viewFromAt(target, time);
         return v ? startOffset(target, v, result) : v;
@@ -203,6 +224,8 @@ export function createCesiumFollow({ widget, scene, camera, onChanged }) {
           ? Cesium.TrackingReferenceFrame.AUTODETECT
           : Cesium.TrackingReferenceFrame.ENU,
     });
+    HELPER_TARGETS.set(helper, target);
+    return helper;
   }
 
   // preUpdate on purpose: in preRender the target's drawing is already

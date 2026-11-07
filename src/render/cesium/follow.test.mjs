@@ -9,7 +9,7 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { headlessCamera } from './cameraGoldens.js';
 import { createCesiumCamera } from './camera.js';
-import { holdFollowZoom } from './follow.js';
+import { holdFollowZoom, pickThroughFollowHelper } from './follow.js';
 
 function trackingHost() {
   const { scene, camera } = headlessCamera();
@@ -252,28 +252,21 @@ test('an autodetected follow is framed once Cesium tracks its helper', () => {
   h.dispose();
 });
 
-test('a port follow and a layer frame hold one controller together', async () => {
-  const { applyTrackedCameraFrame } =
-    await import('../../data/trackedCamera.js');
+test('a pick of the helper is a pick of the target’s drawn entity', () => {
   const h = trackingHost();
-  const controller = h.scene.screenSpaceCameraController;
-  const viewer = {
-    scene: h.scene,
-    camera: h.camera,
-    clock: h.widget.clock,
-    isDestroyed: () => false,
-    trackedEntity: {},
-  };
-  const stopLayer = applyTrackedCameraFrame(
-    viewer,
-    viewer.trackedEntity,
-    new Cesium.Cartesian3(0, -800, 400),
-  );
-  h.port.follow(target('a', { minRange: 300 }));
-  assert.equal(controller.minimumZoomDistance, 300);
-  stopLayer();
-  assert.equal(controller.minimumZoomDistance, 300, 'the port still holds');
-  h.port.follow(null);
-  assert.deepEqual(controller, { inertiaZoom: 0.8, minimumZoomDistance: 1 });
+  const drawn = h.widget.entities.add({ position: AUSTIN });
+  h.port.follow(target('a', { entity: drawn }));
+  const helper = h.widget.entities.values.find((e) => e !== drawn);
+  const primitive = {};
+  assert.deepEqual(pickThroughFollowHelper({ id: helper, primitive }), {
+    id: drawn,
+    primitive,
+  });
+  h.port.follow(target('b'));
+  const bare = h.widget.entities.values.find((e) => e !== drawn);
+  assert.equal(pickThroughFollowHelper({ id: bare }), undefined);
+  const other = { id: drawn };
+  assert.equal(pickThroughFollowHelper(other), other);
+  assert.equal(pickThroughFollowHelper(undefined), undefined);
   h.dispose();
 });

@@ -150,15 +150,13 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedEntity = null;
 
-  /** Disposes the single active tracked-camera framing owner. */
-
-  flightState._trackedCameraFrameStop = null;
+  /** The FollowTarget the camera follows the tracked aircraft with. */
+  flightState._followTarget = null;
 
   /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft. Deliberately NOT a
-   *  graphic on _trackedEntity: viewer.trackedEntity derives the follow-camera from the entity's
-   *  bounding sphere, and a model graphic reports PENDING until its glTF loads — which stalls (or, on
-   *  3D-toggle, freezes) the centering. A pure-billboard entity always supplies a ready sphere; the
-   *  model rides in _modelCollection and is driven per-frame, fully decoupled from the camera. */
+   *  graphic on _trackedEntity: a model graphic reports PENDING until its glTF loads, and the
+   *  tracked entity must stay a plain, always-ready billboard. The model rides in _modelCollection
+   *  and is driven per-frame, fully decoupled from the camera, which follows its own target. */
 
   flightState._trackedModel = null;
 

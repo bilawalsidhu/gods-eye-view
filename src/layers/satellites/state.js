@@ -83,6 +83,8 @@ export function createState({ services }) {
   };
 
   state._trackedEntity = null;
+  /** The FollowTarget the camera follows the tracked satellite with. */
+  state._followTarget = null;
 
   state._clickSubscription = null;
 

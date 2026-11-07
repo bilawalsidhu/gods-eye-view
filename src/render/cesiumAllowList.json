@@ -38,7 +38,6 @@
   "src/data/modelVisualAnchor.js",
   "src/data/motionModel.js",
   "src/data/osmOverlays.js",
-  "src/data/trackedCamera.js",
   "src/data/trailRenderer.js",
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",

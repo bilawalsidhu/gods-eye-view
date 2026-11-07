@@ -1,3 +1,5 @@
+import { cameraOf } from '../../render/cesium/camera.js';
+import { entityFollowTarget, stopFollowing } from '../../data/followed.js';
 import * as Cesium from 'cesium';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
 import { t } from '../../i18n/index.js';
@@ -113,7 +115,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
       parts.rendering._hideOrbitPath(layerState._trackedNorad);
     }
     if (layerState._viewer && !skipViewerUntrack)
-      layerState._viewer.trackedEntity = undefined;
+      stopFollowing(layerState._viewer);
+    layerState._followTarget = null;
     if (layerState._trackedEntity) {
       layerState._viewer.entities.remove(layerState._trackedEntity);
       layerState._trackedEntity = null;
@@ -425,10 +428,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // Tracked entity position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
     // Falls back to the point primitive's 1s-throttled position if SGP4 fails.
-    const positionProperty = new Cesium.CallbackProperty(() => {
+    const trackedPosition = () => {
       const pos = _getTrackedFramePosition();
       return pos ? layerState._trackedFrameCartesian : point.position;
-    }, false);
+    };
+    const positionProperty = new Cesium.CallbackProperty(
+      trackedPosition,
+      false,
+    );
 
     const name = sat.name.trim();
 
@@ -473,7 +480,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
     selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
     layerState._contextRefreshedAtMs = Date.now();
 
-    layerState._viewer.trackedEntity = layerState._trackedEntity;
+    // Cesium's own frame for a fast mover (AUTODETECT), as the tracked entity
+    // had; no close-range rules at orbital distances.
+    layerState._followTarget = entityFollowTarget(layerState._trackedEntity, {
+      position: trackedPosition,
+      frame: 'autodetect',
+      viewFrom,
+    });
+    cameraOf(layerState._viewer).follow(layerState._followTarget);
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {

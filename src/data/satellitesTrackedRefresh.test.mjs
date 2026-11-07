@@ -16,6 +16,8 @@ import {
   _trackIssForTest,
   createIssOverlayEntry,
 } from './satellites.js';
+import { followedOf } from './followed.js';
+import { bindRenderer } from '../render/rendererOf.js';
 import satellitesLayer from './satellites.js';
 import { createTrackedOverlayEntry } from './trackedReadout.js';
 import { readEntityRecord, withEntityRecord } from './entityRecords.js';
@@ -24,6 +26,22 @@ const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';
 const L2 =
   '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.72125391563537';
+
+
+/** A camera port that only follows, for viewers without a Cesium camera. */
+function followingPort() {
+  let followed = null;
+  return {
+    on: () => () => {},
+    get followed() {
+      return followed;
+    },
+    follow(target) {
+      followed = target;
+    },
+    cancelFlight() {},
+  };
+}
 
 test('partial and dense catalogs do not make an early false missing decision', async () => {
   _setSatelliteTrackingRefreshOutcomeForTest({
@@ -90,7 +108,7 @@ test('satellite first update aborts every parallel catalog request', async () =>
   }
 });
 
-test('selected satellite params survive delayed arrival and yield to newer explicit intent', () => {
+test('selected satellite params survive delayed arrival and yield to newer explicit intent', (t) => {
   const point = {
     position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
     show: true,
@@ -108,6 +126,7 @@ test('selected satellite params survive delayed arrival and yield to newer expli
       primitives: { remove() {} },
     },
   };
+  t.after(bindRenderer(viewer, { camera: followingPort() }));
   _setSatelliteLabelLifecycleStateForTest({
     viewer,
     satrec: twoline2satrec(L1, L2),
@@ -118,7 +137,7 @@ test('selected satellite params survive delayed arrival and yield to newer expli
       satellitesLayer.setParams({ selectedSatTrackingId: 25544 }),
     );
     assert.equal(satellitesLayer.getParams().selectedSatTrackingId, 25544);
-    assert.equal(readEntityRecord(viewer.trackedEntity)?.trackedId, 'satellites:25544');
+    assert.equal(followedOf(viewer)?.key, 'satellites:25544');
 
     satellitesLayer.stopTracking();
     _removeSatelliteTrackingCandidateForTest(25544);
@@ -288,7 +307,7 @@ test('satellite pre-render refreshes the tracked altitude on each propagated fra
   );
 });
 
-test('ISS ambient and tracked lifecycle uses cached host entries with no native labels or duplicate text', () => {
+test('ISS ambient and tracked lifecycle uses cached host entries with no native labels or duplicate text', (t) => {
   const calls = [];
   const overlayHost = {
     setEntries: (...args) => calls.push(['entries', ...args]),
@@ -312,6 +331,7 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
       primitives: { remove() {} },
     },
   };
+  t.after(bindRenderer(viewer, { camera: followingPort() }));
   let cleaned = false;
   _setSatelliteLabelLifecycleStateForTest({
     viewer,
