@@ -625,3 +625,75 @@ test('viewRectangle is in degrees, around the point below a downward eye', () =>
   assert.ok(rect.south < 30.27 && rect.north > 30.27, JSON.stringify(rect));
   ports.dispose();
 });
+
+/** A scene's primitives as Cesium lists them: `length` and `get`. */
+function listedPrimitives(list) {
+  return {
+    get length() {
+      return list.length;
+    },
+    get: (i) => list[i],
+    add: (p) => list.push(p),
+    remove: (p) => list.splice(list.indexOf(p), 1),
+  };
+}
+
+test('clampState drapes without tiles and overlays shown ones, told on change', () => {
+  const { widget, scene, raise } = tickingWidget();
+  const list = [];
+  scene.primitives = listedPrimitives(list);
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  assert.equal(ports.draw.clampState(), 'draped', 'nothing but the ellipsoid');
+  const told = [];
+  const off = ports.draw.on('clampState', (state) => told.push(state));
+  raise('postRender');
+  assert.deepEqual(told, [], 'not on subscribing, nor without a change');
+  const tileset = Object.create(Cesium.Cesium3DTileset.prototype);
+  tileset.show = true;
+  list.push(tileset);
+  assert.equal(ports.draw.clampState(), 'overlay', 'the port drapes no tiles');
+  raise('postRender');
+  raise('postRender');
+  assert.deepEqual(told, ['overlay'], 'told once, after a drawn frame');
+  tileset.show = false;
+  raise('postRender');
+  assert.deepEqual(told, ['overlay', 'draped'], 'hidden tiles take nothing');
+  off();
+  tileset.show = true;
+  raise('postRender');
+  assert.equal(told.length, 2, 'off stops it');
+  assert.equal(typeof ports.draw.on('ready', () => {}), 'function');
+  ports.dispose();
+});
+
+test('an icon draws its atlas slot once the atlas has it, and again when it changes', () => {
+  const { widget, scene } = tickingWidget();
+  const list = [];
+  scene.primitives = listedPrimitives(list);
+  // What a billboard reads of its scene as it is added.
+  scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  const icon = (id, slot) => ({
+    id,
+    pos: { x: 6378137, y: 0, z: 0 },
+    image: { atlas: 'conf', slot },
+    size: [4, 4],
+  });
+  const icons = ports.draw.icons({ id: 'icons' });
+  icons.set([icon('one', 'dot'), icon('two', 'ring')]);
+  assert.equal(icons.size(), 2);
+  assert.equal(list.at(-1).length, 0, 'no atlas yet: nothing drawn');
+  ports.draw.atlas('conf', { dot: 'dot.png' });
+  const first = list.at(-1);
+  assert.equal(first.length, 1, 'the slot it has draws');
+  assert.equal(first.get(0).image, 'dot.png');
+  ports.draw.atlas('other', { dot: 'other.png' });
+  assert.equal(list.at(-1), first, 'another atlas leaves the set alone');
+  ports.draw.atlas('conf', { dot: 'next.png', ring: 'ring.png' });
+  assert.notEqual(list.at(-1), first, 'rebuilt');
+  assert.deepEqual(
+    [list.at(-1).get(0).image, list.at(-1).get(1).image],
+    ['next.png', 'ring.png'],
+  );
+  ports.dispose();
+});

@@ -318,9 +318,6 @@ test('the application refuses a renderer it cannot run on, and destroys it', asy
 });
 
 const EXPECTED_MISSING = [
-  'draw.atlas',
-  'draw.clampState',
-  'draw.on',
   'frame.setTime',
   'renderer.globe',
   'renderer.readPixels',
