@@ -322,6 +322,15 @@ export const DATA_CREDITS = [
       '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
   },
   {
+    key: 'iceland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Iceland): road camera images, fetched live, from the ' +
+      '<a href="https://www.vegagerdin.is/" target="_blank" rel="noopener">Icelandic Road and Coastal Administration (Vegagerðin)</a> — ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
+      '(<a href="https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur/terms-and-conditions" target="_blank" rel="noopener">terms</a>); ' +
+      'no endorsement by IRCA is implied',
+  },
+  {
     key: 'kingcounty-cctv',
     html:
       'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
