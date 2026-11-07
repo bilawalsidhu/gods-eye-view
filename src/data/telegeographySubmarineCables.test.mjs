@@ -6,6 +6,7 @@ import { MAP_STACKS } from '../mapStackController.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import {
   CABLE_LABEL_DEPTH_DECISION,
   CABLE_OVERLAY_COLLISION_CAPACITY,
@@ -586,7 +587,10 @@ function createCableHarness({
   camera.port.cancelFlight = () => flights.push('cancel');
   camera.port.flyTo = (destination, options) =>
     flights.push({ destination, options });
-  const { draw } = bindFakeDraw(viewer, { camera: camera.port });
+  const { draw } = bindFakeDraw(viewer, {
+    camera: camera.port,
+    frame: fakeSceneFrame(viewer),
+  });
   layer.init(viewer);
   /** The layer's live set named `name` (`lines`, `pins`, …). */
   const set = (name) =>

@@ -1,4 +1,4 @@
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf, findFrame, frameOf } from '../../render/rendererOf.js';
 import {
   cableClassificationTypeForScene,
   cableClassificationTypeForStack,
@@ -38,27 +38,25 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         },
       };
       if (!state._preRenderRemover) {
-        state._preRenderRemover = viewer.scene.preRender.addEventListener(
-          () => {
-            // The camera is handed to the gate so tracked/orbit cameras — which
-            // never emit moveEnd — reach the motion fallback. No render is
-            // requested for a fallback sweep: it only fires while the camera is
-            // already moving, so frames are flowing by construction.
-            if (
-              !state._enabled ||
-              !state._loaded ||
-              !state._referenceSweepGate.shouldRun(eye)
-            )
-              return;
-            parts.rendering.updateReferenceVisibility();
-          },
-        );
+        state._preRenderRemover = frameOf(viewer).on('preRender', () => {
+          // The camera is handed to the gate so tracked/orbit cameras — which
+          // never emit moveEnd — reach the motion fallback. No render is
+          // requested for a fallback sweep: it only fires while the camera is
+          // already moving, so frames are flowing by construction.
+          if (
+            !state._enabled ||
+            !state._loaded ||
+            !state._referenceSweepGate.shouldRun(eye)
+          )
+            return;
+          parts.rendering.updateReferenceVisibility();
+        });
       }
       if (!state._moveEndRemover) {
         state._moveEndRemover = cameraOf(viewer).on('moveEnd', () => {
           if (!state._enabled) return;
           state._referenceSweepGate.markDirty();
-          viewer.scene.requestRender?.();
+          findFrame(viewer)?.requestRender('submarine-cables');
         });
       }
     },
@@ -73,7 +71,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._referenceSweepGate.markDirty();
       // The gate is dirty-only; ask for the frame its sweep needs in case the
       // camera is parked and nothing else is rendering.
-      (viewer || state._viewer)?.scene?.requestRender?.();
+      findFrame(viewer || state._viewer)?.requestRender('submarine-cables');
       void parts.ingestion.load(viewer || state._viewer);
     },
 

@@ -1,4 +1,5 @@
 import { msg, t } from '../../i18n/index.js';
+import { findFrame } from '../../render/rendererOf.js';
 import { normalizeFeatures } from './geometry.js';
 
 export function createIngestion({ state, parts, source }) {
@@ -54,7 +55,7 @@ export function createIngestion({ state, parts, source }) {
       state._loadingLabel = '';
       parts.rendering.updateVisibility();
       state._referenceSweepGate.markDirty();
-      viewer?.scene?.requestRender?.();
+      findFrame(viewer)?.requestRender('submarine-cables');
     } catch (error) {
       // A stale or aborted load reports nothing: its failure belongs to a
       // lifecycle the user already left.
