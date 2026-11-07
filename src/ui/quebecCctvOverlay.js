@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { horizonOccluder } from '../data/iconOrientation.js';
 import { t } from '../i18n/index.js';
+import { formatMeasure } from './unitLabels.js';
 
 function isQuebecCamera(camera) {
   return String(camera?.sourceKind || '').startsWith('quebec-');
@@ -153,7 +154,7 @@ export function createQuebecCctvOverlay(viewer) {
     return hasMedia
       ? `${t('PREVIEW')} · ${camera.positionSource || camera.name}`
       : Number.isFinite(camera.accuracyM) && camera.accuracyM > 0
-        ? `${camera.name} · ±${Math.round(camera.accuracyM)} m`
+        ? `${camera.name} · ±${formatMeasure(camera.accuracyM, 'm')}`
         : camera.name;
   }
 
@@ -272,7 +273,7 @@ export function createQuebecCctvOverlay(viewer) {
     coordinates.textContent = [
       `${Number(camera.lat).toFixed(5)}, ${Number(camera.lon).toFixed(5)}`,
       Number.isFinite(camera.accuracyM) && camera.accuracyM > 0
-        ? `±${Math.round(camera.accuracyM)} m`
+        ? `±${formatMeasure(camera.accuracyM, 'm')}`
         : '',
       camera.positionSource || '',
     ]
