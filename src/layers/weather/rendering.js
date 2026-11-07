@@ -1,11 +1,10 @@
 import { weatherTileUrl } from './source.js';
-import { orderWeatherImagery } from './imageryOrder.js';
+import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
-import { createRasterTileProvider } from './rasterTiles.js';
-import { withTileRequestHook } from '../../render/cesium/tileRequests.js';
-import { createWeatherShell } from './shellRendering.js';
-import { weatherDisplay, escapeCreditText } from './display.js';
+import { drawMosaicTile } from './rasterTiles.js';
+import { weatherDisplay } from './display.js';
 import { msg } from '../../i18n/index.js';
+import { findCamera, findCredits, findGlobe } from '../../render/rendererOf.js';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import {
   acquireInfraredMosaic,
@@ -19,11 +18,49 @@ const MAX_PREFETCH_TILES = 8;
 // How often a staged frame waiting out its quiet interval rechecks readiness.
 export const READY_WAKE_MS = 150;
 
-/** Globe imagery: own at most a displayed and a staging frame. Use native Cesium
- * tile scheduling, projection and texture disposal; the application clock is never touched. */
+/**
+ * A degrees rectangle's overlap with another, or null; either may cross the
+ * antimeridian (`west > east`), as a view rectangle can.
+ */
+export function rectangleOverlap(a, b) {
+  let aEast = a.east;
+  let aWest = a.west;
+  let bEast = b.east;
+  let bWest = b.west;
+  if (aEast < aWest && bEast > 0) aEast += 360;
+  else if (bEast < bWest && aEast > 0) bEast += 360;
+  if (aEast < aWest && bWest < 0) bWest += 360;
+  else if (bEast < bWest && aWest < 0) aWest += 360;
+  const wrap = (lon) =>
+    lon >= -180 && lon <= 180 ? lon : ((((lon + 180) % 360) + 360) % 360) - 180;
+  const west = wrap(Math.max(aWest, bWest));
+  const east = wrap(Math.min(aEast, bEast));
+  if ((a.west < a.east || b.west < b.east) && east <= west) return null;
+  const south = Math.max(a.south, b.south);
+  const north = Math.min(a.north, b.north);
+  if (south >= north) return null;
+  return { west, south, east, north };
+}
+
+/** A tile of the geographic scheme (two level-zero tiles), in degrees. */
+export function geographicTile(x, y, level) {
+  const size = 180 / 2 ** level;
+  const west = -180 + x * size;
+  const north = 90 - y * size;
+  return { west, south: north - size, east: west + size, north };
+}
+
+/** HTTP statuses a weather tile is fetched again for, rather than failing. */
+const RETRY_STATUSES = [429, 503];
+
+/** Globe imagery through the renderer's globe port: own at most a displayed
+ * and a staging frame; the application clock is never touched. */
 function createGlobeRendering({
   viewer,
-  cesium,
+  globeOf,
+  cameraOf,
+  creditsOf,
+  toBitmap,
   getHost,
   onChange,
   timeoutMs,
@@ -84,30 +121,18 @@ function createGlobeRendering({
   }
 
   function prefetchTiles(snapshot, time) {
-    const { west, south, east, north } = snapshot.bounds;
-    const bounds = cesium.Rectangle.fromDegrees(west, south, east, north);
-    const view = viewer.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
-    const coverage = view
-      ? cesium.Rectangle.intersection(bounds, view)
-      : bounds;
+    const bounds = snapshot.bounds;
+    const view = cameraOf(viewer)?.viewRectangle?.();
+    const coverage = view ? rectangleOverlap(bounds, view) : bounds;
     if (!coverage) return [];
-    const scheme = new cesium.GeographicTilingScheme();
     const template = weatherTileUrl(snapshot.product, time, {
       size: profile(snapshot.product).tileSize,
     });
     const urls = [];
     for (let z = 0; z <= 1; z++) {
-      for (let y = 0; y < scheme.getNumberOfYTilesAtLevel(z); y++) {
-        for (let x = 0; x < scheme.getNumberOfXTilesAtLevel(z); x++) {
-          if (
-            !cesium.Rectangle.intersection(
-              coverage,
-              scheme.tileXYToRectangle(x, y, z),
-            )
-          )
-            continue;
+      for (let y = 0; y < 2 ** z; y++) {
+        for (let x = 0; x < 2 ** (z + 1); x++) {
+          if (!rectangleOverlap(coverage, geographicTile(x, y, z))) continue;
           urls.push(
             template.replace('{z}', z).replace('{x}', x).replace('{y}', y),
           );
@@ -121,17 +146,31 @@ function createGlobeRendering({
   function creditText(snapshot) {
     const sourceCredit = weatherDisplay(snapshot).credit;
     return sourceCredit !== undefined
-      ? escapeCreditText(sourceCredit)
+      ? sourceCredit
       : snapshot.product === 'lightning'
         ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
         : snapshot.product === 'radar'
           ? 'NOAA nowCOAST · NWS/OAR MRMS'
           : 'NOAA nowCOAST · NESDIS GOES / global satellite partners';
   }
+  /**
+   * The frame's credit is owed while its layer is drawn (shown, even
+   * transparent while it stages), through the renderer's credits port.
+   */
+  function syncCredit(frame) {
+    const text =
+      (!frame.closed && frame.layer?.show === true && frame.credit) || null;
+    if (frame.creditShown === text) return;
+    frame.offCredit?.();
+    frame.offCredit = null;
+    frame.creditShown = text;
+    if (text) frame.offCredit = creditsOf(viewer)?.addStatic({ text }) ?? null;
+  }
   function setCredit(frame) {
     const text = creditText(frame.creditSnapshot ?? frame.snapshot);
-    if (frame.credit?.html === text) return false;
-    frame.credit = new cesium.Credit(text, false);
+    if (frame.credit === text) return false;
+    frame.credit = text;
+    if (frame.layer) syncCredit(frame);
     return true;
   }
   /**
@@ -145,7 +184,7 @@ function createGlobeRendering({
     for (const frame of new Set([current, incoming, ...retiring])) {
       if (!frame || frame.product !== snapshot.product) continue;
       frame.creditSnapshot = snapshot;
-      if (frame.credit && setCredit(frame)) changed = true;
+      if (frame.credit !== undefined && setCredit(frame)) changed = true;
     }
     if (changed) viewer.scene.requestRender();
   }
@@ -163,18 +202,9 @@ function createGlobeRendering({
     frame.offCamera?.();
     clearTimeout(frame.timeout);
     clearTimeout(frame.wake);
-    for (const request of frame.requests) request.cancel?.();
-    frame.requests.clear();
-    frame.retries.clear();
-    if (!frame.layer) return;
-    const collection = frame.collection;
-    if (
-      collection &&
-      !collection.isDestroyed?.() &&
-      collection.contains(frame.layer)
-    )
-      collection.remove(frame.layer, true);
-    else if (!frame.layer.isDestroyed?.()) frame.layer.destroy?.();
+    syncCredit(frame);
+    // Removing the layer cancels its tile requests in flight.
+    frame.layer?.remove();
   }
   function cancelIncoming() {
     if (!incoming) return;
@@ -183,13 +213,17 @@ function createGlobeRendering({
     remove(previous);
     previous.resolve(false);
   }
+  /**
+   * Follow the host: a globe host draws the frame, any other hides it (the
+   * globe drapes nothing while hidden) and drops what was staging for it.
+   */
   function rehome() {
     const host = getHost();
-    const { collection } = host;
+    const { kind } = host;
     const hidden = frameHidden || imageryHostStatus(host) !== null;
     const changed =
-      (current && current.collection !== collection) ||
-      (incoming && incoming.collection !== collection);
+      (current && current.kind !== kind) ||
+      (incoming && incoming.kind !== kind);
     const visibilityChanged = current && current.layer.show === hidden;
     if (changed || imageryHostStatus(host) !== null) {
       cancelPrefetch();
@@ -199,14 +233,8 @@ function createGlobeRendering({
     if (current) {
       if (!hidden && current.layer.alpha !== alpha) current.layer.alpha = alpha;
       if (visibilityChanged) current.layer.show = !hidden;
-    }
-    if (current && current.collection !== collection) {
-      current.collection?.remove(current.layer, false);
-      current.collection = collection;
-      if (collection) {
-        collection.add(current.layer);
-        orderWeatherImagery(collection, current.layer, current.priority);
-      }
+      current.kind = kind;
+      syncCredit(current);
     }
     if (changed || visibilityChanged) viewer.scene.requestRender();
     return Boolean(changed || visibilityChanged);
@@ -265,8 +293,10 @@ function createGlobeRendering({
       rehome();
       cancelIncoming();
       const host = getHost();
-      const { collection, kind } = host;
+      const { kind } = host;
       if (imageryHostStatus(host)) return false;
+      const globe = globeOf(viewer);
+      if (!globe) return false;
       const nextProfile = profile(snapshot.product);
       if (
         current?.time === time &&
@@ -279,7 +309,7 @@ function createGlobeRendering({
       }
       lastError = null;
       const { west, south, east, north } = snapshot.bounds;
-      const rectangle = cesium.Rectangle.fromDegrees(west, south, east, north);
+      const rectangle = { west, south, east, north };
       const global = snapshot.product === 'clouds';
       const frame = {
         snapshot,
@@ -290,17 +320,8 @@ function createGlobeRendering({
           ? { fetched: false, decodeMs: null, cached: false }
           : undefined,
         controller: new AbortController(),
-        collection,
         kind,
-        priority:
-          snapshot.product === 'lightning'
-            ? 3
-            : snapshot.product === 'radar'
-              ? 2
-              : 1,
         product: snapshot.product,
-        requests: new Set(),
-        retries: new Map(),
         deferred: new Set(),
         pending: 0,
         loaded: 0,
@@ -332,6 +353,7 @@ function createGlobeRendering({
           frame.loadMs = now() - frame.startedAt;
           frame.layer.alpha = alpha;
           frame.layer.show = !frameHidden;
+          syncCredit(frame);
           viewer.scene.requestRender();
           if (previous) {
             retiring.add(previous);
@@ -375,103 +397,83 @@ function createGlobeRendering({
           viewer.scene.requestRender();
           return;
         }
-        const tilingScheme = new cesium.GeographicTilingScheme(
-          global
-            ? {
-                rectangle,
-                numberOfLevelZeroTilesX: 2,
-                numberOfLevelZeroTilesY: 1,
-              }
-            : undefined,
-        );
         setCredit(frame);
-        const credit = frame.credit;
-        const source = global
-          ? createRasterTileProvider({
-              cesium,
-              texture,
-              rectangle,
-              tilingScheme,
-              maximumLevel: GLOBAL_TILE_MAXIMUM_LEVEL,
-              tileSize: nextProfile.tileSize,
-              credit,
-              createCanvas,
-            })
-          : new cesium.UrlTemplateImageryProvider({
-              url: weatherTileUrl(snapshot.product, time, {
-                size: nextProfile.tileSize,
-              }),
-              tilingScheme,
-              rectangle,
-              tileWidth: nextProfile.tileSize,
-              tileHeight: nextProfile.tileSize,
-              maximumLevel: nextProfile.maximumLevel,
-              enablePickFeatures: false,
-              credit,
-            });
-        const provider = withTileRequestHook(source, {
-          // Cesium reads a provider's credit every frame; a refreshed manifest
-          // can replace it without restaging the imagery.
-          credit: () => frame.credit,
-          requestImage: ({ x, y, level, request }, issue) => {
-            if (frame.closed) return undefined;
-            const result = issue();
-            const tileKey = `${level}/${x}/${y}`;
-            if (!result) {
-              // Scheduler admission is part of readiness, not a successful tile.
-              frame.deferred.add(tileKey);
-              frame.lastActivity = now();
-              return result;
-            }
-            frame.deferred.delete(tileKey);
-            frame.pending++;
+        const tileSize = nextProfile.tileSize;
+        /** Readiness accounting: each own tile the renderer issues or defers. */
+        const admit = (tile, issue) => {
+          if (frame.closed) return undefined;
+          const result = issue();
+          const tileKey = `${tile.level}/${tile.x}/${tile.y}`;
+          if (!result) {
+            // Scheduler admission is part of readiness, not a successful tile.
+            frame.deferred.add(tileKey);
             frame.lastActivity = now();
-            if (request) frame.requests.add(request);
-            return Promise.resolve(result)
-              .then((image) => {
-                // Cesium decodes tiles as ImageBitmaps already flipped, since WebGL
-                // ignores UNPACK_FLIP_Y for them; a canvas upload flips again.
-                if (!frame.closed && snapshot.product === 'clouds-regional')
-                  image = processInfraredImage(image, infrared, createCanvas, {
-                    flipY:
-                      typeof ImageBitmap !== 'undefined' &&
-                      image instanceof ImageBitmap,
-                  });
-                frame.retries.delete(tileKey);
-                frame.loaded++;
-                return image;
-              })
-              .finally(() => {
-                frame.pending--;
-                frame.lastActivity = now();
-                frame.requests.delete(request);
-                if (!frame.closed) viewer.scene.requestRender();
-              });
-          },
-        });
-        frame.offError = provider.errorEvent.addEventListener((error) => {
-          if (frame.closed) return;
-          const status = error?.error?.statusCode;
-          // Cesium retries synchronously after this event; no delay hook is exposed.
-          const tileKey = `${error.level}/${error.x}/${error.y}`;
-          const retries = frame.retries.get(tileKey) ?? 0;
-          error.retry = false;
-          if ((status === 429 || status === 503) && retries < 3) {
-            frame.retries.set(tileKey, retries + 1);
-            error.retry = true;
-            return;
+            return result;
           }
+          frame.deferred.delete(tileKey);
+          frame.pending++;
+          frame.lastActivity = now();
+          return Promise.resolve(result)
+            .then((image) => {
+              frame.loaded++;
+              return image;
+            })
+            .finally(() => {
+              frame.pending--;
+              frame.lastActivity = now();
+              if (!frame.closed) viewer.scene.requestRender();
+            });
+        };
+        const spec = global
+          ? {
+              kind: 'canvas',
+              tiling: 'geographic',
+              rectangle,
+              maxLevel: GLOBAL_TILE_MAXIMUM_LEVEL,
+              tileSize,
+              drawTile: (tile, canvas) =>
+                drawMosaicTile(texture, rectangle, tile, canvas),
+              admit,
+              zOrder: WEATHER_IMAGERY_Z[snapshot.product],
+            }
+          : {
+              kind: 'xyz',
+              url: weatherTileUrl(snapshot.product, time, { size: tileSize }),
+              tiling: 'geographic',
+              rectangle,
+              tileSize,
+              maxLevel: nextProfile.maximumLevel,
+              retryStatuses: RETRY_STATUSES,
+              admit,
+              ...(snapshot.product === 'clouds-regional'
+                ? {
+                    // The transfer runs on the upright tile the renderer
+                    // decoded.
+                    // Closed frames do not process late images.
+                    tileTransform: (_tile, image) =>
+                      frame.closed
+                        ? image
+                        : toBitmap(
+                            processInfraredImage(image, infrared, createCanvas),
+                          ),
+                  }
+                : {}),
+              zOrder: WEATHER_IMAGERY_Z[snapshot.product],
+            };
+        // A shown, transparent layer lets the renderer request staging tiles
+        // while the last complete observation stays visible underneath it.
+        frame.layer = globe.imagery.add(spec);
+        frame.layer.drapeOn = 'surface';
+        frame.layer.alpha = 0;
+        syncCredit(frame);
+        frame.offError = frame.layer.on('tileError', () => {
+          if (frame.closed) return;
           frame.failed = true;
           lastError = msg('Some weather tiles unavailable');
           onChange();
         });
-        // A shown, transparent layer lets Cesium request staging tiles while the last
-        // complete observation stays visible underneath it.
-        frame.layer = collection.addImageryProvider(provider);
-        frame.layer.alpha = 0;
-        orderWeatherImagery(collection, frame.layer, frame.priority);
         let settled = 0;
-        frame.offCamera = viewer.camera?.moveEnd?.addEventListener(() => {
+        frame.offCamera = cameraOf(viewer)?.on('moveEnd', () => {
           // Tiles abandoned by a previous viewport are no longer admission work.
           frame.deferred.clear();
           frame.lastActivity = now();
@@ -488,7 +490,7 @@ function createGlobeRendering({
             frame.deferred.size === 0 &&
             now() - frame.lastActivity >= 200;
           if (
-            ((frame.kind === 'globe' && viewer.scene.globe.tilesLoaded) ||
+            ((frame.kind === 'globe' && globe.isSettled('imagery')) ||
               ownReady) &&
             frame.pending === 0
           ) {
@@ -586,7 +588,12 @@ function createGlobeRendering({
  * A host switch tears one renderer down and restages the last frame on the other. */
 export function createWeatherRendering({
   viewer,
-  cesium,
+  createShell,
+  globeOf = findGlobe,
+  cameraOf = findCamera,
+  creditsOf = findCredits,
+  toBitmap = (canvas) =>
+    globalThis.createImageBitmap(canvas, { premultiplyAlpha: 'none' }),
   getHost = () => ({ collection: viewer.imageryLayers, kind: 'globe' }),
   onChange = () => {},
   timeoutMs = 25_000,
@@ -594,11 +601,9 @@ export function createWeatherRendering({
   fetchImpl = (...args) => globalThis.fetch(...args),
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
-  createShell = createWeatherShell,
 }) {
   const shared = {
     viewer,
-    cesium,
     getHost,
     onChange,
     timeoutMs,
@@ -607,7 +612,13 @@ export function createWeatherRendering({
     decodeImage,
     createCanvas,
   };
-  const globe = createGlobeRendering(shared);
+  const globe = createGlobeRendering({
+    ...shared,
+    globeOf,
+    cameraOf,
+    creditsOf,
+    toBitmap,
+  });
   let shell = null;
   let active = null;
   let alpha = 0.7;

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
-import { createRasterTileProvider } from './rasterTiles.js';
+import { drawMosaicTile } from './rasterTiles.js';
 import { createFieldRaster } from '../wind/fields.js';
 
 // A small canvas double exposes the uploaded raster and exact drawImage crop.
@@ -31,7 +30,17 @@ function createCanvas() {
   return canvas;
 }
 
-test('real Cesium geographic provider crops level 0/1 tiles from a decoded canvas with preserved pixels', async () => {
+/** A tile canvas of `size`, drawn by `drawMosaicTile`. */
+function drawTile(texture, bounds, tile, size = 256) {
+  const canvas = createCanvas();
+  canvas.width = canvas.height = size;
+  drawMosaicTile(texture, bounds, tile, canvas);
+  return canvas;
+}
+
+const WORLD = { west: -180, south: -90, east: 180, north: 90 };
+
+test('a world mosaic crops level 0/1 geographic tiles with preserved pixels', () => {
   const raster = createFieldRaster(
     {
       nx: 8,
@@ -50,42 +59,18 @@ test('real Cesium geographic provider crops level 0/1 tiles from a decoded canva
     720,
     362,
   );
-  const credit = new Cesium.Credit('NOAA GFS');
   const texture = {
     width: raster.width,
     height: raster.height,
     rgba: raster.rgba,
   };
-  const provider = createRasterTileProvider({
-    cesium: Cesium,
-    texture,
-    credit,
-    createCanvas,
-  });
-  assert.ok(provider.tilingScheme instanceof Cesium.GeographicTilingScheme);
-  assert.equal(provider.rectangle, Cesium.Rectangle.MAX_VALUE);
-  assert.equal(provider.minimumLevel, 0);
-  assert.equal(provider.maximumLevel, 2);
-  assert.equal(provider.tileWidth, 256);
-  assert.equal(provider.tileHeight, 256);
-  assert.equal(provider.ready, true);
-  assert.equal(provider.hasAlphaChannel, true);
-  assert.equal(provider.credit, credit);
-  assert.ok(provider.errorEvent instanceof Cesium.Event);
-  assert.equal(provider.tileDiscardPolicy, undefined);
-  assert.equal(provider.getTileCredits(0, 0, 0), undefined);
-  assert.equal(provider.pickFeatures(0, 0, 0, 0, 0), undefined);
   for (const [x, y, level, crop, cell] of [
     [0, 0, 0, [0, 0, 360, 362, 0, 0, 256, 256], [90, 91]],
     [1, 0, 0, [360, 0, 360, 362, 0, 0, 256, 256], [450, 91]],
     [0, 0, 1, [0, 0, 180, 181, 0, 0, 256, 256], [45, 45]],
     [3, 1, 1, [540, 181, 180, 181, 0, 0, 256, 256], [585, 226]],
   ]) {
-    const pending = provider.requestImage(x, y, level);
-    assert.ok(pending instanceof Promise, 'ImageryLayer consumes a promise');
-    const tile = await pending;
-    assert.equal(tile.width, 256);
-    assert.equal(tile.height, 256);
+    const tile = drawTile(texture, WORLD, { x, y, level });
     assert.equal(tile.getContext('2d').imageSmoothingEnabled, true);
     assert.deepEqual(tile.crop, crop);
     const offset = (cell[1] * 720 + cell[0]) * 4;
@@ -96,60 +81,29 @@ test('real Cesium geographic provider crops level 0/1 tiles from a decoded canva
   }
 });
 
-test('bounded decoded mosaic crops both roots and higher levels without resampling its extent', async () => {
+test('a bounded mosaic maps each tile by degrees; outside it stays clear', () => {
   const texture = { width: 2048, height: 1024 };
-  const rectangle = Cesium.Rectangle.fromDegrees(-180, -60, 180, 60);
-  const scheme = new Cesium.GeographicTilingScheme({
-    rectangle,
-    numberOfLevelZeroTilesX: 2,
-    numberOfLevelZeroTilesY: 1,
-  });
-  const credit = new Cesium.Credit('NOAA');
-  const provider = createRasterTileProvider({
-    cesium: Cesium,
-    texture,
-    rectangle,
-    tilingScheme: scheme,
-    maximumLevel: 3,
-    credit,
-    createCanvas,
-  });
-  assert.equal(provider.rectangle, rectangle);
-  assert.equal(provider.maximumLevel, 3);
-  assert.equal(provider.credit, credit);
-  assert.equal(provider.hasAlphaChannel, true);
+  const bounds = { west: -180, south: -60, east: 180, north: 60 };
   for (const [x, y, level, crop] of [
-    [0, 0, 0, [0, 0, 1024, 1024, 0, 0, 256, 256]],
-    [1, 0, 0, [1024, 0, 1024, 1024, 0, 0, 256, 256]],
-    [7, 3, 2, [1792, 768, 256, 256, 0, 0, 256, 256]],
+    // 180° square tiles reach past the mosaic's 60° edges.
+    [0, 0, 0, [0, -256, 1024, 1536, 0, 0, 256, 256]],
+    [1, 0, 0, [1024, -256, 1024, 1536, 0, 0, 256, 256]],
+    [7, 1, 2, [1792, 128, 256, 384, 0, 0, 256, 256]],
   ]) {
-    const pending = provider.requestImage(x, y, level);
-    assert.ok(pending instanceof Promise);
-    const tile = await pending;
+    const tile = drawTile(texture, bounds, { x, y, level });
     assert.equal(tile.source, texture);
     assert.deepEqual(tile.crop, crop);
   }
 });
 
-test('512-pixel crops preserve source extent at root and clamped draping levels', async () => {
+test('512-pixel tiles preserve the source extent at every level', () => {
   const texture = { width: 2048, height: 1024 };
-  const provider = createRasterTileProvider({
-    cesium: Cesium,
-    texture,
-    createCanvas,
-    tileSize: 512,
-    maximumLevel: 3,
-  });
-  assert.equal(provider.tileWidth, 512);
-  assert.equal(provider.tileHeight, 512);
   for (const [x, y, level, crop] of [
     [0, 0, 0, [0, 0, 1024, 1024, 0, 0, 512, 512]],
     [3, 1, 1, [1536, 512, 512, 512, 0, 0, 512, 512]],
     [7, 3, 2, [1792, 768, 256, 256, 0, 0, 512, 512]],
   ]) {
-    const tile = await provider.requestImage(x, y, level);
-    assert.equal(tile.width, 512);
-    assert.equal(tile.height, 512);
+    const tile = drawTile(texture, WORLD, { x, y, level }, 512);
     assert.equal(tile.source, texture);
     assert.deepEqual(tile.crop, crop);
   }

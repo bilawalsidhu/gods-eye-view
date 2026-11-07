@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { createWeatherRendering } from './rendering.js';
+import { createWeatherShell } from './shellRendering.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
@@ -284,7 +285,7 @@ export function createWeatherLayer({
       viewer = nextViewer;
       rendering = createRendering({
         viewer,
-        cesium,
+        createShell: (options) => createWeatherShell({ ...options, cesium }),
         getHost,
         onChange: notify,
       });

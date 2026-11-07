@@ -194,12 +194,26 @@ const decodeTile = (blob) =>
  * flipped, as Cesium's own bitmaps are.
  */
 async function transformTile(spec, tile, image) {
+  // Straight alpha throughout, as Cesium uploads its own tiles: WebGL does
+  // not premultiply an ImageBitmap, so one premultiplied here stays so.
+  const straight = {
+    premultiplyAlpha: 'none',
+    colorSpaceConversion: 'default',
+  };
   const upright = await createImageBitmap(
     image,
-    isBitmap(image) ? FLIPPED : {},
+    isBitmap(image) ? { ...FLIPPED, ...straight } : straight,
   );
-  const result = await spec.tileTransform(tile, upright);
-  return createImageBitmap(result, FLIPPED);
+  // The input is the hook's until it settles; a bitmap it returns is the
+  // renderer's, spent once copied.
+  let result;
+  try {
+    result = await spec.tileTransform(tile, upright);
+    return await createImageBitmap(result, { ...FLIPPED, ...straight });
+  } finally {
+    if (isBitmap(result) && result !== upright) result.close();
+    upright.close();
+  }
 }
 
 /** A hook's synchronous throw as a failed tile, never a throw into the frame. */
@@ -527,7 +541,16 @@ export function createCesiumImagery(
         record.provider = hooked;
         return hooked;
       });
-      record.providerPromise.catch(() => {});
+      // A provider that fails to build (its metadata, or a single image)
+      // loads no tile: told as an error of the layer's root tile.
+      record.providerPromise.catch((error) => {
+        if (record.removed || listeners.tileError.size === 0) return;
+        const status = error?.statusCode;
+        listeners.tileError.fire({
+          tile: { x: 0, y: 0, level: 0 },
+          ...(Number.isFinite(status) ? { status } : {}),
+        });
+      });
     } else {
       record.provider = hookProvider(made, spec, ctx);
       watchErrors(made);

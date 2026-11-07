@@ -4,6 +4,7 @@ import * as Cesium from 'cesium';
 
 import { createWindRendering } from './rendering.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
+import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import {
   createShellCesium,
   createShellScene,
@@ -140,28 +141,37 @@ function harness({
   };
   const imagery = [];
   const removed = [];
-  const imageryLayers = {
-    addImageryProvider(provider) {
-      let alpha = 1;
-      const layer = {
-        provider,
-        show: true,
-        alphaWrites: 0,
-        get alpha() {
-          return alpha;
-        },
-        set alpha(value) {
-          alpha = value;
-          this.alphaWrites++;
-        },
-      };
-      imagery.push(layer);
-      return layer;
-    },
-    remove(layer, destroy) {
-      const i = imagery.indexOf(layer);
-      if (i >= 0) imagery.splice(i, 1);
-      removed.push({ layer, destroy });
+  // The viewer's globe port: each layer added, and each removed.
+  const imageryLayers = {};
+  const globe = {
+    imagery: {
+      add(spec) {
+        let alpha = 1;
+        const errors = event();
+        const layer = {
+          spec,
+          errors,
+          show: true,
+          drapeOn: 'all',
+          alphaWrites: 0,
+          get alpha() {
+            return alpha;
+          },
+          set alpha(value) {
+            alpha = value;
+            this.alphaWrites++;
+          },
+          on: (name, cb) =>
+            name === 'tileError' ? errors.addEventListener(cb) : () => {},
+          remove() {
+            const i = imagery.indexOf(layer);
+            if (i >= 0) imagery.splice(i, 1);
+            removed.push({ layer, destroy: true });
+          },
+        };
+        imagery.push(layer);
+        return layer;
+      },
     },
   };
   const viewer = {
@@ -214,6 +224,7 @@ function harness({
     cesium,
     container,
     getViewer: () => viewer,
+    globeOf: (given) => (given === viewer ? globe : null),
     createGpuRendering,
     onStatusChange,
     getHost,
@@ -397,7 +408,9 @@ test('scalar imagery builds once, survives pause, replaces cleanly, and releases
   h.rendering.start();
   assert.equal(h.imagery.length, 1);
   assert.equal(h.textures.length, 1);
-  assert.equal(h.imagery[0].provider.options.tileWidth, 360);
+  assert.equal(h.imagery[0].spec.kind, 'single-image');
+  assert.equal(h.imagery[0].spec.zOrder, WEATHER_IMAGERY_Z.wind);
+  assert.equal(h.imagery[0].drapeOn, 'surface');
   h.callbacks.shift()(16);
   h.callbacks.shift()(50);
   h.callbacks.shift()(85);
@@ -1145,7 +1158,7 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     kind = 'globe';
     h.rendering.rehome();
     assert.equal(primitive.destroyed, true);
-    assert.equal(h.imagery[0].provider.options.tileWidth, 360);
+    assert.equal(h.imagery[0].spec.kind, 'single-image');
     assert.equal(h.imagery[0].alpha, overlay === 'temperature' ? 1 : 0.85);
     h.rendering.destroy();
     assert.equal(camera.moveEnd.size, 0);
@@ -1193,3 +1206,28 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     h.rendering.destroy();
   });
 }
+
+test('globe imagery hides without a host and shows again when one returns; a failed field image says so', () => {
+  let host = { collection: {}, kind: 'globe' };
+  const h = harness({ getHost: () => host });
+  h.rendering.attach();
+  h.rendering.setOptions({ overlay: 'speed' });
+  h.rendering.setField(FIELD);
+  const [layer] = h.imagery;
+  assert.equal(layer.show, true);
+  host = { collection: null, kind: 'none' };
+  h.rendering.rehome();
+  assert.equal(layer.show, false, 'hidden, not removed');
+  assert.deepEqual(h.imagery, [layer]);
+  host = { collection: {}, kind: 'globe' };
+  h.rendering.rehome();
+  assert.equal(layer.show, true);
+  assert.deepEqual(h.imagery, [layer]);
+  layer.errors.emit();
+  assert.equal(
+    h.rendering.getDiagnostics().imageryError,
+    'Globe field image unavailable',
+  );
+  h.rendering.destroy();
+  assert.equal(h.imagery.length, 0);
+});

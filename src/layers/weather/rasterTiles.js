@@ -1,50 +1,29 @@
-/** Tile a bounded decoded canvas without network requests or scene state. */
-export function createRasterTileProvider({
-  cesium,
-  texture,
-  credit,
-  createCanvas,
-  rectangle = cesium.Rectangle.MAX_VALUE,
-  tilingScheme = new cesium.GeographicTilingScheme({ rectangle }),
-  maximumLevel = 2,
-  tileSize = 256,
-}) {
-  return {
-    tilingScheme,
-    rectangle,
-    tileWidth: tileSize,
-    tileHeight: tileSize,
-    minimumLevel: 0,
-    maximumLevel,
-    ready: true,
-    tileDiscardPolicy: undefined,
-    credit,
-    errorEvent: new cesium.Event(),
-    hasAlphaChannel: true,
-    getTileCredits: () => undefined,
-    pickFeatures: () => undefined,
-    requestImage(x, y, level) {
-      const tile = createCanvas();
-      tile.width = tile.height = tileSize;
-      const ctx = tile.getContext('2d');
-      const width =
-        texture.width / tilingScheme.getNumberOfXTilesAtLevel(level);
-      const height =
-        texture.height / tilingScheme.getNumberOfYTilesAtLevel(level);
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(
-        texture,
-        x * width,
-        y * height,
-        width,
-        height,
-        0,
-        0,
-        tileSize,
-        tileSize,
-      );
-      // ImageryLayer consumes requestImage results as promises.
-      return Promise.resolve(tile);
-    },
-  };
+/**
+ * Draw one tile of the geographic scheme (two level-zero tiles) from a
+ * decoded mosaic covering `bounds` (degrees), without network requests or
+ * scene state. The part of a tile outside the mosaic stays transparent.
+ * @param {CanvasImageSource & {width: number, height: number}} texture
+ * @param {{west: number, south: number, east: number, north: number}} bounds
+ * @param {{x: number, y: number, level: number}} tile
+ * @param {HTMLCanvasElement} canvas Sized to the tile.
+ */
+export function drawMosaicTile(texture, bounds, { x, y, level }, canvas) {
+  const size = 180 / 2 ** level;
+  const west = -180 + x * size;
+  const north = 90 - y * size;
+  const perLon = texture.width / (bounds.east - bounds.west);
+  const perLat = texture.height / (bounds.north - bounds.south);
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(
+    texture,
+    (west - bounds.west) * perLon,
+    (bounds.north - north) * perLat,
+    size * perLon,
+    size * perLat,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
 }

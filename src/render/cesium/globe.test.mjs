@@ -577,3 +577,16 @@ test('a scene with no globe drapes on its base tileset', () => {
   port.imagery.add({ kind: 'xyz', url: url('a') });
   assert.equal(tileset.imageryLayers.length, 1);
 });
+
+test('a provider that fails to build is told as an error of its root tile', async () => {
+  const { port } = setup();
+  const layer = port.imagery.add({
+    kind: 'single-image',
+    url: 'data:image/png;base64,AAAA',
+  });
+  const errors = [];
+  layer.on('tileError', (error) => errors.push(error));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(errors, [{ tile: { x: 0, y: 0, level: 0 } }]);
+  layer.remove();
+});

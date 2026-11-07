@@ -140,14 +140,3 @@ export function insideExtent({ west, south, east, north }, lon, lat) {
   if (lat < south || lat > north) return false;
   return west < east ? lon >= west && lon <= east : lon >= west || lon <= east;
 }
-
-/** Plain text for a Cesium credit, which otherwise reads its text as HTML. */
-export function escapeCreditText(value) {
-  return value.replace(
-    /[&<>"']/g,
-    (ch) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
-        ch
-      ],
-  );
-}
