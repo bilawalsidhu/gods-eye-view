@@ -18,8 +18,10 @@ import * as Cesium from 'cesium';
 import { ICON_SEGMENT_GLSL, SEGMENT_STRIDE } from './iconSegment.js';
 import { ICON_CULL_HEIGHT_M, ICON_CULL_LIFT, STYLE_STRIDE } from './iconSet.js';
 import {
+  addressableIconSlots,
   iconAtlas,
   MAX_ICON_SLOTS,
+  MIN_ICON_SLOTS,
   NEAR_IMAGE_DEVICE_PX,
 } from './iconAtlas.js';
 import {
@@ -65,7 +67,7 @@ uniform vec3 u_cameraRight;
 uniform vec3 u_cameraUp;
 uniform vec4 u_recession; // limb distance, start ratio, strength, enabled
 uniform vec3 u_recessionFloors; // scale, alpha, combined alpha
-uniform vec4 u_slots[${MAX_ICON_SLOTS}];
+uniform vec4 u_slots[ICON_SLOTS]; // ICON_SLOTS: as many as the context addresses
 uniform float u_cull; // 1: hide rows past the ellipsoid's horizon
 uniform float u_pickPass; // 1 while drawing for a pick
 
@@ -143,6 +145,7 @@ void main() {
     : glyphPx > ${NEAR_IMAGE_DEVICE_PX.toFixed(1)};
   float slot = nearImage ? style1.y : style1.x;
   if (slot < 0.0) return; // no image set
+  if (slot >= float(ICON_SLOTS)) return; // past what this context addresses
   vec4 rect = u_slots[int(slot)];
   if (rect.z <= 0.0) return; // image not loaded yet
 
@@ -221,6 +224,18 @@ void main() {
 }
 `;
 
+/**
+ * How many atlas slots the icon shader addresses on `context`: as many as
+ * the vertex uniform limit leaves room for (Cesium's ContextLimits, which
+ * the last context created sets: the app draws in one); all of them with no
+ * context (a test's scene).
+ * @param {object} [context] A Cesium Context.
+ */
+export function contextIconSlots(context) {
+  if (!context) return MAX_ICON_SLOTS;
+  return addressableIconSlots(Cesium.ContextLimits.maximumVertexUniformVectors);
+}
+
 const SEGMENT_BYTES = SEGMENT_STRIDE * 4;
 const STYLE_BYTES = STYLE_STRIDE * 4;
 const EARTH_BOUNDS = new Cesium.BoundingSphere(
@@ -264,6 +279,11 @@ export class IconSetPrimitive {
       { length: MAX_ICON_SLOTS },
       () => new Cesium.Cartesian4(),
     );
+    // The slots the shader addresses: as many as its uniforms (set with its
+    // program).
+    this._slotCount = MIN_ICON_SLOTS;
+    this._slotUniform = this._slots.slice(0, this._slotCount);
+    this._warnedSlots = false;
     this._horizon = new Cesium.Cartesian4();
     this._cameraPosition = new Cesium.Cartesian3();
     this._cameraRight = new Cesium.Cartesian3();
@@ -281,7 +301,7 @@ export class IconSetPrimitive {
       u_cameraUp: () => primitive._cameraUp,
       u_recession: () => primitive._recession,
       u_recessionFloors: () => primitive._recessionFloors,
-      u_slots: () => primitive._slots,
+      u_slots: () => primitive._slotUniform,
       u_atlas: () => primitive._texture,
       u_cull: () => (primitive._cull() ? 1 : 0),
       u_pickPass: () => primitive._pickPass,
@@ -314,6 +334,12 @@ export class IconSetPrimitive {
     this._tau = set.seconds(renderTime);
     this._syncCamera(frameState);
     if (!this._programs) this._createCommands(context);
+    if (iconAtlas.size > this._slotCount && !this._warnedSlots) {
+      this._warnedSlots = true;
+      console.warn(
+        `[iconSetPrimitive] This context addresses ${this._slotCount} icon images; the atlas holds ${iconAtlas.size}, and rows drawing the rest draw nothing`,
+      );
+    }
     for (const command of this._commands) {
       command.instanceCount = set.count;
       frameState.commandList.push(command);
@@ -559,10 +585,13 @@ export class IconSetPrimitive {
   }
 
   _createCommands(context) {
+    this._slotCount = contextIconSlots(context);
+    this._slotUniform = this._slots.slice(0, this._slotCount);
     const programFor = (pass) =>
       Cesium.ShaderProgram.fromCache({
         context,
         vertexShaderSource: new Cesium.ShaderSource({
+          defines: [`ICON_SLOTS ${this._slotCount}`],
           sources: [VERTEX_SHADER],
         }),
         fragmentShaderSource: new Cesium.ShaderSource({

@@ -50,7 +50,10 @@ import {
   writeHoldSegment,
   writeLerpSegment,
 } from '../../data/iconSegment.js';
-import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import {
+  contextIconSlots,
+  IconSetPrimitive,
+} from '../../data/iconSetPrimitive.js';
 import { iconAtlas, MAX_ICON_SLOTS } from '../../data/iconAtlas.js';
 import {
   glideOffset,
@@ -244,9 +247,11 @@ export function createGpuIcons({
         if (url !== null && !iconAtlas.has(url, px)) fresh.add(`${px}|${url}`);
       }
     }
-    if (iconAtlas.size + fresh.size > MAX_ICON_SLOTS)
+    // As many as this scene's context addresses (all of them on WebGL 2).
+    const room = Math.min(MAX_ICON_SLOTS, contextIconSlots(scene.context));
+    if (iconAtlas.size + fresh.size > room)
       throw new Error(
-        `the Cesium renderer's GPU icons have no room for ${fresh.size} more images (at most ${MAX_ICON_SLOTS} in all)`,
+        `the Cesium renderer's GPU icons have no room for ${fresh.size} more images (at most ${room} in all)`,
       );
   }
 

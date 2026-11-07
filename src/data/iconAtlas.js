@@ -32,8 +32,33 @@ export function nearImageSwitchPx(pixelRatio = 1) {
   return NEAR_IMAGE_DEVICE_PX / ratio;
 }
 
-/** Slots a renderer can address (one vec4 uniform each). */
-export const MAX_ICON_SLOTS = 64;
+/**
+ * Slots the atlas holds. A renderer addresses each through one vec4
+ * uniform, as many as its context has room for (`addressableIconSlots`):
+ * every WebGL 2 context has room for all of them.
+ */
+export const MAX_ICON_SLOTS = 176;
+/** Slots the renderer addresses, however few uniforms its context has. */
+export const MIN_ICON_SLOTS = 64;
+/**
+ * Vertex uniform vectors the icon shader keeps for everything else: its own
+ * and the renderer's (about 34), with room for drivers that keep constants
+ * in uniforms.
+ */
+const OTHER_VERTEX_UNIFORMS = 80;
+
+/**
+ * How many slots a context with `maxVertexUniformVectors` addresses: all of
+ * them on WebGL 2 (at least 256 vectors), at least `MIN_ICON_SLOTS`.
+ * @param {number} maxVertexUniformVectors
+ */
+export function addressableIconSlots(maxVertexUniformVectors) {
+  const room = Math.floor(maxVertexUniformVectors) - OTHER_VERTEX_UNIFORMS;
+  return Math.max(
+    MIN_ICON_SLOTS,
+    Math.min(MAX_ICON_SLOTS, Number.isFinite(room) ? room : 0),
+  );
+}
 
 const PADDING_PX = 2;
 const START_SIZE_PX = 1024;

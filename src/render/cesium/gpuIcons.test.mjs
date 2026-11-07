@@ -4,6 +4,7 @@ import test from 'node:test';
 import { createCesiumDraw } from './draw.js';
 import { drawHitOf } from './drawHit.js';
 import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import { MAX_ICON_SLOTS } from '../../data/iconAtlas.js';
 import {
   ICON_CULL_LIFT,
   ICON_RECEDES,
@@ -502,7 +503,7 @@ test('an icon set refuses, changing nothing, images the shared atlas has no room
   const { part, draw } = drawOver();
   const set = draw.icons({ id: 'gpu:atlas-room' });
   set.set([icon('a', { motion: { kind: 'hold' } })]);
-  const many = Array.from({ length: 80 }, (_, i) =>
+  const many = Array.from({ length: MAX_ICON_SLOTS + 16 }, (_, i) =>
     icon(`m${i}`, { image: `room-${i}.png`, motion: { kind: 'hold' } }),
   );
   assert.throws(() => set.upsert(many), /no room for/);
@@ -780,4 +781,55 @@ test('an image switch in CSS pixels stands for the aircraft layers’ 76 device 
   // Stored as given: the shader (not run here) switches past it in CSS
   // pixels, the drawn width over the scene's pixel ratio.
   assert.equal(rowsOf.imageSwitch(rowsOf.row('a')), 38);
+});
+
+test('the atlas holds more than 64 images, every one addressed on WebGL 2', async () => {
+  const { addressableIconSlots, MIN_ICON_SLOTS } =
+    await import('../../data/iconAtlas.js');
+  assert.ok(MAX_ICON_SLOTS > 64);
+  assert.equal(addressableIconSlots(256), MAX_ICON_SLOTS, 'WebGL 2’s least');
+  assert.equal(addressableIconSlots(4096), MAX_ICON_SLOTS);
+  assert.equal(addressableIconSlots(128), MIN_ICON_SLOTS, 'WebGL 1’s least');
+  assert.equal(addressableIconSlots(200), 120);
+  const { contextIconSlots } = await import('../../data/iconSetPrimitive.js');
+  const limits = Cesium.ContextLimits;
+  const vectors = limits._maximumVertexUniformVectors;
+  try {
+    limits._maximumVertexUniformVectors = 4095;
+    assert.equal(contextIconSlots({}), MAX_ICON_SLOTS);
+    limits._maximumVertexUniformVectors = 128;
+    assert.equal(contextIconSlots({}), MIN_ICON_SLOTS);
+  } finally {
+    limits._maximumVertexUniformVectors = vectors;
+  }
+  assert.equal(contextIconSlots(undefined), MAX_ICON_SLOTS, 'no context');
+  // A scene whose context addresses fewer refuses past them, as before.
+  const small = drawOver();
+  // (No context created here: ContextLimits leave the least.)
+  small.scene.context = {};
+  const tight = small.draw.icons({ id: 'gpu:tight-context' });
+  assert.throws(
+    () =>
+      tight.set(
+        Array.from({ length: MIN_ICON_SLOTS + 1 }, (_, i) =>
+          icon(`t${i}`, { image: `tight-${i}.png`, motion: { kind: 'hold' } }),
+        ),
+      ),
+    /no room for .* \(at most 64 in all\)/,
+  );
+  assert.equal(addressableIconSlots(0), MIN_ICON_SLOTS, 'no context yet');
+  assert.equal(addressableIconSlots(NaN), MIN_ICON_SLOTS);
+  // A set of more images than 64 is drawn, not refused.
+  const { part, draw } = drawOver();
+  const set = draw.icons({ id: 'gpu:many-images' });
+  const items = Array.from({ length: 70 }, (_, i) =>
+    icon(`i${i}`, { image: `many-${i}.png`, motion: { kind: 'hold' } }),
+  );
+  set.set(items);
+  const { set: rowsOf } = rows(part, 'gpu:many-images');
+  assert.equal(rowsOf.count, 70);
+  const slots = new Set(
+    items.map((item) => rowsOf.imageFar(rowsOf.row(item.id))),
+  );
+  assert.equal(slots.size, 70, 'each its own slot');
 });
