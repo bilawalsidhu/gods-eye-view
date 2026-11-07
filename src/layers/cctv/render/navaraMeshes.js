@@ -1,3 +1,8 @@
+// The CCTV meshes on Navara (behind render/meshes.js, loaded through
+// import()): the monitor plane and the viewshed volume as three meshes in
+// Navara's view, depth-tested against the scene, and a mesh picker for the
+// plane's own triangles.
+
 import {
   BufferAttribute,
   BufferGeometry,
@@ -13,8 +18,9 @@ import {
   Vector3,
   VideoTexture,
 } from 'three';
+import * as geo from '../../../geo/index.js';
 import { frustumVolumeGeometryData } from '../../../data/cctvViewshed.js';
-import { PLANE_OUTLINE_COLOR } from '../policy.js';
+import { PLANE_IMAGE_ALPHA } from './style.js';
 
 const KIND = 'gevCctvMesh';
 const registered = new WeakSet();
@@ -34,7 +40,11 @@ function placeGeometry(mesh, positions, indices, origin) {
   mesh.matrixWorldNeedsUpdate = true;
 }
 
-/** CCTV owns these resources; media playback remains in shared projection. */
+/**
+ * @param {import('../../../globe/contract.js').GlobeEngine} engine
+ * @param {{ view: object, MeshDesc: Function }} navara The engine's Navara
+ *   extension.
+ */
 export function createCctvNavaraMeshes(engine, { view, MeshDesc }) {
   if (!view?.addMesh || !MeshDesc)
     throw new TypeError('CCTV requires Navara MeshDesc support');
@@ -79,7 +89,7 @@ export function createCctvNavaraMeshes(engine, { view, MeshDesc }) {
     const material = new MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.95,
+      opacity: PLANE_IMAGE_ALPHA,
       side: DoubleSide,
       depthWrite: false,
       toneMapped: false,
@@ -178,9 +188,9 @@ export function createCctvNavaraMeshes(engine, { view, MeshDesc }) {
     }
   }
 
-  function updatePlane(plane, geometry, positions, orientation) {
+  function updatePlane(plane, shape, positions, orientation) {
     if (!planes.has(plane)) return;
-    // Match the native plane's quaternion and dimensions, including its UVs.
+    // The native plane's quaternion and dimensions, including its UVs.
     const q = new Quaternion(
       orientation.x,
       orientation.y,
@@ -194,25 +204,55 @@ export function createCctvNavaraMeshes(engine, { view, MeshDesc }) {
       [-1, -1],
       [1, -1],
     ]) {
-      const p = new Vector3(x * geometry.halfW, y * geometry.halfH, 0)
+      const p = new Vector3(x * shape.halfW, y * shape.halfH, 0)
         .applyQuaternion(q)
         .add(positions.capCenter);
       flat.push(p.x, p.y, p.z);
     }
     placeGeometry(plane.mesh, flat, [0, 2, 1, 2, 3, 1], positions.capCenter);
-    plane.outline.setPositions(
-      [0, 1, 3, 2, 0].map((i) => ({
-        x: flat[i * 3],
-        y: flat[i * 3 + 1],
-        z: flat[i * 3 + 2],
-      })),
-    );
     request();
   }
 
+  /** The nearest shown plane's triangles along a ray, from either side. */
+  function pickPlane(ray) {
+    if (destroyed || !ray) return undefined;
+    raycaster.ray.origin.copy(ray.origin);
+    raycaster.ray.direction.copy(ray.direction).normalize();
+    let nearest;
+    for (const plane of planes) {
+      if (!plane.show) continue;
+      plane.group.updateWorldMatrix(true, true);
+      const hit = raycaster.intersectObject(plane.mesh, false)[0];
+      if (hit && (!nearest || hit.distance < nearest.distance))
+        nearest = { ...hit, plane };
+    }
+    return nearest;
+  }
+
+  const removeMeshPicker = engine.picker.registerMeshPicker((at) => {
+    const hit = pickPlane(engine.camera.pickRay(at));
+    if (!hit) return [];
+    // The rendered depth includes terrain, tiles and foreground models.
+    const surface = engine.picker.pickPosition(at);
+    if (
+      surface &&
+      geo.cartesian3.distance(engine.camera.livePosition, surface) + 0.1 <
+        hit.distance
+    )
+      return [];
+    return [
+      {
+        onTop: 0,
+        order: 0,
+        depth: hit.distance,
+        result: { id: hit.plane.id, owner: hit.plane.id },
+      },
+    ];
+  });
+
   return {
     createMaterial,
-    createPlane(cameraId, material, geometry, positions, orientation) {
+    createPlane(cameraId, material, shape, positions, orientation) {
       alive();
       if (!materials.has(material) || material.disposed)
         throw new Error('CCTV plane material is not owned');
@@ -221,45 +261,15 @@ export function createCctvNavaraMeshes(engine, { view, MeshDesc }) {
         'uv',
         new BufferAttribute(new Float32Array([0, 1, 1, 1, 0, 0, 1, 0]), 2),
       );
-      let outline;
-      let plane;
-      let transferred = false;
-      try {
-        outline = engine.lines.createLine({
-          id: `cctv-${cameraId}-plane-outline`,
-          widthPx: 1,
-          color: PLANE_OUTLINE_COLOR.rgba(),
-        });
-        transferred = true;
-        plane = ownMesh(mesh, () => {
-          outline.destroy();
-          material.dispose();
-          planes.delete(plane);
-        });
-        plane.id = `cctv-${cameraId}-plane`;
-        plane.cameraId = cameraId;
-        plane.outline = outline;
-        const visibility = Object.getOwnPropertyDescriptor(plane, 'show');
-        Object.defineProperty(plane, 'show', {
-          get: visibility.get,
-          set(value) {
-            visibility.set(value);
-            if (planes.has(plane)) outline.show(plane.show);
-          },
-        });
-        planes.add(plane);
-        updatePlane(plane, geometry, positions, orientation);
-        plane.show = false;
-        return plane;
-      } catch (error) {
-        plane?.destroy();
-        if (!transferred) {
-          mesh.geometry.dispose();
-          outline?.destroy();
-          material.dispose();
-        }
-        throw error;
-      }
+      // A failed descriptor disposes the geometry; the material stays its own.
+      let plane = null;
+      plane = ownMesh(mesh, () => planes.delete(plane));
+      plane.id = `cctv-${cameraId}-plane`;
+      plane.cameraId = cameraId;
+      planes.add(plane);
+      updatePlane(plane, shape, positions, orientation);
+      plane.show = false;
+      return plane;
     },
     updatePlane,
     createVolume(positions, tint) {
@@ -277,24 +287,18 @@ export function createCctvNavaraMeshes(engine, { view, MeshDesc }) {
       placeGeometry(mesh, data.positions, data.indices, positions.mount);
       return ownMesh(mesh, () => material.dispose());
     },
-    /** Actual plane triangles, not a projected rectangle or marker proxy. */
-    pickPlane(ray) {
-      if (destroyed || !ray) return undefined;
-      raycaster.ray.origin.copy(ray.origin);
-      raycaster.ray.direction.copy(ray.direction).normalize();
-      let nearest;
-      for (const plane of planes) {
-        if (!plane.show) continue;
-        plane.group.updateWorldMatrix(true, true);
-        const hit = raycaster.intersectObject(plane.mesh, false)[0];
-        if (hit && (!nearest || hit.distance < nearest.distance))
-          nearest = { ...hit, plane };
-      }
-      return nearest;
+    pickPlane,
+    // The mesh picker's result names the plane by its id.
+    planeFromPick(picked) {
+      for (const plane of planes)
+        if (picked.id === plane.id && picked.owner === plane.id) return plane;
+      return null;
     },
+    drawnBy: (native) => native.group,
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      removeMeshPicker();
       for (const resource of [...owned]) resource.destroy();
       for (const material of [...materials]) material.dispose();
     },

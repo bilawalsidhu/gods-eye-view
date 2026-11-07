@@ -4,9 +4,9 @@ import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
 
 /**
  * Init / enable / disable / update / destroy for one Transit layer instance.
- * Everything acquired here is released here — primitives, listeners, the sprite
- * registration, the pick owner, the render hold, and the camera sensitivity
- * this layer borrowed.
+ * Everything acquired here is released here — the renderer, listeners, the
+ * pick owner, the render hold, and the camera sensitivity this layer
+ * borrowed.
  * @param {object} context
  * @returns {object}
  */
@@ -111,7 +111,7 @@ export function createLifecycle({
     source: 'GTFS-RT',
 
     /**
-     * Create the point collection. Called once at bootstrap.
+     * Create the marker sets. Called once at bootstrap.
      * @param {Cesium.Viewer} viewer
      */
     init(viewer, options) {
@@ -130,6 +130,8 @@ export function createLifecycle({
         source,
         engine: options.engine,
       });
+      if (!renderer)
+        throw new TypeError('Transit has no renderer on this engine');
       state._viewer = viewer;
       parts.renderer = renderer;
       try {
@@ -154,7 +156,6 @@ export function createLifecycle({
         this.bindScene(viewer);
         if (!state._restoringViewport) this.repaint();
       }
-      parts.renderer.restoreOrder();
       bindStyleEvents();
       console.log(
         `[Data:Transit] Initialized with ${TRANSIT_ENABLED_FEEDS.length} GTFS-RT feeds`,
@@ -196,7 +197,6 @@ export function createLifecycle({
         );
       }
       parts.viewport.runProximityCheck();
-      parts.renderer.restoreOrder();
     },
 
     repaint() {

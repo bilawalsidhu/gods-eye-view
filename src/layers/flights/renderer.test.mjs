@@ -311,8 +311,7 @@ test('a failed engine switch, its rollback and the retry re-follow the tracked a
       destination: geo.cartesian3.fromDegrees(-97.5, 30.3, 400_000),
     });
     made.viewer.trackedEntityChanged.addEventListener((entity) => {
-      if (entity && !entity.gevRestoring)
-        navigations.push(entity.gevTrackedId);
+      if (entity && !entity.gevRestoring) navigations.push(entity.gevTrackedId);
     });
     return made;
   };

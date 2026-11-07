@@ -7,18 +7,21 @@ export function createTesting({
   source,
   rendererFactory,
 }) {
-  let testViewer;
-  function useRenderer(viewer) {
-    if (parts.renderer && testViewer === viewer) return;
+  let testEngine;
+  function useRenderer(engine) {
+    if (parts.renderer && testEngine === engine) return;
     parts.renderer?.destroy();
+    parts.renderer = null;
+    testEngine = engine;
+    if (!engine) return;
     parts.renderer = rendererFactory({
       state: layerState,
       services,
       parts,
       source,
+      engine,
     });
-    parts.renderer.attach(viewer);
-    testViewer = viewer;
+    parts.renderer.attach();
   }
 
   /** Test seam: republishes host entries through the real push path, so tests
@@ -39,13 +42,13 @@ export function createTesting({
 
   /**
    * Create the production monitor-plane/host-label pair without media setup.
-   * @param {Object} viewer Cesium viewer seam.
+   * @param {Object} engine Globe engine.
    * @param {Object} record CCTV runtime record.
    * @returns {Object} Projection runtime.
    */
 
-  function _createCctvProjectionPlaneForTest(viewer, record) {
-    useRenderer(viewer);
+  function _createCctvProjectionPlaneForTest(engine, record) {
+    useRenderer(engine);
     const geometry =
       record.frustumGeometry ||
       parts.geometry.computeFrustumGeometry(
@@ -93,7 +96,7 @@ export function createTesting({
    * Primes the minimum module state needed to exercise the production coverage
    * refresh path in unit tests.
    * @param {Object} [options={}] Test state values.
-   * @param {Object|null} [options.viewer] Viewer-like entity owner.
+   * @param {Object|null} [options.engine] Globe engine the display draws on.
    * @param {Object[]} [options.records] Seeded CCTV records.
    * @param {string|null} [options.activeCameraId] Active record id.
    * @param {boolean} [options.enabled=true] Layer enabled state.
@@ -104,7 +107,7 @@ export function createTesting({
    */
 
   function _setCctvCoverageStateForTest({
-    viewer = null,
+    engine = null,
     records = [],
     activeCameraId = null,
     enabled = true,
@@ -112,7 +115,7 @@ export function createTesting({
     showProjection = false,
     healthById = new Map(),
   } = {}) {
-    useRenderer(viewer);
+    useRenderer(engine);
     layerState._records = Array.isArray(records) ? records : [];
     layerState._recordById = new Map(
       layerState._records

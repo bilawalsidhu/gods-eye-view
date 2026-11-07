@@ -52,6 +52,7 @@ import {
   stationMatchesRadioCategory,
 } from './radio.js';
 import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
+import { radioSelectedMarker, radioTestEngine } from '../testSupport/radioTestEngine.mjs';
 
 const stations = [
   { id: 'news', tags: ['News', 'Weather Radio', 'air traffic'] },
@@ -393,13 +394,11 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     radioLayer.setLifecyclePresentation({
       lifecycleState: 'enabled', enabled: true, uncertain: false,
@@ -424,7 +423,7 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
     assert.equal(getRadioUIState().volume, 0.8);
     assert.equal(getRadioUIState().effectiveVolume, 0.8);
 
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     assert.equal(audioInstances.length, 2, 're-init creates a clean Audio session');
     const nextState = getRadioUIState();
     for (const eventName of ['playing', 'pause', 'waiting', 'error']) {
@@ -512,13 +511,11 @@ test('late media errors after replacement or Pause cannot mutate the active stat
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     await radioLayer.update();
     radioLayer.setLifecyclePresentation({
@@ -643,12 +640,10 @@ test('unusable directory responses preserve warm client state atomically', async
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     globalThis.fetch = async () => new Response(JSON.stringify({
       stations: [station],
       stale: false,
@@ -762,7 +757,7 @@ test('unusable directory responses preserve warm client state atomically', async
     assert.equal(getRadioUIState().stale, true);
     assert.equal(getRadioUIState().rejectedStationCount, 10_000);
     radioLayer.destroy();
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     assert.equal(getRadioUIState().rejectedStationCount, 0);
     assert.equal(getRadioUIState().degraded, false);
   } finally {
@@ -776,8 +771,6 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
   const stationA = {
     id: '00000000-0000-4000-8000-000000000041',
@@ -820,7 +813,7 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     await publish(stationA, 1);
     assert.equal(radioLayer.beginTuning(), true);
@@ -927,9 +920,12 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
 test('tuner cancellation restores the frozen start marker after catalog removal', async () => {
   const originalFetch = globalThis.fetch;
   const originalAudio = globalThis.Audio;
-  const selectedEntities = new Map();
+  const engine = radioTestEngine();
+  const selectedMarker = (id) => {
+    const marker = radioSelectedMarker(engine);
+    return marker?.id === `radio:selected:${id}` ? marker : undefined;
+  };
   let playCalls = 0;
-  let flyToCalls = 0;
   globalThis.Audio = class FakeAudio {
     constructor() {
       this.volume = 0.8;
@@ -944,16 +940,10 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
   const viewer = {
     camera: {
       positionWC: { x: 7_000_000, y: 0, z: 0 },
-      flyTo() { flyToCalls += 1; },
     },
     scene: {
       canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} },
       requestRender() {},
-    },
-    dataSources: { add() {}, remove() {} },
-    entities: {
-      add(entity) { selectedEntities.set(entity.id, entity); return entity; },
-      remove(entity) { return selectedEntities.delete(entity?.id); },
     },
   };
   const stationA = {
@@ -994,7 +984,7 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine });
     radioLayer.enable();
     radioLayer.setLifecyclePresentation({
       lifecycleState: 'enabled', enabled: true, uncertain: false,
@@ -1004,7 +994,7 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
       await publish([stationA, stationB], nextGeneration);
       nextGeneration += 1;
       assert.equal(radioLayer.selectStation(stationA.id, { autoplay: false, focus: false }), true);
-      const startMarker = selectedEntities.get(`radio:selected:${stationA.id}`);
+      const startMarker = selectedMarker(stationA.id);
       assert.ok(startMarker);
       assert.equal(radioLayer.beginTuning(), true);
       assert.equal(radioLayer.previewTuningStation(stationB.id, { rotate: false }), true);
@@ -1012,14 +1002,14 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
       nextGeneration += 1;
       assert.equal(getRadioUIState().selected, null);
       assert.equal(radioLayer.cancelTuning(), true);
-      const restoredMarker = selectedEntities.get(`radio:selected:${stationA.id}`);
+      const restoredMarker = selectedMarker(stationA.id);
       assert.ok(restoredMarker, 'the frozen start marker remains visible after cancellation');
       assert.deepEqual(restoredMarker.position, startMarker.position);
       assert.equal(getRadioUIState().tuningRestoredStationId, stationA.id);
       assert.equal(getRadioUIState().tuningActive, false);
       assert.equal(getRadioUIState().selected, null, 'stale marker never becomes playback authority');
       assert.equal(playCalls, 0);
-      assert.equal(flyToCalls, 0);
+      assert.equal(engine.fake.callsOf('camera.flyTo').length, 0);
       return radioLayer.getAcceptedCatalogSnapshot();
     };
 
@@ -1028,21 +1018,21 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
     assert.equal(radioLayer.setFilter(sameFilter), true);
     assert.equal(getRadioUIState().filter, sameFilter);
     assert.equal(getRadioUIState().tuningRestoredStationId, null);
-    assert.equal(selectedEntities.has(`radio:selected:${stationA.id}`), false);
+    assert.equal(Boolean(selectedMarker(stationA.id)), false);
     assert.equal(radioLayer.getAcceptedCatalogSnapshot(), sameFilterSnapshot);
     assert.equal(getRadioUIState().selected, null);
     assert.equal(playCalls, 0);
-    assert.equal(flyToCalls, 0);
+    assert.equal(engine.fake.callsOf('camera.flyTo').length, 0);
 
     const changedFilterSnapshot = await restoreRemovedStartMarker();
     assert.equal(radioLayer.setFilter('news'), true);
     assert.equal(getRadioUIState().filter, 'news');
     assert.equal(getRadioUIState().tuningRestoredStationId, null);
-    assert.equal(selectedEntities.has(`radio:selected:${stationA.id}`), false);
+    assert.equal(Boolean(selectedMarker(stationA.id)), false);
     assert.equal(radioLayer.getAcceptedCatalogSnapshot(), changedFilterSnapshot);
     assert.equal(getRadioUIState().selected, null);
     assert.equal(playCalls, 0);
-    assert.equal(flyToCalls, 0);
+    assert.equal(engine.fake.callsOf('camera.flyTo').length, 0);
 
     const equalGenerationSnapshot = await restoreRemovedStartMarker();
     await publish([stationB], equalGenerationSnapshot.generation);
@@ -1051,14 +1041,14 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
       null,
       'the next accepted equal-generation refresh clears the presentation-only marker',
     );
-    assert.equal(selectedEntities.has(`radio:selected:${stationA.id}`), false);
+    assert.equal(Boolean(selectedMarker(stationA.id)), false);
     assert.equal(radioLayer.getAcceptedCatalogSnapshot(), equalGenerationSnapshot);
     assert.equal(playCalls, 0);
-    assert.equal(flyToCalls, 0);
+    assert.equal(engine.fake.callsOf('camera.flyTo').length, 0);
 
     assert.equal(radioLayer.selectStation(stationB.id, { autoplay: false, focus: false }), true);
     assert.equal(getRadioUIState().tuningRestoredStationId, null);
-    assert.equal(selectedEntities.has(`radio:selected:${stationA.id}`), false);
+    assert.equal(Boolean(selectedMarker(stationA.id)), false);
   } finally {
     globalThis.fetch = originalFetch;
     radioLayer.destroy();
@@ -1096,14 +1086,12 @@ test('Radio public tuner, filter, and resume mutations require certain enabled l
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
   viewer.scene.requestRender = () => {};
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     await radioLayer.update();
     radioLayer.setLifecyclePresentation({
@@ -1149,8 +1137,6 @@ test('tuner refuses a degraded fallback that has no accepted catalog generation'
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
   const station = {
     id: '00000000-0000-4000-8000-000000000043',
@@ -1178,7 +1164,7 @@ test('tuner refuses a degraded fallback that has no accepted catalog generation'
       acceptedGeneration: null,
       updatedAt: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     await radioLayer.update();
 
@@ -1217,8 +1203,6 @@ test('accepted snapshots allowlist station fields and never regress generation i
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
   const serve = (stations, acceptedGeneration, catalogInstance = 'qa-instance-a') => {
     globalThis.fetch = async () => new Response(JSON.stringify({
@@ -1233,7 +1217,7 @@ test('accepted snapshots allowlist station fields and never regress generation i
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     serve([station], 1);
     radioLayer.enable();
     await radioLayer.update();
@@ -1318,8 +1302,6 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
   const lateStation = {
     id: '00000000-0000-4000-8000-000000000099',
@@ -1344,7 +1326,7 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
       requestSignal = options.signal;
       return new Promise((resolve) => { resolveFetch = resolve; });
     };
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     radioLayer.enable();
     const pending = radioLayer.update();
     assert.equal(getRadioUIState().loading, true);
@@ -1353,7 +1335,7 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
     assert.equal(getRadioUIState().loading, false);
 
     radioLayer.destroy();
-    radioLayer.init(viewer);
+    radioLayer.init(viewer, { engine: radioTestEngine() });
     const cleanState = getRadioUIState();
     assert.deepEqual({
       enabled: cleanState.enabled,

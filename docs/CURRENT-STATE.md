@@ -207,8 +207,12 @@ one application, and only the globe-bound parts move to the next engine.
   `render/navara*.js`, or through one `render/display.js` that runs on every
   engine over the globe contract: the aircraft family (flights, military and
   local ADS-B) through `src/layers/aircraft/render/display.js`, and AIS
-  vessels, satellites, Space Missions, ALPR, bikeshare, OSM Places and
-  Wildlife Sightings through their own `render/display.js`. Cesium
+  vessels, satellites, Space Missions, ALPR, bikeshare, OSM Places,
+  Wildlife Sightings, radio, transit and CCTV through their own
+  `render/display.js`. CCTV's monitor plane and viewshed volume, which the
+  contract has no primitive for yet, draw behind one seam,
+  `src/layers/cctv/render/meshes.js` (`render/cesiumMeshes.js` on Cesium;
+  `render/navaraMeshes.js`, which the Navara mode loads and passes in). Cesium
   renderers are listed in `src/app/layers/renderers.js`
   (`CESIUM_LAYER_RENDERERS`), Navara ones are loaded by
   `registerNavaraLayerRenderers` in `src/app/navaraMode.js`; both register the
@@ -4944,22 +4948,14 @@ zero-duration journey or immediately relocate a visible vehicle.
 **Selected history.** Selecting one vehicle draws its available recent path,
 clipped to the displayed time. The browser retains up to 15 minutes and 128
 fixes per vehicle, under a global 32 MiB history budget. Capacity pressure may
-shorten that history. Only the selected vehicle has a trail: completed segments
-are batched primitives, and a small moving head ends at the marker. Trail
-geometry is bounded to 640 prepared vertices, prioritizing the active corridor
-and shortening the oldest geometry first. Active and future marker corridors
-retain their own 640-vertex budget; long report intervals use coarser subdivisions
-than 25 m instead of dropping an admitted vehicle. Supported scenes use ground polylines
-classified against both terrain and 3D tiles, including after map-stack changes,
-with per-segment age colours. History changes rebuild the body. The head is one
-short draped corridor, clipped to displayed time by a material uniform; only
-subdivision crossings rebuild it. Ordinary frames upload no head geometry.
-Without ground-polyline support, ordinary primitives retain a mode-coloured
-0.55-alpha depth-fail path, including the head, without dimming it to near-black.
-Instance attribute updates write back the same typed array returned by Cesium;
-its getters return copies, so reading a second time discards a visibility or colour edit.
-Normal instance colours follow the age ramp once per display second or style change. Subdivision crossings update only changed visibility
-attributes. Deselecting releases selection geometry; marker paths retain only
+shorten that history. Only the selected vehicle has a trail, drawn with engine.lines on every
+engine: completed segments draw in two lanes (a 5 px dark edge under a 3 px
+mode colour), one line per lane for each run of joined segments in one of 29
+age bands, re-banded once per displayed second or style change; the live head
+runs from its segment's start to the marker and is rewritten only when the
+marker moves. Where the scene hides the trail, the colour lane draws at up to
+0.55 alpha. Trails are not draped yet (the contract's ground corridor will
+drape them), so history appears once its floors resolve. Trail geometry is bounded to 640 prepared vertices, prioritizing the active corridor and shortening the oldest geometry first. Active and future marker corridors retain their own 640-vertex budget; long report intervals use coarser subdivisions than 25 m instead of dropping an admitted vehicle. Deselecting releases selection geometry; marker paths retain only
 active and future corridors.
 
 MBTA history is also retained in the running proxy: up to 15 minutes and 128
@@ -5079,7 +5075,7 @@ heap growth ≤24/48 MiB. The 3,000-vehicle CPU budget is 4 ms (recorded browser
 measurement 3.4 ms); the 800-vehicle budget stays at 1 ms (measured 0.9 ms).
 Transit-authored frame allocation is ≤8 KiB/frame at both fleets, attributed
 by source stack to `src/layers/transit/**`, `src/data/contactPlayback.js`,
-`src/data/contactTrailRenderer.js` and `src/data/transit*.js`. Whole-frame
+`src/data/transit*.js`. Whole-frame
 allocation and its three largest allocators are reported without gating:
 Cesium billboard buffer uploads and the shared DETECT painter are outside
 this layer's allocation budget. **Follow-up: pool shared DETECT placement and
@@ -5161,17 +5157,17 @@ height still choose their own unit.
 At global scale, ambient Radio cluster badges are hard-opacity shared-host
 entries: count/category updates and identity replacement do not run keyhole or
 enter/exit ramps. Shared collision, viewport rejection, allocation, and horizon
-culling can still remove an invalid placement, and Cesium still owns the cluster
-point geometry and picks. Their 50,000 km line-of-sight range covers the
+culling can still remove an invalid placement, and the radio display's cluster
+points (screen clusters with Cesium's EntityCluster rules) carry the picks. Their 50,000 km line-of-sight range covers the
 supported full-globe camera above 24,000 km, including farther horizon clusters.
 Unclustered visible stations publish nearest-first ambient labels through that
 same host, capped at 16 labels globally, 32 at intermediate zoom, and 48 nearby;
 cluster and singleton candidates still share the Radio source's 64-entry ambient
-cohort. Cesium continues to own each 13 px station point, horizon visibility,
-and direct/nearby picking. Native points and shared-host text use one 50,000 km
+cohort. The display draws each 13 px station point, horizon visibility,
+and direct/nearby picking. Points and shared-host text use one 50,000 km
 interaction limit, so a painted singleton or cluster label always retains a
 pickable point at its anchor throughout the supported high-global view. No
-Radio entity uses native Cesium label text.
+Radio point uses engine label text.
 
 Delivery constraint: PR #10 is stack-only and unsafe standalone. PR #11 owns
 the required Radio lifecycle/authority repair, so PR #10 must not merge or ship

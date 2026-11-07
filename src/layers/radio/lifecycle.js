@@ -37,6 +37,8 @@ export function createLifecycle({
         source,
         engine: options.engine,
       });
+      if (!parts.renderer)
+        throw new TypeError('Radio has no renderer on this engine');
       parts.renderer.init(viewer, options);
       if (layerState._enabled) {
         parts.rendering.drawStations(layerState._stations);

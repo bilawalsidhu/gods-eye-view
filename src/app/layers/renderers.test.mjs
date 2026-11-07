@@ -68,6 +68,8 @@ test('the layers with extracted renderers', () => {
     'osm-places',
     'alpr-cameras',
     'bikeshare',
+    'radio',
+    'transit',
     'local-firms',
     'rocket-launches',
     'satellites',
@@ -75,6 +77,7 @@ test('the layers with extracted renderers', () => {
     'military',
     'local-adsb',
     'ais-live-vessels',
+    'cctv',
   ]);
 });
 
@@ -89,6 +92,8 @@ test('the layers drawn through one display get the same factory on every engine'
     'osm-places': ['osmPlaces', 'createOsmPlacesDisplay'],
     'alpr-cameras': ['alpr', 'createAlprDisplay'],
     bikeshare: ['bikeshare', 'createBikeshareDisplay'],
+    radio: ['radio', 'createRadioDisplay'],
+    transit: ['transit', 'createTransitDisplay'],
   };
   // The Navara mode registers the same modules' factories.
   const navaraMode = readFileSync(

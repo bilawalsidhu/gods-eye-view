@@ -9,7 +9,6 @@ function harness() {
   const scene = new Group();
   const kinds = new Map();
   const handles = new Set();
-  const lines = new Set();
   let requests = 0;
   let fail = false;
   let failedGeometryDisposals = 0;
@@ -43,27 +42,25 @@ function harness() {
       return handle;
     },
   };
+  const pickers = new Set();
   const engine = {
     render: { request: () => requests++ },
-    lines: {
-      createLine(options) {
-        const line = {
-          options,
-          setPositions: (value) => (line.positions = value),
-          show: (value) => (line.visible = value),
-          destroy: () => lines.delete(line),
-        };
-        lines.add(line);
-        return line;
+    camera: { livePosition: { x: 0, y: 0, z: 0 }, pickRay: () => null },
+    picker: {
+      pickPosition: () => undefined,
+      registerMeshPicker(pick) {
+        pickers.add(pick);
+        return () => pickers.delete(pick);
       },
     },
   };
   const owner = createCctvNavaraMeshes(engine, { view, MeshDesc });
   return {
     owner,
+    engine,
     scene,
     handles,
-    lines,
+    pickers,
     requests: () => requests,
     failedGeometryDisposals: () => failedGeometryDisposals,
     fail: () => (fail = true),
@@ -111,9 +108,9 @@ test('Navara CCTV plane preserves native rotated geometry, UVs and metre precisi
     assert.equal(uv.getY(i), (y + 1) / 2);
   }
   assert.equal(plane.show, false);
-  assert.equal(plane.outline.visible, false);
+  assert.equal(plane.id, 'cctv-a-plane');
   plane.show = true;
-  assert.equal(plane.outline.visible, true);
+  assert.equal(plane.group.visible, true);
   assert.equal(material.material.opacity, 0.95);
   assert.equal(material.material.depthWrite, false);
 });
@@ -188,12 +185,13 @@ test('Navara CCTV releases replaced video textures and ignores retired image upd
   const plane = h.owner.createPlane('a', material, shape, positions, identity);
   plane.destroy();
   plane.destroy();
+  assert.equal(finalDisposed, 0, 'the plane leaves its material to its owner');
+  material.dispose();
   const requests = h.requests();
   material.setImage(video);
   assert.equal(h.requests(), requests);
   assert.equal(finalDisposed, 1);
   assert.equal(h.handles.size, 0);
-  assert.equal(h.lines.size, 0);
   h.owner.destroy();
   h.owner.destroy();
   assert.equal(finalDisposed, 1);
@@ -209,11 +207,11 @@ test('Navara CCTV rolls back a failed descriptor and rejects new resources after
     () => h.owner.createPlane('a', material, shape, positions, identity),
     /descriptor failed/,
   );
-  assert.equal(releases, 1);
+  assert.equal(releases, 0, 'the material stays with its owner');
   assert.equal(h.failedGeometryDisposals(), 1);
   assert.equal(h.handles.size, 0);
-  assert.equal(h.lines.size, 0);
   h.owner.destroy();
+  assert.equal(releases, 1);
   assert.throws(() => h.owner.createMaterial(canvas()), /destroyed/);
 });
 
@@ -243,4 +241,34 @@ test('Navara CCTV volume preserves native world vertices and releases geometry/m
   assert.equal(geometryReleases, 1);
   assert.equal(materialReleases, 1);
   assert.equal(h.handles.size, 0);
+});
+
+test('Navara CCTV plane picks go through a mesh picker that defers to nearer depth', () => {
+  const h = harness();
+  const plane = h.owner.createPlane(
+    'a',
+    h.owner.createMaterial(canvas()),
+    shape,
+    positions,
+    identity,
+  );
+  plane.show = true;
+  const [pick] = h.pickers;
+  h.engine.camera.livePosition = { ...positions.capCenter, z: 5800 };
+  h.engine.camera.pickRay = () => ({
+    origin: { ...positions.capCenter, z: 5800 },
+    direction: { x: 0, y: 0, z: -1 },
+  });
+  const [hit] = pick({ x: 1, y: 1 });
+  assert.deepEqual(hit.result, { id: 'cctv-a-plane', owner: 'cctv-a-plane' });
+  assert.equal(hit.depth, 122);
+  assert.equal(h.owner.planeFromPick(hit.result), plane);
+  assert.equal(
+    h.owner.planeFromPick({ id: 'cctv-a-plane', owner: 'sibling' }),
+    null,
+  );
+  h.engine.picker.pickPosition = () => ({ ...positions.capCenter, z: 5750 });
+  assert.deepEqual(pick({ x: 1, y: 1 }), [], 'a wall in front hides it');
+  h.owner.destroy();
+  assert.equal(h.pickers.size, 0);
 });

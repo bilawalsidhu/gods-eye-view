@@ -1,11 +1,7 @@
-import {
-  createCctvCesiumRenderer,
-  bindCctvWorldClickGesture,
-} from '../../layers/cctv/render/cesium.js';
+import { bindCctvWorldClickGesture } from '../../layers/cctv/render/display.js';
 import { createCctvLayer } from '../../layers/cctv/index.js';
 import { rendererFor } from './renderers.js';
 import * as credits from '../../data/dataCredits.js';
-import * as sprites from '../../data/spriteOrder.js';
 import * as activation from '../../cctvFocusRequest.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 import { CITY_POIS } from '../../cityPois.js';
@@ -13,14 +9,16 @@ import * as picking from '../../data/pickRegistry.js';
 import * as focus from '../../data/focusDeemphasis.js';
 import * as render from '../../renderGovernor.js';
 
-/** Construct one layer using the application scene owners and a supplied source. */
+/**
+ * Construct one layer using the application scene owners and a supplied
+ * source; it draws with the engine's renderer from the registry
+ * (render/display.js on every engine).
+ */
 export function createApplicationCctv({
   surface,
   source,
   rendererFactory = ({ engine, ...context }) =>
-    engine?.kind === 'navara'
-      ? rendererFor('cctv', engine, context)
-      : createCctvCesiumRenderer(context),
+    rendererFor('cctv', engine, context),
 }) {
   const { terrain, groundFloor: ground, meshFloor: mesh } = surface;
   const layer = createCctvLayer({
@@ -28,7 +26,6 @@ export function createApplicationCctv({
     rendererFactory,
     services: {
       credits,
-      sprites,
       activation,
       overlays,
       locations: { CITY_POIS },
@@ -43,13 +40,17 @@ export function createApplicationCctv({
   return {
     ...layer,
     bindCctvWorldClickGesture,
-    // Legacy native helper; production navigation uses the initialized owner.
-    focusCctvRecord(viewer, record, duration) {
-      const renderer = viewer
-        ? createCctvCesiumRenderer({ services: {}, state: {} })
+    // Legacy helper; production navigation uses the initialized owner.
+    focusCctvRecord(engine, record, duration) {
+      const display = engine
+        ? rendererFor('cctv', engine, { services: {}, state: {} })
         : null;
-      renderer?.attach(viewer);
-      return layer.focusCctvRecord(renderer, record, duration);
+      display?.attach();
+      try {
+        return layer.focusCctvRecord(display, record, duration);
+      } finally {
+        display?.destroy();
+      }
     },
   };
 }

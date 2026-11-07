@@ -1,7 +1,6 @@
 import { createTransitLayer as createLayer } from '../layers/transit/index.js';
-import { createTransitCesiumRenderer } from '../layers/transit/render/cesium.js';
+import { createTransitDisplay } from '../layers/transit/render/display.js';
 import * as render from '../renderGovernor.js';
-import * as sprites from './spriteOrder.js';
 import * as picking from './pickRegistry.js';
 import * as overlays from '../overlays/worldOverlay.js';
 import { registerDynamicCredit, transitFeedCredit } from './dataCredits.js';
@@ -16,7 +15,8 @@ import { sampleMeshFloorCells } from './meshFloorSampler.js';
 
 export function createTransitLayer(options) {
   return createLayer({
-    rendererFactory: createTransitCesiumRenderer,
+    rendererFactory: ({ engine, ...context }) =>
+      createTransitDisplay(engine, context),
     ...options,
   });
 }
@@ -24,7 +24,6 @@ export function createTransitLayer(options) {
 const layer = createTransitLayer({
   services: {
     render,
-    sprites,
     picking,
     overlays,
     credits: { registerDynamicCredit, transitFeedCredit },

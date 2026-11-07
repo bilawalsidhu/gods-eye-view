@@ -37,10 +37,9 @@ export function createRendering({
     const color = parts.model.radioCategoryColor(
       parts.model.radioStationCategoryId(station),
     );
-    const bracket = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(parts.labels.radioSelectionBracketSvg(color))}`;
     const position = markerPosition(station, SELECTED_LIFT_M);
     layerState._selectedPosition = position;
-    parts.renderer.addSelected(station, position, color, bracket);
+    parts.renderer.addSelected(station, position, color);
     scheduleRadioOverlayPublish();
   }
 

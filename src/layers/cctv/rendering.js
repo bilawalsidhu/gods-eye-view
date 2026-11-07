@@ -337,8 +337,8 @@ export function createRendering({
           record.billboard.color = color;
         const scale = isActive ? 1.25 : 1.0;
         if (record.billboard.scale !== scale) record.billboard.scale = scale;
-        // disableDepthTestDistance stays POSITIVE_INFINITY for every billboard
-        // (set at creation) — see the field-test far-zoom submerge fix there.
+        // Every marker draws over the scene (the marker set's depth test is
+        // 'always') — see the field-test far-zoom submerge fix there.
       }
 
       if (

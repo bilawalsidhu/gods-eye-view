@@ -103,29 +103,26 @@ export async function registerNavaraLayerRenderers() {
           ...engine.extensions.navara,
         });
     },
-    transit: async () => {
-      const { createTransitNavaraRenderer } =
-        await import('../layers/transit/render/navara.js');
-      return (engine, options) =>
-        createTransitNavaraRenderer(engine, {
-          ...options,
-          ...engine.extensions.navara,
-        });
-    },
+    transit: async () =>
+      (await import('../layers/transit/render/display.js'))
+        .createTransitDisplay,
+    // CCTV's display, with the Navara backend of its plane and volume.
     cctv: async () => {
-      const { createCctvNavaraRenderer } =
-        await import('../layers/cctv/render/navara.js');
+      const [{ createCctvDisplay }, { createCctvNavaraMeshes }] =
+        await Promise.all([
+          import('../layers/cctv/render/display.js'),
+          import('../layers/cctv/render/navaraMeshes.js'),
+        ]);
       return (engine, options) =>
-        createCctvNavaraRenderer(engine, {
+        createCctvDisplay(engine, {
           ...options,
-          ...engine.extensions.navara,
+          navaraMeshes: createCctvNavaraMeshes,
         });
     },
     'alpr-cameras': async () =>
       (await import('../layers/alpr/render/display.js')).createAlprDisplay,
     radio: async () =>
-      (await import('../layers/radio/render/navara.js'))
-        .createRadioNavaraRenderer,
+      (await import('../layers/radio/render/display.js')).createRadioDisplay,
     bikeshare: async () =>
       (await import('../layers/bikeshare/render/display.js'))
         .createBikeshareDisplay,

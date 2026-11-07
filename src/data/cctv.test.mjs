@@ -27,6 +27,9 @@ function componentFunctionSource(fn) {
 }
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createCesiumMoversEngine } from '../testSupport/cesiumMoversEngine.mjs';
 import cctvLayer, {
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
   _createCctvProjectionPlaneForTest,
@@ -291,29 +294,12 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
     coverageEntities: [],
     projection: null,
   }));
-  const inserted = [];
-  const viewer = {
-    entities: {
-      add(entity) {
-        inserted.push(entity);
-        return entity;
-      },
-      getById(id) {
-        return inserted.find((entity) => entity.id === id);
-      },
-      remove(entity) {
-        const index = inserted.indexOf(entity);
-        if (index < 0) return false;
-        inserted.splice(index, 1);
-        return true;
-      },
-    },
-  };
+  const engine = createFakeEngine();
   const activeRecord = records.at(-1);
 
   try {
     _setCctvCoverageStateForTest({
-      viewer,
+      engine,
       records,
       activeCameraId: activeRecord.camera.id,
     });
@@ -323,7 +309,7 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
       (record) => record.coverageEntities.length > 0,
     );
     assert.equal(
-      inserted.length,
+      engine.lines.list().length,
       14 * 5,
       'default COVERAGE ON builds the 14-camera visible cohort',
     );
@@ -345,7 +331,7 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
       projection: { planeEntity: { show: false } },
     };
     _setCctvCoverageStateForTest({
-      viewer,
+      engine,
       records: [projectionOnly],
       activeCameraId: projectionOnly.camera.id,
       coverageMode: 'off',
@@ -372,13 +358,13 @@ test('camera icons are violet for video feeds, cyan for stills, amber when activ
   const idleVideo = record('idle-hls', 'hls');
   const idleStill = record('idle-image', 'image');
   const activeVideo = record('active-hls', 'hls');
-  const viewer = { entities: { add: (entity) => entity, getById: () => undefined } };
+  const engine = createFakeEngine();
 
   try {
     // Disabled keeps the active video camera from opening a real projection;
     // icon colors are assigned either way.
     _setCctvCoverageStateForTest({
-      viewer,
+      engine,
       records: [idleVideo, idleStill, activeVideo],
       activeCameraId: activeVideo.camera.id,
       enabled: false,
@@ -751,7 +737,7 @@ test('real active monitor plane owns one protected host label and no native labe
     setVisible: (...args) => calls.push(['visible', ...args]),
     clearSource: (...args) => calls.push(['clear', ...args]),
   };
-  const viewer = { entities: new Cesium.EntityCollection() };
+  const { engine, viewer } = createCesiumMoversEngine();
   const record = {
     camera: {
       ...UNCLAMPED_CAMERA,
@@ -764,9 +750,9 @@ test('real active monitor plane owns one protected host label and no native labe
   };
   _setCctvOverlayHostForTest(overlayHost);
   try {
-    const runtime = _createCctvProjectionPlaneForTest(viewer, record);
+    const runtime = _createCctvProjectionPlaneForTest(engine, record);
     _setCctvCoverageStateForTest({
-      viewer,
+      engine,
       records: [record],
       activeCameraId: record.camera.id,
       enabled: true,
@@ -777,13 +763,11 @@ test('real active monitor plane owns one protected host label and no native labe
 
     assert.ok(
       runtime.planeEntity,
-      'runtime guard requires a real monitor-plane entity',
+      'runtime guard requires a real monitor plane',
     );
-    assert.equal(runtime.planeEntity.label, undefined);
-    assert.ok(
-      runtime.planeEntity.plane,
-      'monitor plane geometry remains native',
-    );
+    const planeEntity = viewer.entities.getById(runtime.planeEntity.id);
+    assert.equal(planeEntity.label, undefined);
+    assert.ok(planeEntity.plane, 'monitor plane geometry remains native');
     assert.ok(
       viewer.entities.values.every((entity) => entity.label === undefined),
     );
@@ -821,7 +805,7 @@ test('real active monitor plane owns one protected host label and no native labe
     );
 
     _setCctvCoverageStateForTest({
-      viewer,
+      engine,
       records: [record],
       activeCameraId: null,
       enabled: false,
@@ -830,6 +814,7 @@ test('real active monitor plane owns one protected host label and no native labe
     });
     refreshCoverageStyles();
     assert.equal(runtime.planeEntity.show, false);
+    assert.equal(planeEntity.show, false);
     assert.deepEqual(calls.slice(-2), [
       ['clear', 'cctv-projection'],
       ['visible', 'cctv-projection', false],
@@ -837,6 +822,7 @@ test('real active monitor plane owns one protected host label and no native labe
   } finally {
     _setCctvCoverageStateForTest({ enabled: false });
     _setCctvOverlayHostForTest();
+    engine.destroy();
   }
 });
 
@@ -886,16 +872,19 @@ test('CCTV disable→enable defers the active-camera re-probe until its next act
   );
 });
 
-test('CCTV focus distinguishes tracking ownership from a missing active camera', () => {
-  let flyCalls = 0;
-  const viewer = {
-    trackedEntity: { id: 'tracked-flight' },
-    camera: {
-      flyToBoundingSphere() {
-        flyCalls += 1;
-      },
-    },
+/** A globe engine whose sphere flights are counted, following `following`. */
+function focusEngine(following = null) {
+  const engine = createFakeEngine();
+  engine.camera.following = () => following;
+  engine.flights = 0;
+  engine.camera.flyToSphere = () => {
+    engine.flights += 1;
   };
+  return engine;
+}
+
+test('CCTV focus distinguishes tracking ownership from a missing active camera', () => {
+  const engine = focusEngine({ name: 'tracked-flight' });
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
     position: { x: 1, y: 2, z: 3 },
@@ -904,49 +893,38 @@ test('CCTV focus distinguishes tracking ownership from a missing active camera',
   console.debug = () => {};
   try {
     assert.equal(
-      focusCctvRecord(viewer, record, 1.9),
+      focusCctvRecord(engine, record, 1.9),
       CCTV_FOCUS_RESULT.TRACKING_HOLDS_VIEW,
     );
   } finally {
     console.debug = originalDebug;
   }
-  assert.equal(flyCalls, 0);
+  assert.equal(engine.flights, 0);
   assert.equal(
-    focusCctvRecord(viewer, null, 1.9),
+    focusCctvRecord(engine, null, 1.9),
+    CCTV_FOCUS_RESULT.NO_ACTIVE_CAMERA,
+  );
+  assert.equal(
+    focusCctvRecord(null, record, 1.9),
     CCTV_FOCUS_RESULT.NO_ACTIVE_CAMERA,
   );
 });
 
 test('CCTV focus reports when the camera flight starts', () => {
-  let flyCalls = 0;
-  const viewer = {
-    trackedEntity: null,
-    camera: {
-      flyToBoundingSphere() {
-        flyCalls += 1;
-      },
-    },
-  };
+  const engine = focusEngine();
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
     position: { x: 1, y: 2, z: 3 },
   };
 
-  assert.equal(focusCctvRecord(viewer, record, 1.9), CCTV_FOCUS_RESULT.FOCUSED);
-  assert.equal(flyCalls, 1);
+  assert.equal(focusCctvRecord(engine, record, 1.9), CCTV_FOCUS_RESULT.FOCUSED);
+  assert.equal(engine.flights, 1);
+  assert.equal(engine.movers.list().length + engine.lines.list().length, 0);
 });
 
 test('CCTV focus refuses camera flights while cockpit owns the view', () => {
   const originalDocument = globalThis.document;
-  let flyCalls = 0;
-  const viewer = {
-    trackedEntity: null,
-    camera: {
-      flyToBoundingSphere() {
-        flyCalls += 1;
-      },
-    },
-  };
+  const engine = focusEngine();
   const record = {
     camera: { rangeM: 210, headingDeg: 41 },
     position: { x: 1, y: 2, z: 3 },
@@ -959,14 +937,14 @@ test('CCTV focus refuses camera flights while cockpit owns the view', () => {
 
   try {
     assert.equal(
-      focusCctvRecord(viewer, record, 1.9),
+      focusCctvRecord(engine, record, 1.9),
       CCTV_FOCUS_RESULT.COCKPIT_ACTIVE,
     );
   } finally {
     console.debug = originalDebug;
     globalThis.document = originalDocument;
   }
-  assert.equal(flyCalls, 0);
+  assert.equal(engine.flights, 0);
 });
 
 // Both initial mount and live engine switches install the same click handler.
@@ -1026,33 +1004,21 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
 
 // ─── Empty-space deselection and stable null-active state ──────────────────
 
-function makeDeselectViewer() {
-  return {
-    entities: new Cesium.EntityCollection(),
-    isDestroyed: () => false,
-    trackedEntity: { id: 'sibling-track-owner' },
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 4_000),
-      positionCartographic: Cesium.Cartographic.fromDegrees(
-        -97.7431,
-        30.2672,
-        4_000,
-      ),
-      heading: 0.4,
-      pitch: -0.7,
-      roll: 0.1,
-      transform: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      flyToBoundingSphere() {
-        this.flyCalls = (this.flyCalls || 0) + 1;
-      },
-    },
-    scene: {
-      canvas: { clientWidth: 1200, clientHeight: 800 },
-      cartesianToCanvasCoordinates: () => undefined,
-      primitives: { add: (primitive) => primitive, remove: () => true },
-      requestRender() {},
-    },
-  };
+/** A globe engine over Austin whose camera a sibling layer follows. */
+function makeDeselectEngine() {
+  const engine = createFakeEngine({
+    longitude: toRad(-97.7431),
+    latitude: toRad(30.2672),
+    altitude: 4_000,
+    width: 1200,
+    height: 800,
+  });
+  engine.fake.script('worldToWindow', undefined);
+  engine.camera.follow({
+    position: () => geo.cartesian3.fromDegrees(-97.7431, 30.2672, 0),
+    viewFrom: { x: 0, y: -300, z: 300 },
+  });
+  return engine;
 }
 
 function makeDeselectRecord(id, index = 0) {
@@ -1143,30 +1109,26 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
 });
 
 test('CCTV camera extraction requires layer ownership, not a colliding sibling ID', () => {
-  const billboard = { id: 'shared-id' };
-  const ownedCoverageEntity = {
-    id: 'cctv-shared-id-cap',
-    properties: { cctvCameraId: 'shared-id' },
-  };
-  const record = {
-    ...makeDeselectRecord('shared-id'),
-    billboard,
-    coverageEntities: [ownedCoverageEntity],
-  };
+  const engine = createFakeEngine();
+  const record = makeDeselectRecord('shared-id');
   _setCctvCoverageStateForTest({
+    engine,
     records: [record],
     activeCameraId: 'shared-id',
   });
   try {
+    refreshCoverageStyles();
+    const cap = record.coverageEntities.find(
+      (line) => line._coverageRole === 'cap',
+    );
+    assert.equal(cap.id, 'cctv-shared-id-cap');
     assert.equal(
-      _extractPickedCameraIdForTest({ id: 'shared-id', primitive: billboard }),
+      _extractPickedCameraIdForTest({ id: 'shared-id', owner: 'cctv' }),
       'shared-id',
+      "a pick of this layer's marker set activates its camera",
     );
     assert.equal(
-      _extractPickedCameraIdForTest({
-        id: 'shared-id',
-        primitive: { id: 'shared-id' },
-      }),
+      _extractPickedCameraIdForTest({ id: 'shared-id', owner: 'sibling' }),
       null,
       'a sibling primitive with the same canonical ID cannot activate CCTV',
     );
@@ -1176,9 +1138,14 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
       'a sibling Entity with the same canonical ID cannot activate CCTV',
     );
     assert.equal(
-      _extractPickedCameraIdForTest({ id: ownedCoverageEntity }),
+      _extractPickedCameraIdForTest({ id: cap.id, owner: cap.id }),
       'shared-id',
-      'an exact stored CCTV coverage Entity retains activation ownership',
+      'an exact stored CCTV coverage line retains activation ownership',
+    );
+    assert.equal(
+      _extractPickedCameraIdForTest({ id: cap.id, owner: 'sibling-line' }),
+      null,
+      'a sibling line cannot borrow the coverage pick id',
     );
     assert.equal(
       _extractPickedCameraIdForTest({
@@ -1196,7 +1163,7 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
 });
 
 test('CCTV deselect publishes one null state and leaves the complete camera pose unchanged', () => {
-  const viewer = makeDeselectViewer();
+  const engine = makeDeselectEngine();
   const record = {
     ...makeDeselectRecord('deselect-me'),
     probeClampRangeM: 150,
@@ -1209,9 +1176,9 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
     hitTest: () => null,
   });
   try {
-    const runtime = _createCctvProjectionPlaneForTest(viewer, record);
+    const runtime = _createCctvProjectionPlaneForTest(engine, record);
     _setCctvCoverageStateForTest({
-      viewer,
+      engine,
       records: [record],
       activeCameraId: record.camera.id,
       enabled: true,
@@ -1223,17 +1190,10 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
       publications.push(state),
     );
     const baselinePublications = publications.length;
-    const pose = {
-      positionWC: Cesium.Cartesian3.clone(viewer.camera.positionWC),
-      positionCartographic: Cesium.Cartographic.clone(
-        viewer.camera.positionCartographic,
-      ),
-      heading: viewer.camera.heading,
-      pitch: viewer.camera.pitch,
-      roll: viewer.camera.roll,
-      transform: Cesium.Matrix4.clone(viewer.camera.transform),
-      trackedEntity: viewer.trackedEntity,
-    };
+    const pose = engine.camera.pose();
+    const transform = engine.camera.transform();
+    const following = engine.camera.following();
+    engine.fake.resetCalls();
 
     assert.equal(deactivateActiveCamera(), true);
     assert.equal(
@@ -1248,17 +1208,17 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
     assert.equal(runtime.planeEntity.show, false);
     assert.equal(record.probeClampRangeM, null);
     assert.equal(record.activationDone, false);
-    assert.deepEqual(viewer.camera.positionWC, pose.positionWC);
+    assert.deepEqual(engine.camera.pose(), pose);
+    assert.deepEqual(engine.camera.transform(), transform);
+    assert.equal(engine.camera.following(), following);
+    assert.ok(following, 'the sibling still follows its target');
     assert.deepEqual(
-      viewer.camera.positionCartographic,
-      pose.positionCartographic,
+      engine.fake.calls
+        .map(({ method }) => method)
+        .filter((method) => method.startsWith('camera.')),
+      [],
+      'no camera command',
     );
-    assert.equal(viewer.camera.heading, pose.heading);
-    assert.equal(viewer.camera.pitch, pose.pitch);
-    assert.equal(viewer.camera.roll, pose.roll);
-    assert.deepEqual(viewer.camera.transform, pose.transform);
-    assert.equal(viewer.trackedEntity, pose.trackedEntity);
-    assert.equal(viewer.camera.flyCalls || 0, 0);
     unsubscribe();
   } finally {
     _setCctvOverlayHostForTest();
@@ -1267,7 +1227,7 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
 });
 
 test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay honest', () => {
-  const viewer = makeDeselectViewer();
+  const engine = makeDeselectEngine();
   const records = Array.from({ length: 3 }, (_, index) =>
     makeDeselectRecord(`cam-${index}`, index),
   );
@@ -1278,7 +1238,7 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
   });
   try {
     _setCctvCoverageStateForTest({
-      viewer,
+      engine,
       records,
       activeCameraId: records[0].camera.id,
       enabled: true,

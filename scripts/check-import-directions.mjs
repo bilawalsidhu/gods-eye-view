@@ -35,6 +35,8 @@ const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 // render/navara*.js. The list grows with each layer moved onto renderers.
 const RENDERED_LAYER_DIRS = [
   'src/layers/alpr/',
+  'src/layers/cctv/',
+  'src/layers/transit/',
   'src/layers/airQuality/',
   'src/layers/gnss/',
   'src/layers/perimeters/',

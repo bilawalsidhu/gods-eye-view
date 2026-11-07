@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCctvSource, createCctvLayer } from './index.js';
-import { createCctvCesiumRenderer } from './render/cesium.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createCctvDisplay } from './render/display.js';
 
 const camera = {
   id: 'pack/camera ?x',
@@ -111,7 +112,6 @@ test('camera construction is inert and destruction cancels a pending catalog and
       setOverlayEntries: noop,
       setOverlaySourceVisible: noop,
     },
-    sprites: { registerSpriteCollection: noop },
     activation: {},
     locations: {},
     picking: { unregisterPickOwner: noop },
@@ -132,24 +132,17 @@ test('camera construction is inert and destruction cancels a pending catalog and
       });
     },
   };
-  const a = createCctvLayer({
-    services,
-    source,
-    rendererFactory: createCctvCesiumRenderer,
-  });
-  const b = createCctvLayer({
-    services,
-    source,
-    rendererFactory: createCctvCesiumRenderer,
-  });
+  const rendererFactory = ({ engine, ...context }) =>
+    createCctvDisplay(engine, context);
+  const a = createCctvLayer({ services, source, rendererFactory });
+  const b = createCctvLayer({ services, source, rendererFactory });
   assert.equal(listeners.size, 0);
-  const viewer = {
-    scene: { primitives: { add: (value) => value, remove: () => true } },
-  };
-  const initializing = a.init(viewer);
+  const engine = createFakeEngine();
+  const initializing = a.init(null, { engine });
   assert.equal(listeners.size, 1);
   assert.equal(signal.aborted, false);
-  a.destroy(viewer);
+  a.destroy();
+  assert.equal(engine.movers.list().length, 0, 'the markers go with it');
   assert.equal(listeners.size, 0);
   assert.equal(signal.aborted, true);
   resolveCatalog({ sources: [] });

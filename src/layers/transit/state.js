@@ -22,9 +22,9 @@ export function createState({ services }) {
   });
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  /** @type {Cesium.Viewer|null} */
+  /** The viewer the layer was initialized with (its renderer draws). */
   state._viewer = null;
-  /** @type {Cesium.BillboardCollection|null} */
+  /** The renderer's marker collections: the fleet and the vehicles mid-glide. */
   state._markers = null;
   state._animatedMarkers = null;
   state._visible = new Set();
@@ -48,7 +48,7 @@ export function createState({ services }) {
   /** @type {(() => void)|null} */
   state._preRenderRemove = null;
   state._renderHeld = false;
-  /** @type {Cesium.ScreenSpaceEventHandler|null} */
+  /** @type {{ destroy: () => void }|null} The renderer's click binding. */
   state._clickHandler = null;
   /**
    * The vehicles currently mid-glide. The per-frame pass walks THIS, not the

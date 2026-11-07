@@ -15,11 +15,10 @@ import { TRANSIT_POLL_MS } from './policy.js';
 /**
  * Construct one Transit layer with its own scene state and supplied services.
  *
- * Nothing here is module-global: the viewer, the point collection, the vehicle
+ * Nothing here is module-global: the renderer, the marker sets, the vehicle
  * and height maps, the in-flight requests, the manager handle and the overlay
  * host all live on the instance this returns, and `destroy()` releases every
- * shared registration it took (sprite collection, pick owner, render hold,
- * camera sensitivity).
+ * shared registration it took (pick owner, render hold, camera sensitivity).
  *
  * @param {{services: object}} options
  * @returns {object} The data-layer module the manager registers.
@@ -29,10 +28,8 @@ export function createTransitLayer({
   source = createTransitSource(),
   rendererFactory,
 }) {
-  if (!services?.overlays || !services?.render || !services?.sprites) {
-    throw new TypeError(
-      'A transit layer needs overlay, render and sprite services',
-    );
+  if (!services?.overlays || !services?.render) {
+    throw new TypeError('A transit layer needs overlay and render services');
   }
   if (
     typeof source?.requestSnapshot !== 'function' ||

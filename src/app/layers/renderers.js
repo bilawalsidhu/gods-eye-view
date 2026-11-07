@@ -40,6 +40,9 @@ import { createLaunchesDisplay } from '../../layers/launches/render/display.js';
 import { createOsmPlacesDisplay } from '../../layers/osmPlaces/render/display.js';
 import { createAlprDisplay } from '../../layers/alpr/render/display.js';
 import { createBikeshareDisplay } from '../../layers/bikeshare/render/display.js';
+import { createRadioDisplay } from '../../layers/radio/render/display.js';
+import { createTransitDisplay } from '../../layers/transit/render/display.js';
+import { createCctvDisplay } from '../../layers/cctv/render/display.js';
 
 const ENGINE_KINDS = new Set(['cesium', 'navara']);
 
@@ -109,6 +112,8 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   'osm-places': createOsmPlacesDisplay,
   'alpr-cameras': createAlprDisplay,
   bikeshare: createBikeshareDisplay,
+  radio: createRadioDisplay,
+  transit: createTransitDisplay,
   'local-firms': createFirmsCesiumRenderer,
   'rocket-launches': createLaunchesDisplay,
   satellites: createSatellitesDisplay,
@@ -116,6 +121,7 @@ export const CESIUM_LAYER_RENDERERS = Object.freeze({
   military: createMilitaryDisplay,
   'local-adsb': createLocalAdsbDisplay,
   'ais-live-vessels': createVesselsDisplay,
+  cctv: createCctvDisplay,
 });
 
 // The other application layers still draw themselves on Cesium.

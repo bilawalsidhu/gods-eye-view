@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "cesiumLayerRendererLines": 2638,
-    "navaraLayerRendererLines": 8735,
+    "cesiumLayerRendererLines": 1636,
+    "navaraLayerRendererLines": 6953,
     "cesiumImportFiles": 65,
-    "viewerLines": 2014,
-    "navaraKindChecks": 15,
+    "viewerLines": 1901,
+    "navaraKindChecks": 12,
     "engineSniffCalls": 14,
     "engineExtensionReads": 26,
-    "groundEffectPasses": 8,
+    "groundEffectPasses": 7,
     "cesiumSdkLoads": 6,
-    "screenSpaceHandlerFiles": 15,
-    "engineNameLines": 141
+    "screenSpaceHandlerFiles": 10,
+    "engineNameLines": 133
   },
-  "measuredAt": "after the vessels, satellites, launches, ALPR, bikeshare and OSM Places displays, 2026-11-07"
+  "measuredAt": "after the radio, transit and CCTV displays; one engine.extensions read is CCTV's meshes seam, 2026-11-07"
 }

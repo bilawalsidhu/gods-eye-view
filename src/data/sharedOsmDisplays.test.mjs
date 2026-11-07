@@ -9,7 +9,8 @@ import * as annotations from '../annotations/worldAnnotationRenderer.js';
 import { createDirectionsLayer } from '../layers/directions/index.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createLifecycle as createCctvLifecycle } from '../layers/cctv/lifecycle.js';
-import { createCctvCesiumRenderer } from '../layers/cctv/render/cesium.js';
+import { createCctvDisplay } from '../layers/cctv/render/display.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import * as input from './inputOwnership.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
 
@@ -83,15 +84,17 @@ test('Directions introduces the shared OSM credit when the requested route draws
 });
 
 test('Warendorf webcam display introduces the shared OSM credit', (t) => {
-  const v = viewer(t), empty = new Proxy({}, { get: () => noop });
-  const renderer = createCctvCesiumRenderer({ state: {}, services: { credits: { showOsmCredit, hideOsmCredit }, sprites: empty } });
-  renderer.attach(v);
+  const engine = createFakeEngine(), empty = new Proxy({}, { get: () => noop });
+  const renderer = createCctvDisplay(engine, { state: {}, services: { credits: { showOsmCredit, hideOsmCredit } } });
+  renderer.attach();
   t.after(() => renderer.destroy());
   const lifecycle = createCctvLifecycle({ state: { _records: [{ camera: { id: 'warendorf-marktplatz-rathaus', cityId: 'warendorf' } }], _recordById: new Map(), _cctvOverlayHost: overlayHost },
     services: { credits: { showOsmCredit, hideOsmCredit }, sprites: empty, activation: empty, picking: empty, focus: empty, render: empty },
     parts: { renderer, selection: empty, geometryQueue: empty, rendering: empty, projection: empty, cards: empty, presentation: empty }, source: {} });
-  lifecycle.methods.enable(); assertCredit(v); lifecycle.methods.disable();
-  assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
+  lifecycle.methods.enable();
+  assert.ok(engine.fake.credits.some((credit) => credit.onScreen && credit.html.includes('>© OpenStreetMap<')));
+  lifecycle.methods.disable();
+  assert.equal(engine.fake.credits.filter((credit) => credit.onScreen).length, 0);
 });
 
 test('optional Overpass ALPR adapter uses the shared contributor wording', () => {
