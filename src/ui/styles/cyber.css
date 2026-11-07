@@ -722,6 +722,11 @@
   content: '⌁';
 }
 :root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='wildlife-sightings']
+  .data-icon::before {
+  content: '✿';
+}
+:root[data-ui-theme='cyber']
   .data-toggle-row[data-layer-id='radio']
   .data-icon::before {
   content: '◉';

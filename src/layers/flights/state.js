@@ -204,6 +204,10 @@ export function createFlightState({ source, services }) {
 
   flightState._lastFleetTickMs = 0;
 
+  /** @type {number} Fleet ticks run; selects which hidden contacts re-reckon */
+
+  flightState._fleetTickSeq = 0;
+
   /** @type {string} Camera pose signature at the last rotation pass */
 
   flightState._lastCamPoseSig = '';
