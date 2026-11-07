@@ -6,6 +6,7 @@ import { setLocale } from '../i18n/index.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -725,7 +726,9 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  const viewer = {};
+  bindFakeDraw(viewer);
+  layer.init(viewer);
   layer.enable();
   await layer.update();
   const f = fixture();

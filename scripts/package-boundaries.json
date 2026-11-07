@@ -5997,6 +5997,10 @@
     "exports": ["./layers/air-quality"],
     "modules": [
       "src/layers/airQuality/index.js",
+      "src/geo/ellipsoid.js",
+      "src/render/rendererOf.js",
+      "src/geo/vector.js",
+      "src/render/color.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/sources/httpBody.js",

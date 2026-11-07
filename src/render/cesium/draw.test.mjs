@@ -431,6 +431,49 @@ test('the earthquakes layer draws its discs as ground fills on a viewer of its o
   assert.equal(scene.added.length, 0);
 });
 
+test('the air quality layer draws its stations as ground fills on a viewer of its own', async () => {
+  const { createAirQualityLayer } =
+    await import('../../layers/airQuality/index.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const reading = (id, lon) => ({
+    id,
+    provider: 'eccc',
+    scale: 'AQHI',
+    value: 3,
+    band: 'low',
+    name: id,
+    lat: 45,
+    lon,
+    observedMs: 0,
+    color: '#4cc9f0',
+    label: '3',
+    risk: 'Low health risk',
+    note: null,
+  });
+  const layer = createAirQualityLayer({
+    source: { getSnapshot: async () => [reading('a', -75), reading('b', -60)] },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init(viewer);
+  layer.enable(viewer);
+  assert.equal(await layer.update(viewer), true);
+  const host = scene.added[0];
+  const grounds = [];
+  for (let i = 0; i < host.length; i++)
+    if (host.get(i) instanceof Cesium.GroundPrimitive)
+      grounds.push(host.get(i));
+  const instances = grounds.flatMap((ground) => ground.geometryInstances);
+  assert.deepEqual(instances.map((instance) => instance.id.id).sort(), [
+    'air-quality:a',
+    'air-quality:b',
+  ]);
+  assert.ok(instances[0].geometry instanceof Cesium.EllipseGeometry);
+  assert.equal(grounds[0].classificationType, Cesium.ClassificationType.BOTH);
+  layer.destroy();
+  assert.equal(scene.added.length, 0);
+});
+
 test('the cyclones layer draws clamped dots, draped tracks and holed cones on a viewer of its own', async () => {
   const { createCycloneRendering } =
     await import('../../layers/cyclones/rendering.js');

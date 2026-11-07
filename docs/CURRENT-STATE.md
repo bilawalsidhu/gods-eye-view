@@ -1103,6 +1103,12 @@ colour `[r, g, b, a]` and `depthAccent` its CSS. The standalone adapter keeps th
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
 destroying the layer cancels pending work and ignores late results.
 
+Air quality (`./layers/air-quality`) draws its station discs as one renderer
+draw set of ground-clamped fills and reads the view through the camera port; it
+no longer reaches Cesium, so a caller handing it a Cesium viewer,
+own, with no renderer bound, loads the `./render/cesium/unbound` export once
+first.
+
 ## Vessel components and sources
 
 `src/data/aisLiveVessels.js` assembles `createVesselLayer` from the

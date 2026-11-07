@@ -83,6 +83,7 @@ const DRAW_FROM_CALLER = new Set([
   './layers/street-level/mapillary',
   './layers/street-level/kartaview',
   './layers/street-level/panoramax',
+  './layers/air-quality',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
