@@ -6,12 +6,28 @@ import {
   WIND_NARROW_PATH_LIMIT,
 } from './streamlines.js';
 
-const WIND_FADE_LOW_METERS = 15000;
-const WIND_FADE_HIGH_METERS = 60000;
+/**
+ * What differs between flows drawn as streamlines: path budget, how paths are
+ * baked, where they float, the camera heights they fade in over, and colour.
+ * Wind is the default; ocean currents pass their own.
+ */
+export const WIND_FLOW_PROFILE = Object.freeze({
+  materialType: 'GevWindStreamline',
+  pathLimit: WIND_PATH_LIMIT,
+  narrowPathLimit: WIND_NARROW_PATH_LIMIT,
+  bake: Object.freeze({}),
+  displayHeightMeters: WIND_DISPLAY_HEIGHT_METERS,
+  fadeLowMeters: 15000,
+  fadeHighMeters: 60000,
+  baseColor: Object.freeze([0.5, 0.79, 0.9]),
+  tipColor: Object.freeze([0.91, 0.99, 1.0]),
+});
+
+const vec3 = (rgb) => `vec3(${rgb.map((c) => c.toFixed(2)).join(', ')})`;
 
 // Original material: a persistent fine curve plus a moving, tapered highlight.
 // The integer part of s identifies a path; its fractional part follows the wind.
-const FLOW_MATERIAL = `
+const flowMaterial = ({ baseColor, tipColor }) => `
 in float v_windFacing;
 czm_material czm_getMaterial(czm_materialInput materialInput)
 {
@@ -25,13 +41,17 @@ czm_material czm_getMaterial(czm_materialInput materialInput)
     float ends = smoothstep(0.0, 0.055, along) * (1.0 - smoothstep(0.945, 1.0, along));
     float edge = 1.0 - smoothstep(0.26, 0.5, abs(materialInput.st.t - 0.5));
     float horizon = smoothstep(0.0, 0.065, v_windFacing);
-    material.diffuse = mix(vec3(0.50, 0.79, 0.90), vec3(0.91, 0.99, 1.0), tip);
+    material.diffuse = mix(${vec3(baseColor)}, ${vec3(tipColor)}, tip);
     material.alpha = (ghostAlpha + 0.64 * tail + 0.16 * tip) * ends * edge * horizon * heightFade;
     return material;
 }`;
 
 /** Native Cesium geometry/material owner. No animation loop or DOM ownership. */
-export function createWindGpuRendering({ cesium: C, getViewer }) {
+export function createWindGpuRendering({
+  cesium: C,
+  getViewer,
+  profile = WIND_FLOW_PROFILE,
+}) {
   const cells = [];
   let occluder = null;
   let collection = null;
@@ -95,19 +115,22 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
     try {
       const width = getViewer().scene.canvas?.clientWidth;
       const budget =
-        width > 0 && width < 700 ? WIND_NARROW_PATH_LIMIT : WIND_PATH_LIMIT;
-      const paths = bakeWindStreamlines(field, { count: budget });
+        width > 0 && width < 700 ? profile.narrowPathLimit : profile.pathLimit;
+      const paths = bakeWindStreamlines(field, {
+        ...profile.bake,
+        count: budget,
+      });
       if (!paths.length) return false;
       let vertexCount = 0;
       material = new C.Material({
         fabric: {
-          type: 'GevWindStreamline',
+          type: profile.materialType,
           uniforms: {
             phaseTime: 0,
             ghostAlpha: paused ? 0.34 : 0.25,
             heightFade: 0,
           },
-          source: FLOW_MATERIAL,
+          source: flowMaterial(profile),
         },
         translucent: () => true,
       });
@@ -146,7 +169,7 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
         let cellVertexCount = 0;
         const instances = group.paths.map((path) => {
           const positions = path.coordinates.map(([lon, lat]) =>
-            C.Cartesian3.fromDegrees(lon, lat, WIND_DISPLAY_HEIGHT_METERS),
+            C.Cartesian3.fromDegrees(lon, lat, profile.displayHeightMeters),
           );
           // Pass the native description to Cesium's worker. Per-instance seed
           // attributes avoid touching the expanded vertex buffer on the UI thread.
@@ -219,8 +242,8 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
       0,
       Math.min(
         1,
-        (height - WIND_FADE_LOW_METERS) /
-          (WIND_FADE_HIGH_METERS - WIND_FADE_LOW_METERS),
+        (height - profile.fadeLowMeters) /
+          (profile.fadeHighMeters - profile.fadeLowMeters),
       ),
     );
     diagnostics.heightFade = heightFade;
@@ -272,7 +295,7 @@ export function createWindGpuRendering({ cesium: C, getViewer }) {
       ...diagnostics,
       ready: cells.length > 0 && cells.every((cell) => cell.primitive.ready),
       mode: 'gpu-streamlines',
-      displayHeightMeters: WIND_DISPLAY_HEIGHT_METERS,
+      displayHeightMeters: profile.displayHeightMeters,
     }),
   };
 }

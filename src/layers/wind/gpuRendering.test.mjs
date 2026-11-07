@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWindGpuRendering } from './gpuRendering.js';
+import { createWindGpuRendering, WIND_FLOW_PROFILE } from './gpuRendering.js';
 import {
   BoundingSphere,
   Cartesian3,
@@ -11,7 +11,7 @@ import {
 } from 'cesium';
 import { bakeWindStreamlines } from './streamlines.js';
 
-function harness({ width = 1000 } = {}) {
+function harness({ width = 1000, profile } = {}) {
   const members = new Set();
   let geometryBuilds = 0;
   const spheres = [];
@@ -138,7 +138,11 @@ function harness({ width = 1000 } = {}) {
     spheres,
     visibility,
     occluderBuilds: () => occluderBuilds,
-    owner: createWindGpuRendering({ cesium: C, getViewer: () => ({ scene }) }),
+    owner: createWindGpuRendering({
+      cesium: C,
+      getViewer: () => ({ scene }),
+      ...(profile ? { profile } : {}),
+    }),
   };
 }
 const field = () => ({
@@ -283,6 +287,42 @@ test('unsupported or failed geometry cleanly requests the existing fallback', ()
   assert.equal(h.owner.setField(field()), false);
   assert.equal(h.members.size, 0);
   assert.match(h.owner.getDiagnostics().error, /test build failure/);
+});
+
+test('a flow profile sets the bake, budget, height and colours without touching wind', () => {
+  const slow = () => ({ ...field(), u: new Float32Array(12).fill(0.1) });
+  assert.equal(
+    harness().owner.setField(slow()),
+    false,
+    'wind calls 0.1 m/s calm',
+  );
+  const h = harness({
+    profile: {
+      ...WIND_FLOW_PROFILE,
+      materialType: 'GevTestFlow',
+      pathLimit: 500,
+      bake: { minSpeed: 0.05, stepSeconds: 21600, maxStepSeconds: 21600 },
+      displayHeightMeters: 1000,
+      baseColor: [1, 0, 0],
+      tipColor: [0, 1, 0],
+    },
+  });
+  assert.equal(h.owner.setField(slow()), true);
+  assert.ok(h.owner.getParticleCount() <= 500);
+  assert.equal(h.owner.getDiagnostics().displayHeightMeters, 1000);
+  const { material } = [...h.members][0].appearance;
+  assert.ok(
+    material.source.includes(
+      'mix(vec3(1.00, 0.00, 0.00), vec3(0.00, 1.00, 0.00), tip)',
+    ),
+  );
+  const wind = harness();
+  wind.owner.setField(field());
+  assert.ok(
+    [...wind.members][0].appearance.material.source.includes(
+      'mix(vec3(0.50, 0.79, 0.90), vec3(0.91, 0.99, 1.00), tip)',
+    ),
+  );
 });
 
 test('narrow canvases use a lower bounded path budget', () => {
