@@ -64,7 +64,10 @@ const FALLS_BACK = new Set(['src/data/followed.js']);
  * export loads the camera factory too, so these entries' camera is the
  * caller's to load the same way.
  */
-const DRAW_FROM_CALLER = new Set(['./layers/earthquakes']);
+const DRAW_FROM_CALLER = new Set([
+  './layers/earthquakes',
+  './layers/bikeshare',
+]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
 

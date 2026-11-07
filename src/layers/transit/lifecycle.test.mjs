@@ -43,6 +43,8 @@ import {
   uninstallRenderGovernor,
 } from '../../renderGovernor.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
 import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
 import { registerStyleStages } from '../../styles/styleStages.js';
 
@@ -3561,7 +3563,7 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
   assert.equal(entry.track.resets, 0);
 });
 
-test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in every enable/disable order', async (t) => {
+test('actual Traffic and Transit lifecycles retain sensitivity in every enable/disable order, Bikeshare among them', async (t) => {
   const { createLifecycle: trafficLifecycle } =
     await import('../traffic/lifecycle.js');
   const { createLifecycle: bikeLifecycle } =
@@ -3583,7 +3585,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
   }).methods;
   const bike = bikeLifecycle({
     state: {
-      _pointCollection: {},
+      _stationSet: {},
       _overlayHost: { setVisible: noop },
       _cityRuntime: new Map(),
       _failedCityIds: new Set(),
@@ -3608,7 +3610,21 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
     },
   }).methods;
   app.viewer.camera.moveEnd = new Cesium.Event();
-  const layers = { traffic, bikeshare: bike, transit: app.layer };
+  // Bikeshare listens through its renderer's camera port, at its own
+  // threshold: it takes no claim on the shared camera's sensitivity.
+  const bikeCamera = fakeCameraPort();
+  const bikeViewer = {};
+  const unbindBike = bindRenderer(bikeViewer, { camera: bikeCamera.port });
+  t.after(unbindBike);
+  const layers = {
+    traffic,
+    bikeshare: {
+      enable: () => bike.enable(bikeViewer),
+      disable: () => bike.disable(bikeViewer),
+    },
+    transit: app.layer,
+  };
+  const claimants = new Set(['traffic', 'transit']);
   const orders = [
     ['traffic', 'bikeshare', 'transit'],
     ['traffic', 'transit', 'bikeshare'],
@@ -3623,8 +3639,13 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
         const active = new Set();
         for (const id of enable) {
           layers[id].enable(app.viewer);
-          active.add(id);
-          assert.equal(app.viewer.camera.percentageChanged, 0.05);
+          if (claimants.has(id)) active.add(id);
+          if (id === 'bikeshare')
+            assert.equal(bikeCamera.listenerCount('changed'), 1);
+          assert.equal(
+            app.viewer.camera.percentageChanged,
+            active.size ? 0.05 : 0.5,
+          );
           assert.deepEqual(
             new Set(cameraSensitivityClaims(app.viewer.camera)),
             active,
@@ -3643,6 +3664,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
             active,
           );
         }
+        assert.equal(bikeCamera.listenerCount('changed'), 0);
       }
   } finally {
     for (const layer of Object.values(layers)) layer.disable(app.viewer);

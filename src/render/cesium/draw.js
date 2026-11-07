@@ -67,6 +67,24 @@ const classificationOf = (clampTo = 'both') =>
     tiles: Cesium.ClassificationType.CESIUM_3D_TILE,
   })[clampTo] ?? Cesium.ClassificationType.BOTH;
 
+/** A distance curve as Cesium's, or undefined. */
+const nearFarOf = (curve) =>
+  curve
+    ? new Cesium.NearFarScalar(
+        curve.near,
+        curve.nearValue,
+        curve.far,
+        curve.farValue,
+      )
+    : undefined;
+
+/** Cesium's point blending for a set's `blend`. */
+const pointBlendOf = (blend) =>
+  ({
+    opaque: Cesium.BlendOption.OPAQUE,
+    translucent: Cesium.BlendOption.TRANSLUCENT,
+  })[blend] ?? Cesium.BlendOption.OPAQUE_AND_TRANSLUCENT;
+
 const ANCHORS = {
   center: Cesium.VerticalOrigin.CENTER,
   bottom: Cesium.VerticalOrigin.BOTTOM,
@@ -115,6 +133,7 @@ export function createCesiumDraw({ scene, report }) {
     const rebuild = () => {
       record.pickIds = [];
       record.placed = [];
+      record.patchable = null;
       build(record);
       setsVersion += 1;
     };
@@ -128,6 +147,13 @@ export function createCesiumDraw({ scene, report }) {
         requestRender();
       },
       upsert(list) {
+        // Items that only change how they look are changed where they are.
+        if (patchPoints(record, list)) {
+          for (const item of list) items.set(item.id, item);
+          setsVersion += 1;
+          requestRender();
+          return;
+        }
         for (const item of list) items.set(item.id, item);
         rebuild();
         requestRender();
@@ -145,9 +171,10 @@ export function createCesiumDraw({ scene, report }) {
       setOptions(options) {
         const culled = spec.horizonCull;
         const clampTo = spec.clampTo;
+        const blend = spec.blend;
         Object.assign(spec, options);
-        // What clamped items clamp to is built into them.
-        if (spec.clampTo !== clampTo) rebuild();
+        // What clamped items clamp to, and how points blend, are built in.
+        if (spec.clampTo !== clampTo || spec.blend !== blend) rebuild();
         setsVersion += 1;
         showHosts(record);
         // No longer culled: what the cull hid comes back.
@@ -203,6 +230,17 @@ export function createCesiumDraw({ scene, report }) {
   function replaceHost(record, host, ground = null, own = null) {
     const old = record.host;
     const waiting = ground?.length ? ground : null;
+    // The set keeps its place among the scene's primitives: a rebuild draws
+    // where it drew, so stacking (and picks among overlapping items) does
+    // not change with each update. Its place is under whatever was above
+    // the host it replaces (indices shift as older hosts go).
+    const slot = old ? slotOf(old) : -1;
+    const above =
+      slot >= 0 && slot + 1 < scene.primitives.length
+        ? scene.primitives.get(slot + 1)
+        : null;
+    // Named for code that orders the scene's primitives (`spriteOrder.js`).
+    host.drawSetId = record.spec.id;
     // Only old ground primitives wait for the new ones: the rest of the old
     // host goes now, as the new host's own parts draw at once.
     if (
@@ -222,8 +260,18 @@ export function createCesiumDraw({ scene, report }) {
     record.ground = waiting;
     record.own = waiting ? own : null;
     record.host = host;
-    scene.primitives.add(host);
+    const at = above ? slotOf(above) : -1;
+    if (at >= 0) scene.primitives.add(host, at);
+    else scene.primitives.add(host);
     showHosts(record);
+  }
+
+  /** Where `primitive` is among the scene's primitives, or -1. */
+  function slotOf(primitive) {
+    const primitives = scene.primitives;
+    const n = primitives?.length ?? 0;
+    for (let i = 0; i < n; i++) if (primitives.get(i) === primitive) return i;
+    return -1;
   }
 
   function showHosts(record) {
@@ -284,7 +332,9 @@ export function createCesiumDraw({ scene, report }) {
 
   /** Remember a drawn point or icon for the horizon cull. */
   function place(record, primitive, position, shown) {
-    record.placed.push({ primitive, position, shown });
+    const placed = { primitive, position, shown };
+    record.placed.push(placed);
+    return placed;
   }
 
   // Atlases icons name images from, by id: `{atlas, slot}` reads the slot
@@ -353,17 +403,24 @@ export function createCesiumDraw({ scene, report }) {
       );
       let primitive;
       if (heightReference === Cesium.HeightReference.NONE) {
-        points ??= new Cesium.PointPrimitiveCollection();
+        points ??= new Cesium.PointPrimitiveCollection({
+          blendOption: pointBlendOf(record.spec.blend),
+        });
         primitive = points.add({
           position,
-          pixelSize: item.pixelSize,
-          color: toColor(item.color),
-          outlineColor: toColor(item.outlineColor ?? [0, 0, 0, 0]),
-          outlineWidth: item.outlineWidth ?? 0,
-          disableDepthTestDistance: item.disableDepthTest ?? 0,
+          ...pointLook(item),
           show,
           id: pickId(record, item),
         });
+        const placed = place(record, primitive, position, show);
+        record.patchable ??= new Map();
+        record.patchable.set(item.id, {
+          primitive,
+          placed,
+          at: placeOf(item),
+          lodGroup: item.lodGroup,
+        });
+        continue;
       } else {
         // Point primitives cannot follow the ground.
         dots ??= new Cesium.BillboardCollection({ scene });
@@ -383,6 +440,61 @@ export function createCesiumDraw({ scene, report }) {
       host.add(dots);
     }
     replaceHost(record, host);
+  }
+
+  /** How a point primitive draws an unclamped point item. */
+  function pointLook(item) {
+    return {
+      pixelSize: item.pixelSize,
+      color: toColor(item.color),
+      outlineColor: toColor(item.outlineColor ?? [0, 0, 0, 0]),
+      outlineWidth: item.outlineWidth ?? 0,
+      disableDepthTestDistance: item.disableDepthTest ?? 0,
+      scaleByDistance: nearFarOf(item.scaleByDistance),
+      translucencyByDistance: nearFarOf(item.fadeByDistance),
+    };
+  }
+
+  const PLACE_KEYS = ['x', 'y', 'z', 'lon', 'lat', 'height'];
+
+  /**
+   * Where an item is, as its values when drawn: a caller may change the
+   * position object it passes and send the same one again.
+   */
+  const placeOf = (item) =>
+    PLACE_KEYS.map((key) => item.pos?.[key]).concat(item.height);
+
+  /**
+   * Upsert unclamped points in place, without a rebuild, when every item
+   * is one the set draws as a point primitive now and keeps its position,
+   * height mode and LOD group: then only how it looks, its `meta` and
+   * whether it shows change. False, changing nothing, otherwise.
+   */
+  function patchPoints(record, list) {
+    const patchable = record.patchable;
+    if (record.kind !== 'points' || !patchable) return false;
+    for (const item of list) {
+      const was = patchable.get(item.id);
+      if (
+        !was ||
+        heightReferenceOf(item.height, record.spec.clampTo) !==
+          Cesium.HeightReference.NONE ||
+        item.lodGroup !== was.lodGroup ||
+        placeOf(item).some((value, i) => value !== was.at[i])
+      )
+        return false;
+    }
+    for (const item of list) {
+      const was = patchable.get(item.id);
+      const show = item.show !== false;
+      Object.assign(was.primitive, pointLook(item));
+      was.primitive.id.meta = item.meta;
+      was.placed.shown = show;
+      // As a rebuild would; the horizon cull, where it runs, hides it again
+      // past the horizon before the next frame draws.
+      was.primitive.show = show;
+    }
+    return true;
   }
 
   /**

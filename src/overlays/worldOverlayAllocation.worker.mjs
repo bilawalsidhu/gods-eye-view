@@ -805,7 +805,7 @@ function buildPhase5BikeshareWorkload(count) {
     isInstalled: true,
     isRenting: true,
     isReturning: true,
-    point: { position },
+    position,
   });
   entry.horizonCull = false;
   workload.registrations.push({

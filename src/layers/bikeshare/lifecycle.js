@@ -1,10 +1,9 @@
-import * as Cesium from 'cesium';
 import { GBFS_CITY_REGISTRY } from './registry.js';
-import { BIKESHARE_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
+  BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
+  CAMERA_CHANGED_THRESHOLD,
+} from './policy.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createLifecycle({
   state: layerState,
@@ -12,28 +11,31 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
+  const { restoreSpriteOrder } = services.sprites;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
+
+  /** Stop listening to the camera, if the layer is. */
+  function detachCamera() {
+    layerState._cameraChangedOff?.();
+    layerState._cameraChangedOff = null;
+  }
 
   const methods = {
     /**
-     * Initialize the bikeshare layer. Creates the point primitive collection,
-     * resets all internal state, and installs the click handler.
-     * Called once during app bootstrap.
-     * @param {Cesium.Viewer} viewer - Cesium viewer instance.
+     * Initialize the bikeshare layer. Makes the station draw sets on the
+     * viewer's renderer (`drawOf`), resets all internal state, and installs
+     * the click handler. Called once during app bootstrap. Given a Cesium
+     * viewer with no renderer bound, the caller loads
+     * the package's `./render/cesium/unbound` export first.
+     * @param {object} viewer - The viewer the layer draws on.
      */
     init(viewer) {
+      parts.rendering.attachSets(viewer);
       layerState._viewer = viewer;
-      layerState._pointCollection = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(layerState._pointCollection);
-      registerSpriteCollection('bikeshare', layerState._pointCollection);
-      layerState._pointCollection.show = false;
 
       layerState._enabled = false;
       layerState._cameraDebounceTimer = null;
-      layerState._cameraChangedAttached = false;
+      detachCamera();
       layerState._altitudeGateEnabled = false;
       layerState._proximityGeneration = 0;
 
@@ -46,7 +48,6 @@ export function createLifecycle({
       layerState._stationRenderMap = new Map();
       layerState._clickSubscription = null;
       layerState._selectedKey = null;
-      layerState._selectedEntity = null;
       layerState._count = 0;
       layerState._lastUpdate = null;
       layerState._loading = false;
@@ -71,12 +72,12 @@ export function createLifecycle({
     /**
      * Enable the bikeshare layer. Shows points, attaches the camera listener,
      * and triggers an initial proximity check.
-     * @param {Cesium.Viewer} viewer - Cesium viewer instance.
+     * @param {object} viewer - The viewer the layer draws on.
      */
     enable(viewer) {
       layerState._enabled = true;
       layerState._failedCityIds.clear();
-      layerState._pointCollection.show = true;
+      layerState._stationSet.show = true;
       layerState._overlayHost.setVisible(
         BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
         true,
@@ -87,13 +88,13 @@ export function createLifecycle({
         layerState._stationRenderMap.has(pickedId),
       );
 
-      if (!layerState._cameraChangedAttached) {
-        viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
-        // Through the shared ledger: this is a single number every layer's
-        // camera.changed listener shares, and a layer leaving must not hand
-        // back a coarse default while this one is still driving off it.
-        claimCameraSensitivity(viewer.camera, 'bikeshare', 0.05);
-        layerState._cameraChangedAttached = true;
+      if (!layerState._cameraChangedOff) {
+        // Its own threshold: the camera measures it for this listener alone.
+        layerState._cameraChangedOff = cameraOf(viewer).on(
+          'changed',
+          parts.viewport.onCameraChanged,
+          { threshold: CAMERA_CHANGED_THRESHOLD },
+        );
       }
 
       void parts.viewport.runProximityCheck();
@@ -103,9 +104,8 @@ export function createLifecycle({
     /**
      * Disable the bikeshare layer. Hides points, removes event listeners,
      * aborts all pending fetches, and tears down all city data.
-     * @param {Cesium.Viewer} viewer - Cesium viewer instance.
      */
-    disable(viewer) {
+    disable() {
       layerState._enabled = false;
       layerState._proximityGeneration++;
       layerState._altitudeGateEnabled = false;
@@ -122,26 +122,20 @@ export function createLifecycle({
       document.removeEventListener('keydown', parts.selection._onKeyDown);
       unregisterPickOwner('bikeshare');
 
-      if (layerState._cameraChangedAttached) {
-        viewer.camera.changed.removeEventListener(
-          parts.viewport.onCameraChanged,
-        );
-        releaseCameraSensitivity(viewer.camera, 'bikeshare');
-        layerState._cameraChangedAttached = false;
-      }
+      detachCamera();
 
       parts.ingestion.abortAllInFlight();
       parts.viewport.deactivateAllCities();
       layerState._cityRuntime.clear();
-      layerState._pointCollection.show = false;
+      if (layerState._stationSet) layerState._stationSet.show = false;
       layerState._count = 0;
       layerState._loading = false;
       layerState._loadingOps = 0;
     },
 
-    /** Permanently release primitives, handlers, and the selected host source. */
-    destroy(viewer) {
-      if (layerState._enabled) this.disable(viewer);
+    /** Permanently release draw sets, handlers, and the selected host source. */
+    destroy() {
+      if (layerState._enabled) this.disable();
       else {
         parts.selection._clearSelection();
         layerState._overlayHost.setVisible(
@@ -153,18 +147,9 @@ export function createLifecycle({
         document.removeEventListener('keydown', parts.selection._onKeyDown);
         unregisterPickOwner('bikeshare');
       }
-      if (layerState._cameraChangedAttached) {
-        viewer.camera.changed.removeEventListener(
-          parts.viewport.onCameraChanged,
-        );
-        releaseCameraSensitivity(viewer.camera, 'bikeshare');
-        layerState._cameraChangedAttached = false;
-      }
+      detachCamera();
       parts.ingestion.abortAllInFlight();
-      if (layerState._pointCollection) {
-        viewer.scene.primitives.remove(layerState._pointCollection);
-        layerState._pointCollection = null;
-      }
+      parts.rendering.detachSets();
       layerState._viewer = null;
     },
   };

@@ -448,3 +448,236 @@ test('the cyclones layer draws clamped dots, draped tracks and holed cones on a 
   rendering.destroy();
   assert.equal(scene.added.length, 0);
 });
+
+test('point sets blend as asked and fall off with distance', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.points({ id: 'falloff', blend: 'translucent' });
+  set.set([
+    {
+      id: 'a',
+      pos: { lon: 0, lat: 0, height: 2 },
+      pixelSize: 6,
+      color: [1, 0, 0, 0.5],
+      scaleByDistance: { near: 200, nearValue: 1.35, far: 1e5, farValue: 0.4 },
+      fadeByDistance: { near: 200, nearValue: 1, far: 2e5, farValue: 0.15 },
+    },
+    { id: 'b', pos: { lon: 1, lat: 0 }, pixelSize: 6, color: '#fff' },
+  ]);
+  const [points] = scene.added;
+  assert.equal(points.blendOption, Cesium.BlendOption.TRANSLUCENT);
+  const a = points.get(0);
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      a.scaleByDistance,
+      new Cesium.NearFarScalar(200, 1.35, 1e5, 0.4),
+    ),
+  );
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      a.translucencyByDistance,
+      new Cesium.NearFarScalar(200, 1, 2e5, 0.15),
+    ),
+  );
+  assert.equal(points.get(1).scaleByDistance, undefined, 'none asked');
+  set.setOptions({ blend: 'opaque' });
+  assert.equal(scene.added[0].blendOption, Cesium.BlendOption.OPAQUE);
+  set.setOptions({ blend: undefined });
+  assert.equal(
+    scene.added[0].blendOption,
+    Cesium.BlendOption.OPAQUE_AND_TRANSLUCENT,
+    'the default, as before',
+  );
+  set.dispose();
+});
+
+test('the bikeshare layer draws its stations as point primitives on a viewer of its own', async () => {
+  const { createState } = await import('../../layers/bikeshare/state.js');
+  const { createModel } = await import('../../layers/bikeshare/model.js');
+  const { createRendering } =
+    await import('../../layers/bikeshare/rendering.js');
+  const { createSelection } =
+    await import('../../layers/bikeshare/selection.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const services = {
+    render: { governorRequestRender() {} },
+    overlays: {
+      setOverlayEntries() {},
+      setOverlaySourceVisible() {},
+      clearOverlaySource() {},
+    },
+  };
+  const state = createState({ services });
+  const parts = {};
+  const context = { state, services, parts, source: {} };
+  parts.model = createModel(context);
+  parts.rendering = createRendering(context);
+  parts.selection = createSelection(context);
+  state._viewer = viewer;
+  parts.rendering.attachSets(viewer);
+  state._stationSet.show = true;
+  const info = parts.model.parseStationInformation({
+    data: {
+      stations: [
+        { station_id: 'a', name: 'A', lat: 30.26, lon: -97.74, capacity: 20 },
+        { station_id: 'b', name: 'B', lat: 30.27, lon: -97.75, capacity: 4 },
+      ],
+    },
+  });
+  parts.rendering.ensureCityPoints('austin', info);
+  parts.rendering.applyStatusToPoints(
+    'austin',
+    parts.model.parseStationStatus({
+      data: {
+        stations: [
+          { station_id: 'a', num_bikes_available: 18, num_docks_available: 2 },
+        ],
+      },
+    }),
+  );
+  const points = scene.added.find((host) => host.get(0)?.id?.id === 'austin:a');
+  assert.ok(points instanceof Cesium.PointPrimitiveCollection);
+  assert.equal(points.blendOption, Cesium.BlendOption.TRANSLUCENT);
+  assert.equal(points.length, 2);
+  const a = points.get(0);
+  assert.match(a.id.set, /^bikeshare:\d+:stations$/);
+  assert.equal(a.disableDepthTestDistance, 2500);
+  assert.equal(a.outlineWidth, 1);
+  assert.ok(
+    a.color.equalsEpsilon(
+      Cesium.Color.fromCssColorString('#00ff88').withAlpha(0.95),
+      1e-9,
+    ),
+    'plenty of bikes: green, as before',
+  );
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(
+      a.position,
+      Cesium.Cartesian3.fromDegrees(-97.74, 30.26, 2),
+      0,
+      1e-6,
+    ),
+  );
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      a.scaleByDistance,
+      new Cesium.NearFarScalar(200, 1.35, 130000, 0.4),
+    ),
+  );
+
+  // Selected: its own dot goes, a cyan one over everything takes its place.
+  parts.selection._selectStation('austin:a');
+  const stations = scene.added.find(
+    (host) => host.get(0)?.id?.set === a.id.set,
+  );
+  assert.equal(stations.get(0).show, false);
+  const highlight = scene.added.find((host) =>
+    host.get(0)?.id?.set?.endsWith(':selected'),
+  );
+  const dot = highlight.get(0);
+  assert.ok(Cesium.Color.equals(dot.color, Cesium.Color.CYAN));
+  assert.equal(dot.pixelSize, 14);
+  assert.equal(dot.outlineWidth, 2);
+  assert.equal(dot.disableDepthTestDistance, Infinity);
+  parts.selection._clearSelection();
+  parts.rendering.detachSets();
+  assert.equal(scene.added.length, 0);
+});
+
+test('a rebuilt set keeps its place among the scene primitives, and names its host', async () => {
+  const {
+    registerSpriteSet,
+    registerSpriteCollection,
+    restoreSpriteOrder,
+    unregisterSpriteCollection,
+  } = await import('../../data/spriteOrder.js');
+  const scene = fakeScene();
+  scene.primitives = new Cesium.PrimitiveCollection();
+  const { draw } = drawOver(scene);
+  const below = scene.primitives.add(new Cesium.PrimitiveCollection());
+  const set = draw.points({ id: 'kept' });
+  set.set([]);
+  const above = scene.primitives.add(new Cesium.PrimitiveCollection());
+  const order = () => {
+    const out = [];
+    for (let i = 0; i < scene.primitives.length; i++) {
+      const p = scene.primitives.get(i);
+      out.push(p === below ? 'below' : p === above ? 'above' : p.drawSetId);
+    }
+    return out;
+  };
+  assert.deepEqual(order(), ['below', 'kept', 'above']);
+  set.set([{ id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' }]);
+  set.upsert([
+    { id: 'b', pos: { lon: 1, lat: 0 }, pixelSize: 4, color: '#fff' },
+  ]);
+  assert.deepEqual(
+    order(),
+    ['below', 'kept', 'above'],
+    'not raised by updates',
+  );
+
+  // The sprite order finds the set's host by its id, whichever host it is.
+  const cctv = registerSpriteCollection('cctv', below);
+  const flights = registerSpriteCollection('flights', above);
+  const entry = registerSpriteSet('bikeshare', 'kept');
+  scene.primitives.raiseToTop(below);
+  assert.deepEqual(order(), ['kept', 'above', 'below']);
+  restoreSpriteOrder({ scene });
+  assert.deepEqual(order(), ['below', 'kept', 'above']);
+  unregisterSpriteCollection('bikeshare', entry);
+  unregisterSpriteCollection('cctv', cctv);
+  unregisterSpriteCollection('flights', flights);
+  set.dispose();
+});
+
+test('restyling points that stay put changes them in place; moving one rebuilds', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.points({ id: 'restyled', blend: 'translucent' });
+  const dot = (id, lon, extra = {}) => ({
+    id,
+    pos: { lon, lat: 0, height: 2 },
+    pixelSize: 6,
+    color: [1, 0, 0, 1],
+    ...extra,
+  });
+  set.set([dot('a', 0), dot('b', 1)]);
+  const [host] = scene.added;
+  const a = host.get(0);
+  set.upsert([
+    dot('a', 0, { color: [0, 1, 0, 1], pixelSize: 9, show: false, meta: 7 }),
+  ]);
+  assert.equal(scene.added[0], host, 'the same collection');
+  assert.equal(host.get(0), a, 'the same point');
+  assert.ok(Cesium.Color.equals(a.color, Cesium.Color.LIME));
+  assert.equal(a.pixelSize, 9);
+  assert.equal(a.show, false);
+  assert.equal(a.id.meta, 7, 'picks read the new meta');
+  assert.equal(set.size(), 2);
+
+  set.upsert([dot('b', 2)]);
+  assert.notEqual(scene.added[0], host, 'moved: rebuilt');
+  set.upsert([dot('c', 3)]);
+  assert.equal(set.size(), 3, 'a new item rebuilds too');
+  assert.equal(scene.added[0].length, 3);
+  set.dispose();
+});
+
+test('a position object changed and sent again moves its point', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.points({ id: 'moved-in-place' });
+  const item = {
+    id: 'a',
+    pos: { lon: 0, lat: 0 },
+    pixelSize: 4,
+    color: '#fff',
+  };
+  set.set([item]);
+  const host = scene.added[0];
+  item.pos.lon = 90;
+  set.upsert([item]);
+  assert.notEqual(scene.added[0], host, 'rebuilt where it now is');
+  const at = Cesium.Cartographic.fromCartesian(scene.added[0].get(0).position);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) - 90) < 1e-9);
+  set.dispose();
+});

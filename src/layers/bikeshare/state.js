@@ -15,13 +15,21 @@ export function createState({ services }) {
   // Module-level mutable state
   // ---------------------------------------------------------------------------
 
-  /** @type {Cesium.Viewer|null} Active Cesium viewer instance. */
+  /** @type {object|null} The viewer the layer draws on. */
 
   layerState._viewer = null;
 
-  /** @type {Cesium.PointPrimitiveCollection|null} Primitive collection for station dots. */
+  /** Draw set of the station dots (`drawOf(viewer).points`), or null. */
 
-  layerState._pointCollection = null;
+  layerState._stationSet = null;
+
+  /** Draw set of the selected station's highlight dot, or null. */
+
+  layerState._selectedSet = null;
+
+  /** The station set's sprite-order registration, while it has one. */
+
+  layerState._spriteEntry = null;
 
   /** Whether the bikeshare layer is currently enabled. */
 
@@ -31,9 +39,9 @@ export function createState({ services }) {
 
   layerState._cameraDebounceTimer = null;
 
-  /** Whether the camera.changed listener is currently attached. */
+  /** @type {(() => void)|null} Stops the camera `changed` listener, while attached. */
 
-  layerState._cameraChangedAttached = false;
+  layerState._cameraChangedOff = null;
 
   /** Hysteresis flag for altitude-based activation. */
 
@@ -78,10 +86,6 @@ export function createState({ services }) {
   /** @type {string|null} Key of the currently selected station, or null. */
 
   layerState._selectedKey = null;
-
-  /** @type {Cesium.Entity|null} Entity used to display the selected-station point highlight. */
-
-  layerState._selectedEntity = null;
 
   /** Total number of currently rendered station points. */
 

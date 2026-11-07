@@ -8,9 +8,9 @@ export function createTesting({ state: layerState, services, parts, source }) {
     overlayHost,
   }) {
     layerState._viewer = viewer;
+    parts.rendering.attachSets(viewer);
     layerState._stationRenderMap = new Map([[key, record]]);
     layerState._selectedKey = null;
-    layerState._selectedEntity = null;
     layerState._overlayHost = overlayHost || layerState.DEFAULT_OVERLAY_HOST;
   }
 

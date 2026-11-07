@@ -26,6 +26,35 @@ export function registerSpriteCollection(layerId, collection) {
 }
 
 /**
+ * Register a renderer draw set for a sprite layer, by its set id. The
+ * default renderer names each set's host primitive with `drawSetId`; the
+ * restorer raises the host it finds under that name, whichever host the
+ * set draws with now.
+ * @param {string} layerId - Stable sprite-order layer key.
+ * @param {string} setId - The draw set's id.
+ * @returns {object} The registration, for `unregisterSpriteCollection`'s guard.
+ */
+export function registerSpriteSet(layerId, setId) {
+  const entry = Object.freeze({ drawSetId: setId });
+  if (layerId && typeof setId === 'string') _collections.set(layerId, entry);
+  return entry;
+}
+
+/**
+ * The primitive `entry` names: itself, or a draw set's host found by its id.
+ * The topmost match wins, so a host still retiring below its replacement is
+ * skipped.
+ */
+function resolveSprite(primitives, entry) {
+  if (typeof entry?.drawSetId !== 'string') return entry;
+  for (let i = (primitives.length ?? 0) - 1; i >= 0; i--) {
+    const primitive = primitives.get(i);
+    if (primitive?.drawSetId === entry.drawSetId) return primitive;
+  }
+  return null;
+}
+
+/**
  * Remove a registered collection (primarily useful to lifecycle tests).
  * @param {string} layerId - Stable sprite-order layer key.
  * @param {Object} [collection] - Optional identity guard against stale teardown.
@@ -51,7 +80,7 @@ export function restoreSpriteOrder(viewer) {
     return;
 
   for (const layerId of SPRITE_LAYER_ORDER) {
-    const collection = _collections.get(layerId);
+    const collection = resolveSprite(primitives, _collections.get(layerId));
     if (!collection || collection.isDestroyed?.()) continue;
     if (primitives.contains?.(collection) === false) continue;
     primitives.raiseToTop(collection);

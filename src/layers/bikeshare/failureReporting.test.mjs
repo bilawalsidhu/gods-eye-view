@@ -83,7 +83,8 @@ test('a recovered city clears its own failure', () => {
 // drive the real proximity check, status poll and lifecycle against a fake
 // GBFS source, so the failure state they read is the state the layer builds.
 
-import * as Cesium from 'cesium';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { CITY_BY_ID } from './registry.js';
 import { createIngestion } from './ingestion.js';
 import { createModel } from './model.js';
@@ -195,21 +196,9 @@ function makeLiveLayer() {
   parts.lifecycle = createLifecycle(context);
   const { methods: controls } = createControls(context);
 
-  const camera = { ...BETWEEN, height: LOW_M };
-  const viewer = {
-    camera: {
-      get positionCartographic() {
-        return Cesium.Cartographic.fromDegrees(
-          camera.lon,
-          camera.lat,
-          camera.height,
-        );
-      },
-      computeViewRectangle: () => undefined,
-      changed: { addEventListener() {}, removeEventListener() {} },
-    },
-    scene: { globe: {}, primitives: { add() {}, remove() {} } },
-  };
+  const camera = fakeCameraPort({ pose: { ...BETWEEN, height: LOW_M } });
+  const viewer = {};
+  bindFakeDraw(viewer, { camera: camera.port });
   parts.lifecycle.methods.init(viewer);
 
   return {
@@ -217,7 +206,7 @@ function makeLiveLayer() {
     source,
     stats: () => controls.getStats(),
     moveTo(place, height = LOW_M) {
-      Object.assign(camera, place, { height });
+      camera.setPose({ ...place, height });
       return parts.viewport.runProximityCheck();
     },
     async enable() {

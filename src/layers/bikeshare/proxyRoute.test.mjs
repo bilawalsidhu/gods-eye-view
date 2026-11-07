@@ -459,7 +459,7 @@ test('a station without a published capacity re-derives it from every status pol
   const state = {
     _cityRuntime: new Map(),
     _stationRenderMap: new Map(),
-    _pointCollection: { add: (options) => ({ ...options }) },
+    _stationSet: { upsert() {}, remove() {} },
   };
   const rendering = createRendering({
     state,
@@ -502,7 +502,7 @@ test('a station without a published capacity re-derives it from every status pol
     { station_id: 'fixed', num_bikes_available: 2, num_docks_available: 3 },
   ]);
   assert.equal(open.capacity, 30, 'the first poll fixed the capacity');
-  assert.equal(open.point.color, COLOR_YELLOW, '10 of 30 is not plenty');
+  assert.equal(open.color, COLOR_YELLOW, '10 of 30 is not plenty');
   assert.equal(fixed.capacity, 13, 'a published capacity is kept');
 
   poll([

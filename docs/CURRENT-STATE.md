@@ -1048,8 +1048,12 @@ Traffic and bikeshare expose factories through `./layers/traffic` and
 flow matching, styling, viewport lifecycle and development timing. Each source
 owns its decoded flow cache; cancelled bodies cannot refill it. Bikeshare
 separates its city registry, station source, parsing, rendering, selection and
-proximity lifecycle. Existing standalone sources, live/simulated labels, road
-budgets, station availability and polling behavior are retained.
+proximity lifecycle; its station dots and selected-station highlight are two
+renderer draw sets and it no longer reaches Cesium, so a caller handing it a
+Cesium viewer, with no renderer bound, loads the
+`./render/cesium/unbound` export once first. Existing standalone sources,
+live/simulated labels, road budgets, station availability and polling behavior
+are retained.
 
 Installations and proximity context now expose `./layers/installations` and
 `./layers/awareness` factories. Each owns its records, selection, presentation,
