@@ -98,9 +98,11 @@ const renderingSource = await readFile(
   new URL('../src/layers/transit/rendering.js', import.meta.url),
   'utf8',
 );
+// The body of onPreRender: up to the closing brace at its own indentation
+// (the visibility sweep that follows it may scan the fleet; the frame may not).
 const frameSource = renderingSource
   .split('function onPreRender()')[1]
-  .split('const occluder')[0];
+  .split('\n  }\n')[0];
 check(
   'frame pass does not scan the fleet or copy the moving set',
   !/_vehicles\.values|\[\.\.\.state\._moving\]/.test(frameSource),
@@ -825,15 +827,16 @@ try {
             color: entry?.marker.color.toCssColorString(),
             width: entry?.marker.width,
             pickOwner: (() => {
-              const p = window.__godsEyeView.viewer.scene.pick(
-                entry.marker.computeScreenSpacePosition(
-                  window.__godsEyeView.viewer.scene,
-                ),
+              // The marker is a mover instance: project it and pick through
+              // the engine, whose result names the instance's pickId.
+              const { engine } = window.__godsEyeView;
+              const screen = engine.projector.worldToWindow(
+                entry.marker.position,
               );
+              const p = screen ? engine.picker.pick(screen) : undefined;
               return {
                 id: typeof p?.id === 'string' ? p.id : null,
-                primitiveId:
-                  typeof p?.primitive?.id === 'string' ? p.primitive.id : null,
+                primitiveId: null,
                 collection:
                   entry.markerCollection === state._animatedMarkers
                     ? 'animated'
@@ -1595,7 +1598,7 @@ try {
         y >= canvas.clientHeight
       )
         return null;
-      const picked = scene.pick({ x, y });
+      const picked = app.engine.picker.pick({ x, y });
       return {
         entityCount: app.viewer.entities.values.length,
         key: entry.key,

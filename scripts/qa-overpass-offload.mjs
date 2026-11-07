@@ -295,9 +295,19 @@ function footprintSummary() {
   if (summary.tourTable.length) console.table(summary.tourTable);
   return summary;
 }
+// The Mapped Installations sites drawn now, as their context handles (the
+// layer draws through the globe contract and owns no Cesium entities; its
+// display keeps one handle per drawn record in the context store).
+function installSiteProbe() {
+  window.__qaInstallationSites = () =>
+    [...(window.__gevContextStore?.entities.values() ?? [])]
+      .filter((r) => r.layerId === 'military-installations' && r.entity?.record)
+      .map((r) => r.entity);
+}
 let page;
 try {
   page = await browser.newPage();
+  await page.evaluateOnNewDocument(installSiteProbe);
   await page.evaluateOnNewDocument(() => {
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
   });
@@ -513,12 +523,23 @@ try {
       const C = await import('/node_modules/cesium/Build/Cesium/index.js');
       const { viewer, dataManager } = window.__godsEyeView;
       const { scene } = viewer;
+      // The traffic dots are point mover sets on the globe contract; on
+      // Cesium each set is a PointPrimitiveCollection under the engine's
+      // mover collection, tagged with its set id (gevMoverSet).
       const collections = [];
-      for (let i = 0; i < scene.primitives.length; i++) {
-        const p = scene.primitives.get(i);
-        if (Array.isArray(p._pointPrimitives) && p.show && p.length > 0)
-          collections.push(p);
-      }
+      const walk = (collection, depth) => {
+        for (let i = 0; i < (collection?.length || 0); i++) {
+          const p = collection.get(i);
+          if (
+            Array.isArray(p?._pointPrimitives) &&
+            String(p.gevMoverSet ?? '').startsWith('traffic-')
+          ) {
+            if (p.show && p.length > 0) collections.push(p);
+          } else if (depth < 3 && typeof p?.get === 'function' && p.show)
+            walk(p, depth + 1);
+        }
+      };
+      walk(scene.primitives, 0);
       let inView = 0,
         onMesh = 0,
         sampled = 0;
@@ -1025,16 +1046,14 @@ try {
       const { viewer, dataManager } = window.__godsEyeView;
       const traffic = dataManager.layers.get('traffic').module.getStats();
       const alpr = dataManager.layers.get('alpr-cameras').module.getStats();
-      let cameraEntities = 0;
-      for (let i = 0; i < viewer.dataSources.length; i++)
-        for (const entity of viewer.dataSources.get(i).entities.values) {
-          if (
-            String(entity.id).startsWith('alpr:') &&
-            entity.billboard &&
-            entity.show
-          )
-            cameraEntities++;
-        }
+      // The camera badges: the layer's sprite mover sets (normal and
+      // selected) on the globe contract.
+      const cameraEntities = window.__godsEyeView.engine.movers
+        .list()
+        .filter(
+          (set) => set.id === 'alpr-cameras' || set.id === 'alpr-selected',
+        )
+        .reduce((sum, set) => sum + set.count, 0);
       return {
         traffic,
         alpr,
@@ -1178,6 +1197,7 @@ try {
       beginView('keyless-startup');
       page = await browser.newPage();
       await page.setViewport({ width: 1440, height: 1000 });
+      await page.evaluateOnNewDocument(installSiteProbe);
       await page.evaluateOnNewDocument(() => {
         sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
         const original = window.fetch;
@@ -1273,15 +1293,27 @@ try {
         .get('military-installations')
         .module.getNearby(center, 4000);
       const ids = new Set(records.map((r) => r.id));
+      // The layer draws through the globe contract: each drawn site has a
+      // context handle (its disc, unless a named area), named areas a named
+      // marker, and the outlines are one engine.ground corridor set.
+      const sites = window.__qaInstallationSites();
       let markers = 0,
         outlines = 0;
-      for (let i = 0; i < viewer.dataSources.length; i++)
-        for (const entity of viewer.dataSources.get(i).entities.values) {
-          if (!ids.has(entity.installationId || entity.id) || !entity.show)
-            continue;
-          if (entity.billboard || entity.point) markers++;
-          if (entity.polyline) outlines++;
-        }
+      for (const site of sites) {
+        if (!ids.has(site.id)) continue;
+        if (!site.record.namedArea) markers++;
+        outlines +=
+          site.record.outlineLines?.length ?? (site.record.footprint ? 1 : 0);
+      }
+      dataManager.layers
+        .get('military-installations')
+        .module.visitNamedMarkers((id) => {
+          if (ids.has(id)) markers++;
+        });
+      const outlineSets = window.__godsEyeView.engine.ground
+        .list()
+        .filter((set) => set.id.startsWith('military-installations-outlines-'));
+      if (!outlineSets.some((set) => set.shown && set.count)) outlines = 0;
       return {
         markers,
         outlines,
@@ -1336,23 +1368,17 @@ try {
     );
     result.fortCavazos = await page.evaluate(() => {
       const { viewer, dataManager } = window.__godsEyeView;
+      // Drawn site discs (context handles, see Camp Mabry) plus the named
+      // markers the stats count.
       let markers = 0,
         outlines = 0;
-      for (let i = 0; i < viewer.dataSources.length; i++)
-        for (const e of viewer.dataSources.get(i).entities.values) {
-          if (
-            !e.show ||
-            !/^(ofm:installation:|osm:military:)/.test(String(e.id))
-          )
-            continue;
-          if (
-            (e.point &&
-              e.point.show?.getValue(viewer.clock.currentTime) !== false) ||
-            e.billboard
-          )
-            markers++;
-          if (e.polyline) outlines++;
-        }
+      for (const site of window.__qaInstallationSites()) {
+        if (!/^(ofm:installation:|osm:military:)/.test(String(site.id)))
+          continue;
+        if (!site.record.namedArea) markers++;
+        outlines +=
+          site.record.outlineLines?.length ?? (site.record.footprint ? 1 : 0);
+      }
       const stats = dataManager.layers
         .get('military-installations')
         .module.getStats();

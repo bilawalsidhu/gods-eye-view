@@ -8,10 +8,11 @@
  *       a. per-frame `scene.render` cost over a ~10 s driven-orbit window
  *          (mean / p50 / p95 / max — relative numbers, SwiftShader surface),
  *       b. toggle-ON → first-labels-visible latency,
- *       c. entity / native-label / host-entry counts,
+ *       c. contract set (ground paths, mover tips, stems) / host-entry counts,
  *       d. parked-idle postRender fires over 5 s (render-governor honesty).
  *  2. GATE (unified build only): assert the migration contract —
- *       zero native `LabelGraphics` on cable reference entities, host entries
+ *       no layer-owned Cesium data source (paths, pins and tips are globe
+ *       contract sets), host entries
  *       present for the source, idle stays near-zero, and a clean OFF→ON cycle
  *       (no orphan host entries after disable).
  *
@@ -105,28 +106,40 @@ try {
     await new Promise((r) => setTimeout(r, 3_000)); // let load/labels settle
   }
 
-  // ── c. entity / label / host counts ───────────────────────────────────
+  // ── c. drawn-set / label / host counts ────────────────────────────────
+  // The layer draws through the globe contract (render/display.js): cable
+  // paths in one engine.ground corridor set, landing points and reference
+  // tips in mover sets, stems in engine.lines, labels on the world-overlay
+  // host. It owns no Cesium DataSource or Entity any more.
   const counts = await page.evaluate((layerId) => {
     const gev = window.__godsEyeView;
     const v = gev.viewer;
+    const engine = gev.engine;
     const out = {
-      dataSources: {}, nativeLabels: 0, dynamicPositionEntities: 0,
-      referenceEntities: 0, hostEntries: 0, hostPainted: 0,
+      layerDataSources: 0, layerEntities: 0,
+      pathSets: 0, pathItems: 0, markers: 0, tipSets: 0, tips: 0, stems: 0,
+      hostEntries: 0, hostPainted: 0,
     };
-    for (let i = 0; i < v.dataSources.length; i++) {
+    for (let i = 0; i < (v?.dataSources?.length ?? 0); i++) {
       const ds = v.dataSources.get(i);
       if (!/TeleGeography/.test(ds.name || '')) continue;
-      const list = ds.entities.values;
-      out.dataSources[ds.name] = list.length;
-      for (const e of list) {
-        if (e.label !== undefined) out.nativeLabels++;
-        if (e.position && e.position.isConstant === false) out.dynamicPositionEntities++;
-        if (e.polyline?.positions && e.polyline.positions.isConstant === false) {
-          out.dynamicPositionEntities++;
-        }
-      }
-      if (/References/.test(ds.name)) out.referenceEntities = list.length;
+      out.layerDataSources++;
+      out.layerEntities += ds.entities.values.length;
     }
+    for (const set of engine.ground.list()) {
+      if (set.id !== `${layerId}-paths`) continue;
+      out.pathSets++;
+      out.pathItems += set.count;
+    }
+    for (const set of engine.movers.list()) {
+      if (set.id === `${layerId}-markers`) out.markers += set.count;
+      else if (set.id.startsWith(`${layerId}-`) && set.id.endsWith('-tips')) {
+        out.tipSets++;
+        out.tips += set.count;
+      }
+    }
+    out.stems = engine.lines.list().filter((line) =>
+      line.id.startsWith(`${layerId}-stem-`) && line.shown).length;
     const diag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
     out.hostEntries = diag.entriesBySource?.[layerId] || 0;
     out.hostPainted = diag.paintedBySource?.[layerId] || 0;
@@ -189,8 +202,10 @@ try {
 
   if (!legacy && !control) {
     // ── unified-build contract gates ────────────────────────────────────
-    check('zero native LabelGraphics on cable entities', counts.nativeLabels === 0, counts.nativeLabels);
-    check('zero per-frame CallbackProperty cable entities', counts.dynamicPositionEntities === 0, counts.dynamicPositionEntities);
+    // Paths, pins and tips belong to contract sets; labels belong to the host.
+    check('no layer-owned Cesium data source or entities', counts.layerDataSources === 0 && counts.layerEntities === 0, counts);
+    check('cable paths drawn as an engine.ground corridor set', counts.pathSets === 1 && counts.pathItems > 0, counts);
+    check('reference tips drawn as mover sets', counts.tipSets > 0 && counts.tips > 0, counts);
     check('host has cable entries', counts.hostEntries > 0, counts.hostEntries);
     check('host painted cable labels', counts.hostPainted > 0, counts.hostPainted);
     // The cables source never republishes an unchanged cohort (unit pin), and

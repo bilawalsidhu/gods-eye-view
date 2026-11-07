@@ -16,10 +16,13 @@ export async function checkInstallationPan(page, dir) {
     const installations = g.dataManager.layers.get(
       'military-installations',
     ).module;
+    // The datacenters' overlay entry ids: the layer draws through the globe
+    // contract and registers each reference row (its overlay entry's id) in
+    // the context store; it owns no Cesium entities.
     const centerIds = [];
-    for (let i = 0; i < g.viewer.dataSources.length; i++)
-      for (const e of g.viewer.dataSources.get(i).entities.values)
-        if (e.__localLayerId === 'local-datacenters') centerIds.push(e.id);
+    for (const record of window.__gevContextStore?.entities.values() ?? [])
+      if (record.layerId === 'local-datacenters' && record.entity?.id != null)
+        centerIds.push(record.entity.id);
     window.__polishPanFrames = [];
     window.__stopPolishPan = g.viewer.scene.postRender.addEventListener(() => {
       const sites = [],
@@ -106,6 +109,17 @@ export async function checkInstallationSelection(
   dir,
   { video = true } = {},
 ) {
+  await page.evaluate(() => {
+    const ground = window.__godsEyeView.engine.ground;
+    const create = ground.createSet.bind(ground);
+    window.__polishGroundSets = new Map();
+    ground.createSet = (options) => {
+      const set = create(options);
+      window.__polishGroundSets.set(options.id, { set, drape: options.drape ?? 'both' });
+      return set;
+    };
+    window.__restorePolishGround = () => { ground.createSet = create; };
+  });
   const result = [];
   const recorder = video
     ? await createScreencast(page, `${dir}/selection-orbit`, { fps: 24 })
@@ -175,50 +189,38 @@ export async function checkInstallationSelection(
           await import('/src/data/contextStore.js');
         const { getOverlayPaintRect, getWorldOverlayDiagnostics } =
           await import('/src/overlays/worldOverlay.js');
-        const knownFills = new Set();
-        const fillEntities = () => {
-          const list = [];
-          for (let i = 0; i < g.viewer.dataSources.length; i++)
-            for (const e of g.viewer.dataSources.get(i).entities.values)
-              if (e.id.startsWith(`${record.id}:selected-fill:`)) list.push(e);
-          for (const e of list) knownFills.add(e);
-          return list;
-        };
-        // Geometry-instance ids prove the ground primitive actually built, not just an entity declaration.
-        const primitives = () => {
-          let count = 0;
-          const walk = (collection) => {
-            if (collection?._collectionsArray) {
-              for (const child of collection._collectionsArray) walk(child);
-              return;
-            }
-            for (let i = 0; i < (collection?.length || 0); i++) {
-              const p = collection.get(i);
-              if (
-                p.ready &&
-                typeof p.getGeometryInstanceAttributes === 'function'
-              ) {
-                for (const e of knownFills) {
-                  try {
-                    const a = p.getGeometryInstanceAttributes(e);
-                    if (a && (!a.show || a.show[0])) count++;
-                  } catch {}
-                }
-              }
-              if (typeof p.get === 'function' || p._collectionsArray) walk(p);
+        // The selected site's fill is one engine.ground polygon set
+        // (render/display.js SELECTION_FILL_SET_ID), an item per footprint
+        // part; the layer owns no Cesium entities or ground primitives.
+        const fillSet = () =>
+          g.engine.ground
+            .list()
+            .find((set) => set.id === 'military-installations-selection-fill');
+        window.__polishFillProbe = () => {
+          const set = fillSet();
+          const items = set?.shown ? set.count : 0;
+          const captured = window.__polishGroundSets.get(set?.id);
+          // A retained fill may predate this probe. Its engine-owned batches
+          // prove readiness and classification on this Cesium-only check.
+          const batches = [];
+          const visit = collection => {
+            for (let i = 0; i < collection.length; i++) {
+              const primitive = collection.get(i);
+              if (primitive.gevGroundSet === set?.id) batches.push(primitive);
+              else if (typeof primitive.get === 'function') visit(primitive);
             }
           };
-          walk(g.viewer.scene.groundPrimitives);
-          return count;
+          if (!captured && set) visit(g.viewer.scene.groundPrimitives);
+          const ready = captured ? captured.set.ready() : batches.length > 0 && batches.every(p => p.ready);
+          const drape = captured?.drape ?? ['terrain', 'tiles', 'both'][batches[0]?.classificationType];
+          return {
+            items,
+            readyItems: ready ? items : 0,
+            drape,
+            expectedDrape: g.engine.maps.photorealActive() ? 'tiles' : 'both',
+            selected: getSelectedEntityContext()?.id || null,
+          };
         };
-        window.__polishFillProbe = () => ({
-          entities: fillEntities().length,
-          primitives: primitives(),
-          classification: fillEntities().map((e) =>
-            e.polygon.classificationType.getValue(),
-          ),
-          selected: getSelectedEntityContext()?.id || null,
-        });
         window.__stopPolishSelection =
           g.viewer.scene.postRender.addEventListener(() => {
             window.__polishSelectionFrames.push({
@@ -251,7 +253,7 @@ export async function checkInstallationSelection(
         .waitForFunction(
           () => {
             const p = window.__polishFillProbe();
-            return p.selected === window.__polishSelectedId && p.primitives > 0;
+            return p.selected === window.__polishSelectedId && p.readyItems > 0;
           },
           { timeout: 20000 },
         )
@@ -259,27 +261,12 @@ export async function checkInstallationSelection(
           await page.screenshot({ path: `${dir}/selection-failure.png` });
           const diagnostic = await page.evaluate(() => {
             const g = window.__godsEyeView;
-            const describe = (p) => ({
-              type: p.constructor.name,
-              ready: p.ready,
-              length: p.length,
-              keys: Object.keys(p).filter((k) =>
-                /primitive|instance|collection/i.test(k),
-              ),
-              ids: p._instanceIds?.map((id) => id.id || String(id)),
-              children:
-                typeof p.get === 'function'
-                  ? Array.from({ length: p.length }, (_, i) =>
-                      describe(p.get(i)),
-                    )
-                  : p._collectionsArray?.map(describe),
-            });
             return {
               probe: window.__polishFillProbe(),
               stats: g.dataManager.layers
                 .get('military-installations')
                 .module.getStats(),
-              primitives: describe(g.viewer.scene.groundPrimitives),
+              ground: g.engine.ground.list(),
               frames: window.__polishSelectionFrames.slice(-5),
             };
           });
@@ -332,9 +319,9 @@ export async function checkInstallationSelection(
         const g = window.__godsEyeView;
         for (let y = 250; y < 650; y += 75)
           for (let x = 400; x < 850; x += 75) {
-            const pick = g.viewer.scene.pick({ x, y });
-            if (!pick?.id?.installationId && !pick?.id?.gevTrackedId)
-              return { x, y };
+            // Nothing drawn there: no mover, line or ground item's pickId.
+            const pick = g.engine.picker.pick({ x, y });
+            if (pick?.id == null) return { x, y };
           }
         throw new Error('No empty map point');
       });
@@ -342,7 +329,7 @@ export async function checkInstallationSelection(
       await page.waitForFunction(
         () =>
           window.__polishFillProbe().selected === null &&
-          window.__polishFillProbe().entities === 0,
+          window.__polishFillProbe().items === 0,
       );
       await sleep(600);
       const deselected = await page.evaluate(() => {
@@ -353,14 +340,11 @@ export async function checkInstallationSelection(
           frames: window.__polishSelectionFrames,
         };
       });
-      assert.equal(selected.entities, picked.parts);
-      assert.equal(selected.primitives, picked.parts);
-      assert.ok(
-        selected.classification.every((c) => c === 1),
-        'Google 3D tile classification',
-      );
-      assert.equal(deselected.entities, 0);
-      assert.equal(deselected.primitives, 0);
+      assert.equal(selected.items, picked.parts);
+      assert.equal(selected.readyItems, picked.parts);
+      assert.equal(selected.drape, selected.expectedDrape, 'selection fill follows the map surface');
+      assert.equal(deselected.items, 0);
+      assert.equal(deselected.readyItems, 0);
       const selectedFrames = deselected.frames.filter(
         (f) => f.selected && f.own,
       );
@@ -381,6 +365,7 @@ export async function checkInstallationSelection(
       result.push({ site, picked, selected, deselected });
     }
   } finally {
+    await page.evaluate(() => window.__restorePolishGround?.());
     await fs.writeFile(
       `${dir}/selection-checks.json`,
       JSON.stringify(result, null, 2),
@@ -396,8 +381,8 @@ export async function checkInstallationSelection(
     id: picked.id,
     selected,
     deselected: {
-      entities: deselected.entities,
-      primitives: deselected.primitives,
+      entities: deselected.items,
+      primitives: deselected.readyItems,
     },
     frames: deselected.frames.length,
   }));

@@ -19,8 +19,9 @@
  *   add order and the app registered first), i.e. at the exact wall-clock the
  *   rate limiter advanced — postRender sampling skews apparent rates by the
  *   variable render-pass duration (~40% at SwiftShader's ~3 fps). The course
- *   is derived from the tracked standalone Cesium.Model's modelMatrix (the
- *   actually-rendered transform), inverting _modelMatrix: with pitch=roll=0
+ *   is derived from the tracked model's heading-pitch-roll frame (the layer's
+ *   model handle, read through the QA probe's layers.drawn on both engines;
+ *   the drawn Cesium Model adds the glTF axis turn), inverting it: with pitch=roll=0
  *   the matrix is ENU·Rz(−h), so local x in ENU = (cos h, −sin h, 0) →
  *   h = atan2(−x·north, x·east), course = norm360(deg(h) − MODEL_HEADING_OFFSET).
  *   The 15 s fix cadence × 3°/s turn = 45° course step per interpolation
@@ -593,44 +594,25 @@ async function main() {
     // ---- Model finder + course derivation, installed once ------------------
     await page.evaluate(() => {
       // Every sampler in this harness targets a KNOWN aircraft, and both the
-      // fleet models and the tracked standalone model carry id=icao — so the
-      // finder selects by id when given one. (The old nearest-to-tracked
-      // fallback could mis-pick ANOTHER plane's model for a frame whenever
-      // the tracked display position read null, which injected a one-frame
-      // ~90° course spike into the sampled series — a measurement flake, not
-      // a product regression.)
+      // fleet models and the tracked model carry id=icao — so the finder
+      // selects by id. The models draw through the globe contract (engine
+      // model movers), on Cesium as on Navara; the layer's drawn rows
+      // (window.__godsEyeView.layers.drawn, src/layers/aircraft/qaDrawn.js)
+      // give each model's heading-pitch-roll frame, the matrix the course
+      // derivation below inverts. The Cesium Model a mover set draws carries
+      // that frame times the layer's glTF axis turn (GLTF_AXIS in
+      // src/layers/aircraft/render/display.js), so its own modelMatrix reads
+      // 90° off; the handle's ready/show say whether the engine draws it.
       window.__findTrackedModel = function (icao) {
-        const v = (window.__headingView ?? window.__godsEyeView.viewer);
-        const out = [];
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            const p = coll.get(i);
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.modelMatrix && typeof p.ready !== 'undefined') {
-              if (icao && p.id !== icao) continue;
-              out.push(p);
-            }
-          }
-        };
-        walk(v.scene.primitives);
-        const shown = out.filter((m) => m.show && m.ready);
-        if (icao) return shown[0] || null; // deterministic: the plane's own model or nothing
-        const pool = shown.length ? shown : out;
-        if (!pool.length) return null;
-        const ent = v.trackedEntity;
-        let tracked = null;
-        if (ent && typeof ent.gevDisplayPosition === 'function') tracked = ent.gevDisplayPosition();
-        if (!tracked) return pool[0];
-        let best = null, bestD = Infinity;
-        for (const m of pool) {
-          const mm = m.modelMatrix;
-          const dx = mm[12] - tracked.x, dy = mm[13] - tracked.y, dz = mm[14] - tracked.z;
-          const d = dx * dx + dy * dy + dz * dz;
-          if (d < bestD) { bestD = d; best = m; }
-        }
-        return best;
+        const rows = ['flights', 'military']
+          .flatMap((layer) => window.__godsEyeView.layers.drawn(layer) ?? [])
+          .filter((row) => row.id === icao);
+        const row =
+          rows.find((r) => r.trackedModel && r.model?.ready && r.model.show) ??
+          rows.find((r) => r.model?.ready && r.model.show);
+        return row
+          ? { id: icao, ready: row.model.ready, show: row.model.show, modelMatrix: row.model.matrix }
+          : null;
       };
 
       // Invert _modelMatrix (pitch=roll=0): local x in ENU = (cos h, −sin h, 0)
@@ -952,23 +934,7 @@ async function main() {
     // ========================================================================
     console.log('\nPhase 5 — 65 kt helicopter: tracked↔fleet course handoff (click / click-away)');
     await page.evaluate(() => {
-      if (window.__headingView) { window.__findModelByIcao = window.__findTrackedModel; return; }
-      window.__findModelByIcao = function (icao) {
-        const v = (window.__headingView ?? window.__godsEyeView.viewer);
-        const out = [];
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.modelMatrix && typeof p.ready !== 'undefined' && p.id === icao && p.show && p.ready) out.push(p);
-          }
-        };
-        walk(v.scene.primitives);
-        return out[0] || null;
-      };
+      window.__findModelByIcao = window.__findTrackedModel;
     });
 
     // Activate the heli in the feed now (kept out of phases 1–4), ingest it,

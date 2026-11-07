@@ -195,23 +195,17 @@ const report = await page.evaluate(async () => {
     });
   }
   // Visibility census (round 6): getNearby only returns contacts a sprite or a
-  // 3D model is actually drawing, so also walk the raw collections — a culled
-  // "invisible plane" shows up here.
+  // 3D model is actually drawing, so also count every glyph the layer holds
+  // (the probe's drawn rows) — a culled "invisible plane" shows up here. The
+  // engine's batched billboards keep hidden spares, so they are not counted.
   let shown = 0, hidden = 0;
-  const censusWalk = (coll) => {
-    const n = coll.length;
-    for (let i = 0; i < n; i++) {
-      let pr; try { pr = coll.get(i); } catch { continue; }
-      if (!pr) continue;
-      if (typeof pr.length === 'number' && typeof pr.get === 'function') { censusWalk(pr); continue; }
-      if (pr.image === undefined || pr.alignedAxis === undefined) continue;
-      const cc = ell.cartesianToCartographic(pr.position);
-      const la = cc.latitude * 180 / Math.PI, lo = cc.longitude * 180 / Math.PI;
-      if (Math.abs(la - window.__QA_SITE.lat) > 0.08 || Math.abs(lo - window.__QA_SITE.lon) > 0.10) continue;
-      if (pr.show) shown++; else hidden++;
-    }
-  };
-  censusWalk(v.scene.primitives);
+  for (const row of gev.layers?.drawn('flights') ?? []) {
+    if (!row.position || row.trackedModel) continue;
+    const cc = ell.cartesianToCartographic(row.position);
+    const la = cc.latitude * 180 / Math.PI, lo = cc.longitude * 180 / Math.PI;
+    if (Math.abs(la - window.__QA_SITE.lat) > 0.08 || Math.abs(lo - window.__QA_SITE.lon) > 0.10) continue;
+    if (row.show) shown++; else hidden++;
+  }
   return { ausContacts: out.length, contacts: out.slice(0, 16), spritesShown: shown, spritesHidden: hidden };
 });
 console.log(JSON.stringify(report, null, 1));

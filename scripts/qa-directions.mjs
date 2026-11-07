@@ -111,11 +111,7 @@ const layerState = () =>
       '#utilities-toggles [data-layer-id="directions"]',
     );
     const controls = module.getRowControls();
-    const viewer = gev.viewer;
-    const entities = [...viewer.entities.values];
-    const routeEntities = entities.filter(
-      (entity) => String(entity.id) === 'directions:route',
-    );
+    const drawn = window.__gevQaDirections.drawn();
     const listNodes = row
       ? [...row.querySelectorAll('.data-row-list-item')]
       : [];
@@ -137,14 +133,9 @@ const layerState = () =>
       domCurrent: listNodes.findIndex((node) =>
         node.classList.contains('current'),
       ),
-      routeEntities: routeEntities.length,
-      routePositions:
-        routeEntities[0]?.polyline?.positions?.getValue?.(
-          viewer.clock.currentTime,
-        )?.length || 0,
-      markerCount: entities.filter((entity) =>
-        String(entity.id).startsWith('directions:marker:'),
-      ).length,
+      routeEntities: drawn.routeSets,
+      routePositions: drawn.routeVertices,
+      markerCount: drawn.markersShown,
       pointerOwner: window.__gevQa.pointerOwner(),
       cameraMotion: window.__gevQa.getActiveCameraMotion(),
     };
@@ -229,6 +220,96 @@ try {
       claimPointer: own.claimPointer,
       releasePointer: own.releasePointer,
       getActiveCameraMotion: verbs.getActiveCameraMotion,
+    };
+    // What Directions draws, read through the globe contract
+    // (src/layers/directions/render/display.js): the route is the
+    // `directions-route` ground corridor set, cut into dash pieces; the A/B
+    // discs and the maneuver dots are the `directions-markers` and
+    // `directions-steps` point mover sets. The route's pieces are seen as the
+    // display hands them to engine.ground; which instances are shown is read
+    // from the Cesium engine's own point collection for the set (this gate
+    // drives the Cesium camera).
+    const engine = window.__godsEyeView.engine;
+    let routePieces = null;
+    const createGroundSet = engine.ground.createSet.bind(engine.ground);
+    engine.ground.createSet = (options) => {
+      const set = createGroundSet(options);
+      if (options?.id === 'directions-route') {
+        const replace = set.replace.bind(set);
+        set.replace = (items) => {
+          routePieces = items.map((item) => item.positions.length);
+          return replace(items);
+        };
+      }
+      return set;
+    };
+    const moverPrimitive = (id) => {
+      const walk = (collection) => {
+        for (let i = 0; i < collection.length; i += 1) {
+          const primitive = collection.get(i);
+          if (!primitive) continue;
+          if (primitive.gevMoverSet === id) return primitive;
+          if (
+            primitive.gevMoverSet === undefined &&
+            typeof primitive.get === 'function' &&
+            typeof primitive.length === 'number'
+          ) {
+            const found = walk(primitive);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(window.__godsEyeView.viewer.scene.primitives);
+    };
+    const moverCount = (id) =>
+      engine.movers.list().find((set) => set.id === id)?.count ?? 0;
+    const shownInstances = (id) => {
+      const primitive = moverPrimitive(id);
+      if (!primitive || primitive.show === false) return [];
+      const shown = [];
+      const count = Math.min(moverCount(id), primitive.length);
+      for (let i = 0; i < count; i += 1) {
+        const instance = primitive.get(i);
+        if (instance.show) shown.push(instance);
+      }
+      return shown;
+    };
+    window.__gevQaDirections = {
+      drawn() {
+        const route = engine.ground
+          .list()
+          .filter((set) => set.id === 'directions-route');
+        // Every original vertex is kept, and each piece adds its two ends,
+        // which are the next piece's start: vertices = total - 2·pieces + 2.
+        const routeVertices =
+          route.length && routePieces?.length
+            ? routePieces.reduce((sum, n) => sum + n, 0) -
+              2 * routePieces.length +
+              2
+            : 0;
+        return {
+          routeSets: route.filter((set) => set.shown && set.count > 0).length,
+          routeVertices,
+          markersShown: shownInstances('directions-markers').length,
+          stepCount: moverCount('directions-steps'),
+          stepsShown: shownInstances('directions-steps').map((point) =>
+            point.position.clone(),
+          ),
+        };
+      },
+      // Every other layer's contract sets, to prove a disable touches only
+      // the Directions ones.
+      others() {
+        const mine = (id) => String(id).startsWith('directions');
+        return [
+          ...engine.movers.list().map((set) => `movers:${set.id}`),
+          ...engine.lines.list().map((line) => `lines:${line.id}`),
+          ...engine.ground.list().map((set) => `ground:${set.id}`),
+        ]
+          .filter((key) => !mine(key.split(':').slice(1).join(':')))
+          .sort();
+      },
     };
   });
   await sleep(3000);
@@ -701,28 +782,11 @@ try {
       const denver = await page.evaluate(() => {
         const viewer = window.__godsEyeView.viewer;
         const Cartographic = viewer.camera.positionCartographic.constructor;
-        const scene = viewer.scene;
-        let collection = null;
-        for (let i = 0; i < scene.primitives.length; i += 1) {
-          const primitive = scene.primitives.get(i);
-          if (
-            primitive &&
-            typeof primitive.get === 'function' &&
-            primitive.length > 0 &&
-            String(primitive.get(0)?.id || '').startsWith('directions:step:')
-          ) {
-            collection = primitive;
-            break;
-          }
-        }
-        if (!collection) return { dots: 0, shown: 0, heights: [] };
-        const heights = [];
-        for (let i = 0; i < collection.length; i += 1) {
-          const point = collection.get(i);
-          if (!point.show) continue;
-          heights.push(Cartographic.fromCartesian(point.position).height);
-        }
-        return { dots: collection.length, shown: heights.length, heights };
+        const { stepCount, stepsShown } = window.__gevQaDirections.drawn();
+        const heights = stepsShown.map(
+          (position) => Cartographic.fromCartesian(position).height,
+        );
+        return { dots: stepCount, shown: heights.length, heights };
       });
       check('Denver has maneuver dots', denver.dots > 0, `${denver.dots} dots`);
       check(
@@ -745,15 +809,10 @@ try {
   }
 
   // ── 10. Disable: nothing is left behind. ────────────────────────────────
-  const { beforeDisable, directionsBeforeDisable } = await page.evaluate(() => {
-    const entities = [...window.__godsEyeView.viewer.entities.values];
-    return {
-      beforeDisable: entities.length,
-      directionsBeforeDisable: entities.filter((entity) =>
-        String(entity.id).startsWith('directions:'),
-      ).length,
-    };
-  });
+  const { othersBefore, drawnBefore } = await page.evaluate(() => ({
+    othersBefore: window.__gevQaDirections.others(),
+    drawnBefore: window.__gevQaDirections.drawn(),
+  }));
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('directions', false, {
       origin: 'user',
@@ -761,39 +820,23 @@ try {
   );
   await sleep(1500);
   const off = await page.evaluate(() => {
-    const gev = window.__godsEyeView;
-    const viewer = gev.viewer;
-    const left = [...viewer.entities.values].filter((entity) =>
-      String(entity.id).startsWith('directions:'),
-    );
-    let shownDots = 0;
-    for (let i = 0; i < viewer.scene.primitives.length; i += 1) {
-      const primitive = viewer.scene.primitives.get(i);
-      if (
-        primitive &&
-        typeof primitive.get === 'function' &&
-        primitive.length > 0 &&
-        String(primitive.get(0)?.id || '').startsWith('directions:step:')
-      ) {
-        shownDots = primitive.show ? primitive.length : 0;
-      }
-    }
+    const drawn = window.__gevQaDirections.drawn();
     const row = document.querySelector(
       '#utilities-toggles [data-layer-id="directions"]',
     );
     return {
-      entities: left.length,
-      shownDots,
+      entities: drawn.routeSets + drawn.markersShown,
+      shownDots: drawn.stepsShown.length,
       controlsHidden:
         row?.querySelector('.data-toggle-controls')?.hidden === true,
       listHidden: row?.querySelector('.data-row-list')?.hidden === true,
       pointerOwner: window.__gevQa.pointerOwner(),
       motion: window.__gevQa.getActiveCameraMotion(),
-      totalEntities: viewer.entities.values.length,
+      others: window.__gevQaDirections.others(),
     };
   });
   check(
-    'disabling removes every Directions entity',
+    'disabling removes the route and hides both markers',
     off.entities === 0,
     `${off.entities} left`,
   );
@@ -810,9 +853,9 @@ try {
   );
   check('disabling leaves no camera motion running', off.motion === null);
   check(
-    'exactly the Directions entities went away, and nothing else did',
-    off.totalEntities === beforeDisable - directionsBeforeDisable,
-    `${beforeDisable} total (${directionsBeforeDisable} ours) -> ${off.totalEntities}`,
+    "only the Directions drawing went away: every other layer's sets stay",
+    JSON.stringify(off.others) === JSON.stringify(othersBefore),
+    `ours before: route ${drawnBefore.routeSets}, markers ${drawnBefore.markersShown}, dots ${drawnBefore.stepsShown.length}; others ${othersBefore.length} -> ${off.others.length}`,
   );
 
   check(

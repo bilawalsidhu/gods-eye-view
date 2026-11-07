@@ -37,6 +37,21 @@ const browser = await puppeteer.launch({
   ],
 });
 const page = await browser.newPage();
+// Daylight over San Francisco: the amber-pixel checks count the drawn mark,
+// and the globe's night side shows warm city lights the count would include.
+await page.evaluateOnNewDocument(() => {
+  const offset = Date.UTC(2026, 5, 15, 20, 0) - Date.now();
+  const RealDate = Date;
+  globalThis.Date = class ShiftedDate extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) super(RealDate.now() + offset);
+      else super(...args);
+    }
+    static now() {
+      return RealDate.now() + offset;
+    }
+  };
+});
 const errors = [];
 page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 let failures = 0;
@@ -189,7 +204,12 @@ async function waitForMarks(expected, timeout = 15_000) {
 
 try {
   await page.setViewport({ width: 1280, height: 860 });
-  await page.goto(`${BASE_URL}/?welcome=0`, { waitUntil: 'domcontentloaded' });
+  // The view in the address too: the boot flight lands there instead of
+  // flying away from the view set below once deferred init runs.
+  await page.goto(
+    `${BASE_URL}/?welcome=0#v=2&lat=${VIEW.lat}&lon=${VIEW.lon}&alt=${VIEW.height}&heading=${VIEW.heading}&pitch=${VIEW.pitch}`,
+    { waitUntil: 'domcontentloaded' },
+  );
   await page.waitForFunction(
     () =>
       window.__gevDrawTool &&
@@ -601,24 +621,46 @@ try {
       : 'no CCTV camera or bundled site could be reached — the ownership case cannot be proved',
   );
   if (target) {
+    // Layers select through their own state now, not the viewer's
+    // selectedEntity: a CCTV marker makes its camera the active one, a data
+    // centre selects its record in the shared context store.
+    const isSelected = (spot) =>
+      page.evaluate((spot) => {
+        if (spot.kind === 'cctv')
+          return (
+            window.__godsEyeView.dataManager.layers
+              .get('cctv')
+              ?.module?.getUIState?.()?.activeCameraId === spot.id
+          );
+        return window.__gevContextStore?.selectedEntityId === spot.id;
+      }, spot);
+    // Clear the selection (another camera active; no context selection), as
+    // the old check cleared the viewer's selectedEntity.
+    const deselect = (spot) =>
+      page.evaluate((spot) => {
+        if (spot.kind === 'cctv') {
+          const module =
+            window.__godsEyeView.dataManager.layers.get('cctv')?.module;
+          const other = (module?.getUIState?.()?.cameras || []).find(
+            (camera) => camera.id !== spot.id,
+          );
+          if (other) module.selectCamera(other.id);
+        } else if (window.__gevContextStore)
+          window.__gevContextStore.selectedEntityId = null;
+      }, spot);
+    await deselect(target);
     await clickWorld(target.x, target.y, { settle: 900 });
-    const selectedNormally = await page.evaluate(() =>
-      Boolean(window.__godsEyeView.viewer.selectedEntity),
-    );
+    const selectedNormally = await isSelected(target);
     check(
       `clicking a ${target.layer} selects it when nothing owns the pointer`,
       selectedNormally,
     );
-    await page.evaluate(() => {
-      window.__godsEyeView.viewer.selectedEntity = undefined;
-    });
+    await deselect(target);
     await page.click('#draw-toggle');
     await page.click('.pp-mode-btn[data-shape="area"]');
     await clickWorld(target.x, target.y, { settle: 900 });
     const whileDrawing = await drawState();
-    const selectedWhileDrawing = await page.evaluate(() =>
-      Boolean(window.__godsEyeView.viewer.selectedEntity),
-    );
+    const selectedWhileDrawing = await isSelected(target);
     check(
       `clicking the same ${target.layer} while drawing adds a vertex and selects nothing`,
       whileDrawing.vertices === 1 && selectedWhileDrawing === false,
@@ -677,19 +719,37 @@ try {
         null,
     };
   });
-  await page.evaluate((view) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (view.lon * Math.PI) / 180,
-        latitude: (view.lat * Math.PI) / 180,
-        height: view.height,
-      }),
-      orientation: { heading: 0, pitch: (view.pitch * Math.PI) / 180, roll: 0 },
-    });
-  }, VIEW);
-  await wait(2500);
+  // The reload restores the view in the address (the clicked CCTV camera's
+  // flight left a low, near-horizontal view there) with a boot flight that can
+  // land after a setView: set the view until it holds.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await page.evaluate((view) => {
+      const viewer = window.__godsEyeView.viewer;
+      viewer.camera.cancelFlight?.();
+      viewer.camera.setView({
+        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+          longitude: (view.lon * Math.PI) / 180,
+          latitude: (view.lat * Math.PI) / 180,
+          height: view.height,
+        }),
+        orientation: {
+          heading: 0,
+          pitch: (view.pitch * Math.PI) / 180,
+          roll: 0,
+        },
+      });
+    }, VIEW);
+    await wait(2500);
+    const held = await page.evaluate((view) => {
+      const carto = window.__godsEyeView.viewer.camera.positionCartographic;
+      return (
+        Math.abs((carto.latitude * 180) / Math.PI - view.lat) < 0.01 &&
+        Math.abs((carto.longitude * 180) / Math.PI - view.lon) < 0.01 &&
+        Math.abs(carto.height - view.height) < view.height * 0.2
+      );
+    }, VIEW);
+    if (held) break;
+  }
   await page.click('#draw-toggle');
   await page.click('.pp-mode-btn[data-shape="area"]');
   await clickWorld(420, 280);
@@ -930,17 +990,15 @@ async function findClickableTarget() {
       viewer.scene.requestRender();
     }, camera);
     await wait(4000);
-    const spot = await onScreen(
-      (entity) => typeof entity.id === 'string' && entity.id.startsWith('CAM-'),
-    );
-    if (spot) return { ...spot, layer: 'CCTV camera' };
+    const spot = await onScreen(['cctv']);
+    if (spot) return { ...spot, kind: 'cctv', layer: 'CCTV camera' };
   }
 
   // Bundled infrastructure as the keyless fallback: a different guarded handler,
-  // the same shared claim, and always present without a key.
+  // the same shared claim, and always present without a key. The layer
+  // registers each site in the shared context store with its coordinates.
   const site = await page
     .evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
       await window.__godsEyeView.dataManager.setEnabled(
         'local-datacenters',
         true,
@@ -948,30 +1006,15 @@ async function findClickableTarget() {
           origin: 'user',
         },
       );
-      const centreOf = (entity) => {
-        const time = viewer.clock.currentTime;
-        const point = entity.position?.getValue?.(time);
-        if (point) return point;
-        const hierarchy = entity.polygon?.hierarchy?.getValue?.(time);
-        if (hierarchy?.positions?.length) return hierarchy.positions[0];
-        const line = entity.polyline?.positions?.getValue?.(time);
-        return line?.length ? line[0] : null;
-      };
       for (let attempt = 0; attempt < 40; attempt += 1) {
-        for (let i = 0; i < viewer.dataSources.length; i += 1) {
-          for (const entity of viewer.dataSources.get(i).entities.values) {
-            if (entity.__localLayerId !== 'local-datacenters') continue;
-            const point = centreOf(entity);
-            if (!point) continue;
-            const carto = window.Cesium
-              ? window.Cesium.Cartographic.fromCartesian(point)
-              : viewer.scene.globe.ellipsoid.cartesianToCartographic(point);
-            if (!carto) continue;
-            return {
-              lon: (carto.longitude * 180) / Math.PI,
-              lat: (carto.latitude * 180) / Math.PI,
-            };
-          }
+        for (const record of window.__gevContextStore?.entities.values() ??
+          []) {
+          if (record.layerId !== 'local-datacenters') continue;
+          if (
+            Number.isFinite(record.latitude) &&
+            Number.isFinite(record.longitude)
+          )
+            return { lon: record.longitude, lat: record.latitude };
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
@@ -993,54 +1036,40 @@ async function findClickableTarget() {
     viewer.scene.requestRender();
   }, site);
   await wait(4000);
-  const spot = await onScreen(
-    (entity) => entity.__localLayerId === 'local-datacenters',
-  );
-  return spot ? { ...spot, layer: 'data centre' } : null;
+  const spot = await onScreen([
+    'local-datacenters-tips',
+    'local-datacenters-pins',
+  ]);
+  return spot ? { ...spot, kind: 'context', layer: 'data centre' } : null;
 }
 
 /**
- * Canvas coordinates of the first entity matching `belongs` that is on screen
- * and clear of the side panels. Annotation marks and the draw tool's own
- * preview vertices are on screen too, so the predicate has to be specific.
+ * Canvas coordinates of a spot clear of the side panels where the engine's
+ * pick returns an instance of one of the mover sets `owners` (layers draw
+ * through engine.movers; a pick reports the set as `owner` and the instance's
+ * pickId as `id`). Picking, not projecting, proves the spot is clickable: an
+ * instance beyond the horizon or behind a building does not count.
  */
-async function onScreen(belongs, timeout = 20_000) {
+async function onScreen(owners, timeout = 20_000) {
   return page
     .waitForFunction(
-      (belongsSource) => {
-        // eslint-disable-next-line no-new-func
-        const belongsTo = new Function(`return (${belongsSource})`)();
-        const viewer = window.__godsEyeView.viewer;
-        const scene = viewer.scene;
-        const collections = [viewer.entities];
-        for (let i = 0; i < viewer.dataSources.length; i += 1) {
-          const source = viewer.dataSources.get(i);
-          if (source?.name === 'gev-draw-preview') continue;
-          collections.push(source.entities);
-        }
-        for (const source of collections) {
-          for (const entity of source.values) {
-            if (!belongsTo(entity)) continue;
-            const position = entity.position?.getValue?.(
-              viewer.clock.currentTime,
-            );
-            if (!position) continue;
-            const window2d = scene.cartesianToCanvasCoordinates(position);
-            if (!window2d) continue;
-            const { x, y } = window2d;
-            if (!(x > 300 && x < 900 && y > 180 && y < 600)) continue;
-            // Projecting into the window is not the same as being clickable:
-            // the entity may be beyond the horizon or behind a building. Only a
-            // spot where the scene actually picks it proves the control case.
-            const hit = scene.pick({ x: Math.round(x), y: Math.round(y) });
-            if (!hit?.id || !belongsTo(hit.id)) continue;
-            return { x: Math.round(x), y: Math.round(y) };
+      (wanted) => {
+        const { engine } = window.__godsEyeView;
+        const sets = engine.movers
+          .list()
+          .filter((set) => wanted.includes(set.id) && set.count > 0);
+        if (!sets.length) return false;
+        for (let y = 190; y < 600; y += 20) {
+          for (let x = 310; x < 900; x += 20) {
+            const hit = engine.picker.pick({ x, y });
+            if (hit && wanted.includes(hit.owner) && hit.id != null)
+              return { x, y, id: String(hit.id) };
           }
         }
         return false;
       },
-      { timeout, polling: 500 },
-      belongs.toString(),
+      { timeout, polling: 1000 },
+      owners,
     )
     .then(
       (handle) => handle.jsonValue(),

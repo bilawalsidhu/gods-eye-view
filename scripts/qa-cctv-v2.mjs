@@ -286,24 +286,106 @@ function installRenderFramesHelper(page) {
   });
 }
 
-// In-page helper (stringified and re-defined inside each evaluate that needs
-// it, since functions can't cross the puppeteer boundary): serializes the
-// 5 frustum polylines + plane position/orientation/dimensions for a camera
-// into plain arrays of numbers, using only the camera's own clock time (no
-// Cesium namespace needed — Property.getValue just needs *a* JulianDate,
-// and the viewer's own clock.currentTime is a valid live instance of one).
+// In-page helpers (stringified and re-defined inside each evaluate that needs
+// them, since functions can't cross the puppeteer boundary).
+//
+// The frustum wireframe (four corner rays and the far cap) and the gizmo draw
+// through the globe contract (src/layers/cctv/render/display.js): engine
+// lines named `cctv-<camera>-<role>` and `cctv-gizmo-<part>`, and the gizmo's
+// handles in the `cctv-gizmo-points` point set. engine.lines.list() names the
+// live lines (id, points, shown); their positions are what the layer's own
+// line handles hold (record.coverageEntities). The monitor plane is still a
+// Cesium plane Entity (render/cesiumMeshes.js), read as before.
+const CONTRACT_SRC = `
+  function cctvRecord(camId) {
+    const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+    return (
+      mod._cctvRecordsForTest().find((r) => r.camera && r.camera.id === camId) ||
+      null
+    );
+  }
+  function liveLines() {
+    return new Map(
+      window.__godsEyeView.engine.lines.list().map((line) => [line.id, line]),
+    );
+  }
+  // The positions of camera camId's coverage line 'role', when the engine
+  // draws that line with the handle's points; null otherwise.
+  function coverageLinePositions(camId, role, lines = liveLines()) {
+    const id = 'cctv-' + camId + '-' + role;
+    const line = lines.get(id);
+    const record = cctvRecord(camId);
+    const handle = ((record && record.coverageEntities) || []).find(
+      (h) => h && h.id === id,
+    );
+    const positions = handle && handle.polyline && handle.polyline.positions;
+    if (!line || !positions || line.points !== positions.length) return null;
+    return Array.from(positions, (p) => [p.x, p.y, p.z]);
+  }
+  // A Cesium mover set's instance by pickId (the contract's own primitives:
+  // a collection tagged gevMoverSet in scene.primitives).
+  function moverInstance(setId, pickId) {
+    const walk = (collection) => {
+      if (!collection || typeof collection.get !== 'function') return null;
+      if (collection.gevMoverSet === setId) {
+        for (let i = 0; i < collection.length; i++) {
+          const item = collection.get(i);
+          if (item && item.id === pickId) return item;
+        }
+        return null;
+      }
+      for (let i = 0; i < collection.length; i++) {
+        const found = walk(collection.get(i));
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(window.__godsEyeView.viewer.scene.primitives);
+  }
+  // 'shown' | 'hidden' | 'missing' for one gizmo part: its line (rings and
+  // arrow shafts) and its point (arrow tips and handles), as many as it has.
+  function gizmoPartState(part) {
+    const id = 'cctv-gizmo-' + part;
+    const line = liveLines().get(id);
+    const point = moverInstance('cctv-gizmo-points', id);
+    if (!line && !point) return 'missing';
+    const shown = [line && line.shown, point && point.show].filter(
+      (value) => value !== undefined && value !== null,
+    );
+    return shown.every(Boolean) ? 'shown' : 'hidden';
+  }
+  // The viewshed volumes the layer holds (record.viewshedPrimitive), with
+  // their Cesium Primitive, only where that primitive is in the scene.
+  function viewshedVolumes() {
+    const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+    const primitives = window.__godsEyeView.viewer.scene.primitives;
+    const out = [];
+    for (const record of mod._cctvRecordsForTest()) {
+      const volume = record.viewshedPrimitive;
+      const primitive = volume && !volume.destroyed && volume.native
+        ? volume.native.primitive
+        : null;
+      if (primitive && primitives.contains(primitive))
+        out.push({ camera: record.camera.id, volume, primitive });
+    }
+    return out;
+  }
+`;
+
+// serializeGeom: the 5 frustum polylines + plane position/orientation/
+// dimensions for a camera as plain arrays of numbers. The plane's properties
+// are read at the viewer's own clock.currentTime (Property.getValue just needs
+// *a* JulianDate, and that is a valid live instance of one).
 const SERIALIZE_GEOM_SRC = `
+  ${CONTRACT_SRC}
   function serializeGeom(camId) {
     const viewer = window.__godsEyeView.viewer;
     const time = viewer.clock.currentTime;
     const roles = ['ray-tl', 'ray-tr', 'ray-br', 'ray-bl', 'cap'];
+    const lines = liveLines();
     const poly = {};
-    for (const role of roles) {
-      const ent = viewer.entities.getById('cctv-' + camId + '-' + role);
-      poly[role] = ent && ent.polyline
-        ? ent.polyline.positions.getValue(time).map((p) => [p.x, p.y, p.z])
-        : null;
-    }
+    for (const role of roles)
+      poly[role] = coverageLinePositions(camId, role, lines);
     const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
     let plane = null;
     if (planeEnt) {
@@ -529,6 +611,8 @@ async function main() {
         ),
       { timeoutMs: 60000 },
     );
+    if (!appReady) throw new Error('app did not initialise within 60s');
+    await installRenderFramesHelper(page);
     await page.evaluate(async () => {
       const app = window.__godsEyeView;
       await app.styleManager.initialRestorePromise;
@@ -790,14 +874,18 @@ async function main() {
         (await waitForPredicate(
           page,
           (expected, base) => {
-            const { viewer, dataManager } = window.__godsEyeView;
-            const camera = dataManager.layers
-              .get('cctv')
-              .module.getUIState().activeCamera;
-            const ray = viewer.entities.getById(`cctv-${camera.id}-ray-tl`);
-            const mount = ray?.polyline?.positions.getValue(
-              viewer.clock.currentTime,
-            )?.[0];
+            const { viewer, dataManager, engine } = window.__godsEyeView;
+            const module = dataManager.layers.get('cctv').module;
+            const camera = module.getUIState().activeCamera;
+            // The corner ray is an engine line; its first point (the mount)
+            // is what the layer's line handle gave it.
+            const id = `cctv-${camera.id}-ray-tl`;
+            const drawn = engine.lines.list().some((line) => line.id === id);
+            const ray = module
+              ._cctvRecordsForTest()
+              .find((record) => record.camera?.id === camera.id)
+              ?.coverageEntities?.find((handle) => handle?.id === id);
+            const mount = drawn ? ray?.polyline?.positions?.[0] : undefined;
             const height =
               mount &&
               viewer.scene.globe.ellipsoid.cartesianToCartographic(mount)
@@ -961,7 +1049,7 @@ async function main() {
       'cap',
     ].every((r) => Array.isArray(geomInfo.poly[r]));
     record(
-      'all 5 frustum polyline entities exist for the active camera',
+      'all 5 frustum lines are drawn for the active camera (engine lines)',
       allPolylinesPresent,
       Object.keys(geomInfo.poly)
         .map((k) => `${k}=${geomInfo.poly[k] ? 'ok' : 'MISSING'}`)
@@ -1775,35 +1863,51 @@ async function main() {
     console.log(
       'Checking viewshed mode (coverage tri-state + color-coded volumes)...',
     );
+    // The volumes are the layer's (record.viewshedPrimitive), each a Cesium
+    // Primitive in scene.primitives (render/cesiumMeshes.js); they carry no
+    // tag of their own any more.
     const countVolumes = () =>
-      page.evaluate(() => {
-        const prims = window.__godsEyeView.viewer.scene.primitives;
-        let n = 0;
-        for (let i = 0; i < prims.length; i++) {
-          if (prims.get(i) && prims.get(i)._gevViewshed) n += 1;
-        }
-        return n;
-      });
+      page.evaluate(`(function(){
+        ${CONTRACT_SRC}
+        return viewshedVolumes().length;
+      })()`);
 
     const cBeforeViewshed = await readCounters();
-    await page.evaluate(() => {
+    await page.evaluate(`(function(){
+      ${CONTRACT_SRC}
       const primitives = window.__godsEyeView.viewer.scene.primitives;
       const events = [];
       window.__qaViewshedTrace = events;
+      // A volume is a synchronous Primitive the pick pass skips; which
+      // camera it belongs to is looked up when the trace is read.
+      const isVolume = (primitive) =>
+        primitive &&
+        primitive.allowPicking === false &&
+        primitive.asynchronous === false &&
+        typeof primitive.get !== 'function';
       for (const method of ['add', 'remove']) {
         const original = primitives[method].bind(primitives);
         primitives[method] = (primitive, ...args) => {
-          if (primitive?._gevViewshed)
+          if (isVolume(primitive))
             events.push({
               method,
-              camera: primitive._gevViewshed,
+              primitive,
               at: performance.now(),
               stack: new Error().stack,
             });
           return original(primitive, ...args);
         };
       }
-    });
+      window.__qaViewshedTraceRead = () => {
+        const owners = new Map(
+          viewshedVolumes().map((entry) => [entry.primitive, entry.camera]),
+        );
+        return events.map(({ primitive, ...event }) => ({
+          ...event,
+          camera: owners.get(primitive) ?? null,
+        }));
+      };
+    })()`);
     const modeAfterSet = await page.evaluate(() => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ coverageMode: 'viewshed' });
@@ -1866,29 +1970,22 @@ async function main() {
       terrainRequests.size === 0 && Date.now() - terrainActivityAt >= 250;
     record('footprint requests settle before viewshed idle', terrainSettled);
     if (!terrainSettled) throw new Error('Footprint requests did not settle');
-    await page.evaluate(() => {
-      const prims = window.__godsEyeView.viewer.scene.primitives;
-      window.__qaViewshedRefs = [];
-      for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed)
-          window.__qaViewshedRefs.push(prims.get(i));
-      }
-    });
+    await page.evaluate(`(function(){
+      ${CONTRACT_SRC}
+      window.__qaViewshedRefs = viewshedVolumes().map((entry) => entry.primitive);
+    })()`);
     await sleep(8000);
-    const viewshedIdle = await page.evaluate(() => {
-      const prims = window.__godsEyeView.viewer.scene.primitives;
-      const now = [];
-      for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed) now.push(prims.get(i));
-      }
+    const viewshedIdle = await page.evaluate(`(function(){
+      ${CONTRACT_SRC}
+      const now = viewshedVolumes().map((entry) => entry.primitive);
       const before = window.__qaViewshedRefs || [];
       const sameCount = now.length === before.length;
       const sameIdentity = sameCount && before.every((p) => now.includes(p));
       return { sameCount, sameIdentity, count: now.length };
-    });
+    })()`);
     const cAfterViewshed = await readCounters();
-    evidence.viewshedTrace = await page.evaluate(
-      () => window.__qaViewshedTrace,
+    evidence.viewshedTrace = await page.evaluate(() =>
+      window.__qaViewshedTraceRead?.(),
     );
     const lateFloorSamples =
       cAfterViewshed.sampleHeight - cBeforeViewshed.sampleHeight;
@@ -1931,15 +2028,12 @@ async function main() {
       'handle-fov-l',
       'handle-fov-r',
     ];
-    const gizmoStates = await page.evaluate((parts) => {
+    const gizmoStates = await page.evaluate(`(function(parts){
+      ${CONTRACT_SRC}
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: true });
-      const viewer = window.__godsEyeView.viewer;
-      return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
-        return e ? (e.show ? 'shown' : 'hidden') : 'missing';
-      });
-    }, GIZMO_PARTS);
+      return parts.map(gizmoPartState);
+    })(${JSON.stringify(GIZMO_PARTS)})`);
     record(
       'all 8 gizmo parts exist and show in ADJUST mode',
       gizmoStates.every((s) => s === 'shown'),
@@ -1949,11 +2043,20 @@ async function main() {
     // Synthetic CDP drag on the EAST arrow — the owner's field-test
     // regression. Sample effective elevation after every mouse move: it must
     // stay frozen until release, with no transient sampleHeight calls.
-    const eastDrag = await page.evaluate(() => {
+    // The E arrow's shaft runs from the active camera's mount to its tip,
+    // the `cctv-gizmo-move-east` point in the gizmo's point set.
+    const eastDrag = await page.evaluate(`(function(){
+      ${CONTRACT_SRC}
       const viewer = window.__godsEyeView.viewer;
-      const e = viewer.entities.getById('cctv-gizmo-move-east');
-      if (!e) return null;
-      const pts = e.polyline.positions.getValue(viewer.clock.currentTime);
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const active = mod.getUIState().activeCameraId;
+      const mount = cctvRecord(active)?.frustumPositions?.mount;
+      const tip = moverInstance('cctv-gizmo-points', 'cctv-gizmo-move-east');
+      if (!mount || !tip || gizmoPartState('move-east') !== 'shown') return null;
+      const pts = [
+        new tip.position.constructor(mount.x, mount.y, mount.z),
+        tip.position,
+      ];
       const scene = viewer.scene;
       const w = scene.canvas.clientWidth;
       const h = scene.canvas.clientHeight;
@@ -1982,7 +2085,7 @@ async function main() {
       }
       if (!candidates.length) return null;
       return { ...candidates[0], candidates, ux: dx / mag, uy: dy / mag };
-    });
+    })()`);
 
     const calBeforeDrag = await page.evaluate(() => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
@@ -2227,16 +2330,13 @@ async function main() {
     );
 
     // ADJUST off: parts hidden; leave a clean calibration for the next group.
-    const gizmoOff = await page.evaluate((parts) => {
+    const gizmoOff = await page.evaluate(`(function(parts){
+      ${CONTRACT_SRC}
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: false });
       mod.setParams({ calibration: { reset: true } });
-      const viewer = window.__godsEyeView.viewer;
-      return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
-        return e ? (e.show ? 'shown' : 'hidden') : 'missing';
-      });
-    }, GIZMO_PARTS);
+      return parts.map(gizmoPartState);
+    })(${JSON.stringify(GIZMO_PARTS)})`);
     record(
       'gizmo parts hide when ADJUST mode turns off',
       gizmoOff.every((s) => s === 'hidden'),

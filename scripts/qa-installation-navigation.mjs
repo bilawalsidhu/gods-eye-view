@@ -40,9 +40,20 @@ try {
   page.on('console', (m) => {
     if (m.type() === 'error') result.errors.push(m.text());
   });
-  await page.evaluateOnNewDocument(() =>
-    sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed'),
-  );
+  await page.evaluateOnNewDocument(() => {
+    sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
+    // The sites drawn as discs, as their context handles: the layer draws
+    // through the globe contract and owns no Cesium entities.
+    window.__qaInstallationSites = () =>
+      [...(window.__gevContextStore?.entities.values() ?? [])]
+        .filter(
+          (r) =>
+            r.layerId === 'military-installations' &&
+            r.entity &&
+            !r.entity.record?.namedArea,
+        )
+        .map((r) => r.entity);
+  });
   await page.goto(
     args.find((a) => /^https?:/.test(a)),
     { waitUntil: 'domcontentloaded' },
@@ -156,8 +167,9 @@ try {
         .catch(() => {});
       const snapshot = await page.evaluate(() => {
         const g = window.__godsEyeView;
-        const ds = g.viewer.dataSources.getByName('military-installations')[0];
-        const points = ds.entities.values.filter((e) => e.point);
+        // The drawn sites' context handles (render/display.js keeps one per
+        // drawn record and prunes the rest); a named area draws no disc.
+        const points = window.__qaInstallationSites();
         const stable = points.every(
           (e) =>
             !window.installationEntityRefs.has(e.id) ||
@@ -244,10 +256,7 @@ try {
         0.6,
       );
       await page.waitForFunction(
-        () =>
-          window.__godsEyeView.viewer.dataSources
-            .getByName('military-installations')[0]
-            .entities.values.some((e) => e.point),
+        () => window.__qaInstallationSites().length > 0,
         { timeout: 5000 },
       );
       await page.evaluate(() => {
@@ -268,8 +277,7 @@ try {
       await sleep(1000);
       await page.evaluate(async () => {
         const g = window.__godsEyeView;
-        const ds = g.viewer.dataSources.getByName('military-installations')[0];
-        const id = ds.entities.values.find((e) => e.point).id;
+        const id = window.__qaInstallationSites()[0].id;
         window.installationSubjectId = id;
         await g.dataManager.layers
           .get('military-awareness')

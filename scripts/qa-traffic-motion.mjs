@@ -116,7 +116,19 @@ try {
       let nextId = 0,
         rebuilds = 0;
       const collections = [];
+      // A rebuild: the traffic display's mover sets made again
+      // (src/layers/traffic/render/display.js writes its two point sets in
+      // place every frame; it never empties and refills a collection).
+      // --baseline records the pre-contract build, whose PointPrimitive
+      // collections sat in scene.primitives and were rebuilt by removeAll.
+      const engine = window.__godsEyeView.engine;
+      const createMoverSet = engine.movers.createSet.bind(engine.movers);
+      engine.movers.createSet = (options) => {
+        if (/^traffic-(fill|outline)$/.test(options?.id ?? '')) rebuilds++;
+        return createMoverSet(options);
+      };
       function discoverCollections() {
+        if (!baseline) return;
         for (let i = 0; i < scene.primitives.length; i++) {
           const p = scene.primitives.get(i);
           if (!Array.isArray(p._pointPrimitives) || collections.includes(p))

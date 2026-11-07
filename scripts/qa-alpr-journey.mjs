@@ -253,23 +253,17 @@ try {
       const entry = window.__godsEyeView.dataManager.layers.get('alpr-cameras');
       const stats = entry?.module?.getStats?.() || {};
       // Layers that publish a render revision are measured by it; otherwise
-      // hash the rendered entity ids and their visibility.
+      // hash the layer's mover sets on the globe contract (ids and counts).
       let hash = 0;
       let shown = 0;
       if (Number.isFinite(stats.renderRevision)) {
         hash = stats.renderRevision;
         shown = stats.shown ?? stats.count ?? 0;
-      } else {
-        const entities =
-          entry?.module && entry.enabled
-            ? window.__godsEyeView.viewer.dataSources.getByName(
-                'alpr-cameras',
-              )[0]?.entities.values || []
-            : [];
-        for (const entity of entities) {
-          if (entity.show === false) continue;
-          shown += 1;
-          const id = String(entity.id);
+      } else if (entry?.module && entry.enabled) {
+        for (const set of window.__godsEyeView.engine.movers.list()) {
+          if (!String(set.id).startsWith('alpr-')) continue;
+          shown += set.count;
+          const id = `${set.id}:${set.count}`;
           for (let i = 0; i < id.length; i++)
             hash = (hash * 31 + id.charCodeAt(i)) | 0;
         }

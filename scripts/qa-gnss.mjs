@@ -24,7 +24,7 @@
  *         CAMERA/GLOBE verify automatic sampling and the screen-centre anchor.
  *   (iii) FAILURE — the route stubbed to 502: stats.error is set and the
  *         cells already on the globe are kept.
- *   (iv)  DISABLE — owned ground primitives are hidden.
+ *   (iv)  DISABLE — the layer's engine.ground cell set is hidden.
  *   (v)   KEYBOARD — the row's toggle button, focused, turns the layer on
  *         with Enter and off with Space, keeps focus and names its state.
  *   (vi)  VIEWPORT — at a 390x844 phone viewport the open row and its legend
@@ -129,18 +129,18 @@ async function enableAndSettle(page, { refresh = false } = {}) {
       const rowName =
         document.querySelector(`[data-layer-id="${id}"] .data-name`)
           ?.textContent ?? '';
-      const all = window.__godsEyeView.viewer.scene.groundPrimitives;
-      const ds = Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-        (item) => item.id === id,
-      );
+      // The layer's cells are one engine.ground cell set named after it.
+      const set = window.__godsEyeView.engine.ground
+        .list()
+        .find((item) => item.id === id);
       return {
         stats,
         legend,
         blurb,
         rowName,
         name: layer.name,
-        entities: ds?.get(0)?.geometryInstances.length ?? 0,
-        shown: ds?.show ?? null,
+        entities: set?.count ?? 0,
+        shown: set?.shown ?? null,
       };
     },
     LAYER_ID,
@@ -151,6 +151,16 @@ async function enableAndSettle(page, { refresh = false } = {}) {
 /** Open the Data Layers panel and bring the GNSS row into view. */
 async function showLayerRow(page) {
   await page.evaluate((id) => {
+    // A phone viewport shows the panel in the shell's Layers sheet
+    // (src/ui/mobileShell.js), opened from its tab bar.
+    const layersTab = document.querySelector(
+      '#mobile-tab-bar [data-mobile-sheet="layers"]',
+    );
+    if (
+      layersTab?.offsetParent &&
+      !document.body.matches('[data-mobile-sheet="layers"]')
+    )
+      layersTab.click();
     const panel = document.getElementById('data-panel');
     if (panel.classList.contains('collapsed'))
       panel.querySelector('[data-collapse-target="data-panel"]').click();
@@ -184,15 +194,25 @@ async function shoot(page, name) {
   await page.screenshot({ path: path.join(SHOTS_DIR, `gnss-${name}.png`) });
 }
 
-/** Bounding-sphere state of every GNSS cell: DONE = 0, PENDING = 1, FAILED = 2. */
+/**
+ * Build state of the GNSS ground set's Cesium batches (DONE = 0, PENDING = 1):
+ * the primitives the Cesium ground engine tags with the set id, under
+ * scene.groundPrimitives. Empty while the set has nothing committed.
+ */
 function cellStates(id) {
-  const { viewer } = window.__godsEyeView;
-  const all = viewer.scene.groundPrimitives;
-  const ds = Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-    (item) => item.id === id,
-  );
-  if (!ds?.length) return [];
-  return [ds.get(0).ready ? 0 : 1];
+  const { viewer, engine } = window.__godsEyeView;
+  const set = engine.ground.list().find((item) => item.id === id);
+  if (!set?.count) return [];
+  const states = [];
+  const walk = (collection) => {
+    for (let i = 0; i < collection.length; i++) {
+      const item = collection.get(i);
+      if (item?.gevGroundSet === id) states.push(item.ready ? 0 : 1);
+      else if (typeof item?.get === 'function' && 'length' in item) walk(item);
+    }
+  };
+  walk(viewer.scene.groundPrimitives);
+  return states.length ? states : [1];
 }
 
 /** Wait until every GNSS cell's ground rectangle has finished building. */
@@ -557,8 +577,9 @@ async function main() {
     });
     await page.waitForFunction(
       () => {
-        const v = window.__godsEyeView.viewer,
-          p = v.scene.pick({
+        // The engine's pick names the perimeter ground item's pickId.
+        const { viewer: v, engine } = window.__godsEyeView,
+          p = engine.picker.pick({
             x: v.scene.canvas.clientWidth / 2,
             y: v.scene.canvas.clientHeight / 2,
           });
@@ -569,11 +590,11 @@ async function main() {
       { timeout: TIMEOUT_MS, polling: 250 },
     );
     const pickProbe = await page.evaluate(() => {
-      const v = window.__godsEyeView.viewer,
+      const { viewer: v, engine } = window.__godsEyeView,
         c = v.scene.canvas;
       const centre = { x: c.clientWidth / 2, y: c.clientHeight / 2 };
       const empty = { x: centre.x + 300, y: centre.y };
-      const picked = v.scene.pick(empty),
+      const picked = engine.picker.pick(empty),
         box = c.getBoundingClientRect();
       return {
         centre: { x: centre.x + box.left, y: centre.y + box.top },
@@ -778,12 +799,11 @@ async function main() {
     console.log('\n(iv) DISABLE...');
     const shown = await page.evaluate(async (id) => {
       await window.__godsEyeView.dataManager.setEnabled(id, false);
-      const all = window.__godsEyeView.viewer.scene.groundPrimitives;
-      return Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-        (item) => item.id === id,
-      )?.show;
+      return window.__godsEyeView.engine.ground
+        .list()
+        .find((item) => item.id === id)?.shown;
     }, LAYER_ID);
-    record('DISABLE: data source hidden', shown === false, `show=${shown}`);
+    record('DISABLE: ground set hidden', shown === false, `show=${shown}`);
     await shoot(page, 'disabled');
 
     // ── (v) KEYBOARD ──────────────────────────────────────────────────────

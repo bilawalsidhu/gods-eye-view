@@ -172,19 +172,24 @@ const measure = () => page.evaluate(async (icao) => {
   }
   const v = app.viewer;
   const C = v.camera.positionCartographic.constructor;
-  const sprites = []; const models = []; let bb = null;
+  // The contact as the layer draws it (the probe's drawn rows: the layer owns
+  // no Cesium billboard of its own any more; the engine's batched billboards
+  // keep a hidden spare's old id, so an id match there can be stale).
+  const bb = app.layers.drawn('flights').find((row) => row.id === icao && !row.trackedModel);
+  if (!bb?.position) return { error: 'contact billboard not found' };
+  // Every billboard and model in the scene (the engine's mover batches
+  // included) stays out of the mesh probes.
+  const sprites = []; const models = [];
   const walk = (coll) => {
     for (let i = 0; i < coll.length; i++) {
       let p; try { p = coll.get(i); } catch { continue; }
       if (!p) continue;
       if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-      if (p.image !== undefined && p.alignedAxis !== undefined) {
-        sprites.push(p); if (p.id === icao) bb = p;
-      } else if (p.boundingSphere && p.modelMatrix) models.push(p);
+      if (p.image !== undefined && p.alignedAxis !== undefined) sprites.push(p);
+      else if (p.boundingSphere && p.modelMatrix) models.push(p);
     }
   };
   try { walk(v.scene.primitives); } catch { /* mid-teardown */ }
-  if (!bb?.position) return { error: 'contact billboard not found' };
   const carto = C.fromCartesian(bb.position);
   const lat = carto.latitude * 180 / Math.PI;
   const lon = carto.longitude * 180 / Math.PI;

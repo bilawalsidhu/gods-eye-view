@@ -5,7 +5,8 @@
  * weather layer on and exercises it (history playback, a wind reading, a
  * storm selection), turns them all off, and asserts the scene is back to the
  * baseline (imagery layers on the globe and the tileset, primitives, ground
- * primitives, data sources, entities, camera/scene listeners, the weather
+ * primitives, data sources, entities, the globe contract's mover sets,
+ * lines, ground sets and imagery layers, camera/scene listeners, the weather
  * panel, the wind reading marker). Then it enables a set of non-weather
  * layers one at a time and samples the render rate, long tasks and console
  * errors for each, and repeats the same non-weather sequence in a control
@@ -120,11 +121,49 @@ const snapshot = (page) =>
         };
     }
     const wind = dm.layers.get('wind')?.module?.getDiagnostics?.() || {};
+    // What layers draw on Cesium directly, excluding collections and the contract's own
+    // batches: the engine keeps one PrimitiveCollection per primitive kind
+    // (src/globe/cesium/) for the scene's lifetime, and its mover, line and
+    // ground batches (tagged gevMoverSet, gevLine, gevGroundSet) are counted
+    // below through the contract.
+    const contractOwned = (item) =>
+      item?.gevMoverSet !== undefined ||
+      item?.gevLine !== undefined ||
+      item?.gevGroundSet !== undefined;
+    const drawn = (collection) => {
+      let count = 0;
+      for (let i = 0; i < collection.length; i++) {
+        const item = collection.get(i);
+        if (contractOwned(item)) continue;
+        if (typeof item?.raiseToTop === 'function') count += drawn(item);
+        else count++;
+      }
+      return count;
+    };
+    const { engine } = gev;
+    const sum = (rows, key) => rows.reduce((n, row) => n + (row[key] || 0), 0);
+    const movers = engine.movers.list();
+    const lines = engine.lines.list();
+    const ground = engine.ground.list();
     return {
       globeImagery: v.imageryLayers.length,
       tilesetImagery: t?.imageryLayers?.length ?? null,
-      primitives: s.primitives.length,
-      groundPrimitives: s.groundPrimitives.length,
+      primitives: drawn(s.primitives),
+      groundPrimitives: drawn(s.groundPrimitives),
+      // The globe contract's own drawing (cyclone points and fills draw
+      // through it; render/display.js).
+      // Drawn instances, not sets: a disabled layer may keep an emptied set
+      // for its next enable (the cyclone points do), which draws nothing.
+      contract: {
+        moverInstances: sum(movers, 'count'),
+        lines: lines.filter((line) => line.shown && line.points > 0).length,
+        groundItems: sum(
+          ground.filter((set) => set.shown),
+          'count',
+        ),
+        imageryLayers: engine.imagery.list().filter((layer) => layer.shown)
+          .length,
+      },
       dataSources: v.dataSources.length,
       entities: v.entities.values.length,
       listeners: {

@@ -367,7 +367,7 @@ export async function runBostonMatrix({
             route: e.record.routeId,
             image: e.marker.image,
             width: e.marker.width,
-            color: e.marker.color.toCssHexString(),
+            color: e.marker.color.toCssColorString(),
           }),
         );
       });
@@ -421,7 +421,7 @@ export async function runBostonMatrix({
           return {
             image: e.marker.image,
             width: e.marker.width,
-            color: e.marker.color.toCssHexString(),
+            color: e.marker.color.toCssColorString(),
           };
         }, target.key);
         check(
@@ -655,6 +655,31 @@ export async function runTrailVisibility({
           ),
           orientation: { heading: 0, pitch: (-pitch * Math.PI) / 180, roll: 0 },
         });
+      // The trail draws through engine.lines (render/display.js); keep the
+      // renderer the selection below creates, the handle that shows and
+      // hides the whole trail.
+      const createLine = app.engine.lines.createLine.bind(app.engine.lines);
+      window.__qaTransitLineKinds = new Map();
+      app.engine.lines.createLine = (options) => {
+        const line = createLine(options);
+        if (options.id.startsWith('transit-trail-'))
+          window.__qaTransitLineKinds.set(
+            options.id,
+            options.order >= 2 ? 'head' : 'body',
+          );
+        return line;
+      };
+      window.__restoreTransitLines = () => {
+        app.engine.lines.createLine = createLine;
+      };
+      const createTrailRenderer = parts.renderer.createTrailRenderer;
+      parts.renderer.createTrailRenderer = (...args) => {
+        parts.renderer.createTrailRenderer = createTrailRenderer;
+        return (window.__qaTransitTrail = createTrailRenderer.apply(
+          parts.renderer,
+          args,
+        ));
+      };
       parts.selection.clearSelection();
       parts.ingestion.abortAllInFlight();
       state._activeFeeds.clear();
@@ -711,6 +736,8 @@ export async function runTrailVisibility({
     check(name, false, JSON.stringify(setup), { unexercised: true });
     return;
   }
+  // Measure the engine's native uploads, attributing its line primitives to
+  // the head or body by the draw order supplied at contract creation.
   const cost = await page.evaluate(async (key) => {
     const app = window.__godsEyeView,
       scene = app.viewer.scene;
@@ -766,9 +793,15 @@ export async function runTrailVisibility({
     }
     const pre = scene.preRender.addEventListener(() => {
       headBytes = bodyBytes = 0;
-      const trail = parts.trails.diagnostics();
-      wrap(trail?.body, 'body');
-      wrap(trail?.headPrimitive || trail?.head?._polylineCollection, 'head');
+      const walk = (collection) => {
+        for (let i = 0; i < collection.length; i++) {
+          const primitive = collection.get(i);
+          const kind = window.__qaTransitLineKinds.get(primitive?.gevLine);
+          if (kind) wrap(primitive, kind);
+          else if (typeof primitive?.get === 'function') walk(primitive);
+        }
+      };
+      walk(scene.primitives);
     });
     const post = scene.postRender.addEventListener(() => {
       frames++;
@@ -792,6 +825,7 @@ export async function runTrailVisibility({
     } finally {
       pre();
       post();
+      window.__restoreTransitLines();
       for (const [name, original] of originals) gl[name] = original;
       for (const [primitive, update] of wrapped)
         if (!primitive.isDestroyed()) primitive.update = update;
@@ -855,7 +889,32 @@ export async function runTrailVisibility({
     if (points.length < 2)
       return { ...setup, present: 0, reason: 'no completed path' };
     const C = scene.camera.positionCartographic.constructor;
-    const V = entry.marker.position.constructor;
+    // Marker positions are plain { x, y, z } now (the display's handles), not
+    // Cesium Cartesian3 instances with static helpers.
+    const V = {
+      distance: (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z),
+      lerp: (a, b, t) => ({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        z: a.z + (b.z - a.z) * t,
+      }),
+    };
+    // What the floor samples leave out: the Cesium primitives the engine
+    // draws the transit mover sets and trail lines with.
+    const drawnByTransit = [];
+    const walk = (collection) => {
+      for (let i = 0; i < collection.length; i++) {
+        const item = collection.get(i);
+        if (
+          String(item?.gevMoverSet ?? '').startsWith('transit') ||
+          String(item?.gevLine ?? '').startsWith('transit-trail-')
+        )
+          drawnByTransit.push(item);
+        else if (typeof item?.get === 'function' && 'length' in item)
+          walk(item);
+      }
+    };
+    walk(scene.primitives);
     const lengths = [0];
     for (let i = 1; i < points.length; i++)
       lengths.push(lengths.at(-1) + V.distance(points[i - 1], points[i]));
@@ -872,13 +931,9 @@ export async function runTrailVisibility({
         points[j - 1],
         points[j],
         (d - lengths[j - 1]) / Math.max(0.001, lengths[j] - lengths[j - 1]),
-        new V(),
       );
       const cart = C.fromCartesian(p);
-      const height = scene.sampleHeight(
-        cart,
-        [entry.marker, trail.body, trail.headPrimitive].filter(Boolean),
-      );
+      const height = scene.sampleHeight(cart, drawnByTransit);
       if (Number.isFinite(height)) cart.height = height;
       const surface = C.toCartesian(cart);
       const q = mul(
@@ -941,18 +996,12 @@ export async function runTrailVisibility({
         });
         scene.requestRender();
       });
-    const bodyShow = trail.body?.show,
-      headShow = trail.head?.show,
-      headPrimitiveShow = trail.headPrimitive?.show,
-      backingShow = trail.backing?.show;
+    const trailRenderer = window.__qaTransitTrail;
+    if (!trailRenderer)
+      return { ...setup, present: 0, reason: 'no trail renderer captured' };
     let showTrail = false;
-    const applyVisibility = () => {
-      if (trail.body) trail.body.show = showTrail && bodyShow;
-      if (trail.headPrimitive)
-        trail.headPrimitive.show = showTrail && headPrimitiveShow;
-      if (trail.head) trail.head.show = showTrail && headShow;
-      if (trail.backing) trail.backing.show = showTrail && backingShow;
-    };
+    // Body and head together, as the trail's own visibility switch does.
+    const applyVisibility = () => trailRenderer.setVisible(showTrail);
     // Override the layer's frame update in both states; selection stays fixed.
     const removeVisibility = scene.preRender.addEventListener(applyVisibility);
     const captures = [];
@@ -971,10 +1020,7 @@ export async function runTrailVisibility({
       }
     } finally {
       removeVisibility();
-      if (trail.body) trail.body.show = bodyShow;
-      if (trail.headPrimitive) trail.headPrimitive.show = headPrimitiveShow;
-      if (trail.head) trail.head.show = headShow;
-      if (trail.backing) trail.backing.show = backingShow;
+      trailRenderer.setVisible(true);
       await frame();
     }
     const [off, on, offAgain, onAgain] = captures.map((patches) =>
@@ -994,8 +1040,8 @@ export async function runTrailVisibility({
       tilesReady: captureReady,
       elapsedDisplayMs: entry.sample.displayT - setup.startDisplayT,
       movedMetres: Math.abs(entry.sample.lat - setup.startLat) * 111320,
-      body: trail.body?.constructor.name,
-      headStrategy: trail.headStrategy || 'PolylineCollection',
+      lines: trail.body?.lines ?? 0,
+      headStrategy: trail.headStrategy,
       headRebuilds: trail.headRebuilds ?? null,
     };
   }, setup);

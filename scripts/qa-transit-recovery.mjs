@@ -100,6 +100,13 @@ try {
         ),
         orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
       });
+    // The trail draws through engine.lines (render/display.js); its renderer
+    // is the handle that shows and hides the whole trail. Keep the one the
+    // selection below creates.
+    let trailRenderer = null;
+    const createTrailRenderer = parts.renderer.createTrailRenderer;
+    parts.renderer.createTrailRenderer = (...args) =>
+      (trailRenderer = createTrailRenderer.apply(parts.renderer, args));
     parts.selection.clearSelection();
     parts.ingestion.abortAllInFlight();
     state._activeFeeds.clear();
@@ -151,6 +158,7 @@ try {
     state._floorTimer = null;
     const started = performance.now();
     parts.selection.selectVehicle(entry.key);
+    parts.renderer.createTrailRenderer = createTrailRenderer;
     const preparedAtSelection = !!parts.trails.diagnostics()?.body;
     parts.height.requestHeight = requestHeight;
     const floor =
@@ -177,6 +185,8 @@ try {
         .find((e) => e.key === entry.key),
       recoveryMs: performance.now() - started,
     };
+    if (!trailRenderer)
+      return { ...status, reason: 'the selection created no trail renderer' };
     if (!entry.marker.show || !trail?.body?.show || !trail.body.ready)
       return {
         ...status,
@@ -188,7 +198,16 @@ try {
     });
     parts.rendering.sampleIdle(entry);
     parts.rendering.schedulePlayback(entry);
-    const V = entry.marker.position.constructor;
+    // Marker positions are plain { x, y, z } now (the display's handles), not
+    // Cesium Cartesian3 instances with static helpers.
+    const V = {
+      distance: (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z),
+      lerp: (a, b, t) => ({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        z: a.z + (b.z - a.z) * t,
+      }),
+    };
     const points = entry.trailSegments
       .filter((s) => s.toT <= entry.sample.displayT)
       .flatMap((s) => s.positions);
@@ -222,7 +241,6 @@ try {
         points[j - 1],
         points[j],
         (d - lengths[j - 1]) / Math.max(0.001, lengths[j] - lengths[j - 1]),
-        new V(),
       );
       const cart = C.fromCartesian(p);
       cart.height = scene.globe.getHeight(cart) || 0;
@@ -273,11 +291,10 @@ try {
         scene.requestRender();
       });
     let visible = true;
-    const remove = scene.preRender.addEventListener(() => {
-      trail.body.show = visible;
-      if (trail.headPrimitive)
-        trail.headPrimitive.show = visible && trail.head.show;
-    });
+    // Body and head together, as the trail's own visibility switch does.
+    const remove = scene.preRender.addEventListener(() =>
+      trailRenderer.setVisible(visible),
+    );
     const captures = [];
     try {
       for (const show of [false, true, false, true]) {
@@ -287,6 +304,7 @@ try {
       }
     } finally {
       remove();
+      trailRenderer.setVisible(true);
       parts.trails.update();
     }
     const [off, on, offAgain, onAgain] = captures;
@@ -302,10 +320,10 @@ try {
         scene.globe.tilesLoaded &&
         parts.trails.diagnostics().body === trail.body,
       elapsedMs: performance.now() - started,
-      attributes: Array.from({ length: 4 }, (_, i) => {
-        const a = trail.body.getGeometryInstanceAttributes(`${i}:1`);
-        return { show: Array.from(a.show), color: Array.from(a.color) };
-      }),
+      // The trail's engine lines (age bands and head, each with a backing).
+      lines: app.engine.lines
+        .list()
+        .filter(({ id }) => id.startsWith('transit-trail-')),
     };
   });
   const pixels = reduceTrailPixels(result.on, result.off, result);
@@ -319,7 +337,9 @@ try {
   const pass =
     result.before?.shown === false &&
     result.before?.phase === 'playing' &&
-    result.preparedAtSelection &&
+    // preparedAtSelection is reported, not required: the trail is engine
+    // lines in the air now (render/display.js), not a draped ground
+    // polyline, so it has no geometry until the floors it waits on arrive.
     result.markerShow &&
     result.body &&
     result.bodyShow &&

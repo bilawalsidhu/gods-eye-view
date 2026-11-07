@@ -18,9 +18,11 @@
  *   node scripts/qa-overlay-baseline.mjs --engine=navara
  *
  * Engine-neutral: the camera and frames go through the globe engine and the
- * layers through the QA probe (window.__godsEyeView.layers). A scene whose
- * layers the engine does not have is SKIPPED; without a Cesium viewer the
- * entity inventory reports the engine's mover sets instead.
+ * layers through the QA probe (window.__godsEyeView.layers, dev server only).
+ * A scene whose layers the engine does not have is SKIPPED. The inventory
+ * counts the globe contract's sets (movers, lines, ground, imagery) on both
+ * engines; on Cesium it also counts what is left of Entities, LabelGraphics
+ * and primitives (none of them a layer's own any more).
  */
 
 import fs from 'node:fs';
@@ -233,14 +235,21 @@ function numericDelta(after, before, key) {
 
 function inventoryDelta(before, after) {
   return {
-    entities: numericDelta(after, before, 'entities'),
-    labelGraphics: numericDelta(after, before, 'labelGraphics'),
-    nonemptyLabelText: numericDelta(after, before, 'nonemptyLabelText'),
-    emptyLabelText: numericDelta(after, before, 'emptyLabelText'),
-    shownLabelGraphics: numericDelta(after, before, 'shownLabelGraphics'),
-    primitiveLabels: numericDelta(after, before, 'primitiveLabels'),
-    primitiveBillboards: numericDelta(after, before, 'primitiveBillboards'),
-    primitivePoints: numericDelta(after, before, 'primitivePoints'),
+    moverInstances: numericDelta(after, before, 'moverInstances'),
+    lines: numericDelta(after, before, 'lines'),
+    groundItems: numericDelta(after, before, 'groundItems'),
+    imageryLayers: numericDelta(after, before, 'imageryLayers'),
+    // Cesium only: what is left of Entities and primitives.
+    ...(after?.totals?.entities === undefined ? {} : {
+      entities: numericDelta(after, before, 'entities'),
+      labelGraphics: numericDelta(after, before, 'labelGraphics'),
+      nonemptyLabelText: numericDelta(after, before, 'nonemptyLabelText'),
+      emptyLabelText: numericDelta(after, before, 'emptyLabelText'),
+      shownLabelGraphics: numericDelta(after, before, 'shownLabelGraphics'),
+      primitiveLabels: numericDelta(after, before, 'primitiveLabels'),
+      primitiveBillboards: numericDelta(after, before, 'primitiveBillboards'),
+      primitivePoints: numericDelta(after, before, 'primitivePoints'),
+    }),
   };
 }
 
@@ -265,14 +274,13 @@ function printScene(result) {
   if (result.reason) console.log(`  reason      : ${result.reason}`);
   for (const activation of result.layerActivations || []) {
     const delta = activation.delta;
-    console.log(`  toggle ${activation.layerId.padEnd(31)} entities ${String(delta.entities).padStart(6)} · LabelGraphics ${String(delta.labelGraphics).padStart(6)} · primitive labels ${String(delta.primitiveLabels).padStart(6)}`);
+    console.log(`  toggle ${activation.layerId.padEnd(31)} movers ${String(delta.moverInstances).padStart(6)} · lines ${String(delta.lines).padStart(5)} · ground ${String(delta.groundItems).padStart(6)} · imagery ${String(delta.imageryLayers).padStart(2)}${delta.entities === undefined ? '' : ` · entities ${String(delta.entities).padStart(6)} · LabelGraphics ${String(delta.labelGraphics).padStart(6)}`}`);
   }
   if (result.entityInventory) {
     const totals = result.entityInventory.totals;
-    if (totals.entities === undefined)
-      console.log(`  scene total : mover sets ${totals.moverSets} · instances ${totals.moverInstances}`);
-    else
-      console.log(`  scene total : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`);
+    console.log(`  scene total : mover sets ${totals.moverSets} · instances ${totals.moverInstances} · lines ${totals.lines} · ground sets ${totals.groundSets} (${totals.groundItems} items) · imagery ${totals.imageryLayers}`);
+    if (totals.entities !== undefined)
+      console.log(`  Cesium      : entities ${totals.entities} · LabelGraphics ${totals.labelGraphics} (${totals.shownLabelGraphics} show=true) · primitive labels ${totals.primitiveLabels}`);
   }
   for (const phaseName of ['motion', 'rest']) {
     const phase = result.samples?.[phaseName];
@@ -416,22 +424,38 @@ async function waitForLayer(page, layerId) {
 
 async function readEntityInventory(page) {
   return page.evaluate(() => {
-    const { viewer, layers } = window.__godsEyeView;
-    // Without a Cesium viewer (Navara): the engine's mover sets.
+    const { viewer, engine } = window.__godsEyeView;
+    // What the layers draw, on either engine: the globe contract's sets
+    // (layers own no Cesium Entities, DataSources or primitives any more).
+    const movers = engine.movers.list();
+    const lines = engine.lines.list();
+    const ground = engine.ground.list();
+    const imagery = engine.imagery.list();
+    const contract = {
+      moverSets: movers.length,
+      moverInstances: movers.reduce((sum, set) => sum + set.count, 0),
+      lines: lines.filter((line) => line.shown).length,
+      groundSets: ground.length,
+      groundItems: ground.reduce((sum, set) => sum + (set.shown ? set.count : 0), 0),
+      imageryLayers: imagery.filter((layer) => layer.shown).length,
+    };
+    const contractCollections = [
+      ...movers.map((set) => ({ scope: 'movers', ...set })),
+      ...ground.map((set) => ({ scope: 'ground', ...set })),
+      ...imagery.map((layer) => ({ scope: 'imagery', ...layer })),
+    ];
+    // Without a Cesium viewer (Navara): the contract sets only.
     if (!viewer) {
-      const sets = layers.movers();
       return {
-        totals: {
-          moverSets: sets.length,
-          moverInstances: sets.reduce((sum, set) => sum + set.count, 0),
-        },
-        collections: sets,
+        totals: contract,
+        collections: contractCollections,
         primitiveTypes: {},
       };
     }
     const time = viewer.clock.currentTime;
-    const collections = [];
+    const collections = [...contractCollections];
     const totals = {
+      ...contract,
       entities: 0,
       labelGraphics: 0,
       shownLabelGraphics: 0,

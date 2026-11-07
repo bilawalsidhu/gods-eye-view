@@ -83,6 +83,20 @@ try {
   await page.goto(testUrl.href, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager
     && document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 90_000 });
+  // The startup view restore and any boot flight land after the loading
+  // screen; park only once they are over, or they move the camera away from
+  // the full-earth view before the first LOD walk.
+  await page.evaluate(async () => {
+    const gev = window.__godsEyeView;
+    await gev.styleManager.initialRestorePromise;
+    let quietSince = performance.now();
+    const deadline = performance.now() + 30_000;
+    while (performance.now() < deadline) {
+      if (gev.engine.camera.flightActive()) quietSince = performance.now();
+      else if (performance.now() - quietSince > 3_000) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  });
   check('first-run chooser does not cover the test surface', await page.evaluate(() => (
     !document.querySelector('#first-run-launcher:not([hidden])')
   )));
@@ -158,8 +172,12 @@ try {
     for (const id of infraIds) {
       out[id] = gev.dataManager.layers.get(id)?.module?.getLodDiagnostics?.() || null;
     }
-    return out;
-  }, INFRA_LAYER_IDS).then((lod) => { report(label, lod); return lod; });
+    // Where the camera is when the LOD is read (reported, not compared).
+    return { lod: out, cameraHeightM: Math.round(gev.engine.camera.height()) };
+  }, INFRA_LAYER_IDS).then(({ lod, cameraHeightM }) => {
+    report(label, { ...lod, cameraHeightM });
+    return lod;
+  });
 
   if (!CONTROL) {
     const globalLod = await readLod('getLodDiagnostics @ full-earth');
@@ -216,15 +234,13 @@ try {
     // ── GATE c: no churn between camera moves ───────────────────────────
     const churn = await page.evaluate(async (infraIds) => {
       const gev = window.__godsEyeView;
-      const snap = () => infraIds.map((id) => {
-        const visibleIds = [];
-        for (let i = 0; i < gev.viewer.dataSources.length; i++) {
-          for (const entity of gev.viewer.dataSources.get(i).entities.values) {
-            if (entity.__localLayerId === id && entity.show) visibleIds.push(String(entity.id));
-          }
-        }
-        return visibleIds.sort();
-      });
+      // The layer draws through the globe contract: a reference in view has
+      // a stem line `${layerId}-stem-${featureId}` (render/display.js drops
+      // it when the reference leaves the view or the LOD set).
+      const snap = () => infraIds.map((id) => gev.engine.lines.list()
+        .filter((line) => line.id.startsWith(`${id}-stem-`) && line.shown)
+        .map((line) => line.id)
+        .sort());
       const before = snap();
       for (let i = 0; i < 5; i++) {
         gev.viewer.scene.requestRender?.();
@@ -297,7 +313,8 @@ try {
   // ── parked-idle honesty: the LOD walk must not force continuous render ─
   await new Promise((r) => setTimeout(r, 4_000));
   const idle = await page.evaluate(async () => {
-    const { getRenderGovernorDiagnostics } = await import('/src/renderGovernor.js');
+    // The debug handle's own governor read (no /src import: runs on a build).
+    const { getRenderGovernorDiagnostics } = window.__godsEyeView;
     return new Promise((resolve) => {
       const scene = window.__godsEyeView.viewer.scene;
       const startedAt = Date.now();

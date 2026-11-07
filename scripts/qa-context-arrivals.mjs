@@ -338,10 +338,16 @@ async function contacts() {
           candidate.querySelector('strong')?.textContent?.trim() ===
           'Mapped installations',
       );
-      const ds = window.__godsEyeView.viewer.dataSources.getByName(
-        'military-installations',
-      )[0];
-      for (const entity of ds?.entities.values || [])
+      // The drawn sites are context handles in the shared context store
+      // (src/layers/installations/render/display.js keeps a site's handle
+      // while its geometry is unchanged), not Entities: a new handle is a
+      // rebuilt site.
+      const sites = [
+        ...(window.__gevContextStore?.entities.values() || []),
+      ].filter((record) =>
+        String(record.entity?.gevTrackedId ?? '').startsWith('installations:'),
+      );
+      for (const { entity } of sites)
         if (!seen.has(entity)) {
           seen.add(entity);
           created += 1;
@@ -357,7 +363,7 @@ async function contacts() {
           name: button.childNodes[0]?.textContent?.trim(),
           distance: button.querySelector('span')?.textContent?.trim(),
         })),
-        entities: ds?.entities.values.length ?? 0,
+        entities: sites.length,
         created,
         tracked:
           window.__godsEyeView.viewer.trackedEntity?.gevTrackedId ?? null,
@@ -429,7 +435,7 @@ async function contacts() {
     `${reverted.length}/${flight.length}`,
   );
   check(
-    'site entities are not rebuilt while tracking',
+    'drawn sites are not rebuilt while tracking',
     createdDuring === 0,
     `${createdDuring} created`,
   );

@@ -54,9 +54,9 @@ const getOpt = (name, dflt) => {
 };
 
 const BASE_URL = getOpt('--url', 'http://localhost:4173');
-// --engine=cesium|navara: without a viewer the layer is read through
-// the QA probe (window.__godsEyeView.layers.drawn) and the military checks are
-// skipped where the engine has no military layer.
+// --engine=cesium|navara: on both engines the layers are read through the QA
+// probe (window.__godsEyeView.layers.drawn, the dev server's); the military
+// checks are skipped where the engine has no military layer.
 const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);
 const APP_URL =
   ENGINE === 'cesium' ? BASE_URL : `${BASE_URL.replace(/\/$/, '')}/?engine=${ENGINE}`;
@@ -283,7 +283,8 @@ async function main() {
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
       () => window.__godsEyeView && window.__godsEyeView.engine && window.__godsEyeView.dataManager && window.__godsEyeView.layers,
-      { timeout: 60000, polling: 200 }
+      // A cold dev server compiles the Navara chunks on first load.
+      { timeout: 180000, polling: 200 }
     );
     await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
     await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
@@ -292,53 +293,22 @@ async function main() {
 
     // ---- In-page probes: billboard walk, model walk, tracked-model finder ---
     await page.evaluate(() => {
-      // Every billboard (image + alignedAxis + id) in every collection.
+      // Every fleet glyph the flights and military layers draw, through the
+      // engine-neutral probe (layers.drawn: the layers' own sprite handles),
+      // on either engine. The layers no longer own Cesium billboards: on
+      // Cesium the contract's batched billboards carry atlas keys, not the
+      // glyph data-URIs.
       window.__collectBillboards = function () {
-        const v = window.__godsEyeView.viewer;
-        if (!v)
-          return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
-            .filter((row) => !row.trackedModel)
-            .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
-        const out = [];
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.image !== undefined && p.alignedAxis !== undefined) {
-              out.push({ id: p.id, image: p.image, scale: p.scale, show: p.show });
-            }
-          }
-        };
-        walk(v.scene.primitives);
-        return out;
+        return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
+          .filter((row) => !row.trackedModel)
+          .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
       };
-      // Every glTF model primitive (modelMatrix + ready flag), with id + scale.
+      // Every fleet and tracked 3D model, with id + scale (the probe's model
+      // handles). The world bounding radius is not on the contract: null.
       window.__collectModels = function () {
-        const v = window.__godsEyeView.viewer;
-        if (!v)
-          return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
-            .filter((row) => row.model && (row.trackedModel || !row.tracked))
-            .map(({ id, model }) => ({ id, ...model, radius: null }));
-        const out = [];
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.modelMatrix && typeof p.ready !== 'undefined' && p.image === undefined) {
-              let radius = null;
-              try { radius = p.ready && p.boundingSphere ? p.boundingSphere.radius : null; } catch { /* not ready */ }
-              out.push({ id: p.id, scale: p.scale, ready: p.ready, show: p.show, radius });
-            }
-          }
-        };
-        walk(v.scene.primitives);
-        return out;
+        return ['flights', 'military'].flatMap((id) => window.__godsEyeView.layers.drawn(id) ?? [])
+          .filter((row) => row.model && (row.trackedModel || !row.tracked))
+          .map(({ id, model }) => ({ id, ...model, radius: null }));
       };
       // Displayed (render-delayed) latitude of a synthetic plane right now.
       window.__displayedState = function (layer, idx, renderDelaySec) {

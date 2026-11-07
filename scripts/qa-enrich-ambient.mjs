@@ -67,8 +67,9 @@ const getOpt = (name, dflt) => {
 };
 
 const BASE_URL = getOpt('--url', 'http://localhost:4173');
-// --engine=cesium|navara: Navara reads the layer through the QA
-// probe (window.__godsEyeView.layers.drawn) and moves the engine camera.
+// --engine=cesium|navara: both engines read the layer through the QA probe
+// (window.__godsEyeView.layers.drawn, the dev server's) and move the engine
+// camera.
 const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=cesium').slice(9);
 const APP_URL =
   ENGINE === 'cesium' ? BASE_URL : `${BASE_URL.replace(/\/$/, '')}/?engine=${ENGINE}`;
@@ -299,38 +300,24 @@ async function main() {
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
       () => window.__godsEyeView && window.__godsEyeView.engine && window.__godsEyeView.dataManager && window.__godsEyeView.layers,
-      { timeout: 60000, polling: 200 }
+      // A cold dev server compiles the Navara chunks on first load.
+      { timeout: 180000, polling: 200 }
     );
     await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
     await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
     await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
-    // ---- In-page billboard probe (same walk as qa-sprites-b5.mjs) ----------
+    // ---- In-page billboard probe (same as qa-sprites-b5.mjs) ---------------
+    // What the flights layer draws, through the engine-neutral probe
+    // (layers.drawn: the layer's own sprite handles) on either engine. The
+    // layer owns no Cesium billboards any more: the contract's batched
+    // billboards carry atlas keys, not the glyph data-URIs.
     await page.evaluate(() => {
       window.__collectBillboards = function () {
-        const v = window.__godsEyeView.viewer;
-        // Without a viewer (Navara): what the flights layer draws, through
-        // the engine-neutral probe.
-        if (!v)
-          return (window.__godsEyeView.layers.drawn('flights') ?? [])
-            .filter((row) => !row.trackedModel)
-            .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
-        const out = [];
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.image !== undefined && p.alignedAxis !== undefined) {
-              out.push({ id: p.id, image: p.image, scale: p.scale, show: p.show });
-            }
-          }
-        };
-        walk(v.scene.primitives);
-        return out;
+        return (window.__godsEyeView.layers.drawn('flights') ?? [])
+          .filter((row) => !row.trackedModel)
+          .map(({ id, image, scale, show }) => ({ id, image, scale, show }));
       };
     });
 
