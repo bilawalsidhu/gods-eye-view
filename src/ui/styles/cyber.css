@@ -1605,9 +1605,9 @@
 }
 
 /* Attribution's logo row extends above its text baseline. Reserve the whole
-   row plus a gap above the dock-relative 2vh + 5rem credit position. */
+   row plus a gap above the dock-relative credit anchor. */
 #intel-hud[data-variant='cyber'] .hud-bottom-left {
-  bottom: calc(2vh + 7.75rem);
+  bottom: calc(var(--gev-credits-bottom) + var(--gev-credits-reserve));
 }
 
 #intel-hud[data-variant='cyber'] .hud-corner {

@@ -2059,9 +2059,15 @@ body.cockpit-mode #intel-hud .hud-top-left,
 body.cockpit-mode #intel-hud .hud-top-right {
   top: clamp(104px, 13vh, 138px);
 }
-body.cockpit-mode #intel-hud .hud-bottom-left,
 body.cockpit-mode #intel-hud .hud-bottom-right {
   bottom: clamp(84px, 11vh, 118px);
+}
+/* The lower-left readout sits over the attribution row, which keeps its map
+   position in Cockpit. Scaling from its bottom edge keeps it on that reserve
+   and below the context window's rail. */
+body.cockpit-mode #intel-hud .hud-bottom-left {
+  bottom: calc(var(--gev-credits-bottom) + var(--gev-credits-reserve));
+  transform-origin: left bottom;
 }
 body.cockpit-mode #intel-hud .hud-summary-wrap {
   max-width: min(34vw, 380px);

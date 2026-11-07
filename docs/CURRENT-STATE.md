@@ -457,6 +457,16 @@ that names Operator restores the default Tactical layout. Operator was the
 only layout that showed the HUD's top banner bar, so its markup and styles are
 removed too.
 
+Minimal no longer shows the centred MGRS / LAT / LON bar near the bottom of the
+globe (November 3, 2026, #1523): the bottom-left readout already carries the
+same position, and the bar sat across the globe. Cyber keeps its own bar. The
+attribution row's position is one variable, `--gev-credits-bottom` in
+`command-dock-trays.css`, and the lower-left readout of Minimal, Tactical, Cyber
+and Cockpit sits `--gev-credits-reserve` (2.75rem) above it, which leaves 1rem
+over the 28px logo row with Scope on or off. Phones hide that readout.
+`scripts/qa-scope-hud.mjs` checks the hidden banner and that clearance against
+the rendered attribution row.
+
 ## Cyber HUD — September 30, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

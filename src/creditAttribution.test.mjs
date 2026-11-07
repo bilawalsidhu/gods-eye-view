@@ -299,9 +299,26 @@ function resolve(candidates, prop, width, label) {
   return winner;
 }
 
+/**
+ * Inline a custom property declared once, on a bare :root, so an offset written
+ * through it evaluates to the length it stands for. Anything else stays a
+ * var() for toPx to vet.
+ */
+function inlineRootVars(value) {
+  const inlined = value.replace(/var\((--[\w-]+)\)/g, (match, name) => {
+    const declarations = RULES.flatMap((rule) =>
+      rule.decls.filter((decl) => decl.prop === name).map((decl) => ({ rule, decl })));
+    if (declarations.length !== 1) return match;
+    const [{ rule, decl }] = declarations;
+    if (rule.media.length || rule.parts.join() !== ':root') return match;
+    return decl.value.replace(/^calc\((.*)\)$/, '$1');
+  });
+  return inlined === value || /^calc\(/.test(inlined) ? inlined : `calc(${inlined})`;
+}
+
 /** Evaluate a length. Anything the model cannot resolve exactly fails loudly. */
 function toPx(value, viewportHeight, where) {
-  const trimmed = value.trim();
+  const trimmed = inlineRootVars(value.trim());
   const inner = /^calc\(/.test(trimmed) ? trimmed.slice(5, -1) : trimmed;
   assert.doesNotMatch(inner, /\bcalc\(/, `nested calc() in ${where}: "${value}"`);
   assert.doesNotMatch(inner, /\b(min|max|clamp|env|attr|round|mod)\(/, `unmodelled function in ${where}: "${value}"`);
@@ -579,7 +596,7 @@ test('the dock anchor changes at 720px — the 2vh cancellation is band-limited'
   assert.equal(resolve(['#command-dock'], 'bottom', 800, 'dock').decl.value, '2vh');
   assert.equal(resolve(['#command-dock'], 'bottom', 720, 'dock').decl.value, '8px');
   assert.equal(
-    resolve(CREDIT_SELECTORS, 'bottom', 720, 'credit').decl.value,
+    inlineRootVars(resolve(CREDIT_SELECTORS, 'bottom', 720, 'credit').decl.value),
     'calc(2vh + 5rem)',
     'the credit keeps its 2vh base below 720px — that asymmetry is the whole hazard',
   );

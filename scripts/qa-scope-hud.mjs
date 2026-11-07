@@ -5,7 +5,9 @@
  * Optional: QA_BASE_URL, QA_SCREENSHOT_DIR (screenshots stay outside the repo).
  * Proves a fresh boot defaults to Scope ON at 100%, native checkbox click/Space,
  * feather 0/11/100/200, layout independence,
- * share/scene restore, and visible text backing including rotated metadata.
+ * share/scene restore, visible text backing including rotated metadata,
+ * Minimal's banner removal, and coordinate/attribution clearance for Minimal
+ * and Tactical in map view and Minimal in Cockpit.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -665,6 +667,117 @@ try {
     );
     await settleTextBackings(false);
     checkSceneChrome(`narrow ${layout}`, before, await readSceneChrome());
+  }
+  // The lower-left readout sits --gev-credits-reserve (2.75rem) above the
+  // attribution anchor; the reserve covers a 28px logo row, so the readout box
+  // clears the row by 1rem.
+  const readCornerGeometry = () =>
+    page.evaluate(() => {
+      const banner = document.querySelector('#intel-hud .hud-bottom-bar');
+      const coordinates = document.querySelector('#intel-hud .hud-bottom-left');
+      // The fixed host has zero size; Cesium positions its actual row inside it.
+      const credits = document.querySelector(
+        '#cesium-credits .cesium-widget-credits',
+      );
+      const coordinateBox = coordinates.getBoundingClientRect();
+      const creditBox = credits.getBoundingClientRect();
+      return {
+        bannerHidden: getComputedStyle(banner).display === 'none',
+        coordinatesVisible: coordinateBox.width > 0 && coordinateBox.height > 0,
+        coordinatesHidden: getComputedStyle(coordinates).display === 'none',
+        creditsVisible: creditBox.width > 0 && creditBox.height > 0,
+        creditRowHeight: creditBox.height,
+        gap: creditBox.top - coordinateBox.bottom,
+        bottom: getComputedStyle(coordinates).bottom,
+      };
+    });
+  const clearsCredits = (geometry) =>
+    geometry.coordinatesVisible &&
+    geometry.creditsVisible &&
+    geometry.creditRowHeight <= 28.5 &&
+    geometry.gap >= 15.5;
+  for (const viewport of [
+    { width: 1600, height: 900 },
+    { width: 1024, height: 700 },
+    { width: 820, height: 700 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewport(viewport);
+    for (const layout of ['minimal', 'tactical']) {
+      await page.select('#hud-layout-select', layout);
+      for (const enabled of [true, false]) {
+        await page.evaluate(
+          (enabled) =>
+            window.__godsEyeView.styleManager.applyVisualState({
+              scope: { enabled },
+            }),
+          enabled,
+        );
+        await settleTextBackings(enabled);
+        // Wait for the responsive shell and the real attribution logo to settle.
+        await page.waitForFunction(
+          (mobile) =>
+            document.body.classList.contains('mobile-shell') === mobile &&
+            [...document.querySelectorAll('#cesium-credits img')].some(
+              (img) => img.complete && img.naturalWidth > 0,
+            ),
+          {},
+          viewport.width <= 720,
+        );
+        const geometry = await readCornerGeometry();
+        const name = `${layout === 'minimal' ? 'Minimal' : 'Tactical'} ${viewport.width}px Scope ${enabled ? 'ON' : 'OFF'}`;
+        if (layout === 'minimal') {
+          check(
+            `${name}: centred coordinate banner stays hidden`,
+            geometry.bannerHidden,
+            geometry,
+          );
+        }
+        if (viewport.width <= 720) {
+          check(
+            `${name}: phone hides the coordinate readout and keeps attribution`,
+            geometry.coordinatesHidden && geometry.creditsVisible,
+            geometry,
+          );
+        } else {
+          check(
+            `${name}: coordinate block clears the full attribution row by 1rem`,
+            clearsCredits(geometry),
+            geometry,
+          );
+        }
+      }
+    }
+  }
+  // Cockpit's corner offset outranks every layout's. The body class carries
+  // that layout; entering for real needs a tracked aircraft.
+  await page.select('#hud-layout-select', 'minimal');
+  for (const viewport of [
+    { width: 1600, height: 900 },
+    { width: 1024, height: 700 },
+  ]) {
+    await page.setViewport(viewport);
+    await page.waitForFunction(
+      () => !document.body.classList.contains('mobile-shell'),
+    );
+    await page.evaluate(() => document.body.classList.add('cockpit-mode'));
+    for (const enabled of [true, false]) {
+      await page.evaluate(
+        (enabled) =>
+          window.__godsEyeView.styleManager.applyVisualState({
+            scope: { enabled },
+          }),
+        enabled,
+      );
+      await settleTextBackings(enabled);
+      const geometry = await readCornerGeometry();
+      check(
+        `Cockpit Minimal ${viewport.width}px Scope ${enabled ? 'ON' : 'OFF'}: coordinate block clears the full attribution row by 1rem`,
+        clearsCredits(geometry),
+        geometry,
+      );
+    }
+    await page.evaluate(() => document.body.classList.remove('cockpit-mode'));
   }
   check('runtime has no uncaught browser errors', errors.length === 0, errors);
 } finally {
