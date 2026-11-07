@@ -24,6 +24,7 @@ import {
   billboardLoadError,
   lastRenderTime,
   lastSeenCamera,
+  onEngineWorkCompleted,
   renderPending,
 } from './internals.js';
 
@@ -1147,7 +1148,7 @@ export function createCesiumPorts(widget, { capabilities }) {
     );
   }
 
-  /** The live model sets, for a renderer's own `whenSettled`. */
+  /** The live model sets, for `whenSettled`. */
   const modelSets = () =>
     [...sets.values()].filter((r) => r.kind === 'models' && r.host);
 
@@ -1170,6 +1171,148 @@ export function createCesiumPorts(widget, { capabilities }) {
     return loading ? 'loading' : 'settled';
   }
 
+  /** A hidden globe loads nothing, so it is never what is still loading. */
+  const globeLoaded = () =>
+    !scene.globe?.show || scene.globe.tilesLoaded !== false;
+  /** Whether every shown 3D tileset has loaded what is in view. */
+  const tilesLoaded = () =>
+    tilesets().every((tileset) => !tileset.show || tileset.tilesLoaded);
+
+  // --- Settling --------------------------------------------------------------
+
+  // Idle watches in progress; disposal ends them rather than leave them
+  // waiting on a scene that will not tick again.
+  const watching = new Set();
+
+  /** How long the loop must stay idle, drawing nothing, to be settled. */
+  const IDLE_MS = 100;
+  /** How long without a tick a loop counts as stopped. */
+  const STALL_MS = 250;
+
+  /**
+   * Watches the loop, without asking for frames, for at least two whole
+   * ticks and `IDLE_MS`. Resolves `'idle'` if in that time it drew nothing
+   * of its own accord and `busy()` stayed false; `'busy'` as soon as it did;
+   * `'ended'` if the ports are disposed or `end` passes first. A draw while
+   * a hold keeps the loop drawing every frame is the hold's, not the
+   * scene's own; `busy` is asked at each tick's start, before Cesium decides
+   * whether it draws.
+   * @param {number} end
+   * @param {() => boolean} busy Whether work landed that will draw again.
+   */
+  function watchIdle(end, busy) {
+    return new Promise((resolve) => {
+      const from = performance.now();
+      let ticks = 0;
+      const offDraw = scene.postRender.addEventListener(() => {
+        if (scene.requestRenderMode) finish('busy');
+      });
+      // Each preUpdate also ends the tick before it.
+      const offTick = scene.preUpdate.addEventListener(() => {
+        if (busy()) return finish('busy');
+        ticks += 1;
+        if (ticks > 2 && performance.now() - from >= IDLE_MS) finish('idle');
+      });
+      const timer = setTimeout(
+        () => finish('ended'),
+        Math.max(0, end - performance.now()),
+      );
+      watching.add(finish);
+      function finish(outcome) {
+        watching.delete(finish);
+        offDraw();
+        offTick();
+        clearTimeout(timer);
+        resolve(outcome);
+      }
+    });
+  }
+
+  async function whenSettled({ timeoutMs = 20000 } = {}) {
+    const end = performance.now() + timeoutMs;
+    // Cesium redraws on its own after each request or worker task it
+    // completes (a terrain picker build after the camera moved, say), which
+    // no loading flag shows; settled means that has stopped too. Every
+    // scene in the page redraws for any completion, so another scene's work
+    // keeps this one from settling: it is drawing.
+    let completed = 0;
+    // Whether the last look found the engine still at work.
+    let busy = false;
+    // When the loop last ticked: one that stopped (suspended, say) is named
+    // in a timeout, not one that merely ran out of time mid-frame.
+    let lastTick = performance.now();
+    const offTick = scene.preUpdate.addEventListener(
+      () => (lastTick = performance.now()),
+    );
+    const off = onEngineWorkCompleted(Cesium, () => (completed += 1));
+    try {
+      let quiet = 0;
+      while (performance.now() < end) {
+        completed = 0;
+        if (disposed) return { state: 'failed', blockers: ['destroyed'] };
+        // Bounded by the time left: a suspended loop draws nothing.
+        const drawn = await nextPostRender({
+          timeoutMs: Math.max(0, end - performance.now()),
+        }).then(
+          () => true,
+          () => false,
+        );
+        if (disposed) return { state: 'failed', blockers: ['destroyed'] };
+        if (!drawn) break;
+        if (modelSets().some((r) => r.host.failed > 0))
+          return { state: 'failed', blockers: ['models'] };
+        const icons = iconState();
+        if (icons === 'failed') return { state: 'failed', blockers: ['icons'] };
+        quiet = loaded() && !idleBlocked() ? quiet + 1 : 0;
+        if (quiet < 3) continue;
+        // Then the loop left alone must draw nothing by itself for a while:
+        // a worker's first task can take tens of milliseconds, and what is
+        // in flight cannot be counted. Something that starts loading
+        // meanwhile ends the watch too; the next pass sees it, or its
+        // failure.
+        const outcome = await watchIdle(end, () => !loaded() || idleBlocked());
+        if (outcome === 'idle') return { state: 'settled', blockers: [] };
+        if (outcome !== 'busy') break;
+        // Work or a draw, unless it was something loading.
+        busy = loaded();
+        quiet = 0;
+      }
+      if (disposed) return { state: 'failed', blockers: ['destroyed'] };
+      const blockers = [];
+      if (!globeLoaded()) blockers.push('globe');
+      if (!tilesLoaded()) blockers.push('tiles');
+      if (modelSets().some((r) => r.host.loading > 0)) blockers.push('models');
+      if (iconState() !== 'settled') blockers.push('icons');
+      if (busy) blockers.push('redraw');
+      if (performance.now() - lastTick >= STALL_MS) blockers.push('frames');
+      return { state: 'timeout', blockers };
+    } finally {
+      off();
+      offTick();
+    }
+
+    /** Whether what is in view has loaded, nothing failing. */
+    function loaded() {
+      const icons = iconState();
+      return (
+        globeLoaded() &&
+        tilesLoaded() &&
+        icons === 'settled' &&
+        !modelSets().some((r) => r.host.loading > 0 || r.host.failed > 0)
+      );
+    }
+
+    /**
+     * Work since the last look that will draw again, or a draw queued (one a
+     * hold makes anyway is the hold's).
+     */
+    function idleBlocked() {
+      busy = completed > 0 || (scene.requestRenderMode && renderPending(scene));
+      completed = 0;
+      return busy;
+    }
+  }
+
   return {
     /** The renderer's own events: `error`, `contextLost`, `contextRestored`. */
     on(event, cb) {
@@ -1184,12 +1327,11 @@ export function createCesiumPorts(widget, { capabilities }) {
     effects: effectsPart.port,
     quality: qualityPart.port,
     capture,
-    modelSets,
-    iconState,
-    nextPostRender,
+    whenSettled,
     /** Detach from the scene; the widget's owner destroys the widget. */
     dispose() {
       disposed = true;
+      for (const finish of [...watching]) finish('ended');
       // The tick under way is no longer seen through: it is not claimed.
       settleTick(false);
       for (const off of removers) off();
