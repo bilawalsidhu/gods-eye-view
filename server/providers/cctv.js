@@ -13,6 +13,7 @@ import {
 } from './cctv/media.js';
 import {
   CCTV_FRAME_FETCH_TIMEOUT_MS,
+  CCTV_FRAME_MAX_BODY_BYTES,
   CCTV_MAX_SOURCES_CEILING,
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
@@ -22,6 +23,13 @@ import { createHlsPuller } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
 import { googleServerApiKey } from './places/google-key.js';
+import { readResponseBytesCapped } from './common/http.js';
+import { clientNetworkKey } from './common/rate-limit.js';
+import {
+  STREET_VIEW_DEFERRED,
+  processStreetViewAdmission,
+  registeredStreetViewLocation,
+} from './cctv/streetViewGuard.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -36,8 +44,14 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  *
  * @returns {import('vite').Plugin}
  */
-export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
+export function cctvProxy({
+  sourceRoot = process.cwd(),
+  streetViewAdmission,
+} = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  // Test callers can supply an isolated budget; deployments default to the
+  // single process-wide admission service shared by every CCTV plugin.
+  const admission = streetViewAdmission ?? processStreetViewAdmission();
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -205,52 +219,65 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
    * rather than HTTP referrer) and falls back to the browser-exposed
    * GOOGLE_MAPS_API_KEY for setups that haven't split the two yet.
    */
-  const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
+  const streetViewFallback = async (
+    { lat, lon, heading, fov, pitch },
+    cameraId,
+    client,
+  ) => {
     const streetViewKey = googleServerApiKey();
     if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon))
       return null;
-    try {
-      const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
-      sv.searchParams.set('size', '960x540');
-      sv.searchParams.set('location', `${lat},${lon}`);
-      sv.searchParams.set(
-        'heading',
-        String(Number.isFinite(heading) ? heading : 0),
-      );
-      sv.searchParams.set(
-        'fov',
-        String(Number.isFinite(fov) ? Math.max(20, Math.min(120, fov)) : 80),
-      );
-      sv.searchParams.set(
-        'pitch',
-        String(Number.isFinite(pitch) ? Math.max(-40, Math.min(20, pitch)) : 0),
-      );
-      sv.searchParams.set('source', 'outdoor');
-      sv.searchParams.set('return_error_code', 'true');
-      sv.searchParams.set('key', streetViewKey);
 
-      const svResp = await fetch(sv.toString(), {
-        headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
-        signal: AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS),
-      });
-      const svType = cctvRasterImageType(svResp.headers.get('content-type'));
-      if (!svResp.ok || !svType) {
+    // Paid attempts for all plugin instances share the same admission service.
+    // The key contains catalog-owned target and pose only, never URL params.
+    const cameraKey = JSON.stringify([cameraId, lat, lon, heading, fov, pitch]);
+    return admission.run({
+      client,
+      cameraKey,
+      fetchFrame: async () => {
         try {
-          await svResp.body?.cancel();
-        } catch {
-          /* no-op */
-        }
-        return null;
-      }
+          const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
+          sv.searchParams.set('size', '960x540');
+          sv.searchParams.set('location', `${lat},${lon}`);
+          sv.searchParams.set('heading', String(heading));
+          sv.searchParams.set('fov', String(fov));
+          sv.searchParams.set('pitch', String(pitch));
+          sv.searchParams.set('source', 'outdoor');
+          sv.searchParams.set('return_error_code', 'true');
+          sv.searchParams.set('key', streetViewKey);
 
-      return {
-        ok: true,
-        body: Buffer.from(await svResp.arrayBuffer()),
-        contentType: svType,
-      };
-    } catch {
-      return null;
-    }
+          const signal = AbortSignal.timeout(CCTV_FRAME_FETCH_TIMEOUT_MS);
+          const svResp = await fetch(sv.toString(), {
+            headers: { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' },
+            redirect: 'error',
+            signal,
+          });
+          const svType = cctvRasterImageType(
+            svResp.headers.get('content-type'),
+          );
+          if (!svResp.ok || !svType) {
+            try {
+              await svResp.body?.cancel();
+            } catch {
+              /* no-op */
+            }
+            return null;
+          }
+          const bytes = await readResponseBytesCapped(
+            svResp,
+            CCTV_FRAME_MAX_BODY_BYTES,
+            signal,
+          );
+          return {
+            ok: true,
+            body: Buffer.from(bytes),
+            contentType: svType,
+          };
+        } catch {
+          return null;
+        }
+      },
+    });
   };
 
   const installMiddleware = (server) => {
@@ -635,13 +662,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
-        const heading = Number(
-          url.searchParams.get('heading') || source?.headingDeg,
-        );
-        const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
-        const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
@@ -734,15 +754,28 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const forwarded = PROXY_SIGNALS.some(
           (name) => req.headers?.[name] !== undefined,
         );
-        const sv = forwarded
-          ? null
-          : await streetViewFallback({
-              lat,
-              lon,
-              heading,
-              fov,
-              pitch,
-            });
+        // The catalog, not the URL query, owns billable Street View locations.
+        // Unknown IDs and invalid registered coordinates get a free SVG fallback.
+        const registeredLocation = registeredStreetViewLocation(source);
+        const sv =
+          forwarded || !registeredLocation
+            ? null
+            : await streetViewFallback(
+                registeredLocation,
+                cameraId,
+                clientNetworkKey(req),
+              );
+        if (sv === STREET_VIEW_DEFERRED) {
+          // Keep the previous camera frame and health provenance intact. A
+          // bodyless image response fails the refresh without replacing the
+          // already-painted thumbnail or projection canvas.
+          res.writeHead(204, {
+            'Cache-Control': 'no-store',
+            'X-CCTV-Source': 'deferred',
+          });
+          res.end();
+          return;
+        }
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',
