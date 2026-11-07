@@ -71,6 +71,7 @@ function weatherRow(weather) {
     precipitation_mm: weather.precipitationMm ?? null,
     cloud_cover_pct: weather.cloudCoverPct ?? null,
     wind_kph: weather.windKph ?? null,
+    // Raw Open-Meteo value, like the fields above; it reports north as 360.
     wind_direction_deg: weather.windDirectionDeg ?? null,
     visibility_m: weather.visibilityM ?? null,
   };
