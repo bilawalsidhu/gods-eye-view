@@ -44,6 +44,7 @@ import {
 } from '../../renderGovernor.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
@@ -310,8 +311,11 @@ function harness(
   // The layer reads the camera through its port; this one reads the fake
   // camera above as the Cesium port reads a real one, so a test can still
   // move it by changing the fake. Terrain heights come through the query
-  // port, which reads the fake globe the same way.
+  // port, which reads the fake globe the same way. The selected trail is
+  // drawn through the draw port.
+  const draw = fakeDrawPort();
   const unbindCamera = bindRenderer(viewer, {
+    draw,
     query: fakeSceneQuery(viewer),
     camera: {
       pose() {
@@ -360,6 +364,7 @@ function harness(
   return {
     layer,
     viewer,
+    draw,
     input,
     primitives,
     sprites,
@@ -3224,7 +3229,7 @@ for (const count of [800, 3000]) {
   });
 }
 
-test('click handler selects a migrated scripted billboard and prepares a valid depth-fail trail', async (t) => {
+test('click handler selects a migrated scripted billboard and prepares its draped trail', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
@@ -3234,15 +3239,9 @@ test('click handler selects a migrated scripted billboard and prepares a valid d
   app.input.click(new Cesium.Cartesian2(500, 400));
   assert.equal(app.state()._selectedKey, entry.key);
   const body = app.layer._transitPartsForTest().trails.diagnostics().body;
-  assert.ok(body.geometryInstances.length > 0);
-  body._batchTableAttributeIndices = { color: 0, depthFailColor: 1 };
-  assert.doesNotThrow(() =>
-    Cesium.Primitive._updateColorAttribute(
-      body,
-      body.depthFailAppearance.vertexShaderSource,
-      true,
-    ),
-  );
+  const lines = [...app.draw.sets.get(body.id).items.values()];
+  assert.ok(lines.length > 0);
+  assert.ok(lines.every((line) => line.mode === 'draped'));
   assert.ok(entry.trailSegments.length > 0);
   app.run(1000, 16);
   assert.equal(entry.marker.show, true);
@@ -3916,18 +3915,12 @@ test('selected draped history prepares geometry before surface heights resolve',
   delete entry.qaFloorM;
   entry.marker.show = false;
   entry.heightPending = true;
-  // Exercise the real GroundPolylinePrimitive branch, without a WebGL context.
-  const width = Cesium.ContextLimits._maximumAliasedLineWidth;
-  Cesium.ContextLimits._maximumAliasedLineWidth = 1;
-  t.after(() => {
-    Cesium.ContextLimits._maximumAliasedLineWidth = width;
-  });
-  app.viewer.scene.frameState = { context: { depthTexture: true } };
-  app.viewer.scene.groundPrimitives = app.viewer.scene.primitives;
   parts.selection.selectVehicle(entry.key);
   const trail = parts.trails.diagnostics();
   assert.equal(trail.ground, true);
-  assert.ok(trail.body instanceof Cesium.GroundPolylinePrimitive);
+  const lines = [...app.draw.sets.get(trail.body.id).items.values()];
+  assert.ok(lines.length > 0);
+  assert.ok(lines.every((line) => line.mode === 'draped'));
   assert.ok(trail.segments > 0);
   assert.equal(trail.body.show, true);
   assert.equal(

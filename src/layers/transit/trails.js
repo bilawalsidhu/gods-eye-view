@@ -34,7 +34,7 @@ export function createTrails({ state, services, parts, source }) {
     revision = 0;
   function ensureRenderer() {
     if (!renderer && state._viewer)
-      renderer = createContactTrailRenderer(state._viewer.scene);
+      renderer = createContactTrailRenderer(state._viewer);
     return renderer;
   }
   function style() {

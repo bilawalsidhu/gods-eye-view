@@ -727,6 +727,15 @@ export async function runTrailVisibility({
       bodyUploadMax = 0,
       frames = 0;
     const headCpu = [];
+    // The Cesium primitives drawing one of the trail's draw-port sets: one,
+    // or while a rebuild builds, the retiring one and its replacement.
+    const hostsOf = (set) => {
+      const hosts = [];
+      for (let i = 0; set && i < scene.primitives.length; i++)
+        if (scene.primitives.get(i).drawSetId === set.id)
+          hosts.push(scene.primitives.get(i));
+      return hosts;
+    };
     const wrap = (primitive, kind) => {
       if (!primitive || wrapped.has(primitive)) return;
       const update = primitive.update;
@@ -767,8 +776,8 @@ export async function runTrailVisibility({
     const pre = scene.preRender.addEventListener(() => {
       headBytes = bodyBytes = 0;
       const trail = parts.trails.diagnostics();
-      wrap(trail?.body, 'body');
-      wrap(trail?.headPrimitive || trail?.head?._polylineCollection, 'head');
+      for (const host of hostsOf(trail?.body)) wrap(host, 'body');
+      for (const host of hostsOf(trail?.headLines)) wrap(host, 'head');
     });
     const post = scene.postRender.addEventListener(() => {
       frames++;
@@ -807,6 +816,26 @@ export async function runTrailVisibility({
     const trail = parts.trails.diagnostics();
     if (!entry || !trail)
       return { ...setup, present: 0, reason: 'selection disappeared' };
+    // The Cesium primitives drawing one of the trail's draw-port sets: one,
+    // or while a rebuild builds, the retiring one and its replacement.
+    const hostsOf = (set) => {
+      const hosts = [];
+      for (let i = 0; set && i < scene.primitives.length; i++)
+        if (scene.primitives.get(i).drawSetId === set.id)
+          hosts.push(scene.primitives.get(i));
+      return hosts;
+    };
+    // Each part of a set's primitive, for readiness and height exclusion.
+    const partsOf = (set) => {
+      const out = [];
+      for (const host of hostsOf(set))
+        for (let i = 0; i < host.length; i++) out.push(host.get(i));
+      return out;
+    };
+    // One host (no rebuild under way) whose parts have all built.
+    const drawnReady = (set) =>
+      hostsOf(set).length === 1 &&
+      partsOf(set).every((part) => part.ready !== false);
     const { setRate } = await import('/src/data/contactPlayback.js');
     setRate(entry.track, 0, {
       wallNowMs: Date.now(),
@@ -819,8 +848,8 @@ export async function runTrailVisibility({
       app.tileset?.show !== false &&
       app.tileset?.tilesLoaded === true &&
       (scene.globe?.show === false || scene.globe?.tilesLoaded === true) &&
-      trail.body?.ready === true &&
-      (!trail.headPrimitive || trail.headPrimitive.ready === true);
+      drawnReady(trail.body) &&
+      (!trail.headLines?.show || drawnReady(trail.headLines));
     // Require sustained readiness after freezing playback, before projecting
     // onto the refined surface. Repeated captures still check pixel stability.
     const tilesReady = await new Promise((resolve) => {
@@ -875,10 +904,11 @@ export async function runTrailVisibility({
         new V(),
       );
       const cart = C.fromCartesian(p);
-      const height = scene.sampleHeight(
-        cart,
-        [entry.marker, trail.body, trail.headPrimitive].filter(Boolean),
-      );
+      const height = scene.sampleHeight(cart, [
+        entry.marker,
+        ...partsOf(trail.body),
+        ...partsOf(trail.headLines),
+      ]);
       if (Number.isFinite(height)) cart.height = height;
       const surface = C.toCartesian(cart);
       const q = mul(
@@ -943,13 +973,12 @@ export async function runTrailVisibility({
       });
     const bodyShow = trail.body?.show,
       headShow = trail.head?.show,
-      headPrimitiveShow = trail.headPrimitive?.show,
+      headLinesShow = trail.headLines?.show,
       backingShow = trail.backing?.show;
     let showTrail = false;
     const applyVisibility = () => {
       if (trail.body) trail.body.show = showTrail && bodyShow;
-      if (trail.headPrimitive)
-        trail.headPrimitive.show = showTrail && headPrimitiveShow;
+      if (trail.headLines) trail.headLines.show = showTrail && headLinesShow;
       if (trail.head) trail.head.show = showTrail && headShow;
       if (trail.backing) trail.backing.show = showTrail && backingShow;
     };
@@ -966,13 +995,13 @@ export async function runTrailVisibility({
         const current = parts.trails.diagnostics();
         captureReady &&=
           ready() &&
-          current?.body === trail.body &&
-          current?.headPrimitive === trail.headPrimitive;
+          current?.rebuilds === trail.rebuilds &&
+          current?.headRebuilds === trail.headRebuilds;
       }
     } finally {
       removeVisibility();
       if (trail.body) trail.body.show = bodyShow;
-      if (trail.headPrimitive) trail.headPrimitive.show = headPrimitiveShow;
+      if (trail.headLines) trail.headLines.show = headLinesShow;
       if (trail.head) trail.head.show = headShow;
       if (trail.backing) trail.backing.show = backingShow;
       await frame();
@@ -994,7 +1023,7 @@ export async function runTrailVisibility({
       tilesReady: captureReady,
       elapsedDisplayMs: entry.sample.displayT - setup.startDisplayT,
       movedMetres: Math.abs(entry.sample.lat - setup.startLat) * 111320,
-      body: trail.body?.constructor.name,
+      body: hostsOf(trail.body)[0]?.constructor.name,
       headStrategy: trail.headStrategy || 'PolylineCollection',
       headRebuilds: trail.headRebuilds ?? null,
     };
