@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMapScene } from './sceneApply.js';
+import { createMapScene } from './mapScene.js';
 
 function fixture() {
   const layers = [];
@@ -91,7 +91,7 @@ test('removeBaseImagery, tilesets, globe and credits', () => {
 });
 
 test('the map scene shows its credit through a given credits capability', async () => {
-  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const { createFakeEngine } = await import('../testing/fakeEngine.js');
   const engine = createFakeEngine();
   const { viewer, credits } = fixture();
   const scene = createMapScene(viewer, {

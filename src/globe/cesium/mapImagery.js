@@ -3,7 +3,7 @@ import {
   SENTINEL2_CREDIT,
   SENTINEL2_MAX_ZOOM,
   SENTINEL2_URL,
-} from './sentinel2.js';
+} from '../../maps/sentinel2.js';
 
 // Attribution and service rights are documented in DATA_SOURCES.md.
 export const ESRI_ATTRIBUTION_HTML =

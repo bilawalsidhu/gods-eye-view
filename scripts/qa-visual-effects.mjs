@@ -169,7 +169,7 @@ try {
         result.bloom.intensityPct === 98 &&
         snapshot.bloom.intensity === 98 &&
         manager._visualEffects.bloomIntensity === 98 &&
-        manager._bloomStage.enabled
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.enabled
       );
     }),
   );
@@ -183,7 +183,8 @@ try {
         result.sharpen.intensityPct === 61 &&
         manager.getVisualState().sharpen.intensity === 61 &&
         manager._visualEffects.sharpenIntensity === 0.61 &&
-        Math.abs(manager._sharpenStage.uniforms.amount - 1.32) < 1e-9
+        Math.abs(window.__godsEyeView.engine.render.sharpen().amount - 1.32) <
+          1e-9
       );
     }),
   );
@@ -199,9 +200,7 @@ try {
     const manager = window.__godsEyeView.styleManager;
     const effects = manager._visualEffects;
     manager.setStyle('retro');
-    const owned = [...Object.values(effects.stages), effects.sharpenStage];
-    const collection = manager.viewer.scene.postProcessStages;
-    const previousBloom = effects.previousBloom;
+    const engine = window.__godsEyeView.engine;
     const pending = manager.dispose();
     const stoppedBeforeAwait =
       effects.stopped &&
@@ -210,22 +209,19 @@ try {
     await pending;
     return {
       stoppedBeforeAwait,
-      removed: owned.every((stage) => !collection.contains(stage)),
-      restored:
-        effects.bloomStage.enabled === previousBloom.enabled &&
-        Object.entries(previousBloom.uniforms).every(
-          ([name, value]) => effects.bloomStage.uniforms[name] === value,
-        ),
+      disabled:
+        engine.render.visualStyles.every(
+          (name) => engine.render.style(name).intensity === 0,
+        ) &&
+        !engine.render.bloom().enabled &&
+        !engine.render.sharpen().enabled,
     };
   });
   check(
     'UI teardown stops effect animation before its first await',
     teardown.stoppedBeforeAwait,
   );
-  check(
-    'UI teardown removes owned stages and restores borrowed bloom',
-    teardown.removed && teardown.restored,
-  );
+  check('UI teardown disables owned effects on the engine', teardown.disabled);
   check(
     'effects do not introduce uncaught browser errors',
     errors.length === 0,

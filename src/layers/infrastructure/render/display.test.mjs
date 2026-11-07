@@ -108,11 +108,16 @@ function watch(engine) {
   };
   const flights = [];
   engine.camera.flyTo = (options) => flights.push(options);
+  // Camera inputs off at each suspension, on again at its resume.
   const cameraInputs = [];
-  const setCameraInputs = engine.input.setCameraInputs.bind(engine.input);
-  engine.input.setCameraInputs = (enabled) => {
-    cameraInputs.push(enabled);
-    setCameraInputs(enabled);
+  const suspend = engine.input.suspendCameraInputs.bind(engine.input);
+  engine.input.suspendCameraInputs = () => {
+    cameraInputs.push(false);
+    const resume = suspend();
+    return () => {
+      cameraInputs.push(true);
+      resume();
+    };
   };
   const requests = [];
   const request = engine.render.request.bind(engine.render);

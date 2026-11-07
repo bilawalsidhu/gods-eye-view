@@ -2,7 +2,7 @@
 // ({ descriptor, credit } for imagery, { id } for terrain) or plain
 // descriptions ({ kind, accessToken?, googleApiKey? }); this module builds
 // Navara sources and layers from them. The URLs and credits repeat those of
-// src/maps/imagery.js and src/maps/terrain.js, which import Cesium.
+// src/globe/cesium/mapImagery.js and terrain.js, which import Cesium.
 //
 // - imagery: OSM and Esri as `raster-tile` layers; Cesium ion imagery (Bing)
 //   has no Navara path yet and rejects.

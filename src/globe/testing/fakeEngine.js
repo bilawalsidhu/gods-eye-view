@@ -320,6 +320,9 @@ export function createFakeEngine(options = {}) {
   let moving = false;
   let lastFramePose = null;
   let lastChangedPose = null;
+  // The setCameraInputs choice and the suspensions held over it.
+  let cameraInputChoice = true;
+  let cameraSuspensions = 0;
 
   const fake = {
     calls: [],
@@ -782,8 +785,23 @@ export function createFakeEngine(options = {}) {
       },
       setCameraInputs(enabled) {
         record('input.setCameraInputs', [enabled]);
-        fake.cameraInputsEnabled = Boolean(enabled);
+        cameraInputChoice = Boolean(enabled);
+        fake.cameraInputsEnabled = cameraInputChoice && !cameraSuspensions;
       },
+      suspendCameraInputs() {
+        record('input.suspendCameraInputs', []);
+        cameraSuspensions++;
+        fake.cameraInputsEnabled = false;
+        let resumed = false;
+        return () => {
+          if (resumed) return;
+          resumed = true;
+          record('input.resumeCameraInputs', []);
+          cameraSuspensions--;
+          fake.cameraInputsEnabled = cameraInputChoice && !cameraSuspensions;
+        };
+      },
+      cameraInputsEnabled: () => fake.cameraInputsEnabled,
     },
     credits: {
       addStatic(html, creditOptions = {}) {

@@ -3,10 +3,11 @@
 // shaders (movers/moverMesh.js) from uniforms every overlay of a view
 // shares. The rings and the sweep itself are the HUD's own (CSS,
 // src/cyberSonar.js); this is the contact side, the counterpart of the
-// Cesium command adapter (src/cyberSonarGpu.js), with the same maths: each
-// contact's factor from its anchor's place on screen against the sweep (the
-// sampler of src/cyberSonar.js createCyberSonarSampler), its colour pulled
-// toward the scanner tint by that factor and its alpha scaled by it.
+// Cesium command adapter (src/globe/cesium/sonarCommands.js), with the same
+// maths: each contact's factor from its anchor's place on screen against
+// the sweep (the sampler of src/cyberSonar.js createCyberSonarSampler), its
+// colour pulled toward the scanner tint by that factor and its alpha scaled
+// by it.
 // Positions, picks and the instance data stay as the layers set them.
 // Models keep their colours (Cesium tints them on the CPU).
 

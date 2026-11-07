@@ -9,7 +9,7 @@
 //
 //   node scripts/check-cesium-load-time.mjs [--json]
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { parse } from '@babel/parser';
 
@@ -17,7 +17,7 @@ const root = new URL('..', import.meta.url);
 
 /** Files under src/ that the app ships (tests and test support excluded). */
 export function sourceFiles() {
-  return execFileSync('git', ['ls-files', 'src'], {
+  return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', 'src'], {
     cwd: root,
     encoding: 'utf8',
   })
@@ -27,7 +27,8 @@ export function sourceFiles() {
         /\.(?:js|mjs)$/.test(path) &&
         !/\.test\.m?js$/.test(path) &&
         !path.startsWith('src/testSupport/') &&
-        !path.includes('/testing/'),
+        !path.includes('/testing/') &&
+        existsSync(new URL(path, root)),
     );
 }
 

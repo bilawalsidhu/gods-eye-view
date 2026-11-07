@@ -20,7 +20,7 @@ import {
   globeFrameShare as poseFrameShare,
   globeOutOfFrame as poseOutOfFrame,
 } from './globeInView.js';
-import { cesiumFramePose } from './app/viewer.js';
+import { cesiumFramePose } from './globe/cesium/viewer.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
 import { setScopeMaskEnabled } from './scopeMask.js';
 

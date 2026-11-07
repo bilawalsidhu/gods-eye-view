@@ -4,7 +4,7 @@ import {
   cesiumIcrfToFixed,
   projectCelestialPoint,
   flyCelestialViewer,
-} from './celestialRing/render/cesium.js';
+} from './globe/cesium/celestial.js';
 import { createCelestialEphemeris } from './celestialRing/ephemeris.js';
 import { appClock } from './time/clock.js';
 import { governorRequestRender } from './renderGovernor.js';

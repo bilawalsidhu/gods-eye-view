@@ -1,6 +1,5 @@
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
-import { createCyberSonarScene } from '../cyberSonarScene.js';
 import { createCyberSonarEngineScene } from '../cyberSonarEngine.js';
 import { panelAwareVisibility } from './embed.js';
 import { attachScenePart, currentSceneOf } from './sceneParts.js';
@@ -105,11 +104,9 @@ export function createApplicationData({
           nextCatalog.weatherClock,
         );
         styleManager.attachDataManager(dataManager);
-        // The sonar treats contacts on the viewer, or through an engine
-        // that draws it (render.setContactSonar, Navara).
-        if (next.viewer)
-          release(createCyberSonarScene(next.viewer, dataManager));
-        else release(createCyberSonarEngineScene(next.engine, dataManager));
+        // The engine draws the sonar's contact treatment
+        // (render.setContactSonar).
+        release(createCyberSonarEngineScene(next.engine, dataManager));
         if (!binding) return;
         // A teardown or switch during the attachment must not wait for slow
         // layer attachments: it ends this wait, and the detach releases the

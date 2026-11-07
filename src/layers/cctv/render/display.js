@@ -593,17 +593,9 @@ export function createCctvDisplay(
           gizmoRemovers.push(() => owner.removeEventListener(event, listener));
         }
       },
-      // The contract sets camera inputs; it cannot read them back, so the
-      // release turns them on again.
-      suspendCameraInputs() {
-        engine.input.setCameraInputs(false);
-        let released = false;
-        return () => {
-          if (released) return;
-          released = true;
-          engine.input.setCameraInputs(true);
-        };
-      },
+      // The engine counts suspensions: the release puts the camera inputs
+      // back as they were.
+      suspendCameraInputs: () => engine.input.suspendCameraInputs(),
       destroy() {
         if (destroyed) return;
         destroyed = true;

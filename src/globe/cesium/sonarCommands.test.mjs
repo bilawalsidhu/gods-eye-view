@@ -7,7 +7,7 @@ import {
   CYBER_SONAR_CESIUM_VERSION,
   isCyberSonarCommandVisible,
   syncCyberSonarCommand,
-} from './cyberSonarGpu.js';
+} from './sonarCommands.js';
 
 test('stable commands reuse uniforms and derived pipelines while all native fields remain live', () => {
   const native = new Cesium.DrawCommand({
@@ -197,7 +197,7 @@ test('unknown native shaders fail closed without losing native commands', () => 
     () => ({
       enabled: true,
       active: true,
-      angle: 0,
+      angleDeg: 0,
       range: 100,
       opacity: 84,
       sector: 24,
@@ -272,7 +272,7 @@ test('program swaps, layer removal and late shader failure release only adapter 
     () => ({
       enabled,
       active: true,
-      angle: 0,
+      angleDeg: 0,
       range: 100,
       opacity: 84,
       sector: 24,

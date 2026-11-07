@@ -95,7 +95,7 @@
     "./infrastructure/geojson": "./src/data/localGeojsonCore.js",
     "./infrastructure/lod": "./src/data/localGeojsonLod.js",
     "./application": "./src/app/application.js",
-    "./application/viewer": "./src/app/viewer.js",
+    "./application/viewer": "./src/globe/cesium/viewer.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },
@@ -204,8 +204,8 @@
     "./geography/neighborhoods": "./src/data/neighborhoodPolygons.js",
     "./maps/controller": "./src/maps/controller.js",
     "./maps/catalog": "./src/maps/catalog.js",
-    "./maps/imagery": "./src/maps/imagery.js",
-    "./maps/terrain": "./src/maps/terrain.js",
+    "./maps/imagery": "./src/globe/cesium/mapImagery.js",
+    "./maps/terrain": "./src/globe/cesium/terrain.js",
     "./maps/3d": "./src/maps/google3d.js",
     "./maps/defaults": "./src/maps/defaultSources.js",
     "./voice/controller": "./src/voice/realtimeController.js",

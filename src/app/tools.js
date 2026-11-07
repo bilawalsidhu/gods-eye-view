@@ -19,7 +19,7 @@ import {
   isScopeMaskEnabled,
 } from '../scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
-import { installGlobeInViewRecovery } from './viewer.js';
+import { installGlobeInViewRecovery } from '../globe/cesium/viewer.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
   installRenderGovernor,
@@ -272,7 +272,6 @@ function cesiumToolBackend({ engine, tileset }) {
     viewer,
     board: () => ({ viewer, engine, tileset }),
     draw: () => ({ viewer, engine }),
-    geoImport: () => ({ viewer, engine }),
     // The tileset lets the layer drape while the globe is hidden.
     recentImagery(layer) {
       layer.attachTileset(tileset);
@@ -336,8 +335,8 @@ function cesiumToolBackend({ engine, tileset }) {
  * Import, the Recent Imagery box and panel, the render governor, the scope
  * mask, hidden-tab handling and voice, and the engine's own tools. The
  * engine kind's backend (TOOL_BACKENDS) says where the shared tools draw:
- * `board()`, `draw()` and `geoImport()` give their attachScene arguments
- * (null: not on this engine), `recentImagery(layer)` the panel's globe,
+ * `board()` and `draw()` give their attachScene arguments (null: not on
+ * this engine), `recentImagery(layer)` the panel's globe,
  * `installGovernor()` the governor's; `attach(context, attachment)` adds
  * the engine's own tools, `suspend(hidden, controls)` its hidden-tab
  * handling and `attachViews(context, attachment)` its embedded views. The
@@ -369,8 +368,9 @@ async function attachEngineTools(
     defer,
   );
   attachDraw(backend.draw, { layerSession, annotations, styleManager }, defer);
+  // Import draws through the globe contract, the same on every engine.
   attachGeoImport(
-    backend.geoImport(),
+    { engine },
     { layerSession, styleManager, operations, mapStackController },
     defer,
   );
@@ -513,8 +513,8 @@ function attachDraw(
 }
 
 /**
- * UTILITIES ▸ Import on this globe (`importScene`, null: not on it): the
- * next globe reads the session's files again. The drop listeners belong to
+ * UTILITIES ▸ Import on this globe (`importScene`: its engine): the next
+ * globe reads the session's files again. The drop listeners belong to
  * this globe. Returns the control (null on a page without it).
  */
 function attachGeoImport(

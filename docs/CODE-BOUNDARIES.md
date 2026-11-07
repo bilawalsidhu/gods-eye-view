@@ -399,10 +399,12 @@ the caller.
 ## Visual effects
 
 `ui/effects` exports the effects controller and existing preset definitions.
-It owns shader stages and their clock, with explicit render ownership callbacks.
-Construction installs no stages or frame callbacks. Stop animation before
-releasing UI consumers, then destroy to remove owned stages and restore the
-borrowed bloom state. `ui/effects/bloom` exposes the pure intensity/version helpers
+It owns transitions and their clock, with explicit render ownership callbacks,
+and writes styles, bloom and sharpening through `engine.render`. Construction
+installs no stages or frame callbacks. Stop animation before releasing UI
+consumers; controller destruction disables its effects. Cesium's
+`src/globe/cesium/postStages.js` owns stage creation and destruction and restores
+the borrowed bloom state when the engine is destroyed. `ui/effects/bloom` exposes the pure intensity/version helpers
 without loading the renderer. UI presentation and product-action coordination
 remain in their callers.
 
@@ -775,3 +777,17 @@ CSS rather than mapping machine states to universal severity. CCTV owns
 frame/source and calibration rules and their data attributes, while Weather
 owns coverage labels. The rail card keeps node identity, header focus,
 disclosure and teardown, and does not announce every card update.
+
+## Engine implementation modules
+
+Cesium's viewer construction, atmosphere compatibility, zoom-out guard, starry
+sky, map scene application, imagery and terrain live in `src/globe/cesium/`.
+The public viewer export still resolves through `package.json`. Celestial
+rendering, screen-event constants, scene projection and the legacy trail
+backend also live there. Sonar commands and post stages are engine internals;
+feature controllers call `engine.render`.
+
+Imported-file parsing (`geoFileImport.js`, `geoImportRecords.js`,
+`geoImportKml.js`) returns plain records. `geoImportDisplay.js` consumes them
+through ground, movers, lines and imagery. The UI owns file bytes, visibility
+and attachment lifetime, with no DataSource or engine-specific import backend.

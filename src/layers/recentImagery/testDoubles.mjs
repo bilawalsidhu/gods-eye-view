@@ -98,11 +98,18 @@ function domEvent(fields) {
 /**
  * Globe engine and document fakes for `initImageryBoxTool`. The canvas is
  * 1000 × 500 px mapped linearly onto 0.2° near Austin; y < 40 px is sky.
- * `suspend: true` gives the engine input a counted suspendCameraInputs
- * (Navara's); without it the tool turns setCameraInputs off and on.
+ * The engine input counts camera-input suspensions over the app's
+ * setCameraInputs choice: `camera.inputs` is on while that choice is on
+ * and nothing suspends them.
  */
-export function boxToolFakes({ suspend = false } = {}) {
-  const camera = { inputs: true, suspended: 0 };
+export function boxToolFakes() {
+  const camera = {
+    choice: true,
+    suspended: 0,
+    get inputs() {
+      return camera.choice && camera.suspended === 0;
+    },
+  };
   const captured = new Set();
   const canvas = eventTarget({
     getBoundingClientRect: () => ({ left: 0, top: 0 }),
@@ -112,16 +119,19 @@ export function boxToolFakes({ suspend = false } = {}) {
   });
   const input = {
     setCameraInputs(enabled) {
-      camera.inputs = Boolean(enabled);
+      camera.choice = Boolean(enabled);
     },
-  };
-  if (suspend)
-    input.suspendCameraInputs = () => {
+    cameraInputsEnabled: () => camera.inputs,
+    suspendCameraInputs() {
       camera.suspended += 1;
+      let resumed = false;
       return () => {
+        if (resumed) return;
+        resumed = true;
         camera.suspended -= 1;
       };
-    };
+    },
+  };
   const engine = {
     host: { canvas, size: () => ({ width: 1000, height: 500 }) },
     input,

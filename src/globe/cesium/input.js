@@ -48,6 +48,11 @@ export function createCesiumInput(
   let handler = null;
   let destroyed = false;
   const groups = new Map();
+  // Camera-input suspensions held, and the enableInputs the last resume
+  // puts back: the controller's own from before the first, or what
+  // setCameraInputs asked for since.
+  let suspended = 0;
+  let resumeTo = true;
   const delivery = createPickDelivery({
     pick: (position) => picker?.pick(position),
     drill: (position, limit) => picker?.drillPick(position, limit) ?? [],
@@ -84,7 +89,23 @@ export function createCesiumInput(
       };
     },
     setCameraInputs(enabled) {
-      scene.screenSpaceCameraController.enableInputs = Boolean(enabled);
+      if (suspended) resumeTo = Boolean(enabled);
+      else scene.screenSpaceCameraController.enableInputs = Boolean(enabled);
+    },
+    // The controller's switch: whatever else turned it off counts too.
+    cameraInputsEnabled: () =>
+      scene.screenSpaceCameraController?.enableInputs !== false,
+    suspendCameraInputs() {
+      const controller = scene.screenSpaceCameraController;
+      if (suspended++ === 0) resumeTo = controller.enableInputs;
+      controller.enableInputs = false;
+      let resumed = false;
+      return () => {
+        if (resumed) return;
+        resumed = true;
+        if (--suspended === 0)
+          scene.screenSpaceCameraController.enableInputs = resumeTo;
+      };
     },
   };
   return {

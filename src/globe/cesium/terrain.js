@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { createTerrainRetryPolicy } from './terrainRetry.js';
+import { createTerrainRetryPolicy } from '../../maps/terrainRetry.js';
 
 /** Re:Earth / Mapterhorn ellipsoidal quantized mesh, CC BY 4.0. */
 export const KEYLESS_TERRAIN_URL =

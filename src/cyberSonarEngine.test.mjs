@@ -114,3 +114,55 @@ test('each drawn frame hands the engine the theme, the settings and the sweep an
       'nothing after dispose',
     );
   }));
+
+test("an engine's own contacts keep the sweep drawing, and a lost treatment wakes the scene once", () =>
+  withCyberPage(async ({ root }) => {
+    const engine = createFakeEngine({ kind: 'cesium', contactSonar: true });
+    // Cesium's report (src/globe/cesium/sonar.js), not contract.
+    const report = {
+      supported: true,
+      contacts: 0,
+      gpu: { visibleCommands: 0 },
+    };
+    engine.contactSonarDiagnostics = () => report;
+    const status = { textContent: '' };
+    const timers = new Map();
+    let nextTimer = 1;
+    const dispose = createCyberSonarEngineScene(engine, null, {
+      root,
+      documentRef: {
+        getElementById: (id) => (id === 'cyber-sonar-status' ? status : null),
+      },
+      setTimer: (callback, ms) => {
+        timers.set(nextTimer, [callback, ms]);
+        return nextTimer++;
+      },
+      clearTimer: (id) => timers.delete(id),
+    });
+    assert.equal(root.dataset.cyberSonarGpu, 'supported');
+    engine.fake.frame();
+    assert.equal(timers.size, 0, 'culled batches must not schedule a draw');
+    report.gpu.visibleCommands = 1;
+    engine.fake.frame();
+    assert.equal(timers.size, 1, 'a visible batch keeps the sweep moving');
+    report.gpu.visibleCommands = 0;
+    report.contacts = 2;
+    engine.fake.frame();
+    assert.equal(timers.size, 1, 'and so does a tinted model');
+    report.contacts = 0;
+    const before = engine.fake.renderRequests;
+    report.supported = false;
+    engine.fake.frame();
+    assert.equal(root.dataset.cyberSonarGpu, 'unsupported');
+    assert.match(status.textContent, /Native contacts remain visible/);
+    assert.equal(
+      engine.fake.renderRequests,
+      before + 1,
+      'support loss explicitly wakes the parked scene',
+    );
+    engine.fake.frame();
+    assert.equal(engine.render.contactSonar().enabled, false);
+    assert.equal(engine.fake.renderRequests, before + 1, 'and only once');
+    dispose();
+    assert.equal(root.dataset.cyberSonarGpu, undefined);
+  }));

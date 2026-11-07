@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
-import { loadBundledJson } from '../data/bundledJson.js';
-import { governorRequestRender } from '../renderGovernor.js';
-import { buildStarVertices, STAR_VERTEX_FLOATS } from './stars.js';
+import { loadBundledJson } from '../../data/bundledJson.js';
+import { governorRequestRender } from '../../renderGovernor.js';
+import { buildStarVertices, STAR_VERTEX_FLOATS } from '../../sky/stars.js';
 
 /**
  * Space background in the `Scene#skyBox` slot: catalogue stars as point
@@ -18,32 +18,32 @@ export const MILKY_WAY_INTENSITY = 0.4;
 export const SKY_ROTATION_EPSILON_SECONDS = 1;
 
 const STAR_PACK_URL = new URL(
-  '../data/local_data/sky/bright_stars.json',
+  '../../data/local_data/sky/bright_stars.json',
   import.meta.url,
 );
 const MILKY_WAY_FACE_URLS = Object.freeze({
   positiveX: new URL(
-    '../data/local_data/sky/milkyway_px.webp',
+    '../../data/local_data/sky/milkyway_px.webp',
     import.meta.url,
   ),
   negativeX: new URL(
-    '../data/local_data/sky/milkyway_nx.webp',
+    '../../data/local_data/sky/milkyway_nx.webp',
     import.meta.url,
   ),
   positiveY: new URL(
-    '../data/local_data/sky/milkyway_py.webp',
+    '../../data/local_data/sky/milkyway_py.webp',
     import.meta.url,
   ),
   negativeY: new URL(
-    '../data/local_data/sky/milkyway_ny.webp',
+    '../../data/local_data/sky/milkyway_ny.webp',
     import.meta.url,
   ),
   positiveZ: new URL(
-    '../data/local_data/sky/milkyway_pz.webp',
+    '../../data/local_data/sky/milkyway_pz.webp',
     import.meta.url,
   ),
   negativeZ: new URL(
-    '../data/local_data/sky/milkyway_nz.webp',
+    '../../data/local_data/sky/milkyway_nz.webp',
     import.meta.url,
   ),
 });
@@ -149,7 +149,7 @@ export class StarrySky {
     /** Matches `SkyBox#show`. */
     this.show = true;
     this.milkyWayIntensity = MILKY_WAY_INTENSITY;
-    /** 0..1 multiplier a style sets to hide the glow (see visualEffects.js). */
+    /** 0..1 multiplier a style sets to hide the glow (see postStages.js). */
     this.milkyWayVisibility = 1;
     this._requestRender = requestRender;
     this._rotation = Cesium.Matrix3.clone(Cesium.Matrix3.IDENTITY);

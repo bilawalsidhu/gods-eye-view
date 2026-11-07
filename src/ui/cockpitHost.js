@@ -10,6 +10,7 @@ import { routeViewerDoubleClick } from '../globe/cesium/doubleClick.js';
  *   the Cockpit's goes first; Navara has none to route around.
  */
 export function cockpitHost(engine, { viewer = null } = {}) {
+  let resumeInputs = null;
   const aircraft = () => {
     const target = engine.camera.following()?.native;
     return target?.resumeAircraftFollow ? target : null;
@@ -27,7 +28,14 @@ export function cockpitHost(engine, { viewer = null } = {}) {
     cartographic: () => engine.camera.pose().cartographic,
     terrainHeight: (place) => engine.surface.terrainHeight(place),
     surface: engine,
-    inputs: (enabled) => engine.input.setCameraInputs(enabled),
+    // The cockpit holds the camera through a suspension of the user's
+    // camera inputs: leaving it puts back whatever they were.
+    inputs(enabled) {
+      if (enabled) {
+        resumeInputs?.();
+        resumeInputs = null;
+      } else resumeInputs ??= engine.input.suspendCameraInputs();
+    },
     canvasPosition: (world) => engine.projector.worldToWindow(world) ?? null,
     routeDoubleClick: (handle) =>
       viewer

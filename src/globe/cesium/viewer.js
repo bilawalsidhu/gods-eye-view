@@ -1,10 +1,11 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
-import { StarrySky } from '../sky/starrySky.js';
+import { StarrySky } from './starrySky.js';
+import { loadPhotorealisticTileset } from '../../maps/google3d.js';
 import {
   FREE_LOOK_MAX_HEIGHT_METERS,
   globeOutOfFrame,
-} from '../globeInView.js';
+} from '../../globeInView.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
@@ -376,6 +377,15 @@ export function installGlobeInViewRecovery(
   };
 }
 
+/**
+ * Google's photorealistic 3D tiles for the startup stack, on this Cesium
+ * (src/maps/google3d.js loadPhotorealisticTileset, which takes the SDK).
+ * @param {{ googleApiKey?: string, googleTokens?: object | null,
+ *   cesiumToken?: string }} keys
+ */
+export const loadCesiumPhotorealTileset = (keys) =>
+  loadPhotorealisticTileset(Cesium, keys);
+
 /** Cesium.Viewer options of the standard globe viewer. */
 export function applicationViewerOptions(creditContainer) {
   return {
@@ -417,7 +427,7 @@ export function createApplicationViewer({ container, creditContainer }) {
       viewer.scene.screenSpaceCameraController.zoomFactor *= 3;
     // Before any tile builds a draw command: Cesium's per-vertex model
     // atmosphere fails to LINK on Apple's Metal backend and kills the
-    // render loop. See app/atmosphereCompat.js.
+    // render loop. See atmosphereCompat.js.
     applyModelAtmosphereWorkaround(viewer.scene);
     viewer.scene.globe.show = false;
     viewer.scene.skyAtmosphere.show = true;

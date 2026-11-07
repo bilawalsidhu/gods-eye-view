@@ -89,12 +89,12 @@ test('Navara draws the page session board and its switch takes only the drawing'
   second.detach();
   lifetime.abort();
   assert.equal(window.__gevAnnotations, undefined);
-  // Without the Navara view there is nothing to draw on: no board, no
-  // Import.
+  // Without the Navara view there is nothing to draw on: no board. Import
+  // draws through the engine contract, outside the backend.
   const viewless = navaraToolBackend({
     engine: createFakeEngine({ kind: 'navara' }),
   });
   assert.equal(viewless.board(), null);
-  assert.equal(viewless.geoImport(), null);
+  assert.equal('geoImport' in viewless, false);
   assert.deepEqual(Object.keys(viewless.recentImagery()), ['engine']);
 });

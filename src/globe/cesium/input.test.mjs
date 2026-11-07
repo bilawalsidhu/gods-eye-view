@@ -105,6 +105,32 @@ test('setCameraInputs toggles the camera controller', () => {
   assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, true);
 });
 
+test('suspendCameraInputs counts and the last resume restores enableInputs', () => {
+  const { viewer, input } = setup();
+  const controller = viewer.scene.screenSpaceCameraController;
+  assert.equal(input.cameraInputsEnabled(), true);
+  const outer = input.suspendCameraInputs();
+  const inner = input.suspendCameraInputs();
+  assert.equal(controller.enableInputs, false);
+  assert.equal(input.cameraInputsEnabled(), false);
+  inner();
+  inner();
+  assert.equal(controller.enableInputs, false, 'the outer one still holds');
+  outer();
+  assert.equal(controller.enableInputs, true);
+  assert.equal(input.cameraInputsEnabled(), true);
+  // Off before the first suspension: off again after the last.
+  controller.enableInputs = false;
+  input.suspendCameraInputs()();
+  assert.equal(controller.enableInputs, false);
+  // A choice made under a suspension applies at its resume.
+  const resume = input.suspendCameraInputs();
+  input.setCameraInputs(true);
+  assert.equal(controller.enableInputs, false);
+  resume();
+  assert.equal(controller.enableInputs, true);
+});
+
 test('destroy destroys the handler', () => {
   const { handlers, input, destroy } = setup();
   input.on('click', () => {});

@@ -24,18 +24,6 @@ import { msg } from '../i18n/index.js';
 export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
 
 /**
- * The camera held still until the returned release: the engine's counted
- * suspension where it has one (Navara keeps the app's own setCameraInputs
- * choice under it), else camera inputs off and on again.
- */
-function freezeCamera(input) {
-  if (typeof input.suspendCameraInputs === 'function')
-    return input.suspendCameraInputs();
-  input.setCameraInputs(false);
-  return () => input.setCameraInputs(true);
-}
-
-/**
  * Wire the box tool.
  * @param {{ engine: import('../globe/contract.js').GlobeEngine,
  *   onBox: (box: object) => void, onPreview?: (box: object | null) => void,
@@ -123,7 +111,9 @@ export function initImageryBoxTool({
     anchor = point;
     corner = point;
     pointerId = event.pointerId;
-    thaw = freezeCamera(engine.input);
+    // The engine counts suspensions: the camera inputs are back as they
+    // were once the drag ends.
+    thaw = engine.input.suspendCameraInputs();
     canvas.setPointerCapture?.(pointerId);
     onPreview(dragBox());
   }

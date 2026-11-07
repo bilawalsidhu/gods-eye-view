@@ -1,8 +1,11 @@
 import { MAP_STACKS } from './catalog.js';
 import { photorealUnavailableReason } from './availability.js';
 import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
-import { imageryFactoryFor, ESRI_ATTRIBUTION_HTML } from './imagery.js';
-import { terrainSourceFor } from './terrain.js';
+import {
+  imageryFactoryFor,
+  ESRI_ATTRIBUTION_HTML,
+} from '../globe/cesium/mapImagery.js';
+import { terrainSourceFor } from '../globe/cesium/terrain.js';
 import { t } from '../i18n/index.js';
 
 const NAVARA_ION_IMAGERY_REASON =

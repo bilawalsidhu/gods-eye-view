@@ -24,7 +24,7 @@
 import {
   worldToWindowCoordinates,
   horizonOccluder,
-} from './render/cesiumProjection.js';
+} from '../globe/cesium/sceneProjection.js';
 import * as geo from '../geo/index.js';
 
 // A window position through the engine projector the scene carries (the

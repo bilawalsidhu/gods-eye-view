@@ -279,7 +279,7 @@ await strict.run({}, async (browser) => {
       stageName: stage.name,
       enabled: stage.enabled,
       intensity: stage.uniforms.intensity,
-      inScene: a.viewer?.scene?.postProcessStages?.contains?.(stage) ?? null,
+      inScene: a.engine.render.style('thermal').intensity > 0,
     };
   });
   const cesiumThermal = await capture(page);
@@ -290,9 +290,9 @@ await strict.run({}, async (browser) => {
       path: path.join(outDir, 'cesium-thermal-page.png'),
     });
   check(
-    'Cesium: FLIR is its own post stage, the engine draws none',
+    'Cesium: the engine owns the FLIR post stage',
     cesium.pending === 0 &&
-      cesiumState.setStyle === 'undefined' &&
+      cesiumState.setStyle === 'function' &&
       cesiumState.enabled === true &&
       cesiumState.intensity === 1 &&
       cesiumState.inScene !== false,

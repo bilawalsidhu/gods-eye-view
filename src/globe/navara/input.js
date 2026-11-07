@@ -139,10 +139,13 @@ export function createNavaraInput(
       cameraInputs = Boolean(enabled);
       sendCameraInputs();
     },
+    /** Off under any suspension, else the setCameraInputs choice. */
+    cameraInputsEnabled: () => cameraInputs && suspended === 0,
     /**
-     * Navara-only: Navara's spin, zoom and tilt off until the returned
-     * release (the follow camera takes drag and wheel itself); the app's
-     * setCameraInputs choice comes back after the last release.
+     * Navara's spin, zoom and tilt off until the returned release (the
+     * follow camera takes drag and wheel itself, as do the app's camera
+     * owners); the app's setCameraInputs choice comes back after the last
+     * release.
      */
     suspendCameraInputs() {
       suspended++;

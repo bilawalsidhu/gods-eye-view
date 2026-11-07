@@ -1699,6 +1699,58 @@ export function createContractSuite(
       },
     ],
     [
+      'input.suspendCameraInputs: counted, the last resume restores the state before the first',
+      async () => {
+        const { input } = engine;
+        const before = input.cameraInputsEnabled();
+        ensure(
+          typeof before === 'boolean',
+          `cameraInputsEnabled() returned ${before}`,
+        );
+        try {
+          input.setCameraInputs(true);
+          ensure(
+            input.cameraInputsEnabled(),
+            'setCameraInputs(true) left them off',
+          );
+          const outer = input.suspendCameraInputs();
+          const inner = input.suspendCameraInputs();
+          ensure(
+            typeof outer === 'function' && typeof inner === 'function',
+            'suspendCameraInputs returned no resume',
+          );
+          ensure(!input.cameraInputsEnabled(), 'on under a suspension');
+          inner();
+          inner();
+          ensure(
+            !input.cameraInputsEnabled(),
+            'an inner resume (twice) let them on under the outer one',
+          );
+          outer();
+          ensure(input.cameraInputsEnabled(), 'off after the last resume');
+          input.setCameraInputs(false);
+          input.suspendCameraInputs()();
+          ensure(
+            !input.cameraInputsEnabled(),
+            'a resume turned on inputs that were off before the suspension',
+          );
+          const resume = input.suspendCameraInputs();
+          input.setCameraInputs(true);
+          ensure(
+            !input.cameraInputsEnabled(),
+            'setCameraInputs(true) lifted a suspension',
+          );
+          resume();
+          ensure(
+            input.cameraInputsEnabled(),
+            'the choice made under a suspension did not apply at its resume',
+          );
+        } finally {
+          input.setCameraInputs(before);
+        }
+      },
+    ],
+    [
       'credits.addStatic: returns an idempotent remover',
       async () => {
         const remove = engine.credits.addStatic('Contract check', {

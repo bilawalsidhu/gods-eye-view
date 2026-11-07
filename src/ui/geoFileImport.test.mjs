@@ -1,14 +1,16 @@
 // Behavioral tests for DISPLAY ▸ Import: the controller is driven against
-// fake DOM and viewer doubles with an injected loader, and its observable
-// effects are asserted — data sources added and removed, the rows and hint it
-// publishes, drop handling, the file limit, and what destroy() gives back.
-// The Display panel renders the published list (`displayPanel.test.mjs`);
-// real parsing and rendering run in `scripts/qa-geo-import.mjs`.
+// fake DOM and engine doubles with an injected loader and drawing, and its
+// observable effects are asserted — drawings made and destroyed, the rows
+// and hint it publishes, drop handling, the file limit, and what destroy()
+// gives back. The Display panel renders the published list
+// (`displayPanel.test.mjs`); real parsing and drawing run in
+// `scripts/qa-geo-import.mjs` and `scripts/qa-navara-geo-import.mjs`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
+import { emptyRecords } from '../data/geoImportRecords.js';
 
 class FakeClassList {
   constructor() {
@@ -59,7 +61,41 @@ class FakeElement {
   }
 }
 
-function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
+/** A globe engine double: its host, camera moves and render requests. */
+function fakeEngine() {
+  const moveEnd = new Set();
+  const engine = {
+    kind: 'fake',
+    host: {
+      container: new FakeElement('div', 'cesiumContainer'),
+      canvas: new FakeElement('canvas'),
+    },
+    camera: {
+      moveEnd: {
+        addEventListener: (fn) => (moveEnd.add(fn), () => moveEnd.delete(fn)),
+      },
+    },
+    surface: { tilesLoaded: () => true },
+    renders: 0,
+    render: { request: () => (engine.renders += 1) },
+    moveEnd,
+  };
+  return engine;
+}
+
+/** A file's records with one point, as the loader reads them. */
+const pointRecords = (lon = 1, lat = 2) => ({
+  ...emptyRecords(),
+  points: [{ position: [lon, lat, 0], altitude: 'ground', icon: {} }],
+});
+
+function setup({
+  load,
+  navigation,
+  flyToSource,
+  subscribeMapSource,
+  drawFile,
+} = {}) {
   const els = {
     'geo-import-button': new FakeElement('button', 'geo-import-button'),
   };
@@ -71,27 +107,27 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
   const added = [];
   const removed = [];
   const flights = [];
-  let renders = 0;
   let shown = null;
   // The view's pick and row buttons, as the display store holds them.
   let actions = null;
-  const viewer = {
-    container: new FakeElement('div', 'cesiumContainer'),
-    scene: { requestRender: () => (renders += 1) },
-    dataSources: {
-      add: async (ds) => {
-        added.push(ds);
-        return ds;
-      },
-      remove: (ds, destroy) => {
-        removed.push({ ds, destroy });
-        return true;
-      },
-    },
-    flyTo: (target) => flights.push(target),
+  // The globe engine the files draw on and fly to.
+  const engine = fakeEngine();
+  const host = engine.host;
+  // Each file's drawing: what it shows and whether it went.
+  const defaultDraw = async (on, records, { visible }) => {
+    const drawing = {
+      engine: on,
+      records,
+      show: visible,
+      refreshed: 0,
+      report: { drawn: 1, undrawn: records.undrawn?.left ?? 0 },
+      setShow: (next) => (drawing.show = next),
+      refreshGround: async () => drawing.refreshed++,
+      destroy: () => removed.push({ ds: drawing }),
+    };
+    added.push(drawing);
+    return drawing;
   };
-  // The viewer's globe engine, which flies the camera to a file.
-  const engine = { kind: 'cesium' };
   const flownOn = [];
   const revoked = [];
   const loads = [];
@@ -100,7 +136,7 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
     if (file.fail) throw new GeoImportError(file.fail);
     if (file.crash) throw new Error('boom');
     return {
-      dataSource: { show: true },
+      records: pointRecords(),
       name: file.name,
       format: 'geojson',
       entityCount: 3,
@@ -110,14 +146,15 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
   };
   const tool = createGeoFileImport({
     load: load || defaultLoad,
+    drawFile: drawFile || defaultDraw,
     document,
     ...(navigation ? { navigation } : {}),
     ...(subscribeMapSource ? { subscribeMapSource } : {}),
     flyToSource:
       flyToSource ||
-      ((target, ds) => {
+      ((target, points) => {
         flownOn.push(target);
-        flights.push(ds);
+        flights.push(points);
       }),
     publish: (view) => {
       shown = view;
@@ -127,12 +164,12 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
       return () => (actions = null);
     },
   });
-  tool?.attachScene({ viewer, engine });
+  tool?.attachScene({ engine });
   return {
     tool,
     els,
     document,
-    viewer,
+    host,
     engine,
     added,
     removed,
@@ -140,7 +177,7 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
     flownOn,
     revoked,
     loads,
-    renders: () => renders,
+    renders: () => engine.renders,
     shown: () => shown,
     actions: () => actions,
     /** A control's change, as the view sends it. */
@@ -176,7 +213,7 @@ test('a pick imports each file', async () => {
   );
   assert.equal(rows(t).length, 2);
   assert.equal(t.flights.length, 1, 'the first file of a batch is flown to');
-  assert.equal(t.flownOn[0], t.engine, "the viewer's engine flies there");
+  assert.equal(t.flownOn[0], t.engine, 'the attached engine flies there');
   assert.equal(t.shown().hint, 'Added 2 files.');
   assert.deepEqual(
     t.tool.list().map((f) => f.name),
@@ -205,9 +242,9 @@ test('row buttons hide, show, fly to and remove a file', async () => {
   assert.equal(action(rows(t)[0], 'toggle').label, 'Show a.gpx');
   glyphClick('fly');
   assert.equal(ds.show, true, 'flying to a hidden file shows it');
-  assert.equal(t.flights.at(-1), ds);
+  assert.deepEqual(t.flights.at(-1), [[1, 2, 0]], 'its footprint');
   glyphClick('remove');
-  assert.deepEqual(t.removed, [{ ds, destroy: true }]);
+  assert.deepEqual(t.removed, [{ ds }]);
   assert.deepEqual(t.revoked, ['a.gpx']);
   assert.equal(t.tool.list().length, 0);
   assert.deepEqual(rows(t), []);
@@ -251,7 +288,7 @@ test('the number of files on the globe is bounded', async () => {
 
 test('dropping files on the globe imports them; other drags are left alone', async () => {
   const t = setup();
-  const c = t.viewer.container;
+  const c = t.host.container;
   const files = { types: ['Files'], files: [file('drop.kmz')] };
   let ev = { dataTransfer: { types: ['text/plain'] } };
   t.document.emit('dragover', ev);
@@ -289,7 +326,7 @@ test('destroy removes every file and listener and the window handle', async () =
     t.tool.destroy();
     assert.equal(t.removed.length, 2);
     assert.deepEqual(t.revoked.sort(), ['a.geojson', 'b.geojson']);
-    assert.equal(t.viewer.container.listeners.length, 0);
+    assert.equal(t.host.container.listeners.length, 0);
     assert.equal(t.document.listeners.length, 0);
     assert.equal(t.actions(), null, 'the view is disconnected');
     assert.deepEqual(t.shown(), { rows: [], hint: '' });
@@ -308,7 +345,7 @@ test('a file that finishes loading after destroy is released, not added', async 
     load: async () => {
       await gate;
       return {
-        dataSource: {},
+        records: pointRecords(),
         name: 'late',
         format: 'kml',
         entityCount: 1,
@@ -344,7 +381,7 @@ test('the application composition wires the import and owns its teardown', () =>
     tools.slice(importAt, importAt + 400),
     /navigation: styleManager/,
   );
-  // The session owns the files; this viewer only their drawing.
+  // The session owns the files; this globe only their drawing.
   assert.ok(
     tools.indexOf('defer(() => geoFileImport?.detachScene());') > importAt,
   );
@@ -423,13 +460,13 @@ test('a direct camera gesture cancels the fly-to of a file still being read', as
           name: 'slow.geojson',
           format: 'geojson',
           entityCount: 1,
-          dataSource: {},
+          records: pointRecords(),
         };
       },
     });
     const result = t.tool.importFiles([file('slow.geojson')]);
     await new Promise((r) => setImmediate(r));
-    t.viewer.container.emit(gesture);
+    t.engine.host.canvas.emit(gesture);
     release();
     await result;
     assert.equal(t.added.length, 1);
@@ -459,7 +496,7 @@ test('dropping on panel controls is accepted and file drags prevent browser navi
 test('ground refresh coalesces map changes and releases its subscription on teardown', async () => {
   let changed,
     unsubscribed = 0,
-    refreshed = 0;
+    refreshed;
   const t = setup({
     subscribeMapSource: (listener) => {
       changed = listener;
@@ -469,20 +506,20 @@ test('ground refresh coalesces map changes and releases its subscription on tear
       name: 'point.geojson',
       format: 'geojson',
       entityCount: 1,
-      dataSource: {},
-      refreshGround: async () => refreshed++,
+      records: pointRecords(),
     }),
   });
   await t.tool.importFiles([file('point.geojson')]);
+  refreshed = () => t.added[0].refreshed;
   changed();
   changed();
   changed();
   await new Promise((resolve) => setTimeout(resolve, 300));
-  assert.equal(refreshed, 1);
+  assert.equal(refreshed(), 1);
   t.tool.destroy();
   changed();
   await new Promise((resolve) => setTimeout(resolve, 250));
-  assert.equal(refreshed, 1);
+  assert.equal(refreshed(), 1);
   assert.equal(unsubscribed, 1);
 });
 
@@ -520,7 +557,7 @@ test('a slow import does not fly once something newer took the camera', async ()
     load: async (f) => {
       await gate;
       return {
-        dataSource: {},
+        records: pointRecords(),
         name: f.name,
         format: 'geojson',
         entityCount: 1,
@@ -554,7 +591,7 @@ test('a queued import cannot fly over navigation that happened while it waited',
     load: async (f) => {
       if (f.name === 'first.geojson') await gate;
       return {
-        dataSource: {},
+        records: pointRecords(),
         name: f.name,
         format: 'geojson',
         entityCount: 1,
@@ -589,7 +626,7 @@ test('a refused deferred stamp (Cockpit) imports without flying', async () => {
 test('KML and KMZ rows say they keep their own styles instead of showing a color', async () => {
   const t = setup({
     load: async (f) => ({
-      dataSource: {},
+      records: pointRecords(),
       name: f.name,
       format: f.name.endsWith('.kml') ? 'kml' : 'gpx',
       entityCount: 2,
@@ -608,7 +645,7 @@ test('KML and KMZ rows say they keep their own styles instead of showing a color
 test('the map-object count in a row title keeps digit grouping', async () => {
   const t = setup({
     load: async (f) => ({
-      dataSource: {},
+      records: pointRecords(),
       name: f.name,
       format: 'geojson',
       entityCount: 12345,
@@ -640,49 +677,46 @@ test('a refusal shows its counts in the language’s numerals, not the browser�
   t.tool.destroy();
 });
 
-test('an engine switch keeps the files and draws them again on the next viewer', async () => {
+test('an engine switch keeps the files and draws them again on the next engine', async () => {
   const t = setup();
   await t.tool.importFiles([file('a.geojson'), file('b.geojson')]);
   const [a, b] = rows(t);
   press(t, b, 'toggle');
   t.tool.detachScene();
-  // The drawing left the viewer; the list and its rows stayed.
+  // The drawing left the globe; the list and its rows stayed.
   assert.equal(t.removed.length, 2);
   assert.deepEqual(t.revoked.sort(), ['a.geojson', 'b.geojson']);
   assert.deepEqual(
     rows(t).map((row) => row.id),
     [a.id, b.id],
   );
-  assert.equal(t.viewer.container.listeners.length, 0);
+  assert.equal(t.host.container.listeners.length, 0);
   assert.equal(t.document.listeners.length, 0);
   assert.equal(t.tool.flyTo(a.id), false);
   const refused = await t.tool.importFiles([file('c.geojson')]);
   assert.equal(refused[0].ok, false);
   assert.equal(t.tool.list().length, 2);
 
-  // The next viewer reads the kept files again, as they were.
-  const next = {
-    container: new FakeElement('div', 'cesiumContainer'),
-    scene: { requestRender() {} },
-    dataSources: {
-      added: [],
-      add: async (ds) => next.dataSources.added.push(ds),
-      remove() {},
-    },
-  };
+  // The next engine reads the kept files again, as they were.
+  const next = fakeEngine();
   t.loads.length = 0;
-  t.tool.attachScene({ viewer: next });
+  t.added.length = 0;
+  t.tool.attachScene({ engine: next });
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(
-    t.loads.map(({ file, opts }) => [file.name, opts.viewer === next]),
+    t.loads.map(({ file, opts }) => [file.name, opts.color]),
     [
-      ['a.geojson', true],
-      ['b.geojson', true],
+      ['a.geojson', '#39d0ff'],
+      ['b.geojson', '#ffb547'],
     ],
+    'each file keeps its colour',
   );
-  assert.equal(next.dataSources.added.length, 2);
-  assert.equal(next.dataSources.added[1].show, false, 'b stays hidden');
+  assert.deepEqual(
+    t.added.map((drawing) => drawing.engine),
+    [next, next],
+  );
+  assert.equal(t.added[1].show, false, 'b stays hidden');
   assert.deepEqual(
     t.tool.list().map(({ id, visible }) => [id, visible]),
     [
@@ -690,98 +724,58 @@ test('an engine switch keeps the files and draws them again on the next viewer',
       [b.id, false],
     ],
   );
-  assert.ok(next.container.listeners.length > 0);
+  assert.ok(next.host.container.listeners.length > 0);
   assert.equal(t.tool.diagnostics().drawn, 2);
   t.tool.destroy();
 });
 
-test('on Navara the files draw through the engine drawing, report what it leaves out and switch back to Cesium', async () => {
-  const t = setup();
-  await t.tool.importFiles([file('a.geojson')]);
-  t.tool.detachScene();
-  const canvas = new FakeElement('canvas');
-  const container = new FakeElement('div', 'cesiumContainer');
-  const moveEnd = new Set();
-  const requests = [];
-  const engine = {
-    host: { canvas, container },
-    camera: {
-      moveEnd: {
-        addEventListener: (fn) => (moveEnd.add(fn), () => moveEnd.delete(fn)),
-      },
-    },
-    render: { request: (reason) => requests.push(reason) },
-  };
-  const drawings = [];
-  const draw = async (dataSource) => {
-    const drawing = {
-      dataSource,
-      shown: [],
-      destroyed: false,
-      report: { drawn: 2, undrawn: 3, kinds: { label: 3 } },
-      setShow: (show) => drawing.shown.push(show),
-      refresh() {},
-      destroy() {
-        drawing.destroyed = true;
-      },
-    };
-    drawings.push(drawing);
-    return drawing;
-  };
-  t.loads.length = 0;
-  t.tool.attachScene({ engine, draw });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  // The kept file is read again for the engine and drawn by it.
-  assert.deepEqual(
-    t.loads.map(({ opts }) => [opts.viewer, opts.engine === engine]),
-    [[null, true]],
-  );
-  assert.equal(drawings.length, 1);
-  assert.match(t.shown().hint, /leaves out of a\.geojson: 3/);
+test('what no engine draws of a file is reported, and the drawing follows the engine', async () => {
+  const t = setup({
+    load: async (f) => ({
+      records: { ...pointRecords(), undrawn: { left: 3 } },
+      name: f.name,
+      format: 'kml',
+      entityCount: 1,
+      removed: 0,
+      revoke() {},
+    }),
+  });
+  await t.tool.importFiles([file('a.kml')]);
+  assert.match(t.shown().hint, /Added 1 file\. .*leaves out of a\.kml: 3/);
   assert.equal(t.tool.list()[0].undrawn, 3);
-  assert.ok(canvas.listeners.length > 0, 'gestures on the engine canvas');
-  assert.ok(container.listeners.length > 0, 'drops on its container');
-  assert.equal(moveEnd.size, 1);
-  // A new file: drawn, counted, reported in the batch hint.
-  const outcomes = await t.tool.importFiles([file('b.geojson')]);
-  assert.deepEqual(
-    outcomes.map(({ ok, undrawn }) => [ok, undrawn]),
-    [[true, 3]],
-  );
-  assert.match(t.shown().hint, /Added 1 file\. .*leaves out of b\.geojson: 3/);
+  t.tool.detachScene();
+  const engine = fakeEngine();
+  t.tool.attachScene({ engine });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The kept file is drawn again on the next engine, and says so.
+  assert.equal(t.added.at(-1).engine, engine);
+  assert.match(t.shown().hint, /leaves out of a\.kml: 3/);
+  assert.ok(engine.host.canvas.listeners.length > 0, 'gestures on its canvas');
+  assert.ok(engine.host.container.listeners.length > 0, 'drops on it');
+  assert.equal(engine.moveEnd.size, 1);
   const [a] = rows(t);
   press(t, a, 'toggle');
-  assert.deepEqual(drawings[0].shown, [false]);
-  // Fly-to goes to the engine.
+  assert.equal(t.added.at(-1).show, false);
   assert.equal(t.tool.flyTo(a.id), true);
-  assert.equal(t.flights.length > 0, true);
-  // A switch to Cesium takes the drawing off the engine.
+  assert.equal(t.flownOn.at(-1), engine, 'fly-to goes to the engine');
   t.tool.detachScene();
-  assert.ok(drawings.every((drawing) => drawing.destroyed));
-  assert.equal(canvas.listeners.length, 0);
-  assert.equal(moveEnd.size, 0);
-  t.tool.attachScene({ viewer: t.viewer });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(t.tool.diagnostics().drawn, 2);
+  assert.equal(engine.host.canvas.listeners.length, 0);
+  assert.equal(engine.moveEnd.size, 0);
   t.tool.destroy();
 });
 
-test('an engine drawing that fails reports the file instead of stopping the batch', async () => {
-  const t = setup();
-  t.tool.detachScene();
-  const engine = {
-    host: { canvas: new FakeElement('canvas'), container: new FakeElement() },
-    camera: { moveEnd: { addEventListener: () => () => {} } },
-    render: { request() {} },
-  };
+test('a drawing that fails reports the file instead of stopping the batch', async () => {
   let calls = 0;
-  t.tool.attachScene({
-    engine,
-    draw: async () => {
+  const t = setup({
+    drawFile: async () => {
       if (calls++ === 0) throw new Error('no GPU');
-      return { report: { undrawn: 0 }, setShow() {}, destroy() {} };
+      return {
+        report: { undrawn: 0 },
+        setShow() {},
+        refreshGround: async () => {},
+        destroy() {},
+      };
     },
   });
   const outcomes = await t.tool.importFiles([

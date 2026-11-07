@@ -1,7 +1,7 @@
 import { catalogControlServices } from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { flyToAustin } from '../camera.js';
-import { installZoomOutGuard } from './zoomOutGuard.js';
+import { installZoomOutGuard } from '../globe/cesium/zoomOutGuard.js';
 import {
   initCockpitCloudEffects,
   initEngineCockpitClouds,

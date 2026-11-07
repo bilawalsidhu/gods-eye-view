@@ -7,9 +7,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { installImportProbe } from './qa-geo-import-probe.mjs';
 import { hookRenderErrors, readRenderErrors } from './qa-browserEvidence.mjs';
 
-const base = process.env.QA_BASE_URL || 'http://localhost:4173';
+const base =
+  process.argv.find((arg) => /^https?:/.test(arg)) ||
+  process.env.QA_BASE_URL ||
+  'http://localhost:4173';
 const supplied = process.argv.includes('--file')
   ? path.resolve(process.argv[process.argv.indexOf('--file') + 1])
   : null;
@@ -90,6 +94,7 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
+  await installImportProbe(page);
   await page.evaluate(async () => {
     const { viewer, dataManager } = window.__godsEyeView;
     const C = window.__CESIUM__;
@@ -103,49 +108,102 @@ try {
       destination: C.Cartesian3.fromDegrees(-122.5, 37.72, 50000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
+    const rgba = (color) => [color.red, color.green, color.blue, color.alpha];
+    const xyz = (p) => [p.x, p.y, p.z];
+    const lonLat = (p) => {
+      const c = C.Cartographic.fromCartesian(p);
+      return [C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude)];
+    };
+    const canonical = (rows) =>
+      rows
+        .map((row) =>
+          JSON.stringify(row, (_, value) =>
+            typeof value === 'number'
+              ? Math.round(value * 1e5) / 1e5 + 0
+              : value,
+          ),
+        )
+        .sort();
     window.__qaStyleSnapshot = (source) => {
       const now = viewer.clock.currentTime;
-      const images = new Map();
-      const imageValue = (p) => {
-        const value = p?.getValue(now);
-        if (value?.tagName !== 'CANVAS') return value;
-        if (!images.has(value)) images.set(value, value.toDataURL());
-        return images.get(value);
-      };
-      const color = (p) => p?.getValue(now)?.toCssColorString();
-      const positions = (p) => p?.getValue(now)?.map((v) => [v.x, v.y, v.z]);
-      const renderedPins = new Map();
-      const collection = source.importedBillboards;
-      if (collection)
-        for (let i = 0; i < collection.length; i++) {
-          const pin = collection.get(i);
-          renderedPins.set(pin.id, pin);
+      const value = (property) => property?.getValue(now);
+      const rows = [];
+      for (const e of source.entities.values) {
+        if (e.billboard && e.position) {
+          const b = e.billboard,
+            image = value(b.image);
+          const scale = value(b.scale) ?? 1;
+          const width = (value(b.width) ?? image.width) * scale;
+          const height = (value(b.height) ?? image.height) * scale;
+          const offset = value(b.pixelOffset) ?? { x: 0, y: 0 };
+          const centerY =
+            offset.y -
+            (value(b.verticalOrigin) === C.VerticalOrigin.BOTTOM
+              ? height / 2
+              : 0);
+          rows.push({
+            kind: 'pin',
+            position: xyz(value(e.position)),
+            size:
+              2 *
+              Math.max(
+                Math.abs(offset.x) + width / 2,
+                Math.abs(centerY) + height / 2,
+                0.5,
+              ),
+            rotation: value(b.rotation) ?? 0,
+            color: rgba(value(b.color) ?? C.Color.WHITE),
+            image: Boolean(image),
+          });
         }
-      const actual = (e, key, fallback) => {
-        const pin = renderedPins.get(e);
-        return pin ? pin[key] : (e.billboard?.[key]?.getValue(now) ?? fallback);
-      };
-      return (source.importedEntities || source.entities.values)
-        .map((e) => ({
-          name: e.name,
-          point: renderedPins.get(e)?.position || e.position?.getValue(now),
-          scale: e.billboard ? actual(e, 'scale', 1) : undefined,
-          rotation: e.billboard ? actual(e, 'rotation', 0) : undefined,
-          image: renderedPins.get(e)?.image || imageValue(e.billboard?.image),
-          color: e.billboard
-            ? actual(e, 'color', C.Color.WHITE).toCssColorString()
-            : undefined,
-          width: e.polyline?.width?.getValue(now),
-          lineColor: color(e.polyline?.material?.color),
-          line: positions(e.polyline?.positions),
-          fill: e.polygon?.fill?.getValue(now),
-          outline: e.polygon?.outline?.getValue(now),
-          polygonColor: color(e.polygon?.material?.color),
-          polygon: e.polygon?.hierarchy
-            ?.getValue(now)
-            ?.positions?.map((v) => [v.x, v.y, v.z]),
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        if (e.polyline)
+          rows.push({
+            kind: 'line',
+            positions: value(e.polyline.positions).map(lonLat),
+            width: value(e.polyline.width),
+            color: rgba(value(e.polyline.material.color)),
+          });
+        if (e.polygon && value(e.polygon.fill) !== false) {
+          const hierarchy = value(e.polygon.hierarchy);
+          rows.push({
+            kind: 'polygon',
+            rings: [
+              hierarchy.positions,
+              ...hierarchy.holes.map((hole) => hole.positions),
+            ].map((ring) => ring.map(lonLat)),
+            fill: rgba(value(e.polygon.material.color)),
+          });
+        }
+      }
+      return canonical(rows);
+    };
+    window.__qaDrawnSnapshot = () => {
+      const rows = [];
+      for (const r of window.__qaImports.records()) {
+        if (r.kind === 'movers')
+          for (const item of r.items)
+            rows.push({
+              kind: 'pin',
+              position: xyz(item.position),
+              size: r.options.sprite.sizePx,
+              rotation: item.rotation,
+              color: item.color,
+              image: r.options.sprite.atlas.canvas.width > 0,
+            });
+        if (r.kind === 'ground')
+          for (const item of r.items)
+            rows.push(
+              r.options.kind === 'corridor'
+                ? {
+                    kind: 'line',
+                    positions: item.positions,
+                    width: item.widthPx,
+                    color: item.color,
+                  }
+                : { kind: 'polygon', rings: item.rings, fill: item.fill },
+            );
+      }
+      return canonical(rows);
     };
     window.__qaUnsharedKml = async (text) => {
       const doc = new DOMParser().parseFromString(text, 'application/xml');
@@ -170,14 +228,15 @@ try {
     const outcomes = await window.__gevGeoImport.importFiles([
       new File([text], 'style-equivalence.kml'),
     ]);
-    const candidate = viewer.dataSources.get(viewer.dataSources.length - 1);
+    const candidate = window.__gevGeoImport
+      .list()
+      .find((file) => file.id === outcomes[0]?.id);
     const result = {
       ok: outcomes[0]?.ok,
       same:
         JSON.stringify(window.__qaStyleSnapshot(control)) ===
-        JSON.stringify(window.__qaStyleSnapshot(candidate)),
-      entities: (candidate.importedEntities || candidate.entities.values)
-        .length,
+        JSON.stringify(window.__qaDrawnSnapshot()),
+      entities: candidate?.entityCount,
     };
     await window.__gevGeoImport.remove(outcomes[0]?.id);
     return result;
@@ -251,7 +310,7 @@ try {
 
   const loadPicked = async (filename, expected) => {
     const before = await page.evaluate(
-      () => window.__godsEyeView.viewer.dataSources.length,
+      () => window.__qaImports.groups().length,
     );
     const priorIds = await page.evaluate(() =>
       window.__gevGeoImport.list().map((f) => f.id),
@@ -276,7 +335,7 @@ try {
     const state = await page.evaluate(() => ({
       files: window.__gevGeoImport.list(),
       hint: document.getElementById('geo-import-hint').textContent,
-      sources: window.__godsEyeView.viewer.dataSources.length,
+      groups: window.__qaImports.groups().length,
     }));
     const item = state.files.find((f) => !priorIds.includes(f.id));
     check(
@@ -285,7 +344,7 @@ try {
         (expected === null
           ? item?.entityCount > 0
           : item?.entityCount === expected) &&
-        state.sources === before + 1,
+        state.groups === before + 1,
       JSON.stringify({
         bytes: fs.statSync(filename).size,
         loadMs: Math.round(performance.now() - started),
@@ -297,10 +356,8 @@ try {
   const item = await loadPicked(file, 5000);
   if (item) {
     const same = await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      const source = viewer.dataSources.get(viewer.dataSources.length - 1);
       return (
-        JSON.stringify(window.__qaStyleSnapshot(source)) ===
+        JSON.stringify(window.__qaDrawnSnapshot()) ===
         window.__qaUnsharedSnapshot
       );
     });
@@ -338,17 +395,15 @@ try {
       const markers = await page.evaluate(() => {
         const { viewer } = window.__godsEyeView,
           C = window.__CESIUM__;
-        const source = viewer.dataSources.get(viewer.dataSources.length - 1);
-        const points = (
-          source.importedEntities || source.entities.values
-        ).filter((e) => e.position && e.billboard);
-        const images = points.filter((e) =>
-          e.billboard.image?.getValue(viewer.clock.currentTime),
-        );
+        const sets = window.__qaImports
+          .records()
+          .filter((record) => record.kind === 'movers');
+        const points = sets.flatMap((record) => record.items);
+        const images = sets
+          .filter((record) => record.options.sprite.atlas.canvas.width > 0)
+          .flatMap((record) => record.items);
         if (images.length) {
-          const at = C.Cartographic.fromCartesian(
-            images[0].position.getValue(viewer.clock.currentTime),
-          );
+          const at = C.Cartographic.fromCartesian(images[0].position);
           viewer.camera.cancelFlight();
           viewer.camera.setView({
             destination: C.Cartesian3.fromRadians(
@@ -436,8 +491,14 @@ try {
     JSON.stringify(errors),
   );
   check(
-    'all imported sources are removed',
-    await page.evaluate(() => window.__gevGeoImport.list().length === 0),
+    'all imported files and drawing sets are removed',
+    await page.evaluate(
+      () =>
+        window.__gevGeoImport.list().length === 0 &&
+        Object.values(window.__qaImports.list()).every(
+          (list) => list.length === 0,
+        ),
+    ),
   );
   console.log('Fixture retained at', file);
 } finally {

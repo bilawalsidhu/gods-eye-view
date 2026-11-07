@@ -6,13 +6,13 @@ import {
   createIonImagery,
   createOsmImagery,
   imageryFactoryFor,
-} from './imagery.js';
+} from '../globe/cesium/mapImagery.js';
 import {
   applyTerrain,
   createWorldTerrain,
   createKeylessTerrain,
   terrainSourceFor,
-} from './terrain.js';
+} from '../globe/cesium/terrain.js';
 import { createDefaultMapSources } from './defaultSources.js';
 
 test('Esri uses Re:Earth without keys and preserves ion terrain when configured', async () => {

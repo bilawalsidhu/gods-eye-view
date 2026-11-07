@@ -15,6 +15,8 @@ const HARNESSES = [
   () => ({ name: 'the fake engine', engine: createFakeEngine() }),
   () => {
     const { engine, viewer, primitive } = createCesiumMoversEngine();
+    // A viewer's camera controller, whose inputs the engine switches.
+    viewer.scene.screenSpaceCameraController = { enableInputs: true };
     return {
       name: 'the Cesium engine',
       cesium: true,
@@ -27,6 +29,23 @@ const HARNESSES = [
 
 for (const makeHarness of HARNESSES) {
   const { name } = makeHarness();
+
+  test(`the display reads whether the engine's camera inputs are on (${name})`, (t) => {
+    const h = makeHarness();
+    const display = createAwarenessDisplay(h.engine);
+    t.after(() => {
+      display.destroy();
+      h.engine.destroy();
+    });
+    assert.equal(display.cameraInputsEnabled(), true);
+    // The cockpit holds the camera through a suspension.
+    const resume = h.engine.input.suspendCameraInputs();
+    assert.equal(display.cameraInputsEnabled(), false);
+    resume();
+    assert.equal(display.cameraInputsEnabled(), true);
+    h.engine.input.setCameraInputs(false);
+    assert.equal(display.cameraInputsEnabled(), false);
+  });
 
   test(`the display reads the engine's camera, frames and followed contact (${name})`, (t) => {
     const h = makeHarness();

@@ -202,7 +202,6 @@ export class VisualSettings {
       setStyleParameter: (name, value) => this.setStyleParameter(name, value),
     });
     this._visualEffects = new VisualEffects({
-      viewer,
       engine,
       requestRender: services.governorRequestRender,
       holdRender: services.holdContinuousRender,

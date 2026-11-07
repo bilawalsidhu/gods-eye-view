@@ -3,7 +3,8 @@ import test from 'node:test';
 import { VisualEffects } from './visualEffects.js';
 import { STYLES } from './visualPresets.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
-import { MILKY_WAY_INTENSITY, StarrySky } from '../sky/starrySky.js';
+import { createCesiumRender } from '../globe/cesium/render.js';
+import { MILKY_WAY_INTENSITY, StarrySky } from '../globe/cesium/starrySky.js';
 import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
@@ -14,7 +15,9 @@ import {
   sharpenAmount,
 } from './visualPresets.js';
 
-function fixture(engine = null) {
+// VisualEffects on the Cesium engine's render (src/globe/cesium/render.js)
+// over a scene whose post stages and bloom stage the test reads.
+function fixture() {
   let time = 0;
   let next = 0;
   const frames = new Map();
@@ -42,11 +45,21 @@ function fixture(engine = null) {
       return stages.delete(stage);
     },
   };
+  const scene = {
+    postProcessStages: pipeline,
+    skyBox: { milkyWayVisibility: 1 },
+    requestRender() {},
+  };
+  const cesium = createCesiumRender(
+    { scene },
+    {
+      requestRender: (reason) => requests.push(reason),
+      createStage: (options) => ({ ...options, enabled: true }),
+    },
+  );
+  const engine = { render: cesium.render, isDestroyed: () => false };
   const effects = new VisualEffects({
     engine,
-    viewer: {
-      scene: { postProcessStages: pipeline, skyBox: { milkyWayVisibility: 1 } },
-    },
     requestRender: (reason) => requests.push(reason),
     holdRender: (reason) => holds.add(reason),
     releaseRender: (reason) => holds.delete(reason),
@@ -58,7 +71,6 @@ function fixture(engine = null) {
     cancelFrame: (id) => frames.delete(id),
     now: () => time,
     wallNow: () => 10_000 + time,
-    createStage: (options) => ({ ...options, enabled: true }),
   });
   function tick(value) {
     time = value;
@@ -66,15 +78,22 @@ function fixture(engine = null) {
     frames.clear();
     for (const callback of pending) callback();
   }
+  /** The scene's post stage by its style name, or 'sharpen'. */
+  const stage = (name) =>
+    [...stages].find((entry) => entry.name === `godsEyeView_${name}`);
   return {
     effects,
+    engine,
+    scene,
     frames,
     stages,
+    stage,
     holds,
     requests,
     bloom,
     originalBloom,
     tick,
+    destroyEngine: () => cesium.destroy(),
   };
 }
 
@@ -85,11 +104,17 @@ test('construction is inert and initialization creates one owned pipeline', () =
   f.effects.initStyles();
   f.effects.initPostProcess();
   assert.equal(f.stages.size, 6);
+  assert.deepEqual(
+    [...f.stages].map(({ name }) => name),
+    [...Object.keys(STYLES), 'sharpen'].map((name) => `godsEyeView_${name}`),
+    'the styles in their order, then the sharpening',
+  );
   assert.ok(
     Object.values(f.effects.stages).every(
       (stage) => !stage.enabled && stage.uniforms.intensity === 0,
     ),
   );
+  assert.ok([...f.stages].every((stage) => !stage.enabled));
   f.effects.initStyles();
   f.effects.initPostProcess();
   assert.equal(f.stages.size, 6);
@@ -113,6 +138,8 @@ test('crossfade uses the established 500ms easing and settles without idle frame
   assert.equal(f.effects.stages.noir.uniforms.intensity, 0.5);
   f.tick(500);
   assert.equal(f.effects.stages.noir.uniforms.intensity, 1);
+  assert.equal(f.stage('noir').uniforms.intensity, 1);
+  assert.equal(f.stage('noir').enabled, true);
   assert.equal(f.effects.transitions.size, 0);
   // Noir's shader has no animated time uniform.
   assert.equal(f.frames.size, 0);
@@ -147,6 +174,7 @@ test('only visible animated stages keep the animation clock and render hold aliv
   f.effects.setStageIntensity(animated, 1);
   f.tick(1000);
   assert.equal(animated.uniforms.time, 1);
+  assert.equal(f.stage('retro').uniforms.time, 1);
   assert.equal(f.frames.size, 1);
   assert.equal(f.holds.size, 1);
   f.effects.setStageIntensity(animated, 0);
@@ -172,7 +200,7 @@ test('the anime stage fades the Milky Way out with its own intensity', () => {
   const f = fixture();
   const sky = new StarrySky({ requestRender: () => {} });
   const glow = () => sky._milkyWayUniforms.u_intensity();
-  f.effects.viewer.scene.skyBox = sky;
+  f.scene.skyBox = sky;
   f.effects.initStyles();
   f.effects.setStageIntensity(f.effects.stages.thermal, 1);
   assert.equal(glow(), MILKY_WAY_INTENSITY, 'other styles keep the glow');
@@ -189,7 +217,7 @@ test('the anime stage fades the Milky Way out with its own intensity', () => {
 for (const skyBox of [undefined, null, {}]) {
   test(`anime works without StarrySky (${JSON.stringify(skyBox)})`, () => {
     const f = fixture();
-    f.effects.viewer.scene.skyBox = skyBox;
+    f.scene.skyBox = skyBox;
     f.effects.initStyles();
     f.effects.setStageIntensity(f.effects.stages.anime, 1);
     assert.equal(f.effects.stages.anime.enabled, true);
@@ -203,6 +231,8 @@ for (const skyBox of [undefined, null, {}]) {
 test('bloom retains its dead zone, normalized intensity and independent toggle', () => {
   const f = fixture();
   f.effects.initPostProcess();
+  assert.equal(f.bloom.enabled, false, 'a new owner starts with no bloom');
+  assert.equal(f.bloom.uniforms.glowOnly, false);
   f.effects.setBloomEnabled(true);
   f.effects.applyBloomIntensity(0);
   assert.equal(f.bloom.enabled, false);
@@ -220,14 +250,15 @@ test('bloom retains its dead zone, normalized intensity and independent toggle',
 test('sharpen uses the existing uniform scale and keeps values while disabled', () => {
   const f = fixture();
   f.effects.initPostProcess(0.49);
-  assert.equal(f.effects.sharpenStage.uniforms.amount, 1.08);
+  assert.equal(f.stage('sharpen').uniforms.amount, 1.08);
   f.effects.applySharpenIntensity(1);
   f.effects.setSharpenEnabled(true);
-  assert.equal(f.effects.sharpenStage.uniforms.amount, 2.1);
-  assert.equal(f.effects.sharpenStage.enabled, true);
+  assert.equal(f.stage('sharpen').uniforms.amount, 2.1);
+  assert.equal(f.stage('sharpen').enabled, true);
+  assert.deepEqual(f.engine.render.sharpen(), { enabled: true, amount: 2.1 });
   f.effects.setSharpenEnabled(false);
   assert.equal(f.effects.sharpenIntensity, 1);
-  assert.equal(f.effects.sharpenStage.enabled, false);
+  assert.equal(f.stage('sharpen').enabled, false);
   f.effects.destroy();
 });
 
@@ -235,21 +266,17 @@ test('sharpen at 0 runs no pass, and comes back with the slider', () => {
   const f = fixture();
   f.effects.initPostProcess(0.49);
   f.effects.setSharpenEnabled(true);
-  assert.equal(f.effects.sharpenStage.enabled, true);
+  assert.equal(f.stage('sharpen').enabled, true);
   f.effects.applySharpenIntensity(0);
-  assert.equal(
-    f.effects.sharpenStage.enabled,
-    false,
-    'no residual sharpen at 0',
-  );
+  assert.equal(f.stage('sharpen').enabled, false, 'no residual sharpen at 0');
   f.effects.setSharpenEnabled(true);
-  assert.equal(f.effects.sharpenStage.enabled, false, 'on at 0 is still off');
+  assert.equal(f.stage('sharpen').enabled, false, 'on at 0 is still off');
   f.effects.applySharpenIntensity(0.2);
-  assert.equal(f.effects.sharpenStage.enabled, true);
+  assert.equal(f.stage('sharpen').enabled, true);
   f.effects.destroy();
 });
 
-test('stop revokes pending work immediately but retains stages until final destruction', () => {
+test('stop revokes pending work immediately and destruction turns the effects off', () => {
   const f = fixture();
   f.effects.initStyles();
   f.effects.initPostProcess();
@@ -268,28 +295,38 @@ test('stop revokes pending work immediately but retains stages until final destr
   f.effects.setStageIntensity(f.effects.stages.retro, 1);
   assert.equal(f.frames.size, 0);
   assert.equal(f.effects.stages.retro.uniforms.intensity, intensity);
+  f.effects.setBloomEnabled(true);
   f.effects.destroy();
+  assert.ok(
+    [...f.stages].every((stage) => !stage.enabled),
+    'nothing draws after the owner',
+  );
+  assert.equal(f.bloom.enabled, false);
+  f.effects.destroy();
+  // The engine removes its stages and gives the bloom stage back.
+  f.destroyEngine();
   assert.equal(f.stages.size, 0);
   assert.deepEqual(
     f.bloom,
     f.originalBloom,
     'borrowed bloom configuration is restored',
   );
-  f.effects.destroy();
 });
 
-test('destroying one instance does not remove another pipeline or clock', () => {
+test('destroying one instance does not stop another pipeline or clock', () => {
   const a = fixture();
   const b = fixture();
   for (const f of [a, b]) {
     f.effects.initStyles();
     f.effects.startTransition('retro', 0, 1);
   }
+  a.tick(250);
   a.effects.destroy();
   b.tick(250);
-  assert.equal(a.stages.size, 0);
-  assert.equal(b.stages.size, 5);
+  assert.equal(a.stage('retro').enabled, false);
+  assert.equal(b.stages.size, 6);
   assert.equal(b.effects.stages.retro.uniforms.intensity, 0.5);
+  assert.equal(b.stage('retro').enabled, true);
   b.effects.destroy();
 });
 
@@ -311,14 +348,13 @@ test('existing baseline and military presets keep one detection default', () => 
   assert.equal(STYLE_PRESET_DEFAULTS.normal, undefined);
 });
 
-test('without a viewer the engine sharpens with the same amount scale', () => {
+test('an engine sharpens with the same amount scale, only while on and above 0', () => {
   const sharpen = [];
   const requests = [];
   const engine = {
     render: { setSharpen: (options) => sharpen.push(options) },
   };
   const effects = new VisualEffects({
-    viewer: null,
     engine,
     requestRender: (reason) => requests.push(reason),
     holdRender() {},
@@ -326,18 +362,27 @@ test('without a viewer the engine sharpens with the same amount scale', () => {
   });
   effects.initStyles();
   effects.initPostProcess(0.49);
-  assert.equal(effects.sharpenStage, null);
   effects.applySharpenIntensity(0.8);
   effects.setSharpenEnabled(true);
+  effects.applySharpenIntensity(0);
+  effects.applySharpenIntensity(0.3);
   effects.setSharpenEnabled(false);
   assert.deepEqual(sharpen, [
+    { enabled: false },
+    { amount: sharpenAmount(0.49) },
     { amount: 1.7000000000000002 },
+    { enabled: true },
+    { amount: sharpenAmount(0) },
+    { enabled: false },
+    { amount: sharpenAmount(0.3) },
     { enabled: true },
     { enabled: false },
   ]);
-  assert.equal(sharpen[0].amount, sharpenAmount(0.8));
-  assert.deepEqual(requests, ['sharpen', 'sharpen', 'sharpen']);
+  assert.equal(sharpen[2].amount, sharpenAmount(0.8));
+  assert.ok(requests.every((reason) => reason === 'sharpen'));
+  effects.setSharpenEnabled(true);
   effects.destroy();
+  assert.deepEqual(sharpen.at(-1), { enabled: false });
 });
 
 // A fake engine drawing the app's styles (render.setStyle), as Navara does.
@@ -365,7 +410,6 @@ function engineFixture(engine = styledEngine()) {
   const holds = new Set();
   const requests = [];
   const effects = new VisualEffects({
-    viewer: null,
     engine,
     requestRender: (reason) => requests.push(reason),
     holdRender: (reason) => holds.add(reason),
@@ -388,7 +432,7 @@ function engineFixture(engine = styledEngine()) {
   return { engine, effects, holds, requests, tick };
 }
 
-test('without a viewer an engine that draws styles gets stand-in stages', () => {
+test('an engine that draws styles gets stand-in stages', () => {
   const { engine, effects } = engineFixture();
   effects.initStyles();
   assert.deepEqual(Object.keys(effects.stages), Object.keys(STYLES));
@@ -405,7 +449,7 @@ test('without a viewer an engine that draws styles gets stand-in stages', () => 
     palette: 0,
     time: 0,
   });
-  // A uniform write reaches the engine, as a Cesium stage uniform would.
+  // A uniform write reaches the engine.
   effects.stages.thermal.uniforms.palette = 1;
   assert.equal(engine.render.style('thermal').uniforms.palette, 1);
   assert.equal(effects.stages.thermal.uniforms.palette, 1);
@@ -451,15 +495,16 @@ test('an engine crossfade eases both styles and animates time on the engine', ()
   effects.destroy();
 });
 
-test('Anime on an engine without a viewer reaches no sky box', () => {
+test('Anime reaches the engine, which fades its own sky', () => {
   const { engine, effects } = engineFixture();
   effects.initStyles();
   effects.setStageIntensity(effects.stages.anime, 0.7);
   assert.equal(engine.render.style('anime').intensity, 0.7);
   effects.destroy();
+  assert.equal(engine.render.style('anime').intensity, 0, 'off after it');
 });
 
-test('without a viewer an engine that blooms gets the slider strength and dead zone', () => {
+test('an engine that blooms gets the slider strength and dead zone', () => {
   const { engine, effects, requests } = engineFixture(
     createFakeEngine({ kind: 'navara', bloom: true }),
   );
@@ -482,7 +527,6 @@ test('without a viewer an engine that blooms gets the slider strength and dead z
   effects.setBloomEnabled(false);
   assert.equal(engine.render.bloom().enabled, false);
   assert.ok(requests.includes('bloom'));
-  assert.equal(effects.bloomStage, null);
   effects.destroy();
 });
 
@@ -491,35 +535,6 @@ test('without the visualStyles capability an engine gets no stages', () => {
   effects.initStyles();
   assert.deepEqual(effects.stages, {});
   effects.destroy();
-});
-
-test('with a viewer the Cesium stage sharpens and the engine mirrors its state', () => {
-  let state = { enabled: false, amount: 1 };
-  const engine = {
-    render: {
-      setSharpen: (options) => {
-        state = { ...state, ...options };
-      },
-      sharpen: () => ({ ...state }),
-    },
-  };
-  const f = fixture(engine);
-  f.effects.initPostProcess(0.49);
-  assert.deepEqual(engine.render.sharpen(), {
-    enabled: false,
-    amount: f.effects.sharpenStage.uniforms.amount,
-  });
-  f.effects.applySharpenIntensity(0.8);
-  f.effects.setSharpenEnabled(true);
-  assert.equal(f.effects.sharpenStage.uniforms.amount, sharpenAmount(0.8));
-  assert.equal(f.effects.sharpenStage.enabled, true);
-  assert.deepEqual(engine.render.sharpen(), {
-    enabled: true,
-    amount: sharpenAmount(0.8),
-  });
-  f.effects.setSharpenEnabled(false);
-  assert.equal(engine.render.sharpen().enabled, false);
-  f.effects.destroy();
 });
 
 test('presets and the baseline take the engine default sharpen: Cesium 49 %, Navara 80 %', () => {

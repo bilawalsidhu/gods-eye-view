@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { assertGlobeEngine } from '../contract.js';
+import { assertGlobeEngine, engineCapabilities } from '../contract.js';
 import {
   _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
@@ -53,6 +53,23 @@ test('the engine satisfies the contract shape and changes nothing at creation', 
   assert.deepEqual(engine.host.size(), { width: 800, height: 600 });
   viewer.scene.canvas.clientWidth = 640;
   assert.deepEqual(engine.host.size(), { width: 640, height: 600 });
+});
+
+test('the engine draws the visual styles, bloom and contact sonar, not the cloud cover', () => {
+  const viewer = createFakeViewer();
+  const engine = createCesiumEngine(viewer);
+  assert.deepEqual(engineCapabilities(engine), {
+    visualStyles: true,
+    bloom: true,
+    cloudCover: false,
+    contactSonar: true,
+    movers: true,
+    lines: true,
+    ground: true,
+    imagery: true,
+  });
+  assert.equal(engine.contactSonarDiagnostics().contacts, 0);
+  engine.destroy();
 });
 
 test('the render option reaches render.request', () => {

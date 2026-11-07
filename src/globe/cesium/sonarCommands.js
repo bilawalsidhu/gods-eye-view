@@ -1,3 +1,7 @@
+// The Cyber HUD sonar on Cesium's native dots, icons and glyphs
+// (render.setContactSonar, sonar.js): each drawn point or billboard batch
+// gets a derived draw command whose shader applies the sweep.
+
 import * as Cesium from 'cesium';
 
 // Narrow, version-tested engine adapter. Cesium has no public custom shader
@@ -137,6 +141,7 @@ export function isCyberSonarCommandVisible(command, frameState, culling) {
 /** Work scales with draw commands, not the number of contacts in a collection.
  * Source programs, colors, pick IDs, render states and other scenes stay owned
  * by Cesium. Only this scene's rendered command slice receives derived shaders.
+ * `readFrame` returns the sonar state to draw (the contract's ContactSonar).
  */
 export function createCyberSonarGpu(scene, readFrame) {
   const root = scene.primitives;
@@ -190,7 +195,7 @@ export function createCyberSonarGpu(scene, readFrame) {
     }
     viewport.x = scene.drawingBufferWidth;
     viewport.y = scene.drawingBufferHeight;
-    uniforms.x = frame.angle;
+    uniforms.x = frame.angleDeg;
     uniforms.y =
       (Math.min(viewport.x * 0.4, viewport.y * 0.52) * frame.range) / 100;
     uniforms.z = frame.opacity / 100;

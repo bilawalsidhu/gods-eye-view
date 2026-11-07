@@ -20,7 +20,7 @@
  * carrying a pick id the layers' click handlers resolve.
  */
 import * as Cesium from 'cesium';
-import { registerPickOwner } from '../pickRegistry.js';
+import { registerPickOwner } from '../../data/pickRegistry.js';
 
 // Round 6: trail ENTITIES are pickable (the old Primitive had
 // allowPicking:false). A trail hugs its aircraft, so an unclaimed pick would

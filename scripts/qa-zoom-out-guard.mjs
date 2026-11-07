@@ -36,7 +36,8 @@ try {
   );
   const renderer = await page.evaluate(async () => {
     const C = await import('/node_modules/cesium/Build/Cesium/index.js');
-    const { maxPitchForHeight } = await import('/src/app/zoomOutGuard.js');
+    const { maxPitchForHeight } =
+      await import('/src/globe/cesium/zoomOutGuard.js');
     const { readCameraTargetFrame } =
       await import('/src/ui/cameraOrientationControls.js');
     const { viewer, engine } = window.__godsEyeView;
@@ -86,7 +87,7 @@ try {
     };
     viewer.camera.setView = (options) => {
       // Cesium itself also calls setView while processing touch movement.
-      if (new Error().stack.includes('/src/app/zoomOutGuard.js'))
+      if (new Error().stack.includes('/src/globe/cesium/zoomOutGuard.js'))
         qa.guardWrites++;
       return original(options);
     };

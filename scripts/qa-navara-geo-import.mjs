@@ -238,20 +238,18 @@ await strict.run(
         imported.diagnostics.drawn === 4,
       { files: imported.files.map((f) => f.format), rows: imported.rows },
     );
-    // The KMZ's packed ground overlay is a rectangle Navara has no drawing
-    // for; the KML's remote one was left out of the file on import.
+    // Packed overlays draw through imagery; remote overlays are removed on import.
     const undrawn = Object.fromEntries(
       imported.files.map((f) => [f.name, f.undrawn]),
     );
     await strict.check(
       page,
       'geo-import',
-      'the ground overlay Navara cannot draw is counted and reported in the hint',
-      undrawn['packed.kmz'] === 1 &&
+      'all supported geometry, including the packed overlay, draws on Navara',
+      undrawn['packed.kmz'] === 0 &&
         undrawn['park.geojson'] === 0 &&
         undrawn['remote-bits.kml'] === 0 &&
-        undrawn['walk.gpx'] === 0 &&
-        /leaves out of packed\.kmz: 1/.test(imported.hint),
+        undrawn['walk.gpx'] === 0,
       { undrawn, hint: imported.hint },
     );
     await strict.check(

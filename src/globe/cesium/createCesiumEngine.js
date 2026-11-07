@@ -36,10 +36,13 @@ import { createCesiumSurface } from './surface.js';
  *   lineFactories?: object,
  *   groundFactories?: object,
  *   imageryFactories?: object,
+ *   createStage?: Function,
+ *   createSonar?: Function,
  * }} [options] `requestRender` defaults to the render governor; `appClock`
  *   to the page's app clock; the `create*`/`load*` options and the mover and
  *   line, ground and imagery factories (movers.js, lines.js, ground.js,
- *   imagery.js) are test seams.
+ *   imagery.js) are test seams, `createStage` and `createSonar` too
+ *   (render.js).
  *
  * `render.setContinuous` takes a hold on the app's singleton renderGovernor
  * (src/renderGovernor.js), which governs the one viewer it was installed on;
@@ -107,6 +110,9 @@ export function createCesiumEngine(viewer, options = {}) {
     kind: 'cesium',
     // What only Cesium has, for code still written against the viewer.
     extensions: Object.freeze({ cesium: Object.freeze({ viewer }) }),
+    // Cesium only, not contract: what the contact sonar holds (sonar.js),
+    // live; the app reads whether its command adapter runs here.
+    contactSonarDiagnostics: render.sonarDiagnostics,
     host: {
       container: viewer.container,
       canvas,

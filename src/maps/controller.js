@@ -1,7 +1,6 @@
 import { indexMapSources } from './registry.js';
-import * as Cesium from 'cesium';
-import { createMapScene } from './sceneApply.js';
-import { applyTerrain } from './terrain.js';
+import { createMapScene } from '../globe/cesium/mapScene.js';
+import { applyTerrain } from '../globe/cesium/terrain.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
 /**
@@ -52,7 +51,8 @@ export class MapSourceController {
       requestRender = engine
         ? () => engine.render.request('map-stack')
         : () => viewer?.scene?.requestRender?.(),
-      createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
+      // A test seam: Cesium's ImageryLayer by default (mapScene.js).
+      createImageryLayer,
     },
   ) {
     this.viewer = viewer;
@@ -69,7 +69,10 @@ export class MapSourceController {
     this._prebuilt = engine?.kind === 'cesium';
     this._scene = engine
       ? null
-      : createMapScene(viewer, { createImageryLayer });
+      : createMapScene(
+          viewer,
+          createImageryLayer ? { createImageryLayer } : {},
+        );
     /** Engine mode: the provider last handed to engine.maps as base imagery. */
     this._baseProvider = null;
     this._abort = new AbortController();

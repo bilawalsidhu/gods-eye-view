@@ -63,8 +63,15 @@ export function fakeCctvHarness() {
       engine.fake.script('pick', () => results[0]);
       engine.fake.script('drillPick', () => results);
     },
+    // Camera inputs off at each suspension, on again at its resume.
     cameraInputs: () =>
-      engine.fake.callsOf('input.setCameraInputs').map(({ args }) => args[0]),
+      engine.fake.calls
+        .filter(({ method }) =>
+          ['input.suspendCameraInputs', 'input.resumeCameraInputs'].includes(
+            method,
+          ),
+        )
+        .map(({ method }) => method === 'input.resumeCameraInputs'),
     lineState: (id) => {
       const line = engine.fake.line(id);
       return line && { ...line.options, color: line.color, shown: line.shown };
@@ -103,11 +110,16 @@ export function cesiumCctvHarness() {
   canvas.style = {};
   canvas.ownerDocument = { defaultView: new EventTarget() };
   viewer.scene.screenSpaceCameraController = { enableInputs: true };
+  // Camera inputs off at each suspension, on again at its resume.
   const inputs = [];
-  const setCameraInputs = engine.input.setCameraInputs;
-  engine.input.setCameraInputs = (enabled) => {
-    inputs.push(enabled);
-    setCameraInputs(enabled);
+  const suspend = engine.input.suspendCameraInputs;
+  engine.input.suspendCameraInputs = () => {
+    inputs.push(false);
+    const resume = suspend();
+    return () => {
+      inputs.push(true);
+      resume();
+    };
   };
   engine.camera.setView({
     destination: geo.cartesian3.fromDegrees(0, 0, VIEW.height),

@@ -5,12 +5,9 @@
 
 import * as Cesium from 'cesium';
 import { loadPhotorealisticTileset } from '../../maps/google3d.js';
-import { createMapScene } from '../../maps/sceneApply.js';
-import {
-  ESRI_ATTRIBUTION_HTML,
-  imageryFactoryFor,
-} from '../../maps/imagery.js';
-import { applyTerrain, terrainSourceFor } from '../../maps/terrain.js';
+import { createMapScene } from './mapScene.js';
+import { ESRI_ATTRIBUTION_HTML, imageryFactoryFor } from './mapImagery.js';
+import { applyTerrain, terrainSourceFor } from './terrain.js';
 
 const IMAGERY_KINDS = new Set(['osm', 'esri-imagery', 'sentinel2', 'ion']);
 

@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
-import { createCesiumCredits } from '../globe/cesium/credits.js';
-import { createMapCredits } from './credits.js';
+import { createCesiumCredits } from './credits.js';
+import { createMapCredits } from '../../maps/credits.js';
 
 /**
  * The scene changes a map source makes on a Cesium viewer: the base imagery
@@ -10,7 +10,7 @@ import { createMapCredits } from './credits.js';
  * @param {Cesium.Viewer} viewer
  * @param {{
  *   createImageryLayer?: (provider: object) => object,
- *   credits?: import('../globe/contract.js').GlobeEngine['credits'],
+ *   credits?: import('../contract.js').GlobeEngine['credits'],
  * }} [options] `credits`: the globe engine's credits (default: the viewer's
  *   credit display through the Cesium engine's credits).
  */

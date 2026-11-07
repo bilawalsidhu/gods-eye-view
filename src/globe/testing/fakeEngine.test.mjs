@@ -129,6 +129,14 @@ test('fake input dispatches to subscribers and off removes them', () => {
   assert.throws(() => engine.input.on('wheel', () => {}), /Unknown input type/);
   engine.input.setCameraInputs(false);
   assert.equal(engine.fake.cameraInputsEnabled, false);
+  engine.input.setCameraInputs(true);
+  const resume = engine.input.suspendCameraInputs();
+  const inner = engine.input.suspendCameraInputs();
+  assert.equal(engine.input.cameraInputsEnabled(), false);
+  inner();
+  resume();
+  resume();
+  assert.equal(engine.input.cameraInputsEnabled(), true);
 });
 
 test('pick, sampleHeight and worldToWindow results can be scripted', () => {

@@ -7,67 +7,25 @@ import {
   osmOverlayHiddenReason,
 } from './osmOverlays.js';
 import { NO_IMAGERY_HOST } from '../maps/imageryHost.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
-function fakeCollection() {
-  const layers = [];
-  const removed = [];
-  return {
-    layers,
-    removed,
-    add(layer) {
-      layers.push(layer);
-    },
-    contains(layer) {
-      return layers.includes(layer);
-    },
-    remove(layer, destroy) {
-      const index = layers.indexOf(layer);
-      if (index < 0) return false;
-      layers.splice(index, 1);
-      removed.push({ layer, destroy });
-      if (destroy) layer.destroyed = true;
-      return true;
-    },
-  };
-}
-
-function fakeMapStack() {
-  const subscribers = new Set();
-  return {
-    tileset: null,
-    getImageryHostTileset() {
-      return this.tileset;
-    },
-    subscribe(fn) {
-      subscribers.add(fn);
-      return () => subscribers.delete(fn);
-    },
-    emit() {
-      for (const fn of subscribers) fn();
-    },
-    subscribers,
-  };
-}
-
+/** A layer on the fake engine, whose imagery drapes where `surface()` says. */
 function setup(overlay = OSM_OVERLAYS[0]) {
-  const globe = fakeCollection();
-  const viewer = {
-    imageryLayers: globe,
-    scene: { globe: { show: true }, requestRender() {} },
+  let surface = 'globe';
+  const fake = createFakeEngine({ kind: 'cesium' });
+  const engine = {
+    ...fake,
+    imagery: { ...fake.imagery, surface: () => surface },
   };
-  const created = [];
-  const layer = createOsmOverlayLayer(overlay, {
-    createProvider: (descriptor) => ({ descriptor }),
-    createImageryLayer: (provider) => {
-      const imagery = { provider, destroyed: false };
-      created.push(imagery);
-      return imagery;
-    },
-  });
-  const mapStack = fakeMapStack();
-  layer.init(viewer);
-  layer.attachMapStackController(mapStack);
-  return { layer, viewer, globe, created, mapStack };
+  const layer = createOsmOverlayLayer(overlay);
+  layer.init(null, { engine });
+  return {
+    layer,
+    engine,
+    layers: () =>
+      engine.imagery.list().filter(({ id }) => id.startsWith('osm-overlay-')),
+    setSurface: (next) => (surface = next),
+  };
 }
 
 test('OSM_OVERLAYS: the two shipped layers, each with a tile template and credit', () => {
@@ -104,66 +62,60 @@ test('osmOverlayHiddenReason: only when enabled with no imagery host', () => {
 });
 
 test('a layer owns no imagery until enabled and destroys it on disable', () => {
-  const { layer, globe, created } = setup(OSM_OVERLAYS[1]);
-  assert.equal(created.length, 0);
+  const { layer, engine, layers } = setup(OSM_OVERLAYS[1]);
+  assert.equal(layers().length, 0);
 
   layer.enable();
-  assert.equal(globe.layers.length, 1);
-  assert.equal(globe.layers[0].provider.descriptor.id, 'ski-pistes');
+  assert.equal(layers().length, 1);
+  const [{ id }] = layers();
+  assert.equal(id, 'osm-overlay-ski-pistes');
+  const { source, options } = engine.fake.imageryLayer(id);
+  assert.equal(source.url, OSM_OVERLAYS[1].urlTemplate);
+  assert.equal(source.maxLevel, 18);
+  assert.equal(source.credit, OSM_OVERLAYS[1].credit);
+  assert.equal(options.order, 10);
   assert.deepEqual(layer.getStats(), { count: 1, error: null });
 
   layer.disable();
-  assert.equal(globe.layers.length, 0);
-  assert.equal(created[0].destroyed, true);
+  assert.equal(layers().length, 0);
   assert.deepEqual(layer.diagnostics(), { host: 'none', ownedCount: 0 });
   assert.deepEqual(layer.getStats(), { count: 0, error: null });
 
   layer.enable();
-  assert.equal(created.length, 2, 're-enabling creates a fresh imagery layer');
+  assert.equal(layers().length, 1, 're-enabling creates a fresh layer');
 });
 
-test('the overlay follows a map-stack switch onto the Google 3D tileset and back', () => {
-  const { layer, viewer, globe, mapStack } = setup();
+test('the overlay reports the surface the engine drapes it on', () => {
+  const { layer, setSurface } = setup();
   layer.enable();
-  const [imagery] = globe.layers;
-
-  const tileset = { imageryLayers: fakeCollection() };
-  viewer.scene.globe.show = false;
-  mapStack.tileset = tileset;
-  mapStack.emit();
-  assert.equal(globe.layers.length, 0);
-  assert.deepEqual(tileset.imageryLayers.layers, [imagery]);
-  assert.equal(globe.removed[0].destroy, false);
+  assert.equal(layer.diagnostics().host, 'globe');
+  setSurface('tiles');
   assert.equal(layer.diagnostics().host, 'tileset');
   assert.equal(layer.getStats().error, null);
-
-  viewer.scene.globe.show = true;
-  mapStack.tileset = null;
-  mapStack.emit();
-  assert.deepEqual(globe.layers, [imagery]);
-  assert.equal(tileset.imageryLayers.layers.length, 0);
 });
 
 test('with no surface to drape on the row explains itself, and recovers when one appears', () => {
-  const { layer, viewer, globe, mapStack } = setup();
-  viewer.scene.globe.show = false;
+  const { layer, setSurface } = setup();
+  setSurface('none');
   layer.enable();
-  assert.equal(globe.layers.length, 0);
   assert.equal(layer.getStats().error, NO_IMAGERY_HOST);
-
-  viewer.scene.globe.show = true;
-  mapStack.emit();
-  assert.equal(globe.layers.length, 1);
+  setSurface('globe');
   assert.equal(layer.getStats().error, null);
 });
 
-test('destroy removes owned imagery and unsubscribes from the map stack', () => {
-  const { layer, globe, created, mapStack } = setup();
+test('destroy and a renderer detach remove the owned imagery', () => {
+  const { layer, layers, engine } = setup();
   layer.enable();
+  layer.detachRenderer();
+  assert.equal(layers().length, 0);
+  layer.attachRenderer(null, { engine });
+  assert.equal(
+    layers().length,
+    1,
+    'the enabled state stays for the next globe',
+  );
   layer.destroy();
-  assert.equal(globe.layers.length, 0);
-  assert.equal(created[0].destroyed, true);
-  assert.equal(mapStack.subscribers.size, 0);
+  assert.equal(layers().length, 0);
 });
 
 test('on Navara an overlay drapes through engine.maps and follows the globe', () => {

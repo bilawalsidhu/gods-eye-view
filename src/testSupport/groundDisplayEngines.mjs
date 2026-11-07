@@ -99,7 +99,10 @@ export function createFakeGroundHarness(options = {}) {
  * `realFills`, Cesium's own GroundPrimitive draws the fills (it builds in
  * Node; GroundPolylinePrimitive does not).
  */
-export function createCesiumGroundHarness({ realFills = false } = {}) {
+export function createCesiumGroundHarness({
+  realFills = false,
+  engineOptions = {},
+} = {}) {
   const handlers = createFakeEventHandlers();
   const primitive = (type) => (options) => {
     const value = {
@@ -117,6 +120,7 @@ export function createCesiumGroundHarness({ realFills = false } = {}) {
   };
   const { engine, viewer } = createCesiumMoversEngine({
     engineOptions: {
+      ...engineOptions,
       createEventHandler: handlers.create,
       scheduleFrame: (run) => run(),
       groundFactories: {

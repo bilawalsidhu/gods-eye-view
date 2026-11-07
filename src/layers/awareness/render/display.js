@@ -57,6 +57,8 @@ export function createAwarenessDisplay(engine, { navaraPulses } = {}) {
       return engine.camera.following()?.native;
     },
     cameraHeight: () => engine.camera.height(),
+    // Off while another owner holds the camera (the cockpit, a gizmo drag).
+    cameraInputsEnabled: () => engine.input.cameraInputsEnabled(),
     onFrame: (run) => engine.frames.preRender.addEventListener(run),
     onFrameEnd: (run) => engine.frames.postRender.addEventListener(run),
     frameContact: (center, radius, duration) =>

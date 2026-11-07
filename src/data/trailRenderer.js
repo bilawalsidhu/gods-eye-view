@@ -1,1 +1,1 @@
-export { createTrail } from './render/cesiumTrailRenderer.js';
+export { createTrail } from '../globe/cesium/trail.js';

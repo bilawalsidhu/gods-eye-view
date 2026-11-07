@@ -67,7 +67,7 @@ test('disposing an active Cockpit releases the supplied render owner without ret
       services: { releaseContinuousRender: (reason) => released.push(reason) },
     });
     const ridden = env.cockpit.aircraft();
-    env.engine.input.setCameraInputs(false);
+    owner.host.inputs(false);
     ridden.show = false;
     Object.assign(owner, { active: true, trackedEntity: ridden });
     owner.dispose();

@@ -421,12 +421,11 @@ screen pass right after tone mapping, under the other drapes and
   mip levels come from the derivatives of the ground position, taken
   before any branch, so rectangle edges and the antimeridian show no seams.
 
-`engine.imagery` is the successor of `engine.maps.addOverlay`, Navara's
-undocumented extension for the open map overlays (Sea Marks, Ski Pistes).
-That one adds a native Navara raster layer: Navara's own per-tile levels on
+Open map overlays (Sea Marks, Ski Pistes) use `engine.imagery` when the
+engine has no `maps.addOverlay`. Navara keeps that optional native raster
+path for its per-tile detail. It adds a native Navara raster layer: Navara's own per-tile levels on
 the terrain, lit like the base map, but no rectangle, split, alpha or order,
-and nothing on 3D tiles. It stays until those overlays move, which needs a
-finer Navara tiles path first: a global overlay seen obliquely gets coarse
+and nothing on 3D tiles. Moving that path to imagery needs finer Navara tile detail: a global overlay seen obliquely gets coarse
 near the camera from one 8×8 atlas over the whole view.
 
 ### Who draws through imagery
@@ -454,8 +453,58 @@ near the camera from one 8×8 atlas over the whole view.
   locator's story entities still draw on Cesium itself and through
   Navara's story backend (`src/layers/shared/render/navaraStory.js`).
 
-`engine.imagery` is still not used by the open map overlays (Sea Marks, Ski
-Pistes; see above).
+- **Imported KML/KMZ ground images** (`src/data/geoImportDisplay.js`): one
+  image layer per rectangle at order 30, with the authored alpha capped at
+  0.99 as on Cesium.
+- **Sea Marks and Ski Pistes** (`src/data/osmOverlays.js`): tile layers at
+  order 10 on engines without `maps.addOverlay`.
+
+## Imported files
+
+`geoFileImport.js` reads GeoJSON, GPX, KML and KMZ into the plain records in
+`src/data/geoImportRecords.js`. `geoImportKml.js` resolves KML styles with
+Cesium's precedence; its tests compare the records with `KmlDataSource`.
+No import loads the Cesium SDK. One `geoImportDisplay.js` draws the records
+on every engine: points on movers, ground paths and polygon fills on ground,
+raised paths and outlines on lines, and packed ground images on imagery.
+Every owned id starts with `geo-import-`; the file controller owns visibility,
+framing, refresh and destruction across engine switches.
+
+Pins use composed square sprites to retain Cesium's pin tip, hot spot,
+subregion, colour, scale and rotation. Ground heights come from the loaded
+surface, refreshed after the camera or map settles. Ground pins ignore scene
+depth and are culled beyond the horizon; absolute pins retain their height.
+
+The shared display has known limits against Cesium: wall fills and extruded
+prisms are omitted (their top geometry remains), and `gx:LatLonQuad` is
+omitted. These are counted as undrawn. Raised polygon fills drape; their
+outlines retain altitude. Ground-overlay rotation, altitude and RGB tint are
+not applied, and ground edges use great circles rather than rhumb lines.
+These appearance limits are not included in the undrawn count.
+
+## Input ownership
+
+`engine.input.suspendCameraInputs()` disables camera gestures and returns an
+idempotent resume function. Suspensions are counted: only the last resume
+restores the state captured before the first suspension. This preserves an
+already-disabled camera. A `setCameraInputs()` call during suspension updates
+the state restored on resume. `cameraInputsEnabled()` reads the current state.
+Cockpit, imagery-box drawing, CCTV calibration and infrastructure flights use
+these methods on every engine. Pointer claims remain separate from camera
+input suspension.
+
+## Render effects
+
+The optional `visualStyles`, `bloom` and `contactSonar` capabilities are
+available on Cesium and Navara through `engine.render`. Cesium implements
+styles, sharpening, borrowed bloom and the Anime Milky Way fade in
+`src/globe/cesium/postStages.js`; contact sonar is in `sonar.js` and
+`sonarCommands.js`. Cesium does not advertise `cloudCover`.
+
+`VisualEffects` drives transitions through the render contract. UI teardown
+stops animation and disables effects; engine destruction removes its stages
+and restores the borrowed bloom state. Sharpen intensity zero disables
+sharpening on both engines, following Cesium.
 
 ### Choosing a primitive
 

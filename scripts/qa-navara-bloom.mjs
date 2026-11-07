@@ -160,7 +160,7 @@ await strict.run({}, async (browser) => {
     { engine: off.engine, diff: diff(normal, offFrame) },
   );
 
-  // Cesium keeps its scene bloom stage; its engine has no bloom.
+  // Cesium drives its scene bloom stage through the render contract.
   await strict.switchTo(page, 'cesium');
   await freeze(page);
   await setBloom(page, false, 200);
@@ -178,9 +178,9 @@ await strict.run({}, async (browser) => {
   const cesiumGlow = await capture(page);
   save('cesium-bloom-200', cesiumGlow);
   check(
-    "Cesium: its scene's bloom stage glows, the engine draws none",
-    cesium.engine === null &&
-      cesiumStage.setBloom === 'undefined' &&
+    "Cesium: the engine drives its scene's bloom stage",
+    cesium.engine?.enabled === true &&
+      cesiumStage.setBloom === 'function' &&
       cesiumStage.enabled !== false &&
       diff(cesiumNormal, cesiumGlow).mean > 1,
     { stage: cesiumStage, diff: diff(cesiumNormal, cesiumGlow) },

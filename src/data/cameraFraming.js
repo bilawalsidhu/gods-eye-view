@@ -1,9 +1,8 @@
-import * as Cesium from 'cesium';
-
 /** Camera range with breathing room in both viewport dimensions. */
 export function rangeForBoundingSphere(viewer, radius) {
   const frustum = viewer.camera?.frustum;
-  const verticalFov = Number(frustum?.fov) || Cesium.Math.toRadians(60);
+  // Cesium's default frustum: 60°.
+  const verticalFov = Number(frustum?.fov) || Math.PI / 3;
   const aspectRatio = Math.max(0.5, Number(frustum?.aspectRatio) || 1);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspectRatio);
   const limitingFov = Math.min(verticalFov, horizontalFov);

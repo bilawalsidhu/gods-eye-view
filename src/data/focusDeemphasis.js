@@ -1,4 +1,4 @@
-import { worldToWindowCoordinates } from './render/cesiumProjection.js';
+import { worldToWindowCoordinates } from '../globe/cesium/sceneProjection.js';
 import * as geo from '../geo/index.js';
 
 // A window position through the engine projector the scene carries (the

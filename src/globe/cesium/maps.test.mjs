@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../../maps/catalog.js';
 import { createDefaultMapSources } from '../../maps/defaultSources.js';
-import { ESRI_ATTRIBUTION_HTML } from '../../maps/imagery.js';
+import { ESRI_ATTRIBUTION_HTML } from './mapImagery.js';
 import { createCesiumMaps } from './maps.js';
 import { createFakeViewer } from './testing/fakeViewer.mjs';
 

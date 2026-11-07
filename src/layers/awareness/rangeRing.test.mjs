@@ -682,8 +682,8 @@ function inputLifecycle(t, ring) {
   const { state, rendering } = ring;
   const loop = frameLoop(t, ring, { date: true });
   state.enabled = true;
-  // The contract cannot say whether the camera controller takes input, so
-  // the display does not either; the lifecycle reads it when a display does.
+  // The display answers from engine.input.cameraInputsEnabled; here the
+  // test switches the controller's inputs itself.
   const controller = { enableInputs: true };
   state.display.cameraInputsEnabled = () => controller.enableInputs;
   setCamera(ring, 3);

@@ -539,8 +539,7 @@ export function createInfrastructureDisplay(
 
   function flyTo(lon, lat) {
     // Camera input would cancel the flight.
-    engine.input.setCameraInputs(false);
-    const restore = () => engine.input.setCameraInputs(true);
+    const restore = engine.input.suspendCameraInputs();
     engine.camera.flyTo({
       destination: geo.cartesian3.fromDegrees(lon, lat, FLY_HEIGHT_M),
       duration: FLY_SECONDS,

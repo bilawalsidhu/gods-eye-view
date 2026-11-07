@@ -9,7 +9,7 @@ import {
   installFreeLookHeightLimit,
   installGlobeInViewRecovery,
   installTrackpadPinchZoom,
-} from './viewer.js';
+} from '../globe/cesium/viewer.js';
 import * as globeInView from '../globeInView.js';
 
 const { FREE_LOOK_MAX_HEIGHT_METERS } = globeInView;
@@ -300,8 +300,9 @@ test('the separate viewer export imports without constructing a browser viewer',
 });
 
 test('the viewer gets the starry sky as an option, which keeps the Sun and Moon', async () => {
-  const { applicationViewerOptions } = await import('./viewer.js');
-  const { StarrySky } = await import('../sky/starrySky.js');
+  const { applicationViewerOptions } =
+    await import('../globe/cesium/viewer.js');
+  const { StarrySky } = await import('../globe/cesium/starrySky.js');
   const creditContainer = {};
   const options = applicationViewerOptions(creditContainer);
   // CesiumWidget skips scene.sun and scene.moon when skyBox is false.

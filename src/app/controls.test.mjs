@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import '../testSupport/stubMgrs.mjs';
 import { installVueDom } from '../testSupport/vueDom.mjs';
-import { MAXIMUM_ZOOM_DISTANCE_M } from './zoomOutGuard.js';
+import { MAXIMUM_ZOOM_DISTANCE_M } from '../globe/cesium/zoomOutGuard.js';
 
 const { createApplicationControls } = await import('./controls.js');
 

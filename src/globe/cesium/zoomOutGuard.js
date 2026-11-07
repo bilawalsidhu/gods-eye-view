@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { governorRequestRender } from '../renderGovernor.js';
+import { governorRequestRender } from '../../renderGovernor.js';
 
 /** Whole-Earth input limit; explicit camera destinations can go farther. */
 export const MAXIMUM_ZOOM_DISTANCE_M = 40_000_000;

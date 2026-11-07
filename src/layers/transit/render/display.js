@@ -573,8 +573,7 @@ function createTrail(engine, { id }) {
  * Where a click lands in the image before a sensor style bent it: the
  * surveillance lens's barrel distortion and the sensors' pixelation grid
  * (src/styles/surveillance.js, thermal.js), read from the engine's own
- * style state (render.style). Cesium has none: there clicks pick where they
- * land.
+ * style state (render.style), on every engine that draws the styles.
  */
 function styleClickPosition(engine, style, position) {
   if (style !== 'thermal' && style !== 'surveillance') return position;

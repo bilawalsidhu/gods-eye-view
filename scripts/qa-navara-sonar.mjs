@@ -252,7 +252,7 @@ await strict.run({}, async (browser) => {
   );
   await page.evaluate(() => window.__qaSonarSet.destroy());
 
-  // Cesium keeps its command adapter; its engine draws no sonar.
+  // Cesium draws contact sonar through its engine command adapter.
   await strict.switchTo(page, 'cesium');
   await page.evaluate(() => {
     const { styleManager } = window.__godsEyeView;
@@ -267,8 +267,8 @@ await strict.run({}, async (browser) => {
     gpu: document.documentElement.dataset.cyberSonarGpu,
   }));
   check(
-    'Cesium: the command adapter treats contacts, the engine none',
-    cesium.setContactSonar === 'undefined' && cesium.gpu === 'supported',
+    'Cesium: the engine command adapter treats contacts',
+    cesium.setContactSonar === 'function' && cesium.gpu === 'supported',
     cesium,
   );
   await page.evaluate(() =>

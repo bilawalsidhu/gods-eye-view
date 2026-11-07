@@ -218,6 +218,12 @@ one application, and only the globe-bound parts move to the next engine.
     engines, and `scripts/qa-ground-looks.mjs` drew the jam line and the
     route on Cesium as the old materials did, with no pixel changed at four
     moments of the pulse and the dashes.
+- **Engine-owned effects and camera input.** Cesium's viewer, atmosphere
+  compatibility, zoom guard, starry sky and map implementation live in
+  `src/globe/cesium/`. Styles, bloom and contact sonar use `engine.render`.
+  Camera input suspension is counted on every engine; the last resume restores
+  the state before the first suspension. Cockpit, imagery-box drawing, CCTV
+  calibration and infrastructure flights use that shared ownership API.
 - **Rasters on the ground** (`engine.imagery`) are required of every engine
   too: layers of Web Mercator tiles from a URL template or of one image (a
   canvas, an image, RGBA bytes or an image URL) over a rectangle, each with
@@ -232,8 +238,9 @@ one application, and only the globe-bound parts move to the next engine.
     field and the Bhote Koshi event imagery draw through it. Weather and
     wind require the engine's imagery primitive; the manifest supplies
     each engine's wind streamlines through the display's flow backend.
-  - `engine.maps.addOverlay` (Navara's native raster layers for Sea Marks
-    and Ski Pistes) stays until those overlays move to `engine.imagery`.
+  - Sea Marks and Ski Pistes use `engine.imagery` on engines without
+    `maps.addOverlay`; Navara retains its native raster path for tile detail.
+    Imported KML/KMZ ground images use imagery on both engines.
   - On November 7, 2026, `scripts/qa-ground-suite.mjs --only=imagery:` (the
     imagery checks with pixels) passed 2 of 2 on both engines, and
     `scripts/qa-imagery-compare.mjs` found the heatmap and Recent Imagery
@@ -308,8 +315,8 @@ one application, and only the globe-bound parts move to the next engine.
   restored view and the engine notice.
 - **Cesium only on demand.** The production build loads `/cesium/Cesium.js`
   when a Cesium globe starts or a Navara user turns on a feature that still
-  uses Cesium's maths or entity model (traffic, Street Level, the Bhote Koshi
-  event and locator, geo import; `src/app/loadCesium.js`). App code does its maths with `src/geo`, a Cesium-free
+  uses Cesium's maths or entity model (the Bhote Koshi event and locator;
+  `src/app/loadCesium.js`). Imported files use plain records and load no SDK. App code does its maths with `src/geo`, a Cesium-free
   port of the vector, ellipsoid, transform and time functions that
   `bitExact.test.mjs` compares with Cesium bit for bit.
   **Invariant: no module reads Cesium while it loads**
@@ -956,7 +963,7 @@ Keyless terrain tiles retry when Re:Earth throttles them. The browser fetches
 `terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain` directly; no
 proxy in this repository sees those requests (`/api/terrain/heights` is the
 separate point-height endpoint), and the upstream edge answers zoom-out bursts
-with HTTP 429 under load. `src/maps/terrain.js` hands Cesium a `Resource`
+with HTTP 429 under load. `src/globe/cesium/terrain.js` hands Cesium a `Resource`
 whose retry policy (`src/maps/terrainRetry.js`) every derived tile fetch
 inherits: 429, 502, 503 and 504 replies retry up to three times, 750 ms
 doubling to a 15 s cap, with every retry waiting behind one shared cooldown
@@ -1907,7 +1914,7 @@ provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.
 
 ## Sky background
 
-`src/sky/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
+`src/globe/cesium/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
 Bright Star Catalogue stars and a soft ESO/S. Brunier Milky Way. Both layers
 rotate from ICRF/J2000 into the Earth-fixed frame at the scene clock, with
 a TEME fallback while Cesium's IAU 2006 tables load. Bundled assets and
@@ -1953,11 +1960,15 @@ remain unchanged.
 
 ## Visual effects ownership
 
-VisualEffects owns style-stage creation, crossfades, animation scheduling, bloom
-and sharpen. Display supplies actions and renders settings; effect execution has
-no DOM dependency. Existing presets and the 500 ms transition remain unchanged.
-Stopping the controller revokes animation before asynchronous UI teardown; final
-destruction removes its stages and restores the borrowed bloom configuration.
+VisualEffects owns crossfades and animation scheduling and drives styles, bloom
+and sharpening through `engine.render` on both engines. Cesium's post stages,
+including the Anime Milky Way fade, live in `src/globe/cesium/postStages.js`;
+its sonar lives in `sonar.js` and `sonarCommands.js`. Display supplies actions
+and renders settings; effect execution has no DOM dependency. Existing presets
+and the 500 ms transition remain unchanged. Stopping the controller revokes
+animation before asynchronous UI teardown; controller destruction disables the
+effects. Engine destruction removes stages and restores borrowed bloom.
+Cesium advertises visualStyles, bloom and contactSonar, but not cloudCover.
 Snow is no longer a visual preset. A share link that names it, in either the
 long or compact form, opens on Normal and drops the Snow shader parameters. A
 view passed to embed mode or `show_in_gods_eye_view`, and a saved scene shot,
@@ -6229,14 +6240,15 @@ request viewbox and continues searching without that geographic preference.
 ### Import Your Own Files (October 2026)
 
 - UTILITIES ▸ **Import** reads GeoJSON (`.geojson`/`.json`), KML, KMZ and GPX from the picker or a file drop anywhere in the app. Each file gets show/hide, Fly-to and Remove controls. GeoJSON and GPX use the row's color; KML/KMZ retain their styles and show a hatched swatch. The file bytes remain on the device for the page session. Rendered overlays can appear in map screenshots sent through voice or other existing screenshot tools.
-- **Ground and height.** GeoJSON XYZ coordinates become ground footprints. KML ground lines/rings are tessellated; static recorded tracks preserve their original vertices, segment gaps and explicit altitude modes. KML with absolute/relative altitude keeps that meaning. Ground pins resolve in batches of 256 against loaded terrain and, in the nearby camera footprint on photoreal maps, `clampToHeightMostDetailed`, then draw in one owned native BillboardCollection per file, with static positions and no per-frame point Entity visualizer or clamping callbacks. Point metadata remains in `dataSource.importedEntities` for framing/style inspection; non-point geometry stays in the normal source collection. Pin collections mount only after source admission, follow file show/hide, and are destroyed on removal. Settled camera/map-source changes and completed terrain loads refresh visible files through the same serial queue; distant points retain their latest available height. No detailed worldwide terrain sweep is started. Nearby mesh sampling can add requests/time; configured photoreal providers require separate validation. The depth test is disabled for ground pins, matching Draw's marker visibility policy.
-- **Navigation.** Row Fly-to uses `runImmediateNavigation('file', …)`; Cockpit can refuse it and existing follow/track ownership is released first. Automatic Fly-to is stamped when a batch is submitted and reasserted before flying. Pointer/wheel gestures and newer navigation supersede it, including time spent in the queue. Framing uses every finite visible point/path/polygon-hole/wall vertex plus rotated overlay bounds, with viewport-aware range and a nadir view. The target uses available terrain/cached ground height and the ground guard on arrival. Empty footprints never fall back to deferred `viewer.flyTo`.
+- **Ground and height.** GeoJSON XYZ coordinates become ground footprints. `geoFileImport.js` and `geoImportKml.js` produce plain records; one `geoImportDisplay.js` draws them on ground, movers, lines and imagery on every engine, without loading Cesium. Ground paths follow great circles and retain segment gaps. Pins use square sprite canvases preserving Cesium's icon placement and styles. Ground and relative pins sample loaded terrain and, at camera heights below 250 km with a tile surface, synchronous `engine.surface.clampToHeight`; absolute pins keep their height. Refreshes run in batches of 256 through the controller's serial queue after camera/map changes and terrain completion, retaining the last available height on misses. Ground pins ignore scene depth and are horizon-culled. Removal destroys every owned drawing set.
+- **Drawing limits.** Wall fills, extruded prisms and `gx:LatLonQuad` are counted as undrawn; wall top edges and polygon top geometry remain. Raised polygon fills drape while their outlines retain altitude. Ground-overlay rotation, altitude and RGB tint are not applied; rhumb edges become great circles. These appearance limits are not part of the undrawn count. Packed image overlays draw on both engines.
+- **Navigation.** Row Fly-to uses `runImmediateNavigation('file', …)`; Cockpit can refuse it and existing follow/track ownership is released first. Automatic Fly-to is stamped when a batch is submitted and reasserted before flying. Pointer/wheel gestures and newer navigation supersede it, including time spent in the queue. Framing uses every finite visible point/path/polygon-hole/wall vertex plus rectangular overlay bounds, with viewport-aware range and a nadir view. The target uses available terrain/cached ground height and the ground guard on arrival. Empty footprints never fall back to deferred `viewer.flyTo`.
 - **Clock.** Imports expose no source clock and no entity availability. KML times/view metadata are removed before loading; recorded tracks become static lines. GPX segments remain separate and GPX times are ignored. The shared clock stays unchanged.
-- **Input handling.** Coordinates and GeoJSON geometry types are checked before Cesium allocation. Only short plain names reach GeoJSON property bags; file IDs, custom CRS and styling properties are removed. KML feature/geometry IDs are removed while Style/StyleMap references remain. Local style references are trimmed, incomplete style pairs removed, hidden-folder flags normalized to the import's show control, and unsupported prototype-named elements removed. UTF-16 BOMs and common KML namespace export defects are handled. Empty drawable content is refused. A loader failure or timeout does not hold the next file indefinitely; teardown aborts pending waits.
-- **References and images.** File-authored remote links/icons/styles, network links, models and screen/photo overlays are removed. Packed KMZ and embedded PNG/JPEG/GIF/WebP/BMP images remain local; decoded dimensions are checked before image decoding against a total 16-megapixel and 8,192-pixel-side budget per file. Blocked IconStyle images fall back to local pins; authored empty icons remain empty. Colored overlays without an Icon survive; overlays with a removed external image are dropped. Metadata, native labels and descriptions are removed, and generated pins share one lossless image URL per canvas.
-- **Bounds.** File size ≤50 MiB; inflated KMZ ≤120 MiB; ≤20,000 entities (including multipart children and Folder containers); ≤250,000 positions; ≤2,000 normalized style definitions and distinct image links; ≤12 files per session. Exact repeated styles share definitions without changing inheritance or inline overrides. Files of 20–30 MB fit the byte budget, subject to geometry/image limits. Refusals name a reason and batches continue; with multiple failures the hint shows the first reason.
-- **Lifecycle and keyboard.** `createApplicationTools` wires `initGeoFileImport` with viewer, navigation, ground services and map-source subscription. Destroy aborts pending work, unsubscribes, removes data sources, revokes blob URLs, removes document/canvas listeners and releases `window.__gevGeoImport`. List rebuilds retain keyboard focus; removing a row hands focus to the next row, else the previous row, else Import.
-- **Validation.** `node scripts/qa-geo-import.mjs` covers all four formats and real painted show/hide. Run `node scripts/qa-geo-import-regressions.mjs` against both dev and preview for XYZ/track heights, failure recovery, namespace/BOM support, portrait framing and panel drops. `node scripts/qa-geo-import-large.mjs [--file /absolute/path/sample.kml] [--expect-local-pins]` checks a 27.6 MB repeated-style file, native style/image equivalence, large-file painted output and frame times. It records the WebGL renderer; software-rendered runs do not establish GPU performance. Unit tests live beside the data/controller/framing modules.
+- **Input handling.** Coordinates and GeoJSON geometry types are checked before drawing allocation. Only short plain names reach the record model; file IDs, custom CRS and styling properties are removed. KML feature/geometry IDs are removed while Style/StyleMap references remain. Local style references are trimmed, incomplete style pairs removed, hidden-folder flags normalized to the import's show control, and unsupported prototype-named elements removed. UTF-16 BOMs and common KML namespace export defects are handled. Empty drawable content is refused. A loader failure or timeout does not hold the next file indefinitely; teardown aborts pending waits.
+- **References and images.** File-authored remote links/icons/styles, network links, models and screen/photo overlays are removed. Packed KMZ and embedded PNG/JPEG/GIF/WebP/BMP images remain local; decoded dimensions are checked before image decoding against a total 16-megapixel and 8,192-pixel-side budget per file. Blocked IconStyle images fall back to local pins; authored empty icons remain empty. Colored overlays without an Icon survive; overlays with a removed external image are dropped. Metadata, native labels and descriptions are removed, and points with the same icon look share a sprite set and atlas canvas.
+- **Bounds.** File size ≤50 MiB; inflated KMZ ≤120 MiB; ≤20,000 drawable records (including multipart children); ≤250,000 positions; ≤2,000 normalized style definitions and distinct image links; ≤12 files per session. Exact repeated styles share definitions without changing inheritance or inline overrides. Files of 20–30 MB fit the byte budget, subject to geometry/image limits. Refusals name a reason and batches continue; with multiple failures the hint shows the first reason.
+- **Lifecycle and keyboard.** `createApplicationTools` wires `initGeoFileImport` with the scene engine, navigation, ground services and map-source subscription. Detach destroys drawings and revokes packed-image URLs; reattach reparses the retained file bytes and restores visibility. Destroy aborts pending work, unsubscribes, removes drawings, revokes blob URLs, removes document/canvas listeners and releases `window.__gevGeoImport`. List rebuilds retain keyboard focus; removing a row hands focus to the next row, else the previous row, else Import.
+- **Validation.** `node scripts/qa-geo-import.mjs` covers all four formats and real painted show/hide. Run `node scripts/qa-geo-import-regressions.mjs` against both dev and preview for XYZ/track heights, failure recovery, namespace/BOM support, portrait framing and panel drops. `node scripts/qa-geo-import-large.mjs [--file /absolute/path/sample.kml] [--expect-local-pins]` checks a 27.6 MB repeated-style file, effective style equivalence against a native Cesium control, large-file painted output and frame times. It records the WebGL renderer; software-rendered runs do not establish GPU performance. Unit tests live beside the data/controller/framing modules.
 
 ### Recent Imagery (September 2026)
 

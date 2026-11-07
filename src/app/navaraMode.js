@@ -15,18 +15,6 @@ import {
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
 import { navaraDrawSurface } from '../annotations/drawInputNavara.js';
 
-/**
- * An imported file's data source drawn on `engine` with Navara's `views`
- * (UTILITIES ▸ Import); the drawing loads on first use, like the layers'
- * Navara renderers.
- */
-async function drawImported(engine, views, dataSource) {
-  const { drawImportedSource, measureImportImages } =
-    await import('../layers/shared/render/navaraStory.js');
-  const sizes = await measureImportImages(dataSource);
-  return drawImportedSource(engine, views, dataSource, { sizes });
-}
-
 /** The Navara globe module, loaded on demand. */
 const loadNavaraGlobeModule = async () =>
   (await import('../globe/navara/index.js')).createNavaraGlobe;
@@ -165,8 +153,8 @@ export async function createNavaraScene({
 
 /**
  * The Navara tool backend (src/app/tools.js) of one Navara scene: where the
- * annotation board, Draw and Import draw (on the engine and Navara's view;
- * null without the view), the Recent Imagery panel's globe, the render
+ * annotation board and Draw draw (on the engine and Navara's view; null
+ * without the view), the Recent Imagery panel's globe, the render
  * governor on the engine, and this engine's own parts: the daylight of a
  * restored view and the engine notice.
  */
@@ -181,15 +169,6 @@ export function navaraToolBackend({ engine }) {
     // The session's tool on the engine's input and preview
     // (src/annotations/drawInputNavara.js).
     draw: () => ({ surface: navaraDrawSurface(engine) }),
-    // The session's files drawn by src/layers/shared/render/navaraStory.js;
-    // what Navara leaves out of them is reported in the control's hint.
-    geoImport: () =>
-      drawn
-        ? {
-            engine,
-            draw: (dataSource) => drawImported(engine, views, dataSource),
-          }
-        : null,
     recentImagery: () => ({ engine }),
     // Holds drive engine.render.setContinuous; requests go to the engine. A
     // parked engine uninstalls it (createNavaraScene suspend).

@@ -1,15 +1,14 @@
 import { releaseCameraVerbs } from '../cameraVerbs.js';
 import { createApplicationOperations } from './operations.js';
-import * as Cesium from 'cesium';
 import {
   createApplicationViewer,
   installFreeLookHeightLimit,
   installTrackpadPinchZoom,
-} from '../app/viewer.js';
+  loadCesiumPhotorealTileset,
+} from '../globe/cesium/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
-import { loadPhotorealisticTileset } from '../mapStartup.js';
 import { initLogoGaze } from '../logoGaze.js';
 import {
   uninstallRenderGovernor,
@@ -174,7 +173,7 @@ async function createRenderer({
     googleApiKey || googleTokens || cesiumToken
       ? t('Loading Google 3D Tiles...')
       : t('Loading the keyless globe...');
-  const photoreal = await loadPhotorealisticTileset(Cesium, {
+  const photoreal = await loadCesiumPhotorealTileset({
     googleApiKey,
     googleTokens,
     cesiumToken,

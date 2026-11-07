@@ -1,4 +1,4 @@
-import { trackingEventTypes } from './render/cesiumConstants.js';
+import { trackingEventTypes } from '../globe/cesium/screenEvents.js';
 import { isPointerFree } from './inputOwnership.js';
 
 export const MAX_TRACKING_CLICK_TRAVEL_PX = 6;

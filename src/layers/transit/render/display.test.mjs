@@ -764,6 +764,55 @@ test('sensor styles drawn by the engine move a click to the pixel the shader sho
   engine.destroy();
 });
 
+test("on the Cesium engine the surveillance lens and FLIR's pixel grid move a click too", () => {
+  const h = cesiumHarness();
+  // The scene's post stages, which draw the styles.
+  h.viewer.scene.postProcessStages = {
+    bloom: { enabled: false, uniforms: {} },
+    add() {},
+    remove() {},
+  };
+  Object.assign(h.viewer.scene.canvas, {
+    clientWidth: 1920,
+    clientHeight: 1080,
+    width: 1920,
+    height: 1080,
+  });
+  const state = { _stylePreset: 'surveillance', _vehicles: new Map() };
+  const display = createTransitDisplay(h.engine, {
+    state,
+    services: {},
+    drawAtlas: transitTestAtlas,
+  });
+  display.attach();
+  const seen = [];
+  display.bindClick(
+    ({ x, y }) => seen.push([x, y]),
+    () => true,
+  );
+  h.click({ x: 1440, y: 540 });
+  assert.deepEqual(seen.at(-1), [1440, 540], 'no style, no bend');
+  h.engine.render.setStyle('surveillance', {
+    intensity: 1,
+    uniforms: { pixelation: 1 },
+  });
+  h.click({ x: 1440, y: 540 });
+  near(seen.at(-1)[0], 1472, 'barrel distortion');
+  near(seen.at(-1)[1], 540, 'on the axis');
+  near(h.picked().at(-1).x, 1472, 'the engine picks where the lens drew');
+  state._stylePreset = 'thermal';
+  h.engine.render.setStyle('surveillance', { intensity: 0 });
+  h.engine.render.setStyle('thermal', {
+    intensity: 1,
+    uniforms: { pixelation: 1.5 },
+  });
+  h.click({ x: 100.9, y: 200.1 });
+  near(seen.at(-1)[0], 100.5, 'pixel grid x');
+  near(seen.at(-1)[1], 201, 'pixel grid y');
+  display.destroy();
+  h.engine.destroy();
+});
+
 test('terrain answers the floor unless photoreal tiles hide the globe', async () => {
   const engine = createFakeEngine();
   const display = createTransitDisplay(engine, {

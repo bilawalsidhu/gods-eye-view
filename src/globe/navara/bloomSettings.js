@@ -3,7 +3,7 @@
 // bloomStrengthFromIntensity, 0..1) as postprocessing BloomEffect settings,
 // and the bloom port createNavaraEngine takes. bloom.js adds the effect.
 //
-// Cesium's bloom stage (src/ui/visualEffects.js applyBloomIntensity) eases
+// Cesium's bloom stage (src/globe/cesium/postStages.js bloomUniforms) eases
 // the strength above a 0.06 dead zone (smoothstep) into a lower contrast, a
 // brighter offset and a wider blur: more of the frame glows, further out.
 // The same eased value drives the threshold, softness, blur radius and

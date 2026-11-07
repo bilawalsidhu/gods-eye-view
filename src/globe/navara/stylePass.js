@@ -33,7 +33,7 @@ import {
 } from 'three';
 
 export const STYLES_EFFECT_KEY = 'gevStyles';
-/** Intensity under which a style draws nothing (as VisualEffects disables a stage). */
+/** Intensity under which a style draws nothing (as Cesium disables a stage). */
 const STYLE_VISIBLE_INTENSITY = 0.001;
 
 const VERTEX_SHADER = /* glsl */ `precision highp float;

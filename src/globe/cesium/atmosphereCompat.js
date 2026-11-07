@@ -39,7 +39,7 @@
  *     boost. Parking our fix on `enabled` would let that restore resurrect
  *     the broken shader mid-session; `renderable` is orthogonal to it.
  *
- * @module app/atmosphereCompat
+ * @module globe/cesium/atmosphereCompat
  */
 
 /** Minimal vertex shader reproducing the exact out-param-to-varying bind. */

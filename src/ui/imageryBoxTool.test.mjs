@@ -12,9 +12,9 @@ import {
 } from './imageryBoxTool.js';
 import { boxToolFakes } from '../layers/recentImagery/testDoubles.mjs';
 
-function fixture(options = {}, fakeOptions = {}) {
+function fixture(options = {}) {
   resetPointerOwnership();
-  const fakes = boxToolFakes(fakeOptions);
+  const fakes = boxToolFakes();
   const boxes = [];
   const cancels = [];
   const actives = [];
@@ -163,11 +163,11 @@ test('destroy mid-drag restores the camera, releases the claim and clears the pr
 });
 
 test('blur and a cancelled pointer during a drag return the camera, the preview and the pointer', () => {
-  const f = fixture({}, { suspend: true });
+  const f = fixture();
   f.tool.start();
   f.down({ x: 250, y: 125 });
   assert.equal(f.camera.suspended, 1, "the engine's counted suspension");
-  assert.equal(f.camera.inputs, true, 'the app choice is left alone');
+  assert.equal(f.camera.choice, true, 'the app choice is left alone');
   f.windowRef.dispatch('blur', {});
   assert.equal(f.camera.suspended, 0);
   assert.equal(f.previews.at(-1), null);

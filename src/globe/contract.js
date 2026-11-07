@@ -232,16 +232,16 @@
  *   (the maths of the app's Cesium sharpen stage, whose `amount` uniform the
  *   Sharpen slider sets in 0.1..2.1). Omitted fields keep their value; a
  *   non-boolean `enabled` or a negative or non-finite `amount` throws a
- *   TypeError. Off with amount 1 until set. The Cesium engine only keeps the
- *   state: in Cesium mode the app's own post stage sharpens and mirrors its
- *   state here (src/ui/visualEffects.js).
+ *   TypeError. Off with amount 1 until set. Cesium draws it as a post stage
+ *   after the styles' (src/globe/cesium/postStages.js); the app's Display
+ *   controls drive it (src/ui/visualEffects.js).
  * @property {() => { enabled: boolean, amount: number }} sharpen
  *   The sharpening last set (a copy).
  * @property {readonly string[]} [visualStyles] Optional, with setStyle and
  *   style (capability `visualStyles`, see engineCapabilities): the
  *   full-frame styles the engine draws itself, by the app's style names
- *   (src/styles: retro, surveillance, thermal, anime, noir). Cesium has none:
- *   in Cesium mode the app's own post stages draw the styles
+ *   (src/styles: retro, surveillance, thermal, anime, noir). Cesium draws
+ *   each as its own post stage, Navara in one pass; the app drives them
  *   (src/ui/visualEffects.js).
  * @property {(name: string, options: { intensity?: number, uniforms?: Record<string, number> }) => void} [setStyle]
  *   Shows one style at `intensity` (0..1, 0 draws nothing; a crossfade shows
@@ -259,8 +259,8 @@
  *   bloomStrengthFromIntensity); at or under 0.06 nothing glows, as with
  *   Cesium's bloom stage, whose easing the engine follows. Omitted fields
  *   keep their value; a non-boolean `enabled` or a strength outside 0..1
- *   throws a TypeError. Off at strength 0 until set. Cesium has none: in
- *   Cesium mode the app drives the scene's own bloom stage.
+ *   throws a TypeError. Off at strength 0 until set. Cesium draws it with the
+ *   scene's own bloom stage, which it gives back on destroy.
  * @property {() => { enabled: boolean, strength: number }} [bloom] The bloom
  *   last set (a copy).
  * @property {(options: { coverage?: number | null }) => void} [setCloudCover]
@@ -282,8 +282,9 @@
  *   off (`active` false) every contact takes the neutral factor. Positions
  *   and picks are unchanged. Omitted fields keep their value; a bad value
  *   throws a TypeError. Takes effect on the next drawn frame (a call outside
- *   a frame requests one). Off until set. Cesium has none: in Cesium mode
- *   src/cyberSonarScene.js adapts Cesium's own draw commands.
+ *   a frame requests one). Off until set. Cesium adapts its native draw
+ *   commands and tints models (src/globe/cesium/sonar.js); the app hands
+ *   the state over every frame (src/cyberSonarEngine.js).
  * @property {() => ContactSonar} [contactSonar] The sonar last set (a copy).
  *
  * @typedef {object} ContactSonar
@@ -296,6 +297,22 @@
  * @property {number} sector The sector's width in degrees (0..360].
  *
  * @typedef {{ intensity: number, uniforms: Record<string, number> }} StyleState
+ *
+ * @typedef {object} GlobeInput
+ * @property {(type: InputType, listener: (event: InputEvent) => void, options?: InputOptions) => () => void} on
+ *   As in Cesium, a listener with a modifier fires only while that key is
+ *   held and one without fires only while no modifier is held.
+ * @property {(enabled: boolean) => void} setCameraInputs Whether the user's
+ *   drag, wheel and touch move the camera (Cesium's enableInputs). Under a
+ *   suspension the choice is kept and applies at the last resume.
+ * @property {() => () => void} suspendCameraInputs Camera inputs off until
+ *   the returned resume (idempotent): for an owner that holds the camera for
+ *   a while (the cockpit, a gizmo or box drag, a flight a gesture would
+ *   cancel). Suspensions count: inputs stay off until the last one resumes,
+ *   which brings back the state from before the first (Cesium: the
+ *   controller's enableInputs as it was), or what setCameraInputs set since.
+ * @property {() => boolean} cameraInputsEnabled Whether the user's gestures
+ *   move the camera now: on, and under no suspension.
  *
  * @typedef {object} PickResult
  * @property {any} id The picked entity or object id (a mover's or line's
@@ -638,9 +655,7 @@
  * @property {{ preUpdate: EngineEvent, preRender: EngineEvent, postRender: EngineEvent }} frames Listeners receive a timestamp in ms.
  * @property {GlobeRender} render
  * @property {GlobeSurface} surface
- * @property {{ on: (type: InputType, listener: (event: InputEvent) => void, options?: { modifier?: InputModifier }) => () => void, setCameraInputs: (enabled: boolean) => void }} input
- *   As in Cesium, a listener with a modifier fires only while that key is
- *   held and one without fires only while no modifier is held.
+ * @property {GlobeInput} input
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
  * @property {GlobeMaps} maps
  * @property {GlobeClock} clock
@@ -851,7 +866,12 @@ const SHAPE = {
     clampToHeightSupported: isBoolean,
     tilesLoaded: isFunction,
   },
-  input: { on: isFunction, setCameraInputs: isFunction },
+  input: {
+    on: isFunction,
+    setCameraInputs: isFunction,
+    suspendCameraInputs: isFunction,
+    cameraInputsEnabled: isFunction,
+  },
   credits: { addStatic: isFunction },
   clock: { now: isFunction, frameTime: isFunction },
   movers: { createSet: isFunction, list: isFunction },
@@ -911,10 +931,11 @@ const memberAt = (engine, path) =>
 
 /**
  * Which optional capabilities an engine has: { visualStyles, ... } as
- * booleans. A caller that refuses a feature on an engine without a Cesium
- * viewer (voice, say) asks here instead: Cesium draws these through the app's
- * own stages and reports false. `movers`, `lines`, `ground` and `imagery`
- * are required; they are reported too, true for every valid engine.
+ * booleans. A caller that refuses a feature on an engine without one
+ * (voice, say) asks here. Cesium and Navara draw the styles, bloom and
+ * contact sonar; only Navara has cloudCover. `movers`, `lines`, `ground`
+ * and `imagery` are required; they are reported too, true for every valid
+ * engine.
  */
 export function engineCapabilities(engine) {
   const whole = (members, prefix = '') =>

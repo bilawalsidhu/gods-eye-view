@@ -134,6 +134,26 @@ test('setCameraInputs toggles Navara camera control and user input cancels fligh
   ]);
 });
 
+test('suspendCameraInputs counts and keeps the setCameraInputs choice for the last resume', () => {
+  const { input, cameraOptions } = setup();
+  const on = { enableSpin: true, enableZoom: true, enableTilt: true };
+  const off = { enableSpin: false, enableZoom: false, enableTilt: false };
+  assert.equal(input.cameraInputsEnabled(), true);
+  const outer = input.suspendCameraInputs();
+  const inner = input.suspendCameraInputs();
+  assert.equal(input.cameraInputsEnabled(), false);
+  inner();
+  inner();
+  assert.deepEqual(cameraOptions.at(-1), off);
+  input.setCameraInputs(false);
+  outer();
+  assert.deepEqual(cameraOptions.at(-1), off);
+  assert.equal(input.cameraInputsEnabled(), false);
+  input.setCameraInputs(true);
+  assert.deepEqual(cameraOptions.at(-1), on);
+  assert.equal(input.cameraInputsEnabled(), true);
+});
+
 test('destroy removes every DOM listener and later subscriptions are inert', () => {
   const { canvas, input, destroy } = setup();
   input.on('click', () => {});
