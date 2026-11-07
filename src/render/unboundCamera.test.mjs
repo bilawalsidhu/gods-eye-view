@@ -69,6 +69,7 @@ const DRAW_FROM_CALLER = new Set([
   './layers/bikeshare',
   './layers/gnss',
   './layers/perimeters',
+  './layers/awareness',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

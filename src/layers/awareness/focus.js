@@ -1,6 +1,6 @@
-import * as Cesium from 'cesium';
 import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
-import { cameraOf } from '../../render/cesium/camera.js';
+import { cameraOf } from '../../render/rendererOf.js';
+import { clone, distance } from '../../geo/index.js';
 
 export function createFocus({ state: layerState, services, parts, source }) {
   const flightsLayer = services.flights;
@@ -75,7 +75,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
       layerId,
       id: String(known.id || known.mmsi),
       label: known.label || known.name || known.callsign || String(id),
-      position: Cesium.Cartesian3.clone(known.position),
+      position: clone(known.position),
     });
     return true;
   }
@@ -107,7 +107,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
   /**
    * Pick the observed candidate closest to the current view. This is intentionally
    * a navigation preference, not a risk, capability, or affiliation calculation.
-   * @param {Array<{position: Cesium.Cartesian3}>} candidates Observed candidates.
+   * @param {Array<{position: {x: number, y: number, z: number}}>} candidates Observed candidates.
    * @returns {Object|null} The best currently observable candidate.
    */
 
@@ -121,13 +121,10 @@ export function createFocus({ state: layerState, services, parts, source }) {
     let closestDistance = Infinity;
     for (const candidate of candidates) {
       if (!candidate?.position) continue;
-      const distance = Cesium.Cartesian3.distance(
-        cameraPosition,
-        candidate.position,
-      );
-      if (Number.isFinite(distance) && distance < closestDistance) {
+      const metres = distance(cameraPosition, candidate.position);
+      if (Number.isFinite(metres) && metres < closestDistance) {
         closest = candidate;
-        closestDistance = distance;
+        closestDistance = metres;
       }
     }
     return closest;

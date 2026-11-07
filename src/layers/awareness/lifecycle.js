@@ -231,6 +231,7 @@ export function createLifecycle({
       detachRuntimeListeners();
       parts.panel.clearPanel();
       parts.rendering.removeDirectionOverlay();
+      parts.rendering.disposeVisual();
       layerState.subjectListener = null;
       layerState.contextListener = null;
       layerState.clearListener = null;

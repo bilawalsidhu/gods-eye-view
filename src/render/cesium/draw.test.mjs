@@ -931,3 +931,71 @@ test('the fires layer draws its heat cells as ground fills through the Cesium dr
   layer.destroy(viewer);
   assert.equal(grounds().length, 0);
 });
+
+test('the context layer draws its rim as an outlined ellipse on a viewer of its own', async () => {
+  const { createRendering } =
+    await import('../../layers/awareness/rendering.js');
+  const { createState } = await import('../../layers/awareness/state.js');
+  const { scene } = drawOver();
+  const state = createState({ services: {} });
+  state.viewer = { scene };
+  const rendering = createRendering({
+    state,
+    services: {
+      geometry: {},
+      render: { governorRequestRender() {} },
+    },
+    parts: {},
+  });
+  const subject = (lon) => ({
+    layerId: 'military',
+    id: 'a',
+    position: Cesium.Cartesian3.fromDegrees(lon, 0, 9000),
+  });
+  rendering.renderVisual(subject(0));
+  const outlineOf = () => {
+    const [host] = scene.added;
+    const primitives = [];
+    for (let i = 0; i < host.length; i++) primitives.push(host.get(i));
+    const outline = primitives.find(
+      (p) =>
+        p instanceof Cesium.Primitive &&
+        p.geometryInstances.geometry instanceof Cesium.EllipseOutlineGeometry,
+    );
+    assert.ok(outline, 'an outline geometry, as the entity drew');
+    assert.ok(
+      !primitives.some(
+        (p) =>
+          p instanceof Cesium.Primitive &&
+          p.geometryInstances.geometry instanceof Cesium.EllipseGeometry,
+      ),
+      'and no fill',
+    );
+    return outline;
+  };
+  const outline = outlineOf();
+  const { geometry, attributes } = outline.geometryInstances;
+  assert.equal(geometry._semiMajorAxis, 250_000);
+  assert.equal(geometry._height, 2_500);
+  const center = Cesium.Cartographic.fromCartesian(geometry._center);
+  assert.ok(Math.abs(center.longitude) < 1e-9);
+  assert.deepEqual(
+    [...attributes.color.value],
+    [0x62, 0xb5, 0xff, Math.round(0.72 * 255)],
+  );
+  // Small moves keep the ring; one past 250 m moves it.
+  rendering.renderVisual(subject(0.001));
+  assert.equal(outlineOf(), outline);
+  rendering.renderVisual(subject(0.01));
+  assert.notEqual(outlineOf(), outline);
+  // Re-initialized on another viewer, the same subject's rim moves there.
+  const other = drawOver().scene;
+  state.viewer = { scene: other };
+  rendering.renderVisual(subject(0.01));
+  assert.equal(scene.added.length, 0, 'gone from the old viewer');
+  assert.equal(other.added.length, 1, 'drawn on the new one');
+  rendering.clearVisual();
+  assert.equal(other.added[0].length, 1, 'only the empty polyline collection');
+  rendering.disposeVisual();
+  assert.equal(other.added.length, 0);
+});

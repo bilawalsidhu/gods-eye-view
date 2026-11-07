@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
   createCyberSonarSampler,
@@ -12,6 +11,21 @@ import {
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
 import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
 import { formatAwarenessDirection } from './presentation.js';
+import { drawOf, findCamera } from '../../render/rendererOf.js';
+import {
+  PI_OVER_TWO,
+  distance,
+  dot,
+  fromDegrees,
+  normalize,
+  sub,
+  toDegrees,
+  toLonLatH,
+  toRadians,
+} from '../../geo/index.js';
+
+/** Each instance's rim set id is its own. */
+let instances = 0;
 
 export function createRendering({
   state: layerState,
@@ -21,6 +35,9 @@ export function createRendering({
 }) {
   const { getKeyholeGeometry, celestialScreenAngle } = services.geometry;
   const { governorRequestRender } = services.render;
+  const rimSetId = `awareness:${++instances}:rim`;
+  /** The context rim's draw set, and the viewer it draws on. */
+  let rim = null;
 
   const CARDINALS = [
     ['N', 0],
@@ -146,9 +163,9 @@ export function createRendering({
       120,
       Math.min(geometry.radius - 48, geometry.radius * 0.66),
     );
-    const cameraHeading = layerState.viewer.camera.heading || 0;
-    const headingDeg =
-      (Math.round(Cesium.Math.toDegrees(cameraHeading)) + 360) % 360;
+    const pose = findCamera(layerState.viewer)?.pose();
+    const cameraHeading = pose?.heading || 0;
+    const headingDeg = (Math.round(toDegrees(cameraHeading)) + 360) % 360;
     const ring = {
       left: `${geometry.centerX - compassRadius}px`,
       top: `${geometry.centerY - compassRadius}px`,
@@ -164,8 +181,8 @@ export function createRendering({
       top: `${geometry.centerY - compassRadius + 39}px`,
     };
     const labels = root.labels.map((label) => {
-      const bearing = Cesium.Math.toRadians(label.bearing);
-      const angle = bearing - cameraHeading - Cesium.Math.PI_OVER_TWO;
+      const bearing = toRadians(label.bearing);
+      const angle = bearing - cameraHeading - PI_OVER_TWO;
       const labelRadius = compassRadius - 17;
       return {
         ...label,
@@ -193,19 +210,15 @@ export function createRendering({
         marker.hidden = true;
         continue;
       }
-      const direction = Cesium.Cartesian3.subtract(
-        item.position,
-        layerState.subject.position,
-        layerState.DIRECTION_SCRATCH[index],
-      );
-      if (Cesium.Cartesian3.magnitudeSquared(direction) < 1) {
+      const offset = sub(item.position, layerState.subject.position);
+      if (dot(offset, offset) < 1 || !pose) {
         marker.hidden = true;
         continue;
       }
-      Cesium.Cartesian3.normalize(direction, direction);
+      const direction = normalize(offset);
       const projection = celestialScreenAngle(
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.rightWC),
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.upWC),
+        dot(direction, pose.right),
+        dot(direction, pose.up),
         layerState.directionAngles[index],
       );
       if (projection.stable)
@@ -233,23 +246,15 @@ export function createRendering({
         transform: `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`,
       };
       const label = formatAwarenessLabel(item);
-      const subjectCartographic = Cesium.Cartographic.fromCartesian(
-        layerState.subject.position,
-        undefined,
-        layerState.SUBJECT_CARTOGRAPHIC_SCRATCH,
-      );
-      const targetCartographic = Cesium.Cartographic.fromCartesian(
-        item.position,
-        undefined,
-        layerState.TARGET_CARTOGRAPHIC_SCRATCH[index],
-      );
+      const subjectLocation = toLonLatH(layerState.subject.position);
+      const targetLocation = toLonLatH(item.position);
       const bearing =
-        subjectCartographic && targetCartographic
+        subjectLocation && targetLocation
           ? bearingBetweenCoordinates(
-              Cesium.Math.toDegrees(subjectCartographic.latitude),
-              Cesium.Math.toDegrees(subjectCartographic.longitude),
-              Cesium.Math.toDegrees(targetCartographic.latitude),
-              Cesium.Math.toDegrees(targetCartographic.longitude),
+              subjectLocation.lat,
+              subjectLocation.lon,
+              targetLocation.lat,
+              targetLocation.lon,
             )
           : null;
       const bearingText = Number.isFinite(bearing)
@@ -272,65 +277,72 @@ export function createRendering({
   }
 
   function clearVisual() {
-    if (layerState.visual?.entities && layerState.viewer) {
-      for (const entity of layerState.visual.entities)
-        layerState.viewer.entities.remove(entity);
+    if (layerState.visual && rim) {
+      rim.set.clear();
       // Idle mode renders only on request; a removed ring must not linger.
       governorRequestRender('awareness-visual');
     }
     layerState.visual = null;
   }
 
+  /** Let the rim's draw set go, as the layer is destroyed. */
+  function disposeVisual() {
+    clearVisual();
+    rim?.set.dispose();
+    rim = null;
+  }
+
+  /** The rim's draw set on the current viewer, made on first use. */
+  function rimSet() {
+    if (rim?.viewer !== layerState.viewer) {
+      rim?.set.dispose();
+      rim = {
+        viewer: layerState.viewer,
+        set: drawOf(layerState.viewer).shapes({ id: rimSetId }),
+      };
+    }
+    return rim.set;
+  }
+
+  /** The awareness radius as an outlined ellipse around the subject's ground point. */
+  function rimItem(lon, lat) {
+    return {
+      id: 'rim',
+      geometry: {
+        kind: 'ellipse',
+        center: { lon, lat, height: CONTEXT_RIM_HEIGHT_M },
+        semiMajor: AWARENESS_RADIUS_M,
+        semiMinor: AWARENESS_RADIUS_M,
+      },
+      fill: null,
+      outline: [0x62 / 255, 0xb5 / 255, 1, 0.72],
+      outlineOnly: true,
+      height: 'absolute',
+    };
+  }
+
   function renderVisual(subject) {
     if (!layerState.viewer || !subject?.position) return;
-    const cartographic = Cesium.Cartographic.fromCartesian(subject.position);
-    if (!cartographic) return;
-    const groundCenter = Cesium.Cartesian3.fromRadians(
-      cartographic.longitude,
-      cartographic.latitude,
-      0,
-    );
+    const location = toLonLatH(subject.position);
+    if (!location) return;
+    const { lon, lat } = location;
+    const groundCenter = fromDegrees(lon, lat, 0);
     const key = `${subject.layerId}:${subject.id}`;
-    if (layerState.visual?.key === key) {
-      // Large ellipse geometry is more reliable as a ConstantPositionProperty.
-      // Move it only after a meaningful displacement so live tracking does not
-      // churn ten large geometries for sub-pixel motion every 750 ms.
-      if (
-        Cesium.Cartesian3.distance(layerState.visual.center, groundCenter) >=
-        250
-      ) {
-        for (const entity of layerState.visual.entities)
-          entity.position.setValue(groundCenter);
-        Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
+    // A rim drawn on another viewer (the layer re-initialized) is redrawn.
+    if (layerState.visual?.key === key && rim?.viewer === layerState.viewer) {
+      // Move the large ring only after a meaningful displacement so live
+      // tracking does not rebuild it for sub-pixel motion every 750 ms.
+      if (distance(layerState.visual.center, groundCenter) >= 250) {
+        rimSet().set([rimItem(lon, lat)]);
+        layerState.visual.center = groundCenter;
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
       }
       return;
     }
     clearVisual();
-
-    const entities = [];
-
-    entities.push(
-      layerState.viewer.entities.add({
-        position: groundCenter,
-        ellipse: {
-          semiMajorAxis: AWARENESS_RADIUS_M,
-          semiMinorAxis: AWARENESS_RADIUS_M,
-          fill: false,
-          outline: true,
-          outlineColor:
-            Cesium.Color.fromCssColorString('#62b5ff').withAlpha(0.72),
-          height: CONTEXT_RIM_HEIGHT_M,
-        },
-      }),
-    );
-
-    layerState.visual = {
-      key,
-      entities,
-      center: Cesium.Cartesian3.clone(groundCenter),
-    };
+    rimSet().set([rimItem(lon, lat)]);
+    layerState.visual = { key, center: groundCenter };
     governorRequestRender('awareness-visual');
   }
   return {
@@ -342,6 +354,7 @@ export function createRendering({
     cancelDirectionOverlayUpdate,
     updateDirectionOverlay,
     clearVisual,
+    disposeVisual,
     renderVisual,
   };
 }

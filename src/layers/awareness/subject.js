@@ -3,8 +3,8 @@ import {
   AWARENESS_RADIUS_M,
   AWARENESS_RELATIONSHIP,
 } from '../../data/militaryAwarenessEngine.js';
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
+import { clone, distance, fromDegrees } from '../../geo/index.js';
 import {
   AWARENESS_QUERY_LIMIT,
   SOURCE_LABEL,
@@ -24,6 +24,8 @@ function localizeCoverageLabel(label) {
   if (within) return t('WITHIN {km} KM', { km: within[1] });
   return label;
 }
+
+/** @typedef {import('../../render/contract/common').Ecef} Ecef */
 
 export function createSubject({ state: layerState, services, parts, source }) {
   const aisLiveVesselsLayer = services.vessels;
@@ -184,10 +186,10 @@ export function createSubject({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Resolve the source-owned aircraft that currently owns Cesium tracking.
+   * Resolve the source-owned aircraft that currently owns the follow camera.
    * Both flight layers may briefly retain local state during a cross-layer
    * handoff, so the viewer's normalized tracked identity is the tie-breaker.
-   * @returns {{layerId: string, id: string, label: string, position: Cesium.Cartesian3}|null}
+   * @returns {{layerId: string, id: string, label: string, position: Ecef}|null}
    *   Detached awareness subject, or null when no flight owns the follow camera.
    */
 
@@ -232,7 +234,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
             subject,
             parts.history.historySourceItem(subject),
           ),
-          position: Cesium.Cartesian3.clone(subject.position),
+          position: clone(subject.position),
         });
         layerState.navigationIndex = layerState.navigationHistory.length - 1;
       }
@@ -247,10 +249,10 @@ export function createSubject({ state: layerState, services, parts, source }) {
    * Resolve the currently displayed position for a selected live subject. Flight
    * tracking owns the motion callback, so awareness consumes its cached display
    * position instead of creating a second tracker or extrapolation path.
-   * @param {{layerId: string, id: string, position: Cesium.Cartesian3}} subject Current subject.
+   * @param {{layerId: string, id: string, position: Ecef}} subject Current subject.
    * @param {object} [options] Position materialization controls.
    * @param {boolean} [options.allowCollectionMaterialization=true] Whether a layer-wide fallback may run.
-   * @returns {Cesium.Cartesian3|null} A cloned live position when one is available.
+   * @returns {Ecef|null} A cloned live position when one is available.
    */
 
   function resolveSubjectPosition(
@@ -263,7 +265,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       const trackedPosition = followed?.displayPosition?.();
       if (trackedPosition) {
         return {
-          position: Cesium.Cartesian3.clone(trackedPosition),
+          position: clone(trackedPosition),
           // Only the follow camera's own contact proves presence this way; a
           // different tracked entity says nothing about this subject.
           presence:
@@ -277,7 +279,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       // awareness position instead of allocating/scanning up to 1,000 contacts.
       if (!allowCollectionMaterialization) {
         return {
-          position: Cesium.Cartesian3.clone(subject.position),
+          position: clone(subject.position),
           presence: SUBJECT_PRESENCE.UNCHECKED,
         };
       }
@@ -292,7 +294,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     if (subject.layerId === 'ais-live-vessels') {
       if (!allowCollectionMaterialization) {
         return {
-          position: Cesium.Cartesian3.clone(subject.position),
+          position: clone(subject.position),
           presence: SUBJECT_PRESENCE.UNCHECKED,
         };
       }
@@ -305,7 +307,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     // Mapped installations come from static geometry, not a live feed: there is
     // nothing to be culled from.
     return {
-      position: Cesium.Cartesian3.clone(subject.position),
+      position: clone(subject.position),
       presence: SUBJECT_PRESENCE.LIVE,
     };
   }
@@ -319,10 +321,10 @@ export function createSubject({ state: layerState, services, parts, source }) {
    * ~11k contacts against a 1,000-row cap, so "not in the rows" is not "gone".
    * The rows are only consulted for a fresher position — a contact past the cap
    * keeps its last known position while still reading as present.
-   * @param {{id: string, position: Cesium.Cartesian3}} subject Current subject.
-   * @param {Array<{id: string, position: Cesium.Cartesian3}>} rows Live collection rows.
+   * @param {{id: string, position: Ecef}} subject Current subject.
+   * @param {Array<{id: string, position: Ecef}>} rows Live collection rows.
    * @param {{hasContact?: function}} layer The owning source layer.
-   * @returns {{position: Cesium.Cartesian3, presence: string}} Position plus presence verdict.
+   * @returns {{position: Ecef, presence: string}} Position plus presence verdict.
    */
 
   function collectionSubjectPosition(subject, rows, layer) {
@@ -340,8 +342,8 @@ export function createSubject({ state: layerState, services, parts, source }) {
           : SUBJECT_PRESENCE.UNCHECKED;
     return {
       position: current?.position
-        ? Cesium.Cartesian3.clone(current.position)
-        : Cesium.Cartesian3.clone(subject.position),
+        ? clone(current.position)
+        : clone(subject.position),
       presence,
     };
   }
@@ -402,7 +404,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const labelChanged = nextLabel !== layerState.subject.label;
     layerState.subject = { ...layerState.subject, position, label: nextLabel };
     const movementM = layerState.lastEvaluatedPosition
-      ? Cesium.Cartesian3.distance(layerState.lastEvaluatedPosition, position)
+      ? distance(layerState.lastEvaluatedPosition, position)
       : Infinity;
     if (
       !parts.model.awarenessRefreshRequired({
@@ -426,10 +428,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     }
     layerState.results = evaluateSubject(layerState.subject, sources);
     layerState.sourceRevision = nextSourceRevision;
-    layerState.lastEvaluatedPosition = Cesium.Cartesian3.clone(
-      position,
-      layerState.lastEvaluatedPosition,
-    );
+    layerState.lastEvaluatedPosition = clone(position);
     for (const cohort of layerState.results.cohorts) {
       const maxPage = Math.max(
         0,
@@ -461,7 +460,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       id: record.properties?.mmsi || record.id,
       label: record.label || record.id,
       memberNames: record.properties?.memberNames || [],
-      position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
+      position: fromDegrees(longitude, latitude, 0),
     };
   }
 

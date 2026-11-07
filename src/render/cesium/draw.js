@@ -706,17 +706,23 @@ export function createCesiumDraw({ scene, report }) {
           ring: outer,
         };
       }
-      case 'ellipse':
-        return {
-          fill: new Cesium.EllipseGeometry({
-            center: toCartesian(g.center),
-            semiMajorAxis: g.semiMajor,
-            semiMinorAxis: g.semiMinor,
-            rotation: g.rotation ?? 0,
-            height: heightOf(g.center),
-            extrudedHeight,
-          }),
+      case 'ellipse': {
+        const ellipse = {
+          center: toCartesian(g.center),
+          semiMajorAxis: g.semiMajor,
+          semiMinorAxis: g.semiMinor,
+          rotation: g.rotation ?? 0,
+          height: heightOf(g.center),
+          extrudedHeight,
         };
+        return {
+          fill: new Cesium.EllipseGeometry(ellipse),
+          // Its outline is an outline geometry, as the entities' ellipses draw it.
+          outline: item.outline
+            ? new Cesium.EllipseOutlineGeometry(ellipse)
+            : undefined,
+        };
+      }
       case 'rectangle':
         return {
           fill: new Cesium.RectangleGeometry({
@@ -878,7 +884,35 @@ export function createCesiumDraw({ scene, report }) {
           }),
         );
       }
-      if (item.outline && shape.ring)
+      if (item.outline && shape.outline) {
+        const color = toColor(item.outline);
+        host.add(
+          new Cesium.Primitive({
+            geometryInstances: new Cesium.GeometryInstance({
+              geometry: shape.outline,
+              attributes: {
+                color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
+              },
+              id,
+            }),
+            appearance: new Cesium.PerInstanceColorAppearance({
+              flat: true,
+              translucent: color.alpha < 1,
+              renderState: {
+                // Clamped to what the context draws, as entities do.
+                lineWidth:
+                  typeof scene.clampLineWidth === 'function'
+                    ? scene.clampLineWidth(item.outlineWidth ?? 1)
+                    : Math.min(
+                        item.outlineWidth ?? 1,
+                        scene.maximumAliasedLineWidth ?? 1,
+                      ),
+              },
+            }),
+            asynchronous: false,
+          }),
+        );
+      } else if (item.outline && shape.ring)
         outlines.add({
           positions: [...shape.ring, shape.ring[0]],
           width: item.outlineWidth ?? 1,

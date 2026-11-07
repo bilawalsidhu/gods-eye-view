@@ -74,13 +74,15 @@ export function fakeCameraPort({ pose = {}, viewRectangle = null } = {}) {
  * `roll`) and events come from the fake's own `changed`, `moveStart` and
  * `moveEnd`. A fake with `trackedEntityChanged` and `entities` follows
  * through the port, as the renderer does. Its credits are the renderer's
- * credits port over the fake's `creditDisplay`, if it has one. Binding a
- * viewer twice keeps the first. Returns the viewer.
+ * credits port over the fake's `creditDisplay`, if it has one; `ports`
+ * adds other ports (a fake draw port, say). Binding a viewer twice keeps the
+ * first. Returns the viewer.
  * @template {{camera: object}} V
  * @param {V} viewer
+ * @param {object} [ports]
  * @returns {V}
  */
-export function bindFakeCesiumCamera(viewer) {
+export function bindFakeCesiumCamera(viewer, ports = {}) {
   if (rendererOf(viewer)) return viewer;
   const fake = viewer.camera;
   const noEvent = { addEventListener: () => () => {} };
@@ -173,6 +175,10 @@ export function bindFakeCesiumCamera(viewer) {
       },
     },
   });
-  bindRenderer(viewer, { camera: port, credits: fakeCesiumCredits(viewer) });
+  bindRenderer(viewer, {
+    ...ports,
+    camera: port,
+    credits: fakeCesiumCredits(viewer),
+  });
   return viewer;
 }

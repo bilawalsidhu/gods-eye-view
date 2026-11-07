@@ -49,6 +49,7 @@ import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 import { withEntityRecord } from './entityRecords.js';
 import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -184,7 +185,7 @@ function installAwarenessRuntime({
     },
     container: new FakeElement(),
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() });
   const layers = new Map(
     AWARENESS_DEPENDENCIES.map((layerId) => [
       layerId,
