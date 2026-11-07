@@ -185,8 +185,11 @@ const LIVE_PACKS = [
     load: loadA22SourcesFromOpenDataHub,
   },
   {
+    // Opt-in until MnDOT confirms that third-party apps may relay its camera
+    // stills: the list and stills are public, but no reuse licence or terms
+    // are published for them (see DATA_SOURCES.md).
     name: 'mndot',
-    enabled: () => envEnabled('CCTV_MNDOT_ENABLED'),
+    enabled: () => envOptIn('CCTV_MNDOT_ENABLED'),
     load: loadMndotSources,
   },
 ];

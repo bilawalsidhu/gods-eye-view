@@ -300,25 +300,33 @@ function addConfiguredPack(count) {
 
 const runCatalog = () => createCctvCatalog({ sourceRoot: '/nonexistent' })();
 
-test('the MnDOT pack is in the catalog by default', async (t) => {
+test('CCTV_MNDOT_ENABLED=1 adds the MnDOT pack to the catalog', async (t) => {
   mockCatalog(t);
+  process.env.CCTV_MNDOT_ENABLED = '1';
   const sources = await runCatalog();
   assert.equal(sources.find((c) => c.id === 'mndot-c001')?.cityId, 'minnesota');
 });
 
-test('CCTV_MNDOT_ENABLED=0 makes no MnDOT request', async (t) => {
+test('without CCTV_MNDOT_ENABLED=1 the catalog makes no MnDOT request', async (t) => {
+  // Opt-in: MnDOT publishes no reuse licence for the list or the stills.
   const requested = mockCatalog(t);
-  process.env.CCTV_MNDOT_ENABLED = '0';
-  const sources = await runCatalog();
-  assert.ok(requested.length > 0, 'the other packs still refreshed');
-  assert.equal(
-    requested.some((href) => href.includes('dot.state.mn.us')),
-    false,
-  );
-  assert.ok(!sources.some((c) => c.cityId === 'minnesota'));
+  for (const value of [undefined, '', '0', 'true', 'yes', ' 2 ']) {
+    if (value === undefined) delete process.env.CCTV_MNDOT_ENABLED;
+    else process.env.CCTV_MNDOT_ENABLED = value;
+    requested.length = 0;
+    const sources = await runCatalog();
+    assert.ok(requested.length > 0, `other packs refreshed (${value})`);
+    assert.equal(
+      requested.some((href) => href.includes('dot.state.mn.us')),
+      false,
+      String(value),
+    );
+    assert.ok(!sources.some((c) => c.cityId === 'minnesota'), String(value));
+  }
 });
 
 test('CCTV_MNDOT_URL redirects the loader to the override', async (t) => {
+  process.env.CCTV_MNDOT_ENABLED = '1';
   process.env.CCTV_MNDOT_URL = 'https://mirror.test/camera_pub';
   const requested = mockCatalog(t);
   const sources = await runCatalog();
@@ -328,6 +336,7 @@ test('CCTV_MNDOT_URL redirects the loader to the override', async (t) => {
 });
 
 test('a failed MnDOT list leaves the other packs in the catalog', async (t) => {
+  process.env.CCTV_MNDOT_ENABLED = '1';
   addConfiguredPack(3);
   mockCatalog(t, { mndotStatus: 503 });
   const sources = await runCatalog();
@@ -336,6 +345,7 @@ test('a failed MnDOT list leaves the other packs in the catalog', async (t) => {
 });
 
 test('under a lowered catalog cap MnDOT shares round-robin, metro first', async (t) => {
+  process.env.CCTV_MNDOT_ENABLED = '1';
   addConfiguredPack(6);
   mockCatalog(t, {
     mndot: [
