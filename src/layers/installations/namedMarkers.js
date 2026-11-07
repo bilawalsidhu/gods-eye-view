@@ -1,55 +1,112 @@
 import { installationClassLabel, installationTitle } from './classLabel.js';
-import * as Cesium from 'cesium';
 import {
   MILITARY_LABEL_CAP,
   MILITARY_POINT_CAP,
 } from '../../data/militaryNames.js';
-import { LAYER_ID, COLOR_BY_CLASS } from './policy.js';
+import { fromDegrees } from '../../geo/index.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import {
+  cameraOf,
+  drawOf,
+  findFrame,
+  findQuery,
+} from '../../render/rendererOf.js';
+import {
+  CAMERA_CHANGED_THRESHOLD,
+  LAYER_ID,
+  COLOR_BY_CLASS,
+} from './policy.js';
 import { createInfrastructureOverlayEntry } from '../../data/infrastructureOverlayEntry.js';
+
+let instances = 0;
+
+/**
+ * A named marker's point item id. Not the bare record id: the shared pick
+ * registry resolves a draw item's pick to its item id, and a point click has
+ * never been this layer's for sibling layers' owner checks (a tracked
+ * aircraft is released by it, as by a click on empty map). The click handler
+ * reads the record id from the item's `meta`.
+ */
+export const namedPointId = (recordId) => `named:${recordId}`;
+
+const samePlace = (a, b) =>
+  Boolean(a) && a.x === b.x && a.y === b.y && a.z === b.z;
 
 /** Bounded point markers; the shared overlay owns text projection and decluttering. */
 export function createNamedMarkers({ state, services, parts, overlayHost }) {
+  const setId = `${LAYER_ID}:${++instances}:names`;
   let points = null;
   let entries = [];
   const markers = new Map();
-  const screen = new Cesium.Cartesian2();
-  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
   let shownPoints = 0;
+  /** Where each drawn point item is, by item id. */
+  let drawn = new Map();
   let ordered = [];
-  const viewMatrix = new Cesium.Matrix4();
+  let lastPose = null;
   let width = 0,
     height = 0;
   let removeChanged = null,
     removeEnd = null,
     removeFrame = null;
 
-  function refresh() {
+  /** Whether the eye moved or the canvas resized since the last refresh. */
+  function viewChanged(viewer, pose) {
+    const same = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
+    return (
+      !lastPose ||
+      !same(pose.position, lastPose.position) ||
+      !same(pose.direction, lastPose.direction) ||
+      !same(pose.up, lastPose.up) ||
+      width !== viewer.scene.canvas.clientWidth ||
+      height !== viewer.scene.canvas.clientHeight
+    );
+  }
+
+  // Reused projection buffers, grown to the marker count.
+  let worldXyz = new Float64Array(0);
+  let screenXy = new Float32Array(0);
+
+  function refresh(pose = null) {
     const viewer = state.viewer;
     if (!state.enabled || !points) return;
     width = viewer.scene.canvas.clientWidth;
     height = viewer.scene.canvas.clientHeight;
-    if (viewer.camera.viewMatrix)
-      Cesium.Matrix4.clone(viewer.camera.viewMatrix, viewMatrix);
-    occluder.cameraPosition = viewer.camera.positionWC;
-    shownPoints = 0;
+    pose ??= cameraOf(viewer).pose();
+    lastPose = {
+      position: { ...pose.position },
+      direction: { ...pose.direction },
+      up: { ...pose.up },
+    };
+    // The ellipsoid horizon from the eye, the test the draw set's own
+    // horizon cull makes, so the count agrees with what is drawn.
+    const horizon = horizonFrom(pose.position);
+    if (worldXyz.length < ordered.length * 3) {
+      worldXyz = new Float64Array(ordered.length * 3);
+      screenXy = new Float32Array(ordered.length * 2);
+    }
+    let shown = 0;
     for (let index = 0; index < ordered.length; index++) {
       const marker = ordered[index];
       const point = marker.point;
-      point.show = marker.named && occluder.isPointVisible(point.position);
+      point.show = marker.named && horizon.isPointVisible(point.position);
       if (!point.show) continue;
-      const projected = Cesium.SceneTransforms.worldToWindowCoordinates(
-        viewer.scene,
-        point.position,
-        screen,
-      );
-      if (
-        projected &&
-        screen.x >= 0 &&
-        screen.y >= 0 &&
-        screen.x < width &&
-        screen.y < height
-      )
-        shownPoints++;
+      worldXyz[shown * 3] = point.position.x;
+      worldXyz[shown * 3 + 1] = point.position.y;
+      worldXyz[shown * 3 + 2] = point.position.z;
+      shown++;
+    }
+    shownPoints = 0;
+    const query = findQuery(viewer);
+    if (!query || !shown) return;
+    query.projectMany(
+      worldXyz.subarray(0, shown * 3),
+      screenXy.subarray(0, shown * 2),
+    );
+    for (let i = 0; i < shown; i++) {
+      const x = screenXy[i * 2];
+      const y = screenXy[i * 2 + 1];
+      // NaN, behind the eye, fails every test.
+      if (x >= 0 && y >= 0 && x < width && y < height) shownPoints++;
     }
   }
 
@@ -71,20 +128,20 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
   }
   function frame() {
     const viewer = state.viewer;
-    if (
-      viewer?.camera.viewMatrix &&
-      (!Cesium.Matrix4.equals(viewMatrix, viewer.camera.viewMatrix) ||
-        width !== viewer.scene.canvas.clientWidth ||
-        height !== viewer.scene.canvas.clientHeight)
-    )
-      refresh();
+    if (!viewer || !points) return;
+    const pose = cameraOf(viewer).pose();
+    if (viewChanged(viewer, pose)) refresh(pose);
   }
   function enable() {
     const viewer = state.viewer;
     if (!viewer || removeChanged || removeEnd || removeFrame) return;
-    removeChanged = viewer.camera.changed?.addEventListener(cameraChanged);
-    removeEnd = viewer.camera.moveEnd?.addEventListener(cameraChanged);
-    removeFrame = viewer.scene.preRender?.addEventListener(frame);
+    const camera = cameraOf(viewer);
+    // The sensitivity this layer claims for raw camera listeners while on.
+    removeChanged = camera.on('changed', cameraChanged, {
+      threshold: CAMERA_CHANGED_THRESHOLD,
+    });
+    removeEnd = camera.on('moveEnd', cameraChanged);
+    removeFrame = findFrame(viewer)?.on('preRender', frame) ?? null;
     if (points) points.show = true;
     publishLabels();
     overlayHost.setVisible(LAYER_ID, true);
@@ -101,14 +158,25 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
     shownPoints = 0;
   }
 
+  /** The point item a marker draws. */
+  function pointItem(marker, record) {
+    return {
+      id: namedPointId(marker.recordId),
+      pos: marker.point.position,
+      pixelSize: 7,
+      color: parts.model.colorFor(record),
+      outlineColor: [0, 0, 0, 1],
+      outlineWidth: 1,
+      disableDepthTest: Infinity,
+      show: marker.named,
+      meta: { installationId: marker.recordId },
+    };
+  }
+
   function sync(records) {
     const viewer = state.viewer;
-    if (!viewer?.scene?.primitives) return;
-    if (!points) {
-      points = viewer.scene.primitives.add(
-        new Cesium.PointPrimitiveCollection(),
-      );
-    }
+    if (!viewer?.scene) return;
+    points ??= drawOf(viewer).points({ id: setId, horizonCull: true });
     points.show = state.enabled;
     const named = records
       .filter((r) => r.namedArea || r.id === state.selectedId)
@@ -132,15 +200,12 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
       marker.entry.id = record.id;
       markers.set(record.id, marker);
     }
-    for (const [id, marker] of markers)
-      if (!keep.has(id)) {
-        points.remove(marker.point);
-        markers.delete(id);
-      }
+    for (const id of markers.keys()) if (!keep.has(id)) markers.delete(id);
     ordered = [];
     entries = [];
+    const items = [];
     for (const record of named) {
-      const position = Cesium.Cartesian3.fromDegrees(
+      const position = fromDegrees(
         record.longitude,
         record.latitude,
         record.pointOnly
@@ -151,17 +216,9 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
       if (!marker) {
         marker = {
           recordId: record.id,
-          point: points.add({
-            // The app's own pick payload. An object, not the bare record id, so the
-            // shared pick registry keeps treating a point click as it always has.
-            id: { installationId: record.id },
-            position,
-            pixelSize: 7,
-            color: new Cesium.Color(...parts.model.colorFor(record)),
-            outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 1,
-            disableDepthTestDistance: Infinity,
-          }),
+          // What `visit` hands out: the marker's id, position and whether
+          // it is on this side of the horizon.
+          point: { id: { installationId: record.id }, position, show: false },
           entry: createInfrastructureOverlayEntry({
             id: record.id,
             source: LAYER_ID,
@@ -175,7 +232,7 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
       } else {
         marker.point.position = position;
       }
-      marker.named = record.namedArea;
+      marker.named = Boolean(record.namedArea);
       marker.entry.variant =
         record.id === state.selectedId ? 'selected' : 'card';
       marker.entry.selected = record.id === state.selectedId;
@@ -190,13 +247,25 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
       marker.entry.priority = record.areaM2 || 0;
       entries.push(marker.entry);
       ordered.push(marker);
+      items.push(pointItem(marker, record));
     }
+    // Restyled points that keep their ids and places change in place; any
+    // other change draws the set anew.
+    if (
+      items.length === drawn.size &&
+      items.every((item) => samePlace(drawn.get(item.id), item.pos))
+    )
+      points.upsert(items);
+    else points.set(items);
+    drawn = new Map(items.map((item) => [item.id, { ...item.pos }]));
     if (state.enabled) publishLabels();
     refresh();
     services.render.governorRequestRender('installation-names');
   }
   return {
     sync,
+    /** The draw set's id, for matching its click hits. */
+    setId,
     visit(visitor) {
       for (let i = 0; i < ordered.length; i++) {
         const marker = ordered[i];
@@ -217,8 +286,9 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
     destroy() {
       hide();
       ordered = [];
-      if (points) state.viewer?.scene.primitives.remove(points);
+      points?.dispose();
       points = null;
+      drawn = new Map();
       entries = [];
       markers.clear();
     },

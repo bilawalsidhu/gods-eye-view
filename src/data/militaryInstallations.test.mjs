@@ -1,4 +1,5 @@
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -198,7 +199,7 @@ test('real enabled installation entities carry no native label graphics', async 
       },
     },
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
 
   try {
     militaryInstallationsLayer.init(viewer);
@@ -344,7 +345,7 @@ async function runInstallationLoad({
       },
     },
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
 
   const originalSetInputAction = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
   Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (action, type, modifier) {
@@ -635,7 +636,7 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
       },
     },
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
 
   const heightOf = (entity) => Cesium.Cartographic.fromCartesian(
     entity.position.getValue(Cesium.JulianDate.now()),
@@ -706,7 +707,7 @@ test('reports bounded installation requests as loading and clears on settlement'
     },
     dataSources: { add(value) { return value; }, remove() { return true; } },
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
 
   try {
     militaryInstallationsLayer.init(viewer);
@@ -771,7 +772,7 @@ test('zoom-out aborts an active installation request and returns non-loading gui
     },
     dataSources: { add(value) { return value; }, remove() { return true; } },
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
 
   try {
     militaryInstallationsLayer.init(viewer);

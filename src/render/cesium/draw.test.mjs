@@ -1098,6 +1098,101 @@ test('the context layer draws its rim as an outlined ellipse on a viewer of its 
   assert.equal(other.added.length, 0);
 });
 
+test('the installations layer draws its named markers as outlined point primitives on a viewer of its own', async () => {
+  const { createNamedMarkers, namedPointId } =
+    await import('../../layers/installations/namedMarkers.js');
+  const scene = fakeScene();
+  scene.canvas = { clientWidth: 800, clientHeight: 600 };
+  const viewer = { scene };
+  const state = { viewer, enabled: false, selectedId: null };
+  const markers = createNamedMarkers({
+    state,
+    services: { render: { governorRequestRender() {} } },
+    parts: {
+      model: { colorFor: () => [1, 165 / 255, 0, 1] },
+      rendering: { installationSurfaceHeightM: () => 40 },
+    },
+    overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
+  });
+  const records = [
+    {
+      id: 'a',
+      name: 'A',
+      namedArea: true,
+      areaM2: 2,
+      latitude: 30,
+      longitude: -97,
+      pointOnly: false,
+    },
+    {
+      id: 'b',
+      name: 'B',
+      namedArea: true,
+      areaM2: 1,
+      latitude: 31,
+      longitude: -98,
+      pointOnly: true,
+    },
+  ];
+  markers.sync(records);
+  const host = scene.added.find((h) => h.get?.(0)?.id?.set === markers.setId);
+  assert.ok(host instanceof Cesium.PointPrimitiveCollection);
+  assert.equal(host.show, false, 'hidden while the layer is off');
+  assert.equal(host.length, 2);
+  const a = host.get(0);
+  assert.equal(a.id.id, namedPointId('a'));
+  assert.deepEqual(a.id.meta, { installationId: 'a' });
+  assert.equal(a.pixelSize, 7);
+  assert.equal(a.outlineWidth, 1);
+  assert.ok(Cesium.Color.equals(a.outlineColor, Cesium.Color.BLACK));
+  assert.ok(Cesium.Color.equals(a.color, new Cesium.Color(1, 165 / 255, 0, 1)));
+  assert.equal(a.disableDepthTestDistance, Infinity);
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(
+      a.position,
+      Cesium.Cartesian3.fromDegrees(-97, 30, 40),
+      0,
+      1e-6,
+    ),
+  );
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(
+      host.get(1).position,
+      Cesium.Cartesian3.fromDegrees(-98, 31, 0),
+      0,
+      1e-6,
+    ),
+    'a point-only site sits on the ellipsoid',
+  );
+  // Selecting a drawn site restyles nothing that moves: the points stay.
+  state.selectedId = 'b';
+  markers.sync(records);
+  assert.equal(scene.added.includes(host), true);
+  assert.equal(host.get(0), a);
+  // A selected site that is not a named area draws no point.
+  state.selectedId = 'c';
+  markers.sync([
+    ...records,
+    {
+      id: 'c',
+      name: 'C',
+      areaM2: 3,
+      latitude: 32,
+      longitude: -99,
+      pointOnly: true,
+    },
+  ]);
+  const rebuilt = scene.added.find(
+    (h) => h.get?.(0)?.id?.set === markers.setId,
+  );
+  const c = [0, 1, 2]
+    .map((i) => rebuilt.get(i))
+    .find((p) => p.id.id === namedPointId('c'));
+  assert.equal(c.show, false);
+  markers.destroy();
+  assert.equal(scene.added.includes(host), false);
+});
+
 /** Run `fn` with the image classes Cesium's materials test uniforms against. */
 function withImageClasses(fn) {
   const names = [

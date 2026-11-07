@@ -4,7 +4,9 @@ import * as Cesium from 'cesium';
 import * as context from '../../data/contextStore.js';
 import { createSelection } from './selection.js';
 import { createRendering } from './rendering.js';
-import { createNamedMarkers } from './namedMarkers.js';
+import { createNamedMarkers, namedPointId } from './namedMarkers.js';
+import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
+import { fakeInput } from '../../input/testDoubles.mjs';
 
 function harness(t) {
   const previousWindow = globalThis.window;
@@ -45,17 +47,17 @@ function harness(t) {
           clientHeight: 800,
         }),
         primitives: { add: (p) => p, remove() {} },
+        pick: () => picked,
       },
     },
   };
+  let picked;
+  const { draw } = bindFakeCesiumScene(state.viewer);
+  const input = fakeInput(state.viewer);
   t.mock.method(
     Cesium.SceneTransforms,
     'worldToWindowCoordinates',
-    (_scene, _point, scratch) => {
-      scratch.x = 640;
-      scratch.y = 400;
-      return scratch;
-    },
+    () => new Cesium.Cartesian2(640, 400),
   );
   let labels = [];
   const services = {
@@ -91,6 +93,7 @@ function harness(t) {
     state.clickSubscription();
     parts.namedMarkers.destroy();
     parts.rendering.clearRendered();
+    input.destroy();
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
     if (previousDocument === undefined) delete globalThis.document;
@@ -107,7 +110,18 @@ function harness(t) {
   };
   assert.equal(selection.selectRecord(record.id), true);
   assertSelected(true);
-  return { state, selection, assertSelected };
+  return {
+    state,
+    selection,
+    assertSelected,
+    draw,
+    parts,
+    /** Click on what `pick` names, as the scene would pick it. */
+    click(value) {
+      picked = value;
+      input.tap({ x: 640, y: 400 });
+    },
+  };
 }
 
 for (const layerId of ['flights', 'military', 'satellites']) {
@@ -152,4 +166,23 @@ test('destroy removes all installation context listeners', (t) => {
     );
     h.assertSelected(true);
   }
+});
+
+test('a click on a named marker point selects its site; again releases it', (t) => {
+  const h = harness(t);
+  h.state.selectedId = null;
+  context.clearSelectedEntityContextForLayer('military-installations');
+  h.parts.rendering.renderRecords();
+  h.assertSelected(false);
+  const setId = h.parts.namedMarkers.setId;
+  const item = h.draw.set(setId).items.get(namedPointId('base'));
+  assert.deepEqual(item.meta, { installationId: 'base' });
+  const pointPick = { id: { set: setId, id: item.id, meta: item.meta } };
+  h.click(pointPick);
+  h.assertSelected(true);
+  h.click(pointPick);
+  h.assertSelected(false);
+  // Another set's item with the same meta is not this layer's point.
+  h.click({ id: { set: 'other:1', id: item.id, meta: item.meta } });
+  h.assertSelected(false);
 });

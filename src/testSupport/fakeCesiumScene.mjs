@@ -9,7 +9,7 @@
  *   `positionCartographic`; `viewRectangle()` from its
  *   `computeViewRectangle()`, in degrees; events from its own `moveEnd`,
  *   `moveStart` and `changed`.
- * - query: `project` through `Cesium.SceneTransforms.worldToWindowCoordinates`
+ * - query: `project` (and `projectMany`) through `Cesium.SceneTransforms.worldToWindowCoordinates`
  *   (which a test may stub), `isOccluded` against the ellipsoid's horizon
  *   from the camera's `positionWC` (never occluded without one).
  * - frame: phases from the scene's own `preUpdate`, `preRender` and
@@ -30,6 +30,75 @@ function listen(source, cb) {
   return () => source?.removeEventListener?.(cb);
 }
 
+/** The double's camera: `viewer.camera`, else `viewer.scene.camera`. */
+const cameraOfDouble = (viewer) =>
+  viewer.camera?.positionWC || !viewer.scene?.camera
+    ? viewer.camera
+    : viewer.scene.camera;
+
+/**
+ * The query port `bindFakeCesiumScene` binds, on its own, for a test that
+ * binds its other ports another way (`bindFakeCesiumCamera`'s `ports`).
+ * @param {object} viewer
+ */
+export function fakeSceneQuery(viewer) {
+  return {
+    project(position) {
+      // The position itself, so a stub can tell positions apart by identity.
+      const s = Cesium.SceneTransforms.worldToWindowCoordinates(
+        viewer.scene,
+        position,
+      );
+      return s ? { x: s.x, y: s.y } : null;
+    },
+    projectMany(source, out) {
+      for (let i = 0, j = 0; i + 2 < source.length; i += 3, j += 2) {
+        const s = this.project({
+          x: source[i],
+          y: source[i + 1],
+          z: source[i + 2],
+        });
+        out[j] = s ? s.x : Number.NaN;
+        out[j + 1] = s ? s.y : Number.NaN;
+      }
+    },
+    isOccluded(position) {
+      const eye = cameraOfDouble(viewer)?.positionWC;
+      if (!eye) return false;
+      return !new Cesium.EllipsoidalOccluder(
+        Cesium.Ellipsoid.WGS84,
+        eye,
+      ).isPointVisible(toCartesian(position));
+    },
+  };
+}
+
+/**
+ * The frame port `bindFakeCesiumScene` binds, on its own, as
+ * `fakeSceneQuery` is.
+ * @param {object} viewer
+ */
+export function fakeSceneFrame(viewer) {
+  return {
+    on: (phase, cb) => listen(viewer.scene?.[phase], cb),
+    requestRender: () => viewer.scene?.requestRender?.(),
+  };
+}
+
+/**
+ * A fake draw port and the query and frame ports above, for
+ * `bindFakeCesiumCamera(viewer, fakeScenePorts(viewer))`.
+ * @param {object} viewer
+ * @returns {{draw: object, query: object, frame: object}}
+ */
+export function fakeScenePorts(viewer) {
+  return {
+    draw: fakeDrawPort(),
+    query: fakeSceneQuery(viewer),
+    frame: fakeSceneFrame(viewer),
+  };
+}
+
 /**
  * Bind the ports to `viewer`.
  * @param {object} viewer
@@ -37,10 +106,7 @@ function listen(source, cb) {
  * @returns {{draw: object, camera: object, query: object, frame: object, unbind: () => void}}
  */
 export function bindFakeCesiumScene(viewer, { draw = fakeDrawPort() } = {}) {
-  const cam = () =>
-    viewer.camera?.positionWC || !viewer.scene?.camera
-      ? viewer.camera
-      : viewer.scene.camera;
+  const cam = () => cameraOfDouble(viewer);
   const camera = {
     pose() {
       const c = cam();
@@ -80,28 +146,8 @@ export function bindFakeCesiumScene(viewer, { draw = fakeDrawPort() } = {}) {
     },
     on: (event, cb) => listen(cam()?.[event], cb),
   };
-  const query = {
-    project(position) {
-      // The position itself, so a stub can tell positions apart by identity.
-      const s = Cesium.SceneTransforms.worldToWindowCoordinates(
-        viewer.scene,
-        position,
-      );
-      return s ? { x: s.x, y: s.y } : null;
-    },
-    isOccluded(position) {
-      const eye = cam()?.positionWC;
-      if (!eye) return false;
-      return !new Cesium.EllipsoidalOccluder(
-        Cesium.Ellipsoid.WGS84,
-        eye,
-      ).isPointVisible(toCartesian(position));
-    },
-  };
-  const frame = {
-    on: (phase, cb) => listen(viewer.scene?.[phase], cb),
-    requestRender: () => viewer.scene?.requestRender?.(),
-  };
+  const query = fakeSceneQuery(viewer);
+  const frame = fakeSceneFrame(viewer);
   const unbind = bindRenderer(viewer, { draw, camera, query, frame });
   return { draw, camera, query, frame, unbind };
 }

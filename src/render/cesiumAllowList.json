@@ -72,7 +72,6 @@
   "src/layers/flights/testing.js",
   "src/layers/flights/tracking.js",
   "src/layers/ghostMaps/index.js",
-  "src/layers/installations/namedMarkers.js",
   "src/layers/installations/rendering.js",
   "src/layers/launches/launchPad.js",
   "src/layers/launches/orbitRendering.js",

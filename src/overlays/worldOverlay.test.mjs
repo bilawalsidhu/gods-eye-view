@@ -1,4 +1,5 @@
 import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
@@ -2254,14 +2255,20 @@ test('installation titles share persistent card arbitration and retain a bounded
   env.viewer.camera.changed = new Cesium.Event();
   t.mock.method(Cesium.Cartesian3, 'fromDegrees', (lon, lat) => new Cesium.Cartesian3(lon, lat, 0));
   t.mock.method(Cesium.EllipsoidalOccluder.prototype, 'isPointVisible', () => true);
-  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => {
+  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch = new Cesium.Cartesian2()) => {
     scratch.x = scratch.y = 100; return scratch;
   });
   const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
+  bindFakeCesiumScene(env.viewer);
   const markers = createNamedMarkers({ state,
     services: { render: { governorRequestRender() {} } },
     parts: { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { installationSurfaceHeightM: () => 0 } },
-    overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
+    // The markers place titles in ECEF; this camera looks at degrees, as the
+    // mocked fromDegrees above makes them.
+    overlayHost: { setEntries: (id, entries, policy) => setOverlayEntries(id, entries.map((entry) => {
+      const { longitude, latitude } = Cesium.Cartographic.fromCartesian(entry.position);
+      return { ...entry, position: new Cesium.Cartesian3(Cesium.Math.toDegrees(longitude), Cesium.Math.toDegrees(latitude), 0) };
+    }), policy), clearSource: clearOverlaySource,
       setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
   });
   initWorldOverlay(env.viewer);

@@ -52,10 +52,13 @@ export function createSelection({
     };
     layerState.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!layerState.enabled) return;
-      const picked = event.pick;
-      const target = picked?.id;
+      // A named marker is a draw item; site markers are still entities.
+      const hit = event.drawHit;
+      const target = event.pick?.id;
       const id =
-        target?.installationId ||
+        (hit?.set === parts.namedMarkers?.setId
+          ? hit.meta?.installationId
+          : null) ||
         installationMarkers.read(target)?.recordId ||
         (typeof target?.id === 'string' ? target.id : null);
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
