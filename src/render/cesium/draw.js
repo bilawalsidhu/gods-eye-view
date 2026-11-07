@@ -6,6 +6,15 @@
  * item carries a pick id `{set, id, meta, lodGroup}`, which the query port
  * (`ports.js`) reads picks back through.
  *
+ * Clamped items follow the ground as Cesium's own entities do: a clamped
+ * point is a billboard of a drawn dot, a draped line a ground polyline, a
+ * clamped fill a ground primitive (packed so no two fills in one overlap,
+ * so overlapping translucent fills blend as they did). A rebuilt set keeps
+ * drawing its last ground primitives until the new ones are ready, so a
+ * refresh never blinks. `horizonCull` hides a set's points and icons past
+ * the ellipsoid's horizon, each frame before it draws, tested at the
+ * position each was given (not where clamping put it).
+ *
  * Built over a scene by `createCesiumPorts`, and on its own over a Cesium
  * viewer with no renderer bound, when code first asks
  * `findDraw` for one (`rendererOf.js`).
@@ -37,6 +46,30 @@ export function toImage(image) {
   throw new Error('the Cesium renderer takes URL, SVG and canvas images only');
 }
 
+/** Cesium's height reference for an item's `height` and `clampTo`. */
+export function heightReferenceOf(height, clampTo = 'both') {
+  const H = Cesium.HeightReference;
+  if (height === 'clampGround')
+    return (
+      { terrain: H.CLAMP_TO_TERRAIN, tiles: H.CLAMP_TO_3D_TILE }[clampTo] ??
+      H.CLAMP_TO_GROUND
+    );
+  if (height === 'relativeGround')
+    return (
+      { terrain: H.RELATIVE_TO_TERRAIN, tiles: H.RELATIVE_TO_3D_TILE }[
+        clampTo
+      ] ?? H.RELATIVE_TO_GROUND
+    );
+  return H.NONE;
+}
+
+/** Cesium's classification for what clamped lines and fills drape onto. */
+const classificationOf = (clampTo = 'both') =>
+  ({
+    terrain: Cesium.ClassificationType.TERRAIN,
+    tiles: Cesium.ClassificationType.CESIUM_3D_TILE,
+  })[clampTo] ?? Cesium.ClassificationType.BOTH;
+
 const ANCHORS = {
   center: Cesium.VerticalOrigin.CENTER,
   bottom: Cesium.VerticalOrigin.BOTTOM,
@@ -64,11 +97,27 @@ export function createCesiumDraw({ scene, report }) {
     if (sets.has(spec.id)) throw new Error(`a set with id ${spec.id} is live`);
     const items = new Map();
     const listeners = { ready: listenerList(report) };
-    const record = { kind, spec, items, listeners, host: null, pickIds: [] };
+    const record = {
+      kind,
+      spec,
+      items,
+      listeners,
+      host: null,
+      pickIds: [],
+      // What it drew before its ground primitives were ready, still shown.
+      retiring: null,
+      pending: null,
+      // The host's ground primitives, and the collection beside them.
+      ground: null,
+      own: null,
+      // Each point or icon at its position, for the horizon cull.
+      placed: [],
+    };
     // Each build records its items' pick ids, for height queries to see
     // through.
     const rebuild = () => {
       record.pickIds = [];
+      record.placed = [];
       build(record);
       setsVersion += 1;
     };
@@ -97,9 +146,15 @@ export function createCesiumDraw({ scene, report }) {
         requestRender();
       },
       setOptions(options) {
+        const culled = spec.horizonCull;
+        const clampTo = spec.clampTo;
         Object.assign(spec, options);
+        // What clamped items clamp to is built into them.
+        if (spec.clampTo !== clampTo) rebuild();
         setsVersion += 1;
-        if (record.host) record.host.show = spec.show !== false;
+        showHosts(record);
+        // No longer culled: what the cull hid comes back.
+        if (culled && !spec.horizonCull) uncull(record);
         requestRender();
       },
       size: () => items.size,
@@ -108,7 +163,7 @@ export function createCesiumDraw({ scene, report }) {
       },
       set show(value) {
         spec.show = value;
-        if (record.host) record.host.show = value;
+        showHosts(record);
         requestRender();
       },
       on(event, cb) {
@@ -118,6 +173,7 @@ export function createCesiumDraw({ scene, report }) {
         if (record.host && !record.host.isDestroyed?.() && live())
           scene.primitives.remove(record.host);
         record.host = null;
+        retire(record);
         // A newer set under the same id is not this handle's to remove.
         if (sets.get(spec.id) === record) sets.delete(spec.id);
         setsVersion += 1;
@@ -140,11 +196,98 @@ export function createCesiumDraw({ scene, report }) {
     return id;
   }
 
-  function replaceHost(record, host) {
-    if (record.host) scene.primitives.remove(record.host);
+  /**
+   * Draw `host` for the set in place of what it drew. With `ground` (its
+   * ground primitives), the new host's ground primitives stay hidden and
+   * the old host keeps drawing until every one is ready, then they swap in
+   * one frame, as the entities' ground batches do; a host still waiting
+   * when the next one comes is dropped.
+   */
+  function replaceHost(record, host, ground = null, own = null) {
+    const old = record.host;
+    const waiting = ground?.length ? ground : null;
+    // Only old ground primitives wait for the new ones: the rest of the old
+    // host goes now, as the new host's own parts draw at once.
+    if (
+      old &&
+      waiting &&
+      !record.retiring &&
+      !record.pending &&
+      record.ground
+    ) {
+      record.retiring = old;
+      if (record.own) old.remove(record.own);
+    } else if (old) scene.primitives.remove(old);
+    if (!waiting) retire(record);
+    // Hidden one by one: a hidden collection would not build them.
+    if (waiting) for (const primitive of waiting) primitive.show = false;
+    record.pending = waiting;
+    record.ground = waiting;
+    record.own = waiting ? own : null;
     record.host = host;
-    host.show = record.spec.show !== false;
     scene.primitives.add(host);
+    showHosts(record);
+  }
+
+  function showHosts(record) {
+    const show = record.spec.show !== false;
+    if (record.host) record.host.show = show;
+    if (record.retiring) record.retiring.show = show;
+  }
+
+  function retire(record) {
+    if (record.retiring && !record.retiring.isDestroyed?.() && live())
+      scene.primitives.remove(record.retiring);
+    record.retiring = null;
+  }
+
+  /**
+   * After a draw: a set whose ground primitives are all ready shows them,
+   * and lets go of what drew in their place.
+   */
+  function swapReady() {
+    for (const record of sets.values()) {
+      const ground = record.pending;
+      if (!ground || ground.some((p) => !p.isDestroyed() && !p.ready)) continue;
+      for (const primitive of ground) primitive.show = true;
+      record.pending = null;
+      retire(record);
+      requestRender();
+    }
+  }
+
+  // The horizon cull: a point or icon past the ellipsoid's horizon from the
+  // eye is hidden, as layers drawn without depth test used to do themselves.
+  let occluder = null;
+  function cullHorizon() {
+    for (const record of sets.values()) {
+      if (!record.spec.horizonCull || !record.placed.length) continue;
+      const eye = scene.camera?.positionWC;
+      // The eye is ECEF in 3D only.
+      if (
+        !eye ||
+        (scene.mode ?? Cesium.SceneMode.SCENE3D) !== Cesium.SceneMode.SCENE3D
+      )
+        return;
+      occluder ??= new Cesium.EllipsoidalOccluder(
+        scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84,
+        eye,
+      );
+      occluder.cameraPosition = eye;
+      for (const placed of record.placed) {
+        const show = placed.shown && occluder.isPointVisible(placed.position);
+        if (placed.primitive.show !== show) placed.primitive.show = show;
+      }
+    }
+  }
+
+  function uncull(record) {
+    for (const placed of record.placed) placed.primitive.show = placed.shown;
+  }
+
+  /** Remember a drawn point or icon for the horizon cull. */
+  function place(record, primitive, position, shown) {
+    record.placed.push({ primitive, position, shown });
   }
 
   // Atlases icons name images from, by id: `{atlas, slot}` reads the slot
@@ -180,6 +323,7 @@ export function createCesiumDraw({ scene, report }) {
         color: toColor(item.color, item.alpha ?? 1),
         verticalOrigin: ANCHORS[item.anchor ?? 'center'],
         disableDepthTestDistance: item.disableDepthTest ?? 0,
+        heightReference: heightReferenceOf(item.height, record.spec.clampTo),
         show: item.show !== false,
         id: pickId(record, item),
       };
@@ -195,24 +339,88 @@ export function createCesiumDraw({ scene, report }) {
       }
       const billboard = host.add(options);
       if (keyed) billboard.setImage(image.key, image.canvas);
+      place(record, billboard, position, options.show);
     }
     replaceHost(record, host);
   }
 
   function buildPoints(record) {
-    const host = new Cesium.PointPrimitiveCollection();
-    for (const item of record.items.values())
-      host.add({
-        position: toCartesian(item.pos),
-        pixelSize: item.pixelSize,
-        color: toColor(item.color),
-        outlineColor: toColor(item.outlineColor ?? [0, 0, 0, 0]),
-        outlineWidth: item.outlineWidth ?? 0,
-        disableDepthTestDistance: item.disableDepthTest ?? 0,
-        show: item.show !== false,
-        id: pickId(record, item),
-      });
+    let points = null;
+    let dots = null;
+    for (const item of record.items.values()) {
+      const position = toCartesian(item.pos);
+      const show = item.show !== false;
+      const heightReference = heightReferenceOf(
+        item.height,
+        record.spec.clampTo,
+      );
+      let primitive;
+      if (heightReference === Cesium.HeightReference.NONE) {
+        points ??= new Cesium.PointPrimitiveCollection();
+        primitive = points.add({
+          position,
+          pixelSize: item.pixelSize,
+          color: toColor(item.color),
+          outlineColor: toColor(item.outlineColor ?? [0, 0, 0, 0]),
+          outlineWidth: item.outlineWidth ?? 0,
+          disableDepthTestDistance: item.disableDepthTest ?? 0,
+          show,
+          id: pickId(record, item),
+        });
+      } else {
+        // Point primitives cannot follow the ground.
+        dots ??= new Cesium.BillboardCollection({ scene });
+        primitive = addDot(dots, item, {
+          position,
+          heightReference,
+          show,
+          id: pickId(record, item),
+        });
+      }
+      place(record, primitive, position, show);
+    }
+    let host = points ?? dots ?? new Cesium.PointPrimitiveCollection();
+    if (points && dots) {
+      host = new Cesium.PrimitiveCollection();
+      host.add(points);
+      host.add(dots);
+    }
     replaceHost(record, host);
+  }
+
+  /**
+   * A clamped point as Cesium's entity points draw one: a billboard of a
+   * dot drawn at its pixel size, one texture per look.
+   */
+  function addDot(collection, item, options) {
+    const color = toColor(item.color);
+    const outlineColor = toColor(item.outlineColor ?? [0, 0, 0, 0]);
+    const outlineWidth = Math.round(item.outlineWidth ?? 0);
+    let pixelSize = Math.max(1, Math.round(item.pixelSize));
+    let scale = 1;
+    if (outlineWidth <= 0) {
+      // Drawn large and scaled down, as the entity points are.
+      scale = pixelSize / 50;
+      pixelSize = 50;
+    }
+    const css = color.toCssColorString();
+    const cssOutline = outlineColor.toCssColorString();
+    const billboard = collection.add({
+      ...options,
+      scale,
+      disableDepthTestDistance: item.disableDepthTest ?? 0,
+    });
+    billboard.setImage(
+      JSON.stringify([css, pixelSize, cssOutline, outlineWidth]),
+      Cesium.createBillboardPointCallback(
+        color.alpha,
+        css,
+        cssOutline,
+        outlineWidth,
+        pixelSize,
+      ),
+    );
+    return billboard;
   }
 
   function lineMaterial(style) {
@@ -283,9 +491,33 @@ export function createCesiumDraw({ scene, report }) {
 
   function buildLines(record) {
     const host = new Cesium.PolylineCollection();
+    const draped = new Map();
     for (const item of record.items.values()) {
-      if (item.mode === 'draped')
-        throw new Error('the Cesium renderer has no draped lines');
+      if (item.mode === 'draped') {
+        if (item.style.kind !== 'solid')
+          throw new Error('the Cesium renderer drapes solid lines only');
+        const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+        if (!draped.has(clampTo)) draped.set(clampTo, []);
+        draped.get(clampTo).push(
+          new Cesium.GeometryInstance({
+            geometry: new Cesium.GroundPolylineGeometry({
+              positions: linePositions(item),
+              width: item.widthPx,
+              arcType: Cesium.ArcType.GEODESIC,
+            }),
+            attributes: {
+              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                toColor(item.style.color),
+              ),
+              show: new Cesium.ShowGeometryInstanceAttribute(
+                item.show !== false,
+              ),
+            },
+            id: pickId(record, item),
+          }),
+        );
+        continue;
+      }
       host.add({
         positions: linePositions(item),
         width: item.widthPx,
@@ -294,7 +526,25 @@ export function createCesiumDraw({ scene, report }) {
         id: pickId(record, item),
       });
     }
-    replaceHost(record, host);
+    if (!draped.size) return replaceHost(record, host);
+    // Draped lines drape as the entities' clamped polylines do.
+    const ground = [...draped].map(
+      ([clampTo, geometryInstances]) =>
+        new Cesium.GroundPolylinePrimitive({
+          geometryInstances,
+          appearance: new Cesium.PolylineColorAppearance(),
+          classificationType: classificationOf(clampTo),
+        }),
+    );
+    replaceHost(record, collect(host, ground), ground, host);
+  }
+
+  /** One host for a set's own collection and its ground primitives. */
+  function collect(own, ground) {
+    const host = new Cesium.PrimitiveCollection();
+    if (own) host.add(own);
+    for (const primitive of ground) host.add(primitive);
+    return host;
   }
 
   const heightOf = (pos) =>
@@ -362,11 +612,101 @@ export function createCesiumDraw({ scene, report }) {
     }
   }
 
+  /** A clamped shape's fill geometry, on the ellipsoid for draping. */
+  function groundGeometry(item) {
+    const g = item.geometry;
+    switch (g.kind) {
+      case 'polygon': {
+        const [outer, ...holes] = g.rings.map((ring) => ring.map(toCartesian));
+        return new Cesium.PolygonGeometry({
+          polygonHierarchy: new Cesium.PolygonHierarchy(
+            outer,
+            holes.map((h) => new Cesium.PolygonHierarchy(h)),
+          ),
+        });
+      }
+      case 'ellipse':
+        if (typeof g.semiMajor !== 'number' || typeof g.semiMinor !== 'number')
+          throw new Error('the Cesium renderer takes fixed ellipse radii only');
+        return new Cesium.EllipseGeometry({
+          center: toCartesian(g.center),
+          semiMajorAxis: g.semiMajor,
+          semiMinorAxis: g.semiMinor,
+          rotation: g.rotation ?? 0,
+        });
+      case 'rectangle':
+        return new Cesium.RectangleGeometry({
+          rectangle: Cesium.Rectangle.fromDegrees(
+            g.rect.west,
+            g.rect.south,
+            g.rect.east,
+            g.rect.north,
+          ),
+        });
+      default:
+        throw new Error(`the Cesium renderer cannot clamp ${g.kind} shapes`);
+    }
+  }
+
+  /**
+   * A set's clamped fills as ground primitives, packed as the entities'
+   * ground batches are: a fill goes in the first batch it overlaps nothing
+   * in, so overlapping translucent fills blend over each other.
+   */
+  function groundFills(record, items) {
+    const batches = [];
+    for (const item of items) {
+      if (item.outline)
+        throw new Error('the Cesium renderer has no clamped outlines yet');
+      if (!item.fill || item.outlineOnly) continue;
+      if (typeof item.fill === 'object' && !Array.isArray(item.fill))
+        throw new Error('the Cesium renderer fills shapes with colours only');
+      if (item.extrudeHeight !== undefined)
+        throw new Error('the Cesium renderer cannot clamp extruded shapes');
+      const instance = new Cesium.GeometryInstance({
+        geometry: groundGeometry(item),
+        attributes: {
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+            toColor(item.fill),
+          ),
+        },
+        id: pickId(record, item),
+      });
+      const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+      const rectangle = instance.geometry.rectangle;
+      let batch = batches.find(
+        (b) => b.clampTo === clampTo && !b.rectangles.collides(rectangle),
+      );
+      if (!batch) {
+        batch = {
+          clampTo,
+          instances: [],
+          rectangles: new Cesium.RectangleCollisionChecker(),
+        };
+        batches.push(batch);
+      }
+      batch.rectangles.insert(String(batch.instances.length), rectangle);
+      batch.instances.push(instance);
+    }
+    return batches.map(
+      (batch) =>
+        new Cesium.GroundPrimitive({
+          geometryInstances: batch.instances,
+          classificationType: classificationOf(batch.clampTo),
+        }),
+    );
+  }
+
   function buildShapes(record) {
     const host = new Cesium.PrimitiveCollection();
     const outlines = new Cesium.PolylineCollection();
+    const clamped = [];
     for (const item of record.items.values()) {
       if (item.show === false) continue;
+      if (item.height === 'clampGround') {
+        clamped.push(item);
+        continue;
+      }
       if (
         item.fill &&
         typeof item.fill === 'object' &&
@@ -410,7 +750,9 @@ export function createCesiumDraw({ scene, report }) {
         });
     }
     host.add(outlines);
-    replaceHost(record, host);
+    const ground = groundFills(record, clamped);
+    if (!ground.length) return replaceHost(record, host);
+    replaceHost(record, collect(host, ground), ground, host);
   }
 
   function buildModels(record) {
@@ -520,7 +862,15 @@ export function createCesiumDraw({ scene, report }) {
     sets,
     version: () => setsVersion,
     tilesets,
-    watchClamp,
+    /** Whether a set's ground primitives are still being built. */
+    building: () => [...sets.values()].some((record) => record.pending),
+    /** Each frame, before it draws: the horizon cull. */
+    beforeRender: cullHorizon,
+    /** Each frame, after it drew: clamp state, and ground swaps. */
+    afterRender() {
+      watchClamp();
+      swapReady();
+    },
     /**
      * Let go of the sets; with `removeHosts`, take what they draw out of
      * the scene too (a scene the port does not own outlives it).
@@ -529,8 +879,10 @@ export function createCesiumDraw({ scene, report }) {
       clampListeners.clear();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) {
-        if (removeHosts && record.host && !scene.isDestroyed?.())
-          scene.primitives.remove(record.host);
+        if (removeHosts && !scene.isDestroyed?.()) {
+          if (record.host) scene.primitives.remove(record.host);
+          retire(record);
+        }
         record.host = null;
       }
       sets.clear();
@@ -553,15 +905,19 @@ provideUnboundDraw((viewer) => {
   )
     return null;
   const part = createCesiumDraw({ scene, report: uncaught });
-  const off = scene.postRender.addEventListener(() => part.watchClamp());
+  const offs = [
+    scene.preRender?.addEventListener?.(() => part.beforeRender()),
+    scene.postRender.addEventListener(() => part.afterRender()),
+  ];
+  const off = () => offs.splice(0).forEach((remove) => remove?.());
   return {
     port: part.port,
     dispose() {
       off();
       part.dispose({ removeHosts: true });
     },
-    release() {
-      off();
-    },
+    // Released, its sets still draw, culled and swapped as before; the
+    // hooks go with the scene.
+    release() {},
   };
 });

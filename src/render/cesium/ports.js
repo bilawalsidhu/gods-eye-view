@@ -215,7 +215,8 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
     scene.preRender.addEventListener(onPhase('preRender')),
     scene.postRender.addEventListener(drew),
     scene.postRender.addEventListener(onPhase('postRender')),
-    scene.postRender.addEventListener(() => watchClamp()),
+    scene.preRender.addEventListener(() => drawPart.beforeRender()),
+    scene.postRender.addEventListener(() => drawPart.afterRender()),
     scene.postRender.addEventListener(() => trimGlobeAfterDraw()),
   ];
 
@@ -356,7 +357,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
   // --- Draw ------------------------------------------------------------------
 
   const drawPart = createCesiumDraw({ scene, report });
-  const { port: draw, sets, tilesets, watchClamp } = drawPart;
+  const { port: draw, sets, tilesets } = drawPart;
 
   const cameraPart = createCesiumCamera({ scene, camera, report, widget });
   const cameraPort = cameraPart.port;
@@ -898,6 +899,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
       if (!tilesLoaded()) blockers.push('tiles');
       if (modelSets().some((r) => r.host.loading > 0)) blockers.push('models');
       if (iconState() !== 'settled') blockers.push('icons');
+      if (drawPart.building()) blockers.push('draw');
       if (busy) blockers.push('redraw');
       if (performance.now() - lastTick >= STALL_MS) blockers.push('frames');
       return { state: 'timeout', blockers };
@@ -913,6 +915,7 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
         globeLoaded() &&
         tilesLoaded() &&
         icons === 'settled' &&
+        !drawPart.building() &&
         !modelSets().some((r) => r.host.loading > 0 || r.host.failed > 0)
       );
     }
