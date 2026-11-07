@@ -300,6 +300,38 @@ export const DATA_CREDITS = [
       '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',
   },
   {
+    key: 'ottawa-cctv',
+    html:
+      'Traffic cameras (Ottawa, with an access certificate): ' +
+      '<a href="https://traffic.ottawa.ca/en/traffic-map-data-lists-and-resources/about-the-data" target="_blank" rel="noopener">City of Ottawa Traffic Camera Images API</a>',
+  },
+  {
+    key: 'quebec-cctv',
+    html:
+      'Camera locations (Québec): Ministère des Transports et de la Mobilité durable via ' +
+      '<a href="https://www.donneesquebec.ca/" target="_blank" rel="noopener">Données Québec</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); ' +
+      'Montréal camera locations © OpenStreetMap contributors (ODbL). ' +
+      'Video (when enabled) and linked webcam pages stay with ' +
+      '<a href="https://www.quebec511.info/" target="_blank" rel="noopener">Québec 511</a> and each operator, under their own terms',
+  },
+  {
+    key: 'tripcheck-cctv',
+    html:
+      'Road camera stills (Oregon): camera courtesy of ODOT, via ' +
+      '<a href="https://www.tripcheck.com/" target="_blank" rel="noopener">TripCheck</a>; ' +
+      'partner cameras (counties, cities, Caltrans, WSDOT) are named in the camera label',
+  },
+  {
+    key: 'mlit-river-cctv',
+    html:
+      'River camera stills (Japan): 出典：国土交通省 ' +
+      '<a href="https://www.river.go.jp/" target="_blank" rel="noopener">川の防災情報</a> ' +
+      '(Ministry of Land, Infrastructure, Transport and Tourism; ' +
+      '<a href="https://www.river.go.jp/kawabou/kwb_apend/html/caution.html" target="_blank" rel="noopener">terms</a>), ' +
+      'fetched on view, at most every ten minutes per camera',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
@@ -320,6 +352,15 @@ export const DATA_CREDITS = [
       '<a href="https://transit.gencat.cat/" target="_blank" rel="noopener">Servei Català de Trànsit</a> ' +
       '(Llicència oberta d’ús d’informació - Catalunya); some cameras are supplied by partners ' +
       '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
+  },
+  {
+    key: 'iceland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Iceland): road camera images, fetched live, from the ' +
+      '<a href="https://www.vegagerdin.is/" target="_blank" rel="noopener">Icelandic Road and Coastal Administration (Vegagerðin)</a> — ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
+      '(<a href="https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur/terms-and-conditions" target="_blank" rel="noopener">terms</a>); ' +
+      'no endorsement by IRCA is implied',
   },
   {
     key: 'kingcounty-cctv',
@@ -344,6 +385,14 @@ export const DATA_CREDITS = [
       'Traffic snapshot cameras (Hong Kong): ' +
       '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
       '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
+    key: 'webcamromania-cctv',
+    html:
+      'Giroc camera (when configured): ' +
+      '<a href="https://webcamromania.ro/webcam-orase/webcam-giroc/" target="_blank" rel="noopener">Webcam Romania</a>. ' +
+      'Video rights remain with the camera operator; ' +
+      '<a href="https://webcamromania.ro/termeni-si-conditii/" target="_blank" rel="noopener">provider terms</a> apply.',
   },
   {
     key: 'vegvesen-cctv',
