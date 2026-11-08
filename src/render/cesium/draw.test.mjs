@@ -1057,7 +1057,7 @@ test('changing an option rebuilds only the kinds that build it in, in their plac
   }
 });
 
-test('restyling or moving unclamped points changes them in place; a new one rebuilds', () => {
+test('restyling or moving unclamped points changes them in place; a new clamped one rebuilds', () => {
   const { scene, draw } = drawOver();
   const set = draw.points({ id: 'restyled', blend: 'translucent' });
   const dot = (id, lon, extra = {}) => ({
@@ -1100,8 +1100,92 @@ test('restyling or moving unclamped points changes them in place; a new one rebu
   const rebuilt = scene.added[0];
   set.upsert([dot('c', 3)]);
   assert.equal(set.size(), 3);
-  assert.notEqual(scene.added[0], rebuilt, 'a new item rebuilds');
+  assert.equal(scene.added[0], rebuilt, 'a new unclamped item joins');
   assert.equal(scene.added[0].length, 3);
+  set.upsert([dot('d', 4, { height: 'clampGround' })]);
+  assert.notEqual(scene.added[0], rebuilt, 'a new clamped item rebuilds');
+  set.dispose();
+});
+
+test('unclamped points join and leave their collection in place, and keep what height queries see through', () => {
+  const { scene, draw, frame } = drawOver();
+  const part = unboundDrawPart(draw);
+  const set = draw.points({ id: 'population', blend: 'translucent' });
+  const dot = (id, lon) => ({
+    id,
+    pos: { lon, lat: 0, height: 2 },
+    pixelSize: 6,
+    color: [1, 0, 0, 1],
+  });
+  set.upsert([dot('a', 0)]);
+  const host = scene.added[0];
+  assert.equal(host.length, 1, 'an empty set takes its first point in place');
+  assert.equal(host.blendOption, Cesium.BlendOption.TRANSLUCENT);
+  set.upsert([dot('b', 1), dot('c', 2)]);
+  assert.equal(scene.added[0], host);
+  assert.equal(host.length, 3);
+  const ids = () => part.sets.get('population').pickIds.map((pick) => pick.id);
+  assert.deepEqual(ids(), ['a', 'b', 'c']);
+  let version = part.version();
+  set.upsert([dot('b', 5)]);
+  assert.equal(part.version(), version, 'moved: the same pick ids');
+  set.remove(['a', 'zz']);
+  assert.equal(scene.added[0], host, 'removed where it is');
+  assert.ok(part.version() > version, 'removed: pick ids changed');
+  frame();
+  assert.equal(host.length, 2);
+  assert.deepEqual(ids(), ['b', 'c']);
+  assert.equal(set.size(), 2);
+  version = part.version();
+  set.upsert([dot('a', 0)]);
+  assert.ok(part.version() > version, 'added: pick ids changed');
+  assert.deepEqual(ids(), ['b', 'c', 'a']);
+  // A new id sent twice is drawn once, as the last one.
+  set.upsert([
+    { ...dot('n', 6), lodGroup: 'first' },
+    { ...dot('n', 6), lodGroup: 'last' },
+  ]);
+  const picks = part.sets.get('population').pickIds;
+  assert.deepEqual(
+    picks.filter((pick) => pick.id === 'n').map((pick) => pick.lodGroup),
+    ['last'],
+  );
+  set.dispose();
+});
+
+test('a point moved in place sets only the members of its look that changed', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.points({ id: 'per-frame' });
+  const item = {
+    id: 'a',
+    pos: { x: 6378137, y: 0, z: 0 },
+    pixelSize: 4,
+    color: [1, 1, 1, 0.85],
+    scaleByDistance: { near: 100, nearValue: 1.5, far: 9000, farValue: 0.3 },
+    fadeByDistance: { near: 100, nearValue: 1, far: 9000, farValue: 0 },
+  };
+  set.upsert([item]);
+  const point = scene.added[0].get(0);
+  const written = [];
+  for (const key of ['color', 'scaleByDistance', 'translucencyByDistance'])
+    Object.defineProperty(point, key, {
+      set: () => written.push(key),
+      get: () => undefined,
+    });
+  item.pos.y = 10;
+  item.pixelSize = 2;
+  set.upsert([item]);
+  assert.deepEqual(written, [], 'nothing made anew for an unchanged look');
+  assert.equal(point.pixelSize, 2);
+  assert.equal(point.position.y, 10);
+  item.color = [1, 0, 0, 1];
+  item.scaleByDistance = { ...item.scaleByDistance, far: 12000 };
+  set.upsert([item]);
+  assert.deepEqual(written, ['color', 'scaleByDistance']);
+  // A colour changed in the caller's own array still reads as changed.
+  item.color[1] = 1;
+  set.upsert([item]);
+  assert.deepEqual(written, ['color', 'scaleByDistance', 'color']);
   set.dispose();
 });
 
@@ -3428,6 +3512,55 @@ test('draped glow and dash lines drape with their materials, each on a ground pr
         Cesium.Color.TRANSPARENT,
       ),
     );
+    set.dispose();
+  }));
+
+test('a draped line drawn by its own material changes colour in place; a batched one rebuilds', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'pulsing', clampTo: 'tiles' });
+    const positions = new Float64Array([
+      ...Object.values(Cesium.Cartesian3.fromDegrees(0, 0)),
+      ...Object.values(Cesium.Cartesian3.fromDegrees(0.01, 0.01)),
+    ]);
+    const jam = (alpha) => ({
+      id: 'jam',
+      positions,
+      widthPx: 9,
+      mode: 'draped',
+      style: { kind: 'glow', color: [0.9, 0.3, 0.3, alpha], power: 0.25 },
+    });
+    const slow = (alpha) => ({
+      id: 'slow',
+      positions,
+      widthPx: 4,
+      mode: 'draped',
+      style: { kind: 'solid', color: [0.9, 0.7, 0.2, alpha] },
+    });
+    set.set([jam(0.55), slow(0.2)]);
+    const host = scene.added[0];
+    const glow = [...Array(host.length).keys()]
+      .map((i) => host.get(i))
+      .find((p) => p.appearance?.material?.type === 'PolylineGlow');
+    assert.equal(
+      glow.classificationType,
+      Cesium.ClassificationType.CESIUM_3D_TILE,
+    );
+    set.upsert([jam(0.7)]);
+    assert.equal(scene.added[0], host, 'the same host');
+    assert.equal(glow.appearance.material.uniforms.color.alpha, 0.7);
+    assert.ok(!glow.isDestroyed(), 'the same ground primitive');
+    // Sent twice in one upsert, the last colour is the one it keeps.
+    set.upsert([jam(0.3), jam(0.7)]);
+    assert.equal(glow.appearance.material.uniforms.color.alpha, 0.7);
+    set.upsert([jam(0.3)]);
+    assert.equal(glow.appearance.material.uniforms.color.alpha, 0.3);
+    // Another width is another line: rebuilt.
+    set.upsert([{ ...jam(0.7), widthPx: 10 }]);
+    assert.notEqual(scene.added[0], host, 'a new width rebuilds');
+    const rebuilt = scene.added[0];
+    set.upsert([slow(0.4)]);
+    assert.notEqual(scene.added[0], rebuilt, 'a batched colour rebuilds');
     set.dispose();
   }));
 

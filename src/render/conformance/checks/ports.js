@@ -1736,6 +1736,47 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.points.population',
+      'points added and removed one by one draw and pick on their own, the others staying where they are',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.points({
+          id: 'conf:points-population',
+          blend: 'translucent',
+        });
+        const at = (k) =>
+          h.toEcef({ lon: AUSTIN.lon + 0.003 * k, lat: AUSTIN.lat });
+        const point = (k) => ({
+          id: `p${k}`,
+          pos: at(k),
+          pixelSize: 16,
+          color: [1, 0, 0, 0.9],
+          meta: { k },
+        });
+        const picked = (k) => {
+          const s = r.query.project(at(k));
+          const hit = s && r.query.pick(s.x, s.y);
+          return hit?.set === 'conf:points-population' ? hit.meta?.k : null;
+        };
+        set.upsert([point(0)]);
+        set.upsert([point(1), point(-1)]);
+        await drawn(h, r);
+        deepEqual([picked(-1), picked(0), picked(1)], [-1, 0, 1], 'all drawn');
+        set.remove(['p0']);
+        await drawn(h, r);
+        deepEqual(
+          [picked(-1), picked(0), picked(1)],
+          [-1, null, 1],
+          'removed: only that one is gone',
+        );
+        equal(set.size(), 2, 'two left');
+        set.upsert([point(0)]);
+        await drawn(h, r);
+        equal(picked(0), 0, 'added again: drawn again');
+        set.dispose();
+      },
+    ),
+    check(
       'draw.columns',
       'column updates are rows: sized, picked, removed',
       async (h, r) => {

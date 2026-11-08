@@ -57,6 +57,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.motion.shared',
   'draw.pick',
   'draw.points.update',
+  'draw.points.population',
   'draw.lodGroup',
   'draw.sets',
   'draw.shapes.drapedRotation',

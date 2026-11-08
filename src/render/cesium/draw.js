@@ -240,6 +240,10 @@ function flowTime(speed) {
 const ICONS_CHANGED = 'changed';
 const ICONS_KEPT = 'kept';
 
+/** What `patchPoints` did: points added too, or only changed in place. */
+const POINTS_ADDED = 'added';
+const POINTS_KEPT = 'kept';
+
 /**
  * The draw port over `scene`, and what the other ports read of it: the live
  * sets by id, a version that changes with what height queries see through
@@ -300,6 +304,7 @@ export function createCesiumDraw({
       record.pickIds = [];
       record.placed = [];
       record.patchable = null;
+      record.pointHost = null;
       // The lines as the host this build replaces draws them.
       record.drawnParts = record.lineParts;
       record.lineParts = null;
@@ -341,11 +346,19 @@ export function createCesiumDraw({
           record.gpu.write(list);
           return patched();
         }
-        // Points restyled or moved, lines that only change how they show
-        // or where an undraped one runs, and clamped shapes that only show
-        // or hide, are changed where they are.
+        // Points restyled, moved or added keep the pick ids they had, so
+        // only points added change what height queries see through.
+        const points = patchPoints(record, list);
+        if (points) {
+          for (const item of list) items.set(item.id, item);
+          if (points === POINTS_ADDED) setsVersion += 1;
+          requestRender();
+          return;
+        }
+        // Lines that only change how they show or where an undraped one
+        // runs, and clamped shapes that only show or hide, are changed
+        // where they are.
         if (
-          patchPoints(record, list) ||
           patchLines(record, list) ||
           patchShapes(record, list) ||
           (kind === 'models' && modelSets.upsert(record, list))
@@ -367,6 +380,7 @@ export function createCesiumDraw({
       },
       remove(ids) {
         for (const id of ids) items.delete(id);
+        if (removePoints(record, ids)) return patched();
         if (record.gpu) {
           record.gpu.drop(ids);
           return patched();
@@ -933,46 +947,65 @@ export function createCesiumDraw({
         item.height,
         record.spec.clampTo,
       );
-      let primitive;
-      let dot;
       if (heightReference === Cesium.HeightReference.NONE) {
         points ??= new Cesium.PointPrimitiveCollection({
           blendOption: pointBlendOf(record.spec.blend),
         });
-        primitive = points.add({
-          position,
-          ...pointLook(item),
-          show,
-          id: pickId(record, item),
-        });
-      } else {
-        // Point primitives cannot follow the ground.
-        dots ??= new Cesium.BillboardCollection({ scene });
-        primitive = addDot(dots, item, {
-          position,
-          heightReference,
-          show,
-          distanceDisplayCondition: displayConditionOf(item.displayRange),
-          id: pickId(record, item),
-        });
-        dot = { dot: dotLook(item).key, heightReference };
+        addPoint(record, points, item, position, show);
+        continue;
       }
+      // Point primitives cannot follow the ground.
+      dots ??= new Cesium.BillboardCollection({ scene });
+      const primitive = addDot(dots, item, {
+        position,
+        heightReference,
+        show,
+        distanceDisplayCondition: displayConditionOf(item.displayRange),
+        id: pickId(record, item),
+      });
       record.patchable ??= new Map();
       record.patchable.set(item.id, {
         primitive,
         placed: place(record, primitive, position, show),
         at: placeOf(item),
         lodGroup: item.lodGroup,
-        ...dot,
+        dot: dotLook(item).key,
+        heightReference,
       });
     }
-    let host = points ?? dots ?? new Cesium.PointPrimitiveCollection();
+    // With no clamped dots, its points are drawn by one collection that
+    // takes points added later where it is.
+    if (!dots)
+      points ??= new Cesium.PointPrimitiveCollection({
+        blendOption: pointBlendOf(record.spec.blend),
+      });
+    record.patchable ??= new Map();
+    record.pointHost = dots ? null : points;
+    let host = points ?? dots;
     if (points && dots) {
       host = new Cesium.PrimitiveCollection();
       host.add(points);
       host.add(dots);
     }
     replaceHost(record, host);
+  }
+
+  /** Draw an unclamped point item on `points`, the set's collection. */
+  function addPoint(record, points, item, position, show) {
+    const primitive = points.add({
+      position,
+      ...pointLook(item),
+      show,
+      id: pickId(record, item),
+    });
+    record.patchable ??= new Map();
+    record.patchable.set(item.id, {
+      primitive,
+      placed: place(record, primitive, position, show),
+      at: placeOf(item),
+      lodGroup: item.lodGroup,
+      look: pointLookOf(item),
+    });
   }
 
   /** How a point primitive draws an unclamped point item. */
@@ -989,6 +1022,71 @@ export function createCesiumDraw({
     };
   }
 
+  // An unclamped point's look, by the item's members each primitive member
+  // is drawn from: an upsert sets only the members whose values changed,
+  // so a set moving every point each frame makes nothing new for the look.
+  const LOOK = [
+    ['pixelSize', (item) => item.pixelSize],
+    ['color', (item) => toColor(item.color)],
+    ['outlineColor', (item) => toColor(item.outlineColor ?? [0, 0, 0, 0])],
+    ['outlineWidth', (item) => item.outlineWidth ?? 0],
+    ['disableDepthTestDistance', (item) => item.disableDepthTest ?? 0],
+    ['scaleByDistance', (item) => nearFarOf(item.scaleByDistance)],
+    ['translucencyByDistance', (item) => nearFarOf(item.fadeByDistance)],
+    [
+      'distanceDisplayCondition',
+      (item) => displayConditionOf(item.displayRange),
+    ],
+  ];
+  const LOOK_FROM = [
+    'pixelSize',
+    'color',
+    'outlineColor',
+    'outlineWidth',
+    'disableDepthTest',
+    'scaleByDistance',
+    'fadeByDistance',
+    'displayRange',
+  ];
+
+  /** A copy of the item members a point's look is drawn from. */
+  const pointLookOf = (item) => LOOK_FROM.map((key) => plainCopy(item[key]));
+
+  /**
+   * Whether `value` holds what `kept` (a `plainCopy` of a colour, curve or
+   * range) holds, read without allocating: points moved every frame
+   * compare their looks every frame.
+   */
+  function sameLookValue(kept, value) {
+    if (Object.is(kept, value)) return true;
+    if (
+      !kept ||
+      !value ||
+      typeof kept !== 'object' ||
+      typeof value !== 'object'
+    )
+      return false;
+    if (Array.isArray(kept) !== Array.isArray(value)) return false;
+    let count = 0;
+    for (const key in value) {
+      if (value[key] === undefined) continue;
+      count += 1;
+      if (!Object.is(kept[key], value[key])) return false;
+    }
+    for (const key in kept) if (kept[key] !== undefined) count -= 1;
+    return count === 0;
+  }
+
+  /** Set the members of a point's look whose item values changed. */
+  function patchLook(was, item) {
+    for (let i = 0; i < LOOK.length; i++) {
+      const value = item[LOOK_FROM[i]];
+      if (sameLookValue(was.look[i], value)) continue;
+      was.primitive[LOOK[i][0]] = LOOK[i][1](item);
+      was.look[i] = plainCopy(value);
+    }
+  }
+
   const PLACE_KEYS = ['x', 'y', 'z', 'lon', 'lat', 'height'];
 
   /**
@@ -998,25 +1096,68 @@ export function createCesiumDraw({
   const placeOf = (item) =>
     PLACE_KEYS.map((key) => item.pos?.[key]).concat(item.height);
 
+  /** Whether an item is somewhere else than `at`; if so, `at` takes it. */
+  function movedFrom(at, item) {
+    let moved = !Object.is(item.height, at[PLACE_KEYS.length]);
+    for (let i = 0; !moved && i < PLACE_KEYS.length; i++)
+      moved = !Object.is(item.pos?.[PLACE_KEYS[i]], at[i]);
+    if (!moved) return false;
+    for (let i = 0; i < PLACE_KEYS.length; i++)
+      at[i] = item.pos?.[PLACE_KEYS[i]];
+    at[PLACE_KEYS.length] = item.height;
+    return true;
+  }
+
+  /** A position as Cesium's, written into `result`. */
+  function toCartesianInto(pos, result) {
+    if ('x' in pos)
+      return Cesium.Cartesian3.fromElements(pos.x, pos.y, pos.z, result);
+    return Cesium.Cartesian3.fromDegrees(
+      pos.lon,
+      pos.lat,
+      pos.height ?? 0,
+      undefined,
+      result,
+    );
+  }
+
   /**
    * Upsert points in place, without a rebuild, when every item is one the
    * set draws now, in the same LOD group, and stays drawn the same way: an
    * unclamped point stays unclamped (then how it looks changes on the point
-   * it has), a clamped dot clamps the same way and keeps its look (the dot
-   * image it is drawn with). Where it is, its `meta`, its display range and
-   * whether it shows change in place; a dot moved follows the ground where
-   * it now is. False, changing nothing, otherwise.
+   * it has, member by member), a clamped dot clamps the same way and keeps
+   * its look (the dot image it is drawn with). Where it is, its `meta`, its
+   * display range and whether it shows change in place; a dot moved follows
+   * the ground where it now is. A new unclamped item joins a set drawn by
+   * one point collection where it is. `POINTS_ADDED` when items were
+   * added, `POINTS_KEPT` when all were changed in place; false, changing
+   * nothing, otherwise.
    */
   function patchPoints(record, list) {
     const patchable = record.patchable;
     if (record.kind !== 'points' || !patchable) return false;
+    // New ids, to tell one sent twice (a rebuild keeps the last).
+    let added = null;
     for (const item of list) {
       const was = patchable.get(item.id);
-      if (!was || item.lodGroup !== was.lodGroup) return false;
       const heightReference = heightReferenceOf(
         item.height,
         record.spec.clampTo,
       );
+      if (!was) {
+        // Only an unclamped point joins, on the set's one collection.
+        if (
+          !record.pointHost ||
+          record.host !== record.pointHost ||
+          record.pointHost.isDestroyed?.() ||
+          heightReference !== Cesium.HeightReference.NONE ||
+          added?.has(item.id)
+        )
+          return false;
+        (added ??= new Set()).add(item.id);
+        continue;
+      }
+      if (item.lodGroup !== was.lodGroup) return false;
       if (was.dot === undefined) {
         if (heightReference !== Cesium.HeightReference.NONE) return false;
       } else if (
@@ -1028,14 +1169,19 @@ export function createCesiumDraw({
     for (const item of list) {
       const was = patchable.get(item.id);
       const show = item.show !== false && displayable(item.displayRange);
-      const at = placeOf(item);
-      if (at.some((value, i) => !Object.is(value, was.at[i]))) {
+      if (!was) {
         const position = toCartesian(item.pos);
-        was.primitive.position = position;
-        was.placed.position = position;
-        was.at = at;
+        addPoint(record, record.pointHost, item, position, show);
+        const placed = patchable.get(item.id).placed;
+        placed.primitive.show = shownNow(record, placed);
+        continue;
       }
-      if (was.dot === undefined) Object.assign(was.primitive, pointLook(item));
+      if (movedFrom(was.at, item)) {
+        // The cull's own copy of where it is; the primitive copies it.
+        toCartesianInto(item.pos, was.placed.position);
+        was.primitive.position = was.placed.position;
+      }
+      if (was.dot === undefined) patchLook(was, item);
       else {
         was.primitive.distanceDisplayCondition = displayConditionOf(
           item.displayRange,
@@ -1045,6 +1191,38 @@ export function createCesiumDraw({
       was.primitive.id.meta = item.meta;
       was.placed.shown = show;
       was.primitive.show = shownNow(record, was.placed);
+    }
+    return added ? POINTS_ADDED : POINTS_KEPT;
+  }
+
+  /**
+   * Remove points from a set drawn by one point collection where they are,
+   * as the items that stay keep drawing. False, changing nothing, for a set
+   * drawn otherwise.
+   */
+  function removePoints(record, ids) {
+    if (
+      record.kind !== 'points' ||
+      !record.pointHost ||
+      record.host !== record.pointHost ||
+      record.pointHost.isDestroyed?.()
+    )
+      return false;
+    const gone = new Set();
+    for (const id of ids) {
+      const was = record.patchable.get(id);
+      if (!was) continue;
+      record.patchable.delete(id);
+      record.pointHost.remove(was.primitive);
+      gone.add(was.primitive);
+    }
+    if (gone.size) {
+      record.pickIds = record.pickIds.filter((pick) =>
+        record.patchable.has(pick.id),
+      );
+      record.placed = record.placed.filter(
+        (placed) => !gone.has(placed.primitive),
+      );
     }
     return true;
   }
@@ -1394,6 +1572,7 @@ export function createCesiumDraw({
         const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
         const part = {
           look: lineLook(item),
+          shape: lineLook(item, true),
           positions: flatPositions(item.positions),
           clampTo,
           id: pickId(record, item),
@@ -1488,12 +1667,12 @@ export function createCesiumDraw({
    * How a line draws, but for where it runs, whether it shows and how much
    * of it is revealed: lines that keep it can be changed in place.
    */
-  const lineLook = (item) =>
+  const lineLook = (item, colourless = false) =>
     JSON.stringify([
       item.mode,
       item.widthPx,
       item.clampTo,
-      item.style,
+      colourless ? { ...item.style, color: undefined } : item.style,
       item.depthFailColor,
       // A dash is drawn only with a depth-fail colour, the same in any key order.
       item.depthFailColor && item.depthFailDash
@@ -1517,7 +1696,52 @@ export function createCesiumDraw({
   }
 
   const samePositions = (a, b) =>
-    a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
+    a === b ||
+    (a.length === b.length && a.every((value, i) => Object.is(value, b[i])));
+
+  /**
+   * Whether a line's positions are those `flat` (a `flatPositions`) holds,
+   * read without flattening them: lines sent again every frame, unmoved,
+   * make nothing new.
+   */
+  function flatEquals(positions, flat) {
+    const same = (value, at) => at < flat.length && Object.is(value, flat[at]);
+    if (positions instanceof Float64Array) {
+      if (positions.length !== flat.length) return false;
+      for (let i = 0; i < positions.length; i++)
+        if (!same(positions[i], i)) return false;
+      return true;
+    }
+    let at = 0;
+    for (let i = 0; i < positions.length; i++) {
+      const p = positions[i];
+      if ('x' in p) {
+        if (!same(p.x, at) || !same(p.y, at + 1) || !same(p.z, at + 2))
+          return false;
+        at += 3;
+        continue;
+      }
+      if (
+        !same(p.lon, at) ||
+        !same(p.lat, at + 1) ||
+        !same(p.height ?? 0, at + 2) ||
+        !same(NaN, at + 3)
+      )
+        return false;
+      at += 4;
+    }
+    return at === flat.length;
+  }
+
+  /**
+   * Whether a draped line drawn by a material of its own (not a batch's,
+   * nor revealed or in segments) changes only its colour: its material
+   * takes the new one in place.
+   */
+  const recolourable = (was, item) =>
+    Boolean(was.clampTo && was.material && !was.segments) &&
+    !revealed(item) &&
+    was.shape === lineLook(item, true);
 
   /**
    * Whether a draped line's upsert can change it in place: its ground
@@ -1547,13 +1771,21 @@ export function createCesiumDraw({
     if (record.kind !== 'lines' || !parts) return false;
     // Each draped line's positions, flattened once for both passes.
     const flats = new Map();
+    // Each item's look, in order: an item sent twice is changed twice.
+    const looks = [];
     for (const item of list) {
       const was = parts.get(item.id);
-      if (!was || was.look !== lineLook(item)) return false;
+      if (!was) return false;
+      const look = lineLook(item);
+      // Only its colour may change: its material takes it in place.
+      if (was.look !== look && !recolourable(was, item)) return false;
+      looks.push(look);
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
       if (!was.clampTo) continue;
-      const flat = flatPositions(item.positions);
+      const flat = flatEquals(item.positions, was.positions)
+        ? was.positions
+        : flatPositions(item.positions);
       // A segmented line that moves is built anew, segment by segment (so
       // one that moves every frame is not drawn until it stops: segments
       // are for lines that move only now and then).
@@ -1563,9 +1795,14 @@ export function createCesiumDraw({
       if (!drapedPatchable(record, was, flat)) return false;
       flats.set(item.id, flat);
     }
-    for (const item of list) {
+    for (let k = 0; k < list.length; k++) {
+      const item = list[k];
       const was = parts.get(item.id);
       const show = item.show !== false;
+      if (was.look !== looks[k]) {
+        was.material.uniforms.color = toColor(item.style.color);
+        was.look = looks[k];
+      }
       if (was.polyline) {
         const positions = linePositions(item);
         was.polyline.positions = positions;
