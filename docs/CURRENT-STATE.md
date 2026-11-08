@@ -1635,7 +1635,8 @@ the map switches to Esri imagery, and exit puts it back unless the operator
 picked another map meanwhile; another owner already holding the map (an
 imagery comparison) keeps it as it is. While orbit holds the lease, Recent
 Imagery cannot take it: turned on in orbit, the layer reports the comparison
-in use and needs turning off and on again after exit. The Cockpit cloud pass is off in orbit
+in use until, after exit, it is turned off and on again or its shown days
+are cleared and picked again. The Cockpit cloud pass is off in orbit
 (it fades out above 24 km); cloud cover from orbit is the Weather layer's,
 and the saved cloud preference stands for the next aircraft or bridge. The layer hides the satellite's dot, docked
 companions, its own orbit ring and its detection bracket, and draws every

@@ -22,6 +22,7 @@ import {
   zoomTransitionState,
 } from '../cockpitOrbital.js';
 import {
+  clampOrbitalLook,
   easeLook,
   lookIsOffset,
   orbitalLookReadoutParts,
@@ -418,9 +419,14 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   // Tilted past the limb, the view's centre looks into space: no swath. The
   // camera eases toward the target, so both must meet the Earth; the HUD
   // republishes on its cadence, so the swath appears once the view arrives.
+  // Exact angles here, not the whole degrees the readout rounds to.
+  const target = clampOrbitalLook(state.lookTarget);
   const seesEarth =
     !offset ||
-    (offNadirCentreMeetsEarth(info.altitudeM, tilt) &&
+    (offNadirCentreMeetsEarth(info.altitudeM, {
+      northDeg: target.pitchDeg,
+      eastDeg: target.yawDeg,
+    }) &&
       offNadirCentreMeetsEarth(info.altitudeM, {
         northDeg: state.lookView?.pitchDeg ?? 0,
         eastDeg: state.lookView?.yawDeg ?? 0,
