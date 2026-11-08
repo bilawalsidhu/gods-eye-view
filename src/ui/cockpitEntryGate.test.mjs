@@ -462,7 +462,7 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   assert.deepEqual(on(manager), ['flights', 'military']);
 });
 
-test('a bridge ride keeps Live AIS Vessels when Contacts had turned it on', async (t) => {
+test('Live AIS Vessels, once adopted as the ridden layer, outlives Contacts', async (t) => {
   const live = await liveFixture(t, {
     tracked: { layerId: 'flights', info: CIVIL },
   });
