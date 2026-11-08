@@ -12,10 +12,8 @@ import {
   countGeoJsonGeometry,
   countKmlGeometry,
   deduplicateKmlStyles,
-  detachImportedTime,
   gpxToGeoJson,
   importFeatureName,
-  scrubImportedEntities,
   sanitizeKmlDocument,
   detectGeoFileFormat,
   importDisplayName,
@@ -26,6 +24,7 @@ import {
   readZipEntries,
   resolveKmzPath,
 } from './geoFileImport.js';
+import { detachImportedTime, scrubImportedEntities } from './geoImportPins.js';
 import { createImportImageBudget, importImageSize } from './geoImportImages.js';
 
 test('real loader grounds XYZ GeoJSON and strips loader-sensitive metadata before allocation', async () => {

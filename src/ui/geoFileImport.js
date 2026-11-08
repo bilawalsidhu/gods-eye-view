@@ -2,9 +2,9 @@
 import {
   GeoImportError,
   MAX_IMPORTED_FILES,
-  dataSourcePoints,
   loadGeoFile,
 } from '../data/geoFileImport.js';
+import { dataSourcePoints } from '../data/geoImportPins.js';
 import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
 import { flyToFootprint } from './flyToDataSource.js';
 

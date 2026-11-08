@@ -5,7 +5,7 @@ import {
   cancelCameraArrival,
   ownCameraArrival,
 } from '../data/cameraArrival.js';
-import { dataSourcePoints } from '../data/geoFileImport.js';
+import { dataSourcePoints } from '../data/geoImportPins.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneQuery } from '../testSupport/fakeCesiumScene.mjs';
 import { flyToFootprint } from './flyToDataSource.js';

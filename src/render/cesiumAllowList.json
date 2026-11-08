@@ -13,7 +13,6 @@
   "src/data/cctvGizmo.js",
   "src/data/detection.js",
   "src/data/focusDeemphasis.js",
-  "src/data/geoFileImport.js",
   "src/data/geoImportPins.js",
   "src/data/iconOrientation.js",
   "src/data/iconSegment.js",
