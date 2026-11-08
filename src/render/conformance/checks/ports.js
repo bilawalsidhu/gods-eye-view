@@ -1379,6 +1379,73 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.settled',
+      'solid lines in space left unchanged for many frames still pick, hide, recolour and move in place',
+      async (h, r) => {
+        await overAustin(h, r);
+        const at = (dLon, dLat, height = 300) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-settled' });
+        const mine = (pos, id) => {
+          const s = r.query.project(pos);
+          return Boolean(
+            s &&
+            r.query
+              .drillPick(s.x, s.y)
+              .some((hit) => hit.set === 'conf:line-settled' && hit.id === id),
+          );
+        };
+        const until = async (test) => {
+          for (let i = 0; i < 300; i++) {
+            await drawn(h, r, 1);
+            if (test()) return true;
+          }
+          return false;
+        };
+        const line = (id, dLat, extra = {}) => ({
+          id,
+          positions: [at(-0.003, dLat), at(0.003, dLat)],
+          widthPx: 8,
+          mode: '3d',
+          style: { kind: 'solid', color: [1, 0.4, 0.1, 1] },
+          ...extra,
+        });
+        lines.set([
+          line('a', 0.002),
+          line('b', -0.002, {
+            style: { kind: 'solid', color: [0.1, 0.6, 1, 0.6] },
+          }),
+        ]);
+        ok(await until(() => mine(at(0, 0.002), 'a')), 'drawn');
+        // Long enough for a renderer to draw unchanged lines another way.
+        await drawn(h, r, 120);
+        ok(mine(at(0, 0.002), 'a'), 'still picks once settled');
+        ok(mine(at(0, -0.002), 'b'), 'a translucent one too');
+        lines.upsert([line('a', 0.002, { show: false })]);
+        await drawn(h, r);
+        ok(!mine(at(0, 0.002), 'a'), 'hidden in place');
+        ok(mine(at(0, -0.002), 'b'), 'the other still drawn');
+        lines.upsert([
+          line('a', 0.002, {
+            style: { kind: 'solid', color: [0.2, 1, 0.2, 1] },
+          }),
+        ]);
+        ok(await until(() => mine(at(0, 0.002), 'a')), 'shown and recoloured');
+        await drawn(h, r, 120);
+        lines.upsert([line('b', -0.004)]);
+        ok(
+          await until(
+            () => mine(at(0, -0.004), 'b') && !mine(at(0, -0.002), 'b'),
+          ),
+          'moved',
+        );
+        equal(lines.size(), 2, 'held');
+        lines.dispose();
+        await drawn(h, r);
+        ok(!mine(at(0, 0.002), 'a'), 'gone with its set');
+      },
+    ),
+    check(
       'draw.shapes.drapedRotation',
       'a draped rectangle with an image fill draws turned by its rotation, picks there, and hides in place',
       async (h, r) => {

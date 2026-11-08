@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test from 'node:test';
 import { bindRenderer, drawOf, findDraw } from '../rendererOf.js';
-import { createCesiumDraw, revealUniform, unboundDrawPart } from './draw.js';
+import {
+  createCesiumDraw,
+  FEW_LOOSE_LINES,
+  LONG_SETTLE_FRAMES,
+  revealUniform,
+  SETTLE_FRAMES,
+  unboundDrawPart,
+} from './draw.js';
 import { drawHitOf } from './drawHit.js';
 import { MODEL_RETRY_MS } from './drawModels.js';
 
@@ -1942,10 +1949,11 @@ test('lines that change only whether they show, or where an undraped one runs, c
     const [, idB] = ground.geometryInstances.map((instance) => instance.id);
     assert.equal(idB.meta, 'new', 'picks read the new meta');
     // An undraped line moves and hides in place, and keeps its new meta.
-    const line = host.get(0).get(0);
+    // Beside the collection, a static batch once the set settles.
+    const line = host.get(0).get(0).get(0);
     set.upsert([stem('s', 2500, false)]);
     assert.equal(scene.added[0], host);
-    assert.equal(host.get(0).get(0), line);
+    assert.equal(host.get(0).get(0).get(0), line);
     assert.equal(line.show, false);
     assert.equal(line.id.meta, 2500);
     assert.ok(
@@ -1977,6 +1985,322 @@ test('lines that change only whether they show, or where an undraped one runs, c
     third.get(1).destroy();
     set.upsert([draped('a', false)]);
     assert.notEqual(scene.added.at(-1), third, 'its ground destroyed');
+    set.dispose();
+  }));
+
+/** A solid 3D stem for the settling tests. */
+const settleStem = (id, height, extra = {}) => ({
+  id,
+  positions: [
+    Cesium.Cartesian3.fromDegrees(0, 0, 0),
+    Cesium.Cartesian3.fromDegrees(0, 0, height),
+  ],
+  widthPx: 2,
+  mode: '3d',
+  style: { kind: 'solid', color: [1, 0, 0, 1] },
+  meta: height,
+  ...extra,
+});
+
+/**
+ * A line set over a fake scene with what the settling tests read: its
+ * host, the polyline collection, the static batches beside it, frames to
+ * settle, and a batch's build finished, its instance attributes kept per
+ * batch as a built primitive keeps them.
+ */
+function settlingSet(id = 'stems') {
+  const { scene, draw, frame } = drawOver();
+  const set = draw.lines({ id });
+  const attributes = new WeakMap();
+  const attrs = (primitive, itemId) => attributes.get(primitive).get(itemId);
+  return {
+    scene,
+    set,
+    frame,
+    host: () => scene.added[0],
+    polylines: () => scene.added[0].get(0),
+    batches() {
+      const host = scene.added[0];
+      const found = [];
+      for (let i = 1; i < host.length; i++) found.push(host.get(i));
+      return found;
+    },
+    settle() {
+      for (let i = 0; i < SETTLE_FRAMES; i++) frame();
+    },
+    built(primitive) {
+      Object.defineProperty(primitive, 'ready', { value: true });
+      const own = new Map();
+      attributes.set(primitive, own);
+      primitive.getGeometryInstanceAttributes = (pickId) => {
+        if (!own.has(pickId.id)) {
+          const instance = primitive.geometryInstances.find(
+            (one) => one.id === pickId,
+          );
+          if (!instance) return undefined;
+          own.set(pickId.id, {
+            show: new Uint8Array(instance.attributes.show.value),
+            color: new Uint8Array(instance.attributes.color.value),
+          });
+        }
+        return own.get(pickId.id);
+      };
+    },
+    attrs,
+  };
+}
+
+test('unchanged solid 3D lines settle into a static batch, changed there in place', () =>
+  withImageClasses(() => {
+    const s = settlingSet();
+    const { set, frame } = s;
+    const stem = settleStem;
+    const glow = {
+      id: 'glow',
+      positions: stem('g', 1).positions,
+      widthPx: 4,
+      mode: '3d',
+      style: { kind: 'glow', color: '#fff', power: 0.2 },
+    };
+    set.set([
+      stem('a', 100),
+      stem('b', 200, { style: { kind: 'solid', color: [0, 1, 0, 0.5] } }),
+      stem('c', 300, { show: false }),
+      glow,
+    ]);
+    const host = s.host();
+    const polylines = s.polylines();
+    assert.ok(polylines instanceof Cesium.PolylineCollection);
+    assert.equal(polylines.length, 4, 'drawn by the collection at once');
+    for (let i = 0; i < SETTLE_FRAMES - 1; i++) frame();
+    assert.equal(host.length, 1, 'not before it settles');
+    frame();
+    // Opaque and translucent lines draw in passes of their own.
+    const [opaque, translucent] = s.batches();
+    assert.ok(opaque instanceof Cesium.Primitive);
+    assert.equal(opaque.show, false, 'hidden while it builds');
+    assert.equal(opaque.appearance.translucent, false);
+    assert.equal(translucent.appearance.translucent, true);
+    assert.deepEqual(
+      opaque.geometryInstances.map((one) => one.id.id),
+      ['a', 'c'],
+      'every solid line, shown or not; the glow stays in the collection',
+    );
+    const [a, c] = opaque.geometryInstances;
+    assert.ok(a.geometry instanceof Cesium.PolylineGeometry);
+    assert.equal(a.geometry._width, 2);
+    assert.deepEqual([...c.attributes.show.value], [0]);
+    assert.deepEqual([...a.attributes.color.value], [255, 0, 0, 255]);
+    // Picks name the set and item, through the same pick ids.
+    assert.equal(a.id, polylines.get(0).id);
+    assert.deepEqual(drawHitOf({ primitive: opaque, id: a.id }), {
+      set: 'stems',
+      id: 'a',
+      meta: 100,
+      surface: false,
+    });
+    // A line in the collection that moves drops the build, which drew it
+    // where it was; one shown, or a glow line changed, does not.
+    set.upsert([stem('c', 300)]);
+    set.upsert([{ ...glow, widthPx: 4, show: false }]);
+    assert.equal(s.host(), host, 'changed in place');
+    assert.equal(s.batches().length, 2, 'still building');
+    set.upsert([stem('a', 150)]);
+    assert.equal(s.batches().length, 0, 'dropped');
+    set.upsert([stem('a', 100)]);
+    s.settle();
+    const [opaqueAgain, translucentAgain] = s.batches();
+    s.built(opaqueAgain);
+    s.built(translucentAgain);
+    frame();
+    assert.equal(opaqueAgain.show, true, 'swapped in once built');
+    assert.equal(polylines.length, 1, 'the glow alone left in the collection');
+    assert.equal(polylines.get(0).id.id, 'glow');
+    // Show, colour and meta change in place on the batch.
+    set.upsert([
+      stem('a', 100, { show: false }),
+      stem('c', 300, { style: { kind: 'solid', color: [0, 0, 1, 1] } }),
+    ]);
+    assert.equal(s.host(), host);
+    assert.deepEqual([...s.attrs(opaqueAgain, 'a').show], [0]);
+    assert.deepEqual([...s.attrs(opaqueAgain, 'c').color], [0, 0, 255, 255]);
+    assert.equal(polylines.length, 1, 'nothing left the batch');
+    set.upsert([stem('a', 100, { meta: 'new' })]);
+    assert.deepEqual([...s.attrs(opaqueAgain, 'a').show], [1]);
+    assert.equal(opaqueAgain.geometryInstances[0].id.meta, 'new');
+    // A line that moves leaves the batch, hidden there, for the
+    // collection; it settles back with the rest.
+    set.upsert([stem('a', 900)]);
+    assert.equal(s.host(), host);
+    assert.deepEqual([...s.attrs(opaqueAgain, 'a').show], [0]);
+    assert.equal(polylines.length, 2);
+    const moved = polylines.get(1);
+    assert.equal(moved.id.id, 'a');
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        moved.positions[1],
+        Cesium.Cartesian3.fromDegrees(0, 0, 900),
+        1e-6,
+      ),
+    );
+    // So does one turned translucent.
+    set.upsert([
+      stem('c', 300, { style: { kind: 'solid', color: [0, 0, 1, 0.4] } }),
+    ]);
+    assert.equal(polylines.length, 3);
+    // Two lines are few beside a batch: they wait longer.
+    s.settle();
+    assert.equal(s.batches().length, 2, 'not yet');
+    for (let i = SETTLE_FRAMES; i < LONG_SETTLE_FRAMES; i++) frame();
+    const next = s.batches().slice(2);
+    assert.equal(next.length, 2, 'built beside the batches drawing now');
+    assert.deepEqual(
+      next.flatMap((one) => one.geometryInstances.map((i) => i.id.id)),
+      ['a', 'b', 'c'],
+    );
+    // A batched line shown or hidden while the next batch builds shows
+    // there as its item now asks, once it is built.
+    set.upsert([
+      stem('b', 200, {
+        style: { kind: 'solid', color: [0, 1, 0, 0.5] },
+        show: false,
+      }),
+    ]);
+    assert.deepEqual([...s.attrs(translucentAgain, 'b').show], [0]);
+    assert.equal(s.batches().length, 4, 'the build goes on');
+    next.forEach(s.built);
+    frame();
+    assert.deepEqual(s.batches(), next, 'the old batches are gone');
+    assert.equal(opaqueAgain.isDestroyed(), true);
+    assert.deepEqual([...s.attrs(next[1], 'b').show], [0]);
+    assert.equal(polylines.length, 1);
+    // A line that looks different is still a rebuild.
+    set.upsert([stem('b', 200, { widthPx: 5 })]);
+    assert.notEqual(s.host(), host);
+    set.dispose();
+  }));
+
+test('many lines left beside a static batch settle as soon as they are unchanged', () =>
+  withImageClasses(() => {
+    const s = settlingSet();
+    const { set } = s;
+    const stems = (height) =>
+      Array.from({ length: FEW_LOOSE_LINES + 1 }, (_, i) =>
+        settleStem(`s${i}`, height + i),
+      );
+    set.set(stems(100));
+    s.settle();
+    const [first] = s.batches();
+    s.built(first);
+    s.frame();
+    set.upsert(stems(500));
+    assert.equal(s.polylines().length, FEW_LOOSE_LINES + 1, 'all moved');
+    s.settle();
+    assert.equal(s.batches().length, 2, 'rebuilding at once');
+    set.dispose();
+  }));
+
+test('a line under half a pixel wide, which the collection does not draw, never settles', () =>
+  withImageClasses(() => {
+    const s = settlingSet();
+    s.set.set([
+      settleStem('thin', 100, { widthPx: 0.25 }),
+      settleStem('a', 200),
+    ]);
+    s.settle();
+    const [batch] = s.batches();
+    assert.deepEqual(
+      batch.geometryInstances.map((one) => one.id.id),
+      ['a'],
+    );
+    s.set.dispose();
+  }));
+
+test('a settling line set keeps what was drawn, not the item a caller changes in place', () =>
+  withImageClasses(() => {
+    const s = settlingSet();
+    const { set } = s;
+    const a = settleStem('a', 100);
+    set.set([a]);
+    const host = s.host();
+    // In the collection, a colour change takes the polyline's material in
+    // place.
+    set.upsert([{ ...a, style: { kind: 'solid', color: [0, 1, 0, 1] } }]);
+    assert.equal(s.host(), host, 'recoloured in place');
+    assert.ok(
+      Cesium.Color.equals(
+        s.polylines().get(0).material.uniforms.color,
+        new Cesium.Color(0, 1, 0, 1),
+      ),
+    );
+    // The same object, changed and sent again, is compared with what was
+    // drawn: a new width rebuilds.
+    const same = { ...a };
+    set.upsert([same]);
+    same.widthPx = 6;
+    set.upsert([same]);
+    assert.notEqual(s.host(), host, 'rebuilt for the new width');
+    assert.equal(s.polylines().get(0).width, 6);
+    set.dispose();
+  }));
+
+test('a settling line set rebuilt or gone while its batch builds, or after the viewer went, lets the batch go', () =>
+  withImageClasses(() => {
+    const s = settlingSet();
+    const { set } = s;
+    set.set([settleStem('a', 100), settleStem('b', 200)]);
+    s.settle();
+    const [building] = s.batches();
+    assert.ok(building, 'building');
+    // A rebuild draws a new host; the batch goes with the old one.
+    const old = s.host();
+    set.set([settleStem('a', 100)]);
+    assert.ok(!s.scene.added.includes(old), 'the old host is gone');
+    assert.equal(old.get(1), building);
+    assert.equal(s.batches().length, 0);
+    // Its build finishing later changes nothing.
+    s.built(building);
+    s.frame();
+    assert.equal(building.show, false);
+    s.settle();
+    const [again] = s.batches();
+    s.built(again);
+    s.frame();
+    assert.equal(again.show, true);
+    // A viewer destroyed under the set takes its batch with it: an upsert
+    // after that rebuilds rather than write to it.
+    s.host().destroy();
+    assert.equal(again.isDestroyed(), true);
+    set.upsert([settleStem('a', 100, { show: false })]);
+    assert.equal(s.polylines().get(0).show, false, 'drawn anew, hidden');
+    set.dispose();
+  }));
+
+test('a static batch that fails to build is reported once, and its lines stay in the collection', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const reported = [];
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => reported.push(error),
+    });
+    const set = part.port.lines({ id: 'failing' });
+    set.set([settleStem('a', 100)]);
+    for (let i = 0; i < SETTLE_FRAMES; i++) part.afterRender();
+    const host = scene.added[0];
+    const batch = host.get(1);
+    assert.ok(batch, 'building');
+    // Its build throws, as a primitive whose workers failed does: the
+    // batch keeps the error rather than throw it every frame.
+    batch.update({ passes: { render: true }, mode: Cesium.SceneMode.SCENE3D });
+    assert.ok(batch.failed, 'kept');
+    part.afterRender();
+    assert.deepEqual(reported, [batch.failed]);
+    assert.equal(host.length, 1, 'the build is gone');
+    assert.equal(host.get(0).length, 1, 'the collection draws the line');
+    for (let i = 0; i < SETTLE_FRAMES * 2; i++) part.afterRender();
+    assert.equal(host.length, 1, 'it settles no more');
+    assert.equal(reported.length, 1);
     set.dispose();
   }));
 
@@ -2987,14 +3311,16 @@ test('scene data packs draw their geometry and media marker through the Cesium d
   assert.equal(points.get(0).pixelSize, 12);
   assert.equal(points.get(0).outlineWidth, 2);
   assert.ok(Cesium.Color.CYAN.equals(points.get(0).color));
-  assert.ok(lines instanceof Cesium.PolylineCollection);
-  assert.equal(lines.get(0).width, 4);
+  // The collection, beside where its static batch goes.
+  assert.ok(lines.get(0) instanceof Cesium.PolylineCollection);
+  assert.equal(lines.get(0).get(0).width, 4);
   const fill = shapes.get(0);
   assert.ok(fill.geometryInstances.geometry instanceof Cesium.PolygonGeometry);
   assert.equal(fill.appearance.translucent, true);
   assert.equal(fill.appearance.flat, true);
   // A click names the feature's set and item, which the targets hold.
-  const hit = drawHitOf({ primitive: lines.get(0), id: lines.get(0).id });
+  const line = lines.get(0).get(0);
+  const hit = drawHitOf({ primitive: line, id: line.id });
   assert.deepEqual(targets.get(JSON.stringify(['data', 'line'])), {
     set: hit.set,
     id: hit.id,

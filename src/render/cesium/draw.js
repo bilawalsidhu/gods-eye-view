@@ -19,6 +19,11 @@
  * draped lines of a set made with `pickable: false` stay out of the pick
  * pass, so they never hide the ground geometry drawn under them from picks.
  *
+ * Solid lines in space start in a polyline collection, which costs every
+ * line every frame; once a set's lines stop changing for a few frames they
+ * settle into static batches that cost nothing until they change, and a
+ * line that moves again goes back to the collection (`settleLines`).
+ *
  * Icon sets whose items move, glide, recede, pick by proxy or switch images
  * by size, or that take columns, draw on the GPU instead (`gpuIcons.js`).
  *
@@ -129,6 +134,21 @@ class UnpickableGroundPrimitive extends Cesium.GroundPrimitive {
  * Images an icon set's collection may hold, or twice those it draws when
  * that is more, before it is built anew holding only those it draws.
  */
+/**
+ * A static batch of lines (`settleLines`): a build that fails keeps its
+ * error and draws nothing, where a primitive would throw it every frame.
+ */
+class StaticLines extends Cesium.Primitive {
+  update(frameState) {
+    if (this.failed) return;
+    try {
+      super.update(frameState);
+    } catch (error) {
+      this.failed = error;
+    }
+  }
+}
+
 const MAX_SPARE_IMAGES = 64;
 
 const ANCHORS = {
@@ -235,6 +255,20 @@ function flowTime(speed) {
   const cells = (performance.now() / 1000) * speed;
   return (cells - Math.floor(cells)) / speed;
 }
+
+/**
+ * Drawn frames a line set's lines stay unchanged before the solid ones
+ * among them settle into a static batch (`settleLines`).
+ */
+export const SETTLE_FRAMES = 30;
+
+/**
+ * Fewer lines than this left in the collection beside a static batch wait
+ * `LONG_SETTLE_FRAMES` to settle, as rebuilding the batch for them costs
+ * more than drawing them in the collection for a while.
+ */
+export const FEW_LOOSE_LINES = 64;
+export const LONG_SETTLE_FRAMES = 300;
 
 /** What `syncIcons` did: icons added or removed, or only changed in place. */
 const ICONS_CHANGED = 'changed';
@@ -1629,6 +1663,7 @@ export function createCesiumDraw({
     record.lineParts = parts;
     // Lines with a depth-fail colour, beside the collection.
     let deep = null;
+    const looks = lineLooks();
     for (const item of record.items.values()) {
       if (item.mode === 'draped') {
         const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
@@ -1676,31 +1711,37 @@ export function createCesiumDraw({
         parts.set(item.id, { look: lineLook(item), id, deep: primitive });
         continue;
       }
-      const positions = linePositions(item);
-      const reveal = revealed(item)
-        ? revealUniform(item.revealFraction, positions)
-        : undefined;
-      const material = lineMaterial(record, item.style, reveal);
-      const polyline = polylines.add({
-        positions,
-        width: item.widthPx,
-        material,
-        show: item.show !== false,
-        id: pickId(record, item),
-      });
+      const id = pickId(record, item);
+      const { polyline, reveal } = addPolyline(record, polylines, item, id);
+      const settled = settles(item);
       parts.set(item.id, {
         look: lineLook(item),
+        // How it draws but for its colour, and where it runs, to tell a
+        // change it takes in place: kept for lines that can settle.
+        shape: settled ? looks.shape(item) : null,
+        positions: settled ? flatPositions(item.positions) : null,
+        id,
         polyline,
-        reveal: reveal === undefined ? null : material,
+        reveal,
+        // Drawn in the set's static batch instead (`settleLines`).
+        batched: null,
       });
     }
     let own = polylines;
-    if (deep) {
+    // Lines in the collection that can settle into a static batch draw
+    // beside it once they do.
+    const settling = [...record.items.values()].some(settles);
+    if (deep || settling) {
       own = new Cesium.PrimitiveCollection();
       own.add(polylines);
-      own.add(deep);
+      if (deep) own.add(deep);
     }
     record.deepLines = deep;
+    record.polylines = polylines;
+    record.lineBox = settling ? own : null;
+    record.batch = null;
+    record.batchPending = null;
+    record.settled = 0;
     if (!draped.size && !glows.size && !alone.length) {
       noteFlows(record);
       return replaceHost(record, own);
@@ -1873,6 +1914,14 @@ export function createCesiumDraw({
     was.shape === (looks ? looks.shape(item) : lineLook(item, true));
 
   /**
+   * Whether an undraped line that can settle (in the collection or a
+   * static batch) changes only its colour: it takes the new one in place.
+   */
+  const recolourableSolid = (was, item, looks) =>
+    Boolean((was.polyline || was.batched) && was.shape) &&
+    was.shape === looks.shape(item);
+
+  /**
    * The colours the glow lines sharing a material that `list` recolours
    * are given together: each such material and the item whose colour it
    * takes, when every line it draws ends the upsert with one look (its
@@ -1938,7 +1987,14 @@ export function createCesiumDraw({
       if (!was) return false;
       const look = lookOf.look(item);
       // Only its colour may change: its material takes it in place.
-      if (was.look !== look && !recolourable(was, item, lookOf)) return false;
+      if (
+        was.look !== look &&
+        !recolourable(was, item, lookOf) &&
+        !recolourableSolid(was, item, lookOf)
+      )
+        return false;
+      // A viewer destroyed under the set took its batch with it.
+      if (was.batched?.isDestroyed()) return false;
       looks.push(look);
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
@@ -1965,23 +2021,15 @@ export function createCesiumDraw({
       const item = list[k];
       const was = parts.get(item.id);
       const show = item.show !== false;
+      if (was.polyline || was.batched) {
+        patchUndraped(record, was, item, looks[k]);
+        continue;
+      }
       if (was.look !== looks[k]) {
         // A line drawing on a shared material took its colour above.
         if (!was.shared || was.solo)
           was.material.uniforms.color = toColor(item.style.color);
         was.look = looks[k];
-      }
-      if (was.polyline) {
-        const positions = linePositions(item);
-        was.polyline.positions = positions;
-        was.polyline.show = show;
-        was.polyline.id.meta = item.meta;
-        if (was.reveal)
-          was.reveal.uniforms.reveal = revealUniform(
-            item.revealFraction,
-            positions,
-          );
-        continue;
       }
       if (was.deep !== undefined) {
         was.id.meta = item.meta;
@@ -2027,6 +2075,255 @@ export function createCesiumDraw({
       } else was.pendingShow = show;
     }
     return true;
+  }
+
+  /**
+   * An undraped line without a depth-fail colour in the set's polyline
+   * collection, under pick id `id`; `reveal` is the material its reveal
+   * is set on, or null.
+   */
+  function addPolyline(record, polylines, item, id) {
+    const positions = linePositions(item);
+    const reveal = revealed(item)
+      ? revealUniform(item.revealFraction, positions)
+      : undefined;
+    const material = lineMaterial(record, item.style, reveal);
+    const polyline = polylines.add({
+      positions,
+      width: item.widthPx,
+      material,
+      show: item.show !== false,
+      id,
+    });
+    return { polyline, reveal: reveal === undefined ? null : material };
+  }
+
+  /**
+   * Whether an undraped line can be drawn in a static batch: solid, all of
+   * it shown, at least half a pixel wide, and without a depth-fail colour
+   * (those draw alone).
+   */
+  const settles = (item) =>
+    item.mode !== 'draped' &&
+    !item.depthFailColor &&
+    item.style.kind === 'solid' &&
+    !revealed(item) &&
+    // The collection draws no line under half a pixel wide; a batch
+    // would.
+    item.widthPx >= 0.5;
+
+  const finitePoint = (p) =>
+    Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
+
+  /** Whether a line's colour is drawn in a batch's translucent pass. */
+  const translucentLine = (item) => toColor(item.style.color).alpha < 1;
+
+  /**
+   * Stop waiting for a set's lines to settle: they changed. A static batch
+   * still building drew them as they were, so it is dropped.
+   */
+  function unsettle(record) {
+    record.settled = 0;
+    const pending = record.batchPending;
+    if (!pending) return;
+    record.batchPending = null;
+    if (record.lineBox && !record.lineBox.isDestroyed())
+      for (const primitive of pending.primitives)
+        record.lineBox.remove(primitive);
+  }
+
+  /**
+   * Change an undraped line drawn in the collection or a static batch in
+   * place: its show and colour, and where it runs. A batched line that
+   * moves, or whose colour leaves its batch's pass, leaves the batch,
+   * hidden there, for the collection, until the set settles again.
+   */
+  function patchUndraped(record, was, item, look) {
+    const show = item.show !== false;
+    // The polyline's pick id and the batch instance's are this one.
+    was.id.meta = item.meta;
+    const recolour = was.look !== look;
+    was.look = look;
+    if (was.batched) {
+      const stays =
+        flatEquals(item.positions, was.positions) &&
+        (!recolour || translucentLine(item) === was.translucent);
+      const attributes = was.batched.getGeometryInstanceAttributes(was.id);
+      if (stays) {
+        // A batch still building draws the colour it was built with.
+        if (recolour) {
+          if (record.batchPending) unsettle(record);
+          attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
+            toColor(item.style.color),
+            attributes.color,
+          );
+        }
+        attributes.show = Cesium.ShowGeometryInstanceAttribute.toValue(
+          show,
+          attributes.show,
+        );
+        return;
+      }
+      attributes.show = Cesium.ShowGeometryInstanceAttribute.toValue(
+        false,
+        attributes.show,
+      );
+      was.batched = null;
+      was.positions = flatPositions(item.positions);
+      Object.assign(was, addPolyline(record, record.polylines, item, was.id));
+      unsettle(record);
+      return;
+    }
+    // Only a change a batch would draw unsettles the set: a show is taken
+    // when the batch swaps in, and lines that cannot settle are not in it.
+    if (was.shape && (recolour || !flatEquals(item.positions, was.positions))) {
+      was.positions = flatPositions(item.positions);
+      unsettle(record);
+    }
+    const positions = linePositions(item);
+    was.polyline.positions = positions;
+    was.polyline.show = show;
+    if (recolour)
+      was.polyline.material.uniforms.color = toColor(item.style.color);
+    if (was.reveal)
+      was.reveal.uniforms.reveal = revealUniform(
+        item.revealFraction,
+        positions,
+      );
+  }
+
+  /**
+   * After a draw: a line set whose lines have not changed for
+   * `SETTLE_FRAMES` drawn frames starts building its static batch, of all
+   * its lines that `settles`, once some are still in the collection (when
+   * it has a batch and only a few are, after `LONG_SETTLE_FRAMES`); one
+   * built swaps in for the collection's lines it draws (`swapBatch`).
+   * Unchanged lines in a polyline collection cost a material id a line
+   * every frame; in a batch they cost nothing until they change.
+   */
+  function settleLines(record) {
+    if (!record.lineBox || record.lineBox.isDestroyed()) return;
+    if (record.batchPending) {
+      swapBatch(record);
+      return;
+    }
+    if (record.settled > LONG_SETTLE_FRAMES) return;
+    record.settled += 1;
+    if (
+      record.settled !== SETTLE_FRAMES &&
+      record.settled !== LONG_SETTLE_FRAMES
+    )
+      return;
+    // The lines that can settle still in the collection: a batch is
+    // rebuilt whole for them, so a few wait longer, as a few cost little.
+    let loose = 0;
+    for (const part of record.lineParts.values())
+      if (part.polyline && part.shape) loose += 1;
+    if (
+      record.batch &&
+      loose < FEW_LOOSE_LINES &&
+      record.settled < LONG_SETTLE_FRAMES
+    )
+      return;
+    record.settled = LONG_SETTLE_FRAMES + 1;
+    if (!loose) return;
+    const members = [];
+    for (const [itemId, part] of record.lineParts) {
+      if (!part.shape || (!part.polyline && !part.batched)) continue;
+      const item = record.items.get(itemId);
+      if (!item || !settles(item)) continue;
+      const positions = linePositions(item);
+      // A batch that fails to build would throw in every frame after.
+      if (!drawable(positions) || !positions.every(finitePoint)) continue;
+      members.push({ part, item, positions });
+    }
+    if (!members.some(({ part }) => part.polyline)) return;
+    const groups = [[], []];
+    for (const member of members) {
+      member.translucent = translucentLine(member.item);
+      member.show = member.item.show !== false;
+      groups[member.translucent ? 1 : 0].push(
+        new Cesium.GeometryInstance({
+          geometry: new Cesium.PolylineGeometry({
+            positions: member.positions,
+            width: member.item.widthPx,
+            vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+            // Straight between the positions, as the collection's lines
+            // are (geodesic ones come densified).
+            arcType: Cesium.ArcType.NONE,
+          }),
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+              toColor(member.item.style.color),
+            ),
+            show: new Cesium.ShowGeometryInstanceAttribute(member.show),
+          },
+          id: member.part.id,
+        }),
+      );
+      member.flat = flatPositions(member.item.positions);
+    }
+    const primitives = [];
+    for (const [translucent, geometryInstances] of groups.entries()) {
+      if (!geometryInstances.length) continue;
+      const primitive = new StaticLines({
+        geometryInstances,
+        appearance: new Cesium.PolylineColorAppearance({
+          translucent: Boolean(translucent),
+        }),
+        // Hidden while it builds: the collection draws its lines.
+        show: false,
+      });
+      primitive.translucentLines = Boolean(translucent);
+      primitives.push(primitive);
+      record.lineBox.add(primitive);
+    }
+    record.batchPending = { primitives, members };
+  }
+
+  /**
+   * A static batch built: it draws its lines in place of the collection's
+   * polylines and the batch before it, each line showing as its item now
+   * asks (shows changed while it built).
+   */
+  function swapBatch(record) {
+    const { primitives, members } = record.batchPending;
+    const failed = primitives.find((p) => p.failed);
+    if (failed) {
+      // The collection draws on; the set settles no more.
+      unsettle(record);
+      record.lineBox = null;
+      throw failed.failed;
+    }
+    if (primitives.some((p) => !p.ready)) return;
+    record.batchPending = null;
+    const box = record.lineBox;
+    for (const primitive of record.batch ?? []) box.remove(primitive);
+    record.batch = primitives;
+    const byPass = new Map(primitives.map((p) => [p.translucentLines, p]));
+    let removed = 0;
+    for (const { part, item, translucent, show, flat } of members) {
+      const batch = byPass.get(translucent);
+      if (part.polyline) {
+        record.polylines.remove(part.polyline);
+        part.polyline = null;
+        part.reveal = null;
+        removed += 1;
+      }
+      part.batched = batch;
+      part.translucent = translucent;
+      part.positions = flat;
+      const now = record.items.get(item.id)?.show !== false;
+      if (now !== show) {
+        const attributes = batch.getGeometryInstanceAttributes(part.id);
+        attributes.show = Cesium.ShowGeometryInstanceAttribute.toValue(
+          now,
+          attributes.show,
+        );
+      }
+    }
+    for (const primitive of primitives) primitive.show = true;
+    if (removed) requestRender();
   }
 
   /**
@@ -2783,6 +3080,15 @@ export function createCesiumDraw({
     afterRender() {
       watchClamp();
       swapReady();
+      for (const record of sets.values())
+        if (record.kind === 'lines')
+          try {
+            settleLines(record);
+          } catch (error) {
+            // Its lines stay in the collection, which draws them all.
+            record.lineBox = null;
+            report(error);
+          }
       // Rows moving on a live clock, and flowing lines, draw on in the
       // frames that follow.
       if (
