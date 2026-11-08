@@ -3,7 +3,7 @@ import * as Cesium from 'cesium';
 import test from 'node:test';
 import { createCesiumDraw } from './draw.js';
 import { drawHitOf } from './drawHit.js';
-import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import { IconSetPrimitive } from './iconSetPrimitive.js';
 import { MAX_ICON_SLOTS } from '../../data/iconAtlas.js';
 import {
   ICON_CULL_LIFT,
@@ -791,7 +791,7 @@ test('the atlas holds more than 64 images, every one addressed on WebGL 2', asyn
   assert.equal(addressableIconSlots(4096), MAX_ICON_SLOTS);
   assert.equal(addressableIconSlots(128), MIN_ICON_SLOTS, 'WebGL 1’s least');
   assert.equal(addressableIconSlots(200), 120);
-  const { contextIconSlots } = await import('../../data/iconSetPrimitive.js');
+  const { contextIconSlots } = await import('./iconSetPrimitive.js');
   const limits = Cesium.ContextLimits;
   const vectors = limits._maximumVertexUniformVectors;
   try {

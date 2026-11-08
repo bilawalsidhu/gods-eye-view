@@ -9,7 +9,7 @@ import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { LOD_LEVELS, CONTEXT_TOP_N, GLOW_SPRITE_PX } from './policy.js';
 import { createIconSet, ICON_CULL_LIFT } from '../../data/iconSet.js';
 import { writeHoldSegment } from '../../data/iconSegment.js';
-import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import { IconSetPrimitive } from '../../render/cesium/iconSetPrimitive.js';
 import { iconAtlas } from '../../data/iconAtlas.js';
 
 export function createRendering({

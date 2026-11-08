@@ -2781,7 +2781,7 @@ async function vesselLayerOver(scene, sprites) {
 }
 
 test('the vessels layer draws its ships as one GPU icon set that holds them on course', async () => {
-  const { IconSetPrimitive } = await import('../../data/iconSetPrimitive.js');
+  const { IconSetPrimitive } = await import('./iconSetPrimitive.js');
   const { ICON_CULL_LIFT, ICON_ROTATES } =
     await import('../../data/iconSet.js');
   const spriteOrder = await import('../../data/spriteOrder.js');
@@ -2908,7 +2908,7 @@ test('vessels on a host with no sprite-set registry still draw, and say so once'
 test('an aircraft layer draws its contacts as one GPU icon set moving on the delayed live clock', async () => {
   const { createAircraftIcons } =
     await import('../../data/aircraftIconLayer.js');
-  const { IconSetPrimitive } = await import('../../data/iconSetPrimitive.js');
+  const { IconSetPrimitive } = await import('./iconSetPrimitive.js');
   const { ICON_CULL_LIFT, ICON_RECEDES, ICON_ROTATES } =
     await import('../../data/iconSet.js');
   const { iconAtlas, nearImageSwitchPx } =

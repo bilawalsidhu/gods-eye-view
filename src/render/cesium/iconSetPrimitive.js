@@ -1,5 +1,5 @@
 /**
- * @module iconSetPrimitive
+ * @module render/cesium/iconSetPrimitive
  * @description Draws an {@link module:iconSet} in a Cesium scene: one instanced quad per
  * row, moved along its segment on the GPU at the set's render time. This replaces a
  * BillboardCollection for large moving fleets, so the CPU writes rows only when their
@@ -15,19 +15,23 @@
  * This module is the one place the icon sets touch Cesium's renderer internals.
  */
 import * as Cesium from 'cesium';
-import { ICON_SEGMENT_GLSL, SEGMENT_STRIDE } from './iconSegment.js';
-import { ICON_CULL_HEIGHT_M, ICON_CULL_LIFT, STYLE_STRIDE } from './iconSet.js';
+import { ICON_SEGMENT_GLSL, SEGMENT_STRIDE } from '../../data/iconSegment.js';
+import {
+  ICON_CULL_HEIGHT_M,
+  ICON_CULL_LIFT,
+  STYLE_STRIDE,
+} from '../../data/iconSet.js';
 import {
   addressableIconSlots,
   iconAtlas,
   MAX_ICON_SLOTS,
   MIN_ICON_SLOTS,
   NEAR_IMAGE_DEVICE_PX,
-} from './iconAtlas.js';
+} from '../../data/iconAtlas.js';
 import {
   cameraLimbDistanceM,
   getAircraftRecessionParams,
-} from './aircraftRecession.js';
+} from '../../data/aircraftRecession.js';
 
 const ATTRIBUTE_LOCATIONS = Object.freeze({
   corner: 0,

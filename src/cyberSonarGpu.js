@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { IconSetPrimitive } from './data/iconSetPrimitive.js';
+import { IconSetPrimitive } from './render/cesium/iconSetPrimitive.js';
 
 // Narrow, version-tested engine adapter. Cesium has no public custom shader
 // option for native point/billboard collections. Do not patch its prototypes or

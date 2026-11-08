@@ -18,7 +18,7 @@ import {
 } from './policy.js';
 import { createIconSet } from '../../data/iconSet.js';
 import { writeHoldSegment } from '../../data/iconSegment.js';
-import { IconSetPrimitive } from '../../data/iconSetPrimitive.js';
+import { IconSetPrimitive } from '../../render/cesium/iconSetPrimitive.js';
 import { iconAtlas } from '../../data/iconAtlas.js';
 import { cctvPicks } from './pickState.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';

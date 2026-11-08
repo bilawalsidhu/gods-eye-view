@@ -50,10 +50,7 @@ import {
   writeHoldSegment,
   writeLerpSegment,
 } from '../../data/iconSegment.js';
-import {
-  contextIconSlots,
-  IconSetPrimitive,
-} from '../../data/iconSetPrimitive.js';
+import { contextIconSlots, IconSetPrimitive } from './iconSetPrimitive.js';
 import { iconAtlas, MAX_ICON_SLOTS } from '../../data/iconAtlas.js';
 import {
   glideOffset,
