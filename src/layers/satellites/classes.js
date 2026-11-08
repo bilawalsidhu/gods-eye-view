@@ -93,7 +93,12 @@ export const SATELLITE_CLASS_DISPLAY = Object.freeze({
 const ISS_NORAD = 25544;
 
 /** SATCAT object types that are never a working payload. */
-const DEBRIS_OBJECT_TYPES = new Set(['R/B', 'DEB', 'UNK']);
+const DEBRIS_OBJECT_TYPES = new Set(['R/B', 'DEB']);
+/**
+ * SATCAT files a new launch's objects as UNK until it identifies them, so an
+ * unknown object launched this recently (years) is not presumed debris.
+ */
+export const UNIDENTIFIED_GRACE_YEARS = 2;
 /** SATCAT operational status: nonoperational, decayed. */
 const DEAD_STATUSES = new Set(['-', 'D']);
 /** SATCAT operational status left blank or unknown. */
@@ -116,7 +121,7 @@ const TELECOM_NAME =
   /^(ONEWEB|IRIDIUM|GLOBALSTAR|ORBCOMM|INTELSAT|IS-\d|SES[ -]?\d|ASTRA|EUTELSAT|INMARSAT|VIASAT|ECHOSTAR|DIRECTV|SIRIUS|XM-|TDRS|NAVSTAR|GPS\b|GLONASS|GSAT0|GALILEO|BEIDOU|QZS|IRNSS|NVS-|KUIPER|LYNK|BLUEBIRD|O3B|TELESAT|ANIK|NIMIQ|AMAZONAS|HISPASAT|ARABSAT|NILESAT|TURKSAT|YAMAL|EXPRESS-|CHINASAT|ZHONGXING|APSTAR|ASIASAT|THAICOM|MEASAT|JCSAT|SUPERBIRD|OPTUS|SKYNET|WGS|MUOS|AEHF|MILSTAR|QIANFAN|GUOWANG|SPACEMOBILE|GONETS|MERIDIAN|LUCH|RADUGA|SKYTERRA|TERRESTAR|SPACEWAY|HYLAS|ARSAT|AMOS|BADR|KA-SAT|YAHSAT|THURAYA)/i;
 
 const IMAGING_PURPOSE =
-  /earth observation|earth science|meteorolog|surveillance/i;
+  /earth observation|earth\/space observation|earth science|meteorolog|surveillance/i;
 const TELECOM_PURPOSE = /communications|navigation|positioning/i;
 
 /**
@@ -173,7 +178,11 @@ export function classifySatellite({
   const label = String(name || '').trim();
   const objectType = satcat?.objectType || null;
   const status = satcat?.opsStatus ?? null;
+  const launched = launchYearOf(satcat?.launchDate) ?? launchYear;
+  const recent =
+    Number.isFinite(launched) && nowYear - launched < UNIDENTIFIED_GRACE_YEARS;
   if (objectType && DEBRIS_OBJECT_TYPES.has(objectType)) return 'debris';
+  if (objectType === 'UNK' && !recent) return 'debris';
   if (!objectType && DEBRIS_NAME.test(label)) return 'debris';
   if (status !== null && DEAD_STATUSES.has(status)) return 'debris';
 
@@ -195,7 +204,6 @@ export function classifySatellite({
   // record gives no status and whose launch is decades old, is presumed
   // dead. Without a SATCAT record (its read failed or has not landed) there
   // is no evidence either way, so nothing is presumed.
-  const launched = launchYearOf(satcat?.launchDate) ?? launchYear;
   if (
     satcat &&
     UNKNOWN_STATUSES.has(status ?? '') &&

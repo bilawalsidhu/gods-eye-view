@@ -60,6 +60,24 @@ test('SATCAT object type and status file debris first, overruling UCS', () => {
     }),
     'imaging',
   );
+  // SATCAT calls a new launch's objects UNK until it names them: only an
+  // old unknown object, or one with no launch date, is debris.
+  assert.equal(
+    classify({
+      name: 'OBJECT C',
+      group: 'resource',
+      satcat: { objectType: 'UNK', opsStatus: '', launchDate: '2025-11-02' },
+    }),
+    'imaging',
+  );
+  assert.equal(
+    classify({
+      name: 'OBJECT C',
+      group: 'resource',
+      satcat: { objectType: 'UNK', opsStatus: '', launchDate: '2019-04-01' },
+    }),
+    'debris',
+  );
   // Debris riding in the stations group (CelesTrak lists FREGAT DEB there).
   assert.equal(classify({ name: 'FREGAT DEB', group: 'stations' }), 'debris');
   assert.equal(classify({ name: 'SL-16 R/B', group: 'visual' }), 'debris');
@@ -104,6 +122,7 @@ test('UCS purpose decides imaging, telecom and probes', () => {
     ['Meteorological', 'imaging'],
     ['Surveillance', 'imaging'],
     ['Earth Observation/Navigation', 'imaging'],
+    ['Earth/Space Observation', 'imaging'],
     ['Communications', 'telecom'],
     ['Navigation/Global Positioning', 'telecom'],
     ['Navigation/Regional Positioning', 'telecom'],
