@@ -2634,9 +2634,10 @@ releases a followed aircraft first. A centre pick outside a plausible surface
 band (below -1,500 m or above 25,000 m) is not used as the orbit target, so a
 zoom step never drives the camera under the ground while tiles are still
 streaming. The look-around buttons are disabled while an entity is tracked.
-The control is hidden in Cockpit, Scene playback, recording and Clean UI, and
-its listeners are removed when the shell is destroyed. Its text is translated
-(es, ru).
+The control is hidden in Cockpit, Scene playback, recording and Clean UI; on
+phones it is also hidden while a sheet is open, and on short landscape phones
+while the world timeline is showing. Its listeners are removed when the shell is
+destroyed. Its text is translated in every shipped locale.
 
 ## Shared control CSS ownership
 
