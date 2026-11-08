@@ -58,10 +58,12 @@ an error naming it, as it does for a dataset it cannot load.
 A selected feature is the context record its draw item carries as `meta`; the
 layer no longer sets the viewer's `selectedEntity`.
 Features keep their own simplestyle `fill`, `fill-opacity`, `stroke`,
-`stroke-opacity`, `stroke-width`, `marker-color` and `marker-size`, given as hex,
-`rgb()` or `hsl()` colours; a `marker-symbol` draws the plain pin. Polygons
-with heights are drawn at them, outlined; points with heights stand their pin
-on the stem's tip. Edges follow rhumb lines.
+`stroke-opacity`, `stroke-width`, `marker-color` and `marker-size`, given as
+hex, `rgb()` or `hsl()` colours or by the CSS colour names the default renderer
+knows (it has no `rebeccapurple`, and spells `lavenderblush` `lavendar_blush`);
+a `marker-symbol` draws the plain pin. Polygons with heights are drawn at them,
+outlined; points with heights stand their pin on the stem's tip. Edges follow
+rhumb lines.
 
 `gods-eye-view/infrastructure/geojson` exports the lower-level
 `createLocalGeoJsonLayer(options, services)` and existing infrastructure overlay

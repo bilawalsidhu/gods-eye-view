@@ -220,7 +220,43 @@ test('features keep their own simplestyle colours, widths and marker sizes', asy
       { type: 'Point', coordinates: [0.002, 0.003] },
       { 'marker-color': '#ffffff', 'marker-size': 'large' },
     ),
+    // CSS colour names, as the loader reads them.
+    feature(
+      'named',
+      { type: 'Polygon', coordinates: square(0.04, 0) },
+      { fill: 'Red' },
+    ),
+    feature(
+      'named-line',
+      {
+        type: 'LineString',
+        coordinates: [
+          [0, 0],
+          [0, 0.01],
+        ],
+      },
+      { stroke: 'navy' },
+    ),
+    feature(
+      'named-pin',
+      { type: 'Point', coordinates: [0.004, 0.003] },
+      { 'marker-color': 'white' },
+    ),
   ]);
+  assert.deepEqual(
+    env.fake.set('fills').items.get('named').fill,
+    [1, 0, 0, 0.3],
+  );
+  assert.deepEqual(env.fake.set('lines').items.get('named-line').style.color, [
+    0,
+    0,
+    128 / 255,
+    1,
+  ]);
+  assert.match(
+    env.fake.set('pins').items.get('named-pin').image.svg,
+    /fill="rgba\(255,255,255,1\)"/,
+  );
   assert.deepEqual(env.fake.set('fills').items.get('p').fill, [1, 0, 0, 0.5]);
   // `fill` alone keeps the layer's fill alpha.
   assert.deepEqual(env.fake.set('fills').items.get('q').fill, [0, 1, 0, 0.3]);
