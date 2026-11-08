@@ -79,12 +79,7 @@ test('keyValues entities read the same as normalized ones', () => {
 
 test('no position, null island, or out-of-range coordinates yield no record', () => {
   assert.equal(normalizeNgsiVehicle(stcpEntity({ location: undefined })), null);
-  for (const coordinates of [
-    [0, 0],
-    [-8.6, 95],
-    ['-8.6', '41.1'],
-    [-8.6],
-  ]) {
+  for (const coordinates of [[0, 0], [-8.6, 95], ['-8.6', '41.1'], [-8.6]]) {
     assert.equal(
       normalizeNgsiVehicle(
         stcpEntity({ location: { value: { type: 'Point', coordinates } } }),
@@ -125,7 +120,9 @@ test('an over-long string drops the whole record rather than truncating it', () 
 });
 
 test('the entity id stands in when the fleet number is missing', () => {
-  const record = normalizeNgsiVehicle(stcpEntity({ fleetVehicleId: undefined }));
+  const record = normalizeNgsiVehicle(
+    stcpEntity({ fleetVehicleId: undefined }),
+  );
   assert.equal(record.id, 'urn:ngsi-ld:Vehicle:porto:stcp:bus:3466');
   assert.equal(record.label, null);
 });
