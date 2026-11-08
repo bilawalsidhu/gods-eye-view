@@ -48,14 +48,28 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   /**
    * Show or hide every point by its class. The tracked satellite's point
-   * stays hidden (its entity draws the dot).
+   * stays hidden (its entity draws the dot). The ISS's ring and label go
+   * with its class.
    */
   function _applyClassVisibility() {
     for (const [noradId, point] of layerState._points) {
       if (noradId === layerState._trackedNorad) continue;
       point.show = _classVisible(noradId);
     }
+    const issPath = layerState._orbitPaths.get(ISS_NORAD);
+    if (issPath) issPath.primitive.show = _issOrbitVisible();
+    parts.labels?._syncIssOverlay?.();
     layerState._detectionObjects.clear();
+  }
+
+  /** Whether the ISS's ring shows: orbits on, the layer drawing, its class on. */
+  function _issOrbitVisible() {
+    return (
+      satelliteVisualsVisible(
+        layerState._enabled,
+        layerState._params.showOrbits,
+      ) && _classVisible(ISS_NORAD)
+    );
   }
 
   /**
@@ -530,11 +544,14 @@ export function createControls({ state: layerState, services, parts, source }) {
       }
       if (params.showOrbits !== undefined) {
         layerState._params.showOrbits = params.showOrbits !== false;
-        for (const path of layerState._orbitPaths.values())
-          path.primitive.show = satelliteVisualsVisible(
-            layerState._enabled,
-            layerState._params.showOrbits,
-          );
+        for (const [noradId, path] of layerState._orbitPaths)
+          path.primitive.show =
+            noradId === ISS_NORAD
+              ? _issOrbitVisible()
+              : satelliteVisualsVisible(
+                  layerState._enabled,
+                  layerState._params.showOrbits,
+                );
         parts.labels._syncIssOverlay();
       }
       if (catalogChanged && catalog === 'dense') {
@@ -690,6 +707,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     _classTally,
     _classVisible,
     _applyClassVisibility,
+    _issOrbitVisible,
     satelliteVisualsVisible,
     satelliteCatalogModeChanged,
     methods,

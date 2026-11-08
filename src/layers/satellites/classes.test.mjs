@@ -258,3 +258,69 @@ test('SATCAT CSV parses, quoted commas included, keyed by NORAD id', () => {
   assert.equal(parseSatcatCsv('<html>busy</html>').size, 0);
   assert.equal(parseSatcatCsv('').size, 0);
 });
+
+test('turning Stations off takes the ISS ring and label with its point', async () => {
+  const { createControls } = await import('./controls.js');
+  let overlaySyncs = 0;
+  const ring = { primitive: { show: true } };
+  const state = {
+    _enabled: true,
+    _params: {
+      catalog: 'core',
+      showOrbits: true,
+      classes: { ...DEFAULT_SATELLITE_CLASSES, stations: false },
+    },
+    _catalog: new Map([[25544, { satelliteClass: 'stations' }]]),
+    _points: new Map([[25544, { show: true }]]),
+    _orbitPaths: new Map([[25544, ring]]),
+    _detectionObjects: new Map(),
+    _trackedNorad: null,
+  };
+  const controls = createControls({
+    state,
+    services: { layerState: { isExplicitLayerStateOrigin: () => false } },
+    parts: { labels: { _syncIssOverlay: () => (overlaySyncs += 1) } },
+    source: {},
+  });
+  controls._applyClassVisibility();
+  assert.equal(state._points.get(25544).show, false);
+  assert.equal(ring.primitive.show, false, 'the ring goes with the class');
+  assert.ok(overlaySyncs >= 1, 'the label is re-synced');
+  state._params.classes = { ...DEFAULT_SATELLITE_CLASSES };
+  controls._applyClassVisibility();
+  assert.equal(ring.primitive.show, true, 'and comes back with it');
+});
+
+test('a failed Starlink load hides the core catalog Starlink points again', async () => {
+  const { createCatalog } = await import('./catalog.js');
+  let applied = 0;
+  const state = {
+    _params: {
+      catalog: 'dense',
+      classes: { ...DEFAULT_SATELLITE_CLASSES, starlink: true },
+    },
+    _denseLoadToken: 3,
+    _denseIds: [],
+    _catalog: new Map(),
+    _points: new Map(),
+    _detectionObjects: new Map(),
+    _trackedNorad: null,
+    _activeUpdateControllers: new Set(),
+  };
+  const catalog = createCatalog({
+    state,
+    services: {},
+    parts: {
+      controls: {
+        _applyClassVisibility: () => (applied += 1),
+        _notifyRowControls() {},
+      },
+      labels: { _syncIssOverlay() {} },
+    },
+    source: {},
+  });
+  catalog._denseLoadFailed(state._denseLoadToken, 'feed unreachable');
+  assert.equal(state._params.catalog, 'core');
+  assert.equal(state._params.classes.starlink, false, 'the choice says so');
+  assert.ok(applied >= 1, 'class visibility is applied again');
+});

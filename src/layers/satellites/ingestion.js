@@ -356,7 +356,10 @@ export function createIngestion({
         if (layerState._catalog.has(ISS_NORAD)) {
           parts.rendering._showOrbitPath(ISS_NORAD, POINT_STYLES.iss.color);
           const issPath = layerState._orbitPaths.get(ISS_NORAD);
-          if (issPath) issPath.primitive.show = layerState._params.showOrbits;
+          if (issPath)
+            issPath.primitive.show =
+              layerState._params.showOrbits &&
+              parts.controls._classVisible(ISS_NORAD);
 
           parts.labels._syncIssOverlay();
         }

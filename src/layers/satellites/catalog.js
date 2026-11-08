@@ -209,6 +209,14 @@ export function createCatalog({ state: layerState, services, parts, source }) {
     if (token !== layerState._denseLoadToken) return;
     layerState._params.catalog = 'core';
     _removeDenseCatalog();
+    // Back on core, Starlink is off: hide the core catalog's own Starlink
+    // points again, and say so in the class choice.
+    if (layerState._params.classes)
+      layerState._params.classes = {
+        ...layerState._params.classes,
+        starlink: false,
+      };
+    parts.controls._applyClassVisibility?.();
     layerState._denseStatus = 'failed';
     layerState._denseError = reason;
     parts.controls._notifyRowControls();
