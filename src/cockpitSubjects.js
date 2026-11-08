@@ -38,6 +38,13 @@ export const VESSEL_WATERLINE_PROBE_COUNT = 8;
 /** How often the bridge reads the water under its ship again, ms. */
 export const VESSEL_WATERLINE_REFRESH_MS = 5000;
 
+/**
+ * A full-detail water read still running after this long is given up and
+ * a fresh one started, ms: tile requests can stall, and one read that never
+ * lands would otherwise hold the height for the rest of the bridge.
+ */
+export const VESSEL_WATERLINE_READ_TIMEOUT_MS = 30000;
+
 /** A surface less than this above sea level is the sea itself, metres. */
 export const VESSEL_WATERLINE_MIN_RISE_M = 2;
 
