@@ -5,10 +5,8 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
 
 /**
- * Every aircraft model drawn in the scene skips Cesium's dynamic environment
- * map (a sky render and GPU readback per model). The preload calls only warm
- * the glTF cache and are never added to the scene, so they are left out:
- * drawn models are the calls that set a minimum pixel size.
+ * Every aircraft model drawn in the scene skips the renderer's dynamic
+ * environment map (a sky render and GPU readback per model).
  */
 const SOURCES = [
   {
@@ -28,18 +26,15 @@ test('the shared option turns the dynamic environment map off', () => {
 
 for (const { name, source } of SOURCES) {
   test(`${name}: every drawn aircraft model skips the dynamic environment map`, () => {
-    const calls = [
-      ...source.matchAll(/(?:fromGltfAsync|loadModel)\(\{([\s\S]*?)\}\)/g),
-    ]
-      .map((match) => match[1])
-      .filter((options) => /\bminimumPixelSize:/.test(options));
-    assert.ok(calls.length >= 1, `expected drawn model calls in ${name}`);
-    for (const [index, options] of calls.entries())
-      assert.match(
-        options,
-        /\benvironmentMapOptions:\s*AIRCRAFT_ENVIRONMENT_MAP_OPTIONS\b/,
-        `${name} model call ${index + 1} must pass AIRCRAFT_ENVIRONMENT_MAP_OPTIONS`,
-      );
+    // Its models are draw-port items; every item it builds (fleet, tracked
+    // and the tracked preload) carries the shared option.
+    assert.doesNotMatch(source, /fromGltfAsync|loadModel\(/);
+    const items = [...source.matchAll(/\burl: (?:record\.url|preloadUrl),/g)];
+    assert.ok(items.length >= 2, `expected model items in ${name}`);
+    const flags = [
+      ...source.matchAll(/\benvironmentMap:\s*AIRCRAFT_ENVIRONMENT_MAP_OPTIONS\.enabled\b/g),
+    ];
+    assert.equal(flags.length, items.length, `${name} model items must pass AIRCRAFT_ENVIRONMENT_MAP_OPTIONS`);
   });
 }
 

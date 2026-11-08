@@ -5,11 +5,23 @@ import { createQueries } from './queries.js';
 import { createRendering } from './rendering.js';
 import { createIcons } from './icons.js';
 import { createContactIcons } from '../../data/aircraftIconLayer.js';
-import {
-  createModelRecord,
-  placeModel,
-  showModel,
-} from '../../data/modelRecord.js';
+import { createModelRecord, showModel } from '../../data/modelRecord.js';
+
+/** A model record in a given load and show state, placed at `at` unturned. */
+function modelRecord({ ready, show, at = null }) {
+  const record = createModelRecord({});
+  record.ready = ready;
+  record.show = show;
+  if (at) placeAt(record, at);
+  return record;
+}
+
+/** Place a record at `at` with no turn, as a test of where it reads. */
+function placeAt(record, at) {
+  record.matrix = Float64Array.from(Cesium.Matrix4.fromTranslation(at));
+  record.position = { x: at.x, y: at.y, z: at.z };
+  record.placed = true;
+}
 
 function fixture() {
   const info = {
@@ -115,12 +127,10 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   const get = t.mock.method(f.flightState._models, 'get');
   const [candidate] = f.queries.getDetectableObjects();
   assert.equal(get.mock.callCount(), 1);
-  const record = createModelRecord({
+  const record = modelRecord({
     ready: false,
     show: true,
-    modelMatrix: Cesium.Matrix4.fromTranslation(
-      new Cesium.Cartesian3(10, 20, 30),
-    ),
+    at: new Cesium.Cartesian3(10, 20, 30),
   });
   f.parts.rendering._modelSpec = () => ({
     visualCenterNative: Cesium.Cartesian3.ZERO,
@@ -129,13 +139,10 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   f.flightState._models.set('abc123', record);
   f.show(false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
-  record.model.ready = true;
+  record.ready = true;
   assert.equal(f.queries.getDetectableObjects()[0], candidate);
   assert.deepEqual(candidate.position, new Cesium.Cartesian3(10, 20, 30));
-  placeModel(
-    record,
-    Cesium.Matrix4.fromTranslation(new Cesium.Cartesian3(40, 50, 60)),
-  );
+  placeAt(record, new Cesium.Cartesian3(40, 50, 60));
   f.queries.getDetectableObjects();
   assert.deepEqual(candidate.position, new Cesium.Cartesian3(40, 50, 60));
   showModel(record, false);
@@ -151,7 +158,7 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
 test('tracked ownership and live anchors remain independent of fleet models', () => {
   const f = fixture();
   f.flightState._trackedIcao = 'abc123';
-  f.flightState._trackedModel = createModelRecord({ ready: true, show: true });
+  f.flightState._trackedModel = modelRecord({ ready: true, show: true });
   f.parts.rendering._modelSpec = () => ({});
   let anchor = new Cesium.Cartesian3(10, 20, 30);
   f.parts.motion._trackedVisualCached = () => anchor;
@@ -163,16 +170,16 @@ test('tracked ownership and live anchors remain independent of fleet models', ()
   assert.equal(f.queries.getDetectableObjects()[0].position, anchor);
   for (const tracked of [
     null,
-    createModelRecord({ ready: false, show: true }),
-    createModelRecord({ ready: true, show: false }),
+    modelRecord({ ready: false, show: true }),
+    modelRecord({ ready: true, show: false }),
   ]) {
     f.flightState._trackedModel = tracked;
     assert.equal(
-      f.parts.rendering._modelOwnsVisual('abc123', createModelRecord({ ready: true, show: true })),
+      f.parts.rendering._modelOwnsVisual('abc123', modelRecord({ ready: true, show: true })),
       false,
     );
   }
-  f.flightState._trackedModel = createModelRecord({ ready: true, show: true });
+  f.flightState._trackedModel = modelRecord({ ready: true, show: true });
   f.parts.tracking._trackedModelRegimeActive = () => false;
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123', null), false);
 });

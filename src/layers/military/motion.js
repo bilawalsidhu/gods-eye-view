@@ -330,7 +330,7 @@ export function createMotion({
    * The position the tracked aircraft is VISUALLY at this frame — the translation its 3D
    * model is actually rendering with when the model owns the visual, otherwise the cached
    * dead-reckoned position. Mirror of flights.js; see that copy for the full rationale.
-   * Reads the modelMatrix the tracked-model update already wrote this frame: no sampling,
+   * Reads the placement the tracked-model update already recorded this frame: no sampling,
    * no `_modelDisplayPosition` from postRender, and the entity record's `displayPosition` keeps its
    * follow-camera anti-jitter contract untouched.
    */
@@ -346,9 +346,7 @@ export function createMotion({
       return modelVisualAnchor(
         flightState._trackedModel.matrix,
         spec.visualCenterNative,
-        Number.isFinite(flightState._trackedModel.model.computedScale)
-          ? flightState._trackedModel.model.computedScale
-          : spec.scale,
+        parts.rendering._modelDrawnScale(flightState._trackedModel, spec),
         flightState._trackedVisualPos,
       );
     }
@@ -356,8 +354,8 @@ export function createMotion({
   }
 
   /** The tracked model's rendered bounding radius (m), or 0 when no model of this
-   *  contact is drawing. Carries Cesium's effective `computedScale`, which may be
-   *  above `scale` to satisfy minimumPixelSize — the trail head has to be judged
+   *  contact is drawing. Carries the scale it is drawn at, which may be
+   *  above `scale` to satisfy its pixel floor — the trail head has to be judged
    *  against the size the operator SEES, not the nominal one. */
   /** World-space origin of the tracked model, or null when no model of this
    *  contact is drawing. This is the centre the rendered bounding sphere is
@@ -386,10 +384,10 @@ export function createMotion({
     const spec = parts.rendering._modelSpec(
       flightState.records.data.get(flightState._trackedIcao)?.klass,
     );
-    const scale = Number.isFinite(flightState._trackedModel.model.computedScale)
-      ? flightState._trackedModel.model.computedScale
-      : spec.scale;
-    return spec.nativeRadiusM * scale;
+    return (
+      spec.nativeRadiusM *
+      parts.rendering._modelDrawnScale(flightState._trackedModel, spec)
+    );
   }
 
   /** Trail endpoint for the rendered tracked owner. Brackets/readouts stay on
@@ -409,9 +407,7 @@ export function createMotion({
       return modelAnchorWorld(
         flightState._trackedModel.matrix,
         spec.trailAnchorNative,
-        Number.isFinite(flightState._trackedModel.model.computedScale)
-          ? flightState._trackedModel.model.computedScale
-          : spec.scale,
+        parts.rendering._modelDrawnScale(flightState._trackedModel, spec),
         flightState._trackedTrailPos,
       );
     }
@@ -527,11 +523,7 @@ export function createMotion({
       flightState._viewer?.scene,
       points,
       {
-        excludeObjects: [
-          ...parts.icons._iconIds(),
-          ...[...flightState._models.values()].map((record) => record.model),
-          flightState._trackedModel?.model,
-        ].filter(Boolean),
+        excludeObjects: parts.icons._iconIds(),
         viewerLat,
         viewerLon,
       },

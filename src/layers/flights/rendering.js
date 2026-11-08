@@ -1,10 +1,11 @@
-import * as Cesium from 'cesium';
 import { civilAircraftModelSpec } from './modelSpec.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import {
   MIL_TINT,
   EMERGENCY_TINT,
+  FLEET_TINT,
+  TRACKED_CYAN,
   GROUND_SCALE,
   COCKPIT_CIVILIAN_COLOR,
 } from './policy.js';
@@ -36,7 +37,7 @@ export function createRendering({
     info = flightState.records.data.get(icao24),
   ) {
     if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
-    return isMilitaryIcao(icao24) ? MIL_TINT : Cesium.Color.WHITE;
+    return isMilitaryIcao(icao24) ? MIL_TINT : FLEET_TINT;
   }
 
   /** Cockpit far-contact dot tint: the emergency red outranks the category tint. */
@@ -78,7 +79,7 @@ export function createRendering({
   /** Model tint, mirroring the billboard color rules. */
 
   function _modelColor(icao24) {
-    if (icao24 === flightState._trackedIcao) return Cesium.Color.CYAN;
+    if (icao24 === flightState._trackedIcao) return TRACKED_CYAN;
     return _fleetBillboardColor(icao24);
   }
 
@@ -88,31 +89,28 @@ export function createRendering({
     parts,
     resolveAsset,
     logLabel: 'Data:Flights',
+    setPrefix: 'flights',
     policy,
     modelSpec: _modelSpec,
     modelColor: _modelColor,
     // About to render in 3D: jump the ambient type-enrichment backlog.
     onModelEligible: (icao24) =>
       parts.enrichment._requestTypeEnrichment(icao24, true),
-    afterReplan: (renderTime, t, nowMs, camera) =>
-      parts.icons._floorGroundedIcons(renderTime, t, nowMs, camera.positionWC),
+    afterReplan: (renderTime, t, nowMs, eye) =>
+      parts.icons._floorGroundedIcons(renderTime, t, nowMs, eye),
   });
 
   /**
    * Sample the rendered mesh under the collected floor cells (see
-   * meshFloorSampler.js), leaving this layer's own icons and models out of
-   * the probe so it cannot land on an aircraft instead of the pavement.
+   * meshFloorSampler.js), leaving this layer's own icons out of the probe so
+   * it cannot land on an aircraft instead of the pavement.
    */
   function _sampleMeshFloor(points, viewerLat, viewerLon) {
     services.meshFloor.sampleMeshFloorCells(
       flightState._viewer?.scene,
       points,
       {
-        excludeObjects: [
-          ...parts.icons._iconIds(),
-          ...[...flightState._models.values()].map((record) => record.model),
-          flightState._trackedModel?.model,
-        ].filter(Boolean),
+        excludeObjects: parts.icons._iconIds(),
         viewerLat,
         viewerLon,
       },

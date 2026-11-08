@@ -13,6 +13,11 @@ import assert from 'node:assert/strict';
  * regression would silently revert. These assertions pin the decisions.
  */
 
+const DRAW_MODELS_SOURCE = readFileSync(
+  new URL('../render/cesium/drawModels.js', import.meta.url),
+  'utf8',
+);
+
 const LAYERS = [
   { name: 'flights', path: new URL('./flights.js', import.meta.url) },
   { name: 'militaryFlights', path: new URL('./militaryFlights.js', import.meta.url) },
@@ -29,8 +34,11 @@ for (const layer of LAYERS) {
   const source = readLayerSource(layer.path);
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
-    const calls = [...source.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
-    assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);
+    // The fleet and tracked models are draw-port models sets; the Cesium
+    // draw port creates every model off the frame-spread queue.
+    assert.match(source, /\.models\(\{\s*id:/, 'the layer draws its models as draw-port models sets');
+    const calls = [...DRAW_MODELS_SOURCE.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
+    assert.ok(calls.length >= 1, 'the draw port creates models');
     for (const [index, call] of calls.entries()) {
       assert.match(call[1], /\basynchronous:\s*false\b/,
         `Model.fromGltfAsync call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);

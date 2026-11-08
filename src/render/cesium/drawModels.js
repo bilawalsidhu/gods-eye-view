@@ -212,6 +212,9 @@ export function createModelSets({
       show: false,
       // All textures before ready, so a settled capture is the whole model.
       incrementallyLoadTextures: false,
+      // Off the frame-spread job queue that photoreal tiles contend for, so
+      // a model's readiness stays bounded while tiles stream.
+      asynchronous: false,
       id: entry.pickId,
     }).then(
       (model) => {

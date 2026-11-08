@@ -229,25 +229,3 @@ export const COURSE_SLEW_DT_MAX_SEC = 0.25;
 // camera, and trail head never visibly jump — with zero steady-state lag. --
 
 export const DR_CORRECTION_MS = 900;
-
-/** Bounded on-demand loading for the tracked model (mirror of flights.js). The
- *  tracked regime is DEFAULT-ON and its driver runs every `scene.preUpdate`, so
- *  a missing or corrupt GLB — or a dead network — would otherwise spin
- *  load→reject at frame rate for as long as the contact stays selected.
- *  Failures are counted PER SELECTION: a short backoff absorbs a transient
- *  blip, then the layer stops asking until the operator selects something else.
- *  The billboard is the visual throughout (the handoff only fades it once a
- *  model actually renders), so a latched failure degrades to exactly the
- *  pre-3D presentation. */
-
-export const TRACKED_MODEL_MAX_LOAD_FAILS = 3;
-
-export const TRACKED_MODEL_RETRY_BACKOFF_MS = 1500;
-
-/** Boost flip = BATCHED release through the fleet tick (mirror of flights.js —
- *  destroying the whole fleet synchronously in the style handler stalls the
- *  render thread). Models tagged with their load-time boost state; stale queue
- *  entries skip; in-flight loads invalidated immediately; tracked reloads
- *  synchronously (single primitive). */
-
-export const IR_RELOAD_BATCH = 40;

@@ -433,6 +433,8 @@ export function createQueries({
 
       const result = [];
       const ids = icons.ids();
+      /** One camera and viewport for every model's drawn scale. */
+      let view = null;
       for (let i = start; i < ids.length; i += stride) {
         const icao24 = ids[i];
         if (
@@ -478,9 +480,11 @@ export function createQueries({
             ? modelVisualAnchor(
                 record.matrix,
                 spec.visualCenterNative,
-                Number.isFinite(record.model.computedScale)
-                  ? record.model.computedScale
-                  : spec.scale,
+                parts.rendering._modelDrawnScale(
+                  record,
+                  spec,
+                  (view ??= parts.rendering._drawnScaleView()),
+                ),
                 object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
               )
             : icons.position(icao24, t, object._iconPos);

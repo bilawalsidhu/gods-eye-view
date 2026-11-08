@@ -34,6 +34,8 @@ import flightsLayer, {
   _trackedBillboardColorForTest as flightsTrackedBillboardColor,
   _driveFleetModelHandoffForTest as flightsDriveFleetModel,
   _ensureFleetModelForTest as flightsEnsureFleetModel,
+  _trackedModelForTest as flightsTrackedModel,
+  _modelSetIdsForTest as flightsModelSetIds,
   _iconForTest as flightsIcon,
   _setIconForTest as flightsSetIcon,
 } from './flights.js';
@@ -44,11 +46,15 @@ import militaryFlightsLayer, {
   _trackedBillboardColorForTest as militaryTrackedBillboardColor,
   _driveFleetModelHandoffForTest as militaryDriveFleetModel,
   _ensureFleetModelForTest as militaryEnsureFleetModel,
+  _trackedModelForTest as militaryTrackedModel,
+  _modelSetIdsForTest as militaryModelSetIds,
   _iconForTest as militaryIcon,
   _setIconForTest as militarySetIcon,
 } from './militaryFlights.js';
 import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 // Sample altitudes are expressed RELATIVE to the band rather than as absolute
 // offsets. The thresholds have already been retuned once (1_000_000 → 150_000
@@ -156,10 +162,13 @@ if (typeof globalThis.window === 'undefined') {
   globalThis.window = { dispatchEvent() { return true; }, addEventListener() {}, removeEventListener() {} };
 }
 
-/** A viewer stub whose camera altitude the test can move between evaluations. */
+/** A viewer stub whose camera altitude the test can move between evaluations.
+ *  Its renderer has a fake draw port (`viewer.draw`) the layer's model sets
+ *  are made on, and a query port whose height samples are `sampleHeight`'s. */
 function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undefined } = {}) {
   const tileset = { show: true, tilesLoaded };
-  return {
+  const draw = fakeDrawPort();
+  const viewer = {
     camera: {
       positionCartographic: { height },
       positionWC: Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 5000),
@@ -172,9 +181,25 @@ function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undef
       sampleHeight,
     },
     tileset,
+    draw,
     trackedEntity: undefined,
     entities: { remove() {} },
   };
+  return bindFakeCesiumCamera(viewer, {
+    draw,
+    query: { sampleHeightNow: () => sampleHeight() },
+    canvas: viewer.scene.canvas,
+  });
+}
+
+/** The layer's fleet or tracked models set in the viewer's fake draw port. */
+function modelSet(fixture, viewer, which) {
+  return viewer.draw.set(fixture.modelSetIds()[which]);
+}
+
+/** Where a model record places its model (its placement's translation). */
+function placedAt(record) {
+  return new Cesium.Cartesian3(record.matrix[12], record.matrix[13], record.matrix[14]);
 }
 
 /** A billboard with a real position, so the tracked-model driver has somewhere
@@ -208,13 +233,6 @@ function iconView(icao24, readIcon, setIcon) {
   };
 }
 
-/** Records what the driver hands to the scene, so a test can assert that a
- *  failing loader never put a model up. */
-function recordingModelCollection() {
-  const added = [];
-  return { added, add(m) { added.push(m); }, remove() {}, isDestroyed() { return false; } };
-}
-
 const LAYERS = [
   {
     name: 'flights',
@@ -223,9 +241,11 @@ const LAYERS = [
     driveTrackedModel: flightsDriveTrackedModel,
     driveFleetModel: flightsDriveFleetModel,
     ensureFleetModel: flightsEnsureFleetModel,
+    trackedModel: flightsTrackedModel,
+    modelSetIds: flightsModelSetIds,
     trackedBillboardColor: flightsTrackedBillboardColor,
     bellyM: 6.719,
-    seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
+    seed({ viewer, tracked = true, icao24 = ICAO, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedFlightRefreshStateForTest({
         icao24,
@@ -235,7 +255,7 @@ const LAYERS = [
         viewer,
         tracked,
         models,
-        modelCollection,
+        draw: viewer.draw,
         meta: { callsign: 'TEST123 ', altitude: 10_668, klass: 'airliner', onGround },
       });
       return iconView(icao24, flightsIcon, flightsSetIcon);
@@ -248,9 +268,11 @@ const LAYERS = [
     driveTrackedModel: militaryDriveTrackedModel,
     driveFleetModel: militaryDriveFleetModel,
     ensureFleetModel: militaryEnsureFleetModel,
+    trackedModel: militaryTrackedModel,
+    modelSetIds: militaryModelSetIds,
     trackedBillboardColor: militaryTrackedBillboardColor,
     bellyM: 5.631 * 0.8,
-    seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
+    seed({ viewer, tracked = true, icao24 = ICAO, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedMilitaryRefreshStateForTest({
         icao24,
@@ -260,7 +282,7 @@ const LAYERS = [
         viewer,
         tracked,
         models,
-        modelCollection,
+        draw: viewer.draw,
         meta: { callsign: 'TEST123 ', altitudeFt: 35_000, klass: 'fastjet', onGround },
       });
       return iconView(icao24, militaryIcon, militarySetIcon);
@@ -269,44 +291,26 @@ const LAYERS = [
 ];
 
 for (const fixture of LAYERS) {
-  test(`${fixture.name}: production fleet loader admits a HIDDEN primitive and fails back to 2D`, async () => {
+  test(`${fixture.name}: production fleet admission keeps the model HIDDEN until it is ready and placed`, () => {
     clearTr3bRegistry();
     fixture.layer.stopTracking();
     fixture.layer.setParams({ models3d: true });
 
-    const realFrom = Cesium.Model.fromGltfAsync;
     const viewer = viewerAtHeight(30_000, { tilesLoaded: false });
     const position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
-    const loadedCollection = recordingModelCollection();
-    const loadingModel = {
-      modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      ready: false,
-      show: true,
-      scale: 1,
-      destroy() {},
-    };
 
     try {
       const loadingIcao = fixture.name === 'flights' ? 'a0f201' : 'b0f201';
-      Cesium.Model.fromGltfAsync = () => Promise.resolve(loadingModel);
       const billboard = fixture.seed({
         viewer,
         tracked: false,
         icao24: loadingIcao,
         onGround: true,
-        modelCollection: loadedCollection,
       });
-      const admitted = await fixture.ensureFleetModel(loadingIcao);
-      assert.equal(admitted, loadingModel, 'the production fleet loader admits the resolved primitive');
-      assert.equal(loadedCollection.added.length, 1, 'the production loader adds it once');
-      assert.equal(loadingModel.ready, false);
-      // Cesium 1.138's Model.update has no `show` guard — PrimitiveCollection
-      // updates every member unconditionally and `_ready` flips in afterRender —
-      // so hiding an admitted primitive costs its load nothing, and it is the
-      // only thing that keeps Cesium's default show=true from claiming the
-      // visual at the identity matrix before the first tick places it.
-      assert.equal(loadingModel.show, false, 'admission hides the primitive until it is placed');
-      assert.equal(loadingModel.scale, 1, 'and never touches its scale to do it');
+      const admitted = fixture.ensureFleetModel(loadingIcao);
+      assert.ok(admitted, 'the production fleet admission records a model');
+      assert.equal(admitted.ready, false, 'nothing has loaded yet');
+      assert.equal(admitted.show, false, 'admission records the model hidden until it is placed');
       assert.equal(billboard.show, true, 'the 2D billboard owns the cold loading state');
 
       const nearby = fixture.layer.getNearby(billboard.position, 1_000, 50)
@@ -316,31 +320,60 @@ for (const fixture of LAYERS) {
         'fleet proximity stays at the billboard rather than the unplaced model');
 
       fixture.driveFleetModel({ icao24: loadingIcao, position, course: 92 });
-      assert.equal(loadingModel.show, false);
-      assert.equal(loadingModel.scale, 1);
+      const fleet = modelSet(fixture, viewer, 'fleet');
+      const item = fleet.items.get(loadingIcao);
+      assert.ok(item, 'the model set loads the contact from its first write');
+      assert.equal(item.show, false, 'and draws nothing while there is no safe placement');
+      assert.equal(admitted.show, false);
       assert.equal(billboard.show, true, 'cold terrain preserves the same visible 2D owner');
 
-      const failedIcao = fixture.name === 'flights' ? 'a0f202' : 'b0f202';
-      const failedCollection = recordingModelCollection();
-      Cesium.Model.fromGltfAsync = () => Promise.reject(new Error('simulated fleet GLB failure'));
-      const failedBillboard = fixture.seed({
-        viewer,
-        tracked: false,
-        icao24: failedIcao,
-        onGround: true,
-        modelCollection: failedCollection,
-      });
-      const failedModel = await fixture.ensureFleetModel(failedIcao);
-      assert.equal(failedModel, null, 'a rejected fleet GLB is never admitted');
-      assert.equal(failedCollection.added.length, 0);
-      assert.equal(failedBillboard.show, true,
-        'fleet load rejection leaves the 2D owner visible');
-      assert.ok(fixture.layer.getNearby(failedBillboard.position, 1_000, 50)
-        .some((object) => object.icao24 === failedIcao),
-      'fleet load rejection leaves the contact in the billboard proximity cohort');
+      // A load that never finishes (a missing or broken GLB) never fires
+      // `ready`, so the billboard stays the visual for as long as it lasts.
+      viewer.draw.ready(fleet.spec.id, 'someone-else');
+      assert.equal(admitted.ready, false, 'another item loading does not ready this one');
+      fixture.driveFleetModel({ icao24: loadingIcao, position, course: 92 });
+      assert.equal(billboard.show, true, 'an unready model leaves the 2D owner visible');
+      assert.ok(fixture.layer.getNearby(billboard.position, 1_000, 50)
+        .some((object) => object.icao24 === loadingIcao),
+      'an unready model leaves the contact in the billboard proximity cohort');
+
+      viewer.draw.ready(fleet.spec.id, loadingIcao);
+      assert.equal(admitted.ready, true, "the set's ready marks the contact's model loaded");
     } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
       fixture.layer.setParams({ models3d: false });
+      fixture.layer.stopTracking();
+    }
+  });
+
+  test(`${fixture.name}: the IR boost restyles a drawn model in place, flat white and unlit`, () => {
+    clearTr3bRegistry();
+    fixture.layer.stopTracking();
+    fixture.layer.setParams({ models3d: true, irBoost: false });
+    const viewer = viewerAtHeight(30_000);
+    const position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
+    const icao24 = fixture.name === 'flights' ? 'a0f301' : 'b0f301';
+    try {
+      fixture.seed({ viewer, tracked: false, icao24 });
+      const record = fixture.ensureFleetModel(icao24);
+      const fleet = modelSet(fixture, viewer, 'fleet');
+      viewer.draw.ready(fleet.spec.id, icao24);
+      fixture.driveFleetModel({ icao24, position, course: 92 });
+      const normal = fleet.items.get(icao24);
+      assert.equal(normal.shading, 'pbr');
+      assert.equal(normal.show, true);
+      assert.ok(normal.colorBlend.amount < 1, 'the asset keeps a hint of its own colour');
+
+      fixture.layer.setParams({ irBoost: true });
+      fixture.driveFleetModel({ icao24, position, course: 92 });
+      const boosted = fleet.items.get(icao24);
+      assert.notEqual(boosted, normal, 'the boost writes the item again');
+      assert.equal(boosted.shading, 'unlit');
+      assert.deepEqual(boosted.tint, [1, 1, 1, 1]);
+      assert.deepEqual(boosted.colorBlend, { mode: 'mix', amount: 1 });
+      assert.equal(fixture.ensureFleetModel(icao24), record, 'the same model restyles; nothing reloads');
+      assert.equal(boosted.url, normal.url);
+    } finally {
+      fixture.layer.setParams({ models3d: false, irBoost: false });
       fixture.layer.stopTracking();
     }
   });
@@ -397,7 +430,7 @@ for (const fixture of LAYERS) {
       assert.equal(model.show, true);
       assert.equal(billboard.show, false);
       assert.ok(model.show || billboard.show, 'successful handoff keeps a visible owner');
-      const placed = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
+      const placed = placedAt(model);
       const placedHeight = Cesium.Cartographic.fromCartesian(placed).height;
       assert.ok(Math.abs(placedHeight - (sampledHeight + fixture.bellyM)) < 0.001,
         `placement uses the exact ${fixture.bellyM} m asset-measured belly offset`);
@@ -422,7 +455,7 @@ for (const fixture of LAYERS) {
       assert.equal(model.show, true, 'no 3D→2D pop while the resample is backing off');
       assert.equal(billboard.show, false);
       assert.equal(sampleCalls, 1, 'and the hold costs no extra synchronous sample');
-      const held = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
+      const held = placedAt(model);
       assert.ok(Math.abs(Cesium.Cartographic.fromCartesian(held).height
         - (sampledHeight + fixture.bellyM)) < 0.001,
       'the hold places the model on the last MEASURED floor, not on the feed altitude');
@@ -491,7 +524,7 @@ for (const fixture of LAYERS) {
     };
     /** Height (m) the model's matrix currently places it at. */
     const placedHeightM = () => Cesium.Cartographic.fromCartesian(
-      Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3()),
+      placedAt(model),
     ).height;
 
     const LAT = 30.21;
@@ -594,12 +627,11 @@ for (const fixture of LAYERS) {
     }
   });
 
-  test(`${fixture.name}: grounded tracked model waits for a valid terrain snap with no visual gap`, async () => {
+  test(`${fixture.name}: grounded tracked model waits for a valid terrain snap with no visual gap`, () => {
     clearTr3bRegistry();
     fixture.layer.stopTracking();
     fixture.layer.setParams({ models3d: false });
 
-    const realFrom = Cesium.Model.fromGltfAsync;
     const realNow = Date.now;
     let now = 3_000_000;
     Date.now = () => now;
@@ -609,30 +641,25 @@ for (const fixture of LAYERS) {
       tilesLoaded: false,
       sampleHeight: () => { sampleCalls++; return sampledHeight; },
     });
-    const collection = recordingModelCollection();
-    const model = {
-      modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      ready: false,
-      show: true,
-      scale: 1,
-      destroy() {},
-    };
-    Cesium.Model.fromGltfAsync = () => Promise.resolve(model);
+    const icao24 = fixture.name === 'flights' ? 'a0f001' : 'b0f001';
 
     try {
       const billboard = fixture.seed({
         viewer,
-        modelCollection: collection,
         onGround: true,
-        icao24: fixture.name === 'flights' ? 'a0f001' : 'b0f001',
+        icao24,
       });
 
       fixture.driveTrackedModel();
-      await Promise.resolve(); await Promise.resolve();
-      assert.equal(collection.added.length, 1, 'the loaded primitive enters the scene once');
-      assert.equal(model.ready, false, 'the production loader is still awaiting GPU readiness');
-      assert.equal(model.show, false, 'the loading primitive is admitted hidden, not zero-scaled');
-      assert.equal(model.scale, 1, 'its scale is left to the pixel-cap driver');
+      const model = fixture.trackedModel();
+      const tracked = modelSet(fixture, viewer, 'tracked');
+      assert.ok(model, 'the driver records the tracked model');
+      assert.deepEqual([...tracked.items.keys()], [icao24],
+        'the tracked set loads the one model for the contact');
+      assert.equal(model.ready, false, 'the model is still loading');
+      assert.equal(model.show, false, 'the loading model is drawn hidden, not zero-scaled');
+      assert.equal(tracked.items.get(icao24).show, false);
+      const baseScale = model.scale;
       assert.equal(fixture.trackedBillboardColor().alpha, 1,
         'the tracked billboard remains opaque while the model lacks safe placement');
       assert.equal(sampleCalls, 0, 'cold tiles do not force a synchronous sample');
@@ -672,12 +699,14 @@ for (const fixture of LAYERS) {
       assert.equal(fixture.trackedBillboardColor().alpha, 1,
         'the billboard retains ownership until GPU readiness too');
 
-      model.ready = true;
+      assert.equal(model.scale, baseScale, 'its scale is left to the pixel-cap driver');
+      viewer.draw.ready(tracked.spec.id, icao24);
       fixture.driveTrackedModel();
       assert.equal(model.show, true, 'the model appears only after its snapped matrix is written');
+      assert.equal(tracked.items.get(icao24).show, true);
       assert.equal(fixture.trackedBillboardColor().alpha, 0,
         'the billboard becomes transparent only when the model actually owns the visual');
-      const placed = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
+      const placed = placedAt(model);
       const placedHeight = Cesium.Cartographic.fromCartesian(placed).height;
       assert.ok(Math.abs(placedHeight - (sampledHeight + fixture.bellyM)) < 0.001,
         `tracked placement uses the exact ${fixture.bellyM} m asset-measured belly offset`);
@@ -710,7 +739,6 @@ for (const fixture of LAYERS) {
       assert.equal(fixture.trackedBillboardColor().alpha, 1,
         'there is no invisible-owner gap while the replacement snap is unavailable');
     } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
       Date.now = realNow;
       fixture.layer.stopTracking();
     }
@@ -833,132 +861,9 @@ for (const fixture of LAYERS) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// 3. Bounded on-demand loading
-//
-// The tracked regime is default-on and its driver runs every scene.preUpdate.
-// A missing or corrupt GLB — or a dead network — used to leave the driver in a
-// load→reject loop at frame rate for as long as the contact stayed selected,
-// because the catch cleared only the in-flight flag. These pin the bound.
-// ---------------------------------------------------------------------------
-
-/** Drive N frames of the production tracked-model driver, letting each
- *  rejected load settle, with a fake clock the backoff can be walked past. */
-async function driveFrames(fixture, count, clock) {
-  for (let i = 0; i < count; i++) {
-    fixture.driveTrackedModel();
-    await Promise.resolve(); await Promise.resolve(); // let the rejection settle
-    clock.advance(2000); // past the retry backoff, so only the LATCH can stop it
-  }
-}
-
-for (const fixture of LAYERS) {
-  test(`${fixture.name}: a rejecting GLB loader is bounded, not a per-frame retry loop`, async () => {
-    clearTr3bRegistry();
-    fixture.layer.setParams({ models3d: false });
-
-    const realFrom = Cesium.Model.fromGltfAsync;
-    const realNow = Date.now;
-    let now = 1_000_000;
-    const clock = { advance(ms) { now += ms; } };
-    Date.now = () => now;
-    let attempts = 0;
-    const requested = [];
-    Cesium.Model.fromGltfAsync = ({ url }) => {
-      attempts++; requested.push(url);
-      return Promise.reject(new Error('simulated missing GLB'));
-    };
-    // The give-up path warns once by design; keep the run's output clean.
-    const realWarn = console.warn;
-    const warnings = [];
-    console.warn = (...args) => { warnings.push(args.join(' ')); };
-
-    try {
-      const collection = recordingModelCollection();
-      const viewer = viewerAtHeight(30_000); // well inside the regime
-      const billboard = fixture.seed({ viewer, modelCollection: collection });
-      assert.equal(fixture.regimeActive(), true, 'the regime is open, so the driver will try to load');
-
-      await driveFrames(fixture, 12, clock);
-      const settled = attempts;
-      assert.ok(settled > 0, 'it must actually try');
-      assert.ok(settled <= 3,
-        `a failing asset must give up within 3 attempts per selection, got ${settled}`);
-
-      // Many more frames must produce NO further attempts — this is the loop bound.
-      await driveFrames(fixture, 25, clock);
-      assert.equal(attempts, settled,
-        'once latched, further frames must not re-ask for the same failed asset');
-
-      // Nothing was ever handed to the scene, so the billboard stayed the visual.
-      assert.equal(collection.added.length, 0, 'a failed load never puts a model up');
-      assert.equal(fixture.trackedBillboardColor().alpha, 1,
-        'a rejected tracked model leaves the tracked billboard opaque');
-      assert.equal(billboard.show, true,
-        'a rejected model never creates a frame with both visual representations hidden');
-
-      // Exactly one operator-facing warning, and it names the asset.
-      assert.equal(warnings.length, 1, 'the give-up is announced once, not per frame');
-      assert.ok(warnings[0].includes(requested[0]), `the warning names the asset: ${warnings[0]}`);
-
-      // A NEW selection gets a fresh budget — the latch is per contact.
-      fixture.layer.stopTracking();
-      fixture.seed({ viewer, icao24: 'def456', modelCollection: collection });
-      await driveFrames(fixture, 3, clock);
-      assert.ok(attempts > settled, 'selecting another contact restores the retry budget');
-    } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
-      Date.now = realNow;
-      console.warn = realWarn;
-      fixture.layer.stopTracking();
-    }
-  });
-
-  test(`${fixture.name}: the failure latch clears on a same-icao re-track too`, async () => {
-    clearTr3bRegistry();
-    fixture.layer.setParams({ models3d: false });
-
-    const realFrom = Cesium.Model.fromGltfAsync;
-    const realNow = Date.now;
-    const realWarn = console.warn;
-    let now = 2_000_000;
-    const clock = { advance(ms) { now += ms; } };
-    Date.now = () => now;
-    let attempts = 0;
-    Cesium.Model.fromGltfAsync = () => { attempts++; return Promise.reject(new Error('simulated missing GLB')); };
-    console.warn = () => {};
-
-    try {
-      const collection = recordingModelCollection();
-      const viewer = viewerAtHeight(30_000);
-      fixture.seed({ viewer, modelCollection: collection });
-      await driveFrames(fixture, 12, clock);
-      const latched = attempts;
-      await driveFrames(fixture, 10, clock);
-      assert.equal(attempts, latched, 'latched for this selection');
-
-      // Deselect and re-select the SAME contact through the production path.
-      fixture.layer.stopTracking();
-      fixture.seed({ viewer, modelCollection: collection });
-      await driveFrames(fixture, 3, clock);
-      assert.ok(attempts > latched,
-        're-tracking the same contact is a new selection and gets its retries back');
-    } finally {
-      Cesium.Model.fromGltfAsync = realFrom;
-      Date.now = realNow;
-      console.warn = realWarn;
-      fixture.layer.stopTracking();
-    }
-  });
-}
-
-test('both layers gate the tracked-model load and record its failures', async () => {
+test('both layers reset the per-selection tracked-model state', async () => {
   for (const name of ['flights.js', 'militaryFlights.js']) {
     const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    assert.match(source, /!(?:(?:flightState|state)\.)?_trackedModel\s*&&\s*!(?:(?:flightState|state)\.)?_trackedModelLoading\s*&&\s*(?:parts\.\w+\.)?_trackedModelLoadAllowed\(\s*,?\s*\)/,
-      `${name}: the driver asks permission before starting another tracked-model load`);
-    assert.match(source, /(?:parts\.\w+\.)?_noteTrackedModelLoadFailure\(\s*trackedSpec\.url,\s*err,?\s*\)/,
-      `${name}: a rejected load is recorded against this selection, not silently retried`);
     // The reset must be reachable from the real teardown, not only a test seam.
     assert.match(source, /(?:parts\.\w+\.)?_releaseTrackedModel\(\s*,?\s*\);\n\s*(?:parts\.\w+\.)?_resetTrackedSelectionState\(\s*,?\s*\);/,
       `${name}: deselect clears the per-selection latches in the production path`);

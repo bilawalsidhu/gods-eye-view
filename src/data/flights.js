@@ -40,6 +40,8 @@ export const _driveFleetModelHandoffForTest =
   flightsLayer.testing._driveFleetModelHandoffForTest;
 export const _ensureFleetModelForTest =
   flightsLayer.testing._ensureFleetModelForTest;
+export const _trackedModelForTest = flightsLayer.testing._trackedModelForTest;
+export const _modelSetIdsForTest = flightsLayer.testing._modelSetIdsForTest;
 export const _iconForTest = flightsLayer.testing._iconForTest;
 export const _setIconForTest = flightsLayer.testing._setIconForTest;
 export const _floorGroundedIconsForTest =

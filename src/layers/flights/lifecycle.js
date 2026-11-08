@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { findCamera, findFrame } from '../../render/rendererOf.js';
 import { PLANE_MODEL_URL } from './policy.js';
 
 export function createLifecycle({
@@ -33,7 +33,7 @@ export function createLifecycle({
      * Initialize the flights layer.
      * Creates the icon set and its primitive, resets all state, and installs the
      * click-to-track handler on the scene canvas.
-     * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
+     * @param {object} viewer - The viewer.
      */
     init(viewer) {
       if (flightState._viewer)
@@ -46,33 +46,11 @@ export function createLifecycle({
       flightState._focusEvidenceIds.clear();
       flightState._viewer = viewer;
       registerSpriteSet('flights', parts.icons._createIcons(viewer));
-      flightState._modelCollection = new Cesium.PrimitiveCollection();
-      viewer.scene.primitives.add(flightState._modelCollection);
-      // Warm the glTF cache so the tracked plane's model instantiates instantly when first needed
-      // (keeps the retained instance referenced; never rendered). Captured against this epoch so a
-      // destroy/re-init mid-load doesn't flip the flag for a torn-down lifecycle.
-      if (!flightState._preloadModel) {
-        const epoch = flightState._modelEpoch;
-        Cesium.Model.fromGltfAsync({
-          url: resolveAsset(PLANE_MODEL_URL),
-          asynchronous: false,
-        })
-          .then((m) => {
-            if (epoch === flightState._modelEpoch) {
-              flightState._preloadModel = m;
-              flightState._planeModelLoaded = true;
-            } else {
-              try {
-                m.destroy();
-              } catch {
-                /* gone */
-              }
-            }
-          })
-          .catch(() => {
-            /* tracked plane just stays a billboard a beat longer */
-          });
-      }
+      // The models' draw sets; a hidden item keeps the tracked asset loaded so
+      // the tracked plane's model draws as soon as it is wanted.
+      parts.rendering._createModelSets(viewer, {
+        preloadUrl: resolveAsset(PLANE_MODEL_URL),
+      });
       flightState._grounded.clear();
       flightState._floorPinned.clear();
       flightState._iconFocusActive = 0;
@@ -127,13 +105,12 @@ export function createLifecycle({
 
     /**
      * Show the icons and re-install the click handler.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     enable(viewer) {
       if (flightState._icons) flightState._icons.show = true;
       holdContinuousRender('flights'); // per-frame animator (perf wave 2)
-      if (flightState._modelCollection)
-        flightState._modelCollection.show = true;
+      parts.rendering._setModelsShown(true);
       parts.tracking._setCockpitContactMode(
         document.body.classList.contains('cockpit-mode'),
       );
@@ -155,26 +132,25 @@ export function createLifecycle({
         'flights',
         (pickedId) => flightState._icons?.has(pickedId) === true,
       );
-      if (!flightState._preRenderRemove && viewer?.scene) {
-        flightState._preRenderRemove = viewer.scene.preRender.addEventListener(
-          parts.rendering._fleetTick,
+      const frame = findFrame(viewer);
+      if (!flightState._preRenderRemove && frame) {
+        flightState._preRenderRemove = frame.on('preRender', () =>
+          parts.rendering._fleetTick(),
         );
       }
-      if (!flightState._trackedModelPreUpdateRemove && viewer?.scene) {
-        flightState._trackedModelPreUpdateRemove =
-          viewer.scene.preUpdate.addEventListener(
-            parts.rendering._updateTrackedModel,
-          );
+      if (!flightState._trackedModelPreUpdateRemove && frame) {
+        flightState._trackedModelPreUpdateRemove = frame.on('preUpdate', () =>
+          parts.rendering._updateTrackedModel(),
+        );
       }
-      if (!flightState._moveEndRemove && viewer?.camera) {
+      const camera = findCamera(viewer);
+      if (!flightState._moveEndRemove && camera) {
         // A settled camera move (voice fly-to, fast pan release) runs the fleet
         // pass on the very next preRender rather than up to FLEET_DR_INTERVAL_MS
         // later, so the model handoff and focus land with the camera.
-        flightState._moveEndRemove = viewer.camera.moveEnd.addEventListener(
-          () => {
-            flightState._lastFleetTickMs = 0;
-          },
-        );
+        flightState._moveEndRemove = camera.on('moveEnd', () => {
+          flightState._lastFleetTickMs = 0;
+        });
       }
       restoreSpriteOrderOnEnable('flights', viewer);
     },
@@ -182,7 +158,7 @@ export function createLifecycle({
     /**
      * Hide all flight icons and tear down click/keyboard handlers.
      * Also clears any active flight tracking so the camera is released.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     disable(viewer) {
       parts.controller._abortActiveUpdates();
@@ -190,8 +166,7 @@ export function createLifecycle({
       if (flightState._icons) flightState._icons.show = false;
       releaseContinuousRender('flights');
       parts.rendering._releaseModels();
-      if (flightState._modelCollection)
-        flightState._modelCollection.show = false;
+      parts.rendering._setModelsShown(false);
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       // Remove click handler + keydown listener while disabled to avoid
@@ -221,7 +196,7 @@ export function createLifecycle({
     /**
      * Fully tear down the flights layer — remove primitives, handlers,
      * tracked entities, and clear all internal state maps.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     destroy(viewer) {
       flightState.lifetime.abort();
@@ -265,22 +240,7 @@ export function createLifecycle({
       }
       parts.rendering._releaseModels();
       parts.icons._disposeIcons();
-      if (flightState._modelCollection) {
-        viewer.scene.primitives.remove(flightState._modelCollection); // removing destroys it + its models
-        flightState._modelCollection = null;
-      }
-      flightState._modelEpoch += 1; // invalidate any in-flight load from this lifecycle (settles post-destroy)
-      flightState._modelPending.clear();
-      flightState._modelGen.clear();
-      if (flightState._preloadModel) {
-        try {
-          flightState._preloadModel.destroy();
-        } catch {
-          /* gone */
-        }
-        flightState._preloadModel = null;
-      }
-      flightState._planeModelLoaded = false;
+      parts.rendering._disposeModelSets();
       flightState._grounded.clear();
       flightState._floorPinned.clear();
       flightState._iconFocusActive = 0;

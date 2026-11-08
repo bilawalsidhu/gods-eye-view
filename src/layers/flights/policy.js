@@ -105,7 +105,11 @@ export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
 
 export const MODEL_BELLY_OFFSET_NATIVE = 6.719;
 
+/** The tracked contact's tint, and its billboard once a model takes over. */
+export const TRACKED_CYAN = Cesium.Color.CYAN;
 export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
+/** An ordinary fleet contact's tint. */
+export const FLEET_TINT = Cesium.Color.WHITE;
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
@@ -281,19 +285,6 @@ export const ENRICH_AMBIENT_PER_SWEEP = 150;
 
 export const DR_CORRECTION_MS = 900;
 
-/** Bounded on-demand loading for the tracked model. The tracked regime is
- *  DEFAULT-ON and its driver runs every `scene.preUpdate`, so a missing or
- *  corrupt GLB — or a dead network — would otherwise spin load→reject at frame
- *  rate for as long as the contact stays selected. Failures are counted PER
- *  SELECTION: a short backoff absorbs a transient blip, then the layer stops
- *  asking until the operator selects something else. The billboard is the
- *  visual throughout (the handoff only fades it once a model actually renders),
- *  so a latched failure degrades to exactly the pre-3D presentation. */
-
-export const TRACKED_MODEL_MAX_LOAD_FAILS = 3;
-
-export const TRACKED_MODEL_RETRY_BACKOFF_MS = 1500;
-
 /** @constant {number} Cap on NEW cells the display corridors may add to one
  *  poll's warm/sample batch — a view full of ground traffic must not balloon
  *  it. Cells the poll already collected are free (deduped before budgeting). */
@@ -422,18 +413,3 @@ export const FLOOR_EASE_EPSILON_M = 0.02;
  *  airborne long enough to have gone anywhere. */
 
 export const FLOOR_SEED_GRACE_MS = 90_000;
-
-/** Flip the whole 3D fleet's boost state by dropping models so the eligibility
- *  pass reloads them with creation-time boost options (both directions — a
- *  boosted model must not stay flat white back in Normal). Destroying 350
- *  GPU-backed models synchronously inside the style handler stalls the render
- *  thread (review P1; same failure the cockpit path documents), so the release
- *  is BATCHED through the fleet tick: each tick drops a bounded slice, showing
- *  each plane's billboard first (gap-proof per plane, no double-image window).
- *  Models are tagged with the boost state they loaded under, so queue entries
- *  whose model already matches the current state (rapid style cycling, or a
- *  reload that already happened) are skipped. In-flight loads are invalidated
- *  immediately (cheap gen bumps); the tracked model is a single primitive and
- *  reloads synchronously. */
-
-export const IR_RELOAD_BATCH = 40;

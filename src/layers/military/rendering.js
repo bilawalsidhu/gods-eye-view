@@ -132,6 +132,7 @@ export function createRendering({
     parts,
     resolveAsset,
     logLabel: 'Data:Military',
+    setPrefix: 'military',
     policy,
     modelSpec: _modelSpec,
     modelColor: _modelColor,

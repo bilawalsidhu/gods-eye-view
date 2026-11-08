@@ -469,7 +469,7 @@ export function createMotion({
    * is what you can see drifts below the aircraft and only converges as the coarse floor
    * cell warms ("the buoy"), sometimes never.
    *
-   * It reads `modelMatrix`, which `_updateTrackedModel` already wrote this frame — no
+   * It reads the placement `_updateTrackedModel` already recorded this frame — no
    * sampling, no `_modelDisplayPosition` call from postRender, and no new dead reckoning,
    * so the follow-camera anti-jitter contract on the entity record's `displayPosition` is untouched.
    */
@@ -485,9 +485,7 @@ export function createMotion({
       return modelVisualAnchor(
         flightState._trackedModel.matrix,
         spec.visualCenterNative,
-        Number.isFinite(flightState._trackedModel.model.computedScale)
-          ? flightState._trackedModel.model.computedScale
-          : spec.scale,
+        parts.rendering._modelDrawnScale(flightState._trackedModel, spec),
         flightState._trackedVisualPos,
       );
     }
@@ -497,8 +495,8 @@ export function createMotion({
   /** Trail endpoint for the rendered tracked owner. Brackets/readouts stay on
    * the visual centre; only the trail moves to the model's lower-centre hardpoint. */
   /** The tracked model's rendered bounding radius (m), or 0 when no model of this
-   *  contact is drawing. Carries Cesium's effective `computedScale`, which may be
-   *  above `scale` to satisfy minimumPixelSize — the trail head has to be judged
+   *  contact is drawing. Carries the scale it is drawn at, which may be
+   *  above `scale` to satisfy its pixel floor — the trail head has to be judged
    *  against the size the operator SEES, not the nominal one. */
   /** World-space origin of the tracked model, or null when no model of this
    *  contact is drawing. This is the centre the rendered bounding sphere is
@@ -527,10 +525,10 @@ export function createMotion({
     const spec = parts.rendering._modelSpec(
       flightState.records.data.get(flightState._trackedIcao)?.klass,
     );
-    const scale = Number.isFinite(flightState._trackedModel.model.computedScale)
-      ? flightState._trackedModel.model.computedScale
-      : spec.scale;
-    return spec.nativeRadiusM * scale;
+    return (
+      spec.nativeRadiusM *
+      parts.rendering._modelDrawnScale(flightState._trackedModel, spec)
+    );
   }
 
   function _trackedTrailCached() {
@@ -547,9 +545,7 @@ export function createMotion({
       return modelAnchorWorld(
         flightState._trackedModel.matrix,
         spec.trailAnchorNative,
-        Number.isFinite(flightState._trackedModel.model.computedScale)
-          ? flightState._trackedModel.model.computedScale
-          : spec.scale,
+        parts.rendering._modelDrawnScale(flightState._trackedModel, spec),
         flightState._trackedTrailPos,
       );
     }

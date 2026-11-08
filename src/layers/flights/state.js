@@ -30,31 +30,15 @@ export function createFlightState({ source, services }) {
 
   flightState._groundSnap = createGroundSnap();
 
-  flightState._scratchGroundCarto = new Cesium.Cartographic();
+  /** The fleet and tracked model draw sets of this layer lifetime
+   *  (`_createModelSets`), or null. */
 
-  flightState._scratchGroundPos = new Cesium.Cartesian3();
+  flightState._modelSets = null;
 
-  /** @type {Cesium.PrimitiveCollection|null} */
-
-  flightState._modelCollection = null;
-
-  /** @type {Map<string, Cesium.Model>} icao24 → model */
+  /** @type {Map<string, import('../../data/modelRecord.js').ModelRecord>}
+   *  icao24 → the fleet model admitted for it (loading or drawn). */
 
   flightState._models = new Map();
-
-  /** @type {Set<string>} icao24 currently loading (async) */
-
-  flightState._modelPending = new Set();
-
-  /** @type {Map<string, number>} icao24 → load generation; bumped on release to invalidate
-   *  an in-flight load (so a track/untrack/remove during fromGltfAsync can't add a stale model). */
-
-  flightState._modelGen = new Map();
-
-  /** Lifecycle epoch; bumped on destroy so an in-flight load from a PREVIOUS init can't settle
-   *  against a new lifecycle's globals (which destroy cleared). Captured by _ensureModel. */
-
-  flightState._modelEpoch = 0;
 
   /** DEFAULT-ON in PROXIMITY (owner directive 2026-08-22). A fresh boot never runs
    *  layer-state restoration, so this initializer — not the codec — is what the app
@@ -69,22 +53,6 @@ export function createFlightState({ source, services }) {
 
   flightState._lastModelCapWarnMs = 0;
   // throttle the "more planes in view than the cap" console notice
-  // The tracked entity's billboard goes transparent (rather than hidden) once the model takes
-  // over, so it keeps supplying a bounding sphere for follow-camera framing. We only drop its
-  // alpha after the GLB is preloaded so the model is ready to render the instant the billboard
-  // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
-  // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
-
-  flightState._planeModelLoaded = false;
-
-  /** @type {Cesium.Model|null} retained preload that keeps the glTF cache warm */
-
-  flightState._preloadModel = null;
-
-  flightState._scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
-
-  flightState._scratchModelMtx = new Cesium.Matrix4();
-
   flightState._scratchModelBS = new Cesium.BoundingSphere(
     new Cesium.Cartesian3(),
     1.0,
@@ -148,18 +116,12 @@ export function createFlightState({ source, services }) {
   /** The FollowTarget the camera follows the tracked aircraft with. */
   flightState._followTarget = null;
 
-  /** @type {Cesium.Model|null} Standalone 3D model for the tracked aircraft. Deliberately NOT a
+  /** @type {import('../../data/modelRecord.js').ModelRecord|null} Standalone 3D model for the tracked aircraft. Deliberately NOT a
    *  graphic on _trackedEntity: a model graphic reports PENDING until its glTF loads, and the
-   *  tracked entity must stay a plain, always-ready billboard. The model rides in _modelCollection
+   *  tracked entity must stay a plain, always-ready billboard. The model rides in its own draw set
    *  and is driven per-frame, fully decoupled from the camera, which follows its own target. */
 
   flightState._trackedModel = null;
-
-  /** Bumped on untrack/teardown so an in-flight tracked-model load resolves into a no-op. */
-
-  flightState._trackedModelGen = 0;
-
-  flightState._trackedModelLoading = false;
 
   /** @type {(() => void)|null} Unsubscribes the scene click. */
 
@@ -379,12 +341,6 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedZoomLatchIcao = null;
 
-  flightState._trackedModelFailIcao = null;
-
-  flightState._trackedModelFailCount = 0;
-
-  flightState._trackedModelRetryAtMs = 0;
-
   /** @type {Cesium.Cartographic} Scratch for the grounded display-floor read. */
 
   flightState._scratchDisplayCarto = new Cesium.Cartographic();
@@ -428,21 +384,5 @@ export function createFlightState({ source, services }) {
 
   flightState._irBoost = false;
 
-  /** Boosted models render UNLIT (owner cockpit-FLIR field rounds, 2026-08-16):
-   *  the white tint alone is applied to the MATERIAL, so Cesium still
-   *  sun-shades it — near-horizon viewing shows a plane's SIDE, ~90° to a high
-   *  sun, so it rendered near-BLACK in FLIR/NVG while sun-lit neighbors glowed.
-   *  LightingModel.UNLIT emits the flat white directly, orientation be damned.
-   *  CRITICAL (field-verified via scene.pick): assigning customShader to an
-   *  already-READY model is a silent no-op — the property sets but the shader
-   *  program never rebuilds. The boost therefore flips by RELEASE-AND-RELOAD
-   *  (see setParams), so every boosted model gets the shader AT CREATION.
-   *  One shared shader instance — stateless, safe across models. */
-
-  flightState._IR_UNLIT_SHADER = new Cesium.CustomShader({
-    lightingModel: Cesium.LightingModel.UNLIT,
-  });
-
-  flightState._irReloadQueue = null;
   return flightState;
 }

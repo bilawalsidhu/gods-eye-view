@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { AMBER_TRANSPARENT, TRACKED_ICON_COLOR } from './policy.js';
 import { createModelRecord } from '../../data/modelRecord.js';
 import {
@@ -23,15 +22,43 @@ export function createTesting({
    * @param {string} state.icao24
    * @param {object} state.entity
    * @param {object} state.meta
-   * @param {{position?: Cesium.Cartesian3, show?: boolean}} [state.icon]
+   * @param {{position?: {x: number, y: number, z: number}, show?: boolean}} [state.icon]
    *   Where the contact's icon is held, and whether it is shown.
    * @param {{show?: boolean}} [state.iconLayer] Layer visibility.
    * @param {object} state.viewer
    * @param {Array<Object>} [state.history=[]]
    * @param {boolean} [state.tracked=true]
    * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
-   *   by icao24, for the icon-hidden/model-shown handoff state.
+   *   by icao24, for the icon-hidden/model-shown handoff state: each object
+   *   becomes the contact's model record (`ready`, `show`, and a placement
+   *   `modelMatrix` when given), so the test reads what the layer writes back.
+   * @param {object|null} [state.draw] A draw port the layer's model sets are
+   *   made on (a test double); none keeps the records only.
    */
+
+  /** Turn a test's model fields into the contact's model record, in place. */
+  function _modelRecordForTest(fields, klass) {
+    const spec = parts.rendering._modelSpec(klass);
+    const base = createModelRecord({
+      specKey: parts.rendering._specKeyFor(klass),
+      bellyM: spec.bellyM,
+      scale: spec.scale,
+    });
+    for (const key of Object.keys(base))
+      if (!(key in fields)) fields[key] = base[key];
+    fields.ready = fields.ready === true;
+    fields.show = fields.show ?? true;
+    if (fields.modelMatrix) {
+      fields.matrix = Float64Array.from(fields.modelMatrix);
+      fields.position = {
+        x: fields.matrix[12],
+        y: fields.matrix[13],
+        z: fields.matrix[14],
+      };
+      fields.placed = true;
+    }
+    return fields;
+  }
 
   function _setTrackedMilitaryRefreshStateForTest({
     icao24,
@@ -43,16 +70,17 @@ export function createTesting({
     history = [],
     tracked = true,
     models = [],
-    modelCollection = null,
+    draw = null,
   }) {
     flightState._viewer = viewer;
-    flightState._modelCollection = modelCollection;
+    parts.rendering._disposeModelSets();
+    if (draw) parts.rendering._createModelSets(viewer, { draw });
     flightState._icons = createContactIcons();
     flightState._icons.show = iconLayer?.show ?? true;
     _seedIconForTest(icao24, icon, tracked);
     flightState._models.clear();
     for (const [key, model] of models)
-      flightState._models.set(key, createModelRecord(model));
+      flightState._models.set(key, _modelRecordForTest(model, meta?.klass));
     flightState._detectionObjects = new Map();
     flightState.records.data = new Map([[icao24, meta]]);
     flightState._positionHistory = new Map([[icao24, history]]);
@@ -63,7 +91,6 @@ export function createTesting({
     flightState._trackedEntity = tracked ? entity : null;
     flightState._trackedModel = null;
     parts.tracking._cancelPendingTrackingRestore();
-    flightState._trackedModelLoading = false;
     // NOTE: deliberately does NOT reset the per-selection latches. They are
     // production state owned by the tracking lifecycle (_resetTrackedSelectionState),
     // and clearing them here would mask exactly the deselect→re-track hole this
@@ -128,7 +155,7 @@ export function createTesting({
   }
 
   /** Run one frame of the production tracked-model driver (normally a
-   *  `scene.preUpdate` listener) so tests can pin its bounded load retries. */
+   *  `preUpdate` listener). */
 
   function _updateTrackedModelForTest() {
     return parts.rendering._updateTrackedModel();
@@ -153,11 +180,24 @@ export function createTesting({
     );
   }
 
-  /** Exercise the exact asynchronous fleet loader and return its admitted model. */
+  /** Exercise the exact fleet admission and return the admitted model's record. */
 
-  async function _ensureFleetModelForTest(icao24) {
-    await parts.rendering._ensureModel(icao24);
-    return flightState._models.get(icao24)?.model ?? null;
+  function _ensureFleetModelForTest(icao24) {
+    parts.rendering._ensureModel(icao24);
+    return flightState._models.get(icao24) ?? null;
+  }
+
+  /** The tracked model's record, or null. */
+
+  function _trackedModelForTest() {
+    return flightState._trackedModel;
+  }
+
+  /** The fleet and tracked model sets' ids, or null without sets. */
+
+  function _modelSetIdsForTest() {
+    const [fleet, tracked] = parts.rendering._modelSetIds();
+    return fleet ? { fleet, tracked } : null;
   }
 
   return {
@@ -174,5 +214,7 @@ export function createTesting({
     _iconForTest,
     _setIconForTest,
     _ensureFleetModelForTest,
+    _trackedModelForTest,
+    _modelSetIdsForTest,
   };
 }

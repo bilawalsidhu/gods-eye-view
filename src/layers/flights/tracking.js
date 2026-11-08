@@ -24,8 +24,6 @@ import {
 } from '../../data/trackingClickGesture.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
-  TRACKED_MODEL_MAX_LOAD_FAILS,
-  TRACKED_MODEL_RETRY_BACKOFF_MS,
   TRAIL_MAX_POINTS,
   RENDER_DELAY_SEC,
   TRAIL_COLOR,
@@ -36,8 +34,8 @@ import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
 
 /**
- * The icao a pick carries: a draw-set item's id (the icon sets' rows), a
- * string pick id, or a model primitive's id.
+ * The icao a pick carries: a draw-set item's id (the icon and model sets'
+ * rows), a string pick id, or a primitive's id.
  */
 function aircraftPickId(picked) {
   const id = picked?.id;
@@ -223,7 +221,7 @@ export function createTracking({
     // aircraft silhouette until a ready model takes over; far contacts are pips.
     // Never destroy on entry: tearing down hundreds of live glTF instances
     // synchronously blocked Chrome's renderer into Page Unresponsive.
-    if (flightState._modelCollection) flightState._modelCollection.show = true;
+    parts.rendering._setModelsShown(true);
     flightState._trail?.setVisible(!next);
     for (const icao24 of flightState._icons?.ids() ?? [])
       parts.icons._applyIconPresentation(icao24);
@@ -240,8 +238,8 @@ export function createTracking({
     _setCockpitContactMode(active);
   }
 
-  /** Clear every per-SELECTION tracked-model latch: the zoom hysteresis band and
-   *  the load-failure bound. Called from each path that changes which contact is
+  /** Clear the per-SELECTION tracked-model latch: the zoom hysteresis band.
+   *  Called from each path that changes which contact is
    *  selected — deselect, re-track, cross-layer handoff, init, destroy.
    *
    *  This must live in the production lifecycle, not only in the predicate's
@@ -249,44 +247,11 @@ export function createTracking({
    *  icao (Contacts re-entry, a cross-layer round trip back to the original
    *  layer) never makes `_trackedIcao` *observably* change, so the guard never
    *  fires. Without the reset, a contact dropped inside the hysteresis band comes
-   *  back as a MODEL above the ENTER ceiling, and a contact whose GLB had already
-   *  failed out would never get its retries back. */
+   *  back as a MODEL above the ENTER ceiling. */
 
   function _resetTrackedSelectionState() {
     flightState._trackedZoomLatched = false;
     flightState._trackedZoomLatchIcao = null;
-    flightState._trackedModelFailIcao = null;
-    flightState._trackedModelFailCount = 0;
-    flightState._trackedModelRetryAtMs = 0;
-  }
-
-  /** Whether the driver may start another tracked-model load this frame. */
-
-  function _trackedModelLoadAllowed(nowMs = Date.now()) {
-    if (flightState._trackedModelFailIcao !== flightState._trackedIcao)
-      return true; // untried selection
-    if (flightState._trackedModelFailCount >= TRACKED_MODEL_MAX_LOAD_FAILS)
-      return false;
-    return nowMs >= flightState._trackedModelRetryAtMs;
-  }
-
-  /** Record a rejected tracked-model load and arm the backoff / give-up latch. */
-
-  function _noteTrackedModelLoadFailure(url, err) {
-    if (flightState._trackedModelFailIcao !== flightState._trackedIcao) {
-      flightState._trackedModelFailIcao = flightState._trackedIcao;
-      flightState._trackedModelFailCount = 0;
-    }
-    flightState._trackedModelFailCount += 1;
-    flightState._trackedModelRetryAtMs =
-      Date.now() + TRACKED_MODEL_RETRY_BACKOFF_MS;
-    if (flightState._trackedModelFailCount >= TRACKED_MODEL_MAX_LOAD_FAILS) {
-      console.warn(
-        `[Data:Flights] tracked 3D model gave up after ${flightState._trackedModelFailCount} failed loads of ${url} — ` +
-          'this contact stays 2D until another is selected',
-        err,
-      );
-    }
   }
 
   /**
@@ -662,7 +627,7 @@ export function createTracking({
       flightState._trackedEntity = null;
     }
     parts.rendering._releaseTrackedModel();
-    _resetTrackedSelectionState(); // the zoom band + load-failure budget belong to the selection we just dropped
+    _resetTrackedSelectionState(); // the zoom band belongs to the selection we just dropped
     flightState._trackedIcao = null;
     // Hand the contact back to its icon only now: settling floors a grounded
     // contact, and while it still read as tracked its tracked model owned the
@@ -821,8 +786,7 @@ export function createTracking({
     if (isTr3b(id)) {
       // Drop the 3D handoff for this contact — the fleet tick now skips it, so
       // an already-loaded model would otherwise linger with the billboard hidden.
-      if (flightState._models.has(id) || flightState._modelPending.has(id))
-        parts.rendering._releaseModel(id);
+      if (flightState._models.has(id)) parts.rendering._releaseModel(id);
       if (flightState._icons?.has(id) && id !== flightState._trackedIcao)
         flightState._icons.setShown(id, true);
       if (id === flightState._trackedIcao) {
@@ -903,7 +867,7 @@ export function createTracking({
     const iconCourse = icons.course(icao24, t);
     flightState._displayCourse.set(icao24, iconCourse);
     flightState._trackedIcao = icao24;
-    _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling, full load-retry budget
+    _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling
     flightState._cachedDRFrame = -1;
     flightState._lastTrackedRotation =
       screenProjectedRotation(
@@ -940,7 +904,7 @@ export function createTracking({
     // resolves into an aircraft.
     //
     // The billboard stays SHOWN at all times and is hidden by going TRANSPARENT (alpha 0), not by
-    // show=false: it drops its alpha only once the model GLB is preloaded (_planeModelLoaded), so
+    // show=false: it drops its alpha only once the tracked model is drawing, so
     // there's neither a billboard+model double-image nor a gap. The camera follows its own target
     // through the camera port, so nothing here frames the camera.
     // The tracked entity is a PURE BILLBOARD — no label or model graphic. The 3D model for the
@@ -1185,17 +1149,11 @@ export function createTracking({
         // any pick carrying its icao) — same no-op as the 2D tracked-entity click
         // above. H1: the model used to have no pick id, so this fell through to
         // "empty space" and deselected the very plane being tracked.
-        if (flightState._trackedIcao) {
-          const rawPick = aircraftPickId(picked);
-          if (
-            (flightState._trackedModel &&
-              picked.primitive === flightState._trackedModel.model) ||
-            rawPick === flightState._trackedIcao
-          )
-            return;
-        }
-
+        // Its models are draw-set items keyed by icao, like its icons.
         const pickedIcao = aircraftPickId(picked);
+        if (flightState._trackedIcao && pickedIcao === flightState._trackedIcao)
+          return;
+
         if (pickedIcao && flightState._icons?.has(pickedIcao)) {
           _cancelPendingTrackingRestore();
           _trackFlight(pickedIcao, { origin: 'user' });
@@ -1233,8 +1191,6 @@ export function createTracking({
     _setCockpitContactMode,
     _applyCockpitState,
     _resetTrackedSelectionState,
-    _trackedModelLoadAllowed,
-    _noteTrackedModelLoadFailure,
     _trackedModelRegimeActive,
     _syncTracked2dRotation,
     _appendTrailFix,
