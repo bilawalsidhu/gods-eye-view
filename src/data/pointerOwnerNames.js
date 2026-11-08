@@ -9,6 +9,7 @@ const POINTER_OWNER_NAMES = Object.freeze({
   draw: msg('Draw'),
   directions: msg('Directions'),
   'recent-imagery-box': msg('Recent imagery'),
+  'scenario-editor': msg('Scenario Editor'),
 });
 
 /**

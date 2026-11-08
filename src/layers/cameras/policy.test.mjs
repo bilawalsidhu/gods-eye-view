@@ -6,10 +6,13 @@ import {
   FOV_LIMITS_DEG,
   autoFovRad,
   chaseOffsetEnu,
+  chooseShot,
+  leadOffsetEnu,
   normalizeCamera,
   normalizeCameraList,
   orbitOffsetEnu,
   placedGroundCamera,
+  scoreShot,
   smoothingAlpha,
 } from './policy.js';
 
@@ -113,4 +116,39 @@ test('placedGroundCamera is an ellipsoid-height tripod with a session id', () =>
   assert.equal(camera.altitudeReference, 'ellipsoid');
   assert.equal(camera.heightM, 25);
   assert.equal(camera.target, 'a1');
+});
+
+test('leadOffsetEnu runs the velocity forward for the lead time', () => {
+  const still = leadOffsetEnu({ headingDeg: 45, speedMps: 0, leadS: 1 });
+  assert.deepEqual(still, { east: 0, north: 0, up: 0 });
+  const north = leadOffsetEnu({ headingDeg: 0, speedMps: 100, leadS: 0.5 });
+  assert.ok(Math.abs(north.east) < 1e-9 && Math.abs(north.north - 50) < 1e-9);
+  const climb = leadOffsetEnu({ headingDeg: 90, pitchDeg: 30, speedMps: 100, leadS: 1 });
+  assert.ok(Math.abs(climb.east - 100 * Math.cos(Math.PI / 6)) < 1e-9);
+  assert.ok(Math.abs(climb.up - 50) < 1e-9);
+});
+
+test('scoreShot prefers tripods in range with a clear line, keeps chase and orbit as fallbacks', () => {
+  assert.equal(scoreShot({ type: 'ground', distanceM: 1000 }), 1);
+  assert.ok(scoreShot({ type: 'ground', distanceM: 100 }) < 1);
+  assert.ok(scoreShot({ type: 'ground', distanceM: 8000 }) < 1);
+  assert.equal(scoreShot({ type: 'ground', distanceM: 20_000 }), -Infinity);
+  assert.equal(scoreShot({ type: 'ground', distanceM: 1000, occluded: true }), -Infinity);
+  assert.ok(scoreShot({ type: 'ground', distanceM: 1000, elevationDeg: 70 }) < 1);
+  assert.ok(scoreShot({ type: 'chase', distanceM: 1 }) > scoreShot({ type: 'orbit', distanceM: 1 }));
+  assert.ok(scoreShot({ type: 'chase', distanceM: 1, isCurrent: true }) > scoreShot({ type: 'chase', distanceM: 1 }));
+});
+
+test('chooseShot honours dwell, hysteresis and dropped shots', () => {
+  const shots = [
+    { id: 'a', score: 1 },
+    { id: 'b', score: 0.8 },
+    { id: 'c', score: -Infinity },
+  ];
+  assert.equal(chooseShot(shots, { currentId: null, nowS: 0 }), 'a');
+  assert.equal(chooseShot(shots, { currentId: 'b', lastCutAtS: 0, nowS: 1 }), 'b', 'inside dwell');
+  assert.equal(chooseShot(shots, { currentId: 'b', lastCutAtS: 0, nowS: 10 }), 'a', 'dwell over');
+  assert.equal(chooseShot(shots, { currentId: 'c', lastCutAtS: 0, nowS: 1 }), 'a', 'a dropped shot cuts at once');
+  assert.equal(chooseShot(shots, { currentId: 'a', lastCutAtS: 0, nowS: 10 }), 'a');
+  assert.equal(chooseShot([{ id: 'c', score: -Infinity }], { currentId: 'c', nowS: 0 }), null);
 });

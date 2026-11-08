@@ -465,6 +465,8 @@ export const VOICE_OFF_LAYERS = Object.freeze({
     'authored scenario playback; voice control waits for prompt budget',
   'virtual-cameras':
     'scenario camera selection; voice control waits for prompt budget',
+  'scenario-editor':
+    'authoring tool driven by globe clicks; not a voice surface',
 });
 
 const TYPE_NAMES = Object.freeze({

@@ -7002,6 +7002,27 @@ ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
 
+## Scenario Editor layer
+
+Scenario Editor (`scenario-editor`, Movement group; `src/layers/scenarioEditor/`,
+pure `document.js` plus the Cesium-injected `index.js`) edits the loaded
+scenario in place. On enable it adopts `simulation.getDocument()` (the raw
+file) or an empty document, and follows later scenario loads while its draft is
+clean. **Add waypoints** claims the globe pointer (`claimPointer('scenario-editor')`,
+named in `pointerOwnerNames.js`; a busy pointer is refused and the row names
+the holder), installs a `LEFT_CLICK` handler and appends a waypoint per click
+at `scene.pickPosition` (ellipsoid pick as the fallback), the row's altitude
+slider (0–20 000 ft, step 100) and the previous waypoint's speed. Every edit
+hands the playable part of the draft (aircraft with two or more waypoints,
+cameras whose target exists) to `simulation.replaceScenario(doc, { keepTime })`,
+which validates it whole, registers it as the local source for its id,
+rebuilds the fleet and keeps the clock. Actions: new aircraft (`aircraft-N`),
+undo last waypoint, loop/once, clear path, remove aircraft (its cameras lose
+their target), export (the draft plus `getSessionCameras()` from Virtual
+Cameras, downloaded as `<id>.json`) and import (a JSON file parsed and
+validated before it replaces the draft). Share links keep the layer under token
+`03`; voice is off for this layer and it has no analyst records.
+
 ## Virtual Cameras layer
 
 Virtual Cameras (`virtual-cameras`, Movement group) aims the view at Simulation
@@ -7015,6 +7036,18 @@ ellipsoid height, `chase` behind the target in its east-north-up frame, and
 target spans `frameFraction` of the frame height (1.5°–75°); chase and orbit
 use a fixed `fovDeg`. Direction, chase/orbit position and field of view are
 exponentially smoothed by each camera's `smoothingS`.
+
+The **Director** pseudo camera (`DIRECTOR_ID`) re-scores every camera every
+`DIRECTOR_TICK_S` (0.5 s) for the current target with `scoreShot` (tripods:
+range band 300–4000 m, elevation, and a `scene.pickFromRay` line-of-sight test
+that rules a tripod out when a hit lands short of the target; chase and orbit
+fixed fallbacks; a bonus for the current shot) and cuts through `chooseShot`
+with a `DIRECTOR_MIN_DWELL_S` (4 s) minimum shot length unless the shot is
+ruled out; a cut resets the smoothing so there is no easing between cameras.
+Every camera aims `leadS` seconds (0.4) of the target's velocity ahead of it.
+Cold tripod cells are also probed through `sampleMeshFloorCells` (at most once
+a second per camera) so tripods climb onto rooftops once the 3D tiles under
+them are loaded.
 
 Selecting a camera claims the view through the shell's navigation authority
 (`runImmediateNavigation('target')`, the same seam the Director uses, so

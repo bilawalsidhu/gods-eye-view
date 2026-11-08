@@ -29,6 +29,9 @@ function fakeCesium() {
       out.z = a.z / m;
       return out;
     }
+    static dot(a, b) {
+      return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
     static lerp(a, b, t, out) {
       out.x = a.x + (b.x - a.x) * t;
       out.y = a.y + (b.y - a.y) * t;
@@ -36,8 +39,15 @@ function fakeCesium() {
       return out;
     }
   }
+  class Ray {
+    constructor(origin, direction) {
+      this.origin = origin;
+      this.direction = direction;
+    }
+  }
   return {
     Cartesian3,
+    Ray,
     Math: {
       toDegrees: (rad) => (rad * 180) / Math.PI,
       toRadians: (deg) => (deg * Math.PI) / 180,
@@ -88,6 +98,7 @@ function fakeViewer() {
     },
     scene: {
       renders: 0,
+      pickFromRay: null,
       requestRender() {
         this.renders += 1;
       },
@@ -211,7 +222,8 @@ test('enable lists the scenario cameras without touching the view', () => {
   assert.equal(controls.list.items[0].id, 'free');
   assert.equal(controls.list.items[0].active, true);
   assert.equal(controls.list.items[1].id, 'place');
-  assert.equal(controls.list.items.length, 5);
+  assert.equal(controls.list.items[2].id, 'director');
+  assert.equal(controls.list.items.length, 6);
   assert.equal(controls.segmented.options.length, 3);
   assert.equal(controls.info, 'Pick a camera');
   assert.deepEqual(h.layer.getStats(), { count: 3, error: null, loading: false });
@@ -220,7 +232,7 @@ test('enable lists the scenario cameras without touching the view', () => {
 test('a tripod claims the view, stands on the ground floor and aims at its target with auto zoom', () => {
   const h = harness();
   h.layer.enable();
-  h.layer.setParams({ camera: 'tripod' });
+  h.layer.setParams({ camera: 'tripod', leadS: 0 });
   assert.equal(h.shell.claims, 1);
   assert.ok(h.holds.has(CAMERAS_LAYER_ID));
   assert.equal(h.layer.diagnostics().activeId, 'tripod');
@@ -311,7 +323,12 @@ test('a cold tripod stands on the geoid, or on ellipsoid zero over the flat fall
 test('target override, frame fill and placing a tripod here', () => {
   const h = harness();
   h.layer.enable();
-  h.layer.setParams({ camera: 'tripod', target: 'heavy', frameFraction: 0.4 });
+  h.layer.setParams({
+    camera: 'tripod',
+    target: 'heavy',
+    frameFraction: 0.4,
+    leadS: 0,
+  });
   assert.ok(h.layer.getRowControls().info.endsWith('HEAVY'));
   const view = h.viewer.views.at(-1);
   const length = Math.hypot(
@@ -321,7 +338,11 @@ test('target override, frame fill and placing a tripod here', () => {
   );
   const expected = 2 * Math.atan(60 / 0.4 / (2 * length));
   assert.ok(Math.abs(h.viewer.camera.frustum.fov - expected) < 1e-9);
-  assert.deepEqual(h.layer.getParams(), { target: 'heavy', frameFraction: 0.4 });
+  assert.deepEqual(h.layer.getParams(), {
+    target: 'heavy',
+    frameFraction: 0.4,
+    leadS: 0,
+  });
   h.layer.setParams({ frameFraction: 5 });
   assert.equal(h.layer.getParams().frameFraction, 0.6);
   h.layer.setParams({ place: true });
@@ -354,4 +375,50 @@ test('a scenario reload keeps session cameras, drops a vanished active one, and 
   assert.equal(h.holds.size, 0);
   assert.equal(h.viewer.camera.frustum.fov, 1.0);
   h.layer.destroy();
+});
+
+test('the aim leads a moving target by its velocity', () => {
+  const h = harness();
+  h.layer.enable();
+  h.layer.setParams({ camera: 'tripod' });
+  const view = h.viewer.views.at(-1);
+  // Eastbound at 150 m/s with the default 0.4 s lead: aim 60 m east of the jet.
+  const aimX = h.jet.position.x + 60;
+  const dx = aimX - view.destination.x;
+  const dy = h.jet.position.y - view.destination.y;
+  const length = Math.hypot(dx, dy, h.jet.position.z - 15);
+  assert.ok(Math.abs(view.orientation.direction.x - dx / length) < 1e-9);
+  assert.ok(Math.abs(view.orientation.direction.y - dy / length) < 1e-9);
+});
+
+test('the Director opens on the best shot, holds its dwell, and cuts when a tripod is blocked', () => {
+  const h = harness();
+  h.layer.enable();
+  h.layer.setParams({ camera: 'director' });
+  assert.equal(h.layer.diagnostics().activeId, 'director');
+  // The tripod is a few hundred metres from the jet: the ideal range wins.
+  assert.equal(h.layer.diagnostics().shotId, 'tripod');
+  assert.ok(h.layer.getRowControls().info.startsWith('Director · Pier'));
+  // Something blocks the tripod's line of sight right in front of it.
+  h.viewer.scene.pickFromRay = (ray) => ({
+    position: {
+      x: ray.origin.x + ray.direction.x * 5,
+      y: ray.origin.y + ray.direction.y * 5,
+      z: ray.origin.z + ray.direction.z * 5,
+    },
+  });
+  h.advance(600);
+  h.viewer.tick();
+  assert.equal(h.layer.diagnostics().shotId, 'chase', 'blocked tripod: cut to chase');
+  // The line clears, but the chase shot keeps its minimum dwell first.
+  h.viewer.scene.pickFromRay = () => undefined;
+  h.advance(1000);
+  h.viewer.tick();
+  assert.equal(h.layer.diagnostics().shotId, 'chase');
+  h.advance(4000);
+  h.viewer.tick();
+  assert.equal(h.layer.diagnostics().shotId, 'tripod', 'dwell over: back to the better tripod');
+  h.viewer.gesture('wheel');
+  assert.equal(h.layer.diagnostics().activeId, null);
+  assert.equal(h.layer.diagnostics().shotId, null);
 });

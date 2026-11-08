@@ -20,6 +20,18 @@ export const FRAME_FRACTION_LIMITS = Object.freeze([0.05, 0.6]);
 export const DEFAULT_TARGET_SIZE_M = 40;
 /** Why a camera could not take the view (English; translated on show). */
 export const COCKPIT_REFUSAL = 'Camera unavailable — exit cockpit first';
+/** The pseudo camera that cuts between the real ones on its own. */
+export const DIRECTOR_ID = 'director';
+/** How often the Director re-scores its cameras, seconds. */
+export const DIRECTOR_TICK_S = 0.5;
+/** Shortest shot before the Director may cut again, seconds. */
+export const DIRECTOR_MIN_DWELL_S = 4;
+/** Seconds of flight the aim leads the target by, so it flies into frame. */
+export const DEFAULT_LEAD_S = 0.4;
+/** A tripod shot reads best inside this range, metres. */
+export const TRIPOD_IDEAL_RANGE_M = Object.freeze([300, 4000]);
+/** A tripod shot is dropped beyond this range, metres. */
+export const TRIPOD_MAX_RANGE_M = 12_000;
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const DEG = Math.PI / 180;
@@ -330,4 +342,92 @@ export function placedGroundCamera(where, target, ordinal, title) {
     heightM: where.heightM,
     altitudeReference: 'ellipsoid',
   });
+}
+
+/**
+ * Where the aim point sits ahead of a moving target, in its east-north-up
+ * frame: the target's velocity for `leadS` seconds.
+ * @returns {{east:number, north:number, up:number}}
+ */
+export function leadOffsetEnu({
+  headingDeg,
+  pitchDeg = 0,
+  speedMps = 0,
+  leadS = DEFAULT_LEAD_S,
+}) {
+  const along = Math.max(0, speedMps || 0) * Math.max(0, leadS || 0);
+  if (!(along > 0)) return { east: 0, north: 0, up: 0 };
+  const h = (headingDeg || 0) * DEG;
+  const p = (pitchDeg || 0) * DEG;
+  const ground = along * Math.cos(p);
+  return {
+    east: Math.sin(h) * ground,
+    north: Math.cos(h) * ground,
+    up: Math.sin(p) * along,
+  };
+}
+
+/**
+ * How good a shot a camera offers right now, higher is better; `-Infinity`
+ * rules it out. Tripods are judged on range and elevation and fail when the
+ * line of sight is blocked; chase and orbit are steady fallbacks. The current
+ * camera gets a small bonus so the Director does not flicker between equals.
+ * @param {{type:string, distanceM:number, elevationDeg?:number|null, occluded?:boolean, isCurrent?:boolean}} shot
+ * @returns {number}
+ */
+export function scoreShot({
+  type,
+  distanceM,
+  elevationDeg = null,
+  occluded = false,
+  isCurrent = false,
+}) {
+  if (occluded) return -Infinity;
+  let score;
+  if (type === 'ground') {
+    if (!Number.isFinite(distanceM) || distanceM > TRIPOD_MAX_RANGE_M)
+      return -Infinity;
+    const [near, far] = TRIPOD_IDEAL_RANGE_M;
+    if (distanceM < near) score = 0.55 + 0.45 * (distanceM / near);
+    else if (distanceM <= far) score = 1;
+    else
+      score = Math.max(0.1, 1 - (distanceM - far) / (TRIPOD_MAX_RANGE_M - far));
+    // Looking almost straight up or along the ground reads badly.
+    if (elevationDeg !== null) {
+      if (elevationDeg > 60) score *= 0.5;
+      else if (elevationDeg < 1) score *= 0.7;
+    }
+  } else if (type === 'chase') {
+    score = 0.45;
+  } else {
+    score = 0.4;
+  }
+  return score + (isCurrent ? 0.15 : 0);
+}
+
+/**
+ * The Director's pick: keep the current shot through its minimum dwell while
+ * it is still valid, otherwise the best-scoring candidate.
+ * @param {{id:string, score:number}[]} candidates
+ * @param {{currentId:string|null, lastCutAtS:number, nowS:number, minDwellS?:number}} state
+ * @returns {string|null}
+ */
+export function chooseShot(
+  candidates,
+  {
+    currentId = null,
+    lastCutAtS = -Infinity,
+    nowS = 0,
+    minDwellS = DIRECTOR_MIN_DWELL_S,
+  },
+) {
+  const valid = candidates.filter((c) => Number.isFinite(c.score));
+  if (valid.length === 0) return null;
+  const current = valid.find((c) => c.id === currentId) || null;
+  if (current && nowS - lastCutAtS < minDwellS) return currentId;
+  let best = valid[0];
+  for (const candidate of valid)
+    if (candidate.score > best.score) best = candidate;
+  if (current && best.score <= current.score) return currentId;
+  return best.id;
 }

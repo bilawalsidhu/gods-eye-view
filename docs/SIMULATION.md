@@ -92,9 +92,44 @@ Every camera has an `id`, an optional `title` and an optional `target`
 adds a session camera at the current viewer position (absolute height) aimed
 at the current target; session cameras are not written back to the file yet.
 
+### Director
+
+The **Director** entry in the camera list cuts between the cameras on its own.
+Twice a second it scores every camera for the current target: tripods score
+best between 300 m and 4 km with a clear line of sight (a ray from the tripod
+to the aircraft that hits the 3D tiles or terrain first rules the shot out),
+chase and orbit are steady fallbacks, and the current shot gets a small bonus
+so equals do not flicker. A shot is held at least four seconds unless it is
+ruled out. Every camera also aims a little ahead of a moving target (0.4 s of
+its velocity by default; the layer param `leadS`), so the aircraft flies into
+the frame instead of trailing out of it.
+
 Tripod ground height comes from the app's cached ground floor (the 3D tiles or
 terrain under the point); until that cell is warm the tripod stands on the
 EGM96 sea-level datum instead and moves up once the floor resolves.
+
+## Scenario Editor
+
+The **Scenario Editor** layer (Movement group) builds or changes a scenario
+without leaving the globe:
+
+1. Turn it on. It adopts the loaded scenario (or starts an empty one).
+2. Pick an aircraft in its list, or **New aircraft**. Set **New waypoint
+   altitude**.
+3. Switch **Editing** to **Add waypoints** and click the globe: each click
+   appends a waypoint at that point, at the slider altitude and the previous
+   waypoint's speed. As soon as an aircraft has two waypoints the Simulation
+   layer flies the edited scenario live, keeping the clock where it was.
+4. **Undo last waypoint**, **Clear path**, **Loop → fly once** and **Remove
+   aircraft** act on the selected aircraft.
+5. **Export scenario JSON** downloads the file, including any tripods placed
+   from the Virtual Cameras row; drop it into `public/scenarios/` to make it a
+   bundled scenario. **Import scenario JSON** loads one from disk.
+
+While **Add waypoints** is on the editor holds the globe pointer (like Draw),
+so clicks do not also select aircraft or cameras; the row says who holds the
+pointer when another tool has it. Dragging existing waypoints is a later
+extension; today a wrong click is one **Undo** away.
 
 ## How motion works
 

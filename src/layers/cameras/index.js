@@ -3,12 +3,18 @@ import { t } from '../../i18n/index.js';
 import {
   CAMERA_DEFAULTS,
   COCKPIT_REFUSAL,
+  DEFAULT_LEAD_S,
   DEFAULT_TARGET_SIZE_M,
+  DIRECTOR_ID,
+  DIRECTOR_TICK_S,
   FRAME_FRACTION_LIMITS,
   autoFovRad,
   chaseOffsetEnu,
+  chooseShot,
+  leadOffsetEnu,
   orbitOffsetEnu,
   placedGroundCamera,
+  scoreShot,
   smoothingAlpha,
 } from './policy.js';
 
@@ -35,7 +41,7 @@ function clamp(value, min, max) {
  * @param {object} [options]
  * @param {object} [options.services]
  * @param {{holdContinuousRender:Function, releaseContinuousRender:Function, governorRequestRender?:Function}|null} [options.services.render]
- * @param {{cachedGroundFloor:Function, warmGroundFloor?:Function}|null} [options.services.groundFloor] Ellipsoidal ground height cache for tripod cameras.
+ * @param {{cachedGroundFloor:Function, warmGroundFloor?:Function, sampleMeshFloorCells?:Function}|null} [options.services.groundFloor] Ellipsoidal ground height cache for tripod cameras; the mesh sampler puts tripods on rooftops.
  * @param {{ensureGeoidReady:Function, geoidHeight:Function}|null} [options.services.geoid] Fallback sea-level datum while the ground is cold.
  * @param {() => object[]} [options.targets] This frame's targets (`simulation.getTargets()`).
  * @param {() => object[]} [options.scenarioCameras] Cameras the loaded scenario declares.
@@ -67,6 +73,7 @@ export function createVirtualCamerasLayer({
   let params = {
     target: 'auto',
     frameFraction: CAMERA_DEFAULTS.ground.frameFraction,
+    leadS: DEFAULT_LEAD_S,
   };
   let claimError = null;
   let removePreUpdate = null;
@@ -81,6 +88,12 @@ export function createVirtualCamerasLayer({
   /** @type {Map<string, {floorM:number|null, warmed:boolean}>} */
   const ground = new Map();
   const smooth = { position: null, direction: null, fov: null };
+  /** Director state: the real camera it is showing and when it last cut. */
+  const director = {
+    shotId: null,
+    lastCutAtS: -Infinity,
+    lastTickAtS: -Infinity,
+  };
 
   function requestRender() {
     if (render?.governorRequestRender)
@@ -117,8 +130,14 @@ export function createVirtualCamerasLayer({
     notify();
   }
 
+  function cameraById(id) {
+    return cameras.find((camera) => camera.id === id) || null;
+  }
+
+  /** The camera whose pose is written: the Director's current shot, else the pick. */
   function activeCamera() {
-    return cameras.find((camera) => camera.id === activeId) || null;
+    if (activeId === DIRECTOR_ID) return cameraById(director.shotId);
+    return cameraById(activeId);
   }
 
   function resolveTarget(camera) {
@@ -143,6 +162,27 @@ export function createVirtualCamerasLayer({
           groundFloor?.warmGroundFloor?.([
             { lat: camera.lat, lon: camera.lon },
           ]);
+        } catch {
+          /* best effort */
+        }
+      }
+      // Rooftops: the mesh sampler reads the 3D tiles under the tripod once
+      // they are loaded; until then the cell stays cold and is retried.
+      const nowMs = now();
+      if (
+        entry.floorM === null &&
+        !(nowMs - (entry.meshAtMs || -Infinity) < 1000)
+      ) {
+        entry.meshAtMs = nowMs;
+        try {
+          groundFloor?.sampleMeshFloorCells?.(viewer?.scene, [
+            { lat: camera.lat, lon: camera.lon },
+          ]);
+          const floor = groundFloor?.cachedGroundFloor?.(
+            camera.lat,
+            camera.lon,
+          );
+          if (Number.isFinite(floor)) entry.floorM = floor;
         } catch {
           /* best effort */
         }
@@ -206,6 +246,89 @@ export function createVirtualCamerasLayer({
     );
   }
 
+  /** Whether something solid sits between a camera position and the target. */
+  function occluded(from, target) {
+    const scene = viewer?.scene;
+    if (
+      typeof scene?.pickFromRay !== 'function' ||
+      typeof cesium.Ray !== 'function'
+    )
+      return false;
+    const toTarget = cesium.Cartesian3.subtract(
+      target.position,
+      from,
+      new cesium.Cartesian3(),
+    );
+    const distanceM = cesium.Cartesian3.magnitude(toTarget);
+    if (!(distanceM > 1)) return false;
+    const direction = cesium.Cartesian3.normalize(toTarget, toTarget);
+    try {
+      const hit = scene.pickFromRay(new cesium.Ray(from, direction));
+      if (!hit?.position) return false;
+      const hitDistance = cesium.Cartesian3.magnitude(
+        cesium.Cartesian3.subtract(hit.position, from, new cesium.Cartesian3()),
+      );
+      // A hit short of the target (with room for its own model) blocks the shot.
+      return hitDistance < distanceM - Math.max(60, (target.sizeM || 0) * 2);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Re-score the cameras for the Director and cut when a better shot appears. */
+  function directorTick(target, nowS) {
+    if (nowS - director.lastTickAtS < DIRECTOR_TICK_S && director.shotId)
+      return;
+    director.lastTickAtS = nowS;
+    const candidates = cameras.map((camera) => {
+      // Each camera is judged on the aircraft it would actually show.
+      const own = resolveTarget(camera) || target;
+      if (!own?.position) return { id: camera.id, score: -Infinity };
+      const position = desiredPosition(camera, own);
+      const toTarget = cesium.Cartesian3.subtract(
+        own.position,
+        position,
+        new cesium.Cartesian3(),
+      );
+      const distanceM = cesium.Cartesian3.magnitude(toTarget);
+      const up = cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
+        position,
+        new cesium.Cartesian3(),
+      );
+      const rise =
+        typeof cesium.Cartesian3.dot === 'function'
+          ? cesium.Cartesian3.dot(toTarget, up)
+          : 0;
+      const elevationDeg =
+        distanceM > 0
+          ? (Math.asin(Math.max(-1, Math.min(1, rise / distanceM))) * 180) /
+            Math.PI
+          : 0;
+      return {
+        id: camera.id,
+        score: scoreShot({
+          type: camera.type,
+          distanceM,
+          elevationDeg,
+          occluded: camera.type === 'ground' && occluded(position, own),
+          isCurrent: camera.id === director.shotId,
+        }),
+      };
+    });
+    const next = chooseShot(candidates, {
+      currentId: director.shotId,
+      lastCutAtS: director.lastCutAtS,
+      nowS,
+    });
+    if (next && next !== director.shotId) {
+      director.shotId = next;
+      director.lastCutAtS = nowS;
+      // A cut is a cut: no easing from the previous camera's pose.
+      smooth.position = smooth.direction = smooth.fov = null;
+      notify();
+    }
+  }
+
   function blend(previous, next, alpha, normalize) {
     if (!previous) return next;
     const out = cesium.Cartesian3.lerp(
@@ -219,11 +342,19 @@ export function createVirtualCamerasLayer({
 
   /** Aim the viewer at the target from the active camera. */
   function frame() {
+    if (!activeId || !viewer?.camera) return;
+    const nowMs = now();
+    if (activeId === DIRECTOR_ID) {
+      const target = resolveTarget(
+        cameraById(director.shotId) || cameras[0] || null,
+      );
+      if (target?.position && cameras.length)
+        directorTick(target, nowMs / 1000);
+    }
     const camera = activeCamera();
-    if (!camera || !viewer?.camera) return;
+    if (!camera) return;
     const target = resolveTarget(camera);
     if (!target?.position) return;
-    const nowMs = now();
     const dtS = lastFrameMs === null ? 0 : (nowMs - lastFrameMs) / 1000;
     lastFrameMs = nowMs;
     const alpha = smoothingAlpha(dtS, camera.smoothingS);
@@ -232,8 +363,21 @@ export function createVirtualCamerasLayer({
       camera.type === 'ground'
         ? wanted
         : blend(smooth.position, wanted, alpha, false);
+    // Aim a little ahead of a moving target so it flies into the frame.
+    const aimPoint =
+      params.leadS > 0 && target.speedMps > 0
+        ? enuPoint(
+            target.position,
+            leadOffsetEnu({
+              headingDeg: target.headingDeg,
+              pitchDeg: target.pitchDeg,
+              speedMps: target.speedMps,
+              leadS: params.leadS,
+            }),
+          )
+        : target.position;
     const toTarget = cesium.Cartesian3.subtract(
-      target.position,
+      aimPoint,
       position,
       new cesium.Cartesian3(),
     );
@@ -313,6 +457,7 @@ export function createVirtualCamerasLayer({
     originalFov = null;
     smooth.position = smooth.direction = smooth.fov = null;
     lastFrameMs = null;
+    director.shotId = null;
     lastPose = { released: reason };
     syncHold();
     requestRender();
@@ -321,8 +466,14 @@ export function createVirtualCamerasLayer({
 
   /** Claim the view for a camera; false when Cockpit or the shell refuses. */
   function activate(id) {
-    const camera = cameras.find((entry) => entry.id === id);
+    const isDirector = id === DIRECTOR_ID;
+    const camera = isDirector ? cameras[0] || null : cameraById(id);
     if (!camera || !viewer) return false;
+    if (isDirector) {
+      director.shotId = null;
+      director.lastCutAtS = -Infinity;
+      director.lastTickAtS = -Infinity;
+    }
     if (shell?.isCockpitActive?.()) {
       claimError = COCKPIT_REFUSAL;
       notify();
@@ -432,6 +583,10 @@ export function createVirtualCamerasLayer({
       }
       if (Object.hasOwn(patch, 'target'))
         params.target = patch.target ? String(patch.target) : 'auto';
+      if (Object.hasOwn(patch, 'leadS')) {
+        const value = Number(patch.leadS);
+        if (Number.isFinite(value)) params.leadS = clamp(value, 0, 5);
+      }
       if (patch.place) placeHere();
       if (Object.hasOwn(patch, 'camera')) {
         if (patch.camera === FREE_ITEM || !patch.camera) release('free');
@@ -468,6 +623,14 @@ export function createVirtualCamerasLayer({
               lead: '+',
               text: t('Place a tripod here'),
               params: { place: true },
+            },
+            {
+              id: DIRECTOR_ID,
+              ordinal: 0,
+              lead: t('Director'),
+              text: t('Cuts between cameras on its own'),
+              active: activeId === DIRECTOR_ID,
+              params: { camera: DIRECTOR_ID },
             },
             ...cameras.map((camera, index) => ({
               id: camera.id,
@@ -515,7 +678,7 @@ export function createVirtualCamerasLayer({
         info: claimError
           ? t(claimError)
           : active
-            ? `${active.title} → ${activeTarget?.callsign || t('no target')}`
+            ? `${activeId === DIRECTOR_ID ? `${t('Director')} · ` : ''}${active.title} → ${activeTarget?.callsign || t('no target')}`
             : t('Pick a camera'),
       };
     },
@@ -525,11 +688,16 @@ export function createVirtualCamerasLayer({
     getStats() {
       return { count: cameras.length, error: claimError, loading: false };
     },
+    /** Tripods placed this session, for the editor's export. */
+    getSessionCameras() {
+      return sessionCameras.map((camera) => ({ ...camera }));
+    },
     /** Active camera, cameras and the last written pose, for tests and gates. */
     diagnostics() {
       return {
         enabled,
         activeId,
+        shotId: activeId === DIRECTOR_ID ? director.shotId : activeId,
         cameras: cameras.map((camera) => camera.id),
         claimError,
         holding,

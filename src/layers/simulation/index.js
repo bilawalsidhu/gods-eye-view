@@ -92,6 +92,9 @@ export function createSimulationLayer({
   const clock = createSimulationClock({ now });
   /** @type {Set<Function>} */
   const scenarioListeners = new Set();
+  /** Documents handed over by the editor, by id; they win over files. */
+  const localDocuments = new Map();
+  let rawDocument = null;
   /** @type {Map<string, object>} aircraft id -> runtime record */
   const fleet = new Map();
 
@@ -265,8 +268,11 @@ export function createSimulationLayer({
     clearFleet();
     notifyRowControls();
     let next = null;
+    let json = null;
     try {
-      const json = await fetchScenario(id, { signal: abort?.signal });
+      json = localDocuments.has(id)
+        ? structuredClone(localDocuments.get(id))
+        : await fetchScenario(id, { signal: abort?.signal });
       next = normalizeScenario(json);
     } catch (error) {
       if (token !== generation) return false;
@@ -278,6 +284,7 @@ export function createSimulationLayer({
     }
     if (token !== generation || !enabled || !viewer) return false;
     scenario = next;
+    rawDocument = json;
     for (const aircraft of next.aircraft) addAircraft(aircraft);
     const timelines = [...fleet.values()].map((record) => record.timeline);
     const allLoop = next.aircraft.every((aircraft) => aircraft.loop);
@@ -380,6 +387,7 @@ export function createSimulationLayer({
       detachViewer();
       clearFleet();
       scenario = null;
+      rawDocument = null;
       focusedId = null;
       syncHold();
       notifyScenario();
@@ -491,6 +499,49 @@ export function createSimulationLayer({
     },
     getScenario() {
       return scenario;
+    },
+    /** The scenario file as loaded or last replaced, for the editor. */
+    getDocument() {
+      return rawDocument ? structuredClone(rawDocument) : null;
+    },
+    /**
+     * Fly an edited document at once (the editor's live path). The document
+     * is validated whole; on success it replaces the fleet, keeps the clock
+     * time when asked, and becomes the local source for its id.
+     * @returns {{ok:true}|{ok:false, error:string}}
+     */
+    replaceScenario(doc, { keepTime = true } = {}) {
+      let next;
+      try {
+        next = normalizeScenario(doc);
+      } catch (error) {
+        return { ok: false, error: error?.message || String(error) };
+      }
+      const copy = structuredClone(doc);
+      localDocuments.set(next.id, copy);
+      params = { ...params, scenario: next.id };
+      if (!enabled || !viewer) return { ok: true };
+      generation += 1;
+      abort?.abort();
+      abort = null;
+      loading = false;
+      loadError = null;
+      const timeS = clock.timeS();
+      clearFleet();
+      scenario = next;
+      rawDocument = copy;
+      for (const aircraft of next.aircraft) addAircraft(aircraft);
+      const timelines = [...fleet.values()].map((record) => record.timeline);
+      clock.setDuration(
+        scenarioDurationS(timelines),
+        next.aircraft.every((aircraft) => aircraft.loop),
+      );
+      clock.seek(keepTime ? timeS : 0);
+      frame();
+      syncHold();
+      notifyRowControls();
+      notifyScenario();
+      return { ok: true };
     },
     /** Cameras the loaded scenario declares, for the Virtual Cameras layer. */
     getCameras() {

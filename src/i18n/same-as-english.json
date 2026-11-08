@@ -39,6 +39,7 @@
     "▲ {frp} MW"
   ],
   "de": [
+    "{value} ft",
     "Auto",
     "Simulation",
     "+{value} m",
@@ -218,6 +219,8 @@
     "▲ {frp} MW"
   ],
   "es": [
+    "{value} ft",
+    "Director",
     "Auto",
     "+{value} m",
     "1090 MHz",
@@ -359,6 +362,7 @@
     "iNaturalist"
   ],
   "fr": [
+    "{value} ft",
     "Auto",
     "Simulation",
     "+{value} m",
@@ -556,6 +560,7 @@
     "▲ {frp} MW"
   ],
   "it": [
+    "{value} ft",
     "Auto",
     "+{value} m",
     "1090 MHz",
@@ -738,6 +743,7 @@
     "iNaturalist"
   ],
   "ja": [
+    "{value} ft",
     "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
@@ -794,6 +800,7 @@
     "▲ {frp} MW"
   ],
   "pt": [
+    "{value} ft",
     "Auto",
     "+{value} m",
     "1090 MHz",
