@@ -81,7 +81,8 @@ export function onScenePointerDown(nowMs = performance.now()) {
     return;
   }
   const at = subjectCanvasPosition.call(this);
-  this.doubleClickStart = at ? { x: at.x, y: at.y, atMs: nowMs } : null;
+  const mmsi = this.readVesselInfo()?.mmsi ?? null;
+  this.doubleClickStart = at ? { x: at.x, y: at.y, atMs: nowMs, mmsi } : null;
 }
 
 /**
@@ -105,6 +106,10 @@ export function onSceneDoubleClick(position, nowMs = performance.now()) {
     doubleClickHitsSubject(position, subjectCanvasPosition.call(this)) ||
     (Boolean(start) &&
       nowMs - start.atMs <= DOUBLE_CLICK_MEMORY_MS &&
+      // The memory is the ship's it was taken for: one followed since (an
+      // aircraft, another ship) is hit only where it is drawn.
+      this.resolveEntryKind() === 'vessel' &&
+      start.mmsi === (this.readVesselInfo()?.mmsi ?? null) &&
       doubleClickHitsSubject(position, start));
   if (!hit) return false;
   this.enter();

@@ -1435,6 +1435,28 @@ test('a followed aircraft keeps its own double-click hit area', async (t) => {
   assert.equal(cockpit.active, false);
 });
 
+test("a ship's double-click memory does not carry over to an aircraft followed since", async (t) => {
+  const aircraftInfo = {
+    icao24: 'abc123',
+    callsign: 'TEST1',
+    latitude: 54.5,
+    longitude: 10.2,
+    altitudeM: 3000,
+    velocityMps: 200,
+    track: 45,
+    onGround: false,
+  };
+  const { cockpit, viewer, aircraft } = fixture(t, { aircraftInfo });
+  heightSensitiveProjection(viewer);
+  // The press finds the ship at (400, 300).
+  cockpit.onScenePointerDown(1000);
+  // Within the memory, an aircraft is followed, drawn elsewhere.
+  viewer.trackedEntity = aircraft;
+  heightSensitiveProjection(viewer, { x: 900 });
+  assert.equal(cockpit.onSceneDoubleClick({ x: 400, y: 300 }, 1250), false);
+  assert.equal(cockpit.active, false);
+});
+
 test("a double-click's second press keeps the first press's picture of the ship", async (t) => {
   const { cockpit, viewer, store } = fixture(t);
   heightSensitiveProjection(viewer);
