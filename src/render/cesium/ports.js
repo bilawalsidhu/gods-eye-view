@@ -44,6 +44,7 @@ const GLOBE_CAPABILITIES = [
   'imageryOnTiles',
   'splitSwipe',
   'imageHooks',
+  'surfaceIdentity',
   'globeVisibility',
 ];
 

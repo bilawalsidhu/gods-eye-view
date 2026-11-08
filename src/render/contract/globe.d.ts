@@ -248,7 +248,13 @@ export interface LoadProgress {
   terrainPending: number;
 }
 
-export type SettleKind = 'base' | 'tiles' | 'terrain' | 'imagery';
+/**
+ * `surface`: what `against: 'surface'` heights answer from has loaded what
+ * is in view: the terrain while the globe is shown, otherwise the drawn
+ * tiles; false when neither is drawn. A renderer that predates it answers
+ * as `base`.
+ */
+export type SettleKind = 'base' | 'tiles' | 'terrain' | 'imagery' | 'surface';
 
 export interface GlobePort {
   /** Switch the whole base at once; resolves when the new base has settled. */
@@ -265,6 +271,13 @@ export interface GlobePort {
    * drawn.
    */
   isGlobeVisible?(): boolean;
+  /**
+   * `surfaceIdentity`: a number that changes whenever what heights answer
+   * against changes (base, terrain or photoreal route swapped, the globe
+   * shown or hidden) and never otherwise (not on camera moves or tile
+   * loads). The application keys cached surface heights by it.
+   */
+  surfaceVersion?(): number;
   /** `surfaceShading`. */
   setSurfaceShading?(shading: SurfaceShading | null): void;
   /** `clouds`: the renderer's volumetric clouds, or none. */

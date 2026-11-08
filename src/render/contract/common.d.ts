@@ -160,6 +160,8 @@ export type Capability =
   | 'imageryFrames'
   /** Wind-relief and similar shading of the globe surface. */
   | 'surfaceShading'
+  /** A version of what surface heights answer against (`globe.surfaceVersion`). */
+  | 'surfaceIdentity'
   /** Volumetric clouds (`globe.setClouds`). */
   | 'clouds'
   /** A water surface on the oceans (`globe.setWater`). */

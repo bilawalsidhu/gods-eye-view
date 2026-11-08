@@ -114,6 +114,9 @@ async function terrainProvider(spec, { worldDataToken }) {
   throw new TypeError(`Unknown terrain kind: ${spec.kind}`);
 }
 
+/** The last `surfaceVersion` any globe port handed out. */
+let surfaceVersions = 0;
+
 /**
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
  * @param {{capabilities: ReadonlySet<string>,
@@ -370,7 +373,56 @@ export function createCesiumGlobe(
   };
   const imageryLoaded = () => imagery.pending() === 0 && terrainLoaded();
 
+  /**
+   * `surface`: what surface heights answer from has loaded what is in view:
+   * the globe's terrain while it is shown, otherwise the shown 3D tiles;
+   * false with neither drawn.
+   */
+  function surfaceLoaded() {
+    if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
+    let found = false;
+    for (const tileset of tilesets()) {
+      if (!tileset.show || tileset.isDestroyed?.()) continue;
+      found = true;
+      if (tileset.tilesLoaded === false) return false;
+    }
+    return found;
+  }
+
+  // `surfaceVersion`: bumped when what heights answer against changes, read
+  // off the scene (so a base changed around the port counts too): whether
+  // the globe is shown, its terrain provider, and the shown 3D tilesets.
+  // Taken from one counter for every port, so no two surfaces share one.
+  let surfaceVersion = 0;
+  const surfaceSeen = { globe: null, terrain: null, tiles: new Set() };
+  function readSurfaceVersion() {
+    const globe = Boolean(scene.globe?.show);
+    const terrain = scene.globe?.terrainProvider ?? null;
+    let changed =
+      surfaceSeen.globe !== globe || surfaceSeen.terrain !== terrain;
+    // The shown tilesets as a set: their order among the primitives is no
+    // change to the surface.
+    let count = 0;
+    for (const tileset of tilesets()) {
+      if (!tileset.show || tileset.isDestroyed?.()) continue;
+      count += 1;
+      if (!surfaceSeen.tiles.has(tileset)) changed = true;
+    }
+    if (count !== surfaceSeen.tiles.size) changed = true;
+    if (changed) {
+      surfaceSeen.globe = globe;
+      surfaceSeen.terrain = terrain;
+      surfaceSeen.tiles.clear();
+      for (const tileset of tilesets())
+        if (tileset.show && !tileset.isDestroyed?.())
+          surfaceSeen.tiles.add(tileset);
+      surfaceVersion = ++surfaceVersions;
+    }
+    return surfaceVersion;
+  }
+
   function isSettled(kind) {
+    if (kind === 'surface' && can('surfaceIdentity')) return surfaceLoaded();
     if (kind === 'terrain') return terrainLoaded();
     if (kind === 'tiles') return tilesLoaded();
     if (kind === 'imagery') return imageryLoaded();
@@ -440,6 +492,7 @@ export function createCesiumGlobe(
   };
   if (can('globeVisibility'))
     port.isGlobeVisible = () => scene.globe?.show === true;
+  if (can('surfaceIdentity')) port.surfaceVersion = readSurfaceVersion;
   if (can('splitSwipe')) {
     // Cesium's split starts at the canvas's left edge, as the scene was
     // made: a `left` layer shows once the split moves.
@@ -473,7 +526,12 @@ provideUnboundGlobe((viewer) => {
   if (!viewer?.scene) return null;
   // Visibility reads back only from a globe that keeps it: a scene made
   // without one gives no reading, so its callers keep their own default.
-  const capabilities = new Set(['imageHooks', 'imageryOnTiles', 'splitSwipe']);
+  const capabilities = new Set([
+    'imageHooks',
+    'imageryOnTiles',
+    'splitSwipe',
+    'surfaceIdentity',
+  ]);
   if (typeof viewer.scene.globe?.show === 'boolean')
     capabilities.add('globeVisibility');
   const { port, dispose } = createCesiumGlobe(viewer, {

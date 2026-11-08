@@ -602,3 +602,30 @@ test('a provider that fails to build is told as an error of its root tile', asyn
   assert.deepEqual(errors, [{ tile: { x: 0, y: 0, level: 0 } }]);
   layer.remove();
 });
+
+test('surfaceVersion follows what heights answer against; surface settles on it', () => {
+  const { scene, port } = setup(new Set([...ALL, 'surfaceIdentity']));
+  const first = port.surfaceVersion();
+  assert.equal(port.surfaceVersion(), first, 'steady while nothing changes');
+  assert.equal(port.isSettled('surface'), true, 'the globe has loaded');
+  scene.globe.tilesLoaded = false;
+  assert.equal(port.isSettled('surface'), false, 'the globe still loading');
+  assert.equal(port.surfaceVersion(), first, 'tile loads are not a change');
+  scene.globe.show = false;
+  const hidden = port.surfaceVersion();
+  assert.notEqual(hidden, first, 'the globe hidden');
+  assert.equal(port.isSettled('surface'), false, 'no globe and no tiles');
+  const tileset = fakeTileset();
+  scene.primitives.add(tileset);
+  const tiled = port.surfaceVersion();
+  assert.notEqual(tiled, hidden, 'tiles shown');
+  assert.equal(port.isSettled('surface'), true, 'the tiles have loaded');
+  scene.globe.show = true;
+  scene.globe.terrainProvider = {};
+  assert.notEqual(port.surfaceVersion(), tiled, 'new terrain under the globe');
+  // Without the capability there is no version and surface answers as base.
+  const plain = setup();
+  assert.equal(plain.port.surfaceVersion, undefined);
+  plain.scene.globe.show = false;
+  assert.equal(plain.port.isSettled('surface'), plain.port.isSettled('base'));
+});

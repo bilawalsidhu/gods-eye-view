@@ -23,6 +23,7 @@ test('capabilities follow what the scene supports', () => {
     'imageryOnTiles',
     'splitSwipe',
     'imageHooks',
+    'surfaceIdentity',
   ];
   const globe = { show: true };
   const draw = ['models', 'quads', 'meshes'];

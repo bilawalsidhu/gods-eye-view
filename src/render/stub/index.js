@@ -1142,6 +1142,9 @@ export function createStubRenderer(options = {}) {
     return layer;
   }
 
+  // `surfaceIdentity`: bumped by whatever changes what heights answer against.
+  let surfaceVersion = 0;
+  let terrainKey = 'null';
   const globe = {
     async setBase(base) {
       log('globe', 'setBase', [base]);
@@ -1153,19 +1156,26 @@ export function createStubRenderer(options = {}) {
     },
     async setPhotoreal(spec) {
       log('globe', 'setPhotoreal', [spec]);
+      const route = photorealStatus.route;
       photorealStatus =
         spec && capabilities.has('photoreal')
           ? { route: 'google' }
           : { route: 'none' };
+      if (photorealStatus.route !== route || spec) surfaceVersion += 1;
       requestRender('base');
       return photorealStatus;
     },
     async setTerrain(spec) {
       log('globe', 'setTerrain', [spec]);
+      // The stub keeps no terrain: a spec unlike the last is a new surface.
+      const key = JSON.stringify(spec ?? null);
+      if (key !== terrainKey) surfaceVersion += 1;
+      terrainKey = key;
       requestRender('base');
     },
     setGlobeVisible(visible) {
       log('globe', 'setGlobeVisible', [visible]);
+      if (globeVisible !== Boolean(visible)) surfaceVersion += 1;
       globeVisible = Boolean(visible);
       requestRender('base');
     },
@@ -1180,7 +1190,13 @@ export function createStubRenderer(options = {}) {
         requestRender('sky');
       },
     },
-    isSettled: (kind) => settled[kind] ?? true,
+    isSettled(kind) {
+      if (kind !== 'surface') return settled[kind] ?? true;
+      if (!capabilities.has('surfaceIdentity')) return settled.base;
+      // Heights answer from the globe, else the tiles; neither drawn, none.
+      if (!globeVisible && photorealStatus.route === 'none') return false;
+      return settled.surface ?? settled[globeVisible ? 'terrain' : 'tiles'];
+    },
     on(event, cb) {
       if (event !== 'progress') return () => {};
       progressListeners.push(cb);
@@ -1192,6 +1208,8 @@ export function createStubRenderer(options = {}) {
   };
   if (capabilities.has('globeVisibility'))
     globe.isGlobeVisible = () => globeVisible;
+  if (capabilities.has('surfaceIdentity'))
+    globe.surfaceVersion = () => surfaceVersion;
   if (capabilities.has('surfaceShading'))
     globe.setSurfaceShading = (shading) => {
       log('globe', 'setSurfaceShading', [shading]);

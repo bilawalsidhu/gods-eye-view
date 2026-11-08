@@ -42,6 +42,12 @@ optional, so a renderer written before it still conforms:
   target's east-north-up frame, or the identity. `setView` keeps that frame
   while it places a world pose. A share link's follow offset is
   re-expressed in it, satellites included.
+- `globe.surfaceVersion()` (capability `surfaceIdentity`) is a number that
+  changes whenever what surface heights answer against changes (base,
+  terrain or photoreal route swapped, the globe shown or hidden) and never
+  otherwise (not on camera moves or tile loads), so the application can key cached
+  heights by it. `isSettled('surface')` says whether that surface has
+  loaded what is in view; a renderer without it answers `surface` as `base`.
 - `camera.on('changed', cb, { threshold })` measures each listener by its
   own threshold under the capability `cameraChangeThreshold`; a renderer
   without it fires every `changed` listener at 0.5.

@@ -3054,6 +3054,39 @@ export function portChecks() {
       { capability: 'globeVisibility' },
     ),
     check(
+      'globe.surfaceVersion',
+      'the surface version changes with what heights answer against, only',
+      async (h, r) => {
+        await overAustin(h, r);
+        await drawn(h, r);
+        const first = r.globe.surfaceVersion();
+        equal(typeof first, 'number', 'a number');
+        r.camera.setView({
+          destination: { ...AUSTIN, height: 9000 },
+          orientation: { heading: 1, pitch: -1, roll: 0 },
+        });
+        await drawn(h, r, 4);
+        equal(
+          r.globe.surfaceVersion(),
+          first,
+          'steady across frames and moves',
+        );
+        r.globe.setGlobeVisible(false);
+        await drawn(h, r);
+        const hidden = r.globe.surfaceVersion();
+        ok(hidden !== first, 'the globe hidden changes it');
+        equal(
+          r.globe.isSettled('surface'),
+          false,
+          'with no globe and no tiles there is no surface to settle',
+        );
+        r.globe.setGlobeVisible(true);
+        await drawn(h, r);
+        ok(r.globe.surfaceVersion() !== hidden, 'shown again changes it');
+      },
+      { capability: 'surfaceIdentity' },
+    ),
+    check(
       'globe.sky',
       'sky settings round-trip and keep unchanged keys',
       (h, r) => {
