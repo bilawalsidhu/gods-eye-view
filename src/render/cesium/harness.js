@@ -45,6 +45,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.lines.segments',
   'draw.ids',
   'draw.models',
+  'draw.models.loadFailed',
   'draw.models.tint',
   'draw.models.update',
   'draw.motion',
@@ -113,11 +114,16 @@ function nextFrame() {
 }
 
 /**
- * @param {{name?: string, model?: string}} [options] `model`: a glTF URL
- *   for the model checks.
+ * @param {{name?: string, model?: string, missingModel?: string}} [options]
+ *   `model`: a glTF URL for the model checks; `missingModel`: one that
+ *   fails to load, for the failure check.
  * @returns {import('../conformance/index.js').ConformanceHarness}
  */
-export function createCesiumHarness({ name = 'cesium', model } = {}) {
+export function createCesiumHarness({
+  name = 'cesium',
+  model,
+  missingModel,
+} = {}) {
   return {
     name,
     async create({ viewport, capabilities }) {
@@ -157,6 +163,6 @@ export function createCesiumHarness({ name = 'cesium', model } = {}) {
     toEcef,
     tolerance: DEFAULT_TOLERANCE,
     flightPaths: 'endpoints',
-    ...(model ? { assets: { model } } : {}),
+    ...(model ? { assets: { model, missingModel } } : {}),
   };
 }

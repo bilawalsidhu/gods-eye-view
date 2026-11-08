@@ -74,3 +74,26 @@ test('a throwing listener with no error listener is reported and the frame goes 
     globalThis.reportError = saved;
   }
 });
+
+test('a model load is told once, even when a listener loads it again', () => {
+  const r = createStubRenderer({ capabilities: ['models'] });
+  const set = r.draw.models({ id: 'm' });
+  const told = [];
+  const model = (id, url) => ({
+    id,
+    pos: { lon: 0, lat: 0 },
+    url,
+    orientation: { heading: 0, pitch: 0, roll: 0 },
+  });
+  set.on('ready', (id) => told.push(`ready ${id}`));
+  set.on('loadFailed', (id) => {
+    told.push(`failed ${id}`);
+    // Pointing b at another failing url is a new load, told by its upsert.
+    if (id === 'a') set.upsert([model('b', 'stub-fail:other.glb')]);
+  });
+  set.set([model('a', 'stub-fail:a.glb'), model('b', 'stub-fail:b.glb')]);
+  assert.deepEqual(told, ['failed a', 'failed b']);
+  set.remove(['a']);
+  set.upsert([model('a', 'good.glb')]);
+  assert.deepEqual(told.slice(2), ['ready a']);
+});

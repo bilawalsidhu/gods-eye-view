@@ -20,6 +20,7 @@ export function fakeDrawPort() {
       disposed: false,
       writes: 0,
       ready: new Set(),
+      loadFailed: new Set(),
     };
     sets.set(spec.id, record);
     const write = (fn) => {
@@ -55,9 +56,13 @@ export function fakeDrawPort() {
         record.show = value;
       },
       on(event, cb) {
-        if (event !== 'ready') return () => {};
-        record.ready.add(cb);
-        return () => record.ready.delete(cb);
+        const listeners = {
+          ready: record.ready,
+          loadFailed: record.loadFailed,
+        }[event];
+        if (!listeners) return () => {};
+        listeners.add(cb);
+        return () => listeners.delete(cb);
       },
       dispose() {
         record.disposed = true;
@@ -81,6 +86,11 @@ export function fakeDrawPort() {
     /** Fire a models set's `ready` for an item, as a load finishing does. */
     ready(setId, id) {
       for (const cb of [...(sets.get(setId)?.ready ?? [])]) cb(id);
+    },
+    /** Fire a models set's `loadFailed` for an item, as a failed load does. */
+    loadFailed(setId, id, message = 'the model did not load') {
+      for (const cb of [...(sets.get(setId)?.loadFailed ?? [])])
+        cb(id, message);
     },
     clampState: () => 'draped',
     on: () => () => {},

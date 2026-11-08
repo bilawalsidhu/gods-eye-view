@@ -270,6 +270,15 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedZoomLatchIcao = null;
 
+  /** The tracked-model load-failure budget: the selection it counts for,
+   *  its failures, and when it may load again (`TRACKED_MODEL_*`). */
+
+  flightState._trackedModelFailIcao = null;
+
+  flightState._trackedModelFailCount = 0;
+
+  flightState._trackedModelRetryAtMs = 0;
+
   /** IR hot-target mode — mirror of flights.js: under the luminance-mapped
    *  NVG/FLIR post-styles every model renders flat white (hottest); the dominant
    *  amber/tracked tint restores on style exit. */

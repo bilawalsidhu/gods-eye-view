@@ -34,6 +34,12 @@ import {
 
 const FRAME_MS = 1000 / 60;
 
+/**
+ * Model urls under this scheme fail to load (`loadFailed`), so tests can
+ * see a failure; the stub loads nothing, and every other url is a model.
+ */
+export const STUB_FAILING_MODEL_SCHEME = 'stub-fail:';
+
 /** Every setting the stub accepts, with its descriptor. */
 const KNOBS = Object.freeze([
   { key: 'pixelRatio', kind: 'number', min: 0, max: 4, default: 0, cost: 1 },
@@ -314,21 +320,37 @@ export function createStubRenderer(options = {}) {
       items: new Map(),
       show: spec.show ?? true,
       readyListeners: [],
+      loadFailedListeners: [],
     };
     sets.set(spec.id, record);
     log('draw', kind, [spec]);
     // A model is ready once per load: when it is new or its url changes,
-    // not when it is moved or restyled.
+    // not when it is moved or restyled. One under the failing scheme fails
+    // its load instead.
+    // Each load is told once: a listener that starts another load of the
+    // same item (or removes it) supersedes the one queued here.
+    const loadTokens = new Map();
     const loads = (items) =>
       kind === 'models'
         ? items
             .filter(
               (item) => record.items.get(String(item.id))?.url !== item.url,
             )
-            .map((item) => String(item.id))
+            .map((item) => {
+              const token = {};
+              loadTokens.set(String(item.id), token);
+              return [String(item.id), token];
+            })
         : [];
-    const ready = (ids) => {
-      for (const id of ids) deliver(record.readyListeners, id);
+    const ready = (loading) => {
+      for (const [id, token] of loading) {
+        if (loadTokens.get(id) !== token || !record.items.has(id)) continue;
+        loadTokens.delete(id);
+        const url = String(record.items.get(id).url ?? '');
+        if (url.startsWith(STUB_FAILING_MODEL_SCHEME))
+          deliver(record.loadFailedListeners, id, `${url} does not load`);
+        else deliver(record.readyListeners, id);
+      }
     };
     const handle = {
       id: spec.id,
@@ -369,9 +391,15 @@ export function createStubRenderer(options = {}) {
         requestRender('draw');
       },
       on(event, cb) {
-        if (event !== 'ready') return () => {};
+        const list =
+          event === 'ready'
+            ? record.readyListeners
+            : event === 'loadFailed'
+              ? record.loadFailedListeners
+              : null;
+        if (!list) return () => {};
         const entry = { cb, live: true };
-        record.readyListeners.push(entry);
+        list.push(entry);
         return () => {
           entry.live = false;
         };

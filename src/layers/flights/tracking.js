@@ -257,7 +257,8 @@ export function createTracking({
     _setCockpitContactMode(active);
   }
 
-  /** Clear the per-SELECTION tracked-model latch: the zoom hysteresis band.
+  /** Clear the per-SELECTION tracked-model latches: the zoom hysteresis band
+   *  and the load-failure budget.
    *  Called from each path that changes which contact is
    *  selected — deselect, re-track, cross-layer handoff, init, destroy.
    *
@@ -271,6 +272,9 @@ export function createTracking({
   function _resetTrackedSelectionState() {
     flightState._trackedZoomLatched = false;
     flightState._trackedZoomLatchIcao = null;
+    flightState._trackedModelFailIcao = null;
+    flightState._trackedModelFailCount = 0;
+    flightState._trackedModelRetryAtMs = 0;
   }
 
   /**
@@ -641,7 +645,7 @@ export function createTracking({
     trackedIcon.hide();
     flightState._trackedEntity = null;
     parts.rendering._releaseTrackedModel();
-    _resetTrackedSelectionState(); // the zoom band belongs to the selection we just dropped
+    _resetTrackedSelectionState(); // the zoom band + load-failure budget belong to the selection we just dropped
     flightState._trackedIcao = null;
     // Hand the contact back to its icon only now: settling floors a grounded
     // contact, and while it still read as tracked its tracked model owned the
@@ -878,7 +882,7 @@ export function createTracking({
     const iconCourse = icons.course(icao24, t);
     flightState._displayCourse.set(icao24, iconCourse);
     flightState._trackedIcao = icao24;
-    _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling
+    _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling, full load-retry budget
     flightState._cachedDRFrame = -1;
     flightState._lastTrackedRotation =
       courseScreenRotation(_pose(), iconPosition, iconCourse, 0) ?? 0;

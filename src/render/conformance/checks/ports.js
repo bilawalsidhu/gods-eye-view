@@ -1755,6 +1755,60 @@ export function portChecks() {
       { capability: 'models' },
     ),
     check(
+      'draw.models.loadFailed',
+      'a model set says when a model fails to load, and loads it when added again',
+      async (h, r) => {
+        if (!h.assets?.model || !h.assets?.missingModel)
+          return { skip: 'no missing model asset in this harness' };
+        const set = r.draw.models({ id: 'conf:models.loadFailed' });
+        const ready = [];
+        const failed = [];
+        set.on('ready', (id) => ready.push(id));
+        set.on('loadFailed', (id, message) => failed.push([id, message]));
+        const model = (id, url) => ({
+          id,
+          pos: { ...AUSTIN, height: 0 },
+          url,
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+        });
+        const until = async (done) => {
+          for (let i = 0; i < 600 && !done(); i++) await drawn(h, r, 1);
+        };
+        set.set([
+          model('bad', h.assets.missingModel),
+          model('good', h.assets.model),
+        ]);
+        await until(() => failed.length >= 1 && ready.length >= 1);
+        deepEqual(ready, ['good'], 'the good one is ready');
+        deepEqual(
+          failed.map(([id]) => id),
+          ['bad'],
+          'the missing one failed',
+        );
+        ok(
+          typeof failed[0]?.[1] === 'string' && failed[0][1].length > 0,
+          'with a message',
+        );
+        equal(set.size(), 2, 'the failed item stays in the set');
+        // Removed and added again, it is tried at once, and fails again.
+        set.remove(['bad']);
+        set.upsert([model('bad', h.assets.missingModel)]);
+        await until(() => failed.length >= 2);
+        deepEqual(
+          failed.map(([id]) => id),
+          ['bad', 'bad'],
+          'tried again when added again',
+        );
+        // Pointed at a url that loads, it is ready.
+        set.upsert([model('bad', h.assets.model)]);
+        await until(() => ready.length >= 2);
+        deepEqual(ready, ['good', 'bad'], 'a good url loads');
+        equal(failed.length, 2, 'no failure for a good url');
+        set.dispose();
+      },
+      { capability: 'models' },
+    ),
+    check(
       'draw.models.update',
       'a model moves, turns and restyles in place; only a new url loads it again',
       async (h, r) => {

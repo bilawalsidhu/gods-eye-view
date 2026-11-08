@@ -345,6 +345,84 @@ for (const fixture of LAYERS) {
     }
   });
 
+  test(`${fixture.name}: a tracked model that fails to load is retried within a per-selection budget`, () => {
+    clearTr3bRegistry();
+    fixture.layer.stopTracking();
+    fixture.layer.setParams({ models3d: false });
+    const realNow = Date.now;
+    const realWarn = console.warn;
+    const warnings = [];
+    let now = 7_000_000;
+    Date.now = () => now;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    const viewer = viewerAtHeight(30_000);
+    const icao24 = fixture.name === 'flights' ? 'a0f401' : 'b0f401';
+    try {
+      fixture.seed({ viewer, icao24 });
+      fixture.driveTrackedModel();
+      let tracked = modelSet(fixture, viewer, 'tracked');
+      const fail = () => viewer.draw.loadFailed(tracked.spec.id, icao24, '404');
+      assert.ok(tracked.items.has(icao24), 'the tracked model loads');
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        fail();
+        fixture.driveTrackedModel();
+        assert.equal(tracked.items.has(icao24), false, `failure ${attempt}: let go`);
+        assert.equal(fixture.trackedModel(), null);
+        assert.equal(fixture.trackedBillboardColor()[3], 1, 'the icon carries the contact');
+        now += 1499;
+        fixture.driveTrackedModel();
+        assert.equal(tracked.items.has(icao24), false, 'not before the backoff');
+        now += 1;
+        fixture.driveTrackedModel();
+        assert.equal(tracked.items.has(icao24), attempt < 3,
+          attempt < 3 ? 'loaded again after the backoff' : 'given up after the third failure');
+      }
+      assert.equal(warnings.length, 1, 'giving up is said once');
+      now += 60_000;
+      fixture.driveTrackedModel();
+      assert.equal(tracked.items.has(icao24), false, 'the selection stays 2D');
+
+      // A new selection of the same contact starts with a full budget.
+      fixture.layer.stopTracking();
+      fixture.seed({ viewer, icao24 });
+      fixture.driveTrackedModel();
+      tracked = modelSet(fixture, viewer, 'tracked');
+      assert.ok(tracked.items.has(icao24), 'reselected, it loads again');
+      // A failure the renderer recovers from before the driver runs keeps it.
+      const recovered = fixture.trackedModel();
+      fail();
+      viewer.draw.ready(tracked.spec.id, icao24);
+      fixture.driveTrackedModel();
+      assert.equal(fixture.trackedModel(), recovered, 'a model that loaded after all is kept');
+      assert.ok(tracked.items.has(icao24));
+      fixture.layer.stopTracking();
+      fixture.seed({ viewer, icao24 });
+      fixture.driveTrackedModel();
+      tracked = modelSet(fixture, viewer, 'tracked');
+      // And a good load retires the failures counted so far.
+      fail();
+      fixture.driveTrackedModel();
+      now += 1500;
+      fixture.driveTrackedModel();
+      viewer.draw.ready(tracked.spec.id, icao24);
+      fixture.driveTrackedModel();
+      assert.equal(fixture.trackedModel()?.ready, true);
+      fail();
+      fixture.driveTrackedModel();
+      now += 1500;
+      fixture.driveTrackedModel();
+      fail();
+      fixture.driveTrackedModel();
+      now += 1500;
+      fixture.driveTrackedModel();
+      assert.ok(tracked.items.has(icao24), 'two failures after a good load are under the budget');
+    } finally {
+      Date.now = realNow;
+      console.warn = realWarn;
+      fixture.layer.stopTracking();
+    }
+  });
+
   test(`${fixture.name}: the IR boost restyles a drawn model in place, flat white and unlit`, () => {
     clearTr3bRegistry();
     fixture.layer.stopTracking();

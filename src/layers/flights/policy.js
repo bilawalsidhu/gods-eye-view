@@ -290,6 +290,19 @@ export const ENRICH_AMBIENT_PER_SWEEP = 150;
 
 export const DR_CORRECTION_MS = 900;
 
+/** Bounded loading for the tracked model. Its driver runs every frame, so a
+ *  missing or corrupt GLB, or a dead network, would otherwise ask for the
+ *  model again for as long as the contact stays selected. Failures (the
+ *  model set's `loadFailed`) are counted PER SELECTION: a short backoff
+ *  absorbs a transient blip, then the layer stops asking until the operator
+ *  selects something else. The icon is the visual throughout (the handoff
+ *  only fades it once a model actually renders), so a latched failure
+ *  degrades to exactly the pre-3D presentation. */
+
+export const TRACKED_MODEL_MAX_LOAD_FAILS = 3;
+
+export const TRACKED_MODEL_RETRY_BACKOFF_MS = 1500;
+
 /** @constant {number} Cap on NEW cells the display corridors may add to one
  *  poll's warm/sample batch — a view full of ground traffic must not balloon
  *  it. Cells the poll already collected are free (deduped before budgeting). */

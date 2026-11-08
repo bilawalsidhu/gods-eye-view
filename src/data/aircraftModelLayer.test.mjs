@@ -19,6 +19,8 @@ const POLICY = {
   TRACKED_MODEL_MAX_PX: 600,
   MODEL_HEADING_OFFSET_DEG: 0,
   FLEET_DR_INTERVAL_MS: 80,
+  TRACKED_MODEL_MAX_LOAD_FAILS: 3,
+  TRACKED_MODEL_RETRY_BACKOFF_MS: 1500,
 };
 
 const SPEC = {
@@ -247,7 +249,7 @@ test('a failed fleet write leaves the icons in charge and is sent again', () => 
   assert.equal(f.shown.get('a1'), false);
 });
 
-test('a model that has not loaded is written again for the renderer to retry', () => {
+test('a fleet model whose load failed is loaded again after a wait, not before', () => {
   const positions = new Map([['a1', near(1)]]);
   const f = fleetFixture(positions);
   const realNow = Date.now;
@@ -256,18 +258,39 @@ test('a model that has not loaded is written again for the renderer to retry', (
   try {
     f.tick();
     const writes = f.fleet().writes;
+    clock += 60_000;
     f.tick();
     assert.equal(
       f.fleet().writes,
       writes,
-      'an unchanged loading model is not rewritten every tick',
+      'a model still loading is not rewritten, however long it takes',
     );
-    clock += 5_000;
+    f.draw.loadFailed(f.fleetId, 'a1');
+    f.removes.length = 0;
+    clock += 4_999;
     f.tick();
+    assert.deepEqual(f.removes, [], 'not before the wait');
+    assert.equal(f.shown.get('a1'), true, 'the icon carries the contact');
+    clock += 1;
+    f.tick();
+    assert.deepEqual(f.removes, [['a1']], 'removed once the wait is over');
+    assert.ok(f.fleet().items.has('a1'), 'and added again in the same tick');
+    assert.equal(f.state._models.get('a1').failedAt, 0);
+    assert.equal(f.state._models.get('a1').ready, false, 'a fresh load');
+    f.removes.length = 0;
+    clock += 60_000;
+    f.tick();
+    assert.deepEqual(f.removes, [], 'tried again only after another failure');
+    // A renderer's own retry that loads before the layer's: nothing is due.
+    f.draw.loadFailed(f.fleetId, 'a1');
+    f.draw.ready(f.fleetId, 'a1');
+    clock += 60_000;
+    f.tick();
+    assert.deepEqual(f.removes, [], 'a model that loaded is not tried again');
     assert.equal(
-      f.fleet().writes,
-      writes + 1,
-      'but it is rewritten every few seconds',
+      f.shown.get('a1'),
+      false,
+      'the model takes over once it loads',
     );
   } finally {
     Date.now = realNow;

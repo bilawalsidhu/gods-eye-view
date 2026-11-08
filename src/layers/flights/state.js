@@ -333,6 +333,15 @@ export function createFlightState({ source, services }) {
 
   flightState._trackedZoomLatchIcao = null;
 
+  /** The tracked-model load-failure budget: the selection it counts for,
+   *  its failures, and when it may load again (`TRACKED_MODEL_*`). */
+
+  flightState._trackedModelFailIcao = null;
+
+  flightState._trackedModelFailCount = 0;
+
+  flightState._trackedModelRetryAtMs = 0;
+
   /** @type {Map<string, {cell: {lat: number, lon: number}, effectiveM: number|null,
    *  in: {x: number, y: number, z: number}, out: {x: number, y: number, z: number}|null, heldM: number|null,
    *  heldCell: {lat: number, lon: number}|null,

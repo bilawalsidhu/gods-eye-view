@@ -4,7 +4,7 @@
  * the Node test and the browser page alike.
  */
 import { DEFAULT_TOLERANCE } from '../conformance/index.js';
-import { createStubRenderer } from './index.js';
+import { createStubRenderer, STUB_FAILING_MODEL_SCHEME } from './index.js';
 import { toEcef } from './math.js';
 
 /** @returns {import('../conformance/index.js').ConformanceHarness} */
@@ -23,7 +23,11 @@ export function createStubHarness(name = 'stub') {
     pointer: (r, type, x, y, extra) => r.testing.pointer(type, x, y, extra),
     scriptHeights: (r, fn) => r.testing.setHeights(fn),
     wallTime: (r) => r.testing.wallTime(),
-    // The stub loads nothing: any url is a model it draws.
-    assets: { model: 'stub:model.glb' },
+    // The stub loads nothing: any url is a model it draws, but one under
+    // its failing scheme.
+    assets: {
+      model: 'stub:model.glb',
+      missingModel: `${STUB_FAILING_MODEL_SCHEME}model.glb`,
+    },
   };
 }

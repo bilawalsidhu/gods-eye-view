@@ -143,6 +143,37 @@ test('the capability and frame-step lists are the types’ own', () => {
   );
 });
 
+test('a draw set’s events: ready with the id, loadFailed with the id and why', () => {
+  const on = checker
+    .getTypeAtLocation(declared('DrawSet').name)
+    .getProperty('on');
+  const signatures = checker
+    .getTypeOfSymbolAtLocation(on, declared('DrawSet'))
+    .getCallSignatures();
+  const events = Object.fromEntries(
+    signatures.map((signature) => {
+      const [event, cb] = signature.getParameters();
+      const callback = checker
+        .getTypeOfSymbolAtLocation(cb, cb.valueDeclaration)
+        .getCallSignatures()[0];
+      return [
+        checker.getTypeOfSymbolAtLocation(event, event.valueDeclaration).value,
+        callback
+          .getParameters()
+          .map((p) =>
+            checker.typeToString(
+              checker.getTypeOfSymbolAtLocation(p, p.valueDeclaration),
+            ),
+          ),
+      ];
+    }),
+  );
+  assert.deepEqual(events, {
+    ready: ['string'],
+    loadFailed: ['string', 'string'],
+  });
+});
+
 test('the shape check names what is missing and what a capability does not allow', () => {
   assert.deepEqual(checkRendererShape(null), ['renderer is not an object']);
   assert.deepEqual(checkRendererShape({}), [

@@ -507,6 +507,15 @@ export interface DrawSet<T> {
   show: boolean;
   /** `models`: a model has loaded and is posed. */
   on(event: 'ready', cb: (id: string) => void): Off;
+  /**
+   * `models`: a model's url failed to load (`message` says why), once per
+   * failed load. The item stays in the set, drawing what it drew before (a
+   * new item draws nothing); a renderer may try the url again when the item
+   * is next updated. Removing the item and adding it again tries at once.
+   * Optional: where the renderer cannot tell a failure it may never fire it, so
+   * a fallback must not wait on it.
+   */
+  on(event: 'loadFailed', cb: (id: string, message: string) => void): Off;
   dispose(): void;
 }
 

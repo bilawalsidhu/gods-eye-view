@@ -30,10 +30,9 @@ const PRELOAD_ID = '~preload';
 /** Where the preload item waits, unshown. */
 const NOWHERE = Object.freeze({ x: 0, y: 0, z: 0 });
 
-/** How often (ms) a model that has not loaded is written again, so a
- *  renderer that retries failed loads on write (as the Cesium one does)
- *  gets the chance even for a parked contact whose item never changes. */
-const UNREADY_REWRITE_MS = 5000;
+/** How long (ms) a fleet model whose load failed (`loadFailed`) waits
+ *  before it is removed and added again, which loads it again. */
+const FLEET_MODEL_RETRY_MS = 5000;
 
 /** A colour as the draw contract's `[r, g, b, a]`, from `{red, green, blue, alpha}`. */
 function rgba(color) {
@@ -68,8 +67,13 @@ function inView(pose, point) {
  * layer lifetime (`_createModelSets`): the fleet's, one item per modelled
  * contact, and the tracked contact's (with a hidden item that keeps the
  * tracked asset loaded). Each item is re-posed and restyled in place; the
- * layer keeps its own record of each (`modelRecord.js`), and a set's `ready`
- * says when a model has loaded. Picks name the set and the contact's id.
+ * layer keeps its own record of each (`modelRecord.js`), a set's `ready`
+ * says when a model has loaded and its `loadFailed` when one failed to. A
+ * failed fleet model is loaded again every `FLEET_MODEL_RETRY_MS`; the
+ * tracked model has a per-selection budget (`TRACKED_MODEL_MAX_LOAD_FAILS`
+ * failures, `TRACKED_MODEL_RETRY_BACKOFF_MS` apart), after which the contact
+ * stays an icon until another is selected. Picks name the set and the
+ * contact's id.
  * @param {object} options
  * @param {object} options.state The layer state.
  * @param {object} options.services
@@ -79,7 +83,8 @@ function inView(pose, point) {
  * @param {string} options.logLabel Console prefix, e.g. `Data:Flights`.
  * @param {string} options.setPrefix The draw sets' id prefix, e.g. `flights`.
  * @param {object} options.policy The layer's model budgets, radii, pixel
- *   bounds, heading offset and fleet tick interval.
+ *   bounds, heading offset, fleet tick interval and tracked-model load
+ *   budget.
  * @param {(klass: string) => object} options.modelSpec The class's GLB, scale,
  *   geometry and tint blend; `headingOffsetDeg` overrides the policy's.
  * @param {(icao24: string) => object} options.modelColor Model tint
@@ -161,11 +166,32 @@ export function createAircraftModels({
     const offs = [
       fleet.on('ready', (id) => {
         const record = state._models.get(id);
-        if (record) record.ready = true;
+        if (!record) return;
+        record.ready = true;
+        // Loaded after all (a renderer may retry on its own): no retry due.
+        record.failedAt = 0;
+      }),
+      fleet.on('loadFailed', (id) => {
+        const record = state._models.get(id);
+        if (record) record.failedAt = Date.now();
       }),
       tracked.on('ready', (id) => {
-        if (id === state._trackedIcao && state._trackedModel)
-          state._trackedModel.ready = true;
+        if (id !== state._trackedIcao || !state._trackedModel) return;
+        state._trackedModel.ready = true;
+        // Loaded after all (a renderer may retry on its own): kept.
+        state._trackedModel.failedAt = 0;
+        // A good load retires this selection's failure budget: a contact
+        // that recovers after a transient blip is not one attempt from
+        // giving up.
+        state._trackedModelFailIcao = null;
+        state._trackedModelFailCount = 0;
+        state._trackedModelRetryAtMs = 0;
+      }),
+      tracked.on('loadFailed', (id, message) => {
+        const record = state._trackedModel;
+        if (id !== state._trackedIcao || !record || record.id !== id) return;
+        record.failedAt = Date.now();
+        _noteTrackedModelLoadFailure(record.url, message);
       }),
     ];
     state._modelSets = { fleet, tracked, offs };
@@ -351,16 +377,29 @@ export function createAircraftModels({
     if (!set) return;
     const p = record.position;
     const t = record.tint ?? WHITE;
-    // A model still loading is rewritten now and then, for the renderer's retry.
-    const loading = record.ready
-      ? ''
-      : Math.floor(Date.now() / UNREADY_REWRITE_MS);
-    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${spec.blendAmount}|${record.show}|${loading}`;
+    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${spec.blendAmount}|${record.show}`;
     if (key === record.sent) return;
     record.sent = key;
     const item = _itemOf(id, record, spec);
     if (out) out.push(item);
     else set.upsert([item]);
+  }
+
+  /** A fleet model whose load failed, removed from its set once
+   *  `FLEET_MODEL_RETRY_MS` has passed; the write that follows adds it
+   *  again, and the set loads it again. */
+  function _retryFailedFleetModel(set, icao24, record) {
+    if (
+      !set ||
+      !record.failedAt ||
+      Date.now() - record.failedAt < FLEET_MODEL_RETRY_MS
+    )
+      return;
+    record.failedAt = 0;
+    record.sent = null;
+    // A fresh load: not ready until the set says so again.
+    record.ready = false;
+    set.remove([icao24]);
   }
 
   /** Atomically hand one fleet contact from its icon to a safely placed,
@@ -386,6 +425,7 @@ export function createAircraftModels({
     const klass = state.records.data.get(icao24)?.klass;
     const spec = _modelSpec(klass);
     const set = state._modelSets?.fleet ?? null;
+    _retryFailedFleetModel(set, icao24, record);
     const displayPos = _modelDisplayPosition(icao24, pos);
     if (!displayPos) {
       showModel(record, false); // no ground evidence → nothing safe to place a depth-tested model at
@@ -587,6 +627,33 @@ export function createAircraftModels({
       icons.setShown(icao24, true);
   }
 
+  /** Whether the driver may load the tracked model again: an untried
+   *  selection, or one under its failure budget past its backoff. */
+  function _trackedModelLoadAllowed(nowMs = Date.now()) {
+    if (state._trackedModelFailIcao !== state._trackedIcao) return true;
+    if (state._trackedModelFailCount >= policy.TRACKED_MODEL_MAX_LOAD_FAILS)
+      return false;
+    return nowMs >= state._trackedModelRetryAtMs;
+  }
+
+  /** Count a failed tracked-model load against the selection's budget and
+   *  arm the backoff, or the give-up latch. */
+  function _noteTrackedModelLoadFailure(url, message) {
+    if (state._trackedModelFailIcao !== state._trackedIcao) {
+      state._trackedModelFailIcao = state._trackedIcao;
+      state._trackedModelFailCount = 0;
+    }
+    state._trackedModelFailCount += 1;
+    state._trackedModelRetryAtMs =
+      Date.now() + policy.TRACKED_MODEL_RETRY_BACKOFF_MS;
+    if (state._trackedModelFailCount >= policy.TRACKED_MODEL_MAX_LOAD_FAILS)
+      console.warn(
+        `[${logLabel}] tracked 3D model gave up after ${state._trackedModelFailCount} failed loads of ${url}; ` +
+          'this contact stays 2D until another is selected',
+        message,
+      );
+  }
+
   /** Drop the standalone tracked-aircraft model. */
 
   function _releaseTrackedModel() {
@@ -615,6 +682,9 @@ export function createAircraftModels({
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode). */
 
   function _updateTrackedModel() {
+    // A failed load is let go (the icon carries the contact); the budget
+    // decides when, if ever, it is loaded again.
+    if (state._trackedModel?.failedAt) _releaseTrackedModel();
     const active =
       state._trackedIcao &&
       parts.tracking._trackedModelRegimeActive() &&
@@ -640,6 +710,7 @@ export function createAircraftModels({
     if (state._trackedModel && state._trackedModel.id !== icao24)
       _releaseTrackedModel();
     if (!state._trackedModel) {
+      if (!_trackedModelLoadAllowed()) return; // the icon carries it
       const record = createModelRecord({
         specKey: _specKeyFor(klass), // class-change sync compares against this
         bellyM: spec.bellyM,

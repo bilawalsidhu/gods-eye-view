@@ -27,7 +27,14 @@ import {
 
 const REFERENCES = '/src/render/conformance/goldens/visual/';
 const SAVE = '/__conformance/references/';
-const ctx = { toEcef, assets: { model: '/models/c172.glb' } };
+const ctx = {
+  toEcef,
+  assets: {
+    model: '/models/c172.glb',
+    // Not served: the model failure check loads it.
+    missingModel: '/models/conformance-missing.glb',
+  },
+};
 const $ = (id) => document.getElementById(id);
 const status = (text) => ($('status').textContent = text);
 
@@ -38,7 +45,10 @@ const RENDERERS = {
 const HARNESSES = {
   stub: () => [createStubHarness('stub (browser)'), {}],
   cesium: () => [
-    createCesiumHarness({ model: ctx.assets.model }),
+    createCesiumHarness({
+      model: ctx.assets.model,
+      missingModel: ctx.assets.missingModel,
+    }),
     { only: (id) => CESIUM_CHECKS.has(id) },
   ],
 };

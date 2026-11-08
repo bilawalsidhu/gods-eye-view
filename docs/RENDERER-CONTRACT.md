@@ -109,7 +109,10 @@ in memory and draws nothing. It has:
   height arc and easing, `changed` thresholds and follows;
 - picks against what was drawn, or a scripted table;
 - scripted heights;
-- a virtual clock that nothing advances on its own.
+- a virtual clock that nothing advances on its own;
+- models that load at once, but for urls under `stub-fail:`
+  (`STUB_FAILING_MODEL_SCHEME`), which fire `loadFailed` instead of `ready`
+  (they are still picked where they are).
 
 `renderer.testing` drives it with `tick()`, `advance(ms)`, `pointer(type, x, y)`,
 `scriptPicks`, `setHeights` and `cacheHeight`, and records its calls.
@@ -132,7 +135,8 @@ renderer under test:
 - `tolerance` and `flightPaths`.
 
 Optional members widen what is checked: `pointer` for synthetic input,
-`scriptHeights`, and `assets.model`.
+`scriptHeights`, `assets.model`, and `assets.missingModel` (a model url
+that fails to load, for the `loadFailed` check).
 
 There are two layers of checks.
 

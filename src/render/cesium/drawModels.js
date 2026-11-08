@@ -15,8 +15,9 @@
  * measures `minPixelSize`), `scaleByDistance`, `fadeByDistance` (the tint's
  * alpha) and the set's `horizonCull`.
  *
- * A failed load is tried again when its item is next updated, once
- * `MODEL_RETRY_MS` has passed.
+ * A failed load fires `loadFailed` (after the frame Cesium reported it in,
+ * so a listener may change the set), and is tried again when its item is
+ * next updated, once `MODEL_RETRY_MS` has passed.
  *
  * `shading: 'thermal'` draws the model unlit and white-hot (its texture
  * left out), then tinted as asked: a hot target, as the thermal views draw
@@ -116,6 +117,13 @@ const tintKey = (tint) =>
       ? tint
       : tint.join(',');
 
+/** Why a load failed, as `loadFailed` reports it. */
+function failureMessage(error) {
+  if (error instanceof Error && error.message) return error.message;
+  const text = error === undefined || error === null ? '' : String(error);
+  return text && text !== '[object Object]' ? text : 'the model did not load';
+}
+
 /** Whether an item needs the per-frame pass. */
 const needsFrame = (item, spec) =>
   item.maxPixelSize > 0 ||
@@ -183,8 +191,11 @@ export function createModelSets({
     // A load counts until it is ready, fails or is superseded; once.
     host.loading += 1;
     let settled = false;
+    const item = entry.item;
+    const current = () =>
+      entry.token === token && record.host === host && !host.isDestroyed();
     const settleLoad = () => settle(false);
-    const settle = (failed) => {
+    const settle = (failed, error) => {
       if (settled) return;
       settled = true;
       if (entry.settleLoad === settleLoad) entry.settleLoad = null;
@@ -193,13 +204,17 @@ export function createModelSets({
         entry.failed = true;
         entry.failedAt = Date.now();
         host.failed += 1;
+        // Told once Cesium is done with the frame it raised this in; not
+        // when the item has moved on to another load meanwhile.
+        const message = failureMessage(error);
+        queueMicrotask(() => {
+          if (current() && entry.failed)
+            record.listeners.loadFailed.fire(item.id, message);
+        });
       }
       requestRender();
     };
     entry.settleLoad = settleLoad;
-    const item = entry.item;
-    const current = () =>
-      entry.token === token && record.host === host && !host.isDestroyed();
     Cesium.Model.fromGltfAsync({
       url: item.url,
       modelMatrix: matrixOf(entry, new Cesium.Matrix4()),
@@ -241,7 +256,7 @@ export function createModelSets({
         });
         // A failed load is let go (Cesium would keep drawing frames for
         // it); the failure stays for `whenSettled` until the item changes.
-        model.errorEvent.addEventListener(() => {
+        model.errorEvent.addEventListener((error) => {
           if (current() && entry.next === model) {
             entry.next = null;
             // Cesium raises this inside the model's update: removing it
@@ -251,11 +266,11 @@ export function createModelSets({
                 host.remove(model);
             });
           }
-          settle(true);
+          settle(true, error);
         });
         requestRender();
       },
-      () => settle(true),
+      (error) => settle(true, error),
     );
   }
 

@@ -267,7 +267,10 @@ export function createCesiumDraw({
   function makeSet(kind, spec, build) {
     if (sets.has(spec.id)) throw new Error(`a set with id ${spec.id} is live`);
     const items = new Map();
-    const listeners = { ready: listenerList(report) };
+    const listeners = {
+      ready: listenerList(report),
+      loadFailed: listenerList(report),
+    };
     const record = {
       kind,
       spec,

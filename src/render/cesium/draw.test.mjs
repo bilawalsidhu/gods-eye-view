@@ -4052,6 +4052,59 @@ test('a model load superseded or failed settles once', async () => {
   }
 });
 
+test('a failed model load fires loadFailed once, after the frame, with why', async () => {
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'm' });
+    const failed = [];
+    set.on('loadFailed', (id, message) => failed.push([id, message]));
+    const item = (id, url) => ({
+      id,
+      pos: { lon: 0, lat: 0 },
+      url,
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+    });
+    // A load that rejects (the glTF did not fetch).
+    set.set([item('a', 'a.glb'), item('b', 'b.glb')]);
+    loads[0].reject(new Error('404 for a.glb'));
+    await settle();
+    assert.deepEqual(failed, [['a', '404 for a.glb']]);
+    // One that fails in its update: told after that update, not inside it.
+    loads[1].resolve();
+    await settle();
+    loads[1].model.errorEvent.raiseEvent(new Error('bad texture'));
+    assert.equal(failed.length, 1, 'not inside the model update');
+    await settle();
+    assert.deepEqual(failed[1], ['b', 'bad texture']);
+    // A listener may change the set: removing and adding again loads at once.
+    set.remove(['a']);
+    set.upsert([item('a', 'a.glb')]);
+    assert.equal(loads.length, 3, 'added again, loaded again');
+    // A load superseded before it fails is not told.
+    set.upsert([item('a', 'c.glb')]);
+    loads[2].reject(new Error('late'));
+    await settle();
+    assert.equal(failed.length, 2, 'a superseded load does not fire');
+    // Nor one whose item went before the failure was told.
+    loads[3].reject('plain reason');
+    set.remove(['a']);
+    await settle();
+    assert.equal(failed.length, 2, 'an item gone does not fire');
+    set.upsert([item('d', 'd.glb')]);
+    loads[4].reject({});
+    await settle();
+    assert.deepEqual(failed[2], ['d', 'the model did not load']);
+    set.dispose();
+  } finally {
+    restore();
+  }
+});
+
 test('a failed model load is tried again on a later update, after a wait', async () => {
   const { loads, restore } = fakeModelLoads();
   const realNow = Date.now;

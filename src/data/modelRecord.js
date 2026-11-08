@@ -5,7 +5,8 @@
  * layer reads what it pushed (and what the set told it) back from itself.
  *
  * Write `show` and the placement with {@link showModel} and
- * {@link placeModel}; the set's `ready` event sets `ready`. The placement is
+ * {@link placeModel}; the set's `ready` event sets `ready`, and its
+ * `loadFailed` event `failedAt`. The placement is
  * kept as the column-major frame the model is posed in, the same frame a
  * renderer builds from the item's position and heading, so anchors on the
  * model can be read from it.
@@ -19,6 +20,8 @@ import { eastNorthUp } from '../geo/frames.js';
  * @property {string|null} url The model asset the layer sends.
  * @property {boolean} ready Whether the set reported the model loaded and
  *   posed (`ready`).
+ * @property {number} failedAt When (epoch ms) the set last reported the
+ *   model's load failed (`loadFailed`); 0 when it has not.
  * @property {boolean} show Whether the layer last showed the model.
  * @property {boolean} placed Whether the layer has placed it yet.
  * @property {Float64Array} matrix Where the layer last placed it: the
@@ -55,6 +58,7 @@ export function createModelRecord({
     id,
     url,
     ready: false,
+    failedAt: 0,
     show: false,
     placed: false,
     matrix,
