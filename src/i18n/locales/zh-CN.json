@@ -3109,5 +3109,9 @@
   "Close camera preview": "关闭摄像头预览",
   "Refresh map still": "刷新地图静止画面",
   "The map still uses a separate request and may show a different moment.": "地图静止画面通过单独的请求获取，可能显示不同的时刻。",
-  "Video plays from Québec 511, which sees your IP address.": "视频从 Québec 511 播放，Québec 511 会看到你的 IP 地址。"
+  "Video plays from Québec 511, which sees your IP address.": "视频从 Québec 511 播放，Québec 511 会看到你的 IP 地址。",
+  "Volcano status": "火山状态",
+  "Aurora forecast": "极光预报",
+  "NOAA OVATION forecast: {forecastTime}\nBrighter green = higher probability": "NOAA OVATION 预报：{forecastTime}\n绿色越亮，概率越高",
+  "Public feed unavailable": "公共数据源不可用"
 }

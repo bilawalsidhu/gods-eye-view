@@ -3259,5 +3259,9 @@
   "Close camera preview": "Fechar prévia da câmera",
   "Refresh map still": "Atualizar imagem fixa no mapa",
   "The map still uses a separate request and may show a different moment.": "A imagem no mapa usa uma solicitação separada e pode mostrar outro momento.",
-  "Video plays from Québec 511, which sees your IP address.": "O vídeo é reproduzido a partir do Québec 511, que vê o seu endereço IP."
+  "Video plays from Québec 511, which sees your IP address.": "O vídeo é reproduzido a partir do Québec 511, que vê o seu endereço IP.",
+  "Volcano status": "Estado dos vulcões",
+  "Aurora forecast": "Previsão de auroras",
+  "NOAA OVATION forecast: {forecastTime}\nBrighter green = higher probability": "Previsão NOAA OVATION: {forecastTime}\nVerde mais brilhante = maior probabilidade",
+  "Public feed unavailable": "Fonte pública indisponível"
 }
