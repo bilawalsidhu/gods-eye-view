@@ -1489,8 +1489,10 @@ export function portChecks() {
           return false;
         };
         shapes.set([overlay(undefined)]);
+        // A draped fill can reach the pick pass tile by tile, so wait for
+        // both ends, as the turned case below waits for its own.
         ok(await until(() => mine(at(0))), 'unturned, it draws');
-        ok(mine(at(0.003)), 'unturned, it is wide');
+        ok(await until(() => mine(at(0.003))), 'unturned, it is wide');
         ok(!mine(at(0, 0.003)), 'unturned, it is not tall');
         shapes.set([overlay(Math.PI / 2)]);
         ok(
