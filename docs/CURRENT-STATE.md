@@ -7002,6 +7002,36 @@ ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
 
+## Virtual Cameras layer
+
+Virtual Cameras (`virtual-cameras`, Movement group) aims the view at Simulation
+targets from authored or placed cameras (`src/layers/cameras/`; descriptors
+and framing math in the pure `policy.js`, format in
+[docs/SIMULATION.md](SIMULATION.md)). Three types: `ground` tripods at a
+lat/lon and height above the cached ground floor (`cachedGroundFloor`, warmed
+on first use; the EGM96 datum stands in while cold) or at an absolute
+ellipsoid height, `chase` behind the target in its east-north-up frame, and
+`orbit` around it on the scenario clock. Tripods zoom automatically so the
+target spans `frameFraction` of the frame height (1.5°–75°); chase and orbit
+use a fixed `fovDeg`. Direction, chase/orbit position and field of view are
+exponentially smoothed by each camera's `smoothingS`.
+
+Selecting a camera claims the view through the shell's navigation authority
+(`runImmediateNavigation('target')`, the same seam the Director uses, so
+Cockpit refuses with `Camera unavailable — exit cockpit first` and tracked
+contacts are released), then writes `camera.setView` once per frame on
+`scene.preUpdate` from `simulation.getTargets()`. A `pointerdown` or `wheel`
+on the canvas, a camera handoff published by the navigation owner, picking
+**Free**, or disable releases the view and restores the original field of
+view. The layer holds continuous rendering only while a camera is active. Row
+controls: the camera list (Free, Place a tripod here, then each camera), a
+**Target** switch (Auto or an aircraft, overriding the active camera's target)
+and a **Target size in frame** slider. Session tripods placed from the row are
+kept for the session only. The shell connects the layer in
+`LayerBindings._connectVirtualCameras`. Share links keep the layer under token
+`02`; voice is off for this layer for now (prompt budget) and it has no analyst
+records. The app wiring is `src/app/layers/virtualCameras.js`.
+
 ## Simulation layer
 
 Simulation (`simulation`, Movement group) flies authored aircraft scenarios

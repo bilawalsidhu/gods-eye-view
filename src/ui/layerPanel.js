@@ -47,6 +47,7 @@ const PANEL_GROUPS = [
       'military',
       'local-adsb',
       'simulation',
+      'virtual-cameras',
       'ais-live-vessels',
       'traffic',
       'transit',

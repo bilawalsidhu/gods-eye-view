@@ -50,6 +50,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'ski-pistes': msg('Ski Pistes'),
   'water-surface': msg('Water Surface'),
   simulation: msg('Simulation'),
+  'virtual-cameras': msg('Virtual Cameras'),
 });
 
 /** The layer panel's own English names, where they differ from the module's. */

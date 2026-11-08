@@ -34,6 +34,7 @@ import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.j
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationWaterSurface } from './layers/waterSurface.js';
 import { createApplicationSimulation } from './layers/simulation.js';
+import { createApplicationVirtualCameras } from './layers/virtualCameras.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -80,6 +81,7 @@ export function createApplicationCatalog({
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
   const militaryRegistry = createMilitaryRegistry();
+  const simulation = createApplicationSimulation();
   const weatherClock = createWeatherClock();
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
@@ -186,7 +188,11 @@ export function createApplicationCatalog({
         }),
         createApplicationCyclones({ feed: sources.cyclones }),
         createApplicationWaterSurface(),
-        createApplicationSimulation(),
+        simulation,
+        createApplicationVirtualCameras({
+          simulation,
+          groundFloor: surface.groundFloor,
+        }),
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),

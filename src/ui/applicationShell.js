@@ -283,6 +283,9 @@ export class StyleManager extends ShellFacade {
           this._runExplicitWorldFocus(...args),
         runImmediateNavigation: (...args) =>
           this.runImmediateNavigation(...args),
+        subscribeCameraHandoff: (listener) =>
+          this._navigation?.subscribeCameraHandoff?.(listener),
+        isCockpitActive: () => Boolean(this.cockpitView?.active),
         _showToast: (...args) => this._showToast(...args),
       },
       feedback: this._feedback,

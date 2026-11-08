@@ -463,6 +463,8 @@ export const VOICE_OFF_LAYERS = Object.freeze({
     'rendered sea surface with no records; no room in the prompt budget',
   simulation:
     'authored scenario playback; voice control waits for prompt budget',
+  'virtual-cameras':
+    'scenario camera selection; voice control waits for prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({

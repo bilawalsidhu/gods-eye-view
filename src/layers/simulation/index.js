@@ -90,6 +90,8 @@ export function createSimulationLayer({
   let focusedId = null;
   let rowControlsListener = null;
   const clock = createSimulationClock({ now });
+  /** @type {Set<Function>} */
+  const scenarioListeners = new Set();
   /** @type {Map<string, object>} aircraft id -> runtime record */
   const fleet = new Map();
 
@@ -101,6 +103,16 @@ export function createSimulationLayer({
 
   function notifyRowControls() {
     rowControlsListener?.();
+  }
+
+  function notifyScenario() {
+    for (const listener of [...scenarioListeners]) {
+      try {
+        listener(scenario);
+      } catch {
+        /* a listener's failure is its own */
+      }
+    }
   }
 
   function syncHold() {
@@ -278,6 +290,7 @@ export function createSimulationLayer({
     frame();
     syncHold();
     notifyRowControls();
+    notifyScenario();
     return true;
   }
 
@@ -369,6 +382,7 @@ export function createSimulationLayer({
       scenario = null;
       focusedId = null;
       syncHold();
+      notifyScenario();
       return true;
     },
     update() {
@@ -462,6 +476,7 @@ export function createSimulationLayer({
           headingDeg: record.sample.headingDeg,
           pitchDeg: record.sample.pitchDeg,
           speedMps: record.sample.speedMps,
+          sizeM: record.spec.nativeRadiusM * 2 * record.spec.scale,
           altM: record.sample.altM,
           done: record.sample.done,
         }));
@@ -476,6 +491,16 @@ export function createSimulationLayer({
     },
     getScenario() {
       return scenario;
+    },
+    /** Cameras the loaded scenario declares, for the Virtual Cameras layer. */
+    getCameras() {
+      return scenario?.cameras || [];
+    },
+    /** Hear scenario loads and clears; returns the unsubscribe. */
+    subscribe(listener) {
+      if (typeof listener !== 'function') return () => {};
+      scenarioListeners.add(listener);
+      return () => scenarioListeners.delete(listener);
     },
     /** Loaded aircraft and clock, for tests and live gates. */
     diagnostics() {

@@ -11,6 +11,7 @@
  * @module layers/simulation/scenario
  */
 import { classifyAircraft } from '../../data/aircraftClass.js';
+import { normalizeCameraList } from '../cameras/policy.js';
 
 export const SCENARIO_VERSION = 1;
 export const MAX_AIRCRAFT = 64;
@@ -48,7 +49,7 @@ function fail(message) {
  * second (`speedMps`); the result is metric. Throws on anything malformed, so
  * a bad file never half-loads.
  * @param {object} json Parsed scenario file.
- * @returns {{version:number, id:string, title:string, aircraft:object[]}}
+ * @returns {{version:number, id:string, title:string, aircraft:object[], cameras:object[]}}
  */
 export function normalizeScenario(json) {
   if (!json || typeof json !== 'object' || Array.isArray(json))
@@ -122,7 +123,11 @@ export function normalizeScenario(json) {
       waypoints,
     };
   });
-  return { version: SCENARIO_VERSION, id, title, aircraft };
+  const cameras = normalizeCameraList(
+    json.cameras,
+    aircraft.map((entry) => entry.id),
+  );
+  return { version: SCENARIO_VERSION, id, title, aircraft, cameras };
 }
 
 /** Horizontal great-circle distance plus the altitude change, metres. */

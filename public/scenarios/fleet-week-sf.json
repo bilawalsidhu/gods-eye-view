@@ -2,7 +2,7 @@
   "version": 1,
   "id": "fleet-week-sf",
   "title": "Fleet Week over San Francisco Bay",
-  "comment": "Hand-written demonstration scenario. Waypoints are lat/lon with altFt (feet above sea level) and speedKt (knots); timing is derived from distance and speed. Set loop true for a circuit, false for a one-way flight.",
+  "comment": "Hand-written demonstration scenario. Waypoints are lat/lon with altFt (feet above sea level) and speedKt (knots); timing is derived from distance and speed. Set loop true for a circuit, false for a one-way flight. Cameras: ground tripods (lat/lon, heightM above ground), chase (behind the target) and orbit (around it); see docs/SIMULATION.md.",
   "aircraft": [
     {
       "id": "angel1",
@@ -12,14 +12,54 @@
       "color": "#ffd166",
       "loop": true,
       "waypoints": [
-        { "lat": 37.8405, "lon": -122.5300, "altFt": 1800, "speedKt": 380 },
-        { "lat": 37.8215, "lon": -122.4800, "altFt": 900, "speedKt": 400 },
-        { "lat": 37.8130, "lon": -122.4360, "altFt": 600, "speedKt": 410 },
-        { "lat": 37.8080, "lon": -122.3980, "altFt": 700, "speedKt": 400 },
-        { "lat": 37.8180, "lon": -122.3620, "altFt": 1500, "speedKt": 380 },
-        { "lat": 37.8440, "lon": -122.3700, "altFt": 2600, "speedKt": 350 },
-        { "lat": 37.8600, "lon": -122.4300, "altFt": 2800, "speedKt": 340 },
-        { "lat": 37.8560, "lon": -122.4950, "altFt": 2400, "speedKt": 360 }
+        {
+          "lat": 37.8405,
+          "lon": -122.53,
+          "altFt": 1800,
+          "speedKt": 380
+        },
+        {
+          "lat": 37.8215,
+          "lon": -122.48,
+          "altFt": 900,
+          "speedKt": 400
+        },
+        {
+          "lat": 37.813,
+          "lon": -122.436,
+          "altFt": 600,
+          "speedKt": 410
+        },
+        {
+          "lat": 37.808,
+          "lon": -122.398,
+          "altFt": 700,
+          "speedKt": 400
+        },
+        {
+          "lat": 37.818,
+          "lon": -122.362,
+          "altFt": 1500,
+          "speedKt": 380
+        },
+        {
+          "lat": 37.844,
+          "lon": -122.37,
+          "altFt": 2600,
+          "speedKt": 350
+        },
+        {
+          "lat": 37.86,
+          "lon": -122.43,
+          "altFt": 2800,
+          "speedKt": 340
+        },
+        {
+          "lat": 37.856,
+          "lon": -122.495,
+          "altFt": 2400,
+          "speedKt": 360
+        }
       ]
     },
     {
@@ -30,14 +70,54 @@
       "color": "#ffd166",
       "loop": true,
       "waypoints": [
-        { "lat": 37.8425, "lon": -122.5340, "altFt": 1900, "speedKt": 380 },
-        { "lat": 37.8232, "lon": -122.4840, "altFt": 1000, "speedKt": 400 },
-        { "lat": 37.8147, "lon": -122.4400, "altFt": 700, "speedKt": 410 },
-        { "lat": 37.8097, "lon": -122.4020, "altFt": 800, "speedKt": 400 },
-        { "lat": 37.8197, "lon": -122.3660, "altFt": 1600, "speedKt": 380 },
-        { "lat": 37.8457, "lon": -122.3740, "altFt": 2700, "speedKt": 350 },
-        { "lat": 37.8617, "lon": -122.4340, "altFt": 2900, "speedKt": 340 },
-        { "lat": 37.8577, "lon": -122.4990, "altFt": 2500, "speedKt": 360 }
+        {
+          "lat": 37.8425,
+          "lon": -122.534,
+          "altFt": 1900,
+          "speedKt": 380
+        },
+        {
+          "lat": 37.8232,
+          "lon": -122.484,
+          "altFt": 1000,
+          "speedKt": 400
+        },
+        {
+          "lat": 37.8147,
+          "lon": -122.44,
+          "altFt": 700,
+          "speedKt": 410
+        },
+        {
+          "lat": 37.8097,
+          "lon": -122.402,
+          "altFt": 800,
+          "speedKt": 400
+        },
+        {
+          "lat": 37.8197,
+          "lon": -122.366,
+          "altFt": 1600,
+          "speedKt": 380
+        },
+        {
+          "lat": 37.8457,
+          "lon": -122.374,
+          "altFt": 2700,
+          "speedKt": 350
+        },
+        {
+          "lat": 37.8617,
+          "lon": -122.434,
+          "altFt": 2900,
+          "speedKt": 340
+        },
+        {
+          "lat": 37.8577,
+          "lon": -122.499,
+          "altFt": 2500,
+          "speedKt": 360
+        }
       ]
     },
     {
@@ -48,13 +128,48 @@
       "color": "#ff7b7b",
       "loop": true,
       "waypoints": [
-        { "lat": 37.8120, "lon": -122.5120, "altFt": 1400, "speedKt": 240 },
-        { "lat": 37.8085, "lon": -122.4700, "altFt": 500, "speedKt": 260 },
-        { "lat": 37.8075, "lon": -122.4300, "altFt": 400, "speedKt": 270 },
-        { "lat": 37.8150, "lon": -122.3950, "altFt": 900, "speedKt": 250 },
-        { "lat": 37.8380, "lon": -122.4000, "altFt": 2200, "speedKt": 220 },
-        { "lat": 37.8420, "lon": -122.4700, "altFt": 2400, "speedKt": 220 },
-        { "lat": 37.8300, "lon": -122.5150, "altFt": 2000, "speedKt": 230 }
+        {
+          "lat": 37.812,
+          "lon": -122.512,
+          "altFt": 1400,
+          "speedKt": 240
+        },
+        {
+          "lat": 37.8085,
+          "lon": -122.47,
+          "altFt": 500,
+          "speedKt": 260
+        },
+        {
+          "lat": 37.8075,
+          "lon": -122.43,
+          "altFt": 400,
+          "speedKt": 270
+        },
+        {
+          "lat": 37.815,
+          "lon": -122.395,
+          "altFt": 900,
+          "speedKt": 250
+        },
+        {
+          "lat": 37.838,
+          "lon": -122.4,
+          "altFt": 2200,
+          "speedKt": 220
+        },
+        {
+          "lat": 37.842,
+          "lon": -122.47,
+          "altFt": 2400,
+          "speedKt": 220
+        },
+        {
+          "lat": 37.83,
+          "lon": -122.515,
+          "altFt": 2000,
+          "speedKt": 230
+        }
       ]
     },
     {
@@ -65,13 +180,48 @@
       "color": "#cfe8ff",
       "loop": false,
       "waypoints": [
-        { "lat": 37.7400, "lon": -122.7800, "altFt": 7000, "speedKt": 260 },
-        { "lat": 37.7250, "lon": -122.6400, "altFt": 5200, "speedKt": 240 },
-        { "lat": 37.7050, "lon": -122.5300, "altFt": 3800, "speedKt": 220 },
-        { "lat": 37.6760, "lon": -122.4550, "altFt": 2400, "speedKt": 190 },
-        { "lat": 37.6450, "lon": -122.4080, "altFt": 1200, "speedKt": 160 },
-        { "lat": 37.6240, "lon": -122.3860, "altFt": 450, "speedKt": 145 },
-        { "lat": 37.6135, "lon": -122.3740, "altFt": 60, "speedKt": 135 }
+        {
+          "lat": 37.74,
+          "lon": -122.78,
+          "altFt": 7000,
+          "speedKt": 260
+        },
+        {
+          "lat": 37.725,
+          "lon": -122.64,
+          "altFt": 5200,
+          "speedKt": 240
+        },
+        {
+          "lat": 37.705,
+          "lon": -122.53,
+          "altFt": 3800,
+          "speedKt": 220
+        },
+        {
+          "lat": 37.676,
+          "lon": -122.455,
+          "altFt": 2400,
+          "speedKt": 190
+        },
+        {
+          "lat": 37.645,
+          "lon": -122.408,
+          "altFt": 1200,
+          "speedKt": 160
+        },
+        {
+          "lat": 37.624,
+          "lon": -122.386,
+          "altFt": 450,
+          "speedKt": 145
+        },
+        {
+          "lat": 37.6135,
+          "lon": -122.374,
+          "altFt": 60,
+          "speedKt": 135
+        }
       ]
     },
     {
@@ -82,12 +232,84 @@
       "color": "#b4ffb4",
       "loop": true,
       "waypoints": [
-        { "lat": 37.8060, "lon": -122.4680, "altFt": 600, "speedKt": 60 },
-        { "lat": 37.8110, "lon": -122.4600, "altFt": 650, "speedKt": 55 },
-        { "lat": 37.8090, "lon": -122.4500, "altFt": 600, "speedKt": 60 },
-        { "lat": 37.8030, "lon": -122.4540, "altFt": 550, "speedKt": 55 },
-        { "lat": 37.8020, "lon": -122.4640, "altFt": 580, "speedKt": 55 }
+        {
+          "lat": 37.806,
+          "lon": -122.468,
+          "altFt": 600,
+          "speedKt": 60
+        },
+        {
+          "lat": 37.811,
+          "lon": -122.46,
+          "altFt": 650,
+          "speedKt": 55
+        },
+        {
+          "lat": 37.809,
+          "lon": -122.45,
+          "altFt": 600,
+          "speedKt": 60
+        },
+        {
+          "lat": 37.803,
+          "lon": -122.454,
+          "altFt": 550,
+          "speedKt": 55
+        },
+        {
+          "lat": 37.802,
+          "lon": -122.464,
+          "altFt": 580,
+          "speedKt": 55
+        }
       ]
+    }
+  ],
+  "cameras": [
+    {
+      "id": "crissy-tripod",
+      "title": "Crissy Field",
+      "type": "ground",
+      "target": "angel1",
+      "lat": 37.8046,
+      "lon": -122.466,
+      "heightM": 2
+    },
+    {
+      "id": "alcatraz-tripod",
+      "title": "Alcatraz",
+      "type": "ground",
+      "target": "patriot-lead",
+      "lat": 37.827,
+      "lon": -122.4229,
+      "heightM": 12
+    },
+    {
+      "id": "marin-tripod",
+      "title": "Marin Headlands",
+      "type": "ground",
+      "target": "angel2",
+      "lat": 37.8276,
+      "lon": -122.4996,
+      "heightM": 4,
+      "frameFraction": 0.3
+    },
+    {
+      "id": "angel-chase",
+      "title": "Angel 1 chase",
+      "type": "chase",
+      "target": "angel1",
+      "distanceM": 220,
+      "heightOffsetM": 40
+    },
+    {
+      "id": "heavy-orbit",
+      "title": "United orbit",
+      "type": "orbit",
+      "target": "united-heavy",
+      "radiusM": 600,
+      "heightOffsetM": 150,
+      "periodS": 60
     }
   ]
 }

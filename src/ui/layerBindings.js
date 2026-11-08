@@ -34,6 +34,7 @@ export class LayerBindings {
     this._dataManager = null;
     this._directionsShellModule = null;
     this._weatherShellModules = [];
+    this._virtualCamerasModule = null;
     this._cctvRequestFocusHandler = null;
     this._removeCctvRequestFocusListener = null;
     this._worldRequestFocusHandler = null;
@@ -118,6 +119,22 @@ export class LayerBindings {
       warmFn: (cells) => this.services.warmGroundFloor(cells),
       showToast: (message) => this._showToast(message),
     });
+  }
+
+  /** Virtual cameras claim the view through the same navigation authority. */
+  _connectVirtualCameras() {
+    this._virtualCamerasModule?.attachShellServices?.(null);
+    this._virtualCamerasModule = null;
+    const layer = this._dataManager?.layers?.get('virtual-cameras')?.module;
+    if (typeof layer?.attachShellServices !== 'function') return;
+    layer.attachShellServices({
+      runNavigation: (navigate) =>
+        this.runImmediateNavigation('target', navigate),
+      subscribeCameraHandoff: (listener) =>
+        this.subscribeCameraHandoff?.(listener),
+      isCockpitActive: () => Boolean(this.isCockpitActive?.()),
+    });
+    this._virtualCamerasModule = layer;
   }
 
   _connectWeatherCamera() {
@@ -248,6 +265,7 @@ export class LayerBindings {
     this._streetLevelControls?.connect();
     this._connectDirectionsCamera();
     this._connectWeatherCamera();
+    this._connectVirtualCameras();
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) =>
         this._persistAwarenessSelection(event, false);
@@ -300,5 +318,6 @@ export class LayerBindings {
     this._directionsShellModule = null;
     this._dataManager = null;
     this._connectWeatherCamera();
+    this._connectVirtualCameras();
   }
 }

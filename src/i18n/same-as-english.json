@@ -39,6 +39,7 @@
     "▲ {frp} MW"
   ],
   "de": [
+    "Auto",
     "Simulation",
     "+{value} m",
     "1090 MHz",
@@ -217,6 +218,7 @@
     "▲ {frp} MW"
   ],
   "es": [
+    "Auto",
     "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
@@ -357,6 +359,7 @@
     "iNaturalist"
   ],
   "fr": [
+    "Auto",
     "Simulation",
     "+{value} m",
     "1090 MHz",
@@ -553,6 +556,7 @@
     "▲ {frp} MW"
   ],
   "it": [
+    "Auto",
     "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
@@ -790,6 +794,7 @@
     "▲ {frp} MW"
   ],
   "pt": [
+    "Auto",
     "+{value} m",
     "1090 MHz",
     "978 MHz UAT",

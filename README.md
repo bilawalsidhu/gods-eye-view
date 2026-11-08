@@ -76,6 +76,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🔍 Keyless search:** Type decimal coordinates, a two-dimensional WGS84 `geo:` URI (for example, `geo:39.7392,-104.9903`), or a bundled city or landmark to fly there with no geocoder request; other names use Google when configured, then Photon and Nominatim.
 - **📦 Shareable scenes:** Import, preview and share Director scenes as files or bundles, with camera anchors, authored moves and data packs.
 - **🛩 Simulation:** Fly authored aircraft scenarios over the globe: waypoints in, smooth 3D motion, trails and a playback clock out. See [docs/SIMULATION.md](docs/SIMULATION.md).
+- **🎥 Virtual cameras:** Tripods on the ground that track an aircraft and zoom on their own, plus chase and orbit cameras, from the scenario file or placed on the spot.
 - **🌊 Nepal flood scene:** Replay the Bhote Koshi flood: flood path, witness sources and before-and-after imagery (bundled data is non-commercial; see [DATA_SOURCES.md](DATA_SOURCES.md)).
 
 ---

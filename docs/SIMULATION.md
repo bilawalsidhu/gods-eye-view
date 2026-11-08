@@ -63,6 +63,39 @@ Limits: 64 aircraft, 512 waypoints each, speeds 5–1200 m/s, altitudes
 −500 to 30 000 m. A file that breaks a rule is refused whole and the row says
 why.
 
+## Virtual cameras
+
+The **Virtual Cameras** layer (Movement group, next to Simulation) lists the
+cameras a scenario declares plus any you place during the session. Picking one
+claims the view and aims it at the camera's target every frame; a drag or
+scroll on the globe, Cockpit, or picking **Free** hands the view back. Three
+types:
+
+| Type | What it does | Fields (defaults) |
+| --- | --- | --- |
+| `ground` | A tripod at a fixed place that turns to follow the target and zooms so the target keeps a share of the frame. | `lat`, `lon`, `heightM` (2, above the ground; `altitudeReference: "ellipsoid"` for an absolute height), `frameFraction` (0.22), `fovDeg` (auto), `smoothingS` (0.25) |
+| `chase` | Rides behind the target. | `distanceM` (250), `heightOffsetM` (60), `lateralM` (0, right of track), `fovDeg` (50), `smoothingS` (0.6) |
+| `orbit` | Circles the target with the scenario clock. | `radiusM` (400), `heightOffsetM` (120), `periodS` (40), `phaseDeg` (0), `fovDeg` (45), `smoothingS` (0.4) |
+
+```json
+"cameras": [
+  { "id": "crissy", "title": "Crissy Field", "type": "ground",
+    "target": "lead", "lat": 37.8046, "lon": -122.466, "heightM": 2 },
+  { "id": "chase", "title": "Lead chase", "type": "chase", "target": "lead" }
+]
+```
+
+Every camera has an `id`, an optional `title` and an optional `target`
+(an aircraft id; without one the camera follows the first aircraft). The row's
+**Target** switch overrides the target for whichever camera is active, and
+**Target size in frame** sets how tightly tripods zoom. **Place a tripod here**
+adds a session camera at the current viewer position (absolute height) aimed
+at the current target; session cameras are not written back to the file yet.
+
+Tripod ground height comes from the app's cached ground floor (the 3D tiles or
+terrain under the point); until that cell is warm the tripod stands on the
+EGM96 sea-level datum instead and moves up once the floor resolves.
+
 ## How motion works
 
 - A leg from one waypoint to the next takes its length divided by the mean of

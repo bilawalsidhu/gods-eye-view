@@ -26,6 +26,7 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'military',
       'local-adsb',
       'simulation',
+      'virtual-cameras',
       'ais-live-vessels',
       'traffic',
       'transit',
