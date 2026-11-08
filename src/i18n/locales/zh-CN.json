@@ -3119,5 +3119,8 @@
   "Switching map": "正在切换地图",
   "Opening imagery": "正在打开影像",
   "Street View is ready: press {open} to load it": "街景已就绪：按 {open} 加载",
-  "Street-level photos are hidden in the current view. Leave it first.": "当前视图隐藏了街景照片。请先退出该视图。"
+  "Street-level photos are hidden in the current view. Leave it first.": "当前视图隐藏了街景照片。请先退出该视图。",
+  "World time": "世界时间",
+  "Back to live": "返回实时",
+  "Live": "实时"
 }

@@ -124,7 +124,7 @@ export function createOrbitRendering({
     collection.show = missionOrbitPrimitiveVisible(launch.id);
     orbitFrameModelMatrix(
       satelliteTrack.gmstAtBake,
-      new Date(),
+      new Date(layerState.orbitNow()),
       collection.modelMatrix,
     );
     layerState._viewer.scene.primitives.add(collection);

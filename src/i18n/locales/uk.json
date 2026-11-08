@@ -3344,5 +3344,8 @@
   "Switching map": "Перемикання карти",
   "Opening imagery": "Відкриття знімків",
   "Street View is ready: press {open} to load it": "Перегляд вулиць готовий: натисніть {open}, щоб завантажити",
-  "Street-level photos are hidden in the current view. Leave it first.": "Вуличні знімки приховані в поточному режимі. Спершу вийдіть із нього."
+  "Street-level photos are hidden in the current view. Leave it first.": "Вуличні знімки приховані в поточному режимі. Спершу вийдіть із нього.",
+  "World time": "Світовий час",
+  "Back to live": "Повернутися до прямого ефіру",
+  "Live": "Зараз"
 }

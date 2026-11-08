@@ -3494,5 +3494,8 @@
   "Switching map": "جارٍ تبديل الخريطة",
   "Opening imagery": "جارٍ فتح الصور",
   "Street View is ready: press {open} to load it": "Street View جاهز: اضغط «{open}» لتحميله",
-  "Street-level photos are hidden in the current view. Leave it first.": "صور مستوى الشارع مخفية في العرض الحالي. اخرج منه أولًا."
+  "Street-level photos are hidden in the current view. Leave it first.": "صور مستوى الشارع مخفية في العرض الحالي. اخرج منه أولًا.",
+  "World time": "وقت العالم",
+  "Back to live": "العودة إلى البث المباشر",
+  "Live": "مباشر"
 }

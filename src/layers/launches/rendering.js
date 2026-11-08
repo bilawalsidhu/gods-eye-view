@@ -394,7 +394,7 @@ export function createRendering({
         orbitCurrent.latitude,
         orbitCurrent.altitude,
       );
-      const liveTime = new Date();
+      const liveTime = new Date(layerState.orbitNow());
       const liveTelemetry = { speedMps: null };
       layerState._satelliteTelemetry.set(launch.id, liveTelemetry);
       let liveFrameNumber = -1;
@@ -405,7 +405,7 @@ export function createRendering({
           layerState._viewer?.scene?.frameState?.frameNumber ?? -1;
         if (frameNumber !== -1 && frameNumber === liveFrameNumber) return;
         liveFrameNumber = frameNumber;
-        const nowMs = Date.now();
+        const nowMs = layerState.orbitNow();
         liveTime.setTime(nowMs);
         if (satelliteTrack) {
           const propagated =

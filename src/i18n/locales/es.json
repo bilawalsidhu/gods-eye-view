@@ -3269,5 +3269,8 @@
   "Switching map": "Cambiando de mapa",
   "Opening imagery": "Abriendo imágenes",
   "Street View is ready: press {open} to load it": "Street View está listo: pulsa {open} para cargarlo",
-  "Street-level photos are hidden in the current view. Leave it first.": "Las fotos a pie de calle están ocultas en la vista actual. Sal de ella primero."
+  "Street-level photos are hidden in the current view. Leave it first.": "Las fotos a pie de calle están ocultas en la vista actual. Sal de ella primero.",
+  "World time": "Hora mundial",
+  "Back to live": "Volver al directo",
+  "Live": "En directo"
 }
