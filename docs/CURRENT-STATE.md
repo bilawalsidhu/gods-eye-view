@@ -154,7 +154,7 @@ implementations.
 ## Navara globe engine — November 5, 2026
 
 Navara, an experimental three.js/WASM globe (`@navaramap/three` 0.2.1), runs
-next to Cesium. It is picked under Display → Globe Engine or with
+next to Cesium. It is picked under VISUAL PRESETS → Globe Engine or with
 `?engine=navara`; Cesium stays the default. Switching is live: the page keeps
 one application, and only the globe-bound parts move to the next engine.
 
@@ -183,10 +183,7 @@ one application, and only the globe-bound parts move to the next engine.
   `node scripts/qa-contract-suite.mjs <origin>` runs them in headless Chrome
   on the real Cesium and Navara of a keyless dev server, with a real pointer
   and real canvases; checks of state the app drives itself (contact sonar)
-  are skipped and named. On November 7, 2026, with the imagery checks,
-  Cesium passed 68 of 68 and Navara 71 of 71 (the camera-events check now
-  and then misses its moveEnd on a busy machine on either engine and passes
-  when run again). `movers` and `lines` are required of every engine: Cesium
+  are skipped and named. `movers` and `lines` are required of every engine: Cesium
   draws them with billboards, points, models and polyline primitives
   (`src/globe/cesium/movers.js`, `lines.js`).
 - **Fills on the ground** (`engine.ground`) are required of every engine
@@ -211,13 +208,8 @@ one application, and only the globe-bound parts move to the next engine.
     segments (`corridors.js`): 10,000 corridors draw in about 12 ms still
     and 14 ms moving, where Cesium takes 23 ms (the chunks before took 151
     and 196 ms).
-  - Navara's vector layers were measured against that pass and lost
-    (`docs/GLOBE-PRIMITIVES.md`).
-  - On November 7, 2026, `scripts/qa-ground-suite.mjs` (the ground checks
-    with pixels, the corridor looks among them) passed 4 of 4 on both
-    engines, and `scripts/qa-ground-looks.mjs` drew the jam line and the
-    route on Cesium as the old materials did, with no pixel changed at four
-    moments of the pulse and the dashes.
+  - `scripts/qa-ground-suite.mjs` checks ground pixels and corridor looks
+    on both engines.
 - **Ground and input parity.** Space Missions draws its 500 m launch-pad
   zone with the radial ground material: faint fill, bright soft rim and
   emission, classified on terrain and tiles. Transit draws its age-banded
@@ -257,12 +249,8 @@ one application, and only the globe-bound parts move to the next engine.
   - Sea Marks and Ski Pistes use `engine.imagery` on engines without
     `maps.addOverlay`; Navara retains its native raster path for tile detail.
     Imported KML/KMZ ground images use imagery on both engines.
-  - On November 7, 2026, `scripts/qa-ground-suite.mjs --only=imagery:` (the
-    imagery checks with pixels) passed 2 of 2 on both engines, and
-    `scripts/qa-imagery-compare.mjs` found the heatmap and Recent Imagery
-    drawn as before on Cesium (no pixel changed where they draw) and on
-    Navara (no channel off by more than 1 of 255, but for the heatmap from
-    orbit, which Navara now mipmaps as Cesium does).
+  - `scripts/qa-ground-suite.mjs --only=imagery:` checks imagery pixels
+    on both engines. Navara mipmaps the heatmap at orbit scale.
 - **Engine coupling.** `node scripts/report-engine-coupling.mjs` counts the
   engine-specific code outside the engines: renderer lines per engine, Cesium
   imports, `viewer` mentions, engine-name checks, raw Navara reads, Navara
@@ -412,10 +400,8 @@ one application, and only the globe-bound parts move to the next engine.
   A per-view pool hands released ids back out
   (`src/globe/navara/movers/batchIds.js`); the long soak asserts both JS
   objects and native memory stay flat.
-- **Navara 0.2.1 workaround.** The first `layer.update({ show: false })` after
-  a vector layer is added is sometimes dropped, so a zone turned off right
-  after a switch stayed drawn. Polygon displays hide by deleting their layers
-  and rebuild them when shown (`src/layers/shared/render/navaraPolygons.js`).
+- **Ground visibility.** Polygon displays show and hide engine ground sets
+  through the screen pass on Navara.
 
 ## Wildlife Sightings — iNaturalist and Acartia
 
@@ -2787,7 +2773,7 @@ same hues, from a bright red edge through orange and gold to a pale
 white-hot core. The edge starts more than half opaque, so regions far below
 the hottest ones still read over forest and savanna imagery. Nothing is painted where
 nothing burns (`src/data/firmsHeatRaster.js`). It is one full-globe imagery
-tile on the active imagery host (`src/layers/firms/heatImagery.js`), rebuilt
+tile on the active imagery host (`src/layers/firms/render/display.js`), rebuilt
 on each data refresh or filter change (the first far-band paint at once,
 later ones 150 ms after the last change). Heatmap and markers are both kept
 built at every zoom and cross-fade by camera height between 3,600 and

@@ -78,7 +78,7 @@ const nearFar = (value) =>
  * A model set's colour blend as Cesium Model options. Without colorBlend the
  * instance colour only sets the alpha (MIX by 0), as on Navara.
  */
-export function modelBlend(colorBlend) {
+function modelBlend(colorBlend) {
   if (!colorBlend)
     return { colorBlendMode: Cesium.ColorBlendMode.MIX, colorBlendAmount: 0 };
   return colorBlend.mode === 'replace'

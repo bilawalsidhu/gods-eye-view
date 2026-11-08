@@ -92,13 +92,12 @@ export const ENGINE_COUPLING_METRICS = Object.freeze([
   },
   {
     id: 'engineSniffCalls',
-    label: 'isGlobeEngine / engineFromViewer calls outside src/globe',
+    label: 'isGlobeEngine calls outside src/globe',
     measure: (files) =>
       files
         .filter(({ file }) => !inGlobe(file))
         .reduce(
-          (sum, { text }) =>
-            sum + countMatches(text, /\b(?:isGlobeEngine|engineFromViewer)\(/),
+          (sum, { text }) => sum + countMatches(text, /\bisGlobeEngine\(/),
           0,
         ),
   },

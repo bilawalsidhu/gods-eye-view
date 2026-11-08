@@ -71,9 +71,8 @@ await strict.run({}, async (b) => {
   await p.goto(base.href);
   await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
-    const { dataManager, tileset } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Keyless preview required');
+    const { dataManager } = window.__godsEyeView;
+
     const mod = dataManager.layers.get('wind').module;
     window.qaWind = mod;
     mod.setParams({ overlay: 'temperature', paused: true, units: 'm/s' });

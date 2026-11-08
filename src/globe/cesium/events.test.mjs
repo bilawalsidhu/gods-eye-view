@@ -23,7 +23,7 @@ test('a bridged event is a contract event that subscribes to Cesium lazily', () 
 
 test('a bridged event maps Cesium arguments and keeps contract semantics', () => {
   const source = new Cesium.Event();
-  const { event } = bridgeEvent(source, (scene, time) => [time * 2]);
+  const { event } = bridgeEvent(source, { unary: (scene, time) => time * 2 });
   const seen = [];
   const listener = (value) => seen.push(value);
   event.addEventListener(listener);
@@ -84,7 +84,7 @@ test('a bridge detaches through the remover the source returned', () => {
 
 test('a unary bridge raises one mapped value', () => {
   const source = new Cesium.Event();
-  const { event, detach } = bridgeEvent(source, null, {
+  const { event, detach } = bridgeEvent(source, {
     unary: (scene, time) => time * 2,
   });
   const seen = [];

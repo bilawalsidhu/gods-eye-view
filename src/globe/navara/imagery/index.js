@@ -107,7 +107,7 @@ const unwrapped = ({ west, south, east, north }) => [
  *   replace); `load` (a tile or an image URL to a decoded image) and
  *   `createCanvas` are test seams.
  * @returns {{ imagery: import('../../contract.js').GlobeImagery,
- *   diagnostics: () => object, destroy: () => void }}
+ *   destroy: () => void }}
  */
 export function createNavaraImagery(
   view,
@@ -323,12 +323,6 @@ export function createNavaraImagery(
         detail?.held.texture.dispose();
         detail = null;
       },
-      diagnostics: () => ({
-        kind: 'image',
-        loaded: drawn !== null,
-        staging: staging !== null,
-        detail: detail !== null,
-      }),
     };
   }
 
@@ -457,17 +451,6 @@ export function createNavaraImagery(
         queue.destroy();
         disposeAtlas();
       },
-      diagnostics: () => ({
-        ...queue.diagnostics(),
-        atlas: atlas
-          ? {
-              level: atlas.plan.z,
-              tiles: atlas.plan.width * atlas.plan.height,
-              loaded: atlas.loaded,
-              failed: atlas.failed,
-            }
-          : null,
-      }),
     };
   }
 
@@ -551,11 +534,6 @@ export function createNavaraImagery(
         tiler?.dispose();
         tiler = null;
       },
-      diagnostics: () => ({
-        kind: 'tiles',
-        ...(tiler?.diagnostics() ?? {}),
-        staging: staged ? staged.tiler.diagnostics() : null,
-      }),
     };
   }
 
@@ -659,16 +637,6 @@ export function createNavaraImagery(
 
   return {
     imagery: registry.imagery,
-    /** Not contract: what each layer holds (QA reads it). */
-    diagnostics: () =>
-      Object.fromEntries(
-        registry
-          .ordered()
-          .map((state) => [
-            state.options.id,
-            entries.get(state)?.drawing.diagnostics(),
-          ]),
-      ),
     destroy() {
       offCamera();
       registry.destroyAll();

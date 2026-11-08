@@ -22,19 +22,11 @@ async function declared(key, path, className) {
   };
 }
 const specs = [
-  await declared(
-    'gevImagery',
-    '../../../globe/navara/imagery/pass.js',
-    'ImageryEffectDesc',
-  ),
-  await declared(
-    'gevGround',
-    '../../../globe/navara/ground/pass.js',
-    'GroundEffectDesc',
-  ),
+  await declared('gevImagery', './imagery/pass.js', 'ImageryEffectDesc'),
+  await declared('gevGround', './ground/pass.js', 'GroundEffectDesc'),
   await declared(
     'gevPreSharpenOverlay',
-    '../../../globe/navara/overlay.js',
+    './overlay.js',
     'GevPreSharpenOverlayEffectDesc',
   ),
 ];

@@ -9,6 +9,7 @@
 // outside the preview and the free tile cache).
 //
 //   node scripts/qa-navara-geo-import.mjs http://127.0.0.1:<PORT>/
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -162,13 +163,7 @@ await strict.run(
       );
     };
     await ready('navara');
-    assert.equal(
-      await page.evaluate(() =>
-        Boolean(window.__godsEyeView.tileset || window.__GOOGLE_MAPS_API_KEY__),
-      ),
-      false,
-      'keyless preview required',
-    );
+    await assertKeylessPreview(page);
     const state = () =>
       page.evaluate(() => ({
         files: window.__gevGeoImport.list(),

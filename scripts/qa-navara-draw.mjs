@@ -8,6 +8,7 @@
 // the shapes drawn on either engine stay on the board and draw on both.
 //
 //   node scripts/qa-navara-draw.mjs http://127.0.0.1:<PORT>/
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import sharp from 'sharp';
@@ -58,13 +59,7 @@ await strict.run(
       );
     };
     await ready('navara');
-    assert.equal(
-      await page.evaluate(() =>
-        Boolean(window.__godsEyeView.tileset || window.__GOOGLE_MAPS_API_KEY__),
-      ),
-      false,
-      'keyless preview required',
-    );
+    await assertKeylessPreview(page);
     const tool = () =>
       page.evaluate(() => {
         const draw = window.__gevDrawTool;

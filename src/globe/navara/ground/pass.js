@@ -381,14 +381,7 @@ export const textureBytes = (state) =>
 class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
   static key = GROUND_EFFECT_KEY;
   // Navara takes the first anchor that exists: the latest first.
-  static insertAfter = [
-    'gevFirmsGround',
-    'gevEarthquakeGround',
-    'gevObservedWeather',
-    'gevNepalEvent',
-    'gevImagery',
-    'toneMapping',
-  ];
+  static insertAfter = ['gevImagery', 'toneMapping'];
   static insertBefore = [
     'gevPreSharpenOverlay',
     'gevSharpen',

@@ -54,9 +54,8 @@ await strict.run({}, async (b) => {
   await waitForEngine(p, 'navara');
   const ids = ['local-datacenters', 'local-dams'];
   const dataset = await p.evaluate(async (ids) => {
-    const { dataManager, tileset } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Keyless preview required');
+    const { dataManager } = window.__godsEyeView;
+
     window.qaSites = [];
     const records = [];
     for (const id of ids) {

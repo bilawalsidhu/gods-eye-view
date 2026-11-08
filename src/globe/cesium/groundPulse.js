@@ -70,7 +70,7 @@ const toColor = ([red, green, blue, alpha]) =>
  * @param {Cesium.Matrix4} [result]
  * @returns {Cesium.Matrix4}
  */
-export function discFollowMatrix(from, to, result = new Cesium.Matrix4()) {
+function discFollowMatrix(from, to, result = new Cesium.Matrix4()) {
   const a = Cesium.Cartesian3.normalize(from, new Cesium.Cartesian3());
   const b = Cesium.Cartesian3.normalize(to, new Cesium.Cartesian3());
   const axis = Cesium.Cartesian3.cross(a, b, new Cesium.Cartesian3());

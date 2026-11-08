@@ -100,9 +100,58 @@ const hooks = {
   retainTileGeometry() {},
 };
 
+// Primitive ports for tests of engine orchestration.
+const STUB_MOVERS = Object.freeze({
+  createSet() {
+    throw new Error("Navara movers need the view's three runtime (movers/)");
+  },
+  list: () => [],
+});
+const STUB_LINES = Object.freeze({
+  createSegments() {
+    throw new Error("Navara lines need the view's three runtime (lines/)");
+  },
+  createLine() {
+    throw new Error("Navara lines need the view's three runtime (lines/)");
+  },
+  list: () => [],
+});
+const STUB_MESHES = Object.freeze({
+  createMesh() {
+    throw new Error('Navara meshes need the view runtime');
+  },
+  list: () => [],
+});
+const STUB_GROUND = Object.freeze({
+  createPulseField() {
+    throw new Error('Navara ground needs the view runtime');
+  },
+  createSet() {
+    throw new Error("Navara ground needs the view's three runtime (ground/)");
+  },
+  list: () => [],
+});
+const STUB_IMAGERY = Object.freeze({
+  createLayer() {
+    throw new Error("Navara imagery needs the view's three runtime (imagery/)");
+  },
+  list: () => [],
+  setSplitPosition() {},
+  splitPosition: () => 0.5,
+  surface: () => 'globe',
+});
+
+const ports = {
+  movers: { movers: STUB_MOVERS, destroy() {} },
+  lines: { lines: STUB_LINES, destroy() {} },
+  ground: { ground: STUB_GROUND, destroy() {} },
+  imagery: () => ({ imagery: STUB_IMAGERY, destroy() {} }),
+  meshes: () => ({ meshes: STUB_MESHES, destroy() {} }),
+};
+
 const setup = () => {
   const view = fakeView();
-  const engine = createNavaraEngine(view, { hooks });
+  const engine = createNavaraEngine(view, { ...ports, hooks });
   return { view, engine };
 };
 
@@ -135,7 +184,7 @@ test('the engine clock is the app clock, latched on the view preUpdate before fr
   let wall = 2_000_000;
   const appClock = createAppClock({ now: () => wall });
   const view = fakeView();
-  const engine = createNavaraEngine(view, { hooks, appClock });
+  const engine = createNavaraEngine(view, { ...ports, hooks, appClock });
   assert.equal(engine.clock.now(), 2_000_000);
   const seen = [];
   for (const name of ['preUpdate', 'preRender', 'postRender'])
@@ -177,6 +226,7 @@ test('setSharpen hands changed states to the sharpen port and draws a frame', ()
   const shown = [];
   let destroyed = 0;
   const engine = createNavaraEngine(view, {
+    ...ports,
     hooks,
     sharpen: {
       set: (state) => shown.push(state),
@@ -225,7 +275,7 @@ function stylesPort() {
 test('setStyle hands changed style states to the styles port and draws a frame', () => {
   const view = fakeView();
   const port = stylesPort();
-  const engine = createNavaraEngine(view, { hooks, styles: port });
+  const engine = createNavaraEngine(view, { ...ports, hooks, styles: port });
   assertGlobeEngine(engine);
   assert.equal(engineCapabilities(engine).visualStyles, true);
   assert.deepEqual(engine.render.visualStyles, ['retro', 'noir']);
@@ -267,6 +317,7 @@ test('setBloom hands changed states to the bloom port and draws a frame', () => 
   const shown = [];
   let destroyed = 0;
   const engine = createNavaraEngine(view, {
+    ...ports,
     hooks,
     bloom: { set: (state) => shown.push(state), destroy: () => destroyed++ },
   });
@@ -294,6 +345,7 @@ test('setCloudCover hands changed covers to the clouds port and draws a frame', 
   const shown = [];
   let destroyed = 0;
   const engine = createNavaraEngine(view, {
+    ...ports,
     hooks,
     clouds: { set: (state) => shown.push(state), destroy: () => destroyed++ },
   });
@@ -317,6 +369,7 @@ test('setContactSonar hands changes to the sonar port, asking a frame only outsi
   const shown = [];
   let destroyed = 0;
   const engine = createNavaraEngine(view, {
+    ...ports,
     hooks,
     sonar: { set: (state) => shown.push(state), destroy: () => destroyed++ },
   });
@@ -590,11 +643,4 @@ test('the floor stands aside while the camera inputs are suspended (the cockpit 
   view.emit('preRender', 2);
   near(heightOf(engine), 130, 1e-6, 'lifted once the inputs are back');
   engine.destroy();
-});
-
-test('the ground floor reports its own ground and margin (diagnostics, not contract)', () => {
-  const { engine } = setup();
-  assert.equal(typeof engine.groundFloor.ground, 'function');
-  assert.equal(engine.groundFloor.margin, 30);
-  assert.equal(engine.groundFloor.ground(), undefined, 'nothing sampled yet');
 });

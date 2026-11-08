@@ -1,3 +1,4 @@
+import { localPreview, waitForEngine } from './qa-strict-harness.mjs';
 // An active voice session survives engine switches. With a fake microphone
 // and a fake Realtime transport (no model is reached: /api/openai, /api/realtime
 // and api.openai.com are blocked or answered in the page), this gate starts
@@ -17,16 +18,14 @@ import {
   idDifference,
   launch,
   openSessionPage,
-  previewBase,
   readSession,
   readVoiceEvidence,
   requestEngine,
   sessionAddress,
   switchEngine,
-  waitReady,
 } from './qa/appSessionHarness.mjs';
 
-const base = previewBase(process.argv[2]);
+const base = localPreview(process.argv[2]);
 
 // Play one server function call on the fake data channel and wait for the
 // client's function_call_output.
@@ -117,7 +116,7 @@ try {
     browser,
     sessionAddress(base, { engine: 'cesium' }),
   );
-  await waitReady(page, 'cesium');
+  await waitForEngine(page, 'cesium', { timeout: 90_000 });
   await page.evaluate(async () => {
     const close = document.querySelector('[data-key-setup-close]');
     if (close?.offsetParent) close.click();
@@ -184,7 +183,7 @@ try {
     { layerId: 'earthquakes', enabled: true },
     { beforeCall: 'switch-cesium' },
   );
-  await waitReady(page, 'cesium');
+  await waitForEngine(page, 'cesium', { timeout: 90_000 });
   assert.equal(midSwitch.ok, true, JSON.stringify(midSwitch));
   assert.equal(midSwitch.engine, 'cesium', JSON.stringify(midSwitch));
   results.push('PASS a call made during the switch ran on the incoming engine');
@@ -204,7 +203,7 @@ try {
     { layerId: 'earthquakes', enabled: false },
     { beforeCall: 'switch-navara' },
   );
-  await waitReady(page, 'navara');
+  await waitForEngine(page, 'navara', { timeout: 90_000 });
   await page.evaluate(() => {
     window.__godsEyeView.voiceCommands.runner.switchWaitMs = 15_000;
   });

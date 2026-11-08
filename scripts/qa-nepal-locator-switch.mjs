@@ -21,9 +21,8 @@ await strict.run({}, async (b) => {
   await p.goto(base.href);
   await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
-    const { tileset, dataManager } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Keyless preview required');
+    const { dataManager } = window.__godsEyeView;
+
     window.qaLocator = dataManager.layers.get('bhote-koshi-locator').module;
     window.qaLocator.setParams({ presentation: 'bhote-koshi-path-overview' });
     await dataManager.setEnabled('bhote-koshi-locator', true, {

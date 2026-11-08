@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
 import { APPLICATION_LAYER_DIRECTORY } from '../src/app/layers/directory.js';
 import {
+  assertPreviewPortAvailable,
   createStrict,
   ENGINES,
   localPreview,
@@ -147,6 +148,7 @@ if (flag('serve')) {
     ? resolve(String(flag('scratch')))
     : tmpdir();
   mkdirSync(scratchRoot, { recursive: true });
+  await assertPreviewPortAvailable(base.href);
   const scratch = mkdtempSync(join(scratchRoot, 'gev-acceptance-build-'));
   const worktree = join(scratch, 'checkout');
   const dist = join(scratch, 'dist');

@@ -249,7 +249,6 @@ export class IntelHUD {
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
     this.engine = engine;
-    this.viewer = viewer;
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
@@ -1236,7 +1235,6 @@ export class IntelHUD {
     this._removeCameraMoveStart = null;
     this._summaryRequest?.abort();
     this.engine = engine ?? null;
-    this.viewer = viewer;
     if (!this.engine) return;
     this._removeCameraMoveStart =
       this.engine.camera.moveStart?.addEventListener(this._onCameraMoveStart);

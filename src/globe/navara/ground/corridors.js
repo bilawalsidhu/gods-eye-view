@@ -378,7 +378,7 @@ export function tileCorridors(
  * `reachOf(item)` is the item's [half width in pixels + 0.5, half width in
  * metres]; `reference` the set's least pixel reach.
  */
-export function packTile(tile, pieces, items, frame, reachOf, reference) {
+export function packTile(tile, pieces, frame, reference) {
   const { project } = frame;
   // Its region in the plane, from its edges.
   let x0 = Infinity;

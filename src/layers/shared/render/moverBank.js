@@ -112,17 +112,3 @@ export function createMoverBank(engine, { options, write, onCommit }) {
   };
   return bank;
 }
-
-/** Plain colour copy (the stored value a handle's colour getter returns). */
-export class StoredColor {
-  constructor(color) {
-    this.red = color?.red ?? 1;
-    this.green = color?.green ?? 1;
-    this.blue = color?.blue ?? 1;
-    this.alpha = color?.alpha ?? 1;
-  }
-
-  withAlpha(alpha) {
-    return new StoredColor({ ...this, alpha });
-  }
-}

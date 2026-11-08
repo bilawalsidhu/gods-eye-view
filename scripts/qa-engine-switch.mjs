@@ -1,3 +1,4 @@
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { createStrict, localPreview } from './qa-strict-harness.mjs';
@@ -69,10 +70,9 @@ await strict.run({}, async (browser) => {
       { timeout: 90000 },
       kind,
     );
+    await assertKeylessPreview(page);
     await page.evaluate(async () => {
       await window.__godsEyeView.styleManager.initialRestorePromise;
-      if (window.__GOOGLE_MAPS_API_KEY__ || window.__godsEyeView.tileset)
-        throw new Error('Keyless preview required');
     });
     assert.equal(await page.$eval('#globe-engine', (el) => el.value), kind);
   }

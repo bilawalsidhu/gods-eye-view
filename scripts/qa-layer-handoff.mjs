@@ -1,3 +1,4 @@
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { createStrict, localPreview } from './qa-strict-harness.mjs';
 
@@ -125,10 +126,10 @@ await strict.run({}, async (browser) => {
   await page.waitForFunction(
     () => window.__godsEyeView.styleManager.getCockpitState().active,
   );
+  await assertKeylessPreview(page);
   await page.evaluate(() => {
-    const { dataManager, styleManager, tileset } = window.__godsEyeView;
-    if (window.__GOOGLE_MAPS_API_KEY__ || tileset)
-      throw Error('Keyless preview required');
+    const { dataManager, styleManager } = window.__godsEyeView;
+
     styleManager.cockpitView.setVisionMode('thermal');
     const entry = dataManager.layers.get(window.__qaAircraft.layerId);
     window.__handoff = {

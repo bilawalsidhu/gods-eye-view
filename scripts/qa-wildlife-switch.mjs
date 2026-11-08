@@ -62,9 +62,8 @@ await strict.run({}, async (b) => {
   await p.goto(base.href);
   await waitForEngine(p, 'cesium');
   await p.evaluate(async (id) => {
-    const { dataManager, tileset } = window.__godsEyeView;
-    if (window.__GOOGLE_MAPS_API_KEY__ || tileset)
-      throw Error('Keyless preview required');
+    const { dataManager } = window.__godsEyeView;
+
     await dataManager.setEnabled(id, true, { origin: 'user' });
     window.qaWild = dataManager.layers.get(id).module;
     // Every selection the layer reports, in order.

@@ -34,7 +34,7 @@ import { registerEntityContext, selectEntityContext } from './contextStore.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
 import { pickRegistryFor } from './pickRegistry.js';
-const wireEngine = {};
+const wireEngine = createFakeEngine({ width: 1600, height: 900 });
 const { registerPickOwner, unregisterPickOwner } = pickRegistryFor(wireEngine);
 import { applyVesselOverlayPolicy } from './vesselLabels.js';
 import { layerFeedState } from './manager.js';
@@ -42,12 +42,20 @@ import {
   presentSelectedVessel,
   subscribeSelectedVessel,
 } from '../hudReadouts.js';
-import { vesselViewerRenderer } from '../testSupport/vesselViewerRenderer.mjs';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createVesselsDisplay, vesselAtlasLayout } from '../layers/vessels/render/display.js';
 
-// The layer's state over the test's viewer, drawn by the Cesium-shaped test
-// renderer (its billboard collection, projection and trackedEntityChanged).
+function vesselDisplay(engine = createFakeEngine({ width: 1600, height: 900 })) {
+  const layout = vesselAtlasLayout();
+  const renderer = createVesselsDisplay(engine, {
+    drawAtlas: async () => ({ canvas: { width: layout.width, height: layout.height }, cells: layout.cells }),
+  });
+  renderer.fleet.attach({ show: true });
+  return renderer;
+}
+
 const _setVesselStateForTest = (options = {}) =>
-  setVesselStateForTest({ renderer: vesselViewerRenderer, ...options });
+  setVesselStateForTest({ renderer: () => options.enabled === false ? null : vesselDisplay(options.engine), ...options });
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42), null);
@@ -953,16 +961,17 @@ function installWireHarness(picked, stateOverrides = {}) {
   globalThis.document = {
     getElementById: () => null,
   };
-  // The test renderer draws in no scene; the harness viewer's
-  // trackedEntityChanged is its follow signal.
-  const followViewer = {
-    get trackedEntity() {
-      return viewer.trackedEntity;
-    },
-    trackedEntityChanged,
+  Object.defineProperty(wireEngine.camera, 'followChanged', { configurable: true, value: trackedEntityChanged });
+  wireEngine.camera.following = () => viewer.trackedEntity ?? null;
+  const pickedRecord = picked?.id && typeof picked.id === 'object' && Object.hasOwn(picked.id, 'mmsi') ? picked.id : null;
+  const renderer = () => {
+    const display = vesselDisplay(wireEngine);
+    if (pickedRecord) {
+      const handle = display.fleet.add({ id: pickedRecord, position: pickedRecord.position });
+      picked = { id: handle.pickId };
+    }
+    return display;
   };
-  const renderer = ({ billboardCollection }) =>
-    ({ ...vesselViewerRenderer({ viewer: followViewer, billboardCollection }), engine: wireEngine });
   _setVesselStateForTest({
     records: [record],
     selectedRecord: record,
@@ -1413,7 +1422,8 @@ test('buildSelectedVesselCard: full detail card with MMSI + position time', () =
 
 test('vessel host publication preserves the shipped grid winner and separation selector', () => {
   const publications = [];
-  const originalProjection = Cesium.SceneTransforms.worldToWindowCoordinates;
+  const engine = createFakeEngine({ width: 1600, height: 900 });
+  engine.projector.worldToWindow = (position) => position.screen;
   const makeCandidate = (mmsi, name, x, y, speed = 1) => makeRecord({
     mmsi,
     name,
@@ -1423,7 +1433,6 @@ test('vessel host publication preserves the shipped grid winner and separation s
   const low = makeCandidate('100', 'VESSEL', 20, 20, 1);
   const winner = makeCandidate('200', 'NAMED WINNER', 40, 30, 16);
   const separated = makeCandidate('300', 'SEPARATED', 400, 300, 3);
-  Cesium.SceneTransforms.worldToWindowCoordinates = (_scene, position) => position.screen;
   _setVesselOverlayHostForTest({
     setEntries(sourceId, entries, options) { publications.push({ sourceId, entries, options }); },
     setVisible() {},
@@ -1432,6 +1441,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
   _setVesselStateForTest({
     viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
     records: [low, winner, separated],
+    engine,
   });
   try {
     _updateVesselCardsForTest([low, winner, separated]);
@@ -1444,7 +1454,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
     assert.equal(publications[0].options.cohortLimit, 112);
     assert.equal(publications[0].options.collisionCapacity, 112);
   } finally {
-    Cesium.SceneTransforms.worldToWindowCoordinates = originalProjection;
+    engine.destroy();
     _setVesselStateForTest({ enabled: false });
     _setVesselOverlayHostForTest();
   }

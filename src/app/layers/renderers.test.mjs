@@ -11,7 +11,7 @@ import {
   rendererFor,
 } from './renderers.js';
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
-import { ENGINE_KINDS, engineCapabilities } from '../../globe/contract.js';
+import { ENGINE_KINDS, assertGlobeEngine } from '../../globe/contract.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 test('the manifest lists every directory layer, in its order', () => {
@@ -25,9 +25,9 @@ test('the manifest lists every directory layer, in its order', () => {
 });
 
 test('the primitives a display needs are the contract primitives every engine has', () => {
-  const capabilities = engineCapabilities(createFakeEngine());
-  for (const name of CONTRACT_PRIMITIVES)
-    assert.equal(capabilities[name], true, name);
+  const engine = createFakeEngine();
+  assertGlobeEngine(engine);
+  for (const name of CONTRACT_PRIMITIVES) assert.ok(engine[name], name);
   for (const [id, entry] of Object.entries(LAYER_MANIFEST))
     for (const name of entry.needs ?? [])
       assert.ok(CONTRACT_PRIMITIVES.includes(name), `${id} needs ${name}`);

@@ -8,8 +8,6 @@
 
 import { createCpuPicker } from '../cpuPicks.js';
 
-export { distanceToSegment } from '../cpuPicks.js';
-
 const CLICK_TIMEOUT_MS = 250;
 // A GPU answer this recent belongs to the click being delivered.
 const EARLY_ANSWER_MS = 100;

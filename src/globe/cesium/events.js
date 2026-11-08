@@ -8,20 +8,16 @@ import { createEngineEvent } from '../contract.js';
 /**
  * @param {{ addEventListener: (listener: Function) => () => void }} source A
  *   Cesium.Event (its addEventListener returns the remover the bridge uses).
- * @param {((...args: any[]) => any[]) | null} [mapArgs] Cesium arguments →
- *   contract arguments.
  * @param {{ unary?: (...args: any[]) => any }} [options] `unary` maps the
  *   Cesium arguments to the one contract argument without building an
  *   argument list (for per-frame events).
  * @returns {{ event: import('../contract.js').EngineEvent, detach: () => void }}
  */
-export function bridgeEvent(source, mapArgs, { unary } = {}) {
+export function bridgeEvent(source, { unary } = {}) {
   const event = createEngineEvent();
   const forward = unary
     ? (a, b, c) => event.raiseValue(unary(a, b, c))
-    : mapArgs
-      ? (...args) => event.raiseEvent(...mapArgs(...args))
-      : (...args) => event.raiseEvent(...args);
+    : (...args) => event.raiseEvent(...args);
   let removeForward = null;
   let detached = false;
   const sync = () => {

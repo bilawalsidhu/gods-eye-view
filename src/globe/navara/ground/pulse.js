@@ -85,13 +85,7 @@ const pulseEffect = defineGroundEffect({
   key: KEY,
   name: 'GevGroundPulses',
   fragmentShader,
-  insertAfter: [
-    'gevGround',
-    'gevObservedWeather',
-    'gevNepalEvent',
-    'gevImagery',
-    'toneMapping',
-  ],
+  insertAfter: ['gevGround', 'gevImagery', 'toneMapping'],
   insertBefore: [
     'gevPreSharpenOverlay',
     'gevSharpen',

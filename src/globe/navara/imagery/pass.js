@@ -21,7 +21,7 @@ import { DataTexture, Matrix4, RGBADepthPacking, Uniform } from 'three';
 import { withFrameUpdates, withPassDisposal } from '../frameDescriptor.js';
 import { MAX_IMAGERY_SLOTS } from './index.js';
 
-export const IMAGERY_EFFECT_KEY = 'gevImagery';
+const IMAGERY_EFFECT_KEY = 'gevImagery';
 
 const SLOTS = Array.from({ length: MAX_IMAGERY_SLOTS }, (_, index) => index);
 
@@ -179,9 +179,6 @@ class ImageryEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
   // Navara takes the first anchor that exists: right after tone mapping.
   static insertAfter = ['toneMapping'];
   static insertBefore = [
-    'gevNepalEvent',
-    'gevObservedWeather',
-    'gevEarthquakeGround',
     'gevGroundPulses',
     'gevGround',
     'gevPreSharpenOverlay',

@@ -84,8 +84,8 @@ test('surfaceRay runs down the ellipsoid normal from 12 km', () => {
     cartesian3.create(),
   );
   near(cartographic.fromCartesian(below, WGS84).height, 0, 1e-6, 'ground');
-  assert.equal(heightAlongRay(ray, 11950), 50);
-  assert.equal(heightAlongRay(ray, null), undefined);
+  assert.equal(heightAlongRay(11950), 50);
+  assert.equal(heightAlongRay(null), undefined);
 });
 
 test('sampleHeight hits the top of the loaded tiles and keeps tile geometry', () => {

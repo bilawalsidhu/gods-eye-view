@@ -30,16 +30,12 @@ const globeEngine = (file) => /^src\/globe\/(?:cesium|navara)\//.test(file);
 const cesiumPackage = /^(?:cesium(?:\/|$)|@cesium\/)/;
 // Navara renders through three.js and its postprocessing peer.
 const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
-// Navara renderers outside a layer's render/ directory: like those, they
-// reach the app only through the Navara mode's import().
-const NAVARA_SCENE_RENDERERS = new Set();
 // The modules that load Navara renderers, each through import().
 const NAVARA_RENDERER_LOADERS = new Set([
   'src/app/navaraMode.js',
   'src/app/layers/renderers.js',
 ]);
-const navaraLayerRenderer = (file) =>
-  /\/render\/navara[^/]*\.js$/.test(file) || NAVARA_SCENE_RENDERERS.has(file);
+const navaraLayerRenderer = (file) => /\/render\/navara[^/]*\.js$/.test(file);
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(

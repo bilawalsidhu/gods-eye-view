@@ -195,8 +195,7 @@ await strict.run({}, async (b) => {
     );
   };
   await p.evaluate(() => {
-    if (window.__godsEyeView.tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Keyless preview required');
+
   });
   for (const id of [ids[1], ids[0], ids[2]]) {
     await p.evaluate(

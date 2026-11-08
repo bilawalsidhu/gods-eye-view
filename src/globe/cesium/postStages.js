@@ -52,7 +52,7 @@ const BLOOM_UNIFORMS = [
  * Samples a 3x3 neighborhood, computes box blur, then adds the
  * difference (center - blur) scaled by `amount` for edge enhancement.
  */
-export const SHARPEN_SHADER = /* glsl */ `
+const SHARPEN_SHADER = /* glsl */ `
   uniform sampler2D colorTexture;
   uniform vec2 colorTextureDimensions;
   uniform float amount;

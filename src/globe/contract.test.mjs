@@ -293,19 +293,14 @@ test('mergeSharpen keeps omitted fields and rejects bad values', () => {
     assert.throws(() => mergeSharpen(on, bad), TypeError);
 });
 
-test('movers and lines are required and reported as capabilities', () => {
+test('movers and lines are required', () => {
   const engine = createFakeEngine();
-  assert.equal(engineCapabilities(engine).movers, true);
-  assert.equal(engineCapabilities(engine).lines, true);
   const without = { ...engine };
   delete without.movers;
   delete without.lines;
   assert.throws(() => assertGlobeEngine(without), /\bmovers\b.*\blines\b/);
-  assert.equal(engineCapabilities(without).movers, false);
-  assert.equal(engineCapabilities(without).lines, false);
   const half = { ...engine, movers: { createSet: () => {} } };
   assert.throws(() => assertGlobeEngine(half), /movers\.list/);
-  assert.equal(engineCapabilities(half).movers, false);
   // The suite draws movers and lines on every engine.
   const names = createContractSuite(engine, {
     waitFrames: async () => {},
@@ -317,13 +312,11 @@ test('movers and lines are required and reported as capabilities', () => {
     );
 });
 
-test('ground is required and reported as a capability', () => {
+test('ground is required', () => {
   const engine = createFakeEngine();
-  assert.equal(engineCapabilities(engine).ground, true);
   const without = { ...engine };
   delete without.ground;
   assert.throws(() => assertGlobeEngine(without), /\bground\b/);
-  assert.equal(engineCapabilities(without).ground, false);
   const half = { ...engine, ground: { createSet: () => {} } };
   assert.throws(
     () => assertGlobeEngine(half),
@@ -331,13 +324,11 @@ test('ground is required and reported as a capability', () => {
   );
 });
 
-test('imagery is required and reported as a capability', () => {
+test('imagery is required', () => {
   const engine = createFakeEngine();
-  assert.equal(engineCapabilities(engine).imagery, true);
   const without = { ...engine };
   delete without.imagery;
   assert.throws(() => assertGlobeEngine(without), /\bimagery\b/);
-  assert.equal(engineCapabilities(without).imagery, false);
   const half = { ...engine, imagery: { createLayer: () => {} } };
   assert.throws(() => assertGlobeEngine(half), /imagery\.list/);
   const names = createContractSuite(engine, {
@@ -346,9 +337,8 @@ test('imagery is required and reported as a capability', () => {
   assert.ok(names.some((name) => name.startsWith('imagery:')));
 });
 
-test('meshes are required and reported as a capability', () => {
+test('meshes are required', () => {
   const engine = createFakeEngine();
-  assert.equal(engineCapabilities(engine).meshes, true);
   assert.throws(
     () => assertGlobeEngine({ ...engine, meshes: undefined }),
     /meshes/,

@@ -4,28 +4,8 @@
 // endpoint blocked, a fake microphone and Realtime transport, and readers for
 // the session ids, listener counts and transport counters.
 import puppeteer from 'puppeteer';
-import { blockPaidQaMaps } from '../qa-map-policy.mjs';
-import { localPreview, waitForEngine } from '../qa-strict-harness.mjs';
-
-/** Paid or live model endpoints no switch gate may reach. */
-export const BLOCKED_URLS = Object.freeze([
-  '*://tile.googleapis.com/*',
-  '*://*.googleapis.com/*3dtiles*',
-  '*://api.cesium.com/*',
-  '*://assets.ion.cesium.com/*',
-  '*://maps.googleapis.com/*',
-  '*/api/google/*',
-  '*/api/openai/*',
-  '*/api/realtime/*',
-  '*/api/gemini/*',
-  '*://api.openai.com/*',
-  '*://generativelanguage.googleapis.com/*',
-]);
-
-/** The preview origin from argv, refusing the ports that belong to the user. */
-export function previewBase(argument) {
-  return localPreview(argument ?? '');
-}
+import { SESSION_BLOCKED_URLS } from '../qa-map-policy.mjs';
+import { CHROME_ARGS, waitForEngine } from '../qa-strict-harness.mjs';
 
 /** The page address: Boston on OSM, no welcome, on the given engine. */
 export function sessionAddress(base, { engine = 'cesium', extra = {} } = {}) {
@@ -46,8 +26,7 @@ export function launch() {
   return puppeteer.launch({
     headless: true,
     args: [
-      '--use-angle=metal',
-      '--enable-gpu',
+      ...CHROME_ARGS,
       '--use-fake-device-for-media-stream',
       '--use-fake-ui-for-media-stream',
       '--autoplay-policy=no-user-gesture-required',
@@ -216,21 +195,15 @@ export async function openSessionPage(browser, address) {
   await browser
     .defaultBrowserContext()
     .overridePermissions(new URL(address).origin, ['microphone']);
-  await blockPaidQaMaps(page);
   const network = await page.createCDPSession();
   await network.send('Network.enable');
-  await network.send('Network.setBlockedURLs', { urls: [...BLOCKED_URLS] });
+  await network.send('Network.setBlockedURLs', { urls: [...SESSION_BLOCKED_URLS] });
   await page.evaluateOnNewDocument(installFakeVoice);
   await page.setViewport({ width: 1440, height: 900 });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(address, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   return { page, errors };
-}
-
-/** The engine runs, its picker is idle and the loading screen is gone. */
-export function waitReady(page, kind) {
-  return waitForEngine(page, kind, { timeout: 90_000 });
 }
 
 /**
@@ -247,7 +220,7 @@ export function requestEngine(page, kind) {
 
 export async function switchEngine(page, kind) {
   await requestEngine(page, kind);
-  await waitReady(page, kind);
+  await waitForEngine(page, kind, { timeout: 90_000 });
 }
 
 /** Session object ids and counters (src/app/sessionDiagnostics.js). */

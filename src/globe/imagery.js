@@ -8,16 +8,11 @@
 // that mosaic their own tiles (Navara). Rectangles are degrees; colours are
 // the image's own. No engine imports.
 
-export const IMAGERY_SOURCE_KINDS = Object.freeze(['tiles', 'image']);
-export const IMAGERY_SPLITS = Object.freeze(['none', 'left', 'right']);
+const IMAGERY_SOURCE_KINDS = Object.freeze(['tiles', 'image']);
+const IMAGERY_SPLITS = Object.freeze(['none', 'left', 'right']);
 /** How a tiles source cuts the globe: Web Mercator XYZ, or geographic
  * (EPSG:4326, 2×1 tiles at level 0, Cesium's GeographicTilingScheme). */
-export const IMAGERY_TILE_SCHEMES = Object.freeze([
-  'webMercator',
-  'geographic',
-]);
-/** Where imagery drapes now (GlobeImagery.surface). */
-export const IMAGERY_SURFACES = Object.freeze(['globe', 'tiles', 'none']);
+const IMAGERY_TILE_SCHEMES = Object.freeze(['webMercator', 'geographic']);
 /** The latitude Web Mercator tiles stop at. */
 export const WEB_MERCATOR_LIMIT = 85.05112878;
 
@@ -496,7 +491,6 @@ export const mercatorY = (lat) => {
 };
 
 /** Geographic tiles: x across 2^(z+1) columns, y down 2^z rows from 90°. */
-export const geographicX = (lon) => (lon + 180) / 360;
 export const geographicY = (lat) =>
   (90 - Math.max(-90, Math.min(90, lat))) / 180;
 
@@ -521,7 +515,7 @@ export function imageryTilePlan(box, rectangle, level, scheme = 'webMercator') {
     };
   }
   if (area.west >= area.east || area.south >= area.north) return null;
-  const toX = geographic ? geographicX : mercatorX;
+  const toX = mercatorX;
   const toY = geographic ? geographicY : mercatorY;
   for (let z = Math.max(0, Math.floor(level)); z >= 0; z--) {
     const columns = geographic ? 2 ** (z + 1) : 2 ** z;
@@ -600,7 +594,6 @@ export function imageryTileLevel({
  */
 export function createImageryTileQueue({ load, limit = 6 }) {
   let active = 0,
-    peak = 0,
     destroyed = false;
   const pending = [],
     controllers = new Set();
@@ -612,7 +605,6 @@ export function createImageryTileQueue({ load, limit = 6 }) {
       controllers.add(controller);
       task.controllers.add(controller);
       active++;
-      peak = Math.max(peak, active);
       Promise.resolve()
         .then(() => load(task.url, controller.signal))
         .then((image) => {
@@ -646,11 +638,6 @@ export function createImageryTileQueue({ load, limit = 6 }) {
       for (let i = pending.length - 1; i >= 0; i--)
         if (!pending[i].live()) pending.splice(i, 1);
     },
-    diagnostics: () => ({
-      active,
-      queued: pending.filter((t) => t.live()).length,
-      peak,
-    }),
     destroy() {
       destroyed = true;
       pending.length = 0;

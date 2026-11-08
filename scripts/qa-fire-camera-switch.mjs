@@ -1,3 +1,4 @@
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { installAlprFixture, cameras } from './fixtures/w2/alpr.mjs';
 import { firmsFixture, FIRMS_VALID_COUNT } from './fixtures/w2/firms.mjs';
@@ -46,10 +47,10 @@ await strict.run({}, async (b) => {
       window.__godsEyeView?.engine?.kind === 'navara' &&
       document.querySelector('#loading-screen.hidden'),
   );
+  await assertKeylessPreview(p);
   await p.evaluate(async (id) => {
-    const { dataManager, styleManager, tileset } = window.__godsEyeView;
-    if (window.__GOOGLE_MAPS_API_KEY__ || tileset)
-      throw Error('Keyless preview required');
+    const { dataManager, styleManager } = window.__godsEyeView;
+
     await styleManager.initialRestorePromise;
     window.qaGround = dataManager.layers.get(id).module;
     await dataManager.setEnabled(id, true, { origin: 'user' });

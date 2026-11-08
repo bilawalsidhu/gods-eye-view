@@ -292,7 +292,7 @@ export function packSet(
         (tile.west + tile.east) / 2,
         (tile.south + tile.north) / 2,
       );
-      const packed = packTile(tile, pieces, items, frame, reachOf, reference);
+      const packed = packTile(tile, pieces, frame, reference);
       // Runs and bins relative to the tile's own: its style holds where
       // they start in the set's.
       const runStart = runs.length / 4;

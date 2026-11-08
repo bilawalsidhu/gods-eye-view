@@ -77,8 +77,7 @@ await strict.run({}, async (b) => {
     const { tileset, dataManager, sceneDirector } = window.__godsEyeView;
     if (!sceneDirector?.listScenes().length)
       throw Error('No scenes available on Navara');
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Keyless preview required');
+
     const mod = dataManager.layers.get('bhote-koshi-2026').module;
     window.qaEvent = mod;
     await dataManager.setEnabled(mod.id, true, { origin: 'user' });

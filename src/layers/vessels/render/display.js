@@ -13,9 +13,9 @@
 // writes outside a frame).
 
 import * as geo from '../../../geo/index.js';
-import { createMoverBank, StoredColor } from '../../shared/render/moverBank.js';
+import { createMoverBank } from '../../shared/render/moverBank.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
-import { rgbaFromCss } from '../../shared/color.js';
+import { Rgba, rgbaFromCss } from '../../shared/color.js';
 import {
   decodeImages,
   imageAtlasLayout,
@@ -208,7 +208,7 @@ export function createVesselsDisplay(
       storedRotation: spec.rotation ?? 0,
       storedScale: spec.scale ?? 1,
       storedImage: spec.image,
-      storedColor: new StoredColor(),
+      storedColor: new Rgba(),
       // The chevron artwork's size, before the scale.
       width: VESSEL_ICON_PX,
       height: VESSEL_ICON_PX,
@@ -255,7 +255,12 @@ export function createVesselsDisplay(
         return handle.storedColor;
       },
       set color(value) {
-        handle.storedColor = new StoredColor(value);
+        handle.storedColor = new Rgba(
+          value?.red ?? 1,
+          value?.green ?? 1,
+          value?.blue ?? 1,
+          value?.alpha ?? 1,
+        );
         scratchRgba[0] = handle.storedColor.red;
         scratchRgba[1] = handle.storedColor.green;
         scratchRgba[2] = handle.storedColor.blue;

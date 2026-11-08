@@ -18,7 +18,7 @@ function fixture() {
   const view = {
     forceUpdate: () => frames++,
   };
-  const { imagery, diagnostics, destroy } = createNavaraImagery(view, {
+  const { imagery, destroy } = createNavaraImagery(view, {
     camera: {
       changed,
       pose: () => ({
@@ -53,7 +53,6 @@ function fixture() {
   });
   return {
     imagery,
-    diagnostics,
     destroy,
     canvases,
     draws,
@@ -80,10 +79,10 @@ test('a tiles layer mosaics the visible tiles into one atlas; a new source drops
   const f = fixture();
   const layer = f.imagery.createLayer({ id: 'a', source: tiles() });
   await tick();
-  const first = f.diagnostics().a;
-  assert.equal(first.atlas.level, 12);
-  assert.ok(first.atlas.tiles >= 1 && first.atlas.tiles <= 64);
-  assert.equal(f.jobs.length, Math.min(6, first.atlas.tiles), 'six at a time');
+  const canvas = f.canvases[0];
+  const count = (canvas.width / 256) * (canvas.height / 256);
+  assert.ok(count >= 1 && count <= 64);
+  assert.equal(f.jobs.length, Math.min(6, count), 'six at a time');
   assert.match(
     f.jobs[0].url,
     /^https:\/\/gibs-[abc]\.example\/12\/\d+\/\d+\.png$/,
@@ -189,13 +188,13 @@ test('a hidden tiles layer drops its atlas; shown again it builds one at the vie
   const f = fixture();
   const layer = f.imagery.createLayer({ id: 'a', source: tiles() });
   layer.show(false);
-  assert.equal(f.diagnostics().a.atlas, null);
+  assert.equal(f.last().slots.length, 0);
   assert.equal(f.credits.get('NASA GIBS'), 0, 'its credit goes too');
   f.changed.raiseEvent();
-  assert.equal(f.diagnostics().a.atlas, null);
+  assert.equal(f.last().slots.length, 0);
   layer.show(true);
   await tick();
-  assert.ok(f.diagnostics().a.atlas);
+  assert.ok(f.last().slots[0].texture.image.width > 0);
   assert.equal(f.last().slots.length, 1);
 });
 
@@ -215,8 +214,6 @@ test('geographic tiles draw in degrees through the source’s transform', async 
     }),
   });
   await tick();
-  const { atlas } = f.diagnostics().radar;
-  assert.equal(atlas.level, 6, 'the source’s top level');
   const [slot] = f.last().slots;
   assert.equal(slot.look[2], 0, 'sampled in degrees');
   const [west, south, east, north] = slot.bounds;
@@ -242,7 +239,6 @@ test('a staged tiles source builds its own atlas under the drawn one and takes i
   );
   await tick();
   assert.equal(f.last().slots[0].texture, drawn, 'the drawn atlas stays');
-  assert.ok(f.diagnostics().a.staging, 'the staged atlas loads');
   const next = f.jobs.slice(firstJobs);
   assert.ok(next.length > 0 && next.every((job) => /next/.test(job.url)));
   let done;

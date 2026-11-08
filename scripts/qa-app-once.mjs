@@ -1,3 +1,4 @@
+import { localPreview, waitForEngine } from './qa-strict-harness.mjs';
 // The application is created once per page: switching engines detaches and
 // attaches only the engine-bound parts. This gate runs three Cesium→Navara→
 // Cesium round trips and checks that every session object keeps its identity,
@@ -14,15 +15,13 @@ import {
   listenerCounts,
   listenerDifference,
   openSessionPage,
-  previewBase,
   readSession,
   requestEngine,
   sessionAddress,
   switchEngine,
-  waitReady,
 } from './qa/appSessionHarness.mjs';
 
-const base = previewBase(process.argv[2]);
+const base = localPreview(process.argv[2]);
 const reportOnly = process.argv.includes('--report');
 const report = { switches: [], failures: [] };
 const check = (condition, message, detail) => {
@@ -139,7 +138,7 @@ try {
     browser,
     sessionAddress(base, { engine: 'cesium' }),
   );
-  await waitReady(page, 'cesium');
+  await waitForEngine(page, 'cesium', { timeout: 90_000 });
   // Let the first boot's deferred listeners land before counting.
   await new Promise((resolve) => setTimeout(resolve, 2000));
   const boot = await readSession(page);
@@ -335,7 +334,7 @@ try {
     await page.waitForFunction(() => window.__qaRollback === true, {
       timeout: 60_000,
     });
-    await waitReady(page, 'cesium');
+    await waitForEngine(page, 'cesium', { timeout: 90_000 });
     const rolledBack = await readSession(page);
     const ui = await readUi(page);
     report.rollback = {
@@ -388,7 +387,7 @@ try {
     await page.waitForFunction(() => window.__qaDataRefused === true, {
       timeout: 60_000,
     });
-    await waitReady(page, 'cesium');
+    await waitForEngine(page, 'cesium', { timeout: 90_000 });
     const afterDataFailure = await readSession(page);
     report.dataFailure = {
       ids: idDifference(boot.ids, afterDataFailure.ids),

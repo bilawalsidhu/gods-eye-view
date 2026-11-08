@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createMoverStore, normalizeMoverSetOptions } from '../movers.js';
 import { normalizeLineOptions } from '../lines.js';
-import { createNavaraPicking, distanceToSegment } from './picking.js';
+import { createNavaraPicking } from './picking.js';
+import { distanceToSegment } from '../cpuPicks.js';
 
 // A projector that maps x → screen x and y → screen y, z is the depth (the
 // distance from the camera at the origin along +z).

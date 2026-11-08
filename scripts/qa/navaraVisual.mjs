@@ -1,3 +1,4 @@
+import { assertKeylessPreview } from '../qa-strict-harness.mjs';
 // Shared by the Navara visual QA scenarios (qa-navara-visual-styles,
 // qa-navara-bloom, qa-navara-sonar, qa-navara-cockpit-clouds): read the
 // engine canvas, compare frames, settle a still view, follow a style
@@ -134,10 +135,10 @@ export const histogramShift = (a, b) =>
   ) / 2;
 
 export async function freeze(page) {
+  await assertKeylessPreview(page);
   await page.evaluate(async () => {
     const a = window.__godsEyeView;
-    if (window.__GOOGLE_MAPS_API_KEY__ || a.tileset)
-      throw new Error('Keyless preview required');
+
     a.styleManager.orbitController.stop();
     a.engine.camera.cancelFlight();
     a.styleManager._setDetectionMode?.('OFF');

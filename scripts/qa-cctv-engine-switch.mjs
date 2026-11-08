@@ -1,3 +1,4 @@
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
@@ -55,10 +56,10 @@ await strict.run({}, async (b) => {
       window.__godsEyeView?.engine?.kind === 'navara' &&
       document.querySelector('#loading-screen.hidden'),
   );
+  await assertKeylessPreview(p);
   await p.evaluate(async () => {
-    const { dataManager, styleManager, tileset } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Expected keyless preview');
+    const { dataManager, styleManager } = window.__godsEyeView;
+
     await styleManager.initialRestorePromise;
     await dataManager.setEnabled('cctv', true, { origin: 'user' });
     window.qaCctv = dataManager.layers.get('cctv').module;

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  layerEffectDesc,
   withFrameUpdates,
   withPassDisposal,
 } from './frameDescriptor.js';
@@ -80,47 +79,4 @@ test('a deleted effect disposes the pass the composer no longer holds', () => {
   events.length = 0;
   assert.throws(() => new (withPassDisposal(Failing))().onDestroy(), /removal/);
   assert.deepEqual(events, ['dispose']);
-});
-
-test('a layer effect re-created on every attach leaves no pass, material or frame callback behind', () => {
-  const frames = new Set();
-  const view = {
-    on: (name, cb) => frames.add(cb),
-    off: (name, cb) => frames.delete(cb),
-  };
-  const live = new Set();
-  class EffectDesc {
-    view = view;
-    onCreate() {
-      const pass = {
-        material: {},
-        dispose: () => live.delete(pass),
-      };
-      live.add(pass);
-      this._instance = { rawPass: pass };
-    }
-    get raw() {
-      return this._instance;
-    }
-    onDestroy() {
-      // Navara's removePass: out of the composer, not disposed.
-      this._instance = undefined;
-    }
-  }
-  // As the earthquakes ground effect: disposes its own effect, then super.
-  class LayerEffect extends layerEffectDesc(EffectDesc) {
-    updateFrame() {}
-    onDestroy() {
-      this.effectDisposed = true;
-      super.onDestroy();
-    }
-  }
-  for (let attach = 0; attach < 50; attach++) {
-    const effect = new LayerEffect();
-    effect.onCreate();
-    effect.onDestroy();
-    assert.equal(effect.effectDisposed, true);
-  }
-  assert.equal(live.size, 0, 'every pass of a deleted effect is disposed');
-  assert.equal(frames.size, 0, 'no frame callback outlives its effect');
 });

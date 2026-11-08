@@ -1,3 +1,4 @@
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { createStrict, localPreview } from './qa-strict-harness.mjs';
@@ -181,10 +182,10 @@ await strict.run({}, async (b) => {
       window.__godsEyeView?.sceneDirector &&
       document.querySelector('#loading-screen.hidden'),
   );
+  await assertKeylessPreview(p);
   await p.evaluate(async (project) => {
     const a = window.__godsEyeView;
-    if (window.__GOOGLE_MAPS_API_KEY__ || a.tileset)
-      throw Error('Expected keyless preview');
+
     await a.styleManager.initialRestorePromise;
     window.director = a.sceneDirector;
     await window.director.importProjectFile(

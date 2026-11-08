@@ -106,7 +106,7 @@ czm_material czm_getMaterial(czm_materialInput materialInput) {
 }`;
 
 /** The uniforms of an animated corridor's material (pure, for tests). */
-export function corridorUniforms(item) {
+function corridorUniforms(item) {
   const { glow, pulse, dash } = item.animation;
   return {
     color: colorOf(item.fill),
@@ -146,7 +146,7 @@ const corridorMaterial = (item) =>
       });
 
 /** The radial disc material, including its soft outside edge. */
-export function radialMaterial(item) {
+function radialMaterial(item) {
   return new Cesium.Material({
     fabric: {
       type: 'GevGroundRadial',
@@ -181,7 +181,7 @@ function positionsOf(flat) {
 const longitude = (degrees) => degrees - 360 * Math.round(degrees / 360);
 
 /** The fill geometry of one item of a set of `kind` (pure, for tests). */
-export function fillGeometry(kind, item) {
+function fillGeometry(kind, item) {
   const vertexFormat = item.radial
     ? Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat
     : Cesium.PerInstanceColorAppearance.FLAT_VERTEX_FORMAT;

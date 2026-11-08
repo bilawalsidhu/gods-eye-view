@@ -1083,10 +1083,6 @@ const OPTIONAL_SHAPE = {
   },
 };
 
-// Required capabilities engineCapabilities reports as well: true for an
-// engine that has them whole, as every valid engine does.
-const REPORTED_REQUIRED = ['movers', 'lines', 'ground', 'imagery', 'meshes'];
-
 const memberAt = (engine, path) =>
   path.split('.').reduce((value, key) => value?.[key], engine);
 
@@ -1094,26 +1090,20 @@ const memberAt = (engine, path) =>
  * Which optional capabilities an engine has: { visualStyles, ... } as
  * booleans. A caller that refuses a feature on an engine without one
  * (voice, say) asks here. Cesium and Navara draw the styles, bloom and
- * contact sonar; only Navara has cloudCover. `movers`, `lines`, `ground`
- * and `imagery`, plus `meshes`, are required; they are reported too, true for every valid
- * engine.
+ * contact sonar; only Navara has cloudCover.
  */
 export function engineCapabilities(engine) {
-  const whole = (members, prefix = '') =>
+  const whole = (members) =>
     isObject(engine) &&
     Object.entries(members).every(([path, valid]) =>
-      valid(memberAt(engine, prefix + path)),
+      valid(memberAt(engine, path)),
     );
-  return Object.fromEntries([
-    ...Object.entries(OPTIONAL_SHAPE).map(([flag, members]) => [
+  return Object.fromEntries(
+    Object.entries(OPTIONAL_SHAPE).map(([flag, members]) => [
       flag,
       whole(members),
     ]),
-    ...REPORTED_REQUIRED.map((capability) => [
-      capability,
-      whole(SHAPE[capability], `${capability}.`),
-    ]),
-  ]);
+  );
 }
 
 /**

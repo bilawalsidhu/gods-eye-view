@@ -66,7 +66,7 @@ const sameEdges = (a, b) =>
 
 /** Keep the shells first in the primitive collection, by rank: higher ranks
  * draw over lower ones and other opaque content draws over both. */
-export function orderImageryShells(primitives, primitive, rank) {
+function orderImageryShells(primitives, primitive, rank) {
   ranks.set(primitive, rank);
   if (typeof primitives.lowerToBottom !== 'function') return;
   const shells = [];

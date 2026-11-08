@@ -69,24 +69,3 @@ test('the debug handle exposes the engine beside the viewer', () => {
     /Object\.assign\(debug, \{\n\s+viewer: next\.viewer \?\? null,\n\s+engine: next\.engine,/,
   );
 });
-
-test('the scene engine is the one engineFromViewer returns for its viewer until teardown', async () => {
-  const { engineFromViewer } =
-    await import('../globe/cesium/engineFromViewer.js');
-  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
-  const viewer = { name: 'viewer' };
-  const cleanups = [];
-  const engine = createSceneEngine(viewer, {
-    tilesetRef: null,
-    defer: (dispose) => cleanups.push(dispose),
-    createEngine: () => createFakeEngine(),
-  });
-  assert.equal(engineFromViewer(viewer), engine);
-  for (const cleanup of cleanups.reverse()) cleanup();
-  assert.equal(engine.fake.destroyed, true);
-  assert.equal(
-    engineFromViewer(viewer),
-    null,
-    'no longer registered, and none is built',
-  );
-});

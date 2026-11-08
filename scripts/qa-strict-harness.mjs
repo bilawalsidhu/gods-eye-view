@@ -34,18 +34,11 @@ const CHOICES = Object.freeze([...ENGINES, 'navara-hd']);
 /** Local ports that belong to the user's own servers: never a QA preview. */
 export const RESERVED_PORTS = Object.freeze([
   '',
-  '4173',
-  '4174',
-  '4185',
-  '4186',
-  '4187',
-  '4188',
-  '4189',
-  '4194',
-  '4196',
+  ...(process.env.QA_RESERVED_PORTS ?? '4173,4174,4185,4186,4187,4188,4189,4194,4196')
+    .split(',').map((port) => port.trim()).filter(Boolean),
 ]);
 /** Chrome flags every scenario's browser starts with (the GPU path). */
-const CHROME_ARGS = Object.freeze(['--use-angle=metal', '--enable-gpu']);
+export const CHROME_ARGS = Object.freeze([`--use-angle=${process.env.QA_ANGLE || 'metal'}`, '--enable-gpu']);
 
 /** The values of --layers=a,b and --evidence=FILE (null when absent). */
 export function strictArguments(argv = process.argv) {
@@ -67,6 +60,27 @@ export function localPreview(href) {
   )
     throw Error('Supply an unreserved local keyless preview URL');
   return url;
+}
+
+/** Refuse to start a preview over an existing local server. */
+export async function assertPreviewPortAvailable(href, request = fetch) {
+  const url = localPreview(href);
+  let response;
+  try {
+    response = await request(url.origin, { signal: AbortSignal.timeout(1000) });
+  } catch (error) {
+    if (error.cause?.code === 'ECONNREFUSED') return;
+    throw error;
+  }
+  if (response) throw new Error(`Preview port ${url.port} already answers`);
+}
+
+/** Check the running page before any scenario touches its layers. */
+export async function assertKeylessPreview(page) {
+  await page.evaluate(() => {
+    if (window.__godsEyeView.tileset || window.__GOOGLE_MAPS_API_KEY__)
+      throw new Error('Keyless preview required');
+  });
 }
 
 /** The URL with no remote IP: fulfilled by a fixture or a cache, or a data URL. */
@@ -567,6 +581,7 @@ export async function waitForEngine(page, kind, { timeout = 120000 } = {}) {
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
+  await assertKeylessPreview(page);
 }
 
 /**

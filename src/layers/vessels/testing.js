@@ -49,8 +49,7 @@ export function createTesting({
         .map((record) => [record.mmsi, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
-    // The test's renderer over its viewer and collection
-    // (testSupport/vesselViewerRenderer), else the layer's for `engine`.
+    // The test's renderer, else the layer's display for `engine`.
     state.renderer =
       typeof options.renderer === 'function'
         ? options.renderer({

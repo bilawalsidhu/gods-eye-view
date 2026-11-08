@@ -88,8 +88,8 @@ for (const [name, files, pattern] of [
     /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
-    'W1 shared trailRenderer keeps SDK imports in the engine',
-    { 'src/data/trailRenderer.js': "import 'cesium';" },
+    'Shared render modules keep SDK imports in the engine',
+    { 'src/layers/shared/render/moverBank.js': "import 'cesium';" },
     /cesium imports belong in src\/globe\/cesium\//,
   ],
   [
@@ -360,21 +360,18 @@ test('legacy renderer names grant no SDK import exemption', (t) => {
   assert.throws(() => checkImportDirections(root), /three imports belong/);
 });
 
-test('remaining Navara layer helpers still load through the manifest or mode', (t) => {
+test('Navara flow helpers load dynamically through the manifest', (t) => {
   const { root, write } = fixture(t);
-  write('src/layers/shared/render/navaraPolygons.js');
+  write('src/globe/navara/windFlow.js');
   write(
     'src/app/layers/renderers.js',
-    "export const load = () => import('../../layers/shared/render/navaraPolygons.js');",
+    "export const load = () => import('../../globe/navara/windFlow.js');",
   );
   assert.doesNotThrow(() => checkImportDirections(root));
-  write(
-    'src/app/data.js',
-    "import '../layers/shared/render/navaraPolygons.js';",
-  );
+  write('src/app/data.js', "import '../globe/navara/windFlow.js';");
   assert.throws(
     () => checkImportDirections(root),
-    /A Navara layer renderer loads only through/,
+    /The Navara engine loads only through/,
   );
 });
 

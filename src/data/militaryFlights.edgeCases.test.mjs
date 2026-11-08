@@ -16,7 +16,7 @@ import {
   registerMilitaryIcaos,
   setMilitaryLayerActive,
 } from './militaryRegistry.js';
-import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
+import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
 
 const SHARED_HEX = 'ae5e01';
 const CIVIL_HEX = 'a0c1v1';
@@ -85,7 +85,9 @@ test('edge:military: an ICAO in both feeds draws one target and keeps the milita
   const civilBillboards = collection();
   _armFlightTrackingRestoreForTest(null);
   _setTrackedMilitaryRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: 'seedm0',
     entity: null,
     billboard: { show: false, position: Cesium.Cartesian3.ZERO },
@@ -95,7 +97,9 @@ test('edge:military: an ICAO in both feeds draws one target and keeps the milita
     tracked: false,
   });
   _setTrackedFlightRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: 'seedf0',
     entity: null,
     billboard: { show: false, position: Cesium.Cartesian3.ZERO },
@@ -173,8 +177,10 @@ test('edge:military: losing the tracked contact from the owning feed releases th
     entities: { add: (value) => value, remove: () => true },
     trackedEntity: entity,
   };
+  const renderer = recordingAircraftRenderer(null, { fleet: { shown: true } });
+  renderer.follow.start(entity);
   _setTrackedMilitaryRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: () => renderer,
     icao24: SHARED_HEX,
     entity,
     billboard: {
@@ -214,7 +220,7 @@ test('edge:military: losing the tracked contact from the owning feed releases th
     }
     assert.equal(militaryFlightsLayer.hasContact(SHARED_HEX), false);
     assert.equal(
-      viewer.trackedEntity,
+      renderer.follow.current(),
       undefined,
       'the follow camera is released',
     );

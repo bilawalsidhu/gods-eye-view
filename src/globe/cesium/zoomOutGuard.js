@@ -3,7 +3,7 @@ import * as Cesium from 'cesium';
 /** Whole-Earth input limit; explicit camera destinations can go farther. */
 export const MAXIMUM_ZOOM_DISTANCE_M = 40_000_000;
 /** Below this, oblique browsing is left alone. */
-export const PITCH_CLAMP_MIN_HEIGHT_M = 300_000;
+const PITCH_CLAMP_MIN_HEIGHT_M = 300_000;
 // Plain numbers: on a page that starts on Navara the Cesium SDK loads only
 // with the first Cesium globe, after this module (src/app/loadCesium.js).
 const RADIANS_PER_DEGREE = Math.PI / 180;

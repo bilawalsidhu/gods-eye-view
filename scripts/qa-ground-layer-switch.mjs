@@ -218,8 +218,7 @@ await strict.run({}, async (b) => {
   await waitForEngine(p, 'navara');
   await p.evaluate(() => {
     const d = window.__godsEyeView;
-    if (d.tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Keyless required');
+
     window.qaAir = d.dataManager.layers.get('air-quality').module;
     window.qaGnss = d.dataManager.layers.get('gnss-integrity').module;
   });

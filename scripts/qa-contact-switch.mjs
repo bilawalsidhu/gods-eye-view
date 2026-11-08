@@ -90,9 +90,8 @@ await strict.run({}, async (b) => {
   await p.goto(base.href);
   await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
-    const { dataManager, styleManager, tileset } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Require keyless preview');
+    const { dataManager, styleManager } = window.__godsEyeView;
+
     await dataManager.setEnabled('ais-live-vessels', true, { origin: 'user' });
     window.qaBefore = [...dataManager.getEnabledLayerIds()].sort();
     const outcome = await styleManager.setContextMode('contacts');

@@ -5,7 +5,7 @@
 import * as geo from '../geo/index.js';
 
 /** A renderer of plain records, for the logic alone. */
-export function recordingAircraftRenderer(engine) {
+export function recordingAircraftRenderer(engine, ports = {}) {
   const calls = [];
   const sprites = new Set();
   const camera = {
@@ -118,5 +118,7 @@ export function recordingAircraftRenderer(engine) {
     surfaceExclusions: () => [],
     destroy: () => calls.push(['destroy']),
   };
+  for (const [name, values] of Object.entries(ports))
+    Object.assign(renderer[name], values);
   return renderer;
 }

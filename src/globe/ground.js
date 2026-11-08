@@ -9,13 +9,8 @@
 import * as geo from '../geo/index.js';
 import { createGroundPulseRegistry } from './groundPulse.js';
 
-export const GROUND_KINDS = Object.freeze([
-  'polygon',
-  'disc',
-  'cell',
-  'corridor',
-]);
-export const GROUND_DRAPES = Object.freeze(['both', 'terrain', 'tiles']);
+const GROUND_KINDS = Object.freeze(['polygon', 'disc', 'cell', 'corridor']);
+const GROUND_DRAPES = Object.freeze(['both', 'terrain', 'tiles']);
 
 const isFiniteNumber = (value) =>
   typeof value === 'number' && Number.isFinite(value);
@@ -381,20 +376,6 @@ export function pulseFactor({ periodMs, min, max }, seconds) {
 
 /** Half the soft edge of a dash, in cells (the route flow material's). */
 export const DASH_EDGE = 0.08;
-
-/**
- * How lit a dash is (0..1) at `along` (0 at the corridor's start, 1 at its
- * end) and `seconds`: the cells scroll toward the end at `speed` a second.
- */
-export function dashLit({ cells, duty, speed }, along, seconds) {
-  const flow = along * cells - seconds * speed;
-  const at = flow - Math.floor(flow);
-  const t = Math.min(
-    1,
-    Math.max(0, (at - (duty - DASH_EDGE)) / (2 * DASH_EDGE)),
-  );
-  return 1 - t * t * (3 - 2 * t);
-}
 
 /** A disc's boundary as a ring of `segments` points (degrees, flat). */
 export function discRing({ center, radiusM }, segments = 64) {

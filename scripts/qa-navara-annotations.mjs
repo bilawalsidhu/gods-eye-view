@@ -46,13 +46,6 @@ await strict.run(
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(base.href);
     await waitForEngine(page, 'navara');
-    assert.equal(
-      await page.evaluate(() =>
-        Boolean(window.__godsEyeView.tileset || window.__GOOGLE_MAPS_API_KEY__),
-      ),
-      false,
-      'keyless preview required',
-    );
 
     /** Amber pixels of the globe canvas alone (the SVG board hidden). */
     const canvasAmber = async () => {

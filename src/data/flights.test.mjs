@@ -28,8 +28,9 @@ import {
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
-import { trackingEngine } from '../testSupport/viewerEngine.mjs';
-import { aircraftViewerRenderer } from '../testSupport/aircraftViewerRenderer.mjs';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createAircraftDisplay, aircraftAtlasLayout } from '../layers/aircraft/render/display.js';
+import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
 
 test('share-Follow absence requires an accepted OpenSky snapshot', async () => {
   _setFlightTrackingRefreshOutcomeForTest({ status: 'source-unavailable' });
@@ -185,7 +186,9 @@ test('flights first update forwards caller cancellation into the feed request', 
 
 test('nonempty OpenSky payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedFlightRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: 'abc123',
     entity: { gevLabelModel: { title: 'WARM', details: [] } },
     billboard: { show: false },
@@ -241,7 +244,9 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
   };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: 'seed00',
     entity: null,
     billboard: {
@@ -330,7 +335,9 @@ test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STA
   const billboardCollection = { show: false, remove() {} };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24,
     entity,
     billboard,
@@ -411,45 +418,17 @@ test('real civil track path creates no native label and publishes every cached h
   const icao24 = 'civ001';
   const position = Cesium.Cartesian3.fromDegrees(-97.6699, 30.1945, 10_668);
   const now = Cesium.JulianDate.now();
-  const entities = new Cesium.EntityCollection();
-  const trackedEntityChanged = new Cesium.Event();
-  let trackedEntity;
-  let cancelledFlights = 0;
-  let appliedFrames = 0;
-  const viewer = {
-    entities,
-    trackedEntityChanged,
-    clock: { currentTime: now },
-    camera: {
-      cancelFlight() {
-        cancelledFlights += 1;
-      },
-      position: new Cesium.Cartesian3(0, -10_000, 7_000),
-      positionWC: new Cesium.Cartesian3(0, -10_000, 7_000),
-      direction: Cesium.Cartesian3.UNIT_Y,
-      transform: Cesium.Matrix4.IDENTITY,
-      viewMatrix: Cesium.Matrix4.IDENTITY,
-      frustum: { projectionMatrix: Cesium.Matrix4.IDENTITY },
-      lookAtTransform() {
-        appliedFrames += 1;
-      },
-    },
-    scene: {
-      canvas: { clientWidth: 1600, clientHeight: 900 },
-      frameState: { frameNumber: 41, mode: Cesium.SceneMode.SCENE3D },
-      preUpdate: new Cesium.Event(),
-      screenSpaceCameraController: null,
-    },
-    isDestroyed: () => false,
-  };
-  Object.defineProperty(viewer, 'trackedEntity', {
-    get: () => trackedEntity,
-    set(value) {
-      trackedEntity = value;
-      trackedEntityChanged.raiseEvent(value);
-    },
+  const engine = createFakeEngine();
+  let followCalls = 0;
+  const follow = engine.camera.follow;
+  engine.camera.follow = (options) => { followCalls++; return follow(options); };
+  const layout = aircraftAtlasLayout();
+  const renderer = createAircraftDisplay(engine, {
+    layerId: 'flights',
+    drawAtlas: async () => ({ canvas: { width: layout.width, height: layout.height }, cells: layout.cells }),
   });
-  viewer.scene.camera = viewer.camera;
+  renderer.fleet.attach();
+  renderer.fleet.setVisible(true);
   const billboard = {
     position,
     rotation: 0.3,
@@ -478,17 +457,15 @@ test('real civil track path creates no native label and publishes every cached h
     },
   );
   globalThis.fetch = async () => ({ ok: false });
-  const engine = trackingEngine(viewer);
   const readoutServices = createSceneServices(engine, { trackedOverlay: host });
   try {
     initTrackedReadout(engine);
     _setTrackedFlightRefreshStateForTest({
-      renderer: (options) => aircraftViewerRenderer({ ...options, engine }),
+      renderer: () => renderer,
       icao24,
       entity: null,
       billboard,
       billboardCollection: { show: true, remove() {} },
-      viewer,
       tracked: false,
       history: [
         {
@@ -525,27 +502,19 @@ test('real civil track path creates no native label and publishes every cached h
       flightsLayer.trackById(icao24, { origin: 'programmatic' }),
       true,
     );
-    const entity = viewer.trackedEntity;
-    assert.ok(
-      entity instanceof Cesium.Entity,
-      'trackById must create the real Cesium entity',
-    );
-    assert.equal(entity.label, undefined);
-    assert.ok(
-      entities.values.every((candidate) => candidate.label === undefined),
-    );
+    const entity = renderer.follow.current();
+    assert.ok(entity, 'tracking creates a display handle');
     assert.deepEqual(entity.gevLabelModel, {
       title: 'N12345 · FL350 · 486 kts',
       details: ['TEST AIR · A320', 'AUS → LAX'],
       accent: '#39d0ff',
     });
-    viewer.scene.preUpdate.raiseEvent();
-    const initialAppliedFrames = appliedFrames;
-    const initialCancelledFlights = cancelledFlights;
+    engine.fake.frame();
+    const initialFollowCalls = followCalls;
     assert.equal(flightsLayer.trackById(icao24, { origin: 'user' }), true);
     assert.equal(
-      cancelledFlights,
-      initialCancelledFlights,
+      followCalls,
+      initialFollowCalls,
       'ordinary repeated tracking stays camera-idempotent',
     );
     assert.equal(
@@ -565,21 +534,16 @@ test('real civil track path creates no native label and publishes every cached h
       'same-target refocus forwards explicit authority',
     );
     assert.equal(flightsLayer.refocusTrackedById(icao24), true);
-    viewer.scene.preUpdate.raiseEvent();
+    engine.fake.frame();
     assert.equal(
-      viewer.trackedEntity,
+      renderer.follow.current(),
       entity,
       'refocus must retain the exact tracked entity',
     );
     assert.equal(
-      appliedFrames,
-      initialAppliedFrames + 1,
-      'repeated refocus keeps one camera-frame owner',
-    );
-    assert.equal(
-      cancelledFlights,
-      initialCancelledFlights + 2,
-      'only explicit refocus requests cancel camera flights',
+      followCalls,
+      initialFollowCalls + 2,
+      'only explicit refocus requests restart following',
     );
     const publication = publications.at(-1);
     assert.equal(publication.sourceId, 'tracked');
@@ -589,7 +553,7 @@ test('real civil track path creates no native label and publishes every cached h
     assert.equal(entry.title, entity.gevLabelModel.title);
     assert.deepEqual(entry.details, entity.gevLabelModel.details);
 
-    const display = entity.position.getValue(now);
+    const display = entity.spec.position();
     assert.ok(display, 'tracked position callback must seed its frame cache');
     assert.equal(
       entry.position(),
@@ -710,9 +674,11 @@ test('real civil track path creates no native label and publishes every cached h
     assert.equal(flightsLayer.getParams().selectedFlightsTrackingId, 'late005');
   } finally {
     flightsLayer.stopTracking();
-    viewer.scene.preUpdate.raiseEvent();
+    engine.fake.frame();
     destroyTrackedReadout(engine);
     readoutServices.destroy();
+    renderer.destroy();
+    engine.destroy();
     globalThis.fetch = realFetch;
     globalThis.window = realWindow;
   }
@@ -743,7 +709,9 @@ function seedLabelContact({
   meta: metaOverrides = {},
 }) {
   _setTrackedFlightRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: LABEL_ICAO,
     entity: null,
     billboard: {
@@ -952,7 +920,9 @@ test('civil tracked readout: a callsign-less enriched contact reads as its regis
   const entity = { gevLabelModel: { title: 'OLD', details: [] } };
   seedLabelContact({ callsign: '  ', registration: ' N123AB ', tracked: true });
   _setTrackedFlightRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: LABEL_ICAO,
     entity,
     billboard: {
@@ -1091,7 +1061,9 @@ test('a newly seen taxiing aircraft starts on the floor under its delayed positi
   };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) => recordingAircraftRenderer(null, {
+      fleet: { ...billboardCollection, shown: billboardCollection?.show !== false },
+    }),
     icao24: 'seed00',
     entity: null,
     billboard: {

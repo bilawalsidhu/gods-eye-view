@@ -146,8 +146,7 @@ export class NavigationController {
     } = this.tracking;
     let contactSelected = false;
     try {
-      // A layer an engine leaves out (military awareness on Navara) has no
-      // controls: release the trackers it would release, below.
+      // If awareness controls are unavailable, release the trackers directly.
       if (typeof militaryAwarenessLayer?.releaseCameraOwnership !== 'function')
         throw new Error('no military awareness controls');
       contactSelected = Boolean(

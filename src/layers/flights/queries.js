@@ -935,7 +935,7 @@ export function createQueries({
               view.holdFrames();
               setFocusEvidenceNowMs(startMs);
               flightState._lastFleetTickMs = startMs - FLEET_DR_INTERVAL_MS;
-              // Cross a browser task boundary, then close Cesium's pending-loop
+              // Cross a browser task boundary, then close the renderer's pending-loop
               // latch. Any already-queued callback still observes the false gate,
               // while manual evidence renders can begin without waiting on VSYNC.
               return new Promise((resolve) =>

@@ -21,10 +21,7 @@
  * keeps rotation continuous through tracked orbits; field evidence, not an
  * unverified math swap, decides whether exact projection becomes preferred.
  */
-import {
-  worldToWindowCoordinates,
-  horizonOccluder,
-} from '../globe/cesium/sceneProjection.js';
+import { worldToWindowCoordinates } from '../globe/cesium/sceneProjection.js';
 import * as geo from '../geo/index.js';
 
 // A window position through the engine projector the scene carries (the
@@ -148,7 +145,7 @@ const _wgs84OneOverRadii = geo.ellipsoid.WGS84.oneOverRadii;
  * ABOVE the ellipsoid the horizon is the tangent silhouette and the test is a
  * genuine ray/ellipsoid hit test: 1 means the view ray through the point misses
  * the planet entirely. Here the function is the exact complement of
- * {@link horizonOccluder} — the occluder asks whether the planet is in FRONT of
+ * the horizon visibility test — the occluder asks whether the planet is in FRONT of
  * a point (cull it), this asks whether it is BEHIND (what a screen-space label
  * anchored there is read against). For any point the occluder keeps, a ray that
  * hits the ellipsoid must hit it beyond the point, so the hit/miss test alone
@@ -252,7 +249,6 @@ export function skyBackdropFactor(
  * @param {Cesium.Camera} camera - The scene camera.
  * @returns {Cesium.EllipsoidalOccluder}
  */
-export { horizonOccluder };
 
 /**
  * Cheap camera pose signature for "did the camera move" gating of rotation

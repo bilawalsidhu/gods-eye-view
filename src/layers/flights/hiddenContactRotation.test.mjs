@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createFlightState } from './state.js';
 import { createRendering } from './rendering.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import { horizonVisible } from '../../globe/cameraMath.js';
 import {
   FLEET_DR_INTERVAL_MS,
   HIDDEN_CONTACT_DR_INTERVAL_MS,
@@ -93,7 +93,10 @@ function fleetFixture() {
     view: {
       camera,
       scene: {},
-      horizon: () => horizonOccluder(camera),
+      horizon: () => ({
+        isPointVisible: (position) =>
+          horizonVisible(camera.positionWC, position),
+      }),
       frustumTester: () => () => true,
     },
   };

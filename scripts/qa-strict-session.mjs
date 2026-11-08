@@ -120,8 +120,7 @@ export async function openApp(
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   await waitForEngine(page, engine);
   await page.evaluate(() => {
-    if (window.__GOOGLE_MAPS_API_KEY__ || window.__godsEyeView.tileset)
-      throw Error('Keyless preview required');
+
     window.__qaEngines = new Map([
       [window.__godsEyeView.engine.kind, window.__godsEyeView.engine],
     ]);

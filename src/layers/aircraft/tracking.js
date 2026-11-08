@@ -545,12 +545,11 @@ export function createAircraftTracking({
     }
     flightState._trail?.setVisible(!flightState._cockpitContactMode);
     // Live head segment: last DISPLAYED body point → current dead-reckoned icon, updated
-    // every frame via a CallbackProperty (Cesium updates entity-polyline positions cheaply,
-    // unlike the trail primitive which fully rebuilds on setPositions). Keeps the head glued
-    // to the 12 Hz icon instead of lagging ~1 s behind it.
+    // every frame through the display callback. Keeps the head glued
+    // to the 12 Hz icon while the trail body updates less often.
     if (!flightState._trailHeadEntity && flightState._renderer) {
       flightState._trailHeadEntity = flightState._renderer.trails.createHead({
-        // 'gev-trail' namespace: claimed by trailRenderer's pick
+        // 'gev-trail' namespace: claimed by the display's pick
         // owner so a click on the head segment never reads as empty space.
         id: `gev-trail:${trailHeadIdPrefix}-head-${++flightState._trailHeadSeq}`,
         show: !flightState._cockpitContactMode,
@@ -812,10 +811,8 @@ export function createAircraftTracking({
     flightState._lastCamPoseSig = ''; // force a fleet rotation pass on the next tick
 
     // Stop tracking and remove the entity. skipViewerUntrack: when ANOTHER layer just grabbed the
-    // follow-camera, we tear down our own state but must NOT clear viewer.trackedEntity (the new owner
-    // controls it now — clearing it would yank the camera off their plane). Releasing trackedEntity
-    // does NOT move the camera: Cesium resets the lookAt transform in place, so the view stays where
-    // the follow left it and the user can immediately orbit/zoom.
+    // follow camera, tear down only our own state and keep the new owner.
+    // Releasing our follow keeps the camera pose so the user can orbit or zoom.
     if (flightState._renderer && !skipViewerUntrack) {
       flightState._renderer.follow.release();
     }
@@ -869,12 +866,12 @@ export function createAircraftTracking({
    * Begin tracking a specific aircraft by ICAO24 address.
    *
    * Clears any existing tracked flight, hides its billboard, and creates a
-   * new Entity with:
-   *  - A CallbackProperty position driven by dead-reckoning (_deadReckon).
-   *  - A CallbackProperty rotation from the aircraft's course.
+   * tracked display handle with:
+   *  - A position callback driven by dead-reckoning (_deadReckon).
+   *  - A rotation callback from the aircraft's course.
    *  - An explicit host presentation model (the layer's tracked card).
    *
-   * The viewer's trackedEntity is set to this entity so the camera follows it.
+   * The display starts the engine follow for this handle.
    *
    * @param {string} icao24 - ICAO 24-bit transponder address to track.
    */
@@ -980,10 +977,8 @@ export function createAircraftTracking({
       trackedStyle.labelColor,
     );
 
-    // A billboard has a ~zero bounding sphere, so Cesium's default follow distance is
-    // far too tight (the user had to scroll out to read the plane). Give the entity a
-    // calibrated viewFrom — behind + above, distance scaled to altitude — for a readable
-    // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
+    // Frame the aircraft behind and above, with distance scaled to altitude.
+    // The offset uses ENU: east=+X, north=+Y, up=+Z.
     const followRange = Math.min(
       Math.max((followAltitudeM(info) || 1500) * 1.1 + 2500, 3000),
       30000,
@@ -994,10 +989,6 @@ export function createAircraftTracking({
       z: followRange * 0.55,
     });
 
-    // Cancel any in-progress camera flight first — otherwise Cesium won't apply the
-    // tracked entity's viewFrom on the first frame, so voice-initiated tracking (which
-    // often fires mid-fly_to_location) would follow the plane WITHOUT centering/framing it
-    // the way a click (idle camera) does.
     // Expose the camera's already-settled position to cross-module HUD consumers (the tracked-target
     // readout) so they draw at the SAME spot the camera framed, without recomputing the dead-reckon in
     // postRender (which would jitter the label against the now-stable plane).

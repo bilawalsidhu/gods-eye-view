@@ -1,31 +1,5 @@
 // Public depth inputs shared by actual terrain/tiles classifiers.
-import {
-  DataTexture,
-  FloatType,
-  RGBAFormat,
-  NearestFilter,
-  Matrix4,
-  Uniform,
-  RGBADepthPacking,
-} from 'three';
-export function createGroundTexture(data, width, height) {
-  const texture = new DataTexture(data, width, height, RGBAFormat, FloatType);
-  texture.minFilter = NearestFilter;
-  texture.magFilter = NearestFilter;
-  texture.needsUpdate = true;
-  return texture;
-}
-export function createGroundStorage(texels) {
-  const width = Math.min(1024, Math.max(1, texels));
-  const height = Math.max(1, Math.ceil(texels / width));
-  const data = new Float32Array(width * height * 4);
-  return {
-    data,
-    width,
-    height,
-    texture: createGroundTexture(data, width, height),
-  };
-}
+import { Matrix4, Uniform, RGBADepthPacking } from 'three';
 export function groundSurfaceUniforms() {
   return [
     ['tAllDepth', new Uniform(null)],

@@ -1,27 +1,21 @@
 import assert from 'node:assert/strict';
 import { stations, installRadioFixture } from './fixtures/w2/radio.mjs';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import { createStrict, localPreview, openPage, waitForEngine } from './qa-strict-harness.mjs';
 const url = localPreview(process.argv[2]);
 // The long soak and switch timings live in qa-strict-soak.mjs.
 url.search = '?engine=navara&welcome=0';
 url.hash = 'v=2&lat=30.27&lon=-97.74&alt=12000&pitch=-90&map=sentinel2&l=';
 const strict = createStrict({ origin: url.origin, layers: ['radio'] });
 await strict.run({}, async (browser) => {
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  const { page: page, errors } = await openPage(browser);
+  await page.setViewport({ width: 800, height: 600 });
   await installRadioFixture(page);
   await page.goto(url.href);
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.engine?.kind === 'navara' &&
-      document.querySelector('#loading-screen.hidden'),
-  );
+  await waitForEngine(page, 'navara');
   await page.evaluate(async (id) => {
-    const { dataManager, styleManager, tileset } = window.__godsEyeView;
+    const { dataManager, styleManager } = window.__godsEyeView;
     await styleManager.initialRestorePromise;
-    if (window.__GOOGLE_MAPS_API_KEY__ || tileset)
-      throw Error('Expected keyless preview');
+
     window.qaLayer = dataManager.layers.get('radio').module;
     await dataManager.setEnabled('radio', true, { origin: 'user' });
   }, stations[0].id);

@@ -27,7 +27,7 @@ const NO_HOST = Object.freeze({ collection: null, surface: 'none' });
 /** Delay before the one frame that retries tiles a provider deferred. */
 export const TILE_RETRY_DELAY_MS = 250;
 /** How often a staged source waiting out its quiet interval rechecks readiness. */
-export const STAGE_WAKE_MS = 150;
+const STAGE_WAKE_MS = 150;
 // A staged source's own tiles are in once no request was made or settled
 // for this long; two frames in a row must find it so.
 const STAGE_QUIET_MS = 200;
@@ -118,7 +118,7 @@ function singleImageProvider(image, rectangle, credit) {
  * for one frame when it settles), and a request the provider itself
  * deferred goes through one coalesced delayed retry.
  */
-export function admitTileRequests(provider, admission, requestRender, retry) {
+function admitTileRequests(provider, admission, requestRender, retry) {
   const original = provider.requestImage.bind(provider);
   provider.requestImage = (x, y, level, request) => {
     if (admission.inFlight >= admission.limit) return undefined;

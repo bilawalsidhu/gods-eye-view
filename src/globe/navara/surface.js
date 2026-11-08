@@ -46,7 +46,7 @@ export function surfaceRay(place) {
 }
 
 /** Height above the ellipsoid of a hit `distance` metres down a surfaceRay. */
-export const heightAlongRay = (ray, distance) =>
+export const heightAlongRay = (distance) =>
   Number.isFinite(distance) ? RAY_START_HEIGHT - distance : undefined;
 
 const worldRay = new Ray();
@@ -279,7 +279,7 @@ export function createNavaraSurface(view, hooks) {
     shownRoots.length = 0;
     if (!Number.isFinite(hit.distance))
       hit = finestHiddenHit(roots, excluded, ray);
-    const height = heightAlongRay(ray, hit.distance);
+    const height = heightAlongRay(hit.distance);
     if (height === undefined) return terrainDetail(place);
     return { height, source: 'tiles', tileSizeM: tileSizeOf(hit.root) };
   };

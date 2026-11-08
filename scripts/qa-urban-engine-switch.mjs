@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { fromDegrees } from '../src/geo/cartesian3.js';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import { createStrict, localPreview, openPage, waitForEngine } from './qa-strict-harness.mjs';
 import { installTransitFixture } from './fixtures/w2/transit.mjs';
 import {
   combinedPayloads,
@@ -22,37 +22,19 @@ const VEHICLES = 12;
 const strict = createStrict({
   origin: url.origin,
   layers: [id],
-  // installCombinedFixture answers these hosts too.
-  fixtures: bus
-    ? []
-    : [
-        'https://earthquake.usgs.gov/*',
-        'https://tiles.dontgetflocked.com/*',
-        '*://*.earthdata.nasa.gov/*',
-      ],
 });
 await strict.run({}, async (b) => {
-  const p = await b.newPage();
+  const { page: p, errors } = await openPage(b);
   await p.setViewport({ width: 1280, height: 900 });
-  const errors = [];
-  p.on('pageerror', (e) => {
-    errors.push(e.message);
-    console.log('error', e.message);
-  });
   const fx = bus
     ? await installTransitFixture(p)
     : await installCombinedFixture(p);
   fx.setStep?.(9);
   await p.goto(url.href);
-  await p.waitForFunction(
-    () =>
-      window.__godsEyeView?.engine?.kind === 'navara' &&
-      document.querySelector('#loading-screen.hidden'),
-  );
+  await waitForEngine(p, 'navara');
   await p.evaluate(async (id) => {
-    const { dataManager, styleManager, tileset } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Expected keyless preview');
+    const { dataManager, styleManager } = window.__godsEyeView;
+
     await styleManager.initialRestorePromise;
     window.qaUrban = dataManager.layers.get(id).module;
     await dataManager.setEnabled(id, true, { origin: 'user' });

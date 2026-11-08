@@ -34,7 +34,5 @@ export function createBatchIdPool() {
       released.add(wrapper);
       for (const id of wrapper.batchIds) if (id > 0) free.push(id);
     },
-    /** The ids waiting for a wrapper. */
-    size: () => free.length,
   };
 }

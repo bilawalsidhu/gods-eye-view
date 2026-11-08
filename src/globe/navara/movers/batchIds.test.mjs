@@ -25,7 +25,6 @@ test('a rebuilt set takes the ids of the set it replaces', () => {
     set = wrapper(pool.source(ctx), 1000);
   }
   assert.equal(ctx.issued(), 1000);
-  assert.equal(pool.size(), 0);
   assert.equal(new Set(set.batchIds).size, 1000);
 });
 
@@ -35,7 +34,6 @@ test('live sets never share an id, and a set gives its ids back once', () => {
   const a = wrapper(pool.source(ctx), 3);
   pool.release(a);
   pool.release(a);
-  assert.equal(pool.size(), 3);
   const b = wrapper(pool.source(ctx), 2);
   const c = wrapper(pool.source(ctx), 2);
   const ids = [...b.batchIds, ...c.batchIds];
@@ -47,7 +45,6 @@ test('ids Navara could not give (0) are not pooled', () => {
   const pool = createBatchIdPool();
   pool.release({ batchIds: [0, 0, 7] });
   pool.release(null);
-  assert.equal(pool.size(), 1);
   const none = { genGlobalBatchId: () => undefined };
   assert.equal(pool.source(none).genGlobalBatchId(), 7);
   assert.equal(pool.source(none).genGlobalBatchId(), undefined);

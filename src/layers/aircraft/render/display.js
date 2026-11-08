@@ -5,7 +5,7 @@
 // engine.camera.follow (the follow camera), engine.projector and
 // engine.camera.pose() (the view the logic reads). The engine draws.
 //
-// Handles keep the Cesium field vocabulary the logic writes (contract.js) as
+// Handles expose the fields the logic writes (contract.js) as
 // setters that write the engine's instance stores; the writes of a frame are
 // committed once, at the end of the frame listener that made them (or in a
 // microtask for writes outside a frame), so a fleet tick draws in its frame.
@@ -23,13 +23,9 @@ import {
   drawAircraftIconAtlas,
 } from '../../../data/aircraftIcons.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
-import { rgbaFromCss } from '../../shared/color.js';
+import { Rgba, rgbaFromCss } from '../../shared/color.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
-import {
-  createMoverBank,
-  StoredColor,
-  writeFields,
-} from '../../shared/render/moverBank.js';
+import { createMoverBank, writeFields } from '../../shared/render/moverBank.js';
 
 const BASE_SIZE_PX = 20;
 
@@ -41,7 +37,7 @@ const BASE_SIZE_PX = 20;
  */
 const GLTF_AXIS = [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1];
 // The trail's alpha where it passes the depth test and where the scene hides
-// it (as data/trailRenderer.js draws track histories), and the live head's.
+// it, and the live head's.
 const TRAIL_ALPHA = 0.85;
 const TRAIL_OCCLUDED_ALPHA = 0.4;
 const HEAD_ALPHA = 0.9;
@@ -245,7 +241,12 @@ export function createAircraftDisplay(
       this._scale = spec.scale ?? 1;
       this._width = spec.width ?? BASE_SIZE_PX;
       this._height = spec.height ?? BASE_SIZE_PX;
-      this._color = new StoredColor(spec.color);
+      this._color = new Rgba(
+        spec.color?.red ?? 1,
+        spec.color?.green ?? 1,
+        spec.color?.blue ?? 1,
+        spec.color?.alpha ?? 1,
+      );
       this._image = spec.image;
       this.cell = iconCells.get(spec.image) ?? iconCells.get(defaultIcon);
       this._scaleByDistance = spec.scaleByDistance
@@ -354,7 +355,12 @@ export function createAircraftDisplay(
         (value?.alpha ?? 1) === this._color.alpha
       )
         return;
-      this._color = new StoredColor(value);
+      this._color = new Rgba(
+        value?.red ?? 1,
+        value?.green ?? 1,
+        value?.blue ?? 1,
+        value?.alpha ?? 1,
+      );
       rgbaOf(this._color);
       this.write(spriteColorField);
     }
@@ -493,7 +499,12 @@ export function createAircraftDisplay(
       this.placed = false;
       this._show = true;
       this._scale = spec.scale ?? 1;
-      this._color = new StoredColor(spec.color);
+      this._color = new Rgba(
+        spec.color?.red ?? 1,
+        spec.color?.green ?? 1,
+        spec.color?.blue ?? 1,
+        spec.color?.alpha ?? 1,
+      );
       this._id = spec.id;
       this.modelMatrix = geo.matrix4.create();
       this.translation = geo.cartesian3.create();
@@ -562,7 +573,12 @@ export function createAircraftDisplay(
     }
 
     set color(value) {
-      this._color = new StoredColor(value);
+      this._color = new Rgba(
+        value?.red ?? 1,
+        value?.green ?? 1,
+        value?.blue ?? 1,
+        value?.alpha ?? 1,
+      );
       this.gevBank?.update(this, { color: rgbaOf(this._color) });
     }
   }

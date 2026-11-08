@@ -2,9 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
-import { vesselViewerRenderer } from '../../testSupport/vesselViewerRenderer.mjs';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createVesselsDisplay, vesselAtlasLayout } from './render/display.js';
 
 const noop = () => {};
+function vesselDisplay() {
+  const layout = vesselAtlasLayout();
+  const renderer = createVesselsDisplay(createFakeEngine(), {
+    drawAtlas: async () => ({
+      canvas: { width: layout.width, height: layout.height },
+      cells: layout.cells,
+    }),
+  });
+  renderer.fleet.attach({ show: true });
+  return renderer;
+}
 function services() {
   return {
     context: {
@@ -28,7 +40,7 @@ function services() {
     },
     worldFocus: {},
     renderer: {
-      create: ({ viewer }) => vesselViewerRenderer({ viewer }),
+      create: () => vesselDisplay(),
     },
     render: {
       holdContinuousRender: noop,
@@ -42,14 +54,20 @@ function setup(source, options = {}) {
   const primitives = new Set();
   layer.testing._setVesselStateForTest({
     viewer: {},
-    renderer: vesselViewerRenderer,
-    billboardCollection: {
-      add(options) {
-        const primitive = { ...options };
-        primitives.add(primitive);
-        return primitive;
-      },
-      remove: (primitive) => primitives.delete(primitive),
+    renderer: () => {
+      const display = vesselDisplay();
+      const add = display.fleet.add;
+      const remove = display.fleet.remove;
+      display.fleet.add = (spec) => {
+        const handle = add(spec);
+        primitives.add(handle);
+        return handle;
+      };
+      display.fleet.remove = (handle) => {
+        primitives.delete(handle);
+        remove(handle);
+      };
+      return display;
     },
   });
   let now = 1000;

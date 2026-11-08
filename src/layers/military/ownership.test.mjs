@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
-import { aircraftViewerRenderer } from '../../testSupport/aircraftViewerRenderer.mjs';
+import { recordingAircraftRenderer } from '../../testSupport/aircraftRecordingRenderer.mjs';
 
 function services() {
   const names = [
@@ -183,7 +183,13 @@ async function firstPlacement(appClockLagMs) {
   });
   const added = [];
   layer.testing._setTrackedMilitaryRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) =>
+      recordingAircraftRenderer(null, {
+        fleet: {
+          ...billboardCollection,
+          shown: billboardCollection?.show !== false,
+        },
+      }),
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
@@ -287,7 +293,13 @@ test('a vanished military contact fades while position-less rows keep theirs', a
   });
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   layer.testing._setTrackedMilitaryRefreshStateForTest({
-    renderer: aircraftViewerRenderer,
+    renderer: ({ billboardCollection }) =>
+      recordingAircraftRenderer(null, {
+        fleet: {
+          ...billboardCollection,
+          shown: billboardCollection?.show !== false,
+        },
+      }),
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },

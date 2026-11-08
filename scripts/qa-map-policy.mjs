@@ -115,3 +115,18 @@ export function strictBlockPatterns(
     { urlPattern: '*://*:*/*', block: true },
   ];
 }
+
+/** Paid or live model endpoints no switch gate may reach. */
+export const SESSION_BLOCKED_URLS = Object.freeze([
+  '*://tile.googleapis.com/*',
+  '*://*.googleapis.com/*3dtiles*',
+  '*://api.cesium.com/*',
+  '*://assets.ion.cesium.com/*',
+  '*://maps.googleapis.com/*',
+  '*/api/google/*',
+  '*/api/openai/*',
+  '*/api/realtime/*',
+  '*/api/gemini/*',
+  '*://api.openai.com/*',
+  '*://generativelanguage.googleapis.com/*',
+]);

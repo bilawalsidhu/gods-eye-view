@@ -1,3 +1,4 @@
+import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { launchFixture } from '../src/bench/launchFixture.js';
 import {
@@ -62,10 +63,10 @@ await strict.run({}, async (b) => {
       window.__godsEyeView?.engine?.kind === 'navara' &&
       document.querySelector('#loading-screen.hidden'),
   );
+  await assertKeylessPreview(p);
   await p.evaluate(async (missions) => {
-    const { dataManager, styleManager, tileset } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Expected keyless preview');
+    const { dataManager, styleManager } = window.__godsEyeView;
+
     await styleManager.initialRestorePromise;
     window.sa = dataManager.layers.get('satellites').module;
     window.la = dataManager.layers.get('rocket-launches').module;

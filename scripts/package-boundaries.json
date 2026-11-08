@@ -1214,7 +1214,6 @@
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
       "src/ui/i18n.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/cameraAngles.js",
       "src/globe/contract.js",
       "src/geo/",
@@ -1377,7 +1376,6 @@
       "src/ui/stores/sceneInteractions.js",
       "src/ui/stores/dataPacks.js",
       "src/ui/i18n.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/contract.js",
       "src/geo/"
     ],
@@ -1466,7 +1464,6 @@
       "src/geo/",
       "src/time/clock.js",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/layers/shared/color.js",
       "src/layers/aircraft/qaDrawn.js",
       "src/data/bindContextStore.js"
@@ -1536,7 +1533,6 @@
       "src/geo/",
       "src/time/clock.js",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/layers/aircraft/qaDrawn.js",
       "src/data/bindContextStore.js"
     ],
@@ -1574,8 +1570,7 @@
       "src/globe/cesium/sceneProjection.js",
       "src/globe/cesium/screenEvents.js",
       "src/geo/",
-      "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/contract.js"
     ],
     "external": ["cesium"]
   },
@@ -1622,7 +1617,6 @@
       "src/globe/cesium/sceneProjection.js",
       "src/geo/",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/overlays/bindOverlayHost.js",
       "src/data/bindContextStore.js"
     ],
@@ -1797,7 +1791,6 @@
       "src/geo/",
       "src/time/clock.js",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
@@ -1848,8 +1841,7 @@
       "src/layers/installations/classLabel.js",
       "src/layers/shared/color.js",
       "src/geo/",
-      "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/contract.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1903,8 +1895,7 @@
       "src/ui/unitLabels.js",
       "src/globe/cesium/sceneProjection.js",
       "src/geo/",
-      "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js"
+      "src/globe/contract.js"
     ],
     "external": ["cesium"]
   },
@@ -1966,7 +1957,6 @@
       "src/i18n/locales/zh-Hant.json",
       "src/geo/",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/layers/traffic/render/display.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile"]
@@ -2007,7 +1997,6 @@
       "src/layers/shared/color.js",
       "src/geo/",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/overlays/bindOverlayHost.js"
     ],
     "external": []
@@ -2652,7 +2641,6 @@
       "src/data/trafficFlowStyle.js",
       "src/data/trafficPresetStyle.js",
       "src/data/trafficQueue.js",
-      "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
       "src/data/vesselTypes.js",
       "src/firstRunExperience.js",
@@ -3441,7 +3429,6 @@
       "src/globe/cesium/surface.js",
       "src/globe/cesium/movers.js",
       "src/globe/cesium/lines.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/cameraMath.js",
       "src/globe/navara/cameraModel.js",
       "src/globe/navara/createNavaraEngine.js",
@@ -3468,7 +3455,6 @@
       "src/annotations/drawSurface.js",
       "src/globe/cesium/sceneProjection.js",
       "src/globe/cesium/screenEvents.js",
-      "src/globe/cesium/trail.js",
       "src/layers/alpr/overlay.js",
       "src/layers/alpr/presentation.js",
       "src/layers/bikeshare/selectionModel.js",
@@ -3520,17 +3506,13 @@
       "src/layers/shared/render/engineView.js",
       "src/globe/cesium/celestial.js",
       "src/celestialRing/view.js",
-      "src/layers/shared/render/navaraPolygons.js",
       "src/globe/navara/ground/pulse.js",
       "src/globe/navara/sceneDepth.js",
       "src/layers/bhoteKoshi/render/story.js",
       "src/globe/navara/windFlowMesh.js",
-      "src/layers/shared/render/navaraGroundPicks.js",
-      "src/layers/shared/render/groundRing.js",
       "src/layers/bikeshare/stationPoints.js",
       "src/layers/shared/viewRectangle.js",
       "src/layers/firms/rectangle.js",
-      "src/layers/shared/render/navaraMoverBank.js",
       "src/layers/shared/render/moverBank.js",
       "src/layers/radio/screenClusters.js",
       "src/layers/shared/render/imageAtlas.js",
@@ -3805,7 +3787,6 @@
       "src/data/trafficFlowStyle.js",
       "src/data/trafficPresetStyle.js",
       "src/data/trafficQueue.js",
-      "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
       "src/data/vesselTypes.js",
       "src/keylessGeocoder.js",
@@ -4259,7 +4240,6 @@
       "src/ui/stores/bhoteKoshiPanel.js",
       "src/hudReadouts.js",
       "src/ui/i18n.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/cesium/createCesiumEngine.js",
       "src/globe/cesium/maps.js",
       "src/globe/cesium/terrain.js",
@@ -4284,7 +4264,6 @@
       "src/globe/contract.js",
       "src/globe/cesium/sceneProjection.js",
       "src/globe/cesium/screenEvents.js",
-      "src/globe/cesium/trail.js",
       "src/layers/alpr/overlay.js",
       "src/layers/alpr/presentation.js",
       "src/layers/bikeshare/selectionModel.js",
@@ -4492,7 +4471,6 @@
       "src/sources/capability.js",
       "src/data/cameraArrival.js",
       "src/data/cameraFraming.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/cesium/credits.js",
       "src/globe/contract.js",
       "src/geo/",
@@ -4524,7 +4502,6 @@
   "layer-lifecycle": {
     "exports": ["./data/lifecycle"],
     "modules": [
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/contract.js",
       "src/data/lifecycle.js",
       "src/data/layerSceneBinding.js",
@@ -4552,7 +4529,6 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/i18n/index.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/contract.js"
     ],
     "external": ["cesium"]
@@ -5154,7 +5130,6 @@
       "src/globe/cesium/terrain.js",
       "src/globe/cesium/maps.js",
       "src/globe/cesium/createCesiumEngine.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/cesium/projector.js",
       "src/globe/cesium/render.js",
       "src/globe/cesium/credits.js",
@@ -5752,7 +5727,6 @@
       "src/globe/cesium/sceneProjection.js",
       "src/geo/",
       "src/globe/contract.js",
-      "src/globe/cesium/engineFromViewer.js",
       "src/globe/cesium/credits.js",
       "src/layers/wildlifeSightings/display.js",
       "src/data/spriteOrder.js",

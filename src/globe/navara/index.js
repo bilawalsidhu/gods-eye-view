@@ -2,14 +2,11 @@
 // the product way (viewOptions.js) and the GlobeEngine on it. Load it with a
 // dynamic import() so Navara stays out of the Cesium-mode bundle.
 
-import { layerEffectDesc, withFrameUpdates } from './frameDescriptor.js';
 import ThreeView, {
   Color as NavaraColor,
   MeshDesc,
   EffectDesc,
   Effect as NavaraEffect,
-  DrapedMesh,
-  setupMaterialForDrape,
 } from '@navaramap/three';
 import * as geo from '../../geo/index.js';
 import { DefaultPlugin } from '@navaramap/three-default-plugin';
@@ -124,7 +121,7 @@ function groundInView(engine) {
  *   `?look=` (cinematic by default); `hd` draws at the device pixel ratio
  *   with MSAA (Navara HD), else at CSS pixels without it. The sun follows the engine clock (the
  *   page's app clock): the look reads its frame time.
- * @returns {Promise<{ view: object, engine: import('../contract.js').GlobeEngine, destroy: () => void }>}
+ * @returns {Promise<{ setRenderLoop: (enabled: boolean) => void, engine: import('../contract.js').GlobeEngine, destroy: () => void }>}
  */
 export async function createNavaraGlobe({ container, search, hd = false }) {
   if (!container) throw new TypeError('createNavaraGlobe needs a container');
@@ -272,10 +269,6 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
       view,
       MeshDesc,
       NavaraColor,
-      EffectDesc: layerEffectDesc(EffectDesc),
-      NavaraEffect,
-      DrapedMesh,
-      setupMaterialForDrape,
       alignDaylightToRestoredView() {
         look.resetDaylight();
         engine.render.request('restored-daylight');
@@ -283,20 +276,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
     }),
   });
   return {
-    view,
     engine,
-    NavaraColor,
-    MeshDesc,
-    EffectDesc,
-    LayerEffectDesc: layerEffectDesc(EffectDesc),
-    NavaraEffect,
-    DrapedMesh,
-    setupMaterialForDrape,
-    // Startup can fly from the engine's placeholder camera into a shared view.
-    alignDaylightToRestoredView() {
-      look.resetDaylight();
-      engine.render.request('restored-daylight');
-    },
     setRenderLoop: (enabled) => {
       parked = !enabled;
       setRenderLoopEnabled(view, enabled);

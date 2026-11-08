@@ -6,7 +6,6 @@ import {
   cellRing,
   createGroundPicks,
   createGroundRegistry,
-  dashLit,
   discRing,
   normalizeGroundItem,
   normalizeGroundSetOptions,
@@ -288,18 +287,11 @@ test("a pixel corridor's glow, pulse and dash are checked and defaulted", () => 
   );
 });
 
-test('a pulse swings between its min and max; a dash scrolls toward the end', () => {
+test('a pulse swings between its min and max', () => {
   const pulse = { periodMs: 2000, min: 0.2, max: 0.8 };
   assert.ok(Math.abs(pulseFactor(pulse, 0) - 0.5) < 1e-9);
   assert.ok(Math.abs(pulseFactor(pulse, 0.5) - 0.8) < 1e-9);
   assert.ok(Math.abs(pulseFactor(pulse, 1.5) - 0.2) < 1e-9);
-  const dash = { cells: 10, duty: 0.5, speed: 1 };
-  // Lit for the first half of each cell, dark for the second, soft edges.
-  assert.equal(dashLit(dash, 0.02, 0), 1);
-  assert.equal(dashLit(dash, 0.08, 0), 0);
-  assert.ok(Math.abs(dashLit(dash, 0.05, 0) - 0.5) < 1e-9);
-  // A second later the pattern has moved one cell toward the end.
-  assert.equal(dashLit(dash, 0.12, 1), dashLit(dash, 0.02, 0));
 });
 
 test('the registry knows when a shown set animates', () => {

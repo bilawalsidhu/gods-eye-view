@@ -31,7 +31,7 @@ export function createCesiumFrames(viewer) {
   const { scene } = viewer;
   const bridges = ['preUpdate', 'preRender', 'postRender'].map((name) => [
     name,
-    bridgeEvent(scene[name], null, { unary: unixMilliseconds }),
+    bridgeEvent(scene[name], { unary: unixMilliseconds }),
   ]);
   return {
     frames: Object.fromEntries(

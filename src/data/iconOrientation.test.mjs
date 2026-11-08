@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
   HORIZON_FEATHER_RAD,
-  horizonOccluder,
   screenProjectedRotation,
   skyBackdropFactor,
   stabilizeScreenRotation,
@@ -483,7 +482,7 @@ test('below the surface the backdrop test agrees with the occluder beside it', (
   // halves use that plane. The old fail-closed broke exactly this: the occluder
   // kept a contact against sky and the backdrop test called it ground.
   const camera = Cesium.Cartesian3.fromDegrees(JFK_LON, JFK_LAT, -18);
-  const occluder = horizonOccluder({ positionWC: camera });
+  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, camera);
   const enu = Cesium.Transforms.eastNorthUpToFixedFrame(camera);
   const offsetBy = (up) =>
     Cesium.Cartesian3.add(

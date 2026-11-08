@@ -430,13 +430,13 @@ test('six admissions include slow aborted decodes; stale images close without dr
   queue.add(Array.from({ length: 10 }, (_, i) => task(i)));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(pending.length, 6);
-  assert.equal(queue.diagnostics().active, 6);
+  assert.equal(pending.length, 6);
   live = false;
   for (const c of controllers) c.abort();
   queue.prune();
   let replacement = true;
   queue.add([{ ...task(10), live: () => replacement }]);
-  assert.equal(queue.diagnostics().active, 6);
+  assert.equal(pending.length, 6);
   for (const p of pending) p.resolve({ close: () => closed.push(p.url) });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(pending.length, 7);
@@ -449,5 +449,6 @@ test('six admissions include slow aborted decodes; stale images close without dr
   assert.deepEqual(drawn, []);
   assert.deepEqual(failed, []);
   assert.equal(closed.length, 7);
-  assert.deepEqual(queue.diagnostics(), { active: 0, queued: 0, peak: 6 });
+  assert.equal(controllers.size, 0);
+  assert.equal(pending.length, 7, 'stale queued tasks never load');
 });

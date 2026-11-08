@@ -33,12 +33,3 @@ export function withPassDisposal(Base) {
     }
   };
 }
-
-// The base the layers' Navara effects extend (engine.LayerEffectDesc): per
-// frame updates on their own callback, and the raw pass disposed when the
-// effect is deleted. A layer re-creates its effect on every attach (an
-// engine switch), so an undisposed pass kept its material, its shader
-// program and the uniforms' data textures alive for the page's lifetime.
-export function layerEffectDesc(EffectDesc) {
-  return withPassDisposal(withFrameUpdates(EffectDesc));
-}

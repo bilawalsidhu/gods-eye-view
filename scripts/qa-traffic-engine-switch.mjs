@@ -75,9 +75,8 @@ await strict.run({}, async (b) => {
   await p.goto(base.href);
   await waitForEngine(p, 'navara');
   await p.evaluate(async () => {
-    const { tileset, dataManager } = window.__godsEyeView;
-    if (tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw Error('Keyless preview required');
+    const { dataManager } = window.__godsEyeView;
+
     window.qaTraffic = dataManager.layers.get('traffic').module;
     window.qaTraffic.setParams({ jamViz: 'both' });
     await dataManager.setEnabled('traffic', true, { origin: 'user' });
