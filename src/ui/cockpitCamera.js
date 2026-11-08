@@ -109,7 +109,10 @@ export function update() {
  * full-detail read runs at a time (each is nine picks Cesium traverses
  * every frame until it settles): while one is still running, a refresh
  * reads the loaded tiles instead, and the slow read applies whenever it
- * lands unless a newer one has.
+ * lands. Once a full-detail read has answered, only full-detail reads
+ * change the height: a loaded-tile read stands in only until the first
+ * lands, so one coarse probe cannot drop a river bridge to the sea, and a
+ * read that sampled nothing keeps the height it had.
  * @param {{latitude: number, longitude: number}} [at] Where to read the
  *   water: the dead-reckoned position the camera rides.
  * @returns {number} Ellipsoidal metres.
@@ -133,15 +136,14 @@ function vesselSurfaceM(info, nowMs, at = info) {
         mmsi: info.mmsi,
         heightM: loadedWaterlineM(scene, probes, seaM),
         sampledMs: nowMs,
-        // Full-detail reads by number: the last started, the last applied.
-        startedSeq: 0,
-        landedSeq: 0,
+        // Whether a full-detail read has answered for this ship.
+        landed: false,
         inFlight: false,
       };
       this.vesselWaterline = read;
     } else {
       read.sampledMs = nowMs;
-      if (read.inFlight) {
+      if (read.inFlight && !read.landed) {
         const loadedM = loadedWaterlineM(scene, probes, seaM);
         if (Number.isFinite(loadedM)) read.heightM = loadedM;
       }
@@ -155,7 +157,6 @@ function vesselSurfaceM(info, nowMs, at = info) {
 
 /** Start one full-detail water read for `read`; its answer lands on it. */
 function readWaterline(read, scene, probes, seaM) {
-  const seq = ++read.startedSeq;
   read.inFlight = true;
   Promise.resolve()
     .then(() => scene.sampleHeightMostDetailed(probes))
@@ -163,13 +164,12 @@ function readWaterline(read, scene, probes, seaM) {
       (samples) => {
         if (this.vesselWaterline !== read) return;
         read.inFlight = false;
-        // However late it lands, it applies unless a newer read has.
-        if (seq <= read.landedSeq) return;
-        read.landedSeq = seq;
-        read.heightM = vesselWaterlineM(
-          seaM,
-          (samples || []).map((sample) => sample?.height),
-        );
+        // However late it lands, it applies; one that sampled nothing (tiles
+        // not loaded yet) is no answer and keeps the height already read.
+        const heights = (samples || []).map((sample) => sample?.height);
+        if (!heights.some(Number.isFinite)) return;
+        read.landed = true;
+        read.heightM = vesselWaterlineM(seaM, heights);
       },
       () => {
         if (this.vesselWaterline === read) read.inFlight = false;

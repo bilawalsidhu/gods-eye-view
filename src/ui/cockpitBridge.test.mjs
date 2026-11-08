@@ -1261,6 +1261,59 @@ test('a slow water read is never stacked, and lands however late', async (t) => 
   );
 });
 
+test('a river height stands through reads that sample nothing or one coarse probe', async (t) => {
+  const clock = manualClock(t, START_MS);
+  const sea = await bridgeAt(t, clock);
+  frames(sea.cockpit, clock, sea.shots, 60);
+  const seaEyeM = eyeHeightM(sea.shots.at(-1));
+  sea.cockpit.exit();
+
+  clock.set(START_MS);
+  const record = { ...RECORD, lastPositionEpoch: START_MS / 1000 };
+  const ship = fixture(t, { record });
+  const reads = [];
+  ship.viewer.scene.sampleHeightMostDetailed = (positions) =>
+    new Promise((resolve) => reads.push({ positions, resolve }));
+  ship.viewer.scene.sampleHeight = () => undefined;
+  const answer = (read, height) =>
+    read.resolve(
+      read.positions.map((position) => Object.assign(position, { height })),
+    );
+  ship.cockpit.enter();
+  await settle();
+  ship.cockpit.update();
+  await settle();
+  answer(reads[0], 27);
+  await settle();
+  frames(ship.cockpit, clock, ship.shots, 120);
+  await settle();
+  near(eyeHeightM(ship.shots.at(-1)) - seaEyeM, 27, 'on the river', 0.5);
+  // The next full read lands over tiles not loaded yet: every probe empty.
+  assert.equal(reads.length, 2);
+  answer(reads[1], undefined);
+  await settle();
+  frames(ship.cockpit, clock, ship.shots, 120);
+  await settle();
+  near(
+    eyeHeightM(ship.shots.at(-1)) - seaEyeM,
+    27,
+    'an empty full read is no answer',
+    0.5,
+  );
+  // While the next one runs, coarse loaded tiles read the sea.
+  assert.equal(reads.length, 3);
+  ship.viewer.scene.sampleHeight = () => 0.5;
+  frames(ship.cockpit, clock, ship.shots, 240);
+  await settle();
+  assert.equal(reads.length, 3, 'still the one read in flight');
+  near(
+    eyeHeightM(ship.shots.at(-1)) - seaEyeM,
+    27,
+    'loaded tiles do not undo a full read',
+    0.5,
+  );
+});
+
 test('a client clock minutes fast does not age the bridge into a stale feed', async (t) => {
   // The feed's newest fix is this ship's; the client clock runs 200 s
   // ahead of the feed and received the refresh just now.

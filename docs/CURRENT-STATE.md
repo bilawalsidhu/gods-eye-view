@@ -1568,8 +1568,10 @@ eight probes 30 m out, the lowest probe taken as the water when it is 2 m to
 4,000 m above sea level. The first read starts from the tiles already loaded, then
 the full-detail read replaces it; it repeats every 5 s. Only one full-detail
 read runs at a time: while one is still running, a refresh reads the loaded
-tiles instead, and the slow read applies whenever it lands unless a newer
-one has. A failed read keeps the sea surface.
+tiles instead, and the slow read applies whenever it lands. Once a
+full-detail read has answered, loaded-tile reads no longer change the height,
+and a read that sampled nothing keeps the height it had. A failed read keeps
+the sea surface.
 
 The HUD keeps its frame, vision styles, briefing, weather and Display/Radio
 utilities. It names the ship, reads `{type} · LIVE AIS · EYE {height}`, shows
