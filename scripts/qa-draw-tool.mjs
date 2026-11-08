@@ -284,14 +284,14 @@ try {
   }
   const after = await drawState();
   check(
-    'three enable/disable cycles add no listener, handler or preview data source',
+    'three enable/disable cycles add no listener, handler or preview set',
     after.domListeners === before.domListeners &&
-      after.previewDataSources === 1 &&
-      before.previewDataSources === 1 &&
+      after.previewSets === 2 &&
+      before.previewSets === 2 &&
       after.sceneHandler === false &&
       after.pointerOwner === null &&
       after.stockDoubleClick === before.stockDoubleClick,
-    `listeners ${before.domListeners}→${after.domListeners}, previews ${after.previewDataSources}, ` +
+    `listeners ${before.domListeners}→${after.domListeners}, previews ${after.previewSets}, ` +
       `handler ${after.sceneHandler}, owner ${after.pointerOwner}, stock dblclick ${after.stockDoubleClick}`,
   );
 
@@ -774,13 +774,10 @@ try {
     finalState.active === false &&
       finalState.pointerOwner === null &&
       finalState.sceneHandler === false &&
-      finalState.previewDataSources === 1,
+      finalState.previewSets === 2,
     JSON.stringify(finalState),
   );
   // ── destroy(): the shell disposing the tool leaves nothing behind ───────
-  const beforeDestroy = await page.evaluate(
-    () => window.__godsEyeView.viewer.dataSources.length,
-  );
   await page.click('#draw-toggle'); // destroy from an ACTIVE session: the harder case
   await wait(200);
   const destroyed = await page.evaluate(async () => {
@@ -788,16 +785,11 @@ try {
     const wasActive = tool.active;
     await tool.destroy();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const viewer = window.__godsEyeView.viewer;
-    let previews = 0;
-    for (let i = 0; i < viewer.dataSources.length; i += 1)
-      if (viewer.dataSources.get(i)?.name === 'gev-draw-preview') previews += 1;
     const diagnostics = tool.diagnostics();
     return {
       wasActive,
       diagnostics,
-      previews,
-      dataSources: viewer.dataSources.length,
+      previews: diagnostics.previewSets,
       handleGone: window.__gevDrawTool === undefined,
       // The viewer's own select and follow run again.
       clickRestored: diagnostics.stockSingleClick,
@@ -816,11 +808,9 @@ try {
     JSON.stringify(destroyed.diagnostics),
   );
   check(
-    'destroy() detaches the preview data source and gives the window handle back',
-    destroyed.previews === 0 &&
-      destroyed.dataSources === beforeDestroy - 1 &&
-      destroyed.handleGone,
-    `previews ${destroyed.previews}, dataSources ${beforeDestroy} → ${destroyed.dataSources}, handle gone ${destroyed.handleGone}`,
+    'destroy() disposes the preview draw sets and gives the window handle back',
+    destroyed.previews === 0 && destroyed.handleGone,
+    `preview sets ${destroyed.previews}, handle gone ${destroyed.handleGone}`,
   );
   check(
     "destroy() returns Cesium's own click actions",

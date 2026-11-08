@@ -426,6 +426,28 @@ test('sensor styles move the pick to where the picture came from', () => {
   assert.deepEqual([plain.x, plain.y], [300, 50]);
 });
 
+test('a move carries its pick-buffer position, sensor-corrected as a click is', (t) => {
+  const h = harness();
+  t.after(() => h.input.destroy());
+  Object.assign(h.viewer.scene.canvas, {
+    clientWidth: 400,
+    clientHeight: 200,
+    width: 400,
+    height: 200,
+  });
+  const stage = { enabled: true, uniforms: { intensity: 1, pixelation: 4 } };
+  registerStyleStages(h.viewer.scene, { surveillance: stage });
+  const seen = [];
+  h.input.onPointer('move', (event) => seen.push(event));
+  h.handler.fire(TYPES.MOUSE_MOVE, { endPosition: { x: 300, y: 50 } });
+  const expected = sensorPickPosition(h.viewer.scene, { x: 300, y: 50 });
+  assert.deepEqual(
+    [seen[0].pickPosition.x, seen[0].pickPosition.y],
+    [expected.x, expected.y],
+  );
+  assert.deepEqual([seen[0].endPosition.x, seen[0].endPosition.y], [300, 50]);
+});
+
 test('the dispatcher is the package input export', async () => {
   const exported = await import('gods-eye-view/input');
   assert.equal(exported.inputFor, inputFor);

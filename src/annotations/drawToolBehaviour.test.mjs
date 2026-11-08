@@ -14,6 +14,7 @@ import {
   resetPointerOwnership,
 } from '../data/inputOwnership.js';
 import { fakeInput } from '../input/testDoubles.mjs';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 
 /* ── DOM doubles ───────────────────────────────────────────────────────── */
 
@@ -144,33 +145,9 @@ function fakeViewer() {
     setInputAction: (action, type) => actions.set(type, action),
     removeInputAction: (type) => actions.delete(type),
   };
-  const attached = [];
-  const pendingAdds = [];
-  const dataSources = {
-    get length() {
-      return attached.length;
-    },
-    get: (index) => attached[index],
-    add(source) {
-      // Cesium resolves this on a later tick — the whole point of finding 7.
-      const promise = Promise.resolve().then(() => {
-        attached.push(source);
-        return source;
-      });
-      pendingAdds.push(promise);
-      return promise;
-    },
-    remove(source) {
-      const at = attached.indexOf(source);
-      if (at >= 0) attached.splice(at, 1);
-      return at >= 0;
-    },
-  };
   return {
     scene: { canvas, requestRender() {} },
     screenSpaceEventHandler: stockHandler,
-    dataSources,
-    _attached: attached,
     _actions: actions,
   };
 }
@@ -231,6 +208,10 @@ function harness({ navigation = null, beforeInput = () => {} } = {}) {
   // The viewer's own actions are bound before its input port takes them.
   beforeInput(viewer);
   const input = fakeInput(viewer);
+  // The renderer the tool draws its preview with, drawing in the viewer's canvas.
+  const { draw, unbind: unbindDraw } = bindFakeDraw(viewer, {
+    canvas: viewer.scene.canvas,
+  });
   const annotations = fakeAnnotations();
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
@@ -253,6 +234,7 @@ function harness({ navigation = null, beforeInput = () => {} } = {}) {
     tool,
     shown,
     viewer,
+    draw,
     annotations,
     byId,
     documentDouble,
@@ -263,6 +245,7 @@ function harness({ navigation = null, beforeInput = () => {} } = {}) {
     input,
     restore() {
       input.destroy();
+      unbindDraw();
       resetPointerOwnership();
       if (previousDocument === undefined) delete globalThis.document;
       else globalThis.document = previousDocument;
@@ -416,15 +399,16 @@ test('the live preview hangs at the height the click landed on', async () => {
     h.tool.addVertex(-97.75, 30.26, 187.5);
     h.tool.addVertex(-97.74, 30.26, 212.25);
 
-    await h.tool.whenSettled();
-    const source = h.viewer._attached[0] ?? null;
-    assert.ok(source, 'the preview data source is attached');
-    const points = source.entities.values.filter((entity) => entity.point);
-    assert.equal(points.length, 2, 'one preview dot per vertex');
-    const heights = points.map((entity) => {
-      const position = entity.position.getValue(Cesium.JulianDate.now());
-      return Cesium.Cartographic.fromCartesian(position).height;
-    });
+    const dots = [...h.draw.sets.values()].find(
+      (set) => !set.disposed && set.kind === 'points',
+    );
+    assert.equal(dots.items.size, 2, 'one preview dot per vertex');
+    const heights = [...dots.items.values()].map((item) => item.pos.height);
+    const band = [...h.draw.sets.values()]
+      .find((set) => !set.disposed && set.kind === 'lines')
+      .items.get('band');
+    assert.equal(band.positions.length, 2, 'the rubber band joins the vertices');
+    assert.equal(band.mode, 'geodesic', 'it follows the globe, not draped');
     assert.ok(Math.abs(heights[0] - 187.5) < 0.5, `got ${heights[0]}`);
     assert.ok(Math.abs(heights[1] - 212.25) < 0.5, `got ${heights[1]}`);
 
@@ -443,18 +427,46 @@ test('the live preview hangs at the height the click landed on', async () => {
   }
 });
 
-test('destroy in the same tick as init still removes the preview data source', async () => {
+test('the rubber band follows the pointer, closes an area and takes the chosen colour', async () => {
   const h = harness();
   try {
-    // Nothing has been attached yet — dataSources.add() resolves later.
-    assert.equal(h.viewer._attached.length, 0, 'the add is still pending');
-    await h.tool.destroy();
-    await Promise.resolve();
-    assert.equal(
-      h.viewer._attached.length,
-      0,
-      'the preview must not be left attached behind the teardown',
+    const sets = () => [...h.draw.sets.values()].filter((set) => !set.disposed);
+    const band = () => sets().find((set) => set.kind === 'lines').items.get('band');
+    h.act('toggleDraw');
+    h.tool.setShape('area');
+    h.tool.addVertex(-97.75, 30.26);
+    assert.equal(band(), undefined, 'one vertex and no pointer draw no band');
+    h.tool.addVertex(-97.74, 30.26);
+    h.tool.addVertex(-97.74, 30.27);
+    assert.equal(band().positions.length, 4, 'an area of three closes back to its first vertex');
+    assert.deepEqual(band().positions[3], band().positions[0]);
+
+    h.tool.setColor('red');
+    assert.deepEqual(band().style.color, [1, 107 / 255, 107 / 255, 0.9], 'the band takes the colour');
+    assert.deepEqual(
+      band().depthFailColor,
+      [139 / 255, 233 / 255, 1, 0.35],
+      'behind the surface it stays the primary colour, as before',
     );
+    assert.equal(band().style.kind, 'dash');
+    assert.equal(band().style.length, 16);
+    assert.equal(band().widthPx, 3);
+
+    h.tool.setShape('pin');
+    assert.equal(band(), undefined, 'a pin has no rubber band');
+  } finally {
+    h.restore();
+  }
+});
+
+test('destroy in the same tick as init disposes the preview sets', async () => {
+  const h = harness();
+  try {
+    const live = () => [...h.draw.sets.values()].filter((set) => !set.disposed);
+    assert.equal(live().length, 2, 'the rubber band and the vertex dots');
+    await h.tool.destroy();
+    assert.equal(live().length, 0, 'nothing is left drawn behind the teardown');
+    assert.equal(h.tool.diagnostics().previewSets, 0, 'no live tool draws a preview');
   } finally {
     h.restore();
   }
@@ -486,7 +498,7 @@ test('destroy releases the pointer, the handler, the listeners and the stock act
       stockClick,
       'the viewer got its selecting click back',
     );
-    assert.equal(h.viewer._attached.length, 0, 'the preview data source is detached');
+    assert.equal(after.previewSets, 0, 'the preview sets are disposed');
     assert.equal(h.annotations.listeners.size, 0, 'and it no longer follows the board');
 
     // Idempotent: a second destroy is harmless.

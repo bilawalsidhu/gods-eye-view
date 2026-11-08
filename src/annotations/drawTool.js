@@ -1,5 +1,5 @@
 /**
- * Manual whiteboard drawing: the Cesium + DOM half.
+ * Manual whiteboard drawing: the scene + DOM half.
  *
  * UTILITIES ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
  * shape (area, line or pin) and a colour, click the vertices on the real world,
@@ -20,7 +20,7 @@
  *   pointer) and double click (track it) on the viewer's handler, outside every
  *   layer and therefore outside the shared claim. Both are suppressed for the
  *   session and given back on the way out, and `destroy()` gives back every
- *   listener, the pointer subscriptions, the preview data source and the window
+ *   listener, the pointer subscriptions, the preview draw sets and the window
  *   handle, so the tool can be turned off or the shell disposed without leaving
  *   anything behind.
  *
@@ -30,7 +30,6 @@
  * drapes finished areas and routes onto the surface, so the height is dropped
  * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
  */
-import * as Cesium from 'cesium';
 import { pickWorldFromScreen } from './annotationResolver.js';
 import {
   claimPointer,
@@ -38,7 +37,6 @@ import {
   releasePointer,
 } from '../data/inputOwnership.js';
 import { inputFor } from '../input/dispatcher.js';
-import { sensorPickPosition } from '../input/sensorPick.js';
 import { pointerOwnerName } from '../data/pointerOwnerNames.js';
 import {
   DRAW_SHAPES,
@@ -55,9 +53,20 @@ import {
 import { DRAW_COLORS, DRAW_COLOR_CSS, presentDrawMarks } from './drawMarks.js';
 
 import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
+import { fromDegrees } from '../geo/index.js';
+import { cssColor } from '../render/color.js';
+import { drawOf, findFrame, rendererOf } from '../render/rendererOf.js';
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
-const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
+/** Each tool's preview sets get their own ids. */
+let previewSerial = 0;
+/**
+ * Preview sets drawn on each viewer by its live tools, so a tool left
+ * undestroyed beside its replacement shows up in `diagnostics()`.
+ */
+const livePreviewSets = new WeakMap();
+const countPreviewSets = (viewer, delta) =>
+  livePreviewSets.set(viewer, (livePreviewSets.get(viewer) ?? 0) + delta);
 
 const PREVIEW = DRAW_COLOR_CSS;
 
@@ -69,7 +78,7 @@ const PREVIEW = DRAW_COLOR_CSS;
  * through the actions it gives `connect`, which returns their disconnect.
  * A row's fly-to is an immediate navigation through `navigation`, like
  * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
+ * @param {{viewer: object, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
  * @returns {{destroy: Function}|null}
  */
 export function initDrawTool({
@@ -97,7 +106,6 @@ export function initDrawTool({
   // the board, leaving draw mode, teardown. An `annotate()` that resolves after
   // one of those must not write its outcome over the newer state.
   let generation = 0;
-  const previewEntities = [];
   // Every DOM listener this tool adds (the session's keydown), so teardown is
   // one loop rather than a list that can fall out of step with the bindings.
   const domListeners = [];
@@ -106,14 +114,26 @@ export function initDrawTool({
     domListeners.push([target, type, listener, options]);
   };
 
-  const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
-  // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
-  // remove a source that had not been attached yet and leave the attachment to
-  // land afterwards — a preview data source nobody owns. Chain the removal onto
-  // the attachment instead of racing it.
-  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
-    () => null,
-  );
+  // The preview: one dashed rubber band and a dot per vertex, drawn through
+  // the renderer's draw port. Both sets live as long as the tool.
+  const draw = drawOf(viewer);
+  const previewId = `draw-preview:${++previewSerial}`;
+  const previewLines = draw.lines({ id: `${previewId}:line` });
+  const previewPoints = draw.points({ id: `${previewId}:vertices` });
+  countPreviewSets(viewer, 2);
+  let previewReleased = false;
+  const releasePreview = () => {
+    if (previewReleased) return;
+    previewReleased = true;
+    countPreviewSets(viewer, -2);
+    previewLines.dispose();
+    previewPoints.dispose();
+  };
+  /** The canvas the renderer draws in (the viewer's own when none is bound). */
+  const canvasOf = () => rendererOf(viewer)?.canvas ?? viewer.canvas;
+  const requestRender = () => findFrame(viewer)?.requestRender('draw-preview');
+  // Teardown finishes synchronously; `whenSettled()` keeps its promise.
+  const attaching = Promise.resolve();
 
   const present = () =>
     publish({
@@ -137,70 +157,66 @@ export function initDrawTool({
 
   // ---- preview ---------------------------------------------------------
   const vertexPositions = () =>
-    session.vertices.map((v) =>
-      Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0),
-    );
-  const previewLine = dataSource.entities.add({
-    show: false,
-    polyline: {
-      positions: new Cesium.CallbackProperty(() => {
-        if (!session) return [];
-        const pts = vertexPositions();
-        if (cursor && session.shape !== 'pin') pts.push(cursor);
-        if (session.shape === 'area' && pts.length >= 3) pts.push(pts[0]);
-        return pts;
-      }, false),
-      width: 3,
-      material: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.9),
-        dashLength: 16,
-      }),
-      depthFailMaterial: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.35),
-        dashLength: 16,
-      }),
-      clampToGround: false,
-    },
-  });
-  const syncPreview = () => {
+    session.vertices.map((v) => fromDegrees(v.lon, v.lat, v.height || 0));
+  /** The rubber band, from the vertices to the pointer (and closed for an area). */
+  const syncPreviewLine = () => {
     if (destroyed) return;
-    previewEntities.forEach((e) => dataSource.entities.remove(e));
-    previewEntities.length = 0;
-    if (!session) {
-      previewLine.show = false;
-      setHint(() => drawHint(null));
-      viewer.scene.requestRender();
+    if (!session || session.shape === 'pin') {
+      previewLines.clear();
       return;
     }
-    const stroke = Cesium.Color.fromCssColorString(
-      PREVIEW[color] || PREVIEW.primary,
-    );
-    previewLine.polyline.material = new Cesium.PolylineDashMaterialProperty({
-      color: stroke.withAlpha(0.9),
-      dashLength: 16,
-    });
-    previewLine.show = session.shape !== 'pin';
-    for (const v of session.vertices) {
-      previewEntities.push(
-        dataSource.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0),
-          point: {
-            pixelSize: 8,
-            color: stroke,
-            outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-            outlineWidth: 2,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        }),
-      );
+    const pts = vertexPositions();
+    if (cursor) pts.push(cursor);
+    if (session.shape === 'area' && pts.length >= 3) pts.push(pts[0]);
+    if (pts.length < 2) {
+      previewLines.clear();
+      return;
     }
+    previewLines.upsert([
+      {
+        id: 'band',
+        positions: pts,
+        widthPx: 3,
+        // Along the ellipsoid between vertices, as the entity polyline was.
+        mode: 'geodesic',
+        style: {
+          kind: 'dash',
+          color: withAlpha(cssColor(PREVIEW[color] || PREVIEW.primary), 0.9),
+          length: 16,
+        },
+        depthFailColor: withAlpha(cssColor(PREVIEW.primary), 0.35),
+      },
+    ]);
+  };
+  const syncPreview = () => {
+    if (destroyed) return;
+    if (!session) {
+      previewPoints.clear();
+      previewLines.clear();
+      setHint(() => drawHint(null));
+      requestRender();
+      return;
+    }
+    const stroke = cssColor(PREVIEW[color] || PREVIEW.primary);
+    previewPoints.set(
+      session.vertices.map((v, index) => ({
+        id: String(index),
+        pos: { lon: v.lon, lat: v.lat, height: v.height || 0 },
+        pixelSize: 8,
+        color: stroke,
+        outlineColor: [0, 0, 0, 0.6],
+        outlineWidth: 2,
+        disableDepthTest: Number.POSITIVE_INFINITY,
+      })),
+    );
+    syncPreviewLine();
     setHint(() => drawHint(session));
-    viewer.scene.requestRender();
+    requestRender();
   };
 
   // ---- vertices from clicks --------------------------------------------
   const worldAt = (position) => {
-    const canvas = viewer.scene.canvas;
+    const canvas = canvasOf();
     const w = canvas.clientWidth || canvas.width || 1;
     const h = canvas.clientHeight || canvas.height || 1;
     return pickWorldFromScreen(viewer, position.x / w, position.y / h);
@@ -230,11 +246,10 @@ export function initDrawTool({
     if (!session || session.shape === 'pin' || destroyed) return;
     // The click's own position is sensor-corrected; the rubber band must
     // follow the same point the click would place.
-    const p = worldAt(sensorPickPosition(viewer.scene, event.endPosition));
-    cursor = p
-      ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0)
-      : null;
-    viewer.scene.requestRender();
+    const p = worldAt(event.pickPosition ?? event.endPosition);
+    cursor = p ? fromDegrees(p.lon, p.lat, p.height || 0) : null;
+    syncPreviewLine();
+    requestRender();
   };
 
   // ---- finish / cancel -------------------------------------------------
@@ -314,9 +329,7 @@ export function initDrawTool({
       t.closest('button, a, select, [role="button"], [role="radio"]')
     )
       return false;
-    return (
-      t === document.body || t === viewer.scene.canvas || t.tagName === 'CANVAS'
-    );
+    return t === document.body || t === canvasOf() || t.tagName === 'CANVAS';
   };
   const onKey = (event) => {
     if (!active || destroyed || typingElsewhere(event)) return;
@@ -506,8 +519,11 @@ export function initDrawTool({
         destroyed,
         sceneHandler: Boolean(unbindScene),
         domListeners: domListeners.length,
-        previewDataSources: countPreviewDataSources(viewer),
-        previewEntities: destroyed ? 0 : dataSource.entities.values.length,
+        // Every live tool's on this viewer: 2 while one tool lives.
+        previewSets: livePreviewSets.get(viewer) ?? 0,
+        previewItems: previewReleased
+          ? 0
+          : previewLines.size() + previewPoints.size(),
         pointerOwner: pointerOwner(),
         // The viewer's own select and follow, which the input port runs: off
         // while a session is open, back on after it closes.
@@ -534,18 +550,7 @@ export function initDrawTool({
       for (const [target, type, listener, options] of domListeners.splice(0)) {
         target.removeEventListener(type, listener, options);
       }
-      previewEntities.length = 0;
-      dataSource.entities.removeAll();
-      // Wait for the pending add() before removing: a destroy() in the same
-      // tick as init would otherwise remove nothing and let the attachment land
-      // behind it.
-      attaching = attaching.then(() => {
-        try {
-          viewer.dataSources.remove(dataSource, true);
-        } catch {
-          /* viewer already disposed — nothing to detach from */
-        }
-      });
+      releasePreview();
       document.body.classList.remove('gev-drawing');
       hint = '';
       present();
@@ -557,13 +562,7 @@ export function initDrawTool({
   return api;
 }
 
-/** How many draw previews are attached — more than one means a leaked tool. */
-function countPreviewDataSources(viewer) {
-  const sources = viewer?.dataSources;
-  if (!sources) return 0;
-  let found = 0;
-  for (let index = 0; index < sources.length; index += 1) {
-    if (sources.get(index)?.name === PREVIEW_DATA_SOURCE_NAME) found += 1;
-  }
-  return found;
+/** `color` at `alpha`. */
+function withAlpha(color, alpha) {
+  return [color[0], color[1], color[2], alpha];
 }

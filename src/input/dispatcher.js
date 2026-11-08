@@ -123,7 +123,8 @@ const dispatchers = new WeakMap();
  *   Ambient click subscription. Returns its unsubscribe.
  * @property {(type: 'down'|'move'|'up'|'click'|'dblclick', fn: Function, options?: {lease?: object|(() => object|null)}) => () => void} onPointer
  *   Raw pointer subscription: `click` gets the {@link ClickEvent}, the others
- *   Cesium's event. With a lease, runs only while that lease is current;
+ *   Cesium's event; `move`'s also carries `pickPosition`, its `endPosition`
+ *   corrected for sensor styles as a click's `position` is. With a lease, runs only while that lease is current;
  *   without one, only while the pointer is free (`move` and `up` always run).
  * @property {(reason: string) => () => void} suspendCamera Hold camera input
  *   off; returns this hold's release.
@@ -227,9 +228,17 @@ function createDispatcher(viewer, { createHandler, now, document } = {}) {
     }),
     port.on('move', (ev) => {
       if (!unmodified(ev)) return;
+      const endPosition = cartesian(ev.endPosition ?? ev.position);
+      let pickPosition;
       run(pointerSubscribers.move, true, {
         startPosition: cartesian(ev.position),
-        endPosition: cartesian(ev.endPosition ?? ev.position),
+        endPosition,
+        // Where the pointer lands in the pick buffer, as a click's
+        // `position` is (corrected for sensor styles); made on first read.
+        get pickPosition() {
+          pickPosition ??= sensorPickPosition(viewer.scene, endPosition);
+          return pickPosition;
+        },
       });
     }),
     port.on('up', (ev) => {

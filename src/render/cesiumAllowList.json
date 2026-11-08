@@ -1,6 +1,5 @@
 [
   "dev/conformance/main.js",
-  "src/annotations/drawTool.js",
   "src/annotations/worldAnnotationRenderer.js",
   "src/app/embed.js",
   "src/app/scene.js",
