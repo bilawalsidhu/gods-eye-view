@@ -5119,7 +5119,8 @@
       "src/layers/alpr/records.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/infrastructureData.js",
-      "src/sources/eventPacks.js"
+      "src/sources/eventPacks.js",
+      "src/keylessGeocoder.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

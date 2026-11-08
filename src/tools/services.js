@@ -35,6 +35,7 @@ import {
   createVesselSource,
   createFlightSource,
 } from '../sources/live/standalone.js';
+import { createPhotonGeocoder } from '../keylessGeocoder.js';
 import {
   createGeocodePlaceService,
   createPlaceSearchService,
@@ -86,7 +87,10 @@ export function createToolServices({ fetchImpl, appUrl, panelKey }) {
       fetchImpl,
       tileFetchImpl: fetchImpl,
     }),
-    places: createGeocodePlaceService({ fetchImpl }),
+    places: createGeocodePlaceService({
+      fetchImpl,
+      keylessGeocoder: createPhotonGeocoder({ fetchImpl }),
+    }),
   };
 }
 
