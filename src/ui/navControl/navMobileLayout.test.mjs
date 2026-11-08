@@ -60,14 +60,25 @@ test('short landscape phones use a switcher row and center nav clear of top acti
 test('tablet, desktop and exclusive modes retain their existing nav rules', () => {
   assert.match(
     nav,
-    /@media \(max-width: 900px\)\s*\{\s*\.gev-nav\s*\{\s*right: 12px;\s*bottom: calc\(2vh \+ 7\.5rem\);/,
+    /@media \(max-width: 900px\)\s*\{\s*\.gev-nav\s*\{\s*right: 12px;\s*bottom: calc\(2vh \+ 7\.5rem \+ var\(--world-timeline-lift, 0px\)\);/,
   );
   assert.match(
     nav,
-    /@media \(min-width: 901px\)\s*\{\s*\.gev-nav\s*\{\s*bottom: max\(58px, calc\(env\(safe-area-inset-bottom, 0px\) \+ 58px\)\);/,
+    /@media \(min-width: 901px\)\s*\{\s*\.gev-nav\s*\{\s*bottom: calc\(\s*max\(58px, calc\(env\(safe-area-inset-bottom, 0px\) \+ 58px\)\) \+\s*var\(--world-timeline-lift, 0px\)\s*\);/,
   );
   assert.match(
     nav,
     /body:is\(\.cockpit-mode, \.scene-playback-mode, \.recording-mode, \.ui-clean-view\)\s*\.gev-nav\s*\{\s*display: none !important;/,
+  );
+});
+
+test('every nav placement follows the world-timeline lift and short phones cap it', () => {
+  // Each base placement (desktop, tablet, phone) must carry the lift the
+  // dock uses, so the raised dock never covers the control.
+  const lifted = nav.match(/var\(--world-timeline-lift, 0px\)/g) ?? [];
+  assert.ok(lifted.length >= 4, `expected lift in 4 nav offsets, got ${lifted.length}`);
+  assert.match(
+    nav,
+    /max-height: 450px\)\s*\{\s*body\.mobile-shell \.gev-nav\s*\{[^}]*bottom: min\([\s\S]*?calc\(100dvh - 130px - var\(--mobile-top-inset, 0px\)\)/,
   );
 });
