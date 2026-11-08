@@ -25,6 +25,7 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'flights',
       'military',
       'local-adsb',
+      'simulation',
       'ais-live-vessels',
       'traffic',
       'transit',

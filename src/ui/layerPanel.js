@@ -46,6 +46,7 @@ const PANEL_GROUPS = [
       'flights',
       'military',
       'local-adsb',
+      'simulation',
       'ais-live-vessels',
       'traffic',
       'transit',

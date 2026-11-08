@@ -7002,6 +7002,36 @@ ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
 
+## Simulation layer
+
+Simulation (`simulation`, Movement group) flies authored aircraft scenarios
+over the live globe. A scenario file (`public/scenarios/<id>.json`, format in
+[docs/SIMULATION.md](SIMULATION.md)) lists aircraft with hand-written waypoints
+(position, altitude, speed); leg timing is length over mean speed, and motion
+between waypoints follows a Catmull-Rom spline whose tangent gives heading and
+pitch. Each aircraft is an entity with a 3D model from the shared hangar
+(`civilAircraftModelSpec` by `classifyAircraft` class, the Flights heading
+offset), a callsign label, a glowing trail of the last `trailS` seconds
+(default 90, at most 600) and a faint dashed route line toggled by `routes`.
+Positions are sampled once per frame on `scene.preUpdate`; the entities read
+that sample through callback properties, and `getTargets()` returns the same
+sample for cameras and tooling, with `sampleAt(id, timeS)` for any time.
+
+The clock (`src/layers/simulation/clock.js`) is wall-time driven: `playing`,
+`rate` (0.1–16, row switch Pause / 0.5× / 1× / 2× / 4×) and a `timeS` seek
+(row slider). Its length is the longest aircraft path and it wraps only when
+every aircraft loops; a finite aircraft holds its last position and the list
+marks it `Landed`. Clicking a list item (`focus`) flies the camera to that
+aircraft once. The layer holds continuous rendering only while playing. A file
+that fails validation is refused whole and the row error names the scenario;
+scenario ids are limited to `[a-z0-9-]`. Share links keep the layer under
+token `01`; the clock always restarts at zero. Voice is off for this layer for
+now (prompt budget) and it has no analyst records. The bundled
+`fleet-week-sf` scenario is synthetic (two fast jets, an L-39, a 777 approach
+and a helicopter over San Francisco Bay). The layer is
+`src/layers/simulation/` (pure `scenario.js` and `clock.js`, Cesium-injected
+`index.js`); the app wiring is `src/app/layers/simulation.js`.
+
 ## Water Surface layer
 
 Water Surface (`water-surface`, Weather group) draws one animated sea surface

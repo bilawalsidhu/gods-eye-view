@@ -312,6 +312,15 @@ https://www.naturalearthdata.com/about/terms-of-use/). We credit anyway: "Made w
 Earth". Registration in the in-app `dataCredits.js` attribution list ships with the resolver
 wiring (see below).
 
+### Simulation scenarios (`public/scenarios/`, synthetic)
+
+The Simulation layer flies authored aircraft from scenario files bundled under
+`public/scenarios/`; format in [docs/SIMULATION.md](docs/SIMULATION.md). The
+bundled `fleet-week-sf.json` is hand-written and synthetic: invented callsigns,
+registrations and paths, not recorded flights. Models are the project's own
+hangar GLBs (see `public/models/README.md`). No key, no request beyond the
+scenario file itself.
+
 ### Water Surface (synthetic; no dataset)
 
 The Water Surface layer (`src/layers/water/`) draws no data. It is one animated

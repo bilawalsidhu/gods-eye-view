@@ -461,6 +461,8 @@ export const VOICE_OFF_LAYERS = Object.freeze({
     'community observation layer; no room in the prompt budget',
   'water-surface':
     'rendered sea surface with no records; no room in the prompt budget',
+  simulation:
+    'authored scenario playback; voice control waits for prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({
