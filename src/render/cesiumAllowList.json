@@ -15,7 +15,6 @@
   "src/layers/launches/orbitRendering.js",
   "src/layers/launches/rendering.js",
   "src/layers/recentImagery/rendering.js",
-  "src/layers/satellites/rendering.js",
   "src/layers/traffic/rendering.js",
   "src/layers/transit/rendering.js",
   "src/layers/weather/shellRendering.js",

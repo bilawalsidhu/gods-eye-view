@@ -13,7 +13,7 @@ export function createLifecycle({
 
   /** Run the shared per-frame tick before each frame draws. */
   function onEachFrame(frame) {
-    return frame.on('preRender', () => parts.rendering._preRenderTick());
+    return frame.on('preRender', (t) => parts.rendering._preRenderTick(t));
   }
 
   const methods = {
@@ -54,7 +54,7 @@ export function createLifecycle({
       layerState._denseError = null;
       layerState._catalogRevision++;
 
-      // The collection the satellite dots draw in
+      // The sets the satellite dots, the tracked dot and the rings draw in
       parts.rendering._attach(viewer);
 
       parts.interaction._installClickHandler(viewer);
@@ -141,7 +141,7 @@ export function createLifecycle({
       }
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
       layerState._overlayHost.setVisible(ISS_OVERLAY_SOURCE_ID, false);
-      // The dots' collection and the orbit rings go (and are destroyed)
+      // The dots', tracked dot's and rings' sets are disposed of
       parts.rendering._detach(viewer);
       layerState._points.clear();
       layerState._detectionObjects.clear();

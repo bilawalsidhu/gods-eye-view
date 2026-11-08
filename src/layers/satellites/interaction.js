@@ -21,7 +21,7 @@ export function createInteraction({
 
     // Cross-layer untrack (H2, mirror of flights): if ANOTHER layer (flights,
     // military, …) grabs the follow-camera, drop our tracking so the orbit ring /
-    // tracked entity don't orphan — without touching viewer.trackedEntity (the
+    // tracked dot don't orphan — without touching viewer.trackedEntity (the
     // new owner controls it). Guarded so our OWN switch (viewer.trackedEntity
     // briefly undefined mid-_trackSatellite) doesn't self-clear.
     if (!layerState._trackedEntityChangedRemove) {
@@ -46,18 +46,17 @@ export function createInteraction({
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!layerState._enabled) return;
       const picked = event.pick;
+      const hit = event.drawHit;
 
-      if (picked) {
-        // Clicking tracked entity itself — ignore
-        if (parts.rendering._pickIsTrackedEntity(picked)) return;
+      // Clicking the tracked satellite's own dot — ignore
+      if (parts.rendering._hitIsTracked(hit)) return;
 
-        // Check if it's a satellite point (id is NORAD catalog number)
-        const noradId = parts.rendering._pickedPointId(picked);
-        if (noradId !== null && layerState._catalog.has(noradId)) {
-          parts.tracking._cancelPendingTrackingRestore();
-          parts.tracking._trackSatellite(noradId, { origin: 'user' });
-          return;
-        }
+      // A satellite dot (its item id is the NORAD catalog number)
+      const noradId = parts.rendering._hitPointId(hit);
+      if (noradId !== null && layerState._catalog.has(noradId)) {
+        parts.tracking._cancelPendingTrackingRestore();
+        parts.tracking._trackSatellite(noradId, { origin: 'user' });
+        return;
       }
 
       // A pick that belongs to a sibling layer (plane, vessel, station, CCTV

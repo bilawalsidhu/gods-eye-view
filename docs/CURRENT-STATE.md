@@ -1072,6 +1072,12 @@ a fresh winning record. Dense removal clears only its own provenance, and a
 fresh core rebuild or lifecycle reset replaces the corresponding ownership.
 Source adapters retain the existing CelesTrak and Launch Library
 endpoints; standalone entries provide scene services and the satellite dependency.
+The satellites layer draws through the renderer's draw port and no longer
+reaches Cesium: the dots are one point set moved in a single write a frame, the
+tracked satellite's dot a set of its own drawn where the follow camera framed
+it, and the orbit rings a line set dimmed behind the globe and turned with the
+Earth each second. A caller handing it a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
 Launch Library pad coordinates retain unknown values: missing fields use the
 reported location coordinates when available, and launches without a known pad

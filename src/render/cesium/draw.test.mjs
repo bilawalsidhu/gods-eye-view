@@ -1889,6 +1889,70 @@ test('the installations layer draws its site dots, outlines and selected dot on 
   assert.equal(scene.added.length, 0, 'gone with the layer');
 });
 
+test('the satellites layer draws its dots as one point collection and its rings as depth-fail primitives out of picks', async () => {
+  const { createRendering } =
+    await import('../../layers/satellites/rendering.js');
+  const { POINT_STYLES, TRACKED_ORBIT_COLOR } =
+    await import('../../layers/satellites/policy.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const state = {
+    _points: new Map(),
+    _orbitPaths: new Map(),
+    _catalog: new Map([[25544, { satrec: {} }]]),
+    _viewer: viewer,
+    _trackedNorad: null,
+    _enabled: false,
+  };
+  const ring = [
+    { x: 7e6, y: 0, z: 0 },
+    { x: 0, y: 7e6, z: 0 },
+    { x: -7e6, y: 0, z: 0 },
+  ];
+  const rendering = createRendering({
+    state,
+    services: { focus: {} },
+    parts: { orbits: { computeOrbitPath: () => ring } },
+  });
+  rendering._attach(viewer);
+  rendering._addPoint(25544, { x: 7e6, y: 0, z: 0 }, POINT_STYLES.iss);
+  rendering._addPoint(5, { x: 0, y: 7e6, z: 0 }, POINT_STYLES.visual);
+  rendering._preRenderTick({ frame: 1 });
+  const points = scene.added.find(
+    (host) => host instanceof Cesium.PointPrimitiveCollection,
+  );
+  assert.equal(points.length, 2);
+  const iss = points.get(0);
+  assert.equal(iss.id.id, '25544');
+  assert.deepEqual(iss.id.meta, { noradId: 25544 });
+  assert.equal(iss.pixelSize, 12);
+  assert.equal(iss.scaleByDistance.nearValue, 1.5);
+  assert.equal(iss.scaleByDistance.far, 2e7);
+  // Moved in place, both in one write.
+  rendering._movePoint(25544, { x: 6.9e6, y: 0, z: 0 });
+  rendering._movePoint(5, { x: 0, y: 6.9e6, z: 0 });
+  rendering._preRenderTick({ frame: 2 });
+  assert.equal(points.get(0), iss);
+  assert.equal(iss.position.x, 6.9e6);
+
+  withImageClasses(() =>
+    rendering._showOrbitPath(25544, TRACKED_ORBIT_COLOR),
+  );
+  const all = (host) =>
+    host instanceof Cesium.PrimitiveCollection
+      ? Array.from({ length: host.length }, (_, i) => all(host.get(i))).flat()
+      : [host];
+  const primitive = scene.added
+    .flatMap(all)
+    .find(
+      (host) => host instanceof Cesium.Primitive && host.depthFailAppearance,
+    );
+  assert.ok(primitive, 'a ring with a dimmed part behind the globe');
+  assert.equal(primitive.allowPicking, false, 'ring clicks fall through');
+  rendering._detach(viewer);
+  assert.equal(scene.added.length, 0, 'gone with the layer');
+});
+
 test('the ALPR layer draws its badges as icons that follow the ground, restyled in place', async () => {
   const { alprMarkers, createAlprMarkerSet } =
     await import('../../layers/alpr/markerState.js');

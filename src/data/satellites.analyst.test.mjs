@@ -96,7 +96,7 @@ test('satellite getAnalystRecords: disabled or empty catalog returns []', () => 
 test('satellite getAnalystRecords: core rows beat dense extras under the cap', () => {
   const satrec = twoline2satrec(ISS_L1, ISS_L2);
   const point = {
-    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
+    pos: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
   };
   _setTrackedSatelliteRefreshStateForTest({
     noradId: ISS_NORAD,
@@ -112,7 +112,7 @@ test('satellite getAnalystRecords: core rows beat dense extras under the cap', (
         name: 'STARLINK-TEST',
         satrec,
         group: 'dense',
-        point: { position: Cesium.Cartesian3.fromDegrees(-90, 20, 550_000) },
+        point: { pos: Cesium.Cartesian3.fromDegrees(-90, 20, 550_000) },
       },
       {
         noradId: 24876,
@@ -120,7 +120,7 @@ test('satellite getAnalystRecords: core rows beat dense extras under the cap', (
         satrec,
         group: 'gps-ops',
         point: {
-          position: Cesium.Cartesian3.fromDegrees(-100, 10, 20_200_000),
+          pos: Cesium.Cartesian3.fromDegrees(-100, 10, 20_200_000),
         },
       },
     ],

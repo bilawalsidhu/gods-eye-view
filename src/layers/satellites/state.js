@@ -15,18 +15,18 @@ export function createState({ services }) {
 
   state._catalog = new Map();
 
-  state._pointCollection = null;
+  /** The draw sets (`{points, tracked, rings}`), owned by the rendering part. */
+  state._sets = null;
 
   state._points = new Map();
-  // noradId → point primitive
+  // noradId → the point item its dot is drawn from (the rendering part's)
   /** Stable lightweight records reused by the detection overlay between updates. */
 
   state._detectionObjects = new Map();
 
-  // noradId → { primitive, gmstAtBake }, owned by the rendering part:
-  // primitive is a one-instance primitive holding the ring baked in ECEF
-  // at gmstAtBake; the preRender tick re-aligns it to current GMST by updating
-  // its modelMatrix (rigid Z-rotation — no geometry rebuild, WS-D1).
+  // noradId → { base, gmstAtBake, item }, owned by the rendering part: base
+  // is the ring baked in ECEF at gmstAtBake; the preRender tick turns it to
+  // current GMST (rigid Z-rotation, WS-D1) into the line item drawn.
 
   state._orbitPaths = new Map();
 

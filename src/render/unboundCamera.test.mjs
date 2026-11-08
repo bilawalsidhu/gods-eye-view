@@ -98,6 +98,9 @@ const DRAW_FROM_CALLER = new Set([
   // Its site dots, outlines and selected fill draw through `drawOf`; it
   // follows a site and reads the globe through the camera and globe ports.
   './layers/installations',
+  // Its dots, tracked dot and orbit rings draw through `drawOf`; it follows,
+  // ticks, projects and reads the eye through the ports.
+  './layers/satellites',
   // Its data packs draw through `drawOf`; its flights ask `cameraOf`, which
   // throws until then too.
   './scenes',

@@ -114,10 +114,10 @@ assertResumeGate('CCTV', () => {
 
 assertResumeGate('satellite', () => {
   const point = {
-    position: { x: 1, y: 2, z: 3 },
+    pos: { x: 1, y: 2, z: 3 },
     show: true,
     pixelSize: 6,
-    color: color(),
+    color: [1, 1, 1, 1],
   };
   return {
     pass: ({ nowMs, target: focusTarget, previousActiveCount }) =>
@@ -129,9 +129,9 @@ assertResumeGate('satellite', () => {
         nowMs,
         screenPositionFor: () => ({ x: 50, y: 50 }),
         cameraDistanceFor: () => 1200,
-        baseColorFor: () => color(),
+        baseColorFor: () => [1, 1, 1, 1],
         params,
       }),
-    readAlpha: () => point.color.alpha,
+    readAlpha: () => point.color[3],
   };
 });
