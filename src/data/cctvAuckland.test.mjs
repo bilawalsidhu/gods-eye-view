@@ -12,8 +12,8 @@ import {
   AUCKLAND_IMAGE_ORIGIN,
   AUCKLAND_IMAGE_URL,
   AUCKLAND_MAX_CATALOG_BYTES,
+  CCTV_SHARED_SOURCE_SLOTS,
   DEFAULT_AUCKLAND_MAX_SOURCES,
-  DEFAULT_CCTV_MAX_SOURCES,
 } from '../../server/providers/cctv/constants.js';
 import {
   CAMERA_CODE_MAX_CHARS,
@@ -458,8 +458,8 @@ for (const [label, flag] of [
   });
 }
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+test('the shared catalog slots are not raised to make room for this pack', () => {
+  assert.equal(CCTV_SHARED_SOURCE_SLOTS, 4000);
   assert.equal(DEFAULT_AUCKLAND_MAX_SOURCES, 120);
 });
 
