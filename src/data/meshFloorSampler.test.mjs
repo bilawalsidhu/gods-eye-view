@@ -21,6 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { sampleMeshFloorCells } from './meshFloorSampler.js';
+import { bindRenderer } from '../render/rendererOf.js';
 import { resolveEllipsoidalGround } from './terrainHeights.js';
 import {
   cachedGroundFloor, cachedMeshFloor, setMeshFloorPreferred,
@@ -152,4 +153,33 @@ test('sampler: a scene without depth-texture support is never probed', async () 
   sampleMeshFloorCells(scene, [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
   assert.equal(calls, 0);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
+});
+
+test('sampler: with `sets` the probe asks the query port, naming those sets', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  const scene = fakeScene(() => {
+    throw new Error('the scene is not asked when sets are named');
+  });
+  const viewer = { scene };
+  const asked = [];
+  bindRenderer(viewer, {
+    capabilities: new Set(['sampleHeight']),
+    query: {
+      sampleHeightNow(point, options) {
+        asked.push({ point: { ...point }, options });
+        return 138.0;
+      },
+    },
+  });
+  sampleMeshFloorCells(viewer, [cell], {
+    sets: ['flights-models:1', 'flights-icons:1'],
+    viewerLat: cell.lat,
+    viewerLon: cell.lon,
+  });
+  assert.equal(asked.length, 1);
+  assert.deepEqual(asked[0].options.exclude, ['flights-models:1', 'flights-icons:1']);
+  assert.ok(Math.abs(asked[0].point.lat - cell.lat) < 0.05);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 138.0);
 });

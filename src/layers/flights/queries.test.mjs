@@ -79,8 +79,7 @@ function fixture() {
     formats: () => formats,
     place,
     show: (shown) => icons.setShown('abc123', shown),
-    drawn: () =>
-      parts.icons._iconPosition('abc123', new Cesium.Cartesian3()),
+    drawn: () => parts.icons._iconPosition('abc123', { x: 0, y: 0, z: 0 }),
   };
 }
 
@@ -92,7 +91,7 @@ test('candidate text follows in-place enrichment without freezing identity or po
   f.place(new Cesium.Cartesian3(4, 5, 6));
   assert.equal(f.queries.getDetectableObjects()[0], first);
   assert.deepEqual(first.position, f.drawn());
-  assert.deepEqual(first.position, new Cesium.Cartesian3(4, 5, 6));
+  assert.deepEqual(first.position, { x: 4, y: 5, z: 6 });
   assert.equal(f.formats(), 1);
   f.info.callsign = ' NEW456 ';
   assert.equal(f.queries.getDetectableObjects()[0].id, 'NEW456');
@@ -141,10 +140,10 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   record.ready = true;
   assert.equal(f.queries.getDetectableObjects()[0], candidate);
-  assert.deepEqual(candidate.position, new Cesium.Cartesian3(10, 20, 30));
+  assert.deepEqual(candidate.position, { x: 10, y: 20, z: 30 });
   placeAt(record, new Cesium.Cartesian3(40, 50, 60));
   f.queries.getDetectableObjects();
-  assert.deepEqual(candidate.position, new Cesium.Cartesian3(40, 50, 60));
+  assert.deepEqual(candidate.position, { x: 40, y: 50, z: 60 });
   showModel(record, false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   f.show(true);
@@ -175,7 +174,10 @@ test('tracked ownership and live anchors remain independent of fleet models', ()
   ]) {
     f.flightState._trackedModel = tracked;
     assert.equal(
-      f.parts.rendering._modelOwnsVisual('abc123', modelRecord({ ready: true, show: true })),
+      f.parts.rendering._modelOwnsVisual(
+        'abc123',
+        modelRecord({ ready: true, show: true }),
+      ),
       false,
     );
   }

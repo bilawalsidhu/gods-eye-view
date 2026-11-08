@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { findCamera, findQuery } from '../render/rendererOf.js';
 
 /**
  * Focus-aware sprite treatment shared by the live contact layers.
@@ -213,6 +214,91 @@ export function publishFocusTargetFromCachedPosition({
     displayPosition,
     _scratchScreen,
   );
+  return publishFocusRect({
+    ownerLayer,
+    id,
+    screen,
+    cameraDistance: Cesium.Cartesian3.distance(
+      camera.positionWC,
+      displayPosition,
+    ),
+    frameNumber: scene.frameState?.frameNumber ?? -1,
+    widthPx,
+    heightPx,
+    params,
+  });
+}
+
+/**
+ * `publishFocusTargetFromCachedPosition` through the renderer bound to
+ * `viewer`: its query port projects the cached position and its camera's
+ * pose gives the distance. Same contract: the position must be the one the
+ * tracking/render path already cached this frame.
+ *
+ * @param {object} input
+ * @param {string} input.ownerLayer
+ * @param {string|number} input.id
+ * @param {object} input.viewer The host the renderer is bound to.
+ * @param {{x: number, y: number, z: number}} input.displayPosition Cached display position.
+ * @param {number} [input.widthPx=24]
+ * @param {number} [input.heightPx=24]
+ * @param {Partial<typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS>} [input.params]
+ * @returns {object|null} Published target, or null when it cannot be projected.
+ */
+export function publishFocusTargetAt({
+  ownerLayer,
+  id,
+  viewer,
+  displayPosition,
+  widthPx = 24,
+  heightPx = 24,
+  params,
+}) {
+  const query = viewer ? findQuery(viewer) : null;
+  let eye = null;
+  try {
+    eye = viewer ? (findCamera(viewer)?.pose().position ?? null) : null;
+  } catch {
+    eye = null;
+  }
+  if (
+    !ownerLayer ||
+    id === null ||
+    id === undefined ||
+    !query ||
+    !eye ||
+    !displayPosition
+  ) {
+    clearFocusTarget(ownerLayer, id);
+    return null;
+  }
+  return publishFocusRect({
+    ownerLayer,
+    id,
+    screen: query.project(displayPosition),
+    cameraDistance: Math.hypot(
+      displayPosition.x - eye.x,
+      displayPosition.y - eye.y,
+      displayPosition.z - eye.z,
+    ),
+    frameNumber: -1,
+    widthPx,
+    heightPx,
+    params,
+  });
+}
+
+/** Publish the focus rectangle around `screen`, or clear it when there is none. */
+function publishFocusRect({
+  ownerLayer,
+  id,
+  screen,
+  cameraDistance,
+  frameNumber,
+  widthPx,
+  heightPx,
+  params,
+}) {
   if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) {
     clearFocusTarget(ownerLayer, id);
     return null;
@@ -232,11 +318,8 @@ export function publishFocusTargetFromCachedPosition({
       bottom: screen.y + halfHeight + padding,
     },
     paddingPx: padding,
-    cameraDistance: Cesium.Cartesian3.distance(
-      camera.positionWC,
-      displayPosition,
-    ),
-    frameNumber: scene.frameState?.frameNumber ?? -1,
+    cameraDistance,
+    frameNumber,
   };
   if (appeared) {
     for (const listener of _focusAppearListeners) {

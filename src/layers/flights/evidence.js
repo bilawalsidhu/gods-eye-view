@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import { findCamera, findFrame, findQuery } from '../../render/rendererOf.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { distance, vec } from '../../geo/vector.js';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
 import {
   aircraftRecessionFactors,
@@ -21,18 +23,14 @@ export function createEvidence({
       cartesian.length >= 3 &&
       cartesian.slice(0, 3).every(Number.isFinite)
     ) {
-      return Cesium.Cartesian3.fromElements(
-        cartesian[0],
-        cartesian[1],
-        cartesian[2],
-      );
+      return vec(cartesian[0], cartesian[1], cartesian[2]);
     }
     if (
       !Number.isFinite(record?.longitude) ||
       !Number.isFinite(record?.latitude)
     )
       return null;
-    return Cesium.Cartesian3.fromDegrees(
+    return fromDegrees(
       record.longitude,
       record.latitude,
       Number.isFinite(record.altitudeM) ? record.altitudeM : 3_000,
@@ -75,7 +73,7 @@ export function createEvidence({
       const klass = record.klass || 'airliner';
       const altitudeM = Number.isFinite(record.altitudeM)
         ? record.altitudeM
-        : Cesium.Cartographic.fromCartesian(position)?.height || 3_000;
+        : toLonLatH(position)?.height || 3_000;
       const meta = {
         callsign: String(record.callsign || id).toUpperCase(),
         altitude: altitudeM,
@@ -99,7 +97,7 @@ export function createEvidence({
     }
     flightState.feed._count = icons.count;
     flightState._lastFleetTickMs = 0;
-    flightState._viewer.scene.requestRender?.();
+    findFrame(flightState._viewer)?.requestRender('flights: focus evidence');
     return { ok: true, count: flightState.feed._count };
   }
 
@@ -127,7 +125,8 @@ export function createEvidence({
       moved += 1;
     }
     flightState._lastFleetTickMs = 0;
-    flightState._viewer?.scene?.requestRender?.();
+    if (flightState._viewer)
+      findFrame(flightState._viewer)?.requestRender('flights: focus evidence');
     return { ok: true, moved };
   }
 
@@ -136,19 +135,19 @@ export function createEvidence({
   function _focusEvidenceSnapshot() {
     if (!FOCUS_EVIDENCE_DEV || !flightState._viewer) return [];
     const icons = flightState._icons;
-    const { scene, camera } = flightState._viewer;
+    const pose = findCamera(flightState._viewer)?.pose();
+    const query = findQuery(flightState._viewer);
+    if (!pose || !query) return [];
     const occluder = parts.icons._occluder();
-    const cameraHeightM = camera.positionCartographic?.height;
+    const cameraHeightM = pose.height;
     return [...flightState._focusEvidenceIds].map((id) => {
       const position = icons?.has(id)
-        ? parts.icons._iconPosition(id, new Cesium.Cartesian3())
+        ? parts.icons._iconPosition(id, vec())
         : null;
       const cameraDistanceM = position
-        ? Cesium.Cartesian3.distance(camera.positionWC, position)
+        ? distance(pose.position, position)
         : null;
-      const screen = position
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(scene, position)
-        : null;
+      const screen = position ? query.project(position) : null;
       // What the icon shader composes: base scale × limb taper, and base
       // alpha × max(floor, focus × limb haze).
       const factors = position

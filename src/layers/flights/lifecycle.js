@@ -240,6 +240,7 @@ export function createLifecycle({
       }
       parts.rendering._releaseModels();
       parts.icons._disposeIcons();
+      parts.tracking._disposeTrackedIcon();
       parts.rendering._disposeModelSets();
       flightState._grounded.clear();
       flightState._floorPinned.clear();

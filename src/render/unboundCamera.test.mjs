@@ -91,6 +91,10 @@ const DRAW_FROM_CALLER = new Set([
   // Asks `findQuery` instead, and answers null rather than throw until the
   // caller has loaded the factory.
   './queries/heights',
+  // Their fleet icons draw through `drawOf`. Not wholly Cesium-free (pointer
+  // input still is), but none of their modules loads a factory.
+  './layers/flights',
+  './layers/military',
 ]);
 
 /**

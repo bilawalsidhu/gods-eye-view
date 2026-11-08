@@ -1,5 +1,11 @@
-import * as Cesium from 'cesium';
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
+import { cssColor } from '../../render/color.js';
+
+/** A CSS colour as frozen `[r, g, b, a]`, 0..1 (the renderer's `Color`). */
+const rgba = (css, alpha) =>
+  Object.freeze(
+    alpha === undefined ? cssColor(css) : [...cssColor(css).slice(0, 3), alpha],
+  );
 
 /**
  * @module militaryFlights
@@ -21,18 +27,17 @@ import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 export const BILLBOARD_SCALE = 0.7;
 
-/** @constant {Cesium.Color} Default amber tint for untracked military icons */
+/** @constant {number[]} Default amber tint for untracked military icons */
 
-export const MIL_ICON_COLOR = Cesium.Color.fromCssColorString('#FFB800');
+export const MIL_ICON_COLOR = rgba('#FFB800');
 
-/** @constant {Cesium.Color} Lighter amber tint applied to the actively tracked aircraft */
+/** @constant {number[]} Lighter amber tint applied to the actively tracked aircraft */
 
-export const TRACKED_ICON_COLOR = Cesium.Color.fromCssColorString('#FFD166');
+export const TRACKED_ICON_COLOR = rgba('#FFD166');
 
-/** @constant {Cesium.Color} Red tint for aircraft broadcasting an emergency (mirror of flights) */
+/** @constant {number[]} Red tint for aircraft broadcasting an emergency (mirror of flights) */
 
-export const EMERGENCY_ICON_COLOR =
-  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
+export const EMERGENCY_ICON_COLOR = rgba(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03; mirror of flights.js) ---------------
 // adsb.lol/readsb flags ground traffic with alt_baro === "ground" (no separate
@@ -143,16 +148,17 @@ export const MODEL_BELLY_OFFSET_NATIVE = 5.631;
 
 /** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). */
 
-export const AMBER_TRANSPARENT = MIL_ICON_COLOR.withAlpha(0);
+export const AMBER_TRANSPARENT = rgba('#FFB800', 0);
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
-export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
-  1000,
-  3.0,
-  8000000,
-  0.5,
-);
+/** The tracked billboard's size by eye distance (the renderer's `NearFar`). */
+export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze({
+  near: 1000,
+  nearValue: 3.0,
+  far: 8000000,
+  farValue: 0.5,
+});
 
 // ---------------------------------------------------------------------------
 // Track-history trail state (PRD WS-F F2/F4): a fading polyline behind the

@@ -64,7 +64,7 @@ test('flight state owns distinct mutable records, scratch objects and floor samp
     '_positionHistory',
     '_displayFloorState',
     '_groundSnap',
-    '_scratchCarto',
+    '_scratchNearbyPos',
     '_models',
     'lifetime',
   ]) {

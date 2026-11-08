@@ -660,7 +660,7 @@ for (const fixture of LAYERS) {
       assert.equal(model.show, false, 'the loading model is drawn hidden, not zero-scaled');
       assert.equal(tracked.items.get(icao24).show, false);
       const baseScale = model.scale;
-      assert.equal(fixture.trackedBillboardColor().alpha, 1,
+      assert.equal(fixture.trackedBillboardColor()[3], 1,
         'the tracked billboard remains opaque while the model lacks safe placement');
       assert.equal(sampleCalls, 0, 'cold tiles do not force a synchronous sample');
       const loadingDetection = fixture.layer.getDetectableObjects({ maxCount: 50 })
@@ -689,14 +689,14 @@ for (const fixture of LAYERS) {
       fixture.driveTrackedModel();
       assert.equal(sampleCalls, 0, 'the tracked path honors the same retry backoff before sampling');
       assert.equal(model.show, false, 'retry backoff keeps the unplaced primitive hidden');
-      assert.equal(fixture.trackedBillboardColor().alpha, 1,
+      assert.equal(fixture.trackedBillboardColor()[3], 1,
         'retry backoff leaves the tracked billboard opaque');
 
       now += 1500;
       fixture.driveTrackedModel();
       assert.equal(sampleCalls, 1, 'the first settled turn samples once');
       assert.equal(model.show, false, 'terrain alone does not reveal an unready model');
-      assert.equal(fixture.trackedBillboardColor().alpha, 1,
+      assert.equal(fixture.trackedBillboardColor()[3], 1,
         'the billboard retains ownership until GPU readiness too');
 
       assert.equal(model.scale, baseScale, 'its scale is left to the pixel-cap driver');
@@ -704,7 +704,7 @@ for (const fixture of LAYERS) {
       fixture.driveTrackedModel();
       assert.equal(model.show, true, 'the model appears only after its snapped matrix is written');
       assert.equal(tracked.items.get(icao24).show, true);
-      assert.equal(fixture.trackedBillboardColor().alpha, 0,
+      assert.equal(fixture.trackedBillboardColor()[3], 0,
         'the billboard becomes transparent only when the model actually owns the visual');
       const placed = placedAt(model);
       const placedHeight = Cesium.Cartographic.fromCartesian(placed).height;
@@ -727,7 +727,7 @@ for (const fixture of LAYERS) {
       fixture.driveTrackedModel();
       assert.equal(model.show, true,
         'a taxi-invalidated tracked snap is HELD through the resample outage');
-      assert.equal(fixture.trackedBillboardColor().alpha, 0,
+      assert.equal(fixture.trackedBillboardColor()[3], 0,
         'the model still owns the visual, so the billboard stays transparent');
       assert.equal(sampleCalls, 1, 'the hold costs no extra synchronous sample');
 
@@ -736,7 +736,7 @@ for (const fixture of LAYERS) {
       fixture.driveTrackedModel();
       assert.equal(model.show, false,
         'past HELD_SNAP_MAX_DRIFT_M the hold is released and the model is withheld');
-      assert.equal(fixture.trackedBillboardColor().alpha, 1,
+      assert.equal(fixture.trackedBillboardColor()[3], 1,
         'there is no invisible-owner gap while the replacement snap is unavailable');
     } finally {
       Date.now = realNow;

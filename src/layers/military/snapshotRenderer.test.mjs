@@ -32,7 +32,11 @@ function harness({ viewer = null, floor = null } = {}) {
     records: { data: new Map() },
   };
   const parts = {
-    rendering: { _modelOwnsVisual: () => false, _syncModelToClass() {} },
+    rendering: {
+      _modelOwnsVisual: () => false,
+      _syncModelToClass() {},
+      _groundSampleExclusions: () => ({ sets: ['fleet-models', 'icons'] }),
+    },
     icons: {
       _iconIds: () => ['icon-primitive'],
       _addIcon: (id) => iconIds.add(id),
@@ -115,10 +119,10 @@ test('the mesh floor probe takes the camera subpoint from the camera port', () =
   h.apply(CONTACT, 1_700_000_000_000);
   assert.equal(h.meshCalls.length, 1);
   const [call] = h.meshCalls;
-  assert.equal(call.scene, viewer.scene);
+  assert.equal(call.scene, viewer);
   assert.equal(call.options.viewerLat, 30.5);
   assert.equal(call.options.viewerLon, -97.25);
-  assert.deepEqual(call.options.excludeObjects, ['icon-primitive']);
+  assert.deepEqual(call.options.sets, ['fleet-models', 'icons']);
 });
 
 test('without a viewer the mesh floor probe has no camera subpoint', () => {

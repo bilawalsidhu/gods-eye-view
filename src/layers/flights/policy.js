@@ -1,16 +1,21 @@
-import * as Cesium from 'cesium';
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
+import { cssColor } from '../../render/color.js';
+
+/** A CSS colour as frozen `[r, g, b, a]`, 0..1 (the renderer's `Color`). */
+const rgba = (css, alpha) =>
+  Object.freeze(
+    alpha === undefined ? cssColor(css) : [...cssColor(css).slice(0, 3), alpha],
+  );
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
-export const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+export const MIL_TINT = rgba('#FFB800');
 
 /** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
 
-export const EMERGENCY_TINT =
-  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
+export const EMERGENCY_TINT = rgba(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------
@@ -90,7 +95,7 @@ export const MODEL_ALL_KEEP_M = 450000;
 // all: KEEP modeled planes out to 450 km
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
-// airplane.glb nose is opposite Cesium heading-0
+// airplane.glb nose is opposite the renderer's heading 0
 // Owner launch-polish direction: models should read as clean light silhouettes,
 // with only a weak diffuse contribution from the existing approved textures.
 
@@ -106,22 +111,22 @@ export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
 export const MODEL_BELLY_OFFSET_NATIVE = 6.719;
 
 /** The tracked contact's tint, and its billboard once a model takes over. */
-export const TRACKED_CYAN = Cesium.Color.CYAN;
-export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
+export const TRACKED_CYAN = rgba('#00FFFF');
+export const CYAN_TRANSPARENT = rgba('#00FFFF', 0);
 /** An ordinary fleet contact's tint. */
-export const FLEET_TINT = Cesium.Color.WHITE;
+export const FLEET_TINT = rgba('#FFFFFF');
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
-export const COCKPIT_CIVILIAN_COLOR =
-  Cesium.Color.fromCssColorString('#DCEEFF');
+export const COCKPIT_CIVILIAN_COLOR = rgba('#DCEEFF');
 
-export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
-  1000,
-  3.0,
-  8000000,
-  0.5,
-);
+/** The tracked billboard's size by eye distance (the renderer's `NearFar`). */
+export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze({
+  near: 1000,
+  nearValue: 3.0,
+  far: 8000000,
+  farValue: 0.5,
+});
 
 // ---------------------------------------------------------------------------
 // Track-history trail state (PRD WS-F F1/F4): a fading polyline behind the

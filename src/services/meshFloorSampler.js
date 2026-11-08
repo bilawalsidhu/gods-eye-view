@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { approxDistanceKm } from '../data/approxDistance.js';
 import { heightsFor } from '../render/cesium/heights.js';
+import { heightsOf } from '../queries/heights.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -94,18 +95,29 @@ export function createMeshFloorSampler({
    * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
    *   exclude from the probe (Cesium matches instances/.primitive/.id — pass
    *   Billboard and Model instances, NOT collections).
+   * @param {string[]} [options.sets] - Own draw set ids to see through. When
+   *   given, `host` must be the viewer and the probe asks the renderer's
+   *   query port (`heightsOf`), which sees through every draw set not drawn
+   *   as ground; `excludeObjects` is then unused.
    * @param {number} [options.viewerLat] @param {number} [options.viewerLon]
    *   Viewer subpoint (computed once by the caller's poll).
    */
   function sampleMeshFloorCells(
     host,
     points,
-    { excludeObjects = [], viewerLat, viewerLon } = {},
+    { excludeObjects = [], sets, viewerLat, viewerLon } = {},
   ) {
     const scene = host?.scene ?? host;
     if (!meshFloorPreferred()) return;
+    const bySets = Array.isArray(sets);
+    const heights = !scene
+      ? null
+      : bySets
+        ? heightsOf(host)
+        : heightsFor(scene);
+    const exclude = bySets ? sets : excludeObjects;
     // Without depth-texture support every probe throws: nothing to latch.
-    if (!scene || !heightsFor(scene).supported().surface) return;
+    if (!heights?.supported().surface) return;
     if (!Array.isArray(points) || !points.length) return;
     // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
     // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
@@ -133,9 +145,9 @@ export function createMeshFloorSampler({
       ) {
         continue; // too far: tiles not streamed there, probe would be a guaranteed miss
       }
-      const height = heightsFor(scene).now(
+      const height = heights.now(
         Cesium.Cartographic.fromDegrees(cell.lon, cell.lat, 0, _scratchProbe),
-        { exclude: excludeObjects },
+        { exclude },
       );
       // A miss counts against the budget whatever its cause: past the support
       // gate a probe only throws mid-teardown, when every later cell would too.

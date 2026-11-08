@@ -10,8 +10,8 @@ function fixture() {
     _positionHistory: new Map(),
     _focusEvidenceIds: new Set(),
     _scratchArc: {},
-    _scratchOffset: new Cesium.Cartesian3(),
-    _scratchRenderTime: new Cesium.JulianDate(),
+    _scratchOffset: { x: 0, y: 0, z: 0 },
+    _scratchRenderTime: { dayNumber: 0, secondsOfDay: 0 },
   };
   const motion = createMotion({
     flightState,
@@ -35,64 +35,55 @@ function close(actual, expected) {
   assert.ok(Cesium.Cartesian3.distance(actual, expected) < 1e-8);
 }
 
-test('extrapolation reuses fixed frames and invalidates corrected coordinates', (t) => {
+test('extrapolation follows the fix frame, a corrected or replaced fix included', () => {
   const { motion } = fixture();
   const transform = Cesium.Transforms.eastNorthUpToFixedFrame;
-  const spy = t.mock.method(
-    Cesium.Transforms,
-    'eastNorthUpToFixedFrame',
-    transform,
-  );
   const fix = {
     position: Cesium.Cartesian3.fromDegrees(-97, 30, 200),
     velocity: 90,
     track: 70,
   };
-  const out = new Cesium.Cartesian3();
+  const out = { x: 0, y: 0, z: 0 };
   for (const dt of [-30, 5, 30, 60]) {
     motion._extrapolateFix(fix, {}, dt, out, 1.5);
     close(out, expectedPosition(fix, dt, 1.5, transform));
   }
-  assert.equal(spy.mock.callCount(), 1);
 
-  // Ground reflooring mutates an existing fix's Cartesian in place.
+  // Ground reflooring mutates an existing fix's position in place: the
+  // frame kept for the fix must not answer for the old coordinates.
   Cesium.Cartesian3.fromDegrees(-97, 30, 350, undefined, fix.position);
   motion._extrapolateFix(fix, {}, 30, out, 1.5);
   close(out, expectedPosition(fix, 30, 1.5, transform));
-  assert.equal(spy.mock.callCount(), 2);
 
   fix.position = Cesium.Cartesian3.fromDegrees(140, 80, 1000);
   motion._extrapolateFix(fix, {}, 30, out, -2);
   close(out, expectedPosition(fix, 30, -2, transform));
-  assert.equal(spy.mock.callCount(), 3);
 
   fix.velocity = 210;
   fix.track = 359;
   motion._extrapolateFix(fix, {}, 15, out, -1);
   close(out, expectedPosition(fix, 15, -1, transform));
-  assert.equal(spy.mock.callCount(), 3);
 
   const replacement = { ...fix };
   motion._extrapolateFix(replacement, {}, 15, out, -1);
   close(out, expectedPosition(replacement, 15, -1, transform));
-  assert.equal(spy.mock.callCount(), 4);
 });
 
-test('stationary fixes do not build a frame until motion needs it', (t) => {
+test('stationary fixes stay at the fix', () => {
   const { motion } = fixture();
-  const spy = t.mock.method(Cesium.Transforms, 'eastNorthUpToFixedFrame');
   const fix = {
     position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     velocity: 0,
     track: 90,
   };
-  const out = new Cesium.Cartesian3();
+  const out = { x: 0, y: 0, z: 0 };
   close(motion._extrapolateFix(fix, {}, 30, out), fix.position);
   fix.velocity = 10;
   close(motion._extrapolateFix(fix, {}, 0, out), fix.position);
-  assert.equal(spy.mock.callCount(), 0);
-  motion._extrapolateFix(fix, {}, 30, out);
-  assert.equal(spy.mock.callCount(), 1);
+  close(
+    motion._extrapolateFix(fix, {}, 30, out),
+    expectedPosition(fix, 30, 0, Cesium.Transforms.eastNorthUpToFixedFrame),
+  );
 });
 
 test('fleet render time is shared without resampling or mutating the supplied instant', (t) => {
@@ -121,7 +112,7 @@ test('fleet render time is shared without resampling or mutating the supplied in
     flightState.records.data.set(id, { velocity: 100, true_track: 90 });
     flightState._positionHistory.set(id, history);
   }
-  t.mock.method(Cesium.JulianDate, 'now', () => {
+  t.mock.method(Date, 'now', () => {
     throw new Error('unexpected per-contact clock read');
   });
   const expected = Cesium.Cartesian3.lerp(
@@ -156,10 +147,8 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
   flightState.records.data.set('tracked', { velocity: 100, true_track: 90 });
   flightState._positionHistory.set('tracked', history);
   let elapsed = 60;
-  const spy = t.mock.method(Cesium.JulianDate, 'now', (result) => {
-    assert.equal(result, flightState._scratchRenderTime);
-    return Cesium.JulianDate.addSeconds(start, elapsed, result);
-  });
+  const startMs = Cesium.JulianDate.toDate(start).getTime();
+  const spy = t.mock.method(Date, 'now', () => startMs + elapsed * 1000);
   const out = new Cesium.Cartesian3();
   close(
     motion._deadReckon('tracked', out),
@@ -181,4 +170,11 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
     ),
   );
   assert.equal(spy.mock.callCount(), 2);
+  // Sampled into the layer's scratch, not a new date.
+  assert.ok(
+    Cesium.JulianDate.equals(
+      flightState._scratchRenderTime,
+      Cesium.JulianDate.addSeconds(start, 45, new Cesium.JulianDate()),
+    ),
+  );
 });

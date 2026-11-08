@@ -439,9 +439,16 @@ test('real military track path creates no native label and publishes every cache
     );
     const entity = followedOf(viewer)?.entity;
     assert.ok(
-      entity instanceof Cesium.Entity,
-      'trackById must create the real Cesium entity',
+      readEntityRecord(entity)?.trackedId,
+      'trackById must record the tracked contact',
     );
+    assert.ok(
+      !(entity instanceof Cesium.Entity),
+      'tracking draws through the draw port, not a viewer entity',
+    );
+    assert.ok(entity.position, 'Cockpit sees a contact it can fly');
+    assert.equal(readEntityRecord(entity).drawn(), true);
+    assert.equal(entity.show, true);
     assert.equal(entity.label, undefined);
     assert.ok(
       entities.values.every((candidate) => candidate.label === undefined),
@@ -507,8 +514,8 @@ test('real military track path creates no native label and publishes every cache
     assert.equal(entry.title, readEntityRecord(entity)?.labelModel.title);
     assert.deepEqual(entry.details, readEntityRecord(entity)?.labelModel.details);
 
-    const display = entity.position.getValue(now);
-    assert.ok(display, 'tracked position callback must seed its frame cache');
+    const display = followedOf(viewer)?.position(Date.now());
+    assert.ok(display, 'the follow target must seed the frame cache');
     assert.equal(
       entry.position(),
       display,

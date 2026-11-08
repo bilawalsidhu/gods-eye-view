@@ -1,4 +1,5 @@
 import { followedOf } from '../data/followed.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
@@ -378,9 +379,12 @@ export class StyleManager extends ShellFacade {
         meshFloorPreferred: services.meshFloorPreferred,
         warmGroundFloor: services.warmGroundFloor,
         sampleMeshFloorCells: services.sampleMeshFloorCells,
-        // Whether the aircraft entity Cockpit flies still draws: the flight
-        // layers draw it as an entity of the viewer's own.
-        trackedEntityDrawn: (entity) => viewer.entities.contains(entity),
+        // Whether the aircraft Cockpit flies still draws: an entity of the
+        // viewer's own, or a tracked contact whose layer draws it through
+        // the draw port and says so in its entity record.
+        trackedEntityDrawn: (entity) =>
+          viewer.entities.contains(entity) ||
+          readEntityRecord(entity)?.drawn?.() === true,
         holdContinuousRender: services.holdContinuousRender,
         releaseContinuousRender: services.releaseContinuousRender,
         fetchRegionalBrief: services.fetchRegionalBrief,

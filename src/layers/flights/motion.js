@@ -1,4 +1,29 @@
-import * as Cesium from 'cesium';
+import { findCamera, rendererOf } from '../../render/rendererOf.js';
+import { renderedFrames } from '../../data/renderedFrames.js';
+import {
+  fromDegrees,
+  fromRadians,
+  toCartographicRadians,
+  toLonLatH,
+} from '../../geo/ellipsoid.js';
+import { eastNorthUp, framePoint } from '../../geo/frames.js';
+import {
+  addSeconds,
+  julianLessThan,
+  julianNow,
+  secondsDifference,
+} from '../../geo/julian.js';
+import {
+  add,
+  clamp,
+  copyInto,
+  distance,
+  lerpInto,
+  scale,
+  sub,
+  toDegrees,
+  vec,
+} from '../../geo/vector.js';
 import {
   COURSE_HOLD_SPEED_MPS,
   lerpAngleDeg,
@@ -45,6 +70,9 @@ import {
   fixTrackDeg,
 } from '../../data/aircraftMotionRegime.js';
 
+/** Whether two ECEF points are the same point, component for component. */
+const samePoint = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
+
 /** Where a flights record carries its reported speed and track. */
 const RECORD_FIELDS = { speed: 'velocity', track: 'true_track' };
 
@@ -69,8 +97,26 @@ export function createMotion({
   const {
     nearFarScalarValueAtDistance,
     clearFocusTarget,
-    publishFocusTargetFromCachedPosition,
+    publishFocusTargetAt,
   } = services.focus;
+
+  /** The camera's pose, or null without a camera to ask. */
+  function _pose() {
+    const viewer = flightState._viewer;
+    try {
+      return (viewer && findCamera(viewer)?.pose()) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The renderer canvas's CSS height (the viewer's own canvas when no
+   *  renderer is bound), or 0 without either. */
+  function _viewportHeightPx() {
+    const viewer = flightState._viewer;
+    const canvas = rendererOf(viewer)?.canvas ?? viewer?.canvas;
+    return Number(canvas?.clientHeight) || 0;
+  }
 
   // Fixes leave the cache with their history; corrected positions invalidate
   // the local frame even when the existing Cartesian is mutated in place.
@@ -112,15 +158,10 @@ export function createMotion({
       )
         continue;
       info.renderAltitudeM = lifted;
-      const position = Cesium.Cartesian3.fromDegrees(
-        info.rawLon,
-        info.rawLat,
-        lifted,
-      );
+      const position = fromDegrees(info.rawLon, info.rawLat, lifted);
       const history = flightState._positionHistory.get(icao24);
       const newest = history?.[history.length - 1];
-      if (newest)
-        newest.position = Cesium.Cartesian3.clone(position, newest.position);
+      if (newest) newest.position = copyInto(position, newest.position);
       // Above the ellipsoid now (or floors say otherwise next poll).
       parts.icons._applyIconPresentation(icao24);
       parts.icons._planIcon(icao24);
@@ -139,24 +180,19 @@ export function createMotion({
    * position toward the corrected fix before projecting forward.
    *
    * @param {string} icao24 - ICAO 24-bit transponder address of the aircraft.
-   * @returns {Cesium.Cartesian3|null} Estimated ECEF position, or null if no history exists.
+   * @returns {{x: number, y: number, z: number}|null} Estimated ECEF position, or null if no history exists.
    */
 
   function _deadReckon(icao24, result, sampledRenderTime) {
     const info = flightState.records.data.get(icao24);
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
-      const position = parts.icons._iconPosition(
-        icao24,
-        new Cesium.Cartesian3(),
-      );
+      const position = parts.icons._iconPosition(icao24, vec());
       flightState._drCourseDeg = info?.true_track || 0;
       flightState._drSpeedMps = info?.velocity || 0;
       flightState._drCourseHold =
         flightState._drSpeedMps < COURSE_HOLD_SPEED_MPS;
       flightState._drExtrapolating = false;
-      return position
-        ? Cesium.Cartesian3.clone(position, result || new Cesium.Cartesian3())
-        : null;
+      return position ? copyInto(position, result || vec()) : null;
     }
     const history = flightState._positionHistory.get(icao24);
     if (!history || history.length === 0) {
@@ -167,13 +203,13 @@ export function createMotion({
       return null;
     }
 
-    const out = result || new Cesium.Cartesian3();
+    const out = result || vec();
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime =
       sampledRenderTime ??
-      Cesium.JulianDate.addSeconds(
-        Cesium.JulianDate.now(flightState._scratchRenderTime),
+      addSeconds(
+        julianNow(flightState._scratchRenderTime),
         -RENDER_DELAY_SEC,
         flightState._scratchRenderTime,
       );
@@ -181,10 +217,7 @@ export function createMotion({
     const regime = _motionRegime(history, info, renderTime);
     if (regime.kind === 'between') {
       const { a, b, span } = regime;
-      const t =
-        span > 0
-          ? Cesium.JulianDate.secondsDifference(renderTime, a.time) / span
-          : 1.0;
+      const t = span > 0 ? secondsDifference(renderTime, a.time) / span : 1.0;
       const trackCourse = lerpAngleDeg(regime.trackFrom, regime.trackTo, t);
       flightState._drCourseDeg =
         regime.chordCourse != null
@@ -193,10 +226,10 @@ export function createMotion({
       flightState._drSpeedMps = regime.speed;
       flightState._drCourseHold = regime.speed < COURSE_HOLD_SPEED_MPS;
       flightState._drExtrapolating = false;
-      return Cesium.Cartesian3.lerp(a.position, b.position, t, out);
+      return lerpInto(a.position, b.position, t, out);
     }
-    const dt = Cesium.Math.clamp(
-      Cesium.JulianDate.secondsDifference(renderTime, regime.fix.time),
+    const dt = clamp(
+      secondsDifference(renderTime, regime.fix.time),
       regime.minDt,
       regime.maxDt,
     );
@@ -238,43 +271,26 @@ export function createMotion({
     flightState._drExtrapolating = true;
     if (speed === 0 || dt === 0) {
       flightState._drCourseDeg = heading;
-      return Cesium.Cartesian3.clone(fix.position, out);
+      return copyInto(fix.position, out);
     }
     // Constant-rate-turn arc (straight line when turnRateDps ≈ 0) — a plane in a
     // standard-rate turn is ~90° of arc wrong per 30 s if extrapolated straight.
     arcOffsetEnu(speed, heading, turnRateDps, dt, flightState._scratchArc);
     flightState._drCourseDeg = flightState._scratchArc.endCourseDeg;
-    Cesium.Cartesian3.fromElements(
-      flightState._scratchArc.east,
-      flightState._scratchArc.north,
-      0,
-      flightState._scratchOffset,
-    );
+    const offset = flightState._scratchOffset;
+    offset.x = flightState._scratchArc.east;
+    offset.y = flightState._scratchArc.north;
+    offset.z = 0;
     let frame = fixFrames.get(fix);
     if (!frame) {
-      frame = {
-        position: new Cesium.Cartesian3(),
-        matrix: new Cesium.Matrix4(),
-      };
+      frame = { position: vec(), enu: null };
       fixFrames.set(fix, frame);
     }
-    if (
-      !frame.valid ||
-      !Cesium.Cartesian3.equals(frame.position, fix.position)
-    ) {
-      Cesium.Transforms.eastNorthUpToFixedFrame(
-        fix.position,
-        Cesium.Ellipsoid.WGS84,
-        frame.matrix,
-      );
-      Cesium.Cartesian3.clone(fix.position, frame.position);
-      frame.valid = true;
+    if (!frame.enu || !samePoint(frame.position, fix.position)) {
+      frame.enu = eastNorthUp(fix.position);
+      copyInto(fix.position, frame.position);
     }
-    return Cesium.Matrix4.multiplyByPoint(
-      frame.matrix,
-      flightState._scratchOffset,
-      out,
-    );
+    return copyInto(framePoint(frame.enu, offset), out);
   }
 
   /**
@@ -289,21 +305,21 @@ export function createMotion({
     if (!flightState._trackedIcao) return false;
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     if (!history || history.length === 0) return true;
-    const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
+    const renderTime = addSeconds(
+      julianNow(),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );
-    return Cesium.JulianDate.lessThan(renderTime, history[0].time);
+    return julianLessThan(renderTime, history[0].time);
   }
 
   /** Resolve the selected aircraft's actual rendered square extent this frame. */
 
   function _trackedFocusSizePx(icao24, position) {
-    const camera = flightState._viewer?.camera;
-    const scene = flightState._viewer?.scene;
-    if (!camera?.positionWC || !position || !scene) return 28;
-    const rangeM = Cesium.Cartesian3.distance(camera.positionWC, position);
+    const pose = _pose();
+    if (!pose || !position) return 28;
+    const rangeM = distance(pose.position, position);
+    const viewportHeightPx = _viewportHeightPx();
     if (parts.rendering._modelOwnsVisual(icao24)) {
       const spec = parts.rendering._modelSpec(
         flightState.records.data.get(icao24)?.klass,
@@ -312,12 +328,11 @@ export function createMotion({
         baseScale: spec.scale,
         nativeRadiusM: spec.nativeRadiusM,
         rangeM,
-        viewportHeightPx: scene.canvas.clientHeight,
-        fovyRad: camera.frustum.fovy,
+        viewportHeightPx,
+        fovyRad: pose.fovy,
         maximumPixelSize: TRACKED_MODEL_MAX_PX,
       });
-      const focalLengthPx =
-        scene.canvas.clientHeight / (2 * Math.tan(camera.frustum.fovy / 2));
+      const focalLengthPx = viewportHeightPx / (2 * Math.tan(pose.fovy / 2));
       const projectedDiameterPx =
         (2 * spec.nativeRadiusM * scale * focalLengthPx) / rangeM;
       return Math.max(
@@ -339,16 +354,16 @@ export function createMotion({
   }
 
   /**
-   * Per-frame-cached, discontinuity-smoothed tracked DISPLAY position. Cached by Cesium
-   * frame number so the position / rotation / trail-head callbacks share ONE computation
+   * Per-frame-cached, discontinuity-smoothed tracked DISPLAY position. Cached by drawn
+   * frame (see renderedFrames.js) so the position / rotation / trail-head callbacks share ONE computation
    * (and one reconciliation-state update) per frame. Returns a stable module holder, or
    * null when the aircraft has no fix.
    * @param {string} icao24
-   * @returns {Cesium.Cartesian3|null}
+   * @returns {{x: number, y: number, z: number}|null}
    */
 
   function _trackedDisplayPosition(icao24) {
-    const frame = flightState._viewer?.scene?.frameState?.frameNumber ?? -1;
+    const frame = renderedFrames(flightState._viewer);
     if (
       frame === flightState._cachedDRFrame &&
       icao24 === flightState._drReconcileIcao
@@ -379,29 +394,26 @@ export function createMotion({
       const speed = (info && info.velocity) || 0;
       // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
       const plausible = speed * dtSec * 4 + 25;
-      if (Cesium.Cartesian3.distance(raw, flightState._drPrevRaw) > plausible) {
+      if (distance(raw, flightState._drPrevRaw) > plausible) {
         // Discontinuity — re-anchor so the DISPLAYED position stays continuous, then decay.
-        Cesium.Cartesian3.subtract(
-          flightState._drPrevDisplay,
-          raw,
+        copyInto(
+          sub(flightState._drPrevDisplay, raw),
           flightState._drCorrection,
         );
         flightState._drCorrectionStartMs = nowMs;
       }
     } else {
-      Cesium.Cartesian3.fromElements(0, 0, 0, flightState._drCorrection);
+      copyInto(vec(), flightState._drCorrection);
       flightState._drCorrectionStartMs = nowMs - DR_CORRECTION_MS; // fully decayed
     }
 
     const elapsed = nowMs - flightState._drCorrectionStartMs;
     const factor =
       elapsed >= DR_CORRECTION_MS ? 0 : 1 - elapsed / DR_CORRECTION_MS;
-    let display = Cesium.Cartesian3.multiplyByScalar(
-      flightState._drCorrection,
-      factor,
+    let display = copyInto(
+      add(raw, scale(flightState._drCorrection, factor)),
       flightState._trackedPosHolder,
     );
-    Cesium.Cartesian3.add(raw, display, display);
     // Same display floor the fleet pass applies — otherwise selecting a correctly
     // floored grounded billboard swapped it for an unfloored tracked entity and
     // dropped the cyan target back under the mesh. Applied HERE, at the single
@@ -420,8 +432,8 @@ export function createMotion({
       nowMs,
     );
 
-    Cesium.Cartesian3.clone(raw, flightState._drPrevRaw);
-    Cesium.Cartesian3.clone(display, flightState._drPrevDisplay);
+    copyInto(raw, flightState._drPrevRaw);
+    copyInto(display, flightState._drPrevDisplay);
     flightState._drPrevMs = nowMs;
     flightState._drReconcileValid = true;
     flightState._cachedDRPosition = display;
@@ -429,14 +441,13 @@ export function createMotion({
       icao24,
       flightState._cachedDRPosition,
     );
-    // Publish only the exact per-frame display cache the tracked entity/camera
+    // Publish only the exact per-frame display cache the tracked billboard/camera
     // consumes. Re-running DR from a later frame phase recreates the historical
     // target-vs-camera jitter bug.
-    publishFocusTargetFromCachedPosition({
+    publishFocusTargetAt({
       ownerLayer: 'flights',
       id: icao24,
-      scene: flightState._viewer?.scene,
-      camera: flightState._viewer?.camera,
+      viewer: flightState._viewer,
       displayPosition: flightState._cachedDRPosition,
       widthPx: focusSizePx,
       heightPx: focusSizePx,
@@ -446,7 +457,7 @@ export function createMotion({
 
   /** The tracked plane's current display position WITHOUT recomputing — the exact value the
    *  follow-camera already settled on this frame (in the Viewer _onTick). getDetectableObjects + the
-   *  readout run in postRender at a LATER frameNumber, so calling _trackedDisplayPosition there would
+   *  readout run in postRender, later in the same frame, so calling _trackedDisplayPosition there would
    *  re-run the dead-reckon on a fresh sample and double-advance the reconciliation → the label jitters
    *  against the now-stable plane (the model's jitter fix, resurfacing in the labels). Returns null when
    *  there's no valid fix for the tracked aircraft, so callers fall back to the icon position. */
@@ -509,10 +520,12 @@ export function createMotion({
       !parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     )
       return null;
-    return Cesium.Matrix4.getTranslation(
-      flightState._trackedModel.matrix,
-      flightState._scratchTrailClip,
-    );
+    const m = flightState._trackedModel.matrix;
+    const out = flightState._scratchTrailClip;
+    out.x = m[12];
+    out.y = m[13];
+    out.z = m[14];
+    return out;
   }
 
   function _trackedModelEnvelopeM() {
@@ -747,7 +760,7 @@ export function createMotion({
       state.probeMs = null; // re-ground may probe immediately
       state.out = null;
       state.effectiveM = null;
-      Cesium.Cartesian3.clone(Cesium.Cartesian3.ZERO, state.in); // invalidate the memo
+      copyInto(vec(), state.in); // invalidate the memo
     } else if (_seedExpired(state, nowMs)) {
       flightState._displayFloorState.delete(icao24); // airborne long enough to be anywhere
     }
@@ -792,11 +805,11 @@ export function createMotion({
    *
    * @param {string} icao24 - Contact key (owns one `_displayFloorState` entry).
    * @param {object|null|undefined} info - `_flightData` record for this contact.
-   * @param {Cesium.Cartesian3|null} pos - Dead-reckoned display position.
+   * @param {{x: number, y: number, z: number}|null} pos - Dead-reckoned display position.
    * @param {boolean} modelOwnsVisual - Whether a 3D model is drawing this contact.
    * @param {number} [nowMs] - Tick clock, passed by both callers so the release
    *   ease advances on the same clock the rest of the tick uses.
-   * @returns {Cesium.Cartesian3|null} `pos` itself when nothing moves (the common
+   * @returns {{x: number, y: number, z: number}|null} `pos` itself when nothing moves (the common
    *   case — no allocation, no rebuild), otherwise the lifted position.
    */
 
@@ -812,22 +825,18 @@ export function createMotion({
       return pos;
     }
     const state = flightState._displayFloorState.get(icao24);
-    const carto = Cesium.Cartographic.fromCartesian(
-      pos,
-      Cesium.Ellipsoid.WGS84,
-      flightState._scratchDisplayCarto,
-    );
+    const carto = toCartographicRadians(pos);
     // Boundary hysteresis: a position jittering across a cell edge would flip
     // floors at fleet-tick rate (see stickyFloorCell).
     const cell = stickyFloorCell(
-      Cesium.Math.toDegrees(carto.latitude),
-      Cesium.Math.toDegrees(carto.longitude),
+      toDegrees(carto.lat),
+      toDegrees(carto.lon),
       state?.cell,
     );
     const floor = cachedGroundFloor(cell.lat, cell.lon);
     const next = state || {
       cell,
-      in: new Cesium.Cartesian3(),
+      in: vec(),
       out: null,
       effectiveM: null,
       heldM: null,
@@ -920,28 +929,21 @@ export function createMotion({
     // never adopted. One owned entry per grounded
     // contact — O(grounded), dropped on eviction, on destroy, and the moment the
     // contact stops being a grounded billboard.
-    if (
-      state &&
-      state.effectiveM === effective &&
-      Cesium.Cartesian3.equals(pos, state.in)
-    ) {
+    if (state && state.effectiveM === effective && samePoint(pos, state.in)) {
       return state.out || pos;
     }
     const lifted = displayFloorHeightM(carto.height, effective);
     next.cell = cell;
     next.effectiveM = effective;
-    Cesium.Cartesian3.clone(pos, next.in);
+    copyInto(pos, next.in);
     if (lifted == null) {
       next.out = null;
     } else {
       // The cache OWNS its output: returning a shared scratch would let the next
       // contact in the fleet loop overwrite a position already handed out.
-      next.out = Cesium.Cartesian3.fromRadians(
-        carto.longitude,
-        carto.latitude,
-        lifted,
-        Cesium.Ellipsoid.WGS84,
-        next.out || new Cesium.Cartesian3(),
+      next.out = copyInto(
+        fromRadians(carto.lon, carto.lat, lifted),
+        next.out || vec(),
       );
     }
     if (!state) flightState._displayFloorState.set(icao24, next);
@@ -1024,13 +1026,10 @@ export function createMotion({
         flightState._drCourseDeg != null
           ? flightState._drCourseDeg
           : info.true_track || 0;
-      const c = Cesium.Cartographic.fromCartesian(
-        dr,
-        Cesium.Ellipsoid.WGS84,
-        flightState._scratchCorridorCarto,
-      );
-      const lat = Cesium.Math.toDegrees(c.latitude);
-      const lon = Cesium.Math.toDegrees(c.longitude);
+      const c = toLonLatH(dr);
+      if (!c) continue;
+      const lat = c.lat;
+      const lon = c.lon;
       const cells = corridorFloorCells(
         corridorPathLatLon({
           extrapolating,
@@ -1063,7 +1062,7 @@ export function createMotion({
       out.push(cell);
     }
   }
-  /** The display instant `epochMs` as a JulianDate, for `_motionRegime`. */
+  /** The display instant `epochMs` as a Julian date, for `_motionRegime`. */
   const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
 
   return {

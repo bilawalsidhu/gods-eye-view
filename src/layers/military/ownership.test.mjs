@@ -90,7 +90,7 @@ test('military state owns separate contact maps, motion scratch and ground sampl
     '_displayCourse',
     '_positionHistory',
     '_groundSnap',
-    '_scratchCarto',
+    '_scratchNearbyPos',
     '_models',
     'lifetime',
   ]) {

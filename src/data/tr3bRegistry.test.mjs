@@ -250,21 +250,25 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
 
     // 3. Every aircraftIcon() CALL SITE routes through the kind resolver, so no
     //    refresh path (poll reconciler, raster swap, presentation, tracked
-    //    entity) can silently revert a conversion.
+    //    billboard) can silently revert a conversion. The tracked billboard's
+    //    sites share one helper; the fleet's live in aircraftIconLayer.js.
     const code = stripComments(source);
     const callSites = code.match(/aircraftIcon\(\s*[^;]*?\)/g) || [];
-    assert.equal(callSites.length >= 4, true, `${name}: expected the known aircraftIcon call sites`);
+    assert.equal(callSites.length >= 1, true, `${name}: expected the known aircraftIcon call sites`);
     for (const call of callSites) {
       assert.match(call, /aircraftIcon\(\s*\s*(?:(?:parts\.)?rendering\.)?_iconKind\(\s*/,
         `${name}: ${call.replace(/\s+/g, ' ')} must resolve its sprite kind through _iconKind`);
     }
 
-    // 4. Orientation contract is untouched: still a screen-projected rotation
-    //    with alignedAxis ZERO, and no new per-frame CallbackProperty.
-    assert.match(source, /alignedAxis: Cesium\.Cartesian3\.ZERO/, `${name}: alignedAxis stays ZERO`);
-    assert.doesNotMatch(source, /isTr3b[\s\S]{0,200}new Cesium\.CallbackProperty/,
+    // 4. Orientation contract is untouched: the tracked billboard is still a
+    //    screen-rotated icon, and no per-frame CallbackProperty is added.
+    assert.doesNotMatch(source, /new Cesium\.CallbackProperty/,
       `${name}: the Easter egg adds no per-frame CallbackProperty`);
   }
+  const tracked = stripComments(
+    await readFile(new URL('./trackedAircraftIcon.js', import.meta.url), 'utf8'),
+  );
+  assert.match(tracked, /rotationMode: 'screen'/, 'the tracked billboard rotates in screen space');
 });
 
 test('conversions are session-scoped and no lifecycle path clears them', async () => {

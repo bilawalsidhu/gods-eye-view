@@ -23,16 +23,10 @@
  */
 import * as Cesium from 'cesium';
 import { poseSignature } from '../render/camera/poseSignature.js';
-
-/** Meters used to give the course vector a stable projection magnitude. */
-const FORWARD_PROBE_M = 2000;
-/**
- * Minimum camera-plane component before we trust the angle — below this the
- * course points almost exactly into/out of the screen and the angle is noise.
- */
-const MIN_SCREEN_COMPONENT_M = 0.5;
-/** Ignore sub-degree projection noise while retaining deliberate camera-orbit rotation. */
-const ROTATION_DEADBAND_RAD = Cesium.Math.toRadians(0.5);
+import {
+  courseScreenRotation,
+  stabilizeScreenRotation,
+} from './screenRotation.js';
 
 const _scratchEnu = new Cesium.Matrix4();
 const _scratchForward = new Cesium.Cartesian3();
@@ -41,7 +35,8 @@ const _scratchWorldForward = new Cesium.Cartesian3();
 /**
  * Computes the billboard rotation (radians, CCW-positive, for
  * alignedAxis = Cartesian3.ZERO) that points an icon along its real-world
- * course in the stable camera-basis approximation described above.
+ * course in the stable camera-basis approximation described above; the
+ * scene's camera axes in `screenRotation.js`'s `courseScreenRotation`.
  *
  * @param {Cesium.Scene} scene - The scene (projection source).
  * @param {Cesium.Cartesian3} position - Entity world position.
@@ -57,64 +52,15 @@ export function screenProjectedRotation(
   previous = null,
 ) {
   const camera = scene?.camera;
-  if (!camera?.rightWC || !camera?.upWC || !position) return previous;
-
-  const courseRad = Cesium.Math.toRadians(courseDeg || 0);
-  Cesium.Cartesian3.fromElements(
-    Math.sin(courseRad) * FORWARD_PROBE_M,
-    Math.cos(courseRad) * FORWARD_PROBE_M,
-    0,
-    _scratchForward,
-  );
-  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+  return courseScreenRotation(
+    camera && { right: camera.rightWC, up: camera.upWC },
     position,
-    Cesium.Ellipsoid.WGS84,
-    _scratchEnu,
+    courseDeg,
+    previous,
   );
-  Cesium.Matrix4.multiplyByPointAsVector(
-    enu,
-    _scratchForward,
-    _scratchWorldForward,
-  );
-
-  // Screen x follows camera-right. Window y grows downward, the opposite of
-  // camera-up. Projecting the vector itself avoids clipping/behind-camera
-  // failure modes from the old forward-point worldToWindowCoordinates probe.
-  const dx = Cesium.Cartesian3.dot(_scratchWorldForward, camera.rightWC);
-  const dy = -Cesium.Cartesian3.dot(_scratchWorldForward, camera.upWC);
-  if (dx * dx + dy * dy < MIN_SCREEN_COMPONENT_M * MIN_SCREEN_COMPONENT_M)
-    return previous;
-
-  // Window y grows downward; rotation 0 = icon pointing screen-up.
-  // Icon direction in window coords after CCW rotation r is (-sin r, -cos r),
-  // so matching the projected course (dx, dy) gives r = atan2(-dx, -dy).
-  return Math.atan2(-dx, -dy);
 }
 
-/**
- * Hold a billboard rotation when the newly projected angle differs only by
- * sub-degree render noise. The comparison uses the shortest wrapped arc so
- * values around ±π do not jump.
- *
- * @param {number|null} previous Last displayed rotation.
- * @param {number|null} next Newly projected rotation.
- * @param {number} [deadbandRad=ROTATION_DEADBAND_RAD] Angular hold threshold.
- * @returns {number|null} Stable rotation.
- */
-export function stabilizeScreenRotation(
-  previous,
-  next,
-  deadbandRad = ROTATION_DEADBAND_RAD,
-) {
-  if (!Number.isFinite(next))
-    return Number.isFinite(previous) ? previous : null;
-  if (!Number.isFinite(previous)) return next;
-  const delta = Math.atan2(
-    Math.sin(next - previous),
-    Math.cos(next - previous),
-  );
-  return Math.abs(delta) < Math.max(0, deadbandRad) ? previous : next;
-}
+export { stabilizeScreenRotation };
 
 const _occluder = new Cesium.EllipsoidalOccluder(
   Cesium.Ellipsoid.WGS84,

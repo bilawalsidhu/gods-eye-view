@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { TRACKED_ICON_COLOR } from '../layers/military/policy.js';
+import { TRACKED_CYAN } from '../layers/flights/policy.js';
 import { createRendering as civilRendering } from '../layers/flights/rendering.js';
 import { createRendering as militaryRendering } from '../layers/military/rendering.js';
 import { createMilitarySnapshotRenderer } from '../layers/military/snapshotRenderer.js';
@@ -456,7 +456,7 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
     const red = rendering._fleetBillboardColor('civil', {
       emergency: aircraftEmergency({ squawk: '7700' }),
     });
-    assert.ok(red.red > 0.9 && red.green < 0.5);
+    assert.ok(red[0] > 0.9 && red[1] < 0.5);
     flightState.records.data.set('civil', {
       emergency: aircraftEmergency({ squawk: '7700' }),
     });
@@ -466,7 +466,7 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
     flightState._trackedIcao = 'civil';
     assert.equal(
       rendering._modelColor('civil'),
-      factory === civilRendering ? Cesium.Color.CYAN : TRACKED_ICON_COLOR,
+      factory === civilRendering ? TRACKED_CYAN : TRACKED_ICON_COLOR,
     );
     flightState._trackedIcao = null;
     flightState.records.data.set('civil', { emergency: null });

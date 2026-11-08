@@ -1,9 +1,9 @@
-import { cameraOf } from '../../render/cesium/camera.js';
+import { cameraOf, findFrame } from '../../render/rendererOf.js';
 import { followedOf } from '../../data/followed.js';
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
-import * as Cesium from 'cesium';
-import { closeRenderLoopLatch } from '../../render/cesium/internals.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import { clone, distance as distanceBetween, vec } from '../../geo/vector.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
 import {
@@ -116,7 +116,7 @@ export function createQueries({
    * Build a public descriptor for one aircraft using its best current position
    * (dead-reckoned when history exists, billboard position otherwise).
    * @param {string} icao24 - ICAO 24-bit transponder address.
-   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
+   * @returns {{icao24: string, callsign: string|null, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
    */
 
@@ -136,7 +136,7 @@ export function createQueries({
     const info = flightState.records.data.get(icao24);
     const basePos =
       parts.motion._deadReckon(icao24) ||
-      parts.icons._iconPosition(icao24, new Cesium.Cartesian3());
+      parts.icons._iconPosition(icao24, vec());
     if (!basePos) return null;
     const displayed = displayedKinematics({
       derivedSpeedMps: flightState._drSpeedMps,
@@ -144,18 +144,14 @@ export function createQueries({
       reportedSpeedMps: info?.velocity,
       reportedTrackDeg: info?.true_track,
     });
-    const carto = Cesium.Cartographic.fromCartesian(
-      basePos,
-      Cesium.Ellipsoid.WGS84,
-      flightState._scratchCarto,
-    );
+    const carto = toLonLatH(basePos);
     if (!carto) return null;
     return {
       icao24,
       callsign: String(info?.callsign || '').trim() || null,
-      position: Cesium.Cartesian3.clone(basePos),
-      latitude: Cesium.Math.toDegrees(carto.latitude),
-      longitude: Cesium.Math.toDegrees(carto.longitude),
+      position: clone(basePos),
+      latitude: carto.lat,
+      longitude: carto.lon,
       // The cockpit instrument reports aviation altitude, not the Cesium
       // ellipsoid height of the camera/ground-clamped render position. The
       // latter can be slightly negative over terrain near the surface.
@@ -414,7 +410,7 @@ export function createQueries({
      * @param {object}  [options]
      * @param {number}  [options.maxCount] - Maximum number of objects to return.
      * @param {number}  [options.seed]     - Deterministic offset into the stride pattern.
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
       const icons = flightState._icons;
@@ -457,8 +453,8 @@ export function createQueries({
           object = {
             sourceId: icao24,
             type: 'AIR',
-            _weldPos: new Cesium.Cartesian3(),
-            _iconPos: new Cesium.Cartesian3(),
+            _weldPos: vec(),
+            _iconPos: vec(),
           };
           flightState._detectionObjects.set(icao24, object);
         }
@@ -485,7 +481,7 @@ export function createQueries({
                   spec,
                   (view ??= parts.rendering._drawnScaleView()),
                 ),
-                object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
+                object._weldPos || (object._weldPos = vec()),
               )
             : icons.position(icao24, t, object._iconPos);
         // An icon past the horizon is not drawn, so it is not detectable.
@@ -533,7 +529,7 @@ export function createQueries({
      * Match priority: exact icao24 hex, exact callsign, callsign prefix,
      * then callsign substring (all case-insensitive, trimmed).
      * @param {string} query - ICAO24 hex or full/partial callsign.
-     * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+     * @returns {{icao24: string, callsign: string|null, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
      *   Best match with a cloned, dead-reckoned position, or null if none.
      */
     findByQuery(query) {
@@ -574,12 +570,12 @@ export function createQueries({
     /**
      * Find aircraft near a given ECEF position, sorted ascending by distance.
      * Return shape mirrors militaryFlightsLayer.getNearby (id/icao24/position/distance).
-     * @param {Cesium.Cartesian3} center - Reference position in ECEF coordinates.
+     * @param {{x: number, y: number, z: number}} center - Reference position in ECEF coordinates.
      * @param {number} range - Maximum distance in meters (Infinity if not finite).
      * @param {number} [maxCount=50] - Maximum number of results to return.
      * @param {object} [options] Query membership options.
      * @param {boolean} [options.includeHidden=false] Include loaded horizon-hidden aircraft.
-     * @returns {Array<{id: string, icao24: string, callsign: string|null, position: Cesium.Cartesian3, distance: number, aircraftClass: string|null, altitudeM: number|null, velocityMps: number|null, track: number|null}>}
+     * @returns {Array<{id: string, icao24: string, callsign: string|null, position: {x: number, y: number, z: number}, distance: number, aircraftClass: string|null, altitudeM: number|null, velocityMps: number|null, track: number|null}>}
      */
     getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
       const icons = flightState._icons;
@@ -615,9 +611,9 @@ export function createQueries({
         )
           continue;
 
-        const distance = Cesium.Cartesian3.distance(center, drawn);
+        const distance = distanceBetween(center, drawn);
         if (distance > maxRange) continue;
-        const pos = trackedPos || Cesium.Cartesian3.clone(drawn);
+        const pos = trackedPos || clone(drawn);
 
         const info = flightState.records.data.get(icao24);
         const callsign = info?.callsign?.trim() || null;
@@ -652,7 +648,7 @@ export function createQueries({
      * Cheap snapshot for voice-tool framing — drawn icon positions, no
      * extra dead reckoning.
      * @param {number} [maxCount=500] - Maximum number of entries to return.
-     * @returns {Array<{id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number}>}
+     * @returns {Array<{id: string, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number}>}
      */
     /**
      * Whether this layer still carries a contact, in O(1).
@@ -686,20 +682,16 @@ export function createQueries({
 
       const result = [];
       for (const icao24 of icons.ids()) {
-        const pos = icons.position(icao24, t, new Cesium.Cartesian3());
-        const carto = Cesium.Cartographic.fromCartesian(
-          pos,
-          Cesium.Ellipsoid.WGS84,
-          flightState._scratchCarto,
-        );
+        const pos = icons.position(icao24, t, vec());
+        const carto = toLonLatH(pos);
         if (!carto) continue;
         const info = flightState.records.data.get(icao24);
         result.push({
           id: icao24, // identity (trackById resolves this)
           label: _contactLabel(icao24, info),
           position: pos,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: carto.lat,
+          longitude: carto.lon,
           altitudeM: carto.height,
           airline: info?.airline ?? null,
           typeName: info?.typeName ?? null,
@@ -831,7 +823,6 @@ export function createQueries({
       if (!flightState._icons?.has(id)) id = id.toLowerCase();
       if (
         id !== flightState._trackedIcao ||
-        !flightState._viewer.entities?.contains?.(flightState._trackedEntity) ||
         followedOf(flightState._viewer) !== flightState._followTarget
       )
         return false;
@@ -873,7 +864,7 @@ export function createQueries({
     /**
      * Return the current aircraft as a Context subject without changing
      * tracking or camera ownership.
-     * @returns {{layerId: string, id: string, label: string, position: Cesium.Cartesian3}|null}
+     * @returns {{layerId: string, id: string, label: string, position: {x: number, y: number, z: number}}|null}
      *   Detached subject descriptor, or null when no aircraft is tracked.
      */
     getTrackedSubject() {
@@ -889,7 +880,7 @@ export function createQueries({
           described.callsign ||
           _toCleanText(described.registration) ||
           described.icao24,
-        position: Cesium.Cartesian3.clone(described.position),
+        position: clone(described.position),
       };
     },
 
@@ -914,17 +905,14 @@ export function createQueries({
             takeFrameClock(startMs = 1_000_000_000) {
               if (!flightState._viewer || !Number.isFinite(startMs))
                 return { ok: false, nowMs: null };
-              flightState._viewer.useDefaultRenderLoop = false;
+              // The loop stops ticking; evidence frames are drawn by hand.
+              findFrame(flightState._viewer)?.suspend(true);
               setFocusEvidenceNowMs(startMs);
               flightState._lastFleetTickMs = startMs - FLEET_DR_INTERVAL_MS;
-              // Cross a browser task boundary, then close Cesium's pending-loop
-              // latch. Any already-queued callback still observes the false gate,
-              // while manual evidence renders can begin without waiting on VSYNC.
+              // Cross a browser task boundary, so a loop callback already
+              // queued has seen the stopped loop before manual renders begin.
               return new Promise((resolve) =>
-                setTimeout(() => {
-                  closeRenderLoopLatch(flightState._viewer);
-                  resolve({ ok: true, nowMs: startMs });
-                }, 0),
+                setTimeout(() => resolve({ ok: true, nowMs: startMs }), 0),
               );
             },
             advanceFrameClock(deltaMs = FLEET_DR_INTERVAL_MS) {
@@ -933,7 +921,7 @@ export function createQueries({
             releaseFrameClock() {
               setFocusEvidenceNowMs(null);
               if (flightState._viewer)
-                flightState._viewer.useDefaultRenderLoop = true;
+                findFrame(flightState._viewer)?.suspend(false);
             },
           }),
         }
