@@ -12,6 +12,7 @@ export function normalizeEarthquakeSnapshot(geojson) {
       !properties ||
       typeof properties !== 'object' ||
       Array.isArray(properties) ||
+      (properties.type != null && typeof properties.type !== 'string') ||
       (feature.geometry.type != null && feature.geometry.type !== 'Point')
     )
       return null;

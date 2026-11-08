@@ -1,5 +1,10 @@
 # God's Eye View Current State
 
+The Earthquakes layer and `get_earthquakes` count M2.5+ USGS events classified
+as `earthquake`. A refresh removes an event if USGS reclassifies it as a
+quarry blast or another type. Records with an omitted or null event type keep
+the magnitude-only behavior. A malformed non-string type rejects the snapshot.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
@@ -2464,7 +2469,7 @@ cancels pending work; a later reopening cannot inherit an old focus request.
 
 ## September 8, 2026
 
-Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering. The shared USGS source uses the catalog’s `earthquake` event type for the map and `get_earthquakes`. Quarry blasts, explosions and other explicitly classified events are excluded from both. Snapshots with an omitted or null event type keep the magnitude-only behavior.
+Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
 
 Non-object or array-valued properties reject the response instead of being treated as an unknown magnitude.
 

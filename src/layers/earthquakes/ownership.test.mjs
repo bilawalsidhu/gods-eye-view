@@ -106,6 +106,11 @@ test('a USGS reclassification removes a displayed quake on the next refresh', as
       [feature.id],
     );
 
+    feature.properties.type = { invalid: true };
+    assert.equal(await h.layer.update(h.viewer), false);
+    assert.equal(h.layer.getStats().error, 'Malformed USGS response');
+    assert.equal(h.layer.getStats().count, 1);
+
     feature.properties.type = 'quarry blast';
     assert.equal(await h.layer.update(h.viewer), true);
     assert.equal(h.layer.getStats().count, 0);
