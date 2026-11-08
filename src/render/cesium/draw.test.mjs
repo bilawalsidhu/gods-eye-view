@@ -4774,3 +4774,66 @@ test('a model past its pixel cap is scaled down each frame; fades and culls too'
     restore();
   }
 });
+
+test('a raised polygon outlines its holes as well as its outer ring', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.shapes({ id: 'raised-holes' });
+    const at = ([lon, lat]) => ({ lon, lat, height: 100 });
+    const outer = [
+      [0, 0],
+      [0.01, 0],
+      [0.01, 0.01],
+      [0, 0.01],
+    ].map(at);
+    // A triangle, so its line has a length of its own.
+    const hole = [
+      [0.004, 0.004],
+      [0.006, 0.004],
+      [0.005, 0.006],
+    ].map(at);
+    set.set([
+      {
+        id: 'p',
+        geometry: {
+          kind: 'polygon',
+          rings: [outer, hole],
+          perPositionHeight: true,
+        },
+        fill: [0, 0.5, 1, 0.3],
+        outline: [0, 0.5, 1, 1],
+        outlineWidth: 1,
+        height: 'absolute',
+      },
+    ]);
+    const host = scene.added[0];
+    let outlines = null;
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.PolylineCollection)
+        outlines = host.get(i);
+    assert.ok(outlines, 'outlined');
+    assert.equal(outlines.length, 2, 'the outer ring and the hole');
+    for (const [i, ring] of [outer, hole].entries()) {
+      const line = outlines.get(i);
+      assert.equal(line.positions.length, ring.length + 1, 'closed');
+      const start = Cesium.Cartesian3.fromDegrees(
+        ring[0].lon,
+        ring[0].lat,
+        ring[0].height,
+      );
+      assert.ok(
+        Cesium.Cartesian3.equalsEpsilon(line.positions[0], start, 0, 1e-6),
+        `line ${i} runs along its ring`,
+      );
+      assert.equal(line.width, 1);
+      assert.ok(
+        Cesium.Color.equals(
+          line.material.uniforms.color,
+          new Cesium.Color(0, 0.5, 1, 1),
+        ),
+      );
+      assert.equal(line.id.set, 'raised-holes');
+      assert.equal(line.id.id, 'p', 'picks as the polygon');
+    }
+    set.dispose();
+  }));

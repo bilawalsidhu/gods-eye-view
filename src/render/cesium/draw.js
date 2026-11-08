@@ -2228,7 +2228,8 @@ export function createCesiumDraw({
             extrudedHeight,
             perPositionHeight: g.perPositionHeight,
           }),
-          ring: outer,
+          // Its holes are outlined too, as the entities' polygons outline them.
+          rings: [outer, ...holes],
         };
       }
       case 'ellipse': {
@@ -2662,15 +2663,16 @@ export function createCesiumDraw({
             asynchronous: false,
           }),
         );
-      } else if (item.outline && shape.ring)
-        outlines.add({
-          positions: [...shape.ring, shape.ring[0]],
-          width: item.outlineWidth ?? 1,
-          material: Cesium.Material.fromType('Color', {
-            color: toColor(item.outline),
-          }),
-          id,
-        });
+      } else if (item.outline && shape.rings)
+        for (const ring of shape.rings)
+          outlines.add({
+            positions: [...ring, ring[0]],
+            width: item.outlineWidth ?? 1,
+            material: Cesium.Material.fromType('Color', {
+              color: toColor(item.outline),
+            }),
+            id,
+          });
     }
     host.add(outlines);
     const ground = groundFills(record, clamped);
