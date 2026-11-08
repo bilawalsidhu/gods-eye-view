@@ -322,6 +322,8 @@ export function createIngestion({
             groups,
             // satellite.js does not keep the designator the year match reads.
             launchYear,
+            line1: entry.line1,
+            line2: entry.line2,
             satelliteClass: classifySatellite({
               noradId,
               name: entry.name,
