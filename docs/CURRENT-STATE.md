@@ -1538,8 +1538,8 @@ HUD on, in its Tactical and Cyber layouts). Turning Live AIS Vessels off ends
 the bridge: the layer then has no subject (`getCockpitSubject` returns null).
 The bridge picture uses AIS alone, so no other feed being off makes it partial.
 Voice (`control_cockpit`) and the selection entry transaction stay aircraft-only;
-voice `enter` on a bridge is refused before it touches tracking, with the
-reason to exit the bridge first.
+voice `enter` on a bridge or in an orbital view is refused before it touches
+tracking, with the reason to exit it first.
 The vessel layer supplies the subject (`getCockpitSubject`), hides that ship's
 sprite, card, detection bracket and trail while it is held
 (`setCockpitSubject`), and
