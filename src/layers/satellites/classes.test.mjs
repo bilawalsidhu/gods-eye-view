@@ -9,6 +9,7 @@ import {
   mergeClassVisibility,
   parseSatcatCsv,
 } from './classes.js';
+import { CATALOG_GROUPS } from './policy.js';
 
 const NOW = 2026;
 const classify = (subject) => classifySatellite({ nowYear: NOW, ...subject });
@@ -356,4 +357,31 @@ test('a failed Starlink load hides the core catalog Starlink points again', asyn
   assert.equal(state._params.catalog, 'core');
   assert.equal(state._params.classes.starlink, false, 'the choice says so');
   assert.ok(applied >= 1, 'class visibility is applied again');
+});
+
+test('every ingested group names the class its unnamed members fall back to', () => {
+  // A group added to CATALOG_GROUPS without a class would file its members
+  // under PROBES, the catch-all.
+  const expected = {
+    stations: 'probes',
+    visual: 'probes',
+    'gps-ops': 'telecom',
+    glonass: 'telecom',
+    galileo: 'telecom',
+    geo: 'telecom',
+    resource: 'imaging',
+    weather: 'imaging',
+    planet: 'imaging',
+    sar: 'imaging',
+    science: 'probes',
+  };
+  assert.deepEqual(
+    Object.fromEntries(
+      CATALOG_GROUPS.map(({ tag }) => [
+        tag,
+        classify({ noradId: 99999, name: 'UNNAMED-1', group: tag }),
+      ]),
+    ),
+    expected,
+  );
 });

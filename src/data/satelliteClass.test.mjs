@@ -13,6 +13,7 @@ import satellitesLayer, {
   _clearDenseCatalogStateForTest,
   _setDenseCatalogStateForTest,
 } from './satellites.js';
+import { CATALOG_GROUPS } from '../layers/satellites/policy.js';
 
 /**
  * A real, parseable TLE under an arbitrary 5-digit catalog number, so the dense
@@ -46,7 +47,7 @@ const starlinkChip = () =>
   satellitesLayer.getRowControls().chips.find((entry) => entry.id === 'catalog');
 
 /** Every CelesTrak group the catalog ingests, plus the dense-mode tag. */
-const INGESTED_GROUPS = ['stations', 'visual', 'gps-ops', 'glonass', 'galileo', 'geo', 'dense'];
+const INGESTED_GROUPS = [...CATALOG_GROUPS.map((group) => group.tag), 'dense'];
 
 test('every ingested CelesTrak group resolves to a real class', () => {
   // Guards against drift: adding a group to CATALOG_GROUPS without classifying
@@ -342,7 +343,8 @@ test('a real stations-feed outage keeps the ISS under STATIONS in the legend', a
     assert.equal(legend.find((row) => row.klass === 'stations')?.count, 1,
       'STATIONS survives the outage because the ISS is counted there');
     assert.equal(legend.length, 1, 'and it is not also counted under another class');
-    assert.equal(satelliteClassLabel('visual', { isIss: true }), 'STATION · ISS',
+    const [iss] = satellitesLayer.getAnalystRecords();
+    assert.equal(iss?.satelliteClass, 'STATIONS · ISS',
       'the card says the same thing the legend does');
   } finally {
     console.log = log;
@@ -420,9 +422,9 @@ test('every class but Starlink shows by default; each class chip turns its class
   console.warn = () => {};
   const served = {
     '/api/celestrak/stations': ISS_TLE,
-    '/api/celestrak/resource': tleFor('40002', 'SENTINEL-2A'),
-    '/api/celestrak/gps-ops': tleFor('40001', 'GPS BIII-1'),
-    '/api/celestrak/visual': tleFor('40003', 'SL-16 R/B'),
+    '/api/celestrak/resource': tleFor('90002', 'SENTINEL-2A'),
+    '/api/celestrak/gps-ops': tleFor('90001', 'GPS BIII-1'),
+    '/api/celestrak/visual': tleFor('90003', 'SL-16 R/B'),
   };
   const shown = () => satellitesLayer.getAllPositions().map((row) => row.id).sort();
   const chip = (id) =>
@@ -434,7 +436,7 @@ test('every class but Starlink shows by default; each class chip turns its class
       text: async () => served[String(url)] || '',
     });
     await satellitesLayer.update({ scene: { primitives: { add: (p) => p, remove() {} } } });
-    assert.deepEqual(shown(), [25544, 40001, 40002, 40003], 'all but Starlink');
+    assert.deepEqual(shown(), [25544, 90001, 90002, 90003], 'all but Starlink');
     assert.deepEqual(
       satellitesLayer.getRowControls().chips.map((entry) => entry.label),
       ['STATIONS', 'IMAGING', 'TELECOM', 'STARLINK', 'PROBES', 'DEBRIS'],
@@ -454,7 +456,7 @@ test('every class but Starlink shows by default; each class chip turns its class
 
     satellitesLayer.setParams(chip('telecom').params);
     satellitesLayer.setParams(chip('debris').params);
-    assert.deepEqual(shown(), [25544, 40002], 'telecom and debris off');
+    assert.deepEqual(shown(), [25544, 90002], 'telecom and debris off');
     assert.equal(chip('debris').active, false);
     assert.deepEqual(satellitesLayer.getParams().classes, {
       stations: true,
@@ -467,7 +469,7 @@ test('every class but Starlink shows by default; each class chip turns its class
 
     satellitesLayer.setParams(chip('telecom').params);
     satellitesLayer.setParams(chip('imaging').params);
-    assert.deepEqual(shown(), [25544, 40001], 'telecom back on, imaging off');
+    assert.deepEqual(shown(), [25544, 90001], 'telecom back on, imaging off');
     assert.equal(satellitesLayer.setParams({ classes: 'all' }), false, 'malformed request refused');
 
     // A saved or shared choice comes back as class letters.
@@ -480,7 +482,7 @@ test('every class but Starlink shows by default; each class chip turns its class
       probes: true,
       debris: false,
     });
-    assert.deepEqual(shown(), [25544, 40002], 'restored from letters');
+    assert.deepEqual(shown(), [25544, 90002], 'restored from letters');
   } finally {
     console.log = log;
     console.warn = warn;
