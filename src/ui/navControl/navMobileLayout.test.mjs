@@ -82,3 +82,10 @@ test('every nav placement follows the world-timeline lift and short phones cap i
     /max-height: 450px\)\s*\{\s*body\.mobile-shell \.gev-nav\s*\{[^}]*bottom: min\([\s\S]*?calc\(100dvh - 130px - var\(--mobile-top-inset, 0px\)\)/,
   );
 });
+
+test('short landscape phones hide the nav while the world timeline is showing', () => {
+  assert.match(
+    nav,
+    /max-height: 450px\)\s*\{[\s\S]*?body\.mobile-shell:has\(#world-timeline\) \.gev-nav\s*\{\s*display: none;/,
+  );
+});
