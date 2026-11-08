@@ -469,6 +469,18 @@ test('every class but Starlink shows by default; each class chip turns its class
     satellitesLayer.setParams(chip('imaging').params);
     assert.deepEqual(shown(), [25544, 40001], 'telecom back on, imaging off');
     assert.equal(satellitesLayer.setParams({ classes: 'all' }), false, 'malformed request refused');
+
+    // A saved or shared choice comes back as class letters.
+    assert.equal(satellitesLayer.setParams({ classes: 'sip' }), true);
+    assert.deepEqual(satellitesLayer.getParams().classes, {
+      stations: true,
+      imaging: true,
+      telecom: false,
+      starlink: false,
+      probes: true,
+      debris: false,
+    });
+    assert.deepEqual(shown(), [25544, 40002], 'restored from letters');
   } finally {
     console.log = log;
     console.warn = warn;

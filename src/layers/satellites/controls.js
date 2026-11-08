@@ -1,4 +1,5 @@
 import { satelliteClassText } from '../../data/satelliteClass.js';
+import { decodeSatelliteClassMask } from '../../data/satelliteClassMask.js';
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
@@ -493,16 +494,22 @@ export function createControls({ state: layerState, services, parts, source }) {
       let catalog = params.catalog;
       if (catalog !== undefined && catalog !== 'core' && catalog !== 'dense')
         return false;
+      // A saved or shared choice arrives as class letters (layerState.js).
+      const requestedClasses =
+        typeof params.classes === 'string'
+          ? decodeSatelliteClassMask(params.classes)
+          : params.classes;
       if (params.classes !== undefined) {
-        if (!params.classes || typeof params.classes !== 'object') return false;
+        if (!requestedClasses || typeof requestedClasses !== 'object')
+          return false;
         // Starlink's toggle is the dense catalog: its points load on demand.
         if (
-          typeof params.classes.starlink === 'boolean' &&
+          typeof requestedClasses.starlink === 'boolean' &&
           catalog === undefined
         )
-          catalog = params.classes.starlink ? 'dense' : 'core';
+          catalog = requestedClasses.starlink ? 'dense' : 'core';
         layerState._params.classes = mergeClassVisibility(
-          params.classes,
+          requestedClasses,
           _classes(),
         );
       }

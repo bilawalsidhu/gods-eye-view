@@ -970,6 +970,41 @@ test('a direct Context selection promotes its owned tracker layer before persist
   coordinator.destroy();
 });
 
+test('a satellite class choice is saved, shared and restored', async () => {
+  const storage = memoryStorage();
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage,
+  });
+  await coordinator.start();
+  await manager.setEnabled('satellites', true, { origin: 'user' });
+  assert.equal(
+    coordinator.getDurableState().options.satellites.classes,
+    'sitpd',
+    'every class but Starlink by default',
+  );
+  manager.setLayerParams(
+    'satellites',
+    { classes: { debris: false } },
+    { origin: 'user' },
+  );
+  const durable = coordinator.getDurableState();
+  assert.equal(durable.options.satellites.classes, 'sitp');
+  assert.equal(
+    new URLSearchParams(encode(durable)).get('lo')?.includes('s.k.sitp'),
+    true,
+  );
+  coordinator.destroy();
+
+  // A reload hands the layer its letters back (the layer decodes them:
+  // src/data/satelliteClass.test.mjs).
+  const reloaded = productionManager();
+  const next = new LayerStateCoordinator(reloaded, shareSink(), { storage });
+  await next.start();
+  assert.equal(reloaded.getLayerParams('satellites')?.classes, 'sitp');
+  next.destroy();
+});
+
 test('explicit Flight to Satellite replacement keeps the new Satellite ID durable', async () => {
   const manager = productionManager();
   const coordinator = new LayerStateCoordinator(manager, shareSink(), {
