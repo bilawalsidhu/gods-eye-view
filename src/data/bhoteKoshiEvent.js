@@ -28,6 +28,7 @@ import { createImagerySplit } from '../ui/imagerySplit.js';
 import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { ICONS } from '../icons.js';
 
 export const BHOTE_KOSHI_LAYER_ID = 'bhote-koshi-2026';
 export const BHOTE_KOSHI_OVERLAY_SOURCE_ID = 'bhote-koshi-witnesses';
@@ -3845,7 +3846,8 @@ export function createBhoteKoshiEventLayer({
     name: 'Bhote Koshi Flood',
     // Scene-owned component; retain registration without a standalone menu row.
     showInTogglePanel: false,
-    icon: '🌊',
+    icon: '',
+    iconSvg: ICONS.waves,
     source: 'Vantor + GeoPera',
     updateInterval: 0,
     init,

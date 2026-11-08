@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { msg, t } from '../../i18n/index.js';
+import { ICONS } from '../../icons.js';
 import {
   DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
   droneAirspaceAnchorDegrees,
@@ -154,7 +155,8 @@ export function createDroneAirspaceLayer({
   const layer = {
     id: 'drone-airspace',
     name: 'Prohibited & Restricted Airspace',
-    icon: '🚫',
+    icon: '',
+    iconSvg: ICONS.ban,
     source: 'FAA SUA',
     updateInterval: 3600000,
 

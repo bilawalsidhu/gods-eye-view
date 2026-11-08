@@ -33,7 +33,15 @@ defineProps({
       :data-layer-name="item.englishName"
       ><div class="data-toggle-top"
         ><div class="data-toggle-left"
-          ><span class="data-icon" aria-hidden="true">{{ item.icon }}</span
+          ><span
+            v-if="item.iconSvg"
+            class="data-icon"
+            aria-hidden="true"
+            v-html="item.iconSvg"
+          ></span
+          ><span v-else class="data-icon" aria-hidden="true">{{
+            item.icon
+          }}</span
           ><RowText class="data-name" :text="item.name" /></div
         ><div class="data-toggle-right"
           ><RowText

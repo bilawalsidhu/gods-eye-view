@@ -221,7 +221,12 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
-const TIER_DOTS = Object.freeze({ metered: '🔴', paid: '🔴', free: '🟡' });
+/** Visual tier marker, styled as a colored dot via CSS. */
+const TIER_CLASSES = Object.freeze({
+  metered: 'tier-metered',
+  paid: 'tier-paid',
+  free: 'tier-free',
+});
 
 /** One key row as the view renders it, from the status payload's own text. */
 function presentRow(key) {
@@ -231,7 +236,7 @@ function presentRow(key) {
     set: Boolean(key.set),
     managed: key.managed || null,
     external: key.managed === 'external',
-    tierDot: TIER_DOTS[key.tier] || '',
+    tierClass: TIER_CLASSES[key.tier] || '',
     tierTitle:
       key.tier === 'metered'
         ? t('Metered — a billing-enabled account')

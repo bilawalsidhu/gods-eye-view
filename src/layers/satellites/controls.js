@@ -6,6 +6,7 @@ import {
 import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import { ISS_NORAD, POINT_STYLES } from './policy.js';
+import { ICONS } from '../../icons.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -93,7 +94,9 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'Satellites',
 
-    icon: '🛰️',
+    icon: '',
+
+    iconSvg: ICONS.satellite,
 
     source: 'CelesTrak',
 

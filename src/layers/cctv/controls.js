@@ -5,6 +5,7 @@ import {
   DEFAULT_CAMERA_CALIBRATION,
   CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
+import { ICONS } from '../../icons.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
@@ -15,7 +16,9 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     name: 'CCTV',
 
-    icon: '📹',
+    icon: '',
+
+    iconSvg: ICONS.video,
 
     source: 'CCTV + Street View fallback',
 

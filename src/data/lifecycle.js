@@ -2268,6 +2268,7 @@ export class LayerLifecycle {
         id,
         name: entry.module.name,
         icon: entry.module.icon,
+        iconSvg: entry.module.iconSvg,
         source: entry.module.source,
         showInTogglePanel: entry.module.showInTogglePanel !== false,
         // Registry id of the provider key this layer needs, if any (mirrors

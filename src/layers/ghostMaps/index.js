@@ -16,6 +16,7 @@ import {
 } from '../../i18n/index.js';
 import { createHorizonCull } from '../streetLevel/view.js';
 import { readGhostMapsKml } from './kml.js';
+import { ICONS } from '../../icons.js';
 import {
   fieldLabel,
   GHOSTMAPS_AGE_OPTIONS,
@@ -657,7 +658,8 @@ export function createGhostMapsLayer({
   const layer = {
     id: GHOSTMAPS_LAYER_ID,
     name: 'S2 GhostMaps',
-    icon: '👻',
+    icon: '',
+    iconSvg: ICONS.ghost,
     source: 'S2 Underground',
     // Pushes arrive within seconds over the event stream; this interval is
     // the backstop if the stream is down.

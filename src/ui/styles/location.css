@@ -67,6 +67,23 @@
   color: #bdefff;
 }
 
+/* SVG pin, replacing the old emoji glyph that led the readout. */
+.location-mini-city::before {
+  content: '';
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 3px;
+  vertical-align: -1px;
+  background: currentColor;
+  mask-image: url('/location.svg');
+  -webkit-mask-image: url('/location.svg');
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
 .location-mini-poi {
   font-family: var(--font-mono);
   font-size: 8px;
