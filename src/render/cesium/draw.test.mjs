@@ -5163,3 +5163,268 @@ test('a raised polygon outlines its holes as well as its outer ring', () =>
     }
     set.dispose();
   }));
+
+test('quads draw a posed plane and its outline, changed in place', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.quads({ id: 'monitors' });
+    const canvas = { width: 4, height: 4 };
+    const other = { width: 4, height: 4 };
+    const center = { x: 6378137, y: 10, z: 20 };
+    const quad = (extra = {}) => ({
+      id: 'q',
+      center,
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+      size: [40, 20],
+      source: { canvas },
+      alpha: 0.95,
+      outline: { color: [0.4, 0.9, 1, 0.55], widthPx: 1 },
+      meta: { camera: 'c1' },
+      ...extra,
+    });
+    set.set([quad()]);
+    const host = scene.added[0];
+    assert.equal(host.length, 2, 'the plane and its outline');
+    const [fill, outline] = [host.get(0), host.get(1)];
+    assert.ok(fill.geometryInstances.geometry instanceof Cesium.PlaneGeometry);
+    assert.ok(
+      outline.geometryInstances.geometry instanceof Cesium.PlaneOutlineGeometry,
+    );
+    assert.deepEqual(fill.geometryInstances.id, {
+      set: 'monitors',
+      id: 'q',
+      meta: { camera: 'c1' },
+      lodGroup: undefined,
+    });
+    // Scaled to its size about its centre, as a plane entity's matrix is.
+    const scale = Cesium.Matrix4.getScale(
+      fill.modelMatrix,
+      new Cesium.Cartesian3(),
+    );
+    assert.deepEqual([scale.x, scale.y, scale.z], [40, 20, 1]);
+    const at = Cesium.Matrix4.getTranslation(
+      fill.modelMatrix,
+      new Cesium.Cartesian3(),
+    );
+    assert.deepEqual({ x: at.x, y: at.y, z: at.z }, center);
+    const material = fill.appearance.material;
+    assert.equal(material.type, 'Image');
+    assert.equal(material.uniforms.image, canvas);
+    assert.ok(Math.abs(material.uniforms.color.alpha - 0.95) < 1e-12);
+    assert.equal(fill.appearance.translucent, true);
+
+    // Moved, resized, faded, hidden and given another canvas: the same plane.
+    set.upsert([
+      quad({
+        center: { x: 6378137, y: 30, z: 20 },
+        size: [80, 45],
+        alpha: 0.5,
+        show: false,
+        source: { canvas: other },
+        meta: { camera: 'c2' },
+      }),
+    ]);
+    assert.equal(host.get(0), fill, 'changed where it is');
+    Cesium.Matrix4.getScale(fill.modelMatrix, scale);
+    assert.deepEqual([scale.x, scale.y], [80, 45]);
+    assert.ok(
+      Cesium.Matrix4.equals(fill.modelMatrix, outline.modelMatrix),
+      'the outline follows',
+    );
+    assert.equal(fill.show, false);
+    assert.equal(outline.show, false);
+    assert.equal(material.uniforms.image, other, 'the new canvas is read');
+    assert.ok(Math.abs(material.uniforms.color.alpha - 0.5) < 1e-12);
+    assert.deepEqual(fill.geometryInstances.id.meta, { camera: 'c2' });
+
+    // Unpickable, or without an outline: built anew.
+    set.upsert([quad({ outline: null, pickable: false })]);
+    assert.equal(host.length, 1, 'no outline');
+    assert.notEqual(host.get(0), fill);
+    assert.equal(host.get(0).allowPicking, false);
+    set.remove(['q']);
+    assert.equal(host.length, 0);
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('a video quad keeps frames coming while it plays, read anew at a new size', () =>
+  withImageClasses(() => {
+    const realVideo = globalThis.HTMLVideoElement;
+    globalThis.HTMLVideoElement = class extends EventTarget {};
+    try {
+      const scene = fakeScene();
+      let renders = 0;
+      scene.requestRender = () => (renders += 1);
+      const part = createCesiumDraw({
+        scene,
+        report: (error) => assert.fail(error),
+      });
+      const set = part.port.quads({ id: 'feeds' });
+      const video = Object.assign(new globalThis.HTMLVideoElement(), {
+        readyState: 4,
+        paused: false,
+        ended: false,
+        videoWidth: 640,
+        videoHeight: 360,
+      });
+      set.set([
+        {
+          id: 'v',
+          center: { x: 6378137, y: 0, z: 0 },
+          orientation: { x: 0, y: 0, z: 0, w: 1 },
+          size: [16, 9],
+          source: { video },
+          alpha: 0.95,
+        },
+      ]);
+      const fill = scene.added[0].get(0);
+      const first = fill.appearance.material;
+      assert.equal(first.uniforms.image, video);
+      part.beforeRender();
+      renders = 0;
+      part.afterRender();
+      assert.ok(renders > 0, 'a playing video asks for the next frame');
+      // Past the frames a new image needs, a paused video asks for none.
+      part.afterRender();
+      part.afterRender();
+      video.paused = true;
+      renders = 0;
+      part.afterRender();
+      assert.equal(renders, 0, 'a paused video draws no more frames');
+      // A new size: a new material reads it, the old one freed once drawn.
+      video.videoWidth = 1280;
+      video.videoHeight = 720;
+      part.beforeRender();
+      assert.notEqual(fill.appearance.material, first);
+      assert.equal(fill.appearance.material.uniforms.image, video);
+      assert.equal(first.isDestroyed(), false, 'kept until the frame drew');
+      part.afterRender();
+      assert.equal(first.isDestroyed(), true);
+      // Paused, it draws again as it plays, with no frame asked for.
+      renders = 0;
+      video.dispatchEvent(new Event('playing'));
+      assert.equal(renders, 1, 'playing again asks for a frame');
+      // From the video to a canvas: a material of its own.
+      const sized = fill.appearance.material;
+      const canvas = { width: 4, height: 4 };
+      const quad = {
+        id: 'v',
+        center: { x: 6378137, y: 0, z: 0 },
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+        size: [16, 9],
+        source: { canvas },
+        alpha: 0.95,
+      };
+      set.upsert([{ ...quad, show: false }]);
+      assert.notEqual(fill.appearance.material, sized);
+      assert.equal(fill.appearance.material.uniforms.image, canvas);
+      renders = 0;
+      video.dispatchEvent(new Event('playing'));
+      assert.equal(renders, 0, 'the video it left is no longer heard');
+      // Hidden, the frames its image needs wait until it shows.
+      part.afterRender();
+      part.afterRender();
+      part.afterRender();
+      set.upsert([quad]);
+      renders = 0;
+      part.afterRender();
+      assert.ok(renders > 0, 'shown, it asks for the frames its image needs');
+      set.dispose();
+    } finally {
+      globalThis.HTMLVideoElement = realVideo;
+    }
+  }));
+
+test('meshes draw their triangles in the frame at their origin', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.meshes({ id: 'volumes', pickable: false });
+    const positions = new Float32Array([0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10]);
+    const indices = new Uint16Array([0, 1, 2, 0, 1, 3]);
+    const origin = Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 200);
+    const mesh = (extra = {}) => ({
+      id: 'm',
+      origin: { x: origin.x, y: origin.y, z: origin.z },
+      positions,
+      indices,
+      color: [0.2, 0.8, 1, 0.2],
+      flat: true,
+      ...extra,
+    });
+    set.set([mesh()]);
+    const host = scene.added[0];
+    assert.equal(host.length, 1);
+    const primitive = host.get(0);
+    const geometry = primitive.geometryInstances.geometry;
+    assert.equal(
+      geometry.attributes.position.componentDatatype,
+      Cesium.ComponentDatatype.DOUBLE,
+    );
+    // In the Earth-fixed frame: the east-north-up offsets about the origin.
+    const frame = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
+    const values = geometry.attributes.position.values;
+    for (let i = 0; i < positions.length; i += 3) {
+      const want = Cesium.Matrix4.multiplyByPoint(
+        frame,
+        new Cesium.Cartesian3(positions[i], positions[i + 1], positions[i + 2]),
+        new Cesium.Cartesian3(),
+      );
+      assert.ok(
+        Cesium.Cartesian3.equalsEpsilon(
+          new Cesium.Cartesian3(values[i], values[i + 1], values[i + 2]),
+          want,
+          0,
+          1e-6,
+        ),
+        `vertex ${i / 3} in place`,
+      );
+    }
+    assert.equal(geometry.indices, indices);
+    assert.equal(primitive.allowPicking, false, 'an unpickable set');
+    assert.equal(primitive.appearance.flat, true);
+    assert.equal(primitive.appearance.translucent, true);
+    assert.equal(
+      primitive.appearance.renderState.cull.enabled,
+      false,
+      'both faces',
+    );
+    // Hidden: the same primitive.
+    set.upsert([mesh({ show: false })]);
+    assert.equal(host.get(0), primitive);
+    assert.equal(primitive.show, false);
+    // Moved: built anew where it now is.
+    const moved = Cesium.Cartesian3.fromDegrees(-97.73, 30.27, 200);
+    set.upsert([mesh({ origin: { x: moved.x, y: moved.y, z: moved.z } })]);
+    assert.equal(host.length, 1);
+    const rebuilt = host.get(0);
+    assert.notEqual(rebuilt, primitive);
+    const first = rebuilt.geometryInstances.geometry.attributes.position.values;
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        new Cesium.Cartesian3(first[0], first[1], first[2]),
+        moved,
+        0,
+        1e-6,
+      ),
+      'its origin vertex is the new origin',
+    );
+    // A new colour builds it anew.
+    set.upsert([mesh({ color: '#ff0000' })]);
+    assert.equal(host.length, 1);
+    assert.notEqual(host.get(0), rebuilt);
+    // Lit meshes are closed: their back faces culled.
+    set.upsert([mesh({ flat: false })]);
+    assert.equal(host.get(0).appearance.closed, true);
+    set.clear();
+    assert.equal(host.length, 0);
+    set.dispose();
+  }));
