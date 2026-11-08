@@ -2464,7 +2464,7 @@ cancels pending work; a later reopening cannot inherit an old focus request.
 
 ## September 8, 2026
 
-Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
+Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering. The shared USGS source uses the catalog’s `earthquake` event type for the map and `get_earthquakes`. Quarry blasts, explosions and other explicitly classified events are excluded from both. Snapshots with an omitted or null event type keep the magnitude-only behavior.
 
 Non-object or array-valued properties reject the response instead of being treated as an unknown magnitude.
 
