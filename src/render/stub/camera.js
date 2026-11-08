@@ -867,6 +867,15 @@ export function createStubCamera({
       near,
     }),
     holds: () => [...holds.values()],
+    /** The frame the eye is in, column-major from it to the world. */
+    eyeFrame: () =>
+      Float64Array.of(
+        ...[frame.x, frame.y, frame.z].flatMap((a) => [a.x, a.y, a.z, 0]),
+        frame.origin.x,
+        frame.origin.y,
+        frame.origin.z,
+        1,
+      ),
     setViewRectangle(fn) {
       port.viewRectangle = fn;
     },

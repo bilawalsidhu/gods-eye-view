@@ -11,11 +11,8 @@ import {
   PI_OVER_TWO,
   TWO_PI,
   acosClamped,
-  clamp,
   equalsEpsilon,
-  negate,
   rotate,
-  scale,
   vec,
   zeroToTwoPi,
 } from '../../geo/index.js';
@@ -61,18 +58,6 @@ export const pitchOf = (direction) => PI_OVER_TWO - acosClamped(direction.z);
 export function rollOf(direction, up, right) {
   if (equalsEpsilon(Math.abs(direction.z), 1.0, EPSILON3)) return 0;
   return zeroToTwoPi(Math.atan2(-right.z, up.z) + TWO_PI);
-}
-
-/** The local offset a heading, pitch and range puts the eye at. */
-export function offsetFromHeadingPitchRange(heading, pitch, range) {
-  const p = clamp(pitch, -PI_OVER_TWO, PI_OVER_TWO);
-  const h = zeroToTwoPi(heading) - PI_OVER_TWO;
-  const offset = rotate(
-    rotate(vec(1, 0, 0), vec(0, 1, 0), -p),
-    vec(0, 0, 1),
-    -h,
-  );
-  return scale(negate(offset), range);
 }
 
 export { EPSILON10 };

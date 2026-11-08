@@ -47,6 +47,7 @@ export const CAPABILITIES = Object.freeze([
   'sharpen',
   'followAutodetect',
   'globeVisibility',
+  'followFrame',
   'benchmark',
 ]);
 
@@ -173,8 +174,8 @@ export const PORTS = deepFreeze({
     ['agents', 'agents'],
     ['orbits', 'orbits'],
   ]),
-  camera: Object.fromEntries(
-    required(
+  camera: Object.fromEntries([
+    ...required(
       'pose',
       'setView',
       'setFov',
@@ -214,7 +215,8 @@ export const PORTS = deepFreeze({
       'onCommand',
       'matrices',
     ),
-  ),
+    ['followFrame', 'followFrame'],
+  ]),
   query: Object.fromEntries(
     required(
       'pick',

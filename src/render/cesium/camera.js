@@ -83,13 +83,21 @@ const NO_FOLLOW_OFFSET = Object.freeze({ get: () => null, set() {} });
 
 /**
  * @param {{scene: object, camera: object, report: (error: unknown) => void,
- *   widget?: object}} options `scene` gives `requestRender` and the
- *   `postUpdate` tick `changed` is measured on; `widget`, the Viewer or
- *   CesiumWidget, gives the entity tracking `follow` runs on (without it the
- *   camera cannot follow).
+ *   widget?: object, capabilities?: ReadonlySet<string>}} options `scene`
+ *   gives `requestRender` and the `postUpdate` tick `changed` is measured
+ *   on; `widget`, the Viewer or CesiumWidget, gives the entity tracking
+ *   `follow` runs on (without it the camera cannot follow);
+ *   `capabilities`, the renderer's, gates the optional members (a camera
+ *   with none given has them all).
  * @returns {{port: import('../contract/camera').CameraPort, dispose: () => void}}
  */
-export function createCesiumCamera({ scene, camera, report, widget }) {
+export function createCesiumCamera({
+  scene,
+  camera,
+  report,
+  widget,
+  capabilities,
+}) {
   const removers = [];
   // Camera events: Cesium's own moveStart and moveEnd (500 ms after the
   // last change, never while following), and `changed` measured per
@@ -379,6 +387,11 @@ export function createCesiumCamera({ scene, camera, report, widget }) {
       };
     },
   };
+  // Cesium keeps the eye in `camera.transform`: a tracked entity's frame, a
+  // `lookAt` target's, or the identity.
+  if (!capabilities || capabilities.has('followFrame'))
+    cameraPort.followFrame = () =>
+      Float64Array.from(Cesium.Matrix4.toArray(camera.transform));
 
   return {
     port: cameraPort,

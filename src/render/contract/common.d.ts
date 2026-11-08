@@ -208,5 +208,7 @@ export type Capability =
   | 'followAutodetect'
   /** Reading back whether the globe surface is shown (`globe.isGlobeVisible`). */
   | 'globeVisibility'
+  /** Reading the frame the eye is placed in (`camera.followFrame`). */
+  | 'followFrame'
   /** A built-in quality benchmark. */
   | 'benchmark';

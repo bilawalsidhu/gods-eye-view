@@ -1,19 +1,25 @@
 /**
  * @module geo/frames
  * @description Rigid frames (unit axes and an origin, local to ECEF), the
- * east-north-up frame at a point, and rotation about an axis.
+ * east-north-up frame at a point, rotation about an axis, and the offset a
+ * heading, pitch and range puts an eye at.
  */
 import { geodeticSurfaceNormal } from './ellipsoid.js';
 import {
   EPSILON14,
+  PI_OVER_TWO,
   add,
+  clamp,
   clone,
   cross,
   dot,
   equalsEpsilon,
+  negate,
   normalize,
+  scale,
   sub,
   vec,
+  zeroToTwoPi,
 } from './vector.js';
 
 /**
@@ -89,4 +95,21 @@ export function rotate(v, axis, angle) {
     v.y * c + k.y * s + axis.y * d * (1 - c),
     v.z * c + k.z * s + axis.z * d * (1 - c),
   );
+}
+
+/**
+ * The offset from a target a heading, pitch and range put the eye at, in
+ * the target's east-north-up frame: heading clockwise from north, pitch
+ * negative looking down (clamped to straight up or down), as `lookAt` takes
+ * them.
+ */
+export function offsetFromHeadingPitchRange(heading, pitch, range) {
+  const p = clamp(pitch, -PI_OVER_TWO, PI_OVER_TWO);
+  const h = zeroToTwoPi(heading) - PI_OVER_TWO;
+  const offset = rotate(
+    rotate(vec(1, 0, 0), vec(0, 1, 0), -p),
+    vec(0, 0, 1),
+    -h,
+  );
+  return scale(negate(offset), range);
 }

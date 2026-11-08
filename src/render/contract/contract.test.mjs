@@ -174,6 +174,12 @@ test('a draw set’s events: ready with the id, loadFailed with the id and why',
   });
 });
 
+test('members added to version 0 later are optional, each behind its capability', () => {
+  // A renderer written before an addition still conforms without it.
+  assert.equal(PORTS.globe.isGlobeVisible, 'globeVisibility');
+  assert.equal(PORTS.camera.followFrame, 'followFrame');
+});
+
 test('the shape check names what is missing and what a capability does not allow', () => {
   assert.deepEqual(checkRendererShape(null), ['renderer is not an object']);
   assert.deepEqual(checkRendererShape({}), [

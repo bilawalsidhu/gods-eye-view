@@ -254,3 +254,13 @@ test('setFov holds the vertical angle across resizes, and waits for a first one'
   assert.throws(() => port.setFov({ vertical: Math.PI }), RangeError);
   assert.throws(() => port.setFov({ vertical: NaN }), RangeError);
 });
+
+test('followFrame is there only with its capability', () => {
+  const { scene, camera } = headlessCamera();
+  scene.postUpdate = new Cesium.Event();
+  const make = (capabilities) =>
+    createCesiumCamera({ scene, camera, report: () => {}, capabilities }).port;
+  assert.equal(make(new Set()).followFrame, undefined);
+  assert.equal(typeof make(new Set(['followFrame'])).followFrame, 'function');
+  assert.equal(typeof make(undefined).followFrame, 'function');
+});

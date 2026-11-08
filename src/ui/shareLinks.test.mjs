@@ -123,12 +123,53 @@ function fakeViewer() {
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
+/** A frame port whose preUpdate is the fake viewer's scene's, read when subscribed. */
+const preUpdateFrame = (viewer) => ({
+  on: (phase, cb) =>
+    phase === 'preUpdate'
+      ? (viewer.scene?.preUpdate?.addEventListener(cb) ?? (() => {}))
+      : () => {},
+});
+
+/**
+ * A Cesium-shaped camera in `transform` with its eye at `position` there:
+ * a view set on it (a world pose) lands in that frame, and each eye it is
+ * given is recorded in `looks`, in the frame.
+ */
+function cameraInFrame(transform, position, looks) {
+  return {
+    transform,
+    position,
+    get positionWC() {
+      return Cesium.Matrix4.multiplyByPoint(
+        this.transform,
+        this.position,
+        new Cesium.Cartesian3(),
+      );
+    },
+    setView({ destination }) {
+      const local = Cesium.Matrix4.multiplyByPoint(
+        Cesium.Matrix4.inverseTransformation(
+          this.transform,
+          new Cesium.Matrix4(),
+        ),
+        destination,
+        new Cesium.Cartesian3(),
+      );
+      looks.push(local);
+      this.position = local;
+    },
+  };
+}
+
 /** A ShareRestoration over a real ShareLinkManager, as the shell wires them. */
 function openPage(t, href, { managerOptions = {}, tracking = null } = {}) {
   const page = installPage(t, href);
   const clock = installManualTimers(t);
   const viewer = fakeViewer();
   const restores = [];
+  // Bound first with a frame port: the share follow runs on its preUpdate.
+  bindFakeCesiumCamera(viewer, { frame: preUpdateFrame(viewer) });
   const manager = new ShareLinkManager(bindFakeCesiumCamera(viewer), {
     onRestore: async (state) => restores.push(state),
     isNavigationCurrent: () => true,
@@ -272,15 +313,16 @@ test('a thing view turns its layer on, follows by id and frames the shared offse
     },
     isDestroyed: () => false,
   });
-  Object.assign(page.viewer.camera, {
-    transform: Cesium.Transforms.eastNorthUpToFixedFrame(target),
-    // The app's own follow framing: south of the aircraft and above it.
-    position: new Cesium.Cartesian3(0, -4800, 3300),
-    lookAtTransform(transform, offset) {
-      looks.push(offset);
-      this.position = Cesium.Cartesian3.clone(offset);
-    },
-  });
+  // The app's own follow framing: south of the aircraft and above it.
+  const followCamera = cameraInFrame(
+    Cesium.Transforms.eastNorthUpToFixedFrame(target),
+    new Cesium.Cartesian3(0, -4800, 3300),
+    looks,
+  );
+  Object.defineProperties(
+    page.viewer.camera,
+    Object.getOwnPropertyDescriptors(followCamera),
+  );
   entity = withEntityRecord({}, { trackedId: 'flights:a1b2c3', displayPosition: () => target });
 
   const parsed = page.manager._parseShareCode(aircraftCode());
@@ -302,7 +344,8 @@ test('a thing view turns its layer on, follows by id and frames the shared offse
     Math.abs(Cesium.Math.toDegrees(destination.longitude) - camera.lon) < 1e-3,
   );
   // Once followed, the camera takes the shared offset after the follow's
-  // own first frame.
+  // own first frame. (The restore's own views do not count.)
+  looks.length = 0;
   assert.equal(listeners.length, 1);
   listeners[0]();
   assert.equal(looks.length, 0);
@@ -449,11 +492,11 @@ test('the followed entity is read in the share format, and its offset round-trip
     new Cesium.Cartesian3(local.east, local.north, local.up),
     new Cesium.Cartesian3(),
   );
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     camera: { positionWC: cameraPosition },
     clock: { currentTime: Cesium.JulianDate.now() },
     trackedEntity: withEntityRecord({}, { trackedId: 'military:ae1234', displayPosition: () => target }),
-  };
+  });
   const subject = readShareFollowSubject({ viewer, nowMs: NOW_MS });
   assert.equal(subject.kind, 'military_aircraft');
   assert.equal(subject.id, 'ae1234');
@@ -484,15 +527,13 @@ test('a shared offset on the far side swings round, never jumping through the en
       },
     },
     trackedEntity: entity,
-    camera: {
-      transform: Cesium.Transforms.eastNorthUpToFixedFrame(target),
-      position: new Cesium.Cartesian3(0, -4800, 3300),
-      lookAtTransform(transform, offset) {
-        looks.push(Cesium.Cartesian3.clone(offset));
-        this.position = Cesium.Cartesian3.clone(offset);
-      },
-    },
+    camera: cameraInFrame(
+      Cesium.Transforms.eastNorthUpToFixedFrame(target),
+      new Cesium.Cartesian3(0, -4800, 3300),
+      looks,
+    ),
   };
+  bindFakeCesiumCamera(viewer, { frame: preUpdateFrame(viewer) });
   // Looking south at the nose: the opposite side of the app's framing.
   const offset = { range: 5800, heading: 180, pitch: -35 };
   applyShareFollowOffset(viewer, followedOf(viewer), offset);
@@ -525,7 +566,9 @@ test('applying a follow offset gives up when the follow ends', () => {
       },
     },
     trackedEntity: null,
+    camera: {},
   };
+  bindFakeCesiumCamera(viewer, { frame: preUpdateFrame(viewer) });
   applyShareFollowOffset(viewer, {}, OFFSET);
   listeners[0]();
   assert.equal(listeners.length, 0);

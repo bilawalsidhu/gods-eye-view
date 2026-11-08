@@ -60,6 +60,7 @@ const GLOBE_CAPABILITIES = [
 export function cesiumCapabilities(scene, only) {
   const all = [
     'models',
+    'followFrame',
     ...GPU_ICON_CAPABILITIES,
     'styles',
     'bloom',
@@ -305,7 +306,13 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
   });
   const { port: draw, sets, tilesets } = drawPart;
 
-  const cameraPart = createCesiumCamera({ scene, camera, report, widget });
+  const cameraPart = createCesiumCamera({
+    scene,
+    camera,
+    report,
+    widget,
+    capabilities,
+  });
   const cameraPort = cameraPart.port;
   const effectsPart = createCesiumEffects(scene, {
     capabilities,

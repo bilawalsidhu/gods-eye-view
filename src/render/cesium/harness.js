@@ -26,6 +26,7 @@ export const CESIUM_CHECKS = new Set([
   'camera.controls.holds',
   'camera.controls.settings',
   'camera.follow',
+  'camera.followFrame',
   'camera.trace.flyTo with a duration of 0 completes inside the call',
   'camera.trace.flyTo where the camera already is completes inside the call',
   'camera.viewRectangle',

@@ -244,6 +244,20 @@ export interface CameraPort {
     get(): Vec3 | null;
     set(offset: Vec3): void;
   };
+  /**
+   * `followFrame`: the frame the eye is placed in now, as a column-major
+   * 4×4 matrix from that frame to ECEF (a rigid frame: unit axes, then the
+   * origin). Once a follow has framed the camera (`followFramed`) it is the
+   * follow's frame, whose origin is the target and in which `followOffset`
+   * is the eye: east-north-up for an `enu` follow, the renderer's own orbit
+   * frame for `autodetect`; until then it is whatever frame the eye was in
+   * before. Under `lookAt` it is the target's east-north-up frame; in the
+   * world frame, the identity. A follow's frame moves with its target, so a
+   * reading is valid only for the tick it is read in. `setView` places a
+   * world pose and keeps this frame, so code can re-express an offset in
+   * the follow's own frame, whichever frame that is, and place the eye there.
+   */
+  followFrame?(): Float64Array;
   readonly controls: CameraControls;
   on(event: CameraEvent, cb: () => void, options?: { threshold?: number }): Off;
   /** Runs before each camera command, so an owner can yield to another. */

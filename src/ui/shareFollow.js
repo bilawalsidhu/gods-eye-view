@@ -1,6 +1,26 @@
-import * as Cesium from 'cesium';
-import { findCamera } from '../render/rendererOf.js';
+import { findCamera, findFrame } from '../render/rendererOf.js';
 import { followedOf, followedPosition } from '../data/followed.js';
+import { toLonLatH } from '../geo/ellipsoid.js';
+import {
+  eastNorthUp,
+  framePoint,
+  frameVector,
+  inverseFramePoint,
+  inverseFrameVector,
+  isIdentity,
+  offsetFromHeadingPitchRange,
+} from '../geo/frames.js';
+import {
+  add,
+  cross,
+  dot,
+  magnitude,
+  negate,
+  normalize,
+  scale,
+  sub,
+  vec,
+} from '../geo/vector.js';
 import {
   SHARE_VIEW_ENTITY_KINDS,
   followOffsetFromEnu,
@@ -17,22 +37,91 @@ const KIND_BY_LAYER = new Map(
   SHARE_VIEW_ENTITY_KINDS.map((entry) => [entry.layerId, entry.kind]),
 );
 const MAX_FRAMES = 120;
+const EPSILON10 = 1e-10;
 
-/** Where `followed` is shown now, as a Cesium position, or null. */
+/** Where `followed` is shown now, as an ECEF position, or null. */
 function shownAt(viewer, followed) {
   const p = followedPosition(viewer, followed);
-  return p ? new Cesium.Cartesian3(p.x, p.y, p.z) : null;
+  return p ? vec(p.x, p.y, p.z) : null;
 }
 
 /** `position`'s local east/north/up offset from `origin`, in metres. */
 function enuOffset(origin, position) {
-  const frame = Cesium.Transforms.eastNorthUpToFixedFrame(origin);
-  const local = Cesium.Matrix4.multiplyByPoint(
-    Cesium.Matrix4.inverseTransformation(frame, new Cesium.Matrix4()),
-    position,
-    new Cesium.Cartesian3(),
-  );
+  const local = inverseFramePoint(eastNorthUp(origin), position);
   return { east: local.x, north: local.y, up: local.z };
+}
+
+/** A column-major 4×4 frame-to-ECEF matrix as a frame of axes and origin. */
+const frameOfMatrix = (m) => ({
+  x: vec(m[0], m[1], m[2]),
+  y: vec(m[4], m[5], m[6]),
+  z: vec(m[8], m[9], m[10]),
+  origin: vec(m[12], m[13], m[14]),
+});
+
+/** The frame the camera's eye is in now, or null when it cannot say. */
+function eyeFrame(camera) {
+  const matrix = camera?.followFrame?.();
+  return matrix ? frameOfMatrix(matrix) : null;
+}
+
+/** The angle between two vectors, as the default renderer measures it. */
+function angleBetween(a, b) {
+  const unitA = normalize(a);
+  const unitB = normalize(b);
+  return Math.atan2(magnitude(cross(unitA, unitB)), dot(unitA, unitB));
+}
+
+/**
+ * The eye at `offset` in `frame`, looking at the frame's origin with the
+ * frame's z as up, in the world: where a look at a frame's origin from an
+ * offset puts it.
+ */
+function lookingAtOrigin(frame, offset) {
+  const direction = normalize(negate(offset));
+  let right = cross(direction, vec(0, 0, 1));
+  if (dot(right, right) < EPSILON10) right = vec(1, 0, 0);
+  right = normalize(right);
+  const up = normalize(cross(right, direction));
+  return {
+    position: framePoint(frame, offset),
+    direction: frameVector(frame, direction),
+    up: frameVector(frame, up),
+  };
+}
+
+/**
+ * The heading, pitch and roll that turn the east-north-up frame at
+ * `position` onto `direction` and `up`, exactly: straight down included,
+ * where a renderer reading angles off a direction rounds the roll away.
+ */
+function anglesAt(position, direction, up) {
+  const enu = eastNorthUp(position);
+  const d = inverseFrameVector(enu, direction);
+  const u = inverseFrameVector(enu, up);
+  // From both components: near straight down `asin` would lose precision.
+  const pitch = Math.atan2(d.z, Math.hypot(d.x, d.y));
+  // Straight up or down, any heading will do: the roll takes the rest.
+  const a = Math.abs(d.x) + Math.abs(d.y) > 0 ? Math.atan2(d.y, d.x) : 0;
+  const across = vec(-Math.sin(a), Math.cos(a), 0);
+  const lifted = vec(
+    Math.cos(a) * -Math.sin(pitch),
+    Math.sin(a) * -Math.sin(pitch),
+    Math.cos(pitch),
+  );
+  return {
+    heading: Math.PI / 2 - a,
+    pitch,
+    roll: Math.atan2(-dot(u, across), dot(u, lifted)),
+  };
+}
+
+/** Put the eye at a world pose, keeping the frame the camera is in. */
+function placeEye(camera, eye) {
+  camera.setView({
+    destination: eye.position,
+    orientation: anglesAt(eye.position, eye.direction, eye.up),
+  });
 }
 
 /**
@@ -43,7 +132,7 @@ function enuOffset(origin, position) {
  * keeps its own camera.
  */
 export function readShareFollowSubject({ viewer, nowMs = Date.now() }) {
-  const cameraPosition = viewer?.camera?.positionWC;
+  const cameraPosition = viewer ? findCamera(viewer)?.pose().position : null;
   if (!cameraPosition) return null;
   const followed = followedOf(viewer);
   const trackedId = String(followed?.key || '');
@@ -54,15 +143,15 @@ export function readShareFollowSubject({ viewer, nowMs = Date.now() }) {
   const target = kind ? shownAt(viewer, followed) : null;
   if (!kind || !id || !target) return null;
   const offset = followOffsetFromEnu(enuOffset(target, cameraPosition));
-  const fix = Cesium.Cartographic.fromCartesian(target);
+  const fix = toLonLatH(target);
   if (!offset || !fix) return null;
   return {
     kind,
     id,
     offset,
     lastKnown: {
-      lat: Cesium.Math.toDegrees(fix.latitude),
-      lon: Cesium.Math.toDegrees(fix.longitude),
+      lat: fix.lat,
+      lon: fix.lon,
       alt: fix.height,
       observedAtMs: nowMs,
     },
@@ -74,71 +163,55 @@ const MAX_TURN_PER_FRAME = Math.PI / 3;
 
 /**
  * Put the camera at a shared follow offset from `followed` (what
- * `followedOf` gave) once following it has framed the camera. Cesium keeps the offset afterwards, as it keeps one
+ * `followedOf` gave) once following it has framed the camera. The renderer keeps the offset afterwards, as it keeps one
  * the user orbits to. The camera swings round the entity at most 60° a frame:
  * the follow's own guard treats a jump to the far side as the camera crossing
  * through the entity and puts it back. Returns a disposer.
  */
 export function applyShareFollowOffset(viewer, followed, offset) {
-  if (!viewer?.scene?.preUpdate || !followed || !(offset?.range > 0))
-    return () => {};
+  const frames = viewer ? findFrame(viewer) : null;
+  if (!frames || !followed || !(offset?.range > 0)) return () => {};
   const local = followOffsetToEnu(offset);
-  let frames = 0;
+  let count = 0;
   let remove = null;
   const stop = () => {
     remove?.();
     remove = null;
   };
-  remove = viewer.scene.preUpdate.addEventListener(() => {
-    if (viewer.isDestroyed?.() || followedOf(viewer) !== followed) {
+  remove = frames.on('preUpdate', () => {
+    if (followedOf(viewer) !== followed) {
       stop();
       return;
     }
-    frames += 1;
-    const camera = viewer.camera;
+    count += 1;
     // Let the follow frame the camera first (its first frame), then move it.
-    const port = findCamera(viewer);
+    const camera = findCamera(viewer);
+    const frame = eyeFrame(camera);
+    const ported = camera?.followed === followed;
     const framed =
-      frames > 1 &&
-      (port?.followed === followed
-        ? port.followFramed
-        : !Cesium.Matrix4.equals(camera.transform, Cesium.Matrix4.IDENTITY));
-    const target = framed ? shownAt(viewer, followed) : null;
+      count > 1 &&
+      (ported ? camera.followFramed : frame !== null && !isIdentity(frame));
+    const target = framed && frame ? shownAt(viewer, followed) : null;
     if (!target) {
-      if (frames >= MAX_FRAMES) stop();
+      if (count >= MAX_FRAMES) stop();
       return;
     }
     // The offset is east/north/up at the entity; the follow's own frame may
     // differ, so place the camera in world space and re-express it there.
-    const world = Cesium.Matrix4.multiplyByPoint(
-      Cesium.Transforms.eastNorthUpToFixedFrame(target),
-      new Cesium.Cartesian3(local.east, local.north, local.up),
-      new Cesium.Cartesian3(),
+    const world = framePoint(
+      eastNorthUp(target),
+      vec(local.east, local.north, local.up),
     );
-    const goal = Cesium.Matrix4.multiplyByPoint(
-      Cesium.Matrix4.inverseTransformation(
-        camera.transform,
-        new Cesium.Matrix4(),
-      ),
-      world,
-      new Cesium.Cartesian3(),
-    );
-    const from = Cesium.Cartesian3.clone(
-      camera.position,
-      new Cesium.Cartesian3(),
-    );
-    const angle =
-      Cesium.Cartesian3.magnitude(from) > 0
-        ? Cesium.Cartesian3.angleBetween(from, goal)
-        : 0;
+    const goal = inverseFramePoint(frame, world);
+    const from =
+      (ported && camera.followOffset.get()) ||
+      inverseFramePoint(frame, camera.pose().position);
+    const angle = magnitude(from) > 0 ? angleBetween(from, goal) : 0;
     const done = !(angle > MAX_TURN_PER_FRAME);
     const next = done ? goal : turnToward(from, goal, MAX_TURN_PER_FRAME);
     // Through the port when it follows: its close-range guard keeps the eye.
-    if (port?.followed === followed) port.followOffset.set(next);
-    else {
-      camera.lookAtTransform(camera.transform, next);
-      viewer.scene.requestRender?.();
-    }
+    if (ported) camera.followOffset.set(next);
+    else placeEye(camera, lookingAtOrigin(frame, next));
     if (done) stop();
   });
   return stop;
@@ -149,65 +222,47 @@ export function applyShareFollowOffset(viewer, followed, offset) {
  * fraction of the way: one frame of the swing round the entity.
  */
 function turnToward(from, to, step) {
-  const angle = Cesium.Cartesian3.angleBetween(from, to);
-  const unitFrom = Cesium.Cartesian3.normalize(from, new Cesium.Cartesian3());
+  const angle = angleBetween(from, to);
+  const unitFrom = normalize(from);
   // The direction perpendicular to `from` in the plane toward `to` (or any
   // perpendicular when they are opposite).
-  let toward = Cesium.Cartesian3.subtract(
-    Cesium.Cartesian3.normalize(to, new Cesium.Cartesian3()),
-    Cesium.Cartesian3.multiplyByScalar(
+  let toward = sub(normalize(to), scale(unitFrom, Math.cos(angle)));
+  if (magnitude(toward) < 1e-9)
+    toward = cross(
       unitFrom,
-      Math.cos(angle),
-      new Cesium.Cartesian3(),
-    ),
-    new Cesium.Cartesian3(),
-  );
-  if (Cesium.Cartesian3.magnitude(toward) < 1e-9)
-    toward = Cesium.Cartesian3.cross(
-      unitFrom,
-      Math.abs(unitFrom.z) < 0.9
-        ? Cesium.Cartesian3.UNIT_Z
-        : Cesium.Cartesian3.UNIT_X,
-      new Cesium.Cartesian3(),
+      Math.abs(unitFrom.z) < 0.9 ? vec(0, 0, 1) : vec(1, 0, 0),
     );
-  Cesium.Cartesian3.normalize(toward, toward);
+  toward = normalize(toward);
   const length =
-    Cesium.Cartesian3.magnitude(from) +
-    (Cesium.Cartesian3.magnitude(to) - Cesium.Cartesian3.magnitude(from)) *
-      (step / angle);
-  const direction = Cesium.Cartesian3.add(
-    Cesium.Cartesian3.multiplyByScalar(
-      unitFrom,
-      Math.cos(step),
-      new Cesium.Cartesian3(),
-    ),
-    Cesium.Cartesian3.multiplyByScalar(
-      toward,
-      Math.sin(step),
-      new Cesium.Cartesian3(),
-    ),
-    new Cesium.Cartesian3(),
+    magnitude(from) + (magnitude(to) - magnitude(from)) * (step / angle);
+  const direction = add(
+    scale(unitFrom, Math.cos(step)),
+    scale(toward, Math.sin(step)),
   );
-  return Cesium.Cartesian3.multiplyByScalar(direction, length, direction);
+  return scale(direction, length);
 }
 
 /**
  * Put the eye of a camera that follows something at `offset` (heading,
  * pitch, range) from `target`, keeping the follow's own reference frame
  * (a satellite's included): the follow's next update carries the new offset
- * along with the target. Returns true.
+ * along with the target. False when the camera cannot say which frame it
+ * is in.
  * @param {object} viewer
  * @param {{x: number, y: number, z: number}} target
  * @param {{heading: number, pitch: number, range: number}} offset
  */
 export function placeFollowEye(viewer, target, offset) {
-  const camera = viewer.camera;
-  const trackedTransform = Cesium.Matrix4.clone(camera.transform);
-  camera.lookAt(
-    new Cesium.Cartesian3(target.x, target.y, target.z),
-    new Cesium.HeadingPitchRange(offset.heading, offset.pitch, offset.range),
+  const camera = findCamera(viewer);
+  if (!eyeFrame(camera)) return false;
+  // Where looking at `target` from `offset` in its east-north-up frame puts
+  // the eye, placed in the world while the camera stays in its frame.
+  placeEye(
+    camera,
+    lookingAtOrigin(
+      eastNorthUp(vec(target.x, target.y, target.z)),
+      offsetFromHeadingPitchRange(offset.heading, offset.pitch, offset.range),
+    ),
   );
-  camera.lookAtTransform(trackedTransform);
-  viewer.scene?.requestRender?.();
   return true;
 }

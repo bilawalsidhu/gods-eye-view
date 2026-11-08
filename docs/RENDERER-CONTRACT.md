@@ -36,6 +36,12 @@ optional, so a renderer written before it still conforms:
 
 - `globe.isGlobeVisible()` (capability `globeVisibility`) reads back whether
   the globe surface is shown, for code that holds only the scene.
+- `camera.followFrame()` (capability `followFrame`) reads the frame the eye
+  is placed in, as a column-major 4×4 matrix to ECEF: a follow's own frame
+  (east-north-up, or the orbit frame `autodetect` chose), a `lookAt`
+  target's east-north-up frame, or the identity. `setView` keeps that frame
+  while it places a world pose. A share link's follow offset is
+  re-expressed in it, satellites included.
 
 The renderer itself (`renderer.d.ts`) adds capture, pixel reads, settling,
 resize, context loss and `destroy`. `common.d.ts` holds the shared shapes

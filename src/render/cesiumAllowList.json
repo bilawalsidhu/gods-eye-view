@@ -46,6 +46,5 @@
   "src/services/groundSnap.js",
   "src/services/meshFloorSampler.js",
   "src/sky/starrySky.js",
-  "src/ui/applicationShell.js",
-  "src/ui/shareFollow.js"
+  "src/ui/applicationShell.js"
 ]

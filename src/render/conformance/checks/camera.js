@@ -448,6 +448,118 @@ export function cameraChecks() {
       },
     },
     {
+      id: 'camera.followFrame',
+      port: 'camera',
+      title:
+        'the eye’s frame reads back: the world, a lookAt target’s east-north-up, a follow’s with the offset in it',
+      async run(h) {
+        const r = await fresh(h);
+        if (!r.capabilities.has('followFrame')) {
+          r.destroy();
+          return { skip: 'no followFrame' };
+        }
+        const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+        const frameOf = () => {
+          const m = r.camera.followFrame();
+          equal(m.length, 16, 'a 4×4 matrix');
+          return {
+            m,
+            x: { x: m[0], y: m[1], z: m[2] },
+            y: { x: m[4], y: m[5], z: m[6] },
+            z: { x: m[8], y: m[9], z: m[10] },
+            origin: { x: m[12], y: m[13], z: m[14] },
+          };
+        };
+        // The eye's position in a frame, from its world position.
+        const inFrame = (f, p) => {
+          const d = {
+            x: p.x - f.origin.x,
+            y: p.y - f.origin.y,
+            z: p.z - f.origin.z,
+          };
+          const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+          return { x: dot(f.x, d), y: dot(f.y, d), z: dot(f.z, d) };
+        };
+        const world = frameOf();
+        IDENTITY.forEach((v, i) => near(world.m[i], v, 1e-12, `world [${i}]`));
+
+        const target = h.toEcef({ lon: -97.74, lat: 30.27, height: 1000 });
+        r.camera.lookAt(target, {
+          heading: 0,
+          pitch: -Math.PI / 2,
+          range: 900,
+        });
+        const looked = frameOf();
+        nearVec(looked.origin, target, 1e-6, 'lookAt origin');
+        // Straight down from 900 m: the eye is 900 m up the frame's z.
+        nearVec(
+          inFrame(looked, r.camera.pose().position),
+          { x: 0, y: 0, z: 900 },
+          1e-6,
+          'lookAt eye',
+        );
+        const up = Math.hypot(target.x, target.y, target.z);
+        ok(
+          (looked.z.x * target.x +
+            looked.z.y * target.y +
+            looked.z.z * target.z) /
+            up >
+            0.99,
+          'its z is up',
+        );
+        r.camera.release();
+
+        const start = r.frame.time();
+        const mover = {
+          key: 'test:frame',
+          position: (t) => ({
+            x: target.x + (t - start) * 0.2,
+            y: target.y,
+            z: target.z,
+          }),
+          frame: 'enu',
+          viewFrom: { x: 0, y: -800, z: 400 },
+        };
+        r.camera.follow(mover);
+        await h.frame(r);
+        r.frame.setTime(start + 5000);
+        await h.frame(r);
+        const followed = frameOf();
+        nearVec(
+          followed.origin,
+          mover.position(r.frame.time()),
+          1e-3,
+          'the follow frame stands on the target',
+        );
+        nearVec(
+          inFrame(followed, r.camera.pose().position),
+          r.camera.followOffset.get(),
+          1e-3,
+          'followOffset is the eye in it',
+        );
+        // setView places a world pose and keeps the follow's frame.
+        const placed = {
+          x: followed.origin.x + 300,
+          y: followed.origin.y - 200,
+          z: followed.origin.z + 500,
+        };
+        r.camera.setView({
+          destination: placed,
+          orientation: { heading: 0.3, pitch: -0.5, roll: 0 },
+        });
+        frameOf().m.forEach((v, i) =>
+          near(v, followed.m[i], 1e-6, `setView keeps the frame [${i}]`),
+        );
+        nearVec(r.camera.pose().position, placed, 1e-6, 'setView places it');
+        r.camera.follow(null);
+        const after = frameOf();
+        IDENTITY.forEach((v, i) =>
+          near(after.m[i], v, 1e-12, `world again [${i}]`),
+        );
+        r.destroy();
+      },
+    },
+    {
       id: 'camera.rect',
       port: 'camera',
       title:
