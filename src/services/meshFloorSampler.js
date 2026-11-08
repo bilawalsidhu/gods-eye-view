@@ -87,7 +87,8 @@ export function createMeshFloorSampler({
    * layer poll (never per contact, never per frame). Synchronous — Cesium's
    * sampleHeight is a CPU-side query against loaded tiles.
    *
-   * @param {Cesium.Scene|undefined} scene - The scene (skipped when absent/torn down).
+   * @param {Cesium.Scene|object|undefined} host - The scene, or the viewer
+   *   whose scene it is (skipped when absent/torn down).
    * @param {Array<{lat: number, lon: number}>} points - Contact/waypoint coords.
    * @param {object} [options]
    * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
@@ -97,10 +98,11 @@ export function createMeshFloorSampler({
    *   Viewer subpoint (computed once by the caller's poll).
    */
   function sampleMeshFloorCells(
-    scene,
+    host,
     points,
     { excludeObjects = [], viewerLat, viewerLon } = {},
   ) {
+    const scene = host?.scene ?? host;
     if (!meshFloorPreferred()) return;
     // Without depth-texture support every probe throws: nothing to latch.
     if (!scene || !heightsFor(scene).supported().surface) return;

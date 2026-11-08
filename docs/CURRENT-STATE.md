@@ -1109,6 +1109,14 @@ no longer reaches Cesium, so a caller handing it a Cesium viewer,
 own, with no renderer bound, loads the `./render/cesium/unbound` export once
 first.
 
+Cockpit (`./ui/cockpit`) flies the camera through the camera port on the frame
+port's `preUpdate`, with the shared geo maths, and no longer loads the Cesium
+camera factory: a caller handing it a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first, or its
+controller throws naming it. Whether the aircraft it flies still draws comes
+from its `trackedEntityDrawn` service (the application asks the viewer's
+entities); without one, Cockpit takes the aircraft as drawn.
+
 ## Vessel components and sources
 
 `src/data/aisLiveVessels.js` assembles `createVesselLayer` from the

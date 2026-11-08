@@ -33,8 +33,9 @@ import {
 import { toDegrees, toRadians } from '../geo/index.js';
 import { cameraOf, findCamera } from '../render/cesium/camera.js';
 // Loads the effects factory, so visual settings on a viewer with no renderer
-// bound still get an effects port. Loading the camera and effects factories
-// is all that keeps this module on the Cesium allow-list.
+// bound still get an effects port. Loading the camera and effects factories,
+// and asking the viewer's entities whether Cockpit's aircraft still draws,
+// keep this module on the Cesium allow-list.
 import '../render/cesium/effects.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
@@ -376,6 +377,9 @@ export class StyleManager extends ShellFacade {
         meshFloorPreferred: services.meshFloorPreferred,
         warmGroundFloor: services.warmGroundFloor,
         sampleMeshFloorCells: services.sampleMeshFloorCells,
+        // Whether the aircraft entity Cockpit flies still draws: the flight
+        // layers draw it as an entity of the viewer's own.
+        trackedEntityDrawn: (entity) => viewer.entities.contains(entity),
         holdContinuousRender: services.holdContinuousRender,
         releaseContinuousRender: services.releaseContinuousRender,
         fetchRegionalBrief: services.fetchRegionalBrief,

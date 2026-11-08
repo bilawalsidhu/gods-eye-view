@@ -52,7 +52,7 @@ function fixture(t) {
     },
     trackedEntityChanged: listeners(),
   };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, { frame: { on: () => () => {} } });
   const cockpit = new CockpitViewController(viewer, {
     services: {
       flightsLayer: { getTrackedInfo: () => INFO, refreshTr3b() {} },

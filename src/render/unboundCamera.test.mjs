@@ -100,6 +100,10 @@ const DRAW_FROM_CALLER = new Set([
  * `./render/cesium/unbound`.
  */
 const CAMERA_FROM_CALLER = new Set([
+  // Not wholly Cesium-free (its pointer input still is), but it loads no
+  // factory: Cockpit moves the camera on the frame port's preUpdate, and
+  // `frameOf` throws, naming the export, until the caller has loaded it.
+  './ui/cockpit',
   './ui/navigation',
   './voice/commands',
   './voice/controller',

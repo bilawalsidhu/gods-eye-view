@@ -1,6 +1,22 @@
 /** Camera placement, ground acquisition and motion correction for the Cockpit controller. */
-import * as Cesium from 'cesium';
-import { cameraOf } from '../render/cesium/camera.js';
+import { cameraOf, findFrame } from '../render/rendererOf.js';
+import { followedPosition } from '../data/followed.js';
+import { trackedEntityDrawn } from './cockpitTrackingController.js';
+import {
+  add,
+  clone,
+  eastNorthUp,
+  frameVector,
+  fromRadians,
+  magnitude,
+  normalize,
+  scale,
+  sub,
+  toCartographicRadians,
+  toDegrees,
+  toRadians,
+  vec,
+} from '../geo/index.js';
 import {
   cockpitAnchorCorrectionStep,
   cockpitGroundSafeHeight,
@@ -19,6 +35,17 @@ import {
   COCKPIT_GROUND_PROBE_MS,
   COCKPIT_GROUND_WAIT_TIMEOUT_MS,
 } from './cockpitPresentation.js';
+
+/**
+ * Where the aircraft Cockpit flies is now: its follow target's position at
+ * scene time (what the drawn entity's position reads), or, for a target
+ * with none, where it is shown.
+ */
+function trackedPositionNow(viewer, followed) {
+  if (typeof followed?.position === 'function')
+    return followed.position(findFrame(viewer)?.time() ?? Date.now());
+  return followedPosition(viewer, followed);
+}
 
 export function update() {
   if (this.destroyed) return false;
@@ -46,7 +73,7 @@ export function update() {
   if (
     !info ||
     !this.trackedEntity ||
-    !this.viewer.entities.contains(this.trackedEntity)
+    !trackedEntityDrawn.call(this, this.trackedEntity)
   ) {
     if (nowMs < this.contextNavigationDeadlineMs) return;
     this.exit({ restoreTracking: false });
@@ -62,10 +89,7 @@ export function update() {
     return;
   this.lastCameraUpdateMs = nowMs;
 
-  const target = this.trackedEntity.position.getValue(
-    this.viewer.clock.currentTime,
-    this.scratchTarget,
-  );
+  const target = trackedPositionNow(this.viewer, this.trackedFollow);
   if (!target) return;
   const dtSec = Math.min(0.1, Math.max(0, (nowMs - this.lastFrameMs) / 1000));
   this.lastFrameMs = nowMs;
@@ -78,7 +102,7 @@ export function update() {
   }
 
   if (!this.cockpitAnchorValid) {
-    Cesium.Cartesian3.clone(target, this.cockpitAnchor);
+    this.cockpitAnchor = clone(target);
     this.cockpitAnchorValid = true;
   }
 
@@ -89,8 +113,8 @@ export function update() {
   // display position at a bounded rate. This preserves the layer's required
   // 15/30-second interpolation and per-frame cache without exposing its
   // sample-boundary corrections to the camera.
-  const headingRad = Cesium.Math.toRadians(this.heading ?? 0);
-  const pitchRad = Cesium.Math.toRadians(COCKPIT_VIEW_PITCH_DEG);
+  const headingRad = toRadians(this.heading ?? 0);
+  const pitchRad = toRadians(COCKPIT_VIEW_PITCH_DEG);
   const speedMps = Number.isFinite(info.velocityMps)
     ? Math.max(0, info.velocityMps)
     : 0;
@@ -99,55 +123,29 @@ export function update() {
     // A feed backoff has no authoritative velocity epoch to advance from.
     // Hold the cockpit on the exact layer-rendered position so the camera
     // cannot coast away while the icon correctly remains fixed.
-    Cesium.Cartesian3.clone(target, this.cockpitAnchor);
+    this.cockpitAnchor = clone(target);
   } else {
-    Cesium.Transforms.eastNorthUpToFixedFrame(
+    const horizontal = normalize(
+      frameVector(
+        eastNorthUp(this.cockpitAnchor),
+        vec(Math.sin(headingRad), Math.cos(headingRad), 0),
+      ),
+    );
+    this.cockpitAnchor = add(
       this.cockpitAnchor,
-      Cesium.Ellipsoid.WGS84,
-      this.scratchEnu,
+      scale(horizontal, speedMps * dtSec),
     );
-    this.scratchLocal.x = Math.sin(headingRad);
-    this.scratchLocal.y = Math.cos(headingRad);
-    this.scratchLocal.z = 0;
-    Cesium.Matrix4.multiplyByPointAsVector(
-      this.scratchEnu,
-      this.scratchLocal,
-      this.scratchHorizontal,
-    );
-    Cesium.Cartesian3.normalize(this.scratchHorizontal, this.scratchHorizontal);
-    Cesium.Cartesian3.multiplyByScalar(
-      this.scratchHorizontal,
-      speedMps * dtSec,
-      this.scratchAdvance,
-    );
-    Cesium.Cartesian3.add(
-      this.cockpitAnchor,
-      this.scratchAdvance,
-      this.cockpitAnchor,
-    );
-    Cesium.Cartesian3.subtract(
-      target,
-      this.cockpitAnchor,
-      this.scratchCorrection,
-    );
-    const correctionDistanceM = Cesium.Cartesian3.magnitude(
-      this.scratchCorrection,
-    );
+    const correction = sub(target, this.cockpitAnchor);
+    const correctionDistanceM = magnitude(correction);
     const correctionStepM = cockpitAnchorCorrectionStep(
       correctionDistanceM,
       speedMps,
       dtSec,
     );
     if (correctionStepM > 0 && correctionDistanceM > 0) {
-      Cesium.Cartesian3.multiplyByScalar(
-        this.scratchCorrection,
-        correctionStepM / correctionDistanceM,
-        this.scratchCorrection,
-      );
-      Cesium.Cartesian3.add(
+      this.cockpitAnchor = add(
         this.cockpitAnchor,
-        this.scratchCorrection,
-        this.cockpitAnchor,
+        scale(correction, correctionStepM / correctionDistanceM),
       );
     }
   }
@@ -157,16 +155,8 @@ export function update() {
   // between fixes. Clamp it against the same mesh-first shared floor used by
   // aircraft rendering. For a slow contact whose floor cell is still cold,
   // its already-clamped render position is a conservative temporary floor.
-  const anchorCartographic = Cesium.Cartographic.fromCartesian(
-    this.cockpitAnchor,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchAnchorCartographic,
-  );
-  const targetCartographic = Cesium.Cartographic.fromCartesian(
-    target,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchTargetCartographic,
-  );
+  const anchorCartographic = toCartographicRadians(this.cockpitAnchor);
+  const targetCartographic = toCartographicRadians(target);
   let cockpitFloorM = this.services.cachedGroundFloor(
     info.latitude,
     info.longitude,
@@ -187,11 +177,11 @@ export function update() {
         )
       ) {
         this.lastGroundProbeMs = nowMs;
-        const viewerCartographic = this.viewer.camera.positionCartographic;
-        this.services.sampleMeshFloorCells(this.viewer.scene, groundPoint, {
+        const eye = cameraOf(this.viewer).pose();
+        this.services.sampleMeshFloorCells(this.viewer, groundPoint, {
           excludeObjects: [this.trackedEntity],
-          viewerLat: Cesium.Math.toDegrees(viewerCartographic.latitude),
-          viewerLon: Cesium.Math.toDegrees(viewerCartographic.longitude),
+          viewerLat: eye.lat,
+          viewerLon: eye.lon,
         });
       }
       cockpitFloorM = this.services.cachedMeshFloor(
@@ -252,83 +242,50 @@ export function update() {
       COCKPIT_MIN_GROUND_CLEARANCE_M - COCKPIT_UP_OFFSET_M,
     );
     if (minimumAnchorHeightM !== anchorCartographic.height) {
-      anchorCartographic.height = minimumAnchorHeightM;
-      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
-        anchorCartographic,
-        this.cockpitAnchor,
+      this.cockpitAnchor = fromRadians(
+        anchorCartographic.lon,
+        anchorCartographic.lat,
+        minimumAnchorHeightM,
       );
     }
   }
 
   // Rebuild the local frame at the stabilized anchor after advancing it.
-  Cesium.Transforms.eastNorthUpToFixedFrame(
-    this.cockpitAnchor,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchEnu,
+  const enu = eastNorthUp(this.cockpitAnchor);
+  const horizontal = normalize(
+    frameVector(enu, vec(Math.sin(headingRad), Math.cos(headingRad), 0)),
   );
-  this.scratchLocal.x = Math.sin(headingRad);
-  this.scratchLocal.y = Math.cos(headingRad);
-  this.scratchLocal.z = 0;
-  Cesium.Matrix4.multiplyByPointAsVector(
-    this.scratchEnu,
-    this.scratchLocal,
-    this.scratchHorizontal,
+  const forward = normalize(
+    frameVector(
+      enu,
+      vec(
+        Math.sin(headingRad) * Math.cos(pitchRad),
+        Math.cos(headingRad) * Math.cos(pitchRad),
+        Math.sin(pitchRad),
+      ),
+    ),
   );
-  Cesium.Cartesian3.normalize(this.scratchHorizontal, this.scratchHorizontal);
-
-  this.scratchLocal.x = Math.sin(headingRad) * Math.cos(pitchRad);
-  this.scratchLocal.y = Math.cos(headingRad) * Math.cos(pitchRad);
-  this.scratchLocal.z = Math.sin(pitchRad);
-  Cesium.Matrix4.multiplyByPointAsVector(
-    this.scratchEnu,
-    this.scratchLocal,
-    this.scratchForward,
+  const up = normalize(
+    frameVector(
+      enu,
+      vec(
+        -Math.sin(headingRad) * Math.sin(pitchRad),
+        -Math.cos(headingRad) * Math.sin(pitchRad),
+        Math.cos(pitchRad),
+      ),
+    ),
   );
-  Cesium.Cartesian3.normalize(this.scratchForward, this.scratchForward);
-
-  this.scratchLocal.x = -Math.sin(headingRad) * Math.sin(pitchRad);
-  this.scratchLocal.y = -Math.cos(headingRad) * Math.sin(pitchRad);
-  this.scratchLocal.z = Math.cos(pitchRad);
-  Cesium.Matrix4.multiplyByPointAsVector(
-    this.scratchEnu,
-    this.scratchLocal,
-    this.scratchUp,
-  );
-  Cesium.Cartesian3.normalize(this.scratchUp, this.scratchUp);
-
-  Cesium.Cartesian3.multiplyByScalar(
-    this.scratchHorizontal,
-    COCKPIT_FORWARD_OFFSET_M,
-    this.scratchCamera,
-  );
-  Cesium.Cartesian3.add(
-    this.cockpitAnchor,
-    this.scratchCamera,
-    this.scratchCamera,
-  );
-  Cesium.Matrix4.getTranslation(this.scratchEnu, this.scratchTarget);
-  Cesium.Cartesian3.normalize(this.scratchTarget, this.scratchTarget);
-  Cesium.Cartesian3.multiplyByScalar(
-    this.scratchTarget,
-    COCKPIT_UP_OFFSET_M,
-    this.scratchTarget,
-  );
-  Cesium.Cartesian3.add(
-    this.scratchCamera,
-    this.scratchTarget,
-    this.scratchCamera,
+  let eye = add(
+    add(this.cockpitAnchor, scale(horizontal, COCKPIT_FORWARD_OFFSET_M)),
+    scale(normalize(enu.origin), COCKPIT_UP_OFFSET_M),
   );
 
   // Recheck at the final forward-offset camera coordinate because a taxiing
   // aircraft can cross into an adjacent coarse floor cell between updates.
-  const cameraCartographic = Cesium.Cartographic.fromCartesian(
-    this.scratchCamera,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchCameraCartographic,
-  );
+  const cameraCartographic = toCartographicRadians(eye);
   if (cameraCartographic) {
-    const cameraLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
-    const cameraLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
+    const cameraLat = toDegrees(cameraCartographic.lat);
+    const cameraLon = toDegrees(cameraCartographic.lon);
     const cameraFloorM = this.services.cachedGroundFloor(cameraLat, cameraLon);
     if (Number.isFinite(cameraFloorM)) {
       cockpitFloorM = Math.max(
@@ -342,17 +299,17 @@ export function update() {
       COCKPIT_MIN_GROUND_CLEARANCE_M,
     );
     if (safeHeightM !== cameraCartographic.height) {
-      cameraCartographic.height = safeHeightM;
-      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
-        cameraCartographic,
-        this.scratchCamera,
+      eye = fromRadians(
+        cameraCartographic.lon,
+        cameraCartographic.lat,
+        safeHeightM,
       );
     }
   }
 
   cameraOf(this.viewer).setView({
-    destination: this.scratchCamera,
-    orientation: { direction: this.scratchForward, up: this.scratchUp },
+    destination: eye,
+    orientation: { direction: forward, up },
   });
   if (cockpitUiUpdateDue(nowMs, this.lastHudUpdateMs, COCKPIT_HUD_UPDATE_MS)) {
     this.lastHudUpdateMs = nowMs;

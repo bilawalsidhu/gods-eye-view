@@ -13,6 +13,15 @@ import {
 } from '../data/followed.js';
 import { inputFor } from '../input/dispatcher.js';
 
+/**
+ * Whether the aircraft entity Cockpit holds still draws, as its services
+ * say; true when they cannot say.
+ */
+export function trackedEntityDrawn(entity) {
+  const drawn = this.services.trackedEntityDrawn;
+  return typeof drawn === 'function' ? drawn(entity) !== false : true;
+}
+
 export function readAircraftInfo() {
   // In cockpit mode the controller stops the camera following (see enter()),
   // so the cockpit's own handle is the tracked identity there.
@@ -125,7 +134,7 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
     return false;
   const info = suppliedInfo || this.readAircraftInfo();
   if (!info) return false;
-  if (this.trackedEntity && this.viewer.entities.contains(this.trackedEntity)) {
+  if (this.trackedEntity && trackedEntityDrawn.call(this, this.trackedEntity)) {
     this.trackedEntity.show = this.trackedEntityWasShown;
   }
   this.trackedEntity = nextEntity;
@@ -253,11 +262,12 @@ export function exit({ restoreTracking = true } = {}) {
   this.setVisionMode('optical');
   this.releaseCameraInput?.();
   this.releaseCameraInput = null;
-  if (entity && this.viewer.entities.contains(entity))
-    entity.show = this.trackedEntityWasShown;
+  const present = () =>
+    Boolean(entity) && trackedEntityDrawn.call(this, entity);
+  if (present()) entity.show = this.trackedEntityWasShown;
   this.trackedEntityWasShown = true;
   this.dispatchCockpitModeChanged(false);
-  if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
+  if (restoreTracking && present()) {
     resumeFollowing(this.viewer, followed);
     this.restoreTrackingFrame(entity);
   }
