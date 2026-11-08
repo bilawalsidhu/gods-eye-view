@@ -52,7 +52,8 @@ const utc = (value) =>
     : t('Unavailable');
 
 /** A per-application observation layer, using the existing layer lifecycle and
- * row controls. History is transient: shared links always open latest imagery. */
+ * row controls. Its time is the world clock's, so a link made away from live
+ * opens its imagery at that time; one made live opens the latest. */
 export function createWeatherLayer({
   feed,
   clock,

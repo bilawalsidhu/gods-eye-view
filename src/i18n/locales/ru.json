@@ -3347,5 +3347,8 @@
   "Close camera preview": "Закрыть просмотр камеры",
   "Refresh map still": "Обновить кадр на карте",
   "The map still uses a separate request and may show a different moment.": "Кадр на карте запрашивается отдельно и может показывать другой момент.",
-  "Video plays from Québec 511, which sees your IP address.": "Видео воспроизводится с Québec 511, который видит ваш IP-адрес."
+  "Video plays from Québec 511, which sees your IP address.": "Видео воспроизводится с Québec 511, который видит ваш IP-адрес.",
+  "World time": "Мировое время",
+  "Back to live": "Вернуться к прямому эфиру",
+  "Live": "Сейчас"
 }

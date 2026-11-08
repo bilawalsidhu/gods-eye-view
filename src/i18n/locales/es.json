@@ -3272,5 +3272,8 @@
   "Close camera preview": "Cerrar vista previa de la cámara",
   "Refresh map still": "Actualizar imagen fija del mapa",
   "The map still uses a separate request and may show a different moment.": "La imagen del mapa usa una solicitud independiente y puede mostrar otro momento.",
-  "Video plays from Québec 511, which sees your IP address.": "El vídeo se reproduce desde Québec 511, que ve tu dirección IP."
+  "Video plays from Québec 511, which sees your IP address.": "El vídeo se reproduce desde Québec 511, que ve tu dirección IP.",
+  "World time": "Hora mundial",
+  "Back to live": "Volver al directo",
+  "Live": "En directo"
 }

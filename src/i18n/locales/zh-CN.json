@@ -3122,5 +3122,8 @@
   "Close camera preview": "关闭摄像头预览",
   "Refresh map still": "刷新地图静止画面",
   "The map still uses a separate request and may show a different moment.": "地图静止画面通过单独的请求获取，可能显示不同的时刻。",
-  "Video plays from Québec 511, which sees your IP address.": "视频从 Québec 511 播放，Québec 511 会看到你的 IP 地址。"
+  "Video plays from Québec 511, which sees your IP address.": "视频从 Québec 511 播放，Québec 511 会看到你的 IP 地址。",
+  "World time": "世界时间",
+  "Back to live": "返回实时",
+  "Live": "实时"
 }
