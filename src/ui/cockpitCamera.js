@@ -401,9 +401,18 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     Cesium.Ellipsoid.WGS84,
     this.scratchTargetCartographic,
   );
+  // A bridge's target is its fix dead-reckoned up to minutes ahead: read
+  // the floor where the ship is now, as its water is.
+  const floorAt =
+    info.kind === 'vessel'
+      ? {
+          latitude: Cesium.Math.toDegrees(targetCartographic.latitude),
+          longitude: Cesium.Math.toDegrees(targetCartographic.longitude),
+        }
+      : info;
   let cockpitFloorM = this.services.cachedGroundFloor(
-    info.latitude,
-    info.longitude,
+    floorAt.latitude,
+    floorAt.longitude,
   );
   if (info.onGround === true) {
     const groundPoint = [{ lat: info.latitude, lon: info.longitude }];

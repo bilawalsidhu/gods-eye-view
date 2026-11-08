@@ -1077,6 +1077,27 @@ test('the water is read where the ship is now, not at its last report', async (t
   assert.ok(eastM > 300 && eastM < 450, `probed ${eastM.toFixed(0)} m east`);
 });
 
+test('the bridge floor is read where the ship is now, not at its last report', async (t) => {
+  const clock = manualClock(t, START_MS);
+  // Reported a minute ago at 12 kn on course 095: since then ~370 m east.
+  const record = { ...RECORD, lastPositionEpoch: (START_MS - 60_000) / 1000 };
+  const ship = fixture(t, { record });
+  const floors = [];
+  const cached = ship.cockpit.services.cachedGroundFloor;
+  ship.cockpit.services.cachedGroundFloor = (lat, lon) => {
+    floors.push({ lat, lon });
+    return cached(lat, lon);
+  };
+  ship.cockpit.enter();
+  await settle();
+  frames(ship.cockpit, clock, ship.shots, 20);
+  const first = floors[0];
+  assert.ok(first, 'the floor was read');
+  const eastM =
+    (first.lon - RECORD.lon) * 111_320 * Math.cos((RECORD.lat * Math.PI) / 180);
+  assert.ok(eastM > 300 && eastM < 450, `read ${eastM.toFixed(0)} m east`);
+});
+
 test('the radar centres where the camera rides, not at the last report', async (t) => {
   const clock = manualClock(t, START_MS);
   // Reported a minute ago at 12 kn on course 095: since then ~370 m east.
