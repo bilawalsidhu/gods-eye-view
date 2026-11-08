@@ -212,7 +212,7 @@
    Its measured height includes every visible button, including wrapped text. */
 body.mobile-shell .gev-nav {
   bottom: calc(
-    var(--mobile-view-switcher-bottom) +
+    var(--mobile-view-switcher-bottom) + var(--world-timeline-lift, 0px) +
       var(--mobile-view-switcher-height, 0px) + 8px
   );
 }
