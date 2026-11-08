@@ -141,7 +141,18 @@ const LOOK_KEY_OWNERS = [
   'textarea',
   'select',
   '[contenteditable]',
+  '[role=combobox]',
+  '[role=grid]',
+  '[role=menubar]',
+  '[role=menuitemcheckbox]',
+  '[role=menuitemradio]',
+  '[role=scrollbar]',
+  '[role=searchbox]',
   '[role=slider]',
+  '[role=spinbutton]',
+  '[role=textbox]',
+  '[role=tree]',
+  '[role=treeitem]',
   '[role=tab]',
   '[role=tablist]',
   '[role=radio]',
@@ -231,13 +242,18 @@ export function onKeyDown(event) {
       const cockpitAttempt = !!(
         this.readAircraftInfo() && this.viewer.trackedEntity?.position
       );
-      // With no tracked aircraft, C takes the selected vessel's bridge.
-      const bridgeAttempt = !cockpitAttempt && !!this.readVesselInfo();
+      // With no tracked aircraft, C takes the selected vessel's bridge, but
+      // only when the bridge can be entered: otherwise C stays the CCTV
+      // shortcut, as it is with nothing selected.
+      const bridgeAttempt =
+        !cockpitAttempt &&
+        !!this.readVesselInfo() &&
+        this.isBridgeEntryAllowed();
       if (!cockpitAttempt && !bridgeAttempt) return;
       if (bridgeAttempt) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (this.isBridgeEntryAllowed()) this.enter({ kind: 'vessel' });
+        this.enter({ kind: 'vessel' });
         return;
       }
     }

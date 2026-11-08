@@ -439,6 +439,27 @@ test('C enters the selected vessel bridge and aircraft-only entry refuses it', a
   assert.equal(event.defaultPrevented, true);
 });
 
+test('C stays the CCTV shortcut when the bridge gate is shut', async (t) => {
+  const { cockpit } = fixture(t, { bridgeAllowed: false });
+  let stopped = false;
+  const event = {
+    key: 'c',
+    target: document.body,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopImmediatePropagation() {
+      stopped = true;
+    },
+  };
+  cockpit.onKeyDown(event);
+  await settle();
+  assert.equal(cockpit.active, false);
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(stopped, false, 'the application shortcut still sees C');
+});
+
 test('a slow-frame bridge keeps pace with its ship', async (t) => {
   // One rendered frame a second, as software rendering manages. The bridge
   // must still cover the ship's distance, not a capped fraction of it.
