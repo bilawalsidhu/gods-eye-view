@@ -14,6 +14,7 @@ import {
 import { isVideoFeedType } from '../../sources/cctvTypes.js';
 import * as Cesium from 'cesium';
 import { createIconSet } from '../../data/iconSet.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 
 const FOCUS_FACTOR = 0.5;
 
@@ -112,40 +113,45 @@ test('icons leave the scene they were added to, whichever viewer tears down', ()
   assert.equal(state._icons, null);
 });
 
-test('the obstruction probe sees through the layer and needs a ray pick', () => {
-  const coverage = [{ id: 'cov' }];
-  const plane = { id: 'plane' };
+test('the obstruction probe casts one ray through the query port', async () => {
   const calls = [];
-  const state = {
-    _viewer: {
-      scene: {
-        pickFromRay(ray, exclude) {
-          calls.push({ ray, exclude });
-          return { position: { x: 1, y: 2, z: 3 } };
-        },
+  const viewer = {};
+  const unbind = bindRenderer(viewer, {
+    query: {
+      rayCast: async (ray, options) => {
+        calls.push({ ray, options });
+        return { x: 1, y: 2, z: 3 };
       },
     },
-    _coverageEntities: coverage,
-    _projectionEntities: [{ planeEntity: plane }, null, {}],
-  };
+  });
+  const state = { _viewer: viewer };
   const rendering = createRendering({
     state,
     services: { focus: {} },
     parts: {},
   });
-  assert.equal(rendering.canPickFromRay(), true);
-  const hit = rendering.obstructionHit(
-    { x: 0, y: 0, z: 0 },
-    { x: 1, y: 0, z: 0 },
-  );
-  assert.deepEqual(hit.position, { x: 1, y: 2, z: 3 });
-  assert.deepEqual(calls[0].exclude, [...coverage, plane]);
-  assert.ok(calls[0].ray instanceof Cesium.Ray);
-  state._viewer = { scene: {} };
+  try {
+    assert.equal(rendering.canPickFromRay(), true);
+    const origin = { x: 0, y: 0, z: 0 };
+    const direction = { x: 1, y: 0, z: 0 };
+    assert.deepEqual(await rendering.obstructionHit(origin, direction), {
+      x: 1,
+      y: 2,
+      z: 3,
+    });
+    // The layer's own sets are not ground: the cast sees through them
+    // without naming them.
+    assert.deepEqual(calls, [
+      { ray: { origin, direction }, options: { against: 'surface' } },
+    ]);
+  } finally {
+    unbind();
+  }
+  state._viewer = {};
   assert.equal(rendering.canPickFromRay(), false);
   assert.equal(
-    rendering.obstructionHit({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }),
-    undefined,
+    await rendering.obstructionHit({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }),
+    null,
   );
 });
 

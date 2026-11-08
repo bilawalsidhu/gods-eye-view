@@ -92,3 +92,91 @@ test('the frustum axis and plane orientation match the renderer transforms exact
     assert.deepEqual([q.x, q.y, q.z, q.w], [e.x, e.y, e.z, e.w]);
   }
 });
+
+test('the activation probe clamps the range once its ray answers, unless the camera moved on', async () => {
+  const { createRendering } = await import('./rendering.js');
+  const p = {};
+  const state = { _activeCameraId: 'cam', _viewer: {} };
+  const context = {
+    state,
+    services: { ground: {}, mesh: {}, focus: {} },
+    parts: p,
+  };
+  const written = [];
+  const footprints = [];
+  let restyles = 0;
+  let notices = 0;
+  let hitAtM = 80;
+  p.model = createModel(context);
+  p.geometry = createGeometry(context);
+  p.rendering = {
+    ...createRendering(context),
+    canPickFromRay: () => true,
+    refreshCoverageStyles: () => (restyles += 1),
+    // The first surface `hitAtM` metres along the axis.
+    obstructionHit: async (origin, direction) => ({
+      x: origin.x + direction.x * hitAtM,
+      y: origin.y + direction.y * hitAtM,
+      z: origin.z + direction.z * hitAtM,
+    }),
+  };
+  p.calibration = { normalizeCalibration: () => ({ rangeScale: 1 }) };
+  p.ground = {
+    groundAltFor: () => 100,
+    resolveFootprintGround: async (r) =>
+      footprints.push(p.geometry.footprintPose(r)),
+  };
+  p.presentation = { notifyListeners: () => (notices += 1) };
+  p.drawSets = { writeLines: (lines) => written.push(lines) };
+  p.projection = { updatePlanePlacement() {} };
+  const record = {
+    camera: {
+      id: 'cam',
+      lon: -97.74,
+      lat: 30.27,
+      headingDeg: 90,
+      pitchDeg: -10,
+      fovDeg: 60,
+      rangeM: 200,
+      mountHeightM: 8,
+    },
+    coverageEntities: [],
+  };
+  state._recordById = new Map([['cam', record]]);
+  p.geometry.applyFrustumGeometry(record, 100);
+  assert.equal(record.frustumGeometry.rangeM, 200, 'unclamped at first');
+
+  const landed = p.geometry.runActivationObstructionProbe(record);
+  assert.equal(record.probeClampRangeM, null, 'the answer is still to come');
+  await landed;
+  const clamp = p.geometry.activationProbeClampRange(200, 80);
+  assert.ok(Math.abs(record.probeClampRangeM - clamp) < 1e-6);
+  assert.ok(
+    Math.abs(record.frustumGeometry.rangeM - clamp) < 1e-6,
+    'the geometry is rewritten at the clamp, from the ground it had',
+  );
+  assert.equal(record.frustumGeometry.mount.alt, 108);
+  assert.deepEqual(
+    footprints,
+    [p.geometry.footprintPose(record)],
+    "the clamped plane's footprint ground is asked for",
+  );
+  assert.ok(
+    Math.abs(footprints[0].rangeM - clamp) < 1e-6,
+    'at the clamped pose',
+  );
+  assert.deepEqual([restyles, notices], [1, 1]);
+
+  // A probe whose camera is deactivated before it answers lands nothing.
+  hitAtM = 50;
+  const stale = p.geometry.runActivationObstructionProbe(record);
+  p.geometry.clearProbeClampOnDeactivation(record, () => {});
+  await stale;
+  assert.equal(record.probeClampRangeM, null);
+
+  // Nor does one whose record a re-init replaced for the same camera.
+  const replaced = p.geometry.runActivationObstructionProbe(record);
+  state._recordById = new Map([['cam', { ...record }]]);
+  await replaced;
+  assert.equal(record.probeClampRangeM, null);
+});

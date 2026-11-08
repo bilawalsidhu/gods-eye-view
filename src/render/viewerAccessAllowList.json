@@ -9,7 +9,6 @@
   "src/data/followed.js": 5,
   "src/data/pickRegistry.js": 3,
   "src/data/spriteOrder.js": 2,
-  "src/layers/cctv/geometry.js": 1,
   "src/layers/flights/motion.js": 1,
   "src/layers/military/motion.js": 1,
   "src/layers/streetLevel/view.js": 1,

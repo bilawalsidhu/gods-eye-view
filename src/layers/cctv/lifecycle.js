@@ -157,6 +157,9 @@ export function createLifecycle({
     // Idempotent — also covers a re-init without a prior destroy().
     parts.cards.teardownAmbientCards();
     parts.projection.clearProjectionOverlay();
+    // An activation probe still to answer lands on none of these records.
+    for (const record of layerState._records || [])
+      if (record) record.probeToken = (record.probeToken || 0) + 1;
     layerState._records = [];
     layerState._recordById = new Map();
     layerState._viewRecords = [];
@@ -317,7 +320,7 @@ export function createLifecycle({
           viewshedColors: viewshedColors(
             cameraHue(hueIndexById.get(camera.id) ?? 0),
           ),
-          viewshedPrimitive: null,
+          viewshedVolume: null,
           viewshedActiveTint: false,
         };
         layerState._records.push(record);
@@ -582,6 +585,7 @@ export function createLifecycle({
       parts.cards.teardownAmbientCards();
       parts.geometry.destroyCoverageEntities();
       parts.rendering.destroyCameraIcons();
+      parts.drawSets.dispose();
       clearRuntimeState();
       layerState._viewer = null;
       layerState._enabled = false;

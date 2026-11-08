@@ -10,7 +10,6 @@
   "src/data/geoImportPins.js",
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
-  "src/layers/cctv/projection.js",
   "src/layers/cctv/rendering.js",
   "src/layers/firms/rendering.js",
   "src/layers/ghostMaps/index.js",

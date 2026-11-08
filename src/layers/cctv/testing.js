@@ -19,7 +19,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
 
   /**
    * Create the production monitor-plane/host-label pair without media setup.
-   * @param {Object} viewer Cesium viewer seam.
+   * @param {Object} viewer Viewer whose renderer draws the plane.
    * @param {Object} record CCTV runtime record.
    * @returns {Object} Projection runtime.
    */
@@ -39,11 +39,11 @@ export function createTesting({ state: layerState, services, parts, source }) {
     record.frustumPositions = positions;
     const runtime = {
       cameraId: String(record.camera.id),
-      planeEntity: null,
+      plane: null,
       // createProjectionPlane gives it its label position.
       labelPosition: null,
       overlayEntry: null,
-      planeMaterial: parts.projection.plainPlaneMaterial(),
+      planeSource: parts.projection.plainPlaneSource(),
     };
     parts.projection.createProjectionPlane(
       record,
@@ -122,10 +122,29 @@ export function createTesting({ state: layerState, services, parts, source }) {
       if (record?.camera?.id) parts.rendering.addCameraIcon(record);
   }
 
-  /** What the layer draws now, for the QA harness: the gizmo's parts. */
+  /**
+   * What the layer draws now, for the QA harness: the gizmo's parts, the
+   * coverage lines and monitor planes by item id, the viewshed volumes'
+   * ids, and how many volumes were ever written.
+   */
 
   function _cctvDrawnForTest() {
-    return { gizmo: layerState._gizmo?.partsForTest() ?? {} };
+    const coverage = {};
+    for (const record of layerState._records)
+      for (const line of record.coverageEntities || [])
+        if (line?.id) coverage[line.id] = line;
+    const planes = {};
+    for (const runtime of layerState._projectionEntities)
+      if (runtime?.plane) planes[runtime.plane.id] = runtime.plane;
+    return {
+      gizmo: layerState._gizmo?.partsForTest() ?? {},
+      coverage,
+      planes,
+      viewsheds: layerState._records
+        .map((record) => record.viewshedVolume)
+        .filter(Boolean),
+      viewshedWrites: parts.drawSets.volumeWritesForTest(),
+    };
   }
 
   /** The layer's icon set, for tests that read what the rows draw. */

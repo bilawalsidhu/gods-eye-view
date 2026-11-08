@@ -103,12 +103,13 @@ export function createSelection({
       layerState._geoQueue.splice(queueIdx, 1);
       layerState._geoQueue.unshift(record);
     }
-    // §9.1: one obstruction probe per activation, BEFORE the geometry pass so
-    // the range clamp lands in the same rewrite. A FIRST-EVER activation (no
-    // real ground sample yet) probes from the catalog-prior altitude — if that
-    // prior is off, the clamp is measured from a shifted origin, but a
-    // re-activation after the one-shot snap lands re-probes from real ground,
-    // so it self-corrects.
+    // §9.1: one obstruction probe per activation, cast before the geometry
+    // pass; its range clamp lands a microtask later, before the next frame,
+    // rewriting the geometry and asking again for the footprint ground. A
+    // FIRST-EVER activation (no real ground sample yet) probes from the
+    // catalog-prior altitude — if that prior is off, the clamp is measured
+    // from a shifted origin, but a re-activation after the one-shot snap
+    // lands re-probes from real ground, so it self-corrects.
     parts.geometry.runActivationObstructionProbe(record);
     // Coverage is activation-lazy even while the mode is OFF: the active
     // camera's projection representation must be ready without materializing
