@@ -108,8 +108,10 @@ export function createCesiumQuery({
 
   // What height queries see through, by their items' pick ids: the sets not
   // drawn as ground, and the sets a caller excludes. Built once per change
-  // to the sets, not per query.
+  // to the sets, not per query. Each list's sets are kept beside it, with
+  // the change they were read at, for `withoutSets` to hide.
   const seeThroughCache = new Map();
+  const seeThroughSets = new WeakMap();
   let seeThroughVersion = -1;
   function seeThrough(exclude, { allSets = false } = {}) {
     if (seeThroughVersion !== drawPart.version()) {
@@ -120,14 +122,18 @@ export function createCesiumQuery({
     let out = seeThroughCache.get(key);
     if (!out) {
       out = [];
+      const records = [];
       for (const record of drawPart.sets.values())
         if (
           allSets ||
           !record.spec.includeInHeightQueries ||
           exclude?.includes(record.spec.id)
-        )
+        ) {
+          records.push(record);
           for (const id of record.pickIds) out.push(id);
+        }
       seeThroughCache.set(key, out);
+      seeThroughSets.set(out, { records, version: seeThroughVersion });
     }
     return out;
   }
@@ -159,11 +165,60 @@ export function createCesiumQuery({
     }
   }
 
+  /**
+   * The hosts `withoutSets` hid, each followed by its set, shown again once its
+   * sample is done.
+   */
+  let hiddenHosts = [];
+  const hide = (host, record) => {
+    if (!host || host.show === false || host.isDestroyed?.()) return;
+    host.show = false;
+    hiddenHosts.push(host, record);
+  };
+  /** Show again what `hidden` hid, as each set now asks. */
+  const showAgain = (hidden) => {
+    for (let i = 0; i < hidden.length; i += 2)
+      hidden[i].show = hidden[i + 1].spec.show !== false;
+  };
+
+  /**
+   * `fn` with the sets seen through by `excluded` hidden whole, so a sample
+   * renders past them in one pass. Seen through item by item instead, each
+   * item hit costs another pass, and a line hit rebuilds every line of its
+   * collection, as the scene hides a hit line alone. Synchronous: they are
+   * shown again, as their sets now ask, before anything draws. A list read
+   * before the sets last changed is seen through item by item, as its items
+   * may no longer be all its sets draw; a sample inside another sees what
+   * the outer one hid, unless it sees through it too.
+   */
+  function withoutSets(excluded, fn) {
+    const seen = excluded && seeThroughSets.get(excluded);
+    const current =
+      seen?.records.length > 0 && seen.version === drawPart.version();
+    const outer = hiddenHosts;
+    if (!current && !outer.length) return fn();
+    showAgain(outer);
+    hiddenHosts = [];
+    try {
+      if (current)
+        for (const record of seen.records) {
+          hide(record.host, record);
+          hide(record.retiring, record);
+        }
+      return fn();
+    } finally {
+      showAgain(hiddenHosts);
+      hiddenHosts = outer;
+      for (let i = 0; i < outer.length; i += 2) outer[i].show = false;
+    }
+  }
+
   /** A height now from what is loaded, against the surface asked for. */
   function heightNow(point, against, excluded) {
     if (against === 'terrain')
       return heights().now(point, { against: 'terrain' });
-    const sample = () => heights().now(point, { exclude: excluded });
+    const sample = () =>
+      withoutSets(excluded, () => heights().now(point, { exclude: excluded }));
     return against === 'tiles' ? withoutGlobe(sample) : sample();
   }
 

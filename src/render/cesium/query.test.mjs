@@ -152,3 +152,130 @@ test('a query port built before its viewer can draw sees the sets drawn later, a
   viewer.isDestroyed = () => true;
   assert.equal(findQuery(viewer), null, 'gone with its viewer');
 });
+
+test('a height sample hides the sets it sees through for that sample alone', () => {
+  const viewer = fakeViewer();
+  const { scene } = viewer;
+  const shownWhileSampling = [];
+  scene.sampleHeight = (carto, exclude) => {
+    scene.sampled.push(exclude);
+    shownWhileSampling.push(scene.added.map((host) => host.show));
+    return 12;
+  };
+  const query = queryOf(viewer);
+  const ground = drawOf(viewer).points({
+    id: 'ground',
+    includeInHeightQueries: true,
+  });
+  ground.set([{ id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4 }]);
+  const markers = drawOf(viewer).points({ id: 'markers' });
+  markers.set([{ id: 'b', pos: { lon: 1, lat: 0 }, pixelSize: 4 }]);
+  const hidden = drawOf(viewer).points({ id: 'hidden' });
+  hidden.set([{ id: 'c', pos: { lon: 2, lat: 0 }, pixelSize: 4 }]);
+  hidden.show = false;
+  const [groundHost, markersHost, hiddenHost] = scene.added;
+
+  assert.equal(query.sampleHeightNow({ lon: 0, lat: 0 }), 12);
+  assert.deepEqual(
+    shownWhileSampling.at(-1),
+    [true, false, false],
+    'the markers are hidden while it samples, the ground is not',
+  );
+  assert.deepEqual(
+    scene.sampled
+      .at(-1)
+      .map((id) => id.set)
+      .sort(),
+    ['hidden', 'markers'],
+    'and their items are still seen through',
+  );
+  assert.equal(groundHost.show, true);
+  assert.equal(markersHost.show, true, 'shown again after');
+  assert.equal(hiddenHost.show, false, 'a hidden set stays hidden');
+
+  query.sampleHeightNow({ lon: 0, lat: 0 }, { exclude: ['ground'] });
+  assert.deepEqual(shownWhileSampling.at(-1), [false, false, false]);
+  assert.deepEqual(
+    scene.added.map((host) => host.show),
+    [true, true, false],
+  );
+
+  const out = new Float64Array(2);
+  query.sampleHeightNowMany(new Float64Array([0, 0, 1, 0]), out);
+  assert.deepEqual([...out], [12, 12]);
+  assert.deepEqual(shownWhileSampling.slice(-2), [
+    [true, false, false],
+    [true, false, false],
+  ]);
+  assert.deepEqual(
+    scene.added.map((host) => host.show),
+    [true, true, false],
+  );
+
+  // A sample that throws is a miss, and shows them again.
+  scene.sampleHeight = () => {
+    throw new Error('lost context');
+  };
+  assert.equal(query.sampleHeightNow({ lon: 0, lat: 0 }), null);
+  assert.deepEqual(
+    scene.added.map((host) => host.show),
+    [true, true, false],
+  );
+
+  // Terrain samples render nothing, so they hide nothing.
+  const before = shownWhileSampling.length;
+  scene.globe = { getHeight: () => 5 };
+  query.sampleHeightNow({ lon: 0, lat: 0 }, { against: 'terrain' });
+  assert.equal(shownWhileSampling.length, before);
+  ground.dispose();
+  markers.dispose();
+  hidden.dispose();
+});
+
+test('hiding the sets seen through answers as seeing through their items did, nested samples too', () => {
+  const viewer = fakeViewer();
+  const { scene } = viewer;
+  const query = queryOf(viewer);
+  const ground = drawOf(viewer).points({
+    id: 'ground',
+    includeInHeightQueries: true,
+  });
+  ground.set([{ id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4 }]);
+  const markers = drawOf(viewer).points({ id: 'markers' });
+  markers.set([{ id: 'b', pos: { lon: 0, lat: 0 }, pixelSize: 4 }]);
+  const [groundHost, markersHost] = scene.added;
+  // The first thing drawn and not seen through answers: the markers at
+  // 100 m, the ground at 50 m, else the surface at 12 m.
+  const sees = (host, set, exclude) =>
+    host.show && !exclude.some((id) => id.set === set);
+  let nested = null;
+  scene.sampleHeight = (carto, exclude) => {
+    const inner = nested?.();
+    nested = null;
+    if (inner !== undefined) scene.inner = inner;
+    if (sees(markersHost, 'markers', exclude)) return 100;
+    if (sees(groundHost, 'ground', exclude)) return 50;
+    return 12;
+  };
+
+  assert.equal(query.sampleHeightNow({ lon: 0, lat: 0 }), 50);
+  assert.equal(
+    query.sampleHeightNow({ lon: 0, lat: 0 }, { exclude: ['ground'] }),
+    12,
+  );
+  // A sample inside one that hid the ground sees it, and leaves it hidden
+  // for the outer one.
+  nested = () => query.sampleHeightNow({ lon: 0, lat: 0 });
+  assert.equal(
+    query.sampleHeightNow({ lon: 0, lat: 0 }, { exclude: ['ground'] }),
+    12,
+  );
+  assert.equal(scene.inner, 50);
+  assert.deepEqual(
+    [groundHost.show, markersHost.show],
+    [true, true],
+    'all shown after',
+  );
+  ground.dispose();
+  markers.dispose();
+});
