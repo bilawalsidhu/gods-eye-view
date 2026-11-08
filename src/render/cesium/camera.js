@@ -101,10 +101,13 @@ export function createCesiumCamera({
   const removers = [];
   // Camera events: Cesium's own moveStart and moveEnd (500 ms after the
   // last change, never while following), and `changed` measured per
-  // listener on every tick, where Cesium measures its single threshold.
+  // listener on every tick, where Cesium measures its single threshold
+  // (`camera.percentageChanged`, which this leaves as it is for everyone
+  // else listening to Cesium's own event).
   const cameraEvents = createCameraEvents({
     pose: () => cameraPort.pose(),
     report,
+    thresholds: capabilities?.has('cameraChangeThreshold') ?? true,
   });
   removers.push(
     scene.postUpdate.addEventListener(() => {

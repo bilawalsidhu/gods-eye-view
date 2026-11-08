@@ -18,6 +18,9 @@ import { toCartesian } from './common.js';
 import { unboundDrawPart } from './draw.js';
 import { drawHitOf } from './drawHit.js';
 
+/** The fewest things a bounded drill looks through (`QueryPort.drillPick`). */
+const DRILL_DEPTH = 16;
+
 /**
  * The query capabilities a Cesium scene has: depth picks, height samples
  * and ray casts all need depth textures, which `pickPositionSupported` and
@@ -80,15 +83,24 @@ export function createCesiumQuery({
    * The pickable draw-set items under a pixel, nearest first, once each (a
    * shape's fill and outline share one id). `untilForeign` stops at the first
    * thing that is not a draw-set item (a tile, the app's own primitives):
-   * what is behind it is hidden.
+   * what is behind it is hidden. With a `limit`, Cesium looks through at
+   * most `max(limit, 16)` things of any kind (each a pick pass), as the
+   * contract bounds the work; without one, or with `unbounded` (a `pick`
+   * looking under something unpickable), it picks until nothing is left.
    */
-  function drill(x, y, { width = 3, height = 3, limit, untilForeign } = {}) {
+  function drill(
+    x,
+    y,
+    { width = 3, height = 3, limit, untilForeign, unbounded = false } = {},
+  ) {
     const hits = [];
     if (limit === 0) return hits;
     const seen = new Set();
     for (const picked of scene.drillPick(
       screen(x, y),
-      undefined,
+      limit === undefined || unbounded
+        ? undefined
+        : Math.max(limit, DRILL_DEPTH),
       width,
       height,
     )) {
@@ -269,6 +281,7 @@ export function createCesiumQuery({
           ...window,
           limit: 1,
           untilForeign: true,
+          unbounded: true,
         });
         if (under) return under;
       }

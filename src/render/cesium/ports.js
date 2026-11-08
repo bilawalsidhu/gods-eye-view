@@ -63,6 +63,7 @@ export function cesiumCapabilities(scene, only) {
     'quads',
     'meshes',
     'followFrame',
+    'cameraChangeThreshold',
     ...GPU_ICON_CAPABILITIES,
     'styles',
     'bloom',

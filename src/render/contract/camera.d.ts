@@ -9,7 +9,9 @@
  * - `lookAt` orbits the target (the user can still rotate and zoom about it);
  *   `release` returns to the world frame.
  * - `changed` fires when the view has moved by more than the listener's own
- *   `threshold` (default 0.5) since it last fired, measured per listener:
+ *   `threshold` (`cameraChangeThreshold`; default 0.5, and 0.5 for every
+ *   listener without the capability) since it last fired, measured per
+ *   listener, without changing what any other listener is measured by:
  *   heading and roll each by their change over π since they last fired; the
  *   view by the larger of the direction's turn over half the vertical field
  *   of view and the eye's travel over its height, since the view last
@@ -45,7 +47,13 @@ export interface CameraPose {
   direction: Vec3;
   up: Vec3;
   right: Vec3;
-  /** Vertical field of view, radians. */
+  /**
+   * Vertical field of view, radians. `fovy` and `aspectRatio` describe a
+   * centred perspective frustum. Where the renderer's frustum is off-centre or
+   * orthographic reports the nearest centred one here and its exact
+   * projection only in `matrices()`; code that culls or projects exactly
+   * reads `matrices()`.
+   */
   fovy: number;
   aspectRatio: number;
   near: number;
@@ -259,6 +267,12 @@ export interface CameraPort {
    */
   followFrame?(): Float64Array;
   readonly controls: CameraControls;
+  /**
+   * `threshold` (`cameraChangeThreshold`): the fraction of change, as the
+   * header measures it, that fires this `changed` listener; ignored for the
+   * other events, and without the capability (every listener then fires at
+   * 0.5).
+   */
   on(event: CameraEvent, cb: () => void, options?: { threshold?: number }): Off;
   /** Runs before each camera command, so an owner can yield to another. */
   onCommand(cb: (command: CameraCommand) => void): Off;

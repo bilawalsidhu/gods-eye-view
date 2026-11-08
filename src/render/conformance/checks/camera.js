@@ -138,6 +138,8 @@ export function cameraChecks() {
       ok(expected, `no reference trace for ${script.name}`);
       const r = await fresh(h);
       try {
+        if (script.capability && !r.capabilities.has(script.capability))
+          return { skip: `no ${script.capability}` };
         const run = await runCameraScript(
           contractDriver(r, {
             frame: () => h.frame(r),

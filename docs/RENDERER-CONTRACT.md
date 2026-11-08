@@ -42,6 +42,9 @@ optional, so a renderer written before it still conforms:
   target's east-north-up frame, or the identity. `setView` keeps that frame
   while it places a world pose. A share link's follow offset is
   re-expressed in it, satellites included.
+- `camera.on('changed', cb, { threshold })` measures each listener by its
+  own threshold under the capability `cameraChangeThreshold`; a renderer
+  without it fires every `changed` listener at 0.5.
 - A line item's `depthFailDash` (`{ length, pattern16? }`) dashes the parts
   behind the surface in `depthFailColor`, as the Draw tool's rubber band is.
   A renderer that predates it draws those parts solid.
@@ -72,6 +75,12 @@ The rules that hold everywhere:
   its documentation names first. A required member that names a capability
   always exists, and without the capability it answers null or empty.
   Quality support is listed by `quality.knobs()`, not by capabilities.
+- **Picks see the scene before effects.** A style that moves pixels does not
+  move what is picked, so the application maps a pointer through its own
+  style first
+  (`src/input/sensorPick.js`). A bounded `drillPick` (`limit`) also bounds
+  its work: it looks through at most `max(limit, 16)` things under the
+  pointer.
 - **Heights are physical.** All heights are metres above the ellipsoid,
   unexaggerated. Only drawing follows exaggerated terrain.
 - **Listeners** run in subscription order. A listener removed during

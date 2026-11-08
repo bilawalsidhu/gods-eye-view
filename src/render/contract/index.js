@@ -48,6 +48,7 @@ export const CAPABILITIES = Object.freeze([
   'followAutodetect',
   'globeVisibility',
   'followFrame',
+  'cameraChangeThreshold',
   'benchmark',
 ]);
 

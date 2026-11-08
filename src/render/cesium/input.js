@@ -257,7 +257,7 @@ export function createCesiumInput(
     let picked = false;
     let ground;
     let grounded = false;
-    /** @type {Map<string, {limit: number, hits: object[]}>} */
+    /** @type {Map<string, object[]>} */
     const drills = new Map();
     ev.pick = () => {
       if (!picked) {
@@ -269,22 +269,20 @@ export function createCesiumInput(
     ev.drill = (options = {}) => {
       const { limit, ...window } = options;
       const want = limit ?? Infinity;
-      const key = `${window.width ?? ''}x${window.height ?? ''}:${window.purpose ?? ''}`;
-      let pass = drills.get(key);
-      // A pass that found fewer than it asked for found everything.
-      if (!pass || (pass.hits.length >= pass.limit && want > pass.limit)) {
-        const depth =
-          want === Infinity ? Infinity : Math.max(want, DRILL_DEPTH);
-        pass = {
-          limit: depth,
-          hits: query.drillPick(x, y, {
-            ...window,
-            ...(depth === Infinity ? {} : { limit: depth }),
-          }),
-        };
-        drills.set(key, pass);
+      // A bounded drill looks only so deep (`drillPick`'s limit bounds the
+      // work), so each depth is its own pass: a deeper one could name items
+      // a shallower one never reaches.
+      const depth = want === Infinity ? Infinity : Math.max(want, DRILL_DEPTH);
+      const key = `${window.width ?? ''}x${window.height ?? ''}:${window.purpose ?? ''}:${depth}`;
+      let hits = drills.get(key);
+      if (!hits) {
+        hits = query.drillPick(x, y, {
+          ...window,
+          ...(depth === Infinity ? {} : { limit: depth }),
+        });
+        drills.set(key, hits);
       }
-      return want === Infinity ? pass.hits.slice() : pass.hits.slice(0, want);
+      return want === Infinity ? hits.slice() : hits.slice(0, want);
     };
     ev.ground = () => {
       if (!grounded) {

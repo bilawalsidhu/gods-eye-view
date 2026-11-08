@@ -52,11 +52,13 @@ function headlessHarness(clock) {
       scene.primitives = { add() {}, remove() {} };
       scene.requestRender = () => {};
       clock.now = 0;
+      const capabilities = new Set(['cameraChangeThreshold']);
       const ports = createCesiumPorts(
         { scene, clock: { currentTime: Cesium.JulianDate.now() } },
-        { capabilities: new Set() },
+        { capabilities },
       );
       return {
+        capabilities,
         camera: ports.camera,
         query: ports.query,
         destroy: () => ports.dispose(),

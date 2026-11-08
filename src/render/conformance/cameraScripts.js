@@ -428,6 +428,7 @@ export const CAMERA_SCRIPTS = Object.freeze([
   },
   {
     name: 'changed fires by each listener’s threshold',
+    capability: 'cameraChangeThreshold',
     steps: [
       START,
       city(2000, 0, -0.5),

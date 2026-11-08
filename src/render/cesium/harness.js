@@ -83,6 +83,7 @@ export const CESIUM_CHECKS = new Set([
   'input.lease.grab',
   'input.lease.press',
   'query.heights',
+  'query.pickBeforeStyles',
   'query.heights.sets',
   'query.projectMany',
   'query.rays',

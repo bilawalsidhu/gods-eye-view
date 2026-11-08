@@ -207,6 +207,29 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   },
 });
 
+/** A style that mirrors the image left to right: it moves every pixel. */
+const mirrorStyle = (id) => ({
+  id,
+  params: [],
+  animated: false,
+  shader: {
+    glsl: `uniform sampler2D colorTexture;
+uniform float intensity;
+in vec2 v_textureCoordinates;
+void main() {
+  vec2 uv = v_textureCoordinates;
+  vec2 mirrored = vec2(1.0 - uv.x, uv.y);
+  out_FragColor = vec4(texture(colorTexture, mix(uv, mirrored, step(0.5, intensity))).rgb, 1.0);
+}`,
+    wgsl: `@fragment
+fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+  let mirrored = vec2f(1.0 - uv.x, uv.y);
+  let at = mix(uv, mirrored, step(0.5, params.intensity));
+  return vec4f(textureSample(colorTexture, colorSampler, at).rgb, 1.0);
+}`,
+  },
+});
+
 export function portChecks() {
   return [
     // --- Shape -------------------------------------------------------------
@@ -644,8 +667,94 @@ export function portChecks() {
           .sort();
         deepEqual(ids, ['a', 'b'], 'both hits');
         equal(r.query.drillPick(s.x, s.y, { limit: 1 }).length, 1, 'limit');
+        equal(
+          r.query.drillPick(s.x, s.y, { limit: 0 }).length,
+          0,
+          'a limit of 0 picks nothing',
+        );
+        ok(
+          r.query.drillPick(s.x, s.y).every((hit) => hit.surface === false),
+          'never the surface',
+        );
+        deepEqual(
+          r.query.drillPick(s.x + 120, s.y + 120),
+          [],
+          'nothing over the bare globe',
+        );
+        // An unpickable set over them is looked through, never named.
+        const cover = r.draw.points({
+          id: 'conf:drill-cover',
+          pickable: false,
+        });
+        cover.set([{ id: 'c', pos, pixelSize: 30, color: '#00f' }]);
+        await drawn(h, r);
+        const through = r.query.drillPick(s.x, s.y, { limit: 2 });
+        ok(
+          through.every((hit) => hit.set === 'conf:drill'),
+          'an unpickable set is not named',
+        );
+        equal(through.length, 2, 'the items under it are');
+        cover.dispose();
+        set.dispose();
+        // Nearest first: stacked under a downward eye, the highest is nearest.
+        const stack = r.draw.points({ id: 'conf:drill-stack' });
+        stack.set(
+          [0, 300, 600].map((height) => ({
+            id: `h${height}`,
+            pos: h.toEcef({ ...AUSTIN, height }),
+            pixelSize: 20,
+            color: '#f0f',
+          })),
+        );
+        await drawn(h, r);
+        const top = r.query.project(h.toEcef({ ...AUSTIN, height: 600 }));
+        const all = r.query
+          .drillPick(top.x, top.y)
+          .filter((x) => x.set === 'conf:drill-stack')
+          .map((x) => x.id);
+        deepEqual(all, ['h600', 'h300', 'h0'], 'nearest first');
+        const bounded = r.query
+          .drillPick(top.x, top.y, { limit: 2 })
+          .map((x) => x.id);
+        ok(bounded.length <= 2, 'no more than the limit');
+        deepEqual(bounded, all.slice(0, bounded.length), 'the nearest of them');
+        stack.dispose();
+      },
+    ),
+    check(
+      'query.pickBeforeStyles',
+      'picks answer against the scene as drawn before styles',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({ id: 'conf:pick-styled' });
+        // Off centre, so a style that mirrors the image moves it.
+        const pos = h.toEcef({
+          lon: AUSTIN.lon + 0.004,
+          lat: AUSTIN.lat,
+          height: 0,
+        });
+        set.set([{ id: 'one', pos, image: DOT, size: [24, 24] }]);
+        await drawn(h, r);
+        await settled(r);
+        const s = r.query.project(pos);
+        ok(s, 'the icon projects');
+        const off = r.effects.defineStyle(mirrorStyle('conf:mirror'));
+        r.effects.setStyle('conf:mirror');
+        r.effects.setStyleIntensity('conf:mirror', 1);
+        await drawn(h, r);
+        equal(r.effects.diagnostics().style, 'conf:mirror', 'the style is on');
+        const hit = r.query.pick(s.x, s.y);
+        equal(
+          hit?.set,
+          'conf:pick-styled',
+          'picked where it is, not where it shows',
+        );
+        equal(hit?.id, 'one', 'Hit.id');
+        r.effects.setStyle(null);
+        off();
         set.dispose();
       },
+      { capability: 'styles' },
     ),
     check(
       'draw.motion',

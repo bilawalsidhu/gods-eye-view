@@ -11,6 +11,7 @@ import { updateCameraChanged } from './internals.js';
 test('capabilities follow what the scene supports', () => {
   const effects = [
     'followFrame',
+    'cameraChangeThreshold',
     'columns',
     'motionSegments',
     'courseGlide',
@@ -568,7 +569,9 @@ test('changed fires per listener, at each threshold as Cesium would', () => {
   ];
   const { widget, scene, raise } = tickingWidget();
   cityView(scene.camera);
-  const ports = createCesiumPorts(widget, { capabilities: all });
+  const ports = createCesiumPorts(widget, {
+    capabilities: new Set([...all, 'cameraChangeThreshold']),
+  });
   const counts = { 0.5: 0, 0.1: 0 };
   for (const t of [0.5, 0.1])
     ports.camera.on('changed', () => (counts[t] += 1), { threshold: t });
@@ -580,6 +583,27 @@ test('changed fires per listener, at each threshold as Cesium would', () => {
   assert.ok(counts[0.1] > counts[0.5], JSON.stringify(counts));
   for (const t of [0.5, 0.1])
     assert.equal(counts[t], cesiumChangedCount(t, steps), `threshold ${t}`);
+  ports.dispose();
+});
+
+test('without cameraChangeThreshold every changed listener fires at 0.5', () => {
+  const steps = Array.from({ length: 24 }, () => (c) => c.lookRight(0.05));
+  const { widget, scene, raise } = tickingWidget();
+  cityView(scene.camera);
+  const before = scene.camera.percentageChanged;
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  const counts = { 0.5: 0, 0.1: 0 };
+  for (const t of [0.5, 0.1])
+    ports.camera.on('changed', () => (counts[t] += 1), { threshold: t });
+  raise('postUpdate');
+  for (const step of steps) {
+    step(scene.camera);
+    raise('postUpdate');
+  }
+  assert.equal(counts[0.1], counts[0.5], JSON.stringify(counts));
+  assert.equal(counts[0.5], cesiumChangedCount(0.5, steps));
+  // Cesium's own threshold, shared with everyone else, is left as it was.
+  assert.equal(scene.camera.percentageChanged, before);
   ports.dispose();
 });
 

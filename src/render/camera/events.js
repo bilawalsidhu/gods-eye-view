@@ -28,10 +28,12 @@ const angleDelta = (a, b) => {
 
 /**
  * @param {{pose: () => import('../contract/camera').CameraPose,
- *   report: (error: unknown) => void}} options `pose` is read only while a
- *   `changed` listener is registered.
+ *   report: (error: unknown) => void, thresholds?: boolean}} options `pose`
+ *   is read only while a `changed` listener is registered; `thresholds`
+ *   false (a renderer without `cameraChangeThreshold`) ignores a listener's
+ *   own threshold, so every listener fires at 0.5.
  */
-export function createCameraEvents({ pose, report }) {
+export function createCameraEvents({ pose, report, thresholds = true }) {
   const listeners = Object.fromEntries(CAMERA_EVENTS.map((e) => [e, []]));
 
   function deliver(entry) {
@@ -56,7 +58,8 @@ export function createCameraEvents({ pose, report }) {
   function on(event, cb, options = {}) {
     const list = listeners[event];
     if (!list) throw new Error(`Unknown camera event: ${event}`);
-    const entry = { cb, live: true, threshold: options.threshold ?? 0.5 };
+    const threshold = thresholds ? (options.threshold ?? 0.5) : 0.5;
+    const entry = { cb, live: true, threshold };
     list.push(entry);
     return () => {
       entry.live = false;

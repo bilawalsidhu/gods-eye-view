@@ -4,6 +4,10 @@
  * Picks, projection and rays are synchronous and answer against the last
  * presented frame. Heights have a synchronous cache-only form that may
  * return null, and asynchronous forms that load what they need.
+ *
+ * Picks, depth picks and rays answer against the scene as drawn before
+ * effects: a style that moves pixels does not move what is picked, so the application
+ * maps a pointer through its own style before it picks.
  */
 import type { Ecef, LonLat, Meta, Ray, ScreenXY } from './common';
 
@@ -60,6 +64,16 @@ export interface HeightSample {
 
 export interface QueryPort {
   pick(x: number, y: number, window?: PickWindow): Hit | null;
+  /**
+   * The pickable draw-set items under the pointer, nearest first, each once:
+   * never the surface (`surface` is always false) and never anything that is
+   * not a draw-set item. `limit`, a whole number of 0 or more, bounds the
+   * work as well as the answer: the renderer stops at `limit` hits and
+   * looks through at most `max(limit, 16)` things of any kind under the pointer that its picks
+   * see (tiles, unpickable items it still picks, its own), so it may return
+   * fewer than `limit` when more lie above them. Omitted: every item, at
+   * whatever cost.
+   */
   drillPick(
     x: number,
     y: number,

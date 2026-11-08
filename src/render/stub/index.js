@@ -172,6 +172,7 @@ export function createStubRenderer(options = {}) {
     requestRender,
     report,
     drawnPosition: (ref, aheadMs) => drawnPosition(ref, aheadMs),
+    thresholds: capabilities.has('cameraChangeThreshold'),
   });
   camera.setViewRectangle(viewRectangle);
   if (capabilities.has('followFrame'))
@@ -675,16 +676,24 @@ export function createStubRenderer(options = {}) {
     );
   }
 
-  function hitsAt(x, y, win = {}) {
+  /**
+   * The pickable items under a pixel, nearest first. With a `depth`, only
+   * the nearest `depth` things drawn there are looked through, unpickable
+   * ones included (as a bounded `drillPick` does).
+   */
+  function hitsAt(x, y, win = {}, depth = undefined) {
     if (scriptedPicks) return scriptedPicks(x, y, win) ?? [];
     const halfW = (win.width ?? 3) / 2;
     const halfH = (win.height ?? 3) / 2;
     const hits = [];
     for (const [setId, set] of sets) {
-      if (!set.show || set.spec.pickable === false) continue;
+      if (!set.show) continue;
+      // Drawn but never picked: it still takes up a place under the pointer.
+      const setBlocked = set.spec.pickable === false;
+      const blockedItem = (item) => setBlocked || item.pickable === false;
       if (set.kind === 'lines') {
         for (const item of set.items.values()) {
-          if (item.show === false || item.pickable === false) continue;
+          if (item.show === false) continue;
           // Lines in the sky's frame are not picked where they are drawn.
           if (item.frame === 'inertial') continue;
           const p = lineHit(item, x, y, Math.max(halfW, halfH));
@@ -696,6 +705,7 @@ export function createStubRenderer(options = {}) {
               surface: false,
               position: p,
               depth: magnitude(sub(p, eye().position)),
+              blocked: blockedItem(item),
             });
         }
         continue;
@@ -707,7 +717,7 @@ export function createStubRenderer(options = {}) {
         const at = ground && toCartographicRadians(ground);
         if (!at) continue;
         for (const item of set.items.values()) {
-          if (item.show === false || item.pickable === false) continue;
+          if (item.show === false) continue;
           if (!item.fill || item.outlineOnly) continue;
           if (item.height !== 'clampGround') continue;
           if (item.geometry?.kind !== 'rectangle') continue;
@@ -720,6 +730,7 @@ export function createStubRenderer(options = {}) {
             surface: false,
             position: ground,
             depth: magnitude(sub(ground, eye().position)),
+            blocked: blockedItem(item),
           });
         }
         continue;
@@ -732,7 +743,7 @@ export function createStubRenderer(options = {}) {
       )
         continue;
       for (const item of set.items.values()) {
-        if (item.show === false || item.pickable === false) continue;
+        if (item.show === false) continue;
         const p = itemPosition(set, item);
         if (!p || isOccluded(p)) continue;
         const distance = magnitude(sub(p, eye().position));
@@ -769,12 +780,18 @@ export function createStubRenderer(options = {}) {
             surface: false,
             position: p,
             depth: magnitude(sub(p, eye().position)),
+            blocked: blockedItem(item),
           });
       }
     }
     hits.sort((a, b) => a.depth - b.depth);
-    for (const hit of hits) delete hit.depth;
-    return hits;
+    const looked = depth === undefined ? hits : hits.slice(0, depth);
+    const out = looked.filter((hit) => !hit.blocked);
+    for (const hit of out) {
+      delete hit.depth;
+      delete hit.blocked;
+    }
+    return out;
   }
 
   /**
@@ -869,8 +886,8 @@ export function createStubRenderer(options = {}) {
       return hitsAt(x, y, win)[0] ?? surfaceHit(x, y);
     },
     drillPick(x, y, opts = {}) {
-      const hits = hitsAt(x, y, opts);
-      return opts.limit === undefined ? hits : hits.slice(0, opts.limit);
+      if (opts.limit === undefined) return hitsAt(x, y, opts);
+      return hitsAt(x, y, opts, Math.max(opts.limit, 16)).slice(0, opts.limit);
     },
     pickPosition(x, y) {
       if (!capabilities.has('pickPosition')) return null;
@@ -962,7 +979,7 @@ export function createStubRenderer(options = {}) {
       const hits = () => (picked ??= hitsAt(x, y));
       ev.pick = () => hits()[0] ?? surfaceHit(x, y);
       ev.drill = (opts = {}) =>
-        opts.limit === undefined ? hits().slice() : hits().slice(0, opts.limit);
+        opts.limit === undefined ? hits().slice() : query.drillPick(x, y, opts);
       ev.ground = () => rayEllipsoid(pickRay(x, y));
     }
     router.dispatch(ev);

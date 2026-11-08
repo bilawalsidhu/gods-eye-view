@@ -203,7 +203,10 @@ test('a click carries its gesture and one pick, drill and ground', () => {
     ev.drill().map((h) => h.id),
     ['a', 'b', 'c'],
   );
-  assert.equal(s.passes.drill, 1, 'a short pass found everything');
+  // Each depth is a pass of its own: a bounded one looks only so deep.
+  assert.equal(s.passes.drill, 2, 'a bounded pass is drilled again for more');
+  ev.drill({ limit: 2 });
+  assert.equal(s.passes.drill, 2, 'the same depth is drilled once');
   assert.deepEqual(ev.ground(), { x: 1, y: 2, z: 3 });
   s.handler.fire(T.LEFT_CLICK, { position: s.at(3, 4) });
   assert.deepEqual(

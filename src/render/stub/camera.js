@@ -75,6 +75,8 @@ const ONE_DEGREE = Math.PI / 180;
  * @param {() => number} options.sceneTime Scene time, epoch ms.
  * @param {(reason: string) => void} options.requestRender
  * @param {(error: Error) => void} options.report
+ * @param {boolean} [options.thresholds] `cameraChangeThreshold`: each
+ *   `changed` listener's own threshold (default true).
  */
 export function createStubCamera({
   viewport,
@@ -83,6 +85,7 @@ export function createStubCamera({
   requestRender,
   report,
   drawnPosition = () => null,
+  thresholds = true,
 }) {
   // Local frame values; world values are `frame` applied to them.
   let frame = IDENTITY;
@@ -95,7 +98,7 @@ export function createStubCamera({
   const near = 1;
   const far = 5e8;
 
-  const events = createCameraEvents({ pose, report });
+  const events = createCameraEvents({ pose, report, thresholds });
   const { emit, on, stepChanged } = events;
   const commandHooks = [];
   const holds = new Map();

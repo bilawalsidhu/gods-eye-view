@@ -210,5 +210,7 @@ export type Capability =
   | 'globeVisibility'
   /** Reading the frame the eye is placed in (`camera.followFrame`). */
   | 'followFrame'
+  /** A `threshold` per `changed` listener (`camera.on`). */
+  | 'cameraChangeThreshold'
   /** A built-in quality benchmark. */
   | 'benchmark';
