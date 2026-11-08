@@ -235,6 +235,8 @@ function updateVessel(nowMs) {
     },
     Date.now(),
   );
+  // The radar centres here too, so it agrees with the view out the window.
+  this.vesselFix = fix;
   const target = Cesium.Cartesian3.fromDegrees(
     fix.longitude,
     fix.latitude,

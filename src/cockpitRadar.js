@@ -9,6 +9,10 @@ import {
   relativeBearing,
 } from './cockpitMath.js';
 import { greatCircleMeters } from './geoDistance.js';
+import {
+  deadReckonVesselFix,
+  VESSEL_DEAD_RECKON_MAX_S,
+} from './cockpitSubjects.js';
 
 /** Metres in one international nautical mile. */
 export const METRES_PER_NM = 1852;
@@ -21,6 +25,14 @@ export const DEFAULT_RADAR_RANGE_NM = 3;
 
 /** At most this many contacts are drawn, nearest first. */
 export const RADAR_MAX_CONTACTS = 60;
+
+/**
+ * How far past the range a contact's last fix can lie and still be in range
+ * once dead-reckoned: the projection limit at 40 kn, faster than all but a
+ * few high-speed craft.
+ */
+export const RADAR_REACH_M =
+  VESSEL_DEAD_RECKON_MAX_S * 40 * (METRES_PER_NM / 3600);
 
 /** Range rings divide the range into this many equal steps. */
 export const RADAR_RING_COUNT = 4;
@@ -67,6 +79,36 @@ export function radarRangeM(rangeNm) {
 }
 
 const round4 = (value) => Math.round(value * 1e4) / 1e4;
+
+/**
+ * Advance each contact's last fix along its course over ground to `nowMs`,
+ * as the bridge camera advances its own ship, so own ship and contacts are
+ * drawn at the same moment. A contact with no direction stays on its fix.
+ * @param {Array<object>} contacts Contacts with the `vesselCockpitInfo`
+ *   motion fields (`motionCourse`, `velocityMps`, `fixEpochMs`,
+ *   `receivedAtMs`, `feedEpochMs`).
+ * @param {number} nowMs Client clock, ms.
+ * @returns {Array<object>} The contacts with dead-reckoned positions.
+ */
+export function deadReckonRadarContacts(contacts, nowMs) {
+  if (!Array.isArray(contacts)) return [];
+  return contacts.map((contact) => {
+    if (!Number.isFinite(contact?.motionCourse)) return contact;
+    const fix = deadReckonVesselFix(
+      {
+        latitude: contact.latitude,
+        longitude: contact.longitude,
+        courseDeg: contact.motionCourse,
+        speedMps: contact.velocityMps,
+        fixEpochMs: contact.fixEpochMs,
+        receivedAtMs: contact.receivedAtMs,
+        feedEpochMs: contact.feedEpochMs,
+      },
+      nowMs,
+    );
+    return { ...contact, latitude: fix.latitude, longitude: fix.longitude };
+  });
+}
 
 /**
  * Project vessel contacts onto a heading-up radar.

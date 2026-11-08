@@ -37,6 +37,8 @@ import {
 import { lookIsOffset, lookReadoutParts, wrapLookYaw } from '../cockpitLook.js';
 import {
   RADAR_MAX_CONTACTS,
+  RADAR_REACH_M,
+  deadReckonRadarContacts,
   radarPicture,
   radarRangeM,
   radarRangeNm,
@@ -342,7 +344,9 @@ function updateVesselHud(info, nowMs, forceContext) {
 
 /**
  * Publish the bridge radar: nearby AIS vessels drawn heading-up from the
- * camera's current heading, within the chosen range.
+ * camera's current heading, within the chosen range. Own ship sits where
+ * the camera rides (its fix dead-reckoned), and every contact is
+ * dead-reckoned to the same moment, so the picture matches the window.
  * @param {object} info The vessel subject (`readVesselInfo`).
  */
 export function updateRadar(info) {
@@ -352,16 +356,22 @@ export function updateRadar(info) {
     return;
   }
   const rangeNm = radarRangeNm(this.radarRangeNm);
-  const contacts = layer.getRadarContacts(
-    info.latitude,
-    info.longitude,
-    radarRangeM(rangeNm),
-    RADAR_MAX_CONTACTS,
+  const own = this.vesselFix ?? info;
+  // Ask past the range for ships that have since moved into it; the picture
+  // trims them to the range once they are dead-reckoned.
+  const contacts = deadReckonRadarContacts(
+    layer.getRadarContacts(
+      own.latitude,
+      own.longitude,
+      radarRangeM(rangeNm) + RADAR_REACH_M,
+      RADAR_MAX_CONTACTS * 4,
+    ),
+    Date.now(),
   );
   const picture = radarPicture(
     {
-      latitude: info.latitude,
-      longitude: info.longitude,
+      latitude: own.latitude,
+      longitude: own.longitude,
       headingDeg: normalizeHeading(this.heading ?? info.track ?? 0),
       courseDeg: info.course,
     },

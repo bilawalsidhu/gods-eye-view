@@ -91,6 +91,11 @@ test('radar contacts are within range, nearest first and capped', () => {
     type: '70',
     color: vesselTypeCss('70'),
     stale: false,
+    motionCourse: 45,
+    velocityMps: 10 * 0.514444,
+    fixEpochMs: null,
+    receivedAtMs: null,
+    feedEpochMs: null,
   });
   assert.equal(contacts[1].course, null);
   assert.equal(contacts[1].heading, null);
@@ -110,6 +115,17 @@ test('the ship whose bridge the Cockpit rides is not its own contact', () => {
   );
   layer.setCockpitSubject(null);
   assert.equal(layer.getRadarContacts(54.5, 10.2, 6 * 1852).length, 2);
+});
+
+test('ships with no MMSI each keep a key of their own', () => {
+  const layer = layerWith([
+    record('', 1, { name: 'A' }),
+    record('', 2, { name: 'B' }),
+  ]);
+  const ids = layer.getRadarContacts(54.5, 10.2, 6 * 1852).map((c) => c.id);
+  assert.equal(ids.length, 2);
+  assert.equal(new Set(ids).size, 2, ids.join(', '));
+  assert.ok(ids.every((id) => id.startsWith('unkeyed:')));
 });
 
 test('a disabled layer has no radar contacts', () => {

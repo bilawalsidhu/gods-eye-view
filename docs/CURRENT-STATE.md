@@ -1590,7 +1590,10 @@ above it keeps the ship's true heading; a ring with a centre dot marks the bow
 from the caret. The bridge radar
 shows nearby AIS ships heading-up and opens at 3 NM
 (`DEFAULT_RADAR_RANGE_NM` in `src/cockpitRadar.js`); its range button steps
-3, 6, 12 and 24 NM and the chosen range is kept across bridges. Contact
+3, 6, 12 and 24 NM and the chosen range is kept across bridges. Own ship
+sits where the camera rides, and every contact's last fix is dead-reckoned
+along its course over ground to the same moment (`deadReckonRadarContacts`),
+so the scope matches the view out of the window. Contact
 Previous/Next and Live Signals aircraft handoffs are refused on the bridge and
 the Contact card stays hidden. Exit returns the camera to the vessel's map view
 through the layer's own focus. Tracking an aircraft or losing the vessel

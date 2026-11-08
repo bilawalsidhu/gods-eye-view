@@ -13,6 +13,7 @@ import ContextView from './views/ContextView.vue';
 import * as Cesium from 'cesium';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { VesselRecords } from '../layers/vessels/records.js';
+import { RADAR_REACH_M } from '../cockpitRadar.js';
 
 const RECORD = Object.freeze({
   mmsi: '211000000',
@@ -327,7 +328,8 @@ test('the bridge radar shows nearby ships without its own and steps its range', 
   assert.ok(neighbour.x < -0.3 && Math.abs(neighbour.y) < 0.02);
   assert.equal(neighbour.relativeCourseDeg, -180);
   assert.equal(radar.ownRelativeCourseDeg, 5, 'COG 095 from heading 090');
-  assert.equal(vessels.radarQueries.at(-1).rangeM, 3 * 1852);
+  // Past the range by the dead-reckoning reach, for ships moving into it.
+  assert.equal(vessels.radarQueries.at(-1).rangeM, 3 * 1852 + RADAR_REACH_M);
 
   assert.equal($('#cockpit-radar').hidden, false);
   assert.equal($('#cockpit-radar-range').textContent.trim(), '3 NM');
@@ -337,7 +339,7 @@ test('the bridge radar shows nearby ships without its own and steps its range', 
   $('#cockpit-radar-range').click();
   await settle();
   assert.equal(store.radar.rangeNm, 6);
-  assert.equal(vessels.radarQueries.at(-1).rangeM, 6 * 1852);
+  assert.equal(vessels.radarQueries.at(-1).rangeM, 6 * 1852 + RADAR_REACH_M);
   assert.equal($('#cockpit-radar-range').textContent.trim(), '6 NM');
   assert.match(
     $('#cockpit-radar-range').getAttribute('aria-label'),
@@ -1073,6 +1075,21 @@ test('the water is read where the ship is now, not at its last report', async (t
     111_320 *
     Math.cos((RECORD.lat * Math.PI) / 180);
   assert.ok(eastM > 300 && eastM < 450, `probed ${eastM.toFixed(0)} m east`);
+});
+
+test('the radar centres where the camera rides, not at the last report', async (t) => {
+  const clock = manualClock(t, START_MS);
+  // Reported a minute ago at 12 kn on course 095: since then ~370 m east.
+  const record = { ...RECORD, lastPositionEpoch: (START_MS - 60_000) / 1000 };
+  const ship = fixture(t, { record });
+  ship.cockpit.enter();
+  await settle();
+  frames(ship.cockpit, clock, ship.shots, 20);
+  await settle();
+  const query = ship.vessels.radarQueries.at(-1);
+  const eastM =
+    (query.lon - RECORD.lon) * 111_320 * Math.cos((RECORD.lat * Math.PI) / 180);
+  assert.ok(eastM > 300 && eastM < 450, `centred ${eastM.toFixed(0)} m east`);
 });
 
 test('the radar look line turns the short way across astern', async (t) => {

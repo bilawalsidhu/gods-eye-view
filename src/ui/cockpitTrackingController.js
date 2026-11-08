@@ -218,6 +218,7 @@ export function enter({ kind = null } = {}) {
   this.subjectKind = subjectKind;
   // Each session reads its own water: never a height left from the last.
   this.vesselWaterline = null;
+  this.vesselFix = null;
   this.subjectId = vessel ? info.mmsi : null;
   this.trackedEntity = entity;
   if (entity) {
@@ -329,6 +330,7 @@ export function exit({ restoreTracking = true } = {}) {
   this.active = false;
   this.subjectKind = null;
   this.vesselWaterline = null;
+  this.vesselFix = null;
   this.subjectId = null;
   this.services.releaseContinuousRender('cockpit');
   this.trackedEntity = null;
