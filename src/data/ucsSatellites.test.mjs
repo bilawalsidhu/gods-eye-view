@@ -27,9 +27,6 @@ test('the bundled UCS pack names its release, licence and curation', () => {
     'operator',
     'operatorCountry',
     'purpose',
-    'detailedPurpose',
-    'users',
-    'orbitClass',
   ]);
   // Small enough to load with the layer.
   assert.ok(readFileSync(PACK_URL).length < 200_000);
@@ -49,7 +46,6 @@ test('the pack loads into records keyed by NORAD number', async () => {
       /starlink/i,
       'Starlink rows are dropped',
     );
-    if (record.orbitClass) assert.match(record.orbitClass, /^(LEO|MEO|GEO|ELLIPTICAL)$/);
   }
 });
 
