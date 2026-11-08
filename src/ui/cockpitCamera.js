@@ -9,7 +9,6 @@ import {
 } from '../cockpitMath.js';
 import {
   VESSEL_DEAD_RECKON_MAX_S,
-  VESSEL_WATERLINE_READ_TIMEOUT_MS,
   VESSEL_WATERLINE_REFRESH_MS,
   deadReckonVesselFix,
   vesselCameraProfile,
@@ -111,11 +110,10 @@ export function update() {
  * every frame until it settles): while one is still running, a refresh
  * reads the loaded tiles instead, and the slow read applies whenever it
  * lands. Once a full-detail read has answered, only full-detail reads
- * change the height; before then a loaded-tile read may only raise it, so
- * one coarse probe cannot drop a river bridge, and a read that sampled
- * nothing keeps the height it had. A full-detail read still running after
- * VESSEL_WATERLINE_READ_TIMEOUT_MS is given up for a fresh one, so a
- * stalled read cannot hold a wrong height for the whole bridge.
+ * change the height; before then a loaded-tile read may find raised water
+ * but never takes a raised height back to the sea. One coarse probe cannot
+ * drop a river bridge to the sea, and a read that sampled nothing keeps
+ * the height it had.
  * @param {{latitude: number, longitude: number}} [at] Where to read the
  *   water: the dead-reckoned position the camera rides.
  * @returns {number} Ellipsoidal metres.
@@ -142,49 +140,35 @@ function vesselSurfaceM(info, nowMs, at = info) {
         // Whether a full-detail read has answered for this ship.
         landed: false,
         inFlight: false,
-        // The running full-detail read: its number and start time.
-        attempt: 0,
-        startedMs: 0,
       };
       this.vesselWaterline = read;
     } else {
       read.sampledMs = nowMs;
       if (read.inFlight && !read.landed) {
         const loadedM = loadedWaterlineM(scene, probes, seaM);
-        // Lowering the water is the full-detail read's to say.
-        if (
-          Number.isFinite(loadedM) &&
-          !(Number.isFinite(read.heightM) && loadedM < read.heightM)
-        )
-          read.heightM = loadedM;
+        // Taking a river back to the sea is the full-detail read's to say.
+        const lowers =
+          Number.isFinite(read.heightM) &&
+          read.heightM > seaM &&
+          !(loadedM > seaM);
+        if (Number.isFinite(loadedM) && !lowers) read.heightM = loadedM;
       }
-      if (
-        read.inFlight &&
-        nowMs - read.startedMs >= VESSEL_WATERLINE_READ_TIMEOUT_MS
-      )
-        read.inFlight = false;
     }
-    if (!read.inFlight)
-      readWaterline.call(this, read, scene, probes, seaM, nowMs);
+    if (!read.inFlight) readWaterline.call(this, read, scene, probes, seaM);
   }
   return read && Number.isFinite(read.heightM)
     ? Math.max(seaM, read.heightM)
     : seaM;
 }
 
-/**
- * Start one full-detail water read for `read`; its answer lands on it
- * unless it was given up for a newer read.
- */
-function readWaterline(read, scene, probes, seaM, nowMs) {
-  const attempt = ++read.attempt;
+/** Start one full-detail water read for `read`; its answer lands on it. */
+function readWaterline(read, scene, probes, seaM) {
   read.inFlight = true;
-  read.startedMs = nowMs;
   Promise.resolve()
     .then(() => scene.sampleHeightMostDetailed(probes))
     .then(
       (samples) => {
-        if (this.vesselWaterline !== read || attempt !== read.attempt) return;
+        if (this.vesselWaterline !== read) return;
         read.inFlight = false;
         // However late it lands, it applies; one that sampled nothing (tiles
         // not loaded yet) is no answer and keeps the height already read.
@@ -194,8 +178,7 @@ function readWaterline(read, scene, probes, seaM, nowMs) {
         read.heightM = vesselWaterlineM(seaM, heights);
       },
       () => {
-        if (this.vesselWaterline === read && attempt === read.attempt)
-          read.inFlight = false;
+        if (this.vesselWaterline === read) read.inFlight = false;
       },
     );
 }

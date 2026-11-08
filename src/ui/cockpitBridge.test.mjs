@@ -1376,59 +1376,6 @@ test('before any full read lands, a coarse loaded read keeps the river it found'
   ship.viewer.scene.sampleHeight = () => 0.5;
   frames(ship.cockpit, clock, ship.shots, 240);
   near(eyeHeightM(ship.shots.at(-1)) - seaEyeM, 27, 'still on the river', 0.5);
-  // Nor partway down: a probe on a 15 m bank is not the river either.
-  ship.viewer.scene.sampleHeight = () => 15;
-  frames(ship.cockpit, clock, ship.shots, 240);
-  near(eyeHeightM(ship.shots.at(-1)) - seaEyeM, 27, 'not lowered partway', 0.5);
-});
-
-test('a full water read that never lands is given up for a fresh one', async (t) => {
-  const clock = manualClock(t, START_MS);
-  const sea = await bridgeAt(t, clock);
-  frames(sea.cockpit, clock, sea.shots, 60);
-  const seaEyeM = eyeHeightM(sea.shots.at(-1));
-  sea.cockpit.exit();
-
-  clock.set(START_MS);
-  const record = { ...RECORD, lastPositionEpoch: START_MS / 1000 };
-  const ship = fixture(t, { record });
-  const reads = [];
-  ship.viewer.scene.sampleHeightMostDetailed = (positions) =>
-    new Promise((resolve) => reads.push({ positions, resolve }));
-  // Coarse tiles first put the ship 27 m up; it is really at sea.
-  ship.viewer.scene.sampleHeight = () => 27;
-  ship.cockpit.enter();
-  await settle();
-  ship.cockpit.update();
-  await settle();
-  assert.equal(reads.length, 1);
-  // The first read stalls. Twenty seconds on, still no second read.
-  frames(ship.cockpit, clock, ship.shots, 400);
-  await settle();
-  assert.equal(reads.length, 1, 'not stacked while it may still land');
-  // Past the timeout, a fresh read starts, and its answer applies.
-  frames(ship.cockpit, clock, ship.shots, 300);
-  await settle();
-  assert.equal(reads.length, 2, 'a fresh read after the stalled one');
-  const answer = (read, height) =>
-    read.resolve(
-      read.positions.map((position) => Object.assign(position, { height })),
-    );
-  answer(reads[1], 0.5);
-  await settle();
-  // The eye eases down; give it time to settle.
-  frames(ship.cockpit, clock, ship.shots, 400);
-  near(eyeHeightM(ship.shots.at(-1)), seaEyeM, 'back on the sea', 0.5);
-  // The stalled read landing now changes nothing.
-  answer(reads[0], 27);
-  await settle();
-  frames(ship.cockpit, clock, ship.shots, 60);
-  near(
-    eyeHeightM(ship.shots.at(-1)),
-    seaEyeM,
-    'the given-up read is dropped',
-    0.5,
-  );
 });
 
 test('a client clock minutes fast does not age the bridge into a stale feed', async (t) => {

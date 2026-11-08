@@ -1574,10 +1574,9 @@ the full-detail read replaces it; it repeats every 5 s. Only one full-detail
 read runs at a time: while one is still running, a refresh reads the loaded
 tiles instead, and the slow read applies whenever it lands. Once a
 full-detail read has answered, loaded-tile reads no longer change the height;
-before then they may only raise it. A read that sampled nothing keeps the
-height it had, and a full-detail read still running after 30 s
-(`VESSEL_WATERLINE_READ_TIMEOUT_MS`) is given up for a fresh one. A failed read keeps
-the sea surface.
+before then they may find raised water but never take it back to the sea.
+A read that sampled nothing, or failed, keeps the height it had and is
+tried again on the next refresh.
 
 The HUD keeps its frame, vision styles, briefing, weather and Display/Radio
 utilities. It names the ship, reads `{type} · LIVE AIS · EYE {height}`, shows
