@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseTleText, tleLineLaunchYear } from '../../sources/tle.js';
-import { SATCAT_WAIT_MS, createIngestion } from './ingestion.js';
+import {
+  SATCAT_KEEP_MS,
+  SATCAT_WAIT_MS,
+  createIngestion,
+} from './ingestion.js';
 import { createOrbits } from './orbits.js';
 import { createControls } from './controls.js';
 
@@ -178,7 +182,9 @@ test('a satellite in visual and resource is imaging, whichever group shows it', 
   t.mock.method(console, 'warn', () => {});
   // A name no pattern knows, no UCS record and no SATCAT: only its groups.
   const { state, update } = ingestionFor((path) =>
-    path === 'visual' || path === 'resource' ? tleSet('ZZ TESTSAT', '50001') : '',
+    path === 'visual' || path === 'resource'
+      ? tleSet('ZZ TESTSAT', '50001')
+      : '',
   );
   await update();
   const sat = state._catalog.get(50001);
@@ -246,4 +252,41 @@ test('a failed SATCAT read is told on the layer row, not only the console', asyn
     source: {},
   });
   assert.equal(current.methods.getRowControls().info, '');
+});
+
+test('a current SATCAT read is kept between updates; a failed one is asked again', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  const header =
+    'OBJECT_NAME,OBJECT_ID,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE\n';
+  let reads = 0;
+  let ok = true;
+  const { state, update } = ingestionFor(tleSet('ZZ TESTSAT', '50003'), {
+    source: {
+      readSatcat: async () => {
+        reads++;
+        return ok
+          ? { ok: true, text: `${header}ZZ TESTSAT,2015-001A,50003,PAY,-` }
+          : { ok: false, text: '' };
+      },
+    },
+  });
+  await update();
+  const perUpdate = reads;
+  assert.ok(perUpdate > 0);
+  await update();
+  assert.equal(reads, perUpdate, 'a fresh read is not asked again');
+  assert.equal(
+    state._catalog.get(50003).satelliteClass,
+    'debris',
+    'the held records still class the rebuilt catalog',
+  );
+
+  state._satcatReadAtMs -= SATCAT_KEEP_MS;
+  ok = false;
+  await update();
+  assert.equal(reads, 2 * perUpdate, 'an old read is asked again');
+  assert.equal(state._satcatState, 'unavailable');
+  await update();
+  assert.equal(reads, 3 * perUpdate, 'a failed read is asked again');
 });

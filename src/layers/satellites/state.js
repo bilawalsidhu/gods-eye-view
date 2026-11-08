@@ -48,6 +48,9 @@ export function createState({ services }) {
   // How current the SATCAT records behind the classes are: null before any
   // read, then 'current' | 'stale' | 'unavailable' (see ingestion.js).
   state._satcatState = null;
+  // When _satcatState was last set (Date.now()); a current read is kept
+  // SATCAT_KEEP_MS (src/layers/satellites/ingestion.js).
+  state._satcatReadAtMs = Number.NEGATIVE_INFINITY;
   state._denseStale = false;
 
   state._activeUpdateControllers = new Set();
