@@ -92,11 +92,6 @@ test('radar contacts are within range, nearest first and capped', () => {
     type: '70',
     color: vesselTypeCss('70'),
     stale: false,
-    motionCourse: 45,
-    velocityMps: 10 * 0.514444,
-    fixEpochMs: null,
-    receivedAtMs: null,
-    feedEpochMs: null,
   });
   assert.equal(contacts[1].course, null);
   assert.equal(contacts[1].heading, null);

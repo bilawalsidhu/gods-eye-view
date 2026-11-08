@@ -360,12 +360,8 @@ export function createQueries({
      * @param {number} [maxCount=60] Maximum entries to return.
      * @returns {Array<{ id: string, name: string, latitude: number,
      *   longitude: number, course: number|null, heading: number|null,
-     *   type: string, color: string, stale: boolean,
-     *   motionCourse: number|null, velocityMps: number|null,
-     *   fixEpochMs: number|null, receivedAtMs: number|null,
-     *   feedEpochMs: number|null }>} Empty while the layer is off. The
-     *   motion fields are `vesselCockpitInfo`'s, for dead reckoning; a
-     *   ship with no MMSI has no motion fields and an `unkeyed:` id.
+     *   type: string, color: string, stale: boolean }>} Empty while the
+     *   layer is off. A ship with no MMSI has an `unkeyed:` id.
      */
     getRadarContacts(lat, lon, rangeM, maxCount = 60) {
       const records = state.records.all;
@@ -393,26 +389,18 @@ export function createQueries({
         entries.push({ record, index, distanceM });
       });
       entries.sort((a, b) => a.distanceM - b.distanceM);
-      return entries.slice(0, cap).map(({ record, index }) => {
-        const motion = vesselCockpitInfo(record);
-        return {
-          // A ship with no MMSI still needs a key of its own on the scope.
-          id: record.mmsi ? String(record.mmsi) : `unkeyed:${index}`,
-          name: String(record.name || record.mmsi || ''),
-          latitude: record.lat,
-          longitude: record.lon,
-          course: finite(record.course),
-          heading: finite(record.heading),
-          type: String(record.type || ''),
-          color: vesselTypeCss(record.type),
-          stale: (record.missedRefreshes || 0) > 0,
-          motionCourse: motion?.motionCourse ?? null,
-          velocityMps: motion?.velocityMps ?? null,
-          fixEpochMs: motion?.fixEpochMs ?? null,
-          receivedAtMs: motion?.receivedAtMs ?? null,
-          feedEpochMs: motion?.feedEpochMs ?? null,
-        };
-      });
+      return entries.slice(0, cap).map(({ record, index }) => ({
+        // A ship with no MMSI still needs a key of its own on the scope.
+        id: record.mmsi ? String(record.mmsi) : `unkeyed:${index}`,
+        name: String(record.name || record.mmsi || ''),
+        latitude: record.lat,
+        longitude: record.lon,
+        course: finite(record.course),
+        heading: finite(record.heading),
+        type: String(record.type || ''),
+        color: vesselTypeCss(record.type),
+        stale: (record.missedRefreshes || 0) > 0,
+      }));
     },
 
     /**

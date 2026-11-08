@@ -13,7 +13,6 @@ import ContextView from './views/ContextView.vue';
 import * as Cesium from 'cesium';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { VesselRecords } from '../layers/vessels/records.js';
-import { RADAR_REACH_M } from '../cockpitRadar.js';
 
 const RECORD = Object.freeze({
   mmsi: '211000000',
@@ -328,8 +327,7 @@ test('the bridge radar shows nearby ships without its own and steps its range', 
   assert.ok(neighbour.x < -0.3 && Math.abs(neighbour.y) < 0.02);
   assert.equal(neighbour.relativeCourseDeg, -180);
   assert.equal(radar.ownRelativeCourseDeg, 5, 'COG 095 from heading 090');
-  // Past the range by the dead-reckoning reach, for ships moving into it.
-  assert.equal(vessels.radarQueries.at(-1).rangeM, 3 * 1852 + RADAR_REACH_M);
+  assert.equal(vessels.radarQueries.at(-1).rangeM, 3 * 1852);
 
   assert.equal($('#cockpit-radar').hidden, false);
   assert.equal($('#cockpit-radar-range').textContent.trim(), '3 NM');
@@ -339,7 +337,7 @@ test('the bridge radar shows nearby ships without its own and steps its range', 
   $('#cockpit-radar-range').click();
   await settle();
   assert.equal(store.radar.rangeNm, 6);
-  assert.equal(vessels.radarQueries.at(-1).rangeM, 6 * 1852 + RADAR_REACH_M);
+  assert.equal(vessels.radarQueries.at(-1).rangeM, 6 * 1852);
   assert.equal($('#cockpit-radar-range').textContent.trim(), '6 NM');
   assert.match(
     $('#cockpit-radar-range').getAttribute('aria-label'),

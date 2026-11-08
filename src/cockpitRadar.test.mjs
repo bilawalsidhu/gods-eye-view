@@ -7,7 +7,6 @@ import {
   METRES_PER_NM,
   RADAR_MAX_CONTACTS,
   RADAR_RANGES_NM,
-  deadReckonRadarContacts,
   nextRadarRange,
   projectRadarContacts,
   radarPicture,
@@ -95,25 +94,6 @@ test('course is drawn relative to the bow and stays null when unknown', () => {
   ]);
   assert.equal(crossing.relativeCourseDeg, 90);
   assert.equal(drifting.relativeCourseDeg, null);
-});
-
-test('contacts are dead-reckoned along course over ground to now', () => {
-  const nowMs = 1_800_000_000_000;
-  const fixEpochMs = nowMs - 120_000;
-  // 12 kn due north, fix received a minute ago: ~370 m (0.2 NM) on.
-  const moving = contact('moving', 1, 0, {
-    motionCourse: 0,
-    velocityMps: 12 * 0.514444,
-    fixEpochMs,
-    feedEpochMs: fixEpochMs,
-    receivedAtMs: nowMs - 60_000,
-  });
-  const adrift = contact('adrift', 1, 0, { motionCourse: null });
-  const [ahead, still] = deadReckonRadarContacts([moving, adrift], nowMs);
-  const movedNm = (ahead.latitude - moving.latitude) / NM_LAT;
-  assert.ok(Math.abs(movedNm - 0.2) < 0.005, `moved ${movedNm} NM`);
-  assert.ok(Math.abs(ahead.longitude - moving.longitude) < 1e-9);
-  assert.equal(still, adrift, 'no direction, no move');
 });
 
 test('contacts beyond the range are left out', () => {
