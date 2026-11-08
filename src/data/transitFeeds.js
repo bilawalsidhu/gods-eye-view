@@ -1069,11 +1069,14 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     center: { lat: 44.7, lon: -63.6 },
     loadRadiusKm: 22,
     url: 'https://gtfs.halifax.ca/realtime/Vehicle/VehiclePositions.pb',
-    license: 'Halifax Open Data Licence',
-    licenseUrl: 'https://www.halifax.ca/home/open-data/open-data-licence',
-    attribution: 'Halifax Regional Municipality (Halifax Transit)',
+    license: 'Open Government Licence – Halifax',
+    licenseUrl: 'https://www.halifax.ca/home/open-data/open-data-license',
+    attribution:
+      'Contains information licenced under the Open Government Licence – Halifax',
     terms: {
-      note: 'The catalogue points at Halifax’s open-data licence; the licence page renders only in a browser and was not quoted. Speeds are m/s.',
+      quote:
+        'The information provider grants you a worldwide, royalty-free, perpetual, non-exclusive licence to use the Information, including for commercial purposes, subject to the terms below.',
+      note: 'Version 1.0, modelled on the Open Government Licence – Canada 2.0. The attribution is the licence’s own standard statement, with a link to the licence where possible. Logos and crests are excluded and no endorsement may be implied, so the credit stays plain text. The page refuses automated requests (403); its text was read in a browser on 2026-11-08. Speeds are m/s.',
     },
     defaultMode: 'bus',
   }),
