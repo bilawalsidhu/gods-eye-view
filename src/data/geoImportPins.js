@@ -509,3 +509,33 @@ export function dataSourcePoints(dataSource, time = Cesium.JulianDate.now()) {
   }
   return points;
 }
+
+/**
+ * Draw an imported file's data source on `viewer`: resolves once the viewer
+ * has taken it.
+ * @param {object} viewer
+ * @param {object} dataSource
+ * @returns {Promise<void>}
+ */
+export async function addImportedSource(viewer, dataSource) {
+  await viewer.dataSources.add(dataSource);
+}
+
+/**
+ * Take an imported file's data source off `viewer` and destroy it; nothing
+ * when the viewer has no data sources left.
+ * @param {object} viewer
+ * @param {object} dataSource
+ */
+export function removeImportedSource(viewer, dataSource) {
+  viewer.dataSources?.remove?.(dataSource, true);
+}
+
+/**
+ * Show or hide an imported file's data source (its entities and pins).
+ * @param {object} dataSource
+ * @param {boolean} show
+ */
+export function showImportedSource(dataSource, show) {
+  dataSource.show = show;
+}

@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { initGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 class FakeClassList {
   constructor() {
@@ -59,7 +60,13 @@ class FakeElement {
   }
 }
 
-function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
+function setup({
+  load,
+  navigation,
+  flyToSource,
+  subscribeMapSource,
+  ports,
+} = {}) {
   const els = {
     'geo-import-button': new FakeElement('button', 'geo-import-button'),
   };
@@ -90,6 +97,9 @@ function setup({ load, navigation, flyToSource, subscribeMapSource } = {}) {
     },
     flyTo: (target) => flights.push(target),
   };
+  // The renderer's ports, when the test gives them, bound before the import
+  // starts as the application binds its renderer.
+  if (ports) bindRenderer(viewer, ports);
   const revoked = [];
   const loads = [];
   const defaultLoad = async (file, opts) => {
@@ -469,6 +479,60 @@ test('ground refresh coalesces map changes and releases its subscription on tear
   await new Promise((resolve) => setTimeout(resolve, 250));
   assert.equal(refreshed, 1);
   assert.equal(unsubscribed, 1);
+});
+
+test('the camera settling and the terrain queue running dry refresh the ground, through the ports', async () => {
+  const listeners = { moveEnd: new Set(), progress: new Set() };
+  const on = (name) => (event, cb) => {
+    assert.equal(event, name);
+    listeners[name].add(cb);
+    return () => listeners[name].delete(cb);
+  };
+  const reasons = [];
+  let refreshed = 0;
+  const t = setup({
+    ports: {
+      camera: { on: on('moveEnd') },
+      globe: { on: on('progress') },
+      frame: { requestRender: (reason) => reasons.push(reason) },
+    },
+    load: async () => ({
+      name: 'point.geojson',
+      format: 'geojson',
+      entityCount: 1,
+      dataSource: {},
+      refreshGround: async () => refreshed++,
+    }),
+  });
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
+  const progress = (terrainPending) => {
+    for (const cb of [...listeners.progress])
+      cb({ tilesPending: 0, imageryPending: 0, terrainPending });
+  };
+  await t.tool.importFiles([file('point.geojson')]);
+  assert.ok(reasons.length > 0 && reasons.every((r) => r === 'geo-import'));
+  for (const cb of [...listeners.moveEnd]) cb();
+  await settle();
+  assert.equal(refreshed, 1, 'the camera settling refreshes once');
+  // The first report of an empty terrain queue counts, then only the queue
+  // running dry again, once each time it does; progress that leaves the
+  // terrain count where it was (imagery only) does not.
+  progress(0);
+  await settle();
+  assert.equal(refreshed, 2);
+  progress(0);
+  await settle();
+  assert.equal(refreshed, 2);
+  progress(3);
+  progress(1);
+  await settle();
+  assert.equal(refreshed, 2);
+  progress(0);
+  await settle();
+  assert.equal(refreshed, 3);
+  t.tool.destroy();
+  assert.equal(listeners.moveEnd.size, 0);
+  assert.equal(listeners.progress.size, 0);
 });
 
 test('Fly to is an immediate navigation that Cockpit can refuse', async () => {

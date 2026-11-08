@@ -3,7 +3,7 @@ import {
   hasStructuredViewIdentity,
 } from './realtimeProtocol.js';
 import { cameraPoseKey } from './pointerContext.js';
-import { canvasOf } from '../render/rendererOf.js';
+import { canvasOf, findFrame } from '../render/rendererOf.js';
 
 /** The live viewer's camera pose identity (Cesium-free read). */
 function readViewerCameraKey() {
@@ -230,8 +230,8 @@ export function estimateDataUrlBytes(dataUrl) {
  *   canvas as current. (perf wave 2)
  */
 export async function renderFreshCesiumFrame(viewer) {
-  const scene = viewer?.scene;
-  if (!scene) return false;
+  const frame = findFrame(viewer);
+  if (!frame) return false;
   // While the document is hidden the render loop is suspended — don't
   // secretly restart rendering for an optional screenshot, and don't pass
   // the stale preserved frame off as current.
@@ -241,7 +241,7 @@ export async function renderFreshCesiumFrame(viewer) {
     // necessarily draw — request a frame and await its postRender (bounded),
     // which also covers the just-became-visible race.
     const rendered = new Promise((resolve) => {
-      const remove = scene.postRender.addEventListener(() => {
+      const remove = frame.on('postRender', () => {
         remove();
         resolve(true);
       });
@@ -250,7 +250,7 @@ export async function renderFreshCesiumFrame(viewer) {
         resolve(false);
       }, 400);
     });
-    scene.requestRender?.();
+    frame.requestRender('voice-capture');
     const fresh = await rendered;
     // A tab switch during the bounded wait invalidates freshness.
     if (typeof document !== 'undefined' && document.hidden) return false;

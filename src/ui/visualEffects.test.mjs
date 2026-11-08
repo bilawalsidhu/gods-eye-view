@@ -3,6 +3,7 @@ import test from 'node:test';
 import { VisualEffects } from './visualEffects.js';
 import { createCesiumEffects } from '../render/cesium/effects.js';
 import { styleStagesOf } from '../styles/styleStages.js';
+import { createCesiumGlobe } from '../render/cesium/globe.js';
 import { MILKY_WAY_INTENSITY, StarrySky } from '../sky/starrySky.js';
 import {
   GLOBAL_POST_DEFAULTS,
@@ -63,9 +64,16 @@ function fixture() {
     },
     createStage: (options) => ({ ...options, enabled: true }),
   });
+  // The sky the anime style dims is the globe port's, over the scene.
+  const viewer = { scene };
+  const globe = createCesiumGlobe(viewer, {
+    capabilities: new Set(),
+    requestRender() {},
+  }).port;
   const effects = new VisualEffects({
     effects: renderer.port,
-    viewer: { scene },
+    viewer,
+    sky: () => globe.sky,
     requestRender: (reason) => requests.push(reason),
     holdRender: (reason) => holds.add(reason),
     releaseRender: (reason) => holds.delete(reason),

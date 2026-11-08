@@ -5,7 +5,12 @@ import { useDisplayStore } from './stores/display.js';
 import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
-import { findEffects, releaseUnboundEffects } from '../render/rendererOf.js';
+import {
+  findEffects,
+  findFrame,
+  findGlobe,
+  releaseUnboundEffects,
+} from '../render/rendererOf.js';
 import {
   VisualEffects,
   STYLES,
@@ -198,6 +203,7 @@ export class VisualSettings {
     this._visualEffects = new VisualEffects({
       effects: findEffects(viewer),
       viewer,
+      sky: () => findGlobe(viewer)?.sky,
       requestRender: services.governorRequestRender,
       holdRender: services.holdContinuousRender,
       releaseRender: services.releaseContinuousRender,
@@ -424,17 +430,17 @@ export class VisualSettings {
     // (owner cockpit-FLIR field rounds, 2026-08-16). IR sensors see through
     // haze, so the boost styles simply turn fog off; the prior state restores
     // on exit. Transition-guarded so repeated syncs don't clobber the saved value.
-    const scene = this.viewer?.scene;
-    if (scene?.fog && irBoost !== this._irBoostActive) {
+    // The globe's sky draws the fog; setting it asks for a frame.
+    const sky = findGlobe(this.viewer)?.sky;
+    if (sky && irBoost !== this._irBoostActive) {
       this._irBoostActive = irBoost;
       if (irBoost) {
-        this._irFogWasEnabled = scene.fog.enabled;
-        scene.fog.enabled = false;
+        this._irFogWasEnabled = sky.get().fog;
+        sky.set({ fog: false });
       } else if (this._irFogWasEnabled != null) {
-        scene.fog.enabled = this._irFogWasEnabled;
+        sky.set({ fog: this._irFogWasEnabled });
         this._irFogWasEnabled = null;
       }
-      scene.requestRender?.();
     }
   }
 
@@ -623,7 +629,7 @@ export class VisualSettings {
       fadeRatio: this._detectionFadePct / 100,
       outsideOpacity: this._detectionOutsidePct / 100,
     });
-    this.viewer.scene.requestRender?.();
+    findFrame(this.viewer)?.requestRender('detection-tuning');
   }
 
   _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
@@ -1610,8 +1616,9 @@ export class VisualSettings {
   }
   releaseIrBoost() {
     if (!this._irBoostActive) return;
-    if (this._irFogWasEnabled != null && this.viewer?.scene?.fog)
-      this.viewer.scene.fog.enabled = this._irFogWasEnabled;
+    const sky = findGlobe(this.viewer)?.sky;
+    if (this._irFogWasEnabled != null && sky)
+      sky.set({ fog: this._irFogWasEnabled });
     this._dataManager?.setLayerParams('flights', { irBoost: false });
     this._dataManager?.setLayerParams('military', { irBoost: false });
     this._irBoostActive = false;

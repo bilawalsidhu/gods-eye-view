@@ -4,7 +4,16 @@ import * as Cesium from 'cesium';
 // factory its other parts reach the renderer through.
 import '../../render/cesium/camera.js';
 import { t } from '../../i18n/index.js';
-import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
+import {
+  CAMERA_CHANGED_THRESHOLD,
+  LAYER_ID,
+  MAX_RENDERED,
+  COLOR_BY_CLASS,
+} from './policy.js';
+import {
+  claimCameraSensitivity,
+  releaseCameraSensitivity,
+} from '../../data/cameraSensitivity.js';
 import { entityRecord } from '../../data/entityRecords.js';
 import { installationMarkers } from './markerState.js';
 
@@ -382,9 +391,26 @@ export function createRendering({
       renderRecords();
     });
   }
+  /**
+   * While the layer is on, the Cesium camera reports changes at the layer's
+   * threshold to its own `changed` listeners too (the camera port measures
+   * each listener's threshold itself).
+   */
+  function claimCameraChanges() {
+    claimCameraSensitivity(
+      layerState.viewer.camera,
+      LAYER_ID,
+      CAMERA_CHANGED_THRESHOLD,
+    );
+  }
+  function releaseCameraChanges() {
+    releaseCameraSensitivity(layerState.viewer?.camera, LAYER_ID);
+  }
   return {
     attach,
     detach,
+    claimCameraChanges,
+    releaseCameraChanges,
     installationSurfaceHeightM,
     clearSelectionFill,
     syncSelectionFill,

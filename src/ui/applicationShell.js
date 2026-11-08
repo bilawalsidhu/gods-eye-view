@@ -37,6 +37,7 @@ import { cameraOf, findCamera } from '../render/cesium/camera.js';
 // and asking the viewer's entities whether Cockpit's aircraft still draws,
 // keep this module on the Cesium allow-list.
 import '../render/cesium/effects.js';
+import '../render/cesium/globe.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 

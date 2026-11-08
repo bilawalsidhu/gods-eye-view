@@ -1,9 +1,5 @@
 import { cameraOf } from '../../render/rendererOf.js';
 import { CAMERA_CHANGED_THRESHOLD, LAYER_ID } from './policy.js';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
 
 export function createLifecycle({
   state: layerState,
@@ -52,11 +48,7 @@ export function createLifecycle({
         });
       parts.namedMarkers?.enable();
       parts.namedMarkers?.sync(layerState.records || []);
-      claimCameraSensitivity(
-        layerState.viewer.camera,
-        LAYER_ID,
-        CAMERA_CHANGED_THRESHOLD,
-      );
+      parts.rendering.claimCameraChanges?.();
       registerPickOwner(LAYER_ID, (id) => layerState.recordById.has(id));
       layerState.dataSource.show = true;
       // DataLayerManager invokes update() immediately after enable(), which owns
@@ -67,7 +59,7 @@ export function createLifecycle({
       layerState.enabled = false;
       services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
       parts.namedMarkers?.hide();
-      releaseCameraSensitivity(layerState.viewer?.camera, LAYER_ID);
+      parts.rendering.releaseCameraChanges?.();
       layerState.contextAnchor = null;
       layerState.contextPosition = null;
       layerState.coverage = { kind: 'viewport' };

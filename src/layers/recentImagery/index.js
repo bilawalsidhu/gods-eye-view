@@ -20,7 +20,7 @@ import {
   PRODUCTS,
   boxCentre,
   boxFromPin,
-  boxFromRectangle,
+  boxFromDegrees,
   boxSideKm,
   dequantizeBox,
   fitViewHeightM,
@@ -33,8 +33,14 @@ import {
   viewTooLargeMessage,
 } from './model.js';
 import { msg, t } from '../../i18n/index.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
-import { findCamera, findGlobe } from '../../render/rendererOf.js';
+import {
+  canvasOf,
+  findCamera,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -67,10 +73,6 @@ const clampUnit = (value, fallback) => {
 const boxSignature = (box) =>
   box ? BOX_EDGES.map((edge) => Number(box[edge]).toFixed(6)).join(',') : '';
 const sourceOf = (product) => PRODUCTS[product]?.source || null;
-const toDegrees = (radians) => (radians * 180) / Math.PI;
-const toRadians = (degrees) => (degrees * Math.PI) / 180;
-const ellipsoidOf = (viewer) =>
-  viewer?.scene?.ellipsoid || viewer?.scene?.globe?.ellipsoid || null;
 
 /**
  * The ground under the canvas centre, in degrees; null when the centre is
@@ -79,20 +81,14 @@ const ellipsoidOf = (viewer) =>
  * @returns {{ lon: number, lat: number } | null}
  */
 function viewCentre(viewer) {
-  const ellipsoid = ellipsoidOf(viewer);
-  const canvas = viewer?.scene?.canvas;
+  const query = findQuery(viewer);
+  const canvas = canvasOf(viewer);
   const width = Number(canvas?.clientWidth);
   const height = Number(canvas?.clientHeight);
-  if (!ellipsoid?.cartesianToCartographic || !(width > 0) || !(height > 0))
-    return null;
-  const hit = viewer.camera?.pickEllipsoid?.(
-    { x: width / 2, y: height / 2 },
-    ellipsoid,
-  );
-  const ground = hit ? ellipsoid.cartesianToCartographic(hit) : null;
-  return ground
-    ? { lon: toDegrees(ground.longitude), lat: toDegrees(ground.latitude) }
-    : null;
+  if (!query || !(width > 0) || !(height > 0)) return null;
+  const hit = query.pickEllipsoid(width / 2, height / 2);
+  const ground = hit ? toLonLatH(hit) : null;
+  return ground ? { lon: ground.lon, lat: ground.lat } : null;
 }
 const modeFrom = (value) =>
   MODES.includes(value)
@@ -963,10 +959,10 @@ export function createRecentImageryLayer({
      * @returns {boolean}
      */
     useCurrentView(viewer = _viewer) {
-      const rectangle = viewer?.camera?.computeViewRectangle?.();
+      const rectangle = findCamera(viewer)?.viewRectangle();
       if (!rectangle)
         return refuseBox('Point the camera at the ground to use the view');
-      const box = boxFromRectangle(rectangle);
+      const box = boxFromDegrees(rectangle);
       if (validateBox(box).reason === 'too-large') {
         const { width, height } = boxSideKm(box);
         return refuseBox(
@@ -985,29 +981,20 @@ export function createRecentImageryLayer({
      */
     zoomToFit() {
       const target = _boxError ? _refusalTarget : null;
-      const camera = _viewer?.camera;
-      const ellipsoid = ellipsoidOf(_viewer);
       // No camera port: a viewer of the caller's own whose renderer did not
       // bring the camera factory (GEV's own imagery renderer does).
       const port = findCamera(_viewer);
-      if (!target || !port || !ellipsoid?.cartographicToCartesian) return null;
-      const canvas = _viewer.scene?.canvas;
+      if (!target || !port) return null;
+      const canvas = canvasOf(_viewer);
       const height = fitViewHeightM({
         width: canvas?.clientWidth,
         height: canvas?.clientHeight,
-        fovy: camera?.frustum?.fovy,
+        fovy: port.pose().fovy,
       });
-      port.flyTo(
-        ellipsoid.cartographicToCartesian({
-          longitude: toRadians(target.lon),
-          latitude: toRadians(target.lat),
-          height,
-        }),
-        {
-          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-          durationS: ZOOM_FIT_SECONDS,
-        },
-      );
+      port.flyTo(fromDegrees(target.lon, target.lat, height), {
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        durationS: ZOOM_FIT_SECONDS,
+      });
       return height;
     },
 

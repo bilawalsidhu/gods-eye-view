@@ -40,13 +40,15 @@ export function styleDefinition(name, shader) {
 export class VisualEffects {
   /**
    * @param {object} options - The renderer's effects port (null: records
-   *   only), the viewer whose sky the anime style dims, render ownership
+   *   only), the viewer, a getter for the globe's sky port the anime
+   *   style dims (null: the sky is left alone), render ownership
    *   callbacks and optional clocks. Construction is inert;
    *   initStyles/initPostProcess retain startup ordering.
    */
   constructor({
     effects = null,
     viewer,
+    sky = null,
     requestRender,
     holdRender,
     releaseRender,
@@ -56,6 +58,7 @@ export class VisualEffects {
   }) {
     this.effects = effects;
     this.viewer = viewer;
+    this.sky = sky;
     this.requestRender = requestRender;
     this.holdRender = holdRender;
     this.releaseRender = releaseRender;
@@ -164,11 +167,7 @@ export class VisualEffects {
     stage.enabled = value > OFF;
     // Anime's bands turn the faint Milky Way into blotches, and depth cannot
     // tell the sky from far geometry, so the glow fades with the style.
-    if (
-      stage === this.stages.anime &&
-      this.viewer?.scene?.skyBox?.milkyWayVisibility !== undefined
-    )
-      this.viewer.scene.skyBox.milkyWayVisibility = 1 - value;
+    if (stage === this.stages.anime) this.sky?.()?.set({ milkyWay: 1 - value });
     this.requestRender('style-stage');
   }
 

@@ -27,7 +27,7 @@ import {
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
 import { pointerOwnerName } from '../data/pointerOwnerNames.js';
-import { canvasOf, findGlobe } from '../render/rendererOf.js';
+import { canvasOf, findFrame, findGlobe } from '../render/rendererOf.js';
 
 const PANEL_ID = 'recent-imagery-panel';
 const OVERVIEW_MIN_BOX_KM = 25;
@@ -206,7 +206,7 @@ export function createRecentImageryPanel({
   fetchImpl = globalThis.fetch?.bind(globalThis),
   createObjectUrl = (blob) => URL.createObjectURL(blob),
   revokeObjectUrl = (url) => URL.revokeObjectURL(url),
-  requestRender = () => viewer?.scene?.requestRender?.(),
+  requestRender = () => findFrame(viewer)?.requestRender('recent-imagery'),
 } = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement || !layer) return null;

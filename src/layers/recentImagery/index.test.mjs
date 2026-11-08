@@ -27,6 +27,7 @@ import {
   settle,
 } from './testDoubles.mjs';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 
 const NOW = new Date('2026-09-21T15:00:00Z');
 const LINK_BOX = {
@@ -116,6 +117,7 @@ function fixture({
   controller = fakeController(),
   viirs = true,
   globeOf,
+  ports = () => ({}),
 } = {}) {
   const renderer = fakeRenderer();
   const thumbnails = fakeThumbnails();
@@ -138,7 +140,7 @@ function fixture({
   });
   if (viirs) layer.setSources({ viirs: true });
   const viewer = { camera: {} };
-  bindFakeCesiumCamera(viewer);
+  bindFakeCesiumCamera(viewer, ports(viewer));
   const reasons = [];
   layer.subscribe((snapshot, reason) => reasons.push(reason));
   layer.init(viewer);
@@ -996,7 +998,8 @@ test('USE VIEW takes the camera rectangle and refuses a view over the cap instea
 });
 
 test('ZOOM IN: an oversized box or view flies top-down to its centre at the height whose view is 400 km wide', () => {
-  const f = fixture();
+  // The renderer's query port picks the ellipsoid through the camera's own.
+  const f = fixture({ ports: (viewer) => ({ query: fakeSceneQuery(viewer) }) });
   const flights = [];
   const landing = (i) =>
     Cesium.Ellipsoid.WGS84.cartesianToCartographic(flights[i].destination);
@@ -1007,21 +1010,25 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   const expected = 400_000 / (2 * Math.tan(Math.PI / 6));
   let centreHit = null;
   Object.assign(f.viewer, {
-    scene: {
-      canvas: { clientWidth: 1000, clientHeight: 500 },
-      ellipsoid: {
-        cartographicToCartesian: (c) =>
-          Cesium.Ellipsoid.WGS84.cartographicToCartesian(c),
-        cartesianToCartographic: (c) => c && { ...c },
-      },
-    },
+    canvas: { clientWidth: 1000, clientHeight: 500 },
   });
   Object.assign(f.viewer.camera, {
     frustum: { fovy },
     flyTo: (options) => flights.push(options),
     pickEllipsoid: (position) => {
-      assert.deepEqual(position, { x: 500, y: 250 }, 'the canvas centre');
-      return centreHit;
+      assert.deepEqual(
+        [position.x, position.y],
+        [500, 250],
+        'the canvas centre',
+      );
+      return (
+        centreHit &&
+        Cesium.Cartesian3.fromRadians(
+          centreHit.longitude,
+          centreHit.latitude,
+          centreHit.height,
+        )
+      );
     },
   });
   f.layer.enable();

@@ -4,9 +4,20 @@ import {
   MAX_IMPORTED_FILES,
   loadGeoFile,
 } from '../data/geoFileImport.js';
-import { dataSourcePoints } from '../data/geoImportPins.js';
+import {
+  addImportedSource,
+  dataSourcePoints,
+  removeImportedSource,
+  showImportedSource,
+} from '../data/geoImportPins.js';
 import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
 import { flyToFootprint } from './flyToDataSource.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findGlobe,
+} from '../render/rendererOf.js';
 
 /** Fly to the whole footprint of one imported file's data source. */
 const flyToDataSource = (viewer, dataSource, options) =>
@@ -73,7 +84,7 @@ export function initGeoFileImport({
     hint = text || '';
     present();
   };
-  const render = () => viewer.scene?.requestRender?.();
+  const render = () => findFrame(viewer)?.requestRender('geo-import');
   let groundTimer,
     groundQueued = false,
     groundAgain = false;
@@ -114,14 +125,20 @@ export function initGeoFileImport({
     }, 200);
   };
   removeMapSource = subscribeMapSource?.(scheduleGround);
-  const ownEvent = (event, listener) => {
-    const remove = event?.addEventListener?.(listener);
-    if (remove) groundRemovers.push(remove);
-  };
-  ownEvent(viewer.camera?.moveEnd, scheduleGround);
-  ownEvent(viewer.scene?.globe?.tileLoadProgressEvent, (pending) => {
-    if (!pending) scheduleGround();
-  });
+  const camera = findCamera(viewer);
+  if (camera) groundRemovers.push(camera.on('moveEnd', scheduleGround));
+  // Terrain tiles finishing loading: the queue running dry, once each time.
+  let terrainPending = null;
+  const globe = findGlobe(viewer);
+  if (globe)
+    groundRemovers.push(
+      globe.on('progress', (progress) => {
+        const pending = progress.terrainPending;
+        if (pending === terrainPending) return;
+        terrainPending = pending;
+        if (!pending) scheduleGround();
+      }),
+    );
 
   /** Publish the file list and hint; the view renders them. */
   function present() {
@@ -171,7 +188,7 @@ export function initGeoFileImport({
     const item = find(id);
     if (!item) return false;
     item.visible = Boolean(visible);
-    item.dataSource.show = item.visible;
+    showImportedSource(item.dataSource, item.visible);
     if (item.visible) scheduleGround();
     present();
     render();
@@ -219,7 +236,7 @@ export function initGeoFileImport({
     const at = imports.findIndex((item) => item.id === id);
     if (at < 0) return false;
     const [item] = imports.splice(at, 1);
-    viewer.dataSources?.remove?.(item.dataSource, true);
+    removeImportedSource(viewer, item.dataSource);
     item.revoke?.();
     present();
     render();
@@ -298,9 +315,9 @@ export function initGeoFileImport({
         revoke: loaded.revoke,
         refreshGround: loaded.refreshGround,
       };
-      await viewer.dataSources.add(item.dataSource);
+      await addImportedSource(viewer, item.dataSource);
       if (destroyed) {
-        viewer.dataSources.remove?.(item.dataSource, true);
+        removeImportedSource(viewer, item.dataSource);
         item.revoke?.();
         break;
       }
@@ -341,10 +358,10 @@ export function initGeoFileImport({
   const gesture = () => {
     cameraIntent += 1;
   };
-  listen(viewer.scene?.canvas || container, 'pointerdown', gesture, {
+  listen(canvasOf(viewer) || container, 'pointerdown', gesture, {
     passive: true,
   });
-  listen(viewer.scene?.canvas || container, 'wheel', gesture, {
+  listen(canvasOf(viewer) || container, 'wheel', gesture, {
     passive: true,
   });
   const hasFiles = (event) =>
@@ -407,7 +424,7 @@ export function initGeoFileImport({
       clearTimeout(groundTimer);
       for (const remove of groundRemovers) remove();
       for (const item of imports.splice(0)) {
-        viewer.dataSources?.remove?.(item.dataSource, true);
+        removeImportedSource(viewer, item.dataSource);
         item.revoke?.();
       }
       for (const [target, type, listener, options] of listeners.splice(0))
