@@ -5632,6 +5632,13 @@ and unreachable upstream (502/504) separately from road geometry.
   explicit-empty form); unknown option tokens are ignored. Restoration
   settles independently per layer so one failed or unavailable source cannot
   block its siblings.
+- An application that registers fewer layers (an embedder with a smaller
+  catalog) keeps only its own: `LayerStateCoordinator` drops enabled-layer ids
+  the application did not register before it normalizes a share, saved state or
+  explicit change, so such a layer is never restored, written to local storage
+  or carried into a link this application shares. Options that depend on a
+  dropped layer (a tracked selection) go with it. An application with every
+  layer registered is unchanged.
 - Layer tokens are permanent public compatibility identifiers. The reservation
   JSON ledger at `src/data/layerStateTokenReservations.json` pins all existing
   one-character assignments (all letters plus `0`, `1` and
