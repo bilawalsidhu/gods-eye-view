@@ -10,6 +10,13 @@ import { hexColor } from '../../render/color.js';
 
 export const ACTIVATION_ALTITUDE = 8000;
 
+/**
+ * How far the view moves before the camera tells the layer (the camera's
+ * `changed` threshold): fine, so it notices entering a coverage area.
+ */
+
+export const CAMERA_CHANGED_THRESHOLD = 0.05;
+
 /** @const {number} Meters — above this altitude, only major roads are fetched */
 
 export const FAST_FETCH_ALTITUDE = 4500;

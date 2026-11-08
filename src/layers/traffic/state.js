@@ -41,11 +41,11 @@ export function createState({ services }) {
 
   layerState._enabled = false;
 
-  /** @type {Function|null} Disposer returned by preRender event subscription */
+  /** @type {Function|null} Disposer of the frame port's preRender listener */
 
   layerState._preRenderRemover = null;
 
-  /** @type {Function|null} Disposer returned by camera.changed event subscription */
+  /** @type {Function|null} Disposers of the camera port's changed and moveEnd listeners */
 
   layerState._cameraRemover = null;
   layerState._arrivalRemover = null;
@@ -89,10 +89,6 @@ export function createState({ services }) {
   /** @type {{lat:number,lon:number}|null} Center of last-fetched viewport for shift gating */
 
   layerState._lastViewCenter = null;
-
-  /** @type {number|null} camera.percentageChanged value before we overrode it, restored on disable */
-
-  layerState._prevPercentageChanged = null;
 
   /** @type {boolean} Live TomTom flow mode — true iff /api/tomtom/status reports a key */
 

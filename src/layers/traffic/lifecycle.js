@@ -1,15 +1,6 @@
 import { observeTrafficSurface } from './surface.js';
-// Still Cesium for its events, so this layer loads the unbound
-// camera factory (with its query port) and globe factory its other parts
-// reach the renderer through.
-import '../../render/cesium/camera.js';
-import '../../render/cesium/globe.js';
-import { TRAFFIC_TIMING_ENABLED } from './policy.js';
-import { drawOf } from '../../render/rendererOf.js';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
+import { CAMERA_CHANGED_THRESHOLD, TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { cameraOf, drawOf, frameOf } from '../../render/rendererOf.js';
 
 /** Numbers each layer instance's draw sets apart. */
 let instances = 0;
@@ -89,9 +80,9 @@ export function createLifecycle({
     },
 
     /**
-     * Enable the traffic layer. Shows the point collection, subscribes to the
-     * preRender animation loop and camera-change events, and kicks off an
-     * initial viewport check.
+     * Enable the traffic layer. Shows the dots, subscribes to the frame
+     * port's preRender for the animation and to the camera port's events,
+     * and kicks off an initial viewport check.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
@@ -104,27 +95,33 @@ export function createLifecycle({
       layerState._lastAnimTime = 0;
       if (layerState._dotSet) layerState._dotSet.show = true;
 
-      layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
+      const camera = cameraOf(viewer);
+      layerState._preRenderRemover = frameOf(viewer).on(
+        'preRender',
         parts.animation.animate,
       );
       if (TRAFFIC_TIMING_ENABLED) {
         parts.timing.clearTrafficTimingEntries();
         layerState._trafficTimingCurrentAnchor = null;
         layerState._trafficTimingPostRenderRemovers = new Set();
-        layerState._trafficTimingMoveEndRemover =
-          viewer.camera.moveEnd.addEventListener(
-            parts.timing.markTrafficTimingMoveEnd,
-          );
+        layerState._trafficTimingMoveEndRemover = camera.on(
+          'moveEnd',
+          parts.timing.markTrafficTimingMoveEnd,
+        );
       }
 
-      // Share the 5% movement threshold with other camera-driven layers.
-      viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
+      // Its own 5% movement threshold: the camera measures it for this
+      // listener alone.
+      layerState._cameraRemover = camera.on(
+        'changed',
+        () => parts.viewport.onCameraChanged(),
+        { threshold: CAMERA_CHANGED_THRESHOLD },
+      );
       // Always inspect the final view, even when the last flight step is below
-      // camera.changed's movement threshold.
-      layerState._arrivalRemover = viewer.camera.moveEnd.addEventListener(() =>
+      // the changed threshold.
+      layerState._arrivalRemover = camera.on('moveEnd', () =>
         parts.viewport.onCameraChanged({ immediate: true }),
       );
-      claimCameraSensitivity(viewer.camera, 'traffic', 0.05);
 
       // Enabling is explicit intent, not a camera gesture that needs settling.
       parts.viewport.onCameraChanged({ immediate: true });
@@ -197,10 +194,10 @@ export function createLifecycle({
         layerState._trafficTimingCurrentAnchor = null;
       }
 
-      viewer.camera.changed.removeEventListener(parts.viewport.onCameraChanged);
+      layerState._cameraRemover?.();
+      layerState._cameraRemover = null;
       layerState._arrivalRemover?.();
       layerState._arrivalRemover = null;
-      releaseCameraSensitivity(viewer.camera, 'traffic');
       if (layerState._dotSet) layerState._dotSet.show = false;
     },
 

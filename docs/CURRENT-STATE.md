@@ -1041,7 +1041,7 @@ The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.
 
-Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames.
+Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger; only the surface identity, tile readiness and draped-line support are still read off the Cesium scene.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and
 `./layers/bikeshare`. Traffic separates road requests, ingestion, animation,
@@ -6277,8 +6277,9 @@ on it.
   Every failed read cancels its body and aborts its owned request, including
   declared and streaming byte-cap failures.
 - Development captures opened with `?trafficDebug=1` mint an interaction anchor
-  from the exact `camera.changed` event that arms each debounced load, then emit
-  scheduling-correlated User Timing entries for production `response.json`, road
+  from the exact camera-port `changed` event that arms each debounced load,
+  then emit scheduling-correlated User Timing entries for production
+  `response.json`, road
   parse, dot construction, heat-line rebuild, and next-post-render
   boundaries. Every trace is paired with the exact camera-change that scheduled
   its load; mismatches are counted drops. Cesium's `moveEnd` remains a diagnostic

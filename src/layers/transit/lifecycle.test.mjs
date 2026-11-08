@@ -3617,7 +3617,7 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
   assert.equal(entry.track.resets, 0);
 });
 
-test('actual Traffic and Transit lifecycles retain sensitivity in every enable/disable order, Bikeshare among them', async (t) => {
+test('the actual Transit lifecycle retains its sensitivity in every enable/disable order, Traffic and Bikeshare among them', async (t) => {
   const { createLifecycle: trafficLifecycle } =
     await import('../traffic/lifecycle.js');
   const { createLifecycle: bikeLifecycle } =
@@ -3670,15 +3670,33 @@ test('actual Traffic and Transit lifecycles retain sensitivity in every enable/d
   const bikeViewer = {};
   const unbindBike = bindRenderer(bikeViewer, { camera: bikeCamera.port });
   t.after(unbindBike);
+  // So does traffic, which animates on its renderer's frame port.
+  const trafficCamera = fakeCameraPort();
+  const trafficViewer = {};
+  const trafficFrames = new Set();
+  const unbindTraffic = bindRenderer(trafficViewer, {
+    camera: trafficCamera.port,
+    frame: {
+      on(_phase, cb) {
+        trafficFrames.add(cb);
+        return () => trafficFrames.delete(cb);
+      },
+      requestRender: noop,
+    },
+  });
+  t.after(unbindTraffic);
   const layers = {
-    traffic,
+    traffic: {
+      enable: () => traffic.enable(trafficViewer),
+      disable: () => traffic.disable(trafficViewer),
+    },
     bikeshare: {
       enable: () => bike.enable(bikeViewer),
       disable: () => bike.disable(bikeViewer),
     },
     transit: app.layer,
   };
-  const claimants = new Set(['traffic', 'transit']);
+  const claimants = new Set(['transit']);
   const orders = [
     ['traffic', 'bikeshare', 'transit'],
     ['traffic', 'transit', 'bikeshare'],
@@ -3696,6 +3714,10 @@ test('actual Traffic and Transit lifecycles retain sensitivity in every enable/d
           if (claimants.has(id)) active.add(id);
           if (id === 'bikeshare')
             assert.equal(bikeCamera.listenerCount('changed'), 1);
+          if (id === 'traffic') {
+            assert.equal(trafficCamera.listenerCount('changed'), 1);
+            assert.equal(trafficFrames.size, 1);
+          }
           assert.equal(
             app.viewer.camera.percentageChanged,
             active.size ? 0.05 : 0.5,
@@ -3719,6 +3741,9 @@ test('actual Traffic and Transit lifecycles retain sensitivity in every enable/d
           );
         }
         assert.equal(bikeCamera.listenerCount('changed'), 0);
+        assert.equal(trafficCamera.listenerCount('changed'), 0);
+        assert.equal(trafficCamera.listenerCount('moveEnd'), 0);
+        assert.equal(trafficFrames.size, 0);
       }
   } finally {
     for (const layer of Object.values(layers)) layer.disable(app.viewer);

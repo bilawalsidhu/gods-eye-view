@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createTrafficLayer } from './index.js';
 import { findCamera } from '../../render/rendererOf.js';
-import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import {
+  bindFakeCesiumCamera,
+  fakeCameraPort,
+} from '../../testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { createLifecycle } from './lifecycle.js';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { sceneSurfacePorts } from '../../testSupport/fakeSceneSurface.mjs';
 
@@ -223,6 +228,75 @@ test('arrival below the camera change threshold loads the final city and unsubsc
   layer.disable(viewer);
   assert.equal(viewer.camera.moveEnd.numberOfListeners, ported.moveEnd);
   assert.equal(viewer.camera.changed.numberOfListeners, ported.changed);
+});
+
+test('the layer animates on the frame port and leaves the shared camera threshold alone', async (t) => {
+  const frames = [];
+  const frame = {
+    on(phase, cb) {
+      const entry = { phase, cb };
+      frames.push(entry);
+      return () => frames.splice(frames.indexOf(entry), 1);
+    },
+    requestRender() {},
+  };
+  const { layer, viewer, tick } = setup(
+    t,
+    async (bounds) => roads(bounds),
+    undefined,
+    { frame },
+  );
+  layer.enable(viewer);
+  assert.deepEqual(
+    frames.map((f) => f.phase),
+    ['preRender'],
+  );
+  assert.equal(
+    viewer.camera.percentageChanged,
+    0.5,
+    'the shared threshold is left alone',
+  );
+  await tick(400);
+  layer.disable(viewer);
+  assert.equal(frames.length, 0);
+});
+
+test('the camera tells the layer once the view has moved 5%', (t) => {
+  const noop = () => {};
+  const calls = [];
+  const lifecycle = createLifecycle({
+    state: { _loadGeneration: 0 },
+    services: {},
+    source: {},
+    parts: {
+      animation: { animate: noop, clearDots: noop, syncRenderDemand: noop },
+      viewport: { onCameraChanged: (options) => calls.push(options) },
+      ingestion: { cancelActiveFetch: noop },
+    },
+  }).methods;
+  const camera = fakeCameraPort({ pose: { height: 1000 } });
+  const viewer = {};
+  t.after(
+    bindRenderer(viewer, {
+      camera: camera.port,
+      frame: { on: () => noop, requestRender: noop },
+    }),
+  );
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  lifecycle.enable(viewer);
+  calls.length = 0;
+  camera.stepChanged();
+  camera.setPose({ position: { x: 30, y: 0, z: 0 } });
+  camera.stepChanged();
+  assert.equal(calls.length, 0, '3% is not enough');
+  camera.setPose({ position: { x: 70, y: 0, z: 0 } });
+  camera.stepChanged();
+  assert.deepEqual(calls, [undefined], '7% is, debounced as a camera move');
+  camera.emit('moveEnd');
+  assert.deepEqual(calls[1], { immediate: true }, 'arrival is immediate');
+  lifecycle.disable(viewer);
+  assert.equal(camera.listenerCount('changed'), 0);
+  assert.equal(camera.listenerCount('moveEnd'), 0);
 });
 
 test('parked failures back off and disabling cancels the scheduled retry', async (t) => {
@@ -466,8 +540,10 @@ test('partial coverage retries while coarse roads render, then stops after three
 
 test('an unready surface waits for drawn frames through the frame port, then refines once', async (t) => {
   const listeners = new Set();
+  // The drawn frames; the animation runs on preRender.
   const frame = {
     on(phase, cb) {
+      if (phase === 'preRender') return () => {};
       assert.equal(phase, 'postRender');
       listeners.add(cb);
       return () => listeners.delete(cb);
@@ -523,7 +599,8 @@ test('an unready surface waits for drawn frames through the frame port, then ref
 test('disabling while a refinement waits drops its frame listener', async (t) => {
   const listeners = new Set();
   const frame = {
-    on(_phase, cb) {
+    on(phase, cb) {
+      if (phase === 'preRender') return () => {};
       listeners.add(cb);
       return () => listeners.delete(cb);
     },

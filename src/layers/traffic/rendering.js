@@ -12,6 +12,11 @@ import {
 } from './policy.js';
 import { distance } from '../../geo/vector.js';
 import { findCamera } from '../../render/rendererOf.js';
+// The layer's other parts reach the renderer through the unbound camera
+// factory (with its query port) and globe factory, loaded here with the
+// adapter this file needs.
+import '../../render/cesium/camera.js';
+import '../../render/cesium/globe.js';
 // What the dots' surface is, and whether it has loaded, the renderer
 // contract cannot say: the Cesium adapter reads it off the scene.
 import {

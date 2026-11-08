@@ -4,9 +4,10 @@
  *
  * `camera.changed` fires once the view has moved by this fraction, and it is a
  * single number on the camera that every listener in the app shares. Several
- * layers want it finer than the default — traffic and transit ask for 0.05 so
- * they notice they have entered a coverage area (bikeshare did too, before it
- * listened through the renderer's camera port at its own threshold) — and
+ * layers want it finer than the default — transit asks for 0.05 so it
+ * notices it has entered a coverage area (bikeshare and traffic did too,
+ * before they listened through the renderer's camera port at their own
+ * threshold) — and
  * each of them used to write the number directly and hand back whatever it
  * remembered.
  *

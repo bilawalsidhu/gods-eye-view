@@ -117,8 +117,9 @@ async function moveCamera(page, view) {
     });
     // setView normally propagates through Cesium's render loop. Raising these
     // explicitly makes the capture boundary deterministic across GPU speeds.
-    // Pairing still flows through camera.changed's schedule-time anchor; the
-    // synthetic moveEnd is emitted only as the same diagnostic used naturally.
+    // Traffic hears the synthetic moveEnd through the camera port and loads at
+    // once; the port measures its own `changed` on the next rendered tick, so
+    // the synthetic camera.changed reaches only the layers still on Cesium.
     gev.viewer.camera.changed.raiseEvent();
     gev.viewer.camera.moveEnd.raiseEvent();
     return { beforeLastUpdate, boundaryTime };

@@ -245,8 +245,16 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     // The layer reads the camera through the renderer's camera port.
     const { bindRenderer } = await server.ssrLoadModule('/src/render/rendererOf.js');
     const degrees = (radians) => radians * 180 / Math.PI;
+    const cameraEvents = { moveEnd, changed };
+    const frameEvents = { preRender, postRender };
     bindRenderer(viewer, {
+      // The scene's channels, raised by the test as Cesium would.
+      frame: {
+        on: (phase, cb) => frameEvents[phase].addEventListener(cb),
+        requestRender() {},
+      },
       camera: {
+        on: (event, cb) => cameraEvents[event].addEventListener(cb),
         pose: () => ({
           lon: degrees(camera.positionCartographic.longitude),
           lat: degrees(camera.positionCartographic.latitude),
