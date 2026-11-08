@@ -142,7 +142,7 @@ export function updateHud(
     updateVesselHud.call(this, info, nowMs, forceContext);
     return;
   }
-  this.lastAircraftInfo = info;
+  this.lastSubjectInfo = info;
   const view = this.instruments;
   view.kind = 'aircraft';
   view.trackSource = null;
@@ -247,7 +247,7 @@ export function updateHud(
  * Signals stay aircraft-only, so the Contact card is withdrawn.
  */
 function updateVesselHud(info, nowMs, forceContext) {
-  this.lastAircraftInfo = info;
+  this.lastSubjectInfo = info;
   const view = this.instruments;
   view.kind = 'vessel';
   view.trackSource = info.trackSource ?? null;

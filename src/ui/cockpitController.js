@@ -217,7 +217,8 @@ export class CockpitViewController {
     this.contextView = createContextState();
     this.brief = createBriefState();
     this.briefTimer = null;
-    this.lastAircraftInfo = null;
+    // The last aircraft or vessel the HUD drew.
+    this.lastSubjectInfo = null;
     this.regionalBrief = null;
     this.regionalBriefAnchor = null;
     this.regionalBriefFetchedAt = 0;
@@ -399,8 +400,8 @@ export class CockpitViewController {
   /** Step the bridge radar to its next range and redraw it at once. */
   cycleRadarRange() {
     this.radarRangeNm = nextRadarRange(this.radarRangeNm);
-    if (this.active && this.subjectKind === 'vessel' && this.lastAircraftInfo)
-      this.updateRadar(this.lastAircraftInfo);
+    if (this.active && this.subjectKind === 'vessel' && this.lastSubjectInfo)
+      this.updateRadar(this.lastSubjectInfo);
   }
   presentLook() {
     return presentLook.call(this);
@@ -555,10 +556,10 @@ export class CockpitViewController {
     this.relocalizeBrief();
     this.publishVision(createVisionState(this.visionMode));
     this.routeSignature = null;
-    if (this.active && this.lastAircraftInfo) {
+    if (this.active && this.lastSubjectInfo) {
       this.rewordingSignals = true;
       try {
-        this.updateHud(this.lastAircraftInfo, performance.now(), true);
+        this.updateHud(this.lastSubjectInfo, performance.now(), true);
       } finally {
         this.rewordingSignals = false;
       }

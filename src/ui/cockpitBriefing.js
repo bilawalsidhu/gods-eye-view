@@ -85,11 +85,11 @@ export function relocalizeBrief() {
   Object.assign(this.brief, cycleWords(this.briefAutoRotateEnabled));
   this.showBriefPage(this.briefPageIndex);
   if (this.regionalBrief)
-    this.renderRegionalBrief(this.regionalBrief, this.lastAircraftInfo);
+    this.renderRegionalBrief(this.regionalBrief, this.lastSubjectInfo);
   else if (this.brief.news.state)
     this.renderRegionalBriefStatus(
       this.brief.news.state,
-      this.lastAircraftInfo,
+      this.lastSubjectInfo,
     );
 }
 
