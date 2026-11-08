@@ -126,7 +126,7 @@ const dispatchers = new WeakMap();
  * method is memoized, so subscribers share the passes.
  * @typedef {object} ClickEvent
  * @property {{x: number, y: number}} screenPosition Where the user clicked.
- * @property {Cesium.Cartesian2} position Where that lands in the pick buffer
+ * @property {{x: number, y: number}} position Where that lands in the pick buffer
  *   (corrected for sensor styles; see sensorPick.js).
  * @property {ClickGesture} gesture
  * @property {object|undefined} pick `scene.pick` at `position`.
@@ -270,7 +270,11 @@ function createDispatcher(viewer, { createHandler, now, document } = {}) {
         // Where the pointer lands in the pick buffer, as a click's
         // `position` is (corrected for sensor styles); made on first read.
         get pickPosition() {
-          pickPosition ??= sensorPickPosition(viewer.scene, endPosition);
+          pickPosition ??= sensorPickPosition(
+            viewer.scene,
+            endPosition,
+            viewer.scene.canvas,
+          );
           return pickPosition;
         },
       });
@@ -370,7 +374,7 @@ function createDispatcher(viewer, { createHandler, now, document } = {}) {
  */
 function createClickEvent(viewer, click, gesture) {
   const scene = viewer.scene;
-  const position = sensorPickPosition(scene, click.position);
+  const position = sensorPickPosition(scene, click.position, scene.canvas);
   const memo = new Map();
   const once = (key, compute) => {
     if (!memo.has(key)) memo.set(key, compute());

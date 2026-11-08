@@ -418,11 +418,11 @@ test('sensor styles move the pick to where the picture came from', () => {
   };
   registerStyleStages(scene, { surveillance: stage });
   const click = { x: 300, y: 50 };
-  const mapped = sensorPickPosition(scene, click);
+  const mapped = sensorPickPosition(scene, click, scene.canvas);
   assert.notDeepEqual([mapped.x, mapped.y], [300, 50]);
   assert.deepEqual(click, { x: 300, y: 50 }, 'the click is left alone');
   stage.enabled = false;
-  const plain = sensorPickPosition(scene, click);
+  const plain = sensorPickPosition(scene, click, scene.canvas);
   assert.deepEqual([plain.x, plain.y], [300, 50]);
 });
 
@@ -440,7 +440,11 @@ test('a move carries its pick-buffer position, sensor-corrected as a click is', 
   const seen = [];
   h.input.onPointer('move', (event) => seen.push(event));
   h.handler.fire(TYPES.MOUSE_MOVE, { endPosition: { x: 300, y: 50 } });
-  const expected = sensorPickPosition(h.viewer.scene, { x: 300, y: 50 });
+  const expected = sensorPickPosition(
+    h.viewer.scene,
+    { x: 300, y: 50 },
+    h.viewer.scene.canvas,
+  );
   assert.deepEqual(
     [seen[0].pickPosition.x, seen[0].pickPosition.y],
     [expected.x, expected.y],

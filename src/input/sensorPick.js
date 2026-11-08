@@ -6,27 +6,28 @@
  * different spot of the scene: map it back through the shader's barrel
  * distortion and quantization first.
  */
-import * as Cesium from 'cesium';
 import { styleStagesOf } from '../styles/styleStages.js';
 
 const SENSOR_STYLES = ['thermal', 'surveillance'];
 
 /**
  * The pick-buffer position for a screen click.
- * @param {Cesium.Scene} scene
+ * @param {object} scene The scene object the styles are recorded on.
  * @param {{x: number, y: number}} position CSS pixels on the canvas.
- * @returns {Cesium.Cartesian2} A new position; the click's own is left alone.
+ * @param {{width: number, height: number, clientWidth: number,
+ *   clientHeight: number}} canvas The canvas the scene draws in.
+ * @returns {{x: number, y: number}} A new position; the click's own is left
+ *   alone.
  */
-export function sensorPickPosition(scene, position) {
-  const out = new Cesium.Cartesian2(position.x, position.y);
+export function sensorPickPosition(scene, position, canvas) {
+  const out = { x: position.x, y: position.y };
   const stages = styleStagesOf(scene);
   if (!stages) return out;
   for (const style of SENSOR_STYLES) {
     const stage = stages[style];
     if (!stage?.enabled) continue;
     const intensity = stage.uniforms.intensity;
-    const canvas = scene.canvas,
-      w = canvas.clientWidth,
+    const w = canvas.clientWidth,
       h = canvas.clientHeight;
     let u = out.x / w,
       v = 1 - out.y / h;
