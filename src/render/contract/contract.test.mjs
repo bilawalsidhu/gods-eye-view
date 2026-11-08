@@ -184,6 +184,11 @@ test('members added to version 0 later are optional, each behind its capability'
       members(checker.getTypeAtLocation(declared(shape).name)),
     )[field];
   assert.equal(optional('LineItem', 'depthFailDash'), true);
+  // And on one kind of a union: the rectangle's rotation.
+  const rectangle = checker
+    .getTypeAtLocation(declared('ShapeGeometry').name)
+    .types.find((kind) => checker.getPropertyOfType(kind, 'rect'));
+  assert.equal(Object.fromEntries(members(rectangle)).rotation, true);
 });
 
 test('the shape check names what is missing and what a capability does not allow', () => {

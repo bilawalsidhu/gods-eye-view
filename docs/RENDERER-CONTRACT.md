@@ -45,6 +45,11 @@ optional, so a renderer written before it still conforms:
 - A line item's `depthFailDash` (`{ length, pattern16? }`) dashes the parts
   behind the surface in `depthFailColor`, as the Draw tool's rubber band is.
   A renderer that predates it draws those parts solid.
+- A rectangle shape's `rotation` (radians counter-clockwise) turns it about
+  its centre in longitude and latitude, as a KML ground overlay turns, and
+  its image fill turns with it. The Cesium port drapes image fills too, each
+  on a ground primitive of its own. A renderer that predates it draws the
+  rectangle unturned.
 
 The renderer itself (`renderer.d.ts`) adds capture, pixel reads, settling,
 resize, context loss and `destroy`. `common.d.ts` holds the shared shapes

@@ -656,6 +656,25 @@ export function createStubRenderer(options = {}) {
     return set && item ? itemPosition(set, item, aheadMs) : null;
   }
 
+  /**
+   * Whether `lon`, `lat` (degrees) is in a rectangle geometry, turned by its
+   * `rotation` about its centre in longitude and latitude.
+   */
+  function inRectangle({ rect, rotation = 0 }, lon, lat) {
+    // A rectangle across the antimeridian runs east past 180°.
+    const span = rect.east - rect.west;
+    const width = span >= 360 ? 360 : ((span % 360) + 360) % 360;
+    const wrap = (d) => ((((d + 180) % 360) + 360) % 360) - 180;
+    const dLon = wrap(lon - (rect.west + width / 2));
+    const dLat = lat - (rect.south + rect.north) / 2;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    return (
+      Math.abs(cos * dLon + sin * dLat) <= width / 2 &&
+      Math.abs(-sin * dLon + cos * dLat) <= (rect.north - rect.south) / 2
+    );
+  }
+
   function hitsAt(x, y, win = {}) {
     if (scriptedPicks) return scriptedPicks(x, y, win) ?? [];
     const halfW = (win.width ?? 3) / 2;
@@ -678,6 +697,30 @@ export function createStubRenderer(options = {}) {
               position: p,
               depth: magnitude(sub(p, eye().position)),
             });
+        }
+        continue;
+      }
+      if (set.kind === 'shapes') {
+        // Draped rectangles are picked where they cover the ellipsoid, turned
+        // as the default renderer turns them; other shapes are not picked.
+        const ground = rayEllipsoid(pickRay(x, y));
+        const at = ground && toCartographicRadians(ground);
+        if (!at) continue;
+        for (const item of set.items.values()) {
+          if (item.show === false || item.pickable === false) continue;
+          if (!item.fill || item.outlineOnly) continue;
+          if (item.height !== 'clampGround') continue;
+          if (item.geometry?.kind !== 'rectangle') continue;
+          if (!inRectangle(item.geometry, toDegrees(at.lon), toDegrees(at.lat)))
+            continue;
+          hits.push({
+            set: setId,
+            id: item.id,
+            meta: item.meta,
+            surface: false,
+            position: ground,
+            depth: magnitude(sub(ground, eye().position)),
+          });
         }
         continue;
       }

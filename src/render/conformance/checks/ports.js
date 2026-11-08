@@ -1379,6 +1379,70 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.shapes.drapedRotation',
+      'a draped rectangle with an image fill draws turned by its rotation, picks there, and hides in place',
+      async (h, r) => {
+        await overAustin(h, r);
+        const at = (dLon, dLat = 0) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat });
+        const shapes = r.draw.shapes({ id: 'conf:overlay' });
+        const mine = (pos) => {
+          const s = r.query.project(pos);
+          return Boolean(
+            s &&
+            r.query
+              .drillPick(s.x, s.y)
+              .some(
+                (hit) => hit.set === 'conf:overlay' && hit.id === 'overlay',
+              ),
+          );
+        };
+        // Wide east to west; a quarter turn stands it north to south.
+        const overlay = (rotation, extra = {}) => ({
+          id: 'overlay',
+          geometry: {
+            kind: 'rectangle',
+            rect: {
+              west: AUSTIN.lon - 0.004,
+              south: AUSTIN.lat - 0.001,
+              east: AUSTIN.lon + 0.004,
+              north: AUSTIN.lat + 0.001,
+            },
+            ...(rotation === undefined ? {} : { rotation }),
+          },
+          fill: { image: PIXEL_PNG },
+          height: 'clampGround',
+          ...extra,
+        });
+        const until = async (test) => {
+          for (let i = 0; i < 300; i++) {
+            await drawn(h, r, 1);
+            if (test()) return true;
+          }
+          return false;
+        };
+        shapes.set([overlay(undefined)]);
+        ok(await until(() => mine(at(0))), 'unturned, it draws');
+        ok(mine(at(0.003)), 'unturned, it is wide');
+        ok(!mine(at(0, 0.003)), 'unturned, it is not tall');
+        shapes.set([overlay(Math.PI / 2)]);
+        ok(
+          await until(() => mine(at(0, 0.003)) && !mine(at(0.003))),
+          'a quarter turn stands it north to south',
+        );
+        ok(mine(at(0)), 'turned about its centre');
+        shapes.upsert([overlay(Math.PI / 2, { show: false })]);
+        await drawn(h, r);
+        ok(!mine(at(0)), 'hidden');
+        shapes.upsert([overlay(Math.PI / 2)]);
+        ok(await until(() => mine(at(0, 0.003))), 'shown again');
+        equal(shapes.size(), 1, 'held');
+        shapes.dispose();
+        await drawn(h, r);
+        ok(!mine(at(0)), 'gone with its set');
+      },
+    ),
+    check(
       'draw.lines.styles',
       'flow lines draw draped and in space, and a line with a depth-fail colour moves every frame, without stopping the frame or picks',
       async (h, r) => {

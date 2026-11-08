@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createStubRenderer } from './index.js';
 import { createStubHarness } from './harness.js';
 import { runConformance } from '../conformance/index.js';
+import { toEcef } from './math.js';
 
 test('the stub passes the conformance suite', async () => {
   const report = await runConformance(createStubHarness());
@@ -96,4 +97,36 @@ test('a model load is told once, even when a listener loads it again', () => {
   set.remove(['a']);
   set.upsert([model('a', 'good.glb')]);
   assert.deepEqual(told.slice(2), ['ready a']);
+});
+
+test('a draped rectangle across the antimeridian picks on both sides of it, turned too', () => {
+  const r = createStubRenderer();
+  r.camera.setView({
+    destination: { lon: 180, lat: 0, height: 400_000 },
+    orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+  });
+  const shapes = r.draw.shapes({ id: 'dateline' });
+  const rect = (rotation) => ({
+    id: 'r',
+    geometry: {
+      kind: 'rectangle',
+      rect: { west: 179, south: -0.25, east: -179, north: 0.25 },
+      rotation,
+    },
+    fill: '#f00',
+    height: 'clampGround',
+  });
+  const picked = (lon, lat) => {
+    const s = r.query.project(toEcef({ lon, lat, height: 0 }));
+    return r.query.drillPick(s.x, s.y).some((hit) => hit.set === 'dateline');
+  };
+  shapes.set([rect(0)]);
+  for (const lon of [179.5, 180, -179.5])
+    assert.ok(picked(lon, 0), `at ${lon}`);
+  assert.ok(!picked(178.5, 0) && !picked(-178.5, 0), 'not past its ends');
+  assert.ok(!picked(180, 0.5), 'not past its north');
+  shapes.set([rect(Math.PI / 2)]);
+  assert.ok(picked(180, 0.75), 'a quarter turn stands it north to south');
+  assert.ok(!picked(179.5, 0), 'and narrows it');
+  r.destroy();
 });

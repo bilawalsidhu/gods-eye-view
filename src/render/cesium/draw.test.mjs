@@ -2590,6 +2590,101 @@ test('an unclamped shape filled with an image draws a textured primitive and fre
     );
   }));
 
+test('a draped rectangle turns, its image fill with it, on a ground primitive that owns its material', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const draw = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    }).port;
+    const set = draw.shapes({ id: 'overlays' });
+    const overlay = (extra = {}) => ({
+      id: 'overlay',
+      geometry: {
+        kind: 'rectangle',
+        rect: { west: 2, south: 1, east: 2.1, north: 1.1 },
+        rotation: 0.4,
+      },
+      fill: { image: 'overlay.png' },
+      height: 'clampGround',
+      ...extra,
+    });
+    const tinted = {
+      id: 'tinted',
+      geometry: {
+        kind: 'rectangle',
+        rect: { west: 2, south: 1, east: 2.1, north: 1.1 },
+        rotation: -0.2,
+      },
+      fill: [1, 0, 0, 0.5],
+      height: 'clampGround',
+    };
+    set.set([overlay(), tinted]);
+    const grounds = () => {
+      const host = scene.added[0];
+      const out = [];
+      for (let i = 0; i < host.length; i++)
+        if (host.get(i) instanceof Cesium.GroundPrimitive)
+          out.push(host.get(i));
+      return out;
+    };
+    const [image, colour] = grounds();
+    assert.equal(
+      grounds().length,
+      2,
+      'the image on a ground primitive of its own',
+    );
+    const { appearance, geometryInstances } = image;
+    assert.ok(appearance instanceof Cesium.MaterialAppearance);
+    assert.equal(appearance.material.type, 'Image');
+    assert.equal(appearance.material.uniforms.image, 'overlay.png');
+    const [instance] = geometryInstances;
+    assert.equal(instance.id.id, 'overlay');
+    assert.equal(instance.geometry._rotation, 0.4);
+    assert.equal(instance.geometry._stRotation, 0.4, 'the image turns with it');
+    assert.equal(instance.attributes.color, undefined);
+    assert.equal(colour.geometryInstances[0].geometry._rotation, -0.2);
+    // Hiding it is a change of its show, not a rebuild.
+    const host = scene.added[0];
+    set.upsert([overlay({ show: false })]);
+    assert.equal(scene.added[0], host, 'not rebuilt');
+    const material = appearance.material;
+    scene.primitives.remove = (primitive) => {
+      const at = scene.added.indexOf(primitive);
+      if (at >= 0) scene.added.splice(at, 1);
+      primitive.destroy();
+      return at >= 0;
+    };
+    set.dispose();
+    assert.equal(material.isDestroyed(), true, 'its material goes with it');
+    // Not rotated, it is as before.
+    const plain = draw.shapes({ id: 'plain' });
+    plain.set([
+      overlay({
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 2, south: 1, east: 2.1, north: 1.1 },
+        },
+      }),
+    ]);
+    const [flat] = grounds();
+    assert.equal(flat.geometryInstances[0].geometry._rotation, 0);
+    plain.dispose();
+    // An image it cannot take is refused before anything is built.
+    const made = scene.added.length;
+    assert.throws(
+      () =>
+        draw
+          .shapes({ id: 'atlas' })
+          .set([
+            overlay(),
+            overlay({ id: 'b', fill: { image: { atlas: 'a', slot: 's' } } }),
+          ]),
+      /URL, SVG and canvas images only/,
+    );
+    assert.equal(scene.added.length, made, 'nothing drawn');
+  }));
+
 test('scene data packs draw their geometry and media marker through the Cesium draw port on a viewer of its own', async (t) => {
   const names = [
     'HTMLCanvasElement',

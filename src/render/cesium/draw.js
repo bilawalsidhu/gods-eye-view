@@ -1854,6 +1854,9 @@ export function createCesiumDraw({
             ),
             height: g.height ?? 0,
             extrudedHeight,
+            // An image fill turns with the rectangle, as a KML overlay's does.
+            rotation: g.rotation ?? 0,
+            stRotation: g.rotation ?? 0,
           }),
         };
       case 'box': {
@@ -1902,6 +1905,8 @@ export function createCesiumDraw({
             g.rect.east,
             g.rect.north,
           ),
+          rotation: g.rotation ?? 0,
+          stRotation: g.rotation ?? 0,
         });
       default:
         throw new Error(`the Cesium renderer cannot clamp ${g.kind} shapes`);
@@ -1926,13 +1931,24 @@ export function createCesiumDraw({
         parts.set(item.id, { look: lookOf(item), id: null, ground: null });
         continue;
       }
-      if (typeof item.fill === 'object' && !Array.isArray(item.fill))
+      const imageFill =
+        typeof item.fill === 'object' && !Array.isArray(item.fill)
+          ? item.fill
+          : null;
+      if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
       if (item.extrudeHeight !== undefined)
         throw new Error('the Cesium renderer cannot clamp extruded shapes');
-      // Hidden ones are built too, hidden, so showing them is a change of
-      // their show, not a rebuild of every fill; a hidden one it cannot
-      // build stays out, as before, and showing it rebuilds.
+      // Draping a material needs depth textures (WebGL 2 always has them).
+      if (imageFill && scene.context?.depthTexture === false)
+        throw new Error('the Cesium renderer cannot drape images here');
+      // Refused before anything is made, so nothing is left half built.
+      const image = imageFill ? toImage(imageFill.image) : null;
+      // Hidden colour fills are built too, hidden, so showing them is a
+      // change of their show, not a rebuild of every fill; a hidden one it
+      // cannot build stays out, as before, and showing it rebuilds. Hidden
+      // image fills are not passed in (`hiddenFillBuilds`): their textures
+      // load when they show.
       let geometry;
       try {
         geometry = groundGeometry(item);
@@ -1946,20 +1962,41 @@ export function createCesiumDraw({
         ground: null,
       };
       parts.set(item.id, part);
+      const show = new Cesium.ShowGeometryInstanceAttribute(
+        item.show !== false,
+      );
       const instance = new Cesium.GeometryInstance({
         geometry,
-        attributes: {
-          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-            toColor(item.fill),
-          ),
-          show: new Cesium.ShowGeometryInstanceAttribute(item.show !== false),
-        },
+        attributes: imageFill
+          ? { show }
+          : {
+              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                toColor(item.fill),
+              ),
+              show,
+            },
         id: part.id,
       });
       const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+      if (imageFill) {
+        // An image fill is a ground primitive of its own, with its material.
+        // (Cesium turns its texture wrongly across the antimeridian: its
+        // rotation points are taken against a centre wrapped to ±180°.)
+        batches.push({
+          clampTo,
+          instances: [instance],
+          parts: [part],
+          image,
+          imageFill,
+        });
+        continue;
+      }
       const rectangle = instance.geometry.rectangle;
       let batch = batches.find(
-        (b) => b.clampTo === clampTo && !b.rectangles.collides(rectangle),
+        (b) =>
+          b.rectangles &&
+          b.clampTo === clampTo &&
+          !b.rectangles.collides(rectangle),
       );
       if (!batch) {
         batch = {
@@ -1979,11 +2016,40 @@ export function createCesiumDraw({
       ? Cesium.GroundPrimitive
       : UnpickableGroundPrimitive;
     const grounds = batches.map((batch) => {
+      const material = batch.imageFill
+        ? Cesium.Material.fromType('Image', {
+            image: batch.image,
+            repeat: new Cesium.Cartesian2(
+              ...(batch.imageFill.repeat ?? [1, 1]),
+            ),
+          })
+        : null;
       const ground = new Ground({
         geometryInstances: batch.instances,
         classificationType: classificationOf(batch.clampTo),
         allowPicking: pickable,
+        ...(material
+          ? {
+              appearance: new Cesium.MaterialAppearance({
+                material,
+                materialSupport:
+                  Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
+                translucent: true,
+                flat: true,
+              }),
+            }
+          : {}),
       });
+      // Its material holds the texture, which the primitive leaves alone:
+      // it goes with the primitive, which may outlive the host that built it
+      // while a rebuild's ground primitives get ready.
+      if (material) {
+        const destroyGround = ground.destroy.bind(ground);
+        ground.destroy = () => {
+          if (!material.isDestroyed()) material.destroy();
+          return destroyGround();
+        };
+      }
       for (const part of batch.parts) part.ground = ground;
       return ground;
     });
@@ -2096,7 +2162,7 @@ export function createCesiumDraw({
     };
     for (const item of record.items.values()) {
       // Clamped ones are built hidden as well (`groundFills`), when they
-      // are a fill it can draw: others hidden stay out, as before.
+      // are a colour fill it can draw: others hidden stay out, as before.
       if (
         item.height === 'clampGround' &&
         (item.show !== false || hiddenFillBuilds(item))

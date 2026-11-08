@@ -281,8 +281,13 @@ export type ShapeGeometry =
       /** Only part of the ellipse, radians from north. */
       arc?: { start: number; end: number };
     }
-  /** `height`: metres above the ellipsoid, for a rectangle not clamped. */
-  | { kind: 'rectangle'; rect: GeoRect; height?: number }
+  /**
+   * `height`: metres above the ellipsoid, for a rectangle not clamped.
+   * `rotation`: radians counter-clockwise, turning the rectangle about its
+   * centre in longitude and latitude (as a KML ground overlay turns); an
+   * image fill turns with it.
+   */
+  | { kind: 'rectangle'; rect: GeoRect; height?: number; rotation?: number }
   | {
       kind: 'box';
       center: Position;
