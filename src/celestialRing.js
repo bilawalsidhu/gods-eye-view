@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from './renderGovernor.js';
+import { worldClock, worldTimeFor } from './time/worldClock.js';
+
+// The ring shows the sun and moon at the time the sky is drawn.
+const skyTime = worldTimeFor('sky');
 
 /** Outer edge of the existing NVG/FLIR keyhole in normalized shader space. */
 export const KEYHOLE_OUTER_RADIUS = 1.05;
@@ -445,6 +449,12 @@ export class CelestialRing {
       if (typeof document !== 'undefined' && document.hidden) return;
       governorRequestRender('celestial-ephemeris');
     }, 60_000);
+    // A jump in the world time moves the sun and moon at once.
+    this._skyDate = new Date();
+    this._skyTime = new Cesium.JulianDate();
+    this._unsubscribeWorldTime = worldClock.subscribe(() => {
+      this._ephemerisDirty = true;
+    });
     this.setEnabled(this.enabled);
   }
 
@@ -801,7 +811,8 @@ export class CelestialRing {
       return;
     }
 
-    const time = Cesium.JulianDate.now();
+    this._skyDate.setTime(skyTime());
+    const time = Cesium.JulianDate.fromDate(this._skyDate, this._skyTime);
     if (!this._updateEphemeris(time)) return;
     this._present({ ephemerisUpdates: String(this._ephemerisUpdateCount) });
     const camera = this.viewer.camera;
@@ -890,6 +901,8 @@ export class CelestialRing {
       clearInterval(this._ephemerisTimer);
       this._ephemerisTimer = null;
     }
+    this._unsubscribeWorldTime?.();
+    this._unsubscribeWorldTime = null;
     if (this._removePostRender) this._removePostRender();
     this._removePostRender = null;
     if (this._shown()) {

@@ -3109,5 +3109,8 @@
   "Close camera preview": "カメラのプレビューを閉じる",
   "Refresh map still": "地図上の静止画を更新",
   "The map still uses a separate request and may show a different moment.": "地図上の静止画は別のリクエストで取得されるため、異なる時点を表示する場合があります。",
-  "Video plays from Québec 511, which sees your IP address.": "動画は Québec 511 から再生され、Québec 511 にはあなたの IP アドレスが見えます。"
+  "Video plays from Québec 511, which sees your IP address.": "動画は Québec 511 から再生され、Québec 511 にはあなたの IP アドレスが見えます。",
+  "World time": "世界時刻",
+  "Back to live": "ライブに戻る",
+  "Live": "ライブ"
 }
