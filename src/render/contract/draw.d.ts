@@ -229,6 +229,13 @@ export interface LineItem {
   style: LineStyle;
   /** Colour where the line is behind the surface; `null` hides those parts. */
   depthFailColor?: Color | null;
+  /**
+   * Dash the parts behind the surface, in `depthFailColor`, as a `dash`
+   * style's `length` and `pattern16` dash a line. Omitted, they are solid; a
+   * renderer that predates it draws them solid too. Ignored without a
+   * `depthFailColor`, and on draped lines, which are never behind it.
+   */
+  depthFailDash?: { length: number; pattern16?: number };
   /** Per-segment colours; changing them does not rebuild the line. */
   segmentColors?: Color[];
   segmentShow?: boolean[];

@@ -1349,6 +1349,36 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.depthFailDash',
+      'a line dashed behind the surface draws, moves in place and changes back to solid',
+      async (h, r) => {
+        await overAustin(h, r);
+        const lines = r.draw.lines({ id: 'conf:line-dash' });
+        const at = (dLon, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat, height });
+        const band = (height, extra = {}) => ({
+          id: 'band',
+          positions: [at(-0.002, 50), at(0.002, height)],
+          widthPx: 3,
+          mode: 'geodesic',
+          style: { kind: 'dash', color: [1, 1, 0, 0.9], length: 16 },
+          depthFailColor: [0, 1, 1, 0.35],
+          depthFailDash: { length: 16 },
+          ...extra,
+        });
+        lines.set([band(-200)]);
+        await drawn(h, r);
+        equal(lines.size(), 1, 'held');
+        lines.upsert([band(-100)]);
+        await drawn(h, r);
+        equal(lines.size(), 1, 'moved in place, not added');
+        lines.upsert([band(-100, { depthFailDash: undefined })]);
+        await drawn(h, r);
+        equal(lines.size(), 1, 'solid behind the surface again');
+        lines.dispose();
+      },
+    ),
+    check(
       'draw.lines.styles',
       'flow lines draw draped and in space, and a line with a depth-fail colour moves every frame, without stopping the frame or picks',
       async (h, r) => {

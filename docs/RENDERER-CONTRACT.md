@@ -42,6 +42,9 @@ optional, so a renderer written before it still conforms:
   target's east-north-up frame, or the identity. `setView` keeps that frame
   while it places a world pose. A share link's follow offset is
   re-expressed in it, satellites included.
+- A line item's `depthFailDash` (`{ length, pattern16? }`) dashes the parts
+  behind the surface in `depthFailColor`, as the Draw tool's rubber band is.
+  A renderer that predates it draws those parts solid.
 
 The renderer itself (`renderer.d.ts`) adds capture, pixel reads, settling,
 resize, context loss and `destroy`. `common.d.ts` holds the shared shapes

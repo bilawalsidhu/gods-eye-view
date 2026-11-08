@@ -1281,7 +1281,14 @@ export function createCesiumDraw({
       depthFailAppearance: new Cesium.PolylineMaterialAppearance({
         material: lineMaterial(
           record,
-          { kind: 'solid', color: item.depthFailColor },
+          item.depthFailDash
+            ? {
+                kind: 'dash',
+                color: item.depthFailColor,
+                length: item.depthFailDash.length,
+                pattern16: item.depthFailDash.pattern16,
+              }
+            : { kind: 'solid', color: item.depthFailColor },
           reveal,
         ),
       }),
@@ -1488,6 +1495,10 @@ export function createCesiumDraw({
       item.clampTo,
       item.style,
       item.depthFailColor,
+      // A dash is drawn only with a depth-fail colour, the same in any key order.
+      item.depthFailColor && item.depthFailDash
+        ? [item.depthFailDash.length, item.depthFailDash.pattern16]
+        : null,
       // Segment colours and shows change in place.
       item.segmentColors != null,
       item.segmentShow != null,

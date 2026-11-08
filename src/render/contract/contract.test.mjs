@@ -178,6 +178,12 @@ test('members added to version 0 later are optional, each behind its capability'
   // A renderer written before an addition still conforms without it.
   assert.equal(PORTS.globe.isGlobeVisible, 'globeVisibility');
   assert.equal(PORTS.camera.followFrame, 'followFrame');
+  // Item fields added later are optional too.
+  const optional = (shape, field) =>
+    Object.fromEntries(
+      members(checker.getTypeAtLocation(declared(shape).name)),
+    )[field];
+  assert.equal(optional('LineItem', 'depthFailDash'), true);
 });
 
 test('the shape check names what is missing and what a capability does not allow', () => {

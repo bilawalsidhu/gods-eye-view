@@ -2892,6 +2892,58 @@ test('a line with a depth-fail colour draws it behind the surface, and moves in 
     assert.equal(scene.added.length, 0);
   }));
 
+test('a depth-fail dash dashes the parts behind the surface, in the depth-fail colour', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'band' });
+    const band = (extra = {}) => ({
+      id: 'band',
+      positions: [
+        Cesium.Cartesian3.fromDegrees(0, 0, 100),
+        Cesium.Cartesian3.fromDegrees(0.01, 0.01, 100),
+      ],
+      widthPx: 3,
+      mode: 'geodesic',
+      style: { kind: 'dash', color: [1, 1, 0, 0.9], length: 16 },
+      depthFailColor: [0, 1, 1, 0.35],
+      depthFailDash: { length: 16 },
+      ...extra,
+    });
+    set.set([band()]);
+    const host = scene.added[0];
+    const deep = host.get(1).get(0);
+    const hidden = deep.depthFailAppearance.material;
+    assert.equal(hidden.type, 'PolylineDash');
+    assert.ok(
+      Cesium.Color.equals(
+        hidden.uniforms.color,
+        new Cesium.Color(0, 1, 1, 0.35),
+      ),
+    );
+    assert.equal(hidden.uniforms.dashLength, 16);
+    assert.equal(hidden.uniforms.dashPattern, 255, 'the default pattern');
+    // A move keeps the dash; its fields in another order are the same look.
+    set.upsert([band({ depthFailDash: { length: 16 } })]);
+    assert.equal(scene.added[0], host, 'not rebuilt');
+    assert.equal(
+      host.get(1).get(0).depthFailAppearance.material.type,
+      'PolylineDash',
+    );
+    set.upsert([band({ depthFailDash: { pattern16: 0xf0f0, length: 8 } })]);
+    const patterned = scene.added[0].get(1).get(0).depthFailAppearance.material;
+    assert.equal(patterned.uniforms.dashPattern, 0xf0f0);
+    assert.equal(patterned.uniforms.dashLength, 8);
+    const again = scene.added[0];
+    set.upsert([band({ depthFailDash: { length: 8, pattern16: 0xf0f0 } })]);
+    assert.equal(scene.added[0], again, 'the same dash in another order');
+    // Without it the hidden parts are solid; the change is a new look.
+    set.upsert([band({ depthFailDash: undefined })]);
+    assert.notEqual(scene.added[0], host, 'rebuilt');
+    const solid = scene.added[0].get(1).get(0).depthFailAppearance.material;
+    assert.equal(solid.type, 'Color');
+    set.dispose();
+  }));
+
 test('a draped flow line still drawing while its rebuilds build keeps flowing', () =>
   withImageClasses(() => {
     const { scene, draw, frame } = drawOver();
