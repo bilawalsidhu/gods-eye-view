@@ -14,6 +14,7 @@ import {
   nextOrbitalZoom,
   offNadirAngleDeg,
   offNadirOrientation,
+  offNadirCentreMeetsEarth,
   offNadirSwathScale,
   orbitalBaseFovRad,
   previousOrbitalZoom,
@@ -410,9 +411,12 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   const settledFov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
   const footprintKm = footprintWidthKm(info.altitudeM, settledFov, aspect);
   const trackUp = Number.isFinite(info.groundTrackDeg);
-  const swathScale = offset
-    ? offNadirSwathScale(lookTilt(orbitalLookReadoutParts(state.lookTarget)))
-    : 1;
+  const tilt = offset
+    ? lookTilt(orbitalLookReadoutParts(state.lookTarget))
+    : null;
+  const swathScale = offset ? offNadirSwathScale(tilt) : 1;
+  // Tilted past the limb, the view's centre looks into space: no swath.
+  const seesEarth = !offset || offNadirCentreMeetsEarth(info.altitudeM, tilt);
   this.publishOrbital({
     name: info.name,
     classLabel: info.classLabel || '',
@@ -432,7 +436,7 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
       // the nadir footprint (`offNadirSwathScale`); 1 and null at nadir.
       swathScale,
       swathKm:
-        offset && Number.isFinite(footprintKm)
+        offset && seesEarth && Number.isFinite(footprintKm)
           ? footprintKm * swathScale
           : null,
     },

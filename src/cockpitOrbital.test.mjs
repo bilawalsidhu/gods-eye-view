@@ -13,6 +13,7 @@ import {
   nadirOrientation,
   nextOrbitalZoom,
   offNadirAngleDeg,
+  offNadirCentreMeetsEarth,
   offNadirSwathScale,
   offNadirOrientation,
   orbitalBaseFovRad,
@@ -299,4 +300,17 @@ test("a tilted view's width grows faster across the frame than along it", () => 
     last = scale;
   }
   assert.equal(offNadirSwathScale({ northDeg: Number.NaN }), 1);
+});
+
+test('a view tilted past the limb no longer meets the Earth', () => {
+  // GEO: the Earth spans about 8.7 degrees either side of nadir.
+  assert.equal(offNadirCentreMeetsEarth(35_786_000, { northDeg: 5 }), true);
+  assert.equal(offNadirCentreMeetsEarth(35_786_000, { northDeg: 15 }), false);
+  // LEO: a 30 degree tilt still lands on the ground.
+  assert.equal(
+    offNadirCentreMeetsEarth(420_000, { northDeg: 20, eastDeg: 20 }),
+    true,
+  );
+  assert.equal(offNadirCentreMeetsEarth(420_000, { eastDeg: 80 }), false);
+  assert.equal(offNadirCentreMeetsEarth(NaN, {}), false);
 });
