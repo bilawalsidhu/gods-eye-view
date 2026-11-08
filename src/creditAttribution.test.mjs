@@ -241,7 +241,7 @@ const VETTED_VARS = new Set([
 // Custom properties CSS sets to a fixed length besides their 0 default. The
 // clearance checks run at each length CSS gives them, not only at 0.
 const FIXED_LENGTH_VARS = new Set(['--world-timeline-lift']);
-const LIFTS_PX = [0, 50, 80];
+const LIFTS_PX = [0, 66, 80];
 let liftPx = 0;
 function eachLift(check) {
   for (const lift of LIFTS_PX) {

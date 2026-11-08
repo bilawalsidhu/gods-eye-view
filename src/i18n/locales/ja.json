@@ -3112,5 +3112,11 @@
   "Video plays from Québec 511, which sees your IP address.": "動画は Québec 511 から再生され、Québec 511 にはあなたの IP アドレスが見えます。",
   "World time": "世界時刻",
   "Back to live": "ライブに戻る",
-  "Live": "ライブ"
+  "Live": "ライブ",
+  "1 h/s": "1時間/秒",
+  "1 d/s": "1日/秒",
+  "1 wk/s": "1週間/秒",
+  "Play speed": "再生速度",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
+  "1 min/s": "1分/秒"
 }
