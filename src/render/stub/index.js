@@ -313,6 +313,7 @@ export function createStubRenderer(options = {}) {
   const sets = new Map();
   const atlases = new Map();
 
+  let setSeq = 0;
   function makeSet(kind, spec) {
     if (!spec?.id) throw new TypeError('A draw set needs an id');
     if (sets.has(spec.id))
@@ -320,6 +321,8 @@ export function createStubRenderer(options = {}) {
     const record = {
       kind,
       spec: { ...spec },
+      // When it was made: of sets of one `drawOrder`, the earlier is on top.
+      seq: (setSeq += 1),
       items: new Map(),
       show: spec.show ?? true,
       readyListeners: [],
@@ -443,6 +446,8 @@ export function createStubRenderer(options = {}) {
     const record = {
       kind,
       spec: { ...spec },
+      // When it was made: of sets of one `drawOrder`, the earlier is on top.
+      seq: (setSeq += 1),
       items: new Map(),
       show: true,
       readyListeners: [],
@@ -779,17 +784,32 @@ export function createStubRenderer(options = {}) {
             ...(item.lodGroup !== undefined ? { lodGroup: item.lodGroup } : {}),
             surface: false,
             position: p,
-            depth: magnitude(sub(p, eye().position)),
+            depth: distance,
             blocked: blockedItem(item),
+            // Drawn over depth here: stacked by its set's draw order.
+            over: (item.disableDepthTest ?? 0) > distance,
+            order: set.spec.drawOrder ?? 0,
+            seq: set.seq,
           });
       }
     }
-    hits.sort((a, b) => a.depth - b.depth);
+    // What skips the depth test is on top, the highest draw order first and
+    // of one order the set made first (as the default renderer stacks
+    // opaque ones); the rest nearest first.
+    hits.sort(
+      (a, b) =>
+        (b.over === true) - (a.over === true) ||
+        (a.over ? b.order - a.order || a.seq - b.seq : 0) ||
+        a.depth - b.depth,
+    );
     const looked = depth === undefined ? hits : hits.slice(0, depth);
     const out = looked.filter((hit) => !hit.blocked);
     for (const hit of out) {
       delete hit.depth;
       delete hit.blocked;
+      delete hit.over;
+      delete hit.order;
+      delete hit.seq;
     }
     return out;
   }

@@ -722,6 +722,64 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.drawOrder',
+      'of sets drawn over depth, the higher draw order is on top and picked',
+      async (h, r) => {
+        await overAustin(h, r);
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const icon = (id) => ({
+          id,
+          pos,
+          image: DOT,
+          size: [24, 24],
+          disableDepthTest: Infinity,
+        });
+        const first = r.draw.icons({ id: 'conf:order-first' });
+        // Made after it, but drawn over it.
+        const second = r.draw.icons({ id: 'conf:order-second', drawOrder: 2 });
+        first.set([icon('a')]);
+        second.set([icon('b')]);
+        await drawn(h, r);
+        await settled(r);
+        const s = r.query.project(pos);
+        ok(s, 'the icons project');
+        const sets = () =>
+          r.query
+            .drillPick(s.x, s.y)
+            .filter((x) => x.set.startsWith('conf:order-'))
+            .map((x) => x.set);
+        equal(r.query.pick(s.x, s.y)?.set, 'conf:order-second', 'the higher');
+        deepEqual(
+          sets(),
+          ['conf:order-second', 'conf:order-first'],
+          'topmost first',
+        );
+        first.setOptions({ drawOrder: 3 });
+        await drawn(h, r);
+        equal(
+          r.query.pick(s.x, s.y)?.set,
+          'conf:order-first',
+          'raised, the pick flips',
+        );
+        deepEqual(
+          sets(),
+          ['conf:order-first', 'conf:order-second'],
+          'and the drill',
+        );
+        // Of one order, they keep the order they were made in.
+        first.setOptions({ drawOrder: 0 });
+        second.setOptions({ drawOrder: 0 });
+        await drawn(h, r);
+        equal(
+          r.query.pick(s.x, s.y)?.set,
+          'conf:order-first',
+          'equal ones as they were made',
+        );
+        first.dispose();
+        second.dispose();
+      },
+    ),
+    check(
       'query.pickBeforeStyles',
       'picks answer against the scene as drawn before styles',
       async (h, r) => {

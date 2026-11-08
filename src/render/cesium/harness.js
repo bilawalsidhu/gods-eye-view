@@ -38,6 +38,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.clampState',
   'draw.columns',
   'draw.columns.shown',
+  'draw.drawOrder',
   'draw.drillPick',
   'draw.icons.distance',
   'draw.icons.update',

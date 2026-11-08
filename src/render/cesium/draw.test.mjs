@@ -1103,6 +1103,74 @@ test('a rebuilt set keeps its place among the scene primitives, and names its ho
   set.dispose();
 });
 
+test('sets stack by drawOrder, a higher one earlier, ties as they were made', () => {
+  const scene = fakeScene();
+  scene.primitives = new Cesium.PrimitiveCollection();
+  const { draw } = drawOver(scene);
+  const below = scene.primitives.add(new Cesium.PrimitiveCollection());
+  const order = () => {
+    const out = [];
+    for (let i = 0; i < scene.primitives.length; i++) {
+      const p = scene.primitives.get(i);
+      out.push(p === below ? 'below' : p.drawSetId);
+    }
+    return out;
+  };
+  const dot = { id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' };
+  const plain = draw.points({ id: 'plain' });
+  plain.set([dot]);
+  const between = scene.primitives.add(new Cesium.PrimitiveCollection());
+  const high = draw.points({ id: 'high', drawOrder: 2 });
+  high.set([dot]);
+  const named = () =>
+    order().map((n, i) =>
+      scene.primitives.get(i) === between ? 'between' : n,
+    );
+  // Drawn first, so on top; the other primitives keep their places.
+  assert.deepEqual(named(), ['below', 'high', 'between', 'plain']);
+  assert.equal(high.size(), 1, 'not destroyed by the move');
+  high.setOptions({ drawOrder: 0 });
+  assert.deepEqual(
+    named(),
+    ['below', 'plain', 'between', 'high'],
+    'back to 0, it takes its place by when it was made',
+  );
+  // All at 0, nothing is moved: what others stacked stays.
+  scene.primitives.raiseToTop(below);
+  const added = draw.points({ id: 'added' });
+  added.set([dot]);
+  assert.deepEqual(named(), ['plain', 'between', 'high', 'below', 'added']);
+  for (const set of [high, plain, added]) set.dispose();
+});
+
+test('reordering by drawOrder leaves the other primitives where they are', () => {
+  const scene = fakeScene();
+  scene.primitives = new Cesium.PrimitiveCollection();
+  const { draw } = drawOver(scene);
+  const dot = { id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' };
+  const [a, b, c] = ['A', 'B', 'C'].map((id) => draw.points({ id }));
+  const x = new Cesium.PrimitiveCollection();
+  const y = new Cesium.PrimitiveCollection();
+  c.set([dot]);
+  scene.primitives.add(x);
+  b.set([dot]);
+  scene.primitives.add(y);
+  a.set([dot]);
+  const order = () => {
+    const out = [];
+    for (let i = 0; i < scene.primitives.length; i++) {
+      const p = scene.primitives.get(i);
+      out.push(p === x ? 'X' : p === y ? 'Y' : p.drawSetId);
+    }
+    return out;
+  };
+  assert.deepEqual(order(), ['C', 'X', 'B', 'Y', 'A']);
+  a.setOptions({ drawOrder: 1 });
+  assert.deepEqual(order(), ['A', 'X', 'B', 'Y', 'C']);
+  assert.ok(!x.isDestroyed() && !y.isDestroyed());
+  for (const set of [a, b, c]) set.dispose();
+});
+
 test('changing an option rebuilds only the kinds that build it in, in their place', () => {
   const scene = fakeScene();
   scene.primitives = new Cesium.PrimitiveCollection();

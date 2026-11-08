@@ -351,6 +351,7 @@ export function createCesiumDraw({
   requestRender: requestFrame = null,
 }) {
   const sets = new Map();
+  let setSeq = 0;
   // Bumped whenever what height queries see through may have changed: a
   // set made, rebuilt, restyled or gone, or items added or removed (icons
   // changed in place keep their pick ids, so they do not bump it).
@@ -375,6 +376,8 @@ export function createCesiumDraw({
       items,
       listeners,
       host: null,
+      // When it was made: `drawOrder`'s ties keep that order.
+      seq: (setSeq += 1),
       pickIds: [],
       // What it drew before its ground primitives were ready, still shown.
       retiring: null,
@@ -495,6 +498,7 @@ export function createCesiumDraw({
         const clampTo = spec.clampTo;
         const blend = spec.blend;
         const pickable = spec.pickable !== false;
+        const drawOrder = spec.drawOrder ?? 0;
         Object.assign(spec, options);
         // What clamped items clamp to, how points blend, and whether ground
         // primitives pick, are built into them. Models clamp nothing, only
@@ -520,6 +524,7 @@ export function createCesiumDraw({
         showHosts(record);
         // No longer culled: what the cull hid comes back.
         if (culled && !spec.horizonCull) uncull(record);
+        if ((spec.drawOrder ?? 0) !== drawOrder) orderHosts(true);
         requestRender();
       },
       size: () => items.size,
@@ -668,6 +673,65 @@ export function createCesiumDraw({
     if (at >= 0) scene.primitives.add(host, at);
     else scene.primitives.add(host);
     showHosts(record);
+    // A new set's host comes in last; it takes its place by draw order.
+    if (!old) orderHosts();
+  }
+
+  /**
+   * `SetSpec.drawOrder`: the sets' hosts stacked in the scene's primitives
+   * by their draw order. Of opaque billboards and points that skip the
+   * depth test, Cesium draws the one in the earlier primitive on top (both
+   * at the near plane, the later fails the depth test) and picks it, so a
+   * higher order goes earlier; of one order, in the order they were made.
+   * The hosts trade places among the slots they hold, so nothing else in
+   * the scene moves. Nothing moves while every set is at 0 (unless an order
+   * just changed, `changed`), so sets at 0 stack as they were first drawn
+   * (and as the sprite order raises them); nor while the hosts are already
+   * in order.
+   * Translucent ones blend order-independently, whatever their order, and
+   * items in different view frustums stack nearer frustum first.
+   * @param {boolean} [changed]
+   */
+  function orderHosts(changed = false) {
+    if (!live()) return;
+    let ordered = changed;
+    for (const record of sets.values())
+      if ((record.spec.drawOrder ?? 0) !== 0) ordered = true;
+    if (!ordered) return;
+    const placed = [];
+    for (const record of sets.values()) {
+      if (!record.host || record.host.isDestroyed?.()) continue;
+      const slot = slotOf(record.host);
+      if (slot >= 0) placed.push({ record, slot });
+    }
+    const slots = placed.map(({ slot }) => slot).sort((a, b) => a - b);
+    const wanted = [...placed].sort(
+      (a, b) =>
+        (b.record.spec.drawOrder ?? 0) - (a.record.spec.drawOrder ?? 0) ||
+        a.record.seq - b.record.seq,
+    );
+    if (wanted.every(({ slot }, i) => slot === slots[i])) return;
+    // Each slot, lowest first, takes its host by trading places with the
+    // host in it (taken out and put back, not destroyed): what lies between
+    // them, and every slot already filled, stays where it is.
+    const primitives = scene.primitives;
+    const destroys = primitives.destroyPrimitives;
+    primitives.destroyPrimitives = false;
+    try {
+      wanted.forEach(({ record }, i) => {
+        const to = slots[i];
+        const from = slotOf(record.host);
+        if (from === to) return;
+        // `from` is later: the hosts still to place sit after the filled slots.
+        const other = primitives.get(to);
+        primitives.remove(record.host);
+        primitives.add(record.host, to);
+        primitives.remove(other);
+        primitives.add(other, from);
+      });
+    } finally {
+      primitives.destroyPrimitives = destroys;
+    }
   }
 
   /** Where `primitive` is among the scene's primitives, or -1. */
