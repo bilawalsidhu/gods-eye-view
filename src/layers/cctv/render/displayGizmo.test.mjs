@@ -1,7 +1,4 @@
-// The CCTV calibration gizmo drawn by the display, on the fake engine and
-// on the Cesium engine: drags through engine.input that patch only the
-// pinned record and hand the camera back, picks that need the gizmo's own
-// handles, the handles' geometry, hover sizes, cancellation and teardown.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -185,40 +182,7 @@ for (const makeHarness of CCTV_HARNESSES) {
       { id: points.id, kind: points.kind, count: points.count },
       { id: 'cctv-gizmo-points', kind: 'point', count: 6 },
     );
-    if (h.cesium) {
-      const ring = h.primitive('cctv-gizmo-ring-heading');
-      const first = ring.geometryInstances.geometry._positions[0];
-      assert.ok(
-        Math.abs(
-          geo.cartesian3.distance(first, h.record.frustumPositions.mount) - 12,
-        ) < 1e-6,
-      );
-      const east = h.primitive('cctv-gizmo-move-east');
-      assert.equal(east.geometryInstances.geometry._width, 12);
-      assert.equal(east.appearance.material.type, 'PolylineArrow');
-      assert.ok(
-        Math.abs(
-          east.depthFailAppearance.material.uniforms.color.alpha - 0.45,
-        ) < 1e-6,
-      );
-      const heading = h.primitive('cctv-gizmo-ring-heading');
-      assert.ok(
-        Math.abs(heading.appearance.material.uniforms.color.alpha - 0.9) < 1e-6,
-      );
-      assert.ok(
-        Math.abs(
-          heading.depthFailAppearance.material.uniforms.color.alpha - 0.45,
-        ) < 1e-6,
-      );
-      const tips = h.primitive('cctv-gizmo-points');
-      const tip = tips.get(0);
-      near(tip.pixelSize, 14, 'tip size');
-      assert.equal(tip.outlineWidth, 2);
-      assert.ok(Math.abs(tip.outlineColor.alpha - 0.7) < 1e-6);
-      assert.equal(tip.disableDepthTestDistance, Number.POSITIVE_INFINITY);
-      assert.ok(Math.abs(tip.position.y - 19.2) < 1e-6);
-      near(tips.get(3).pixelSize, 13, 'range handle size');
-    } else {
+    {
       const ring = h.engine.fake.line('cctv-gizmo-ring-heading');
       assert.ok(
         Math.abs(
@@ -262,9 +226,7 @@ for (const makeHarness of CCTV_HARNESSES) {
     h.event('move');
     assert.equal(h.canvas.style.cursor, 'grab');
     const size = (index) =>
-      h.cesium
-        ? h.primitive('cctv-gizmo-points').get(index).pixelSize
-        : h.engine.fake.moverSet('cctv-gizmo-points').store.scales[index] * 10;
+      h.engine.fake.moverSet('cctv-gizmo-points').store.scales[index] * 10;
     near(size(3), 17, 'the hovered range handle');
     near(size(0), 10, 'an arrow tip takes the handle size');
     near(size(4), 10, 'a field-of-view handle');

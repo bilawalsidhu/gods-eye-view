@@ -13,6 +13,7 @@
 // materials, from the time uniform (src/globe/ground.js groundSeconds).
 // No effect remains in the chain while no item is drawn.
 
+import { DISPLAY_COLOR_GLSL, VIEW_POSITION_GLSL } from '../shaderChunks.js';
 import { EffectDesc, Effect as NavaraEffect } from '@navaramap/three';
 import { Effect, EffectAttribute } from 'postprocessing';
 import {
@@ -20,13 +21,13 @@ import {
   FloatType,
   Matrix4,
   NearestFilter,
-  RGBADepthPacking,
   RGBAFormat,
   Uniform,
 } from 'three';
 import { DASH_EDGE, groundSeconds } from '../../ground.js';
+import { groundSurfaceUniforms, updateGroundSurface } from './surface.js';
 import { withFrameUpdates, withPassDisposal } from '../frameDescriptor.js';
-import { ITEM_TEXELS, LOOK, MARGIN_RATIO } from './corridors.js';
+import { REVEAL_OFFSET, ITEM_TEXELS, LOOK, MARGIN_RATIO } from './corridors.js';
 import {
   GRID_COLS,
   GRID_ROWS,
@@ -60,12 +61,8 @@ uniform float uPixelRatio;
 vec4 atSlot(highp sampler2D image, int slot) {
   return texelFetch(image, ivec2(slot & ${ROW - 1}, slot >> ${Math.log2(ROW)}), 0);
 }
-vec3 toDisplay(vec3 c) {
-  return mix(12.92*c,1.055*pow(max(c,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),c));
-}
-vec3 toLinear(vec3 c) {
-  return mix(c/12.92,pow(max((c+0.055)/1.055,vec3(0.0)),vec3(2.4)),step(vec3(0.04045),c));
-}
+${DISPLAY_COLOR_GLSL}
+${VIEW_POSITION_GLSL}
 // A corridor item over the colour, nearest metres from its line and along
 // metres from its start: its width, glow, pulse and dash, in LDR and
 // premultiplied, as Cesium writes ground polylines.
@@ -122,9 +119,9 @@ vec3 blendCorridor(vec3 color, int item, float nearest, vec2 normal, float along
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   outputColor = inputColor;
   float depth = unpackRGBAToDepth(texture2D(tAllDepth, uv));
-  float distance = exp2(2.0 * depth / uLogDepthFC) - 1.0;
+  float distance = viewDistance(depth, uLogDepthFC);
   vec4 ray = uInverseProjection * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
-  vec3 point = ray.xyz * (distance / -ray.z);
+  vec3 point = viewPosition(ray, distance);
   // Derivatives before any divergent branch: neighbours test other items.
   vec3 pointDx = dFdx(point);
   vec3 pointDy = dFdy(point);
@@ -403,8 +400,7 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
       // Its own pass: inputColor is the tone-mapped frame.
       attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map([
-        ['tAllDepth', new Uniform(null)],
-        ['tSurfaceDepth', new Uniform(null)],
+        ...groundSurfaceUniforms(),
         ['tFrames', new Uniform(null)],
         ['tStyles', new Uniform(null)],
         ['tSegments', new Uniform(null)],
@@ -413,9 +409,7 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
         ['tItems', new Uniform(null)],
         ['tGrid', new Uniform(null)],
         ['tCandidates', new Uniform(null)],
-        ['uInverseProjection', new Uniform(new Matrix4())],
         ['uViewToWorld', new Uniform(new Matrix4())],
-        ['uLogDepthFC', new Uniform(1)],
         ['uTime', new Uniform(0)],
         ['uPixelRatio', new Uniform(1)],
       ]),
@@ -428,8 +422,7 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
     const owner = this.owner;
     if (!this.effect || !camera || !owner.state) return;
     const mrt = this.find('mrt');
-    if (mrt?.depthBufferPacking !== RGBADepthPacking)
-      throw new Error('The ground pass needs packed scene depth');
+    updateGroundSurface(this.effect, camera, this.ctx, mrt);
     const input = this.ctx.getInputBuffer();
     const { state } = owner;
     if (
@@ -451,11 +444,7 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
       textures.candidates.needsUpdate = true;
     }
     const u = this.effect.uniforms;
-    u.get('tAllDepth').value = mrt.depthBuffer;
-    u.get('tSurfaceDepth').value = this.ctx.getRenderTarget().depthTexture;
-    u.get('uInverseProjection').value.copy(camera.projectionMatrixInverse);
     u.get('uViewToWorld').value.copy(camera.matrixWorld);
-    u.get('uLogDepthFC').value = 2 / Math.log2(camera.far + 1);
     u.get('uTime').value = groundSeconds();
     const cssWidth = this.view.canvas?.clientWidth;
     u.get('uPixelRatio').value = cssWidth > 0 ? input.width / cssWidth : 1;
@@ -504,7 +493,8 @@ export function createGroundPass(view) {
     reveal(offset, count, fraction) {
       if (!owner.state) return;
       for (let i = 0; i < count; i++)
-        owner.state.items.data[offset + i * ITEM_TEXELS * 4 + 20] = fraction;
+        owner.state.items.data[offset + i * ITEM_TEXELS * 4 + REVEAL_OFFSET] =
+          fraction;
       owner.textures.items.needsUpdate = true;
     },
     textureBytes: () => textureBytes(owner.state),

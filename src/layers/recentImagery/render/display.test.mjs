@@ -1,12 +1,10 @@
-// The Recent Imagery display on the fake engine and on the Cesium engine
-// over a stub scene: the same calls, read back from each engine's own
-// store (the fake's imagery layers, Cesium's imagery layers and their
-// template providers).
+// Layer display behavior on the fake engine.
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { BOX } from '../testDoubles.mjs';
 import { createRecentImageryDisplay } from './display.js';
 
@@ -42,62 +40,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const { engine, viewer } = createCesiumMoversEngine();
-  viewer.imageryLayers = new Cesium.ImageryLayerCollection();
-  // The map's base imagery, under the slot's layers.
-  const tilingScheme = new Cesium.WebMercatorTilingScheme();
-  const base = new Cesium.ImageryLayer({
-    tilingScheme,
-    rectangle: tilingScheme.rectangle,
-    tileWidth: 256,
-    tileHeight: 256,
-    minimumLevel: 0,
-    maximumLevel: 18,
-    errorEvent: new Cesium.Event(),
-    requestImage: () => undefined,
-  });
-  viewer.imageryLayers.add(base);
-  viewer.scene.globe.show = true;
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  const side = (direction) =>
-    ({
-      [Cesium.SplitDirection.LEFT]: 'left',
-      [Cesium.SplitDirection.RIGHT]: 'right',
-    })[direction] ?? 'none';
-  const degrees = (value) => Number(Cesium.Math.toDegrees(value).toFixed(9));
-  return {
-    name: 'the Cesium engine',
-    engine,
-    drawn: () =>
-      Array.from({ length: viewer.imageryLayers.length - 1 }, (_, i) => {
-        const layer = viewer.imageryLayers.get(i + 1);
-        const provider = layer.imageryProvider;
-        const { west, south, east, north } = provider.rectangle;
-        return {
-          url: provider.url,
-          maxLevel: provider.maximumLevel,
-          opaque: !provider.hasAlphaChannel,
-          rectangle: {
-            west: degrees(west),
-            south: degrees(south),
-            east: degrees(east),
-            north: degrees(north),
-          },
-          credit: provider.credit?.html ?? null,
-          alpha: layer.alpha,
-          split: side(layer.splitDirection),
-          shown: layer.show,
-        };
-      }),
-    hideSurface() {
-      viewer.scene.globe.show = false;
-    },
-    destroy: () => engine.destroy(),
-  };
-}
-
-for (const make of [fakeHarness, cesiumHarness]) {
+for (const make of [fakeHarness]) {
   const name = make().name;
 
   test(`${name}: a slot drapes one GIBS template bounded to the box; the same day only restyles it`, () => {

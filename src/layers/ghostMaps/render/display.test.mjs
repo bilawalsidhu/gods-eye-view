@@ -1,15 +1,12 @@
-// The GhostMaps display on the globe contract, on the fake engine and on the
-// Cesium engine over a stub scene: KML polygons, lines and placemarks keep
-// the styles the Cesium entities had (colours, alphas, widths, scales and
-// order), picks name the report part, a report drops in place, placemarks
-// beyond the horizon hide, and teardown leaves nothing drawn.
+import { createFakeGroundHarness } from '../../../testSupport/groundDisplayEngines.mjs';
+// Layer display behavior on the fake engine.
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { rgbaFromCss } from '../../shared/color.js';
 import { createGhostMapsDisplay } from './display.js';
 
@@ -41,15 +38,10 @@ function recordGround(engine) {
 }
 
 function fakeHarness() {
-  const engine = createFakeEngine();
+  const harness = createFakeGroundHarness();
+  const { engine } = harness;
   return {
-    name: 'the fake engine',
-    engine,
-    frame: () => engine.fake.frame(),
-    click(picked) {
-      engine.fake.script('pick', picked);
-      engine.fake.input('click', { position: { x: 100, y: 100 } });
-    },
+    ...harness,
     pin(id, index) {
       const { store, options } = engine.fake.moverSet(id);
       return {
@@ -63,83 +55,7 @@ function fakeHarness() {
   };
 }
 
-// Cesium's ground primitives as built, without a WebGL context: the
-// options (instances, appearance, classification) the engine hands them.
-const groundFactory = (type) => (options) => ({
-  type,
-  ...options,
-  ready: true,
-  destroy() {},
-  isDestroyed: () => false,
-});
-
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const { engine, viewer, frame, primitive } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-      groundFactories: {
-        fills: groundFactory('fills'),
-        lines: groundFactory('lines'),
-      },
-    },
-  });
-  // The stub scene has no ground collection of its own.
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    frame,
-    click(picked) {
-      native = !picked
-        ? undefined
-        : picked.ground
-          ? { id: { gevGroundSet: picked.owner, instance: picked.instance } }
-          : { primitive: primitive(picked.owner).get(picked.instance) };
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(100, 100),
-        });
-    },
-    pin(id, index) {
-      const item = primitive(id).get(index);
-      const count = engine.movers.list().find((set) => set.id === id).count;
-      return {
-        shown: index < count && item.show,
-        color: [
-          item.color.red,
-          item.color.green,
-          item.color.blue,
-          item.color.alpha,
-        ],
-        sizePx: item.width * item.scale,
-        id: item.id,
-      };
-    },
-    count: (id) => engine.movers.list().find((set) => set.id === id).count,
-    // The ground primitives Cesium builds for a set.
-    groundPrimitives(id) {
-      const found = [];
-      const visit = (collection) => {
-        for (let index = 0; index < collection.length; index++) {
-          const child = collection.get(index);
-          if (child.gevGroundSet === id) found.push(child);
-          else if (child instanceof Cesium.PrimitiveCollection) visit(child);
-        }
-      };
-      visit(viewer.scene.groundPrimitives);
-      return found;
-    },
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 // Seams for Node: decoded icons by URL and a canvas that records draws.
 function iconSeams(sizes = {}) {
@@ -324,26 +240,11 @@ for (const makeHarness of HARNESSES) {
     assert.ok(Math.abs(big.sizePx - 20 * 1.5) < 1e-6, 'scale capped at 1.5');
     const set = harness.engine.movers.list().find(({ id }) => id === pins);
     assert.equal(set.kind, 'sprite');
-    if (harness.cesium) {
-      // The per-instance colours and widths Cesium batches.
-      const [fills, outlines] = harness.groundPrimitives(polygons().options.id);
-      assert.deepEqual(
-        [fills.type, outlines.type],
-        ['fills', 'lines'],
-        'one fill and one outline batch',
-      );
-      assert.equal(fills.classificationType, Cesium.ClassificationType.BOTH);
-      assert.equal(fills.allowPicking, true);
-      const colour = fills.geometryInstances[0].attributes.color.value;
-      assert.deepEqual([...colour], [255, 90, 54, 64]);
-      assert.equal(outlines.geometryInstances[0].geometry.width, 1.5);
-      const [corridors] = harness.groundPrimitives(lines().options.id);
-      assert.equal(corridors.geometryInstances[0].geometry.width, 8);
-    } else {
-      const { options } = harness.engine.fake.moverSet(pins);
-      assert.equal(options.depthTest, 'always');
-      assert.equal(options.pickable, true);
-    }
+
+    const { options } = harness.engine.fake.moverSet(pins);
+    assert.equal(options.depthTest, 'always');
+    assert.equal(options.pickable, true);
+
     display.destroy();
   });
 

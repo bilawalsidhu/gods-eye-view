@@ -1,7 +1,7 @@
 import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
-import { installAlprFixture, cameras } from './fixtures/w2/alpr.mjs';
-import { firmsFixture, FIRMS_VALID_COUNT } from './fixtures/w2/firms.mjs';
+import { installAlprFixture, cameras } from './fixtures/layers/alpr.mjs';
+import { firmsFixture, FIRMS_VALID_COUNT } from './fixtures/layers/firms.mjs';
 import { createStrict, localPreview } from './qa-strict-harness.mjs';
 const url = localPreview(process.argv[2]),
   fire = process.argv.includes('--fires'),

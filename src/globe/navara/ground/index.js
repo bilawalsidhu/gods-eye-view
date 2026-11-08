@@ -12,7 +12,7 @@
 
 import { createGroundRegistry } from '../../ground.js';
 import { composeGround, packHeights, packSet } from './pack.js';
-import { ITEM_TEXELS } from './corridors.js';
+import { REVEAL_OFFSET, ITEM_TEXELS } from './corridors.js';
 
 // Frames before the first new try at a set's missing terrain heights; each
 // later try waits twice as long, up to RETRIES tries.
@@ -61,7 +61,11 @@ export function createNavaraGround(
   };
   const pack = (entry) => {
     entry.pack = packSet(entry.options.kind, entry.items, { terrainHeight });
-    for (let at = 20; at < entry.pack.items.length; at += ITEM_TEXELS * 4)
+    for (
+      let at = REVEAL_OFFSET;
+      at < entry.pack.items.length;
+      at += ITEM_TEXELS * 4
+    )
       entry.pack.items[at] = entry.fraction;
     entry.wait = entry.pack.heights.some(Number.isNaN) ? RETRY_FRAMES : 0;
   };
@@ -122,7 +126,11 @@ export function createNavaraGround(
         if (entry.fraction === fraction) return;
         entry.fraction = fraction;
         if (entry.pack) {
-          for (let at = 20; at < entry.pack.items.length; at += ITEM_TEXELS * 4)
+          for (
+            let at = REVEAL_OFFSET;
+            at < entry.pack.items.length;
+            at += ITEM_TEXELS * 4
+          )
             entry.pack.items[at] = fraction;
           if (entry.offset !== null)
             pass.reveal(

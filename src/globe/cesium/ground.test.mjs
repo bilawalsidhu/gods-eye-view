@@ -237,6 +237,14 @@ test('fills batch into GroundPrimitive instances, outlines into ground polylines
     items('disc', [{ center: [0, 0], radiusM: 500, fill: [1, 1, 1, 1] }]),
   );
   assert.ok(shapes.fills[0].geometry instanceof Cesium.EllipseGeometry);
+  assert.equal(shapes.fills[0].geometry._semiMajorAxis, 500);
+  const cells = groundInstances(
+    { id: 'cells', kind: 'cell' },
+    items('cell', [
+      { west: 0, south: 0, east: 1, north: 1, fill: [1, 0, 0, 1] },
+    ]),
+  );
+  assert.ok(cells.fills[0].geometry instanceof Cesium.RectangleGeometry);
 });
 
 test('sets join scene.groundPrimitives in order and rebuild on commit', () => {
@@ -440,4 +448,27 @@ test('corridor reveal mutates the live material and retains it through a geometr
   set.commit();
   assert.equal(built[1].appearance.material.uniforms.reveal, 0.5);
   port.destroy();
+});
+
+test('non-pickable ground fills skip pick commands and retain normal drawing', (t) => {
+  const viewer = createFakeViewer();
+  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
+  const port = createCesiumGround(viewer);
+  const set = port.ground.createSet({
+    id: 'cells',
+    kind: 'cell',
+    pickable: false,
+  });
+  set.replace([{ west: 0, south: 0, east: 1, north: 1, fill: [1, 0, 0, 1] }]);
+  set.commit();
+  const fill = viewer.scene.groundPrimitives.get(0).get(0).get(0);
+  assert.ok(fill instanceof Cesium.GroundPrimitive);
+  let updates = 0;
+  t.mock.method(Cesium.GroundPrimitive.prototype, 'update', () => updates++);
+  fill.update({ passes: { pick: true } });
+  assert.equal(updates, 0);
+  fill.update({ passes: { render: true, pick: false } });
+  assert.equal(updates, 1);
+  port.destroy();
+  assert.equal(fill.isDestroyed(), true);
 });

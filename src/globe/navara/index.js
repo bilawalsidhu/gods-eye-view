@@ -2,12 +2,7 @@
 // the product way (viewOptions.js) and the GlobeEngine on it. Load it with a
 // dynamic import() so Navara stays out of the Cesium-mode bundle.
 
-import ThreeView, {
-  Color as NavaraColor,
-  MeshDesc,
-  EffectDesc,
-  Effect as NavaraEffect,
-} from '@navaramap/three';
+import ThreeView, { Color as NavaraColor, MeshDesc } from '@navaramap/three';
 import * as geo from '../../geo/index.js';
 import { DefaultPlugin } from '@navaramap/three-default-plugin';
 import { Pass } from 'postprocessing';
@@ -177,10 +172,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
       ground: createNavaraGround(view, {
         createPass: createGroundPass,
         pulseField: (options) =>
-          createNavaraPulseField(
-            { view, EffectDesc, NavaraEffect, canvas },
-            options,
-          ),
+          createNavaraPulseField({ view, canvas }, options),
       }),
       imagery: (parts) =>
         createNavaraImagery(view, { ...parts, createPass: createImageryPass }),

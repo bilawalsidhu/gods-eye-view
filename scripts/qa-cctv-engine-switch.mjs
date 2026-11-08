@@ -2,7 +2,7 @@ import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
-import { installCctvFixture } from './fixtures/w2/cctv.mjs';
+import { installCctvFixture } from './fixtures/layers/cctv.mjs';
 import { createStrict, localPreview } from './qa-strict-harness.mjs';
 const url = localPreview(process.argv[2]);
 url.search = '?engine=navara&welcome=0';
@@ -64,7 +64,7 @@ await strict.run({}, async (b) => {
     await dataManager.setEnabled('cctv', true, { origin: 'user' });
     window.qaCctv = dataManager.layers.get('cctv').module;
     window.qaCctv.setParams({
-      selectedCameraId: 'w2-cctv-video',
+      selectedCameraId: 'fixture-cctv-video',
       showProjection: true,
       coverageMode: 'viewshed',
       calibration: { patch: { heightM: 31, pitchDeg: 20 } },
@@ -101,11 +101,12 @@ await strict.run({}, async (b) => {
       params: window.qaCctv.getParams(),
       plane: !!window.qaCctv
         ._cctvRecordsForTest()
-        .find((r) => r.camera.id === 'w2-cctv-video').projection?.planeEntity,
+        .find((r) => r.camera.id === 'fixture-cctv-video').projection
+        ?.planeEntity,
       projection: (() => {
         const r = window.qaCctv
           ._cctvRecordsForTest()
-          .find((r) => r.camera.id === 'w2-cctv-video');
+          .find((r) => r.camera.id === 'fixture-cctv-video');
         return {
           show: r.projection?.planeEntity?.show === true,
           visible: r.projection?.planeVisible === true,
@@ -123,7 +124,7 @@ await strict.run({}, async (b) => {
       v.params.coverageMode,
     );
     assert.ok(v.same && v.media && v.plane && !v.paused);
-    assert.equal(v.params.selectedCameraId, 'w2-cctv-video');
+    assert.equal(v.params.selectedCameraId, 'fixture-cctv-video');
     assert.equal(v.params.coverageMode, 'viewshed');
     assert.equal(catalogs, count);
     await strict.passed(

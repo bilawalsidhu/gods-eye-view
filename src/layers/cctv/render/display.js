@@ -17,7 +17,10 @@
 import * as geo from '../../../geo/index.js';
 import { GIZMO_ID_PREFIX } from '../../../data/cctvGizmo.js';
 import { CAMERA_ICON, IDLE_CAMERA_COLOR } from '../policy.js';
-import { bindCctvWorldClickGesture } from '../worldClick.js';
+import {
+  bindTrackingClickGesture,
+  isTrackingClickGesture,
+} from '../../../data/trackingGesture.js';
 import { createCctvMeshes } from './meshes.js';
 import {
   COVERAGE_DASH,
@@ -40,13 +43,6 @@ import {
 
 const GIZMO_POINT_SET_ID = `${GIZMO_ID_PREFIX}points`;
 const GIZMO_POINT_CAPACITY = 16;
-// The tracking click gesture's handler types, as engine.input types.
-const CLICK_EVENT_TYPES = Object.freeze({
-  LEFT_DOWN: 'down',
-  MOUSE_MOVE: 'move',
-  LEFT_UP: 'up',
-  LEFT_CLICK: 'click',
-});
 const CORNERS = ['tl', 'tr', 'br', 'bl'];
 const capRing = (p) => [p.tl, p.tr, p.br, p.bl, p.tl];
 const sameDash = (a, b) =>
@@ -617,17 +613,15 @@ export function createCctvDisplay(engine, { state, services = {} } = {}) {
     onMoveStart: (fn) =>
       ownListener(engine.camera.moveStart.addEventListener(fn)),
     bindClick(onClick, options = {}) {
-      const removes = [];
-      bindCctvWorldClickGesture(
-        {
-          setInputAction(fn, type) {
-            removes.push(engine.input.on(type, fn));
+      return ownListener(
+        bindTrackingClickGesture(
+          engine.input,
+          (click, gesture) => {
+            if (isTrackingClickGesture(gesture)) onClick(click);
           },
-        },
-        onClick,
-        { ...options, eventTypes: CLICK_EVENT_TYPES },
+          options,
+        ),
       );
-      return ownListener(() => removes.forEach((remove) => remove()));
     },
     createGizmoRenderer() {
       const gizmo = createGizmoRenderer();

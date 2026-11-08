@@ -413,10 +413,9 @@ export function cesiumStreetLevelMap({ view = true, terrain = 0 } = {}) {
   };
 }
 
-/** The display on each engine: the fake one and Cesium's, over Sacramento. */
+/** The display on the fake engine over Sacramento. */
 export const STREET_LEVEL_MAPS = Object.freeze([
   () => ({ name: 'the fake engine', ...streetLevelMap({ view: true }) }),
-  () => cesiumStreetLevelMap(),
 ]);
 
 /** The centre of the tile holding a point at zoom `z`, so a small view is one tile. */

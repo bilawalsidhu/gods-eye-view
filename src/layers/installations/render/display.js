@@ -1,3 +1,7 @@
+import {
+  createSelectionKeeper,
+  writeSelectedMarker,
+} from '../../shared/selectionKeeper.js';
 import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 // Mapped Installations on the globe contract (engine.movers, engine.ground,
 // engine.input, engine.camera), the same on every engine:
@@ -19,7 +23,6 @@ import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 
 import { t } from '../../../i18n/index.js';
 import * as geo from '../../../geo/index.js';
-import { isPointerFree } from '../../../data/inputOwnership.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
@@ -250,13 +253,16 @@ export function createInstallationsDisplay(
         });
       }
     normal.setCount(count);
-    selected.setCount(chosen ? 1 : 0);
-    if (chosen)
-      selected.set(0, {
-        position: chosen.position,
-        color: SELECTED_MARKER_COLOR,
-        pickId: chosen.record.id,
-      });
+    writeSelectedMarker(
+      selected,
+      chosen
+        ? {
+            position: chosen.position,
+            color: SELECTED_MARKER_COLOR,
+            pickId: chosen.record.id,
+          }
+        : null,
+    );
     normal.commit();
     selected.commit();
   }
@@ -413,13 +419,7 @@ export function createInstallationsDisplay(
     if (!initialized) return;
     // Context navigation can select another layer without a canvas click.
     // A delayed floor/data repaint must not steal that newer selection back.
-    const selectedContext = getSelectedEntityContext();
-    if (
-      !claimSelection &&
-      state.selectedId &&
-      selectedContext?.id !== state.selectedId
-    )
-      state.selectedId = null;
+    selection.reconcile({ claimSelection });
     let migratedSelection = false;
     if (state.selectedId && !state.recordById.has(state.selectedId)) {
       const replacement = state.records.find((record) =>
@@ -529,22 +529,17 @@ export function createInstallationsDisplay(
     return state.selectedId === id;
   }
 
-  function onClick({ picked }) {
-    // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-    if (!isPointerFree()) return;
-    if (!state.enabled) return;
-    const id = typeof picked?.id === 'string' ? picked.id : null;
-    if (id && state.recordById.has(id) && id !== state.selectedId) {
-      selectRecord(id);
-    } else if (state.selectedId) {
-      // Clicking the selected site again, empty map, or another contact
-      // releases this layer's selection. Clear only our shared context so a
-      // sibling click handler's newly selected aircraft/site stays intact.
+  const selection = createSelectionKeeper({
+    state,
+    getSelectedEntityContext,
+    selectRecord,
+    clearSelection() {
       state.selectedId = null;
       clearSelectedEntityContextForLayer(LAYER_ID);
       renderRecords();
-    }
-  }
+    },
+  });
+  const onClick = selection.onClick;
 
   function installInteraction() {
     if (removeClick) return;

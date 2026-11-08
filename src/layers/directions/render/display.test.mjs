@@ -1,13 +1,8 @@
-// The Directions display on the engine contract, on the fake engine and on
-// the Cesium engine (real Cesium point and billboard collections and the
-// engine's ground batches over fake primitives): the route's flowing
-// dashes, width, colour and drape, and the render it holds; the maneuver dots' style, anchoring, selection
-// and picks; the A and B markers at the surface with their letters; show and
-// hide through the layer; and what teardown leaves.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { GROUND_HARNESSES } from '../../../testSupport/groundDisplayEngines.mjs';
 import { createApplicationDirectionsLayer } from '../../../data/directions.js';
@@ -114,11 +109,7 @@ function cesiumPoint(viewer, id, index) {
 function fixture(t, makeHarness, { document = true } = {}) {
   if (document) installDocument(t);
   const h = makeHarness();
-  if (h.viewer)
-    h.viewer.creditDisplay ??= {
-      addStaticCredit() {},
-      removeStaticCredit() {},
-    };
+
   const movers = recordMovers(h.engine);
   let floor = 0;
   const requests = [];
@@ -192,22 +183,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       getRenderGovernorDiagnostics(f.engine).holds.includes('directions'),
       'a drawn route holds continuous render',
     );
-    if (f.cesium) {
-      const { fills, lines } = f.primitives(IDS.route);
-      assert.equal(fills.length, 0);
-      assert.equal(lines.length, 1, 'one ground polyline batch');
-      assert.equal(
-        lines[0].options.classificationType,
-        Cesium.ClassificationType.BOTH,
-      );
-      const { uniforms } = lines[0].options.appearance.material;
-      assert.equal(uniforms.dashCells, 64);
-      near(uniforms.dashDuty, 0.46, 'duty');
-      near(uniforms.dashSpeed, 0.55, 'speed');
-      near(uniforms.dashGap, 0.18, 'gap');
-      near(uniforms.dashEmission, 0.9, 'emission');
-      near(uniforms.color.alpha, 0.95, 'alpha');
-    }
+
     f.layer.setParams({ clear: true });
     assert.equal(f.set(IDS.route), undefined);
     assert.ok(
@@ -241,13 +217,6 @@ for (const makeHarness of GROUND_HARNESSES) {
     const at = geo.cartographic.fromCartesian(anchored.position);
     near(at.height, 32, 'floor + lift', 1e-3);
     near(geo.math.toDegrees(at.longitude), MID.lon, 'dot lon');
-    if (f.cesium) {
-      const point = cesiumPoint(f.viewer, IDS.steps, 0);
-      assert.equal(point.pixelSize, 8);
-      assert.equal(point.outlineWidth, 2);
-      assert.equal(point.disableDepthTestDistance, Number.POSITIVE_INFINITY);
-      assert.equal(point.show, true);
-    }
   });
 
   test(`a click on a dot selects it at 13 px and opens its card; a click elsewhere clears it (${name})`, async (t) => {
@@ -258,8 +227,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(f.layer.getRowControls().list.items[1].active, true);
     near(f.movers(IDS.steps).rows[0].scale, 13 / 8, 'selected scale');
     assert.equal(f.cards.at(-1).id, 'directions-step-1');
-    if (f.cesium)
-      assert.equal(cesiumPoint(f.viewer, IDS.steps, 0).pixelSize, 13);
+
     f.click(undefined);
     await settle();
     assert.equal(f.layer.getRowControls().list.items[1].active, false);
@@ -268,7 +236,7 @@ for (const makeHarness of GROUND_HARNESSES) {
 
   test(`A and B are 14 px discs with a black outline and their letters, at the surface (${name})`, async (t) => {
     const f = fixture(t, makeHarness);
-    if (!f.cesium) f.engine.fake.script('sampleHeight', () => 120);
+    f.engine.fake.script('sampleHeight', () => 120);
     f.layer.placeEndpoint('a', A);
     const markers = f.movers(IDS.markers);
     assert.equal(markers.options.kind, 'point');
@@ -281,13 +249,12 @@ for (const makeHarness of GROUND_HARNESSES) {
     nearAll(markers.rows[0].color, [a.red, a.green, a.blue, 1], 'A colour');
     assert.equal(markers.rows[0].show, true);
     assert.equal(markers.rows[1].show, false, 'B is not placed yet');
-    if (!f.cesium)
-      near(
-        geo.cartographic.fromCartesian(markers.rows[0].position).height,
-        120,
-        'A on the sampled surface',
-        1e-3,
-      );
+    near(
+      geo.cartographic.fromCartesian(markers.rows[0].position).height,
+      120,
+      'A on the sampled surface',
+      1e-3,
+    );
     const letters = f.movers(IDS.letters);
     assert.equal(letters.options.kind, 'sprite');
     assert.equal(letters.options.order, 2);
@@ -339,14 +306,10 @@ for (const makeHarness of GROUND_HARNESSES) {
 }
 
 test('an engine switch redraws the route, dots and markers on the new engine only', async (t) => {
-  const [makeFake, makeCesium] = GROUND_HARNESSES;
+  const [makeFake] = GROUND_HARNESSES;
   const f = fixture(t, makeFake);
   await f.route();
-  const next = makeCesium();
-  next.viewer.creditDisplay ??= {
-    addStaticCredit() {},
-    removeStaticCredit() {},
-  };
+  const next = makeFake();
   const movers = recordMovers(next.engine);
   t.after(() => next.destroy());
   f.layer.suspendCamera();

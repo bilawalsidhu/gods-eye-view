@@ -90,6 +90,41 @@ async function runOn(browser, kind) {
     content:
       '* { pointer-events: none !important; } [data-contract-target] { pointer-events: auto !important; }',
   });
+  // The globe drawn and its tiles loaded: a restored view hides the globe
+  // for a moment after the loading screen goes.
+  await page.evaluate(async () => {
+    const { engine } = window.__godsEyeView;
+    const canvas = engine.host.canvas;
+    const probe = document.createElement('canvas');
+    probe.width = 1;
+    probe.height = 1;
+    const context = probe.getContext('2d', { willReadFrequently: true });
+    const started = performance.now();
+    let settled = 0;
+    while (performance.now() - started < 120_000 && settled < 20) {
+      await new Promise((resolve) => {
+        const remove = engine.frames.postRender.addEventListener(() => {
+          remove();
+          resolve();
+        });
+        engine.render.request('contract-suite-settle');
+      });
+      context.drawImage(
+        canvas,
+        canvas.width / 2,
+        canvas.height / 2,
+        1,
+        1,
+        0,
+        0,
+        1,
+        1,
+      );
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+      settled =
+        r + g + b > 60 && engine.surface.tilesLoaded() ? settled + 1 : 0;
+    }
+  });
   // A real left click and pointer move at a canvas position.
   await page.exposeFunction('__contractPointer', async (type, x, y) => {
     const box = await page.evaluate(() => {
@@ -127,9 +162,32 @@ async function runOn(browser, kind) {
       // A real 2D canvas: a sprite atlas the engines can draw and pick.
       const makeCanvas = (width, height) =>
         Object.assign(document.createElement('canvas'), { width, height });
+      // RGBA of the last drawn frame (both engines keep their drawing buffer).
+      const scratch = document.createElement('canvas');
+      const context = scratch.getContext('2d', { willReadFrequently: true });
+      const readRegion = (x, y, width, height) => {
+        const canvas = engine.host.canvas;
+        const scale = canvas.width / canvas.clientWidth;
+        scratch.width = width;
+        scratch.height = height;
+        context.clearRect(0, 0, width, height);
+        context.drawImage(
+          canvas,
+          x * scale,
+          y * scale,
+          width * scale,
+          height * scale,
+          0,
+          0,
+          width,
+          height,
+        );
+        return context.getImageData(0, 0, width, height).data;
+      };
       for (const { name, run } of createContractSuite(engine, {
         waitFrames,
         pointer,
+        readRegion,
         makeCanvas,
       })) {
         if (only && !only.some((prefix) => name.startsWith(prefix))) continue;

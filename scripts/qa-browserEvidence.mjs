@@ -47,7 +47,11 @@ export function isExpectedPreviewSetupError(
 
 // The runtime evidence gate shares one strict runtime verdict across its main page and
 // every share-link page. Response diagnostics never retain query credentials.
-export function watchW1Page(page, report, { name, preview = false, baseUrl }) {
+export function watchBrowserPage(
+  page,
+  report,
+  { name, preview = false, baseUrl },
+) {
   const errors = (report.browserErrors ??= []);
   report.expectedPreviewErrors ??= [];
   report.failedResponses ??= [];

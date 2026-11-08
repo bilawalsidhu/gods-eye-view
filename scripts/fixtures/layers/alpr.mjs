@@ -13,7 +13,7 @@ export const cameras = [
 ].map((position, i) => ({
   ...position,
   osmId: 9000000 + i,
-  operator: i % 3 ? 'W2 fixture' : 'Cámara pública',
+  operator: i % 3 ? 'Deterministic fixture' : 'Cámara pública',
   brand: 'Fixture camera',
   cameraType: 'fixed',
   direction: i % 5 ? String((i * 37) % 360) : '',

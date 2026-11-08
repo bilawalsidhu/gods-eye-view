@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { stations, installRadioFixture } from './fixtures/w2/radio.mjs';
+import { stations, installRadioFixture } from './fixtures/layers/radio.mjs';
 import { createStrict, localPreview, openPage, waitForEngine } from './qa-strict-harness.mjs';
 const url = localPreview(process.argv[2]);
 // The long soak and switch timings live in qa-strict-soak.mjs.

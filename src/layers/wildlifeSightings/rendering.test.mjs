@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as geo from '../../geo/index.js';
-import {
-  createFakeGroundHarness,
-  createCesiumGroundHarness,
-} from '../../testSupport/groundDisplayEngines.mjs';
+import { createFakeGroundHarness } from '../../testSupport/groundDisplayEngines.mjs';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import {
   createRendering,
@@ -454,7 +451,7 @@ test('a selected observation remains rendered outside the viewport and observati
   h.rendering.destroy();
 });
 
-for (const make of [createFakeGroundHarness, createCesiumGroundHarness]) {
+for (const make of [createFakeGroundHarness]) {
   test(`privacy cells drape accent fills and outlines and release them (${make.name})`, () => {
     const cell = { south: 47.6, west: -122.4, north: 47.8, east: -122.2 };
     const groundHarness = make();

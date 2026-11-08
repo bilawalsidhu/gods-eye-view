@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
-import { stations } from './fixtures/w2/radio.mjs';
+import { stations } from './fixtures/layers/radio.mjs';
 import { isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

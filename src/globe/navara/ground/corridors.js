@@ -16,6 +16,9 @@ import * as geo from '../../../geo/index.js';
 const { cartesian3, ellipsoid } = geo;
 
 const DEG = Math.PI / 180;
+/** Reveal fraction within a packed corridor item. */
+export const REVEAL_OFFSET = 20;
+
 /** Pieces a tile holds before it splits. */
 export const TILE_PIECES = 20000;
 /** A piece's longest arc, degrees. */

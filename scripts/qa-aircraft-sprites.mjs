@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * qa-sprites-b5.mjs — throwaway QA harness for skylight Tasks 8+9
+ * qa-aircraft-sprites.mjs — aircraft sprite checks
  * (type-aware billboard silhouettes + per-class 2D/3D scale; Batch 5).
  *
  * Injects synthetic STRAIGHT-FLYING aircraft covering ALL 8 classifyAircraft
  * classes — the flights layer via OpenSky extended categories (state[17]),
  * the military layer via adsb.lol type codes — using the same fetch-shim +
- * history-priming pattern as scripts/qa-heading-b3.mjs (positions analytic at
+ * history-priming pattern as scripts/qa-aircraft-heading.mjs (positions analytic at
  * serve time so every fix is self-consistent through the render delay).
  *
  * Machine assertions:
@@ -15,17 +15,17 @@
  *                   per-class glyph (image data-URI === aircraftIcon(klass),
  *                   imported from src) and per-class scale (flights:
  *                   CLASS_SCALE_2D; military: 0.7 × CLASS_SCALE_2D)
- *   B3 models     : with 3D on, fleet Cesium.Model.scale === the layer's
+ *   Model scales     : with 3D on, fleet Cesium.Model.scale === the layer's
  *                   MODEL_SCALE (both 1; legacy scale is baked into the GLB)
  *                   × CLASS_SCALE_3D[klass] per icao; tracked too
  *   B4 clean      : no console errors
  *
- * Visual output (qa-shots/b5/, untracked): top-down 2D spreads of both rows,
+ * Visual output (qa-shots/aircraft-sprites/, untracked): top-down 2D spreads of both rows,
  * per-row close-ups, a tracked-cyan tint shot, and 3D cluster shots at two
  * zooms per layer showing per-class model scale differences. The PNGs are the
  * acceptance test — read them.
  *
- * Run:  node scripts/qa-sprites-b5.mjs --url http://localhost:4300
+ * Run:  node scripts/qa-aircraft-sprites.mjs --url http://localhost:4300
  * Exits non-zero if any assertion fails. Never commits anything.
  */
 
@@ -44,7 +44,7 @@ const militaryWantScale = (klass) => (CLASS_MODEL_REAL[klass] ? 1
 import { aircraftIcon } from '../src/data/aircraftIcons.js';
 
 // ---------------------------------------------------------------------------
-// Args (same shape as qa-heading-b3.mjs)
+// Args (same shape as qa-aircraft-heading.mjs)
 // ---------------------------------------------------------------------------
 const argv = process.argv.slice(2);
 const getFlag = (name) => argv.includes(name);
@@ -61,7 +61,7 @@ const ENGINE = (argv.find((arg) => arg.startsWith('--engine=')) ?? '--engine=ces
 const APP_URL =
   ENGINE === 'cesium' ? BASE_URL : `${BASE_URL.replace(/\/$/, '')}/?engine=${ENGINE}`;
 const HEADFUL = getFlag('--headful');
-const SHOT_DIR = path.resolve(ENGINE === 'cesium' ? 'qa-shots/b5' : `qa-shots/b5-${ENGINE}`);
+const SHOT_DIR = path.resolve(ENGINE === 'cesium' ? 'qa-shots/aircraft-sprites' : `qa-shots/aircraft-sprites-${ENGINE}`);
 
 const FL_MODEL_SCALE = 1;         // flights.js (airplane.glb is transform-applied and meter-scale)
 const MIL_PLANE_MODEL_SCALE = 1;  // military heavy classes share the same baked airplane.glb
@@ -137,7 +137,7 @@ const SPRITES = {
     { hex: 'dda006', flight: 'ML-QUAD', t: 'B744', lon0: ROW_LON0 + 5 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 13000 },
     { hex: 'dda007', flight: 'ML-HEL',  t: 'H60',  lon0: ROW_LON0 + 6 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 40, altFt: 3000 },
     // course 0 like the rest — keeps the row a clean size-comparison line (2D
-    // rotation is demoed by caa004 and gated by qa-heading-b3 anyway).
+    // rotation is demoed by caa004 and gated by qa-aircraft-heading anyway).
     { hex: 'dda008', flight: 'ML-FJ',   t: 'F16',  lon0: ROW_LON0 + 7 * ROW_STEP_DEG, lat0: 30.28, courseDeg: 0, speedMps: 80, altFt: 15000 },
     // 3D cluster: C17 vs F16 (tracked) vs B744 vs C130. jet.glb is a
     // real-world-scale asset (native bounding radius ~29.8) rendered at
@@ -332,7 +332,7 @@ async function main() {
       };
     });
 
-    // ---- Prime history through the render delay (same pattern as b3) -------
+    // ---- Prime history through the render delay (same pattern as the heading checks) -------
     console.log('Priming straight-flight history through the render delay (30 s / 15 s)...');
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
@@ -394,7 +394,7 @@ async function main() {
     // ========================================================================
     // 2D screenshots
     // ========================================================================
-    console.log('\n2D screenshots → qa-shots/b5/');
+    console.log('\n2D screenshots → qa-shots/aircraft-sprites/');
     const topDown = async (lat, lon, height) => {
       await page.evaluate(async ({ lat, lon, height }) => {
         const camera = window.__godsEyeView.engine.camera;
@@ -429,21 +429,21 @@ async function main() {
     const flRowLat = await rowLat('flights', 2, 30);
     const milRowLat = await rowLat('military', 4, 15);
     await topDown((flRowLat + milRowLat) / 2, ROW_LON0 + 3 * ROW_STEP_DEG, 16000);
-    await page.screenshot({ path: path.join(SHOT_DIR, 'b5-2d-spread-bothrows.png') });
-    console.log('  saved b5-2d-spread-bothrows.png (flights row top, military row bottom)');
+    await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-2d-spread-bothrows.png') });
+    console.log('  saved aircraft-sprites-2d-spread-bothrows.png (flights row top, military row bottom)');
 
     // Row widths: military spans 7 steps (~8.1 km) → frame ~13.9 km at 12 km up;
     // flights spans 5 steps (~5.8 km, +caa004's eastward drift) → ~10.4 km at 9 km up.
     if (hasMilitary) {
       await topDown(await rowLat('military', 4, 15), ROW_LON0 + 3.5 * ROW_STEP_DEG, 17000);
-      await page.screenshot({ path: path.join(SHOT_DIR, 'b5-2d-military-row.png') });
-      console.log('  saved b5-2d-military-row.png (8 classes, amber)');
+      await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-2d-military-row.png') });
+      console.log('  saved aircraft-sprites-2d-military-row.png (8 classes, amber)');
       console.log(`    glyph positions: ${await page.evaluate(() => window.__planeCanvasCoords('military', 15, 'ft'))}`);
     }
 
     await topDown(await rowLat('flights', 2, 30), ROW_LON0 + 2.5 * ROW_STEP_DEG, 12000);
-    await page.screenshot({ path: path.join(SHOT_DIR, 'b5-2d-flights-row.png') });
-    console.log('  saved b5-2d-flights-row.png (6 category classes, white)');
+    await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-2d-flights-row.png') });
+    console.log('  saved aircraft-sprites-2d-flights-row.png (6 category classes, white)');
     console.log(`    glyph positions: ${await page.evaluate(() => window.__planeCanvasCoords('flights', 30, 'm'))}`);
 
     // Tracked tint: commercial tracked plane goes cyan; neighbors stay white.
@@ -451,11 +451,11 @@ async function main() {
       window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
     }, 'caa002');
     await sleep(3000);
-    await page.screenshot({ path: path.join(SHOT_DIR, 'b5-2d-tracked-cyan.png') });
-    console.log('  saved b5-2d-tracked-cyan.png (tracked airliner cyan, follow camera)');
+    await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-2d-tracked-cyan.png') });
+    console.log('  saved aircraft-sprites-2d-tracked-cyan.png (tracked airliner cyan, follow camera)');
 
     // ========================================================================
-    // B3 + 3D screenshots — flights cluster
+    // Model scale and 3D screenshots — flights cluster
     // ========================================================================
     console.log('\n3D — flights cluster (airplane.glb, per-class scale)');
     await page.evaluate(() => {
@@ -492,15 +492,15 @@ async function main() {
 
       await sleep(1500);
       await zoomToRange(900);
-      await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-flights-mid.png') });
-      console.log('  saved b5-3d-flights-mid.png (900 m range — near the min-pixel clamp)');
+      await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-3d-flights-mid.png') });
+      console.log('  saved aircraft-sprites-3d-flights-mid.png (900 m range — near the min-pixel clamp)');
       await zoomToRange(450);
-      await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-flights-close.png') });
-      console.log('  saved b5-3d-flights-close.png (450 m range: widebody left, airliner center, fastjet right)');
+      await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-3d-flights-close.png') });
+      console.log('  saved aircraft-sprites-3d-flights-close.png (450 m range: widebody left, airliner center, fastjet right)');
     }
 
     // ========================================================================
-    // B3 + 3D screenshots — military cluster
+    // Model scale and 3D screenshots — military cluster
     // ========================================================================
     if (!hasMilitary) {
       console.log(`  [SKIP] 3D military — no military layer on ${ENGINE}`);
@@ -543,11 +543,11 @@ async function main() {
       // jet.glb at MODEL_SCALE 1 is real-world size — same shot ranges as the
       // flights cluster (close zoom no longer puts the camera inside a model).
       await zoomToRange(900);
-      await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-military-far.png') });
-      console.log('  saved b5-3d-military-far.png (900 m range: C130/C17 left, F16 center, B744 right)');
+      await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-3d-military-far.png') });
+      console.log('  saved aircraft-sprites-3d-military-far.png (900 m range: C130/C17 left, F16 center, B744 right)');
       await zoomToRange(450);
-      await page.screenshot({ path: path.join(SHOT_DIR, 'b5-3d-military-close.png') });
-      console.log('  saved b5-3d-military-close.png (450 m range: C17 left, F16 center, B744 right)');
+      await page.screenshot({ path: path.join(SHOT_DIR, 'aircraft-sprites-3d-military-close.png') });
+      console.log('  saved aircraft-sprites-3d-military-close.png (450 m range: C17 left, F16 center, B744 right)');
     }
     }
 

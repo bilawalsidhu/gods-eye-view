@@ -32,6 +32,7 @@
       "src/geo/",
       "src/layers/infrastructure/index.js",
       "src/layers/infrastructure/render/display.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/sources/requestDeadline.js",
       "src/overlays/bindOverlayHost.js"
@@ -1423,8 +1424,6 @@
       "src/data/routePlausible.js",
       "src/geoDistance.js",
       "src/data/trackedModelRegime.js",
-      "src/data/trackingClickGesture.js",
-      "src/data/trackingGesture.js",
       "src/layers/flights/controller.js",
       "src/layers/flights/enrichment.js",
       "src/layers/flights/evidence.js",
@@ -1465,9 +1464,11 @@
       "src/geo/",
       "src/time/clock.js",
       "src/globe/contract.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/aircraft/qaDrawn.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/trackingGesture.js"
     ],
     "external": ["cesium"]
   },
@@ -1495,8 +1496,6 @@
       "src/data/motionModel.js",
       "src/data/renderAltitude.js",
       "src/data/trackedModelRegime.js",
-      "src/data/trackingClickGesture.js",
-      "src/data/trackingGesture.js",
       "src/layers/military/controller.js",
       "src/layers/military/index.js",
       "src/layers/military/ingestion.js",
@@ -1530,18 +1529,21 @@
       "src/i18n/locales/zh-Hant.json",
       "src/globe/cesium/sceneProjection.js",
       "src/globe/cesium/screenEvents.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/",
       "src/time/clock.js",
       "src/globe/contract.js",
       "src/layers/aircraft/qaDrawn.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/trackingGesture.js"
     ],
     "external": ["cesium"]
   },
   "aircraft-mechanics": {
     "exports": ["./aircraft"],
     "modules": [
+      "src/data/trackingGesture.js",
       "src/i18n/marker.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftIcons.js",
@@ -1563,8 +1565,6 @@
       "src/data/routePlausible.js",
       "src/geoDistance.js",
       "src/data/trackedModelRegime.js",
-      "src/data/trackingClickGesture.js",
-      "src/data/trackingGesture.js",
       "src/layers/aircraft/classification.js",
       "src/layers/aircraft/index.js",
       "src/data/inputOwnership.js",
@@ -1614,6 +1614,7 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/vessels/icons.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/globe/cesium/sceneProjection.js",
       "src/geo/",
@@ -1630,6 +1631,7 @@
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js",
       "src/geo/",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/earthquakes/render/display.js",
       "src/overlays/bindOverlayHost.js"
@@ -1700,6 +1702,7 @@
       "src/i18n/locales/zh-Hant.json",
       "src/geo/",
       "src/layers/firms/rectangle.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/overlays/bindOverlayHost.js"
     ],
@@ -1743,6 +1746,7 @@
       "src/ui/unitLabels.js",
       "src/geo/",
       "src/time/clock.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/overlays/bindOverlayHost.js"
     ],
@@ -1785,6 +1789,7 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/",
       "src/time/clock.js",
@@ -1837,6 +1842,7 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/layers/installations/classLabel.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/",
       "src/globe/contract.js"
@@ -1900,6 +1906,7 @@
   "traffic-layer": {
     "exports": ["./layers/traffic"],
     "modules": [
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/data/cameraSensitivity.js",
       "src/data/flowMatch.js",
@@ -1992,6 +1999,7 @@
       "src/i18n/locales/zh-Hant.json",
       "src/layers/bikeshare/selectionModel.js",
       "src/layers/bikeshare/presentation.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/",
       "src/globe/contract.js",
@@ -2051,6 +2059,7 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/",
       "src/overlays/bindOverlayHost.js"
@@ -2128,6 +2137,7 @@
       "src/i18n/locales/zh-Hant.json",
       "src/layers/streetLevel/providers/mapillary/policy.js",
       "src/geo/",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/globe/cameraMath.js",
       "src/layers/streetLevel/render/display.js",
@@ -2246,6 +2256,7 @@
       "src/i18n/locales/zh-Hant.json",
       "src/geo/",
       "src/sources/requestDeadline.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/submarineCables/render/display.js",
       "src/overlays/bindOverlayHost.js"
@@ -2610,7 +2621,6 @@
       "src/data/neighborhoodPolygons.js",
       "src/data/pickRegistry.js",
       "src/data/sceneServices.js",
-      "src/data/trackingGesture.js",
       "src/data/radio.js",
       "src/data/radioCountry.js",
       "src/data/regionalBrief.js",
@@ -2633,7 +2643,6 @@
       "src/data/trackedCamera.js",
       "src/data/trackedModelRegime.js",
       "src/data/trackedReadout.js",
-      "src/data/trackingClickGesture.js",
       "src/data/traffic.js",
       "src/data/trafficBounds.js",
       "src/data/trafficFlowStyle.js",
@@ -3496,6 +3505,7 @@
       "src/layers/flights/render/display.js",
       "src/layers/military/render/display.js",
       "src/data/selectionDispatcher.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/aircraft/qaDrawn.js",
       "src/layers/localAdsb/render/display.js",
@@ -3503,6 +3513,7 @@
       "src/globe/cesium/celestial.js",
       "src/celestialRing/view.js",
       "src/globe/navara/ground/pulse.js",
+      "src/globe/navara/shaderChunks.js",
       "src/globe/navara/sceneDepth.js",
       "src/layers/bhoteKoshi/render/story.js",
       "src/globe/navara/windFlowMesh.js",
@@ -3513,7 +3524,6 @@
       "src/layers/radio/screenClusters.js",
       "src/layers/shared/render/imageAtlas.js",
       "src/globe/navara/ground/surface.js",
-      "src/globe/navara/ground/effect.js",
       "src/annotations/outlineRungs.js",
       "src/sources/openFreeMapOutlines.js",
       "src/sources/nominatimOutlines.js",
@@ -3581,7 +3591,6 @@
       "src/globe/navara/ground/index.js",
       "src/layers/cctv/render/meshes.js",
       "src/layers/cctv/render/display.js",
-      "src/layers/cctv/worldClick.js",
       "src/layers/transit/render/display.js",
       "src/layers/earthquakes/render/display.js",
       "src/layers/airQuality/render/display.js",
@@ -3625,7 +3634,8 @@
       "src/globe/exclusivePointer.js",
       "src/globe/cesium/followOffset.js",
       "src/overlays/bindOverlayHost.js",
-      "src/ui/releaseTrackers.js"
+      "src/ui/releaseTrackers.js",
+      "src/data/trackingGesture.js"
     ],
     "external": [
       "hls.js",
@@ -3764,7 +3774,6 @@
       "src/data/neighborhoodPolygons.js",
       "src/data/pickRegistry.js",
       "src/data/sceneServices.js",
-      "src/data/trackingGesture.js",
       "src/data/radioCountry.js",
       "src/data/renderAltitude.js",
       "src/data/bundledJson.js",
@@ -3778,7 +3787,6 @@
       "src/data/trackedCamera.js",
       "src/data/trackedModelRegime.js",
       "src/data/trackedReadout.js",
-      "src/data/trackingClickGesture.js",
       "src/data/trafficBounds.js",
       "src/data/trafficFlowStyle.js",
       "src/data/trafficPresetStyle.js",
@@ -4275,6 +4283,7 @@
       "src/app/layers/displays.js",
       "src/layers/aircraft/render/display.js",
       "src/data/selectionDispatcher.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/flights/render/display.js",
       "src/layers/military/render/display.js",
@@ -4336,7 +4345,6 @@
       "src/layers/cctv/render/style.js",
       "src/layers/cctv/render/meshes.js",
       "src/layers/cctv/render/display.js",
-      "src/layers/cctv/worldClick.js",
       "src/layers/transit/render/display.js",
       "src/layers/earthquakes/render/display.js",
       "src/layers/airQuality/render/display.js",
@@ -4368,7 +4376,6 @@
       "src/layers/bhoteKoshi/render/story.js",
       "src/globe/navara/ground/surface.js",
       "src/globe/navara/windFlowMesh.js",
-      "src/globe/navara/ground/effect.js",
       "src/globe/navara/ground/pulse.js",
       "src/globe/cesium/windFlow.js",
       "src/globe/cesium/postStages.js",
@@ -4386,7 +4393,8 @@
       "src/globe/meshes.js",
       "src/globe/exclusivePointer.js",
       "src/globe/cesium/followOffset.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/trackingGesture.js"
     ],
     "external": [
       "hls.js",
@@ -4730,6 +4738,7 @@
       "src/data/distanceFormat.js",
       "src/i18n/marker.js",
       "src/layers/directions/index.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/data/pointerOwnerNames.js",
       "src/layers/directions/source.js",
@@ -5051,7 +5060,6 @@
       "src/data/meshFloorSampler.js",
       "src/data/pickRegistry.js",
       "src/data/sceneServices.js",
-      "src/data/trackingGesture.js",
       "src/data/scenePick.js",
       "src/data/spriteOrder.js",
       "src/data/terrainHeights.js",
@@ -5132,6 +5140,7 @@
       "src/celestialRing/view.js",
       "src/layers/shared/render/engineView.js",
       "src/globe/cesium/sceneProjection.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/",
       "src/time/clock.js",
@@ -5156,7 +5165,8 @@
       "src/data/selectionDispatcher.js",
       "src/overlays/bindOverlayHost.js",
       "src/data/contextStore.js",
-      "src/data/trackedReadout.js"
+      "src/data/trackedReadout.js",
+      "src/data/trackingGesture.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -5208,6 +5218,7 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/",
       "src/globe/contract.js",
@@ -5276,6 +5287,7 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/perimeters/render/display.js",
       "src/overlays/bindOverlayHost.js"
@@ -5306,6 +5318,7 @@
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
       "src/layers/shared/viewRectangle.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/geo/math.js",
       "src/geo/cartesian2.js",
@@ -5439,6 +5452,7 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/droneAirspace/render/display.js",
       "src/overlays/bindOverlayHost.js"
@@ -5645,6 +5659,7 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/airQuality/render/display.js",
       "src/overlays/bindOverlayHost.js"
@@ -5725,6 +5740,7 @@
       "src/globe/cesium/credits.js",
       "src/layers/wildlifeSightings/display.js",
       "src/data/spriteOrder.js",
+      "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/overlays/bindOverlayHost.js"
     ],

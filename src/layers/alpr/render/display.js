@@ -1,3 +1,7 @@
+import {
+  createSelectionKeeper,
+  writeSelectedMarker,
+} from '../../shared/selectionKeeper.js';
 // The ALPR camera badges on the globe contract (engine.movers, engine.input,
 // engine.camera, engine.projector, engine.surface, engine.credits), the
 // same on every engine. Each displayed camera is a plain marker handle: a
@@ -14,7 +18,6 @@
 
 import * as geo from '../../../geo/index.js';
 import { distanceScale } from '../../../globe/cpuPicks.js';
-import { isPointerFree } from '../../../data/inputOwnership.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import { alprCreditMarkup } from '../model.js';
 import { createAlprOverlayCore } from '../overlay.js';
@@ -196,8 +199,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     };
     normal.set(marker.index, { ...fields, show: show && !isSelected });
     if (isSelected) {
-      selected.setCount(1);
-      selected.set(0, fields);
+      writeSelectedMarker(selected, fields);
     }
     // The overlay changes ownership while it paints, after the frame's
     // render request was taken: wake the next frame, which commits.
@@ -215,7 +217,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
   }
   function dropSelectedSprite() {
     if (!initialized) return;
-    selected.setCount(0);
+    writeSelectedMarker(selected, null);
     dirty = true;
   }
 
@@ -378,7 +380,6 @@ export function createAlprDisplay(engine, { state, services, source }) {
 
   function renderRecords() {
     if (!initialized) return;
-    const selectedContext = getSelectedEntityContext();
     // Over the render cap, keep the cameras nearest the view centre and say
     // coverage is limited rather than dropping an arbitrary subset.
     const { visible: shown, capped } = viewRecords(state.records);
@@ -386,13 +387,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     visibleRecords = shown;
     // A refresh may retain its own selection, never reclaim one cleared or
     // replaced by an aircraft, another layer, or a voice action.
-    if (
-      selectedContext?.layerId !== LAYER_ID ||
-      selectedContext.id !== state.selectedId ||
-      !shown.some((record) => record.id === state.selectedId)
-    ) {
-      state.selectedId = null;
-      selectionStartedAt = 0;
+    if (!selection.reconcile({ layerId: LAYER_ID, records: shown })) {
       dropSelectedSprite();
       clearSelectedEntityContextForLayer(LAYER_ID);
     }
@@ -595,21 +590,17 @@ export function createAlprDisplay(engine, { state, services, source }) {
     return true;
   }
 
-  function onClick({ position, picked }) {
-    // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-    if (!isPointerFree()) return;
-    if (!state.enabled) return;
-    const id =
+  const selection = createSelectionKeeper({
+    state,
+    getSelectedEntityContext,
+    selectRecord,
+    clearSelection,
+    pickId: ({ position, picked }) =>
       overlay.pick(position) ||
-      (typeof picked?.id === 'string' ? picked.id : null);
-    if (
-      id &&
-      state.recordById.has(id) &&
-      (id !== state.selectedId || getSelectedEntityContext()?.id !== id)
-    )
-      selectRecord(id);
-    else if (state.selectedId) clearSelection();
-  }
+      (typeof picked?.id === 'string' ? picked.id : null),
+    reselectContext: true,
+  });
+  const onClick = selection.onClick;
 
   // Badges move on screen with the camera: their horizon test and a pick
   // target's size follow it.

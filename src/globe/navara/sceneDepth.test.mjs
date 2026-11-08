@@ -32,7 +32,10 @@ test('the scene-depth test goes after the log depth and brings packing once', ()
       patched.indexOf('uniform float uGevSceneDepthOn;') <
         patched.indexOf('void main() {'),
     );
-    assert.match(patched, /gevDepth > gevScene \+ 5e-6\)\s*discard;/);
+    assert.match(
+      patched,
+      /packedDepthOccluded\(gevDepth, gevScene, 5e-6\)\)\s*discard;/,
+    );
   }
   assert.ok(SCENE_DEPTH_BIAS > 0 && SCENE_DEPTH_BIAS < 1e-4);
   assert.throws(() => withSceneDepthTest('void main() {}'), /logdepthbuf/);

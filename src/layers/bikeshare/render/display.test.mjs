@@ -1,17 +1,11 @@
-// The bikeshare stations on the engine contract, on the fake engine and on
-// the Cesium engine (real Cesium point collections over a stub scene: they
-// draw nothing but hold what the engine writes): the station discs and the
-// selected highlight as the layer styles them, their height on the sampled
-// surface, the click and Escape rules, the camera's change listener and
-// sensitivity claim, and what enable/disable cycles and teardown leave.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { createBikeshareLayer } from '../index.js';
 import { capacityToPixelSize } from '../presentation.js';
 import { COLOR_GREEN, COLOR_OUTLINE, COLOR_RED } from '../policy.js';
@@ -79,57 +73,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const { engine, viewer, primitive } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-    },
-  });
-  const count = (id) => engine.movers.list().find((set) => set.id === id).count;
-  // A Cesium pick of `picked`'s set and instance: its point primitive.
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    primitive,
-    click(picked) {
-      native = undefined;
-      if (picked?.owner?.startsWith('bikeshare'))
-        native = { primitive: primitive(picked.owner).get(picked.instance) };
-      else if (picked) native = { id: picked.id, primitive: {} };
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(100, 100),
-        });
-    },
-    surface(height) {
-      viewer.scene.sampleHeightSupported = true;
-      viewer.scene.sampleHeight = () => height;
-    },
-    point: (id, index) => {
-      const point = primitive(id).get(index);
-      return {
-        shown: index < count(id) && point.show,
-        pixelSize: point.pixelSize,
-        color: [
-          point.color.red,
-          point.color.green,
-          point.color.blue,
-          point.color.alpha,
-        ],
-        id: point.id,
-        native: point,
-      };
-    },
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 function fixture(makeHarness, getStations) {
   const h = makeHarness();
@@ -204,47 +148,20 @@ for (const makeHarness of HARNESSES) {
       COLOR_GREEN.rgba().forEach((value, i) =>
         near(station.color[i], value, `colour ${i}`),
       );
-      if (f.cesium) {
-        const collection = f.primitive('bikeshare');
-        assert.ok(collection instanceof Cesium.PointPrimitiveCollection);
-        const point = station.native;
-        assert.equal(point.outlineWidth, 1);
-        assert.ok(
-          point.outlineColor.equalsEpsilon(
-            new Cesium.Color(...COLOR_OUTLINE.rgba()),
-            1e-6,
-          ),
-        );
-        assert.ok(
-          Cesium.NearFarScalar.equals(
-            point.scaleByDistance,
-            new Cesium.NearFarScalar(200, 1.35, 130000, 0.4),
-          ),
-        );
-        assert.ok(
-          Cesium.NearFarScalar.equals(
-            point.translucencyByDistance,
-            new Cesium.NearFarScalar(200, 1, 180000, 0.15),
-          ),
-        );
-        assert.equal(point.disableDepthTestDistance, 2500);
-      } else {
-        const { options } = f.engine.fake.moverSet('bikeshare');
-        assert.equal(options.pickable, true);
-        assert.equal(options.sharpen, true);
-        assert.equal(options.order, 3, 'its data/spriteOrder slot');
-        assert.deepEqual(options.depthTest, { disableWithinM: 2500 });
-        assert.equal(options.point.outlinePx, 1);
-        assert.deepEqual(options.point.outlineColor, COLOR_OUTLINE.rgba());
-        assert.deepEqual(
-          options.point.scaleByDistance,
-          [200, 1.35, 130000, 0.4],
-        );
-        assert.deepEqual(
-          options.point.translucencyByDistance,
-          [200, 1, 180000, 0.15],
-        );
-      }
+
+      const { options } = f.engine.fake.moverSet('bikeshare');
+      assert.equal(options.pickable, true);
+      assert.equal(options.sharpen, true);
+      assert.equal(options.order, 3, 'its data/spriteOrder slot');
+      assert.deepEqual(options.depthTest, { disableWithinM: 2500 });
+      assert.equal(options.point.outlinePx, 1);
+      assert.deepEqual(options.point.outlineColor, COLOR_OUTLINE.rgba());
+      assert.deepEqual(options.point.scaleByDistance, [200, 1.35, 130000, 0.4]);
+      assert.deepEqual(
+        options.point.translucencyByDistance,
+        [200, 1, 180000, 0.15],
+      );
+
       f.setBikes(1);
       await f.layer.update();
       COLOR_RED.rgba().forEach((value, i) =>
@@ -267,22 +184,16 @@ for (const makeHarness of HARNESSES) {
       assert.equal(highlight.shown, true);
       near(highlight.pixelSize, 14, 'highlight size');
       assert.deepEqual(highlight.color, [0, 1, 1, 1]);
-      if (f.cesium) {
-        const point = highlight.native;
-        assert.equal(point.outlineWidth, 2);
-        assert.ok(point.outlineColor.equals(Cesium.Color.BLACK));
-        assert.equal(point.disableDepthTestDistance, Number.POSITIVE_INFINITY);
-        assert.equal(point.scaleByDistance, undefined);
-      } else {
-        const { options } = f.engine.fake.moverSet('bikeshare-selected');
-        assert.equal(options.depthTest, 'always');
-        assert.equal(options.point.scaleByDistance, null);
-        assert.deepEqual(options.point.outlineColor, [0, 0, 0, 1]);
-        assert.ok(
-          options.order > f.engine.fake.moverSet('bikeshare').options.order,
-          'over the layer’s own points',
-        );
-      }
+
+      const { options } = f.engine.fake.moverSet('bikeshare-selected');
+      assert.equal(options.depthTest, 'always');
+      assert.equal(options.point.scaleByDistance, null);
+      assert.deepEqual(options.point.outlineColor, [0, 0, 0, 1]);
+      assert.ok(
+        options.order > f.engine.fake.moverSet('bikeshare').options.order,
+        'over the layer’s own points',
+      );
+
       assert.equal(
         f.entries.get('bikeshare-selected')[0].title,
         '中央 / Central',
@@ -360,13 +271,12 @@ for (const makeHarness of HARNESSES) {
       await settle();
       const point = f.layer.getDetectableObjects()[0].position;
       near(geo.cartographic.fromCartesian(point).height, 177, 'height');
-      if (!f.cesium) {
-        const call = f.engine.fake.callsOf('surface.sampleHeight')[0];
-        assert.deepEqual(
-          call.args[1].map((set) => set.id),
-          ['bikeshare', 'bikeshare-selected'],
-        );
-      }
+
+      const call = f.engine.fake.callsOf('surface.sampleHeight')[0];
+      assert.deepEqual(
+        call.args[1].map((set) => set.id),
+        ['bikeshare', 'bikeshare-selected'],
+      );
     } finally {
       f.layer.destroy();
     }

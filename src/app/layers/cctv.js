@@ -1,4 +1,3 @@
-import { bindCctvWorldClickGesture } from '../../layers/cctv/worldClick.js';
 import { createCctvLayer } from '../../layers/cctv/index.js';
 import { rendererFor } from './renderers.js';
 import * as credits from '../../data/dataCredits.js';
@@ -37,20 +36,5 @@ export function createApplicationCctv({
       render,
     },
   });
-  return {
-    ...layer,
-    bindCctvWorldClickGesture,
-    // Legacy helper; production navigation uses the initialized owner.
-    focusCctvRecord(engine, record, duration) {
-      const display = engine
-        ? rendererFor('cctv', engine, { services: {}, state: {} })
-        : null;
-      display?.attach();
-      try {
-        return layer.focusCctvRecord(display, record, duration);
-      } finally {
-        display?.destroy();
-      }
-    },
-  };
+  return layer;
 }

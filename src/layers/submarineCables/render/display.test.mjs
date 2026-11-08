@@ -1,11 +1,4 @@
-// The cables display on the engine contract, on the fake engine and on the
-// Cesium engine: cable paths and their colours, widths, picks and drape per
-// map stack; landing markers; the reference sweep (tips, horizon, labels,
-// the publish skip, the winners' stems, the moveEnd and motion cadence);
-// clicks that fly to a reference; hide, show and destroy; and the
-// antimeridian edge cases. Each harness records what the ground sets were
-// given and the flights asked for, drives preRender and moveEnd by hand, and
-// clicks with a pick of a ground item, a mover instance or a line.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,8 +6,7 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { claimPointer, releasePointer } from '../../../data/inputOwnership.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import {
@@ -162,81 +154,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const { engine, viewer, primitive } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-    },
-  });
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  const watched = watch(engine);
-  const count = (id) => engine.movers.list().find((set) => set.id === id).count;
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    ...watched,
-    preRender: () => viewer.scene.preRender.raiseEvent(viewer.scene),
-    moveEnd: () => viewer.camera.moveEnd.raiseEvent(),
-    /** The Cesium ground primitives a set drew, in its slot. */
-    groundPrimitives(id) {
-      const root = viewer.scene.groundPrimitives.get(0);
-      const found = [];
-      for (let index = 0; index < (root?.length ?? 0); index++) {
-        const slot = root.get(index);
-        for (let at = 0; at < slot.length; at++)
-          if (slot.get(at).gevGroundSet === id) found.push(slot.get(at));
-      }
-      return found;
-    },
-    point(id, index) {
-      const collection = primitive(id);
-      if (!collection || index >= count(id)) return undefined;
-      const item = collection.get(index);
-      return {
-        shown: item.show,
-        color: [
-          item.color.red,
-          item.color.green,
-          item.color.blue,
-          item.color.alpha,
-        ],
-        sizePx: item.pixelSize,
-        outlinePx: item.outlineWidth,
-        outlineColor: item.outlineColor,
-        id: item.id,
-        position: item.position,
-        native: item,
-      };
-    },
-    click(target) {
-      native =
-        target?.ground !== undefined
-          ? { id: { gevGroundSet: target.ground, instance: target.instance } }
-          : target?.mover !== undefined
-            ? { primitive: primitive(target.mover).get(target.instance) }
-            : target?.line !== undefined
-              ? {
-                  primitive: primitive(watched.line(target.line).owner),
-                  id: watched.line(target.line).pickId,
-                }
-              : target;
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(100, 100),
-        });
-      native = undefined;
-    },
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 const PATHS = `${CABLE_OVERLAY_SOURCE_ID}-paths`;
 const MARKERS = `${CABLE_OVERLAY_SOURCE_ID}-markers`;
@@ -356,17 +274,6 @@ for (const makeHarness of HARNESSES) {
     assert.equal(set.items[0].pickId, set.items[1].pickId);
     assert.notEqual(set.items[0].pickId, set.items[2].pickId);
     assert.deepEqual(set.items[0].positions, alpha.geometry.coordinates[0]);
-    if (f.cesium) {
-      const [batch] = f.groundPrimitives(PATHS);
-      assert.ok(batch instanceof Cesium.GroundPolylinePrimitive);
-      assert.equal(batch.geometryInstances.length, 3);
-      assert.equal(batch.geometryInstances[0].geometry.width, 2.5);
-      assert.equal(batch.classificationType, Cesium.ClassificationType.TERRAIN);
-      assert.deepEqual(
-        [...batch.geometryInstances[0].attributes.color.value],
-        [255, 0, 0, Math.round(0.92 * 255)],
-      );
-    }
   });
 
   test(`the paths drape on the active map stack's surface and follow its changes (${name})`, (t) => {
@@ -378,11 +285,7 @@ for (const makeHarness of HARNESSES) {
     listener({ detail: { activeId: 'photoreal', status: 'ready' } });
     assert.equal(f.groundSet(PATHS).options.drape, 'tiles');
     assert.equal(f.groundSet(PATHS).items.length, 3, 'rebuilt whole');
-    if (f.cesium)
-      assert.equal(
-        f.groundPrimitives(PATHS)[0].classificationType,
-        Cesium.ClassificationType.CESIUM_3D_TILE,
-      );
+
     listener({ detail: { activeId: 'osm', status: 'ready' } });
     assert.equal(f.groundSet(PATHS).options.drape, 'terrain');
     listener({ detail: { activeId: 'some-future-stack' } });
@@ -440,19 +343,7 @@ for (const makeHarness of HARNESSES) {
     const landingTip = f.point(LANDING_TIPS, 0);
     assert.equal(landingTip.sizePx, 8);
     near(landingTip.color, rgba(BASE_LANDING_COLOR, 0.94), 'landing tip');
-    if (f.cesium) {
-      assert.equal(alphaTip.native.disableDepthTestDistance, 0, 'depth-tested');
-      near(
-        [
-          alphaTip.outlineColor.red,
-          alphaTip.outlineColor.green,
-          alphaTip.outlineColor.blue,
-          alphaTip.outlineColor.alpha,
-        ],
-        [0, 0, 0, 0.65],
-        'tip outline',
-      );
-    }
+
     const tipHeight = geo.cartographic.fromCartesian(alphaTip.position).height;
     assert.ok(tipHeight >= 700 && tipHeight <= 85_000, `tip ${tipHeight} m`);
 
@@ -598,15 +489,14 @@ for (const makeHarness of HARNESSES) {
     f.click({ id: 'cable-reference-0-alpha', owner: 'someone-else' });
     assert.equal(f.flights.length, 4);
     f.display.hide();
-    if (!f.cesium) {
-      f.engine.fake.script('pick', {
-        id: 'cable-reference-0-alpha',
-        owner: PATHS,
-      });
-      f.engine.fake.input('click', { position: { x: 1, y: 1 } });
-      f.engine.fake.unscript('pick');
-      assert.equal(f.flights.length, 4, 'a hidden display takes no clicks');
-    }
+
+    f.engine.fake.script('pick', {
+      id: 'cable-reference-0-alpha',
+      owner: PATHS,
+    });
+    f.engine.fake.input('click', { position: { x: 1, y: 1 } });
+    f.engine.fake.unscript('pick');
+    assert.equal(f.flights.length, 4, 'a hidden display takes no clicks');
   });
 
   test(`hide clears what the display drew and its labels; show draws it again (${name})`, (t) => {

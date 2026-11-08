@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-heading-b3.mjs — throwaway QA harness for skylight Task 4
+ * qa-aircraft-heading.mjs — aircraft display-heading checks
  * (path-derived, rate-limited display course; Batch 3 overnight run).
  *
  * The permanent track-regression harness flies planes STRAIGHT, so it cannot
@@ -45,7 +45,7 @@
  *   normalized nose -X, offset 180°).
  *
  *   VISUAL — with the turning flights plane tracked in 3D, capture screenshots
- *   (two zoom levels × two orbit angles) into qa-shots/b3/ for human review:
+ *   (two zoom levels × two orbit angles) into qa-shots/aircraft-heading/ for human review:
  *   the nose must lead the curved trail, never sideways/backwards.
  *
  *   LOW-SPEED (heading-v2, 2026-07-03 field-test regression) — two extra
@@ -93,7 +93,7 @@
  *   exceeds 15°/s (truth is 2°/s; the pre-fix snap replayed ~120° of frozen
  *   divergence at the 60°/s slew cap).
  *
- * Run:  node scripts/qa-heading-b3.mjs --url http://localhost:4300
+ * Run:  node scripts/qa-aircraft-heading.mjs --url http://localhost:4300
  * Exits non-zero if any assertion fails. Never commits anything.
  */
 
@@ -120,7 +120,7 @@ if (requestedEngine) {
 }
 const APP_URL = appUrl.href;
 const HEADFUL = getFlag('--headful');
-const SHOT_DIR = path.resolve('qa-shots/b3');
+const SHOT_DIR = path.resolve('qa-shots/aircraft-heading');
 const SHOT_DIR_V2 = path.resolve('qa-shots/heading-v2');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -774,7 +774,7 @@ async function main() {
     }
 
     // ---- Screenshots: two zoom levels × two orbit angles --------------------
-    console.log('\n  Screenshots (turning plane tracked in 3D) → qa-shots/b3/');
+    console.log('\n  Screenshots (turning plane tracked in 3D) → qa-shots/aircraft-heading/');
     await page.evaluate(() => {
       window.__godsEyeView.styleManager._setDetectionMode('DENSE');
     });

@@ -4,8 +4,8 @@ const grid = (i, cols, spacing) => ({
   lon: ORIGIN.lon + ((i % cols) - cols / 2) * spacing,
 });
 const bikes = Array.from({ length: 200 }, (_, i) => ({
-  station_id: `w2-bike-${i}`,
-  name: `W2 station ${i}`,
+  station_id: `fixture-bike-${i}`,
+  name: `Fixture station ${i}`,
   capacity: 20,
   ...grid(i, 15, 0.0015),
 }));

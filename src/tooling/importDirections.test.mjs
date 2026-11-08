@@ -109,7 +109,7 @@ for (const [name, files, pattern] of [
   ],
   [
     'W1 shared trackingClickGesture keeps SDK imports in the engine',
-    { 'src/data/trackingClickGesture.js': "import 'cesium';" },
+    { 'src/data/trackingGesture.js': "import 'cesium';" },
     /cesium imports belong in src\/globe\/cesium\//,
   ],
   [

@@ -1,34 +1,17 @@
 import { sceneServicesFor } from './sceneServices.js';
-// One selection dispatcher for the layers that draw through the globe
-// engine: one click subscription with picks
-// (engine.input.on('click', …, { pick: true, drill: 8 })), the press
-// gesture and one Escape listener, instead of a ScreenSpaceEventHandler
-// per layer. Owners register as with pickRegistry (registerPickOwner, so
-// layers still on their own handlers keep seeing the ownership) plus
-// handlers:
-//   onSelect(id, ctx)   a click whose first pick it owns;
-//   onEmptyClick(ctx)   a clean click (short, no drag) on the map or nothing;
-//   onEscape()          Escape.
-// The rules are the old handlers': a pick another layer owns is not empty
-// space (a pick nobody owns is); `passThrough` picks (trails) never take the
-// click, the next pick does; a `drillThrough` owner takes its object from
-// under another layer's; a drag selects nothing; a pointer owned by a tool
-// (inputOwnership) selects nothing. Layers not moved yet keep their own
-// handlers: the dispatcher never acts on an id it does not own.
-// A `lookUnder` owner (local ADS-B) keeps its own old click rule instead:
-// its object on top, or under picks no layer owns and picks it looks under
-// (`lookUnder(id)`: trails), is selected; another layer's object on top, or
-// nothing, is empty space for it (it releases its selection); a click that
-// only meets what it looks under does nothing; no gesture rule (its old
-// handler took every click). To the others it is another layer.
-// An own-rule owner (`onClick(ctx)`: vessels) keeps its whole old click
-// handler: it gets every click with the top pick and decides itself (no
-// gesture rule, as its old LEFT_CLICK handler); to the others it is another
-// layer.
+// Shared selection for registered owners, with one pick subscription and
+// press accumulator. Normal owners select their first pick, clear on a short
+// empty click, and retain selection on another owner's pick. Pass-through
+// picks yield to the next hit; drill-through owners may select below an
+// unregistered owner's hit. Pointer claims suppress selection.
+// Look-under owners select below unowned picks or their declared pass-through
+// ids, clear on other owners, and ignore clicks containing only those ids.
+// Own-rule owners receive every pointer-free click and apply their own rules.
 
 import { isPointerFree as pointerFree } from './inputOwnership.js';
 import { pickRegistryFor, resolvePickId } from './pickRegistry.js';
 import {
+  createPressGesture,
   isTrackingClickGesture,
   isTrackingSelectionGesture,
 } from './trackingGesture.js';
@@ -58,27 +41,7 @@ export function createSelectionDispatcher(
   let removers = [];
   let destroyed = false;
 
-  // The press gesture, as bindTrackingClickGesture measures it.
-  let press = null;
-  let completed = null;
-  const travel = (position) => {
-    if (!press || !position) return;
-    if (press.last)
-      press.travelPx += Math.hypot(
-        position.x - press.last.x,
-        position.y - press.last.y,
-      );
-    press.last = { x: position.x, y: position.y };
-  };
-  const finish = (position) => {
-    if (!press) return;
-    travel(position);
-    completed = {
-      travelPx: press.travelPx,
-      durationMs: Math.max(0, now() - press.startedAt),
-    };
-    press = null;
-  };
+  const press = createPressGesture(now);
 
   const ownerOf = (picked) => {
     const id = resolvePickId(picked);
@@ -116,9 +79,7 @@ export function createSelectionDispatcher(
     typeof owner.lookUnder !== 'function' && !ownRule(owner);
 
   const onClick = (event) => {
-    if (press) finish(event.position);
-    const gesture = completed ?? { travelPx: 0, durationMs: 0 };
-    completed = null;
+    const gesture = press.click(event.position);
     if (!isPointerFree()) return;
     const picked = nearbyContact(
       event.picked,
@@ -204,17 +165,9 @@ export function createSelectionDispatcher(
   const attach = () => {
     if (removers.length || destroyed) return;
     removers = [
-      engine.input.on('down', (event) => {
-        press = {
-          startedAt: now(),
-          travelPx: 0,
-          last: null,
-        };
-        completed = null;
-        travel(event.position);
-      }),
-      engine.input.on('move', (event) => travel(event.endPosition)),
-      engine.input.on('up', (event) => finish(event.position)),
+      engine.input.on('down', (event) => press.down(event.position)),
+      engine.input.on('move', (event) => press.move(event.endPosition)),
+      engine.input.on('up', (event) => press.up(event.position)),
       engine.input.on('click', onClick, { pick: true, drill: SELECTION_DRILL }),
     ];
     keyTarget?.addEventListener?.('keydown', onKey);

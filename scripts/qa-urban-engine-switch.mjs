@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import { createStrict, localPreview, openPage, waitForEngine } from './qa-strict-harness.mjs';
-import { installTransitFixture } from './fixtures/w2/transit.mjs';
+import { installTransitFixture } from './fixtures/layers/transit.mjs';
 import {
   combinedPayloads,
   installCombinedFixture,
-} from './fixtures/w2/combined.mjs';
+} from './fixtures/layers/combined.mjs';
 const url = localPreview(process.argv[2]),
   bus = process.argv.includes('--transit'),
   id = bus ? 'transit' : 'bikeshare';

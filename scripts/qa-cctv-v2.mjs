@@ -77,9 +77,9 @@
  */
 
 import puppeteer from 'puppeteer';
-import { watchW1Page, redact } from './qa-browserEvidence.mjs';
+import { watchBrowserPage, redact } from './qa-browserEvidence.mjs';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
-import { installCctvFixture } from './fixtures/w2/cctv.mjs';
+import { installCctvFixture } from './fixtures/layers/cctv.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -581,7 +581,7 @@ async function main() {
         if (terrainRequests.delete(request)) terrainActivityAt = Date.now();
       });
     await page.setViewport({ width: 1280, height: 800 });
-    watchW1Page(page, evidence, {
+    watchBrowserPage(page, evidence, {
       name: 'cctv-legacy',
       baseUrl: APP_URL,
       preview: getFlag('--preview'),

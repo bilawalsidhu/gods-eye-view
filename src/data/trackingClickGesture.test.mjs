@@ -6,21 +6,21 @@ import {
   bindTrackingClickGesture,
   isTrackingClickGesture,
   isTrackingSelectionGesture,
-} from './trackingClickGesture.js';
+} from './trackingGesture.js';
 import { TRACKED_MODEL_MAX_PX as CIVIL_TRACKED_MODEL_MAX_PX } from './flights.js';
 import { TRACKED_MODEL_MAX_PX as MILITARY_TRACKED_MODEL_MAX_PX } from './militaryFlights.js';
 
 const TYPES = {
-  LEFT_DOWN: 'left-down',
-  MOUSE_MOVE: 'mouse-move',
-  LEFT_UP: 'left-up',
-  LEFT_CLICK: 'left-click',
+  LEFT_DOWN: 'down',
+  MOUSE_MOVE: 'move',
+  LEFT_UP: 'up',
+  LEFT_CLICK: 'click',
 };
 
 function makeHandler() {
   const actions = new Map();
   return {
-    setInputAction(callback, type) { actions.set(type, callback); },
+    on(type, callback) { actions.set(type, callback); return () => actions.delete(type); },
     fire(type, event) { actions.get(type)?.(event); },
   };
 }
@@ -49,7 +49,6 @@ test('synthetic drag-then-click sequence does not reach the untrack callback', (
     if (isTrackingClickGesture(gesture)) untrackCalls += 1;
   }, {
     now: () => timeMs,
-    eventTypes: TYPES,
   });
 
   handler.fire(TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
@@ -81,7 +80,6 @@ test('slow clean sprite clicks select, while long presses and orbit nudges canno
     if (isTrackingClickGesture(gesture)) untracks += 1;
   }, {
     now: () => timeMs,
-    eventTypes: TYPES,
   });
 
   handler.fire(TYPES.LEFT_DOWN, { position: { x: 0, y: 0 } });

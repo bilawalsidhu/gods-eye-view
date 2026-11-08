@@ -1,17 +1,12 @@
-// The fire perimeters on the engine contract, on the fake engine and on the
-// Cesium engine (its ground batches over fake primitives): fills with their
-// holes at 0.25 and a 2 px fire line at 0.9 along the outer ring only, in
-// the containment colour; clicks through the engine's input selecting an
-// incident's card; visibility and teardown.
+// Layer display behavior on the fake engine.
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import {
   GROUND_HARNESSES,
   createFakeGroundHarness,
-  instanceColor,
 } from '../../../testSupport/groundDisplayEngines.mjs';
 import { rgbaFromCss } from '../../shared/color.js';
 import { containmentAccent } from '../cards.js';
@@ -137,51 +132,9 @@ for (const makeHarness of GROUND_HARNESSES) {
       lines.forEach(({ outline }, index) =>
         assert.deepEqual(outline.color, COLORS[index].withAlpha(0.9).rgba()),
       );
-      if (f.cesium) {
-        const primitives = f.primitives('fire-perimeters');
-        assert.equal(primitives.fills.length, 1, 'one fill batch');
-        assert.equal(primitives.lines.length, 1, 'one fire-line batch');
-        const fillInstances = primitives.fills[0].options.geometryInstances;
-        const lineInstances = primitives.lines[0].options.geometryInstances;
-        assert.equal(fillInstances.length, 3);
-        assert.equal(lineInstances.length, 3, 'no line along a hole');
-        assert.equal(
-          primitives.fills[0].options.classificationType,
-          Cesium.ClassificationType.BOTH,
-        );
-        assert.equal(primitives.fills[0].options.allowPicking, true);
-        assert.ok(fillInstances[0].geometry instanceof Cesium.PolygonGeometry);
-        assert.equal(
-          fillInstances[0].geometry._polygonHierarchy.holes.length,
-          1,
-        );
-        fillInstances.forEach((instance, index) =>
-          instanceColor(instance).forEach((channel, at) =>
-            near(
-              channel,
-              COLORS[index].withAlpha(0.25).rgba()[at],
-              `fill ${index}.${at}`,
-              0.5 / 255,
-            ),
-          ),
-        );
-        lineInstances.forEach((instance, index) => {
-          assert.ok(instance.geometry instanceof Cesium.GroundPolylineGeometry);
-          assert.equal(instance.geometry.width, 2);
-          assert.equal(instance.geometry.loop, true);
-          instanceColor(instance).forEach((channel, at) =>
-            near(
-              channel,
-              COLORS[index].withAlpha(0.9).rgba()[at],
-              `line ${index}.${at}`,
-              0.5 / 255,
-            ),
-          );
-        });
-      }
+
       f.layer.disable();
       assert.equal(f.set('fire-perimeters').shown, false);
-      if (f.cesium) assert.equal(f.collectionShown('fire-perimeters'), false);
     } finally {
       f.layer.destroy();
     }

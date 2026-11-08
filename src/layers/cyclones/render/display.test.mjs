@@ -1,11 +1,10 @@
-// The cyclone display, each case on the fake engine and on a headless Cesium
-// engine (src/testSupport/cesiumMoversEngine.mjs).
+// Layer display behavior on the fake engine.
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
 import { rgbaFromCss } from '../../shared/color.js';
 import { createCyclonesDisplay, cycloneSphereVisible } from './display.js';
 import {
@@ -91,47 +90,6 @@ const ENGINES = {
         };
       },
       preRenderListeners: null,
-    };
-  },
-  cesium() {
-    const harness = createCesiumMoversEngine();
-    harness.viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-    const { engine, primitive, viewer } = harness;
-    return {
-      engine,
-      viewer,
-      frame: harness.frame,
-      points(prefix) {
-        const id = engine.movers
-          .list()
-          .find((set) => set.id.startsWith(prefix))?.id;
-        const set = engine.movers.list().find((entry) => entry.id === id);
-        const collection = primitive(id);
-        return {
-          id,
-          count: set.count,
-          outlinePx: collection.get(0)?.outlineWidth,
-          depthTest:
-            collection.get(0)?.disableDepthTestDistance === Infinity
-              ? 'always'
-              : 'normal',
-          at: (index) => {
-            const item = collection.get(index);
-            return {
-              color: [
-                item.color.red,
-                item.color.green,
-                item.color.blue,
-                item.color.alpha,
-              ],
-              pixelSize: item.pixelSize,
-              show: item.show,
-              pickId: item.id,
-            };
-          },
-        };
-      },
-      preRenderListeners: () => viewer.scene.preRender.numberOfListeners,
     };
   },
 };
@@ -258,26 +216,7 @@ bothEngines(
       ],
       'cones under the tracks, draped on terrain and tiles',
     );
-    if (kind === 'cesium') {
-      const slots = viewer.scene.groundPrimitives.get(0);
-      const drawn = [];
-      for (let index = 0; index < slots.length; index++) {
-        const slot = slots.get(index);
-        for (let at = 0; at < slot.length; at++) drawn.push(slot.get(at));
-      }
-      const cone = drawn.filter(
-        (p) => p.gevGroundSet === 'weather-cyclones-cones:ep152026',
-      );
-      assert.equal(cone.length, 2, 'one fill batch and one outline batch');
-      assert.equal(cone[0].geometryInstances.length, 2);
-      assert.equal(cone[1].geometryInstances.length, 3, 'one per ring');
-      assert.equal(cone[1].geometryInstances[0].geometry.width, 1);
-      assert.equal(cone[0].classificationType, Cesium.ClassificationType.BOTH);
-      const track = drawn.find(
-        (p) => p.gevGroundSet === 'weather-cyclones-tracks:ep152026',
-      );
-      assert.equal(track.geometryInstances[0].geometry.width, 2.5);
-    }
+
     assert.deepEqual(display.getDiagnostics(), {
       storms: 1,
       tracks: 1,

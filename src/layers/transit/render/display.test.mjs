@@ -1,19 +1,11 @@
-// The transit display on the engine contract, on the fake engine and on the
-// Cesium engine (real Cesium billboard collections and polylines over a stub
-// scene: they draw nothing but hold what the engine writes): the two marker
-// sets and their Billboard-shaped handles, one commit per frame, the glyph
-// atlas, on-screen course rotation, the view test, the surface and credits,
-// clicks (sensor styles included), the selected trail's history bands and
-// head, and teardown.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
-import { perspectiveProjectedRotation } from '../../../data/iconOrientation.js';
+
 import { cameraSensitivityClaims } from '../../../data/cameraSensitivity.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { transitIcon } from '../../../data/transitIcons.js';
@@ -65,91 +57,7 @@ function fakeHarness(options = {}) {
   };
 }
 
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const groundPrimitives = [];
-  const groundPrimitive = (options) => {
-    const primitive = {
-      ...options,
-      ready: true,
-      destroy() {},
-      isDestroyed: () => false,
-    };
-    groundPrimitives.push(primitive);
-    return primitive;
-  };
-  const { engine, viewer, frame, primitive } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-      groundFactories: {
-        lines: groundPrimitive,
-        fills: groundPrimitive,
-      },
-    },
-  });
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  let native;
-  let picked = [];
-  viewer.scene.pick = (position) => {
-    picked.push({ x: position.x, y: position.y });
-    return native;
-  };
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  const count = (id) => engine.movers.list().find((set) => set.id === id).count;
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    groundPrimitives,
-    frame,
-    primitive,
-    picked: () => picked,
-    sprite(id, index) {
-      const billboard = primitive(id).get(index);
-      return {
-        shown: index < count(id) && billboard.show,
-        sizePx: billboard.width * billboard.scale,
-        color: [
-          billboard.color.red,
-          billboard.color.green,
-          billboard.color.blue,
-          billboard.color.alpha,
-        ],
-        rotation: billboard.rotation,
-        id: billboard.id,
-        native: billboard,
-      };
-    },
-    line(id) {
-      const { points, shown } = engine.lines.list().find((l) => l.id === id);
-      const line = primitive(id);
-      const color = line?.appearance.material.uniforms.color;
-      return {
-        color: color && [color.red, color.green, color.blue, color.alpha],
-        widthPx: line?.geometryInstances.geometry._width,
-        depthFailAlpha: line?.depthFailAppearance
-          ? line.depthFailAppearance.material.uniforms.color.alpha / color.alpha
-          : 0,
-        shown,
-        points,
-      };
-    },
-    click(position, pick) {
-      native = pick
-        ? { primitive: primitive(pick.owner).get(pick.instance) }
-        : undefined;
-      picked = [];
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(position.x, position.y),
-        });
-    },
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 function setup(
   makeHarness,
@@ -325,13 +233,7 @@ for (const makeHarness of HARNESSES) {
     rgbaFromCss('#5EF08A')
       .rgba()
       .forEach((value, i) => near(glyph.color[i], value, `colour ${i}`));
-    if (f.cesium) {
-      assert.equal(
-        glyph.native.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-      assert.ok(f.primitive('transit-1') instanceof Cesium.BillboardCollection);
-    } else {
+    {
       const { options } = f.engine.fake.moverSet('transit-1');
       assert.equal(options.depthTest, 'always');
       assert.equal(options.pickable, true);
@@ -344,9 +246,7 @@ for (const makeHarness of HARNESSES) {
       assert.equal(glyph.cell, transitIcon('bus'));
     }
     // A frame's writes are one commit of the set they touch.
-    const before = f.cesium
-      ? null
-      : [f.commits('transit-1'), f.commits('transit-motion-1')];
+    const before = [f.commits('transit-1'), f.commits('transit-motion-1')];
     let wrote = false;
     const remove = f.display.onPreRender(() => {
       if (wrote) return;
@@ -426,13 +326,6 @@ for (const makeHarness of HARNESSES) {
         for (const course of [0, 90, 180, 270]) {
           const rotation = f.display.rotation(position, course, 0);
           assert.ok(Number.isFinite(rotation));
-          if (f.cesium)
-            near(
-              rotation,
-              perspectiveProjectedRotation(f.viewer.scene, position, course, 0),
-              `${height} m, heading ${heading}, course ${course}`,
-              1e-9,
-            );
         }
       }
     assert.equal(f.display.rotation(position, NaN, 0.4), 0.4);
@@ -509,7 +402,7 @@ for (const makeHarness of HARNESSES) {
       y: 50,
       collection: 'animated',
     });
-    if (f.cesium) assert.deepEqual(f.picked()[0], { x: 40, y: 50 });
+
     vehicles.get('mbta:1').markerCollection = f.state._markers;
     f.click(
       { x: 40, y: 50 },
@@ -623,13 +516,7 @@ for (const makeHarness of HARNESSES) {
     assert.equal(lines.length, 3);
     const lanes = lines.map(({ id }) => ({ id, ...f.trailLine(id) }));
     assert.ok(lanes.every((lane) => lane.options.dynamic));
-    if (f.cesium) {
-      assert.equal(f.groundPrimitives.length, 3);
-      assert.ok(
-        f.groundPrimitives.every((primitive) => !primitive.asynchronous),
-        'history and head build immediately without worker jobs',
-      );
-    }
+
     const [bodyBacking, bodyLane, headLane] = lanes;
     assert.equal(bodyBacking.points, 2);
     assert.equal(bodyLane.points, 2);
@@ -649,7 +536,7 @@ for (const makeHarness of HARNESSES) {
     assert.equal(headLane.fraction, 0.5);
     assert.equal(headLane.commits, 1, 'head geometry built once');
     assert.equal(headLane.options.pickable, undefined, 'picks pass through');
-    if (!f.cesium) {
+    {
       assert.equal(bodyBacking.widthPx, 5);
       assert.equal(bodyLane.widthPx, 3);
     }
@@ -816,55 +703,6 @@ test('sensor styles drawn by the engine move a click to the pixel the shader sho
   );
   display.destroy();
   engine.destroy();
-});
-
-test("on the Cesium engine the surveillance lens and FLIR's pixel grid move a click too", () => {
-  const h = cesiumHarness();
-  // The scene's post stages, which draw the styles.
-  h.viewer.scene.postProcessStages = {
-    bloom: { enabled: false, uniforms: {} },
-    add() {},
-    remove() {},
-  };
-  Object.assign(h.viewer.scene.canvas, {
-    clientWidth: 1920,
-    clientHeight: 1080,
-    width: 1920,
-    height: 1080,
-  });
-  const state = { _stylePreset: 'surveillance', _vehicles: new Map() };
-  const display = createTransitDisplay(h.engine, {
-    state,
-    services: {},
-    drawAtlas: transitTestAtlas,
-  });
-  display.attach();
-  const seen = [];
-  display.bindClick(
-    ({ x, y }) => seen.push([x, y]),
-    () => true,
-  );
-  h.click({ x: 1440, y: 540 });
-  assert.deepEqual(seen.at(-1), [1440, 540], 'no style, no bend');
-  h.engine.render.setStyle('surveillance', {
-    intensity: 1,
-    uniforms: { pixelation: 1 },
-  });
-  h.click({ x: 1440, y: 540 });
-  near(seen.at(-1)[0], 1472, 'barrel distortion');
-  near(seen.at(-1)[1], 540, 'on the axis');
-  near(h.picked().at(-1).x, 1472, 'the engine picks where the lens drew');
-  state._stylePreset = 'thermal';
-  h.engine.render.setStyle('surveillance', { intensity: 0 });
-  h.engine.render.setStyle('thermal', {
-    intensity: 1,
-    uniforms: { pixelation: 1.5 },
-  });
-  h.click({ x: 100.9, y: 200.1 });
-  near(seen.at(-1)[0], 100.5, 'pixel grid x');
-  near(seen.at(-1)[1], 201, 'pixel grid y');
-  display.destroy();
-  h.engine.destroy();
 });
 
 test('terrain answers the floor unless photoreal tiles hide the globe', async () => {

@@ -7,10 +7,10 @@
     "navaraKindChecks": 1,
     "engineSniffCalls": 0,
     "engineExtensionReads": 3,
-    "groundEffectPasses": 1,
+    "groundEffectPasses": 0,
     "cesiumSdkLoads": 3,
-    "screenSpaceHandlerFiles": 4,
+    "screenSpaceHandlerFiles": 2,
     "engineNameLines": 27
   },
-  "measuredAt": "Drop leftover viewer paths"
+  "measuredAt": "One selection path and test level"
 }

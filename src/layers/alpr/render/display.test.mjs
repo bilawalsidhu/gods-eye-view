@@ -1,20 +1,14 @@
-// The ALPR badges on the engine contract, on the fake engine and on the
-// Cesium engine (real Cesium billboards over a stub scene: they draw
-// nothing but hold what the engine writes): the badge sets as the layer
-// styles them, floors and the horizon, clicks, selection and its readout
-// anchor, the render cap, credits, the nearest-camera flight, the canvas
-// overlay's cohort and pick targets, and what toggles and teardown leave.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { setLocale } from '../../../i18n/index.js';
 import { shownEntityLabel } from '../../../voice/speech.js';
 import { distanceScale } from '../../../globe/cpuPicks.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { MARKER_SCALE_BY_DISTANCE } from '../policy.js';
 import { directionWedgePositions } from '../visuals.js';
 import { createAlprDisplay } from './display.js';
@@ -69,81 +63,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const { engine, viewer, primitive, frame } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-    },
-  });
-  const credits = [];
-  viewer.creditDisplay = {
-    addStaticCredit: (credit) =>
-      credits.push({
-        html: credit.html,
-        onScreen: credit.showOnScreen,
-        credit,
-      }),
-    removeStaticCredit(credit) {
-      const at = credits.findIndex((entry) => entry.credit === credit);
-      if (at >= 0) credits.splice(at, 1);
-    },
-  };
-  viewer.scene.globe.getHeight = () => undefined;
-  // What a camera flight needs of the scene.
-  viewer.scene.tweens = new Cesium.TweenCollection();
-  viewer.scene.screenSpaceCameraController = {
-    minimumZoomDistance: 1,
-    maximumZoomDistance: Number.POSITIVE_INFINITY,
-  };
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  const count = (id) => engine.movers.list().find((set) => set.id === id).count;
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    primitive,
-    frame,
-    click(target) {
-      native =
-        target?.owner && primitive(target.owner)
-          ? { primitive: primitive(target.owner).get(target.instance) }
-          : target
-            ? { id: target.id, primitive: {} }
-            : undefined;
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(-50, -50),
-        });
-    },
-    credits: () => credits,
-    surface(height) {
-      viewer.scene.sampleHeightSupported = true;
-      viewer.scene.sampleHeight = () => height;
-    },
-    terrain(height) {
-      viewer.scene.globe.getHeight = () => height;
-    },
-    badge(id, index) {
-      const billboard = primitive(id).get(index);
-      return {
-        shown: index < count(id) && billboard.show,
-        sizePx: billboard.width,
-        alpha: billboard.color.alpha,
-        scale: billboard.scale,
-        id: billboard.id,
-        position: billboard.position,
-        native: billboard,
-      };
-    },
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 function services() {
   const contexts = new Map();
@@ -252,23 +172,7 @@ for (const makeHarness of HARNESSES) {
       assert.equal(badge.id, 'alpr:0', 'a pick returns the camera id');
       assert.equal(badge.alpha, 1);
       assert.ok(Math.abs(heightOf(badge.position) - 151.5) < 0.01);
-      if (h.cesium) {
-        const billboard = badge.native;
-        assert.ok(
-          h.primitive('alpr-cameras') instanceof Cesium.BillboardCollection,
-        );
-        assert.equal(billboard.height, 38);
-        assert.equal(
-          billboard.disableDepthTestDistance,
-          Number.POSITIVE_INFINITY,
-        );
-        assert.ok(
-          Cesium.NearFarScalar.equals(
-            billboard.scaleByDistance,
-            new Cesium.NearFarScalar(...MARKER_SCALE_BY_DISTANCE),
-          ),
-        );
-      } else {
+      {
         for (const [id, size, url] of [
           ['alpr-cameras', 38, /alpr-marker-normal\.png$/],
           ['alpr-selected', 60, /alpr-marker-selected\.png$/],
@@ -393,11 +297,10 @@ for (const makeHarness of HARNESSES) {
       h.load(records(1600));
       assert.equal(h.display.count(), 1500);
       assert.equal(h.state.renderSaturated, true);
-      if (!h.cesium)
-        assert.ok(
-          h.engine.fake.moverSet('alpr-cameras').commits < 10,
-          'one buffer commit per batch, not per marker',
-        );
+      assert.ok(
+        h.engine.fake.moverSet('alpr-cameras').commits < 10,
+        'one buffer commit per batch, not per marker',
+      );
       const credit = h.credits().find((c) => /Fixture cameras/.test(c.html));
       assert.ok(credit, 'the source credit shows with the cameras');
       assert.equal(credit.onScreen, true);
@@ -416,7 +319,7 @@ for (const makeHarness of HARNESSES) {
       follow.stop();
       assert.equal(h.display.focusNearest(), true);
       assert.equal(h.services.selected.id, 'alpr:0');
-      if (!h.cesium) {
+      {
         const [{ args }] = h.engine.fake.callsOf('camera.flyToSphere');
         assert.equal(args[0].radius, 30);
         assert.ok(Math.abs(heightOf(args[0].center) - 0) < 0.01, 'no ground');

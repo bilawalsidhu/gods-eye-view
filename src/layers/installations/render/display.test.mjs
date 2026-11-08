@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import * as context from '../../../data/contextStore.js';
 import { claimPointer, releasePointer } from '../../../data/inputOwnership.js';
@@ -101,21 +101,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(disc.pickId, 'osm:way:1', 'a pick names the site');
     closeTo(disc.color, classColor(airfield(), 1));
     assert.equal(h.markers(SELECTED_MARKER_SET_ID).length, 0);
-    if (h.cesium) {
-      const point = disc.point;
-      assert.ok(
-        h.collection(MARKER_SET_ID) instanceof Cesium.PointPrimitiveCollection,
-      );
-      assert.equal(point.pixelSize, 9);
-      assert.equal(point.outlineWidth, 1);
-      assert.ok(
-        point.outlineColor.equalsEpsilon(
-          Cesium.Color.BLACK.withAlpha(0.8),
-          1e-6,
-        ),
-      );
-      assert.equal(point.disableDepthTestDistance, Number.POSITIVE_INFINITY);
-    } else {
+    {
       const { options } = h.engine.fake.moverSet(MARKER_SET_ID);
       assert.equal(options.kind, 'point');
       assert.equal(options.point.sizePx, 9);
@@ -134,7 +120,6 @@ for (const makeHarness of GROUND_HARNESSES) {
     const [chosen] = h.markers(SELECTED_MARKER_SET_ID);
     assert.equal(chosen.pickId, 'osm:way:1');
     closeTo(chosen.color, [1, 1, 1, 1]);
-    if (h.cesium) assert.equal(chosen.point.pixelSize, 13);
   });
 
   test(`a named area draws no disc but its outlines are drawn, as on Cesium (${name})`, (t) => {
@@ -180,20 +165,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(line.widthPx, 2);
     assert.equal(line.pickId, 'osm:way:1');
     closeTo(line.color, classColor(airfield(), 0.85));
-    if (h.cesium) {
-      const [primitive] = h.primitives(`${OUTLINE_SET_ID}-1`).lines;
-      assert.equal(
-        primitive.options.classificationType,
-        Cesium.ClassificationType.BOTH,
-      );
-    }
-    // Cesium builds ground lines in workers: the first set is drawn now.
-    const built = (n) => {
-      for (const primitive of h.primitives(`${OUTLINE_SET_ID}-${n}`).lines)
-        primitive.ready = true;
-      h.viewer.scene.postRender.raiseEvent();
-    };
-    if (h.cesium) built(1);
+
     const commits = [0, 1].map((n) => h.set(`${OUTLINE_SET_ID}-${n}`).commits);
     for (let i = 0; i < 5; i++) h.parts.display.renderRecords();
     assert.deepEqual(
@@ -211,14 +183,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     h.parts.display.renderRecords();
     const counts = () =>
       [0, 1].map((n) => h.set(`${OUTLINE_SET_ID}-${n}`).items.length);
-    if (h.cesium) {
-      assert.deepEqual(
-        counts(),
-        [2, 1],
-        'Cesium is still building the new set',
-      );
-      built(0);
-    }
+
     assert.deepEqual(counts(), [2, 0]);
   });
 
@@ -245,13 +210,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(fill.items[0].pickId, named.id);
     assert.equal(fill.items[0].outline, undefined);
     closeTo(fill.items[0].fill, classColor(named, 0.22));
-    if (h.cesium) {
-      const [primitive] = h.primitives(SELECTION_FILL_SET_ID).fills;
-      assert.equal(
-        primitive.options.classificationType,
-        Cesium.ClassificationType.CESIUM_3D_TILE,
-      );
-    }
+
     const commits = fill.commits;
     for (let i = 0; i < 10; i++) h.parts.display.renderRecords();
     assert.equal(

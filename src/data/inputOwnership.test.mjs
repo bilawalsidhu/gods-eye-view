@@ -114,22 +114,17 @@ test('every scene click handler consults ownership before it picks', () => {
   // find and edit each of these. If a layer grows a click handler it has to
   // appear here too.
   const guarded = [
-    ['src/data/trackingClickGesture.js', 'onClick(click, gesture);'],
+    ['src/data/trackingGesture.js', 'onClick(click, gesture);'],
     [
       'src/layers/infrastructure/render/display.js',
       'const picked = event.picked;',
     ],
     ['src/data/cctvGizmo.js', 'pickGizmoPart(event)'],
     // ALPR and bikeshare take the engine's click with its pick.
-    ['src/layers/alpr/render/display.js', 'overlay.pick(position) ||'],
+    ['src/layers/shared/selectionKeeper.js', 'const id = pickId(event);'],
     ['src/layers/bikeshare/render/display.js', 'const picked = event.picked;'],
     // FIRMS takes the engine dispatcher's click with its pick.
     ['src/layers/firms/selection.js', 'const picked = click.picked;'],
-    // Mapped Installations take the engine's click with its pick.
-    [
-      'src/layers/installations/render/display.js',
-      "const id = typeof picked?.id === 'string' ? picked.id : null;",
-    ],
     ['src/layers/launches/render/display.js', '[ctx.picked, ...ctx.drilled]'],
     [
       'src/layers/radio/interaction.js',
@@ -173,7 +168,7 @@ test('ambient selection handlers never claim the pointer themselves', () => {
   // Claiming from a selection handler would deadlock every other layer the
   // moment a user clicked anything. Only tools claim.
   for (const file of [
-    'src/data/trackingClickGesture.js',
+    'src/data/trackingGesture.js',
     'src/layers/infrastructure/render/display.js',
     'src/data/cctvGizmo.js',
     'src/layers/vessels/selection.js',

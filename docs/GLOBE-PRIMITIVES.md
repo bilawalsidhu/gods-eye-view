@@ -183,78 +183,17 @@ point movers retain their independent fill and outline opacity. No story
 backend is selected by engine. The authored model still uses its existing
 property records; removing that model dependency is separate work.
 
-### How each engine draws the ground
+### Ground drawing guarantees
 
-**Cesium** (`src/globe/cesium/ground.js`) builds at most two batches per set:
+Both engines preserve item order, fill and outline colours, pixel and metre
+widths, visibility, and pick ownership. Non-pickable sets let picks through.
+`ready()` reports when committed geometry is ready to draw. Animated corridor
+looks use the shared ground time and request frames while shown.
 
-- one `GroundPrimitive` for all the fills (polygons, ellipses, rectangles and
-  metre corridors);
-- one `GroundPolylinePrimitive` for all the outlines and pixel corridors.
-
-Both use per-instance colours and the set's `classificationType`. A
-corridor with a look draws in a `GroundPolylinePrimitive` of its own look
-and colour, over the set's other batches. Its material does the glow, pulse
-and dash. The engine writes its time before every frame, and asks for the
-next frame after every frame while the set is shown. Cesium
-builds them in workers; the set's `ready()` turns true once they are drawn.
-A set that is not pickable stays out of the pick pass, so it never hides
-what lies under it.
-
-**Navara** (`src/globe/navara/ground/`) draws every shown set in one screen
-pass after tone mapping. Each pixel's ground position comes from the scene
-depth (terrain and 3D tiles), and the pixel is tested against the items in
-its screen cell:
-
-- a disc against its radius;
-- an area against its edges;
-- a corridor tile against the corridor segments near the pixel.
-
-The tests run in each item's own gnomonic plane, so great-circle edges stay
-straight. Fills and outlines are anti-aliased across one pixel and blended
-in display space, in draw order, as Cesium blends them.
-
-Large shapes get extra structure:
-
-- An area with more than 32 edges gets a grid of bins. A pixel then tests
-  only the edges of its own bin.
-- A corridor set becomes tiles, set-wide grids of bins
-  (`src/globe/navara/ground/corridors.js`). See below.
-- The terrain heights under each item bound its screen box.
-
-**Corridor tiles.** A set's lines are cut into pieces of at most 0.5°
-along their great circles. The pieces fall into a tree of longitude and
-latitude tiles, each with at most 20 000 pieces and at most 20° a side. A
-tile is one pass item:
-
-- a gnomonic plane of its own;
-- the pieces that come near it, as segments in that plane;
-- a pyramid of square bins. A bin of level z is 2^z times the finest bin.
-  It lists runs of segments, item by item in draw order: the segments that
-  reach within its margin. The margin is half a bin for the set's thinnest
-  corridor, more for a wider one, plus a width in metres.
-
-The finest bin is sized so that it holds about two runs per piece. The
-coarsest level has at most 8 bins across.
-
-A pixel finds its ground in world space once. It takes the one tile of the
-set whose cell holds it: the cells are tested with the meridians' normals
-and the parallels' sines, so two neighbouring tiles never both draw a
-pixel. The pixel then takes the finest level whose margin covers the
-reach of the set's thinnest corridor, and tests only its bin's runs. Each
-item takes its nearest segment there, and blends once, in item order. When
-the pixel is wider than the coarsest margin covers (a tile under about 30
-pixels), lines near a tile's edge can lose a little of a neighbour's
-reach; the tile is a solid blur by then.
-
-A commit packs the tiles once. Only the heights are sampled again when the
-terrain loads later.
-
-Picks are CPU picks at the ground under the pointer (`src/globe/ground.js`).
-
-Navara draws ground shapes through the screen pass. It keeps colours and
-outlines exact, supports pixel and metre widths, and reliably shows and
-hides sets. Binned corridor tiles keep draw cost bounded while the camera
-moves, with compact texture storage.
+Cesium translates ground items to classified fills and polylines. Navara
+classifies visible scene depth and blends the ground in display space.
+Navara picks ground items at the surface under the pointer. Packing, tiling
+and bin sizes are implementation details in `src/globe/navara/ground/`.
 
 ## Imagery: rasters on the ground
 
@@ -324,78 +263,27 @@ On the engine:
 - `surface()` says where imagery drapes now: `'globe'`, `'tiles'` (3D tiles)
   or `'none'`.
 
-### How each engine draws imagery
+### Imagery drawing guarantees
 
-**Cesium** (`src/globe/cesium/imagery.js`) gives each layer one
-`ImageryLayer`:
+Both engines draw imagery below ground shapes, movers, lines and models,
+in layer order. Each texel blends by its alpha times the layer alpha.
+Visibility, split position, rectangle bounds and raised-shell height follow
+the imagery contract. Replacing or destroying a source releases its owned
+resources; stale loads cannot replace the current source.
 
-- on the globe's imagery layers while the globe shows, else on the shown 3D
-  tileset's own imagery layers (Cesium drapes imagery on tiles there), as
-  `engine.imagery.surface()` reports it to layers; with neither, the
-  layers wait;
-- the engine checks the surface on every frame while it holds a layer, and
-  builds each layer again on the new stack after a switch;
-- above the base imagery, in order among the engine's layers; imagery other
-  code adds stays where it was put;
-- tiles: a `UrlTemplateImageryProvider` in Web Mercator, bounded to the
-  rectangle; `maxRequests` gates `requestImage`, and a request the gate or
-  the provider defers asks for one delayed frame, never one per frame;
-- an image: one geographic tile over the rectangle (as
-  `SingleTileImageryProvider`), handed to Cesium as the canvas or image
-  itself, with no PNG round trip;
-- geographic tiles: a `GeographicTilingScheme`; a transform wraps
-  `requestImage` (Cesium's tile bitmaps arrive flipped, so the transform
-  gets them upright on a canvas);
-- a credit is read through the provider's `credit` getter every frame, so a
-  new credit of the same source needs no new layer;
-- a staged source is a second `ImageryLayer` at alpha 0 right over the
-  drawn one, whose tiles Cesium loads while the drawn one shows. Its own
-  requests are counted (deferrals too); once they are in (the globe's tiles
-  all loaded, or its own requests quiet for 200 ms) for two frames in a
-  row, it takes the drawn one's alpha and the drawn one goes after the next
-  frame. Throttled tiles (429, 503) retry three times; any other failed
-  tile fails the source;
-- a raised layer is a primitive of its own (`imageryShell.js`): a
-  rectangle at the height with a material of the image and the detail in
-  its window, flat, alpha blended in the opaque pass without depth writes,
-  first in `scene.primitives` in the imagery order, lifted by a uniform
-  scale about the Earth's centre. A new image on the same rectangle swaps
-  once uploaded; another rectangle is a new shell at alpha 0 until drawn;
-- `split` is the layer's `splitDirection`; Cesium splits on the globe only
-  (not raised layers).
+Cesium translates sources to imagery providers and raised shells. Navara
+samples imagery in its surface pass, including raised ellipsoid intersections.
+The adapters own texture storage, tile selection and depth reconstruction.
 
-**Navara** (`src/globe/navara/imagery/`) draws every shown layer in one
-screen pass right after tone mapping, under the other drapes and
-`engine.ground`:
+Cesium moves draped layers between the visible globe and tileset surfaces;
+without either surface, layers wait. Its split applies to globe imagery,
+not raised shells. Navara draws the top eight visible imagery slots, with
+detail images consuming a slot. Staged sources keep the current image visible
+until their replacement is ready; a failed source leaves it intact.
 
-- each pixel's ground position comes from the scene depth (terrain and 3D
-  tiles), as `engine.ground`'s pass finds it;
-- up to 8 layers are sampled in draw order at its longitude and latitude,
-  each in its rectangle and on its side of the split (the top 8 when more
-  are shown);
-- an image is one mipmapped texture, sampled in longitude and latitude;
-- tiles are an atlas of at most 8×8 Web Mercator or geographic tiles over
-  the part of the rectangle in view, at the level the camera's height asks
-  for (a geographic level one below Web Mercator's); it is rebuilt when the
-  camera moves to another plan and filled as tiles arrive, each through the
-  transform, 6 loads at a time (or `maxRequests`);
-- a staged source builds its own texture or atlas (for the view now, again
-  when the camera moves) while the drawn one shows, and takes its place
-  once every tile of it has settled; a failed tile fails it;
-- a raised slot is sampled where the pixel's ray meets the ellipsoid grown
-  by its lifted height, where nothing of the scene is nearer; a detail is a
-  second slot right over its layer's, which draws nothing inside the
-  detail's rectangle;
-- texels are blended in display space, as Cesium's globe blends imagery;
-  mip levels come from the derivatives of the ground position, taken
-  before any branch, so rectangle edges and the antimeridian show no seams.
-
-Open map overlays (Sea Marks, Ski Pistes) use `engine.imagery` when the
-engine has no `maps.addOverlay`. Navara keeps that optional native raster
-path for its per-tile detail. It adds a native Navara raster layer: Navara's own per-tile levels on
-the terrain, lit like the base map, but no rectangle, split, alpha or order,
-and nothing on 3D tiles. Moving that path to imagery needs finer Navara tile detail: a global overlay seen obliquely gets coarse
-near the camera from one 8×8 atlas over the whole view.
+Open map overlays use `engine.imagery` when `maps.addOverlay` is absent.
+Navara's optional native raster path retains terrain detail, but does not
+provide rectangle bounds, split, alpha, order, or drawing on 3D tiles.
 
 ### Who draws through imagery
 
@@ -696,8 +584,8 @@ Run `createContractSuite(engine, { waitFrames, ... })` from
 `src/globe/testing/contractSuite.mjs`. Supply real pointer delivery, canvases and
 pixel reads for browser checks; keep the fake-engine tests as fast contract
 checks. Test ownership and repeated destruction as well as visible output.
-The browser harness is `scripts/qa-contract-suite.mjs`; ground and imagery pixel
-checks also run through `scripts/qa-ground-suite.mjs`.
+The browser harness is `scripts/qa-contract-suite.mjs`; use
+`--only=ground:,imagery:` for ground and imagery pixel checks.
 
 The application currently registers two kinds: adding another still requires
 registration in `ENGINE_KINDS`, scene construction/choice and the corresponding

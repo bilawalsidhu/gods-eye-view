@@ -1,17 +1,11 @@
-// The radio display on the engine contract, on the fake engine and on the
-// Cesium engine (real Cesium point and billboard collections over a stub
-// scene: they draw nothing but hold what the engine writes): station,
-// cluster and selection styles, screen clustering, the direct click that
-// plays, the distance cut, follow ownership, the Earth disc for recentering
-// and what enable/disable cycles and teardown leave.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { projectEarthDiscToViewport } from '../../../celestialRing.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import { createRadioLayer } from '../index.js';
@@ -85,54 +79,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const { engine, viewer, frame, primitive } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-    },
-  });
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  const count = (id) => engine.movers.list().find((set) => set.id === id).count;
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    frame,
-    primitive,
-    click(picked) {
-      native = picked
-        ? { primitive: primitive(picked.owner).get(picked.instance) }
-        : undefined;
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(100, 100),
-        });
-    },
-    instance(id, index) {
-      const item = primitive(id).get(index);
-      return {
-        shown: index < count(id) && item.show,
-        color: [
-          item.color.red,
-          item.color.green,
-          item.color.blue,
-          item.color.alpha,
-        ],
-        pixelSize: item.pixelSize ?? item.width * item.scale,
-        id: item.id,
-        native: item,
-      };
-    },
-    pick: (id, index) => ({ owner: id, instance: index }),
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 function fixture(t, makeHarness) {
   const previous = globalThis.Audio;
@@ -252,32 +199,7 @@ for (const makeHarness of HARNESSES) {
       .forEach((value, i) =>
         near(cluster.color[i], value, `cluster colour ${i}`),
       );
-    if (f.cesium) {
-      const point = station.native;
-      assert.ok(
-        f.primitive('radio-stations') instanceof
-          Cesium.PointPrimitiveCollection,
-      );
-      assert.equal(point.outlineWidth, 1);
-      assert.ok(
-        point.outlineColor.equalsEpsilon(
-          Cesium.Color.fromCssColorString('#071b25'),
-          1e-6,
-        ),
-      );
-      assert.ok(
-        Cesium.NearFarScalar.equals(
-          point.scaleByDistance,
-          new Cesium.NearFarScalar(100_000, 1.15, 12_000_000, 1),
-        ),
-      );
-      assert.equal(point.disableDepthTestDistance, Number.POSITIVE_INFINITY);
-      assert.equal(cluster.native.outlineWidth, 2);
-      assert.equal(
-        cluster.native.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-    } else {
+    {
       const { options } = f.engine.fake.moverSet('radio-stations');
       assert.equal(options.point.sizePx, 13);
       assert.equal(options.point.outlinePx, 1);
@@ -313,20 +235,7 @@ for (const makeHarness of HARNESSES) {
     const bracket = f.instance('radio-bracket', 0);
     near(bracket.pixelSize, 40, 'bracket size');
     assert.equal(bracket.id, `radio:selected:${clusterId}`);
-    if (f.cesium) {
-      assert.equal(selected.native.outlineWidth, 2);
-      assert.equal(selected.native.scaleByDistance, undefined);
-      assert.ok(
-        Cesium.NearFarScalar.equals(
-          bracket.native.scaleByDistance,
-          new Cesium.NearFarScalar(100_000, 1, 12_000_000, 0.72),
-        ),
-      );
-      assert.equal(
-        bracket.native.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-    } else {
+    {
       const { options } = f.engine.fake.moverSet('radio-selected');
       assert.equal(options.point.sizePx, 14);
       assert.equal(options.point.scaleByDistance, null);

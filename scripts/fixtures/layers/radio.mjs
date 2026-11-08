@@ -78,7 +78,7 @@ export async function installRadioFixture(page) {
           stale: false,
           degraded: false,
           acceptedGeneration: qa.generation,
-          catalogInstance: 'w2-radio-fixture',
+          catalogInstance: 'fixture-radio-fixture',
         };
         const mode = qa.response;
         const delay = qa.delay;

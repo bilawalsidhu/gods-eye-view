@@ -1,30 +1,14 @@
-// The Global Context display on the engine contract, on the fake engine and
-// on the Cesium engine: the camera it reads, the followed contact, a contact
-// flight, its frames, the ring lines and the pulse field.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
-import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+import { createFakeGroundHarness } from '../../../testSupport/groundDisplayEngines.mjs';
+
 import { createAwarenessDisplay, RING_HALO_ID, RING_ID } from './display.js';
 
-const HARNESSES = [
-  () => ({ name: 'the fake engine', engine: createFakeEngine() }),
-  () => {
-    const { engine, viewer, primitive } = createCesiumMoversEngine();
-    // A viewer's camera controller, whose inputs the engine switches.
-    viewer.scene.screenSpaceCameraController = { enableInputs: true };
-    return {
-      name: 'the Cesium engine',
-      cesium: true,
-      engine,
-      viewer,
-      primitive,
-    };
-  },
-];
+const HARNESSES = [createFakeGroundHarness];
 
 for (const makeHarness of HARNESSES) {
   const { name } = makeHarness();
@@ -81,10 +65,7 @@ for (const makeHarness of HARNESSES) {
       ends = 0;
     const offFrame = display.onFrame(() => frames++);
     const offEnd = display.onFrameEnd(() => ends++);
-    if (h.cesium) {
-      h.viewer.scene.preRender.raiseEvent(h.viewer.scene);
-      h.viewer.scene.postRender.raiseEvent(h.viewer.scene);
-    } else h.engine.fake.frame();
+    h.engine.fake.frame();
     assert.deepEqual([frames, ends], [1, 1]);
     offFrame();
     offEnd();
@@ -112,46 +93,19 @@ for (const makeHarness of HARNESSES) {
     const center = geo.cartesian3.fromDegrees(3, 27, 0);
     const rim = display.createRim(center);
     const disc = display.createPulses(center);
-    if (h.cesium) {
-      const core = h.primitive(RING_ID);
-      const halo = h.primitive(RING_HALO_ID);
-      assert.equal(core.geometryInstances.geometry._width, 3);
-      assert.equal(halo.geometryInstances.geometry._width, 4);
-      assert.equal(core.allowPicking, false);
-      assert.ok(disc, 'the Cesium backend draws the pulse disc');
-      const primitives = Array.from(
-        { length: h.viewer.scene.primitives.length },
-        (_, i) => h.viewer.scene.primitives.get(i),
-      );
-      const shown = primitives.find(
-        (p) => p.appearance instanceof Cesium.MaterialAppearance,
-      );
-      assert.equal(shown.allowPicking, false);
-      disc.draw({ radii: [0.5, 0, 0, 0], alphas: [0.4, 0, 0, 0], level: 1 });
-      assert.equal(shown.show, true);
-      assert.equal(shown.appearance.material.uniforms.radii.x, 0.5);
-      disc.draw({ radii: [0, 0, 0, 0], alphas: [0, 0, 0, 0], level: 0 });
-      assert.equal(shown.show, false);
-      disc.destroy();
-      assert.ok(shown.isDestroyed());
-    } else {
-      assert.equal(h.engine.fake.line(RING_ID).options.widthPx, 3);
-      assert.equal(h.engine.fake.line(RING_HALO_ID).options.widthPx, 4);
-      assert.ok(disc);
-      disc.draw({ radii: [0.5], alphas: [0.4], level: 1 });
-      const field = h.engine.fake.groundPulse('gev-awareness-pulses');
-      assert.deepEqual(field.radii, [0.5, 0, 0, 0]);
-      assert.deepEqual(field.alphas, [0.4, 0, 0, 0]);
-      disc.destroy();
-      assert.equal(
-        h.engine.fake.groundPulse('gev-awareness-pulses'),
-        undefined,
-      );
-    }
+
+    assert.equal(h.engine.fake.line(RING_ID).options.widthPx, 3);
+    assert.equal(h.engine.fake.line(RING_HALO_ID).options.widthPx, 4);
+    assert.ok(disc);
+    disc.draw({ radii: [0.5], alphas: [0.4], level: 1 });
+    const field = h.engine.fake.groundPulse('gev-awareness-pulses');
+    assert.deepEqual(field.radii, [0.5, 0, 0, 0]);
+    assert.deepEqual(field.alphas, [0.4, 0, 0, 0]);
+    disc.destroy();
+    assert.equal(h.engine.fake.groundPulse('gev-awareness-pulses'), undefined);
+
     rim.setAlpha(0.4);
-    const alpha = h.cesium
-      ? h.primitive(RING_ID).appearance.material.uniforms.color.alpha
-      : h.engine.fake.line(RING_ID).color[3];
+    const alpha = h.engine.fake.line(RING_ID).color[3];
     assert.ok(Math.abs(alpha - 0.95 * 0.4) < 1e-9);
     rim.destroy();
     assert.equal(

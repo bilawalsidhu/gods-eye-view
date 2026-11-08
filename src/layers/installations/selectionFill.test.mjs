@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as context from '../../data/contextStore.js';
 import { SELECTION_FILL_SET_ID } from './render/display.js';
 import { createDisplayHarness } from './render/displayHarness.mjs';
@@ -65,11 +65,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       'the first footprint keeps its hole',
     );
     assert.deepEqual(items[0].fill, items[1].fill);
-    if (h.cesium)
-      assert.equal(
-        h.primitives(SELECTION_FILL_SET_ID).fills[0].options.classificationType,
-        Cesium.ClassificationType.CESIUM_3D_TILE,
-      );
+
     for (let i = 0; i < 100; i++) render.syncSelectionFill();
     assert.equal(fill().commits, commits, 'repaints retain ground geometry');
     h.state.selectedId = null;
@@ -86,11 +82,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     h.changeMapStack();
     assert.equal(fill().options.drape, 'both');
     assert.equal(fill().items.length, 2);
-    if (h.cesium)
-      assert.equal(
-        h.primitives(SELECTION_FILL_SET_ID).fills[0].options.classificationType,
-        Cesium.ClassificationType.BOTH,
-      );
+
     lifecycle.disable();
     assert.equal(fill().items.length, 0);
     assert.equal(h.mapStackRemoved(), 1);

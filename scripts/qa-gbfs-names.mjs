@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
-import { watchW1Page, redact } from './qa-browserEvidence.mjs';
+import { watchBrowserPage, redact } from './qa-browserEvidence.mjs';
 
 const urlIndex = process.argv.indexOf('--url');
 if (urlIndex < 0) throw new Error('An explicit --url is required');
@@ -87,7 +87,7 @@ async function open(mode = 'normal') {
   await page.bringToFront();
   const errors = [];
   if (extended)
-    watchW1Page(page, report, {
+    watchBrowserPage(page, report, {
       name: mode,
       baseUrl: appUrl,
       preview: process.argv.includes('--preview'),

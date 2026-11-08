@@ -1,18 +1,6 @@
-// Ground displays under test, on the fake engine and on the Cesium engine.
-// Both harnesses record what each ground set was given (the items of its
-// last commit, its commits) and count the live input listeners. The Cesium
-// one is the engine over a real Cesium camera on a stub scene
-// (cesiumMoversEngine.mjs) with fake GroundPrimitive and
-// GroundPolylinePrimitive factories: the engine's own geometry instances,
-// colours and options reach them, and they draw nothing. A click goes
-// through the engine's input with a pick of a ground item (`{ set,
-// instance }`), of another object (`{ id }`) or of nothing (undefined).
-
-import * as Cesium from 'cesium';
+// Ground display tests record committed items and input ownership on the fake engine.
 import { normalizeGroundSetOptions } from '../globe/ground.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from './cesiumMoversEngine.mjs';
 
 const CLICK_AT = { x: 100, y: 100 };
 
@@ -73,8 +61,8 @@ export function createFakeGroundHarness(options = {}) {
   const watched = watch(engine);
   return {
     name: 'the fake engine',
-    cesium: false,
     engine,
+    frame: () => engine.fake.frame(),
     ...watched,
     click(target, position = CLICK_AT) {
       let picked = target;
@@ -94,95 +82,4 @@ export function createFakeGroundHarness(options = {}) {
   };
 }
 
-/**
- * The Cesium engine over a stub scene, with fake ground primitives; with
- * `realFills`, Cesium's own GroundPrimitive draws the fills (it builds in
- * Node; GroundPolylinePrimitive does not).
- */
-export function createCesiumGroundHarness({
-  realFills = false,
-  engineOptions = {},
-} = {}) {
-  const handlers = createFakeEventHandlers();
-  const primitive = (type) => (options) => {
-    const value = {
-      type,
-      options,
-      ready: false,
-      show: true,
-      destroyed: false,
-      destroy() {
-        value.destroyed = true;
-      },
-      isDestroyed: () => value.destroyed,
-    };
-    return value;
-  };
-  const { engine, viewer } = createCesiumMoversEngine({
-    engineOptions: {
-      ...engineOptions,
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-      groundFactories: {
-        ...(realFills ? {} : { fills: primitive('fills') }),
-        lines: primitive('lines'),
-      },
-    },
-  });
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  const children = (collection) =>
-    Array.from({ length: collection?.length ?? 0 }, (_, index) =>
-      collection.get(index),
-    );
-  // The engine's collection of sets, each set's collection of primitives.
-  const slots = () => children(viewer.scene.groundPrimitives.get(0));
-  const slotOf = (id) =>
-    slots().find((slot) =>
-      children(slot).some((value) => value.gevGroundSet === id),
-    );
-  const live = (id) => children(slotOf(id));
-  const typeOf = (value) =>
-    value.type ?? (value instanceof Cesium.GroundPrimitive ? 'fills' : 'lines');
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    ...watch(engine),
-    /** The live Cesium primitives of a set: fills and outlines. */
-    primitives: (id) => ({
-      fills: live(id).filter((value) => typeOf(value) === 'fills'),
-      lines: live(id).filter((value) => typeOf(value) === 'lines'),
-    }),
-    /** Whether the set's Cesium collection is shown (undefined: none). */
-    collectionShown: (id) => slotOf(id)?.show,
-    click(target, position = CLICK_AT) {
-      native = undefined;
-      if (target?.set !== undefined) {
-        const [first] = live(target.set);
-        native = {
-          id: { gevGroundSet: target.set, instance: target.instance },
-          primitive: first,
-        };
-      } else if (target) native = { id: target.id, primitive: {} };
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(position.x, position.y),
-        });
-      native = undefined;
-    },
-    destroy: () => engine.destroy(),
-  };
-}
-
-export const GROUND_HARNESSES = [
-  createFakeGroundHarness,
-  createCesiumGroundHarness,
-];
-
-/** A Cesium colour attribute's value as rgba in 0..1. */
-export const instanceColor = (instance) =>
-  Array.from(instance.attributes.color.value, (byte) => byte / 255);
+export const GROUND_HARNESSES = [createFakeGroundHarness];

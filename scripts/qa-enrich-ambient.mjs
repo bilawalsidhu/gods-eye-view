@@ -11,7 +11,7 @@
  * them real types AMBIENTLY (nothing is ever tracked, 3D stays off), while
  * honoring the politeness bounds.
  *
- * Fetch shim (installed before app code, same pattern as qa-sprites-b5.mjs):
+ * Fetch shim (installed before app code, same pattern as qa-aircraft-sprites.mjs):
  *   - /api/flights           → 12 straight-flying planes, category 0
  *   - /api/adsbdb/type/:hex  → varied REAL type codes (C172, B744, DH8D, H60,
  *                              F16, GLID, B77W, A320, B738, PC12, R44) + one
@@ -57,7 +57,7 @@ import { classifyAircraft, CLASS_SCALE_2D } from '../src/data/aircraftClass.js';
 import { aircraftIcon } from '../src/data/aircraftIcons.js';
 
 // ---------------------------------------------------------------------------
-// Args (same shape as qa-sprites-b5.mjs)
+// Args (same shape as qa-aircraft-sprites.mjs)
 // ---------------------------------------------------------------------------
 const argv = process.argv.slice(2);
 const getFlag = (name) => argv.includes(name);
@@ -308,7 +308,7 @@ async function main() {
     await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
-    // ---- In-page billboard probe (same as qa-sprites-b5.mjs) ---------------
+    // ---- In-page billboard probe (same as qa-aircraft-sprites.mjs) ---------------
     // What the flights layer draws, through the engine-neutral probe
     // (layers.drawn: the layer's own sprite handles) on either engine. The
     // layer owns no Cesium billboards any more: the contract's batched

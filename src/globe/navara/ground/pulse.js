@@ -1,13 +1,15 @@
 // Ground pulse fields over the visible globe, after tone mapping.
+import { DISPLAY_COLOR_GLSL, VIEW_POSITION_GLSL } from '../shaderChunks.js';
 import { Matrix4, Uniform, Vector3, Vector4 } from 'three';
 import { groundSurfaceUniforms, updateGroundSurface } from './surface.js';
-import { defineGroundEffect } from './effect.js';
+import { EffectDesc, Effect as NavaraEffect } from '@navaramap/three';
+import { Effect, EffectAttribute } from 'postprocessing';
+import { withFrameUpdates, withPassDisposal } from '../frameDescriptor.js';
 
 const KEY = 'gevGroundPulses';
 
 const fragmentShader = /* glsl */ `
 uniform sampler2D tAllDepth;
-uniform sampler2D tSurfaceDepth;
 uniform mat4 uInverseProjection;
 uniform mat4 uInverseView;
 uniform float uLogDepthFC;
@@ -23,12 +25,8 @@ uniform float uDepth;
 uniform float uLineWidth;
 uniform float uHaloWidth;
 uniform float uPixelRatio;
-vec3 toDisplay(vec3 c) {
-  return mix(12.92*c,1.055*pow(max(c,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),c));
-}
-vec3 toLinear(vec3 c) {
-  return mix(c/12.92,pow(max((c+0.055)/1.055,vec3(0.0)),vec3(2.4)),step(vec3(0.04045),c));
-}
+${DISPLAY_COLOR_GLSL}
+${VIEW_POSITION_GLSL}
 vec4 over(vec4 top, vec4 under) {
   float a = top.a + under.a * (1.0 - top.a);
   if (a <= 0.0) return vec4(0.0);
@@ -37,9 +35,9 @@ vec4 over(vec4 top, vec4 under) {
 void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
   outputColor=inputColor;
   float depth=unpackRGBAToDepth(texture2D(tAllDepth,uv));
-  float distance=exp2(2.0*depth/uLogDepthFC)-1.0;
+  float distance=viewDistance(depth, uLogDepthFC);
   vec4 ray=uInverseProjection*vec4(uv*2.0-1.0,-1.0,1.0);
-  vec3 point=ray.xyz*(distance/-ray.z);
+  vec3 point=viewPosition(ray, distance);
   vec3 origin=uInverseView[3].xyz;
   vec3 direction=normalize((uInverseView*vec4(ray.xyz,0.0)).xyz);
   vec3 o=origin/uRadiiM;
@@ -81,36 +79,49 @@ void mainImage(const in vec4 inputColor,const in vec2 uv,out vec4 outputColor) {
 }
 `;
 
-const pulseEffect = defineGroundEffect({
-  key: KEY,
-  name: 'GevGroundPulses',
-  fragmentShader,
-  insertAfter: ['gevGround', 'gevImagery', 'toneMapping'],
-  insertBefore: [
+class PulseEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
+  static allowDuplication = true;
+  static key = KEY;
+  static insertAfter = ['gevGround', 'gevImagery', 'toneMapping'];
+  static insertBefore = [
     'gevPreSharpenOverlay',
     'gevSharpen',
     'smaa',
     'fxaa',
     'gevOverlay',
     'final',
-  ],
-  uniforms: () => [
-    ...groundSurfaceUniforms(),
-    ['uInverseView', new Uniform(new Matrix4())],
-    ['uCenter', new Uniform(new Vector3(1, 0, 0))],
-    ['uRadiusAngle', new Uniform(1)],
-    ['uRadiiM', new Uniform(new Vector3())],
-    ['uColor', new Uniform(new Vector4())],
-    ['uLineColor', new Uniform(new Vector4())],
-    ['uHaloColor', new Uniform(new Vector4())],
-    ['uRadii', new Uniform(new Vector4())],
-    ['uAlphas', new Uniform(new Vector4())],
-    ['uDepth', new Uniform(0.35)],
-    ['uLineWidth', new Uniform(3)],
-    ['uHaloWidth', new Uniform(1)],
-    ['uPixelRatio', new Uniform(1)],
-  ],
-  update() {
+  ];
+
+  constructor(view, context, config) {
+    super(view, context, config);
+    this.owner = config[KEY].owner;
+  }
+
+  createPass() {
+    this.effect = new Effect('GevGroundPulses', fragmentShader, {
+      // Input color is the tone-mapped frame.
+      attributes: EffectAttribute.CONVOLUTION,
+      uniforms: new Map([
+        ...groundSurfaceUniforms({ surface: false }),
+        ['uInverseView', new Uniform(new Matrix4())],
+        ['uCenter', new Uniform(new Vector3(1, 0, 0))],
+        ['uRadiusAngle', new Uniform(1)],
+        ['uRadiiM', new Uniform(new Vector3())],
+        ['uColor', new Uniform(new Vector4())],
+        ['uLineColor', new Uniform(new Vector4())],
+        ['uHaloColor', new Uniform(new Vector4())],
+        ['uRadii', new Uniform(new Vector4())],
+        ['uAlphas', new Uniform(new Vector4())],
+        ['uDepth', new Uniform(0.35)],
+        ['uLineWidth', new Uniform(3)],
+        ['uHaloWidth', new Uniform(1)],
+        ['uPixelRatio', new Uniform(1)],
+      ]),
+    });
+    return new NavaraEffect(this.view.camera.raw, this.effect);
+  }
+
+  updateFrame() {
     const owner = this.owner,
       camera = this.view.camera.raw;
     if (!this.effect || !camera) return;
@@ -139,8 +150,15 @@ const pulseEffect = defineGroundEffect({
       cssWidth > 0
         ? this.ctx.getInputBuffer().width / cssWidth
         : globalThis.devicePixelRatio || 1;
-  },
-});
+  }
+
+  onDestroy() {
+    this.effect?.dispose();
+    super.onDestroy();
+  }
+}
+
+const registered = new WeakSet();
 
 /**
  * The pulse disc on one Navara view around `center` (Earth-fixed metres):
@@ -149,7 +167,7 @@ const pulseEffect = defineGroundEffect({
  * rgba arrays in 0..1: the band, the pulse line and its halo.
  */
 export function createNavaraPulseField(
-  { view, EffectDesc, NavaraEffect, canvas },
+  { view, canvas },
   {
     center,
     radiusM,
@@ -162,7 +180,10 @@ export function createNavaraPulseField(
     haloWidth,
   },
 ) {
-  pulseEffect.register(view, { EffectDesc, NavaraEffect });
+  if (!registered.has(view)) {
+    view.registerEffect(KEY, PulseEffectDesc);
+    registered.add(view);
+  }
   const owner = {
     cssWidth: () => canvas?.clientWidth ?? 0,
     center: new Vector3(),

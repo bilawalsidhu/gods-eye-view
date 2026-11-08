@@ -1,3 +1,4 @@
+import { createFakeGroundHarness as fakeHarness } from '../../../testSupport/groundDisplayEngines.mjs';
 // The aircraft display on the engine contract, on the fake engine and on the
 // Cesium engine (real Cesium collections, billboards, models and
 // polylines over a stub scene: they draw nothing but hold what the engine
@@ -10,7 +11,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { aircraftIcon, TRACKED_ICON_PX } from '../../../data/aircraftIcons.js';
 import { CYAN, WHITE, nearFarScale, rgbaFromCss } from '../../shared/color.js';
 import {
@@ -33,28 +34,7 @@ const AXIS = Cesium.Matrix4.multiplyTransformation(
 );
 const SCALE_BY_DISTANCE = nearFarScale(1000, 3.0, 8000000, 0.5);
 
-function fakeHarness() {
-  const engine = createFakeEngine();
-  return {
-    name: 'the fake engine',
-    engine,
-    frame: () => engine.fake.frame(),
-    destroy: () => engine.destroy(),
-  };
-}
-
-function cesiumHarness() {
-  const { engine, ...rest } = createCesiumMoversEngine();
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    ...rest,
-    destroy: () => engine.destroy(),
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 async function setup(makeHarness, options = {}) {
   const harness = makeHarness();
@@ -149,34 +129,7 @@ for (const makeHarness of HARNESSES) {
     await settle();
     const [listed] = setsOf(engine, 'flights-sprites');
     assert.equal(listed.count, 1);
-    if (h.cesium) {
-      const collection = h.primitive(listed.id);
-      assert.ok(collection instanceof Cesium.BillboardCollection);
-      const billboard = collection.get(0);
-      assert.ok(Cesium.Cartesian3.equals(billboard.position, spec.position));
-      assert.equal(billboard.id, 'abc123');
-      near(billboard.scale, 1.5, 'scale');
-      near(billboard.rotation, 0.3, 'rotation');
-      assert.equal(billboard.width, 20);
-      assert.equal(billboard.height, 20);
-      assert.equal(
-        billboard.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-      assert.ok(
-        Cesium.NearFarScalar.equals(
-          billboard.scaleByDistance,
-          new Cesium.NearFarScalar(1000, 3, 8000000, 0.5),
-        ),
-      );
-      assert.ok(
-        billboard.color.equalsEpsilon(
-          Cesium.Color.fromCssColorString('#FFB800'),
-          1e-6,
-        ),
-      );
-      assert.equal(billboard.show, true);
-    } else {
+    {
       const set = engine.fake.moverSet(listed.id);
       assert.equal(set.options.depthTest, 'always');
       assert.deepEqual(
@@ -195,9 +148,7 @@ for (const makeHarness of HARNESSES) {
       near(store.colors[1], 184 / 255, 'green');
     }
     // Writes inside a frame listener commit at its end, once.
-    const commits = h.cesium
-      ? null
-      : () => engine.fake.moverSet(listed.id).commits;
+    const commits = () => engine.fake.moverSet(listed.id).commits;
     const before = commits?.();
     const remove = display.view.on('preRender', () => {
       sprite.color = WHITE.withAlpha(0.45);
@@ -210,12 +161,7 @@ for (const makeHarness of HARNESSES) {
     remove();
     if (commits) assert.equal(commits(), before + 1);
     assert.equal(sprite.color.alpha, 0.45);
-    if (h.cesium) {
-      const billboard = h.primitive(listed.id).get(0);
-      near(billboard.color.alpha, 0.45, 'alpha');
-      near(billboard.scale, 2.4, 'scale × width/20');
-      assert.equal(billboard.show, false);
-    } else {
+    {
       const { store } = engine.fake.moverSet(listed.id);
       near(store.colors[3], 0.45, 'alpha');
       near(store.scales[0], 2.4, 'scale × width/20');
@@ -233,9 +179,7 @@ for (const makeHarness of HARNESSES) {
     await settle();
     assert.equal(setsOf(engine, 'flights-sprites')[0].count, 1);
     assert.equal(other.gevIndex, 0);
-    if (h.cesium) assert.equal(h.primitive(listed.id).get(0).id, 'def456');
-    else
-      assert.equal(engine.fake.moverSet(listed.id).store.pickIds[0], 'def456');
+    assert.equal(engine.fake.moverSet(listed.id).store.pickIds[0], 'def456');
     // Another depth mode is another set.
     other.disableDepthTestDistance = 0;
     await settle();
@@ -288,16 +232,7 @@ for (const makeHarness of HARNESSES) {
     await settle();
     const [listed] = setsOf(engine, 'flights-models');
     assert.equal(listed.count, 1);
-    if (h.cesium) {
-      const [instance] = h.loads;
-      for (let index = 0; index < 12; index++)
-        near(instance.modelMatrix[index], drawn[index], `drawn ${index}`);
-      assert.equal(instance.show, false, 'admitted hidden');
-      assert.equal(instance.id, 'abc123');
-      assert.equal(model.ready, false, 'until the model has loaded');
-      instance.ready = true;
-      assert.equal(model.ready, true);
-    } else {
+    {
       const q = Cesium.Quaternion.fromRotationMatrix(
         Cesium.Matrix4.getMatrix3(drawn, new Cesium.Matrix3()),
       );
@@ -311,13 +246,11 @@ for (const makeHarness of HARNESSES) {
     }
     model.show = true;
     await settle();
-    if (h.cesium) assert.equal(h.loads[0].show, true);
-    else
-      assert.equal(
-        engine.fake.moverSet(listed.id).store.shows[0],
-        1,
-        'shown once placed',
-      );
+    assert.equal(
+      engine.fake.moverSet(listed.id).store.shows[0],
+      1,
+      'shown once placed',
+    );
     assert.ok(model.computedScale >= model.scale);
     // A per-model nose offset (military per-class specs).
     display.models.setPose(model, position, 75, 90);
@@ -366,15 +299,6 @@ for (const makeHarness of HARNESSES) {
     const [listed] = setsOf(engine, 'flights-tracked');
     assert.equal(listed.count, 1);
     const read = () => {
-      if (h.cesium) {
-        const billboard = h.primitive(listed.id).get(0);
-        return {
-          x: billboard.position.x,
-          alpha: billboard.color.alpha,
-          rotation: billboard.rotation,
-          id: billboard.id,
-        };
-      }
       const { store } = engine.fake.moverSet(listed.id);
       return {
         x: store.positions[0],
@@ -385,15 +309,7 @@ for (const makeHarness of HARNESSES) {
     };
     assert.equal(read().id, handle.id);
     near(read().rotation, 0.25, 'rotation');
-    if (h.cesium) {
-      const billboard = h.primitive(listed.id).get(0);
-      assert.equal(
-        billboard.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-      assert.equal(billboard.width, 20);
-      near(billboard.scale, 1.2 * (28 / 20), 'scale × width/20');
-    }
+
     state.position = geo.cartesian3.fromDegrees(-97.6, 30.2, 3000);
     state.color = CYAN.withAlpha(0);
     h.frame();
@@ -409,39 +325,19 @@ for (const makeHarness of HARNESSES) {
     assert.equal(following.label.model(), handle.gevLabelModel);
     assert.equal(display.follow.isFollowing(handle), true);
     assert.equal(display.follow.current(), handle);
-    if (h.cesium) {
-      const proxy = h.viewer.trackedEntity;
-      assert.ok(proxy instanceof Cesium.Entity);
-      assert.equal(
-        proxy.trackingReferenceFrame,
-        Cesium.TrackingReferenceFrame.ENU,
-      );
-      assert.equal(proxy.gevTrackedId, 'flights:abc123');
-      const time = h.viewer.clock.currentTime;
-      assert.ok(
-        Cesium.Cartesian3.equals(proxy.viewFrom.getValue(time), {
-          x: 0,
-          y: -2400,
-          z: 1650,
-        }),
-      );
-    }
+
     // The glyph draws where the follow centred in its frame.
     const centred = state.position;
     assert.equal(following.target(), centred);
     state.position = geo.cartesian3.fromDegrees(-97.5, 30.2, 3000);
-    if (h.cesium) {
-      h.frame();
-      assert.equal(read().x, centred.x, "the follow's sample");
-      h.frame();
-    } else h.frame();
+    h.frame();
     assert.equal(read().x, state.position.x);
 
     display.follow.release();
     assert.equal(engine.camera.following(), null);
     assert.equal(display.follow.current(), undefined);
     assert.equal(display.follow.isFollowing(handle), false);
-    if (h.cesium) assert.equal(h.viewer.trackedEntity, undefined);
+
     handle.resumeAircraftFollow();
     assert.equal(display.follow.current(), handle);
     display.tracked.remove(handle);
@@ -466,10 +362,7 @@ for (const makeHarness of HARNESSES) {
     h.frame();
     await settle();
     const [listed] = setsOf(engine, 'flights-tracked');
-    const drawn = () =>
-      h.cesium
-        ? h.primitive(listed.id).get(0).show
-        : engine.fake.moverSet(listed.id).store.shows[0] === 1;
+    const drawn = () => engine.fake.moverSet(listed.id).store.shows[0] === 1;
     assert.equal(drawn(), true);
     // The Cockpit hides what the engine follows, then releases the follow.
     const ridden = engine.camera.following().native;
@@ -486,10 +379,7 @@ for (const makeHarness of HARNESSES) {
     const moved = setsOf(engine, 'flights-tracked').find(
       ({ count }) => count === 1,
     );
-    const shownIn = (set) =>
-      h.cesium
-        ? h.primitive(set.id).get(0).show
-        : engine.fake.moverSet(set.id).store.shows[0] === 1;
+    const shownIn = (set) => engine.fake.moverSet(set.id).store.shows[0] === 1;
     assert.equal(shownIn(moved), false);
     ridden.show = true;
     ridden.resumeAircraftFollow();
@@ -508,16 +398,8 @@ for (const makeHarness of HARNESSES) {
     const remove = display.follow.onChanged(() =>
       changes.push(display.follow.current()),
     );
-    const native = h.cesium
-      ? new Cesium.Entity({
-          position: geo.cartesian3.fromDegrees(0, 0, 400_000),
-          viewFrom: new Cesium.Cartesian3(0, -900, 400),
-        })
-      : { gevSelectionOrigin: 'user' };
-    if (h.cesium) {
-      native.gevSelectionOrigin = 'user';
-      h.viewer.entities.add(native);
-    }
+    const native = { gevSelectionOrigin: 'user' };
+
     engine.camera.follow({
       native,
       position: () => geo.cartesian3.fromDegrees(0, 0, 400_000),
@@ -545,19 +427,6 @@ for (const makeHarness of HARNESSES) {
     assert.equal(body.points, 2, 'near-duplicates dropped');
     const base = Cesium.Color.fromCssColorString('#00d4ff');
     const alphas = (id) => {
-      if (h.cesium) {
-        const primitive = h.primitive(id);
-        assert.equal(primitive.allowPicking, true);
-        assert.equal(
-          primitive.geometryInstances.geometry._arcType,
-          Cesium.ArcType.GEODESIC,
-        );
-        assert.equal(primitive.geometryInstances.id, id);
-        return [
-          primitive.appearance.material.uniforms.color.alpha,
-          primitive.depthFailAppearance.material.uniforms.color.alpha,
-        ];
-      }
       const { options } = engine.fake.line(id);
       assert.equal(options.arc, 'geodesic');
       assert.equal(options.pickId, id);
@@ -567,10 +436,7 @@ for (const makeHarness of HARNESSES) {
     const [bodyAlpha, bodyHidden] = alphas(body.id);
     near(bodyAlpha, 0.85, 'trail alpha');
     near(bodyHidden, 0.4, 'trail occluded alpha');
-    if (h.cesium) {
-      const { color } = h.primitive(body.id).appearance.material.uniforms;
-      near(color.red, base.red, 'trail red');
-    }
+
     trail.setPositions([a]);
     assert.equal(engine.lines.list()[0].points, 0, 'one point draws nothing');
     trail.setVisible(false);
@@ -784,67 +650,4 @@ test('reused sprite field records are copied, including a mutated color getter',
   assert.equal(store.colors[7], 0.75);
   display.destroy();
   destroy();
-});
-
-test("model loads on Cesium carry the layer's look; the IR boost is unlit; readiness is per model", async () => {
-  const h = await setup(cesiumHarness);
-  const { display, loads } = h;
-  const spec = {
-    url: '/models/airplane.glb',
-    minimumPixelSize: 24,
-    scale: 1,
-    color: CYAN,
-    blendAmount: 0.94,
-    unlit: false,
-    id: 'abc123',
-  };
-  const position = geo.cartesian3.fromDegrees(-97.7, 30.2, 3000);
-  const fleet = await display.models.loadFleet(spec);
-  const second = await display.models.loadFleet({ ...spec, id: 'def456' });
-  const boosted = await display.models.loadTracked({
-    ...spec,
-    unlit: true,
-    minimumPixelSize: 40,
-    id: 'ghi789',
-  });
-  for (const model of [fleet, second, boosted]) {
-    display.models.add(model);
-    display.models.setPose(model, position, 10);
-  }
-  await settle();
-  assert.equal(loads.length, 3, 'one Cesium model per instance');
-  const [first, other, unlit] = loads;
-  for (const { options } of loads) {
-    assert.equal(options.asynchronous, false);
-    assert.deepEqual(options.environmentMapOptions, { enabled: false });
-    assert.equal(options.url, '/models/airplane.glb');
-    assert.equal(options.colorBlendMode, Cesium.ColorBlendMode.MIX);
-    assert.equal(options.colorBlendAmount, 0.94);
-    assert.equal(options.allowPicking, true);
-  }
-  assert.equal(first.options.minimumPixelSize, 24);
-  assert.equal(first.options.customShader, undefined);
-  assert.equal(unlit.options.minimumPixelSize, 40);
-  assert.equal(
-    unlit.options.customShader.lightingModel,
-    Cesium.LightingModel.UNLIT,
-  );
-  assert.equal(first.id, 'abc123', 'picks name the aircraft');
-  assert.equal(unlit.id, 'ghi789');
-  assert.ok(first.color.equalsEpsilon(Cesium.Color.CYAN, 1e-6));
-  // Readiness is each model's own: one loading model leaves the others up.
-  first.ready = true;
-  unlit.ready = true;
-  assert.equal(fleet.ready, true);
-  assert.equal(second.ready, false);
-  assert.equal(boosted.ready, true);
-  other.ready = true;
-  assert.equal(second.ready, true);
-  // A removed model's place goes to the last one, ready with its model.
-  display.models.remove(fleet);
-  await settle();
-  assert.equal(second.gevIndex, 0);
-  assert.equal(second.ready, true);
-  display.destroy();
-  h.destroy();
 });

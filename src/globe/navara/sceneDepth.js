@@ -1,3 +1,4 @@
+import { PACKED_DEPTH_GLSL } from './shaderChunks.js';
 // Navara draws its transparent scene after the post effects, into a target
 // that does not hold the scene's depth, so a transparent mesh behind a wall,
 // terrain or the Earth painted through them. Moving such a mesh into the
@@ -15,6 +16,7 @@ const KEY = 'gevSceneDepth';
 export const SCENE_DEPTH_BIAS = 5e-6;
 
 const PARS = /* glsl */ `
+${PACKED_DEPTH_GLSL}
 uniform sampler2D tGevSceneDepth;
 uniform vec2 uGevTargetSize;
 uniform float uGevSceneDepthOn;
@@ -32,7 +34,7 @@ if (uGevSceneDepthOn > 0.5) {
   #else
     float gevDepth = gl_FragCoord.z;
   #endif
-  if (gevScene < 1.0 && gevDepth > gevScene + ${SCENE_DEPTH_BIAS.toExponential()})
+  if (gevScene < 1.0 && packedDepthOccluded(gevDepth, gevScene, ${SCENE_DEPTH_BIAS.toExponential()}))
     discard;
 }
 `;

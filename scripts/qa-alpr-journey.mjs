@@ -41,7 +41,7 @@ import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import sharp from 'sharp';
-import { installAlprFixture } from './fixtures/w2/alpr.mjs';
+import { installAlprFixture } from './fixtures/layers/alpr.mjs';
 import { redact, isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 import {
   createScreencast,

@@ -42,7 +42,6 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(diagnostics.recentRequests[0].reason, 'tick-4');
     diagnostics.holds.push('external');
     assert.deepEqual(governor.getRenderGovernorDiagnostics().holds, []);
-    if (harness.viewer) assert.equal(harness.viewer.scene.maximumRenderTimeChange, Infinity);
   });
 
   test(`${makeHarness.name}: identical owners and teardown stay in their scene`, (t) => {

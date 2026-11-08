@@ -2,8 +2,8 @@ import sharp from 'sharp';
 
 // Transport fixtures are parsed by the real CCTV catalog and media owners.
 export const cameras = Array.from({ length: 25 }, (_, i) => ({
-  id: `w2-cctv-${String(i).padStart(3, '0')}`,
-  name: i === 12 ? 'Cámara pública — Congress' : `W2 camera ${i}`,
+  id: `fixture-cctv-${String(i).padStart(3, '0')}`,
+  name: i === 12 ? 'Cámara pública — Congress' : `Fixture camera ${i}`,
   cityId: 'austin',
   city: 'Austin',
   lat: 30.2672 + (Math.floor(i / 5) - 2) * 0.0018,
@@ -17,7 +17,7 @@ export const cameras = Array.from({ length: 25 }, (_, i) => ({
   headingConfidence: i % 3 ? 'medium' : 'low',
   sourceKind: 'configured',
   feedType: 'image',
-  provider: 'W2 deterministic fixture',
+  provider: 'Deterministic fixture',
   url: 'https://cctv-fixture.invalid/frame.png',
 }));
 
@@ -51,8 +51,8 @@ export async function installCctvFixture(page, { video } = {}) {
   if (video)
     catalog.push({
       ...cameras[0],
-      id: 'w2-cctv-video',
-      name: 'W2 moving video',
+      id: 'fixture-cctv-video',
+      name: 'Fixture moving video',
       lat: 30.2718,
       lon: -97.744,
       feedType: 'video',
@@ -116,7 +116,7 @@ export async function installCctvFixture(page, { video } = {}) {
           id,
           status: 'online',
           sourceKind: feedType,
-          label: 'W2 deterministic fixture',
+          label: 'Deterministic fixture',
           updatedAt: Date.now(),
         })),
       });
@@ -126,7 +126,7 @@ export async function installCctvFixture(page, { video } = {}) {
       const id = decodeURIComponent(media[2]);
       if (
         !ids.has(id) ||
-        (media[1] === 'media' && (id !== 'w2-cctv-video' || !video))
+        (media[1] === 'media' && (id !== 'fixture-cctv-video' || !video))
       ) {
         return request.respond({ status: 404, body: 'Unknown fixture camera' });
       }

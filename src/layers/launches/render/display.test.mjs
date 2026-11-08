@@ -1,3 +1,4 @@
+import { createFakeGroundHarness as fakeHarness } from '../../../testSupport/groundDisplayEngines.mjs';
 // The Space Missions display on the engine contract, on the fake engine and
 // on the Cesium engine (real Cesium collections and polylines over a stub
 // scene: they draw nothing but hold what the engine writes): the dots and the
@@ -8,11 +9,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
-import { dashPattern } from '../../../globe/cesium/lines.js';
+
 import { rgbaFromCss } from '../../shared/color.js';
 import { LAUNCH_PAD_ZONE_RADIUS_M, LAUNCH_PAD_ZONE_STYLE } from '../policy.js';
 import { createLaunchesDisplay } from './display.js';
@@ -21,42 +21,7 @@ import { GROUND_HARNESSES } from '../../../testSupport/groundDisplayEngines.mjs'
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const reticle = { width: 48, height: 48, getContext: () => null };
 
-function fakeHarness() {
-  const engine = createFakeEngine({ canvas: { style: { cursor: '' } } });
-  return {
-    name: 'the fake engine',
-    engine,
-    frame: () => engine.fake.frame(),
-    destroy: () => engine.destroy(),
-  };
-}
-
-function cesiumHarness() {
-  const { engine, viewer, ...rest } = createCesiumMoversEngine({
-    engineOptions: {
-      groundFactories: {
-        fills: (options) => ({
-          ...options,
-          ready: true,
-          destroy() {},
-          isDestroyed: () => false,
-        }),
-      },
-    },
-  });
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  viewer.scene.globe.getHeight = () => 7;
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    ...rest,
-    destroy: () => engine.destroy(),
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 function setup(makeHarness) {
   const harness = makeHarness();
@@ -109,29 +74,18 @@ for (const makeHarness of HARNESSES) {
     assert.equal(five.kind, 'point');
     assert.equal(five.count, 1);
     assert.equal(four.count, 1);
-    if (h.cesium) {
-      const point = h.primitive(five.id).get(0);
-      assert.equal(point.pixelSize, 5);
-      assert.equal(point.outlineWidth, 0);
-      assert.equal(point.disableDepthTestDistance, Number.POSITIVE_INFINITY);
-      assert.equal(point.id, 'rocket-launch:a');
-      assert.equal(point.show, true);
-      assert.ok(Cesium.Cartesian3.equals(point.position, PAD));
-      near(point.color.green, color.green, 'green');
-      assert.equal(h.primitive(four.id).get(0).pixelSize, 4);
-    } else {
-      const set = engine.fake.moverSet(five.id);
-      assert.equal(set.options.point.sizePx, 5);
-      assert.equal(set.options.point.outlinePx, 0);
-      assert.equal(set.options.depthTest, 'always');
-      assert.equal(set.options.pickable, true);
-      assert.equal(set.store.pickIds[0], 'rocket-launch:a');
-      near(set.store.colors[1], color.green, 'green');
-    }
+
+    const set = engine.fake.moverSet(five.id);
+    assert.equal(set.options.point.sizePx, 5);
+    assert.equal(set.options.point.outlinePx, 0);
+    assert.equal(set.options.depthTest, 'always');
+    assert.equal(set.options.pickable, true);
+    assert.equal(set.store.pickIds[0], 'rocket-launch:a');
+    near(set.store.colors[1], color.green, 'green');
+
     pad.show = false;
     await settle();
-    if (h.cesium) assert.equal(h.primitive(five.id).get(0).show, false);
-    else assert.equal(engine.fake.moverSet(five.id).store.shows[0], 0);
+    assert.equal(engine.fake.moverSet(five.id).store.shows[0], 0);
     display.setVisible(false);
     assert.deepEqual(
       engine.movers.list().map(({ count }) => count),
@@ -155,23 +109,13 @@ for (const makeHarness of HARNESSES) {
     await settle();
     const [listed] = engine.movers.list();
     assert.equal(listed.kind, 'sprite');
-    if (h.cesium) {
-      const billboard = h.primitive(listed.id).get(0);
-      assert.equal(billboard.width, 24);
-      assert.equal(billboard.height, 24);
-      assert.equal(
-        billboard.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-      assert.equal(billboard.id, 'rocket-launch:a');
-      assert.equal(billboard.show, false);
-    } else {
-      const set = engine.fake.moverSet(listed.id);
-      assert.equal(set.options.sprite.sizePx, 24);
-      assert.equal(set.options.sprite.atlas.canvas, reticle);
-      assert.equal(set.options.depthTest, 'always');
-      assert.equal(set.store.shows[0], 0);
-    }
+
+    const set = engine.fake.moverSet(listed.id);
+    assert.equal(set.options.sprite.sizePx, 24);
+    assert.equal(set.options.sprite.atlas.canvas, reticle);
+    assert.equal(set.options.depthTest, 'always');
+    assert.equal(set.store.shows[0], 0);
+
     display.destroy();
     h.destroy();
   });
@@ -200,23 +144,21 @@ for (const makeHarness of HARNESSES) {
     assert.equal(reads, 2);
     const [listed] = engine.movers.list();
     const drawn = () => {
-      if (h.cesium) return h.primitive(listed.id).get(0).position;
       const { positions } = engine.fake.moverSet(listed.id).store;
       return geo.cartesian3.create(positions[0], positions[1], positions[2]);
     };
     assert.ok(geo.cartesian3.equalsEpsilon(drawn(), at, 0, 1e-6));
     display.setVisible(false);
-    if (!h.cesium) engine.fake.resetCalls();
+    engine.fake.resetCalls();
     at = geo.cartesian3.fromDegrees(2, 0, 400_000);
     h.frame();
     h.frame();
     assert.equal(reads, 2, 'hidden motion is not read');
-    if (!h.cesium)
-      assert.equal(
-        engine.fake.renderRequests,
-        0,
-        'hidden motion must not sustain rendering',
-      );
+    assert.equal(
+      engine.fake.renderRequests,
+      0,
+      'hidden motion must not sustain rendering',
+    );
     display.destroy();
     h.destroy();
   });
@@ -235,33 +177,19 @@ for (const makeHarness of HARNESSES) {
       dash: { lengthPx: 6, gapPx: 6 },
     });
     const [listed] = engine.lines.list();
-    if (h.cesium) {
-      const primitive = h.primitive(listed.id);
-      const { geometry, id } = primitive.geometryInstances;
-      assert.equal(geometry._width, 1.5);
-      assert.equal(geometry._arcType, Cesium.ArcType.NONE);
-      assert.equal(id, 'rocket-transfer:a');
-      const { material } = primitive.appearance;
-      assert.equal(material.type, 'PolylineDash');
-      // Cesium's dashLength 24 px with 0xf0f0: 6 px on, 6 px off.
-      assert.equal(material.uniforms.dashLength, 12);
-      assert.equal(material.uniforms.dashPattern, dashPattern(6, 6));
-      assert.equal(material.uniforms.dashPattern, 0xff00);
-      near(material.uniforms.color.alpha, 0.8, 'alpha');
-      assert.equal(primitive.depthFailAppearance, undefined);
-    } else {
-      const { options } = engine.fake.line(listed.id);
-      assert.equal(options.widthPx, 1.5);
-      assert.equal(options.arc, 'none');
-      assert.equal(options.pickId, 'rocket-transfer:a');
-      assert.deepEqual(options.dash, {
-        kind: 'pixels',
-        lengthPx: 6,
-        gapPx: 6,
-      });
-      assert.deepEqual(options.color, color.rgba());
-      assert.equal(options.depthFailAlpha, 0);
-    }
+
+    const { options } = engine.fake.line(listed.id);
+    assert.equal(options.widthPx, 1.5);
+    assert.equal(options.arc, 'none');
+    assert.equal(options.pickId, 'rocket-transfer:a');
+    assert.deepEqual(options.dash, {
+      kind: 'pixels',
+      lengthPx: 6,
+      gapPx: 6,
+    });
+    assert.deepEqual(options.color, color.rgba());
+    assert.equal(options.depthFailAlpha, 0);
+
     transfer.show = false;
     assert.equal(engine.lines.list()[0].shown, false);
     transfer.show = true;
@@ -291,27 +219,16 @@ for (const makeHarness of HARNESSES) {
     const [listed] = engine.lines.list();
     modelMatrix[12] = 42;
     ring.setModelMatrix(modelMatrix);
-    if (h.cesium) {
-      const primitive = h.primitive(listed.id);
-      const { material } = primitive.appearance;
-      assert.equal(material.type, 'GevLineTactical');
-      assert.equal(material.uniforms.groupCount, 4);
-      assert.equal(material.uniforms.dashCount, 100);
-      near(material.uniforms.color.alpha, 0.95, 'alpha');
-      assert.equal(primitive.geometryInstances.geometry._width, 3);
-      assert.equal(primitive.modelMatrix[12], 42);
-      // The live ring is not picked (Cesium's polyline collection).
-      assert.equal(primitive.allowPicking, false);
-    } else {
-      const line = engine.fake.line(listed.id);
-      assert.deepEqual(line.options.dash, {
-        kind: 'tactical',
-        groups: 4,
-        dashes: 100,
-      });
-      assert.equal(line.modelMatrix[12], 42);
-      assert.equal(line.options.pickId, undefined);
-    }
+
+    const line = engine.fake.line(listed.id);
+    assert.deepEqual(line.options.dash, {
+      kind: 'tactical',
+      groups: 4,
+      dashes: 100,
+    });
+    assert.equal(line.modelMatrix[12], 42);
+    assert.equal(line.options.pickId, undefined);
+
     display.destroy();
     assert.deepEqual(engine.lines.list(), []);
     h.destroy();
@@ -422,19 +339,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(record.shown, false);
     display.setVisible(true);
     assert.equal(h.set(id).shown, true);
-    if (h.cesium) {
-      const [primitive] = h.primitives(id).fills;
-      assert.equal(
-        primitive.options.classificationType,
-        Cesium.ClassificationType.BOTH,
-      );
-      assert.equal(primitive.options.allowPicking, false);
-      const appearance = primitive.options.appearance;
-      assert.equal(appearance.flat, true);
-      assert.equal(appearance.renderState.polygonOffset.factor, -1);
-      for (const [key, value] of Object.entries(radial))
-        assert.equal(appearance.material.uniforms[key], value);
-    }
+
     pad.show = false;
     display.setVisible(false);
     display.setVisible(true);

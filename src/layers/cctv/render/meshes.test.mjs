@@ -18,12 +18,7 @@ const positions = {
 };
 const identity = { x: 0, y: 0, z: 0, w: 1 };
 
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
-
-for (const [name, make] of [
-  ['fake', () => ({ engine: createFakeEngine() })],
-  ['Cesium', createCesiumMoversEngine],
-]) {
+for (const [name, make] of [['fake', () => ({ engine: createFakeEngine() })]]) {
   test(`CCTV mesh ownership, live image and geometry updates (${name})`, (t) => {
     const h = make();
     t.after(() => h.engine.destroy());
@@ -42,7 +37,7 @@ for (const [name, make] of [
     assert.equal(meshes.planeFromPick({ id: plane.id }), null);
     assert.equal(meshes.drawnBy(plane), plane.mesh);
     assert.equal(meshes.drawnBy(volume), volume.mesh);
-    const image = new HTMLCanvasElement();
+    const image = {};
     image.width = image.height = 8;
     material.setImage(image);
     const moved = {
@@ -50,16 +45,9 @@ for (const [name, make] of [
       capCenter: { ...positions.capCenter, x: positions.capCenter.x + 3 },
     };
     meshes.updatePlane(plane, shape, moved, identity);
-    const state = h.engine.fake?.mesh(plane.id);
-    const primitive = h.primitive?.(plane.id);
-    const flat =
-      state?.positions ??
-      primitive.geometryInstances.geometry.attributes.position.values;
-    assert.equal(flat[0], moved.capCenter.x - shape.halfW);
-    assert.equal(
-      state?.image ?? primitive.appearance.material.uniforms.image,
-      image,
-    );
+    const state = h.engine.fake.mesh(plane.id);
+    assert.equal(state.positions[0], moved.capCenter.x - shape.halfW);
+    assert.equal(state.image, image);
     assert.throws(
       () => meshes.createPlane('b', {}, shape, positions, identity),
       /not owned/,

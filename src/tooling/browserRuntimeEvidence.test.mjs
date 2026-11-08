@@ -1,19 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EventEmitter } from 'node:events';
-import { watchW1Page } from '../../scripts/qa-browserEvidence.mjs';
+import { watchBrowserPage } from '../../scripts/qa-browserEvidence.mjs';
 const baseUrl = 'http://127.0.0.1:4195/';
 const message = (type, text, url) => ({
   type: () => type,
   text: () => text,
   location: () => ({ url }),
 });
-test('W1 main and share pages aggregate console, runtime and crash errors', () => {
+test('Browser main and share pages aggregate console, runtime and crash errors', () => {
   const report = {},
     main = new EventEmitter(),
     shared = new EventEmitter();
-  watchW1Page(main, report, { name: 'main', baseUrl });
-  watchW1Page(shared, report, { name: 'share', baseUrl });
+  watchBrowserPage(main, report, { name: 'main', baseUrl });
+  watchBrowserPage(shared, report, { name: 'share', baseUrl });
   main.emit('console', message('warning', 'ordinary warning', baseUrl));
   shared.emit(
     'console',
@@ -26,10 +26,10 @@ test('W1 main and share pages aggregate console, runtime and crash errors', () =
   assert.match(report.browserErrors[0], /\[share\] late error/);
   assert.ok(!JSON.stringify(report).includes('sample-secret'));
 });
-test('W1 preview exception stays exact on a share page', () => {
+test('Browser preview exception stays exact on a share page', () => {
   const report = {},
     shared = new EventEmitter();
-  watchW1Page(shared, report, { name: 'share', baseUrl, preview: true });
+  watchBrowserPage(shared, report, { name: 'share', baseUrl, preview: true });
   const failure = (url) =>
     shared.emit(
       'console',
@@ -45,10 +45,10 @@ test('W1 preview exception stays exact on a share page', () => {
   assert.deepEqual(report.expectedPreviewErrors, ['/api/setup/status: 404']);
   assert.equal(report.browserErrors.length, 2);
 });
-test('W1 response diagnostics retain page/status/path without query credentials', () => {
+test('Browser response diagnostics retain page/status/path without query credentials', () => {
   const report = {},
     shared = new EventEmitter();
-  watchW1Page(shared, report, { name: 'share', baseUrl });
+  watchBrowserPage(shared, report, { name: 'share', baseUrl });
   shared.emit('response', {
     status: () => 503,
     url: () => baseUrl + 'api/vessels?token=sample-secret',

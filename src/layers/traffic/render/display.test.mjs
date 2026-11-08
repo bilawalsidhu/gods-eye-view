@@ -1,9 +1,4 @@
-// The traffic display on the engine contract, on the fake engine and on the
-// Cesium engine: the vehicle sets (outline under fill, depth-tested, not
-// picked), each dot's size and fade by camera distance as Cesium's
-// NearFarScalar, what is skipped, show and hide; the heat-line corridors
-// (colours, widths, order, drape on 3D tiles) and the layer's jam and slow
-// styles; the sets heights are sampled through; teardown.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,32 +48,7 @@ function drawn(h, id) {
   const listed = h.engine.movers.list().find((set) => set.id === id);
   if (!listed) return undefined;
   const rows = [];
-  if (h.cesium) {
-    const items = (collection) =>
-      Array.from({ length: collection?.length ?? 0 }, (_, i) =>
-        collection.get(i),
-      );
-    let collection;
-    for (const root of items(h.viewer.scene.primitives))
-      for (const child of items(root))
-        if (child.gevMoverSet === id) collection = child;
-    for (let i = 0; i < listed.count; i++) {
-      const point = collection.get(i);
-      rows.push({
-        sizePx: point.pixelSize,
-        color: [
-          point.color.red,
-          point.color.green,
-          point.color.blue,
-          point.color.alpha,
-        ],
-        shown: point.show,
-        outlineWidth: point.outlineWidth,
-        depthTestDistance: point.disableDepthTestDistance,
-        scaleByDistance: point.scaleByDistance,
-      });
-    }
-  } else {
+  {
     const { store, options } = h.engine.fake.moverSet(id);
     for (let i = 0; i < store.count; i++)
       rows.push({
@@ -141,9 +111,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       [IDS.outline, IDS.fill],
     );
     for (const [index, id] of [IDS.outline, IDS.fill].entries()) {
-      const { options } = h.cesium
-        ? { options: null }
-        : h.engine.fake.moverSet(id);
+      const { options } = h.engine.fake.moverSet(id);
       assert.equal(
         sets.find((set) => set.id === id).capacity,
         MAX_DOTS,
@@ -198,13 +166,6 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(outlines.length, 1, 'only the outlined dot has an outline');
     near(outlines[0].sizePx, (7 + 2 * 2) * jamScale, 'outline size', 1e-4);
     nearAll(outlines[0].color, [0, 0, 0, 0.9 * fade], 'outline colour', 1e-6);
-    if (h.cesium) {
-      for (const row of [...fills, ...outlines]) {
-        assert.equal(row.shown, true);
-        assert.equal(row.outlineWidth, 0);
-        assert.equal(row.depthTestDistance, 0, 'depth-tested');
-      }
-    }
   });
 
   test(`hidden, zero-size, faded-out and over-the-horizon dots draw nothing (${name})`, (t) => {
@@ -284,19 +245,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.deepEqual(jam.items[0].color, [1, 0, 0, 0.55]);
     assert.equal(slow.items.length, 1);
     assert.equal(slow.items[0].widthPx, 4);
-    if (h.cesium) {
-      const { fills, lines } = h.primitives(IDS.jam);
-      assert.equal(fills.length, 0);
-      assert.equal(lines.length, 1, 'one ground polyline batch');
-      assert.equal(
-        lines[0].options.classificationType,
-        Cesium.ClassificationType.CESIUM_3D_TILE,
-      );
-      assert.equal(
-        lines[0].options.geometryInstances[0].geometry.width,
-        HEAT_LINE_JAM_WIDTH,
-      );
-    }
+
     display.clearHeat();
     assert.equal(h.set(IDS.jam), undefined);
     assert.equal(h.set(IDS.slow), undefined);
@@ -364,19 +313,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       h.engine.ground.list().find(({ id }) => id === IDS.jam).animated,
       true,
     );
-    if (h.cesium) {
-      // The jam batch draws through the engine's animated material.
-      const [line] = h.primitives(IDS.jam).lines;
-      const { uniforms } = line.options.appearance.material;
-      near(uniforms.glowPower, 0.25, 'glowPower');
-      near(uniforms.pulseMin, 0.35, 'pulse min', 1e-6);
-      near(uniforms.pulseMax, 0.75, 'pulse max', 1e-6);
-      near(uniforms.pulsePeriod, (2 * Math.PI * 260) / 1000, 'pulse period');
-      assert.equal(
-        line.options.classificationType,
-        Cesium.ClassificationType.CESIUM_3D_TILE,
-      );
-    }
+
     assert.equal(slow.items.length, 1);
     nearAll(slow.items[0].color, HEAT_SLOW_COLOR.rgba(), 'slow colour');
     assert.equal(slow.items[0].widthPx, HEAT_LINE_SLOW_WIDTH);

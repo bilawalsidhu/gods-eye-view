@@ -15,9 +15,14 @@
 // slot's position, taken outside any divergent branch. Costs nothing while
 // no layer is drawn (the effect is hidden).
 
+import { DISPLAY_COLOR_GLSL, VIEW_POSITION_GLSL } from '../shaderChunks.js';
 import { EffectDesc, Effect as NavaraEffect } from '@navaramap/three';
 import { Effect, EffectAttribute } from 'postprocessing';
-import { DataTexture, Matrix4, RGBADepthPacking, Uniform } from 'three';
+import { DataTexture, Matrix4, Uniform } from 'three';
+import {
+  groundSurfaceUniforms,
+  updateGroundSurface,
+} from '../ground/surface.js';
 import { withFrameUpdates, withPassDisposal } from '../frameDescriptor.js';
 import { MAX_IMAGERY_SLOTS } from './index.js';
 
@@ -39,12 +44,8 @@ uniform vec4 uBounds${i};
 uniform vec4 uLook${i};
 uniform float uRaise${i};`,
 ).join('\n')}
-vec3 toDisplay(vec3 c) {
-  return mix(12.92*c,1.055*pow(max(c,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),c));
-}
-vec3 toLinear(vec3 c) {
-  return mix(c/12.92,pow(max((c+0.055)/1.055,vec3(0.0)),vec3(2.4)),step(vec3(0.04045),c));
-}
+${DISPLAY_COLOR_GLSL}
+${VIEW_POSITION_GLSL}
 // Geodetic longitude and latitude (Bowring) of a world point, degrees.
 vec2 geodetic(vec3 point) {
   float p = length(point.xy);
@@ -130,9 +131,9 @@ void derivatives(vec2 geo, vec2 merc, float drawn, out vec2 geoDx, out vec2 geoD
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   outputColor = inputColor;
   float depth = unpackRGBAToDepth(texture2D(tAllDepth, uv));
-  float distance = exp2(2.0 * depth / uLogDepthFC) - 1.0;
+  float distance = viewDistance(depth, uLogDepthFC);
   vec4 ray = uInverseProjection * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
-  vec3 point = (uWorld * vec4(ray.xyz * (distance / -ray.z), 1.0)).xyz;
+  vec3 point = (uWorld * vec4(viewPosition(ray, distance), 1.0)).xyz;
   // The ground: the scene depth where it is the surface (the packed depth
   // also holds forward meshes, which are not ground).
   float ground = (1.0 - step(1.0, depth)) *
@@ -201,11 +202,8 @@ class ImageryEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
       // Its own pass: inputColor is the tone-mapped frame.
       attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map([
-        ['tAllDepth', new Uniform(null)],
-        ['tSurfaceDepth', new Uniform(null)],
-        ['uInverseProjection', new Uniform(new Matrix4())],
+        ...groundSurfaceUniforms(),
         ['uWorld', new Uniform(new Matrix4())],
-        ['uLogDepthFC', new Uniform(1)],
         ['uSplit', new Uniform(0.5)],
         ...SLOTS.flatMap((i) => [
           [`tImage${i}`, new Uniform(null)],
@@ -224,14 +222,9 @@ class ImageryEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
     const owner = this.owner;
     if (!this.effect || !camera) return;
     const mrt = this.find('mrt');
-    if (mrt?.depthBufferPacking !== RGBADepthPacking)
-      throw new Error('The imagery pass needs packed scene depth');
+    updateGroundSurface(this.effect, camera, this.ctx, mrt);
     const u = this.effect.uniforms;
-    u.get('tAllDepth').value = mrt.depthBuffer;
-    u.get('tSurfaceDepth').value = this.ctx.getRenderTarget().depthTexture;
-    u.get('uInverseProjection').value.copy(camera.projectionMatrixInverse);
     u.get('uWorld').value.copy(camera.matrixWorld);
-    u.get('uLogDepthFC').value = 2 / Math.log2(camera.far + 1);
     u.get('uSplit').value = owner.split;
     for (const i of SLOTS) {
       const slot = owner.slots[i];

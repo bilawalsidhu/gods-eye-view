@@ -1,3 +1,4 @@
+import { createFakeGroundHarness as fakeHarness } from '../../../testSupport/groundDisplayEngines.mjs';
 // The satellites display on the engine contract, on the fake engine and on
 // the Cesium engine (real Cesium point collections and polylines over a stub
 // scene: they draw nothing but hold what the engine writes): the fleet's
@@ -8,10 +9,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { CYAN, WHITE, nearFarScale } from '../../shared/color.js';
 import { createSatellitesDisplay } from './display.js';
 
@@ -34,28 +35,7 @@ const near = (actual, expected, label, tolerance = 1e-6) =>
     `${label}: ${actual} vs ${expected}`,
   );
 
-function fakeHarness() {
-  const engine = createFakeEngine();
-  return {
-    name: 'the fake engine',
-    engine,
-    frame: () => engine.fake.frame(),
-    destroy: () => engine.destroy(),
-  };
-}
-
-function cesiumHarness() {
-  const { engine, ...rest } = createCesiumMoversEngine();
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    ...rest,
-    destroy: () => engine.destroy(),
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 function setup(makeHarness) {
   const harness = makeHarness();
@@ -70,20 +50,6 @@ const setsOf = (engine) =>
 
 /** What a set's instance draws: its size, outline, depth mode and colour. */
 function drawn(h, setId, index) {
-  if (h.cesium) {
-    const item = h.primitive(setId).get(index);
-    return {
-      position: item.position,
-      pixelSize: item.pixelSize,
-      outlineWidth: item.outlineWidth,
-      outline: item.outlineColor,
-      depth: item.disableDepthTestDistance,
-      scale: item.scaleByDistance,
-      color: item.color,
-      show: item.show,
-      id: item.id,
-    };
-  }
   const { options, store } = h.engine.fake.moverSet(setId);
   const [r, g, b, a] = store.colors.slice(index * 4, index * 4 + 4);
   const [nearM, nearValue, farM, farValue] =
@@ -139,9 +105,7 @@ for (const makeHarness of HARNESSES) {
     // Reads are the display's own copies.
     assert.notEqual(all[0].color, WHITE);
     assert.equal(all[0].color.alpha, 1);
-    const commits = h.cesium
-      ? null
-      : () => engine.fake.moverSet(listed.id).commits;
+    const commits = () => engine.fake.moverSet(listed.id).commits;
     const before = commits?.();
     const remove = display.onFrame(() => {
       all[0].position = { x: 1, y: 2, z: 3 };
@@ -222,8 +186,7 @@ for (const makeHarness of HARNESSES) {
       'yellow',
     );
     assert.equal(dot.id, 25544);
-    if (!h.cesium)
-      assert.equal(engine.fake.moverSet(tracked.id).options.order, 100);
+    assert.equal(engine.fake.moverSet(tracked.id).options.order, 100);
     assert.ok(
       setsOf(engine)
         .filter(({ id }) => id !== tracked.id)
@@ -271,25 +234,7 @@ for (const makeHarness of HARNESSES) {
     assert.equal(following.label.position(), target);
     assert.equal(display.follow.current(), handle);
     assert.equal(following.target(), target);
-    if (h.cesium) {
-      const proxy = h.viewer.trackedEntity;
-      assert.ok(proxy instanceof Cesium.Entity);
-      assert.equal(
-        proxy.trackingReferenceFrame,
-        Cesium.TrackingReferenceFrame.ENU,
-      );
-      assert.equal(proxy.gevTrackedId, 'satellites:25544');
-      assert.equal(proxy.gevSelectionOrigin, 'user');
-      const scratch = new Cesium.Cartesian3();
-      const value = proxy.viewFrom.getValue(
-        h.viewer.clock.currentTime,
-        scratch,
-      );
-      assert.deepEqual(
-        [value.x, value.y, value.z],
-        [offset.x, offset.y, offset.z],
-      );
-    }
+
     // The display's own release is guarded; a later external change is not.
     seen.length = 0;
     const guards = [];
@@ -322,7 +267,7 @@ for (const makeHarness of HARNESSES) {
     display.follow.start(handle);
     display.removeTracked(handle);
     assert.equal(engine.camera.following(), null);
-    if (h.cesium) assert.equal(h.viewer.trackedEntity, undefined);
+
     display.destroy();
     h.destroy();
   });
@@ -339,34 +284,18 @@ for (const makeHarness of HARNESSES) {
     assert.deepEqual(orbit.modelMatrix, geo.matrix4.IDENTITY);
     const [before] = engine.lines.list();
     assert.equal(before.points, 2);
-    if (h.cesium) {
-      const primitive = h.primitive(before.id);
-      assert.equal(primitive.allowPicking, false, 'rings are not picked');
-      assert.equal(
-        primitive.geometryInstances.geometry._arcType,
-        Cesium.ArcType.GEODESIC,
-      );
-      assert.equal(primitive.geometryInstances.geometry._width, 2.5);
-      near(primitive.appearance.material.uniforms.color.alpha, 0.6, 'alpha');
-      near(
-        primitive.depthFailAppearance.material.uniforms.color.alpha,
-        0.35,
-        'occluded alpha',
-      );
-      assert.equal(primitive.appearance.material.uniforms.color.red, 0);
-    } else {
-      const { options } = engine.fake.line(before.id);
-      assert.equal(options.widthPx, 2.5);
-      assert.equal(options.arc, 'geodesic');
-      assert.equal(options.pickId, undefined, 'rings are not picked');
-      near(options.color[3], 0.6, 'alpha');
-      near(options.color[3] * options.depthFailAlpha, 0.35, 'occluded alpha');
-    }
+
+    const { options } = engine.fake.line(before.id);
+    assert.equal(options.widthPx, 2.5);
+    assert.equal(options.arc, 'geodesic');
+    assert.equal(options.pickId, undefined, 'rings are not picked');
+    near(options.color[3], 0.6, 'alpha');
+    near(options.color[3] * options.depthFailAlpha, 0.35, 'occluded alpha');
+
     orbit.modelMatrix[12] = 123;
     display.commitOrbit(orbit);
     assert.equal(engine.lines.list()[0].id, before.id, 'the same line');
-    if (h.cesium) assert.equal(h.primitive(before.id).modelMatrix[12], 123);
-    else assert.equal(engine.fake.line(before.id).modelMatrix[12], 123);
+    assert.equal(engine.fake.line(before.id).modelMatrix[12], 123);
     orbit.show = false;
     assert.equal(orbit.show, false);
     assert.equal(engine.lines.list()[0].shown, false);

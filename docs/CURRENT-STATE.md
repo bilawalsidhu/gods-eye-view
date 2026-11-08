@@ -208,7 +208,7 @@ one application, and only the globe-bound parts move to the next engine.
     segments (`corridors.js`): 10,000 corridors draw in about 12 ms still
     and 14 ms moving, where Cesium takes 23 ms (the chunks before took 151
     and 196 ms).
-  - `scripts/qa-ground-suite.mjs` checks ground pixels and corridor looks
+  - `scripts/qa-contract-suite.mjs --only=ground:` checks ground pixels and corridor looks
     on both engines.
 - **Ground and input parity.** Space Missions draws its 500 m launch-pad
   zone with the radial ground material: faint fill, bright soft rim and
@@ -249,7 +249,7 @@ one application, and only the globe-bound parts move to the next engine.
   - Sea Marks and Ski Pistes use `engine.imagery` on engines without
     `maps.addOverlay`; Navara retains its native raster path for tile detail.
     Imported KML/KMZ ground images use imagery on both engines.
-  - `scripts/qa-ground-suite.mjs --only=imagery:` checks imagery pixels
+  - `scripts/qa-contract-suite.mjs --only=imagery:` checks imagery pixels
     on both engines. Navara mipmaps the heatmap at orbit scale.
 - **Engine coupling.** `node scripts/report-engine-coupling.mjs` counts the
   engine-specific code outside the engines: renderer lines per engine, Cesium

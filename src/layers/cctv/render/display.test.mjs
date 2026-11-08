@@ -1,14 +1,8 @@
-// The CCTV display on the engine contract, on the fake engine and on the
-// Cesium engine (Cesium's own collections, primitives and entities over a
-// stub scene: they draw nothing but hold what the engine writes): the
-// marker set and its batched writes, the coverage wedge lines and their
-// styles, picks that need this layer's own objects, the monitor plane and
-// its outline, the viewshed volume, the activation probe's ray, the world
-// click, the credit, focus and teardown.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { viewshedColors } from '../../../data/cctvViewshed.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
@@ -90,30 +84,7 @@ for (const makeHarness of CCTV_HARNESSES) {
     h.display.setMarkersVisible(false);
     h.display.restoreOrder();
     await h.settle();
-    if (h.cesium) {
-      const billboards = h.primitive('cctv');
-      const billboard = billboards.get(0);
-      assert.equal(billboard.width, 24);
-      assert.equal(billboard.height, 24);
-      assert.equal(
-        billboard.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-      assert.deepEqual(
-        [
-          billboard.scaleByDistance.near,
-          billboard.scaleByDistance.nearValue,
-          billboard.scaleByDistance.far,
-          billboard.scaleByDistance.farValue,
-        ],
-        [350, 1.25, 4_000_000, 0.42],
-      );
-      assert.equal(billboard.id, 'a');
-      assert.equal(billboard.scale, 1.25);
-      near(billboard.color.alpha, ACTIVE_CAMERA_COLOR.alpha, 'alpha');
-      assert.equal(billboard.show, false);
-      assert.equal(billboards.get(1).show, false);
-    } else {
+    {
       const set = h.engine.fake.moverSet('cctv');
       assert.equal(set.options.order, 0, 'the bottom of the contact sprites');
       assert.equal(set.options.depthTest, 'always');
@@ -178,14 +149,7 @@ for (const makeHarness of CCTV_HARNESSES) {
     h.display.updateCoverage({ coverageEntities: lines }, moved);
     assert.deepEqual(lines[0].polyline.positions, [moved.mount, moved.tl]);
     assert.equal(lines[4].polyline.positions[0], moved.tl);
-    if (h.cesium) {
-      const drawn = h.primitive('cctv-a-cap');
-      assert.equal(
-        drawn.geometryInstances.geometry._arcType,
-        Cesium.ArcType.GEODESIC,
-      );
-      assert.equal(drawn.geometryInstances.geometry._width, 1.2);
-    } else {
+    {
       const line = h.lineState('cctv-a-cap');
       assert.equal(line.widthPx, 1.2);
       assert.equal(line.arc, 'geodesic');
@@ -213,21 +177,7 @@ for (const makeHarness of CCTV_HARNESSES) {
       dashed: true,
       depthFail: hue.line.withAlpha(0.18),
     });
-    if (h.cesium) {
-      const drawn = h.primitive(edge.id);
-      assert.equal(drawn.appearance.material.type, 'PolylineDash');
-      near(
-        drawn.appearance.material.uniforms.color.alpha,
-        hue.lineActive.alpha,
-        'line alpha',
-      );
-      near(
-        drawn.depthFailAppearance.material.uniforms.color.alpha,
-        0.18,
-        'depth-fail alpha',
-      );
-      assert.equal(drawn.geometryInstances.geometry._width, 1.8);
-    } else {
+    {
       const line = h.lineState(edge.id);
       assert.deepEqual(line.dash, { kind: 'pixels', lengthPx: 8, gapPx: 8 });
       assert.equal(line.widthPx, 1.8);
@@ -237,12 +187,7 @@ for (const makeHarness of CCTV_HARNESSES) {
     style(cap, { visible: false, width: 1, tint: IDLE_COVERAGE_CENTER_MUTED });
     assert.equal(cap.show, false);
     style(edge, { width: 0.9, tint: IDLE_COVERAGE_EDGE_MUTED });
-    if (h.cesium) {
-      const drawn = h.primitive(edge.id);
-      assert.equal(drawn.appearance.material.type, 'Color');
-      assert.equal(drawn.depthFailAppearance, undefined);
-      assert.equal(drawn.geometryInstances.geometry._width, 0.9);
-    } else {
+    {
       const line = h.lineState(edge.id);
       assert.equal(line.dash, null);
       assert.equal(line.depthFailAlpha, 0);
@@ -354,23 +299,7 @@ for (const makeHarness of CCTV_HARNESSES) {
       );
       near(geo.cartesian3.distance(corners[index], expected), 0, 'corner');
     }
-    if (h.cesium) {
-      const primitive = h.primitive('cctv-a-plane');
-      assert.equal(primitive.show, true);
-      assert.equal(primitive.appearance.material.uniforms.color.alpha, 0.95);
-      assert.equal(primitive.allowPicking, true);
-      h.scriptPicks({ native: { id: 'cctv-a-plane', primitive } });
-      assert.equal(
-        h.display.extractPickedCameraId(h.display.pick({ x: 1, y: 1 })),
-        null,
-        'a plane no record owns is not a camera',
-      );
-      record.projection = runtime;
-      assert.equal(
-        h.display.extractPickedCameraId(h.display.pick({ x: 1, y: 1 })),
-        'a',
-      );
-    } else {
+    {
       const outline = h.lineState('cctv-a-plane-outline');
       assert.equal(outline.widthPx, 1);
       assert.equal(outline.pickId, 'cctv-a-plane');
@@ -394,7 +323,6 @@ for (const makeHarness of CCTV_HARNESSES) {
     h.display.removePlane(runtime);
     assert.equal(material.disposed, true);
     assert.equal(h.engine.lines.list().length, 0);
-    if (h.cesium) assert.equal(h.viewer.entities.values.length, 0);
   });
 
   test(`the viewshed volume and the activation probe's ray (${name})`, (t) => {
@@ -422,37 +350,7 @@ for (const makeHarness of CCTV_HARNESSES) {
     );
     assert.equal(excludeObjects.length, 6);
     const direction = p(0, 1, 0);
-    if (h.cesium) {
-      const primitive = h.primitive(volume.mesh.id);
-      assert.equal(primitive.allowPicking, false);
-      assert.equal(primitive.asynchronous, false);
-      assert.ok(primitive);
-      let query;
-      h.viewer.scene.pickFromRay = (ray, exclusions) => {
-        query = { ray, exclusions };
-        return {
-          position: Cesium.Cartesian3.add(
-            ray.origin,
-            new Cesium.Cartesian3(0, 20, 0),
-            new Cesium.Cartesian3(),
-          ),
-        };
-      };
-      const exclude = [...record.coverageEntities, volume];
-      assert.equal(
-        h.display.obstructionRay(POSITIONS.mount, direction, exclude, 10),
-        undefined,
-        'a hit past the range is no obstruction',
-      );
-      assert.ok(
-        h.display.obstructionRay(POSITIONS.mount, direction, exclude, 30),
-      );
-      assert.ok(query.ray instanceof Cesium.Ray);
-      assert.equal(primitive.show, true, 'the excluded volume is restored');
-      assert.ok(query.exclusions.every((item) => typeof item !== 'string'));
-      h.display.removeVolume(volume);
-      assert.equal(h.primitive(volume.mesh.id), undefined);
-    } else {
+    {
       assert.equal(
         h.display.obstructionRay(POSITIONS.mount, direction, [], 30),
         undefined,
@@ -558,16 +456,6 @@ for (const makeHarness of CCTV_HARNESSES) {
     assert.deepEqual(credits.at(-1), ['hide', h.engine, 'cctv']);
     assert.equal(h.engine.lines.list().length, 0);
     assert.equal(h.engine.movers.list().length, 0);
-    if (h.cesium) {
-      assert.equal(h.viewer.entities.values.length, 0);
-      const drawn = [];
-      for (let i = 0; i < h.viewer.scene.primitives.length; i++)
-        drawn.push(h.viewer.scene.primitives.get(i));
-      assert.ok(
-        drawn.every((primitive) => !(primitive instanceof Cesium.Primitive)),
-        'the volume is gone',
-      );
-    }
   });
 }
 

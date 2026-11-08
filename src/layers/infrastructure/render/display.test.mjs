@@ -12,8 +12,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { claimPointer, releasePointer } from '../../../data/inputOwnership.js';
 import {
   INFRA_LOD_ACTIVE_MAX,
@@ -250,114 +249,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const { engine, viewer, primitive } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-    },
-  });
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  viewer.scene.screenSpaceCameraController = { enableInputs: true };
-  // The fake engine's 800 × 600 view, with Cesium's 60° frustum.
-  Object.assign(viewer.scene.canvas, {
-    clientWidth: 800,
-    clientHeight: 600,
-    width: 800,
-    height: 600,
-  });
-  viewer.scene.drawingBufferWidth = 800;
-  viewer.scene.drawingBufferHeight = 600;
-  viewer.camera.frustum.aspectRatio = 800 / 600;
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  const watched = watch(engine);
-  const count = (id) => engine.movers.list().find((set) => set.id === id).count;
-  let sampleCalls = 0;
-  let photoreal = false;
-  engine.maps.photorealActive = () => photoreal;
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    viewer,
-    ...watched,
-    preRender: () => viewer.scene.preRender.raiseEvent(viewer.scene),
-    moveEnd: () => viewer.camera.moveEnd.raiseEvent(),
-    surface({
-      supported = false,
-      sample = () => undefined,
-      terrain,
-      tilesLoaded = true,
-      photoreal: tiles = false,
-    } = {}) {
-      viewer.scene.sampleHeightSupported = supported;
-      viewer.scene.sampleHeight = (carto) => {
-        sampleCalls++;
-        const height = sample(carto);
-        // A scene whose tiles are not sampleable yet throws.
-        if (height === undefined) throw new Error('tiles not sampleable yet');
-        return height;
-      };
-      photoreal = tiles;
-      const globe = viewer.scene.globe;
-      globe.show = !tiles;
-      globe.getHeight = () => terrain();
-      Object.defineProperty(globe, 'tilesLoaded', {
-        configurable: true,
-        get: () => tilesLoaded(),
-      });
-    },
-    sampleCalls: () => sampleCalls,
-    point(id, index) {
-      const collection = primitive(id);
-      if (!collection || index >= count(id)) return undefined;
-      const item = collection.get(index);
-      return {
-        shown: item.show,
-        color: [
-          item.color.red,
-          item.color.green,
-          item.color.blue,
-          item.color.alpha,
-        ],
-        sizePx: item.pixelSize,
-        outlinePx: item.outlineWidth,
-        depthTest:
-          item.disableDepthTestDistance === Number.POSITIVE_INFINITY
-            ? 'always'
-            : item.disableDepthTestDistance === 0
-              ? 'normal'
-              : item.disableDepthTestDistance,
-        id: item.id,
-        position: item.position,
-      };
-    },
-    moverIds: () => engine.movers.list().map(({ id }) => id),
-    click(target) {
-      native =
-        target?.ground !== undefined
-          ? { id: { gevGroundSet: target.ground, instance: target.instance } }
-          : target?.mover !== undefined
-            ? { primitive: primitive(target.mover).get(target.instance) }
-            : target?.line !== undefined
-              ? {
-                  primitive: primitive(watched.line(target.line).owner),
-                  id: watched.line(target.line).options.pickId,
-                }
-              : target;
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(100, 100),
-        });
-      native = undefined;
-    },
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 /** Freezes performance.now so the 450 ms walk gate is under test control. */
 function installFakeClock(t, startMs = 1_000_000) {

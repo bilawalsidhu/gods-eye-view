@@ -1,7 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../../geo/index.js';
-import { createNavaraPulseField } from './pulse.js';
+import { registerHooks } from 'node:module';
+
+const hook = registerHooks({
+  resolve(specifier, context, next) {
+    if (
+      specifier === '@navaramap/three' &&
+      context.parentURL?.endsWith('/ground/pulse.js')
+    )
+      return {
+        url: 'data:text/javascript,export class EffectDesc {} export class Effect {}',
+        shortCircuit: true,
+      };
+    return next(specifier, context);
+  },
+});
+let createNavaraPulseField;
+try {
+  ({ createNavaraPulseField } = await import('./pulse.js'));
+} finally {
+  hook.deregister();
+}
 
 test('the Navara pulse disc draws only while the pulses run', () => {
   const effects = [];
@@ -25,7 +45,7 @@ test('the Navara pulse disc draws only while the pulses run', () => {
     },
   };
   const disc = createNavaraPulseField(
-    { view, EffectDesc: class {}, NavaraEffect: class {} },
+    { view },
     {
       center: geo.cartesian3.fromDegrees(3, 27, 0),
       radiusM: 250_000,

@@ -1,14 +1,11 @@
-// The FIRMS display on the fake engine and on the Cesium engine over a stub
-// scene: the same calls, the same drawing, read back from each engine's own
-// store (the fake's mover and ground sets, Cesium's billboards and ground
-// primitives).
+// Layer display behavior on the fake engine.
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createFakeEventHandlers } from '../../../globe/cesium/testing/fakeViewer.mjs';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { constantRgba } from '../../shared/color.js';
 import { createFirmsDisplay } from './display.js';
@@ -94,76 +91,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const handlers = createFakeEventHandlers();
-  const { engine, viewer, primitive } = createCesiumMoversEngine({
-    engineOptions: {
-      createEventHandler: handlers.create,
-      scheduleFrame: (run) => run(),
-    },
-  });
-  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
-  engine.camera.setView({ destination: at(FIRE.lon, FIRE.lat, 2_000_000) });
-  let native;
-  viewer.scene.pick = () => native;
-  viewer.scene.drillPick = () => (native ? [native] : []);
-  const ground = watchGround(engine);
-  return {
-    name: 'the Cesium engine',
-    engine,
-    viewer,
-    ground,
-    sprites(id) {
-      const collection = primitive(id);
-      if (!collection) return null;
-      const listed = engine.movers.list().find((entry) => entry.id === id);
-      const count = listed?.count ?? 0;
-      return {
-        collection,
-        count,
-        instances: Array.from({ length: count }, (_, i) => {
-          const billboard = collection.get(i);
-          return {
-            show: billboard.show,
-            scale: billboard.scale,
-            alpha: billboard.color.alpha,
-            pickId: billboard.id,
-            billboard,
-          };
-        }),
-      };
-    },
-    /** The Cesium ground primitives of a set. */
-    groundPrimitives(id) {
-      const root = viewer.scene.groundPrimitives.get(0);
-      for (let i = 0; i < (root?.length ?? 0); i++) {
-        const slot = root.get(i);
-        const values = Array.from({ length: slot.length }, (_, j) =>
-          slot.get(j),
-        );
-        if (values.some((value) => value.gevGroundSet === id))
-          return { slot, values };
-      }
-      return null;
-    },
-    click(picked) {
-      native = picked;
-      for (const handler of handlers.handlers)
-        handler.fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, {
-          position: new Cesium.Cartesian2(10, 20),
-        });
-      native = undefined;
-    },
-    // A Cesium pick of the instance's billboard.
-    pickOf(setId, instance) {
-      const billboard = primitive(setId).get(instance);
-      return { primitive: billboard, id: billboard.id };
-    },
-    destroy: () => engine.destroy(),
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 const display = (h, options = {}) =>
   createFirmsDisplay(h.engine, {
     id: 'firms-fixture',
@@ -535,8 +463,6 @@ for (const make of HARNESSES) {
   test(`${name}: the heatmap is one imagery layer over the globe, faded by its alpha`, () => {
     const restore = stubDocument();
     const h = make();
-    // Cesium drapes it on the globe's own imagery stack.
-    const stack = new Cesium.ImageryLayerCollection();
     if (h.viewer) {
       h.viewer.imageryLayers = stack;
       h.viewer.scene.globe.show = true;

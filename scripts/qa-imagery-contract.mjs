@@ -4,7 +4,7 @@
 // pixels; both pinned dates survive a switch to Cesium and back. The report
 // and its screenshots go next to the evidence file (or to the temp directory).
 //
-//   node scripts/qa-w2-imagery.mjs http://127.0.0.1:<PORT>
+//   node scripts/qa-imagery-contract.mjs http://127.0.0.1:<PORT>
 //     [--layers=recent-imagery] [--evidence=FILE]
 import fs from 'node:fs/promises';
 import os from 'node:os';

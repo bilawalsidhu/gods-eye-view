@@ -334,7 +334,7 @@ const runs = [
     ['--panoramax'],
   ],
   ['radio-engine-switch', 'radio-engine-switch', ['radio']],
-  ['w2-imagery', 'w2-imagery', ['recent-imagery']],
+  ['imagery-contract', 'imagery-contract', ['recent-imagery']],
   ['fire-camera-switch', 'fire-camera-switch', ['alpr-cameras']],
   [
     'fire-camera-switch--fires',

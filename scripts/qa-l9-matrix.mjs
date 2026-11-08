@@ -1086,15 +1086,25 @@ check({
   heavy: true, run: harness({ id: 'D1', script: 'track-regression.mjs', args: ['--url', APP_URL], timeoutMs: 1200000 }),
 });
 check({
-  id: 'D2', group: 'D', desc: 'qa-heading-b3 — path-derived display heading',
-  heavy: true, run: harness({ id: 'D2', script: 'qa-heading-b3.mjs', args: ['--url', APP_URL], timeoutMs: 900000 }),
+  id: 'D2',
+  group: 'D',
+  desc: 'qa-aircraft-heading — path-derived display heading',
+  heavy: true,
+  run: harness({
+    id: 'D2',
+    script: 'qa-aircraft-heading.mjs',
+    args: ['--url', APP_URL],
+    timeoutMs: 900000,
+  }),
 });
 check({
-  id: 'D3', group: 'D', desc: 'qa-sprites-b5 — per-class billboard silhouettes',
+  id: 'D3',
+  group: 'D',
+  desc: 'qa-aircraft-sprites — per-class billboard silhouettes',
   heavy: true,
   run: harness({
     id: 'D3',
-    script: 'qa-sprites-b5.mjs',
+    script: 'qa-aircraft-sprites.mjs',
     args: ['--url', APP_URL],
     timeoutMs: 900000,
     knownConditions: [{

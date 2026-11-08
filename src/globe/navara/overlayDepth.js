@@ -1,3 +1,4 @@
+import { PACKED_DEPTH_GLSL } from './shaderChunks.js';
 // The depth test of gev's screen overlays on Navara (sprites, points and
 // lines drawn after tone mapping, overlay.js): there is no depth buffer in
 // the post-processing chain, so each fragment compares its own logarithmic
@@ -15,6 +16,7 @@ export const OVERLAY_DEPTH_MODES = Object.freeze({
 
 /** Fragment declarations: uniforms, the varying and gevOverlayHidden(). */
 export const OVERLAY_DEPTH_FRAGMENT = /* glsl */ `
+${PACKED_DEPTH_GLSL}
 uniform sampler2D tGevSceneDepth;
 uniform vec2 uGevResolution;
 uniform float uGevDepthMode;
@@ -36,7 +38,7 @@ bool gevOverlayHidden() {
   #else
   float mine = gl_FragCoord.z;
   #endif
-  bool occluded = mine > scene + 2e-6;
+  bool occluded = packedDepthOccluded(mine, scene, 2e-6);
   return uGevDepthMode < 1.5 ? occluded : !occluded;
 }
 `;

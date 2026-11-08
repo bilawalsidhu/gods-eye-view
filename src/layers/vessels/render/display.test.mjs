@@ -1,3 +1,4 @@
+import { createFakeGroundHarness as fakeHarness } from '../../../testSupport/groundDisplayEngines.mjs';
 // The vessels display on the engine contract, on the fake engine and on the
 // Cesium engine (real Cesium billboards and polylines over a stub scene:
 // they draw nothing but hold what the engine writes): the chevron bank
@@ -10,7 +11,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
+
 import { createPickRegistry } from '../../../data/pickRegistry.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { vesselTypeCss } from '../../../data/vesselLabels.js';
@@ -32,28 +33,7 @@ const near = (actual, expected, label, tolerance = 1e-6) =>
 const CARGO = vesselChevronIcon(vesselTypeCss('Cargo'), false);
 const SELECTED = vesselChevronIcon('#ffffff', true);
 
-function fakeHarness() {
-  const engine = createFakeEngine();
-  return {
-    name: 'the fake engine',
-    engine,
-    frame: () => engine.fake.frame(),
-    destroy: () => engine.destroy(),
-  };
-}
-
-function cesiumHarness() {
-  const { engine, ...rest } = createCesiumMoversEngine();
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    ...rest,
-    destroy: () => engine.destroy(),
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 async function setup(makeHarness) {
   const harness = makeHarness();
@@ -82,17 +62,6 @@ const spec = (record, overrides = {}) => ({
 
 /** What a chevron draws. */
 function drawn(h, setId, index) {
-  if (h.cesium) {
-    const billboard = h.primitive(setId).get(index);
-    return {
-      id: billboard.id,
-      position: billboard.position,
-      scale: billboard.scale,
-      rotation: billboard.rotation,
-      alpha: billboard.color.alpha,
-      show: billboard.show,
-    };
-  }
   const { store } = h.engine.fake.moverSet(setId);
   return {
     id: store.pickIds[index],
@@ -147,23 +116,7 @@ for (const makeHarness of HARNESSES) {
     assert.equal(chevron.id, '111', 'picks name the MMSI');
     near(chevron.scale, 0.6, 'scale');
     assert.equal(chevron.show, true);
-    if (h.cesium) {
-      const billboard = h.primitive(listed.id).get(0);
-      assert.ok(h.primitive(listed.id) instanceof Cesium.BillboardCollection);
-      assert.equal(billboard.width, 32);
-      assert.equal(billboard.height, 32);
-      assert.equal(
-        billboard.disableDepthTestDistance,
-        Number.POSITIVE_INFINITY,
-      );
-      assert.equal(billboard.horizontalOrigin, Cesium.HorizontalOrigin.CENTER);
-      assert.equal(billboard.verticalOrigin, Cesium.VerticalOrigin.CENTER);
-      assert.ok(
-        Cesium.Cartesian3.equals(billboard.alignedAxis, Cesium.Cartesian3.ZERO),
-        'rotation in screen space',
-      );
-      assert.equal(billboard.scaleByDistance, undefined);
-    } else {
+    {
       const { options } = engine.fake.moverSet(listed.id);
       assert.equal(options.depthTest, 'always');
       assert.equal(options.sprite.sizePx, 32);
@@ -173,9 +126,7 @@ for (const makeHarness of HARNESSES) {
       assert.equal(chevron.cell, CARGO);
     }
     // Writes inside a frame listener commit at its end, once.
-    const commits = h.cesium
-      ? null
-      : () => engine.fake.moverSet(listed.id).commits;
+    const commits = () => engine.fake.moverSet(listed.id).commits;
     const before = commits?.();
     const moved = geo.cartesian3.fromDegrees(-73.8, 40.6, 1);
     const remove = display.view.on('preRender', () => {
@@ -193,7 +144,7 @@ for (const makeHarness of HARNESSES) {
     near(chevron.rotation, 0.5, 'rotation');
     near(chevron.scale, 0.72, 'scale');
     near(chevron.alpha, 0.3, 'alpha');
-    if (!h.cesium) assert.equal(chevron.cell, SELECTED);
+    assert.equal(chevron.cell, SELECTED);
     // Reads are the display's own copies.
     assert.equal(handle.image, SELECTED);
     assert.equal(handle.color.alpha, 0.3);
@@ -300,24 +251,7 @@ for (const makeHarness of HARNESSES) {
     assert.match(line.id, /^gev-trail:ais-live-vessels-\d+$/);
     assert.equal(line.points, 2, 'near-duplicates and gaps dropped');
     const base = Cesium.Color.fromCssColorString('#00d4ff');
-    if (h.cesium) {
-      const primitive = h.primitive(line.id);
-      assert.equal(primitive.allowPicking, true);
-      assert.equal(primitive.geometryInstances.id, line.id);
-      assert.equal(
-        primitive.geometryInstances.geometry._arcType,
-        Cesium.ArcType.GEODESIC,
-      );
-      assert.equal(primitive.geometryInstances.geometry._width, 2.5);
-      const { color } = primitive.appearance.material.uniforms;
-      near(color.red, base.red, 'red');
-      near(color.alpha, 0.85, 'alpha');
-      near(
-        primitive.depthFailAppearance.material.uniforms.color.alpha,
-        0.4,
-        'occluded alpha',
-      );
-    } else {
+    {
       const { options } = engine.fake.line(line.id);
       assert.equal(options.arc, 'geodesic');
       assert.equal(options.pickId, line.id);

@@ -39,7 +39,6 @@ import cctvLayer, {
   _pushAmbientCardEntriesForTest,
   _setCctvOverlayHostForTest,
   activationProbeClampRange,
-  bindCctvWorldClickGesture,
   clearProbeClampOnDeactivation,
   computeFrustumGeometry,
   cctvCycleIndex,
@@ -60,7 +59,6 @@ import cctvLayer, {
   createGeometryProgressNotifier,
   normalizeCoverageMode,
   frameSignatureFromPixels,
-  focusCctvRecord,
   hideCctvRecordVisuals,
   materializeCctvActiveCoverageEntities,
   materializeCctvVisibleCoverageEntities,
@@ -85,30 +83,28 @@ import {
 } from '../layers/cctv/policy.js';
 import { loadLayerRenderers } from '../app/layers/renderers.js';
 
+import { createNavigation } from '../layers/cctv/navigation.js';
+import { createCctvDisplay } from '../layers/cctv/render/display.js';
+
+function focusCctvRecord(engine, record, duration) {
+  const display = engine
+    ? createCctvDisplay(engine, { services: {}, state: {} })
+    : null;
+  display?.attach();
+  try {
+    return createNavigation({}).focusCctvRecord(display, record, duration);
+  } finally {
+    display?.destroy();
+  }
+}
+
 // The layers draw with the manifest's displays, which load through
 // import() (src/app/layers/renderers.js).
 await loadLayerRenderers('cesium');
 
 const ASPECT = 16 / 9;
 const toRad = (deg) => (deg * Math.PI) / 180;
-const GESTURE_TYPES = {
-  LEFT_DOWN: 'left-down',
-  MOUSE_MOVE: 'mouse-move',
-  LEFT_UP: 'left-up',
-  LEFT_CLICK: 'left-click',
-};
 
-function makeGestureHandler() {
-  const actions = new Map();
-  return {
-    setInputAction(callback, type) {
-      actions.set(type, callback);
-    },
-    fire(type, event) {
-      actions.get(type)?.(event);
-    },
-  };
-}
 // Same spherical earth radius projectPoint uses (R = 6371 km) so the
 // lat/lon→metres conversion in the assertions matches the module's math.
 const M_PER_DEG = (Math.PI / 180) * 6371000;
@@ -1383,14 +1379,16 @@ test('active CCTV camera is absent from host by default and protected only when 
 test('CCTV drag-then-release over a camera is inert, while a clean tap activates and dispatches', () => {
   let timeMs = 0;
   let activationCalls = 0;
-  const handler = makeGestureHandler();
+  const engine = createFakeEngine();
+  const display = createCctvDisplay(engine, { state: {} });
+  display.attach();
+  const handler = { fire: (type, event) => engine.fake.input(type, event) };
   const target = new EventTarget();
   const requests = [];
   target.addEventListener(CCTV_FOCUS_REQUEST_EVENT, (event) =>
     requests.push(event.detail),
   );
-  bindCctvWorldClickGesture(
-    handler,
+  display.bindClick(
     () => {
       activateCctvCameraFromWorldClick(
         'atx-cam-3',
@@ -1403,28 +1401,29 @@ test('CCTV drag-then-release over a camera is inert, while a clean tap activates
     },
     {
       now: () => timeMs,
-      eventTypes: GESTURE_TYPES,
     },
   );
 
-  handler.fire(GESTURE_TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
+  handler.fire('down', { position: { x: 10, y: 10 } });
   timeMs = 20;
-  handler.fire(GESTURE_TYPES.MOUSE_MOVE, { endPosition: { x: 14, y: 10 } });
+  handler.fire('move', { endPosition: { x: 14, y: 10 } });
   timeMs = 40;
-  handler.fire(GESTURE_TYPES.MOUSE_MOVE, { endPosition: { x: 10, y: 10 } });
+  handler.fire('move', { endPosition: { x: 10, y: 10 } });
   timeMs = 60;
-  handler.fire(GESTURE_TYPES.LEFT_UP, { position: { x: 10, y: 10 } });
-  handler.fire(GESTURE_TYPES.LEFT_CLICK, { position: { x: 10, y: 10 } });
+  handler.fire('up', { position: { x: 10, y: 10 } });
+  handler.fire('click', { position: { x: 10, y: 10 } });
   assert.equal(activationCalls, 0);
   assert.deepEqual(requests, []);
 
   timeMs = 100;
-  handler.fire(GESTURE_TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
+  handler.fire('down', { position: { x: 10, y: 10 } });
   timeMs = 180;
-  handler.fire(GESTURE_TYPES.LEFT_UP, { position: { x: 11, y: 11 } });
-  handler.fire(GESTURE_TYPES.LEFT_CLICK, { position: { x: 11, y: 11 } });
+  handler.fire('up', { position: { x: 11, y: 11 } });
+  handler.fire('click', { position: { x: 11, y: 11 } });
   assert.equal(activationCalls, 1);
   assert.deepEqual(requests, [{ cameraId: 'atx-cam-3' }]);
+  display.destroy();
+  engine.destroy();
 });
 
 test('CCTV auto-hop remains activation-only and never dispatches a focus request', () => {

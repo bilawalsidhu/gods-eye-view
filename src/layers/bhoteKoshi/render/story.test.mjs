@@ -56,8 +56,7 @@ for (const make of GROUND_HARNESSES) {
     });
     const before = h.engine.frames.preRender.numberOfListeners;
     const display = drawStorySource(h.engine, source);
-    const frame = () =>
-      h.cesium ? h.viewer.scene.preRender.raiseEvent() : h.engine.fake.frame();
+    const frame = () => h.engine.fake.frame();
     frame();
     assert.equal(h.sets(), 3);
     const haloSet = h.set('story-halo');
@@ -87,21 +86,7 @@ for (const make of GROUND_HARNESSES) {
     });
     assert.equal(h.set('story-fill').items[0].rings.length, 2);
     assert.equal(h.set('story-fill').items[0].fill[3], 0.055);
-    if (h.cesium) {
-      const native = h.primitives('story-halo').lines[0].options;
-      assert.equal(
-        native.asynchronous,
-        false,
-        'reveal geometry builds within the frame',
-      );
-      assert.equal(native.appearance.material.type, 'PolylineDash');
-      assert.equal(native.appearance.material.uniforms.dashLength, 18);
-      const core =
-        h.primitives('story-core').lines[0].options.appearance.material
-          .uniforms;
-      assert.equal(core.glowPower, 0.24);
-      assert.equal(core.taperPower, 0.7);
-    }
+
     frame();
     assert.equal(
       h.set('story-halo').commits,
@@ -186,8 +171,7 @@ for (const make of GROUND_HARNESSES) {
       return 1200;
     };
     const display = drawStorySource(h.engine, source);
-    const frame = () =>
-      h.cesium ? h.viewer.scene.preRender.raiseEvent() : h.engine.fake.frame();
+    const frame = () => h.engine.fake.frame();
     frame();
     assert.equal(options.kind, 'point');
     assert.equal(options.depthTest, 'always');

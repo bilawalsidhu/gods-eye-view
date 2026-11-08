@@ -1,16 +1,12 @@
-// The earthquake discs on the engine contract, on the fake engine and on the
-// Cesium engine (its ground batches over fake primitives): radii, depth
-// colours and alphas, no outline, picks, visibility through the layer,
-// retained discs across a scene handoff and a failed refresh, and teardown.
+// Layer display behavior on the fake engine.
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import {
   GROUND_HARNESSES,
   createFakeGroundHarness,
-  instanceColor,
 } from '../../../testSupport/groundDisplayEngines.mjs';
 import { createEarthquakesLayer } from '../index.js';
 import { createEarthquakesDisplay } from './display.js';
@@ -113,28 +109,7 @@ for (const makeHarness of GROUND_HARNESSES) {
           near(channel, FILLS[index][at], `fill ${index}.${at}`),
         ),
       );
-      if (f.cesium) {
-        const { fills, lines } = f.primitives('earthquakes');
-        assert.equal(fills.length, 1, 'one ground batch');
-        assert.equal(lines.length, 0, 'no outline batch');
-        const { geometryInstances, classificationType, allowPicking } =
-          fills[0].options;
-        assert.equal(classificationType, Cesium.ClassificationType.BOTH);
-        assert.equal(allowPicking, true);
-        geometryInstances.forEach((instance, index) => {
-          const row = rows[index];
-          assert.ok(instance.geometry instanceof Cesium.EllipseGeometry);
-          assert.equal(instance.geometry._semiMajorAxis, 2 ** row.mag * 1000);
-          assert.equal(instance.geometry._semiMinorAxis, 2 ** row.mag * 1000);
-          const center = Cesium.Cartesian3.fromDegrees(row.lon, row.lat);
-          near(instance.geometry._center.x, center.x, 'centre x', 1e-6);
-          near(instance.geometry._center.y, center.y, 'centre y', 1e-6);
-          near(instance.geometry._center.z, center.z, 'centre z', 1e-6);
-          instanceColor(instance).forEach((channel, at) =>
-            near(channel, FILLS[index][at], `colour ${index}.${at}`, 0.5 / 255),
-          );
-        });
-      }
+
       assert.deepEqual(
         f.layer.getAnalystRecords().map((r) => r.id),
         ['us-a', 'us-b', 'QUAKE-0002'],
@@ -145,7 +120,6 @@ for (const makeHarness of GROUND_HARNESSES) {
       f.layer.disable();
       assert.deepEqual(f.layer.getAnalystRecords(), []);
       assert.equal(f.set('earthquakes').shown, false);
-      if (f.cesium) assert.equal(f.collectionShown('earthquakes'), false);
     } finally {
       f.layer.destroy();
     }
@@ -169,7 +143,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       f.setSnapshot([]);
       assert.equal(await f.layer.update(), true);
       assert.equal(f.set('earthquakes').items.length, 0);
-      if (f.cesium) assert.equal(f.primitives('earthquakes').fills.length, 0);
+
       assert.equal(f.layer.getStats().error, null);
     } finally {
       f.layer.destroy();
@@ -182,21 +156,14 @@ for (const makeHarness of GROUND_HARNESSES) {
     try {
       await f.layer.update();
       let picked;
-      if (f.cesium) {
-        const [fills] = f.primitives('earthquakes').fills;
-        f.viewer.scene.pick = () => ({
-          id: fills.options.geometryInstances[1].id,
-          primitive: fills,
-        });
-        picked = f.engine.picker.pick({ x: 1, y: 1 });
-      } else {
-        // The fake picks its ground items on the CPU, under the camera.
-        f.engine.camera.setView({
-          destination: geo.cartesian3.fromDegrees(30, 20, 200_000),
-        });
-        const { width, height } = f.engine.host.size();
-        picked = f.engine.picker.pick({ x: width / 2, y: height / 2 });
-      }
+
+      // The fake picks its ground items on the CPU, under the camera.
+      f.engine.camera.setView({
+        destination: geo.cartesian3.fromDegrees(30, 20, 200_000),
+      });
+      const { width, height } = f.engine.host.size();
+      picked = f.engine.picker.pick({ x: width / 2, y: height / 2 });
+
       assert.equal(picked.id, 'earthquake:b');
       assert.equal(picked.owner, 'earthquakes');
       assert.equal(picked.instance, 1);

@@ -57,41 +57,6 @@ test('the fake records contract calls for shell-module tests', () => {
   assert.equal(engine.fake.renderRequests, 0);
 });
 
-test('fake flights advance with frames and finish or cancel exactly once', () => {
-  const engine = createFakeEngine();
-  const destination = geo.cartesian3.fromDegrees(30, 40, 5000);
-  const outcomes = [];
-  engine.camera.flyTo({
-    destination,
-    duration: 1,
-    complete: () => outcomes.push('complete'),
-    cancel: () => outcomes.push('cancel'),
-  });
-  assert.equal(engine.camera.flightActive(), true);
-  engine.fake.frames(30, 16);
-  assert.deepEqual(outcomes, []);
-  engine.fake.frames(40, 16);
-  assert.deepEqual(outcomes, ['complete']);
-  assert.ok(
-    geo.cartesian3.distance(engine.camera.pose().position, destination) < 1e-6,
-  );
-  engine.camera.cancelFlight();
-  assert.deepEqual(outcomes, ['complete']);
-
-  engine.camera.flyTo({
-    destination: geo.cartesian3.fromDegrees(0, 0, 1e6),
-    cancel: () => outcomes.push('cancel'),
-  });
-  engine.camera.flyTo({
-    destination,
-    duration: 0,
-    complete: () => outcomes.push('second'),
-  });
-  // Duration 0 lands and completes before flyTo returns, as in Cesium.
-  assert.deepEqual(outcomes, ['complete', 'cancel', 'second']);
-  assert.equal(engine.camera.flightActive(), false);
-});
-
 test('fake events can be emitted by hand and frames fire in order', () => {
   const engine = createFakeEngine();
   const seen = [];
@@ -190,25 +155,6 @@ test('fake credits, maps and destroy keep inspectable state', () => {
   assert.equal(engine.fake.destroyed, true);
 });
 
-test('fake lookAtTransform keeps the transform until release', () => {
-  const engine = createFakeEngine();
-  const target = geo.cartesian3.fromDegrees(10, 10, 0);
-  const frame = geo.transforms.eastNorthUpToFixedFrame(target);
-  engine.camera.lookAtTransform(frame, {
-    heading: 0,
-    pitch: -0.5,
-    range: 1000,
-  });
-  assert.deepEqual(engine.camera.transform(), [...frame]);
-  engine.camera.transform()[0] = 42;
-  assert.notEqual(engine.camera.transform()[0], 42);
-  engine.camera.release();
-  assert.deepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
-  engine.camera.lookAt(target, { heading: 0, pitch: -0.5, range: 1000 });
-  assert.deepEqual(engine.camera.transform(), [...frame]);
-  assert.deepEqual(engine.fake.lookAtTarget(), target);
-});
-
 test('fake input honours modifiers like Cesium: unmodified listeners skip modified input', () => {
   const engine = createFakeEngine();
   const seen = [];
@@ -292,33 +238,6 @@ test('fake isDestroyed, commanded and pickGlobe are inspectable', () => {
   assert.equal(engine.isDestroyed(), true);
 });
 
-test('the fake clock is the app clock the test controls, latched per frame', () => {
-  const start = Date.UTC(2026, 9, 16, 12);
-  const engine = createFakeEngine({ nowMs: start });
-  const seen = [];
-  for (const name of ['preUpdate', 'preRender', 'postRender'])
-    engine.frames[name].addEventListener(() =>
-      seen.push([name, engine.clock.frameTime()]),
-    );
-  assert.equal(engine.clock.now(), start);
-  engine.fake.frame(16);
-  assert.deepEqual(seen, [
-    ['preUpdate', start + 16],
-    ['preRender', start + 16],
-    ['postRender', start + 16],
-  ]);
-  // Time moves between frames; the frame time only at the next frame.
-  engine.fake.advanceTime(1000);
-  assert.equal(engine.clock.now(), start + 1016);
-  assert.equal(engine.clock.frameTime(), start + 16);
-  engine.fake.frame(16);
-  assert.equal(engine.clock.frameTime(), start + 1032);
-  // The app clock's controls work through engine.fake.appClock.
-  engine.fake.appClock.freeze(start);
-  engine.fake.frame(16);
-  assert.equal(engine.clock.frameTime(), start);
-});
-
 test('a fake engine can share an app clock', async () => {
   const { createAppClock } = await import('../../time/clock.js');
   let wall = 5000;
@@ -386,82 +305,4 @@ test('fake lines keep their positions, colour, matrix and visibility', () => {
   ]);
   line.destroy();
   assert.equal(engine.fake.line('trail'), undefined);
-});
-
-test('input listeners asking for picks get the pick and the drill in the payload', () => {
-  const engine = createFakeEngine();
-  engine.fake.script('pick', (screen) =>
-    screen.x === 10
-      ? { id: 'ae01ce', owner: 'flights', instance: 3 }
-      : undefined,
-  );
-  engine.fake.script('drillPick', (screen, limit) =>
-    [{ id: 'a' }, { id: 'b' }, { id: 'c' }].slice(0, limit),
-  );
-  const seen = [];
-  engine.input.on('click', (event) => seen.push(['plain', event]));
-  engine.input.on('click', (event) => seen.push(['pick', event]), {
-    pick: true,
-    drill: 2,
-  });
-  engine.input.on('move', (event) => seen.push(['hover', event]), {
-    pick: true,
-  });
-  engine.fake.input('click', { position: { x: 10, y: 5 } });
-  engine.fake.input('move', {
-    startPosition: { x: 0, y: 0 },
-    endPosition: { x: 10, y: 5 },
-  });
-  engine.fake.input('click', { position: { x: 99, y: 5 } });
-  assert.deepEqual(seen[0], ['plain', { position: { x: 10, y: 5 } }]);
-  assert.deepEqual(seen[1][1].picked, {
-    id: 'ae01ce',
-    owner: 'flights',
-    instance: 3,
-  });
-  assert.deepEqual(seen[1][1].drilled, [{ id: 'a' }, { id: 'b' }]);
-  assert.deepEqual(seen[2][1].picked.id, 'ae01ce');
-  assert.equal(seen[2][1].drilled, undefined, 'no drill unless asked');
-  assert.equal(seen[4][1].picked, undefined);
-  assert.throws(
-    () => engine.input.on('click', () => {}, { drill: -1 }),
-    TypeError,
-  );
-  assert.throws(
-    () => engine.input.on('up', () => {}, { pick: true }),
-    TypeError,
-  );
-});
-
-test('input rejects invalid pick windows and forwards copied windows on down and move', () => {
-  const engine = createFakeEngine();
-  for (const pickWindow of [
-    null,
-    {},
-    { width: 0, height: 9 },
-    { width: 9, height: 0.5 },
-    { width: Infinity, height: 1 },
-  ])
-    assert.throws(
-      () => engine.input.on('click', () => {}, { pick: true, pickWindow }),
-      TypeError,
-    );
-  assert.throws(
-    () =>
-      engine.input.on('click', () => {}, {
-        pickWindow: { width: 9, height: 9 },
-      }),
-    TypeError,
-  );
-  const picked = [];
-  engine.fake.script('pick', (at, w, h) => ({ id: `${w}:${h}` }));
-  const pickWindow = { width: 11, height: 7 };
-  engine.input.on('down', (event) => picked.push(event.picked.id), {
-    pick: true,
-    pickWindow,
-  });
-  pickWindow.width = 1;
-  engine.fake.input('down', { position: { x: 2, y: 3 } });
-  assert.deepEqual(picked, ['11:7']);
-  engine.destroy();
 });

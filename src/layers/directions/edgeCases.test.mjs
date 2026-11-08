@@ -66,11 +66,7 @@ function fixture(makeHarness = createFakeGroundHarness) {
   const makeEngine = (make = makeHarness) => {
     const harness = make();
     // The stub Cesium scene has no credit display; the OSM credit goes there.
-    if (harness.viewer)
-      harness.viewer.creditDisplay ??= {
-        addStaticCredit() {},
-        removeStaticCredit() {},
-      };
+
     harnesses.set(harness.engine, harness);
     return harness.engine;
   };

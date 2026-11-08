@@ -44,7 +44,7 @@ import {
   slope,
   startSession,
 } from './qa-strict-session.mjs';
-import { installRadioFixture, stations } from './fixtures/w2/radio.mjs';
+import { installRadioFixture, stations } from './fixtures/layers/radio.mjs';
 import { trafficFixtureResponse } from './traffic-fixtures.mjs';
 import { POSITION_HISTORY_LIMIT } from '../src/layers/flights/recordPolicy.js';
 import { heapSizesByType } from './qa/heapSnapshotSizes.mjs';

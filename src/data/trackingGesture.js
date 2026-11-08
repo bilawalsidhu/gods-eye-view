@@ -1,3 +1,5 @@
+import { isPointerFree } from './inputOwnership.js';
+
 export const MAX_TRACKING_CLICK_TRAVEL_PX = 6;
 export const MAX_TRACKING_CLICK_DURATION_MS = 400;
 
@@ -29,4 +31,71 @@ export function isTrackingClickGesture(gesture = {}) {
     isTrackingSelectionGesture(gesture) &&
     durationMs <= MAX_TRACKING_CLICK_DURATION_MS
   );
+}
+
+/** Accumulate press travel and duration, consuming the result on click. */
+export function createPressGesture(now = () => performance.now()) {
+  let press = null;
+  let completed = null;
+  const travel = (position) => {
+    if (
+      !press ||
+      !Number.isFinite(position?.x) ||
+      !Number.isFinite(position?.y)
+    )
+      return;
+    if (press.last)
+      press.travelPx += Math.hypot(
+        position.x - press.last.x,
+        position.y - press.last.y,
+      );
+    press.last = { x: position.x, y: position.y };
+  };
+  const finish = (position) => {
+    if (!press) return;
+    travel(position);
+    completed = {
+      travelPx: press.travelPx,
+      durationMs: Math.max(0, now() - press.startedAt),
+    };
+    press = null;
+  };
+  return {
+    down(position) {
+      press = { startedAt: now(), travelPx: 0, last: null };
+      completed = null;
+      travel(position);
+    },
+    move: travel,
+    up: finish,
+    click(position) {
+      finish(position);
+      const gesture = completed ?? { travelPx: 0, durationMs: 0 };
+      completed = null;
+      return gesture;
+    },
+  };
+}
+
+/** Bind engine input with press metadata; the caller chooses its click rule. */
+export function bindTrackingClickGesture(
+  input,
+  onClick,
+  { now, onMouseMove } = {},
+) {
+  const press = createPressGesture(now);
+  const removes = [
+    input.on('down', (event) => press.down(event?.position)),
+    input.on('move', (event) => {
+      press.move(event?.endPosition ?? event?.position);
+      onMouseMove?.(event);
+    }),
+    input.on('up', (event) => press.up(event?.position)),
+    input.on('click', (click) => {
+      const gesture = press.click(click?.position);
+      if (!isPointerFree()) return;
+      onClick(click, gesture);
+    }),
+  ];
+  return () => removes.forEach((remove) => remove());
 }

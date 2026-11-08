@@ -1,3 +1,4 @@
+import { writeSelectedMarker } from '../../shared/selectionKeeper.js';
 // The bikeshare stations on the globe contract (engine.movers, engine.input,
 // engine.camera, engine.surface), the same on every engine:
 // - rendering: one point per station in one point set, sized by capacity
@@ -120,15 +121,18 @@ export function createBikeshareDisplay(engine, context) {
     const key = state._selectedKey;
     const record = key ? state._stationRenderMap.get(key) : null;
     const shown = Boolean(record?.point?.position);
-    if (shown)
-      highlight.set(0, {
-        position: record.point.position,
-        color: SELECTED_COLOR.rgba(),
-        scale: 1,
-        show: true,
-        pickId: key,
-      });
-    highlight.setCount(shown ? 1 : 0);
+    writeSelectedMarker(
+      highlight,
+      shown
+        ? {
+            position: record.point.position,
+            color: SELECTED_COLOR.rgba(),
+            scale: 1,
+            show: true,
+            pickId: key,
+          }
+        : null,
+    );
     highlight.commit();
   }
   // The stations show and hide together; the highlight goes with the

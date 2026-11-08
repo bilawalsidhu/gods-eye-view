@@ -19,6 +19,40 @@ import {
 } from '../contract.js';
 
 const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
+const throwsType = (run, label) => {
+  let error = null;
+  try {
+    run();
+  } catch (caught) {
+    error = caught;
+  }
+  ensure(error instanceof TypeError, `${label} did not throw a TypeError`);
+};
+const like = (colour, data, i) =>
+  colour.every(
+    (channel, k) => k > 2 || Math.abs(data[i + k] - channel * 255) <= 40,
+  );
+const MAGENTA = [255, 0, 255];
+const GREEN = [0, 255, 0];
+const nearColour = (actual, expected, tolerance = 40) =>
+  actual.every((value, k) => Math.abs(value - expected[k]) <= tolerance);
+const show = (colour) => colour.map((value) => value.toFixed(0)).join(',');
+const screenOf = (engine, lon, lat) =>
+  engine.projector.worldToWindow(cartesian3.fromDegrees(lon, lat));
+const meanAt = (engine, readRegion, lon, lat, half) => {
+  const { x, y } = screenOf(engine, lon, lat);
+  const data = readRegion(
+    Math.round(x) - half,
+    Math.round(y) - half,
+    2 * half,
+    2 * half,
+  );
+  const mean = [0, 0, 0];
+  for (let i = 0; i < data.length; i += 4)
+    for (let k = 0; k < 3; k++) mean[k] += data[i + k];
+  return mean.map((sum) => sum / (data.length / 4));
+};
+
 const WGS84 = ellipsoid.WGS84;
 
 class ContractError extends Error {
@@ -505,11 +539,7 @@ export function createContractSuite(
           // count and centroid.
           // A colour as drawn: within 40 of the asked one on every channel
           // (both engines draw overlays after tone mapping, unlit).
-          const like = (colour, data, i) =>
-            colour.every(
-              (channel, k) =>
-                k > 2 || Math.abs(data[i + k] - channel * 255) <= 40,
-            );
+
           const find = (screen, colour) => {
             const half = 32;
             const x0 = Math.round(screen.x) - half;
@@ -3002,17 +3032,7 @@ function groundChecks(
     [lon + half, lat + half],
     [lon - half, lat + half],
   ];
-  const screenOf = (lon, lat) =>
-    engine.projector.worldToWindow(cartesian3.fromDegrees(lon, lat));
-  const throwsType = (run, label) => {
-    let error = null;
-    try {
-      run();
-    } catch (caught) {
-      error = caught;
-    }
-    ensure(error instanceof TypeError, `${label} did not throw a TypeError`);
-  };
+
   return [
     [
       'projector: a lowered horizon ellipsoid keeps below-sea-level ground visible',
@@ -3075,7 +3095,7 @@ function groundChecks(
           await until(() => set.ready(), 'reveal ground ready');
           await settle();
           const magenta = (lon) => {
-            const { x, y } = screenOf(lon, 10);
+            const { x, y } = screenOf(engine, lon, 10);
             const p = readRegion(Math.round(x), Math.round(y), 1, 1);
             return Math.min(p[0], p[2]) - p[1];
           };
@@ -3414,7 +3434,8 @@ function groundChecks(
             'the pickable fills drawn',
           );
           await settle(3);
-          const pickAt = (lon, lat) => engine.picker.pick(screenOf(lon, lat));
+          const pickAt = (lon, lat) =>
+            engine.picker.pick(screenOf(engine, lon, lat));
           const onCell = pickAt(19.5, 10.2);
           ensure(
             onCell?.id === 'cell-a' && onCell.owner === 'contract-ground-cells',
@@ -3451,7 +3472,7 @@ function groundChecks(
           await settle(3);
           if (!pointer) return;
           const before = clicks.length;
-          const at = screenOf(19.5, 10.2);
+          const at = screenOf(engine, 19.5, 10.2);
           await pointer.click(at.x, at.y);
           await until(() => clicks.length > before, 'a click payload');
           const clicked = clicks.at(-1);
@@ -3474,14 +3495,10 @@ function groundChecks(
         await nadirView(1e6);
         const MAGENTA = [1, 0, 1, 1];
         const GREEN = [0, 1, 0, 1];
-        const like = (colour, data, i) =>
-          colour.every(
-            (channel, k) =>
-              k > 2 || Math.abs(data[i + k] - channel * 255) <= 40,
-          );
+
         // Pixels of a colour in a box centred on a ground point.
         const countAt = (lon, lat, colour, half = 12) => {
-          const { x, y } = screenOf(lon, lat);
+          const { x, y } = screenOf(engine, lon, lat);
           const data = readRegion(
             Math.round(x) - half,
             Math.round(y) - half,
@@ -3554,7 +3571,7 @@ function groundChecks(
             `the disc's outline is ${countAt(rimLon, 10, MAGENTA, 3).toFixed(2)} magenta at the rim`,
           );
           // A 6 px corridor: a column of pixels across it.
-          const mid = screenOf(20, 8.5);
+          const mid = screenOf(engine, 20, 8.5);
           const column = readRegion(
             Math.round(mid.x),
             Math.round(mid.y) - 10,
@@ -3753,7 +3770,11 @@ function groundChecks(
           const along = (lat, samples = 120) => {
             const out = [];
             for (let k = 0; k < samples; k++) {
-              const at = screenOf(19.2 + (1.6 * k) / (samples - 1), lat);
+              const at = screenOf(
+                engine,
+                19.2 + (1.6 * k) / (samples - 1),
+                lat,
+              );
               out.push([
                 ...readRegion(Math.round(at.x), Math.round(at.y), 1, 1),
               ]);
@@ -3763,7 +3784,7 @@ function groundChecks(
           const magenta = ([r, g, b]) => r > 200 && b > 200 && g < 60;
           // The glow: white at its centre line, green toward its edges.
           {
-            const centre = screenOf(20, 9);
+            const centre = screenOf(engine, 20, 9);
             const column = readRegion(
               Math.round(centre.x),
               Math.round(centre.y) - 12,
@@ -3790,7 +3811,7 @@ function groundChecks(
             let trough = 0;
             const started = performance.now();
             while (performance.now() - started < 1600) {
-              const centre = screenOf(20, 10);
+              const centre = screenOf(engine, 20, 10);
               const pixel = readRegion(
                 Math.round(centre.x),
                 Math.round(centre.y),
@@ -3892,6 +3913,7 @@ function groundChecks(
           const metresPerDegree = 111319.49 * Math.cos((10 * Math.PI) / 180);
           const at = (radius, angle) => {
             const { x, y } = screenOf(
+              engine,
               20 + (radius * Math.cos(angle)) / metresPerDegree,
               10 + (radius * Math.sin(angle)) / 110574,
             );
@@ -3951,15 +3973,7 @@ function groundChecks(
 // engine.imagery: raster layers on the ground (every engine).
 function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
   const { imagery } = engine;
-  const throwsType = (run, label) => {
-    let error = null;
-    try {
-      run();
-    } catch (caught) {
-      error = caught;
-    }
-    ensure(error instanceof TypeError, `${label} did not throw a TypeError`);
-  };
+
   // A flat colour as RGBA bytes (no canvas needed), size × size texels.
   const flat = (rgba, size = 8) => {
     const data = new Uint8Array(size * size * 4);
@@ -4132,35 +4146,16 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
       async () => {
         if (!readRegion) return;
         await nadirView(1e6);
-        const MAGENTA = [255, 0, 255];
-        const GREEN = [0, 255, 0];
-        const screenOf = (lon, lat) =>
-          engine.projector.worldToWindow(cartesian3.fromDegrees(lon, lat));
         // The mean colour in a box centred on a ground point.
-        const meanAt = (lon, lat, half = 6) => {
-          const { x, y } = screenOf(lon, lat);
-          const data = readRegion(
-            Math.round(x) - half,
-            Math.round(y) - half,
-            2 * half,
-            2 * half,
-          );
-          const mean = [0, 0, 0];
-          for (let i = 0; i < data.length; i += 4)
-            for (let k = 0; k < 3; k++) mean[k] += data[i + k];
-          return mean.map((sum) => sum / (data.length / 4));
-        };
-        const near = (actual, expected, tolerance = 40) =>
-          actual.every(
-            (value, k) => Math.abs(value - expected[k]) <= tolerance,
-          );
-        const show = (colour) =>
-          colour.map((value) => value.toFixed(0)).join(',');
+
         // The map's own tiles loaded: what lies under the layers holds still.
         await until(() => engine.surface.tilesLoaded(), 'the map tiles loaded');
         await settle(4);
-        const base = meanAt(19.5, 10);
-        ensure(!near(base, MAGENTA), 'the globe is already magenta there');
+        const base = meanAt(engine, readRegion, 19.5, 10, 6);
+        ensure(
+          !nearColour(base, MAGENTA),
+          'the globe is already magenta there',
+        );
         const magenta = imagery.createLayer({
           id: 'contract-paint-magenta',
           source: {
@@ -4173,33 +4168,38 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
         try {
           await until(() => magenta.ready(), 'the magenta layer ready');
           await until(
-            () => near(meanAt(19.5, 10), MAGENTA),
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 6), MAGENTA),
             'the magenta layer drawn',
           );
           ensure(
-            near(meanAt(21, 10), base, 60) || !near(meanAt(21, 10), MAGENTA),
+            nearColour(meanAt(engine, readRegion, 21, 10, 6), base, 60) ||
+              !nearColour(meanAt(engine, readRegion, 21, 10, 6), MAGENTA),
             'the layer spills outside its rectangle',
           );
           // Alpha: at 0 the globe under it, at 0.5 half way to magenta.
           magenta.setAlpha(0);
-          await until(() => !near(meanAt(19.5, 10), MAGENTA), 'alpha 0 drawn');
+          await until(
+            () => !nearColour(meanAt(engine, readRegion, 19.5, 10, 6), MAGENTA),
+            'alpha 0 drawn',
+          );
           await settle(2);
-          const below = meanAt(19.5, 10);
+          const below = meanAt(engine, readRegion, 19.5, 10, 6);
           magenta.setAlpha(0.5);
           const half = below.map((value, k) => (value + MAGENTA[k]) / 2);
           await until(
-            () => near(meanAt(19.5, 10), half, 30),
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 6), half, 30),
             `alpha 0.5 drawn (${show(half)} wanted)`,
           );
           magenta.setAlpha(1);
           magenta.show(false);
           await until(
-            () => near(meanAt(19.5, 10), below, 30),
+            () =>
+              nearColour(meanAt(engine, readRegion, 19.5, 10, 6), below, 30),
             'the hidden layer gone',
           );
           magenta.show(true);
           await until(
-            () => near(meanAt(19.5, 10), MAGENTA),
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 6), MAGENTA),
             'the layer shown again',
           );
           // Order: a higher order draws on top, a lower one under it.
@@ -4224,12 +4224,12 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
           });
           layers.push(lower);
           await until(
-            () => near(meanAt(19.5, 10), GREEN),
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 6), GREEN),
             'the higher order on top',
           );
           green.destroy();
           await until(
-            () => near(meanAt(19.5, 10), MAGENTA),
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 6), MAGENTA),
             'the destroyed layer gone',
           );
           // A new source in place: the same layer, another colour.
@@ -4239,7 +4239,7 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
             rectangle: box,
           });
           await until(
-            () => near(meanAt(19.5, 10), GREEN),
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 6), GREEN),
             'the new source drawn',
           );
           magenta.setSource({
@@ -4250,11 +4250,11 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
           lower.destroy();
           // Split: a left layer draws only left of the split position.
           const width = engine.host.size().width;
-          const middle = screenOf(19.5, 10).x;
+          const middle = screenOf(engine, 19.5, 10).x;
           imagery.setSplitPosition(middle / width);
           magenta.setSplit('left');
-          const left = screenOf(19.25, 10);
-          const right = screenOf(19.75, 10);
+          const left = screenOf(engine, 19.25, 10);
+          const right = screenOf(engine, 19.75, 10);
           const at = ({ x, y }) => {
             const data = readRegion(Math.round(x) - 3, Math.round(y) - 3, 6, 6);
             const mean = [0, 0, 0];
@@ -4263,17 +4263,20 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
             return mean;
           };
           await until(
-            () => near(at(left), MAGENTA) && !near(at(right), MAGENTA),
+            () =>
+              nearColour(at(left), MAGENTA) && !nearColour(at(right), MAGENTA),
             `the left split drawn (left ${show(at(left))}, right ${show(at(right))})`,
           );
           magenta.setSplit('right');
           await until(
-            () => !near(at(left), MAGENTA) && near(at(right), MAGENTA),
+            () =>
+              !nearColour(at(left), MAGENTA) && nearColour(at(right), MAGENTA),
             'the right split drawn',
           );
           magenta.setSplit('none');
           await until(
-            () => near(at(left), MAGENTA) && near(at(right), MAGENTA),
+            () =>
+              nearColour(at(left), MAGENTA) && nearColour(at(right), MAGENTA),
             'the unsplit layer drawn',
           );
         } finally {
@@ -4283,7 +4286,8 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
         await until(
           () =>
             [MAGENTA, GREEN, [0, 255, 255]].every(
-              (colour) => !near(meanAt(19.5, 10), colour),
+              (colour) =>
+                !nearColour(meanAt(engine, readRegion, 19.5, 10, 6), colour),
             ),
           'every layer gone',
         );
@@ -4479,29 +4483,7 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
       async () => {
         if (!readRegion) return;
         await nadirView(1e6);
-        const MAGENTA = [255, 0, 255];
-        const GREEN = [0, 255, 0];
-        const screenOf = (lon, lat) =>
-          engine.projector.worldToWindow(cartesian3.fromDegrees(lon, lat));
-        const meanAt = (lon, lat, half = 5) => {
-          const { x, y } = screenOf(lon, lat);
-          const data = readRegion(
-            Math.round(x) - half,
-            Math.round(y) - half,
-            2 * half,
-            2 * half,
-          );
-          const mean = [0, 0, 0];
-          for (let i = 0; i < data.length; i += 4)
-            for (let k = 0; k < 3; k++) mean[k] += data[i + k];
-          return mean.map((sum) => sum / (data.length / 4));
-        };
-        const near = (actual, expected, tolerance = 40) =>
-          actual.every(
-            (value, k) => Math.abs(value - expected[k]) <= tolerance,
-          );
-        const show = (colour) =>
-          colour.map((value) => value.toFixed(0)).join(',');
+
         await until(() => engine.surface.tilesLoaded(), 'the map tiles loaded');
         await settle(4);
         // Every tile, whatever the app serves, painted magenta by the
@@ -4536,11 +4518,11 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
           });
           layers.push(tiles);
           await until(
-            () => near(meanAt(19.5, 10), MAGENTA),
-            `the transformed tiles drawn (${show(meanAt(19.5, 10))})`,
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 5), MAGENTA),
+            `the transformed tiles drawn (${show(meanAt(engine, readRegion, 19.5, 10, 5))})`,
           );
           ensure(
-            !near(meanAt(21, 10), MAGENTA),
+            !nearColour(meanAt(engine, readRegion, 21, 10, 5), MAGENTA),
             'the tiles spill outside their rectangle',
           );
           // Staged: green replaces the magenta tiles once it is drawn.
@@ -4553,8 +4535,8 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
           await until(() => swapped !== undefined, 'the staged image');
           ensure(swapped === true, 'the staged image failed');
           await until(
-            () => near(meanAt(19.5, 10), GREEN),
-            `the staged image drawn (${show(meanAt(19.5, 10))})`,
+            () => nearColour(meanAt(engine, readRegion, 19.5, 10, 5), GREEN),
+            `the staged image drawn (${show(meanAt(engine, readRegion, 19.5, 10, 5))})`,
           );
           tiles.destroy();
           // Raised 6 km: drawn over the box (a little parallax at 1000 km),
@@ -4570,8 +4552,8 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
           });
           layers.push(raisedLayer);
           await until(
-            () => near(meanAt(19.6, 10), MAGENTA),
-            `the raised layer drawn (${show(meanAt(19.6, 10))})`,
+            () => nearColour(meanAt(engine, readRegion, 19.6, 10, 5), MAGENTA),
+            `the raised layer drawn (${show(meanAt(engine, readRegion, 19.6, 10, 5))})`,
           );
           raisedLayer.setDetail({
             image: flat([...GREEN, 255]),
@@ -4579,13 +4561,13 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
           });
           await until(
             () =>
-              near(meanAt(19.25, 10), GREEN) &&
-              near(meanAt(19.75, 10), MAGENTA),
-            `the detail drawn (west ${show(meanAt(19.25, 10))}, east ${show(meanAt(19.75, 10))})`,
+              nearColour(meanAt(engine, readRegion, 19.25, 10, 5), GREEN) &&
+              nearColour(meanAt(engine, readRegion, 19.75, 10, 5), MAGENTA),
+            `the detail drawn (west ${show(meanAt(engine, readRegion, 19.25, 10, 5))}, east ${show(meanAt(engine, readRegion, 19.75, 10, 5))})`,
           );
           raisedLayer.setDetail(null);
           await until(
-            () => near(meanAt(19.25, 10), MAGENTA),
+            () => nearColour(meanAt(engine, readRegion, 19.25, 10, 5), MAGENTA),
             'the detail cleared',
           );
         } finally {
@@ -4593,7 +4575,8 @@ function imageryChecks(engine, { settle, until, nadirView, readRegion }) {
         }
         await until(
           () =>
-            !near(meanAt(19.5, 10), MAGENTA) && !near(meanAt(19.5, 10), GREEN),
+            !nearColour(meanAt(engine, readRegion, 19.5, 10, 5), MAGENTA) &&
+            !nearColour(meanAt(engine, readRegion, 19.5, 10, 5), GREEN),
           'every layer gone',
         );
       },

@@ -1,16 +1,12 @@
-// The OSM Places points on the engine contract, on the fake engine and on
-// the Cesium engine (real Cesium point collections over a stub scene): the
-// disc's size, outline, colour and close-range depth test, its height on the
-// sampled surface, what a pick returns, and the points' life across
-// toggles, a globe switch and teardown.
+// Layer display behavior on the fake engine.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+
 import * as geo from '../../../geo/index.js';
 import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
-import { createCesiumMoversEngine } from '../../../testSupport/cesiumMoversEngine.mjs';
-import { createOsmPlacesLayer, OSM_PLACE_COLOR } from '../index.js';
+
+import { createOsmPlacesLayer } from '../index.js';
 import { createOsmPlacesDisplay } from './display.js';
 
 const places = [
@@ -31,22 +27,7 @@ function fakeHarness() {
   };
 }
 
-function cesiumHarness() {
-  const { engine, viewer, primitive } = createCesiumMoversEngine();
-  return {
-    name: 'the Cesium engine',
-    cesium: true,
-    engine,
-    primitive,
-    surface(height) {
-      viewer.scene.sampleHeightSupported = true;
-      viewer.scene.sampleHeight = () => height;
-    },
-    destroy: () => engine.destroy(),
-  };
-}
-
-const HARNESSES = [fakeHarness, cesiumHarness];
+const HARNESSES = [fakeHarness];
 
 function layerOn(engine) {
   const overlay = new Map();
@@ -76,38 +57,17 @@ for (const makeHarness of HARNESSES) {
       display.setVisible(true);
       display.replace(places);
       assert.equal(count(h.engine), 2);
-      if (h.cesium) {
-        const collection = h.primitive('osm-places');
-        assert.ok(collection instanceof Cesium.PointPrimitiveCollection);
-        const point = collection.get(0);
-        assert.equal(point.pixelSize, 9);
-        assert.equal(point.outlineWidth, 2);
-        assert.ok(
-          point.outlineColor.equalsEpsilon(
-            Cesium.Color.BLACK.withAlpha(0.8),
-            1e-6,
-          ),
-        );
-        assert.ok(
-          point.color.equalsEpsilon(
-            Cesium.Color.fromCssColorString(OSM_PLACE_COLOR),
-            1e-6,
-          ),
-        );
-        assert.equal(point.disableDepthTestDistance, 2500);
-        assert.equal(point.id, 'osm-place:node/1', 'a pick names the place');
-      } else {
-        const set = h.engine.fake.moverSet('osm-places');
-        assert.equal(set.options.kind, 'point');
-        assert.equal(set.options.point.sizePx, 9);
-        assert.equal(set.options.point.outlinePx, 2);
-        assert.deepEqual(set.options.point.outlineColor, [0, 0, 0, 0.8]);
-        assert.deepEqual(set.options.depthTest, { disableWithinM: 2500 });
-        assert.equal(set.options.pickable, true);
-        assert.ok(set.options.order < 0, 'under the moving contacts');
-        assert.equal(set.store.pickIds[1], 'osm-place:node/2');
-        assert.ok(Math.abs(set.store.colors[0] - 0x7f / 255) < 1e-6);
-      }
+
+      const set = h.engine.fake.moverSet('osm-places');
+      assert.equal(set.options.kind, 'point');
+      assert.equal(set.options.point.sizePx, 9);
+      assert.equal(set.options.point.outlinePx, 2);
+      assert.deepEqual(set.options.point.outlineColor, [0, 0, 0, 0.8]);
+      assert.deepEqual(set.options.depthTest, { disableWithinM: 2500 });
+      assert.equal(set.options.pickable, true);
+      assert.ok(set.options.order < 0, 'under the moving contacts');
+      assert.equal(set.store.pickIds[1], 'osm-place:node/2');
+      assert.ok(Math.abs(set.store.colors[0] - 0x7f / 255) < 1e-6);
     } finally {
       display.destroy();
       h.destroy();
@@ -119,12 +79,10 @@ for (const makeHarness of HARNESSES) {
     const h = makeHarness();
     const display = createOsmPlacesDisplay(h.engine);
     const position = () =>
-      h.cesium
-        ? h.primitive('osm-places').get(0).position
-        : (() => {
-            const { positions } = h.engine.fake.moverSet('osm-places').store;
-            return { x: positions[0], y: positions[1], z: positions[2] };
-          })();
+      (() => {
+        const { positions } = h.engine.fake.moverSet('osm-places').store;
+        return { x: positions[0], y: positions[1], z: positions[2] };
+      })();
     try {
       h.surface(undefined);
       display.setVisible(true);

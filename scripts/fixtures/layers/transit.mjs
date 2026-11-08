@@ -6,7 +6,7 @@ export function transitSnapshot(step = 8) {
     fetchedAt,
     vehicles: [
       ...Array.from({ length: 12 }, (_, i) => ({
-        id: `w2-${i}`,
+        id: `fixture-${i}`,
         routeId: routes[i % 6],
         tripId: `trip-${i}`,
         lat:
