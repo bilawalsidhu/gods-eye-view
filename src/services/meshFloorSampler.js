@@ -62,7 +62,8 @@ export function createMeshFloorSampler({
 
   /**
    * True when a VISIBLE 3D tileset in the scene reports its streaming queue
-   * drained (tilesLoaded) — the mirror of cctv.js's projectionTilesReady.
+   * drained (tilesLoaded) — as CCTV's projectionTilesReady once did (it now
+   * asks the globe port whether its drawn photoreal tiles have settled).
    * Walks top-level primitives only (a handful; once per poll).
    * @param {Cesium.Scene} scene
    * @returns {boolean}

@@ -60,6 +60,8 @@ const GLOBE_CAPABILITIES = [
 export function cesiumCapabilities(scene, only) {
   const all = [
     'models',
+    'quads',
+    'meshes',
     'followFrame',
     ...GPU_ICON_CAPABILITIES,
     'styles',

@@ -37,6 +37,8 @@ import { provideUnboundDraw } from '../rendererOf.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 import { createModelSets } from './drawModels.js';
+import { createMeshSets } from './drawMeshes.js';
+import { createQuadSets } from './drawQuads.js';
 
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {
@@ -395,7 +397,9 @@ export function createCesiumDraw({
         if (
           patchLines(record, list) ||
           patchShapes(record, list) ||
-          (kind === 'models' && modelSets.upsert(record, list))
+          (kind === 'models' && modelSets.upsert(record, list)) ||
+          (kind === 'quads' && quadSets.upsert(record, list)) ||
+          (kind === 'meshes' && meshSets.upsert(record, list))
         ) {
           for (const item of list) items.set(item.id, item);
           if (kind === 'lines') noteFlows(record);
@@ -449,7 +453,10 @@ export function createCesiumDraw({
         if (
           (kind !== 'models' && spec.clampTo !== clampTo) ||
           ((kind === 'points' || kind === 'icons') && spec.blend !== blend) ||
-          ((kind === 'shapes' || kind === 'lines') &&
+          ((kind === 'shapes' ||
+            kind === 'lines' ||
+            kind === 'quads' ||
+            kind === 'meshes') &&
             (spec.pickable !== false) !== pickable)
         )
           rebuild();
@@ -2994,6 +3001,24 @@ export function createCesiumDraw({
     requestRender,
   });
   const buildModels = (record) => modelSets.build(record);
+  const lineWidth = (px) =>
+    typeof scene.clampLineWidth === 'function'
+      ? scene.clampLineWidth(px)
+      : Math.min(px, scene.maximumAliasedLineWidth ?? 1);
+  const quadSets = createQuadSets({
+    toColor,
+    toImage,
+    pickId,
+    replaceHost,
+    lineWidth,
+    requestRender,
+  });
+  const meshSets = createMeshSets({
+    toColor,
+    pickId,
+    replaceHost,
+    requestRender,
+  });
 
   /** The 3D tilesets in the scene, shown or not. */
   function tilesets() {
@@ -3032,6 +3057,10 @@ export function createCesiumDraw({
     lines: (spec) => makeSet('lines', { ...spec }, buildLines),
     shapes: (spec) => makeSet('shapes', { ...spec }, buildShapes),
     models: (spec) => makeSet('models', { ...spec }, buildModels),
+    quads: (spec) =>
+      makeSet('quads', { ...spec }, (record) => quadSets.build(record)),
+    meshes: (spec) =>
+      makeSet('meshes', { ...spec }, (record) => meshSets.build(record)),
     clampState,
     on(event, cb) {
       if (event !== 'clampState') return () => {};
@@ -3075,6 +3104,7 @@ export function createCesiumDraw({
       cullHorizon();
       runFlows();
       modelSets.beforeRender(sets.values());
+      quadSets.beforeRender(sets.values());
     },
     /** Each frame, after it drew: clamp state, and ground swaps. */
     afterRender() {
@@ -3091,9 +3121,11 @@ export function createCesiumDraw({
           }
       // Rows moving on a live clock, and flowing lines, draw on in the
       // frames that follow.
+      const playing = quadSets.afterRender(sets.values());
       if (
         [...sets.values()].some((record) => record.gpu?.animating()) ||
-        flowing()
+        flowing() ||
+        playing
       )
         requestRender();
     },

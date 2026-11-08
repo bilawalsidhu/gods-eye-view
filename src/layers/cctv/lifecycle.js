@@ -22,7 +22,7 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
+  const { registerSpriteSet, restoreSpriteOrder } = services.sprites;
   const { activateCctvCameraFromWorldClick } = services.activation;
   const { resolvePickId, registerPickOwner, unregisterPickOwner } =
     services.picking;
@@ -157,6 +157,9 @@ export function createLifecycle({
     // Idempotent — also covers a re-init without a prior destroy().
     parts.cards.teardownAmbientCards();
     parts.projection.clearProjectionOverlay();
+    // An activation probe still to answer lands on none of these records.
+    for (const record of layerState._records || [])
+      if (record) record.probeToken = (record.probeToken || 0) + 1;
     layerState._records = [];
     layerState._recordById = new Map();
     layerState._viewRecords = [];
@@ -173,9 +176,6 @@ export function createLifecycle({
     layerState._lastError = null;
     layerState._lastFocusStyleAt = 0;
     layerState._activeFocusStyleCount = 0;
-    // FIX ①/③: the discovered tileset handle is scene-scoped — drop it so a fresh
-    // init re-discovers against the current scene primitives.
-    layerState._activeTileset = null;
     // Task 5: the applied-regime tracker is record-set-scoped — a fresh init
     // recomputes it against the then-current scene.
     layerState._lastAppliedRegime = null;
@@ -205,10 +205,10 @@ export function createLifecycle({
       layerState._lastViewContext = '';
       layerState._calibrationById = parts.calibration.loadCalibrationStore();
 
-      registerSpriteCollection(
-        'cctv',
-        parts.rendering.createCameraIcons(layerState._viewer),
-      );
+      // A host without the sprite order still draws the icons, in the
+      // order they were added.
+      const iconSetId = parts.rendering.createCameraIcons(layerState._viewer);
+      registerSpriteSet?.('cctv', iconSetId);
 
       const sources = await parts.catalog.loadCameraSources();
       const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
@@ -317,7 +317,7 @@ export function createLifecycle({
           viewshedColors: viewshedColors(
             cameraHue(hueIndexById.get(camera.id) ?? 0),
           ),
-          viewshedPrimitive: null,
+          viewshedVolume: null,
           viewshedActiveTint: false,
         };
         layerState._records.push(record);
@@ -396,7 +396,9 @@ export function createLifecycle({
         (event) => {
           if (!layerState._enabled) return;
           const picked = event.pick;
-          const cameraId = parts.selection.extractPickedCameraId(picked);
+          const cameraId = parts.selection.extractPickedCameraId(
+            event.drawHit ?? null,
+          );
           if (cameraId) {
             activateCctvCameraFromWorldClick(
               cameraId,
@@ -582,6 +584,7 @@ export function createLifecycle({
       parts.cards.teardownAmbientCards();
       parts.geometry.destroyCoverageEntities();
       parts.rendering.destroyCameraIcons();
+      parts.drawSets.dispose();
       clearRuntimeState();
       layerState._viewer = null;
       layerState._enabled = false;

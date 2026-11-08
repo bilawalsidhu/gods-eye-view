@@ -86,6 +86,9 @@ const DRAW_FROM_CALLER = new Set([
   './layers/street-level/panoramax',
   './layers/air-quality',
   './layers/directions',
+  // Its icons, wireframes, volumes, plane and gizmo draw through `drawOf`;
+  // it picks, projects and reads the eye and the globe through the ports.
+  './layers/cctv',
   // Its data packs draw through `drawOf`; its flights ask `cameraOf`, which
   // throws until then too.
   './scenes',
@@ -116,6 +119,9 @@ const CAMERA_FROM_CALLER = new Set([
   './ui/navigation',
   './voice/commands',
   './voice/controller',
+  // It loaded the camera factory only through the CCTV layer it took a
+  // constant from.
+  './voice/actions',
   './voice/realtime-session',
 ]);
 

@@ -24,15 +24,16 @@ test('capabilities follow what the scene supports', () => {
     'imageHooks',
   ];
   const globe = { show: true };
-  assert.deepEqual(cesiumCapabilities({}), ['models', ...effects]);
+  const draw = ['models', 'quads', 'meshes'];
+  assert.deepEqual(cesiumCapabilities({}), [...draw, ...effects]);
   // A scene with a globe reads its visibility back.
   assert.deepEqual(cesiumCapabilities({ globe }), [
-    'models',
+    ...draw,
     ...effects,
     'globeVisibility',
   ]);
   assert.deepEqual(cesiumCapabilities({ pickPositionSupported: true }), [
-    'models',
+    ...draw,
     ...effects,
     'pickPosition',
   ]);
@@ -43,7 +44,7 @@ test('capabilities follow what the scene supports', () => {
       sampleHeightSupported: true,
     }),
     [
-      'models',
+      ...draw,
       ...effects,
       'globeVisibility',
       'pickPosition',

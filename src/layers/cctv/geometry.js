@@ -314,30 +314,10 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     record.position = positions.mount;
     record.camera.absoluteHeightM = geometry.mount.alt;
     parts.rendering.moveCameraIcon(record);
+    record.groundAltM = groundAltM;
     if (record.coverageEntities?.length >= 5) {
-      record.coverageEntities[0].polyline.positions = [
-        positions.mount,
-        positions.tl,
-      ];
-      record.coverageEntities[1].polyline.positions = [
-        positions.mount,
-        positions.tr,
-      ];
-      record.coverageEntities[2].polyline.positions = [
-        positions.mount,
-        positions.br,
-      ];
-      record.coverageEntities[3].polyline.positions = [
-        positions.mount,
-        positions.bl,
-      ];
-      record.coverageEntities[4].polyline.positions = [
-        positions.tl,
-        positions.tr,
-        positions.br,
-        positions.bl,
-        positions.tl,
-      ];
+      parts.rendering.placeCoverageLines(record.coverageEntities, positions);
+      parts.drawSets.writeLines(record.coverageEntities);
     }
     // A live viewshed volume tracks its wireframe: rebuild from the SAME fresh
     // positions (weld invariant). Only records currently showing a volume pay
@@ -345,7 +325,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     // Tint derives from the live active id, not the cached viewshedActiveTint —
     // during an activation switch this runs BEFORE refreshCoverageStyles, and
     // the cache is stale for exactly that window.
-    if (record.viewshedPrimitive) {
+    if (record.viewshedVolume) {
       parts.rendering.rebuildViewshedVolume(
         record,
         record.camera.id === layerState._activeCameraId,
@@ -420,11 +400,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       record.groundMeshSampleRequestCount =
         (record.groundMeshSampleRequestCount || 0) + 1;
       const eye = parts.model.eyePose();
-      const excludeObjects = [...(record.coverageEntities || [])];
-      if (record.projection?.planeEntity)
-        excludeObjects.push(record.projection.planeEntity);
-      sampleMeshFloorCells(layerState._viewer?.scene, [point], {
-        excludeObjects: excludeObjects.filter(Boolean),
+      // The layer's own lines and plane are not ground; named all the same.
+      sampleMeshFloorCells(layerState._viewer, [point], {
+        sets: parts.drawSets.pickableSetIds(),
         viewerLat: eye ? eye.lat : undefined,
         viewerLon: eye ? eye.lon : undefined,
       });
@@ -526,7 +504,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * §9.1 activation obstruction probe (LOCKED owner decision): on camera
-   * ACTIVATION only, fire ONE scene.pickFromRay along the frustum axis
+   * ACTIVATION only, cast ONE ray against the scene along the frustum axis
    * (mount → cap-center direction). If it hits the tiles closer than the pose
    * range, clamp the plane's effective range just short of the first hit so the
    * "big and dramatic" true end cap never clips into downtown buildings.
@@ -535,28 +513,58 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * never per-frame (the zero-raycast invariant applies to steady state). The
    * per-camera range slider overrides the clamp: a user-set rangeScale skips the
    * probe entirely. Probe failure/miss keeps the unclamped range.
+   *
+   * The cast is made now, against the scene as it is, and answers a
+   * microtask later: the clamp then lands by rewriting the geometry from the
+   * ground it was last written at, before the next frame draws. A newer
+   * activation, or the camera's deactivation, drops an answer still to come.
    * @param {Object} record - Camera record being activated.
+   * @returns {Promise<void>} Settled once the clamp (if any) has landed.
    */
 
   function runActivationObstructionProbe(record) {
     record.probeClampRangeM = null;
-    if (!parts.rendering.canPickFromRay()) return;
+    const token = (record.probeToken = (record.probeToken || 0) + 1);
+    const viewer = layerState._viewer;
+    if (!parts.rendering.canPickFromRay()) return Promise.resolve();
     const camera = record.camera;
     const rangeScale = parts.calibration.normalizeCalibration(
       camera.calibration,
     ).rangeScale;
-    if (Math.abs(rangeScale - 1) > 0.0001) return; // slider overrides the clamp
+    // The slider overrides the clamp.
+    if (Math.abs(rangeScale - 1) > 0.0001) return Promise.resolve();
     try {
       const mountAlt = parts.ground.groundAltFor(record) + camera.mountHeightM;
       const mountPos = fromDegrees(camera.lon, camera.lat, mountAlt);
       const { dir } = frustumFrameEcef(camera, mountPos);
-      // The rendering part sees through everything the layer draws.
-      const hit = parts.rendering.obstructionHit(mountPos, dir);
-      if (!hit?.position) return;
-      const dist = distance(mountPos, hit.position);
-      record.probeClampRangeM = activationProbeClampRange(camera.rangeM, dist);
+      // The cast sees through everything the layer draws.
+      return Promise.resolve(parts.rendering.obstructionHit(mountPos, dir))
+        .then((hit) => {
+          if (!hit || record.probeToken !== token) return;
+          if (record.camera.id !== layerState._activeCameraId) return;
+          // A layer torn down or re-initialised since (another viewer, or
+          // a new record for the same camera) is not the one it asked for.
+          if (layerState._viewer !== viewer) return;
+          if (layerState._recordById?.get(record.camera.id) !== record) return;
+          const dist = distance(mountPos, hit);
+          const clamp = activationProbeClampRange(camera.rangeM, dist);
+          if (!Number.isFinite(clamp)) return;
+          record.probeClampRangeM = clamp;
+          if (Number.isFinite(record.groundAltM))
+            applyFrustumGeometry(record, record.groundAltM);
+          // The activation asked for the ground under the unclamped plane's
+          // footprint; the clamped plane's is asked for now, and the layer
+          // restyles and tells its listeners, as that answer will.
+          void parts.ground.resolveFootprintGround(record);
+          parts.rendering.refreshCoverageStyles();
+          parts.presentation.notifyListeners();
+        })
+        .catch(() => {
+          // probe failure → keep the unclamped range
+        });
     } catch {
       // probe failure → keep the unclamped range
+      return Promise.resolve();
     }
   }
 
@@ -569,6 +577,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function clearProbeClampOnDeactivation(record, rewriteGeometry) {
+    if (record) record.probeToken = (record.probeToken || 0) + 1;
     if (!record || !Number.isFinite(record.probeClampRangeM)) return false;
     record.probeClampRangeM = null;
     rewriteGeometry?.(record);

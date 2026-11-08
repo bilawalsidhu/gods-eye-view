@@ -83,6 +83,8 @@ export function fakeDrawPort() {
     lines: make('lines'),
     shapes: make('shapes'),
     models: make('models'),
+    quads: make('quads'),
+    meshes: make('meshes'),
     /** Fire a models set's `ready` for an item, as a load finishing does. */
     ready(setId, id) {
       for (const cb of [...(sets.get(setId)?.ready ?? [])]) cb(id);

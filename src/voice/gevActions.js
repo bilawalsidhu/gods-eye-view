@@ -48,7 +48,7 @@ import {
   getSelectedEntityContext,
   isContextRecordActive,
 } from '../data/contextStore.js';
-import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
+import { CCTV_FOCUS_RESULT } from '../layers/cctv/policy.js';
 import {
   createAnalystEngine,
   normalizeAnalystSpec,
