@@ -110,9 +110,10 @@ export function update() {
  * every frame until it settles): while one is still running, a refresh
  * reads the loaded tiles instead, and the slow read applies whenever it
  * lands. Once a full-detail read has answered, only full-detail reads
- * change the height: a loaded-tile read stands in only until the first
- * lands, so one coarse probe cannot drop a river bridge to the sea, and a
- * read that sampled nothing keeps the height it had.
+ * change the height; before then a loaded-tile read may find raised water
+ * but never takes a raised height back to the sea. One coarse probe cannot
+ * drop a river bridge to the sea, and a read that sampled nothing keeps
+ * the height it had.
  * @param {{latitude: number, longitude: number}} [at] Where to read the
  *   water: the dead-reckoned position the camera rides.
  * @returns {number} Ellipsoidal metres.
@@ -145,7 +146,12 @@ function vesselSurfaceM(info, nowMs, at = info) {
       read.sampledMs = nowMs;
       if (read.inFlight && !read.landed) {
         const loadedM = loadedWaterlineM(scene, probes, seaM);
-        if (Number.isFinite(loadedM)) read.heightM = loadedM;
+        // Taking a river back to the sea is the full-detail read's to say.
+        const lowers =
+          Number.isFinite(read.heightM) &&
+          read.heightM > seaM &&
+          !(loadedM > seaM);
+        if (Number.isFinite(loadedM) && !lowers) read.heightM = loadedM;
       }
     }
     if (!read.inFlight) readWaterline.call(this, read, scene, probes, seaM);

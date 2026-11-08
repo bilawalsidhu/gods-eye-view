@@ -1530,16 +1530,20 @@ With no aircraft tracked, Cockpit can ride the selected AIS vessel instead.
 Entry needs only the layer of the vessel it rides, Live AIS Vessels, and a
 selected vessel; Contacts and every other layer may be off, before or during
 the bridge (`bridgeEntryAllowed` in `src/contextModePolicy.js`). A Context mode
-change still in flight blocks entry until it settles. `C` enters it, and the
+change still in flight blocks entry until it settles. `C` enters it (when
+the bridge cannot be entered, `C` stays the CCTV shortcut), and the
 entry button reads BRIDGE with a ship icon both in Contacts (`#cockpit-entry`)
 and under the selected vessel's Intel HUD readout in the bottom-right corner
 (`#cockpit-entry-readout`, shown with the HUD on, in its Tactical and Cyber
 layouts). Turning Live AIS Vessels off ends the bridge: the layer then has no
 subject (`getCockpitSubject` returns null). The bridge picture uses AIS alone,
 so no other feed being off makes it partial.
-Voice (`control_cockpit`) and the selection entry transaction stay aircraft-only.
+Voice (`control_cockpit`) and the selection entry transaction stay aircraft-only;
+voice `enter` on a bridge is refused before it touches tracking, with the
+reason to exit the bridge first.
 The vessel layer supplies the subject (`getCockpitSubject`), hides that ship's
-sprite, card and detection bracket while it is held (`setCockpitSubject`), and
+sprite, card, detection bracket and trail while it is held
+(`setCockpitSubject`), and
 ignores scene clicks so open water cannot deselect it. The eye sits on the AIS
 position at a representative bridge height for the AIS type family
 (`src/layers/vessels/cockpitSubject.js`: cargo and tanker 30 m, passenger 25 m,
@@ -1569,8 +1573,9 @@ eight probes 30 m out, the lowest probe taken as the water when it is 2 m to
 the full-detail read replaces it; it repeats every 5 s. Only one full-detail
 read runs at a time: while one is still running, a refresh reads the loaded
 tiles instead, and the slow read applies whenever it lands. Once a
-full-detail read has answered, loaded-tile reads no longer change the height,
-and a read that sampled nothing keeps the height it had. A failed read keeps
+full-detail read has answered, loaded-tile reads no longer change the height;
+before then they may find raised water but never take it back to the sea.
+A read that sampled nothing keeps the height it had. A failed read keeps
 the sea surface.
 
 The HUD keeps its frame, vision styles, briefing, weather and Display/Radio

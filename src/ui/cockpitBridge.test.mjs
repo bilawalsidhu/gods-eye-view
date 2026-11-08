@@ -1350,6 +1350,30 @@ test('a river height stands through reads that sample nothing or one coarse prob
   );
 });
 
+test('before any full read lands, a coarse loaded read keeps the river it found', async (t) => {
+  const clock = manualClock(t, START_MS);
+  const sea = await bridgeAt(t, clock);
+  frames(sea.cockpit, clock, sea.shots, 60);
+  const seaEyeM = eyeHeightM(sea.shots.at(-1));
+  sea.cockpit.exit();
+
+  clock.set(START_MS);
+  const record = { ...RECORD, lastPositionEpoch: START_MS / 1000 };
+  const ship = fixture(t, { record });
+  // The full-detail read is cold and never lands in this test.
+  ship.viewer.scene.sampleHeightMostDetailed = () => new Promise(() => {});
+  ship.viewer.scene.sampleHeight = () => 27;
+  ship.cockpit.enter();
+  await settle();
+  ship.cockpit.update();
+  frames(ship.cockpit, clock, ship.shots, 60);
+  near(eyeHeightM(ship.shots.at(-1)) - seaEyeM, 27, 'on the river', 0.5);
+  // A refresh meets one low probe on coarse tiles.
+  ship.viewer.scene.sampleHeight = () => 0.5;
+  frames(ship.cockpit, clock, ship.shots, 240);
+  near(eyeHeightM(ship.shots.at(-1)) - seaEyeM, 27, 'still on the river', 0.5);
+});
+
 test('a client clock minutes fast does not age the bridge into a stale feed', async (t) => {
   // The feed's newest fix is this ship's; the client clock runs 200 s
   // ahead of the feed and received the refresh just now.
