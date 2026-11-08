@@ -8,7 +8,7 @@
  *
  *   (i)   LIVE — enabling the layer loads the default products (Common
  *         Intelligence Picture and the 30-day kinetic pull) from the live
- *         repository through /api/ghostmaps, one data source per product,
+ *         repository through /api/ghostmaps, one pin set per product,
  *         matching the proxy's catalog commit; the row shows one chip per
  *         catalog product with the defaults active, and the page holds an
  *         open event stream to /api/ghostmaps/events.
@@ -17,12 +17,14 @@
  *         and clicking empty ground clears it.
  *   (iii) PUSH (synthetic) — the event stream is replaced in the page and a
  *         catalog naming a new edition of one product is pushed: only that
- *         product reloads (a new data source replaces the old one, no
- *         duplicates), the other keeps its data source. A catalog without a
+ *         product reloads (a new pin set replaces the old one, no
+ *         duplicates), the other keeps its pin set. A catalog without a
  *         product removes it.
  *   (iv)  CHIPS — clicking an active product chip removes that product,
  *         clicking it again restores it; the choice survives a reload.
- *   (v)   DISABLE — every GhostMaps data source leaves the viewer.
+ *   (v)   DISABLE — every GhostMaps pin set leaves the viewer.
+ *   The checks read pins (billboards) only: a product's lines and fills
+ *   are not counted.
  *   (vi)  VIEWPORT — at a 390x844 phone viewport the open row and its chips
  *         fit the panel width with no horizontal overflow.
  *   (vii) FAR SIDE — pins skip the depth test, so they are horizon-culled:
@@ -76,16 +78,41 @@ async function boot(page) {
   await page.keyboard.press('Escape');
 }
 
-/** GhostMaps data sources on the viewer: name → entity count. */
-function ghostSources(prefix) {
-  const { dataSources } = window.__godsEyeView.viewer;
-  const out = [];
-  for (let i = 0; i < dataSources.length; i++) {
-    const ds = dataSources.get(i);
-    if (ds.name?.startsWith(prefix))
-      out.push({ name: ds.name, count: ds.entities.values.length });
-  }
+/**
+ * The GhostMaps pins drawn, by edition: each product's pins are drawn in a
+ * billboard collection of their own (a data source's, or a draw set's), so
+ * whatever draws them is read the same way. In the page: `layerId:product`
+ * → `{collection, pins: [{show, position}]}`.
+ */
+function ghostPins(prefix) {
+  const out = new Map();
+  const seen = new Set();
+  const visit = (node) => {
+    if (!node || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node._billboards)) {
+      for (const billboard of node._billboards) {
+        const id = String(billboard?.id?.id ?? billboard?.id ?? '');
+        if (!id.startsWith('ghostmaps:')) continue;
+        const name = `${prefix}${id.split(':')[1]}`;
+        if (!out.has(name)) out.set(name, { collection: node, pins: [] });
+        out.get(name).pins.push(billboard);
+      }
+      return;
+    }
+    if (Array.isArray(node._primitives)) node._primitives.forEach(visit);
+    visit(node._billboardCollection);
+  };
+  visit(window.__godsEyeView.viewer.scene.primitives);
   return out;
+}
+
+/** GhostMaps editions drawn: name → pin count. */
+function ghostSources(prefix) {
+  return [...ghostPins(prefix)].map(([name, { pins }]) => ({
+    name,
+    count: pins.length,
+  }));
 }
 
 function paintedOverlayPixels() {
@@ -124,7 +151,9 @@ const stats = (page) =>
     LAYER_ID,
   );
 const sources = (page) =>
-  page.evaluate(`(${ghostSources})(${JSON.stringify(`${LAYER_ID}:`)})`);
+  page.evaluate(
+    `${ghostPins};(${ghostSources})(${JSON.stringify(`${LAYER_ID}:`)})`,
+  );
 
 async function showRow(page) {
   await page.evaluate((id) => {
@@ -175,7 +204,7 @@ async function main() {
     const live = await stats(page);
     const liveSources = await sources(page);
     record(
-      'LIVE: default products load as one data source each',
+      'LIVE: default products load as one pin set each',
       liveSources.length === 2 &&
         liveSources.every((s) => s.count > 0) &&
         live.products.sort().join() === 'cip,kinetic-30d',
@@ -225,14 +254,14 @@ async function main() {
     await page.screenshot({ path: path.join(SHOTS_DIR, 'ghostmaps-live.png') });
 
     // ---- (ii) PICK ----------------------------------------------------------
-    const target = await page.evaluate((id) => {
+    const target = await page.evaluate(`(() => {
+      ${ghostPins};
       const gev = window.__godsEyeView;
-      const ds = [...Array(gev.viewer.dataSources.length).keys()]
-        .map((i) => gev.viewer.dataSources.get(i))
-        .find((item) => item.name === `${id}:cip`);
-      const entity = ds.entities.values.find((e) => e.billboard);
+      const pin = ghostPins(${JSON.stringify(`${LAYER_ID}:`)}).get(
+        ${JSON.stringify(`${LAYER_ID}:cip`)},
+      ).pins[0];
       const carto = gev.viewer.scene.globe.ellipsoid.cartesianToCartographic(
-        entity.position.getValue(gev.viewer.clock.currentTime),
+        pin.position,
       );
       try {
         gev.viewer.camera.cancelFlight();
@@ -248,8 +277,8 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
       gev.viewer.scene.requestRender?.();
-      return entity.id;
-    }, LAYER_ID);
+      return String(pin.id?.id ?? pin.id);
+    })()`);
     await page
       .waitForFunction(
         () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
@@ -300,7 +329,7 @@ async function main() {
       };
     });
     record(
-      'PICK: the centred marker picks as a GhostMaps entity',
+      'PICK: the centred marker picks as a GhostMaps pin',
       probe.ids.some((id) => id.startsWith('ghostmaps:cip:')),
       `${target} → [${probe.ids.slice(0, 3).join(', ')}]`,
     );
@@ -366,7 +395,9 @@ async function main() {
     // be hidden, and pins facing the camera must still show.
     const horizonCounts = (lon, lat) =>
       page.evaluate(
-        async (id, lo, la) => {
+        async (id, lo, la, pinsSource) => {
+          // eslint-disable-next-line no-new-func
+          const ghostPins = new Function(`return (${pinsSource})`)();
           const gev = window.__godsEyeView;
           const d2r = Math.PI / 180;
           try {
@@ -389,12 +420,9 @@ async function main() {
           const norm = (v) => Math.hypot(v.x, v.y, v.z);
           let far = 0;
           let nearShown = 0;
-          for (let i = 0; i < gev.viewer.dataSources.length; i++) {
-            const ds = gev.viewer.dataSources.get(i);
-            if (!ds.name?.startsWith(`${id}:`)) continue;
-            for (const e of ds.entities.values) {
-              if (!e.billboard) continue;
-              const p = e.position.getValue(gev.viewer.clock.currentTime);
+          for (const { pins } of ghostPins(`${id}:`).values()) {
+            for (const e of pins) {
+              const p = e.position;
               // Angle from the camera's nadir to the pin, against the
               // geometric horizon angle; the cull's 1 km margin shows pins up
               // to about 1° past it, so "clearly behind" is beyond 2°.
@@ -412,6 +440,7 @@ async function main() {
         LAYER_ID,
         lon,
         lat,
+        String(ghostPins),
       );
     const fromIndianOcean = await horizonCounts(80, -30);
     record(
@@ -459,7 +488,7 @@ async function main() {
     );
     const without = await sources(page);
     record(
-      'CHIPS: turning a product off removes only its data source',
+      'CHIPS: turning a product off removes only its pins',
       without.length === 1 && without[0].name === `${LAYER_ID}:cip`,
       without.map((s) => s.name).join(', '),
     );
@@ -498,7 +527,7 @@ async function main() {
     );
     await sleep(500);
     record(
-      'DISABLE: every GhostMaps data source leaves the viewer',
+      'DISABLE: every GhostMaps pin leaves the viewer',
       (await sources(page)).length === 0,
     );
     await page.close();
@@ -533,20 +562,23 @@ async function main() {
     await boot(push);
     await enableAndSettle(push);
     const identity = () =>
-      push.evaluate((id) => {
-        const { dataSources } = window.__godsEyeView.viewer;
-        window.__qaIds ||= new WeakMap();
-        window.__qaNext ||= 1;
-        const out = {};
-        for (let i = 0; i < dataSources.length; i++) {
-          const ds = dataSources.get(i);
-          if (!ds.name?.startsWith(`${id}:`)) continue;
-          if (!window.__qaIds.has(ds))
-            window.__qaIds.set(ds, window.__qaNext++);
-          out[ds.name] = window.__qaIds.get(ds);
-        }
-        return out;
-      }, LAYER_ID);
+      push.evaluate(
+        (id, pinsSource) => {
+          // eslint-disable-next-line no-new-func
+          const ghostPins = new Function(`return (${pinsSource})`)();
+          window.__qaIds ||= new WeakMap();
+          window.__qaNext ||= 1;
+          const out = {};
+          for (const [name, { collection }] of ghostPins(`${id}:`)) {
+            if (!window.__qaIds.has(collection))
+              window.__qaIds.set(collection, window.__qaNext++);
+            out[name] = window.__qaIds.get(collection);
+          }
+          return out;
+        },
+        LAYER_ID,
+        String(ghostPins),
+      );
     const first = await identity();
     const pushed = Date.now();
     await push.evaluate(async (id) => {

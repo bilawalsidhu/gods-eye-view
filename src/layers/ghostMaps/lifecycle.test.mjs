@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { createGhostMapsLayer } from './index.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function element(localName, children = [], value = '', attributes = {}) {
   const node = {
@@ -104,17 +104,17 @@ function fixture(t, { beforeFileReturns, onCreateUrl } = {}) {
   });
   t.mock.method(URL, 'revokeObjectURL', (url) => revoked.push(url));
   t.mock.method(console, 'warn', () => {});
-  const mounted = new Set();
-  const viewer = {
-    scene: { requestRender() {} },
-    dataSources: {
-      async add(dataSource) {
-        mounted.add(dataSource);
-        return dataSource;
-      },
-      remove(dataSource) {
-        return mounted.delete(dataSource);
-      },
+  const viewer = {};
+  const { draw, unbind } = bindFakeDraw(viewer);
+  t.after(unbind);
+  // The editions drawn: each draws in sets of its own.
+  const mounted = {
+    get size() {
+      return new Set(
+        [...draw.sets.values()]
+          .filter((set) => !set.disposed)
+          .map((set) => set.spec.id.split(':').slice(0, 3).join(':')),
+      ).size;
     },
   };
   const layer = createGhostMapsLayer({
@@ -132,7 +132,7 @@ function fixture(t, { beforeFileReturns, onCreateUrl } = {}) {
   layer.init(viewer);
   layer.enable();
   t.after(() => layer.destroy());
-  return { layer, viewer, mounted, created, revoked };
+  return { layer, viewer, draw, unbind, mounted, created, revoked };
 }
 
 test('cancelling a file read does not allocate packed-image URLs', async (t) => {
@@ -155,9 +155,9 @@ test('cancellation during parsing releases every packed-image URL', async (t) =>
   assert.equal(mounted.size, 0);
 });
 
-test('entity construction failure releases parsed image URLs', async (t) => {
-  const { layer, viewer, mounted, created, revoked } = fixture(t);
-  t.mock.method(Cesium.EntityCollection.prototype, 'add', () => {
+test('a draw failure releases parsed image URLs', async (t) => {
+  const { layer, viewer, draw, mounted, created, revoked } = fixture(t);
+  t.mock.method(draw, 'icons', () => {
     throw new Error('fixture entity failure');
   });
   await layer.update(viewer);
@@ -167,13 +167,34 @@ test('entity construction failure releases parsed image URLs', async (t) => {
   assert.equal(layer.getStats().error, 'fixture entity failure');
 });
 
+test('a viewer with no renderer bound releases parsed image URLs', async (t) => {
+  const { layer, viewer, unbind, mounted, created, revoked } = fixture(t);
+  unbind();
+  await layer.update(viewer);
+  assert.equal(created.length, 1);
+  assert.deepEqual(revoked, created);
+  assert.equal(mounted.size, 0);
+  assert.ok(layer.getStats().error);
+});
+
 test('successful load keeps icons until the product is disabled', async (t) => {
-  const { layer, viewer, mounted, created, revoked } = fixture(t);
+  const { layer, viewer, draw, mounted, created, revoked } = fixture(t);
   await layer.update(viewer);
   assert.equal(created.length, 1);
   assert.equal(revoked.length, 0);
   assert.equal(mounted.size, 1);
   assert.equal(layer.getStats().count, 1);
+  const pins = [...draw.sets.values()].find(
+    (set) => !set.disposed && set.kind === 'icons',
+  );
+  const [pin] = pins.items.values();
+  assert.equal(pin.id, 'ghostmaps:cip:0:0');
+  assert.equal(pin.image, 'blob:local-0');
+  assert.equal(pin.height, 'clampGround');
+  assert.equal(pins.spec.clampTo, 'both');
+  assert.equal(pin.disableDepthTest, Infinity);
+  assert.equal(pin.scale, 0.7);
+  assert.deepEqual(pin.size, [20, 20], 'unread in Node: the marker size');
   layer.disable();
   assert.deepEqual(revoked, created);
   assert.equal(mounted.size, 0);

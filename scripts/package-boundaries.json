@@ -5946,6 +5946,7 @@
     "exports": ["./layers/ghostmaps"],
     "modules": [
       "src/layers/ghostMaps/index.js",
+      "src/render/color.js",
       "src/geo/index.js",
       "src/geo/julian.js",
       "src/layers/ghostMaps/catalog.js",
