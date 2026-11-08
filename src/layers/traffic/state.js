@@ -17,9 +17,9 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
-  /** @type {object|null} The dots' point collection. */
+  /** @type {object|null} The dots' draw set (points), made at init. */
 
-  layerState._pointCollection = null;
+  layerState._dotSet = null;
 
   /** @type {Array<{point:object, waypoints:Array<{x:number, y:number, z:number}>, segmentDist:number[], numSegments:number, segIdx:number, t:number, mps:number, direction:number, stoppedUntil:number}>} Active animated dots */
 

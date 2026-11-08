@@ -4,7 +4,6 @@ import {
   presetDotRgba,
   presetDotOutline,
 } from '../../data/trafficPresetStyle.js';
-import * as Cesium from 'cesium';
 import {
   SIZE_BY_TYPE,
   STYLED_MIN_BASE_PX,
@@ -14,26 +13,9 @@ import {
 } from './policy.js';
 
 export function createStyle({ state: layerState, services, parts, source }) {
-  // The dots' renderer colours as the point primitives take them, one per
-  // colour, so painting a dot allocates nothing. Keyed by identity: the
-  // colours are frozen, and a preset change makes new ones.
-  const pointColors = new WeakMap();
-
-  /** A renderer colour (`[r, g, b, a]`) as a point primitive colour. */
-  function pointColor(rgba) {
-    let color = pointColors.get(rgba);
-    if (!color) {
-      color = new Cesium.Color(rgba[0], rgba[1], rgba[2], rgba[3]);
-      pointColors.set(rgba, color);
-    }
-    return color;
-  }
-
-  /** The point colour of a dot in `bucket` (null: simulated white). */
+  /** The colour of a dot in `bucket` (null: simulated white). */
   function dotColor(bucket) {
-    return pointColor(
-      bucket ? layerState._activeBucketColors[bucket] : SIM_DOT_COLOR,
-    );
+    return bucket ? layerState._activeBucketColors[bucket] : SIM_DOT_COLOR;
   }
 
   /** Paint a dot's point in its bucket's colour, as a late flow update does. */
@@ -48,12 +30,36 @@ export function createStyle({ state: layerState, services, parts, source }) {
 
   /** Keep a prominent jam dot larger at range. */
   function emphasizeJamDot(dot) {
-    dot.point.scaleByDistance = new Cesium.NearFarScalar(
-      100,
-      1.5,
-      layerState._fadeScaleFar,
-      JAM_DOT_FAR_SCALE,
-    );
+    dot.point.scaleByDistance = Object.freeze({
+      near: 100,
+      nearValue: 1.5,
+      far: layerState._fadeScaleFar,
+      farValue: JAM_DOT_FAR_SCALE,
+    });
+  }
+
+  /**
+   * The preset's dark-halo outline for a coloured dot, as the point item's
+   * members, or null for the shipped no-outline state.
+   * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
+   * @returns {{outlineColor: number[], outlineWidth: number}|null}
+   */
+  function outlineOf(bucket) {
+    const spec =
+      layerState._presetDots === 'on'
+        ? presetDotOutline(layerState._stylePreset, bucket)
+        : null;
+    return spec
+      ? {
+          outlineColor: Object.freeze([
+            spec.rgba[0] / 255,
+            spec.rgba[1] / 255,
+            spec.rgba[2] / 255,
+            spec.rgba[3],
+          ]),
+          outlineWidth: spec.width,
+        }
+      : null;
   }
   /** @returns {boolean} A non-normal preset profile is active and enabled. */
 
@@ -111,26 +117,14 @@ export function createStyle({ state: layerState, services, parts, source }) {
    * it back to the shipped no-outline state). NVG's auto-gain saturates the
    * scene, so brightness alone cannot separate a dot from a bright road —
    * the dark ring restores local contrast through every luma-mapping shader.
-   * @param {Cesium.PointPrimitive} point - The dot primitive.
+   * @param {object} point - The dot's point item.
    * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
    */
 
   function applyOutline(point, bucket) {
-    const spec =
-      layerState._presetDots === 'on'
-        ? presetDotOutline(layerState._stylePreset, bucket)
-        : null;
-    if (spec) {
-      point.outlineColor = new Cesium.Color(
-        spec.rgba[0] / 255,
-        spec.rgba[1] / 255,
-        spec.rgba[2] / 255,
-        spec.rgba[3],
-      );
-      point.outlineWidth = spec.width;
-    } else {
-      point.outlineWidth = 0;
-    }
+    const outline = outlineOf(bucket);
+    if (outline) Object.assign(point, outline);
+    else point.outlineWidth = 0;
   }
 
   /**
@@ -187,6 +181,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
   }
   return {
     dotColor,
+    outlineOf,
     paintDot,
     showDot,
     emphasizeJamDot,

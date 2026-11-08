@@ -257,6 +257,10 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
           return { west: degrees(r.west), south: degrees(r.south), east: degrees(r.east), north: degrees(r.north) };
         },
       },
+      // The dots' draw set: timing reads none of what it draws.
+      draw: {
+        points: () => ({ show: false, upsert() {}, remove() {}, clear() {}, dispose() {} }),
+      },
     });
 
     performance.clearMarks();

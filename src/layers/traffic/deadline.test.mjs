@@ -7,6 +7,7 @@ import { createRetention } from './retention.js';
 import { createControls } from './controls.js';
 import { createState } from './state.js';
 import { bindRenderer } from '../../render/rendererOf.js';
+import { surfaceViewer } from '../../testSupport/fakeSceneSurface.mjs';
 
 const bounds = { west: 0, east: 0.01, south: 0, north: 0.01 };
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
@@ -212,20 +213,15 @@ function flowFixture(source) {
     _enabled: true,
     _roadMode: 'osm',
     _parseRoads: (data) => data.roads,
-    _viewer: {
-      get canvas() {
-        return this.scene?.canvas;
-      },
-      scene: {
-        globe: {
-          show: true,
-          getHeight: () => {
-            calls.samples++;
-            return 100;
-          },
+    _viewer: surfaceViewer({
+      globe: {
+        show: true,
+        getHeight: () => {
+          calls.samples++;
+          return 100;
         },
       },
-    },
+    }),
   });
   const parts = {
     viewport: {

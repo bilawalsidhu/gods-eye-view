@@ -7,9 +7,87 @@ import {
   HEAT_SLOW_COLOR,
   HEAT_LINE_JAM_WIDTH,
   HEAT_JAM_BASE_ALPHA,
+  HEAT_JAM_PULSE_ALPHA,
   HEAT_LINE_SLOW_WIDTH,
   TRAFFIC_TIMING_ENABLED,
 } from './policy.js';
+
+/**
+ * Whether the surface the dots sit on has loaded what is in view: the
+ * globe's tiles while it is shown, otherwise every shown 3D tileset (and
+ * there is one). The globe port's settle states cannot say whether any
+ * tileset is drawn at all, so this reads the scene.
+ * @param {object|undefined} viewer
+ */
+export function surfaceTilesReady(viewer) {
+  const scene = viewer?.scene;
+  if (!scene) return false;
+  if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
+  let found = false;
+  for (let i = 0; i < (scene.primitives?.length || 0); i++) {
+    const primitive = scene.primitives.get(i);
+    if (!primitive.show || typeof primitive.tilesLoaded !== 'boolean') continue;
+    found = true;
+    if (!primitive.tilesLoaded) return false;
+  }
+  return found;
+}
+
+// Stable ids for the objects heights are sampled from (tilesets, terrain).
+const surfaceIds = new WeakMap();
+let nextSurfaceId = 1;
+const surfaceId = (object) => {
+  if (!object || typeof object !== 'object') return 0;
+  if (!surfaceIds.has(object)) surfaceIds.set(object, nextSurfaceId++);
+  return surfaceIds.get(object);
+};
+
+/**
+ * Name what heights are sampled against: the terrain provider when the globe
+ * is shown, otherwise the set of visible 3D tilesets. A map-provider switch
+ * changes it and invalidates every cached height. The renderer contract
+ * names no surface identity, so this reads the scene.
+ * @param {object|undefined} viewer
+ */
+const surfaceKeys = new WeakMap();
+export function trafficSurfaceKey(viewer) {
+  const scene = viewer?.scene;
+  if (!scene) return '';
+  let state = surfaceKeys.get(scene);
+  if (!state) {
+    state = { globe: null, terrain: null, tiles: [], key: '' };
+    surfaceKeys.set(scene, state);
+  }
+  const globe = Boolean(scene.globe?.show);
+  const terrain = globe ? scene.globe.terrainProvider : null;
+  let changed = state.globe !== globe || state.terrain !== terrain;
+  let count = 0;
+  if (!globe) {
+    for (let i = 0; i < (scene.primitives?.length || 0); i++) {
+      const primitive = scene.primitives.get(i);
+      if (!primitive?.show || typeof primitive.tilesLoaded !== 'boolean')
+        continue;
+      if (state.tiles[count] !== primitive) {
+        state.tiles[count] = primitive;
+        changed = true;
+      }
+      count++;
+    }
+  }
+  if (count !== state.tiles.length) {
+    state.tiles.length = count;
+    changed = true;
+  }
+  if (changed) {
+    state.globe = globe;
+    state.terrain = terrain;
+    // Allocate only when the actual map surface changes, never per frame.
+    state.key = globe
+      ? `globe:${surfaceId(terrain)}`
+      : `tiles:${state.tiles.map(surfaceId).join(',')}`;
+  }
+  return state.key;
+}
 
 export function createRendering({
   state: layerState,
@@ -166,6 +244,21 @@ export function createRendering({
     }
   }
 
+  /** Whether jam heat-lines are drawn, which pulse every frame. */
+  const heatPulsing = () => Boolean(layerState._heatJamPrim);
+
+  /**
+   * Throb the jam heat-lines (~1.6 s period): one shared material uniform
+   * for the whole jam batch, no geometry rebuild.
+   * @param {number} now - Epoch ms.
+   */
+  function pulseHeatLines(now) {
+    if (layerState._heatJamPrim?.appearance) {
+      layerState._heatJamPrim.appearance.material.uniforms.color.alpha =
+        HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260);
+    }
+  }
+
   /**
    * Reconcile road populations without respawning retained dots.
    *
@@ -317,6 +410,8 @@ export function createRendering({
     }
   }
   return {
+    heatPulsing,
+    pulseHeatLines,
     visibleRoadsForAltitude,
     removeHeatLines,
     rebuildHeatLines,

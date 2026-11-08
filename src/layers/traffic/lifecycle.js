@@ -1,14 +1,18 @@
 import { observeTrafficSurface } from './surface.js';
-import * as Cesium from 'cesium';
-// Still Cesium for its points and events, so this layer loads the unbound
-// camera factory (with its query port) its other parts reach the renderer
-// through.
+// Still Cesium for its events, so this layer loads the unbound
+// camera factory (with its query port) and globe factory its other parts
+// reach the renderer through.
 import '../../render/cesium/camera.js';
+import '../../render/cesium/globe.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { drawOf } from '../../render/rendererOf.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
 } from '../../data/cameraSensitivity.js';
+
+/** Numbers each layer instance's draw sets apart. */
+let instances = 0;
 
 export function createLifecycle({
   state: layerState,
@@ -20,20 +24,19 @@ export function createLifecycle({
 
   const methods = {
     /**
-     * One-time initialisation. Creates the PointPrimitiveCollection and adds it
-     * to the scene (hidden). The collection is never removed and re-added — only
-     * toggled via `.show` to avoid destroy-on-remove errors.
+     * One-time initialisation. Makes the dots' draw set (hidden); it is
+     * shown and hidden with the layer, and let go on destroy.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     init(viewer) {
       layerState._viewer = viewer;
-      layerState._pointCollection = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
+      layerState._dotSet?.dispose();
+      layerState._dotSet = drawOf(viewer).points({
+        id: `traffic:${++instances}:dots`,
+        blend: 'translucent',
+        show: false,
       });
-      // Add permanently — toggle with .show to avoid destroy-on-remove errors
-      viewer.scene.primitives.add(layerState._pointCollection);
-      layerState._pointCollection.show = false;
       layerState._dots = [];
       layerState._roads = [];
       layerState._count = 0;
@@ -84,11 +87,11 @@ export function createLifecycle({
     enable(viewer) {
       if (layerState._enabled) return;
       layerState._enabled = true;
-      layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
+      layerState._surfaceFrameRemover = observeTrafficSurface(viewer);
       if (layerState._roadMode !== 'tomtom') source.prefetch?.();
       parts.animation.syncRenderDemand();
       layerState._lastAnimTime = 0;
-      layerState._pointCollection.show = true;
+      if (layerState._dotSet) layerState._dotSet.show = true;
 
       layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
         parts.animation.animate,
@@ -187,21 +190,19 @@ export function createLifecycle({
       layerState._arrivalRemover?.();
       layerState._arrivalRemover = null;
       releaseCameraSensitivity(viewer.camera, 'traffic');
-      if (layerState._pointCollection) layerState._pointCollection.show = false;
+      if (layerState._dotSet) layerState._dotSet.show = false;
     },
 
     /**
-     * Permanently tear down the layer. Disables it, removes the point collection
-     * from the scene, and clears the tile cache.
+     * Permanently tear down the layer. Disables it, lets the dots' draw set
+     * go, and clears the tile cache.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     destroy(viewer) {
       this.disable(viewer);
-      if (layerState._pointCollection) {
-        viewer.scene.primitives.remove(layerState._pointCollection);
-        layerState._pointCollection = null;
-      }
+      layerState._dotSet?.dispose();
+      layerState._dotSet = null;
       parts.rendering.removeHeatLines();
       layerState._tileCache.clear();
       resetFlowTileCache();

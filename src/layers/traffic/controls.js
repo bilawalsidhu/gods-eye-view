@@ -208,7 +208,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {Object}  [options]
      * @param {number}  [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number}  [options.seed]     - Integer seed to offset the sampling start.
-     * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
+     * @returns {Array<{position:{x:number, y:number, z:number}, id:string, type:string}>}
      */
     getDetectableObjects(options = {}) {
       if (!layerState._enabled || layerState._dots.length === 0) return [];
@@ -222,7 +222,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
       const result = [];
       for (let i = start; i < layerState._dots.length; i += stride) {
-        const pos = layerState._dots[i].point.position;
+        const pos = layerState._dots[i].point.pos;
         if (!pos) continue;
         const entry = {
           position: pos,

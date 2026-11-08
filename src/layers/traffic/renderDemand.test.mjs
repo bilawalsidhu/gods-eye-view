@@ -16,6 +16,7 @@ test('traffic render demand follows animated population and jam lines across emp
     parts: {
       retention: { clear() {} },
       rendering: {
+        heatPulsing: () => Boolean(state._heatJamPrim),
         removeHeatLines() {
           state._heatJamPrim = null;
         },

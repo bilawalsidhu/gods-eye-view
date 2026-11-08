@@ -273,10 +273,10 @@ export function createIngestion({
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
     // A miss is the local mesh still loading.
     if (!Number.isFinite(estimated))
-      estimated = viewerRoadSurface(layerState._viewer).loadedHeight(
-        { lon: centerLon, lat: centerLat },
-        [layerState._pointCollection],
-      );
+      estimated = viewerRoadSurface(layerState._viewer).loadedHeight({
+        lon: centerLon,
+        lat: centerLat,
+      });
     if (Number.isFinite(estimated) && Math.abs(estimated) <= 9000)
       layerState._viewHeightEstimate = estimated;
 

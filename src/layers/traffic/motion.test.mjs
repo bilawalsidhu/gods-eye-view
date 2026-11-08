@@ -7,6 +7,8 @@ import { createModel } from './model.js';
 import { createAnimation } from './animation.js';
 import { DOT_HEIGHT_OFFSET } from './policy.js';
 import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { surfaceViewer } from '../../testSupport/fakeSceneSurface.mjs';
 import '../../render/cesium/camera.js';
 import {
   createRetention,
@@ -31,7 +33,7 @@ function setup(t) {
   const state = createState({ services: {} });
   state._enabled = true;
   state._liveMode = true;
-  state._pointCollection = new C.PointPrimitiveCollection();
+  state._dotSet = fakeDrawPort().points({ id: 'traffic:test:dots' });
   state._viewer = {
     scene: {},
     get canvas() {
@@ -92,7 +94,7 @@ function setup(t) {
   };
   t.after(() => {
     parts.animation.clearDots();
-    state._pointCollection.destroy();
+    state._dotSet.dispose();
   });
   return { state, parts, roads, frame, settle, frames };
 }
@@ -180,7 +182,7 @@ test('density and replacement changes are bounded; removed roads fade out and te
   assert.equal(new Set(h.state._dots.map((d) => d.id)).size, 3000);
   h.parts.animation.clearDots();
   h.frame();
-  assert.equal(h.state._pointCollection.length, 0);
+  assert.equal(h.state._dotSet.size(), 0);
   assert.equal(h.state._dots.length, 0);
   assert.equal(h.frames.length, 0);
 });
@@ -233,12 +235,12 @@ test('stopped vehicles still follow smooth height refinement without moving alon
   h.settle();
   const d = h.state._dots[0];
   d.stoppedUntil = Date.now() + 100000;
-  const before = C.Cartographic.fromCartesian(d.point.position).height;
+  const before = C.Cartographic.fromCartesian(d.point.pos).height;
   const progress = d.t;
   h.parts.retention.reconcile(h.roads(0, 120), 450, true);
   h.frame();
   assert.equal(d.t, progress);
-  const after = C.Cartographic.fromCartesian(d.point.position).height;
+  const after = C.Cartographic.fromCartesian(d.point.pos).height;
   assert.ok(after > before && after - before <= 2.01);
 });
 
@@ -309,7 +311,7 @@ test('major previews merge and never retry missing mesh ahead of the detail pass
       _dots: [],
       _detailRoadsReady: true,
       _motion: { added: 0 },
-      _viewer: { scene },
+      _viewer: surfaceViewer(scene),
       _enabled: true,
       _loadGeneration: 1,
       _roadSource: 'OpenStreetMap',
@@ -444,7 +446,7 @@ test('measured preview heights select elevated detail roads before surface admis
   };
   const state = {
     _dots: [],
-    _viewer: { scene },
+    _viewer: surfaceViewer(scene),
     _enabled: true,
     _loadGeneration: 1,
     _roadSource: 'OpenStreetMap',
@@ -527,7 +529,7 @@ test('provisional opposite-direction heights cannot overwrite a measured sibling
   };
   const state = {
     _dots: [],
-    _viewer: { scene },
+    _viewer: surfaceViewer(scene),
     _enabled: true,
     _loadGeneration: 1,
     _roadSource: 'OpenStreetMap',
@@ -655,10 +657,10 @@ test('grounded vehicles respect mesh occlusion even after live congestion change
   h.parts.retention.reconcile(roads, 450, true);
   h.settle();
   assert.ok(h.state._dots.length > 0);
-  assert.ok(h.state._dots.every((d) => d.point.disableDepthTestDistance === 0));
+  assert.ok(h.state._dots.every((d) => d.point.disableDepthTest === 0));
   for (const road of roads) road.flow = { level: 0.01, closure: false };
   h.parts.model.recolorDotsInPlace('late jam');
-  assert.ok(h.state._dots.every((d) => d.point.disableDepthTestDistance === 0));
+  assert.ok(h.state._dots.every((d) => d.point.disableDepthTest === 0));
 });
 
 test('retained road density follows the settled view without requiring a toggle', (t) => {
@@ -716,9 +718,9 @@ test('parsed roads carry plain ECEF waypoints that dots spawn on and move along'
   h.settle();
   assert.ok(h.state._dots.length > 0);
   const dot = h.state._dots[0];
-  const before = C.Cartesian3.clone(dot.point.position);
+  const before = C.Cartesian3.clone(dot.point.pos);
   h.frame(500);
-  const after = dot.point.position;
+  const after = dot.point.pos;
   assert.ok(Number.isFinite(after.x) && Number.isFinite(after.z));
   assert.ok(C.Cartesian3.distance(before, after) > 0, 'the dot moves');
 });
@@ -757,7 +759,9 @@ test('selection asks the query port for depth and screen positions, and the came
     camera: {
       pose: () => (poses++, { position: { x: eye.x, y: eye.y, z: eye.z } }),
     },
+    globe: { isGlobeVisible: () => true },
     query: {
+      sampleHeightNow: () => 0,
       pickPosition(x, y) {
         picks.push([x, y]);
         return C.Cartesian3.fromDegrees(0, 0, 400);
@@ -810,7 +814,11 @@ test('selection asks the query port for depth and screen positions, and the came
     );
     assert.deepEqual(picks[0], [500, 480], 'the depth probe below centre');
     assert.equal(state._viewHeightEstimate, 400);
-    assert.equal(poses, 1, 'the eye is read once a pass');
+    assert.equal(
+      poses,
+      2,
+      'the eye is read once a pass, by selection and by the surface',
+    );
     assert.ok(rendered.includes(near), 'an on-canvas road is admitted');
     assert.ok(!rendered.includes(offCanvas), 'an off-canvas road is not');
     assert.ok(!rendered.includes(outOfRange), 'nor one out of range');

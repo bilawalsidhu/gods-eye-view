@@ -1,6 +1,6 @@
 // src/layers/traffic/style.test.mjs — the traffic layer keeps its dot
-// colours as renderer colours and paints them onto the points as the colours
-// they always were.
+// colours as renderer colours and paints them onto the points' items as the
+// colours they always were.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -12,6 +12,9 @@ import {
 } from './policy.js';
 import { presetDotRgba } from '../../data/trafficPresetStyle.js';
 import { createState } from './state.js';
+
+/** A renderer colour (`[r, g, b, a]`) as Cesium draws it. */
+const asColor = (rgba) => new Cesium.Color(...rgba);
 
 function style(preset = 'normal') {
   const state = createState({ services: {} });
@@ -32,11 +35,14 @@ test('bucket colours are the shipped palette, painted as before', () => {
   };
   for (const bucket of ['free', 'slow', 'jam'])
     assert.ok(
-      Cesium.Color.equals(s.dotColor(bucket), expected[bucket]),
+      Cesium.Color.equals(asColor(s.dotColor(bucket)), expected[bucket]),
       bucket,
     );
   assert.ok(
-    Cesium.Color.equals(s.dotColor(null), Cesium.Color.WHITE.withAlpha(0.85)),
+    Cesium.Color.equals(
+      asColor(s.dotColor(null)),
+      Cesium.Color.WHITE.withAlpha(0.85),
+    ),
   );
   assert.deepEqual(SIM_DOT_COLOR, [1, 1, 1, 0.85]);
   assert.equal(s.dotColor('jam'), s.dotColor('jam'), 'one colour per bucket');
@@ -51,12 +57,12 @@ test('a dot is painted, shown and emphasised on its point', () => {
   s.showDot(dot, false);
   assert.equal(dot.point.show, false);
   s.emphasizeJamDot(dot);
-  assert.ok(
-    Cesium.NearFarScalar.equals(
-      dot.point.scaleByDistance,
-      new Cesium.NearFarScalar(100, 1.5, 9000, JAM_DOT_FAR_SCALE),
-    ),
-  );
+  assert.deepEqual(dot.point.scaleByDistance, {
+    near: 100,
+    nearValue: 1.5,
+    far: 9000,
+    farValue: JAM_DOT_FAR_SCALE,
+  });
 });
 
 test('a styled preset recolours the buckets', () => {
@@ -67,7 +73,7 @@ test('a styled preset recolours the buckets', () => {
   const [r, g, b, a] = presetDotRgba('surveillance', 'jam');
   assert.ok(
     Cesium.Color.equals(
-      s.dotColor('jam'),
+      asColor(s.dotColor('jam')),
       new Cesium.Color(r / 255, g / 255, b / 255, a),
     ),
   );
@@ -84,9 +90,9 @@ test('switching presets and back repaints dots with the shipped colours', () => 
   state._dots = [dot];
   const shipped = Cesium.Color.fromCssColorString('#2ecc71').withAlpha(0.9);
   parts.style.setStylePreset('surveillance');
-  assert.ok(!Cesium.Color.equals(dot.point.color, shipped));
-  assert.ok(Cesium.Color.equals(dot.point.color, parts.style.dotColor('free')));
+  assert.ok(!Cesium.Color.equals(asColor(dot.point.color), shipped));
+  assert.equal(dot.point.color, parts.style.dotColor('free'));
   parts.style.setStylePreset('normal');
-  assert.ok(Cesium.Color.equals(dot.point.color, shipped));
+  assert.ok(Cesium.Color.equals(asColor(dot.point.color), shipped));
   assert.deepEqual(state._activeBucketColors.free, FLOW_BUCKET_COLORS.free);
 });

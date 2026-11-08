@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
+import { surfaceViewer } from '../../testSupport/fakeSceneSurface.mjs';
 import {
   detailBand,
   loadedSurfaceHeight,
@@ -64,12 +65,13 @@ test('per-vertex mesh heights follow terrain, reject invalid samples, and leave 
     sampleHeightSupported: true,
     sampleHeight: () => heights[samples++],
   };
+  const viewer = surfaceViewer(scene);
   const ground = {
     cachedGroundFloor: () => 50,
     reportMeshFloorCell: () => assert.fail('raw sample poisoned shared floor'),
   };
   let metrics;
-  const prepared = await prepareRoadSurfaces([r], scene, ground, [], null, {
+  const prepared = await prepareRoadSurfaces([r], viewer, ground, null, {
     onMetrics: (value) => (metrics = value),
   });
   assert.equal(metrics.sampleCount, 5);
@@ -80,9 +82,9 @@ test('per-vertex mesh heights follow terrain, reject invalid samples, and leave 
   );
   assert.deepEqual(actual, [103, 203, 53, 53, 53]);
   tileset.tilesLoaded = false;
-  assert.equal(trafficSurfaceReady(scene), false);
+  assert.equal(trafficSurfaceReady(viewer), false);
   scene.sampleHeight = () => 75;
-  const resumed = await prepareRoadSurfaces([r], scene, ground, []);
+  const resumed = await prepareRoadSurfaces([r], viewer, ground);
   assert.equal(
     resumed.ready.length,
     1,
@@ -93,14 +95,13 @@ test('per-vertex mesh heights follow terrain, reject invalid samples, and leave 
     picks++;
     return 75;
   };
-  await prepareRoadSurfaces([r], scene, ground, []);
+  await prepareRoadSurfaces([r], viewer, ground);
   assert.equal(picks, 0, 'validated coordinate heights survive cache hits');
   const abort = new AbortController();
   abort.abort();
-  await assert.rejects(
-    prepareRoadSurfaces([r], scene, ground, [], abort.signal),
-    { name: 'AbortError' },
-  );
+  await assert.rejects(prepareRoadSurfaces([r], viewer, ground, abort.signal), {
+    name: 'AbortError',
+  });
 });
 test('visible-globe roads floor each vertex without mesh picks', async () => {
   const r = road([
@@ -110,12 +111,12 @@ test('visible-globe roads floor each vertex without mesh picks', async () => {
   let calls = 0;
   await prepareRoadSurfaces(
     [r],
-    {
+    surfaceViewer({
       globe: { show: true, tilesLoaded: true, getHeight: () => ++calls * 100 },
+      sampleHeightSupported: true,
       sampleHeight: () => assert.fail('mesh sampled'),
-    },
+    }),
     { cachedGroundFloor: () => 20 },
-    [],
   );
   assert.equal(calls, 2);
   assert.deepEqual(
@@ -142,26 +143,27 @@ test('cached heights follow detail and provider; same-detail revisits sample not
     sampleHeight: () => (samples++, mesh),
     camera: camera(3000),
   };
+  const viewer = surfaceViewer(scene);
   const heightAt = () =>
     Math.round(C.Cartographic.fromCartesian(r.waypoints[0]).height);
   // Settled but coarse: sampled from 3 km.
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 2);
   assert.equal(heightAt(), 43);
   // Same detail band on a revisit: zero samples.
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 2);
   // Zooming out never re-samples a finer height either.
   scene.camera = camera(6000);
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 2);
   // Closer view, finer mesh: re-sampled and the waypoint follows it.
   mesh = 47;
   scene.camera = camera(250);
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 4);
   assert.equal(heightAt(), 50);
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 4, 'the finer sample is now the cached one');
   // A different photoreal tileset (map provider switch) invalidates all,
   // even from a coarser view that would otherwise reuse the finer sample.
@@ -169,13 +171,13 @@ test('cached heights follow detail and provider; same-detail revisits sample not
   scene.primitives.get = () => other;
   scene.camera = camera(3000);
   mesh = 30;
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 6);
   assert.equal(heightAt(), 33);
   // A finer sample that fails keeps the coarser measured height.
   scene.camera = camera(250);
   mesh = NaN;
-  const kept = await prepareRoadSurfaces([r], scene, null, []);
+  const kept = await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 8);
   assert.equal(kept.ready.length, 1);
   assert.equal(heightAt(), 33);
@@ -204,13 +206,14 @@ test('a camera jump cannot certify old rendered depth or cache coarse heights as
     sampleHeightSupported: true,
     sampleHeight: () => (samples++, height),
   };
-  assert.equal(trafficSurfaceReady(scene), false);
-  const removeSurfaceObserver = observeTrafficSurface(scene);
+  const viewer = surfaceViewer(scene);
+  assert.equal(trafficSurfaceReady(viewer), false);
+  const removeSurfaceObserver = observeTrafficSurface(viewer);
   scene.postRender.raiseEvent();
-  assert.equal(trafficSurfaceReady(scene), true);
+  assert.equal(trafficSurfaceReady(viewer), true);
   scene.camera.viewMatrix[12] = 100;
   assert.equal(
-    trafficSurfaceReady(scene),
+    trafficSurfaceReady(viewer),
     false,
     'old camera readiness is stale',
   );
@@ -218,18 +221,18 @@ test('a camera jump cannot certify old rendered depth or cache coarse heights as
     [0, 0],
     [0.001, 0],
   ]);
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(r.surfaceSettled, false);
   height = 80;
   scene.postRender.raiseEvent();
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 4, 'the first fresh render revalidates coarse heights');
   assert.equal(r.surfaceSettled, true);
   assert.ok(
     Math.abs(C.Cartographic.fromCartesian(r.waypoints[0]).height - 83) < 0.01,
   );
   height = 100;
-  await prepareRoadSurfaces([r, r], scene, null, [], null, {
+  await prepareRoadSurfaces([r, r], viewer, null, null, {
     revalidate: true,
   });
   assert.equal(
@@ -241,9 +244,9 @@ test('a camera jump cannot certify old rendered depth or cache coarse heights as
   assert.ok(
     Math.abs(C.Cartographic.fromCartesian(r.waypoints[0]).height - 103) < 0.01,
   );
-  await prepareRoadSurfaces([r], scene, null, []);
+  await prepareRoadSurfaces([r], viewer, null);
   assert.equal(samples, 6, 'ordinary same-band revisits still reuse the cache');
-  await prepareRoadSurfaces([r], scene, null, [], null, { revalidate: true });
+  await prepareRoadSurfaces([r], viewer, null, null, { revalidate: true });
   assert.equal(
     samples,
     6,
@@ -264,7 +267,7 @@ test('height stations preserve bends while bounding sample spacing along the roa
   let picks = 0;
   await prepareRoadSurfaces(
     [r],
-    {
+    surfaceViewer({
       globe: {
         show: true,
         tilesLoaded: true,
@@ -273,9 +276,8 @@ test('height stations preserve bends while bounding sample spacing along the roa
           return C.Math.toDegrees(c.longitude) * 1000;
         },
       },
-    },
+    }),
     null,
-    [],
   );
   assert.equal(picks, indices.length);
   for (let i = 0; i < coords.length; i++) {
@@ -306,7 +308,8 @@ test('rendered road depth is geographically checked, bounded, and avoids mesh re
     sampleHeight: () =>
       assert.fail('valid depth must not draw another pick frustum'),
   };
-  assert.ok(Math.abs(renderedRoadHeight(scene, -97, 30, 0) - 100) < 0.001);
+  const viewer = surfaceViewer(scene);
+  assert.ok(Math.abs(renderedRoadHeight(viewer, -97, 30, 0) - 100) < 0.001);
   const r = road([
     [-97, 30],
     [-97, 30.000005],
@@ -314,7 +317,7 @@ test('rendered road depth is geographically checked, bounded, and avoids mesh re
   r.waypoints = r.coords.map(([lon, lat]) =>
     C.Cartesian3.fromDegrees(lon, lat, 50),
   );
-  const result = await prepareRoadSurfaces([r], scene, null, []);
+  const result = await prepareRoadSurfaces([r], viewer, null);
   assert.equal(result.metrics.depthHits, 2);
   assert.equal(result.metrics.sampleCount, 0);
   let calls = 0;
@@ -323,19 +326,24 @@ test('rendered road depth is geographically checked, bounded, and avoids mesh re
     return C.Cartesian3.fromDegrees(-97.001, 30, 150);
   };
   assert.equal(
-    renderedRoadHeight(scene, -97, 30, 0),
+    renderedRoadHeight(viewer, -97, 30, 0),
     undefined,
     'foreground roof is not the road coordinate',
   );
   assert.equal(calls, 4);
   scene.pickPosition = () => C.Cartesian3.fromDegrees(-97, 30, 10000);
-  assert.equal(renderedRoadHeight(scene, -97, 30, 0), undefined);
+  assert.equal(renderedRoadHeight(viewer, -97, 30, 0), undefined);
   scene.pickPosition = () => {
     throw new Error('depth unavailable');
   };
-  assert.equal(renderedRoadHeight(scene, -97, 30, 0), undefined);
-  scene.pickTranslucentDepth = true;
-  assert.equal(renderedRoadHeight(scene, -97, 30, 0), undefined);
+  assert.equal(renderedRoadHeight(viewer, -97, 30, 0), undefined);
+  scene.pickPositionSupported = false;
+  scene.pickPosition = () => C.Cartesian3.fromDegrees(-97, 30, 100);
+  assert.equal(
+    renderedRoadHeight(viewer, -97, 30, 0),
+    undefined,
+    'no depth pick, no depth height',
+  );
 });
 
 test('surface keys reuse identity without building arrays or strings on unchanged frames', (t) => {
@@ -357,8 +365,9 @@ test('surface keys reuse identity without building arrays or strings on unchange
     },
     postRender: new C.Event(),
   };
-  const first = trafficSurfaceKey(scene);
-  const remove = observeTrafficSurface(scene);
+  const viewer = surfaceViewer(scene);
+  const first = trafficSurfaceKey(viewer);
+  const remove = observeTrafficSurface(viewer);
   const originalMap = Array.prototype.map;
   const originalJoin = Array.prototype.join;
   let maps = 0,
@@ -374,7 +383,7 @@ test('surface keys reuse identity without building arrays or strings on unchange
   try {
     for (let i = 0; i < 1000; i++) {
       scene.postRender.raiseEvent();
-      assert.equal(trafficSurfaceKey(scene), first);
+      assert.equal(trafficSurfaceKey(viewer), first);
     }
   } finally {
     Array.prototype.map = originalMap;
@@ -383,23 +392,23 @@ test('surface keys reuse identity without building arrays or strings on unchange
   assert.equal(maps, 0);
   assert.equal(joins, 0);
   tiles[1].show = false;
-  const hidden = trafficSurfaceKey(scene);
+  const hidden = trafficSurfaceKey(viewer);
   assert.notEqual(hidden, first);
   tiles[1] = { show: true, tilesLoaded: true };
   assert.notEqual(
-    trafficSurfaceKey(scene),
+    trafficSurfaceKey(viewer),
     first,
     'same-count tileset replacement is a new surface',
   );
   scene.globe.show = true;
-  const terrain = trafficSurfaceKey(scene);
+  const terrain = trafficSurfaceKey(viewer);
   scene.globe.terrainProvider = {};
-  assert.notEqual(trafficSurfaceKey(scene), terrain);
+  assert.notEqual(trafficSurfaceKey(viewer), terrain);
   remove();
   remove();
   assert.equal(scene.postRender.numberOfListeners, 0);
   assert.equal(
-    trafficSurfaceReady(scene),
+    trafficSurfaceReady(viewer),
     false,
     'readiness cannot recreate a subscription',
   );
@@ -407,26 +416,25 @@ test('surface keys reuse identity without building arrays or strings on unchange
 
 test('the view-height estimate reads terrain under a shown globe, else the drawn surface past the dots', () => {
   const at = { lon: -97.7431, lat: 30.2672 };
-  const dots = {};
   const seen = [];
-  const terrain = {
+  const terrain = surfaceViewer({
     globe: { show: true, getHeight: (carto) => (seen.push(carto), 151) },
     // A shown globe wins even where the scene could sample what is drawn.
     sampleHeightSupported: true,
     sampleHeight: () => assert.fail('terrain, not the drawn surface'),
-  };
-  assert.equal(loadedSurfaceHeight(terrain, at, [dots]), 151);
+  });
+  assert.equal(loadedSurfaceHeight(terrain, at), 151);
   assert.ok(Math.abs(C.Math.toDegrees(seen[0].longitude) - at.lon) < 1e-12);
-  const tiles = {
+  // The query port sees through draw sets (the dots among them) itself.
+  const tiles = surfaceViewer({
     globe: { show: false },
     sampleHeightSupported: true,
-    sampleHeight: (_carto, exclude) => (seen.push(exclude), 188),
-  };
-  assert.equal(loadedSurfaceHeight(tiles, at, [dots]), 188);
-  assert.deepEqual(seen[1], [dots], 'sees through the layer dots');
+    sampleHeight: () => 188,
+  });
+  assert.equal(loadedSurfaceHeight(tiles, at), 188);
   assert.equal(
-    loadedSurfaceHeight({ globe: { show: false } }, at, [dots]),
+    loadedSurfaceHeight(surfaceViewer({ globe: { show: false } }), at),
     undefined,
   );
-  assert.equal(loadedSurfaceHeight(undefined, at, [dots]), undefined);
+  assert.equal(loadedSurfaceHeight(undefined, at), undefined);
 });

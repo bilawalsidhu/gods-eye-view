@@ -912,6 +912,127 @@ test('the bikeshare layer draws its stations as point primitives on a viewer of 
   assert.equal(scene.added.length, 0);
 });
 
+test('the traffic layer draws its dots as one point collection moved, added to and taken from in place on a viewer of its own', async (t) => {
+  const { createState } = await import('../../layers/traffic/state.js');
+  const { createStyle } = await import('../../layers/traffic/style.js');
+  const { createModel } = await import('../../layers/traffic/model.js');
+  const { createAnimation } = await import('../../layers/traffic/animation.js');
+  const { JAM_DOT_FAR_SCALE } = await import('../../layers/traffic/policy.js');
+  let now = 10000;
+  t.mock.method(Date, 'now', () => now);
+  const { scene, draw } = drawOver();
+  const state = createState({ services: {} });
+  state._enabled = true;
+  state._fadeScaleFar = 8000;
+  state._fadeTransFar = 10000;
+  state._dotSet = draw.points({ id: 'traffic:1:dots', blend: 'translucent' });
+  const parts = {
+    rendering: { removeHeatLines() {}, rebuildHeatLines() {} },
+    retention: { easeHeights() {}, finishHeights() {}, clear() {} },
+  };
+  const context = {
+    state,
+    services: {
+      render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+    },
+    parts,
+    source: {},
+  };
+  parts.style = createStyle(context);
+  parts.model = createModel(context);
+  parts.animation = createAnimation(context);
+  parts.style.refreshBucketColors();
+  const [road] = parts.model.parseRoads({
+    roads: [
+      {
+        type: 'primary',
+        oneway: 1,
+        coordinates: [
+          [-97.74, 30.26],
+          [-97.737, 30.26],
+        ],
+      },
+    ],
+  });
+  parts.animation.spawnDotsForRoad(road, 450, 3);
+  const host = scene.added[0];
+  assert.ok(host instanceof Cesium.PointPrimitiveCollection);
+  assert.equal(host.blendOption, Cesium.BlendOption.TRANSLUCENT);
+  assert.equal(host.length, 3, 'drawn as they join');
+  const point = host.get(0);
+  assert.equal(point.id.set, 'traffic:1:dots');
+  assert.ok(
+    Cesium.Color.equals(point.color, Cesium.Color.WHITE.withAlpha(0.85)),
+    'the simulated white',
+  );
+  assert.equal(point.disableDepthTestDistance, 0);
+  const before = Cesium.Cartesian3.clone(point.position);
+  now += 500;
+  parts.animation.animate();
+  assert.equal(scene.added[0], host, 'moved where it is');
+  assert.equal(host.get(0), point);
+  assert.ok(!Cesium.Cartesian3.equals(point.position, before), 'it moves');
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      point.scaleByDistance,
+      new Cesium.NearFarScalar(100, 1.5, 8000, 0.3),
+    ),
+  );
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      point.translucencyByDistance,
+      new Cesium.NearFarScalar(100, 1, 10000, 0),
+    ),
+  );
+  // What the style part changes on a dot reaches its point at the next
+  // frame, on the point it has.
+  const dot = state._dots[0];
+  parts.style.paintDot(dot, 'jam');
+  parts.style.emphasizeJamDot(dot);
+  dot.point.outlineColor = Object.freeze([0, 0, 0, 0.5]);
+  dot.point.outlineWidth = 2;
+  now += 16;
+  parts.animation.animate();
+  assert.equal(host.get(0), point);
+  assert.ok(
+    Cesium.Color.equals(
+      point.color,
+      new Cesium.Color(...state._activeBucketColors.jam),
+    ),
+    'painted',
+  );
+  assert.ok(
+    Cesium.NearFarScalar.equals(
+      point.scaleByDistance,
+      new Cesium.NearFarScalar(100, 1.5, 8000, JAM_DOT_FAR_SCALE),
+    ),
+    'emphasised',
+  );
+  assert.ok(
+    Cesium.Color.equals(point.outlineColor, new Cesium.Color(0, 0, 0, 0.5)),
+  );
+  assert.equal(point.outlineWidth, 2);
+  parts.style.showDot(dot, false);
+  now += 16;
+  parts.animation.animate();
+  assert.equal(point.show, false, 'hidden');
+  parts.style.showDot(dot, true);
+  now += 16;
+  parts.animation.animate();
+  assert.equal(point.show, true);
+  parts.animation.spawnDotsForRoad(road, 450, 2);
+  assert.equal(scene.added[0], host, 'joined where it is');
+  assert.equal(host.length, 5);
+  // A dot that has faded out leaves the collection where it is, as the
+  // retention part takes it.
+  state._dotSet.remove([state._dots[0].point.id]);
+  assert.equal(scene.added[0], host);
+  assert.equal(state._dotSet.size(), 4);
+  parts.animation.clearDots();
+  state._dotSet.dispose();
+  assert.equal(scene.added.length, 0);
+});
+
 test('a rebuilt set keeps its place among the scene primitives, and names its host', async () => {
   const {
     registerSpriteSet,
@@ -1186,6 +1307,35 @@ test('a point moved in place sets only the members of its look that changed', ()
   item.color[1] = 1;
   set.upsert([item]);
   assert.deepEqual(written, ['color', 'scaleByDistance', 'color']);
+  // A frozen colour or curve is kept as it is, and told unchanged by
+  // identity; an equal one sent anew still sets nothing.
+  item.color = Object.freeze([0, 0, 1, 1]);
+  set.upsert([item]);
+  set.upsert([item]);
+  item.color = Object.freeze([0, 0, 1, 1]);
+  set.upsert([item]);
+  assert.deepEqual(written, ['color', 'scaleByDistance', 'color', 'color']);
+  // A frozen curve read through a getter can change, so it is copied and
+  // compared by value.
+  let farValue = 0.3;
+  item.scaleByDistance = Object.freeze(
+    Object.defineProperties(
+      {},
+      {
+        near: { value: 100, enumerable: true },
+        nearValue: { value: 1.5, enumerable: true },
+        far: { value: 12000, enumerable: true },
+        farValue: { get: () => farValue, enumerable: true },
+      },
+    ),
+  );
+  set.upsert([item]);
+  const writes = written.length;
+  set.upsert([item]);
+  assert.equal(written.length, writes, 'unchanged');
+  farValue = 0.8;
+  set.upsert([item]);
+  assert.equal(written.at(-1), 'scaleByDistance', 'the change is seen');
   set.dispose();
 });
 

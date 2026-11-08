@@ -1049,8 +1049,31 @@ export function createCesiumDraw({
     'displayRange',
   ];
 
+  /**
+   * What a point's look keeps of an item member: a frozen value of plain
+   * members (a frozen colour or curve) as it is, since it cannot change and
+   * is then told unchanged by identity; anything else as a `plainCopy`.
+   */
+  function lookCopy(value) {
+    if (!value || typeof value !== 'object' || !Object.isFrozen(value))
+      return plainCopy(value);
+    // Only plain data cannot change: no getters, nothing inherited.
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== Array.prototype)
+      return plainCopy(value);
+    for (const key of Reflect.ownKeys(value)) {
+      const member = Object.getOwnPropertyDescriptor(value, key);
+      if (
+        !('value' in member) ||
+        (member.value !== null && typeof member.value === 'object')
+      )
+        return plainCopy(value);
+    }
+    return value;
+  }
+
   /** A copy of the item members a point's look is drawn from. */
-  const pointLookOf = (item) => LOOK_FROM.map((key) => plainCopy(item[key]));
+  const pointLookOf = (item) => LOOK_FROM.map((key) => lookCopy(item[key]));
 
   /**
    * Whether `value` holds what `kept` (a `plainCopy` of a colour, curve or
@@ -1067,6 +1090,13 @@ export function createCesiumDraw({
     )
       return false;
     if (Array.isArray(kept) !== Array.isArray(value)) return false;
+    if (Array.isArray(value)) {
+      // Colours, read by index: a `for...in` over an array is far slower.
+      if (kept.length !== value.length) return false;
+      for (let i = 0; i < value.length; i++)
+        if (!Object.is(kept[i], value[i])) return false;
+      return true;
+    }
     let count = 0;
     for (const key in value) {
       if (value[key] === undefined) continue;
@@ -1083,28 +1113,57 @@ export function createCesiumDraw({
       const value = item[LOOK_FROM[i]];
       if (sameLookValue(was.look[i], value)) continue;
       was.primitive[LOOK[i][0]] = LOOK[i][1](item);
-      was.look[i] = plainCopy(value);
+      was.look[i] = lookCopy(value);
     }
   }
-
-  const PLACE_KEYS = ['x', 'y', 'z', 'lon', 'lat', 'height'];
 
   /**
    * Where an item is, as its values when drawn: a caller may change the
    * position object it passes and send the same one again.
    */
-  const placeOf = (item) =>
-    PLACE_KEYS.map((key) => item.pos?.[key]).concat(item.height);
+  const placeOf = (item) => {
+    const pos = item.pos;
+    return [
+      pos?.x,
+      pos?.y,
+      pos?.z,
+      pos?.lon,
+      pos?.lat,
+      pos?.height,
+      item.height,
+    ];
+  };
 
-  /** Whether an item is somewhere else than `at`; if so, `at` takes it. */
+  /**
+   * Whether an item is somewhere else than `at`; if so, `at` takes it. Read
+   * member by member, by name: points moved every frame are compared every
+   * frame.
+   */
   function movedFrom(at, item) {
-    let moved = !Object.is(item.height, at[PLACE_KEYS.length]);
-    for (let i = 0; !moved && i < PLACE_KEYS.length; i++)
-      moved = !Object.is(item.pos?.[PLACE_KEYS[i]], at[i]);
-    if (!moved) return false;
-    for (let i = 0; i < PLACE_KEYS.length; i++)
-      at[i] = item.pos?.[PLACE_KEYS[i]];
-    at[PLACE_KEYS.length] = item.height;
+    const pos = item.pos;
+    const x = pos?.x;
+    const y = pos?.y;
+    const z = pos?.z;
+    const lon = pos?.lon;
+    const lat = pos?.lat;
+    const height = pos?.height;
+    if (
+      Object.is(x, at[0]) &&
+      Object.is(y, at[1]) &&
+      Object.is(z, at[2]) &&
+      Object.is(lon, at[3]) &&
+      Object.is(lat, at[4]) &&
+      Object.is(height, at[5]) &&
+      Object.is(item.height, at[6])
+    )
+      return false;
+    at[0] = x;
+    at[1] = y;
+    at[2] = z;
+    at[3] = lon;
+    at[4] = lat;
+    at[5] = height;
+    at[6] = item.height;
     return true;
   }
 

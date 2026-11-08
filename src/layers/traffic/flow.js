@@ -479,7 +479,6 @@ export function createFlow({ state: layerState, services, parts, source }) {
     let prepared = await viewerRoadSurface(layerState._viewer).prepare(
       unresolved,
       services.ground,
-      [layerState._pointCollection],
       signal,
       options,
     );
@@ -500,7 +499,6 @@ export function createFlow({ state: layerState, services, parts, source }) {
       prepared = await viewerRoadSurface(layerState._viewer).prepare(
         prepared.pending,
         services.ground,
-        [layerState._pointCollection],
         signal,
         options,
       );

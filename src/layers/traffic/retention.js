@@ -68,6 +68,8 @@ export function createRetention({ state, parts }) {
     timer = null;
     if (!state._enabled) return;
     let budget = DOT_CHANGE_BUDGET;
+    // The dots that finished fading out, taken from the draw set at once.
+    const gone = [];
     let pending = false;
     const now = Date.now();
     // Removing a road or reducing density fades only surplus dots. A retained
@@ -84,7 +86,7 @@ export function createRetention({ state, parts }) {
       for (let i = record.dots.length - 1; i >= 0 && budget > 0; i--) {
         const dot = record.dots[i];
         if (!dot.retiring || now - dot.retiring < DOT_FADE_MS) continue;
-        state._pointCollection.remove(dot.point);
+        gone.push(dot.point.id);
         const last = state._dots.pop();
         if (last !== dot) {
           state._dots[dot.index] = last;
@@ -127,6 +129,7 @@ export function createRetention({ state, parts }) {
       if (!record.target && !record.dots.length)
         records.delete(record.road.key);
     }
+    if (gone.length) state._dotSet?.remove(gone);
     refreshCounts();
     state._populationPending = pending;
     if (pending) schedule();
@@ -136,7 +139,7 @@ export function createRetention({ state, parts }) {
     counts.free = counts.slow = counts.jam = counts.sim = 0;
     let count = 0;
     for (const dot of state._dots) {
-      if (!dot.point.show) continue;
+      if (dot.point.show === false) continue;
       counts[dot.bucket || 'sim']++;
       count++;
     }
