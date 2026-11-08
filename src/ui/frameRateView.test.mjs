@@ -19,7 +19,7 @@ test('the FPS readout sits in the title bar, hidden until the backquote key', as
     document.querySelector('#title-bar .frame-rate-readout');
   assert.equal(readout(), null, 'no readout without a monitor');
   const monitor = createFrameRateMonitor({
-    viewer: { scene: { postRender: { addEventListener: () => () => {} } } },
+    engine: { frames: { postRender: { addEventListener: () => () => {} } } },
     store: useStatusStore(pinia),
   });
   t.after(() => monitor.destroy());

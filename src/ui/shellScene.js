@@ -344,7 +344,7 @@ export class ShellScene extends ShellFacade {
       this._locationNavigation.attachScene({ viewer, engine });
       this.hud.attachEngine(engine, { viewer });
       this.shareLinkManager.attachEngine(engine);
-      this._displayBindings.attachViewer(viewer);
+      this._displayBindings.attachEngine(engine);
       this._buildSceneControls();
       this._buildSceneCockpit();
       this._shareRestoration.attachLinks(this.shareLinkManager);
@@ -441,7 +441,7 @@ export class ShellScene extends ShellFacade {
     if (this._orientationToken)
       useGlobeActionsStore(applicationPinia()).detach(this._orientationToken);
     this._orientationToken = null;
-    this._displayBindings.attachViewer(null);
+    this._displayBindings.attachEngine(null);
     this._locationNavigation.detachScene();
     this.hud.attachEngine(null);
     this.shareLinkManager.attachEngine(null);

@@ -6,7 +6,7 @@ import { applicationPinia } from './vueRuntime.js';
 /** Own keyboard/display event subscriptions; settings remain with their state owners. */
 export class DisplayBindings {
   constructor({
-    viewer,
+    engine,
     services,
     elements,
     operations,
@@ -16,7 +16,7 @@ export class DisplayBindings {
   }) {
     Object.assign(
       this,
-      { viewer, services, readState, claimDetection, displayStore },
+      { engine, services, readState, claimDetection, displayStore },
       elements,
       operations,
     );
@@ -45,7 +45,7 @@ export class DisplayBindings {
   _initUI() {
     const { cycleDetectionMode, isScopeMaskEnabled } = this.services;
     this._applicationShortcuts?.destroy();
-    this.attachViewer(this.viewer);
+    this.attachEngine(this.engine);
     this._applicationShortcuts = bindApplicationShortcuts({
       documentRef: document,
       searchInput: this._locationSearch,
@@ -168,14 +168,14 @@ export class DisplayBindings {
     this._detachDisplayControls = () => store.detach(token);
   }
   /**
-   * Count the frames of another viewer (an engine switch), or none. The
+   * Count the frames of another engine (an engine switch), or none. The
    * shortcuts and the Display controls stay bound.
    */
-  attachViewer(viewer) {
-    this.viewer = viewer ?? null;
+  attachEngine(engine) {
+    this.engine = engine ?? null;
     this._frameRateMonitor?.destroy();
     this._frameRateMonitor = createFrameRateMonitor({
-      viewer: this.viewer,
+      engine: this.engine,
       documentRef: document,
     });
   }

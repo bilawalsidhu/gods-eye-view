@@ -5,7 +5,7 @@ import { t } from '../i18n/index.js';
 // loads the Navara globe the same way, so the Cesium-mode bundle carries
 // none of it.
 
-import { DATA_CREDITS, registerDataCredits } from '../data/dataCredits.js';
+import { registerDataCredits } from '../data/dataCredits.js';
 import { createLayerAvailability } from './layers/renderers.js';
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
 
@@ -28,35 +28,6 @@ export function navaraModeNotice(availability) {
       : 'No registered data layers',
   });
 }
-
-/** Static attribution for the shell and the layers available on Navara. */
-const NAVARA_CREDIT_KEYS = new Set([
-  'inaturalist',
-  'photon-geocoder',
-  'openstreetmap',
-  'reearth-terrain',
-  'opensky',
-  'adsblol',
-  'adsbdb',
-  'aisstream',
-  'celestrak',
-  'launch-library-2',
-  'usgs',
-  'eccc-aqhi',
-  'wfigs',
-  's2-ghostmaps',
-  'telegeography',
-  'wind-gfs',
-  'ecmwf-ifs',
-  'weather-noaa',
-  'weather-lightning',
-  'weather-cyclones',
-  'dams',
-  'firms',
-  'gbfs',
-  'overture-military-names',
-  'radio-browser',
-]);
 
 /**
  * The scene on the experimental Navara engine: no viewer and no Cesium
@@ -109,10 +80,7 @@ export async function createNavaraScene({
   signal.throwIfAborted();
   // After the map's own credits, so Google's copyright lines come first in
   // Navara's attribution card.
-  registerDataCredits(
-    engine,
-    (credits ?? DATA_CREDITS).filter(({ key }) => NAVARA_CREDIT_KEYS.has(key)),
-  );
+  registerDataCredits(engine, credits);
   return {
     viewer: null,
     engine,

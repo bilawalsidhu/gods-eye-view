@@ -2121,8 +2121,7 @@ for (const createHarness of GROUND_HARNESSES) {
       const follow = engine.camera.follow({ position: () => ({ x: 6378137, y: 0, z: 1000 }), viewFrom: { x: 0, y: -4800, z: 3300 } });
       store.controls.dispatch('card', store.panel.owner);
       await settle();
-      if (harness.cesium) assert.equal(store.panel.card, null, 'tracked subjects keep camera ownership');
-      else assert.equal(store.panel.card.text, 'Details', 'the engine without a legacy tracked subject keeps its interaction policy');
+      assert.equal(store.panel.card, null, 'a followed subject keeps camera ownership');
       follow.stop();
       store.controls.dispatch('card', store.panel.owner);
       await settle();

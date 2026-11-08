@@ -6,11 +6,11 @@ import { applicationPinia } from './vueRuntime.js';
  * readout is presented to the status store, which the title bar renders.
  */
 export function createFrameRateMonitor({
-  viewer,
+  engine,
   documentRef = document,
   store = useStatusStore(applicationPinia()),
 }) {
-  const frameEvent = viewer?.scene?.postRender;
+  const frameEvent = engine?.frames.postRender;
   // A page without the scene chrome has no title bar to show it in.
   if (!documentRef.getElementById('title-bar') || !frameEvent)
     return { destroy() {} };

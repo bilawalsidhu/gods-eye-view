@@ -137,8 +137,8 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   //
   // The transaction has exactly two camera-owner mutations, and each one
   // stamps:
-  //   1. selectedLayer.trackById(id) -> viewer.trackedEntity
-  //        -> viewer.trackedEntityChanged -> _stampNavigation()
+  //   1. selectedLayer.trackById(id) -> engine.camera.follow
+  //        -> engine.camera.followChanged -> _stampNavigation()
   //   2. cockpitView.enter() -> onCameraTakeover() -> _stampNavigation()
   const transaction = body(
     cockpitTracking,
@@ -162,7 +162,7 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   // Seam 1: a new tracker handoff stamps; restoring the session does not.
   assert.match(
     ui,
-    /viewer\.trackedEntityChanged\.addEventListener\(\s*\(entity\) => \{[\s\S]*?if \(entity && !this\._disposed && !entity\.gevRestoring\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
+    /camera\.followChanged\.addEventListener\(\(handle\) => \{[\s\S]*?if \(handle && !this\._disposed && !handle\.native\?\.gevRestoring\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
     'tracker handoff must stamp',
   );
   // Seam 2 is pinned by "Cockpit takeover invalidates deferred work" above.
@@ -255,7 +255,7 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
       'origin: trackingOrigin',
       'satellitesLayer.stopTracking?.({ origin: trackingOrigin })',
       'rocketLaunchesLayer.releaseCameraOwnership?.()',
-      'if (this.viewer) this.viewer.trackedEntity = undefined;',
+      'this.engine?.camera.following()?.stop();',
       "interruptCameraMotion('explicit-navigation')",
       'camera?.cancelFlight();',
       'camera?.release();',

@@ -82,17 +82,16 @@ export class LayerBindings {
       window,
       this._worldRequestFocusHandler,
     );
-    // Cesium's trackedEntity changes announce navigation through this event.
-    if (this.viewer)
-      this._navigationOwnerChangedRemover =
-        this.viewer.trackedEntityChanged.addEventListener((entity) => {
-          // Rebinding the session's subject (a resumed renderer, a share
-          // restore) is part of the pending restoration, not a new navigation
-          // that supersedes it. The mark lasts only while the follow starts.
-          if (entity && !this._disposed && !entity.gevRestoring)
-            this._stampNavigation({ cancelPendingSelection: false });
-        });
-    // Vessel/installation focus flies without ever assigning a tracked entity,
+    // A new follow announces navigation through this event.
+    this._navigationOwnerChangedRemover =
+      this.engine?.camera.followChanged.addEventListener((handle) => {
+        // Rebinding the session's subject (a resumed renderer, a share
+        // restore) is part of the pending restoration, not a new navigation
+        // that supersedes it. The mark lasts only while the follow starts.
+        if (handle && !this._disposed && !handle.native?.gevRestoring)
+          this._stampNavigation({ cancelPendingSelection: false });
+      }) ?? null;
+    // Vessel/installation focus flies without ever starting a follow,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =
       registerNavigationAuthorityListener(window, (event) => {

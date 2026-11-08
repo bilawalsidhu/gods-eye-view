@@ -314,7 +314,7 @@ export class StyleManager extends ShellScene {
 
     this._initSceneOverlays();
     this._displayBindings = new DisplayBindings({
-      viewer,
+      engine,
       services: {
         cycleDetectionMode: services.cycleDetectionMode,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
@@ -1001,7 +1001,7 @@ export class StyleManager extends ShellScene {
       setEnabled: (next) =>
         this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
       readOwnership: () => ({
-        trackedEntity: this.viewer?.trackedEntity,
+        trackedEntity: this.engine?.camera.following() ?? null,
         cockpitActive: !!this.cockpitView?.active,
       }),
       shouldFocus: () =>

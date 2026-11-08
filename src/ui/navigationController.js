@@ -185,7 +185,7 @@ export class NavigationController {
     } catch {
       /* best-effort release */
     }
-    if (this.viewer) this.viewer.trackedEntity = undefined;
+    this.engine?.camera.following()?.stop();
     this.interruptCameraMotion('explicit-navigation');
     this.stopOrbit();
     const camera = this.engine?.camera;

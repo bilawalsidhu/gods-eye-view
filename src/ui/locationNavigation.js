@@ -386,7 +386,6 @@ export class LocationNavigation {
       /* best-effort release */
     }
     this.engine.camera.following()?.stop();
-    if (this.viewer) this.viewer.trackedEntity = undefined;
     this.engine.camera.cancelFlight();
     this.engine.camera.release();
     this._beginWorldJumpTransition();

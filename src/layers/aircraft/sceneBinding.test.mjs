@@ -11,13 +11,13 @@ function observedShell(t) {
   t.after(() => {
     globalThis.window = previous;
   });
-  const trackedEntityChanged = createEngineEvent();
+  const followChanged = createEngineEvent();
   const shell = {
     generation: 1,
-    trackedEntityChanged,
+    followChanged,
   };
   const bindings = new LayerBindings({
-    viewer: { trackedEntityChanged },
+    engine: { camera: { followChanged } },
     services: {},
     operations: {
       _stampNavigation() {
@@ -32,10 +32,10 @@ function observedShell(t) {
 
 // What the tracking modules do around follow.start on a resume or a share
 // restore (the shared aircraft tracking.js and satellites tracking.js).
-function follow(trackedEntityChanged, entity, restoring) {
+function follow(followChanged, entity, restoring) {
   if (restoring) entity.gevRestoring = true;
   try {
-    trackedEntityChanged.raiseEvent(entity);
+    followChanged.raiseEvent({ native: entity });
   } finally {
     if (restoring) delete entity.gevRestoring;
   }
@@ -86,7 +86,7 @@ test('resuming an aircraft on Cesium preserves the pending share navigation', (t
     (id, options) => {
       restored = { id, ...options };
       follow(
-        shell.trackedEntityChanged,
+        shell.followChanged,
         { gevSelectionOrigin: options.origin },
         options.resume,
       );
@@ -100,7 +100,7 @@ test('resuming an aircraft on Cesium preserves the pending share navigation', (t
     'restored tracking cannot supersede and clear itself',
   );
   for (const origin of ['user', 'voice', 'programmatic']) {
-    follow(shell.trackedEntityChanged, { gevSelectionOrigin: origin }, false);
+    follow(shell.followChanged, { gevSelectionOrigin: origin }, false);
   }
   assert.equal(
     shell.generation,
@@ -112,12 +112,12 @@ test('resuming an aircraft on Cesium preserves the pending share navigation', (t
 test('a restored aircraft followed again later is new navigation', (t) => {
   const shell = observedShell(t);
   const entity = { gevSelectionOrigin: 'share-restore' };
-  follow(shell.trackedEntityChanged, entity, true);
+  follow(shell.followChanged, entity, true);
   assert.equal(shell.generation, 1);
   assert.equal('gevRestoring' in entity, false, 'the mark does not stick');
   // Cockpit exit or a refocus hands the same aircraft back to the camera.
-  shell.trackedEntityChanged.raiseEvent(undefined);
-  shell.trackedEntityChanged.raiseEvent(entity);
+  shell.followChanged.raiseEvent(null);
+  shell.followChanged.raiseEvent({ native: entity });
   assert.equal(shell.generation, 2);
 });
 

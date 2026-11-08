@@ -13,7 +13,7 @@ import {
   currentSceneOf,
   detachPartsOnTeardown,
 } from './sceneParts.js';
-import { installViews, isEmbeddedInline } from './embed.js';
+import { installViews, isEmbeddedInline, keepPanelRendering } from './embed.js';
 import {
   installScopeMask,
   destroyScopeMask,
@@ -310,20 +310,8 @@ function cesiumToolBackend({ engine, tileset }) {
       viewer.useDefaultRenderLoop = !hidden;
       cockpitCloudEffects?.setSuspended?.(hidden);
     },
-    attachViews(
-      { styleManager, dataManager, voiceCommands },
-      { signal, defer },
-    ) {
-      defer(
-        installViews({
-          shell: styleManager,
-          viewer,
-          dataManager,
-          run: (name, args) => voiceCommands.runner(name, args, { signal }),
-          signal,
-        }),
-      );
-    },
+    // An inline panel the host reports hidden stops Cesium's render loop.
+    keepRendering: (options) => keepPanelRendering(viewer, options),
   };
 }
 
@@ -336,7 +324,7 @@ function cesiumToolBackend({ engine, tileset }) {
  * this engine), `recentImagery(layer)` the panel's globe,
  * `attach(context, attachment)` adds
  * the engine's own tools, `suspend(hidden, controls)` its hidden-tab
- * handling and `attachViews(context, attachment)` its embedded views. The
+ * handling and `keepRendering` what keeps an inline panel drawing. The
  * shared tools keep their session state across engines. Returns the
  * annotation board (null without one) and voice commands.
  */
@@ -460,9 +448,16 @@ async function attachEngineTools(
     signal,
     defer,
   });
-  backend.attachViews?.(
-    { styleManager, dataManager, voiceCommands },
-    { signal, defer },
+  // Annotation links and embed mode, on every engine.
+  defer(
+    installViews({
+      shell: styleManager,
+      engine,
+      keepRendering: backend.keepRendering ?? null,
+      dataManager,
+      run: (name, args) => voiceCommands.runner(name, args, { signal }),
+      signal,
+    }),
   );
   return { annotations, voiceCommands, startupChrome: backend.startupChrome };
 }

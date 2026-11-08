@@ -119,7 +119,7 @@ export class SceneDirector {
       available: () =>
         !this._destroyed &&
         !this._running &&
-        !this._scene?.viewer?.trackedEntity,
+        !this._scene?.engine?.camera.following(),
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });

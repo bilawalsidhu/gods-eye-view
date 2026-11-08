@@ -17,9 +17,17 @@ test('without a viewer the tools run the governor on the engine, show the notice
     window: globalThis.window,
     document: globalThis.document,
     localStorage: globalThis.localStorage,
+    location: globalThis.location,
   };
   const listeners = new Map();
   globalThis.window = {};
+  // A link that carries an annotation, drawn once the view restores.
+  const linked = encodeURIComponent(
+    JSON.stringify([{ type: 'pin', target: 'Austin' }]),
+  );
+  globalThis.location = { search: '', hash: `#v=2&lat=1&lon=2&an=${linked}` };
+  let restored;
+  const initialRestorePromise = new Promise((resolve) => (restored = resolve));
   globalThis.localStorage = {
     getItem: () => null,
     setItem() {},
@@ -54,11 +62,14 @@ test('without a viewer the tools run the governor on the engine, show the notice
   // The voice pointer listens on the engine's canvas.
   const canvas = new EventTarget();
   const engine = createFakeEngine({ kind: 'navara', canvas });
+  // Navara's extension without its view: no annotation board.
+  engine.extensions = { navara: { alignDaylightToRestoredView() {} } };
   const notices = [];
   const chrome = [];
   const cleanups = [];
   let flushed = 0;
   const styleManager = {
+    initialRestorePromise,
     _showGlobalStatusNotice: (label, options) =>
       notices.push({ label, options }),
   };
@@ -102,6 +113,18 @@ test('without a viewer the tools run the governor on the engine, show the notice
     defer: (dispose) => cleanups.push(dispose),
   });
   assert.ok(tools.sceneDirector);
+  const ran = [];
+  tools.voiceCommands.runner = async (name, args) => {
+    ran.push([name, args]);
+    return { ok: true };
+  };
+  restored();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    ran,
+    [['annotate_map', { annotations: [{ type: 'pin', target: 'Austin' }] }]],
+    "the link's annotations are drawn on this engine too",
+  );
   assert.equal(tools.annotations, null);
   assert.ok(tools.voiceCommands, 'voice runs on the engine');
   assert.equal(window.__gevVoiceCommands, tools.voiceCommands);

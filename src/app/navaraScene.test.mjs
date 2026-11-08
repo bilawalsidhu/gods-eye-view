@@ -174,30 +174,11 @@ test('the Navara scene tears down the controller, then the globe', async (t) => 
   assert.equal(view.__GOOGLE_MAPS_API_KEY__, undefined);
 });
 
-test('Navara keeps attribution for every available W1/W2 source and excludes unavailable data', async (t) => {
-  const keys = [
-    'opensky',
-    'adsblol',
-    'adsbdb',
-    'aisstream',
-    'celestrak',
-    'launch-library-2',
-    'usgs',
-    'eccc-aqhi',
-    'wfigs',
-    'firms',
-    'gbfs',
-    'overture-military-names',
-    'radio-browser',
-    'photon-geocoder',
-    'openstreetmap',
-    'reearth-terrain',
-  ];
+test('Navara registers the attribution of every data source, as Cesium does', async (t) => {
+  // Every layer draws on Navara, so none of their credits may be dropped.
+  const keys = ['opensky', 'nasa-gibs', 'nyc-dot-cctv', 'mapillary', 'gdelt'];
   const run = await startScene({
-    credits: [...keys, 'nasa-gibs'].map((key) => ({
-      key,
-      html: `Credit ${key}`,
-    })),
+    credits: keys.map((key) => ({ key, html: `Credit ${key}` })),
   });
   t.after(run.teardown);
   assert.deepEqual(

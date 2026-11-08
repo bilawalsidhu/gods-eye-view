@@ -17,8 +17,8 @@ function fixture(t) {
     addEventListener: (name, handler) => keys.add(handler),
     removeEventListener: (name, handler) => keys.delete(handler),
   };
-  const viewer = {
-    scene: {
+  const engine = {
+    frames: {
       postRender: {
         addEventListener(handler) {
           frames.add(handler);
@@ -27,7 +27,7 @@ function fixture(t) {
       },
     },
   };
-  const monitor = createFrameRateMonitor({ viewer, documentRef, store });
+  const monitor = createFrameRateMonitor({ engine, documentRef, store });
   t.after(() => monitor.destroy());
   return {
     monitor,
@@ -108,7 +108,7 @@ test('a page without the title bar gets no readout and keeps the key', () => {
   let listened = false;
   const store = { publishFps: () => assert.fail('nothing to show it in') };
   const monitor = createFrameRateMonitor({
-    viewer: { scene: { postRender: { addEventListener: () => () => {} } } },
+    engine: { frames: { postRender: { addEventListener: () => () => {} } } },
     documentRef: {
       getElementById: () => null,
       addEventListener: () => (listened = true),
@@ -130,11 +130,11 @@ test("destroying an earlier monitor leaves a newer one's readout", () => {
     addEventListener() {},
     removeEventListener() {},
   };
-  const viewer = {
-    scene: { postRender: { addEventListener: () => () => {} } },
+  const engine = {
+    frames: { postRender: { addEventListener: () => () => {} } },
   };
-  const first = createFrameRateMonitor({ viewer, documentRef, store });
-  const second = createFrameRateMonitor({ viewer, documentRef, store });
+  const first = createFrameRateMonitor({ engine, documentRef, store });
+  const second = createFrameRateMonitor({ engine, documentRef, store });
   const shown = store.fps;
   first.destroy();
   assert.ok(store.fps === shown);
