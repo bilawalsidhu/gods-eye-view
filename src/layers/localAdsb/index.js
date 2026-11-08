@@ -1,9 +1,9 @@
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import {
-  screenProjectedRotation,
+  courseScreenRotation,
   stabilizeScreenRotation,
-} from '../../data/iconOrientation.js';
+} from '../../data/screenRotation.js';
 import { fromDegreesInto, toLonLatH } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
 import {
@@ -200,14 +200,12 @@ export function createLocalAdsbLayer({
    */
   function cameraBasis() {
     const pose = viewer ? findCamera(viewer)?.pose() : null;
-    return pose?.right && pose?.up
-      ? { camera: { rightWC: pose.right, upWC: pose.up } }
-      : null;
+    return pose?.right && pose?.up ? { right: pose.right, up: pose.up } : null;
   }
 
   function markerRotation(marker, basis = cameraBasis()) {
     if (!basis || !marker.position) return marker.lastRotation;
-    const projected = screenProjectedRotation(
+    const projected = courseScreenRotation(
       basis,
       marker.position,
       marker.courseDeg ?? 0,

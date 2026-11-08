@@ -542,7 +542,7 @@ src/
 ├── voice/                  # OpenAI Realtime session + 30 voice tools
 ├── layers/                 # Layer components — weather, wind, cyclones, transit, ALPR, …
 ├── data/                   # One module per layer + orchestration + context store
-│   ├── iconOrientation.js  # Screen-projected headings + horizon cull
+│   ├── iconOrientation.js  # Horizon backdrop for labels (headings: screenRotation.js)
 │   └── local_data/         # Bundled datasets (per-folder provenance)
 └── scenes/                 # Cinematic scene director
 ```

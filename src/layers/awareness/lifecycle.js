@@ -62,8 +62,8 @@ export function createLifecycle({
         if (!layerState.enabled) return;
         const now = Date.now();
         // "Did the camera move" uses the same quantization as the fleet
-        // rotation pass's iconOrientation.cameraPoseSignature (keep the two
-        // in step), read from the camera port's pose, rather than
+        // rotation pass's cameraPoseSignature (render/cesium/iconOrientation;
+        // keep the two in step), read from the camera port's pose, rather than
         // camera.changed, whose granularity is globally degraded by other layers
         // mutating camera.percentageChanged.
         const poseSig = cameraMotionSignature(layerState.viewer);

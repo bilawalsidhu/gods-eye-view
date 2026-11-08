@@ -10,7 +10,7 @@ import {
 import {
   cameraPoseSignature,
   perspectiveProjectedRotation,
-} from '../../data/iconOrientation.js';
+} from '../../render/cesium/iconOrientation.js';
 import {
   updatePlayback,
   applyDisplayCourse,

@@ -21,7 +21,7 @@ import { writeHoldSegment } from '../../data/iconSegment.js';
 import { IconSetPrimitive } from '../../render/cesium/iconSetPrimitive.js';
 import { iconAtlas } from '../../data/iconAtlas.js';
 import { cctvPicks } from './pickState.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import { horizonOccluder } from '../../render/cesium/iconOrientation.js';
 import { frustumVolumeGeometryData } from '../../data/cctvViewshed.js';
 import { entityRecord } from '../../data/entityRecords.js';
 import { toColor } from '../../render/cesium/draw.js';

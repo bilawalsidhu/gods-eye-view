@@ -2796,7 +2796,7 @@ async function main() {
     const arrival = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
-      const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/data/iconOrientation.js`);
+      const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/render/cesium/iconOrientation.js`);
       const { observeArrivalRotationWithRetry } = await import(`${window.__gevQaSourceBase || '/src'}/tooling/trackArrivalObservation.mjs`);
       // 3D models OFF for this phase: a model-handed-off icon is hidden, and
       // the probes need shown icons (this is also the app's default state the

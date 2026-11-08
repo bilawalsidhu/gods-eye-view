@@ -3,7 +3,7 @@ import * as Cesium from 'cesium';
 // renderer bound, the layer's flights and camera reads find a camera port.
 import '../../render/cesium/camera.js';
 import { clusterPointCollection as clusterPointsOf } from '../../render/cesium/internals.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import { horizonOccluder } from '../../render/cesium/iconOrientation.js';
 import {
   MARKER_LIFT_M,
   RADIO_PREFIX,
