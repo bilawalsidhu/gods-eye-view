@@ -195,6 +195,7 @@ function camAt(s) {
     sun: lerp(a.sun || 0, b.sun || 0),
     vup: lerp(a.vup || 0, b.vup || 0),
     comp: lerp(a.comp ?? 1, b.comp ?? 1),
+    compY: lerp(a.compY ?? 0, b.compY ?? 0),
     pairD: lerp(a.pairD || 0, b.pairD || 0),
     pairTh: lerp(a.pairTh || 0, b.pairTh || 0),
     aimRel: [0, 1, 2].map((k) => lerp(ar[k], br[k])),
@@ -356,7 +357,7 @@ function project(world) {
   return p;
 }
 const hud = createHud({
-  D, W, H, U, PORTRAIT, sec, rate, sOfTau, sepAt, CA_T, VANTOR_T, BURNS, CUTS, SHOTS, shotAt, DUR, project,
+  D, W, H, U, PORTRAIT, sec, rate, sOfTau, sepAt, CA_T, VANTOR_T, BURNS, CUTS, SHOTS, shotAt, DUR, project, relAt,
 });
 
 // ---------------------------------------------------------------------------
@@ -468,7 +469,7 @@ function setState(s) {
     // (sideways, in the orbit's horizontal), aimed at the bisector of the two.
     const u = v3.normalize(v3.subtract(cosW, x36W, new v3()), new v3());
     const perp = v3.normalize(v3.subtract(NW, v3.multiplyByScalar(u, v3.dot(NW, u), new v3()), new v3()), new v3());
-    const th = Cesium.Math.toRadians(cam.pairTh);
+    const th = Cesium.Math.toRadians(cam.pairTh * (PORTRAIT ? 1.3 : 1));
     v3.add(x36W, v3.multiplyByScalar(u, -cam.pairD * Math.cos(th), new v3()), camPos);
     v3.add(camPos, v3.multiplyByScalar(perp, cam.pairD * Math.sin(th), new v3()), camPos);
     const a1 = v3.normalize(v3.subtract(x36W, camPos, new v3()), new v3());
@@ -481,7 +482,11 @@ function setState(s) {
   // Up: local zenith; in portrait chase shots, the direction of flight (so the
   // pair travels up the tall frame and Earth's limb runs down one side).
   const vup = PORTRAIT ? cam.vup : 0;
-  const upHint = v3.normalize(v3.lerp(RW, TW, vup, new v3()), new v3());
+  let upHint = v3.normalize(v3.lerp(RW, TW, vup, new v3()), new v3());
+  if (PORTRAIT && cam.pairD > 0) {
+    // Portrait true-size shot: run the pair up the tall frame.
+    upHint = v3.normalize(v3.subtract(cosW, x36W, new v3()), new v3());
+  }
   let right = v3.normalize(v3.cross(dir, upHint, new v3()), new v3());
   let up = v3.cross(right, dir, new v3());
   {
@@ -491,13 +496,14 @@ function setState(s) {
     const tanH = PORTRAIT ? Math.tan(fovR / 2) * aspect : Math.tan(fovR / 2);
     const tanV = PORTRAIT ? Math.tan(fovR / 2) : Math.tan(fovR / 2) / aspect;
     const ndcX = (PORTRAIT ? 0 : 0.18) * cam.comp;
-    const ndcY = (PORTRAIT ? -0.04 : 0.06) * cam.comp;
+    const ndcY = (PORTRAIT ? -0.04 : 0.06) * cam.comp + cam.compY;
     v3.normalize(v3.add(v3.add(dir, v3.multiplyByScalar(right, -ndcX * tanH, new v3()), new v3()),
       v3.multiplyByScalar(up, -ndcY * tanV, new v3()), new v3()), dir);
     right = v3.normalize(v3.cross(dir, upHint, new v3()), new v3());
     up = v3.cross(right, dir, new v3());
   }
   scene.camera.setView({ destination: camPos, orientation: { direction: dir, up } });
+  scene.skyBox.show = !sh.noSky;
   scene.camera.frustum.fov = Cesium.Math.toRadians(PORTRAIT ? cam.fov * 1.55 : cam.fov);
   {
     const icrf = Cesium.Transforms.computeIcrfToFixedMatrix(jd) || M;
@@ -535,8 +541,8 @@ function setState(s) {
   bCos.position = cosW;
   bX36.scale = (pxX > 24 ? 0.16 : 0.5) * U;
   bCos.scale = (pxC > 24 ? 0.16 : 0.5) * U;
-  bX36.color = Cesium.Color.WHITE.withAlpha(pxX > 60 ? 0.35 : 1);
-  bCos.color = Cesium.Color.WHITE.withAlpha(pxC > 60 ? 0.35 : 1);
+  bX36.color = Cesium.Color.WHITE.withAlpha(pxX > 60 ? 0.6 : 1);
+  bCos.color = Cesium.Color.WHITE.withAlpha(pxC > 60 ? 0.6 : 1);
 
   // Burn flare
   let flare = 0;
@@ -602,6 +608,12 @@ function setState(s) {
     }
     polyline(pts, cols, 1.4);
   }
+  // Element-set uncertainty at closest approach: ±1.5 km along-track.
+  if (sh.id === 'ca') {
+    const a0 = v3.add(cosW, v3.multiplyByScalar(TW, -1500, new v3()), new v3());
+    const a1 = v3.add(cosW, v3.multiplyByScalar(TW, 1500, new v3()), new v3());
+    polyline([a0, cosW, a1], [COL_COS.withAlpha(0), COL_COS.withAlpha(0.45), COL_COS.withAlpha(0)], 10);
+  }
   // RIC reference rings (orbital plane) during proximity
   const gridA = Math.min(1, Math.max(0, (8e3 - Math.max(sep, camDistX)) / 3e3)) * (cam.mag > 0.4 ? 1 : 0.35);
   if (gridA > 0.01) {
@@ -628,7 +640,7 @@ function setState(s) {
   const r0 = relAt(t - 30);
   const relSpeed = Math.hypot(r1[0] - r0[0], r1[1] - r0[1], r1[2] - r0[2]) / 60;
 
-  return { sh, t, b, jd, x36W, cosW, RW, TW, NW, rel, sep, mag, gridA, lx, camDistX, vX: vXv, vC, relSpeed };
+  return { sh, t, b, jd, x36W, cosW, RW, TW, NW, rel, sep, sepG, mag, gridA, lx, camDistX, vX: vXv, vC, relSpeed };
 }
 
 async function frame(s) {

@@ -46,7 +46,7 @@
     display: grid; grid-template-columns: repeat(5, 1fr); gap: calc(12 * var(--u)); }
   .ch i { display: block; height: calc(6 * var(--u)); background: rgba(255,255,255,0.22); border-radius: calc(3 * var(--u)); overflow: hidden; }
   .ch b { display: block; height: 100%; width: 0; background: #fff; }
-  .ch span { display: block; margin-top: calc(10 * var(--u)); white-space: nowrap; font: 700 calc(24 * var(--u))/1 Inter, sans-serif;
+  .ch span { display: block; margin-top: calc(10 * var(--u)); white-space: nowrap; font: 800 calc(26 * var(--u))/1 Inter, sans-serif;
     letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
   .ch.on span { color: var(--ink); }
 
@@ -90,7 +90,7 @@
   #readout .val small { font-size: 0.42em; color: var(--ink-2); margin-left: 0.12em; letter-spacing: 0; }
   #readout .ctx { margin-top: calc(10 * var(--u)); font: 600 calc(32 * var(--u))/1.2 Inter, sans-serif; color: var(--ink); }
 
-  #mag { position: absolute; left: var(--pad); bottom: calc(196 * var(--u)); padding: calc(7 * var(--u)) calc(14 * var(--u)); border-radius: calc(6 * var(--u));
+  #mag { position: absolute; left: calc(56 * var(--u) + 536 * var(--u)); bottom: calc(246 * var(--u)); padding: calc(7 * var(--u)) calc(14 * var(--u)); border-radius: calc(6 * var(--u));
     font: 800 calc(28 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.02em; color: #000; background: #fff; }
   #mag.enlarged { background: var(--burn); }
 
@@ -105,11 +105,16 @@
   #clock .light.day { color: #ffe08a; } #clock .light.day i { background: #ffd34d; box-shadow: 0 0 calc(14 * var(--u)) #ffd34d; }
   #clock .light.night { color: #b9c8ff; } #clock .light.night i { background: #20263a; border: calc(3 * var(--u)) solid #b9c8ff; }
   #readout .rel { margin-top: calc(6 * var(--u)); font: 600 calc(28 * var(--u))/1.2 Inter, sans-serif; color: var(--ink-2); }
+  /* Inset + chips */
+  #inset { position: absolute; left: var(--pad); bottom: calc(196 * var(--u)); width: calc(520 * var(--u)); height: calc(330 * var(--u)); }
+  #relchip { position: absolute; left: calc(56 * var(--u) + 536 * var(--u)); bottom: calc(196 * var(--u)); padding: calc(7 * var(--u)) calc(14 * var(--u));
+    border-radius: calc(6 * var(--u)); font: 800 calc(26 * var(--u))/1 Inter, sans-serif; color: #fff; background: rgba(255,90,60,0.85); opacity: 0; }
+  .event { background: rgba(4,8,14,0.62); padding: calc(10 * var(--u)) calc(16 * var(--u)) calc(10 * var(--u)) calc(14 * var(--u)); border-radius: calc(8 * var(--u)); width: fit-content; }
   /* Timeline */
   #tlwrap { position: absolute; left: var(--pad); right: var(--pad); bottom: calc(52 * var(--u)); }
   #tlwrap .lab { font: 700 calc(24 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.1em; color: var(--ink-3); margin-bottom: calc(8 * var(--u)); }
   #tlwrap .lab span { color: var(--burn); } #tlwrap .lab b { color: var(--ink-2); font-weight: 700; }
-  #timeline { height: calc(76 * var(--u)); }
+  #timeline { height: calc(70 * var(--u)); }
   #timeline svg { width: 100%; height: 100%; overflow: visible; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
   #interstitial { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0;
     background: radial-gradient(ellipse at center, rgba(0,0,0,0.55), rgba(0,0,0,0.15) 70%); }
@@ -159,15 +164,19 @@
   body.portrait #caption.hook h1 { font-size: calc(76 * var(--u)); }
   body.portrait #caption p, body.portrait #caption.hook p { font-size: calc(38 * var(--u)); max-width: none; }
   body.portrait #events { top: calc(700 * var(--u)); width: auto; right: var(--pad); }
-  body.portrait #readout { right: auto; left: var(--pad); bottom: calc(580 * var(--u)); text-align: left; }
-  body.portrait #readout .val { font-size: calc(132 * var(--u)); }
-  body.portrait #mag { left: auto; right: var(--pad); bottom: calc(590 * var(--u)); }
-  body.portrait #tlwrap { bottom: calc(440 * var(--u)); }
-  body.portrait #timeline { height: calc(80 * var(--u)); }
+  body.portrait #readout { right: auto; left: var(--pad); bottom: calc(420 * var(--u)); text-align: left; }
+  body.portrait #readout .val { font-size: calc(104 * var(--u)); }
+  body.portrait #mag { left: auto; right: var(--pad); bottom: calc(912 * var(--u)); }
+  body.portrait #tlwrap { display: none; }
+  body.portrait #inset { left: auto; right: var(--pad); bottom: calc(420 * var(--u)); width: calc(560 * var(--u)); height: calc(430 * var(--u)); }
+  body.portrait #relchip { left: auto; right: var(--pad); bottom: calc(866 * var(--u)); }
+  body.portrait #readout { max-width: calc(400 * var(--u)); }
+  body.portrait #readout .light { margin: 0 0 calc(18 * var(--u)); display: inline-flex; }
+  body.portrait .ch span { font-size: calc(24 * var(--u)); }
   body.portrait #interstitial .d { font-size: calc(120 * var(--u)); }
   body.portrait #topshade { height: calc(1000 * var(--u)); }
   body.portrait #botshade { height: calc(1200 * var(--u)); background: linear-gradient(transparent, rgba(0,0,0,0.78) 45%, rgba(0,0,0,0.85)); }
-  body.portrait #credits { white-space: normal; bottom: calc(400 * var(--u)); font-size: calc(17 * var(--u)); }
+  body.portrait #credits { white-space: normal; bottom: calc(330 * var(--u)); font-size: calc(17 * var(--u)); }
   body.portrait #endcard .panel { width: calc(960 * var(--u)); }
   body.portrait #endcard .big { font-size: calc(210 * var(--u)); }
   body.portrait #endcard .lead { font-size: calc(46 * var(--u)); }
@@ -188,14 +197,16 @@
   <div id="chapters" class="shadow-text"></div>
   <div id="caption" class="shadow-text"><h1></h1><p></p></div>
   <div id="events" class="shadow-text"></div>
-  <div id="clock" class="shadow-text"><div class="date"></div><div class="time"></div><div class="pills"><div class="ff">Fast-forward</div><div class="rate"></div></div><div class="light"></div></div>
+  <div id="clock" class="shadow-text"><div class="date"></div><div class="time"></div><div class="pills"><div class="ff">Fast-forward · Earth slowed</div><div class="rate"></div></div><div class="light"></div></div>
   <div id="readout" class="shadow-text"><div class="label">DISTANCE APART</div><div class="val"></div><div class="ctx"></div><div class="rel"></div></div>
   <div id="mag" class="shadow-text"></div>
-  <div id="tlwrap"><div class="lab">22 DAYS · <span>● ENGINE BURN</span> · <b>○ CLOSEST PASS</b></div><div id="timeline"></div></div>
-  <div id="interstitial"><div class="k">22 days earlier</div><div class="d">SEP 30, 2026</div></div>
+  <div id="tlwrap"><div id="timeline"></div></div>
+  <canvas id="inset"></canvas>
+  <div id="relchip">Red path: Cosmos as seen from X36</div>
+  <div id="interstitial"><div class="k">18 days earlier</div><div class="d">SEP 30, 2026</div></div>
   <div id="endcard"></div>
   <div id="endlogo"><img src="logo.svg" alt=""><span>GOD'S EYE VIEW</span></div>
-  <div id="credits">Reconstruction, not tracking data · Orbits: CelesTrak, KeepTrack, LeoLabs, M. Langbroek · Imagery: Esri, Maxar, Earthstar Geographics, NASA · Sky: ESO/S. Brunier (CC BY 4.0), Yale BSC</div>
+  <div id="credits">Reconstruction from public Space-Track element sets (41 Cosmos 2612, 54 ICEYE-X36), not tracking data · Analyses: LeoLabs, KeepTrack, M. Langbroek, COMSPOC, Integrity ISR · Imagery: Esri, Maxar, Earthstar Geographics, NASA · Sky: ESO/S. Brunier (CC BY 4.0), Yale BSC</div>
   <div id="dip" style="position:absolute;inset:0;background:#000;opacity:0"></div>
 </div>
 <script src="/cesium/Cesium.js"></script>
