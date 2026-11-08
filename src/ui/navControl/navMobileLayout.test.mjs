@@ -57,7 +57,7 @@ test('short landscape phones use a switcher row and center nav clear of top acti
   );
 });
 
-test('tablet, desktop and exclusive modes retain their existing nav rules', () => {
+test('tablet and desktop nav rules carry the timeline lift; exclusive modes hide it', () => {
   assert.match(
     nav,
     /@media \(max-width: 900px\)\s*\{\s*\.gev-nav\s*\{\s*right: 12px;\s*bottom: calc\(2vh \+ 7\.5rem \+ var\(--world-timeline-lift, 0px\)\);/,
