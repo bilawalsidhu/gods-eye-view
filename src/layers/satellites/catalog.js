@@ -124,8 +124,6 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             satrec,
             group: 'dense',
             launchYear: tleLineLaunchYear(entry.line1),
-            line1: entry.line1,
-            line2: entry.line2,
             // The dense feed is CelesTrak's Starlink group.
             satelliteClass: 'starlink',
             ucs: null,

@@ -14,7 +14,7 @@ export function createState({ services }) {
 
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  // Satellite catalog: { noradId → { name, satrec, group, line1, line2,
+  // Satellite catalog: { noradId → { name, satrec, group, launchYear,
   // satelliteClass, ucs, satcat } } — class, UCS and SATCAT records from
   // src/layers/satellites/classes.js and the sources the update read.
 

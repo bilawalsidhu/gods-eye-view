@@ -150,7 +150,7 @@ export const DATA_CREDITS = [
   {
     key: 'ucs-satellite-database',
     html:
-      'Satellite operators and purposes: ' +
+      'Satellite purposes: ' +
       '<a href="https://www.ucsusa.org/satellite_database" target="_blank" rel="noopener">UCS Satellite Database</a> ' +
       '(UCS-Satellite-Database 5-1-2023), Union of Concerned Scientists',
   },

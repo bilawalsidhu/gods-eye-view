@@ -2,9 +2,9 @@
 '''Maintainer-only UCS Satellite Database pack build (openpyxl).
 
 Reads the UCS Excel release and writes the compact pack the satellites layer
-loads: one row per satellite, keyed by NORAD number, with string-table indexes
-for the repeated text columns. Starlink rows are left out: the layer files
-every STARLINK object under its own class and operator without them.
+loads: one row per satellite, keyed by NORAD number, with a string-table index
+for its purpose, the one column the layer's classes read. Starlink rows are
+left out: the layer files every STARLINK object under its own class by name.
 
 Usage: python scripts/build-ucs-satellites.py "<path>/UCS-Satellite-Database 5-1-2023.xlsx"
 '''
@@ -26,12 +26,7 @@ URL = 'https://www.ucsusa.org/satellite_database'
 
 # Output column -> spreadsheet header.
 COLUMNS = {
-    'operator': 'Operator/Owner',
-    'operatorCountry': 'Country of Operator/Owner',
     'purpose': 'Purpose',
-    'detailedPurpose': 'Detailed Purpose',
-    'users': 'Users',
-    'orbitClass': 'Class of Orbit',
 }
 STARLINK = re.compile(r'\bstarlink\b', re.I)
 
@@ -65,11 +60,12 @@ def build(xlsx: Path) -> dict:
         except (TypeError, ValueError):
             invalid_norad += 1
             continue
+        if norad <= 0:
+            invalid_norad += 1
+            continue
         record = [norad]
         for key, column in COLUMNS.items():
             text = clean(row[header[column]])
-            if key == 'orbitClass':
-                text = text.upper()
             if text not in index[key]:
                 index[key][text] = len(tables[key])
                 tables[key].append(text)
