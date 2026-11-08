@@ -225,7 +225,7 @@ body.mobile-shell .gev-nav {
     /* Keep the short screen's top-right actions reachable as well. */
     right: 50%;
     transform: translateX(50%);
-    /* The timeline lift must not push the control off a short screen. */
+    /* Keep the control on a short screen (tall switcher or large root font). */
     bottom: min(
       calc(
         var(--mobile-view-switcher-bottom) + var(--world-timeline-lift, 0px) +
