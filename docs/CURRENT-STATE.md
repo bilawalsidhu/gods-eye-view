@@ -7002,6 +7002,39 @@ ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
 
+## Water Surface layer
+
+Water Surface (`water-surface`, Weather group) draws one animated sea surface
+over the active map stack: a 0.9° × 0.7° rectangle at local mean sea level
+that follows the view, with a custom Cesium fabric (`GevWaterSurface`) that
+mixes three scrolling samples of Cesium's tileable water normal map, a Fresnel
+blend between the water body and the sky, and the scene light's specular glint
+through `czm_phong`. Land hides it through the depth buffer: the Google
+Photorealistic tileset is the depth on Google 3D; on the globe stacks the layer
+turns `globe.depthTestAgainstTerrain` on while enabled and restores the previous
+value on disable.
+
+Height is the EGM96 geoid undulation at the view centre (`src/data/geoid.js`)
+plus the row's **Sea level offset** slider (0–6 m, default 1.2 m), which lifts the
+surface clear of the photogrammetric sea mesh. On the flat-ellipsoid fallback
+globe (terrain unavailable, Google 3D off) the sea datum is ellipsoid height zero
+instead, because that globe has no geoid; a map-stack change that moves the datum
+rebuilds the surface on the next camera stop. `diagnostics().datum` reports
+`geoid` or `ellipsoid`; `opacity` and `waveScale` are
+params without row controls. Rectangle edges snap to a 0.0005° grid and the
+texture repeats a whole number of cells, so a rebuild (once the view centre moves
+more than 12 km from the rectangle centre, on `camera.moveEnd`) keeps the wave
+pattern in place. Above 120 km the surface hides and the row reads
+`Hidden above 120 km: fly closer`. The primitive is unpickable; the layer holds
+continuous rendering through the render governor only while enabled, and a
+`preRender` listener advances the wave clock from enable time so the animation
+does not depend on the frame rate. Share links keep the layer under token `00`.
+Attribution (`WATER_SURFACE_CREDIT`) registers on first enable. Voice is off for
+this layer for now (the Realtime prompt is at its budget), and it has no analyst
+records. The layer is
+`src/layers/water/` (pure `policy.js` and `material.js`, Cesium-injected
+`index.js`); the app wiring is `src/app/layers/waterSurface.js`.
+
 ## Wind forecast models
 
 Wind supports selectable GFS/IFS models with persisted model choice. Each fetch chooses the available cycle and forecast step nearest the current time; rows show both issue and valid UTC timestamps. Grid identities include model, cycle, forecast step and any requested scalar field. The six model/field cache slots each retain the last two issued grids for manifest/grid rollover, coalesce concurrent requests, retain last-good data on failures and retry no faster than once per minute. Model changes clear the old field immediately, cancel old acquisition and ignore superseded results. Last-good data is marked stale; the wind row shows it, and `get_wind` returns `stale` and adds "(forecast may be stale)" to its summary.

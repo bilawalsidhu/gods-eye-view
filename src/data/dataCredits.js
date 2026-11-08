@@ -628,6 +628,15 @@ export const NATURAL_EARTH_CREDIT = {
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
 
+/** Registered while the Water Surface layer is on: its wave normal map is
+ * Cesium's own asset, served from the Cesium bundle (Apache-2.0). */
+export const WATER_SURFACE_CREDIT = {
+  key: 'water-surface',
+  html:
+    'Water surface: synthetic sea at EGM96 mean sea level; wave normal map from ' +
+    '<a href="https://cesium.com/platform/cesiumjs/" target="_blank" rel="noopener">CesiumJS</a> (Apache-2.0)',
+};
+
 /** Registered when the first bundled US county or place outline resolves
  * (public domain — credited as a courtesy). */
 export const US_CENSUS_CREDIT = {

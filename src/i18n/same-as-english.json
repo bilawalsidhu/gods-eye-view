@@ -39,6 +39,7 @@
     "▲ {frp} MW"
   ],
   "de": [
+    "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
@@ -215,6 +216,7 @@
     "▲ {frp} MW"
   ],
   "es": [
+    "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
@@ -354,6 +356,7 @@
     "iNaturalist"
   ],
   "fr": [
+    "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
     "ALTITUDE",
@@ -548,6 +551,7 @@
     "▲ {frp} MW"
   ],
   "it": [
+    "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
     "AFRICA",
@@ -728,6 +732,7 @@
     "iNaturalist"
   ],
   "ja": [
+    "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
@@ -783,6 +788,7 @@
     "▲ {frp} MW"
   ],
   "pt": [
+    "+{value} m",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
