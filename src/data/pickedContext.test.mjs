@@ -64,6 +64,30 @@ test('an entity-backed feature resolves through the context store', () => {
   });
 });
 
+test('a draw-set item resolves through the context record its meta carries', () => {
+  const carrier = { show: true };
+  registerEntityContext(carrier, {
+    id: 'local-datacenters:8',
+    layerId: 'local-datacenters',
+    label: 'Data Center 8',
+    latitude: 30.3,
+    longitude: -97.5,
+  });
+  // A Cesium pick of a draw-set item: its id is the item's pick id.
+  const picked = { id: { set: 'local-datacenters#1:fills', id: '8', meta: carrier }, primitive: {} };
+  assert.deepEqual(resolvePickedContext(picked, { dataManager: manager() }), {
+    layerId: 'local-datacenters',
+    id: 'local-datacenters:8',
+    label: 'Data Center 8',
+    kind: 'feature',
+    lat: 30.3,
+    lon: -97.5,
+  });
+  // Hidden, it is not what the user points at.
+  carrier.show = false;
+  assert.equal(resolvePickedContext(picked, { dataManager: manager() }), null);
+});
+
 test('disabled layers, trails and empty picks never resolve', () => {
   registerPickOwner('military', (id) => id === 'm1');
   assert.equal(resolvePickedContext({ id: 'm1' }, { dataManager: manager() }), null, 'military is disabled');

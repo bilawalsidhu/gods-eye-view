@@ -45,10 +45,23 @@ Callbacks must be ready before enable and remain usable through destruction.
 
 Disable retains the loaded dataset for reuse and clears selection and listeners.
 Concurrent enables share one load. Destroy is permanent, aborts pending fetches,
-discards late results, and clears the owned data source, context records, overlays,
+discards late results, and clears the owned draw sets, context records, overlays,
 input handler and listeners. The layer never creates an application context store,
 overlay host, viewer, or render scheduler. The consumer must resolve one compatible
 Cesium installation shared with its viewer; it must not bundle separate copies.
+
+The layers draw, size their stems and fly the camera through the renderer's
+ports. A viewer the application has bound a renderer to needs nothing more; a
+Cesium viewer with no renderer bound loads
+`gods-eye-view/render/cesium/unbound` once first; until then the layer reports
+an error naming it, as it does for a dataset it cannot load.
+A selected feature is the context record its draw item carries as `meta`; the
+layer no longer sets the viewer's `selectedEntity`.
+Features keep their own simplestyle `fill`, `fill-opacity`, `stroke`,
+`stroke-opacity`, `stroke-width`, `marker-color` and `marker-size`, given as hex,
+`rgb()` or `hsl()` colours; a `marker-symbol` draws the plain pin. Polygons
+with heights are drawn at them, outlined; points with heights stand their pin
+on the stem's tip. Edges follow rhumb lines.
 
 `gods-eye-view/infrastructure/geojson` exports the lower-level
 `createLocalGeoJsonLayer(options, services)` and existing infrastructure overlay
@@ -57,6 +70,6 @@ Consumers use the package exports, which do not import standalone application
 globals.
 
 Dataset files and source/license notices remain under `src/data/local_data/`.
-Their input counts are 4,351 datacenter features and 704 dam features. Cesium may
-expand multipart geometries into multiple entities; entity and stem counts are
-different measurements. This change does not refresh or relicense the datasets.
+Their input counts are 4,351 datacenter features and 704 dam features. A multipart
+geometry draws as several parts, each with its own stem; part and stem counts are
+different measurements from feature counts. This change does not refresh or relicense the datasets.

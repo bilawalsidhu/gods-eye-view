@@ -96,6 +96,10 @@ const DRAW_FROM_CALLER = new Set([
   // input still is), but none of their modules loads a factory.
   './layers/flights',
   './layers/military',
+  // Not wholly Cesium-free (its pointer input still is), but its layers
+  // draw, size and fly through the ports alone.
+  './infrastructure',
+  './infrastructure/geojson',
 ]);
 
 /**

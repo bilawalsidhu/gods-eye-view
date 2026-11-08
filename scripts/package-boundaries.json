@@ -53,7 +53,10 @@
       "src/styles/styleStages.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/color.js",
+      "src/geo/sphere.js",
+      "src/geo/rhumb.js"
     ],
     "external": ["cesium"]
   },

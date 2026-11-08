@@ -7,10 +7,11 @@ import { findPickOwner, resolvePickId } from './pickRegistry.js';
  * layer, which record, and its display label.
  *
  * Two lanes, in order:
- *  1. Context-store carriers. Entity-backed layers (infrastructure GeoJSON,
- *     selected vessels, fires, installations) write a `contextId` into the
- *     picked object's entity record, and the store record already carries the label and
- *     position voice uses everywhere else.
+ *  1. Context-store carriers. Entity-backed layers (selected vessels, fires,
+ *     installations) write a `contextId` into the picked object's entity
+ *     record, and layers drawing through the draw port (infrastructure
+ *     GeoJSON) into a draw item's `meta`; the store record already carries
+ *     the label and position voice uses everywhere else.
  *  2. Pick owners. Primitive-backed layers (aircraft, satellites, vessels)
  *     register an ownership predicate in `pickRegistry`; the owning layer's
  *     `findByQuery` turns the pick id into a live descriptor.
@@ -46,12 +47,21 @@ export function pickedKindForLayer(layerId) {
   return KIND_BY_LAYER[layerId] || 'feature';
 }
 
+/** A pick of a draw-set item (its id is `{set, id, meta}`): the item's `meta`. */
+function drawItemMeta(picked) {
+  const id = picked?.id;
+  return id && typeof id.set === 'string' && typeof id.id === 'string'
+    ? id.meta
+    : undefined;
+}
+
 function contextCarrierRecord(picked, dataManager) {
   const store = getContextStore();
   for (const carrier of [
     picked?.id,
     picked?.primitive?.id,
     picked?.primitive,
+    drawItemMeta(picked),
   ]) {
     const contextId = readEntityRecord(carrier)?.contextId;
     if (!contextId) continue;

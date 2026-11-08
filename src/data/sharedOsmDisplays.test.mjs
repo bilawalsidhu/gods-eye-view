@@ -4,6 +4,7 @@ import * as C from 'cesium';
 import { showOsmCredit, hideOsmCredit } from './dataCredits.js';
 import { bindFakeCesiumCredits, fakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
 import { createInfrastructureLayers } from './infrastructure.js';
 import { createBhoteKoshiLocatorLayer } from './bhoteKoshiLocator.js';
@@ -40,7 +41,11 @@ function assertCredit(v) {
   assert.ok(v.credits.some((credit) => credit.showOnScreen && credit.html.includes('>© OpenStreetMap<')));
 }
 for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce the shared OSM credit when data displays`, async (t) => {
-  const v = viewer(t);
+  // They draw through the renderer's ports: a fake one, with the credits.
+  const ground = bindFakeGroundRenderer({});
+  t.after(ground.unbind);
+  const { capabilities, canvas, draw, frame, camera, query, globe } = ground.renderer;
+  const v = viewer(t, { capabilities, canvas, draw, frame, camera, query, globe });
   t.mock.method(globalThis, 'fetch', async () => ({ ok: true, text: async () => JSON.stringify({ type: 'Feature', id: 'test', properties: { name: 'Site' }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [0.01, 0], [0, 0.01], [0, 0]]] } }) }));
   const layer = createInfrastructureLayers({ overlayHost, registerEntityContext: noop, selectEntityContext: noop, clearSelectedEntityContextForLayer: noop, removeEntityContextsForLayer: noop, governorRequestRender: noop, showOsmCredit, hideOsmCredit })[index];
   await layer.enable(v);

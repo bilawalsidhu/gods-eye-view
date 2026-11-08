@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import * as Cesium from 'cesium';
 import { createInfrastructureLayers } from 'gods-eye-view/infrastructure';
 import { createLocalGeoJsonLayer } from 'gods-eye-view/infrastructure/geojson';
 import { fakeInput } from '../input/testDoubles.mjs';
+import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 
 function services() {
   const records = new Map();
@@ -119,7 +119,6 @@ test('two viewers use their supplied contexts and dispose independently', async 
   }));
   const hosts = [services(), services()];
   const instances = hosts.map((host) => {
-    const sources = new Cesium.DataSourceCollection();
     const layer = createLocalGeoJsonLayer(
       {
         id: 'local-dams',
@@ -130,19 +129,25 @@ test('two viewers use their supplied contexts and dispose independently', async 
       },
       host,
     );
+    // A click picks the feature's stem, as the renderer's pick names it.
     const viewer = {
-      dataSources: sources,
       scene: {
-        canvas: {},
-        preRender: new Cesium.Event(),
-        requestRender() {},
         screenSpaceCameraController: { enableInputs: true },
-        pick: () => ({ id: sources.get(0).entities.values[0] }),
+        pick: () => {
+          const [stem] = fake.set('stems').items.values();
+          return {
+            id: {
+              set: fake.set('stems').spec.id,
+              id: stem.id,
+              meta: stem.meta,
+            },
+          };
+        },
       },
-      camera: { moveEnd: new Cesium.Event(), flyTo() {} },
     };
+    const fake = bindFakeGroundRenderer(viewer);
     const input = fakeInput(viewer);
-    return { layer, viewer, click: () => input.click({ x: 0, y: 0 }) };
+    return { layer, viewer, fake, click: () => input.click({ x: 0, y: 0 }) };
   });
   t.after(() =>
     instances.forEach(({ layer, viewer }) => layer.destroy(viewer)),
@@ -157,10 +162,16 @@ test('two viewers use their supplied contexts and dispose independently', async 
   instances[0].click();
   assert.ok(hosts[0].selection());
   assert.equal(hosts[1].selection(), undefined);
+  assert.deepEqual(
+    instances[0].fake.flights.map(({ destination }) => destination.height),
+    [5000],
+    'the click flies to the feature',
+  );
   instances[0].layer.destroy(instances[0].viewer);
   assert.equal(hosts[0].records.size, 0);
   assert.equal(hosts[1].records.size, 1);
-  assert.equal(instances[1].viewer.dataSources.length, 1);
+  assert.equal(instances[0].fake.liveSets().length, 0);
+  assert.equal(instances[1].fake.liveSets().length, 6);
 });
 
 test('consumer build includes only infrastructure code and resolves assets under a non-root base', async () => {
@@ -185,47 +196,32 @@ test('consumer build includes only infrastructure code and resolves assets under
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
+  // It draws through the renderer's ports: a viewer of the caller's own
+  // draws once the caller has loaded `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
-    'aircraftRecession.js',
-    'camera.js',
     'cameraControls.js',
     'cameraInput.js',
-    'celestial.js',
-    'common.js',
-    'creditMarkup.js',
-    'credits.js',
+    'color.js',
     'ctrlWheelZoom.js',
     'dispatcher.js',
-    'draw.js',
     'drawHit.js',
-    'drawModels.js',
-    'events.js',
+    'ellipsoid.js',
     'follow.js',
-    'frame.js',
-    'gpuIcons.js',
     'heights.js',
-    'horizon.js',
-    'iconAtlas.js',
-    'iconMotion.js',
-    'iconSegment.js',
-    'iconSet.js',
-    'iconSetPrimitive.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
     'input.js',
     'inputOwnership.js',
-    'internals.js',
-    'julian.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
     'pickRegistry.js',
-    'polyline.js',
-    'query.js',
     'rendererOf.js',
+    'rhumb.js',
     'router.js',
     'scenePick.js',
     'sensorPick.js',
+    'sphere.js',
     'styleStages.js',
     'vector.js',
   ]);

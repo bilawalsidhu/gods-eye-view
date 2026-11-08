@@ -15,7 +15,6 @@
   "src/data/iconSegment.js",
   "src/data/iconSet.js",
   "src/data/iconSetPrimitive.js",
-  "src/data/localGeojsonCore.js",
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
   "src/layers/cctv/projection.js",
