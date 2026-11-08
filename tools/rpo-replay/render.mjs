@@ -35,8 +35,6 @@ const FORMATS = { '16x9': [1920, 1080], '9x16': [1080, 1920], preview: [960, 540
 const format = args.format || '16x9';
 const [W, H] = FORMATS[format];
 const FPS = Number(args.fps || 30);
-const DUR = 45;
-const total = Math.round(DUR * FPS);
 const TAG = args.tag ? String(args.tag) : '';
 const RS = Number(args.rs || 1);
 const outDir = join(ROOT, 'output/rpo-replay', TAG, format);
@@ -108,8 +106,9 @@ page.on('console', (m) => {
   if (m.type() === 'error' || m.type() === 'warning') console.log(`[page ${m.type()}]`, m.text());
 });
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
-await page.goto(`http://127.0.0.1:${port}/scene.html?w=${W}&h=${H}&rs=${RS}&settle=${args.stills ? 60 : Number(args.settle || 4)}`);
+await page.goto(`http://127.0.0.1:${port}/scene.html?w=${W}&h=${H}&rs=${RS}&settle=${args.stills ? 60 : Number(args.settle || 4)}&fps=${FPS}`);
 await page.waitForFunction(() => window.rpo?.ready, null, { timeout: 180000 });
+const total = Math.round((await page.evaluate(() => window.rpo.duration)) * FPS);
 
 if (args.stills) {
   const dir = join(outDir, 'stills');

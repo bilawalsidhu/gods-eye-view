@@ -4,6 +4,7 @@
 // renders, and resolves once imagery and models have settled.
 
 import { createHud } from './hud.js';
+import { buildStory } from './story.js';
 
 const params = new URLSearchParams(location.search);
 const W = Number(params.get('w') || 1920);
@@ -18,7 +19,8 @@ const T0 = Date.parse(D.t0);
 const DT = D.dt;
 const NS = D.sep_km.length;
 const sec = (iso) => (Date.parse(iso) - T0) / 1000;
-const DUR = 45;
+const FPS = Number(params.get('fps') || 30);
+const SHUTTER = 0.5; // 180° shutter for motion blur
 const SETTLE = Number(params.get('settle') || 4);
 
 // ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ function basis(r, v) {
 // Curvilinear placement: along-track offset is an arc on the anchor orbit.
 function place(anchor, B, rel) {
   const rm = v3.magnitude(anchor);
-  const th = rel[1] / rm;
+  const th = rel[1] / (D.a_ref_km * 1000);
   const c = Math.cos(th);
   const s = Math.sin(th);
   const Rp = new v3(B.R.x * c + B.T.x * s, B.R.y * c + B.T.y * s, B.R.z * c + B.T.z * s);
@@ -86,24 +88,6 @@ function place(anchor, B, rel) {
 // ---------------------------------------------------------------------------
 const CA_T = sec(D.ca.t);
 const VANTOR_T = sec(D.vantor.t);
-const TAU_KEYS = [
-  [0.0, '2026-09-30T07:30:00Z'],
-  [4.0, '2026-09-30T10:20:00Z'],
-  [7.0, '2026-09-30T13:00:00Z'],
-  [12.5, '2026-10-11T23:20:00Z'],
-  [15.0, '2026-10-12T03:20:00Z'],
-  [17.0, '2026-10-15T01:30:00Z'],
-  [18.6, '2026-10-15T04:40:00Z'],
-  [20.6, '2026-10-16T04:40:00Z'],
-  [22.2, '2026-10-16T07:40:00Z'],
-  [25.8, '2026-10-17T15:40:00Z'],
-  [27.6, '2026-10-17T18:10:00Z'],
-  [29.8, D.ca.t, -14 * 60],
-  [35.0, D.ca.t, 11 * 60],
-  [36.4, '2026-10-18T07:00:00Z'],
-  [40.6, '2026-10-21T10:00:00Z'],
-  [45.0, '2026-10-21T13:00:00Z'],
-].map(([s, iso, off = 0]) => [s, sec(iso) + off]);
 
 function monotone(keys) {
   const n = keys.length;
@@ -125,50 +109,57 @@ function monotone(keys) {
       m[i + 1] = t * b * d[i];
     }
   }
-  const f = (s) => {
+  return (s) => {
     let i = 0;
     while (i < n - 2 && s > xs[i + 1]) i++;
     const hh = xs[i + 1] - xs[i];
     const t = Math.min(Math.max((s - xs[i]) / hh, 0), 1);
     const t2 = t * t;
     const t3 = t2 * t;
-    return (
-      (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * hh * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * hh * m[i + 1]
-    );
+    return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * hh * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * hh * m[i + 1];
   };
-  return f;
 }
-const tau = monotone(TAU_KEYS);
-const rate = (s) => (tau(s + 0.01) - tau(s - 0.01)) / 0.02;
 
-const S_SYNC0 = 29.8;
-const S_SYNC1 = 35.0;
-function hermite(s, s0, y0, m0, s1, y1, m1) {
-  const h = s1 - s0;
-  const t = (s - s0) / h;
-  const t2 = t * t;
-  const t3 = t2 * t;
-  return (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * h * m1;
+// Shots own their clocks (see story.js). tau = simulation time; bclock = the
+// clock the Earth, sun and X36's place on its orbit follow (== tau in `true` shots).
+const STORY = buildStory({ sec, D });
+const SHOTS = STORY.shots.map((sh) => ({ ...sh, tauF: monotone(sh.tau) }));
+const DUR = STORY.duration;
+const CUTS = SHOTS.slice(1).map((sh) => sh.s0);
+function shotAt(s) {
+  let k = 0;
+  for (let i = 0; i < SHOTS.length; i++) if (s >= SHOTS[i].s0) k = i;
+  return SHOTS[k];
 }
-const BG_RATE = 110;
+const tau = (s) => shotAt(s).tauF(s);
+function rate(s) {
+  const sh = shotAt(s);
+  const a = Math.max(sh.s0, s - 0.02);
+  const b = Math.min(sh.s1 - 1e-4, s + 0.02);
+  return (sh.tauF(b) - sh.tauF(a)) / (b - a);
+}
 function bclock(s) {
-  if (s >= S_SYNC0 && s <= S_SYNC1) return tau(s);
-  if (s < S_SYNC0) {
-    const y1 = tau(S_SYNC0);
-    return hermite(s, 0, y1 - S_SYNC0 * BG_RATE * 1.15, BG_RATE, S_SYNC0, y1, rate(S_SYNC0));
-  }
-  const y0 = tau(S_SYNC1);
-  return hermite(s, S_SYNC1, y0, rate(S_SYNC1), DUR, y0 + (DUR - S_SYNC1) * BG_RATE * 1.2, BG_RATE);
+  const sh = shotAt(s);
+  return sh.mode === 'true' ? sh.tauF(s) : sh.tauF(sh.s0) + (s - sh.s0) * (sh.bgRate || 140);
 }
+// Video time at which simulation time t is shown (skipping the cold open).
 function sOfTau(t) {
-  let lo = 0;
-  let hi = DUR;
-  for (let k = 0; k < 50; k++) {
-    const mid = (lo + hi) / 2;
-    if (tau(mid) < t) lo = mid;
-    else hi = mid;
+  for (let i = SHOTS.length - 1; i >= 1; i--) {
+    const sh = SHOTS[i];
+    const a = sh.tauF(sh.s0);
+    const b = sh.tauF(sh.s1);
+    if (t >= a && t <= b) {
+      let lo = sh.s0;
+      let hi = sh.s1;
+      for (let k = 0; k < 40; k++) {
+        const mid = (lo + hi) / 2;
+        if (sh.tauF(mid) < t) lo = mid;
+        else hi = mid;
+      }
+      return lo;
+    }
   }
-  return lo;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,64 +167,37 @@ function sOfTau(t) {
 // ---------------------------------------------------------------------------
 const BURNS = D.burns.map((b) => ({ ...b, t: sec(b.t) }));
 
-// Camera keys, in X36's local frame (R up, T velocity, N orbit normal).
-// dist: metres (or auto = f * separation, floored at min). az: 0 = behind X36
-// looking forward. look: 0 = X36, 1 = Cosmos. earth: pull aim to Earth centre.
-const WIDE = { f: 0, look: 0, earth: 0.86, fov: 40, mag: 0, sun: 0.55 };
-const CAM = [
-  { s: 0.0, ...WIDE, dist: 5.4e7, az: 82, el: 36, trail: 2 },
-  { s: 6.0, ...WIDE, dist: 4.6e7, az: 96, el: 34, trail: 20 },
-  { s: 12.5, ...WIDE, dist: 4.4e7, az: 118, el: 30, trail: 30 },
-  { s: 12.5, cut: true, dist: 6.0e5, f: 2.8, az: 50, el: 38, look: 0.5, earth: 0, fov: 34, mag: 0, trail: 3 },
-  { s: 15.4, dist: 1.6e6, f: 2.8, az: 32, el: 36, look: 0.5, earth: 0, fov: 34, mag: 0, trail: 8 },
-  { s: 18.0, dist: 1.4e6, f: 2.8, az: 26, el: 34, look: 0.5, earth: 0, fov: 34, mag: 0, trail: 12 },
-  { s: 20.4, dist: 4.0e4, f: 2.8, az: 40, el: 32, look: 0.5, earth: 0, fov: 34, mag: 0, trail: 10 },
-  { s: 22.4, dist: 6.5e3, f: 2.4, az: 58, el: 34, look: 0.45, earth: 0, fov: 36, mag: 1, mx: 40, trail: 9 },
-  { s: 26.0, dist: 4.6e3, f: 2.4, az: 76, el: 30, look: 0.5, earth: 0, fov: 36, mag: 1, mx: 40, trail: 9 },
-  { s: 29.7, dist: 2.0e3, f: 2.2, az: 104, el: 24, look: 0.5, earth: 0, fov: 36, mag: 1, mx: 25, trail: 4 },
-  { s: 31.9, dist: 1.0e3, f: 2.2, az: 116, el: 22, look: 0.5, earth: 0, fov: 36, mag: 1, mx: 25, trail: 3 },
-  { s: 31.9, cut: true, dist: 26, f: 0, az: 160, el: 0, look: 0.0, earth: 0, fov: 34, mag: 0, trail: 0.5, comp: 0, pairD: 26, pairTh: 22 },
-  { s: 33.9, dist: 22, f: 0, az: 163, el: 0, look: 0.0, earth: 0, fov: 34, mag: 0, trail: 0.5, comp: 0, pairD: 22, pairTh: 18 },
-  { s: 33.9, cut: true, dist: 1.3e3, f: 2.2, az: 96, el: 18, look: 0.5, earth: 0, fov: 36, mag: 1, mx: 25, trail: 1.6 },
-  { s: 35.6, dist: 1.6e3, f: 2.4, az: 100, el: 22, look: 0.5, earth: 0, fov: 36, mag: 1, mx: 25, trail: 2 },
-  { s: 37.0, dist: 1.2e4, f: 2.8, az: 110, el: 30, look: 0.4, earth: 0, fov: 36, mag: 1, mx: 40, trail: 4 },
-  { s: 39.0, dist: 9.0e5, f: 2.8, az: 60, el: 30, look: 0.5, earth: 0, fov: 34, mag: 0, trail: 30 },
-  { s: 41.2, dist: 2.0e6, f: 2.8, az: 44, el: 30, look: 0.5, earth: 0, fov: 34, mag: 0, trail: 60 },
-  { s: 41.2, cut: true, ...WIDE, dist: 4.8e7, az: 80, el: 34, trail: 60 },
-  { s: 45.0, ...WIDE, dist: 4.2e7, az: 96, el: 32, trail: 60 },
-];
-const CUTS = CAM.filter((k) => k.cut).map((k) => k.s);
 const smooth = (x) => x * x * x * (x * (x * 6 - 15) + 10);
 function camAt(s) {
-  // Keys are grouped into shots at cut keys; interpolation never crosses a cut.
-  let start = 0;
-  for (let k = 1; k < CAM.length; k++) if (CAM[k].cut && s >= CAM[k].s) start = k;
-  let end = CAM.length - 1;
-  for (let k = start + 1; k < CAM.length; k++) if (CAM[k].cut) { end = k - 1; break; }
-  let i = start;
-  while (i < end - 1 && s > CAM[i + 1].s) i++;
-  const a = CAM[i];
-  const b = CAM[Math.min(i + 1, end)];
+  const keys = shotAt(s).cam;
+  let i = 0;
+  while (i < keys.length - 2 && s > keys[i + 1].s) i++;
+  const a = keys[i];
+  const b = keys[Math.min(i + 1, keys.length - 1)];
   const u = b === a ? 0 : smooth(Math.min(Math.max((s - a.s) / (b.s - a.s), 0), 1));
   const lerp = (x, y) => x + (y - x) * u;
+  const lg = (x, y) => Math.exp(lerp(Math.log(x), Math.log(y)));
   const ar = a.aimRel || [0, 0, 0];
   const br = b.aimRel || [0, 0, 0];
   return {
-    dist: Math.exp(lerp(Math.log(a.dist), Math.log(b.dist))),
-    f: lerp(a.f, b.f),
+    frame: a.frame || 'rtn',
+    dist: lg(a.dist, b.dist),
+    f: lerp(a.f || 0, b.f || 0),
     az: lerp(a.az, b.az),
     el: lerp(a.el, b.el),
-    look: lerp(a.look, b.look),
-    earth: lerp(a.earth, b.earth),
+    look: lerp(a.look || 0, b.look || 0),
+    earth: lerp(a.earth || 0, b.earth || 0),
     fov: lerp(a.fov, b.fov),
-    mag: lerp(a.mag, b.mag),
+    mag: lerp(a.mag || 0, b.mag || 0),
+    mx: lg(a.mx || 1, b.mx || 1),
+    rtrail: lerp(a.rtrail || 0, b.rtrail || 0),
+    atrail: lerp(a.atrail || 0, b.atrail || 0),
+    sun: lerp(a.sun || 0, b.sun || 0),
+    vup: lerp(a.vup || 0, b.vup || 0),
     comp: lerp(a.comp ?? 1, b.comp ?? 1),
     pairD: lerp(a.pairD || 0, b.pairD || 0),
     pairTh: lerp(a.pairTh || 0, b.pairTh || 0),
-    mx: Math.exp(lerp(Math.log(a.mx || 1), Math.log(b.mx || 1))),
-    trail: Math.exp(lerp(Math.log(a.trail), Math.log(b.trail))),
     aimRel: [0, 1, 2].map((k) => lerp(ar[k], br[k])),
-    sun: lerp(a.sun || 0, b.sun || 0),
   };
 }
 
@@ -253,6 +217,13 @@ const viewer = new Cesium.Viewer('globe', {
   msaaSamples: 1,
 });
 const scene = viewer.scene;
+// Motion-blur accumulator: sub-frames are averaged here, above the WebGL canvas.
+const accum = document.createElement('canvas');
+accum.width = W;
+accum.height = H;
+accum.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;visibility:hidden';
+document.getElementById('globe').appendChild(accum);
+const actx = accum.getContext('2d');
 // Night side: NASA Black Marble city lights (keyless GIBS tiles).
 const nightLayer = viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
   url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
@@ -385,7 +356,7 @@ function project(world) {
   return p;
 }
 const hud = createHud({
-  D, W, H, U, PORTRAIT, sec, rate, sOfTau, sepAt, CA_T, VANTOR_T, BURNS, CUTS, project,
+  D, W, H, U, PORTRAIT, sec, rate, sOfTau, sepAt, CA_T, VANTOR_T, BURNS, CUTS, SHOTS, shotAt, DUR, project,
 });
 
 // ---------------------------------------------------------------------------
@@ -416,14 +387,24 @@ function eclipseLight(worldPos, sunW) {
   return Math.min(1, Math.max(0, 0.5 + e));
 }
 
-async function frame(s) {
+// Orbital speed from vis-viva, using each satellite's own SMA (m/s).
+const MU = 3.986004418e14;
+function smaOffsetAt(t) {
+  const arr = D.sma_offset_km;
+  const x = Math.min(Math.max(t / (DT * 10), 0), arr.length - 1);
+  return arr[Math.round(x)] * 1000;
+}
+
+// Set every scene element for video time s. Returns state for the HUD.
+function setState(s) {
+  const sh = shotAt(s);
   const t = tau(s);
   const b = bclock(s);
   const jd = Cesium.JulianDate.addSeconds(Cesium.JulianDate.fromIso8601(D.t0), b, new Cesium.JulianDate());
   Cesium.Transforms.computeTemeToPseudoFixedMatrix(jd, M);
   const cam = camAt(s);
 
-  // Anchor (X36 at backdrop time) and relative state at simulation time.
+  // Anchor (X36 on the shot's display clock) and relative state at simulation time.
   const A = x36Teme(b);
   const B = basis(A.r, A.v);
   const rel = relAt(t);
@@ -433,25 +414,51 @@ async function frame(s) {
   const TW = toWorld(B.T);
   const NW = toWorld(B.N);
   const sep = v3.distance(x36W, cosW);
+  // Inertial camera basis: X36's frame frozen at the shot start.
+  let cR = RW;
+  let cT = TW;
+  let cN = NW;
+  if (cam.frame === 'inertial') {
+    const A0 = x36Teme(bclock(sh.s0));
+    const B0 = basis(A0.r, A0.v);
+    cR = toWorld(B0.R);
+    cT = toWorld(B0.T);
+    cN = toWorld(B0.N);
+  }
 
-  // Camera
   const sunW = v3.normalize(Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(jd, new v3()), new v3());
   Cesium.Matrix3.multiplyByVector(Cesium.Transforms.computeIcrfToFixedMatrix(jd) || M, sunW, sunW);
   v3.normalize(sunW, sunW);
-  // Camera orbits a pivot on the X36 -> Cosmos line; aimRel only tilts the gaze.
-  const pivot = v3.lerp(x36W, cosW, cam.look, new v3());
+
+  // Frame on Cosmos's guiding centre (its loop averaged over one orbit) and the
+  // loop's size: both change slowly, so the shot doesn't pump every orbit.
+  const P = 5730;
+  const gc = [0, 0, 0];
+  const relS = [];
+  for (let k = 0; k < 16; k++) {
+    const rk = relAt(t - P / 2 + (k + 0.5) * (P / 16));
+    relS.push(rk);
+    gc[0] += rk[0] / 16;
+    gc[1] += rk[1] / 16;
+    gc[2] += rk[2] / 16;
+  }
+  let loop = 0;
+  for (const rk of relS) loop = Math.max(loop, Math.hypot(rk[0] - gc[0], rk[1] - gc[1], rk[2] - gc[2]));
+  const gcW = toWorld(place(A.r, B, gc));
+  const sepG = v3.distance(x36W, gcW) + loop;
+  const pivot = v3.lerp(x36W, gcW, cam.look, new v3());
   v3.lerp(pivot, v3.ZERO, cam.earth, pivot);
   const aim = v3.clone(pivot);
   v3.add(aim, v3.multiplyByScalar(RW, cam.aimRel[0], new v3()), aim);
   v3.add(aim, v3.multiplyByScalar(TW, cam.aimRel[1], new v3()), aim);
   v3.add(aim, v3.multiplyByScalar(NW, cam.aimRel[2], new v3()), aim);
-  const dist = Math.max(cam.dist, cam.f * sep) * (PORTRAIT && cam.earth > 0.5 ? 0.74 : 1);
+  const dist = Math.max(cam.dist, cam.f * sepG) * (PORTRAIT && cam.earth > 0.5 ? 0.74 : 1);
   const az = Cesium.Math.toRadians(cam.az);
   const el = Cesium.Math.toRadians(cam.el);
   const off = new v3();
-  v3.add(off, v3.multiplyByScalar(TW, -Math.cos(el) * Math.cos(az), new v3()), off);
-  v3.add(off, v3.multiplyByScalar(NW, Math.cos(el) * Math.sin(az), new v3()), off);
-  v3.add(off, v3.multiplyByScalar(RW, Math.sin(el), new v3()), off);
+  v3.add(off, v3.multiplyByScalar(cT, -Math.cos(el) * Math.cos(az), new v3()), off);
+  v3.add(off, v3.multiplyByScalar(cN, Math.cos(el) * Math.sin(az), new v3()), off);
+  v3.add(off, v3.multiplyByScalar(cR, Math.sin(el), new v3()), off);
   if (cam.sun > 0) {
     v3.normalize(v3.add(v3.multiplyByScalar(off, 1 - cam.sun, off), v3.multiplyByScalar(sunW, cam.sun, new v3()), off), off);
   }
@@ -471,20 +478,23 @@ async function frame(s) {
   const minR = 6.371e6 + 1.2e5;
   if (v3.magnitude(camPos) < minR) v3.multiplyByScalar(v3.normalize(camPos, camPos), minR, camPos);
   const dir = v3.normalize(v3.subtract(aim, camPos, new v3()), new v3());
-  let right = v3.normalize(v3.cross(dir, RW, new v3()), new v3());
+  // Up: local zenith; in portrait chase shots, the direction of flight (so the
+  // pair travels up the tall frame and Earth's limb runs down one side).
+  const vup = PORTRAIT ? cam.vup : 0;
+  const upHint = v3.normalize(v3.lerp(RW, TW, vup, new v3()), new v3());
+  let right = v3.normalize(v3.cross(dir, upHint, new v3()), new v3());
   let up = v3.cross(right, dir, new v3());
   {
-    // Composition: put the aim point right of centre in 16:9 (the caption
-    // column is on the left); portrait keeps it centred between the text bands.
+    // Composition: put the aim point right of centre in 16:9 (caption column on the left).
     const fovR = Cesium.Math.toRadians(PORTRAIT ? cam.fov * 1.55 : cam.fov);
     const aspect = W / H;
     const tanH = PORTRAIT ? Math.tan(fovR / 2) * aspect : Math.tan(fovR / 2);
     const tanV = PORTRAIT ? Math.tan(fovR / 2) : Math.tan(fovR / 2) / aspect;
-    const ndcX = (PORTRAIT ? 0 : 0.2) * cam.comp;
-    const ndcY = (PORTRAIT ? -0.02 : -0.06) * cam.comp;
+    const ndcX = (PORTRAIT ? 0 : 0.18) * cam.comp;
+    const ndcY = (PORTRAIT ? -0.04 : 0.06) * cam.comp;
     v3.normalize(v3.add(v3.add(dir, v3.multiplyByScalar(right, -ndcX * tanH, new v3()), new v3()),
       v3.multiplyByScalar(up, -ndcY * tanV, new v3()), new v3()), dir);
-    right = v3.normalize(v3.cross(dir, RW, new v3()), new v3());
+    right = v3.normalize(v3.cross(dir, upHint, new v3()), new v3());
     up = v3.cross(right, dir, new v3());
   }
   scene.camera.setView({ destination: camPos, orientation: { direction: dir, up } });
@@ -499,22 +509,14 @@ async function frame(s) {
   }
   scene.camera.frustum.near = Math.max(0.2, Math.min(dist * 0.02, 1000));
 
-  // Models: attitude, magnification, lighting
+  // Models: attitude, fixed per-shot enlargement, lighting
   const camDistX = v3.distance(camPos, x36W);
   const camDistC = v3.distance(camPos, cosW);
-  const pxPerRad = (PORTRAIT ? W : W) / (2 * Math.tan(scene.camera.frustum.fov / 2));
-  const targetPx = 110 * U; // magnified apparent size
-  const magFor = (d, size) => Math.max(1, (targetPx * d) / (pxPerRad * size));
-  // One fixed enlargement per beat (keyed), so the on-screen factor holds still.
-  const rawMag = cam.mag > 0.5 ? cam.mx : 1;
-  const MAG_MAX = 150;
-  const mag = rawMag;
-  void magFor;
-  const nearScale = Math.min(1, Math.max(0, cam.mag * 2));
-  mX36.show = (cam.mag > 0.01 && rawMag <= MAG_MAX) || camDistX < 3000;
-  mCos.show = (cam.mag > 0.01 && rawMag <= MAG_MAX) || camDistC < 6000;
+  const pxPerRad = W / (2 * Math.tan(scene.camera.frustum.fov / 2));
+  const mag = cam.mag > 0.5 ? cam.mx : 1;
+  mX36.show = cam.mag > 0.01 || camDistX < 3000;
+  mCos.show = cam.mag > 0.01 || camDistC < 6000;
   mX36.modelMatrix = modelMatrix(x36W, TW, RW, mag);
-  // Cosmos points its sensor at X36 when close, otherwise flies prograde.
   const toX = v3.normalize(v3.subtract(x36W, cosW, new v3()), new v3());
   const w = Math.min(1, Math.max(0, (60e3 - sep) / 40e3));
   const cx = v3.normalize(v3.lerp(TW, toX, w, new v3()), new v3());
@@ -522,69 +524,83 @@ async function frame(s) {
   mCos.modelMatrix = modelMatrix(cosW, cx, cy, mag);
   const lx = eclipseLight(x36W, sunW);
   const lc = eclipseLight(cosW, sunW);
-  // In Earth's shadow a dim blue fill keeps the shapes legible.
   const lightFor = (l) => new v3(0.6 + (2.3 - 0.6) * l, 0.66 + (2.3 - 0.66) * l, 0.92 + (2.3 - 0.92) * l);
   mX36.lightColor = lightFor(lx);
   mCos.lightColor = lightFor(lc);
 
-  // Glows: shown when the model is too small to read.
+  // Glows: always on as "lights"; they shrink when the model is big enough to read.
   const pxX = (3.25 * mag * pxPerRad) / camDistX;
   const pxC = (3.6 * mag * pxPerRad) / camDistC;
   bX36.position = x36W;
   bCos.position = cosW;
-  bX36.scale = (pxX > 24 ? 0.14 : 0.42) * U;
-  bCos.scale = (pxC > 24 ? 0.14 : 0.42) * U;
-  bX36.color = Cesium.Color.WHITE.withAlpha(pxX > 40 ? 0 : 1);
-  bCos.color = Cesium.Color.WHITE.withAlpha(pxC > 40 ? 0 : 1);
+  bX36.scale = (pxX > 24 ? 0.16 : 0.5) * U;
+  bCos.scale = (pxC > 24 ? 0.16 : 0.5) * U;
+  bX36.color = Cesium.Color.WHITE.withAlpha(pxX > 60 ? 0.35 : 1);
+  bCos.color = Cesium.Color.WHITE.withAlpha(pxC > 60 ? 0.35 : 1);
 
   // Burn flare
   let flare = 0;
   for (const bn of BURNS) {
     const sb = sOfTauCached(bn.t);
+    if (sb === null) continue;
     const k = (s - sb) / 0.9;
     if (k > -0.08 && k < 1) flare = Math.max(flare, k < 0 ? 1 + k / 0.08 : (1 - k) ** 1.6);
   }
   bBurn.position = cosW;
-  bBurn.scale = flare * 0.9 * U;
+  bBurn.scale = flare * 1.1 * U;
   bBurn.color = Cesium.Color.WHITE.withAlpha(flare);
 
-  // Trails and reference geometry
+  // Trails
   clearDynamic();
-  // X36 orbit ring (inertial, at the anchor epoch); fades out up close.
-  const ringA = Math.min(1, Math.max(0, (camDistX - 1.5e4) / 6e4));
-  if (ringA > 0.01) {
-    const P = 5730;
-    const pts = [];
-    const cols = [];
-    const n = 240;
-    for (let k = 0; k <= n; k++) {
-      const tt = b - P + (k / n) * P;
-      pts.push(toWorld(x36Teme(tt).r));
-      const a = 0.06 + 0.5 * (k / n) ** 3;
-      cols.push(COL_X36.withAlpha(a * ringA));
+  // Orbit trails (inertial): where each satellite has actually flown in the last
+  // `atrail` minutes. Only meaningful when the shot runs on one clock.
+  if (cam.atrail > 0 && sh.mode === 'true') {
+    const span = cam.atrail * 60;
+    const n = Math.min(400, Math.max(40, Math.round(span / 15)));
+    for (const which of ['x36', 'cos']) {
+      const pts = [];
+      const cols = [];
+      const col = which === 'x36' ? COL_X36 : COL_COS;
+      for (let k = 0; k <= n; k++) {
+        const tt = t - span + (k / n) * span;
+        if (tt < 0) continue;
+        const Ak = x36Teme(tt);
+        const p = which === 'x36' ? Ak.r : place(Ak.r, basis(Ak.r, Ak.v), relAt(tt));
+        pts.push(toWorld(p));
+        cols.push(col.withAlpha(0.02 + 0.8 * (k / n) ** 2.2));
+      }
+      pts.push(which === 'x36' ? x36W : cosW);
+      cols.push(col.withAlpha(0.85));
+      polyline(pts, cols, which === 'x36' ? 3 : 3);
     }
-    polyline(pts, cols, 1.6);
   }
-  // Cosmos relative trail, expressed in the current anchor frame
-  {
-    const span = cam.trail * 3600;
-    const n = Math.min(900, Math.max(60, Math.round(span / 45)));
+  // Cosmos relative trail (its path as seen from X36), in the current anchor frame
+  if (cam.rtrail > 0) {
+    const span = cam.rtrail * 3600;
+    const n = Math.min(1200, Math.max(60, Math.round(span / 40)));
     const pts = [];
     const cols = [];
     for (let k = 0; k <= n; k++) {
       const tt = t - span + (k / n) * span;
       if (tt < 0) continue;
       pts.push(toWorld(place(A.r, B, relAt(tt))));
-      cols.push(COL_COS.withAlpha(0.04 + 0.92 * (k / n) ** 1.8));
+      cols.push(COL_COS.withAlpha(0.05 + 0.9 * (k / n) ** 1.6));
     }
     pts.push(cosW);
     cols.push(COL_COS.withAlpha(1));
-    polyline(pts, cols, 2.4);
+    polyline(pts, cols, 2.6);
   }
-  // Separation line when the pair is within view range
-  if (sep < 900e3) {
-    const a = Math.min(1, (900e3 - sep) / 200e3) * 0.55;
-    polyline([x36W, cosW], [Cesium.Color.WHITE.withAlpha(a * 0.25), Cesium.Color.WHITE.withAlpha(a * 0.25)], 1);
+  // X36 orbit ring for wide shots (inertial, at the anchor epoch)
+  const ringA = Math.min(1, Math.max(0, (camDistX - 1.5e4) / 6e4)) * (cam.atrail > 0 && sh.mode === 'true' ? 0.35 : 1);
+  if (ringA > 0.01) {
+    const P = 5730;
+    const pts = [];
+    const cols = [];
+    for (let k = 0; k <= 240; k++) {
+      pts.push(toWorld(x36Teme(b - P + (k / 240) * P).r));
+      cols.push(COL_X36.withAlpha((0.05 + 0.3 * (k / 240) ** 2) * ringA));
+    }
+    polyline(pts, cols, 1.4);
   }
   // RIC reference rings (orbital plane) during proximity
   const gridA = Math.min(1, Math.max(0, (8e3 - Math.max(sep, camDistX)) / 3e3)) * (cam.mag > 0.4 ? 1 : 0.35);
@@ -597,31 +613,54 @@ async function frame(s) {
         const p = v3.add(x36W, v3.multiplyByScalar(RW, r * Math.sin(a), new v3()), new v3());
         v3.add(p, v3.multiplyByScalar(TW, r * Math.cos(a), new v3()), p);
         pts.push(p);
-        cols.push(Cesium.Color.WHITE.withAlpha(0.16 * gridA));
+        cols.push(Cesium.Color.WHITE.withAlpha(0.14 * gridA));
       }
       polyline(pts, cols, 1);
     }
-    const ax = (vec, len, col) => polyline(
-      [v3.add(x36W, v3.multiplyByScalar(vec, -len, new v3()), new v3()), v3.add(x36W, v3.multiplyByScalar(vec, len, new v3()), new v3())],
-      [col.withAlpha(0), col.withAlpha(0)], 1,
-    );
-    polyline([x36W, v3.add(x36W, v3.multiplyByScalar(TW, 2600, new v3()), new v3())], [COL_X36.withAlpha(0.5 * gridA), COL_X36.withAlpha(0)], 1.5);
-    polyline([x36W, v3.add(x36W, v3.multiplyByScalar(RW, 1400, new v3()), new v3())], [Cesium.Color.WHITE.withAlpha(0.4 * gridA), Cesium.Color.WHITE.withAlpha(0)], 1.5);
-    void ax;
   }
 
-  hud.update(s, t, b, { x36W, cosW, RW, TW, NW, rel, sep, mag, gridA, lx, camDistX, jd });
-  // Render; re-render only while imagery is still streaming in.
-  scene.render(jd);
-  // Bounded: parents stand in for children still streaming; sequential frames converge.
-  for (let k = 0; k < SETTLE && !(globe.tilesLoaded && mX36.ready && mCos.ready); k++) {
-    await new Promise((r) => setTimeout(r, 60));
-    scene.render(jd);
+  // Speeds: X36 from its state vector; Cosmos by vis-viva with its own SMA.
+  const rC = v3.magnitude(place(A.r, B, rel));
+  const aC = D.a_km * 1000 + smaOffsetAt(t);
+  const vC = Math.sqrt(MU * (2 / rC - 1 / aC));
+  const vXv = Math.sqrt(MU * (2 / v3.magnitude(A.r) - 1 / (D.a_km * 1000)));
+  const r1 = relAt(t + 30);
+  const r0 = relAt(t - 30);
+  const relSpeed = Math.hypot(r1[0] - r0[0], r1[1] - r0[1], r1[2] - r0[2]) / 60;
+
+  return { sh, t, b, jd, x36W, cosW, RW, TW, NW, rel, sep, mag, gridA, lx, camDistX, vX: vXv, vC, relSpeed };
+}
+
+async function frame(s) {
+  const sh = shotAt(s);
+  const K = Math.max(1, (sh.blur | 0) % 2 ? sh.blur | 0 : (sh.blur | 0) + 1);
+  globe.maximumScreenSpaceError = K > 1 ? 4 : 2.2;
+  const mid = Math.floor(K / 2);
+  let hudState = null;
+  accum.style.visibility = K > 1 ? 'visible' : 'hidden';
+  for (let k = 0; k < K; k++) {
+    // Sub-frames spread across the shutter, clamped inside the shot.
+    const sk = K === 1 ? s : Math.min(sh.s1 - 1e-4, Math.max(sh.s0, s + ((k + 0.5) / K - 0.5) * (SHUTTER / FPS)));
+    const st = setState(k === mid ? s : sk);
+    scene.render(st.jd);
+    if (k === 0 || K === 1) {
+      for (let j = 0; j < SETTLE && !(globe.tilesLoaded && mX36.ready && mCos.ready); j++) {
+        await new Promise((r) => setTimeout(r, 60));
+        scene.render(st.jd);
+      }
+    }
+    if (k === mid) {
+      hud.update(s, st.t, st.b, st);
+      hudState = st;
+    }
+    if (K > 1) {
+      actx.globalAlpha = 1 / (k + 1);
+      actx.drawImage(viewer.canvas, 0, 0, W, H);
+    }
   }
   const gl = scene.context._gl;
   gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
-  const dbg = { pX: Cesium.SceneTransforms.worldToWindowCoordinates(scene, x36W), dX: v3.distance(scene.camera.positionWC, x36W), ang: Cesium.Math.toDegrees(v3.angleBetween(scene.camera.directionWC, v3.subtract(x36W, scene.camera.positionWC, new v3()))), mshow: mX36.show, mm: Cesium.Matrix4.getTranslation(mX36.modelMatrix, new v3()), x36W };
-  return { dbg, s, t, b, sep, mag, camR: v3.magnitude(camPos), dist, fov: scene.camera.frustum.fov, fovy: scene.camera.frustum.fovy, aspect: scene.camera.frustum.aspectRatio };
+  return { s, t: hudState.t, sep: hudState.sep, mag: hudState.mag, shot: sh.id, K };
 }
 
 const sOfTauMemo = new Map();
@@ -631,4 +670,4 @@ function sOfTauCached(t) {
 }
 
 await document.fonts.ready;
-window.rpo = { frame, tau, bclock, duration: DUR, ready: true, CAM };
+window.rpo = { frame, tau, bclock, duration: DUR, ready: true, SHOTS };

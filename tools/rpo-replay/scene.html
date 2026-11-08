@@ -84,16 +84,37 @@
   #clock .shadow { display: none;  margin-top: calc(14 * var(--u)); font: 700 calc(26 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.04em; color: #b9c8ff; }
 
   /* Readout */
-  #readout { position: absolute; right: var(--pad); bottom: calc(250 * var(--u)); text-align: right; }
+  #readout { position: absolute; right: var(--pad); bottom: calc(190 * var(--u)); text-align: right; }
   #readout .label { font: 800 calc(26 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.14em; color: var(--ink-2); }
   #readout .val { font: 700 calc(132 * var(--u))/0.95 'JetBrains Mono', monospace; letter-spacing: -0.05em; margin-top: calc(8 * var(--u)); }
   #readout .val small { font-size: 0.42em; color: var(--ink-2); margin-left: 0.12em; letter-spacing: 0; }
   #readout .ctx { margin-top: calc(10 * var(--u)); font: 600 calc(32 * var(--u))/1.2 Inter, sans-serif; color: var(--ink); }
 
-  #mag { position: absolute; left: var(--pad); bottom: calc(276 * var(--u)); padding: calc(7 * var(--u)) calc(14 * var(--u)); border-radius: calc(6 * var(--u));
+  #mag { position: absolute; left: var(--pad); bottom: calc(196 * var(--u)); padding: calc(7 * var(--u)) calc(14 * var(--u)); border-radius: calc(6 * var(--u));
     font: 800 calc(28 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.02em; color: #000; background: #fff; }
   #mag.enlarged { background: var(--burn); }
 
+  .nw { white-space: nowrap; }
+  #clock .pills { display: flex; gap: calc(10 * var(--u)); justify-content: flex-end; margin-top: calc(16 * var(--u)); }
+  #clock .pills .rate { margin-top: 0; }
+  #clock .ff { display: none; padding: calc(10 * var(--u)) calc(14 * var(--u)); font: 800 calc(26 * var(--u))/1.15 Inter, sans-serif;
+    letter-spacing: 0.06em; text-transform: uppercase; color: #000; background: var(--burn); border-radius: calc(8 * var(--u)); }
+  #clock .light { display: inline-flex; align-items: center; gap: calc(10 * var(--u)); margin-top: calc(14 * var(--u));
+    font: 800 calc(26 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; }
+  #clock .light i { width: calc(18 * var(--u)); height: calc(18 * var(--u)); border-radius: 50%; }
+  #clock .light.day { color: #ffe08a; } #clock .light.day i { background: #ffd34d; box-shadow: 0 0 calc(14 * var(--u)) #ffd34d; }
+  #clock .light.night { color: #b9c8ff; } #clock .light.night i { background: #20263a; border: calc(3 * var(--u)) solid #b9c8ff; }
+  #readout .rel { margin-top: calc(6 * var(--u)); font: 600 calc(28 * var(--u))/1.2 Inter, sans-serif; color: var(--ink-2); }
+  /* Timeline */
+  #tlwrap { position: absolute; left: var(--pad); right: var(--pad); bottom: calc(52 * var(--u)); }
+  #tlwrap .lab { font: 700 calc(24 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.1em; color: var(--ink-3); margin-bottom: calc(8 * var(--u)); }
+  #tlwrap .lab span { color: var(--burn); } #tlwrap .lab b { color: var(--ink-2); font-weight: 700; }
+  #timeline { height: calc(76 * var(--u)); }
+  #timeline svg { width: 100%; height: 100%; overflow: visible; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  #interstitial { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.55), rgba(0,0,0,0.15) 70%); }
+  #interstitial .k { font: 800 calc(30 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.3em; text-transform: uppercase; color: var(--ink-2); }
+  #interstitial .d { margin-top: calc(18 * var(--u)); font: 700 calc(110 * var(--u))/1 'JetBrains Mono', monospace; letter-spacing: -0.03em; }
   /* Chart */
   #chartwrap { position: absolute; left: var(--pad); right: var(--pad); bottom: calc(58 * var(--u)); }
   #chartwrap .lab { font: 700 calc(24 * var(--u))/1 Inter, sans-serif; letter-spacing: 0.12em; color: var(--ink-3); margin-bottom: calc(10 * var(--u)); }
@@ -138,11 +159,12 @@
   body.portrait #caption.hook h1 { font-size: calc(76 * var(--u)); }
   body.portrait #caption p, body.portrait #caption.hook p { font-size: calc(38 * var(--u)); max-width: none; }
   body.portrait #events { top: calc(700 * var(--u)); width: auto; right: var(--pad); }
-  body.portrait #readout { right: auto; left: var(--pad); bottom: calc(690 * var(--u)); text-align: left; }
+  body.portrait #readout { right: auto; left: var(--pad); bottom: calc(580 * var(--u)); text-align: left; }
   body.portrait #readout .val { font-size: calc(132 * var(--u)); }
-  body.portrait #mag { left: auto; right: var(--pad); bottom: calc(700 * var(--u)); }
-  body.portrait #chartwrap { bottom: calc(450 * var(--u)); }
-  body.portrait #chart { height: calc(170 * var(--u)); }
+  body.portrait #mag { left: auto; right: var(--pad); bottom: calc(590 * var(--u)); }
+  body.portrait #tlwrap { bottom: calc(440 * var(--u)); }
+  body.portrait #timeline { height: calc(80 * var(--u)); }
+  body.portrait #interstitial .d { font-size: calc(120 * var(--u)); }
   body.portrait #topshade { height: calc(1000 * var(--u)); }
   body.portrait #botshade { height: calc(1200 * var(--u)); background: linear-gradient(transparent, rgba(0,0,0,0.78) 45%, rgba(0,0,0,0.85)); }
   body.portrait #credits { white-space: normal; bottom: calc(400 * var(--u)); font-size: calc(17 * var(--u)); }
@@ -166,10 +188,11 @@
   <div id="chapters" class="shadow-text"></div>
   <div id="caption" class="shadow-text"><h1></h1><p></p></div>
   <div id="events" class="shadow-text"></div>
-  <div id="clock" class="shadow-text"><div class="date"></div><div class="time"></div><div class="rate"></div><div class="shadow">● IN EARTH'S SHADOW</div></div>
-  <div id="readout" class="shadow-text"><div class="label">DISTANCE APART</div><div class="val"></div><div class="ctx"></div></div>
+  <div id="clock" class="shadow-text"><div class="date"></div><div class="time"></div><div class="pills"><div class="ff">Fast-forward</div><div class="rate"></div></div><div class="light"></div></div>
+  <div id="readout" class="shadow-text"><div class="label">DISTANCE APART</div><div class="val"></div><div class="ctx"></div><div class="rel"></div></div>
   <div id="mag" class="shadow-text"></div>
-  <div id="chartwrap"><div class="lab">DISTANCE OVER 22 DAYS · LOG SCALE</div><div id="chart"></div></div>
+  <div id="tlwrap"><div class="lab">22 DAYS · <span>● ENGINE BURN</span> · <b>○ CLOSEST PASS</b></div><div id="timeline"></div></div>
+  <div id="interstitial"><div class="k">22 days earlier</div><div class="d">SEP 30, 2026</div></div>
   <div id="endcard"></div>
   <div id="endlogo"><img src="logo.svg" alt=""><span>GOD'S EYE VIEW</span></div>
   <div id="credits">Reconstruction, not tracking data · Orbits: CelesTrak, KeepTrack, LeoLabs, M. Langbroek · Imagery: Esri, Maxar, Earthstar Geographics, NASA · Sky: ESO/S. Brunier (CC BY 4.0), Yale BSC</div>
