@@ -3275,5 +3275,11 @@
   "Video plays from Québec 511, which sees your IP address.": "O vídeo é reproduzido a partir do Québec 511, que vê o seu endereço IP.",
   "World time": "Hora do mundo",
   "Back to live": "Voltar ao vivo",
-  "Live": "Ao vivo"
+  "Live": "Ao vivo",
+  "1 h/s": "1 h/s",
+  "1 d/s": "1 d/s",
+  "1 wk/s": "1 sem/s",
+  "Play speed": "Velocidade de reprodução",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Role ou faça pinça para ampliar, arraste para se mover · clique duplo para ver tudo",
+  "1 min/s": "1 min/s"
 }

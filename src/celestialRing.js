@@ -32,6 +32,9 @@ export const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
  */
 export const KEYHOLE_OUTSIDE_OPACITY_DEFAULT = 0.01;
 
+// How far the world time moves before the sun and moon move with it: a
+// minute moves the sun a quarter of a degree.
+const EPHEMERIS_WORLD_STEP_MS = 60_000;
 const RING_INSET_PX = 11;
 const MARKER_INSET_PX = 36;
 const COLLIDING_MARKER_EXTRA_INSET_PX = 32;
@@ -452,7 +455,15 @@ export class CelestialRing {
     // A jump in the world time moves the sun and moon at once.
     this._skyDate = new Date();
     this._skyTime = new Cesium.JulianDate();
-    this._unsubscribeWorldTime = worldClock.subscribe(() => {
+    // Played through, the sky moves on each minute of world time it passes.
+    this._ephemerisWorldMs = null;
+    this._unsubscribeWorldTime = worldClock.subscribe(({ timeMs }) => {
+      if (
+        this._ephemerisWorldMs !== null &&
+        Math.abs(timeMs - this._ephemerisWorldMs) < EPHEMERIS_WORLD_STEP_MS
+      )
+        return;
+      this._ephemerisWorldMs = timeMs;
       this._ephemerisDirty = true;
     });
     this.setEnabled(this.enabled);

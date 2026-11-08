@@ -3350,5 +3350,11 @@
   "Video plays from Québec 511, which sees your IP address.": "Видео воспроизводится с Québec 511, который видит ваш IP-адрес.",
   "World time": "Мировое время",
   "Back to live": "Вернуться к прямому эфиру",
-  "Live": "Сейчас"
+  "Live": "Сейчас",
+  "1 h/s": "1 ч/с",
+  "1 d/s": "1 дн/с",
+  "1 wk/s": "1 нед/с",
+  "Play speed": "Скорость воспроизведения",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутите или сведите пальцы для масштаба, перетащите для перемещения · двойной щелчок — показать всё",
+  "1 min/s": "1 мин/с"
 }

@@ -3125,5 +3125,11 @@
   "Video plays from Québec 511, which sees your IP address.": "影片從 Québec 511 播放，Québec 511 會看到你的 IP 位址。",
   "World time": "世界時間",
   "Back to live": "返回即時",
-  "Live": "即時"
+  "Live": "即時",
+  "1 h/s": "1 小時/秒",
+  "1 d/s": "1 天/秒",
+  "1 wk/s": "1 週/秒",
+  "Play speed": "播放速度",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "捲動或雙指縮放，拖曳以移動 · 按兩下查看全部",
+  "1 min/s": "1 分鐘/秒"
 }
