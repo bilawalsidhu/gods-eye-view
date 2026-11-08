@@ -16,9 +16,9 @@ test('traffic render demand follows animated population and jam lines across emp
     parts: {
       retention: { clear() {} },
       rendering: {
-        heatPulsing: () => Boolean(state._heatJamPrim),
+        heatPulsing: () => Boolean(state._heatJam?.length),
         removeHeatLines() {
-          state._heatJamPrim = null;
+          state._heatJam = [];
         },
       },
     },
@@ -31,7 +31,7 @@ test('traffic render demand follows animated population and jam lines across emp
   assert.deepEqual(calls, [['hold', 'traffic']]);
   animation.clearDots();
   assert.deepEqual(calls.at(-1), ['release', 'traffic']);
-  state._heatJamPrim = {};
+  state._heatJam = [{}];
   animation.syncRenderDemand();
   assert.deepEqual(calls.at(-1), ['hold', 'traffic']);
   state._enabled = false;

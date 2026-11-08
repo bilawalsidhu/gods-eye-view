@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { flowBucket } from '../../data/trafficFlowStyle.js';
 import { trafficStyleProfile } from '../../data/trafficPresetStyle.js';
 import {
@@ -11,83 +10,17 @@ import {
   HEAT_LINE_SLOW_WIDTH,
   TRAFFIC_TIMING_ENABLED,
 } from './policy.js';
+import { distance } from '../../geo/vector.js';
+import { findCamera } from '../../render/rendererOf.js';
+// What the dots' surface is, and whether it has loaded, the renderer
+// contract cannot say: the Cesium adapter reads it off the scene.
+import {
+  drapesLines,
+  surfaceTilesReady,
+  surfaceKey as trafficSurfaceKey,
+} from '../../render/cesium/surfaceState.js';
 
-/**
- * Whether the surface the dots sit on has loaded what is in view: the
- * globe's tiles while it is shown, otherwise every shown 3D tileset (and
- * there is one). The globe port's settle states cannot say whether any
- * tileset is drawn at all, so this reads the scene.
- * @param {object|undefined} viewer
- */
-export function surfaceTilesReady(viewer) {
-  const scene = viewer?.scene;
-  if (!scene) return false;
-  if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
-  let found = false;
-  for (let i = 0; i < (scene.primitives?.length || 0); i++) {
-    const primitive = scene.primitives.get(i);
-    if (!primitive.show || typeof primitive.tilesLoaded !== 'boolean') continue;
-    found = true;
-    if (!primitive.tilesLoaded) return false;
-  }
-  return found;
-}
-
-// Stable ids for the objects heights are sampled from (tilesets, terrain).
-const surfaceIds = new WeakMap();
-let nextSurfaceId = 1;
-const surfaceId = (object) => {
-  if (!object || typeof object !== 'object') return 0;
-  if (!surfaceIds.has(object)) surfaceIds.set(object, nextSurfaceId++);
-  return surfaceIds.get(object);
-};
-
-/**
- * Name what heights are sampled against: the terrain provider when the globe
- * is shown, otherwise the set of visible 3D tilesets. A map-provider switch
- * changes it and invalidates every cached height. The renderer contract
- * names no surface identity, so this reads the scene.
- * @param {object|undefined} viewer
- */
-const surfaceKeys = new WeakMap();
-export function trafficSurfaceKey(viewer) {
-  const scene = viewer?.scene;
-  if (!scene) return '';
-  let state = surfaceKeys.get(scene);
-  if (!state) {
-    state = { globe: null, terrain: null, tiles: [], key: '' };
-    surfaceKeys.set(scene, state);
-  }
-  const globe = Boolean(scene.globe?.show);
-  const terrain = globe ? scene.globe.terrainProvider : null;
-  let changed = state.globe !== globe || state.terrain !== terrain;
-  let count = 0;
-  if (!globe) {
-    for (let i = 0; i < (scene.primitives?.length || 0); i++) {
-      const primitive = scene.primitives.get(i);
-      if (!primitive?.show || typeof primitive.tilesLoaded !== 'boolean')
-        continue;
-      if (state.tiles[count] !== primitive) {
-        state.tiles[count] = primitive;
-        changed = true;
-      }
-      count++;
-    }
-  }
-  if (count !== state.tiles.length) {
-    state.tiles.length = count;
-    changed = true;
-  }
-  if (changed) {
-    state.globe = globe;
-    state.terrain = terrain;
-    // Allocate only when the actual map surface changes, never per frame.
-    state.key = globe
-      ? `globe:${surfaceId(terrain)}`
-      : `tiles:${state.tiles.map(surfaceId).join(',')}`;
-  }
-  return state.key;
-}
+export { surfaceTilesReady, trafficSurfaceKey };
 
 export function createRendering({
   state: layerState,
@@ -112,21 +45,11 @@ export function createRendering({
       : roads;
   }
 
-  /** Remove both heat-line ground primitives from the scene. */
+  /** Take every heat-line down. */
 
   function removeHeatLines() {
-    if (layerState._heatJamPrim) {
-      layerState._viewer?.scene.groundPrimitives.remove(
-        layerState._heatJamPrim,
-      );
-      layerState._heatJamPrim = null;
-    }
-    if (layerState._heatSlowPrim) {
-      layerState._viewer?.scene.groundPrimitives.remove(
-        layerState._heatSlowPrim,
-      );
-      layerState._heatSlowPrim = null;
-    }
+    if (layerState._heatLineCount) layerState._heatSet?.clear();
+    layerState._heatJam = [];
     layerState._heatLineCount = 0;
     parts.animation.syncRenderDemand?.();
   }
@@ -135,32 +58,35 @@ export function createRendering({
    * Rebuild the congestion heat-line underlay (jam-viz heatline prototype):
    * slow/jam roads drape a corridor line onto the rendered 3D tiles — glowing
    * pulsing red for jam, faint flat amber for slow — with the dots animating
-   * on top. Two batched GroundPolylinePrimitives (one per bucket) so the jam
-   * batch pulses through one shared material. Capped at HEAT_LINE_CAP (jam
-   * first, longest first); overflow is logged. No-op in sim mode, when the
-   * heatline mode is off, or without ground-primitive support.
+   * on top. Lines of the layer's heat-line draw set, draped on the tiles;
+   * the jam lines pulse together (`pulseHeatLines`). Capped at
+   * HEAT_LINE_CAP (jam first, longest first); overflow is logged. No-op in
+   * sim mode, when the heatline mode is off, or where lines cannot drape.
    *
    * @param {Array} roads - Road objects visible in the current render.
    */
 
   function rebuildHeatLines(roads) {
-    removeHeatLines();
     if (
       !layerState._viewer ||
+      !layerState._heatSet ||
       !layerState._liveMode ||
       !parts.style.heatlineOn()
-    )
+    ) {
+      removeHeatLines();
       return;
+    }
     if (layerState._heatSupported === null) {
-      layerState._heatSupported = Cesium.GroundPolylinePrimitive.isSupported(
-        layerState._viewer.scene,
-      );
+      layerState._heatSupported = drapesLines(layerState._viewer);
       if (!layerState._heatSupported)
         console.warn(
-          '[Data:Traffic] GroundPolylinePrimitive unsupported — heat-lines disabled',
+          '[Data:Traffic] Draped lines unsupported — heat-lines disabled',
         );
     }
-    if (!layerState._heatSupported) return;
+    if (!layerState._heatSupported) {
+      removeHeatLines();
+      return;
+    }
 
     const candidates = [];
     for (const road of roads) {
@@ -177,63 +103,37 @@ export function createRendering({
     );
     const kept = candidates.slice(0, HEAT_LINE_CAP);
 
-    const instancesFor = (bucket, width) =>
-      kept
-        .filter((c) => c.bucket === bucket)
-        .map(
-          (c) =>
-            new Cesium.GeometryInstance({
-              geometry: new Cesium.GroundPolylineGeometry({
-                // A snapshot of the waypoints, as the renderer's points.
-                positions: c.road.waypoints.map((p) =>
-                  Cesium.Cartesian3.clone(p),
-                ),
-                width,
-              }),
-            }),
-        );
-
     // Mono presets (NVG/FLIR/noir) discard hue — heat-lines re-encode in
     // luminance like the dots: jam = white glow, slow = faint gray.
     const monoHeat =
       layerState._presetDots === 'on' &&
       trafficStyleProfile(layerState._stylePreset) === 'mono';
-    const jamLineColor = monoHeat
-      ? Cesium.Color.WHITE
-      : new Cesium.Color(...HEAT_JAM_COLOR);
-    const slowLineColor = monoHeat
-      ? new Cesium.Color(0.7, 0.7, 0.7, HEAT_SLOW_COLOR[3])
-      : new Cesium.Color(...HEAT_SLOW_COLOR);
+    layerState._heatJamRgb = monoHeat ? [1, 1, 1] : HEAT_JAM_COLOR.slice(0, 3);
+    const jamStyle = jamLineStyle(HEAT_JAM_BASE_ALPHA);
+    const slowStyle = {
+      kind: 'solid',
+      color: monoHeat ? [0.7, 0.7, 0.7, HEAT_SLOW_COLOR[3]] : HEAT_SLOW_COLOR,
+    };
 
-    const jamInstances = instancesFor('jam', HEAT_LINE_JAM_WIDTH);
-    if (jamInstances.length) {
-      layerState._heatJamPrim = layerState._viewer.scene.groundPrimitives.add(
-        new Cesium.GroundPolylinePrimitive({
-          geometryInstances: jamInstances,
-          classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
-          appearance: new Cesium.PolylineMaterialAppearance({
-            material: Cesium.Material.fromType('PolylineGlow', {
-              color: jamLineColor.withAlpha(HEAT_JAM_BASE_ALPHA),
-              glowPower: 0.25,
-            }),
-          }),
-        }),
-      );
+    const items = [];
+    const jam = [];
+    for (let i = 0; i < kept.length; i++) {
+      const { road, bucket } = kept[i];
+      const item = {
+        id: `heat:${i}`,
+        // A snapshot of the waypoints, as the renderer's points.
+        positions: road.waypoints.map((p) => ({ x: p.x, y: p.y, z: p.z })),
+        widthPx: bucket === 'jam' ? HEAT_LINE_JAM_WIDTH : HEAT_LINE_SLOW_WIDTH,
+        mode: 'draped',
+        clampTo: 'tiles',
+        style: bucket === 'jam' ? jamStyle : slowStyle,
+      };
+      items.push(item);
+      if (bucket === 'jam') jam.push(item);
     }
-    const slowInstances = instancesFor('slow', HEAT_LINE_SLOW_WIDTH);
-    if (slowInstances.length) {
-      layerState._heatSlowPrim = layerState._viewer.scene.groundPrimitives.add(
-        new Cesium.GroundPolylinePrimitive({
-          geometryInstances: slowInstances,
-          classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
-          appearance: new Cesium.PolylineMaterialAppearance({
-            material: Cesium.Material.fromType('Color', {
-              color: slowLineColor,
-            }),
-          }),
-        }),
-      );
-    }
+    if (items.length || layerState._heatLineCount)
+      layerState._heatSet.set(items);
+    layerState._heatJam = jam;
 
     layerState._heatLineCount = kept.length;
     parts.animation.syncRenderDemand?.();
@@ -244,19 +144,29 @@ export function createRendering({
     }
   }
 
+  /** The jam heat-lines' glow at `alpha`. */
+  const jamLineStyle = (alpha) => ({
+    kind: 'glow',
+    color: [...layerState._heatJamRgb, alpha],
+    power: 0.25,
+  });
+
   /** Whether jam heat-lines are drawn, which pulse every frame. */
-  const heatPulsing = () => Boolean(layerState._heatJamPrim);
+  const heatPulsing = () => Boolean(layerState._heatJam?.length);
 
   /**
-   * Throb the jam heat-lines (~1.6 s period): one shared material uniform
-   * for the whole jam batch, no geometry rebuild.
+   * Throb the jam heat-lines (~1.6 s period): one colour for them all,
+   * each line recoloured where it is, no geometry rebuilt.
    * @param {number} now - Epoch ms.
    */
   function pulseHeatLines(now) {
-    if (layerState._heatJamPrim?.appearance) {
-      layerState._heatJamPrim.appearance.material.uniforms.color.alpha =
-        HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260);
-    }
+    const jam = layerState._heatJam;
+    if (!jam?.length || !layerState._heatSet) return;
+    const style = jamLineStyle(
+      HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260),
+    );
+    for (const item of jam) item.style = style;
+    layerState._heatSet.upsert(jam);
   }
 
   /**
@@ -300,7 +210,10 @@ export function createRendering({
     // nadir view: oblique pitches put the loaded roads many km away even at
     // low altitude. Probe three roads and stretch the curves accordingly.
     let areaDist = altitude;
-    if (layerState._viewer && filteredRoads.length) {
+    const eye = filteredRoads.length
+      ? findCamera(layerState._viewer)?.pose()?.position
+      : null;
+    if (eye) {
       const probes = [
         filteredRoads[0],
         filteredRoads[Math.floor(filteredRoads.length / 2)],
@@ -308,14 +221,7 @@ export function createRendering({
       ];
       for (const probe of probes) {
         const wp = probe?.waypoints?.[0];
-        if (wp)
-          areaDist = Math.max(
-            areaDist,
-            Cesium.Cartesian3.distance(
-              layerState._viewer.camera.positionWC,
-              wp,
-            ),
-          );
+        if (wp) areaDist = Math.max(areaDist, distance(eye, wp));
       }
     }
     layerState._fadeScaleFar = Math.max(8000, areaDist * 1.5);

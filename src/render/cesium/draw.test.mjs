@@ -3705,6 +3705,12 @@ test('a draped line drawn by its own material changes colour in place; a batched
     assert.equal(glow.appearance.material.uniforms.color.alpha, 0.7);
     set.upsert([jam(0.3)]);
     assert.equal(glow.appearance.material.uniforms.color.alpha, 0.3);
+    // A style object the caller changes and sends again is read anew.
+    const again = jam(0.4);
+    set.upsert([again]);
+    again.style.color[3] = 0.6;
+    set.upsert([again]);
+    assert.equal(glow.appearance.material.uniforms.color.alpha, 0.6);
     // Another width is another line: rebuilt.
     set.upsert([{ ...jam(0.7), widthPx: 10 }]);
     assert.notEqual(scene.added[0], host, 'a new width rebuilds');
@@ -3713,6 +3719,126 @@ test('a draped line drawn by its own material changes colour in place; a batched
     assert.notEqual(scene.added[0], rebuilt, 'a batched colour rebuilds');
     set.dispose();
   }));
+
+test('draped glow lines that look alike share one ground primitive and recolour together in place', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'glows', clampTo: 'tiles' });
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0);
+    const glow = (id, lon, alpha, extra = {}) => ({
+      id,
+      positions: [at(lon), at(lon + 0.01)],
+      widthPx: 9,
+      mode: 'draped',
+      style: { kind: 'glow', color: [0.9, 0.3, 0.3, alpha], power: 0.25 },
+      ...extra,
+    });
+    const grounds = () => {
+      const host = scene.added[0];
+      return [...Array(host.length).keys()]
+        .map((i) => host.get(i))
+        .filter((p) => p instanceof Cesium.GroundPolylinePrimitive);
+    };
+    set.set([glow('a', 0, 0.5), glow('b', 1, 0.5), glow('c', 2, 0.5)]);
+    const host = scene.added[0];
+    const [batch] = grounds();
+    assert.equal(grounds().length, 1, 'one primitive for the three');
+    assert.equal(batch.geometryInstances.length, 3);
+    const uniforms = batch.appearance.material.uniforms;
+    // All recoloured alike: in place, on the one material.
+    set.upsert([glow('a', 0, 0.7), glow('b', 1, 0.7), glow('c', 2, 0.7)]);
+    assert.equal(scene.added[0], host, 'in place');
+    assert.ok(!batch.isDestroyed());
+    assert.equal(uniforms.color.alpha, 0.7);
+    // A line moved off the batch, sent twice in one upsert, takes its last
+    // colour on a material of its own; its peers keep theirs.
+    const moved = (alpha) =>
+      glow('a', 0, alpha, { positions: [at(0.5), at(0.51)] });
+    withTerrainHeights(() => set.upsert([moved(0.2), moved(0.7)]));
+    assert.equal(scene.added[0], host, 'moved in place');
+    assert.equal(uniforms.color.alpha, 0.7, 'the peers keep their colour');
+    // Two recoloured and one not: it would change colour with them, so
+    // the set is rebuilt.
+    set.upsert([glow('a', 0, 0.2), glow('b', 1, 0.2)]);
+    assert.notEqual(scene.added[0], host, 'rebuilt');
+    assert.equal(grounds().length, 2, 'one for each look');
+    const rebuilt = scene.added[0];
+    // Another width is another look: drawn apart.
+    set.upsert([glow('c', 2, 0.7, { widthPx: 4 })]);
+    assert.notEqual(scene.added[0], rebuilt);
+    assert.equal(grounds().length, 2);
+    set.dispose();
+  }));
+
+test('the traffic layer drapes its heat-lines on the tiles and pulses the jam ones in place', async () => {
+  const { createRendering } = await import('../../layers/traffic/rendering.js');
+  const policy = await import('../../layers/traffic/policy.js');
+  await withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 30.26);
+    const road = (level, lon) => ({
+      flow: { level },
+      segmentDist: [100],
+      waypoints: [at(lon), at(lon + 0.001)],
+    });
+    const state = {
+      _viewer: {},
+      _liveMode: true,
+      _presetDots: 'off',
+      _heatJam: [],
+      _heatLineCount: 0,
+      _heatSupported: true,
+      _heatSet: draw.lines({ id: 'traffic:1:heat', clampTo: 'tiles' }),
+    };
+    const rendering = createRendering({
+      state,
+      services: {},
+      parts: {
+        style: { heatlineOn: () => true },
+        animation: { syncRenderDemand() {} },
+      },
+      source: {},
+    });
+    rendering.rebuildHeatLines([
+      road(0.2, -97.74),
+      road(0.25, -97.735),
+      road(0.6, -97.73),
+    ]);
+    const host = scene.added[0];
+    const grounds = [...Array(host.length).keys()]
+      .map((i) => host.get(i))
+      .filter((p) => p instanceof Cesium.GroundPolylinePrimitive);
+    assert.equal(grounds.length, 2, 'the jam lines glowing, the slow ones');
+    assert.ok(
+      grounds.every(
+        (p) =>
+          p.classificationType === Cesium.ClassificationType.CESIUM_3D_TILE,
+      ),
+      'draped on the tiles alone',
+    );
+    const glow = grounds.find(
+      (p) => p.appearance?.material?.type === 'PolylineGlow',
+    );
+    assert.ok(glow, 'the jam line glows');
+    assert.equal(
+      glow.appearance.material.uniforms.color.alpha,
+      policy.HEAT_JAM_BASE_ALPHA,
+    );
+    rendering.pulseHeatLines(260 * (Math.PI / 2));
+    assert.equal(scene.added[0], host, 'pulsed where it is');
+    assert.ok(!glow.isDestroyed());
+    assert.ok(
+      Math.abs(
+        glow.appearance.material.uniforms.color.alpha -
+          (policy.HEAT_JAM_BASE_ALPHA + policy.HEAT_JAM_PULSE_ALPHA),
+      ) < 1e-6,
+    );
+    rendering.removeHeatLines();
+    assert.equal(state._heatSet.size(), 0);
+    state._heatSet.dispose();
+    assert.equal(scene.added.length, 0);
+  });
+});
 
 test('revealFraction draws a line up to that fraction of its length, and changes in place', () =>
   withImageClasses(() => {

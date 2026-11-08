@@ -24,19 +24,30 @@ export function createLifecycle({
 
   const methods = {
     /**
-     * One-time initialisation. Makes the dots' draw set (hidden); it is
-     * shown and hidden with the layer, and let go on destroy.
+     * One-time initialisation. Makes the dots' draw set (hidden; it is
+     * shown and hidden with the layer) and the heat-lines' (emptied when
+     * the layer is disabled); both are let go on destroy.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     init(viewer) {
       layerState._viewer = viewer;
       layerState._dotSet?.dispose();
-      layerState._dotSet = drawOf(viewer).points({
-        id: `traffic:${++instances}:dots`,
+      layerState._heatSet?.dispose();
+      const instance = ++instances;
+      const draw = drawOf(viewer);
+      layerState._dotSet = draw.points({
+        id: `traffic:${instance}:dots`,
         blend: 'translucent',
         show: false,
       });
+      // Draped on the 3D tiles only, as the dots' roads are sampled there.
+      layerState._heatSet = draw.lines({
+        id: `traffic:${instance}:heat`,
+        clampTo: 'tiles',
+      });
+      layerState._heatJam = [];
+      layerState._heatLineCount = 0;
       layerState._dots = [];
       layerState._roads = [];
       layerState._count = 0;
@@ -194,16 +205,18 @@ export function createLifecycle({
     },
 
     /**
-     * Permanently tear down the layer. Disables it, lets the dots' draw set
-     * go, and clears the tile cache.
+     * Permanently tear down the layer. Disables it, lets the dots' and
+     * heat-lines' draw sets go, and clears the tile cache.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     destroy(viewer) {
       this.disable(viewer);
+      parts.rendering.removeHeatLines();
       layerState._dotSet?.dispose();
       layerState._dotSet = null;
-      parts.rendering.removeHeatLines();
+      layerState._heatSet?.dispose();
+      layerState._heatSet = null;
       layerState._tileCache.clear();
       resetFlowTileCache();
       layerState._count = 0;

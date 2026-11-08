@@ -591,7 +591,7 @@ test('a closure that empties the population mid-correction settles heights and c
   corrected[0].flow = { level: 0, closure: true };
   for (let i = 0; i < 20 && h.state._dots.length; i++) h.frame();
   assert.equal(h.state._dots.length, 0);
-  assert.equal(h.state._heatJamPrim, null);
+  assert.equal(h.state._heatLineCount, 0);
   assert.equal(h.state._renderHeld, false);
   assert.equal(h.state._heightPending, false);
   assert.equal(h.state._populationPending, false);

@@ -1612,6 +1612,9 @@ export function createCesiumDraw({
         );
     const polylines = new Cesium.PolylineCollection();
     const draped = new Map();
+    // Draped glow lines that look alike: one ground primitive and one
+    // material for them all, so they recolour together in place.
+    const glows = new Map();
     // Draped lines a batch cannot draw, each with a primitive of its own.
     const alone = [];
     // Each line as drawn, for upserts that change it in place.
@@ -1650,6 +1653,11 @@ export function createCesiumDraw({
           if (!instances.length) continue;
           if (!draped.has(clampTo)) draped.set(clampTo, []);
           draped.get(clampTo).push(...instances);
+          continue;
+        }
+        if (item.style.kind === 'glow' && !revealed(item)) {
+          if (!glows.has(part.look)) glows.set(part.look, []);
+          glows.get(part.look).push({ item, part });
           continue;
         }
         if (!batchable(item)) {
@@ -1693,7 +1701,7 @@ export function createCesiumDraw({
       own.add(deep);
     }
     record.deepLines = deep;
-    if (!draped.size && !alone.length) {
+    if (!draped.size && !glows.size && !alone.length) {
       noteFlows(record);
       return replaceHost(record, own);
     }
@@ -1714,6 +1722,26 @@ export function createCesiumDraw({
         part.ground = byClamp.get(part.clampTo);
         part.batch = part.ground;
       }
+    for (const lines of glows.values()) {
+      const [{ item, part: first }] = lines;
+      const material = lineMaterial(record, item.style);
+      const primitive = new Cesium.GroundPolylinePrimitive({
+        geometryInstances: lines.map(({ item, part }) =>
+          drapedInstance(item, part, false),
+        ),
+        appearance: new Cesium.PolylineMaterialAppearance({ material }),
+        classificationType: classificationOf(first.clampTo),
+        allowPicking: record.spec.pickable !== false,
+      });
+      // A batch as the solid ones are: a line moved leaves it, hidden.
+      for (const { part } of lines) {
+        part.ground = primitive;
+        part.batch = primitive;
+        part.material = material;
+        part.shared = true;
+      }
+      ground.push(primitive);
+    }
     for (const { item, part } of alone) {
       part.ground = drapedPrimitive(record, item, part, false);
       ground.push(part.ground);
@@ -1743,6 +1771,48 @@ export function createCesiumDraw({
       revealed(item),
       item.frame,
     ]);
+
+  /**
+   * Whether two lines have the same `lineLook` by the identity of what it
+   * is drawn from, read without stringifying either.
+   */
+  const sameLookFrom = (a, b) =>
+    a.mode === b.mode &&
+    Object.is(a.widthPx, b.widthPx) &&
+    a.clampTo === b.clampTo &&
+    a.style === b.style &&
+    a.depthFailColor === b.depthFailColor &&
+    (a.segmentColors != null) === (b.segmentColors != null) &&
+    (a.segmentShow != null) === (b.segmentShow != null) &&
+    revealed(a) === revealed(b) &&
+    a.frame === b.frame;
+
+  /**
+   * `lineLook`, kept for the last item asked for: within one upsert, lines
+   * sent with one style object (lines pulsing together) are stringified
+   * once. Not across upserts, where a caller may have changed the style
+   * object it sends again.
+   */
+  function lineLooks() {
+    let last = null;
+    let look = '';
+    let shape = '';
+    return {
+      look(item) {
+        if (!last || !sameLookFrom(last, item)) {
+          last = item;
+          look = lineLook(item);
+          shape = '';
+        }
+        return look;
+      },
+      shape(item) {
+        this.look(item);
+        shape ||= lineLook(item, true);
+        return shape;
+      },
+    };
+  }
 
   /** A line's positions as one flat array of numbers, to compare. */
   function flatPositions(positions) {
@@ -1797,10 +1867,40 @@ export function createCesiumDraw({
    * nor revealed or in segments) changes only its colour: its material
    * takes the new one in place.
    */
-  const recolourable = (was, item) =>
+  const recolourable = (was, item, looks) =>
     Boolean(was.clampTo && was.material && !was.segments) &&
     !revealed(item) &&
-    was.shape === lineLook(item, true);
+    was.shape === (looks ? looks.shape(item) : lineLook(item, true));
+
+  /**
+   * The colours the glow lines sharing a material that `list` recolours
+   * are given together: each such material and the item whose colour it
+   * takes, when every line it draws ends the upsert with one look (its
+   * last in `list`); null when they would not, as the material draws them
+   * all. Lines that move then draw on a material of their own.
+   */
+  function sharedRecolours(parts, list, looks) {
+    const recolours = new Map();
+    // Each shared line's last look in `list`, and the item it is from.
+    let final = null;
+    for (let k = 0; k < list.length; k++) {
+      const was = parts.get(list[k].id);
+      if (was.shared && !was.solo) (final ??= new Map()).set(list[k].id, k);
+    }
+    if (!final) return recolours;
+    const lookOf = new Map();
+    for (const [id, k] of final) {
+      const was = parts.get(id);
+      if (looks[k] === was.look) continue;
+      recolours.set(was.material, list[k]);
+      lookOf.set(was.material, looks[k]);
+    }
+    for (const [id, part] of parts) {
+      if (!part.shared || part.solo || !lookOf.has(part.material)) continue;
+      if (looks[final.get(id)] !== lookOf.get(part.material)) return null;
+    }
+    return recolours;
+  }
 
   /**
    * Whether a draped line's upsert can change it in place: its ground
@@ -1832,12 +1932,13 @@ export function createCesiumDraw({
     const flats = new Map();
     // Each item's look, in order: an item sent twice is changed twice.
     const looks = [];
+    const lookOf = lineLooks();
     for (const item of list) {
       const was = parts.get(item.id);
       if (!was) return false;
-      const look = lineLook(item);
+      const look = lookOf.look(item);
       // Only its colour may change: its material takes it in place.
-      if (was.look !== look && !recolourable(was, item)) return false;
+      if (was.look !== look && !recolourable(was, item, lookOf)) return false;
       looks.push(look);
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
@@ -1854,12 +1955,20 @@ export function createCesiumDraw({
       if (!drapedPatchable(record, was, flat)) return false;
       flats.set(item.id, flat);
     }
+    const shared = sharedRecolours(parts, list, looks);
+    if (!shared) return false;
+    // Shared materials take their one colour once, before lines move off
+    // them.
+    for (const [material, item] of shared)
+      material.uniforms.color = toColor(item.style.color);
     for (let k = 0; k < list.length; k++) {
       const item = list[k];
       const was = parts.get(item.id);
       const show = item.show !== false;
       if (was.look !== looks[k]) {
-        was.material.uniforms.color = toColor(item.style.color);
+        // A line drawing on a shared material took its colour above.
+        if (!was.shared || was.solo)
+          was.material.uniforms.color = toColor(item.style.color);
         was.look = looks[k];
       }
       if (was.polyline) {

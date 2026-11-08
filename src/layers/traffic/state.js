@@ -167,24 +167,26 @@ export function createState({ services }) {
   layerState._jamViz = 'density';
 
   /**
-   * Congestion heat-lines are GroundPolylinePrimitive batches draped onto the
-   * rendered 3D tiles (ClassificationType.CESIUM_3D_TILE). One
-   * primitive per bucket so the jam batch can pulse via a single shared
-   * material uniform.
+   * Congestion heat-lines: a lines draw set draped onto the rendered 3D
+   * tiles, made at init.
    * @type {object|null}
    */
 
-  layerState._heatJamPrim = null;
+  layerState._heatSet = null;
 
-  /** @type {object|null} Slow-bucket heat-line batch. */
+  /** @type {Array} The jam heat-line items, recoloured as they pulse. */
 
-  layerState._heatSlowPrim = null;
+  layerState._heatJam = [];
+
+  /** @type {number[]} The jam heat-lines' colour, without its alpha. */
+
+  layerState._heatJamRgb = [1, 1, 1];
 
   /** @type {number} Heat-lines in the current render (stats). */
 
   layerState._heatLineCount = 0;
 
-  /** @type {boolean|null} GroundPolylinePrimitive.isSupported, checked once. */
+  /** @type {boolean|null} Whether lines can drape here, checked once. */
 
   layerState._heatSupported = null;
 
