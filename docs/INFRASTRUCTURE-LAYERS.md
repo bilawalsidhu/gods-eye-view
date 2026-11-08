@@ -61,9 +61,13 @@ Features keep their own simplestyle `fill`, `fill-opacity`, `stroke`,
 `stroke-opacity`, `stroke-width`, `marker-color` and `marker-size`, given as
 hex, `rgb()` or `hsl()` colours or by the CSS colour names the default renderer
 knows (it has no `rebeccapurple`, and spells `lavenderblush` `lavendar_blush`);
-a `marker-symbol` draws the plain pin. Polygons with heights are drawn at them,
-outlined; points with heights stand their pin on the stem's tip. Edges follow
-rhumb lines.
+a `marker-symbol` is stamped on the pin as the default renderer stamped it: a
+one-character string as bold upper-case text, any other value as the Maki icon
+of that id from the renderer's assets, the plain pin when the icon cannot be
+loaded. The assets are found as the renderer finds them from a page script: the
+`CESIUM_BASE_URL` global, else the folder `Cesium.js` is loaded from; a
+page bundling Cesium as modules sets `CESIUM_BASE_URL` for icon pins. Polygons with heights are drawn at them, outlined; points with
+heights stand their pin on the stem's tip. Edges follow rhumb lines.
 
 `gods-eye-view/infrastructure/geojson` exports the lower-level
 `createLocalGeoJsonLayer(options, services)` and existing infrastructure overlay

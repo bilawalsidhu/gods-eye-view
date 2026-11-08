@@ -66,11 +66,15 @@ async function enabledLayer(t, features) {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   globalThis.window = { dispatchEvent() {} };
-  globalThis.fetch = async () => ({
-    ok: true,
-    status: 200,
-    text: async () => features.map((f) => JSON.stringify(f)).join('\n'),
-  });
+  globalThis.fetch = async (url) =>
+    String(url).includes('/maki/')
+      ? // The renderer's icons: only `rail` is there.
+        { ok: String(url).endsWith('/rail.png'), blob: async () => 'rail' }
+      : {
+          ok: true,
+          status: 200,
+          text: async () => features.map((f) => JSON.stringify(f)).join('\n'),
+        };
   const viewer = {};
   const fake = bindFakeGroundRenderer(viewer, {
     eye: { lon: 0.005, lat: 0.005, height: 50_000 },
@@ -311,4 +315,75 @@ test('long edges follow rhumb lines', async (t) => {
   const { positions } = env.fake.set('lines').items.get('l');
   // Split as the default renderer splits a draped rhumb line: under 10 km.
   assert.ok(positions.length > 150, `${positions.length} points`);
+});
+
+test('a marker-symbol is stamped on its pin: a character as text, a longer one as the renderer’s icon', async (t) => {
+  const saved = {
+    document: globalThis.document,
+    base: globalThis.CESIUM_BASE_URL,
+    bitmap: globalThis.createImageBitmap,
+  };
+  const stamped = [];
+  const canvas = () => {
+    const context = new Proxy(
+      {
+        measureText: (text) => ({
+          width: text.length * 10,
+          actualBoundingBoxAscent: 9,
+          actualBoundingBoxDescent: 1,
+          actualBoundingBoxLeft: 0,
+        }),
+      },
+      {
+        get: (target, key) =>
+          key in target
+            ? target[key]
+            : key === 'drawImage'
+              ? (image) => stamped.push(image.tag ?? 'text')
+              : () => {},
+        set: () => true,
+      },
+    );
+    return { width: 0, height: 0, getContext: () => context };
+  };
+  globalThis.document = { createElement: canvas, baseURI: 'http://gev.test/' };
+  globalThis.CESIUM_BASE_URL = '/cesium/';
+  globalThis.createImageBitmap = async (blob) => ({
+    width: 10,
+    height: 10,
+    tag: blob,
+  });
+  t.after(() => {
+    for (const [key, name] of [
+      ['document', 'document'],
+      ['base', 'CESIUM_BASE_URL'],
+      ['bitmap', 'createImageBitmap'],
+    ])
+      if (saved[key] === undefined) delete globalThis[name];
+      else globalThis[name] = saved[key];
+  });
+  const point = (id, x, symbol) =>
+    feature(
+      id,
+      { type: 'Point', coordinates: [x, 0] },
+      { 'marker-symbol': symbol, 'marker-color': '#ff0000' },
+    );
+  const env = await enabledLayer(t, [
+    point('letter', 0.001, 'h'),
+    point('icon', 0.002, 'rail'),
+    point('missing', 0.003, 'no-such-icon'),
+    point('plain', 0.004, null),
+  ]);
+  const pins = env.fake.set('pins').items;
+  const letter = pins.get('letter').image;
+  assert.match(letter.key, /^geojson-pin:/);
+  assert.ok(letter.canvas);
+  const icon = pins.get('icon').image;
+  assert.match(icon.key, /^geojson-pin:/);
+  assert.notEqual(icon.key, letter.key);
+  assert.ok(stamped.includes('rail'), 'the icon is stamped on its pin');
+  assert.ok(stamped.includes('text'), 'and the letter on its own');
+  // An icon the renderer does not have leaves the plain pin, as no symbol does.
+  assert.match(pins.get('missing').image.svg, /fill="rgba\(255,0,0,1\)"/);
+  assert.deepEqual(pins.get('missing').image, pins.get('plain').image);
 });

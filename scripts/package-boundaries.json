@@ -8,6 +8,7 @@
     "modules": [
       "src/data/infrastructure.js",
       "src/data/localGeojsonCore.js",
+      "src/data/geojsonPins.js",
       "src/render/cesium/heights.js",
       "src/render/cesium/camera.js",
       "src/data/iconSetPrimitive.js",
@@ -3314,6 +3315,7 @@
       "src/data/layerStateTokenReservations.json",
       "src/data/lifecycle.js",
       "src/data/localGeojsonCore.js",
+      "src/data/geojsonPins.js",
       "src/data/localGeojsonLod.js",
       "src/data/local_data/natural_earth/marine.json",
       "src/data/local_data/natural_earth/regions.json",
@@ -4299,6 +4301,7 @@
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/localGeojsonCore.js",
+      "src/data/geojsonPins.js",
       "src/data/localGeojsonLod.js",
       "src/data/local_data/natural_earth/marine.json",
       "src/data/local_data/natural_earth/regions.json",

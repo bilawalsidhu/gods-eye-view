@@ -18,6 +18,7 @@ import {
   parseGeojsonLines,
 } from '../sources/infrastructureData.js';
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
+import { createGeojsonPins } from './geojsonPins.js';
 import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import {
   selectInfraLod,
@@ -314,36 +315,6 @@ const STEM_WIDTH_PX = 3.5;
 const PIN_SIZE_PX = 8;
 const BLACK = Object.freeze([0, 0, 0, 1]);
 
-/** A colour channel as a CSS byte, as the default renderer writes one. */
-const cssByte = (value) => (value === 1 ? 255 : (value * 256) | 0);
-const cssRgba = ([r, g, b, a]) =>
-  `rgba(${cssByte(r)},${cssByte(g)},${cssByte(b)},${a})`;
-
-/**
- * The pin a Point feature stands on: the GeoJSON loader's default marker,
- * its pin path at `size` pixels, filled in `rgba` and outlined in that
- * colour brightened by 0.6.
- * @param {number[]} rgba
- * @param {number} [size]
- * @returns {{svg: string}}
- */
-function pinImage(rgba, size = PIN_SIZE_PX) {
-  const brighter = [
-    1 - (1 - rgba[0]) * 0.4,
-    1 - (1 - rgba[1]) * 0.4,
-    1 - (1 - rgba[2]) * 0.4,
-    rgba[3],
-  ];
-  return {
-    svg:
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">` +
-      '<path d="M6.72 0.422L17.28 0.422C18.553 0.422 19.577 1.758 19.577 3.415L19.577 10.973' +
-      'C19.577 12.63 18.553 13.966 17.282 13.966L14.386 14.008L11.826 23.578L9.614 14.008' +
-      'L6.719 13.965C5.446 13.983 4.422 12.629 4.422 10.972L4.422 3.416C4.423 1.76 5.447 0.423 6.718 0.423Z" ' +
-      `fill="${cssRgba(rgba)}" stroke="${cssRgba(brighter)}" stroke-width="0.846"/></svg>`,
-  };
-}
-
 /** The GeoJSON loader's `marker-size` names, in pixels. */
 const MARKER_SIZES = Object.freeze({ small: 24, medium: 48, large: 64 });
 /**
@@ -405,6 +376,23 @@ function markerOf(properties, rgba) {
     : null;
   const size = MARKER_SIZES[properties?.['marker-size']] ?? PIN_SIZE_PX;
   return { color: color ?? rgba, size };
+}
+
+/** Whether a geometry has a point among its parts. */
+const hasPoint = (shape) =>
+  shape?.type === 'Point' ||
+  shape?.type === 'MultiPoint' ||
+  (shape?.type === 'GeometryCollection' &&
+    Array.isArray(shape.geometries) &&
+    shape.geometries.some(hasPoint));
+
+/** The `marker-symbol` of every feature that draws a pin. */
+function* markerSymbols(features) {
+  for (const feature of features) {
+    const symbol = feature?.properties?.['marker-symbol'];
+    if (symbol !== undefined && symbol !== null && hasPoint(feature.geometry))
+      yield symbol;
+  }
 }
 
 /**
@@ -550,6 +538,8 @@ export function createLocalGeoJsonLayer(
   },
 ) {
   const setPrefix = `${id}:${++layerInstances}`;
+  /** The pins its points stand on, one image per distinct marker. */
+  const pinMaker = createGeojsonPins();
   /** What this layer draws while built: its sets and parts, or null. */
   let _drawn = null;
   let _enabled = false;
@@ -714,15 +704,6 @@ export function createLocalGeoJsonLayer(
     const draw = drawOf(viewer);
     const rgba = cssColor(color) ?? [1, 1, 1, 1];
     const fillColor = [rgba[0], rgba[1], rgba[2], FILL_ALPHA];
-    // One image per marker colour and size, shared by the pins wearing it.
-    const pinImages = new Map();
-    const pinFor = (marker) => {
-      const key = `${marker.color.join()}|${marker.size}`;
-      let image = pinImages.get(key);
-      if (!image)
-        pinImages.set(key, (image = pinImage(marker.color, marker.size)));
-      return image;
-    };
     const parts = localGeojsonParts(features);
     const sets = {};
     const built = { sets, parts: new Map(), records: [], count: parts.length };
@@ -801,7 +782,10 @@ export function createLocalGeoJsonLayer(
           part.pinClamped = part.coordinates.length <= 2;
           part.pinPos = { lon, lat };
           const marker = markerOf(style, rgba);
-          part.pin = pinFor(marker);
+          part.pin = pinMaker.pin({
+            ...marker,
+            symbol: style?.['marker-symbol'],
+          });
           part.pinSize = marker.size;
         }
 
@@ -1041,6 +1025,11 @@ export function createLocalGeoJsonLayer(
                 _cachedFeatures = features;
               }
 
+              // The loader drew its pins' symbols before it finished loading.
+              await pinMaker.load(markerSymbols(features), {
+                signal: _loadController?.signal,
+              });
+              if (_destroyed) return;
               const built = buildDrawn(viewer, features);
               _count = built.count;
               _stemRecords = built.records;
@@ -1318,6 +1307,7 @@ export function createLocalGeoJsonLayer(
       _clickSubscription = null;
       _overlayPublisher.destroy();
       _cachedFeatures = null;
+      pinMaker.clear();
       _stemRecords = [];
       _count = 0;
       _lastUpdate = null;

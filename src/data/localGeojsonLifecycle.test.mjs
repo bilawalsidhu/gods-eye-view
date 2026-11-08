@@ -166,3 +166,43 @@ test('a toggle-off frees the entities and a toggle-on rebuilds them from the cac
   assert.equal(fetchMock.mock.callCount(), 1, 'no second fetch for a bundled dataset');
   assert.equal(env.layer.getLodDiagnostics().total, 1);
 });
+
+test('destroy while a pin icon loads cancels it and leaves no late objects', async t => {
+  const saved = {
+    document: globalThis.document, CESIUM_BASE_URL: globalThis.CESIUM_BASE_URL,
+    createImageBitmap: globalThis.createImageBitmap,
+  };
+  globalThis.document = { createElement: () => ({ getContext: () => ({}) }), baseURI: 'http://gev.test/' };
+  globalThis.CESIUM_BASE_URL = '/cesium/';
+  globalThis.createImageBitmap = async () => ({ width: 1, height: 1 });
+  t.after(() => {
+    for (const [name, value] of Object.entries(saved))
+      if (value === undefined) delete globalThis[name];
+      else globalThis[name] = value;
+  });
+  const env = harness(t);
+  const entered = deferred();
+  const release = deferred();
+  let iconSignal;
+  const pinned = JSON.stringify({
+    type: 'Feature', id: 'pin', properties: { 'marker-symbol': 'rail' },
+    geometry: { type: 'Point', coordinates: [0, 0] },
+  });
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (!String(url).includes('/maki/')) return { ok: true, text: async () => pinned };
+    iconSignal = options.signal;
+    entered.resolve();
+    await release.promise;
+    return { ok: false };
+  });
+  const loading = env.layer.enable(env.viewer);
+  await entered.promise;
+  env.layer.destroy(env.viewer);
+  assert.equal(iconSignal.aborted, true);
+  release.resolve();
+  await loading;
+  assert.equal(env.fake.liveSets().length, 0);
+  assert.equal(env.listeners.size, 0);
+  assert.equal(env.handlers(), 0);
+  assert.equal(getContextStore().entities.size, 0);
+});
