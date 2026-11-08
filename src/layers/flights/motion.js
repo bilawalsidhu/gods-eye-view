@@ -545,8 +545,11 @@ export function createMotion({
       // half-correction put this offset on the lateral axis — see
       // modelAnchorWorld).
       return modelAnchorWorld(
-        flightState._trackedModel,
+        flightState._trackedModel.matrix,
         spec.trailAnchorNative,
+        Number.isFinite(flightState._trackedModel.model.computedScale)
+          ? flightState._trackedModel.model.computedScale
+          : spec.scale,
         flightState._trackedTrailPos,
       );
     }

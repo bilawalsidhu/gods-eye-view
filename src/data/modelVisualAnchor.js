@@ -1,12 +1,11 @@
-import * as Cesium from 'cesium';
 /**
  * Model-space visual centres measured from the shipped GLBs' scene-space AABBs.
  *
- * glTF stores these assets Y-up. Cesium's model frame is Z-up, so a glTF
- * centre `[x, y, z]` becomes `[x, -z, y]` before the layer's ENU modelMatrix
- * is applied. Values remain in native model units; callers supply the Model's
- * effective rendered `computedScale` because Cesium does not bake it into
- * modelMatrix and may raise it above `scale` to satisfy minimumPixelSize.
+ * Unlike the trail anchors below, these are stored in the placed model's
+ * own frame (the glTF axes already turned, see `gltfToPlacedAxes`), so the
+ * layer's ENU placement applies to them directly. Values remain in native model units; callers supply the scale
+ * the model is drawn at (`modelDrawnScale`), which the placement does not
+ * carry and which the pixel floor may raise above `scale`.
  */
 const CENTERED_MODEL = Object.freeze([0, 0, 0]);
 
@@ -19,7 +18,7 @@ export const MODEL_VISUAL_CENTER_NATIVE = Object.freeze({
  * Aft-belly trail attachment points, measured on each approved model's actual
  * MESH SURFACE. Every bundled asset is baked to one convention (see
  * aircraftClass.js): origin at the bbox centre, X = length with the NOSE at
- * local −X, glTF Y = up (Cesium-local Z here).
+ * local −X, glTF Y = up (the placed frame's Z here).
  *
  * Each value is the point of the hull's CENTRELINE PROFILE (the y = 0 slice of
  * the mesh) closest to that model's aft-belly AABB corner. Three things follow
@@ -53,7 +52,7 @@ export const MODEL_VISUAL_CENTER_NATIVE = Object.freeze({
  * the nearest surface point in the round — so the attachment cannot drift
  * screen-left or screen-right as the aircraft turns. (The unconstrained nearest
  * point would put jet.glb's anchor 1.29 m off-axis.) Values are native model
- * units; callers scale them by Cesium's effective `computedScale`.
+ * units; callers scale them by the model's drawn scale (`modelDrawnScale`).
  *
  * Locked against the shipped GLBs by modelScale.test.mjs, which re-reads the
  * POSITION buffers and re-derives every property above — re-measure, never
@@ -70,79 +69,125 @@ export const MODEL_TRAIL_ANCHOR_NATIVE = Object.freeze({
   '/models/atr72.glb': Object.freeze([12.9785, -1.2935, 0]),
 });
 
-/** @constant Cesium's OWN axis correction for a glTF loaded with the
- *  `Model.fromGltfAsync` defaults (upAxis Y, forwardAxis Z), assembled from its
- *  exported constants rather than restated as numbers here. `ModelSceneGraph`
- *  renders with `modelMatrix x components.transform x axisCorrection`, and the
- *  trail anchor has to ride the same chain or it lands on a different axis than
- *  the aircraft it is supposed to be attached to. */
-const AXIS_CORRECTION = Cesium.Matrix4.multiplyTransformation(
-  Cesium.Axis.Y_UP_TO_Z_UP,
-  Cesium.Axis.Z_UP_TO_X_UP,
-  new Cesium.Matrix4(),
-);
-const _anchorScratch = new Cesium.Cartesian3();
-const _chainScratch = new Cesium.Matrix4();
+/**
+ * How a model's raw glTF axes land in its placed frame, as the renderer
+ * draws a glTF model (`ModelItem`: Y-up, turned to Z-up, nose along the
+ * frame's own axis): raw glTF `[x, y, z]` becomes `[z, x, y]` in the frame
+ * `orientation` places. modelScale.test.mjs pins it against the Cesium
+ * renderer's own axis correction.
+ * @param {readonly number[]} v Raw glTF `[x, y, z]`.
+ * @returns {number[]} `[x, y, z]` in the placed frame.
+ */
+export const gltfToPlacedAxes = (v) => [v[2] || 0, v[0] || 0, v[1] || 0];
 
 /**
- * World position of a model-local anchor, through the SAME transform chain
- * Cesium renders the model with.
+ * World position of a model-local anchor, through the same chain the model
+ * is drawn with: its placement `matrix` (column-major, the frame the layer
+ * posed it in) after the glTF axis turn (`gltfToPlacedAxes`), at the scale
+ * it is drawn at.
  *
  * This exists because doing it by hand got it wrong. The anchors used to be
  * stored after a single glTF Y-up -> Z-up step (`[x, y, z]` -> `[x, -z, y]`) and
- * multiplied straight by `modelMatrix`. That is only half of Cesium's
- * correction: with the `fromGltfAsync` defaults it also applies Z_UP_TO_X_UP,
- * and the full correction maps raw glTF `[x, y, z]` -> `[z, x, y]`. The
- * aircraft's longitudinal axis is raw glTF X, so the old conversion put the
- * aft offset on the RENDERED model's lateral axis — a 90-degree disagreement.
- * Because `modelMatrix` carries the heading, both frames rotated together and
- * the offset came out sideways in world space, flipping which side it appeared
- * on as the course changed. Measured on the live rig at N/E/S/W plus a
- * helicopter: the old path put 81.47 m of a civil airliner's anchor entirely on
- * cross-track with 0 aft, at every heading; this path puts 81.47 m aft with 0
- * cross.
+ * multiplied straight by the placement. That is only half of the turn: the
+ * full one maps raw glTF `[x, y, z]` -> `[z, x, y]`. The aircraft's
+ * longitudinal axis is raw glTF X, so the old conversion put the aft offset on
+ * the RENDERED model's lateral axis — a 90-degree disagreement. Because the
+ * placement carries the heading, both frames rotated together and the offset
+ * came out sideways in world space, flipping which side it appeared on as the
+ * course changed. Measured on the live rig at N/E/S/W plus a helicopter: the
+ * old path put 81.47 m of a civil airliner's anchor entirely on cross-track
+ * with 0 aft, at every heading; this path puts 81.47 m aft with 0 cross.
  *
- * The anchors are therefore stored in RAW glTF coordinates and transformed
- * here, so exactly one transform — Cesium's own — stands between the table and
- * the world, and there is no second convention to drift.
+ * The anchors are therefore stored in RAW glTF coordinates and turned here,
+ * so exactly one convention stands between the table and the world.
  *
- * @param {import('./modelRecord.js').ModelRecord} record The layer's record of
- *   the model: where it placed it, and the Cesium Model (computedScale,
- *   sceneGraph).
+ * @param {ArrayLike<number>|null|undefined} matrix Where the model is placed.
  * @param {readonly number[]} nativeAnchor Raw glTF `[x, y, z]` native-unit offset.
+ * @param {number} scale The scale the model is drawn at (`modelDrawnScale`).
  * @param {{x:number,y:number,z:number}} result Mutable Cartesian-like result.
  * @returns {{x:number,y:number,z:number}|null} World position of the anchor.
  */
-export function modelAnchorWorld(record, nativeAnchor, result) {
-  const modelMatrix = record?.matrix;
-  const model = record?.model;
-  if (!modelMatrix || !nativeAnchor || !result) return null;
-  const scale = Number.isFinite(model.computedScale) ? model.computedScale : 1;
-  _anchorScratch.x = (nativeAnchor[0] || 0) * scale;
-  _anchorScratch.y = (nativeAnchor[1] || 0) * scale;
-  _anchorScratch.z = (nativeAnchor[2] || 0) * scale;
-  // The model's own root transform, when it exposes one, then Cesium's axis
-  // correction. Read from the instance rather than assumed, so an asset with a
-  // baked root transform is carried too.
-  const components = model?.sceneGraph?.components?.transform;
-  Cesium.Matrix4.multiplyTransformation(
-    modelMatrix,
-    components || Cesium.Matrix4.IDENTITY,
-    _chainScratch,
+export function modelAnchorWorld(matrix, nativeAnchor, scale, result) {
+  if (!matrix || !nativeAnchor || !result) return null;
+  return modelVisualAnchor(
+    matrix,
+    gltfToPlacedAxes(nativeAnchor),
+    scale,
+    result,
   );
-  Cesium.Matrix4.multiplyTransformation(
-    _chainScratch,
-    AXIS_CORRECTION,
-    _chainScratch,
+}
+
+/**
+ * The scale a model is drawn at, by the draw contract's pixel rule: `scale`
+ * (capped by `maxScale`), raised so its bounding sphere spans `minPixelSize`
+ * pixels at the sphere's distance from the eye (its depth along the view
+ * direction, less its radius), and capped by `maxScale` again.
+ * @param {object} options
+ * @param {number} [options.scale] The item's `scale` (default 1). An item
+ *   that also has `scaleByDistance` or `maxPixelSize` is drawn at a scale
+ *   this does not model; aircraft models use neither.
+ * @param {number} [options.minPixelSize]
+ * @param {number} [options.maxScale]
+ * @param {number} options.radiusM The model's bounding radius at scale 1.
+ * @param {{x:number,y:number,z:number}} options.center Where it is placed.
+ * @param {{position: object, direction: object, fovy: number}|null} options.pose
+ *   The camera pose (`camera.pose()`).
+ * @param {number} options.viewportHeightPx Drawn viewport height, CSS pixels.
+ * @param {number} [options.viewportWidthPx] Drawn viewport width, CSS pixels.
+ * @param {number} [options.pixelRatio] Drawing-buffer pixels per CSS pixel
+ *   (default 1): the sphere's drawn size is capped at the drawing buffer's
+ *   larger side, in its own pixels.
+ * @returns {number}
+ */
+export function modelDrawnScale({
+  scale = 1,
+  minPixelSize = 0,
+  maxScale,
+  radiusM,
+  center,
+  pose,
+  viewportHeightPx,
+  viewportWidthPx = viewportHeightPx,
+  pixelRatio = 1,
+}) {
+  const capped = (s) => (Number.isFinite(maxScale) ? Math.min(maxScale, s) : s);
+  if (
+    !(minPixelSize > 0) ||
+    !(radiusM > 0) ||
+    !center ||
+    !pose?.position ||
+    !pose.direction ||
+    !(pose.fovy > 0) ||
+    !(viewportHeightPx > 0)
+  )
+    return capped(scale);
+  const sphereRadius = radiusM * capped(scale);
+  const depth = Math.abs(
+    (center.x - pose.position.x) * pose.direction.x +
+      (center.y - pose.position.y) * pose.direction.y +
+      (center.z - pose.position.z) * pose.direction.z,
   );
-  return Cesium.Matrix4.multiplyByPoint(_chainScratch, _anchorScratch, result);
+  const distance = Math.max(0, depth - sphereRadius);
+  const metresPerPixel =
+    (2 * distance * Math.tan(pose.fovy / 2)) / viewportHeightPx;
+  if (!(metresPerPixel > 0)) return capped(scale);
+  const diameterPx = Math.min(
+    (2 * sphereRadius) / metresPerPixel,
+    Math.max(viewportWidthPx || 0, viewportHeightPx) *
+      (pixelRatio > 0 ? pixelRatio : 1),
+  );
+  const drawn =
+    diameterPx < minPixelSize
+      ? (minPixelSize * metresPerPixel) / (2 * radiusM)
+      : scale;
+  return capped(drawn);
 }
 
 /**
  * Return the model-local visual centre for an approved bundled GLB.
  * Assets absent from the table were audited as origin-centred.
  * @param {string} url Bundled model URL.
- * @returns {readonly number[]} Cesium-local `[x, y, z]` native-unit offset.
+ * @returns {readonly number[]} Placed-frame `[x, y, z]` native-unit offset.
  */
 export function visualCenterForModel(url) {
   return MODEL_VISUAL_CENTER_NATIVE[url] || CENTERED_MODEL;
@@ -153,7 +198,7 @@ export function visualCenterForModel(url) {
  * Unknown future assets safely fall back to their visual centre until their
  * geometry is measured and added to the table.
  * @param {string} url Bundled model URL.
- * @returns {readonly number[]} Cesium-local `[x, y, z]` native-unit offset.
+ * @returns {readonly number[]} Placed-frame `[x, y, z]` native-unit offset.
  */
 export function trailAnchorForModel(url) {
   return MODEL_TRAIL_ANCHOR_NATIVE[url] || visualCenterForModel(url);
@@ -210,15 +255,15 @@ export function trailAnchorForModel(url) {
  * and an in/out/in flap costs a few centimetres each way instead of ten metres.
  *
  * Scale-free rather than tuned: both ends of that shell come from the model —
- * `radiusM` carries Cesium's `computedScale`, so it tracks whatever
- * `minimumPixelSize` inflated the model to, and the station comes from the
+ * `radiusM` carries the drawn scale, so it tracks whatever
+ * `minPixelSize` inflated the model to, and the station comes from the
  * anchor being drawn to.
  *
  * @param {{x:number,y:number,z:number}} start Segment start (last trail point).
  * @param {{x:number,y:number,z:number}|null} anchor Segment end, world space —
  *   the aft-belly attachment point actually being drawn to.
  * @param {{x:number,y:number,z:number}|null} center Model origin, world space.
- * @param {number} radiusM Rendered bounding radius (nativeRadiusM x computedScale).
+ * @param {number} radiusM Rendered bounding radius (nativeRadiusM x drawn scale).
  * @param {{x:number,y:number,z:number}} result Mutable Cartesian-like result.
  * @returns {{x:number,y:number,z:number}|null} The point to draw FROM, or null
  *   when the segment should not be drawn. May be `start` itself.
@@ -258,9 +303,9 @@ export function trailHeadStart(start, anchor, center, radiusM, result) {
  * allocating. `modelMatrix` continues to own the model origin (including
  * ground snapping); bracket/readout and trail consumers supply their own
  * model-local anchor.
- * @param {ArrayLike<number>} modelMatrix Cesium Matrix4-compatible value.
- * @param {readonly number[]} nativeCenter Cesium-local native-unit offset.
- * @param {number} scale Cesium Model.computedScale applied outside modelMatrix.
+ * @param {ArrayLike<number>} modelMatrix The placement, column-major 4x4.
+ * @param {readonly number[]} nativeCenter Placed-frame native-unit offset.
+ * @param {number} scale The drawn scale, applied outside the placement.
  * @param {{x:number,y:number,z:number}} result Mutable Cartesian-like result.
  * @returns {{x:number,y:number,z:number}|null} World visual centre.
  */

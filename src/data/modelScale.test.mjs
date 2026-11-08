@@ -31,8 +31,9 @@ import {
   trailAnchorForModel,
   trailHeadStart,
   modelAnchorWorld,
+  modelDrawnScale,
+  gltfToPlacedAxes,
 } from './modelVisualAnchor.js';
-import { createModelRecord } from './modelRecord.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -771,40 +772,21 @@ test('the trail head grows continuously across the envelope, never in one step',
 // property directly — the anchor lies in the model's longitudinal/vertical
 // plane, with NO lateral component.
 //
-// The mock carries a NON-IDENTITY `sceneGraph.components.transform`, because
-// the chain has a third link and a mock without one cannot tell whether the
-// code reads it: Cesium renders `modelMatrix x components.transform x
-// axisCorrection`, and an asset with a baked root transform has to ride all
-// three. A scale and an offset ALONG the model's own axes is the strongest
-// choice the property survives — it changes both numbers the pin asserts
-// (identity would leave them at the raw table values, which is the answer a
-// dropped link also gives) while leaving lateral zero, which is the regression.
-const TRAIL_ROOT_SCALE = 2;
-const TRAIL_ROOT_OFFSET = Object.freeze({ lengthwise: 5, vertical: -1 });
+// The anchor is drawn at a scale other than 1 here, because a scale of 1
+// leaves both numbers the pin asserts at the raw table values, which is the
+// answer a dropped scale also gives.
+const TRAIL_DRAWN_SCALE = 2;
 test('the trail anchor rides the rendered longitudinal axis at every heading', () => {
   const position = Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 3000);
   const sub = (a, b) => Cesium.Cartesian3.subtract(a, b, new Cesium.Cartesian3());
-  // Cesium-model-local: x is lateral, y lengthwise, z vertical once the axis
-  // correction has mapped raw glTF [x, y, z] -> [z, x, y].
-  const rootTransform = Cesium.Matrix4.fromTranslationQuaternionRotationScale(
-    new Cesium.Cartesian3(0, TRAIL_ROOT_OFFSET.lengthwise, TRAIL_ROOT_OFFSET.vertical),
-    Cesium.Quaternion.IDENTITY,
-    new Cesium.Cartesian3(TRAIL_ROOT_SCALE, TRAIL_ROOT_SCALE, TRAIL_ROOT_SCALE),
-    new Cesium.Matrix4(),
-  );
   for (const headingDeg of [0, 45, 90, 180, 270, 315]) {
     const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(headingDeg), 0, 0);
     const modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(
       position, hpr, Cesium.Ellipsoid.WGS84, undefined, new Cesium.Matrix4(),
     );
     for (const [url, anchor] of Object.entries(MODEL_TRAIL_ANCHOR_NATIVE)) {
-      const record = createModelRecord({
-        modelMatrix,
-        computedScale: 1,
-        sceneGraph: { components: { transform: rootTransform } },
-      });
       const origin = Cesium.Matrix4.getTranslation(modelMatrix, new Cesium.Cartesian3());
-      const world = modelAnchorWorld(record, anchor, new Cesium.Cartesian3());
+      const world = modelAnchorWorld(modelMatrix, anchor, TRAIL_DRAWN_SCALE, new Cesium.Cartesian3());
       // Reference axes derived INDEPENDENTLY, from the ENU frame and the same
       // heading the matrix was built with — deliberately NOT through
       // modelAnchorWorld. Taking them through the function under test makes the
@@ -838,10 +820,10 @@ test('the trail anchor rides the rendered longitudinal axis at every heading', (
       // SIGNED, not magnitudes. An `abs()` on both sides passes an anchor that
       // landed on the nose instead of the tail, or on the roof instead of the
       // belly — which are the two directions the table exists to fix. The
-      // expected values carry the root transform, so a dropped `components`
-      // link fails here rather than quietly rendering the raw table value.
-      const expectedAlong = anchor[0] * TRAIL_ROOT_SCALE + TRAIL_ROOT_OFFSET.lengthwise;
-      const expectedUp = anchor[1] * TRAIL_ROOT_SCALE + TRAIL_ROOT_OFFSET.vertical;
+      // expected values carry the drawn scale, so a dropped scale fails here
+      // rather than quietly rendering the raw table value.
+      const expectedAlong = anchor[0] * TRAIL_DRAWN_SCALE;
+      const expectedUp = anchor[1] * TRAIL_DRAWN_SCALE;
       assert.ok(Math.abs(along - expectedAlong) < 1e-4,
         `${where}: the longitudinal offset must land AFT along the heading ` +
         `(${along.toFixed(4)} vs ${expectedAlong.toFixed(4)})`);
@@ -861,13 +843,10 @@ test('a hovering rotorcraft anchors aft of its own hull, whatever its heading', 
   const anchor = MODEL_TRAIL_ANCHOR_NATIVE['/models/bell206.glb'];
   for (const headingDeg of [0, 137.5, 271.9]) {
     const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(headingDeg), 0, 0);
-    const record = createModelRecord({
-      modelMatrix: Cesium.Transforms.headingPitchRollToFixedFrame(
-        position, hpr, Cesium.Ellipsoid.WGS84, undefined, new Cesium.Matrix4()),
-      computedScale: 1,
-    });
-    const origin = Cesium.Matrix4.getTranslation(record.matrix, new Cesium.Cartesian3());
-    const world = modelAnchorWorld(record, anchor, new Cesium.Cartesian3());
+    const matrix = Cesium.Transforms.headingPitchRollToFixedFrame(
+      position, hpr, Cesium.Ellipsoid.WGS84, undefined, new Cesium.Matrix4());
+    const origin = Cesium.Matrix4.getTranslation(matrix, new Cesium.Cartesian3());
+    const world = modelAnchorWorld(matrix, anchor, 1, new Cesium.Cartesian3());
     const enu = Cesium.Transforms.eastNorthUpToFixedFrame(origin, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
     const ax = (i) => {
       const c = Cesium.Matrix4.getColumn(enu, i, new Cesium.Cartesian4());
@@ -885,6 +864,56 @@ test('a hovering rotorcraft anchors aft of its own hull, whatever its heading', 
     assert.ok(Math.abs(side) < 1e-4,
       `bell206 @ heading ${headingDeg}: hovering rotorcraft anchor drifted sideways by ${side.toFixed(4)} m`);
   }
+});
+
+// The glTF axis turn the anchors ride is the one the Cesium renderer draws
+// models with (`Model.fromGltfAsync`'s defaults: Y up, Z forward), and no
+// shipped asset carries a root transform of its own (CESIUM_RTC) that the
+// renderer would add to the chain.
+test('anchors turn glTF axes as the Cesium renderer draws models', () => {
+  const correction = Cesium.Matrix4.multiplyTransformation(
+    Cesium.Axis.Y_UP_TO_Z_UP, Cesium.Axis.Z_UP_TO_X_UP, new Cesium.Matrix4());
+  for (const v of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [3.5, -2, 7]]) {
+    const drawn = Cesium.Matrix4.multiplyByPoint(
+      correction, new Cesium.Cartesian3(...v), new Cesium.Cartesian3());
+    const turned = gltfToPlacedAxes(v);
+    assert.deepEqual([drawn.x, drawn.y, drawn.z].map((n) => +n.toFixed(12)), turned.map((n) => +n.toFixed(12)));
+  }
+  for (const url of Object.keys(MODEL_TRAIL_ANCHOR_NATIVE)) {
+    const gltf = glbJson(path.join(ROOT, 'public', url));
+    assert.ok(!gltf.extensionsUsed?.includes('CESIUM_RTC'), `${url}: no root transform of its own`);
+  }
+});
+
+// The drawn scale follows the draw contract's pixel rule, which the Cesium
+// renderer implements as Model.computedScale: the bounding sphere's pixel
+// size at its depth less its radius, raised to minPixelSize.
+test('a model is drawn at its scale until the pixel floor raises it', () => {
+  const pose = { position: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 }, fovy: Math.PI / 3 };
+  const base = { scale: 1, minPixelSize: 24, radiusM: 30, pose, viewportHeightPx: 1000 };
+  // Near: 60 m across fills hundreds of pixels.
+  assert.equal(modelDrawnScale({ ...base, center: { x: 0, y: 0, z: 500 } }), 1);
+  // Far: 100 km away, 24 px of a 30 m-radius sphere.
+  const depth = 100_000;
+  const mpp = (2 * (depth - 30) * Math.tan(Math.PI / 6)) / 1000;
+  const raised = modelDrawnScale({ ...base, center: { x: 0, y: 0, z: depth } });
+  assert.ok(Math.abs(raised - (24 * mpp) / 60) < 1e-9, `raised to ${raised}`);
+  // Depth along the view direction, not straight-line distance: off to one
+  // side at the same depth, it is raised the same.
+  assert.equal(modelDrawnScale({ ...base, center: { x: 40_000, y: 0, z: depth } }), raised);
+  // The sphere's size is capped at the drawing buffer's larger side in its own
+  // pixels: at a pixel ratio of 2 a 500 CSS px viewport is 1000 px across, so
+  // a sphere 600 CSS px wide is not raised.
+  const close = { ...base, minPixelSize: 600, viewportHeightPx: 500, center: { x: 0, y: 0, z: 60 } };
+  assert.equal(modelDrawnScale({ ...close, pixelRatio: 2 }), 1);
+  assert.ok(modelDrawnScale(close) < 1, 'at a pixel ratio of 1 the cap is 500 px');
+  // maxScale caps it, and the sphere it is measured by is at the capped scale.
+  assert.equal(modelDrawnScale({ ...base, maxScale: 2, center: { x: 0, y: 0, z: depth } }), 2);
+  const fromCapped = modelDrawnScale({ ...base, scale: 5, maxScale: 3, minPixelSize: 400, center: { x: 0, y: 0, z: depth } });
+  assert.equal(fromCapped, 3, 'raised past maxScale, then capped');
+  const big = modelDrawnScale({ ...base, scale: 5, maxScale: 1e9, minPixelSize: 4000, viewportHeightPx: 1000, viewportWidthPx: 5000, center: { x: 0, y: 0, z: depth } });
+  assert.ok(Math.abs(big - (4000 * ((2 * (depth - 150) * Math.tan(Math.PI / 6)) / 1000)) / 60) < 1e-9, `raised from the sphere at scale 5: ${big}`);
+  assert.equal(modelDrawnScale({ ...base, pose: null, center: { x: 0, y: 0, z: depth } }), 1);
 });
 
 test('legacy aircraft GLBs keep scale and orientation baked with no node transforms', () => {
