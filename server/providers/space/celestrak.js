@@ -29,8 +29,10 @@ import { readResponseTextCapped } from '../common/http.js';
  * The same plugin serves CelesTrak SATCAT records for the satellites layer's
  * groups at `/api/celestrak-satcat/<group>` (object type, operational status
  * and owner, which file each object under a class). The catalog changes
- * slowly, so SATCAT is cached for a day; both routes share the upstream
- * cooldown, since CelesTrak throttles the client, not the endpoint.
+ * slowly, so SATCAT is cached for a day. CelesTrak throttles the client, not
+ * the endpoint, so a 403 or 429 holds both routes off; any other failure
+ * holds off only the route that failed, so a bad SATCAT answer never stops
+ * TLE refreshes.
  */
 export function celestrakProxy() {
   const TLE_TTL_MS = 6 * 3600_000;
@@ -81,12 +83,17 @@ export function celestrakProxy() {
       invalid: 'no SATCAT header in response',
     },
   ];
-  let cooldownUntil = 0;
+  // CelesTrak throttling (403/429) is per client, so it holds every feed
+  // off; any other failure holds off only the feed that failed, so a bad
+  // SATCAT answer never blocks the TLEs the layer cannot do without.
+  let hostCooldownUntil = 0;
 
   /** The largest group (`active`) measures ~2.7 MB; this bounds a runaway body. */
   const CELESTRAK_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
   function createFeedHandler(feed) {
+    let feedCooldownUntil = 0;
+    const cooldownUntil = () => Math.max(hostCooldownUntil, feedCooldownUntil);
     const mem = new Map(); // group -> { at: epochMs, body: string }
     const inflight = new Map(); // group -> Promise<{at, body}|null>
     const diskPath = (group) => path.join(CACHE_DIR, feed.diskName(group));
@@ -126,10 +133,10 @@ export function celestrakProxy() {
       if (!res.ok) {
         // Group refreshes run in parallel: a later failure without Retry-After
         // must never shorten a longer deadline an earlier one already set.
-        cooldownUntil = Math.max(
-          cooldownUntil,
-          Date.now() + providerCooldownMs(res),
-        );
+        const until = Date.now() + providerCooldownMs(res);
+        if (res.status === 403 || res.status === 429)
+          hostCooldownUntil = Math.max(hostCooldownUntil, until);
+        else feedCooldownUntil = Math.max(feedCooldownUntil, until);
         void res.body?.cancel().catch(() => {});
         throw new Error(`HTTP ${res.status}`);
       }
@@ -171,10 +178,10 @@ export function celestrakProxy() {
           ...(entry
             ? { [feed.cachedAtHeader]: new Date(entry.at).toISOString() }
             : {}),
-          ...(cooldownUntil > 0 && Date.now() < cooldownUntil
+          ...(cooldownUntil() > 0 && Date.now() < cooldownUntil()
             ? {
                 'Retry-After': String(
-                  Math.ceil((cooldownUntil - Date.now()) / 1000),
+                  Math.ceil((cooldownUntil() - Date.now()) / 1000),
                 ),
               }
             : {}),
@@ -192,7 +199,7 @@ export function celestrakProxy() {
           send(200, entry.body, 'HIT', entry);
           return;
         }
-        if (Date.now() < cooldownUntil) {
+        if (Date.now() < cooldownUntil()) {
           send(
             entry ? 200 : 502,
             entry?.body || 'celestrak upstream cooling down',
@@ -212,8 +219,8 @@ export function celestrakProxy() {
                 return fresh;
               })
               .catch((err) => {
-                if (Date.now() >= cooldownUntil)
-                  cooldownUntil = Date.now() + 60000;
+                if (Date.now() >= feedCooldownUntil)
+                  feedCooldownUntil = Date.now() + 60000;
                 console.warn(
                   '[celestrak-proxy] refresh failed — serving cache if any',
                 );
