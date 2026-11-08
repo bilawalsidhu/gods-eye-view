@@ -1785,9 +1785,9 @@ async function main() {
     const gizmoStates = await page.evaluate((parts) => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: true });
-      const viewer = window.__godsEyeView.viewer;
+      const drawn = mod._cctvDrawnForTest().gizmo;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = drawn['cctv-gizmo-' + p];
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);
@@ -1802,9 +1802,10 @@ async function main() {
     // stay frozen until release, with no transient sampleHeight calls.
     const eastDrag = await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
-      const e = viewer.entities.getById('cctv-gizmo-move-east');
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const e = mod._cctvDrawnForTest().gizmo['cctv-gizmo-move-east'];
       if (!e) return null;
-      const pts = e.polyline.positions.getValue(viewer.clock.currentTime);
+      const pts = e.positions;
       const scene = viewer.scene;
       const w = scene.canvas.clientWidth;
       const h = scene.canvas.clientHeight;
@@ -2082,9 +2083,9 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: false });
       mod.setParams({ calibration: { reset: true } });
-      const viewer = window.__godsEyeView.viewer;
+      const drawn = mod._cctvDrawnForTest().gizmo;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = drawn['cctv-gizmo-' + p];
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);

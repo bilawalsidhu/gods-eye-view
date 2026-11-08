@@ -122,6 +122,12 @@ export function createTesting({ state: layerState, services, parts, source }) {
       if (record?.camera?.id) parts.rendering.addCameraIcon(record);
   }
 
+  /** What the layer draws now, for the QA harness: the gizmo's parts. */
+
+  function _cctvDrawnForTest() {
+    return { gizmo: layerState._gizmo?.partsForTest() ?? {} };
+  }
+
   /** The layer's icon set, for tests that read what the rows draw. */
 
   function _cctvIconsForTest() {
@@ -135,5 +141,6 @@ export function createTesting({ state: layerState, services, parts, source }) {
     _extractPickedCameraIdForTest,
     _setCctvCoverageStateForTest,
     _cctvIconsForTest,
+    _cctvDrawnForTest,
   };
 }

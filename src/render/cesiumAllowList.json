@@ -7,7 +7,6 @@
   "src/cockpitCloudEffects.js",
   "src/cyberSonarGpu.js",
   "src/cyberSonarScene.js",
-  "src/data/cctvGizmo.js",
   "src/data/geoImportPins.js",
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
