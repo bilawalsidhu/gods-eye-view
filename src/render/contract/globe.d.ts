@@ -232,15 +232,22 @@ export interface SkySettings {
   lighting: boolean;
 }
 
-export interface SurfaceShading {
-  kind: 'relief';
-  /** Elevation-like field to shade, row-major, `width × height`. */
-  values: Float32Array;
-  width: number;
-  height: number;
-  rectangle: GeoRect;
-  strength: number;
-}
+export type SurfaceShading =
+  | {
+      kind: 'relief';
+      /** Elevation-like field to shade, row-major, `width × height`. */
+      values: Float32Array;
+      width: number;
+      height: number;
+      rectangle: GeoRect;
+      strength: number;
+    }
+  /**
+   * View-lit shading of the drawn terrain's own relief (the ellipsoid's
+   * curvature where terrain has no normals); darkens only, at most
+   * `strength` opacity.
+   */
+  | { kind: 'hillshade'; strength: number };
 
 export interface LoadProgress {
   tilesPending: number;

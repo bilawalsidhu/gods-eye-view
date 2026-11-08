@@ -3087,6 +3087,38 @@ export function portChecks() {
       { capability: 'surfaceIdentity' },
     ),
     check(
+      'globe.surfaceShading',
+      'hillshade shading is set, restrengthened and cleared, drawing each time',
+      async (h, r) => {
+        await overAustin(h, r, 20000);
+        const errors = [];
+        const off = r.on('error', (e) => errors.push(e));
+        const draws = [];
+        const offDraw = r.frame.on('postRender', () => draws.push(1));
+        try {
+          for (const shading of [
+            { kind: 'hillshade', strength: 0.28 },
+            { kind: 'hillshade', strength: 0.5 },
+            null,
+          ]) {
+            const before = draws.length;
+            r.globe.setSurfaceShading(shading);
+            await h.frame(r);
+            await h.frame(r);
+            ok(
+              draws.length > before,
+              `drawn after ${shading?.strength ?? 'clearing'}`,
+            );
+          }
+          deepEqual(errors, [], 'no errors');
+        } finally {
+          off();
+          offDraw();
+        }
+      },
+      { capability: 'surfaceShading' },
+    ),
+    check(
       'globe.sky',
       'sky settings round-trip and keep unchanged keys',
       (h, r) => {

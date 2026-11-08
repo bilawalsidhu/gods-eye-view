@@ -114,6 +114,34 @@ async function terrainProvider(spec, { worldDataToken }) {
   throw new TypeError(`Unknown terrain kind: ${spec.kind}`);
 }
 
+/**
+ * `hillshade` surface shading: view-directed display lighting over the
+ * terrain's own normals, or the ellipsoid's curvature where the terrain
+ * has none (Cesium leaves normal-dependent materials out without them). It
+ * darkens only, up to `strength` opacity; it stands for no sun, changes no
+ * geometry and asks for no data.
+ * @param {boolean} terrainNormals
+ */
+function hillshadeSource(terrainNormals) {
+  const normal = terrainNormals
+    ? 'vec3 normal = normalize(materialInput.normalEC);'
+    : `vec3 worldPosition = (czm_inverseView * vec4(-materialInput.positionToEyeEC, 1.0)).xyz;
+    vec3 geodeticNormal = normalize(worldPosition * czm_ellipsoidInverseRadii * czm_ellipsoidInverseRadii);
+    vec3 normal = normalize(czm_viewRotation * geodeticNormal);`;
+  return `
+czm_material czm_getMaterial(czm_materialInput materialInput)
+{
+    czm_material material = czm_getDefaultMaterial(materialInput);
+    ${normal}
+    vec3 displayLight = normalize(vec3(-0.45, 0.55, 0.8));
+    float shade = clamp((1.0 - dot(normal, displayLight)) * strength * (0.32 / 0.28), 0.0, strength);
+    material.diffuse = vec3(0.0);
+    material.alpha = shade;
+    return material;
+}
+`;
+}
+
 /** The last `surfaceVersion` any globe port handed out. */
 let surfaceVersions = 0;
 
@@ -456,6 +484,10 @@ export function createCesiumGlobe(
       scene.preUpdate.addEventListener(() => {
         // A throw here would stop the widget's render loop.
         try {
+          if (shadingStale()) {
+            applyShading();
+            requestRender('base');
+          }
           if (imagery.list().length) imagery.sync();
           if (progressListeners.size === 0) return;
           const base = drawnBase();
@@ -466,6 +498,84 @@ export function createCesiumGlobe(
         }
       }),
     );
+
+  // --- Surface shading --------------------------------------------------
+
+  // `setSurfaceShading`: the globe material this port owns, while it shades.
+  // It takes the globe's material only when no one else holds it, and gives
+  // it back on null. On the tick after a change it follows the terrain
+  // (with normals or without), lets go of a material someone replaced, and
+  // takes the globe's material once it comes free.
+  let shading = null;
+  let shadingMaterial = null;
+  let shadingNormals = null;
+  // The terrain's normals when shading was last applied, owned or not, so
+  // an idle tick never applies it again.
+  let shadingSeen = null;
+  // A material that could not be made is not retried until the terrain or
+  // the shading changes.
+  let shadingBroken = false;
+  const shadingNormalsNow = () =>
+    scene.globe?.terrainProvider?.hasVertexNormals === true;
+  // Whether a tick should apply the shading again: the terrain's normals
+  // changed, someone took our material, or the globe's material came free.
+  function shadingStale() {
+    const globe = scene.globe;
+    if (!shading || !globe) return false;
+    if (shadingSeen !== shadingNormalsNow()) return true;
+    if (shadingMaterial) return globe.material !== shadingMaterial;
+    return globe.material == null && !shadingBroken;
+  }
+  function dropShadingMaterial() {
+    if (!shadingMaterial) return;
+    if (scene.globe && scene.globe.material === shadingMaterial)
+      scene.globe.material = undefined;
+    if (!shadingMaterial.isDestroyed?.()) shadingMaterial.destroy?.();
+    shadingMaterial = null;
+    shadingNormals = null;
+  }
+  function applyShading() {
+    const globe = scene.globe;
+    const normals = shadingNormalsNow();
+    if (normals !== shadingSeen) shadingBroken = false;
+    shadingSeen = normals;
+    if (!shading || !globe) return dropShadingMaterial();
+    if (shadingMaterial && globe.material !== shadingMaterial) {
+      // Someone else took the globe's material: theirs it stays, and ours,
+      // no longer drawn, goes.
+      if (!shadingMaterial.isDestroyed?.()) shadingMaterial.destroy?.();
+      shadingMaterial = null;
+      shadingNormals = null;
+    }
+    if (shadingMaterial && shadingNormals === normals) {
+      shadingMaterial.uniforms.strength = shading.strength;
+      return;
+    }
+    if (!shadingMaterial && globe.material != null) return;
+    dropShadingMaterial();
+    shadingBroken = true;
+    shadingMaterial = new Cesium.Material({
+      fabric: {
+        type: normals ? 'GEVHillshadeTerrain' : 'GEVHillshadeCurvature',
+        uniforms: { strength: shading.strength },
+        source: hillshadeSource(normals),
+      },
+      translucent: true,
+    });
+    shadingBroken = false;
+    shadingNormals = normals;
+    globe.material = shadingMaterial;
+  }
+  function setSurfaceShading(next) {
+    if (next && next.kind !== 'hillshade')
+      throw new TypeError(`This renderer has no ${next.kind} shading`);
+    shading = next
+      ? { strength: Math.min(1, Math.max(0, Number(next.strength) || 0)) }
+      : null;
+    shadingBroken = false;
+    applyShading();
+    requestRender('base');
+  }
 
   // --- Port ------------------------------------------------------------------
 
@@ -493,6 +603,7 @@ export function createCesiumGlobe(
   if (can('globeVisibility'))
     port.isGlobeVisible = () => scene.globe?.show === true;
   if (can('surfaceIdentity')) port.surfaceVersion = readSurfaceVersion;
+  if (can('surfaceShading')) port.setSurfaceShading = setSurfaceShading;
   if (can('splitSwipe')) {
     // Cesium's split starts at the canvas's left edge, as the scene was
     // made: a `left` layer shows once the split moves.
@@ -511,6 +622,8 @@ export function createCesiumGlobe(
       photorealGen += 1;
       terrainGen += 1;
       for (const off of removers) off();
+      shading = null;
+      dropShadingMaterial();
       progressListeners.clear();
       for (const done of [...settleWaits]) done();
       imagery.dispose();

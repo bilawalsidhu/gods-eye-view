@@ -629,3 +629,61 @@ test('surfaceVersion follows what heights answer against; surface settles on it'
   plain.scene.globe.show = false;
   assert.equal(plain.port.isSettled('surface'), plain.port.isSettled('base'));
 });
+
+test('hillshade shading owns a free globe material, follows the terrain, gives it back', () => {
+  const { scene, port, tick, dispose, renders } = setup(
+    new Set([...ALL, 'surfaceShading']),
+  );
+  assert.throws(
+    () =>
+      port.setSurfaceShading({
+        kind: 'relief',
+        values: new Float32Array(1),
+        width: 1,
+        height: 1,
+        rectangle: { west: 0, south: 0, east: 1, north: 1 },
+        strength: 1,
+      }),
+    /no relief shading/,
+  );
+  port.setSurfaceShading({ kind: 'hillshade', strength: 0.28 });
+  const curvature = scene.globe.material;
+  assert.ok(curvature instanceof Cesium.Material);
+  assert.equal(curvature.type, 'GEVHillshadeCurvature');
+  assert.equal(curvature.uniforms.strength, 0.28);
+  port.setSurfaceShading({ kind: 'hillshade', strength: 0.5 });
+  assert.equal(scene.globe.material, curvature, 'restrengthened in place');
+  assert.equal(curvature.uniforms.strength, 0.5);
+  // Terrain with normals: the next tick shades its relief instead.
+  scene.globe.terrainProvider = { hasVertexNormals: true };
+  tick();
+  assert.equal(scene.globe.material.type, 'GEVHillshadeTerrain');
+  assert.ok(curvature.isDestroyed());
+  port.setSurfaceShading(null);
+  assert.equal(scene.globe.material, undefined, 'given back');
+  // A material someone else holds stays theirs.
+  const theirs = { isDestroyed: () => false };
+  scene.globe.material = theirs;
+  port.setSurfaceShading({ kind: 'hillshade', strength: 0.28 });
+  assert.equal(scene.globe.material, theirs);
+  renders.length = 0;
+  tick();
+  tick();
+  assert.deepEqual(renders, [], 'idle ticks ask for no frame');
+  // Once theirs is let go, the next tick takes the free material.
+  scene.globe.material = undefined;
+  tick();
+  const ours = scene.globe.material;
+  assert.equal(ours.type, 'GEVHillshadeTerrain', 'taken once free');
+  // Replaced while ours: let go of, and destroyed, on the next tick.
+  scene.globe.material = theirs;
+  tick();
+  assert.equal(scene.globe.material, theirs);
+  assert.ok(ours.isDestroyed());
+  renders.length = 0;
+  tick();
+  assert.deepEqual(renders, [], 'and idle again');
+  port.setSurfaceShading(null);
+  assert.equal(scene.globe.material, theirs);
+  dispose();
+});

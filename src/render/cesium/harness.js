@@ -76,6 +76,7 @@ export const CESIUM_CHECKS = new Set([
   'globe.imagery',
   'globe.sky',
   'globe.split',
+  'globe.surfaceShading',
   'globe.surfaceVersion',
   'globe.visible',
   'globe.withoutImageHooks',

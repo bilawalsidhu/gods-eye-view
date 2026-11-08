@@ -24,6 +24,7 @@ test('capabilities follow what the scene supports', () => {
     'splitSwipe',
     'imageHooks',
     'surfaceIdentity',
+    'surfaceShading',
   ];
   const globe = { show: true };
   const draw = ['models', 'quads', 'meshes'];

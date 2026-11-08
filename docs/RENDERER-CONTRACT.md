@@ -48,6 +48,11 @@ optional, so a renderer written before it still conforms:
   otherwise (not on camera moves or tile loads), so the application can key cached
   heights by it. `isSettled('surface')` says whether that surface has
   loaded what is in view; a renderer without it answers `surface` as `base`.
+- `SurfaceShading` has a `hillshade` kind: view-lit shading of the drawn
+  terrain's own relief (the ellipsoid's curvature where terrain has no
+  normals) that only darkens, at most `strength` opacity. The Cesium port
+  draws it as a globe material it takes only while no one else holds the
+  globe's material; it has no `relief` kind.
 - `camera.on('changed', cb, { threshold })` measures each listener by its
   own threshold under the capability `cameraChangeThreshold`; a renderer
   without it fires every `changed` listener at 0.5.

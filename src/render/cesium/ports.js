@@ -45,6 +45,7 @@ const GLOBE_CAPABILITIES = [
   'splitSwipe',
   'imageHooks',
   'surfaceIdentity',
+  'surfaceShading',
   'globeVisibility',
 ];
 
