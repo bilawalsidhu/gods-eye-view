@@ -72,6 +72,34 @@ and each capability member present without its capability.
 `contract.test.mjs` type-checks the contract under strict TypeScript, and
 fails when `PORTS` and the types disagree on a single member.
 
+## Moving code onto the contract
+
+Two ratchet tests keep code that has moved onto the contract from drifting
+back to Cesium. Both lists only ever shrink.
+
+- `src/render/cesiumAllowList.json` lists the files outside the Cesium
+  adapter (`src/render/cesium/`) that may still import or be handed Cesium
+  (`src/render/noCesiumOutsideRender.test.mjs`). A file leaves the list
+  when it no longer drives Cesium at all; nothing is added.
+- `src/render/viewerAccessAllowList.json` counts, per file off that list,
+  the Cesium-shaped accesses through the viewer it still makes
+  (`src/render/viewerAccess.test.mjs`): the viewer's `entities`,
+  `dataSources`, `scene`, `camera`, `clock`, `imageryLayers`,
+  `terrainProvider`, `trackedEntity` and `canvas`, and the scene's
+  `primitives`, `pick`, `drillPick`, `pickPosition`, `globe`, `preRender`,
+  `postRender`, `preUpdate`, `postUpdate`, `canvas`, `requestRender` and
+  `camera`, written plainly, with `?.`, in brackets or destructured.
+  `viewer.container` is a DOM element and does not count; reach the canvas
+  through `canvasOf(viewer)`. Comments and tests do not count.
+  `src/testSupport/viewerAccess.mjs` is the matcher.
+  A file may not make more accesses than recorded (a file not listed may
+  make none), and a count higher than the file now needs fails too. So a
+  file that leaves the Cesium list must port its viewer accesses in the
+  same change: it cannot be added to the count. After
+  porting accesses away, run `node scripts/viewer-access-baseline.mjs` (or
+  `--check` to see what it would change): it lowers counts and drops
+  entries, and never adds or raises one.
+
 ## The stub renderer
 
 `createStubRenderer({ capabilities, viewport, time })` implements every port
