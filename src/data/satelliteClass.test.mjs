@@ -412,7 +412,7 @@ test('a dependency owner hiding the points surrenders the whole row', async () =
   }
 });
 
-test('stations and imaging show by default; each class chip turns its class on and off', async () => {
+test('every class but Starlink shows by default; each class chip turns its class on and off', async () => {
   const originalFetch = globalThis.fetch;
   const log = console.log;
   const warn = console.warn;
@@ -434,35 +434,40 @@ test('stations and imaging show by default; each class chip turns its class on a
       text: async () => served[String(url)] || '',
     });
     await satellitesLayer.update({ scene: { primitives: { add: (p) => p, remove() {} } } });
-    assert.deepEqual(shown(), [25544, 40002], 'stations and imaging only');
+    assert.deepEqual(shown(), [25544, 40001, 40002, 40003], 'all but Starlink');
     assert.deepEqual(
       satellitesLayer.getRowControls().chips.map((entry) => entry.label),
       ['STATIONS', 'IMAGING', 'TELECOM', 'STARLINK', 'PROBES', 'DEBRIS'],
     );
     assert.equal(chip('imaging').active, true);
-    assert.equal(chip('telecom').active, false);
-    assert.deepEqual(chip('telecom').params, { classes: { telecom: true } });
+    assert.equal(chip('telecom').active, true);
+    assert.equal(
+      satellitesLayer.getRowControls().chips.find((entry) => entry.id === 'catalog').active,
+      false,
+    );
+    assert.deepEqual(chip('telecom').params, { classes: { telecom: false } });
     assert.deepEqual(
       satellitesLayer.getRowControls().legend.map((row) => row.klass),
-      ['stations', 'imaging'],
+      ['stations', 'imaging', 'telecom', 'debris'],
       'the legend keys only what is on screen',
     );
 
     satellitesLayer.setParams(chip('telecom').params);
     satellitesLayer.setParams(chip('debris').params);
-    assert.deepEqual(shown(), [25544, 40001, 40002, 40003]);
-    assert.equal(chip('debris').active, true);
+    assert.deepEqual(shown(), [25544, 40002], 'telecom and debris off');
+    assert.equal(chip('debris').active, false);
     assert.deepEqual(satellitesLayer.getParams().classes, {
       stations: true,
       imaging: true,
-      telecom: true,
+      telecom: false,
       starlink: false,
-      probes: false,
-      debris: true,
+      probes: true,
+      debris: false,
     });
 
+    satellitesLayer.setParams(chip('telecom').params);
     satellitesLayer.setParams(chip('imaging').params);
-    assert.deepEqual(shown(), [25544, 40001, 40003], 'imaging off');
+    assert.deepEqual(shown(), [25544, 40001], 'telecom back on, imaging off');
     assert.equal(satellitesLayer.setParams({ classes: 'all' }), false, 'malformed request refused');
   } finally {
     console.log = log;

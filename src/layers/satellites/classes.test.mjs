@@ -32,7 +32,7 @@ test('six classes, with stations and imaging on by default and the rest off', ()
   ]);
   assert.deepEqual(
     SATELLITE_CLASS_IDS.filter((id) => DEFAULT_SATELLITE_CLASSES[id]),
-    ['stations', 'imaging'],
+    ['stations', 'imaging', 'telecom', 'probes', 'debris'],
   );
   for (const id of SATELLITE_CLASS_IDS) {
     const display = SATELLITE_CLASS_DISPLAY[id];

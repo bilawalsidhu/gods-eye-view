@@ -39,14 +39,17 @@ export const SATELLITE_CLASS_IDS = Object.freeze([
   'debris',
 ]);
 
-/** Which classes show when nobody has chosen. */
+/**
+ * Which classes show when nobody has chosen: everything the layer showed
+ * before classes existed. Starlink stays off, as the DENSE switch was.
+ */
 export const DEFAULT_SATELLITE_CLASSES = Object.freeze({
   stations: true,
   imaging: true,
-  telecom: false,
+  telecom: true,
   starlink: false,
-  probes: false,
-  debris: false,
+  probes: true,
+  debris: true,
 });
 
 /**
