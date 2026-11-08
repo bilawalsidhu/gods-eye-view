@@ -89,6 +89,9 @@ const DRAW_FROM_CALLER = new Set([
   // Its icons, wireframes, volumes, plane and gizmo draw through `drawOf`;
   // it picks, projects and reads the eye and the globe through the ports.
   './layers/cctv',
+  // Its heat cells and fire glows draw through `drawOf`; its cards and LOD
+  // watcher read the eye, projection and frames through the ports.
+  './layers/firms',
   // Its data packs draw through `drawOf`; its flights ask `cameraOf`, which
   // throws until then too.
   './scenes',

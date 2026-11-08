@@ -15,6 +15,7 @@ import { createIconSet, ICON_CULL_LIFT } from './iconSet.js';
 import { writeHoldSegment } from './iconSegment.js';
 import { fakeInput } from '../input/testDoubles.mjs';
 import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
+import { createCesiumDraw } from '../render/cesium/draw.js';
 
 const AUSTIN = { lon: -97.7, lat: 30.2 };
 /** Antipode of Austin — as far behind the limb as a point on Earth can be. */
@@ -379,9 +380,14 @@ function createHarness(rawFires) {
       },
       frameState: { mode: Cesium.SceneMode.SCENE3D, mapProjection: new Cesium.GeographicProjection() },
       mapProjection: new Cesium.GeographicProjection(),
+      requestRender: () => {},
+      isDestroyed: () => false,
     },
   };
-  bindFakeCesiumScene(viewer);
+  // The Cesium draw port over the stub scene: the glows are a real GPU icon
+  // set, whose rows say what the GPU would draw.
+  const draw = createCesiumDraw({ scene: viewer.scene, report: () => {} });
+  bindFakeCesiumScene(viewer, { draw: draw.port });
   fakeInput(viewer);
 
   const layer = createFirmsHeatmapLayer({
@@ -411,7 +417,7 @@ function createHarness(rawFires) {
       const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, viewer.camera.positionWC);
       const out = new Map();
       for (let row = 0; row < set.count; row += 1)
-        out.set(set.idAt(row), set.show && gpuShows(set, row, occluder));
+        out.set(set.idAt(row), primitives[0].show !== false && set.show && gpuShows(set, row, occluder));
       return out;
     },
     moveCameraTo(lon, lat, height = REPRO_HEIGHT_M) {
@@ -482,7 +488,8 @@ test('layer: a refresh keeps rows and restyles one whose index now holds another
     const set = harness.icons();
     const austin = set.row('firms-0');
     const handle = set.handleAt(austin);
-    const before = set.width(austin);
+    const drawnPx = (row) => set.width(row) * set.scale(row);
+    const before = drawnPx(austin);
     const beforeImage = set.imageFar(austin);
 
     fires[0] = rawFire(AUSTIN.lat + 0.5, AUSTIN.lon, 1);
@@ -490,7 +497,7 @@ test('layer: a refresh keeps rows and restyles one whose index now holds another
 
     const row = set.row('firms-0');
     assert.equal(set.handleAt(row), handle, 'the row (and its pick id) survives the rebuild');
-    assert.ok(set.width(row) < before, `restyled for the weaker fire: ${set.width(row)} < ${before}`);
+    assert.ok(drawnPx(row) < before, `restyled for the weaker fire: ${drawnPx(row)} < ${before}`);
     assert.notEqual(set.imageFar(row), beforeImage, 'a red glow becomes a yellow one');
     const carto = Cesium.Cartographic.fromCartesian(set.position(row, 0, new Cesium.Cartesian3()));
     assert.ok(Math.abs(Cesium.Math.toDegrees(carto.latitude) - (AUSTIN.lat + 0.5)) < 1e-6, 'moved to the new fire');
@@ -519,7 +526,7 @@ test('layer: re-enabling after the camera moved shows the icons, culled from the
     // loaded, so enable() does not reload): the GPU culls from the current
     // camera on the first frame.
     const show = harness.showById();
-    assert.equal(harness.icons().show, true, 'the icon set is visible again');
+    assert.notEqual(harness.primitives[0].show, false, 'the icon set is visible again');
     assert.equal(show.get('firms-1'), true, 'the Tokyo fire is revealed at enable time');
     assert.equal(show.get('firms-0'), false, 'the Austin fire is NOT left shining through the planet');
   } finally {
@@ -547,7 +554,8 @@ test('layer: a refresh drops rows whose fires left, and an empty one drops them 
       Array.from({ length: set.count }, (_, row) => set.idAt(row)),
       ['firms-0'],
     );
-    assert.equal(set.metaAt(set.row('firms-0')).fire.lat, AUSTIN.lat, 'the kept row holds its own fire');
+    const kept = Cesium.Cartographic.fromCartesian(set.position(set.row('firms-0'), 0, new Cesium.Cartesian3()));
+    assert.ok(Math.abs(Cesium.Math.toDegrees(kept.latitude) - AUSTIN.lat) < 1e-6, 'the kept row holds its own fire');
 
     fires.length = 0;
     await harness.layer.update();

@@ -181,6 +181,7 @@ export function createQueries({
       layerState._firesByFrp = [...fires];
       layerState._pickIndexById.clear();
       layerState._labelLodDistance = 1e7;
+      components.rendering.ensureDetectionCollections();
       layerState._labelCandidates = fires.map((fire) => {
         layerState._pickIndexById.set(`firms-${fire.index}`, fire);
         return { fire, position: components.model.firePosition(fire) };

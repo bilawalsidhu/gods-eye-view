@@ -1,16 +1,10 @@
-import * as Cesium from 'cesium';
-// Still Cesium for its icons, so this layer loads the unbound camera
-// factory, which loads the draw, frame and query factories its other parts
-// reach the renderer through.
-import '../../render/cesium/camera.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { findFrame, findQuery } from '../../render/rendererOf.js';
+import { drawOf, findFrame, findQuery } from '../../render/rendererOf.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 import { LOD_LEVELS, CONTEXT_TOP_N, GLOW_SPRITE_PX } from './policy.js';
-import { createIconSet, ICON_CULL_LIFT } from '../../data/iconSet.js';
-import { writeHoldSegment } from '../../data/iconSegment.js';
-import { IconSetPrimitive } from '../../render/cesium/iconSetPrimitive.js';
-import { iconAtlas } from '../../data/iconAtlas.js';
+
+/** Icon sets made so far, by every fire layer: set ids unique to each. */
+let iconSets = 0;
 
 export function createRendering({
   layerState,
@@ -20,7 +14,8 @@ export function createRendering({
   feed,
 }) {
   const { warmFireAnchorFloors } = services.anchors;
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
+  const { registerSpriteSet, unregisterSpriteCollection, restoreSpriteOrder } =
+    services.sprites;
   const { overlayHost } = config;
 
   /**
@@ -71,9 +66,23 @@ export function createRendering({
     if (layerState._cells?.size()) layerState._cells.clear();
   }
 
+  /**
+   * Each drawn glow's detection and anchor, by its item id: what it was last
+   * written with, so a rebuild writes only the glows that changed.
+   * @type {Map<string, {fire: object, position: object}>}
+   */
+  const drawnGlows = new Map();
+
+  /** Take every glow down (no write when there are none). */
+  function clearIcons() {
+    if (!drawnGlows.size) return;
+    drawnGlows.clear();
+    layerState._icons?.clear();
+  }
+
   function clearRendered() {
     clearCells();
-    layerState._icons?.clear();
+    clearIcons();
     layerState._pickIndexById.clear();
     layerState._cellCount = 0;
     layerState._labelCandidates = [];
@@ -152,7 +161,7 @@ export function createRendering({
 
   function renderCells(cells, lod, bounds) {
     ensureDetectionCollections();
-    layerState._icons?.clear();
+    clearIcons();
     layerState._pickIndexById.clear();
     layerState._cellCount = cells.length;
     const maxScore = Math.max(1, ...cells.map(components.model.heatScore));
@@ -246,15 +255,17 @@ export function createRendering({
     layerState._labelCandidates = [];
     layerState._labelLodDistance = lod.labelDistance;
 
-    // Fires keep their rows across rebuilds: a pan that keeps a fire in view
-    // rewrites nothing for it, and only rows that left the view go.
+    // Fires keep their glows across rebuilds: a pan that keeps a fire in
+    // view rewrites nothing for it, and only glows that left the view go.
     const keep = new Set();
+    const writes = [];
     for (const fire of candidates) {
       const position = components.model.firePosition(fire);
       const pickId = `firms-${fire.index}`;
       layerState._pickIndexById.set(pickId, fire);
       keep.add(pickId);
-      placeFireIcon(set, pickId, fire, position);
+      const glow = fireGlow(pickId, fire, position);
+      if (glow) writes.push({ glow, fire, position });
       // FRP-sorted walk: candidate order doubles as label priority.
       layerState._labelCandidates.push({
         position,
@@ -263,9 +274,15 @@ export function createRendering({
         cell: null,
       });
     }
-    for (let row = set.count - 1; row >= 0; row -= 1) {
-      const pickId = set.idAt(row);
-      if (!keep.has(pickId)) set.remove(pickId);
+    const gone = [];
+    for (const pickId of drawnGlows.keys())
+      if (!keep.has(pickId)) gone.push(pickId);
+    for (const pickId of gone) drawnGlows.delete(pickId);
+    if (gone.length) set.remove(gone);
+    if (writes.length) {
+      set.upsert(writes.map((write) => write.glow));
+      for (const { glow, fire, position } of writes)
+        drawnGlows.set(glow.id, { fire, position });
     }
 
     components.cards.rebuildAmbientLabels();
@@ -289,82 +306,69 @@ export function createRendering({
   }
 
   /**
-   * A fire's glow row: drawn depth-test-free at its anchor (a detection is
-   * never swallowed by terrain it sits on), with the far side of the globe
-   * culled on the GPU each frame. The Cesium globe is hidden here (Google 3D
-   * Tiles render the planet), so nothing writes far-side depth, and the cull
-   * is what keeps fires from shining through the planet. The anchor moves
-   * once, when its floor warms.
+   * A fire's glow icon, when it is new or changed since it was last drawn
+   * (else null): drawn depth-test-free at its anchor (a detection is never
+   * swallowed by terrain it sits on), with the far side of the globe culled
+   * by the set's horizon cull each frame. The Cesium globe is hidden here
+   * (Google 3D Tiles render the planet), so nothing writes far-side depth,
+   * and the cull is what keeps fires from shining through the planet. The
+   * anchor moves once, when its floor warms. A refresh reuses indices, so a
+   * kept id can hold a different detection, restyled then.
+   *
+   * The glow is rasterised once per colour at GLOW_SPRITE_PX and drawn at
+   * the fire's own size by its scale. Its hold motion draws it on the
+   * renderer's moving-icon path, which culls the horizon on the GPU.
    */
-  function placeFireIcon(set, pickId, fire, position) {
-    let row = set.row(pickId);
-    if (row < 0) {
-      row = set.add(pickId, {
-        layer: 'firms',
-        id: pickId,
-        fire: null,
-        position: null,
-      });
-      set.setFlag(row, ICON_CULL_LIFT, true);
-      set.setShown(row, true);
-    }
-    const meta = set.metaAt(row);
-    // A refresh reuses indices, so a kept row can hold a different detection.
-    if (meta.fire !== fire) {
-      meta.fire = fire;
-      const slot = iconAtlas.slot(
-        components.model.glowSprite(components.model.detectionColorStop(fire)),
-        GLOW_SPRITE_PX,
-      );
-      const corePx = components.model.sizeBucket(
-        components.model.frpPixelSize(fire.frp),
-      );
-      set.setImage(row, slot, slot);
-      set.setSize(row, corePx * 2, corePx * 2);
-    }
-    if (meta.position === position) return;
-    meta.position = position;
-    writeHoldSegment(set.segments, row, position, 0);
-    set.segmentWritten(row);
+  function fireGlow(pickId, fire, position) {
+    const drawn = drawnGlows.get(pickId);
+    if (drawn && drawn.fire === fire && drawn.position === position)
+      return null;
+    const corePx = components.model.sizeBucket(
+      components.model.frpPixelSize(fire.frp),
+    );
+    return {
+      id: pickId,
+      pos: { x: position.x, y: position.y, z: position.z },
+      image: components.model.glowSprite(
+        components.model.detectionColorStop(fire),
+      ),
+      size: [GLOW_SPRITE_PX, GLOW_SPRITE_PX],
+      scale: (corePx * 2) / GLOW_SPRITE_PX,
+      disableDepthTest: Infinity,
+      motion: { kind: 'hold' },
+      meta: { layer: 'firms', id: pickId },
+    };
   }
 
-  /** The scene the icon primitive was added to. */
-  let iconScene = null;
+  /** The sprite order's entry for the glow set. */
+  let spriteEntry = null;
 
   function ensureDetectionCollections() {
     if (!layerState._viewer || layerState._icons) return;
-    const epoch = Cesium.JulianDate.now();
-    layerState._icons = createIconSet({ epoch });
-    layerState._iconPrimitive = new IconSetPrimitive({
-      set: layerState._icons,
-      renderTime: () => epoch,
-      requestRender: () => layerState._viewer?.scene?.requestRender?.(),
+    const set = drawOf(layerState._viewer).icons({
+      id: `firms:${++iconSets}:icons`,
+      horizonCull: true,
+      show: layerState._enabled,
     });
-    layerState._icons.show = layerState._enabled;
-    iconScene = layerState._viewer.scene;
-    iconScene.primitives.add(layerState._iconPrimitive);
-    registerSpriteCollection('firms', layerState._iconPrimitive);
+    // Columns of no rows put the set's host in the scene now, where the
+    // sprite order finds it, rather than with its first fire.
+    set.setColumns?.({ ids: [] });
+    layerState._icons = set;
+    spriteEntry = registerSpriteSet('firms', set.id);
     restoreSpriteOrder(layerState._viewer);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, layerState._enabled);
   }
 
   /**
-   * Take the icons out of the scene they were added to, whichever viewer the
-   * caller tears down, and free them: a destroyed primitive left in a live
-   * scene throws on its next frame.
+   * Let the glow set go, whichever viewer the caller tears down: its
+   * renderer takes it out of the scene it draws in.
    */
   function removeDetectionCollections() {
-    const primitive = layerState._iconPrimitive;
-    try {
-      if (primitive && iconScene && !iconScene.isDestroyed?.())
-        iconScene.primitives.remove(primitive);
-    } catch {
-      /* already torn down */
-    }
-    if (primitive && !primitive.isDestroyed()) primitive.destroy();
-    iconScene = null;
-    layerState._iconPrimitive = null;
+    if (spriteEntry) unregisterSpriteCollection('firms', spriteEntry);
+    spriteEntry = null;
+    layerState._icons?.dispose();
     layerState._icons = null;
+    drawnGlows.clear();
     overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
   }
@@ -372,8 +376,8 @@ export function createRendering({
   /**
    * The renderer's query and frame ports the cards and the LOD watcher use:
    * the bound renderer's, or for a viewer with no
-   * renderer bound, those the Cesium adapter builds over it (`findQuery`,
-   * `findFrame`; the camera factory loaded above loads theirs).
+   * renderer bound, those the Cesium adapter builds over it once the
+   * caller has loaded `./render/cesium/unbound` (`findQuery`, `findFrame`).
    * @returns {{query: object|null, frame: object|null}}
    */
   function scenePorts() {

@@ -2887,6 +2887,128 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
   }
 });
 
+test('the FIRMS layer draws its fire glows as one GPU icon set on a viewer of its own', async (t) => {
+  const { createRendering } = await import('../../layers/firms/rendering.js');
+  const { createModel } = await import('../../layers/firms/model.js');
+  const { createFirmsState } = await import('../../layers/firms/state.js');
+  const { IconSetPrimitive } = await import('./iconSetPrimitive.js');
+  const { ICON_CULL_LIFT } = await import('../../data/iconSet.js');
+  const { GLOW_SPRITE_PX, LOD_LEVELS } =
+    await import('../../layers/firms/policy.js');
+  // Each glow colour is rasterised on a canvas once.
+  const hadDocument = Object.hasOwn(globalThis, 'document');
+  const priorDocument = globalThis.document;
+  globalThis.document = {
+    createElement: () => {
+      let stops = [];
+      return {
+        width: 0,
+        height: 0,
+        getContext: () => ({
+          createRadialGradient: () => ({
+            addColorStop: (_, color) => stops.push(color),
+          }),
+          fillRect() {},
+        }),
+        toDataURL: () => `data:image/png;base64,AAAA#${stops.join('|')}`,
+      };
+    },
+  };
+  t.after(() => {
+    if (hadDocument) globalThis.document = priorDocument;
+    else delete globalThis.document;
+  });
+  const scene = fakeScene();
+  const viewer = { scene, isDestroyed: () => false };
+  const sprites = [];
+  const noop = () => {};
+  const services = {
+    anchors: {
+      fireAnchorHeight: () => 40,
+      warmFireAnchorFloors: async () => false,
+    },
+    sprites: {
+      registerSpriteSet: (layerId, setId) => {
+        sprites.push([layerId, setId]);
+        return { drawSetId: setId };
+      },
+      unregisterSpriteCollection: noop,
+      restoreSpriteOrder: noop,
+    },
+  };
+  const config = {
+    overlayHost: { setVisible: noop, clearSource: noop },
+  };
+  const layerState = createFirmsState({ services, config });
+  layerState._viewer = viewer;
+  layerState._enabled = true;
+  const components = {
+    cards: { rebuildAmbientLabels: noop },
+    selection: { refreshContextRegistrations: noop },
+  };
+  const context = { layerState, services, config, components, feed: null };
+  components.model = createModel(context);
+  const rendering = createRendering(context);
+  const fire = (index, lon, frp) => ({
+    index,
+    lat: 30.2,
+    lon,
+    frp,
+    confidence: 0.9,
+    brightness: 340,
+    acqMs: 1,
+  });
+  layerState._firesByFrp = [fire(0, -97.7, 900), fire(1, -97.6, 4)];
+  const local = LOD_LEVELS.find((lod) => lod.id === 'local');
+  rendering.renderDetections(local, null);
+
+  const [host] = scene.added;
+  assert.ok(host instanceof IconSetPrimitive, 'one GPU icon set');
+  assert.deepEqual(sprites, [['firms', host.drawSetId]]);
+  const set = host.set;
+  assert.equal(set.count, 2);
+  const strong = set.row('firms-0');
+  const weak = set.row('firms-1');
+  assert.equal(set.flags(strong) & ICON_CULL_LIFT, ICON_CULL_LIFT);
+  assert.ok(set.depthTestDistance(strong) >= 1e30, 'over depth everywhere');
+  // One raster per colour at the sprite's size, drawn at the fire's size.
+  assert.equal(set.width(strong), GLOW_SPRITE_PX);
+  const drawnPx = (row) => set.width(row) * set.scale(row);
+  assert.ok(Math.abs(drawnPx(strong) - 56) < 1e-4, `${drawnPx(strong)} px`);
+  assert.ok(Math.abs(drawnPx(weak) - 24) < 1e-4, `${drawnPx(weak)} px`);
+  assert.notEqual(set.imageFar(strong), set.imageFar(weak), 'red, not yellow');
+  const tau = set.seconds(Cesium.JulianDate.now());
+  const at = Cesium.Cartographic.fromCartesian(set.position(strong, tau));
+  assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) + 97.7) < 1e-6);
+  assert.ok(Math.abs(at.height - 40) < 1e-3, 'at its anchor');
+  assert.deepEqual(drawHitOf(host._pickObject('firms-0', null, { show: true })), {
+    set: host.drawSetId,
+    id: 'firms-0',
+    meta: { layer: 'firms', id: 'firms-0' },
+    surface: false,
+  });
+
+  // A rebuild that keeps one fire writes nothing for it and drops the other.
+  const written = [];
+  const upsert = layerState._icons.upsert.bind(layerState._icons);
+  layerState._icons.upsert = (items) => {
+    written.push(...items.map((item) => item.id));
+    return upsert(items);
+  };
+  layerState._firesByFrp = [layerState._firesByFrp[0]];
+  rendering.renderDetections(local, null);
+  assert.equal(set.count, 1);
+  assert.equal(set.idAt(0), 'firms-0');
+  assert.deepEqual(written, [], 'the kept fire is not written again');
+  assert.equal(scene.added[0], host, 'the same host');
+
+  // Hidden with the layer, and gone with it.
+  layerState._icons.show = false;
+  assert.equal(host.show, false);
+  rendering.removeDetectionCollections();
+  assert.equal(scene.added.length, 0);
+});
+
 test('vessels on a host with no sprite-set registry still draw, and say so once', async (t) => {
   const warnings = [];
   t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));

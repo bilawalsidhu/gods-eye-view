@@ -1093,6 +1093,9 @@ and scene services. Disable and teardown cancel pending refreshes; malformed
 snapshots preserve the last good display. Refresh restoration keeps selection
 identity without announcing a new user selection. Source/label, LOD thresholds,
 card limits, fire identities, altitude placement and analyst records are retained.
+The layer draws its fire glows through the renderer's draw port and no longer
+reaches Cesium; a caller handing it a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first.
 
 Earthquake rendering is exposed through `./layers/earthquakes`. The layer owns
 its renderer draw set and request lifecycle and no longer reaches Cesium; the

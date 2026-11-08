@@ -35,7 +35,7 @@ export function createSelection({
     const input = inputFor(layerState._viewer);
     layerState._clickSubscription = input.onClick((event) => {
       const picked = event.pick;
-      const fire = pickedFire(picked);
+      const fire = pickedFire(event.drawHit);
       if (fire) {
         selectAndFocusFire(fire);
         return;
@@ -80,29 +80,17 @@ export function createSelection({
   }
 
   /**
-   * Resolve a scene pick to one of this layer's fire records, or null.
-   * Icon-set picks carry our row id on picked.id and on picked.primitive.id;
-   * either is accepted.
-   * @param {*} picked - Result of scene.pick().
+   * Resolve a pick to one of this layer's fire records, or null: a hit (a
+   * draw-port `Hit`, `event.drawHit`) on a glow of the layer's own icon set
+   * whose id is a fire it draws now.
+   * @param {?{set: string, id: string}} hit - The renderer's hit.
    * @returns {?Object} Fire record.
    */
 
-  function pickedFire(picked) {
-    if (!picked) return null;
-    const primitiveId = picked.primitive?.id;
-    if (
-      typeof primitiveId === 'string' &&
-      layerState._pickIndexById.has(primitiveId)
-    ) {
-      return layerState._pickIndexById.get(primitiveId);
-    }
-    if (
-      typeof picked.id === 'string' &&
-      layerState._pickIndexById.has(picked.id)
-    ) {
-      return layerState._pickIndexById.get(picked.id);
-    }
-    return null;
+  function pickedFire(hit) {
+    if (!hit || !layerState._icons || hit.set !== layerState._icons.id)
+      return null;
+    return layerState._pickIndexById.get(hit.id) ?? null;
   }
 
   /**

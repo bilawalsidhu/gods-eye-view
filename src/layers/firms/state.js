@@ -11,11 +11,9 @@ export function createFirmsState({ services, config }) {
 
   layerState._cells = null;
 
-  /** Detection glow rows and the primitive that draws them. */
+  /** The detection glows' icon draw set (made with the first render). */
 
   layerState._icons = null;
-
-  layerState._iconPrimitive = null;
 
   layerState._enabled = false;
 

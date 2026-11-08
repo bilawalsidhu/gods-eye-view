@@ -17,6 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakeInput } from '../input/testDoubles.mjs';
 import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
@@ -36,6 +37,9 @@ function makeFire(overrides = {}) {
     ...overrides,
   };
 }
+
+/** A pick of the layer's glow `id`, as the renderer reports one of its icons. */
+const glowPick = (id) => ({ glow: id });
 
 /**
  * Stand the layer up far enough to drive one click. `cardHit` is what the
@@ -73,16 +77,30 @@ function harness({
     },
   });
 
+  const draw = fakeDrawPort();
+  // A glow pick names the layer's own icon set, as the renderer's pick does.
+  const pick = () =>
+    picked?.glow
+      ? {
+          primitive: {},
+          id: {
+            set: [...draw.sets.values()].find(
+              (record) => record.kind === 'icons' && !record.disposed,
+            )?.spec.id,
+            id: picked.glow,
+          },
+        }
+      : picked;
   const viewer = {
     scene: {
-      pick: () => picked,
+      pick,
       canvas: { clientWidth: 1280, clientHeight: 800 },
       camera: cameraPosition ? { positionWC: cameraPosition } : undefined,
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
     },
     dataSources: { add() {}, remove() {} },
   };
-  bindFakeCesiumScene(viewer);
+  bindFakeCesiumScene(viewer, { draw });
   const input = fakeInput(viewer);
   // The LOD rebuild (and with it the context-registration sweep) is inert
   // without a data source, so tests that drive a real refresh need one.
@@ -205,13 +223,26 @@ test('far-side detections cannot consume the bounded ambient-card cohort', () =>
 
 test('clicking a fire sprite selects it and requests the camera transfer', () => {
   const fire = makeFire();
-  const h = harness({ fires: [fire], picked: { id: 'firms-7' } });
+  const h = harness({ fires: [fire], picked: glowPick('firms-7') });
   try {
     h.click();
     assert.equal(h.requests.length, 1);
     assert.equal(h.requests[0].kind, 'fire');
     assert.equal(h.requests[0].id, fireDetectionKey(fire));
     assert.ok(h.requests[0].position, 'the transfer needs a world position');
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('an item named like a fire in another draw set is not a fire', () => {
+  const h = harness({
+    fires: [makeFire()],
+    picked: { primitive: {}, id: { set: 'other-layer:1:icons', id: 'firms-7' } },
+  });
+  try {
+    h.click();
+    assert.equal(h.requests.length, 0);
   } finally {
     h.cleanup();
   }
@@ -239,7 +270,7 @@ test('clicking a fire CARD behaves exactly like clicking its sprite', () => {
 // The voice model reads these labels as data (track_entity, get_entity_context,
 // pointer_context); the voice card translates them where it shows them.
 test('fire labels stay English data in a translated interface', () => {
-  const h = harness({ fires: [makeFire()], picked: { id: 'firms-7' } });
+  const h = harness({ fires: [makeFire()], picked: glowPick('firms-7') });
   try {
     setLocale('ru');
     h.click();
