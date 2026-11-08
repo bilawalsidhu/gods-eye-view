@@ -199,6 +199,27 @@ test('with no aircraft layer on, entry is refused for that reason, never for Con
   assert.equal(cockpit.active, false);
 });
 
+test('voice entry on a vessel bridge refuses before it touches tracking', (t) => {
+  const { coordinator, cockpit } = fixture(t, { enabled: ['flights'] });
+  let navigated = false;
+  coordinator.services.militaryAwarenessLayer.navigateNext = () => {
+    navigated = true;
+    return true;
+  };
+  // Stand in for a bridge ride: the refusal reads only these two.
+  cockpit.active = true;
+  cockpit.subjectKind = 'vessel';
+  t.after(() => {
+    cockpit.active = false;
+    cockpit.subjectKind = null;
+  });
+  const voice = coordinator.controlCockpit('enter', { targetLayer: 'flights' });
+  assert.equal(voice.ok, false);
+  assert.match(voice.error, /vessel bridge/);
+  assert.equal(navigated, false, 'no aircraft was tracked');
+  assert.equal(cockpit.subjectKind, 'vessel');
+});
+
 test('with an aircraft layer on but nothing tracked, the reason is the missing aircraft', (t) => {
   const { coordinator } = fixture(t, { enabled: ['military'] });
   assert.equal(

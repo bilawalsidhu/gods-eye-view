@@ -172,6 +172,10 @@ export class CockpitCoordinator {
   _cockpitEntryRefusal() {
     if (this._contextModeChanging)
       return 'Context is still changing — try Cockpit again in a moment';
+    // Tracking an aircraft from the bridge ends the bridge and clears the
+    // vessel selection before the entry can run, leaving neither.
+    if (this.cockpitView?.active && this.cockpitView.subjectKind === 'vessel')
+      return 'Cockpit is on a vessel bridge — exit the bridge first, then track an aircraft to enter Cockpit';
     if (!this._aircraftLayerEnabled)
       return 'No aircraft layer is on — turn on Flights or Military Flights and track an aircraft to enter Cockpit';
     return null;
