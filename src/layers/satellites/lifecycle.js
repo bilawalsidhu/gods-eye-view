@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { ISS_OVERLAY_SOURCE_ID } from './policy.js';
+import { ISS_NORAD, ISS_OVERLAY_SOURCE_ID } from './policy.js';
 
 export function createLifecycle({
   state: layerState,
@@ -72,11 +72,14 @@ export function createLifecycle({
             layerState._params.showPoints,
           );
       // Orbit ring primitives + persistent ISS host label — show them
-      for (const path of layerState._orbitPaths.values())
-        path.primitive.show = parts.controls.satelliteVisualsVisible(
-          layerState._enabled,
-          layerState._params.showOrbits,
-        );
+      for (const [noradId, path] of layerState._orbitPaths)
+        path.primitive.show =
+          noradId === ISS_NORAD
+            ? parts.controls._issOrbitVisible()
+            : parts.controls.satelliteVisualsVisible(
+                layerState._enabled,
+                layerState._params.showOrbits,
+              );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation
       parts.interaction._installClickHandler(viewer);

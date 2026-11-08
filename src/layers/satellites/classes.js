@@ -96,7 +96,9 @@ const ISS_NORAD = 25544;
 const DEBRIS_OBJECT_TYPES = new Set(['R/B', 'DEB']);
 /**
  * SATCAT files a new launch's objects as UNK until it identifies them, so an
- * unknown object launched this recently (years) is not presumed debris.
+ * unknown object launched within this many calendar years (2: this year or
+ * last) is not presumed debris. Years, not dates: the TLE designator, the
+ * fallback when SATCAT has no launch date, carries only the year.
  */
 export const UNIDENTIFIED_GRACE_YEARS = 2;
 /** SATCAT operational status: nonoperational, decayed. */
@@ -142,6 +144,9 @@ const GROUP_CLASS = Object.freeze({
   geo: 'telecom',
   science: 'probes',
 });
+
+/** CelesTrak groups named for an orbit, not a mission: the last resort. */
+const ORBIT_GROUPS = new Set(['geo']);
 
 /** The year of a SATCAT launch date (`2024-03-15`), or null. */
 function launchYearOf(launchDate) {
@@ -192,7 +197,10 @@ export function classifySatellite({
   if (STATION_NAME.test(label)) return 'stations';
   if (group === 'dense' || STARLINK_NAME.test(label)) return 'starlink';
 
-  const purpose = ucs?.purpose || '';
+  // UCS writes "Unknown" for a purpose it does not know: no evidence.
+  const purpose = /^unknown$/i.test(ucs?.purpose || '')
+    ? ''
+    : ucs?.purpose || '';
   if (IMAGING_PURPOSE.test(purpose)) return 'imaging';
   if (TELECOM_PURPOSE.test(purpose)) return 'telecom';
   if (purpose) return 'probes';
@@ -212,8 +220,13 @@ export function classifySatellite({
   )
     return 'debris';
 
+  // A mission group (weather, resource, science…) says more than an orbit
+  // group: a weather satellite in geostationary orbit is in both.
   const memberships = groups?.length ? groups : [group];
-  for (const membership of memberships)
+  for (const membership of [
+    ...memberships.filter((m) => !ORBIT_GROUPS.has(m)),
+    ...memberships.filter((m) => ORBIT_GROUPS.has(m)),
+  ])
     if (GROUP_CLASS[membership]) return GROUP_CLASS[membership];
   return 'probes';
 }

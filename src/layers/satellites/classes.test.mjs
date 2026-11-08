@@ -385,3 +385,101 @@ test('every ingested group names the class its unnamed members fall back to', ()
     expected,
   );
 });
+
+test('enabling the layer leaves a hidden Stations class without its ISS ring', async () => {
+  const { createLifecycle } = await import('./lifecycle.js');
+  const iss = { primitive: { show: false } };
+  const other = { primitive: { show: false } };
+  let issVisible = false;
+  const state = {
+    _params: { showPoints: true, showOrbits: true },
+    _orbitPaths: new Map([
+      [25544, iss],
+      [90001, other],
+    ]),
+    _points: new Map(),
+  };
+  const { methods } = createLifecycle({
+    state,
+    services: {
+      focus: { clearFocusTarget() {} },
+      render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+      picking: { registerPickOwner() {}, unregisterPickOwner() {} },
+    },
+    parts: {
+      controls: {
+        satelliteVisualsVisible: (enabled, on) => enabled && on !== false,
+        _issOrbitVisible: () => issVisible,
+      },
+      labels: { _syncIssOverlay() {} },
+      interaction: { _installClickHandler() {} },
+      tracking: { _applyPendingTrackingRestore() {} },
+      rendering: {},
+    },
+  });
+  methods.enable(null);
+  assert.equal(iss.primitive.show, false, 'the ISS ring follows its class');
+  assert.equal(other.primitive.show, true, 'other rings follow showOrbits');
+  issVisible = true;
+  methods.enable(null);
+  assert.equal(iss.primitive.show, true);
+});
+
+test('a mission group outranks an orbit group, and an Unknown UCS purpose is no evidence', () => {
+  assert.equal(
+    classify({ name: 'MTG-X1', group: 'geo', groups: ['geo', 'weather'] }),
+    'imaging',
+  );
+  assert.equal(
+    classify({ name: 'UNNAMED-1', group: 'geo', groups: ['geo'] }),
+    'telecom',
+  );
+  assert.equal(
+    classify({
+      name: 'GPS BIII-9',
+      group: 'visual',
+      ucs: { purpose: 'Unknown' },
+    }),
+    'telecom',
+  );
+  assert.equal(
+    classify({
+      name: 'UNNAMED-1',
+      group: 'resource',
+      ucs: { purpose: 'Unknown' },
+    }),
+    'imaging',
+  );
+});
+
+test('a tracked ISS keeps its ring while Stations is hidden', async () => {
+  const { createControls } = await import('./controls.js');
+  const ring = { primitive: { show: true } };
+  const state = {
+    _enabled: true,
+    _params: {
+      catalog: 'core',
+      showOrbits: true,
+      classes: { ...DEFAULT_SATELLITE_CLASSES, stations: false },
+    },
+    _catalog: new Map([[25544, { satelliteClass: 'stations' }]]),
+    _points: new Map([[25544, { show: true }]]),
+    _orbitPaths: new Map([[25544, ring]]),
+    _detectionObjects: new Map(),
+    _trackedNorad: null,
+  };
+  const controls = createControls({
+    state,
+    services: { layerState: { isExplicitLayerStateOrigin: () => false } },
+    parts: { labels: { _syncIssOverlay() {} } },
+    source: {},
+  });
+  controls._syncIssOrbit();
+  assert.equal(ring.primitive.show, false);
+  state._trackedNorad = 25544;
+  controls._syncIssOrbit();
+  assert.equal(ring.primitive.show, true, 'tracked, it keeps its ring');
+  state._params.showOrbits = false;
+  controls._syncIssOrbit();
+  assert.equal(ring.primitive.show, false, 'orbits off still hides it');
+});

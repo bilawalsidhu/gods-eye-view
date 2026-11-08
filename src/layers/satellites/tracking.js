@@ -119,6 +119,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
       layerState._trackedEntity = null;
     }
     layerState._trackedNorad = null;
+    parts.controls._syncIssOrbit?.();
     parts.labels._syncIssOverlay();
     clearTrackedSubjectContext('satellites');
     layerState._contextRefreshedAtMs = 0;
@@ -421,6 +422,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
 
     // Show orbital path
     parts.rendering._showOrbitPath(noradId, Cesium.Color.YELLOW);
+    if (noradId === ISS_NORAD) parts.controls._syncIssOrbit?.();
 
     // Tracked entity position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.

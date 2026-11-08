@@ -56,20 +56,29 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (noradId === layerState._trackedNorad) continue;
       point.show = _classVisible(noradId);
     }
-    const issPath = layerState._orbitPaths.get(ISS_NORAD);
-    if (issPath) issPath.primitive.show = _issOrbitVisible();
+    _syncIssOrbit();
     parts.labels?._syncIssOverlay?.();
     layerState._detectionObjects.clear();
   }
 
-  /** Whether the ISS's ring shows: orbits on, the layer drawing, its class on. */
+  /**
+   * Whether the ISS's ring shows: orbits on, the layer drawing, and its
+   * class on or the ISS tracked (a tracked satellite keeps its ring).
+   */
   function _issOrbitVisible() {
     return (
       satelliteVisualsVisible(
         layerState._enabled,
         layerState._params.showOrbits,
-      ) && _classVisible(ISS_NORAD)
+      ) &&
+      (_classVisible(ISS_NORAD) || layerState._trackedNorad === ISS_NORAD)
     );
+  }
+
+  /** Show or hide the ISS's ring by _issOrbitVisible, if it is built. */
+  function _syncIssOrbit() {
+    const issPath = layerState._orbitPaths.get(ISS_NORAD);
+    if (issPath) issPath.primitive.show = _issOrbitVisible();
   }
 
   /**
@@ -708,6 +717,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     _classVisible,
     _applyClassVisibility,
     _issOrbitVisible,
+    _syncIssOrbit,
     satelliteVisualsVisible,
     satelliteCatalogModeChanged,
     methods,

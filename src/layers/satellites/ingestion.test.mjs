@@ -50,6 +50,7 @@ function ingestionFor(catalogText, { source: sourceExtras = {} } = {}) {
     controls: {
       _pointStyleFor: () => ({}),
       _classVisible: () => true,
+      _syncIssOrbit() {},
       _applyClassVisibility() {
         state.visibilityApplied = (state.visibilityApplied || 0) + 1;
       },
