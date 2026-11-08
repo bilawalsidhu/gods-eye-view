@@ -8,7 +8,13 @@ import {
   findQuery,
 } from '../render/rendererOf.js';
 import { cssColor } from '../render/color.js';
-import { fromDegrees, fromDegreesInto, toLonLatH } from '../geo/ellipsoid.js';
+import {
+  WGS84,
+  fromDegrees,
+  fromDegreesInto,
+  toLonLatH,
+} from '../geo/ellipsoid.js';
+import { offsetFromHeadingPitchRange } from '../geo/frames.js';
 import { sphereFromPoints } from '../geo/sphere.js';
 import { densifyRhumb } from '../geo/rhumb.js';
 import { heightsOf } from '../queries/heights.js';
@@ -315,6 +321,34 @@ const STEM_WIDTH_PX = 3.5;
 const PIN_SIZE_PX = 8;
 const BLACK = Object.freeze([0, 0, 0, 1]);
 
+/** The range the default renderer frames a sphere of no size from. */
+const MINIMUM_FIT_RANGE_M = 100;
+
+/**
+ * Where the camera frames a part it starts following, as the default
+ * renderer framed an entity it started following with no view of its own:
+ * looking at the bounds' centre, heading north, pitched down 45° (steeper
+ * far from the ground), at the range that fits the bounds in view, within
+ * the camera's zoom limits. Returned as the eye's offset from the centre,
+ * east-north-up there; `at` is where the part stands.
+ */
+function followViewFrom(sphere, at, camera) {
+  const pose = camera.pose?.();
+  const fovy = Number.isFinite(pose?.fovy) ? pose.fovy : Math.PI / 3;
+  const aspect = Number.isFinite(pose?.aspectRatio) ? pose.aspectRatio : 1;
+  const tanPhi = Math.tan(fovy / 2);
+  const tanTheta = aspect * tanPhi;
+  let range =
+    sphere.radius === 0
+      ? MINIMUM_FIT_RANGE_M
+      : Math.max(sphere.radius / tanTheta, sphere.radius / tanPhi);
+  const { minDistance = 0, maxDistance = Infinity } = camera.controls ?? {};
+  range = Math.min(Math.max(range, minDistance), maxDistance);
+  const factor =
+    2 - 1 / Math.max(1, Math.hypot(at.x, at.y, at.z) / WGS84.radii.x);
+  return offsetFromHeadingPitchRange(0, (-Math.PI / 4) * factor, range);
+}
+
 /** The GeoJSON loader's `marker-size` names, in pixels. */
 const MARKER_SIZES = Object.freeze({ small: 24, medium: 48, large: 64 });
 /**
@@ -544,6 +578,9 @@ export function createLocalGeoJsonLayer(
   let _drawn = null;
   let _enabled = false;
   let _clickSubscription = null;
+  let _dblclickSubscription = null;
+  /** The follow a double-click started, while the camera keeps it. */
+  let _follow = null;
   let _count = 0;
   /** @type {number|null} Timestamp of the last successful dataset load. */
   let _lastUpdate = null;
@@ -681,6 +718,9 @@ export function createLocalGeoJsonLayer(
     _lastLodBudgetLimit = 0;
     _lodComputed = false;
     _lastLodProbeMs = Number.NEGATIVE_INFINITY;
+    // Its parts go, and the follow of one with them, as a removed entity
+    // stopped being followed.
+    stopFollow(viewer);
     releaseDrawn();
     _overlayPublisher.hide();
     clearSelectedEntityContextForLayer(id);
@@ -886,6 +926,78 @@ export function createLocalGeoJsonLayer(
     if (pins.length) drawn.sets.pins.upsert(pins);
   }
 
+  /**
+   * Follow the part under `position`: a part with a stem by the centre of
+   * all it draws, stem and all, as the default renderer followed the
+   * loader's entity by its bounds, framed as that renderer framed an entity
+   * it started following; a line, which had no position to
+   * follow, is flown into view instead.
+   */
+  function followAt(viewer, position) {
+    const hit = findQuery(viewer)?.pick(position.x, position.y);
+    if (!hit || !hit.set?.startsWith(`${setPrefix}:`)) return;
+    const part = _drawn?.parts.get(hit.id);
+    if (!part) return;
+    const camera = findCamera(viewer);
+    if (!camera) return;
+    const points = framedPoints(part);
+    if (!points.length) return;
+    const record = part.carrier.record;
+    try {
+      if (!record) {
+        // As the default renderer zoomed to an entity with no position: at
+        // once, north up, pitched down 45°, at the range that fits it in
+        // view (the camera port's defaults).
+        const sphere = sphereFromPoints(points);
+        // Following nothing then, as that zoom stopped any follow first.
+        if (camera.followed) camera.follow(null);
+        camera.flyToBounds(sphere, { durationS: 0 });
+        return;
+      }
+      // The camera looks at the bounds' centre, kept where the stem now
+      // stands, as the default renderer kept its entity's bounds.
+      const outline = framedPoints(part, false);
+      const centre = () =>
+        sphereFromPoints([...outline, record.base, record.tip]).center;
+      const target = {
+        key: `${id}:${record.id}`,
+        position: centre,
+        frame: 'enu',
+        viewFrom: followViewFrom(sphereFromPoints(points), record.tip, camera),
+      };
+      camera.follow(target);
+      _follow = target;
+    } catch (error) {
+      // A camera that cannot follow (a viewer without entity tracking)
+      // leaves the view where it is, as that viewer's double-click did.
+      console.warn(`${id}: cannot follow`, error);
+    }
+  }
+
+  /**
+   * What the default renderer framed for a part: all it drew of it (but
+   * for its stem, without `withStem`).
+   */
+  function framedPoints(part, withStem = true) {
+    const record = part.carrier.record;
+    const points = [];
+    if (part.kind === 'polygon')
+      for (const { lon, lat, height } of part.rings[0])
+        points.push(fromDegrees(lon, lat, height ?? 0));
+    else if (part.kind === 'line')
+      for (const [lon, lat] of part.coordinates)
+        points.push(fromDegrees(lon, lat, 0));
+    if (record && withStem) points.push(copy(record.base), copy(record.tip));
+    return points;
+  }
+
+  /** Stop a follow this layer started, if the camera still keeps it. */
+  function stopFollow(viewer) {
+    const camera = findCamera(viewer);
+    if (_follow && camera?.followed === _follow) camera.follow(null);
+    _follow = null;
+  }
+
   /** Fly to where a clicked part stands, holding camera input meanwhile. */
   function flyToPart(viewer, input, part) {
     const target = part.carrier.record
@@ -1063,6 +1175,19 @@ export function createLocalGeoJsonLayer(
                 // To the surface base of the stem, or the line's start.
                 flyToPart(viewer, input, part);
               });
+            }
+            // 3. Follow a part on a double-click, as the default renderer's
+            // own double-click followed the loader's entities.
+            if (!_dblclickSubscription) {
+              const input = inputFor(viewer);
+              _dblclickSubscription =
+                input.onPointer?.('dblclick', (event) => {
+                  if (!_enabled || !_drawn) return;
+                  // The renderer's own double-click follow, off while a
+                  // tool holds it or on a renderer without one.
+                  if (input.stockEnabled?.('dblclickFollow') !== true) return;
+                  followAt(viewer, event.position);
+                }) ?? null;
             }
           })();
         try {
@@ -1305,6 +1430,8 @@ export function createLocalGeoJsonLayer(
       removeEntityContextsForLayer(id);
       _clickSubscription?.();
       _clickSubscription = null;
+      _dblclickSubscription?.();
+      _dblclickSubscription = null;
       _overlayPublisher.destroy();
       _cachedFeatures = null;
       pinMaker.clear();

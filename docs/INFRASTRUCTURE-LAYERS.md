@@ -56,7 +56,11 @@ Cesium viewer with no renderer bound loads
 `gods-eye-view/render/cesium/unbound` once first; until then the layer reports
 an error naming it, as it does for a dataset it cannot load.
 A selected feature is the context record its draw item carries as `meta`; the
-layer no longer sets the viewer's `selectedEntity`.
+layer no longer sets the viewer's `selectedEntity`. While the renderer's own
+double-click follow is on, a double-click follows a point or polygon through
+the camera port, looking at the centre of what it draws (stem included), framed
+as the default renderer framed an entity it began following, and zooms to a
+line, which has no stem to follow.
 Features keep their own simplestyle `fill`, `fill-opacity`, `stroke`,
 `stroke-opacity`, `stroke-width`, `marker-color` and `marker-size`, given as
 hex, `rgb()` or `hsl()` colours or by the CSS colour names the default renderer

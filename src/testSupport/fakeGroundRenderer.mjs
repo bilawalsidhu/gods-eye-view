@@ -84,6 +84,12 @@ export function bindFakeGroundRenderer(
   const moveEnd = new FakeEvent();
   const capabilities = new Set(sampleHeight ? ['sampleHeight'] : []);
   const flights = [];
+  /** What the camera has been told to follow, in order; the last is followed. */
+  const follows = [];
+  /** The camera's view shape, which a test may change. */
+  const view = { fovy: Math.PI / 3, aspectRatio: 1 };
+  /** What a pick answers at a window position; default: nothing drawn. */
+  let pickAt = () => null;
   const renders = [];
   let position = fromDegrees(eye.lon, eye.lat, eye.height);
   let surfaceHeight = surface;
@@ -114,8 +120,7 @@ export function bindFakeGroundRenderer(
         return {
           ...at,
           position: { ...position },
-          fovy: Math.PI / 3,
-          aspectRatio: 1,
+          ...view,
         };
       },
       on: (event, cb) => (event === 'moveEnd' ? moveEnd.on(cb) : () => {}),
@@ -123,8 +128,20 @@ export function bindFakeGroundRenderer(
         flights.push({ destination, options });
         return { done: Promise.resolve('complete'), cancel() {} };
       },
+      flyToBounds(sphere, options) {
+        flights.push({ sphere, options });
+        return { done: Promise.resolve('complete'), cancel() {} };
+      },
+      follow(target) {
+        follows.push(target);
+      },
+      get followed() {
+        return follows.at(-1) ?? null;
+      },
+      controls: { minDistance: 1, maxDistance: Infinity },
     },
     query: {
+      pick: (x, y) => pickAt(x, y),
       project: () => ({ x: canvas.width / 2, y: canvas.height / 2 }),
       isOccluded: (point) => occluded(position, point),
       sampleHeightNow(point, options = {}) {
@@ -149,6 +166,8 @@ export function bindFakeGroundRenderer(
     moveEnd,
     globe,
     flights,
+    follows,
+    view,
     renders,
     sampleCalls,
     capabilities,
@@ -169,6 +188,10 @@ export function bindFakeGroundRenderer(
       position = { ...next };
     },
     eyePosition: () => ({ ...position }),
+    /** Change what a pick answers at a window position. */
+    setPick(next) {
+      pickAt = next;
+    },
     /** Change what surface samples answer. */
     setSurface(next) {
       surfaceHeight = next;

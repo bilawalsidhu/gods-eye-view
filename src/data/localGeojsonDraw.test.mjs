@@ -8,6 +8,8 @@ import { localGeoJsonServices } from '../app/localGeojsonServices.js';
 import { getContextStore } from './contextStore.js';
 import { readEntityRecord } from './entityRecords.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
+import { distance, normalize, sub } from '../geo/vector.js';
+import { eastNorthUp, framePoint, inverseFrameVector } from '../geo/frames.js';
 
 const feature = (id, geometry, properties = { name: `Feature ${id}` }) => ({
   type: 'Feature',
@@ -80,6 +82,8 @@ async function enabledLayer(t, features) {
     eye: { lon: 0.005, lat: 0.005, height: 50_000 },
   });
   let click = null;
+  let dblclick = null;
+  const stock = { dblclickFollow: true };
   const holds = [];
   const layer = createLocalGeoJsonLayer(
     {
@@ -99,6 +103,14 @@ async function enabledLayer(t, features) {
           holds.push(reason);
           return () => holds.push(`release:${reason}`);
         },
+        onPointer: (type, handler) => {
+          assert.equal(type, 'dblclick');
+          dblclick = handler;
+          return () => {
+            dblclick = null;
+          };
+        },
+        stockEnabled: (name) => stock[name] === true,
       }),
     },
     {
@@ -117,7 +129,16 @@ async function enabledLayer(t, features) {
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   });
-  return { layer, viewer, fake, holds, click: (event) => click?.(event) };
+  return {
+    layer,
+    viewer,
+    fake,
+    holds,
+    stock,
+    click: (event) => click?.(event),
+    dblclick: (event) => dblclick?.(event),
+    subscribed: () => dblclick !== null,
+  };
 }
 
 test('polygons fill the ground, lines drape, points stand on pins, all shown', async (t) => {
@@ -386,4 +407,100 @@ test('a marker-symbol is stamped on its pin: a character as text, a longer one a
   // An icon the renderer does not have leaves the plain pin, as no symbol does.
   assert.match(pins.get('missing').image.svg, /fill="rgba\(255,0,0,1\)"/);
   assert.deepEqual(pins.get('missing').image, pins.get('plain').image);
+});
+
+test('a double-click follows a part as the default renderer followed its entity, and zooms to a line', async (t) => {
+  const env = await enabledLayer(t, [
+    feature('pt', { type: 'Point', coordinates: [0.002, 0.003] }),
+    feature('l', {
+      type: 'LineString',
+      coordinates: [
+        [0, 0],
+        [0.01, 0],
+      ],
+    }),
+  ]);
+  const { fake } = env;
+  const setOf = (role) => fake.set(role).spec.id;
+  const stem = fake.set('stems').items.get('pt');
+  const [base, tip] = stem.positions;
+  let picked = null;
+  fake.setPick((x, y) => (x === 7 && y === 9 ? picked : null));
+
+  // Nothing of this layer's under it: nothing happens.
+  env.dblclick({ position: { x: 7, y: 9 } });
+  picked = { set: 'someone-else', id: 'pt' };
+  env.dblclick({ position: { x: 7, y: 9 } });
+  assert.equal(fake.follows.length, 0);
+
+  // Its pin, its stem or its dot: the camera follows the stem's centre,
+  // where the default renderer kept the entity's bounds. A tall view, so
+  // its width is what fits the stem in.
+  fake.view.aspectRatio = 0.5;
+  picked = { set: setOf('pins'), id: 'pt' };
+  env.dblclick({ position: { x: 7, y: 9 } });
+  const target = fake.follows.at(-1);
+  assert.equal(target.key, 'local-dams:pt');
+  assert.equal(target.frame, 'enu');
+  const center = {
+    x: (base.x + tip.x) / 2,
+    y: (base.y + tip.y) / 2,
+    z: (base.z + tip.z) / 2,
+  };
+  assert.ok(distance(target.position(0), center) < 1e-6);
+  // Looking at it north up, pitched down 45 degrees (a little more for a
+  // tip above the ellipsoid), at the range that fits the stem in view.
+  const eye = framePoint(eastNorthUp(center), target.viewFrom);
+  const radius = distance(base, tip) / 2;
+  const fit = radius / (0.5 * Math.tan(Math.PI / 6));
+  assert.ok(Math.abs(distance(eye, center) - fit) < 1e-6);
+  const look = inverseFrameVector(
+    eastNorthUp(center),
+    normalize(sub(center, eye)),
+  );
+  const factor = 2 - 1 / Math.max(1, Math.hypot(tip.x, tip.y, tip.z) / 6378137);
+  assert.ok(factor > 1 + 1e-5, 'the tip stands above the ellipsoid');
+  assert.ok(Math.abs(look.x) < 1e-9, 'heading north');
+  assert.ok(look.y > 0);
+  assert.ok(
+    Math.abs(Math.asin(-look.z) - (Math.PI / 4) * factor) < 1e-9,
+    'pitched down 45 degrees, steeper above the ground',
+  );
+  fake.view.aspectRatio = 1;
+
+  // Off while the renderer's own double-click follow is held off.
+  env.stock.dblclickFollow = false;
+  picked = { set: setOf('stems'), id: 'pt' };
+  env.dblclick({ position: { x: 7, y: 9 } });
+  assert.equal(fake.follows.length, 1);
+  env.stock.dblclickFollow = true;
+
+  // A line had no position to follow: it is zoomed to instead, at once,
+  // with the camera's default framing (north, 45 degrees down, fitted).
+  picked = { set: setOf('lines'), id: 'l' };
+  env.dblclick({ position: { x: 7, y: 9 } });
+  const zoom = fake.flights.at(-1);
+  assert.ok(zoom.sphere.radius > 500);
+  assert.deepEqual(zoom.options, { durationS: 0 });
+  // Stopping the follow first, as that zoom did.
+  assert.equal(fake.follows.length, 2);
+  assert.equal(fake.follows.at(-1), null);
+
+  // Disabled, the layer leaves a follow another started in place of its
+  // own, and stops its own.
+  picked = { set: setOf('dots'), id: 'pt' };
+  env.dblclick({ position: { x: 7, y: 9 } });
+  assert.equal(fake.follows.at(-1).key, 'local-dams:pt');
+  const theirs = { key: 'theirs' };
+  fake.follows.push(theirs);
+  env.layer.disable(env.viewer);
+  assert.equal(fake.follows.at(-1), theirs);
+  await env.layer.enable(env.viewer);
+  env.dblclick({ position: { x: 7, y: 9 } });
+  assert.equal(fake.follows.at(-1).key, 'local-dams:pt');
+  env.layer.disable(env.viewer);
+  assert.equal(fake.follows.at(-1), null);
+  // Destroyed, it stops listening.
+  env.layer.destroy(env.viewer);
+  assert.equal(env.subscribed(), false);
 });
