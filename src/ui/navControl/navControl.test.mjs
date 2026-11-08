@@ -537,5 +537,5 @@ test('on wide screens the control sits above the bottom-right corner row', async
     /@media \(min-width: 901px\)\s*\{\s*\.gev-nav\s*\{([^}]*)\}/,
   );
   assert.ok(rule, 'a wide-screen rule lifts the control');
-  assert.match(rule[1], /bottom:\s*max\(58px/);
+  assert.match(rule[1], /bottom:\s*calc\(\s*max\(58px/);
 });
