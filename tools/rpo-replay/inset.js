@@ -32,7 +32,7 @@ export function createInset({ D, U, relAt, canvas }) {
     ctx.globalAlpha = opts.alpha;
 
     // Zoom: half-width (km) follows the guiding separation; eased frame to frame.
-    const target = Math.min(9200, Math.max(1.4, 1.6 * sepGuideKm));
+    const target = Math.min(9200, Math.max(1.0, 1.25 * sepGuideKm));
     if (state.hw === null || Math.abs(s - state.lastS) > 0.2 || opts.cut) state.hw = target;
     else state.hw = Math.exp(Math.log(state.hw) + (Math.log(target) - Math.log(state.hw)) * 0.12);
     state.lastS = s;
@@ -51,13 +51,16 @@ export function createInset({ D, U, relAt, canvas }) {
     ctx.roundRect(0, 0, W, H, r);
     ctx.fill();
     ctx.stroke();
-    const head = 44 * U * dpr;
+    const head = 52 * U * dpr;
     ctx.fillStyle = 'rgba(244,247,250,0.92)';
-    ctx.font = `800 ${22 * U * dpr}px Inter, sans-serif`;
+    ctx.font = `800 ${26 * U * dpr}px Inter, sans-serif`;
     ctx.textBaseline = 'middle';
     ctx.fillText('SEEN FROM X36', pad, head / 2 + 4 * dpr);
+    const tw = ctx.measureText('SEEN FROM X36 ').width;
+    ctx.fillStyle = '#ff5a3c';
+    ctx.fillText('· red = Cosmos', pad + tw, head / 2 + 4 * dpr);
     ctx.fillStyle = 'rgba(244,247,250,0.6)';
-    ctx.font = `600 ${20 * U * dpr}px Inter, sans-serif`;
+    ctx.font = `700 ${24 * U * dpr}px Inter, sans-serif`;
     ctx.textAlign = 'right';
     ctx.fillText('flight →', W - pad, head / 2 + 4 * dpr);
     ctx.textAlign = 'left';
@@ -133,7 +136,7 @@ export function createInset({ D, U, relAt, canvas }) {
       const [x, y] = P(...toXY(relAt(tt)));
       if (prev) {
         ctx.strokeStyle = `rgba(255,90,60,${0.08 + 0.85 * (k / n) ** 1.5})`;
-        ctx.lineWidth = (1.5 + 2.5 * (k / n)) * dpr;
+        ctx.lineWidth = (2.5 + 4 * (k / n)) * U * 2;
         ctx.beginPath();
         ctx.moveTo(prev[0], prev[1]);
         ctx.lineTo(x, y);
@@ -162,15 +165,15 @@ export function createInset({ D, U, relAt, canvas }) {
       ctx.fill();
       ctx.shadowBlur = 0;
     };
-    dot(xxp, xyp, '#5ce1e6', 7 * U);
-    dot(cxp, cyp, '#ff5a3c', 7 * U);
-    ctx.font = `800 ${20 * U * dpr}px Inter, sans-serif`;
+    dot(xxp, xyp, '#5ce1e6', 11 * U);
+    dot(cxp, cyp, '#ff5a3c', 11 * U);
+    ctx.font = `800 ${26 * U * dpr}px Inter, sans-serif`;
     ctx.fillStyle = '#5ce1e6';
     ctx.textAlign = 'center';
-    ctx.fillText('X36', xxp, xyp - 20 * U * dpr);
+    ctx.fillText('X36', xxp, xyp - 24 * U * dpr);
     ctx.fillStyle = '#ff5a3c';
     const below = cyp > xyp + 10 * dpr || Math.abs(cxp - xxp) < 40 * U * dpr;
-    ctx.fillText('COSMOS', Math.min(Math.max(cxp, px0 + 50 * U * dpr), px0 + pw - 50 * U * dpr), cyp + (below ? 24 : -20) * U * dpr);
+    ctx.fillText(opts.behindNote ? '← COSMOS falling behind' : 'COSMOS', Math.min(Math.max(cxp, px0 + 150 * U * dpr), px0 + pw - 150 * U * dpr), cyp + (below ? 32 : -24) * U * dpr);
     ctx.textAlign = 'left';
     ctx.restore();
 
@@ -185,13 +188,13 @@ export function createInset({ D, U, relAt, canvas }) {
     ctx.lineTo(pad + sbpx, by);
     ctx.stroke();
     ctx.fillStyle = 'rgba(244,247,250,0.85)';
-    ctx.font = `700 ${19 * U * dpr}px 'JetBrains Mono', monospace`;
+    ctx.font = `700 ${24 * U * dpr}px 'JetBrains Mono', monospace`;
     ctx.textBaseline = 'bottom';
     ctx.fillText(fmt(sb), pad, by - 6 * dpr);
     if (exag > 1.5) {
       ctx.textAlign = 'right';
       ctx.fillStyle = 'rgba(255,181,71,0.95)';
-      ctx.font = `700 ${19 * U * dpr}px Inter, sans-serif`;
+      ctx.font = `700 ${24 * U * dpr}px Inter, sans-serif`;
       ctx.fillText(`heights ×${Math.round(exag)}`, W - pad, by - 6 * dpr);
       ctx.textAlign = 'left';
     }

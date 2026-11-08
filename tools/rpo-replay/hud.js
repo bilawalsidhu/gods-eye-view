@@ -29,12 +29,12 @@ export function createHud(ctx) {
   ];
   const cap = (id, title, body, extra = {}) => ({ s0: span(id)[0], s1: span(id)[1], title, body, ...extra });
   const CAPTIONS = [
-    cap('hook', 'A Russian military satellite came within about half a kilometre of a U.S. radar satellite',
+    cap('hook', `A Russian military satellite came within <span class="c-cos nw">~${CA_M} m</span> of a U.S. one`,
       'Rebuilt from public tracking data.', { hook: true, s0: -1 }),
     cap('climb', 'Climb higher to fall behind',
       'Two burns lift <b class="c-cos">Cosmos 2612</b> <b>47 km</b>. A higher orbit is a longer lap, so it falls behind.'),
     cap('lap', 'Lapped, twice',
-      'Losing <b>~6,700 km a day</b>, it is lapped by <b class="c-x36">X36</b> on Oct 5 and Oct 12, while Earth\'s bulge swings the two orbits into line.'),
+      'Losing <b>~6,700 km a day</b>, it gets lapped by <b class="c-x36">X36</b> on Oct 5 and Oct 12. Earth\'s bulge, plus a 4 m/s nudge, swing the orbits into line.'),
     cap('drop', 'Drop into the same orbit',
       'Oct 12: from <b>54 km</b> directly overhead it dives into X36\'s orbit, landing <b>~500 km behind</b>.'),
     cap('close', 'Speed up, then brake',
@@ -46,7 +46,7 @@ export function createHud(ctx) {
     cap('approach', 'Closing in, slowly',
       'Creeping in at <b>a few centimetres a second</b>, while both fly at <b>27,000 km/h</b>.'),
     cap('ca', `Closest pass: <span class="c-cos nw">~${CA_M} m</span>`,
-      'In Earth\'s shadow, ~01:17 UTC. LeoLabs radar: <b>~500 m</b>. Public estimates: <b>150–650 m</b>.'),
+      'In Earth\'s shadow, drifting slower than a tortoise. LeoLabs radar: <b>~500 m</b>. Estimates: <b>150–650 m</b>.'),
     cap('sunrise', 'Then the sun comes up',
       'Twenty minutes later both leave Earth\'s shadow. Within the hour, Cosmos backs away.'),
     cap('leave', 'Back off, and wait',
@@ -55,7 +55,7 @@ export function createHud(ctx) {
   const BURN_NOTES = {
     'Phasing raise': 'two burns raise its orbit 46 km',
     'Plane trim': 'tilts its orbit into line',
-    'Descent to X36 orbit': 'drops 48 km into X36\'s orbit',
+    'Descent to X36 orbit': 'drops 47 km into X36\'s orbit',
     'Closing burn': 'dips 2.3 km to speed up',
     'Braking burn': 'rises 2.5 km to stop',
     'Back-off': 'rises 140 m and starts to drift back',
@@ -224,7 +224,7 @@ export function createHud(ctx) {
     else if (st.sep < 2e6) ctxLine = `${Math.abs(tt) >= 1e4 ? fmtNum(Math.abs(tt) / 1000) + ' km' : (Math.abs(tt) / 1000).toFixed(1) + ' km'} ${tt < 0 ? 'behind' : 'ahead'}${Math.abs(r) > 20e3 ? ` · ${fmtNum(Math.abs(r) / 1000)} km ${r > 0 ? 'higher' : 'lower'}` : ''}`;
     else ctxLine = `${Math.abs(r) > 20e3 ? `${fmtNum(Math.abs(r) / 1000)} km higher · ` : ''}${fmtNum(st.sep / 1000)} km apart in a straight line`;
     if (s > caS && s < span('leave')[0] + 0.5) ctxLine += ` · closest ${CA_M} m`;
-    ro.querySelector('.ctx').textContent = lapMode ? `${Math.abs(r) > 20e3 ? `${fmtNum(Math.abs(r) / 1000)} km higher · ` : ''}behind X36` : ctxLine;
+    ro.querySelector('.ctx').textContent = lapMode ? `${st.da > 20e3 ? `${Math.round(st.da / 1000)} km higher on average · ` : ''}behind X36` : ctxLine;
     const relLine = ro.querySelector('.rel');
     relLine.textContent = st.sep < 2e4 && sh.mode === 'true' ? (st.relSpeed < 0.2 ? `relative speed ~${Math.max(1, Math.round(st.relSpeed * 100))} cm/s (modelled)` : `relative speed ~${st.relSpeed.toFixed(1)} m/s (modelled)`) : '';
 
@@ -234,13 +234,15 @@ export function createHud(ctx) {
     const trueSize = !enlarged && st.camDistX < 200;
     magEl.style.opacity = (enlarged || trueSize) ? fade(s, climbS, END, 0.3) : 0;
     magEl.classList.toggle('enlarged', enlarged);
-    magEl.textContent = enlarged ? `Satellites enlarged ${Math.round(st.mag)}×` : sh.id === 'ca' ? 'True size · faint bar: ±1.5 km tracking uncertainty' : 'True size';
+    magEl.classList.toggle('low', !sh.inset);
+    magEl.textContent = enlarged ? `Satellites enlarged ${Math.round(st.mag)}×` : sh.id === 'ca' ? 'True size · tracking error ±1.5 km > the gap' : 'True size';
     const relChip = $('#relchip');
-    relChip.style.opacity = ['drop', 'close', 'dance', 'dance-ff', 'approach', 'leave'].includes(sh.id) ? fade(s, sh.s0, sh.s1, 0.3) : 0;
+    relChip.style.opacity = 0;
 
     // Inset
     const insA = sh.inset && s < END - 0.1 ? fade(s, Math.max(sh.s0, climbS + 0.8), END, 0.3) : 0;
-    inset.draw(s, t, (st.sepG || st.sep) / 1000, { alpha: insA * live, trailHours: sh.inset || 1, cut: CUTS.some((c) => Math.abs(s - c) < 0.05) });
+    insetEl.style.opacity = insA * live > 0.01 ? 1 : 0;
+    inset.draw(s, t, (st.sepG || st.sep) / 1000, { alpha: insA * live, trailHours: sh.inset || 1, cut: CUTS.some((c) => Math.abs(s - c) < 0.05), behindNote: sh.id === 'climb' || sh.id === 'lap' });
 
     // Timeline
     const px = timeline.x(Math.min(Math.max(t, TL.t0), TL.t1));
@@ -355,6 +357,10 @@ export function createHud(ctx) {
       el.style.left = `${left}px`;
       el.style.top = `${top}px`;
       el.style.transform = 'none';
+      if (overlap({ l: left, r: left + w, t: top, b: top + h }) > 0.35 * w * h) {
+        el.style.opacity = 0;
+        return;
+      }
       el.style.textAlign = q[0] > 0 ? 'left' : 'right';
       obstacles.push({ left, right: left + w, top, bottom: top + h });
       const ax = q[0] > 0 ? left - 6 * U : left + w + 6 * U;
@@ -386,14 +392,11 @@ export function createHud(ctx) {
     if (!ec.dataset.built) {
       ec.dataset.built = '1';
       ec.innerHTML = `<div class="panel">
-        <div class="big">~${CA_M} m</div>
-        <div class="range">closest pass, Oct 18, in Earth's shadow · LeoLabs ~500 m · estimates 150–650 m</div>
-        <div class="stats">
-          <div><b>18</b><span>days from first burn to closest pass</span></div>
-          <div><b>${BURNS.length}</b><span>manoeuvres</span></div>
-          <div><b>~${Math.round(D.total_dv)} m/s</b><span>of thrust spent</span></div>
-        </div>
-        <div class="why">U.S. officials called it <b>"consistent with on-orbit weapons operations."</b><br>By Oct 25 it was still parked ~480 km behind, in the same orbit.</div>
+        <div class="kicker">Closest pass <span class="c-cos">~${CA_M} m</span> · Oct 18 · in Earth's shadow</div>
+        <div class="quote">“Consistent with on-orbit weapons operations.”</div>
+        <div class="who">— Thomas DiNanno, U.S. Under Secretary of State</div>
+        <div class="still">By Oct 25, Cosmos 2612 was still parked ~480 km behind, in the same orbit.</div>
+        <div class="statline">18 days from first burn · ${BURNS.length} manoeuvres · ~${Math.round(D.total_dv)} m/s Δv · LeoLabs ~500 m · estimates 150–650 m</div>
       </div>`;
     }
     $('#endlogo').style.opacity = endA;

@@ -195,7 +195,7 @@ function camAt(s) {
     sun: lerp(a.sun || 0, b.sun || 0),
     vup: lerp(a.vup || 0, b.vup || 0),
     comp: lerp(a.comp ?? 1, b.comp ?? 1),
-    compY: lerp(a.compY ?? 0, b.compY ?? 0),
+    compY: lerp(a.compY ?? 0, b.compY ?? 0) + (PORTRAIT ? 0 : lerp(a.compYL ?? 0, b.compYL ?? 0)),
     pairD: lerp(a.pairD || 0, b.pairD || 0),
     pairTh: lerp(a.pairTh || 0, b.pairTh || 0),
     aimRel: [0, 1, 2].map((k) => lerp(ar[k], br[k])),
@@ -453,15 +453,16 @@ function setState(s) {
   v3.add(aim, v3.multiplyByScalar(RW, cam.aimRel[0], new v3()), aim);
   v3.add(aim, v3.multiplyByScalar(TW, cam.aimRel[1], new v3()), aim);
   v3.add(aim, v3.multiplyByScalar(NW, cam.aimRel[2], new v3()), aim);
-  const dist = Math.max(cam.dist, cam.f * sepG) * (PORTRAIT && cam.earth > 0.5 ? 0.74 : 1);
+  const dist = Math.max(cam.dist, cam.f * sepG) * (PORTRAIT && cam.earth > 0.5 ? 0.74 : 1) * (PORTRAIT && sh.id === 'hook' ? 0.6 : 1);
   const az = Cesium.Math.toRadians(cam.az);
   const el = Cesium.Math.toRadians(cam.el);
   const off = new v3();
   v3.add(off, v3.multiplyByScalar(cT, -Math.cos(el) * Math.cos(az), new v3()), off);
   v3.add(off, v3.multiplyByScalar(cN, Math.cos(el) * Math.sin(az), new v3()), off);
   v3.add(off, v3.multiplyByScalar(cR, Math.sin(el), new v3()), off);
-  if (cam.sun > 0) {
-    v3.normalize(v3.add(v3.multiplyByScalar(off, 1 - cam.sun, off), v3.multiplyByScalar(sunW, cam.sun, new v3()), off), off);
+  const sunW8 = Math.min(0.8, cam.sun * (PORTRAIT ? 2 : 1));
+  if (sunW8 > 0) {
+    v3.normalize(v3.add(v3.multiplyByScalar(off, 1 - sunW8, off), v3.multiplyByScalar(sunW, sunW8, new v3()), off), off);
   }
   const camPos = v3.add(pivot, v3.multiplyByScalar(off, dist, new v3()), new v3());
   if (cam.pairD > 0) {
@@ -469,7 +470,7 @@ function setState(s) {
     // (sideways, in the orbit's horizontal), aimed at the bisector of the two.
     const u = v3.normalize(v3.subtract(cosW, x36W, new v3()), new v3());
     const perp = v3.normalize(v3.subtract(NW, v3.multiplyByScalar(u, v3.dot(NW, u), new v3()), new v3()), new v3());
-    const th = Cesium.Math.toRadians(cam.pairTh * (PORTRAIT ? 1.3 : 1));
+    const th = Cesium.Math.toRadians(cam.pairTh * (PORTRAIT ? 0.7 : 1));
     v3.add(x36W, v3.multiplyByScalar(u, -cam.pairD * Math.cos(th), new v3()), camPos);
     v3.add(camPos, v3.multiplyByScalar(perp, cam.pairD * Math.sin(th), new v3()), camPos);
     const a1 = v3.normalize(v3.subtract(x36W, camPos, new v3()), new v3());
@@ -495,10 +496,11 @@ function setState(s) {
     const aspect = W / H;
     const tanH = PORTRAIT ? Math.tan(fovR / 2) * aspect : Math.tan(fovR / 2);
     const tanV = PORTRAIT ? Math.tan(fovR / 2) : Math.tan(fovR / 2) / aspect;
-    const ndcX = (PORTRAIT ? 0 : 0.18) * cam.comp;
-    const ndcY = (PORTRAIT ? -0.04 : 0.06) * cam.comp + cam.compY;
+    const ndcX = (PORTRAIT ? 0 : 0.24) * cam.comp;
+    const ndcY = (PORTRAIT ? 0.14 : 0.06) * cam.comp + cam.compY;
+    const ndcYp = ndcY + (PORTRAIT && cam.pairD > 0 ? 0.13 : 0);
     v3.normalize(v3.add(v3.add(dir, v3.multiplyByScalar(right, -ndcX * tanH, new v3()), new v3()),
-      v3.multiplyByScalar(up, -ndcY * tanV, new v3()), new v3()), dir);
+      v3.multiplyByScalar(up, -ndcYp * tanV, new v3()), new v3()), dir);
     right = v3.normalize(v3.cross(dir, upHint, new v3()), new v3());
     up = v3.cross(right, dir, new v3());
   }
@@ -612,7 +614,7 @@ function setState(s) {
   if (sh.id === 'ca') {
     const a0 = v3.add(cosW, v3.multiplyByScalar(TW, -1500, new v3()), new v3());
     const a1 = v3.add(cosW, v3.multiplyByScalar(TW, 1500, new v3()), new v3());
-    polyline([a0, cosW, a1], [COL_COS.withAlpha(0), COL_COS.withAlpha(0.45), COL_COS.withAlpha(0)], 10);
+    polyline([a0, cosW, a1], [COL_COS.withAlpha(0.25), COL_COS.withAlpha(0.6), COL_COS.withAlpha(0.25)], 22);
   }
   // RIC reference rings (orbital plane) during proximity
   const gridA = Math.min(1, Math.max(0, (8e3 - Math.max(sep, camDistX)) / 3e3)) * (cam.mag > 0.4 ? 1 : 0.35);
@@ -640,7 +642,7 @@ function setState(s) {
   const r0 = relAt(t - 30);
   const relSpeed = Math.hypot(r1[0] - r0[0], r1[1] - r0[1], r1[2] - r0[2]) / 60;
 
-  return { sh, t, b, jd, x36W, cosW, RW, TW, NW, rel, sep, sepG, mag, gridA, lx, camDistX, vX: vXv, vC, relSpeed };
+  return { sh, t, b, jd, x36W, cosW, RW, TW, NW, rel, sep, sepG, da: smaOffsetAt(t), mag, gridA, lx, camDistX, vX: vXv, vC, relSpeed };
 }
 
 async function frame(s) {
