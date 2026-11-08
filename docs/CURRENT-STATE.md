@@ -1633,7 +1633,9 @@ frame, with no ground clamp. Entry opens in the plain optical vision style
 with Google 3D tiles shown, which stay coarse from hundreds of kilometres up,
 the map switches to Esri imagery, and exit puts it back unless the operator
 picked another map meanwhile; another owner already holding the map (an
-imagery comparison) keeps it as it is. The Cockpit cloud pass is off in orbit
+imagery comparison) keeps it as it is. While orbit holds the lease, Recent
+Imagery cannot take it: turned on in orbit, the layer reports the comparison
+in use and needs turning off and on again after exit. The Cockpit cloud pass is off in orbit
 (it fades out above 24 km); cloud cover from orbit is the Weather layer's,
 and the saved cloud preference stands for the next aircraft or bridge. The layer hides the satellite's dot, docked
 companions, its own orbit ring and its detection bracket, and draws every
