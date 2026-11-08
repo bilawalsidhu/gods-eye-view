@@ -42,9 +42,9 @@ DATA_SOURCES.md.
   `0` meaning empty.
 - The 3,996 Starlink rows are dropped: every Starlink object is classed and
   credited to SpaceX by name, so they would only add size.
-- Rows without a readable NORAD number are dropped and counted apart from
-  duplicate NORAD numbers (the first row of a duplicate is kept); both counts
-  are 0 in this release.
+- Rows without a readable, positive NORAD number are dropped and counted apart
+  from duplicate NORAD numbers (the first row of a duplicate is kept); both
+  counts are 0 in this release.
 - Owner countries stay as UCS writes them ("USA", "USA/Japan", "ESA",
   "Multinational"); `src/layers/satellites/classes.js` normalises them, together with
   CelesTrak SATCAT owner codes, in one table.

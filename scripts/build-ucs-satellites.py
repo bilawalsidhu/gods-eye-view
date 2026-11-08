@@ -62,6 +62,9 @@ def build(xlsx: Path) -> dict:
         except (TypeError, ValueError):
             invalid_norad += 1
             continue
+        if norad <= 0:
+            invalid_norad += 1
+            continue
         record = [norad]
         for key, column in COLUMNS.items():
             text = clean(row[header[column]])
