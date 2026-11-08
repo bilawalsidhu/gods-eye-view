@@ -1,1 +1,0 @@
-- Add keyless USGS volcano status and NOAA SWPC OVATION aurora forecast layers, with source credits and forecast time (contributors, #99999).
