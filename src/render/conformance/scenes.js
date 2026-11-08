@@ -326,6 +326,53 @@ export const REFERENCE_SCENES = Object.freeze([
     ],
   },
   {
+    // `ShapeItem.lit`: a lit box's faces shade apart, an unlit one's match;
+    // a flat square lit, beside one drawn flat. Lit, the default renderer
+    // shades a flat square's two triangles apart (a seam on the diagonal):
+    // that is its lighting, recorded as it is.
+    id: 'shapes-lit',
+    family: 'shapes',
+    capability: null,
+    async build(r) {
+      await bare(r);
+      const set = r.draw.shapes({ id: 'ref:shapes-lit' });
+      const square = (east, north, half) => [
+        offset(east - half, north - half, 5),
+        offset(east + half, north - half, 5),
+        offset(east + half, north + half, 5),
+        offset(east - half, north + half, 5),
+      ];
+      const box = (id, east, lit) => ({
+        id,
+        geometry: {
+          kind: 'box',
+          center: offset(east, 300, 150),
+          dimensions: { x: 300, y: 300, z: 300 },
+        },
+        fill: '#ff9f0a',
+        lit,
+      });
+      set.set([
+        box('lit-box', -400, true),
+        box('flat-box', 400, false),
+        {
+          id: 'lit-square',
+          geometry: { kind: 'polygon', rings: [square(-400, -500, 200)] },
+          fill: '#0a84ff',
+          lit: true,
+        },
+        {
+          id: 'flat-square',
+          geometry: { kind: 'polygon', rings: [square(400, -500, 200)] },
+          fill: '#0a84ff',
+          lit: false,
+        },
+      ]);
+      return disposeAll(set);
+    },
+    views: [{ name: 'tilted', view: over(2500, -0.5, 0.3, offset(0, -3600)) }],
+  },
+  {
     id: 'models',
     family: 'models',
     capability: 'models',

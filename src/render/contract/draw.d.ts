@@ -228,7 +228,11 @@ export interface LineItem {
   /** ECEF positions, or packed `x, y, z` triples. */
   positions: Ecef[] | Float64Array;
   widthPx: number;
-  /** `3d`: straight in space; `geodesic`: along the ellipsoid; `draped`: on the surface. */
+  /**
+   * `3d`: straight in space; `geodesic`: along the ellipsoid; `draped`: on
+   * the surface. Where the renderer cannot drape at all, it draws `draped` lines
+   * and clamped shapes as in `overlay`, and `clampState()` says `overlay`.
+   */
   mode: '3d' | 'geodesic' | 'draped';
   clampTo?: ClampTarget;
   style: LineStyle;
@@ -322,6 +326,13 @@ export interface ShapeItem {
   classifyVolume?: boolean;
   /** Pull toward the eye, metres, to win depth against coplanar surfaces. */
   depthBias?: number;
+  /**
+   * Shaded by the renderer's fixed light (true) or flat colour (false).
+   * Omitted: lit for extruded shapes and boxes, flat otherwise. A renderer
+   * may draw clamped shapes, which drape on the surface, flat whatever it
+   * says.
+   */
+  lit?: boolean;
   animate?: Pulse;
   meta?: Meta;
   show?: boolean;
@@ -560,7 +571,8 @@ export interface DrawPort {
    * shapes) are draped onto the 3D tiles now (`draped`), or drawn over them
    * and hidden past the ellipsoid's horizon (`overlay`), the fallback a
    * renderer uses where it cannot drape. Without tiles in the base it is
-   * `draped`: clamping to terrain or the ellipsoid always drapes.
+   * `draped`: clamping to terrain or the ellipsoid always drapes, on a
+   * renderer that can drape at all (one that cannot is always `overlay`).
    */
   clampState(): 'draped' | 'overlay';
   /** Fires when `clampState()` changes (not on subscribing). */

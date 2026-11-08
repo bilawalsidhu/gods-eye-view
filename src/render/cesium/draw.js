@@ -3155,6 +3155,8 @@ export function createCesiumDraw({
       const id = pickId(record, item);
       const solid =
         item.extrudeHeight !== undefined || item.geometry.kind === 'box';
+      // `lit`: shaded by Cesium's light, or flat; by default solids are lit.
+      const lit = item.lit ?? solid;
       if (imageFill && !item.outlineOnly) {
         const material = ownMaterial(
           Cesium.Material.fromType('Image', {
@@ -3175,8 +3177,7 @@ export function createCesiumDraw({
                 Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
               translucent: true,
               closed: solid,
-              flat: !solid,
-              faceForward: !solid,
+              flat: !lit,
             }),
             asynchronous: false,
           }),
@@ -3196,8 +3197,10 @@ export function createCesiumDraw({
             appearance: new Cesium.PerInstanceColorAppearance({
               translucent: color.alpha < 1,
               closed: solid,
-              // Flat shapes unlit: lit, their two triangles shade apart.
-              flat: !solid,
+              // Flat shapes unlit by default: lit, their faces shade by
+              // the light (a lit box's sides differ, an unlit one's match).
+              flat: !lit,
+              faceForward: !solid,
             }),
             asynchronous: false,
           }),
@@ -3299,10 +3302,17 @@ export function createCesiumDraw({
   /**
    * The Cesium port draws clamped items where it is given them; it does not
    * drape them onto 3D tiles yet, so over shown tiles it is `overlay`.
-   * Terrain and the ellipsoid always take draped items.
+   * Terrain and the ellipsoid take draped items wherever Cesium drapes at
+   * all: its draped lines and image fills need depth textures, which every
+   * WebGL 2 context has; without them it says `overlay`. (It still builds
+   * them as ground primitives there: the overlay drawing itself is not
+   * built, since only a WebGL 1 context without the extension lacks them.)
    */
   const clampState = () =>
-    tilesets().some((tileset) => tileset.show) ? 'overlay' : 'draped';
+    scene.frameState?.context?.depthTexture === false ||
+    tilesets().some((tileset) => tileset.show)
+      ? 'overlay'
+      : 'draped';
   const clampListeners = listenerList(report);
   // The state last told, while anyone listens; measured after each drawn
   // frame, when what the base holds can have changed.

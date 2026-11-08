@@ -48,6 +48,14 @@ optional, so a renderer written before it still conforms:
 - A line item's `depthFailDash` (`{ length, pattern16? }`) dashes the parts
   behind the surface in `depthFailColor`, as the Draw tool's rubber band is.
   A renderer that predates it draws those parts solid.
+- A shape's `lit` chooses shading by the renderer's fixed light (true) or a
+  flat colour (false); omitted, extruded shapes and boxes are lit and the
+  rest flat, as before. The Cesium port lights unclamped shapes only
+  (clamped ones drape unlit). The `shapes-lit` scene draws both.
+- `SetSpec.drawOrder` stacks sets drawn over depth: a higher one draws over
+  a lower one and is picked first; equal ones keep the order they were
+  made in. The Cesium port stacks opaque icons and points by it;
+  translucent ones blend order-independently there.
 - A rectangle shape's `rotation` (radians counter-clockwise) turns it about
   its centre in longitude and latitude, as a KML ground overlay turns, and
   its image fill turns with it. The Cesium port drapes image fills too, each
