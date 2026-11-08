@@ -1,5 +1,6 @@
 // src/layers/vessels/radarContacts.test.mjs — the vessels the Cockpit bridge
-// radar draws: within range, nearest first, without the ship it rides.
+// radar draws: within range, nearest first, without the ship it rides; and
+// the ridden ship's own trail, hidden while the bridge holds it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
@@ -126,6 +127,24 @@ test('ships with no MMSI each keep a key of their own', () => {
   assert.equal(ids.length, 2);
   assert.equal(new Set(ids).size, 2, ids.join(', '));
   assert.ok(ids.every((id) => id.startsWith('unkeyed:')));
+});
+
+test("the ridden ship's trail is hidden while the bridge holds it", () => {
+  const shown = [];
+  const trail = {
+    setPositions() {},
+    clear() {},
+    destroy() {},
+    setVisible: (visible) => shown.push(visible),
+  };
+  const layer = layerWith([record('own', 0), record('other', 2)], {
+    trail,
+    trailMmsi: 'own',
+  });
+  layer.setCockpitSubject('own');
+  assert.deepEqual(shown, [false]);
+  layer.setCockpitSubject(null);
+  assert.deepEqual(shown, [false, true]);
 });
 
 test('a disabled layer has no radar contacts', () => {

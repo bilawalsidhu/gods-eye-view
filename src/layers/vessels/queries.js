@@ -563,6 +563,9 @@ export function createQueries({
       const next = normalizeSelectionMmsi(mmsi);
       if (state.cockpitSubjectMmsi === next) return true;
       state.cockpitSubjectMmsi = next;
+      // The ridden ship's trail runs from under the eye: hidden, its history
+      // kept, while the bridge holds the ship it belongs to.
+      state.trail?.setVisible?.(!next || next !== state.trailMmsi);
       components.rendering.updateVisibility(true);
       return true;
     },
