@@ -285,6 +285,8 @@ const _customPaintFrame = {
   viewProjectionMatrix: _scratchViewProjection,
   viewProjection: _viewProjectionScalars,
   cameraPosition: null,
+  /** The eye's height above the ellipsoid (m), from the camera port's pose. */
+  cameraHeight: Number.NaN,
   occluder: null,
   keyhole: null,
   uiRects: _uiOcclusionRects,
@@ -1755,6 +1757,7 @@ function prepareCustomPaintFrame(timestamp, keyhole) {
   _customPaintFrame.dpr = _canvasDpr;
   _customPaintFrame.timestamp = timestamp;
   _customPaintFrame.cameraPosition = _eye;
+  _customPaintFrame.cameraHeight = _eyeHeight;
   _customPaintFrame.occluder = _occluder;
   _customPaintFrame.keyhole = keyhole;
   _customPaintFrame.uiRectCount = _uiOcclusionRects.length;
@@ -2859,6 +2862,7 @@ export function destroyWorldOverlay() {
   _customPaintFrame.dpr = 1;
   _customPaintFrame.timestamp = 0;
   _customPaintFrame.cameraPosition = null;
+  _customPaintFrame.cameraHeight = Number.NaN;
   _customPaintFrame.occluder = null;
   _customPaintFrame.keyhole = null;
   _customPaintFrame.uiRectCount = 0;

@@ -538,6 +538,25 @@ test('callouts stop painting the moment the last detectable object goes away', (
   }
 });
 
+test('the view scale reads the camera height the overlay host gives each paint', () => {
+  const env = installEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => [] }], () => {});
+    setMode('DENSE');
+    const scaleAt = (height) => {
+      env.viewer.camera.positionCartographic.height = height;
+      env.advance(250);
+      env.postRender.raise();
+      return getDetectionDiagnostics().viewScale;
+    };
+    assert.equal(scaleAt(1000), 'street');
+    assert.equal(scaleAt(10000), 'metro');
+  } finally {
+    env.cleanup();
+  }
+});
+
 test('every style paints its OWN plate token through the production callout path', () => {
   // The token table and the direct painter are both pinned elsewhere, but a
   // pin on either one still passes if the runtime stops consulting the active

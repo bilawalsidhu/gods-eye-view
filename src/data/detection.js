@@ -1,5 +1,4 @@
 import { paintTransitBracket } from './detectionDraw.js';
-import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   DETECTION_ENABLE_FADE_MS,
@@ -189,11 +188,9 @@ export function countFadingRenderEntries(renderEntries) {
   return count;
 }
 // ---------------------------------------------------------------------------
-// Module-level state — singleton lifecycle tied to the Cesium viewer
+// Module-level state — singleton lifecycle tied to the shared overlay host
 // ---------------------------------------------------------------------------
 
-/** @type {Cesium.Viewer|null} */
-let _viewer = null;
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
 /** @type {HTMLCanvasElement|null} Shared host canvas used for QA diagnostics. */
@@ -280,11 +277,12 @@ let _cockpitModeListener = null;
 /**
  * Initializes detection inside the shared world-overlay host and stores
  * references to data layers. The host owns the canvas and render listener.
- * @param {Cesium.Viewer} viewer - The active Cesium viewer instance.
+ * @param {object} _viewer - The host the renderer is bound to. Unused: the
+ *   world-overlay host hands each paint its camera.
  * @param {Array} layers - Data layer modules that may implement getDetectableObjects().
  * @param {Function} onModeChange - Callback invoked with the new mode label string on mode changes.
  */
-export function initDetection(viewer, layers, onModeChange) {
+export function initDetection(_viewer, layers, onModeChange) {
   if (_cockpitModeListener && typeof window !== 'undefined') {
     window.removeEventListener(
       'gev:cockpit-mode-changed',
@@ -293,7 +291,6 @@ export function initDetection(viewer, layers, onModeChange) {
   }
   _hostLane?.unregister?.();
   _calloutLane?.unregister?.();
-  _viewer = viewer;
   _layers = layers;
   _onModeChange = onModeChange;
   _debugBanner = detectionDebugRequested(
@@ -349,7 +346,6 @@ export function destroyDetection() {
   _calloutLane = null;
   _transitBracketPaths.clear();
   _calloutCount = 0;
-  _viewer = null;
   _layers = [];
   _onModeChange = null;
   _hostCanvas = null;
@@ -1143,6 +1139,15 @@ function _plateScaleForBackdrop(skyFactor) {
   return 1 + (SKY_PLATE_SCALE - 1) * skyFactor;
 }
 
+/**
+ * The eye's height above the ellipsoid (m) for this paint, from the host
+ * frame (the camera port's pose); undefined when the pose has none.
+ */
+function _eyeHeight(frame) {
+  const height = frame.cameraHeight;
+  return Number.isFinite(height) ? height : undefined;
+}
+
 /** Materialize one bounded rich-callout candidate for the existing arbiter. */
 function _materializeCandidate(
   obj,
@@ -1265,9 +1270,7 @@ function _drawOverlay(frame) {
       profile: MODE_LABELS[_mode],
       densityPct: _densityPct,
       allocationStrategy: _allocationStrategy,
-      viewScale: viewScaleForAltitude(
-        _viewer?.camera?.positionCartographic?.height,
-      ),
+      viewScale: viewScaleForAltitude(_eyeHeight(frame)),
       candidateCount: 0,
       observationCount: 0,
       visibleCount: 0,
@@ -1389,8 +1392,11 @@ function _drawOverlay(frame) {
     let halfW;
     let halfH;
     if (obj.type === 'AIR') {
+      const dx = camPos.x - obj.position.x;
+      const dy = camPos.y - obj.position.y;
+      const dz = camPos.z - obj.position.z;
       const bscale = nearFarScale(
-        Cesium.Cartesian3.distance(camPos, obj.position),
+        Math.sqrt(dx * dx + dy * dy + dz * dz),
         BILL_NEAR,
         BILL_NEAR_SCALE,
         BILL_FAR,
@@ -1496,7 +1502,7 @@ function _drawOverlay(frame) {
     }
   }
 
-  const altitude = _viewer?.camera?.positionCartographic?.height ?? 1e9;
+  const altitude = _eyeHeight(frame) ?? 1e9;
   const collectiveBudget = labelBudgetFor(altitude, _densityPct);
   const ambientBudget = Math.max(
     0,

@@ -8,7 +8,6 @@
   "src/cyberSonarGpu.js",
   "src/cyberSonarScene.js",
   "src/data/cctvGizmo.js",
-  "src/data/detection.js",
   "src/data/geoImportPins.js",
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
