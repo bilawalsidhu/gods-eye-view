@@ -18,9 +18,10 @@
  * as `arcOffsetEnu` does.
  *
  * Times are seconds since the owning set's epoch. `base` is stored as high and low
- * float32 parts (Cesium's EncodedCartesian3) so the GPU can draw it relative to the eye.
+ * float32 parts (split at multiples of 65536 m, as the default renderer's
+ * EncodedCartesian3 splits them) so the GPU can draw it relative to the eye.
  */
-import * as Cesium from 'cesium';
+import { WGS84 } from '../geo/ellipsoid.js';
 import { norm180, norm360 } from './motionModel.js';
 
 /** Floats per packed segment. */
@@ -52,17 +53,73 @@ const SLEW_RATE = 23; // deg/s; negative holds the course at the glide's start
 const DEG = Math.PI / 180;
 const STRAIGHT_BELOW_RAD_PER_SEC = 1e-4;
 
-const _encoded = new Cesium.EncodedCartesian3();
-const _enu = new Cesium.Matrix4();
+const SPLIT = 65536.0;
+
+/**
+ * One coordinate as its high part (a multiple of 65536 toward zero) and the
+ * remainder, written at `high` and `low`: `EncodedCartesian3.encode` step
+ * for step, so the stored floats are the same.
+ */
+function writeSplit(out, high, low, value) {
+  let doubleHigh;
+  if (value >= 0.0) {
+    doubleHigh = Math.floor(value / SPLIT) * SPLIT;
+    out[high] = doubleHigh;
+    out[low] = value - doubleHigh;
+  } else {
+    doubleHigh = Math.floor(-value / SPLIT) * SPLIT;
+    out[high] = -doubleHigh;
+    out[low] = value + doubleHigh;
+  }
+}
+
+const POLE_EPSILON = 1e-14;
+
+/**
+ * The east and north unit axes at `p` into `out` at `u` and `v`: the
+ * default renderer's `Transforms.eastNorthUpToFixedFrame` step for step (signed zeros at a pole included), without allocating.
+ */
+function writeEastNorth(out, u, v, p) {
+  if (Math.abs(p.x) <= POLE_EPSILON && Math.abs(p.y) <= POLE_EPSILON) {
+    // At the centre the default renderer's fixed frame; at a pole east is +y
+    // and north (its signed zeros included) points away from the pole.
+    const sign = Math.abs(p.z) <= POLE_EPSILON ? 1 : p.z > 0 ? 1 : -1;
+    out[u] = 0;
+    out[u + 1] = 1;
+    out[u + 2] = 0;
+    out[v] = -1 * sign;
+    out[v + 1] = 0 * sign;
+    out[v + 2] = 0 * sign;
+    return;
+  }
+  const o = WGS84.oneOverRadiiSquared;
+  let ux = p.x * o.x;
+  let uy = p.y * o.y;
+  let uz = p.z * o.z;
+  const um = Math.sqrt(ux * ux + uy * uy + uz * uz);
+  ux /= um;
+  uy /= um;
+  uz /= um;
+  let ex = -p.y;
+  let ey = p.x;
+  let ez = 0;
+  const em = Math.sqrt(ex * ex + ey * ey + ez * ez);
+  ex /= em;
+  ey /= em;
+  ez /= em;
+  out[u] = ex;
+  out[u + 1] = ey;
+  out[u + 2] = ez;
+  // North is up × east.
+  out[v] = uy * ez - uz * ey;
+  out[v + 1] = uz * ex - ux * ez;
+  out[v + 2] = ux * ey - uy * ex;
+}
 
 function writeBase(out, o, position) {
-  Cesium.EncodedCartesian3.fromCartesian(position, _encoded);
-  out[o + BASE_HIGH] = _encoded.high.x;
-  out[o + BASE_HIGH + 1] = _encoded.high.y;
-  out[o + BASE_HIGH + 2] = _encoded.high.z;
-  out[o + BASE_LOW] = _encoded.low.x;
-  out[o + BASE_LOW + 1] = _encoded.low.y;
-  out[o + BASE_LOW + 2] = _encoded.low.z;
+  writeSplit(out, o + BASE_HIGH, o + BASE_LOW, position.x);
+  writeSplit(out, o + BASE_HIGH + 1, o + BASE_LOW + 1, position.y);
+  writeSplit(out, o + BASE_HIGH + 2, o + BASE_LOW + 2, position.z);
 }
 
 function clearMotion(out, o) {
@@ -73,7 +130,7 @@ function clearMotion(out, o) {
  * Stay at `position` facing `courseDeg`.
  * @param {Float32Array} out
  * @param {number} row
- * @param {Cesium.Cartesian3} position
+ * @param {{x: number, y: number, z: number}} position ECEF.
  * @param {number} courseDeg
  */
 export function writeHoldSegment(out, row, position, courseDeg) {
@@ -89,7 +146,7 @@ export function writeHoldSegment(out, row, position, courseDeg) {
  * The course runs from `course0Deg` by `courseSlopeDeg` over the segment.
  * @param {Float32Array} out
  * @param {number} row
- * @param {{from: Cesium.Cartesian3, to: Cesium.Cartesian3, t0: number, t1: number,
+ * @param {{from: object, to: object, t0: number, t1: number,
  *   course0Deg: number, courseSlopeDeg: number}} segment
  */
 export function writeLerpSegment(out, row, segment) {
@@ -113,7 +170,7 @@ export function writeLerpSegment(out, row, segment) {
  * `climbMps` (default 0).
  * @param {Float32Array} out
  * @param {number} row
- * @param {{fix: Cesium.Cartesian3, t0: number, minDt: number, maxDt: number,
+ * @param {{fix: object, t0: number, minDt: number, maxDt: number,
  *   speedMps: number, trackDeg: number, turnRateDps: number,
  *   climbMps?: number}} segment
  */
@@ -122,14 +179,7 @@ export function writeArcSegment(out, row, segment) {
   const { fix } = segment;
   writeBase(out, o, fix);
   clearMotion(out, o);
-  Cesium.Transforms.eastNorthUpToFixedFrame(fix, Cesium.Ellipsoid.WGS84, _enu);
-  // Column-major: columns 0 and 1 are the east and north unit vectors.
-  out[o + AXIS_U] = _enu[0];
-  out[o + AXIS_U + 1] = _enu[1];
-  out[o + AXIS_U + 2] = _enu[2];
-  out[o + AXIS_V] = _enu[4];
-  out[o + AXIS_V + 1] = _enu[5];
-  out[o + AXIS_V + 2] = _enu[6];
+  writeEastNorth(out, o + AXIS_U, o + AXIS_V, fix);
   const omega = (segment.turnRateDps || 0) * DEG;
   out[o + KIND] = SEGMENT_ARC;
   out[o + T0] = segment.t0;
@@ -252,15 +302,10 @@ function targetCourse(seg, o, tau) {
  * @param {Float32Array} seg
  * @param {number} row
  * @param {number} tau
- * @param {Cesium.Cartesian3} [result]
- * @returns {Cesium.Cartesian3}
+ * @param {{x: number, y: number, z: number}} [result]
+ * @returns {{x: number, y: number, z: number}}
  */
-export function segmentPosition(
-  seg,
-  row,
-  tau,
-  result = new Cesium.Cartesian3(),
-) {
+export function segmentPosition(seg, row, tau, result = { x: 0, y: 0, z: 0 }) {
   const o = row * SEGMENT_STRIDE;
   let x = seg[o + BASE_HIGH] + seg[o + BASE_LOW];
   let y = seg[o + BASE_HIGH + 1] + seg[o + BASE_LOW + 1];

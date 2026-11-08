@@ -296,3 +296,38 @@ test('an arc written without a climb stays in its tangent plane', () => {
   const want = productionArc(fix, 100, 0, 0, 30).position;
   assert.ok(Cesium.Cartesian3.distance(at, want) < 0.05);
 });
+
+test('segments store the floats the default renderer encodes, east and north included', () => {
+  const points = [
+    fix,
+    Cesium.Cartesian3.fromDegrees(151.2, -33.9, 40),
+    Cesium.Cartesian3.fromDegrees(-0.0001, 0.0001, -31),
+    Cesium.Cartesian3.fromDegrees(12, 89.9999, 9_000),
+    new Cesium.Cartesian3(0, 0, 6_356_752.3),
+    new Cesium.Cartesian3(0, 0, -6_356_752.3),
+    new Cesium.Cartesian3(-65536, 131072.5, -1),
+    new Cesium.Cartesian3(0, 0, 0),
+    new Cesium.Cartesian3(0, 0, -1e-15),
+  ];
+  const encoded = new Cesium.EncodedCartesian3();
+  const enu = new Cesium.Matrix4();
+  for (const p of points) {
+    const seg = new Float32Array(SEGMENT_STRIDE);
+    writeArcSegment(seg, 0, {
+      fix: p,
+      t0: 0,
+      minDt: 0,
+      maxDt: 10,
+      speedMps: 100,
+      trackDeg: 30,
+      turnRateDps: 1,
+    });
+    const want = new Float32Array(SEGMENT_STRIDE);
+    Cesium.EncodedCartesian3.fromCartesian(p, encoded);
+    Cesium.Transforms.eastNorthUpToFixedFrame(p, Cesium.Ellipsoid.WGS84, enu);
+    want.set([encoded.high.x, encoded.high.y, encoded.high.z], 0);
+    want.set([encoded.low.x, encoded.low.y, encoded.low.z], 3);
+    want.set([enu[0], enu[1], enu[2], enu[4], enu[5], enu[6]], 6);
+    assert.deepStrictEqual(seg.slice(0, 12), want.slice(0, 12), `at ${p}`);
+  }
+});

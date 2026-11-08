@@ -13,8 +13,9 @@
  * {@link rebase} once a frame so they stay small (sub-millisecond steps) however
  * long the session runs.
  */
-import * as Cesium from 'cesium';
+import { WGS84 } from '../geo/ellipsoid.js';
 import { HORIZON_LIFT_M } from '../geo/horizon.js';
+import { cloneJulian, julianNow, secondsDifference } from '../geo/julian.js';
 import {
   SEGMENT_STRIDE,
   segmentCourse,
@@ -145,8 +146,14 @@ export class DirtyRows {
   }
 }
 
+/** A 0..1 colour channel as a byte, as the default renderer's `Color.floatToByte`. */
+const floatToByte = (value) => (value === 1.0 ? 255.0 : (value * 256.0) | 0);
+
 /**
- * @param {{ capacity?: number, epoch?: Cesium.JulianDate }} [options]
+ * @param {{ capacity?: number,
+ *   epoch?: {dayNumber: number, secondsOfDay: number} }} [options] `epoch`
+ *   is a Julian date (`geo/julian.js`, or the renderer's own, which is the
+ *   same numbers).
  */
 export function createIconSet({ capacity = 1024, epoch } = {}) {
   capacity = Math.max(1, capacity);
@@ -160,7 +167,7 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
   // CPU only: until when (seconds since the epoch) the row's segment holds.
   let expires = new Float64Array(capacity);
   let count = 0;
-  const epochTime = Cesium.JulianDate.clone(epoch ?? Cesium.JulianDate.now());
+  const epochTime = cloneJulian(epoch ?? julianNow(), {});
 
   const set = {
     /** Bumped when the columns are reallocated; the renderer rebuilds its buffers. */
@@ -195,7 +202,7 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
 
     /** Seconds since the set's epoch: the clock segments are written in. */
     seconds(julianDate) {
-      return Cesium.JulianDate.secondsDifference(julianDate, epochTime);
+      return secondsDifference(julianDate, epochTime);
     },
 
     /**
@@ -211,7 +218,7 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
         shiftSegmentTimes(segments, row, -shift);
         expires[row] -= shift;
       }
-      Cesium.JulianDate.clone(julianDate, epochTime);
+      cloneJulian(julianDate, epochTime);
       set.dirty.segments.markAll();
       return true;
     },
@@ -442,7 +449,10 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       return style[row * STYLE_STRIDE + DEPTH_TEST_DISTANCE];
     },
 
-    /** Size by camera distance, as Cesium's NearFarScalar (unset: 1 everywhere). */
+    /**
+     * Size by camera distance, as a `{near, nearValue, far, farValue}` curve
+     * (the default renderer's NearFarScalar; unset: 1 everywhere).
+     */
     setScaleByDistance(row, scalar) {
       const o = row * STYLE_STRIDE;
       const near = scalar?.near ?? 0;
@@ -462,7 +472,10 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       style[o + FAR_VALUE] = farValue;
       set.dirty.style.mark(row);
     },
-    scaleByDistance(row, result = new Cesium.NearFarScalar()) {
+    scaleByDistance(
+      row,
+      result = { near: 0, nearValue: 0, far: 0, farValue: 0 },
+    ) {
       const o = row * STYLE_STRIDE;
       result.near = style[o + NEAR_DISTANCE];
       result.nearValue = style[o + NEAR_VALUE];
@@ -471,13 +484,16 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       return result;
     },
 
-    /** Tint as a Cesium.Color; its alpha multiplies the row's own alpha. */
+    /**
+     * Tint as `{red, green, blue, alpha}` (0..1, the default renderer's
+     * Color); its alpha multiplies the row's own alpha.
+     */
     setColor(row, color) {
       const o = row * 4;
-      const r = Cesium.Color.floatToByte(color.red);
-      const g = Cesium.Color.floatToByte(color.green);
-      const b = Cesium.Color.floatToByte(color.blue);
-      const a = Cesium.Color.floatToByte(color.alpha);
+      const r = floatToByte(color.red);
+      const g = floatToByte(color.green);
+      const b = floatToByte(color.blue);
+      const a = floatToByte(color.alpha);
       if (
         colors[o] === r &&
         colors[o + 1] === g &&
@@ -491,15 +507,14 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       colors[o + 3] = a;
       set.dirty.colors.mark(row);
     },
-    color(row, result = new Cesium.Color()) {
+    /** The row's tint as `{red, green, blue, alpha}`, 0..1. */
+    color(row, result = { red: 0, green: 0, blue: 0, alpha: 0 }) {
       const o = row * 4;
-      return Cesium.Color.fromBytes(
-        colors[o],
-        colors[o + 1],
-        colors[o + 2],
-        colors[o + 3],
-        result,
-      );
+      result.red = colors[o] / 255.0;
+      result.green = colors[o + 1] / 255.0;
+      result.blue = colors[o + 2] / 255.0;
+      result.alpha = colors[o + 3] / 255.0;
+      return result;
     },
 
     /** Where the row is at `tau` (seconds since the epoch). */
@@ -511,22 +526,27 @@ export function createIconSet({ capacity = 1024, epoch } = {}) {
       return segmentCourse(segments, row, tau);
     },
     /** The point the horizon test judges for a row drawn at `position`. */
-    cullPoint(row, position, result = new Cesium.Cartesian3()) {
-      if (!(style[row * STYLE_STRIDE + FLAGS] & ICON_CULL_LIFT))
-        return Cesium.Cartesian3.clone(position, result);
+    cullPoint(row, position, result = { x: 0, y: 0, z: 0 }) {
+      const { x, y, z } = position;
+      if (!(style[row * STYLE_STRIDE + FLAGS] & ICON_CULL_LIFT)) {
+        result.x = x;
+        result.y = y;
+        result.z = z;
+        return result;
+      }
       // Height above the ellipsoid along the geocentric ray, as the shader
       // computes it: exact to millimetres this close to the surface.
-      const radius = Cesium.Cartesian3.magnitude(position);
-      Cesium.Cartesian3.multiplyComponents(
-        position,
-        Cesium.Ellipsoid.WGS84.oneOverRadii,
-        result,
-      );
-      const height = radius * (1 - 1 / Cesium.Cartesian3.magnitude(result));
+      const o = WGS84.oneOverRadii;
+      const radius = Math.sqrt(x * x + y * y + z * z);
+      const sx = x * o.x;
+      const sy = y * o.y;
+      const sz = z * o.z;
+      const height = radius * (1 - 1 / Math.sqrt(sx * sx + sy * sy + sz * sz));
       const lift = Math.max(0, ICON_CULL_HEIGHT_M - height);
-      Cesium.Cartesian3.normalize(position, result);
-      Cesium.Cartesian3.multiplyByScalar(result, lift, result);
-      return Cesium.Cartesian3.add(position, result, result);
+      result.x = x + (x / radius) * lift;
+      result.y = y + (y / radius) * lift;
+      result.z = z + (z / radius) * lift;
+      return result;
     },
   };
 

@@ -372,3 +372,41 @@ test('a horizon-culled draw set lifts what the aircraft layers lift, and lifts t
     assert.ok(judged > aircraft(h, d), 'judged higher');
   }
 });
+
+test('colours and cull points read as the default renderer computes them', () => {
+  const set = createIconSet({ capacity: 2 });
+  const row = set.add('a');
+  for (const css of ['#FFB800', '#00000080', 'rgba(12, 200, 99, 0.37)']) {
+    const color = Cesium.Color.fromCssColorString(css);
+    set.setColor(row, color);
+    const want = Cesium.Color.fromBytes(
+      Cesium.Color.floatToByte(color.red),
+      Cesium.Color.floatToByte(color.green),
+      Cesium.Color.floatToByte(color.blue),
+      Cesium.Color.floatToByte(color.alpha),
+    );
+    assert.ok(Cesium.Color.equals(set.color(row), want), css);
+  }
+  set.setFlag(row, ICON_CULL_LIFT, true);
+  for (const h of [-31, 0, 5, 11.9]) {
+    const p = Cesium.Cartesian3.fromDegrees(-84.43, 33.64, h);
+    const scaled = Cesium.Cartesian3.multiplyComponents(
+      p,
+      Cesium.Ellipsoid.WGS84.oneOverRadii,
+      new Cesium.Cartesian3(),
+    );
+    const radius = Cesium.Cartesian3.magnitude(p);
+    const height = radius * (1 - 1 / Cesium.Cartesian3.magnitude(scaled));
+    const lift = Math.max(0, ICON_CULL_HEIGHT_M - height);
+    const want = Cesium.Cartesian3.add(
+      p,
+      Cesium.Cartesian3.multiplyByScalar(
+        Cesium.Cartesian3.normalize(p, new Cesium.Cartesian3()),
+        lift,
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    );
+    assert.ok(Cesium.Cartesian3.equals(set.cullPoint(row, p), want), `h=${h}`);
+  }
+});

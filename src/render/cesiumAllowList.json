@@ -12,8 +12,6 @@
   "src/data/focusDeemphasis.js",
   "src/data/geoImportPins.js",
   "src/data/iconOrientation.js",
-  "src/data/iconSegment.js",
-  "src/data/iconSet.js",
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
   "src/layers/cctv/projection.js",
