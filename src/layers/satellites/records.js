@@ -86,6 +86,12 @@ export function createRecords({ state, parts }) {
     const result = [];
     const emit = (noradId, sat) => {
       if (result.length >= limit) return false;
+      // A class the user hid stays out of answers too; the tracked one stays.
+      if (
+        noradId !== state._trackedNorad &&
+        parts.controls?._classVisible?.(noradId) === false
+      )
+        return true;
       const pos = analystGeo(noradId, sat, now);
       if (!pos) return true;
       result.push(
