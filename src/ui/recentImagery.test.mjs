@@ -1,3 +1,6 @@
+import * as geo from '../geo/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
+import { createRecentImageryDisplay } from '../layers/recentImagery/render/display.js';
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -110,7 +113,14 @@ function fakeDocument() {
 // ---- the real layer, with fakes for everything it injects ------------------
 function fixture({ fetchImpl, controller = fakeController() } = {}) {
   const dom = fakeDocument();
-  const renderer = fakeRenderer();
+  const engine = createFakeEngine({ width: 1000, height: 500 });
+  engine.fake.script('viewRectangle', () => undefined);
+  const display = createRecentImageryDisplay(engine);
+  const renderer = {
+    ...fakeRenderer(),
+    viewCentre: display.viewCentre,
+    zoomToFit: display.zoomToFit,
+  };
   const thumbnails = fakeThumbnails();
   const catalog = fakeCatalog();
   const timers = manualTimers();
@@ -118,7 +128,6 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     catalog,
     renderer,
     thumbnails,
-    host: () => ({ collection: {}, kind: 'globe' }),
     now: () => new Date('2026-09-21T15:00:00Z'),
     setTimeoutImpl: timers.setTimeoutImpl,
     clearTimeoutImpl: timers.clearTimeoutImpl,
@@ -128,7 +137,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     camera: {},
     scene: { canvas: { clientWidth: 1000 }, requestRender() {} },
   };
-  layer.init(viewer);
+  layer.init(null, { engine });
   layer.attachMapStackController(controller);
   let active = false;
   const tool = {
@@ -208,6 +217,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
   };
   return {
     ...dom,
+    engine,
     layer,
     viewer,
     renderer,
@@ -800,14 +810,11 @@ test('the notice line shows the refusal, then errors, then CLEAR, then the Esri 
 test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice line; it asks the layer to fit', async () => {
   const f = fixture();
   const flights = [];
-  f.viewer.scene.canvas.clientHeight = 500;
-  f.viewer.scene.ellipsoid = {
-    cartographicToCartesian: (c) => ({ ...c }),
-  };
-  Object.assign(f.viewer.camera, {
-    frustum: { fovy: 2 * Math.atan(Math.tan(Math.PI / 6) / 2) },
-    flyTo: (options) => flights.push(options),
-  });
+  f.engine.camera.flyTo = (options) =>
+    flights.push({
+      ...options,
+      destination: geo.cartographic.fromCartesian(options.destination),
+    });
   const notice = f.byId('ri-notice');
   const zoom = f.byId('ri-zoom-in');
   assert.equal(zoom.tagName, 'BUTTON');

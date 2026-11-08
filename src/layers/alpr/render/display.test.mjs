@@ -205,7 +205,7 @@ function setup(
     recordById: new Map(),
   };
   const display = createAlprDisplay(h.engine, { state, services: s, source });
-  display.init(null, { onMove() {} });
+  display.init({ onMove() {} });
   display.setVisible(true);
   const load = (list) => {
     state.records = list;
@@ -237,10 +237,6 @@ function setup(
     },
   };
 }
-
-test('the display needs a globe engine', () => {
-  assert.throws(() => createAlprDisplay(null, {}), TypeError);
-});
 
 for (const makeHarness of HARNESSES) {
   const { name } = makeHarness();
@@ -315,14 +311,14 @@ for (const makeHarness of HARNESSES) {
       assert.equal(chosen.id, 'alpr:0');
       assert.equal(
         h.marker('alpr:0').gevLabelModel.accent,
-        'rgb(255,100,116)',
-        'the selected accent, in Cesium’s CSS form',
+        '#ff6474',
+        'the selected accent',
       );
       h.clickCamera('alpr:1');
       h.frame();
       assert.equal(h.services.selected.id, 'alpr:1');
       assert.equal(h.badge('alpr-cameras', 0).shown, true);
-      assert.equal(h.marker('alpr:0').gevLabelModel.accent, 'rgb(82,212,255)');
+      assert.equal(h.marker('alpr:0').gevLabelModel.accent, '#52d4ff');
       h.click({ id: 'alpr:1', owner: 'alpr-selected', instance: 0 });
       h.frame();
       assert.equal(

@@ -910,7 +910,6 @@
   "scripts/qa-weather-journey.mjs",
   "scripts/qa-weather-swap.mjs",
   "scripts/qa-weather-teardown.mjs",
-  "src/layers/weather/imageryHost.test.mjs",
   "src/layers/weather/display.test.mjs",
   "src/sdr/adsbDecoder.test.mjs",
   "src/sdr/controller.test.mjs",
@@ -935,7 +934,6 @@
   "src/data/modelEligibility.test.mjs",
   "src/layers/recentImagery/model.test.mjs",
   "src/layers/recentImagery/catalog.test.mjs",
-  "src/maps/imageryHost.test.mjs",
   "src/layers/recentImagery/thumbnails.test.mjs",
   "src/layers/recentImagery/index.test.mjs",
   "src/ui/imageryBoxTool.test.mjs",
@@ -1695,7 +1693,10 @@
   "src/globe/cesium/annotations/screenAnnotationRenderer.js",
   "src/globe/navara/windFlow.js",
   "src/overlays/bindOverlayHost.js",
-  "src/data/bindContextStore.js",
   "src/data/trackedReadoutScenes.test.mjs",
-  "src/data/trackedAircraftScenes.test.mjs"
+  "src/data/trackedAircraftScenes.test.mjs",
+  "src/ui/releaseTrackers.js",
+  "src/testSupport/domClasses.mjs",
+  "src/layers/shared/imageryHost.js",
+  "src/layers/shared/imageryHost.test.mjs"
 ]

@@ -7,10 +7,8 @@ import { overlayHost } from './overlayHost.js';
  * engine).
  */
 export function createApplicationEarthquakes({
-  renderer = {
-    create: ({ engine }) => rendererFor('earthquakes', engine),
-  },
+  rendererFactory = ({ engine }) => rendererFor('earthquakes', engine),
   ...options
 } = {}) {
-  return createEarthquakesLayer({ overlayHost, renderer, ...options });
+  return createEarthquakesLayer({ overlayHost, rendererFactory, ...options });
 }

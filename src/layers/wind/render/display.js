@@ -9,7 +9,7 @@
 // alone.
 
 import { createFieldRaster, fieldUnavailableText } from '../fields.js';
-import { NO_IMAGERY_HOST } from '../../weather/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../../shared/imageryHost.js';
 import { WEATHER_SHELL_HEIGHTS } from '../../weather/shellRendering.js';
 import { WEATHER_IMAGERY_ORDER } from '../../weather/render/display.js';
 
@@ -63,8 +63,6 @@ export function createWindDisplay(
     createCanvas = rasterCanvas,
   } = {},
 ) {
-  if (!engine?.imagery)
-    throw new TypeError('The wind display needs a globe engine');
   const flow = makeFlow?.(engine, { onStatusChange }) ?? null;
   const id = `wind-field-${++fields}`;
   let snapshot = null;

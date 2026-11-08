@@ -1,4 +1,4 @@
-import { bindContextStore } from '../../data/bindContextStore.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
@@ -109,7 +109,7 @@ export function createLocalAdsbLayer({
     clearSelectedEntityContextForLayer,
     getSelectedEntityContext,
     removeEntityContextsForLayer,
-  } = bindContextStore(services.context, () => renderer?.engine);
+  } = bindOverlayHost(services.context, () => renderer?.engine);
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
   /** The engine's Local ADS-B display for this lifecycle (render/display.js). */

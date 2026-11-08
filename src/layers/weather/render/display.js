@@ -12,7 +12,10 @@
 // frame on the other. Lower products draw first: clouds, radar, lightning.
 
 import { weatherTileUrl } from '../source.js';
-import { engineImageryHost, imageryHostStatus } from '../imageryHost.js';
+import {
+  engineImageryHost,
+  imageryHostStatus,
+} from '../../shared/imageryHost.js';
 import {
   createWeatherShell,
   WEATHER_SHELL_HEIGHTS,
@@ -535,8 +538,6 @@ export function createWeatherDisplay(
     createCanvas = () => document.createElement('canvas'),
   } = {},
 ) {
-  if (!engine?.imagery)
-    throw new TypeError('The weather display needs a globe engine');
   const shared = {
     onChange,
     timeoutMs,

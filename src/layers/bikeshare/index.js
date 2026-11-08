@@ -31,27 +31,25 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
         throw new Error('Bikeshare layer is already initialized');
       renderer ??= rendererFactory({
         ...context,
-        viewer,
         engine: options.engine ?? null,
       });
-      if (!renderer?.lifecycle?.methods)
-        throw new Error('Bikeshare renderer is unavailable');
-      Object.assign(parts, renderer);
+      if (!renderer) throw new Error('Bikeshare renderer is unavailable');
+      parts.display = renderer;
       initialized = true;
       try {
         state._restoringViewport = Boolean(options.waitForCameraRestore);
-        renderer.lifecycle.methods.init(viewer, options);
+        renderer.init();
         if (state._enabled) {
           const selected = state._selectedKey;
           for (const city of state._activeCityIds) {
             const stations = state._stationInfoCache.get(city);
             if (!stations) continue;
-            parts.rendering.ensureCityPoints(city, stations);
+            parts.display.ensureCityPoints(city, stations);
             const status = state._statusCache.get(city)?.statusMap;
-            if (status) parts.rendering.applyStatusToPoints(city, status);
+            if (status) parts.display.applyStatusToPoints(city, status);
           }
-          if (selected) parts.selection._selectStation(selected);
-          renderer.lifecycle.methods.show(viewer);
+          if (selected) parts.display._selectStation(selected);
+          renderer.show();
         }
       } catch (error) {
         initialized = false;
@@ -61,37 +59,35 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
     resumeViewport() {
       if (!state._restoringViewport) return;
       state._restoringViewport = false;
-      if (state._enabled) parts.viewport?.onCameraChanged();
+      if (state._enabled) parts.display?.onCameraChanged();
     },
     detachRenderer() {
       if (!renderer) return;
       state._restoringViewport = true;
       clearTimeout(state._cameraDebounceTimer);
       const selected = state._selectedKey;
-      renderer.lifecycle.methods.detach();
+      renderer.detach();
       state._selectedKey = selected;
       state._cityRuntime.clear();
       state._stationRenderMap.clear();
       state._engine = null;
       renderer = null;
       initialized = false;
-      for (const key of ['rendering', 'selection', 'viewport', 'lifecycle'])
-        delete parts[key];
+      parts.display = null;
     },
     enable(...args) {
-      return renderer?.lifecycle.methods.enable(...args);
+      return renderer?.enable(...args);
     },
     disable(...args) {
-      return renderer?.lifecycle.methods.disable(...args);
+      return renderer?.disable(...args);
     },
     destroy(...args) {
       try {
-        return renderer?.lifecycle.methods.destroy(...args);
+        return renderer?.destroy(...args);
       } finally {
         renderer = null;
         initialized = false;
-        for (const key of ['rendering', 'selection', 'viewport', 'lifecycle'])
-          delete parts[key];
+        parts.display = null;
       }
     },
   };
@@ -105,10 +101,9 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
       _setBikeshareSelectionStateForTest: (options) => {
         renderer ??= rendererFactory({
           ...context,
-          viewer: null,
           engine: options.engine,
         });
-        Object.assign(parts, renderer);
+        parts.display = renderer;
         parts.testing._setBikeshareSelectionStateForTest(options);
       },
       _selectBikeshareStationForTest:

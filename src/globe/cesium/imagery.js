@@ -1,7 +1,7 @@
 // engine.imagery on Cesium: one ImageryLayer per layer, on the imagery
 // stack of the surface the map shows — the globe's imagery layers, or the
 // shown 3D tileset's own (Cesium drapes imagery on tiles there), as
-// src/maps/imageryHost.js resolves it for the shell. Layers sit above the
+// The engine resolves the active surface. Layers sit above the
 // base imagery, in their order among the engine's layers (higher on top,
 // then creation); imagery added by others stays where it was put. A tiles
 // source is a UrlTemplateImageryProvider in Web Mercator or geographic
@@ -187,7 +187,7 @@ export function createCesiumImagery(
   const now = () => globalThis.performance?.now() ?? Date.now();
 
   function host() {
-    if (scene.globe?.show === true && viewer.imageryLayers)
+    if (scene.globe.show === true)
       return { collection: viewer.imageryLayers, surface: 'globe' };
     const tileset = tilesets().find(
       (candidate) =>
@@ -351,8 +351,7 @@ export function createCesiumImagery(
     if (!layer) return;
     layer.alpha = state.alpha;
     layer.show = state.shown;
-    layer.splitDirection =
-      Cesium.SplitDirection?.[SPLIT[state.split]] ?? layer.splitDirection;
+    layer.splitDirection = Cesium.SplitDirection[SPLIT[state.split]];
     guardBase();
   }
 
@@ -557,9 +556,7 @@ export function createCesiumImagery(
       requestRender('imagery-stage');
     });
     job.layer = make.layer(provider, { alpha: 0, show: true });
-    job.layer.splitDirection =
-      Cesium.SplitDirection?.[SPLIT[entry.state.split]] ??
-      job.layer.splitDirection;
+    job.layer.splitDirection = Cesium.SplitDirection[SPLIT[entry.state.split]];
     if (entry.layer && entry.collection === collection)
       collection.add(job.layer, collection.indexOf(entry.layer) + 1);
     else place(entry, job.layer, collection);
@@ -834,8 +831,7 @@ export function createCesiumImagery(
           applyLook(entry);
           if (entry.staging?.layer)
             entry.staging.layer.splitDirection =
-              Cesium.SplitDirection?.[SPLIT[state.split]] ??
-              entry.staging.layer.splitDirection;
+              Cesium.SplitDirection[SPLIT[state.split]];
           // A hidden layer stages nothing: the staged source replaces the
           // drawn one at once.
           if (!state.shown && entry.staging?.layer)

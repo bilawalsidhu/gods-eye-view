@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -256,7 +257,7 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
     clock: { onTick: { addEventListener: () => () => {} } },
     scene: { canvas: eventSource },
   };
-  const runVoiceAction = createGevActionRunner({
+  const runVoiceAction = createGevActionRunner({ engine: createFakeEngine({ visualStyles: { thermal: [], anime: [] }, contactSonar: true }),
     viewer,
     styleManager: voice.owner,
     dataManager: {},

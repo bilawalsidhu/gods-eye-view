@@ -54,8 +54,6 @@ export function createGnssDisplay(
   engine,
   { viewAnchor = defaultGnssViewAnchor } = {},
 ) {
-  if (!engine?.ground)
-    throw new TypeError('The GNSS display needs a globe engine');
   const set = engine.ground.createSet({ id: SET_ID, kind: 'cell' });
   set.show(false);
   let destroyed = false;

@@ -103,8 +103,6 @@ export async function drawImportedFile(
     pixelRatio = Math.max(1, Math.min(2, globalThis.devicePixelRatio || 1)),
   } = {},
 ) {
-  if (!engine?.ground || !engine?.movers || !engine?.lines)
-    throw new TypeError('The imported file display needs a globe engine');
   const prefix = `geo-import-${++serial}`;
   const request = () => engine.render.request('geo-import');
   let shown = visible;

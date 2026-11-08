@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -59,7 +60,7 @@ test('real runner and facade use visual settings, preserve visibility and return
     scene: { canvas: new EventTarget() },
   };
   try {
-    const runner = createGevActionRunner({ styleManager: owner, viewer, dataManager: {} });
+    const runner = createGevActionRunner({ engine: createFakeEngine({ visualStyles: { thermal: [], anime: [] }, contactSonar: true }), styleManager: owner, viewer, dataManager: {} });
     const result = await runner('set_cyber_sonar', { enabled: false, intensityPct: 73, sectorDeg: 9 });
     assert.equal(result.ok, true);
     assert.equal(result.sonar.intensityPct, 73);
@@ -76,7 +77,7 @@ test('real runner and facade use visual settings, preserve visibility and return
     const zero = await runner('set_cyber_sonar', { intensityPct: 0 });
     assert.equal(zero.sonar.intensityPct, 0);
     assert.equal(zero.sonar.enabled, false);
-    const unavailable = createGevActionRunner({ styleManager: {}, viewer, dataManager: {} });
+    const unavailable = createGevActionRunner({ engine: createFakeEngine({ visualStyles: { thermal: [], anime: [] }, contactSonar: true }), styleManager: {}, viewer, dataManager: {} });
     assert.equal((await unavailable('set_cyber_sonar', { enabled: true })).ok, false);
   } finally {
     globalThis.document = previousDocument;

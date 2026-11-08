@@ -19,8 +19,6 @@ export const airQualityPickId = (reading) => `air-quality:${reading.id}`;
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createAirQualityDisplay(engine) {
-  if (!engine?.ground)
-    throw new TypeError('The air-quality display needs a globe engine');
   const set = engine.ground.createSet({
     id: SET_ID,
     kind: 'disc',

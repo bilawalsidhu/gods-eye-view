@@ -109,8 +109,6 @@ export function createAircraftDisplay(
     drawAtlas = drawAircraftIconAtlas,
   },
 ) {
-  if (!engine?.movers || !engine?.lines)
-    throw new TypeError('The aircraft display needs a globe engine');
   let destroyed = false;
   let attached = false;
   const removers = [];

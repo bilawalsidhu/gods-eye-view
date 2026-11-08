@@ -17,7 +17,7 @@ export { createUsgsEarthquakeSource } from './source.js';
 
 /**
  * Own one earthquake display and its refresh lifecycle.
- * renderer.create({ engine }) owns drawing (render/display.js by default)
+ * rendererFactory({ engine }) owns drawing (render/display.js by default)
  * and returns: setVisible(boolean), replace(discs), destroy().
  * Discs are degrees, metre radii and Rgba colours; renderers keep source
  * order. The layer retains observations for queries while detached.
@@ -25,12 +25,12 @@ export { createUsgsEarthquakeSource } from './source.js';
 export function createEarthquakesLayer({
   source,
   overlayHost,
-  renderer = { create: ({ engine }) => createEarthquakesDisplay(engine) },
+  rendererFactory = ({ engine }) => createEarthquakesDisplay(engine),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Earthquakes require a snapshot source');
   if (!overlayHost) throw new TypeError('Earthquakes require an overlay host');
-  if (typeof renderer?.create !== 'function')
+  if (typeof rendererFactory !== 'function')
     throw new TypeError('Earthquakes require a renderer factory');
   let sceneEngine = null;
   overlayHost = bindOverlayHost(overlayHost, () => sceneEngine);
@@ -77,7 +77,7 @@ export function createEarthquakesLayer({
       if (!initialized || _renderer)
         throw new Error('Invalid earthquake scene attachment');
       sceneEngine = engine;
-      _renderer = renderer.create({ engine });
+      _renderer = rendererFactory({ engine });
       if (!_renderer) throw new Error('Earthquake renderer unavailable');
       _renderer.setVisible(_enabled);
       if (discs.length) _renderer.replace(discs);
@@ -93,7 +93,7 @@ export function createEarthquakesLayer({
       sceneEngine = null;
     },
 
-    enable(viewer) {
+    enable() {
       _enabled = true;
       // No continuous-render hold: the discs are static geometry now, so the
       // layer has no per-frame animator to keep the render loop alive for.
@@ -104,7 +104,7 @@ export function createEarthquakesLayer({
       }
     },
 
-    disable(viewer) {
+    disable() {
       _request?.abort();
       _request = null;
       _enabled = false;
@@ -113,7 +113,7 @@ export function createEarthquakesLayer({
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
     },
 
-    async update(viewer) {
+    async update() {
       if (!_enabled) return false;
       _request?.abort();
       const request = new AbortController();

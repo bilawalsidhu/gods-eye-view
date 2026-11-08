@@ -629,7 +629,6 @@ export function createTransitDisplay(
   engine,
   { state, services, drawAtlas = drawTransitAtlas } = {},
 ) {
-  if (!engine) throw new TypeError('The transit display needs a globe engine');
   let destroyed = false,
     attached = false,
     markers = null;

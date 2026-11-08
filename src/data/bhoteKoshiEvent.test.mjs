@@ -14,7 +14,7 @@ import {
   buildCinematicKeyframes,
   buildEvidenceTimeline,
   clampUnit,
-  createBhoteKoshiEventLayer,
+  createBhoteKoshiEventLayer as buildEventLayer,
   evidenceCardLayout,
   createEvidenceFrame,
   elapsedLabel,
@@ -231,6 +231,42 @@ function installEventDom() {
   return { body, removedProperties };
 }
 
+function createBhoteKoshiEventLayer(options) {
+  let viewer;
+  const layer = buildEventLayer({
+    ...options,
+    createNativeRenderer() {
+      let images = [];
+      const clear = () => {
+        for (const image of images) viewer._test?.removedImagery.push(image);
+        images = [];
+      };
+      return {
+        async loadImages(_box, providers) {
+          clear();
+          images = providers.map((provider, index) => ({ provider, splitDirection: index ? 'right' : 'left' }));
+          viewer._test?.imagery.push(...images);
+        },
+        draw(source) {
+          viewer._test?.dataSources.push(source);
+          let removed = false;
+          return { destroy() {
+            if (!removed) viewer._test?.removedDataSources.push(source);
+            removed = true;
+          } };
+        },
+        setVisible(show) { for (const image of images) image.show = show; },
+        setSplit() {}, clear, destroy: clear,
+      };
+    },
+  });
+  for (const name of ['init', 'attachRenderer', 'enable']) {
+    const method = layer[name];
+    layer[name] = (next, options) => { viewer = next; if (name === 'enable') layer.attachRenderer(next); return method.call(layer, next, options); };
+  }
+  return layer;
+}
+
 function eventViewer(splitPosition = 0.37) {
   const imagery = [];
   const removedImagery = [];
@@ -293,7 +329,7 @@ test('public lifecycle restores Nepal scene ownership without forwarding origin 
         const mapCalls = [];
         const layer = createBhoteKoshiEventLayer({
           eventLoader: async () => event,
-          imageryProviderFactory: async (url) => ({ url }),
+          imageLoader: async (url) => ({ url }),
           terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
           mediaLoader: async () => { const error = new Error('No bundled clip'); error.name = 'AbortError'; throw error; },
           overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -355,7 +391,7 @@ test('trimmed scene media holds through provider startup, playback and fade, the
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
     mediaLoader: async () => { const error = new Error('No bundled clip'); error.name = 'AbortError'; throw error; },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -403,7 +439,7 @@ test('Pinokio source-card fallback selects authored Director dwell, not an impos
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async url => ({ url }),
+    imageLoader: async url => ({ url }),
     terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
     mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -448,7 +484,7 @@ test('saved autoplay controls cannot authorize media; live shot ownership is can
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async url => ({ url }),
+    imageLoader: async url => ({ url }),
     terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
     mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -843,7 +879,7 @@ test('Bhote Koshi failed direct enable restores the prior map and shared split',
   };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async () => { throw new Error('fixture image failure'); },
+    imageLoader: async () => { throw new Error('fixture image failure'); },
     overlayHost: {
       setEntries() {},
       setVisible(id, visible) { overlayCalls.push(['visible', id, visible]); },
@@ -866,7 +902,7 @@ test('Bhote Koshi failed direct enable restores the prior map and shared split',
   try {
     await assert.rejects(
       layer.enable(viewer, { origin: 'scene' }),
-      /fixture image failure/,
+      /Bhote Koshi imagery unavailable/,
     );
     assert.deepEqual(mapCalls, ['esri-imagery', 'photoreal']);
     assert.equal(viewer.scene.splitPosition, 0.37);
@@ -946,7 +982,7 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
   const renderCalls = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     overlayHost: {
       setEntries() {},
       setVisible(id, visible) { overlayCalls.push(['visible', id, visible]); },
@@ -1013,7 +1049,7 @@ test('Bhote Koshi disable stops active playback and releases its global render h
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     renderHost: {
       request() {},
@@ -1071,7 +1107,7 @@ test('Bhote Koshi passive restores do not start off-screen playback', async () =
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     renderHost: { request() {}, hold() {}, release() {} },
@@ -1120,7 +1156,7 @@ test('Bhote Koshi standalone Scene keeps its Esri cinematic contract', async () 
   const mapCalls = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1195,7 +1231,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
   const overlayVisibility = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1506,7 +1542,7 @@ test('Nepal hybrid comparison preserves native split and terrain-clamped flood t
   const comparisonCalls = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1540,8 +1576,8 @@ test('Nepal hybrid comparison preserves native split and terrain-clamped flood t
     assert.equal(viewer._test.imagery.length, 2);
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === true));
     assert.equal(viewer.scene.splitPosition, 0.5);
-    assert.equal(viewer._test.imagery[0].splitDirection, Cesium.SplitDirection.LEFT);
-    assert.equal(viewer._test.imagery[1].splitDirection, Cesium.SplitDirection.RIGHT);
+    assert.equal(viewer._test.imagery[0].splitDirection, 'left');
+    assert.equal(viewer._test.imagery[1].splitDirection, 'right');
     layer.setParams({ split: 0.25 });
     assert.equal(viewer.scene.splitPosition, 0.25);
     const flood = viewer._test.dataSources[0].entities.getById('bhote-koshi-flood-core');
@@ -1650,7 +1686,7 @@ test('Bhote Koshi publishes the evidence spine once and scrubs through cards and
   const publications = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1747,7 +1783,7 @@ test('Bhote Koshi keeps one local fallback video active and unloads it on beat c
   };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1848,7 +1884,7 @@ test('Upper Valley Collapse autoplays its muted local fallback without starting 
   };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1924,7 +1960,7 @@ test('Debris-Dammed Lake card opens its source and is armed for approved local v
   let activeCard = null;
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2015,7 +2051,7 @@ test('Nepal evidence shots resume the standalone callout and flood sequence from
   const releases = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2186,7 +2222,7 @@ test('Bhote Koshi beat controls keep cards, flood, camera, and panel on the one 
   const publications = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2306,7 +2342,7 @@ test('Bhote Koshi repeated event frames republish no panel and churn no camera',
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2389,7 +2425,7 @@ test('Bhote Koshi cinematic camera stays synchronized through pause and determin
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2470,7 +2506,7 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2552,7 +2588,7 @@ test('Bhote Koshi closes a poster that resolves after disable', async () => {
   const poster = { closed: false, close() { this.closed = true; } };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async () => [{ height: 2800 }],
     mediaLoader: async (url) => {
       assert.equal(url, '/events/bhote-koshi-2026/evidence-09.jpg');
@@ -2598,7 +2634,7 @@ test('every sourced shot grows its tail with its head, keeps its own card, and c
   let entries = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async () => null,
     mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
     overlayHost: { setEntries(_id, value) { entries = value; }, setVisible() {}, clearSource() {} },
@@ -2700,7 +2736,7 @@ test('media-led upper-valley shots retain only their upstream prefix during came
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async url => ({ url }),
+    imageLoader: async url => ({ url }),
     terrainSampler: async () => null,
     mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -2798,7 +2834,7 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     terrainSampler: async () => null,
     mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -3004,7 +3040,7 @@ for (const stop of ['detach', 'scene-abort']) {
     const second = eventViewer();
     const layer = createBhoteKoshiEventLayer({
       eventLoader: async () => event,
-      imageryProviderFactory: async (url) => ({ url }),
+      imageLoader: async (url) => ({ url }),
       embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
       overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
       renderHost: { request() {}, hold() {}, release() {} },
@@ -3062,7 +3098,7 @@ test('Bhote Koshi stops waiting for a stalled map switch when its scene is relea
   const second = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imageLoader: async (url) => ({ url }),
     embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     renderHost: { request() {}, hold() {}, release() {} },

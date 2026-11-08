@@ -66,6 +66,17 @@ const HEX = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})?$/i;
  * @returns {Rgba}
  */
 export function rgbaFromCss(css) {
+  const functional =
+    /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i.exec(
+      String(css).trim(),
+    );
+  if (functional)
+    return new Rgba(
+      Number(functional[1]) / 255,
+      Number(functional[2]) / 255,
+      Number(functional[3]) / 255,
+      Number(functional[4] ?? 1),
+    );
   const match = HEX.exec(String(css).trim());
   if (!match) throw new TypeError(`Unsupported colour: ${css}`);
   return new Rgba(

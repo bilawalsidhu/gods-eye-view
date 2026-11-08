@@ -99,16 +99,12 @@ export function createFirmsDisplay(
   engine,
   { id = 'local-firms', loadImage, createCanvas } = {},
 ) {
-  if (!engine?.movers || !engine?.ground || !engine?.imagery)
-    throw new TypeError('The FIRMS display needs a globe engine');
   let destroyed = false,
     visible = false,
     cellItems = [],
     cellsQueued = false,
     sprites = null,
     heat = null;
-  // The layer's visibility as the context store reads a data source's.
-  const dataSource = { show: false };
   const clickRemovers = new Set();
   const cells = engine.ground.createSet({ id: `${id}:cells`, kind: 'cell' });
   cells.show(false);
@@ -116,9 +112,6 @@ export function createFirmsDisplay(
     layerId: id,
     isDestroyed: () => destroyed,
   });
-  // The camera and scene events the layer's watchers listen to.
-  layerView.view.camera.moveEnd = engine.camera.moveEnd;
-  layerView.view.scene.preRender = engine.frames.preRender;
   // Cells arrive one addCell at a time: one commit per batch.
   const scheduleCells = () => {
     if (cellsQueued || destroyed) return;
@@ -137,16 +130,11 @@ export function createFirmsDisplay(
   return {
     engine,
     view: layerView.view,
-    dataSource,
-    project: (position, result) =>
-      engine.projector.worldToWindow(position, result),
+    visible: () => visible,
     viewRectangle(result) {
       const rect = engine.camera.viewRectangle();
       return rect ? Object.assign(result ?? {}, rect) : null;
     },
-    horizon: () => ({
-      isPointVisible: (position) => engine.projector.horizonVisible(position),
-    }),
     /**
      * Calls `handler({ position, picked })` for every click while the layer
      * is shown, with the pick under it; returns the remover.
@@ -171,7 +159,6 @@ export function createFirmsDisplay(
       const next = show !== false;
       if (visible === next) return;
       visible = next;
-      dataSource.show = next;
       sprites?.setVisible(next);
       cells.show(next);
     },
@@ -230,7 +217,6 @@ export function createFirmsDisplay(
       if (destroyed) return;
       destroyed = true;
       visible = false;
-      dataSource.show = false;
       cellItems = [];
       for (const release of [...clickRemovers]) release();
       removeSprites();

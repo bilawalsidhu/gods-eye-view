@@ -230,7 +230,7 @@ for (const make of HARNESSES) {
       }
       r.setVisible(false);
       assert.equal(h.ground.listed(id).shown, false);
-      assert.equal(r.dataSource.show, false);
+      assert.equal(r.visible(), false);
       r.clearCells();
       await settle();
       assert.equal(r.cellCount(), 0);
@@ -422,19 +422,19 @@ for (const make of HARNESSES) {
           1e-6,
         ),
       );
-      assert.equal(r.view.camera.moveEnd, h.engine.camera.moveEnd);
-      assert.equal(r.view.scene.preRender, h.engine.frames.preRender);
+      assert.equal(r.engine.camera.moveEnd, h.engine.camera.moveEnd);
+      assert.equal(r.engine.frames.preRender, h.engine.frames.preRender);
       const near = at(FIRE.lon, FIRE.lat);
       assert.deepEqual(
-        r.project(near, {}),
+        r.view.worldToWindow(near, {}),
         h.engine.projector.worldToWindow(near, {}),
       );
       assert.deepEqual(r.viewRectangle({}), {
         ...h.engine.camera.viewRectangle(),
       });
       const far = at(FIRE.lon + 180, -FIRE.lat);
-      assert.equal(r.horizon().isPointVisible(near), true);
-      assert.equal(r.horizon().isPointVisible(far), false);
+      assert.equal(r.view.horizon().isPointVisible(near), true);
+      assert.equal(r.view.horizon().isPointVisible(far), false);
       r.destroy();
     } finally {
       h.destroy();

@@ -1,3 +1,4 @@
+import { rgbaFromCss } from '../../shared/color.js';
 // The Global Context visual on the globe contract (engine.lines,
 // engine.camera, engine.frames, engine.host), the same on every engine:
 // the layer's view of the globe (its canvas, camera, frames, the followed
@@ -25,13 +26,8 @@ import { awarenessRangeRingPositions } from '../rendering.js';
 export const RING_ID = 'gev-awareness-rim';
 export const RING_HALO_ID = 'gev-awareness-rim-halo';
 
-/** `rgba(r, g, b, a)` as an rgba array in 0..1, as Cesium reads it. */
-function rgbaArray(css) {
-  const [r, g, b, a = 1] = css.match(/[\d.]+/g).map(Number);
-  return [r / 255, g / 255, b / 255, a];
-}
-const RING_CORE = rgbaArray(AWARENESS_RANGE_RING_STYLE.color);
-const RING_HALO = rgbaArray(AWARENESS_RANGE_RING_STYLE.outlineColor);
+const RING_CORE = rgbaFromCss(AWARENESS_RANGE_RING_STYLE.color).rgba();
+const RING_HALO = rgbaFromCss(AWARENESS_RANGE_RING_STYLE.outlineColor).rgba();
 const withAlpha = (rgba, alpha) => [rgba[0], rgba[1], rgba[2], rgba[3] * alpha];
 
 /**
@@ -39,8 +35,6 @@ const withAlpha = (rgba, alpha) => [rgba[0], rgba[1], rgba[2], rgba[3] * alpha];
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createAwarenessDisplay(engine) {
-  if (!engine?.lines)
-    throw new TypeError('The awareness display needs a globe engine');
   const binding = createEngineLayerView(engine, {
     layerId: 'military-awareness',
   });

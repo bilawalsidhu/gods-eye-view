@@ -34,8 +34,7 @@ export function recordingAircraftRenderer(engine, ports = {}) {
     view: {
       camera,
       scene,
-      surfaceOwner: engine,
-      surfaceScene: engine,
+      engine,
       frameNumber: () => 1,
       viewportHeightPx: () => 768,
       frustumTester: () => () => true,
@@ -43,9 +42,6 @@ export function recordingAircraftRenderer(engine, ports = {}) {
       worldToWindow: () => ({ x: 0, y: 0 }),
       requestRender: () => calls.push(['requestRender']),
       on: () => () => {},
-      holdFrames() {},
-      closeFrameLatch() {},
-      releaseFrames() {},
     },
     fleet: {
       shown: false,

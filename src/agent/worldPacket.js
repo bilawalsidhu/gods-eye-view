@@ -95,7 +95,6 @@ export function activeContactsWindow(dataManager) {
  */
 export function getWorldPacket(options = {}) {
   const {
-    viewer,
     engine,
     styleManager,
     dataManager,
@@ -105,13 +104,12 @@ export function getWorldPacket(options = {}) {
   // A default parameter only covers undefined; null or NaN would age every
   // feed against the epoch and report stale data as "just now".
   const now = Number.isFinite(requestedNow) ? requestedNow : Date.now();
-  if (!engine && !viewer?.camera?.positionWC)
-    throw new TypeError('World Packet requires a viewer camera');
+  if (!engine) throw new TypeError('World Packet requires a globe engine');
   if (!dataManager || typeof dataManager.getAll !== 'function')
     throw new TypeError('World Packet requires a data manager');
 
   const cartographic = geo.cartographic.fromCartesian(
-    engine?.camera.livePosition ?? viewer.camera.positionWC,
+    engine.camera.livePosition,
   );
   // Read the roster once. Voice must not rewalk disabled layers: preserving the
   // current enabled-only view keeps the model's context budget bounded.

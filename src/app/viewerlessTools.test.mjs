@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApplicationTools } from './tools.js';
 import { navaraModeNotice } from './navaraMode.js';
-import { LAYER_MANIFEST, createLayerAvailability } from './layers/renderers.js';
+import { LAYER_MANIFEST } from './layers/renderers.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import {
   renderGovernorFor,
@@ -138,7 +138,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
   assert.equal(chrome.length, 1);
   assert.equal(chrome[0].initializeWelcome, null, 'no first-run welcome');
   assert.equal(chrome[0].styleManager, styleManager);
-  const notice = navaraModeNotice(createLayerAvailability('navara'));
+  const notice = navaraModeNotice();
   assert.match(notice.detail, /^Data layers: Bhote Koshi Flood, /);
   assert.deepEqual(notices, [
     {
@@ -150,9 +150,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
       },
     },
   ]);
-  const none = navaraModeNotice(
-    createLayerAvailability('navara', { manifest: {} }),
-  );
+  const none = navaraModeNotice({});
   assert.match(
     `${none.label}: ${none.detail}`,
     /^Experimental Navara engine: no registered data layers$/i,
@@ -163,7 +161,7 @@ test('without a viewer the tools run the governor on the engine, show the notice
     flights: LAYER_MANIFEST.flights,
   };
   assert.equal(
-    navaraModeNotice(createLayerAvailability('navara', { manifest })).detail,
+    navaraModeNotice(manifest).detail,
     'Data layers: Live Flights, Satellites',
   );
   // The governor drives the engine's continuous rendering.

@@ -95,8 +95,8 @@ export function createDisplayHarness(
     clearUnavailableRetry() {},
   };
   parts.ingestion = { setInstallationStatus() {} };
-  Object.assign(parts, displayFactory(h.engine, ctx));
-  const methods = parts.lifecycle.methods;
+  parts.display = displayFactory(h.engine, ctx);
+  const methods = parts.display;
   return {
     ...h,
     state,

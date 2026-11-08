@@ -109,10 +109,6 @@ function drawn(h, setId, index) {
   };
 }
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createVesselsDisplay(null), TypeError);
-});
-
 test('the chevron atlas has one 32 px cell per chevron the layer draws', () => {
   for (const icon of [CARGO, SELECTED]) {
     const [u0, v0, u1, v1] = layout.cells[icon];

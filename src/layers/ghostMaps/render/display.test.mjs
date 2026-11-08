@@ -351,8 +351,8 @@ for (const makeHarness of HARNESSES) {
     const harness = makeHarness();
     const { display, polygons, pins } = await drawn(harness);
     const seen = [];
-    const remove = display.onClick((click, pick) =>
-      seen.push({ position: click.position, picked: pick() }),
+    const remove = display.onClick((click) =>
+      seen.push({ position: click.position, picked: click.picked }),
     );
     harness.click({
       ground: true,

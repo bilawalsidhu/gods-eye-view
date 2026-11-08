@@ -23,7 +23,7 @@ for (const source of [
         : [],
     );
     h.state.recordById = new Map();
-    const lifecycle = h.parts.lifecycle.methods;
+    const lifecycle = h.parts.display;
     lifecycle.init();
     const outlinesShown = () =>
       [0, 1].every((n) => h.set(`${OUTLINE_SET_ID}-${n}`).shown);

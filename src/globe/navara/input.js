@@ -44,7 +44,6 @@ export function createNavaraInput(
   const listeners = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   let attached = false;
   let destroyed = false;
-  let cameraInputs = true;
   let cameraOptions = {};
   let downAt = null;
   let last = null;
@@ -123,7 +122,7 @@ export function createNavaraInput(
     last = position;
   };
   const onCameraEvent = (event) => {
-    if (cameraInputs) onCameraInput(event.type);
+    onCameraInput(event.type);
   };
   for (const type of CAMERA_EVENTS)
     canvas.addEventListener(type, onCameraEvent, {
@@ -133,7 +132,7 @@ export function createNavaraInput(
 
   let suspended = 0;
   const sendCameraInputs = () => {
-    const enabled = cameraInputs && suspended === 0;
+    const enabled = suspended === 0;
     input.setCameraOptions({
       enableSpin: enabled,
       enableZoom: enabled,
@@ -166,17 +165,12 @@ export function createNavaraInput(
         listeners.get(type).delete(entry);
       };
     },
-    setCameraInputs(enabled) {
-      cameraInputs = Boolean(enabled);
-      sendCameraInputs();
-    },
-    /** Off under any suspension, else the setCameraInputs choice. */
-    cameraInputsEnabled: () => cameraInputs && suspended === 0,
+    /** Off under any suspension. */
+    cameraInputsEnabled: () => suspended === 0,
     /**
      * Navara's spin, zoom and tilt off until the returned release (the
      * follow camera takes drag and wheel itself, as do the app's camera
-     * owners); the app's setCameraInputs choice comes back after the last
-     * release.
+     * owners). The last release enables the controls.
      */
     suspendCameraInputs() {
       suspended++;
@@ -201,8 +195,6 @@ export function createNavaraInput(
   };
   return {
     input,
-    /** Whether the app leaves the camera to the user (setCameraInputs). */
-    cameraInputs: () => cameraInputs,
     destroy() {
       if (destroyed) return;
       pointer.destroy();

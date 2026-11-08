@@ -1,4 +1,4 @@
-import { bindContextStore } from '../../data/bindContextStore.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import {
   FIRMS_OVERLAY_SOURCE_ID,
   fireDetectionKey,
@@ -22,7 +22,7 @@ export function createSelection({
     getContextStore,
     removeEntityContext = (id) => getContextStore()?.entities.delete(id),
     registerEntityContext,
-  } = bindContextStore(services.context, () => layerState._renderer?.engine);
+  } = bindOverlayHost(services.context, () => layerState._renderer?.engine);
   const { id, name, overlayHost } = config;
 
   /**
@@ -191,7 +191,7 @@ export function createSelection({
       layerId: id,
       layerName: name,
       source: 'NASA FIRMS',
-      dataSource: layerState._dataSource,
+      isVisible: () => layerState._renderer?.visible() ?? false,
       // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
       label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
       latitude: fire.lat,

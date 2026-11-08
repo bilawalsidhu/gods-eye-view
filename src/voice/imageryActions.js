@@ -140,7 +140,6 @@ function waitFor(layer, test, { timeoutMs, isCurrent }) {
  * Run one `find_imagery` call.
  * @param {object} deps
  * @param {object} deps.dataManager
- * @param {object} deps.viewer
  * @param {(areaId: string) => object|null} deps.getArea Stored area by id.
  * @param {(enabled: boolean) => Promise<object>} deps.enableLayer set_layer_visibility for the layer.
  * @param {(step: string, label?: string) => void} [deps.progress] Step reports.
@@ -151,7 +150,6 @@ function waitFor(layer, test, { timeoutMs, isCurrent }) {
 export async function findImagery(
   {
     dataManager,
-    viewer,
     getArea,
     enableLayer,
     progress = () => {},
@@ -277,7 +275,7 @@ export async function findImagery(
       ? layer.boxFromPinAt(box.pin.lon, box.pin.lat)
       : box
         ? layer.setBox(box)
-        : layer.useCurrentView(viewer);
+        : layer.useCurrentView();
     if (!accepted) {
       const reason =
         layer.getSnapshot().boxError || 'That area cannot be searched.';

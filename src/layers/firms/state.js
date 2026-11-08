@@ -16,9 +16,9 @@ export function createFirmsState({ services, config }) {
 
   layerState.scratchWindowCoord = geo.cartesian2.create();
 
-  layerState._viewer = null;
+  layerState._view = null;
 
-  layerState._dataSource = null;
+  layerState._renderer = null;
 
   layerState._renderer = null;
 

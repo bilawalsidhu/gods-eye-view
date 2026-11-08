@@ -245,10 +245,9 @@ async function takeFrameClock(page) {
 async function advanceEvidenceFrame(page, deltaMs = FRAME_MS) {
   return page.evaluate((stepMs) => {
     const gev = window.__godsEyeView;
-    const viewer = gev.viewer;
     const seam = gev.dataManager.layers.get('flights').module.__focusEvidence;
     const nowMs = seam.advanceFrameClock(stepMs);
-    if (!viewer) return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { remove(); reject(new Error('Evidence frame timeout')); }, 5000);
       const remove = gev.engine.frames.postRender.addEventListener(() => {
         remove(); clearTimeout(timer);
@@ -256,13 +255,7 @@ async function advanceEvidenceFrame(page, deltaMs = FRAME_MS) {
       });
       gev.engine.render.request('focus-evidence');
     });
-    const JulianDate = viewer.clock.currentTime.constructor;
-    JulianDate.addSeconds(viewer.clock.currentTime, stepMs / 1000, viewer.clock.currentTime);
-    viewer.dataSourceDisplay?.update(viewer.clock.currentTime);
-    viewer.scene.render(viewer.clock.currentTime);
-    // Cross a task boundary so Chrome can commit the explicitly rendered
-    // surface before capture. Cesium's drained default loop stays disabled.
-    return new Promise((resolve) => setTimeout(() => resolve(nowMs), 0));
+
   }, deltaMs);
 }
 

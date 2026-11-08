@@ -4,7 +4,7 @@ import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
-import { createLayerAvailability, rendererFor } from './layers/renderers.js';
+import { rendererFor } from './layers/renderers.js';
 import { APPLICATION_LAYER_DIRECTORY } from './layers/directory.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
@@ -59,10 +59,6 @@ export const APPLICATION_LAYER_METADATA = Object.freeze([
 ]);
 
 /** Construct the current catalog without choosing any source provider.
- * `engineKind` ('cesium' | 'navara'): only the layers that engine can show
- * (src/app/layers/renderers.js) are constructed, in the same order; the
- * catalog keeps the others' metadata (`unavailableMetadata`) and carries
- * the engine's `availability`.
  * Scene engines remain page-owned; layers and classification have this app's lifetime.
  * The manager owns layer destruction, while abort releases classification even if startup fails.
  */
@@ -77,7 +73,6 @@ export function createApplicationCatalog({
   nepalBoundaryResolver,
   streetLevelProviders,
   engineKind = 'cesium',
-  availability = createLayerAvailability(engineKind),
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -462,36 +457,13 @@ export function createApplicationCatalog({
           ),
       ],
     ];
-    const available = (id) => availability.isAvailable(id);
-    const layers = [];
-    for (const [ids, create] of entries) {
-      const wanted = [ids].flat().filter(available);
-      if (!wanted.length) continue;
-      for (const layer of [create()].flat())
-        if (wanted.includes(layer.id)) layers.push(layer);
-    }
-    const catalog = createLayerCatalog(
-      layers,
-      metadata.filter(({ id }) => available(id)),
-    );
+    const layers = entries.flatMap(([, create]) => create());
+    const catalog = createLayerCatalog(layers, metadata);
     return Object.freeze({
       ...catalog,
       engineKind,
-      // Layers this engine cannot show: their metadata, so links keep their
-      // state (data.js), and the stable availability API (renderers.js).
-      unavailableMetadata: Object.freeze(
-        metadata.filter(({ id }) => !available(id)),
-      ),
-      availability,
       getSourceAvailability: sourceComposition.createAvailabilityLookup(
         catalog.layers,
-        {
-          omitted: new Set(
-            APPLICATION_LAYER_DIRECTORY.map(({ id }) => id).filter(
-              (id) => !available(id),
-            ),
-          ),
-        },
       ),
       militaryRegistry,
       surface,

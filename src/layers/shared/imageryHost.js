@@ -1,13 +1,4 @@
-import { msg } from '../../i18n/index.js';
-
-/** Resolve the visible surface that can own weather imagery without scene mutation. */
-export function resolveImageryHost({ viewer, tileset }) {
-  if (viewer?.scene?.globe?.show === true)
-    return { collection: viewer.imageryLayers, kind: 'globe' };
-  if (tileset?.imageryLayers)
-    return { collection: tileset.imageryLayers, kind: 'tileset' };
-  return { collection: null, kind: 'none' };
-}
+import { msg } from '../../i18n/marker.js';
 
 // What the layer calls a surface: engine.imagery's surfaces as host kinds.
 const HOST_KIND = { globe: 'globe', tiles: 'tileset', none: 'none' };

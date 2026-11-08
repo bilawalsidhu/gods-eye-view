@@ -87,7 +87,6 @@ export function planeOutline(shape, positions, orientation) {
  * @param {{ state: object, services: object }} options
  */
 export function createCctvDisplay(engine, { state, services = {} } = {}) {
-  if (!engine) throw new TypeError('The CCTV display needs a globe engine');
   const meshes = createCctvMeshes(engine);
   const markers = [];
   const markerHandles = new WeakSet();
@@ -673,14 +672,12 @@ export function createCctvDisplay(engine, { state, services = {} } = {}) {
     /** The world (tiles) along the activation probe, within `far` metres. */
     obstructionRay(origin, direction, exclude, far) {
       syncMarkers();
-      if (typeof engine.surface.raycast === 'function')
-        return engine.surface.raycast({
-          origin,
-          direction,
-          far,
-          exclude: [markerSet, ...engineObjects(exclude)].filter(Boolean),
-        });
-      return undefined;
+      return engine.surface.raycast({
+        origin,
+        direction,
+        far,
+        exclude: [markerSet, ...engineObjects(exclude)].filter(Boolean),
+      });
     },
     createPlaneMaterial: (image) => meshes.createMaterial(image),
     createTestPlaneMaterial: () => meshes.createMaterial(null),

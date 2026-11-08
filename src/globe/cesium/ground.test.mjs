@@ -1,3 +1,4 @@
+import { installDomClasses } from '../../testSupport/domClasses.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -7,14 +8,7 @@ import { createFakeViewer } from './testing/fakeViewer.mjs';
 
 // Cesium's Material types its uniforms against the browser's image and
 // canvas classes; Node has none of them.
-for (const name of [
-  'HTMLCanvasElement',
-  'HTMLImageElement',
-  'HTMLVideoElement',
-  'ImageBitmap',
-  'OffscreenCanvas',
-])
-  globalThis[name] ??= class {};
+installDomClasses();
 
 const items = (kind, list) =>
   list.map((item, index) => normalizeGroundItem(kind, item, index));

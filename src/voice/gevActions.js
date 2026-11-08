@@ -407,12 +407,12 @@ export function createGevActionRunner({
     typeof annotations?.[method] === 'function';
   const renderSupported = (capability, method) =>
     typeof styleManager?.[method] === 'function' &&
-    Boolean(viewer || engineCapabilities(engine)[capability]);
+    engineCapabilities(engine)[capability];
   const postEffectSupported = (effect) =>
     effect === 'bloom'
       ? renderSupported('bloom', 'setBloom')
       : typeof styleManager?.setSharpen === 'function' &&
-        Boolean(viewer || typeof engine?.render?.setSharpen === 'function');
+        typeof engine?.render?.setSharpen === 'function';
   function actionSupported(name) {
     switch (name) {
       case 'annotate_map':
@@ -582,17 +582,6 @@ export function createGevActionRunner({
         throw new Error(`Unknown data layer: ${args.layerId || 'missing'}`);
       }
       if (!dataManager.layers.has(layerId)) {
-        // A layer this engine cannot show (the catalog left it out): a
-        // refusal that names it, not an unknown-layer error.
-        if (!viewer && voiceLayer(layerId))
-          return {
-            ...unavailableOnEngine(
-              'set_layer_visibility',
-              engine,
-              `The ${layerId} layer`,
-            ),
-            layerId,
-          };
         if (layerId === 'radio') {
           return {
             ok: false,
@@ -906,11 +895,7 @@ export function createGevActionRunner({
       const style = normalizeStyle(args.style);
       if (!style)
         throw new Error(`Unknown visual style: ${args.style || 'missing'}`);
-      if (
-        !viewer &&
-        style !== 'normal' &&
-        !engine.render.visualStyles.includes(style)
-      )
+      if (style !== 'normal' && !engine.render.visualStyles.includes(style))
         return unavailableOnEngine(name, engine, `The ${style} visual style`);
       styleManager.setStyle(style, { userInitiated: true });
       return { ok: true, action: 'set_visual_style', style };
@@ -1472,29 +1457,6 @@ export function createGevActionRunner({
     }
 
     if (name === 'analyst_query') {
-      // Layers this engine's catalog left out cannot be asked: say so rather
-      // than answer zero.
-      const missing = !viewer
-        ? (Array.isArray(args.layers) ? args.layers : [])
-            .map(normalizeLayerId)
-            .filter(
-              (layerId) =>
-                layerId &&
-                voiceLayer(layerId) &&
-                !dataManager.layers.has(layerId),
-            )
-        : [];
-      if (missing.length)
-        return {
-          ...unavailableOnEngine(
-            'analyst_query',
-            engine,
-            missing.length === 1
-              ? `The ${missing[0]} layer`
-              : `The ${missing.join(', ')} layers`,
-          ),
-          layerIds: missing,
-        };
       return runAnalystQuery(
         ensureAnalystEngine(),
         dataManager,
@@ -1624,7 +1586,6 @@ export function createGevActionRunner({
 
     if (name === 'get_current_view_state') {
       return getWorldPacket({
-        viewer,
         engine,
         styleManager,
         dataManager,
@@ -1732,7 +1693,7 @@ export function createGevActionRunner({
     }
 
     if (name === 'control_radio') {
-      return controlRadio(viewer, dataManager, args, {
+      return controlRadio(dataManager, args, {
         ...runOptions,
         placeSearch,
       });
@@ -2412,12 +2373,7 @@ async function resolveRadioLocation(
 }
 
 /** Voice Radio controls over the Radio layer's public player surface. */
-export async function controlRadio(
-  viewer,
-  dataManager,
-  args = {},
-  options = {},
-) {
+export async function controlRadio(dataManager, args = {}, options = {}) {
   const requestedAction = String(args.action || '')
     .trim()
     .toLowerCase();

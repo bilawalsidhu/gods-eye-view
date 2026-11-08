@@ -60,9 +60,9 @@ async function fixture({ legacySource = false } = {}) {
     : launchSource;
   const services = {
     overlays: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
+      setEntries: noop,
+      setVisible: noop,
+      clearSource: noop,
     },
     render: { holdContinuousRender: noop, releaseContinuousRender: noop },
   };

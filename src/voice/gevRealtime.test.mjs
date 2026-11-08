@@ -1259,7 +1259,7 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -1386,7 +1386,7 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
     radioLayer,
     runner: (name, args, options) => (
       name === 'control_radio'
-        ? controlRadio({}, dataManager, args, options)
+        ? controlRadio(dataManager, args, options)
         : genericRunner(name, args, options)
     ),
   });
@@ -1501,7 +1501,7 @@ test('same-response Pause aborts a real manager enable already in flight', async
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -1629,7 +1629,7 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
                 radioLayer,
                 runner: (name, args, options) => (
                   name === 'control_radio'
-                    ? controlRadio({}, dataManager, args, options)
+                    ? controlRadio(dataManager, args, options)
                     : genericRunner(name, args, options)
                 ),
               });
@@ -1755,7 +1755,7 @@ test('successful same- or newer-response Stop aborts Select across real manager 
       const controller = new GevRealtimeController({
         ui,
         radioLayer,
-        runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+        runner: (_name, args, options) => controlRadio(dataManager, args, options),
       });
       controller.debugLog = () => {};
       controller.sendVisualContextIfUseful = async () => false;
@@ -2017,7 +2017,7 @@ test('failed same-response stop does not suppress a successful playback request'
   const controller = new GevRealtimeController({
     ui,
     runner: async (_name, args) => {
-      const result = await controlRadio({}, dataManager, args);
+      const result = await controlRadio(dataManager, args);
       if (args.action === 'play') await playGate;
       return result;
     },
@@ -2121,7 +2121,7 @@ test('failed same-response Stop preserves Select auto-enable held inside real ma
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -2205,7 +2205,7 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
         dataManager,
         radioLayer: dataManager.layers.get('radio').module,
         runner: async (_name, args) => {
-          const result = await controlRadio({}, dataManager, args);
+          const result = await controlRadio(dataManager, args);
           if (args.action === 'play') await playGate;
           return result;
         },
@@ -2351,7 +2351,7 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) => controlRadio(dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
@@ -3673,7 +3673,7 @@ test('a claimed Space hold barges in on the assistant; a short tap never does', 
 
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
-function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
+function controlRadio(manager, args, options) { return runControlRadio(manager, args, { placeSearch: testPlaceSearch(), ...options }); }
 
 test('voice runs app actions itself and other tools through the catalog', async () => {
   const actions = [];

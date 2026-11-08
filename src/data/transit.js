@@ -2,7 +2,7 @@ import { createTransitLayer as createLayer } from '../layers/transit/index.js';
 import { createTransitDisplay } from '../layers/transit/render/display.js';
 import * as render from '../renderGovernor.js';
 import * as picking from './pickRegistry.js';
-import * as overlays from '../overlays/worldOverlay.js';
+import { worldOverlayFor as overlays } from '../overlays/worldOverlay.js';
 import { registerDynamicCredit, transitFeedCredit } from './dataCredits.js';
 import {
   GROUND_FLOOR_LIFT_M,

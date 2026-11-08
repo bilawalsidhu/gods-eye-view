@@ -648,7 +648,7 @@ for (const makeHarness of GROUND_HARNESSES) {
           overlays: { refreshReadout: refreshTrackedReadout },
         },
       });
-      display.init(null, { onMove() {} });
+      display.init({ onMove() {} });
       display.setVisible(true);
       display.renderRecords();
       return display;
@@ -739,7 +739,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       h.destroy();
       globalThis.window = original;
     });
-    display.init(null, { onMove() {} });
+    display.init({ onMove() {} });
     display.setVisible(true);
     display.renderRecords();
     display.selectRecord('alpr:0');

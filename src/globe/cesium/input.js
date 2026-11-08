@@ -51,7 +51,7 @@ export function createCesiumInput(
   const groups = new Map();
   // Camera-input suspensions held, and the enableInputs the last resume
   // puts back: the controller's own from before the first, or what
-  // setCameraInputs asked for since.
+  // the controller had before the first suspension.
   let suspended = 0;
   let resumeTo = true;
   const pointer = createExclusivePointer(() => {
@@ -114,10 +114,6 @@ export function createCesiumInput(
         if (handler && !handler.isDestroyed?.())
           handler.removeInputAction(TYPES[type], KEYS[modifier]);
       };
-    },
-    setCameraInputs(enabled) {
-      if (suspended) resumeTo = Boolean(enabled);
-      else scene.screenSpaceCameraController.enableInputs = Boolean(enabled);
     },
     // The controller's switch: whatever else turned it off counts too.
     cameraInputsEnabled: () =>

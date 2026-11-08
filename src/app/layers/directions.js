@@ -11,6 +11,6 @@ export function createApplicationDirections({ source, surface }) {
   return createApplicationDirectionsLayer({
     source,
     groundFloor: surface?.groundFloor,
-    createRenderer: (engine) => rendererFor('directions', engine),
+    rendererFactory: (engine) => rendererFor('directions', engine),
   });
 }

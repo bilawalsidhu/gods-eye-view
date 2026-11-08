@@ -1,12 +1,7 @@
 import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
-  const {
-    clearOverlaySource,
-    hitTestWorldOverlay,
-    setOverlayEntries,
-    setOverlaySourceVisible,
-  } = services.overlays;
+  const { clearSource, hitTest, setEntries, setVisible } = services.overlays;
   const layerState = {};
 
   // ---------------------------------------------------------------------------
@@ -222,10 +217,10 @@ export function createState({ services }) {
   layerState._cardFetchMode = 'steady';
 
   layerState.DEFAULT_CCTV_OVERLAY_HOST = Object.freeze({
-    clearSource: clearOverlaySource,
-    hitTest: hitTestWorldOverlay,
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
+    clearSource: clearSource,
+    hitTest: hitTest,
+    setEntries: setEntries,
+    setVisible: setVisible,
   });
 
   layerState._cctvOverlayHost = layerState.DEFAULT_CCTV_OVERLAY_HOST;

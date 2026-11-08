@@ -69,7 +69,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
     governorRequestRender('bikeshare-deactivate', layerState._engine);
     parts.ingestion.abortInFlight(layerState._inFlightInfo, cityId);
     parts.ingestion.abortInFlight(layerState._inFlightStatus, cityId);
-    parts.rendering?.removeCityPoints(cityId);
+    parts.display?.removeCityPoints(cityId);
   }
 
   /** Deactivate all currently active cities and clear the active set. */
@@ -109,12 +109,12 @@ export function createViewport({ state: layerState, services, parts, camera }) {
       )
         return;
 
-      parts.rendering?.ensureCityPoints(cityId, stationMap);
+      parts.display?.ensureCityPoints(cityId, stationMap);
 
       // Apply any cached status immediately for snappier initial rendering
       const cachedStatus = layerState._statusCache.get(cityId)?.statusMap;
       if (cachedStatus) {
-        parts.rendering?.applyStatusToPoints(cityId, cachedStatus);
+        parts.display?.applyStatusToPoints(cityId, cachedStatus);
         showingLastKnown = layerState._cityRuntime.has(cityId);
       }
 
@@ -128,7 +128,7 @@ export function createViewport({ state: layerState, services, parts, camera }) {
         generation !== layerState._proximityGeneration
       )
         return;
-      parts.rendering?.applyStatusToPoints(cityId, statusMap);
+      parts.display?.applyStatusToPoints(cityId, statusMap);
       layerState._lastUpdate = Date.now();
       layerState._failedCityIds.delete(cityId);
     } catch (error) {

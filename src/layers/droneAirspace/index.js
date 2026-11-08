@@ -39,7 +39,7 @@ export function createDroneAirspaceLayer({
   overlayHost = null,
   picking = null,
   pointer = null,
-  createRenderer = ({ engine }) => createDroneAirspaceDisplay(engine),
+  rendererFactory = ({ engine }) => createDroneAirspaceDisplay(engine),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Drone airspace requires a snapshot source');
@@ -113,7 +113,7 @@ export function createDroneAirspaceLayer({
         { sourceId: DRONE_AIRSPACE_OVERLAY_SOURCE_ID },
       );
       if (cardHit && cardHit.entryId === _selectedCardId) return;
-      const picked = renderer.pick(click);
+      const picked = click?.picked ?? null;
       const zoneId = picked ? pickedZoneId(picked) : null;
       if (zoneId) {
         _selectedId = zoneId;
@@ -176,7 +176,7 @@ export function createDroneAirspaceLayer({
       if (!initialized || renderer)
         throw new Error('Invalid drone airspace scene attachment');
       sceneEngine = engine;
-      renderer = createRenderer({ engine });
+      renderer = rendererFactory({ engine });
       renderer.setVisible(_enabled);
       if (_rows.length) renderer.replace(_rows);
       if (_enabled) {

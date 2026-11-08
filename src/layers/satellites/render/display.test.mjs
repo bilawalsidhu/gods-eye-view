@@ -113,10 +113,6 @@ function drawn(h, setId, index) {
   };
 }
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createSatellitesDisplay(null), TypeError);
-});
-
 for (const makeHarness of HARNESSES) {
   const { name } = makeHarness();
 

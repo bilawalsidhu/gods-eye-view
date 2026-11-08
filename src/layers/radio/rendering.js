@@ -14,8 +14,7 @@ export function createRendering({
   parts,
   source,
 }) {
-  const { clearOverlaySource, setOverlaySourceVisible, setOverlayEntries } =
-    services.overlays;
+  const { clearSource, setVisible, setEntries } = services.overlays;
   const { governorRequestRender } = services.render;
 
   function markerPosition(station, liftM = MARKER_LIFT_M) {
@@ -52,8 +51,8 @@ export function createRendering({
       parts.clustering.resetRadioClusterOverlayIdentities();
       layerState._overlayDiagnostics =
         parts.clustering.emptyRadioOverlayDiagnostics();
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
-      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      setVisible(RADIO_OVERLAY_SOURCE_ID, false);
       return;
     }
 
@@ -152,12 +151,8 @@ export function createRendering({
       if (singletonEntry) entries.push(singletonEntry);
     }
 
-    setOverlayEntries(
-      RADIO_OVERLAY_SOURCE_ID,
-      entries,
-      RADIO_OVERLAY_SOURCE_OPTIONS,
-    );
-    setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, true);
+    setEntries(RADIO_OVERLAY_SOURCE_ID, entries, RADIO_OVERLAY_SOURCE_OPTIONS);
+    setVisible(RADIO_OVERLAY_SOURCE_ID, true);
     layerState._overlayDiagnostics = {
       entryCount: entries.length,
       selectedCount: entries.filter((entry) => entry.selected).length,

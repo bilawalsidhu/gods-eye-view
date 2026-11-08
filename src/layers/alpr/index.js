@@ -288,7 +288,7 @@ export function createAlprCamerasLayer({
         source,
         engine: options.engine,
       });
-      renderer.init(viewer, { onMove: scheduleLoad });
+      renderer.init({ onMove: scheduleLoad });
       if (state.enabled) {
         registerPickOwner(
           LAYER_ID,

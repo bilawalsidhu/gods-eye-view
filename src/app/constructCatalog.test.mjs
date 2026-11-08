@@ -200,10 +200,8 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
   );
 });
 
-test('the catalog per engine: the same layers on both, a subset when the manifest says so', async (t) => {
+test('the catalog has the same layers on both engines', async (t) => {
   const { APPLICATION_LAYER_DIRECTORY } = await import('./layers/directory.js');
-  const { createLayerAvailability, LAYER_MANIFEST } =
-    await import('./layers/renderers.js');
   const controller = new AbortController();
   t.after(() => controller.abort());
   const build = (options) =>
@@ -220,35 +218,9 @@ test('the catalog per engine: the same layers on both, a subset when the manifes
     APPLICATION_LAYER_DIRECTORY.map(({ id, name }) => ({ id, name })),
   );
   assert.equal(cesium.engineKind, 'cesium');
-  assert.deepEqual(cesium.unavailableMetadata, []);
-  assert.equal(cesium.availability.unavailable().length, 0);
 
   const navara = build({ engineKind: 'navara' });
   assert.equal(navara.layers.length, cesium.layers.length);
-  assert.deepEqual(navara.unavailableMetadata, []);
-  assert.equal(navara.availability.engine, 'navara');
-
-  // When the engine can show only two layers, only those are constructed,
-  // in catalog order, with their metadata.
-  const subset = build({
-    engineKind: 'navara',
-    availability: createLayerAvailability('navara', {
-      manifest: {
-        satellites: LAYER_MANIFEST.satellites,
-        flights: LAYER_MANIFEST.flights,
-      },
-    }),
-  });
-  assert.deepEqual(
-    subset.layers.map(({ id }) => id),
-    ['flights', 'satellites'],
-  );
-  assert.deepEqual(
-    subset.metadata.map(({ id }) => id),
-    ['flights', 'satellites'],
-  );
-  assert.ok(subset.unavailableMetadata.some(({ id }) => id === 'military'));
-  assert.equal(subset.get('military'), undefined);
 });
 
 test('both engines attach to the same 38 session models', async (t) => {

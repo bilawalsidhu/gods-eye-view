@@ -172,6 +172,7 @@ export function harness({
   engine.fake.script('viewRectangle', () =>
     viewer.camera.computeViewRectangle(),
   );
+  imagery.layer.attachRenderer(null, { engine });
   const referents = createReferentRegistry();
   let snapshot = pointer;
   const osmCalls = [];

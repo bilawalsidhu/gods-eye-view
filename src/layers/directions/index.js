@@ -855,15 +855,15 @@ export function normalizeRoutePayload(payload, mode) {
  * shared services are injected, which is what keeps this module's own imports
  * down to the globe contract display and the pure step formatter.
  * @param {{services: object, source: {getRoute: Function},
- *   createRenderer?: (engine: object) => object|null}} options
- *   `createRenderer` builds the display on an engine (render/display.js by
+ *   rendererFactory?: (engine: object) => object|null}} options
+ *   `rendererFactory` builds the display on an engine (render/display.js by
  *   default).
  * @returns {object} The layer module the data manager registers.
  */
 export function createDirectionsLayer({
   services,
   source,
-  createRenderer = createDirectionsDisplay,
+  rendererFactory = createDirectionsDisplay,
 }) {
   if (typeof source?.getRoute !== 'function')
     throw new TypeError('Directions require a route source');
@@ -877,9 +877,9 @@ export function createDirectionsLayer({
     overlays: bindOverlayHost(services.overlays, () => _engine),
   };
   const DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: (...args) => services.overlays.setOverlayEntries(...args),
-    setVisible: (...args) => services.overlays.setOverlaySourceVisible(...args),
-    clearSource: (...args) => services.overlays.clearOverlaySource(...args),
+    setEntries: (...args) => services.overlays.setEntries(...args),
+    setVisible: (...args) => services.overlays.setVisible(...args),
+    clearSource: (...args) => services.overlays.clearSource(...args),
   });
   let _overlayHost = DEFAULT_OVERLAY_HOST;
 
@@ -1486,7 +1486,7 @@ export function createDirectionsLayer({
   function _installClickHandler() {
     if (_listening) return;
     _listening = true;
-    _removeClick = _display?.onClick(_onClick) ?? null;
+    _removeClick = _engine?.input.on('click', _onClick, { pick: true }) ?? null;
     if (typeof document !== 'undefined')
       document.addEventListener('keydown', _onKeyDown);
   }
@@ -1521,7 +1521,7 @@ export function createDirectionsLayer({
     },
     attachRenderer(_scene, { engine = null } = {}) {
       _engine = engine;
-      _display = engine ? createRenderer(engine) : null;
+      _display = engine ? rendererFactory(engine) : null;
       _display?.show(_enabled);
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, _enabled);
       if (!_enabled) return;

@@ -31,9 +31,9 @@ export function createViewport({
    */
 
   function installMoveEndWatcher() {
-    if (layerState._moveEndRemover || !layerState._viewer) return;
+    if (layerState._moveEndRemover || !layerState._view) return;
     layerState._moveEndRemover =
-      layerState._viewer.camera.moveEnd.addEventListener(() => {
+      layerState._renderer.engine.camera.moveEnd.addEventListener(() => {
         if (!layerState._enabled) return;
         // Settled-camera exactness for the horizon pass (the throttled preRender
         // watcher can last have run up to LOD_CHECK_MS before the camera
@@ -54,7 +54,7 @@ export function createViewport({
 
   function cameraHeight() {
     return (
-      layerState._viewer?.camera?.positionCartographic?.height ??
+      layerState._view?.camera?.positionCartographic?.height ??
       Number.POSITIVE_INFINITY
     );
   }
@@ -138,13 +138,13 @@ export function createViewport({
   }
 
   function installLodWatcher() {
-    if (layerState._preRenderRemover || !layerState._viewer) return;
+    if (layerState._preRenderRemover || !layerState._view) return;
     // The LOD sweep is throttle-gated inside preRender. When the camera
     // settles just inside the throttle window, the final rebuild would wait
     // for a frame that idle mode never produces — schedule one. (perf wave 2)
     if (!layerState._moveEndSettleRemover) {
       layerState._moveEndSettleRemover =
-        layerState._viewer.camera.moveEnd.addEventListener(() => {
+        layerState._renderer.engine.camera.moveEnd.addEventListener(() => {
           if (!layerState._enabled) return;
           clearSettleTimer();
           settleTimer = setTimeout(() => {
@@ -158,7 +158,7 @@ export function createViewport({
         });
     }
     layerState._preRenderRemover =
-      layerState._viewer.scene.preRender.addEventListener(() => {
+      layerState._renderer.engine.frames.preRender.addEventListener(() => {
         // NOTE: `_loading`/empty-data are deliberately NOT part of this guard.
         // A refresh has no timeout, and sprites from the previous payload stay
         // on screen throughout it — so the horizon pass below must keep running
@@ -172,7 +172,7 @@ export function createViewport({
         layerState._lastLodCheck = now;
         // Idle camera: two scratch compares and out — no view-rect math, no
         // aggregation, no allocation while the user is parked.
-        const camera = layerState._viewer.camera;
+        const camera = layerState._view.camera;
         if (
           layerState._camSnapValid &&
           geo.cartesian3.equalsEpsilon(

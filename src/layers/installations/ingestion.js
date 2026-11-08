@@ -260,8 +260,8 @@ export function createIngestion({
               ? msg('Too many mapped sites in view to list them all')
               : placesError,
         );
-        parts.rendering?.renderRecords();
-        parts.rendering?.warmInstallationFloors(
+        parts.display?.renderRecords();
+        parts.display?.warmInstallationFloors(
           layerState.records.filter((r) => !r.pointOnly),
         );
       };

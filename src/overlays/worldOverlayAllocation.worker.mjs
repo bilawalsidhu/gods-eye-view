@@ -1,3 +1,4 @@
+import { worldOverlayFor } from './worldOverlay.js';
 let overlayEngine;
 import * as Cesium from 'cesium';
 import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
@@ -7,13 +8,7 @@ import {
   projectToWindow as navaraProjectToWindow,
   viewProjection as navaraViewProjection,
 } from '../globe/cameraMath.js';
-import {
-  AMBIENT_CARD_COLLISION_CAPACITY,
-  destroyWorldOverlay,
-  getWorldOverlayDiagnostics,
-  initWorldOverlay,
-  setOverlayEntries,
-} from './worldOverlay.js';
+import { AMBIENT_CARD_COLLISION_CAPACITY } from './worldOverlay.js';
 import {
   LOCAL_OVERLAY_COHORT_LIMIT,
   createLocalInfrastructureOverlayEntry,
@@ -1322,7 +1317,7 @@ function main() {
   // The Navara projector profile swaps the engine's projector before the
   // host reads it.
   if (PROFILE === 'navara-projector') env.engine.projector = navaraProjector();
-  initWorldOverlay((overlayEngine = env.engine));
+  worldOverlayFor((overlayEngine = env.engine))?.init();
   const workload =
     PROFILE === 'phase6-detection'
       ? buildPhase6DetectionWorkload(ENTRY_COUNT)
@@ -1377,8 +1372,7 @@ function main() {
     setDetectionMode('DENSE');
   } else if (workload.registrations) {
     for (const registration of workload.registrations) {
-      setOverlayEntries(
-        overlayEngine,
+      worldOverlayFor(overlayEngine)?.setEntries(
         registration.sourceId,
         registration.entries,
         {
@@ -1391,7 +1385,7 @@ function main() {
       );
     }
   } else {
-    setOverlayEntries(overlayEngine, 'alloc-probe', entries, {
+    worldOverlayFor(overlayEngine)?.setEntries('alloc-probe', entries, {
       collisionCapacity: 96,
       cohortLimit: 256,
       moving: true,
@@ -1417,7 +1411,7 @@ function main() {
     globalThis.gc();
     for (let i = 0; i < CHUNK_FRAMES; i++) tick();
   }
-  const warm = getWorldOverlayDiagnostics(overlayEngine);
+  const warm = worldOverlayFor(overlayEngine)?.getDiagnostics();
   const detectionWarm = detectionActive ? getDetectionDiagnostics() : null;
   const painted = detectionActive
     ? detectionWarm.visibleCount
@@ -1440,7 +1434,7 @@ function main() {
   }
   const solveRevisionAfter = detectionActive
     ? getDetectionDiagnostics().solveRevision
-    : getWorldOverlayDiagnostics(overlayEngine).solveRevision;
+    : worldOverlayFor(overlayEngine)?.getDiagnostics().solveRevision;
   const sorted = chunkRates.slice().sort((a, b) => a - b);
   const maxBytesPerFrame = sorted[sorted.length - 1];
   const medianBytesPerFrame = sorted[Math.floor(sorted.length / 2)];
@@ -1476,7 +1470,7 @@ function main() {
   );
 
   if (detectionActive) destroyDetection();
-  destroyWorldOverlay(overlayEngine);
+  worldOverlayFor(overlayEngine)?.destroy();
   env.engine.destroy();
 }
 

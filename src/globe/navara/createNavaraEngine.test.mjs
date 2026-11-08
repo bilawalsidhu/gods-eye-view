@@ -618,13 +618,13 @@ test('the floor does not fight flights or a lookAt target', () => {
 test('the floor stands aside while the camera inputs are off (the cockpit drives it)', () => {
   const { engine, view } = setup();
   view.sampleTerrainHeight = () => 100;
-  engine.input.setCameraInputs(false);
+  const resumeInputs = engine.input.suspendCameraInputs();
   engine.camera.setView({
     destination: cartesian3.fromDegrees(2.35, 48.85, 112),
   });
   view.emit('preRender', 1);
   near(heightOf(engine), 112, 1e-6, 'the cockpit eye 12 m up is kept');
-  engine.input.setCameraInputs(true);
+  resumeInputs();
   view.emit('preRender', 2);
   near(heightOf(engine), 130, 1e-6, 'lifted once the inputs are back');
   engine.destroy();

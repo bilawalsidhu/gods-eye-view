@@ -73,6 +73,7 @@ function fakeViewer({ cameraHeightM, surfaceM, canvas = null }) {
       flyTo: (options) => flights.push(options),
     },
   };
+  viewer.clock = { onTick: new Cesium.Event() };
   viewer.engine = createCesiumEngine(viewer);
   return viewer;
 }

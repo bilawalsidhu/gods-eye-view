@@ -2,14 +2,16 @@ import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
-  const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    bindOverlayHost(services.overlays, () => state._engine);
+  const { setEntries, setVisible, clearSource } = bindOverlayHost(
+    services.overlays,
+    () => state._engine,
+  );
   const state = {};
 
   state.DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
   });
 
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;

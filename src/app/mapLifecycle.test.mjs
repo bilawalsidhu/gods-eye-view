@@ -8,10 +8,10 @@ test('destroy invalidates a pending imagery provider before it can touch the vie
   let resolveProvider;
   let removed = 0;
   const changes = [];
-  const controller = new MapStackController(
-    {},
-    { onChange: (state) => changes.push(state.status) },
-  );
+  const controller = new MapStackController({
+    engine: createFakeEngine({ kind: 'cesium' }),
+    onChange: (state) => changes.push(state.status),
+  });
   controller._getImageryProvider = () =>
     new Promise((resolve) => {
       resolveProvider = resolve;

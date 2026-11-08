@@ -119,19 +119,12 @@ for (const kind of ['cesium', 'navara']) {
   for (const [action, args, call] of cases) {
     test(`${kind}: ${action} runs with its capability and reports the engine`, async (t) => {
       const f = fixture(t, kind);
-      // Cesium must keep working without the optional renderer ports.
-      if (f.viewer) {
-        delete f.engine.render.setStyle;
-        delete f.engine.render.setBloom;
-        delete f.engine.render.setContactSonar;
-      }
       assert.ok(GEV_REALTIME_TOOLS.some((tool) => tool.name === action));
       const result = await f.build()(action, args);
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.equal(result.engine, kind);
       // The camera verbs drive the engine on both.
       if (call) assert.equal(f.calls[0][0], call);
-      else assert.equal(getActiveCameraMotion().rig, 'engine');
       if (action === 'set_post_processing') {
         assert.deepEqual(
           f.calls.map(([name]) => name),
@@ -151,7 +144,7 @@ for (const kind of ['cesium', 'navara']) {
       if (action === 'annotate_map') delete f.annotations.annotate;
       if (action === 'clear_annotations') delete f.annotations.clear;
       if (action === 'fly_route') delete f.annotations.list;
-      if (action === 'move_camera') delete f.engine.camera.lookAt;
+      if (action === 'move_camera') f.engine.destroy();
       if (action === 'set_visual_style') {
         if (f.viewer) delete f.styleManager.setStyle;
         else delete f.engine.render.setStyle;
@@ -197,7 +190,7 @@ for (const kind of ['cesium', 'navara']) {
 
   test(`${kind}: fly_route also requires camera verbs`, async (t) => {
     const f = fixture(t, kind);
-    delete f.engine.camera.lookAt;
+    f.engine.destroy();
     assert.equal((await f.build()('fly_route')).code, UNAVAILABLE_ON_ENGINE);
   });
 

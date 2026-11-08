@@ -13,7 +13,7 @@ import {
   WEATHER_SHELL_HEIGHTS,
 } from './shellRendering.js';
 import { createRaisedWeatherSurface } from './render/display.js';
-import { NO_IMAGERY_HOST } from './imageryHost.js';
+import { NO_IMAGERY_HOST } from '../shared/imageryHost.js';
 
 const times = [
   '2026-09-15T20:00:00.000Z',

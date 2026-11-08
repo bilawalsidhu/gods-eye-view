@@ -1,4 +1,4 @@
-import { bindContextStore } from '../../data/bindContextStore.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 import { constantRgba } from '../shared/color.js';
 import { appClock } from '../../time/clock.js';
@@ -29,7 +29,7 @@ export function createTracking({
     getContextStore,
     refreshTrackedSubjectContext,
     selectTrackedSubjectContext,
-  } = bindContextStore(services.context, () => getRenderer()?.engine);
+  } = bindOverlayHost(services.context, () => getRenderer()?.engine);
   const { refreshTrackedReadout } = services.readout;
 
   function _normalizeTrackedNorad(candidate) {

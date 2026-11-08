@@ -20,13 +20,10 @@ export const perimeterPickId = (row, index) =>
 
 /**
  * The perimeters: `{ setVisible, replace(rows), onClick(listener) → remove,
- * pick(click), destroy }`. A click listener gets the engine's click with its
- * pick; pick(click) is that pick (null for none).
+ * destroy }`. A click listener receives the engine's pick.
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createPerimetersDisplay(engine) {
-  if (!engine?.ground)
-    throw new TypeError('The fire perimeters display needs a globe engine');
   const set = engine.ground.createSet({
     id: SET_ID,
     kind: 'polygon',
@@ -72,7 +69,6 @@ export function createPerimetersDisplay(engine) {
       removers.add(off);
       return off;
     },
-    pick: (click) => click?.picked ?? null,
     destroy() {
       if (destroyed) return;
       destroyed = true;

@@ -66,7 +66,12 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
       ),
   };
   return {
-    viewer: createCesiumEngine({ camera, canvas, scene }),
+    viewer: createCesiumEngine({
+      camera,
+      canvas,
+      scene,
+      clock: { onTick: new Cesium.Event() },
+    }),
     state,
     degreesPerPixel,
   };

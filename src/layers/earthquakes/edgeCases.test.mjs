@@ -58,15 +58,13 @@ function layerWith(payloads) {
       setVisible() {},
       clearSource() {},
     },
-    renderer: {
-      create: () => ({
+    rendererFactory: () => ({
         setVisible() {},
         replace(discs) {
           replaced.push(discs.map((disc) => disc.stableId));
         },
         destroy() {},
       }),
-    },
   });
   return { layer, replaced, labelSets };
 }

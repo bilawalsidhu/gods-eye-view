@@ -11,7 +11,6 @@ const MAX_FRAMES = 120;
  * through the entity and puts it back. Returns a disposer.
  */
 export function swingFollowOffset(viewer, entity, local, position) {
-  if (!viewer?.scene?.preUpdate || !entity || !local) return () => {};
   let frames = 0;
   let remove = null;
   const stop = () => {
@@ -19,7 +18,7 @@ export function swingFollowOffset(viewer, entity, local, position) {
     remove = null;
   };
   remove = viewer.scene.preUpdate.addEventListener(() => {
-    if (viewer.isDestroyed?.() || viewer.trackedEntity !== entity) {
+    if (viewer.isDestroyed() || viewer.trackedEntity !== entity) {
       stop();
       return;
     }
@@ -62,9 +61,9 @@ export function swingFollowOffset(viewer, entity, local, position) {
       ? goal
       : Cesium.Cartesian3.clone(turnFollowOffset(from, goal));
     camera.lookAtTransform(camera.transform, next);
-    viewer.scene.requestRender?.();
+    viewer.scene.requestRender();
     if (done) stop();
   });
-  viewer.scene.requestRender?.();
+  viewer.scene.requestRender();
   return stop;
 }

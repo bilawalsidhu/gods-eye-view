@@ -12,7 +12,7 @@ export function createLifecycle({
   source,
   rendererFactory,
 }) {
-  const { clearOverlaySource, setOverlaySourceVisible } = services.overlays;
+  const { clearSource, setVisible } = services.overlays;
 
   const methods = {
     /** Initialize scene resources and the single audio element. */
@@ -21,8 +21,8 @@ export function createLifecycle({
       layerState._sessionGeneration += 1;
       parts.clustering.resetRadioClusterOverlayIdentities();
       parts.playback.installAudio();
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
-      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      setVisible(RADIO_OVERLAY_SOURCE_ID, false);
     },
 
     attachRenderer(viewer, options = {}) {
@@ -39,7 +39,7 @@ export function createLifecycle({
       });
       if (!parts.renderer)
         throw new TypeError('Radio has no renderer on this engine');
-      parts.renderer.init(viewer, options);
+      parts.renderer.init();
       if (layerState._enabled) {
         parts.rendering.drawStations(layerState._stations);
         parts.interaction.syncRadioLifecyclePresentation();
@@ -50,7 +50,7 @@ export function createLifecycle({
       parts.interaction.removeInteraction();
       clearTimeout(layerState._overlayPublishTimer);
       layerState._overlayPublishTimer = null;
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
       parts.renderer?.destroy();
       parts.renderer = null;
       layerState._renderById.clear();
@@ -91,8 +91,8 @@ export function createLifecycle({
       parts.clustering.resetRadioClusterOverlayIdentities();
       layerState._overlayDiagnostics =
         parts.clustering.emptyRadioOverlayDiagnostics();
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
-      setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, false);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
+      setVisible(RADIO_OVERLAY_SOURCE_ID, false);
       parts.presentation.emitState();
     },
 
@@ -109,7 +109,7 @@ export function createLifecycle({
       if (layerState._audio) layerState._audio.volume = DEFAULT_RADIO_VOLUME;
       layerState._audio = null;
       layerState._userVolume = DEFAULT_RADIO_VOLUME;
-      clearOverlaySource(RADIO_OVERLAY_SOURCE_ID);
+      clearSource(RADIO_OVERLAY_SOURCE_ID);
       parts.renderer?.destroy();
       parts.renderer = null;
       layerState._stations = [];

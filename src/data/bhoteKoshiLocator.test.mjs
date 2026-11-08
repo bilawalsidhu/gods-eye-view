@@ -21,11 +21,26 @@ import {
   BHOTE_KOSHI_REGIONAL_PRESENTATION,
   BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
   closeRegionRing,
-  createBhoteKoshiLocatorLayer,
+  createBhoteKoshiLocatorLayer as buildLocatorLayer,
   largestGeoJsonRing,
   NEPAL_CONTEXT_PRESENTATION,
   revealPolylinePositions,
 } from './bhoteKoshiLocator.js';
+
+function createBhoteKoshiLocatorLayer(options) {
+  let viewer;
+  const layer = buildLocatorLayer({ ...options,
+    createNativeRenderer(_engine, source) {
+      viewer._test.added.push(source);
+      return { destroy() { viewer._test.removed.push(source); } };
+    },
+  });
+  for (const name of ['init', 'attachRenderer', 'enable']) {
+    const method = layer[name];
+    layer[name] = (next, options) => { viewer = next; return method.call(layer, next, options); };
+  }
+  return layer;
+}
 
 function viewerFixture() {
   const added = [];

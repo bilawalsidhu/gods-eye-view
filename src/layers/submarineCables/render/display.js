@@ -133,8 +133,6 @@ export function createCablesDisplay(
     sweepClock = defaultSweepClock,
   } = {},
 ) {
-  if (!engine?.ground || !engine?.movers || !engine?.lines)
-    throw new TypeError('The cables display needs a globe engine');
   const publisher = createCableOverlayPublisher({
     host: bindOverlayHost(overlayHost, () => engine),
   });

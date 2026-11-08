@@ -35,7 +35,7 @@ function setup(t) {
   return {
     state: h.state, engine, base,
     get labels() { return labels; }, get options() { return options; }, get visible() { return visible; },
-    projections, records, markers: h.parts.namedMarkers, lifecycle: h.parts.lifecycle.methods,
+    projections, records, markers: h.parts.display?.namedMarkers, lifecycle: h.parts.display,
     setX: (value) => { x = value; },
     /** A pose change too small for a camera event. */
     nudge() { height += 1; engine.fake.setPose({ height }); },

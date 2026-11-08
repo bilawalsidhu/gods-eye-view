@@ -147,10 +147,10 @@ export function createNavigation({
 
   /** Radio may move the globe only while no tracked entity owns the follow camera. */
 
-  function radioCameraNavigationAllowed(viewer) {
-    if (viewer === undefined)
+  function radioCameraNavigationAllowed(engine) {
+    if (engine === undefined)
       return parts.renderer?.navigationAllowed() ?? false;
-    return Boolean(viewer?.camera) && !viewer.trackedEntity;
+    return Boolean(engine?.camera) && !engine.camera.following();
   }
 
   function radioGlobeRecenterPlan() {

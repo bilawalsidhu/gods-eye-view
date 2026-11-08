@@ -1,5 +1,5 @@
 import { acquireWeatherImage } from './infraredImage.js';
-import { imageryHostStatus } from './imageryHost.js';
+import { imageryHostStatus } from '../shared/imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
 import * as geo from '../../geo/index.js';

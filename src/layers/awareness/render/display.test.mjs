@@ -42,7 +42,7 @@ for (const makeHarness of HARNESSES) {
     assert.equal(display.cameraInputsEnabled(), false);
     resume();
     assert.equal(display.cameraInputsEnabled(), true);
-    h.engine.input.setCameraInputs(false);
+    h.engine.input.suspendCameraInputs();
     assert.equal(display.cameraInputsEnabled(), false);
   });
 

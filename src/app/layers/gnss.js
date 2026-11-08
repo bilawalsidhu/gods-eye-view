@@ -8,8 +8,7 @@ import { createGnssIntegrityLayer } from '../../layers/gnss/index.js';
  */
 export function createApplicationGnssIntegrity(options) {
   return createGnssIntegrityLayer({
-    createRenderer: ({ engine, viewAnchor }) =>
-      rendererFor('gnss-integrity', engine, { viewAnchor }),
+    rendererFactory: ({ engine }) => rendererFor('gnss-integrity', engine),
     ...options,
   });
 }

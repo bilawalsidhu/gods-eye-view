@@ -1,4 +1,4 @@
-import { bindContextStore } from '../../data/bindContextStore.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 import { nearFarScale } from '../shared/color.js';
 import { appClock } from '../../time/clock.js';
@@ -82,7 +82,7 @@ export function createAircraftTracking({
     selectTrackedSubjectContext,
     clearTrackedSubjectContext,
     refreshTrackedSubjectContext,
-  } = bindContextStore(services.context, () => flightState._renderer?.engine);
+  } = bindOverlayHost(services.context, () => flightState._renderer?.engine);
   const { isTr3b, tr3bConvertedIds } = services.aircraftPresentation;
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { resolveGroundFloorCellsBounded, floorAltitudeM, cachedGroundFloor } =

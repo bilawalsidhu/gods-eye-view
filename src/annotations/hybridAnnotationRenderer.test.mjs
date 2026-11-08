@@ -1,3 +1,4 @@
+import { installDomClasses } from '../testSupport/domClasses.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -75,24 +76,14 @@ function cameraLookingAt(lon, lat) {
 function installBrowserGlobals(t) {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalWindow = globalThis.window;
-  const originalBrowserConstructors = new Map([
-    ['HTMLCanvasElement', globalThis.HTMLCanvasElement],
-    ['HTMLImageElement', globalThis.HTMLImageElement],
-    ['ImageBitmap', globalThis.ImageBitmap],
-    ['OffscreenCanvas', globalThis.OffscreenCanvas],
-  ]);
+  installDomClasses(t);
   globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
   globalThis.window = { setTimeout: (fn) => { fn(); return 1; } };
-  for (const name of originalBrowserConstructors.keys()) globalThis[name] = class {};
   t.after(() => {
     if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
     else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
-    for (const [name, original] of originalBrowserConstructors) {
-      if (original === undefined) delete globalThis[name];
-      else globalThis[name] = original;
-    }
   });
 }
 
@@ -182,23 +173,13 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalWindow = globalThis.window;
   globalThis.window = { setTimeout: (fn) => { fn(); return 1; } };
-  const originalBrowserConstructors = new Map([
-    ['HTMLCanvasElement', globalThis.HTMLCanvasElement],
-    ['HTMLImageElement', globalThis.HTMLImageElement],
-    ['ImageBitmap', globalThis.ImageBitmap],
-    ['OffscreenCanvas', globalThis.OffscreenCanvas],
-  ]);
+  installDomClasses(t);
   globalThis.requestAnimationFrame = (callback) => { callback(); return 1; };
-  for (const name of originalBrowserConstructors.keys()) globalThis[name] = class {};
   t.after(() => {
     if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
     else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
-    for (const [name, original] of originalBrowserConstructors) {
-      if (original === undefined) delete globalThis[name];
-      else globalThis[name] = original;
-    }
   });
 
   const camera = cameraLookingAt(-99, 31);

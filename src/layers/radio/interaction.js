@@ -13,7 +13,7 @@ export function createInteraction({
   source,
 }) {
   const { resolvePickId, isOwnedByOtherLayer } = services.picking;
-  const { setOverlaySourceVisible } = services.overlays;
+  const { setVisible } = services.overlays;
 
   /** Resolve a station id from ordinary, selected, or Cesium cluster pick shapes. */
 
@@ -99,7 +99,7 @@ export function createInteraction({
   function syncRadioLifecyclePresentation() {
     const visible = radioPresentationAllowed();
     parts.renderer?.setVisible(visible);
-    setOverlaySourceVisible(RADIO_OVERLAY_SOURCE_ID, visible);
+    setVisible(RADIO_OVERLAY_SOURCE_ID, visible);
     if (visible) {
       installInteraction();
       parts.rendering.updateSelectionEntity();

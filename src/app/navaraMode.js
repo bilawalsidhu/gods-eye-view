@@ -6,7 +6,8 @@ import { t } from '../i18n/index.js';
 // none of it.
 
 import { registerDataCredits } from '../data/dataCredits.js';
-import { createLayerAvailability } from './layers/renderers.js';
+import { APPLICATION_LAYER_DIRECTORY } from './layers/directory.js';
+import { LAYER_MANIFEST } from './layers/renderers.js';
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
 
 /** The Navara globe module, loaded on demand. */
@@ -17,10 +18,11 @@ const loadNavaraGlobeModule = async () =>
  * The shell's notice in the experimental Navara mode (label and detail): the
  * data layers this engine shows (its catalog, from the layer manifest) and
  * what it does not have.
- * @param {import('./layers/renderers.js').LayerAvailability} availability
  */
-export function navaraModeNotice(availability) {
-  const names = availability.available().map(({ name }) => name);
+export function navaraModeNotice(manifest = LAYER_MANIFEST) {
+  const names = APPLICATION_LAYER_DIRECTORY.filter(({ id }) =>
+    Object.hasOwn(manifest, id),
+  ).map(({ name }) => name);
   return Object.freeze({
     label: t('Experimental Navara engine'),
     detail: names.length
@@ -61,7 +63,7 @@ export async function createNavaraScene({
   const { engine } = globe;
   signal.throwIfAborted();
   loaderStatus.textContent = t('Initializing systems...');
-  const mapStackController = new MapController(null, {
+  const mapStackController = new MapController({
     requestRender: (reason) => engine.render.request(reason),
     engine,
     ...mapOptions,
@@ -116,13 +118,11 @@ export function navaraToolBackend({ engine }) {
     // The session's tool on the engine's input and preview.
     draw: () => ({ engine }),
     recentImagery: () => ({ engine }),
-    attach({ data, styleManager }, { signal, defer }) {
+    attach({ styleManager }, { signal, defer }) {
       void styleManager.initialRestorePromise?.then(() => {
         if (!signal.aborted) views.alignDaylightToRestoredView();
       });
-      const notice = navaraModeNotice(
-        data.catalog?.availability ?? createLayerAvailability(engine.kind),
-      );
+      const notice = navaraModeNotice();
       styleManager._showGlobalStatusNotice?.(notice.label, {
         state: 'retry',
         detail: notice.detail,

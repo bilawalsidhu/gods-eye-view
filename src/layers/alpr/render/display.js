@@ -50,8 +50,8 @@ const SELECTED_ORDER = -0.5;
 // What a canvas-owned marker keeps of its badge: enough for a pick.
 const PICK_TARGET_ALPHA = 0.01;
 // The label accents, in Cesium's CSS form.
-const ACCENT = rgbaFromCss(ALPR_COLOR).toCssColorString();
-const SELECTED_ACCENT = rgbaFromCss(ALPR_SELECTED_COLOR).toCssColorString();
+const ACCENT = ALPR_COLOR;
+const SELECTED_ACCENT = ALPR_SELECTED_COLOR;
 
 /**
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
@@ -59,7 +59,6 @@ const SELECTED_ACCENT = rgbaFromCss(ALPR_SELECTED_COLOR).toCssColorString();
  *   The layer's state, services and camera source.
  */
 export function createAlprDisplay(engine, { state, services, source }) {
-  if (!engine) throw new TypeError('The ALPR display needs a globe engine');
   const { governorRequestRender } = services.render;
   const {
     clearSelectedEntityContextForLayer,
@@ -231,63 +230,11 @@ export function createAlprDisplay(engine, { state, services, source }) {
       },
     },
     onSurfaceChange: refreshPlacements,
-    engine: {
-      marker: (id) => markers.get(id),
-      markers: () => markers.values(),
-      canvasOwned(marker, owned) {
-        if (marker.canvasOwned === owned) return;
-        marker.canvasOwned = owned;
-        syncMarker(marker);
-      },
-      setShown(marker, shown) {
-        if (marker.shown === shown) return;
-        marker.shown = shown;
-        syncMarker(marker);
-      },
-      setDisplayPosition(marker, position) {
-        marker.displayPosition = position;
-      },
-      placeAnchor(marker, record, height) {
-        marker.gevAlprCanvasPosition = geo.cartesian3.fromDegrees(
-          record.longitude,
-          record.latitude,
-          height,
-        );
-        marker.resolved = true;
-        syncMarker(marker);
-      },
-      surfaceSupported: () => engine.surface.supported,
-      sampleHeight: (record) => sampleHeight(record),
-      terrainHeight,
-      surfaceSettled: () => engine.surface.tilesLoaded(),
-      cameraPose: () => engine.camera.pose(),
-      cameraPosition: () => engine.camera.livePosition,
-      projector: ({ width, height, viewProjectionMatrix: matrix }) => ({
-        horizonVisible: (point) => engine.projector.horizonVisible(point),
-        // The host captured the camera and CSS viewport for this frame;
-        // every wedge vertex reuses it instead of rereading DOM geometry.
-        project({ x, y, z }) {
-          const w = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
-          if (!(w > 0)) return null;
-          return {
-            x:
-              (((matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12]) /
-                w +
-                1) *
-                width) /
-              2,
-            y:
-              ((1 -
-                (matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13]) /
-                  w) *
-                height) /
-              2,
-          };
-        },
-      }),
-      cullOffscreenWedges: true,
-      createId: () => globalThis.crypto.randomUUID(),
-    },
+    engine,
+    markers,
+    syncMarker,
+    sampleHeight,
+    terrainHeight,
   });
 
   /** Places every marker again (a new map stack moved the surface). */
@@ -713,7 +660,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     focusNearest,
     /** The marker handles displayed now. */
     markers: () => [...markers.values()],
-    init(_viewer, { onMove }) {
+    init({ onMove }) {
       if (initialized) throw new Error('ALPR renderer is already initialized');
       // A source credit that is not a public HTTPS link fails here.
       creditMarkup = alprCreditMarkup(source.attribution);

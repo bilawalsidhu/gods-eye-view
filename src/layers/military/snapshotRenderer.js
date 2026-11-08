@@ -258,7 +258,7 @@ export function createMilitarySnapshotRenderer({
       const viewerCarto =
         flightState._renderer?.view.camera?.positionCartographic || null;
       sampleMeshFloorCells(
-        flightState._renderer?.view.surfaceScene,
+        flightState._renderer?.view.engine,
         _floorWarmPoints,
         {
           excludeObjects:

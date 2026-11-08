@@ -7,10 +7,10 @@ function setup(t, { failMarkers = false } = {}) {
   const noop = () => {};
   const services = {
     overlays: {
-      clearOverlaySource: noop,
-      hitTestWorldOverlay: noop,
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
+      clearSource: noop,
+      hitTest: noop,
+      setEntries: noop,
+      setVisible: noop,
     },
     activation: {},
     picking: { unregisterPickOwner: noop },

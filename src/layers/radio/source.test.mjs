@@ -86,9 +86,9 @@ test('radio factories keep settings and subscriptions independent without fetchi
     globe: {},
     render: { governorRequestRender() {} },
     overlays: {
-      clearOverlaySource() {},
-      setOverlaySourceVisible() {},
-      setOverlayEntries() {},
+      clearSource() {},
+      setVisible() {},
+      setEntries() {},
     },
   };
   const first = createRadioLayer({ source, services });

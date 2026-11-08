@@ -129,7 +129,7 @@ export function applyTrackedCameraFrame(
   // front/back oscillation). The controller then enforces the minimum range
   // during the same update pass.
   remove = viewer.scene.preUpdate.addEventListener(() => {
-    if (viewer.isDestroyed?.() || viewer.trackedEntity !== entity) {
+    if (viewer.isDestroyed() || viewer.trackedEntity !== entity) {
       stop();
       return;
     }
@@ -356,7 +356,7 @@ export function createCesiumFollow(viewer, { commanded }) {
         viewer.trackedEntity = undefined;
       release(state);
     });
-    viewer.scene.requestRender?.();
+    viewer.scene.requestRender();
   }
 
   function follow(input) {

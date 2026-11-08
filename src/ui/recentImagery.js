@@ -296,7 +296,7 @@ export function createRecentImageryPanel({
             title: t('Use the current view as the box'),
             onClick: () => {
               exportError = null;
-              layer.useCurrentView(viewer);
+              layer.useCurrentView();
             },
           },
           {

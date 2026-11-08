@@ -222,10 +222,10 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
       clearSelectedEntityContextForLayer() {},
     },
   });
-  h.parts.lifecycle.methods.init();
+  h.parts.display.init();
   const { state } = h;
   state.selectedId = selected.id;
-  const rendering = h.parts.rendering;
+  const rendering = h.parts.display;
   for (const members of [[a, b], [b], [a, b]]) {
     state.records = mergeMilitaryFragments(members, aliases);
     state.recordById = new Map(state.records.map((r) => [r.id, r]));
@@ -298,9 +298,9 @@ test('cold names reconcile selection through enrichment, identical groups at ano
       clearSelectedEntityContextForLayer() {},
     },
   });
-  h.parts.lifecycle.methods.init();
+  h.parts.display.init();
   const { state } = h;
-  const rendering = h.parts.rendering;
+  const rendering = h.parts.display;
   const publish = (records, claimSelection = false) => {
     state.records = records;
     state.recordById = new Map(records.map((r) => [r.id, r]));

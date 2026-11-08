@@ -295,7 +295,7 @@ export function createRendering({
     const meta = flightState.records.data.get(icao24);
     if (!meta || !meta.onGround) return pos;
     const h = flightState._groundSnap.heightFor(
-      flightState._renderer?.view.surfaceOwner,
+      flightState._renderer?.view.engine,
       icao24,
       pos,
       _groundSampleExclusions,

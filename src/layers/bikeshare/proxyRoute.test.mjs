@@ -457,8 +457,8 @@ test('a station without a published capacity re-derives it from every status pol
     _cityRuntime: new Map(),
     _stationRenderMap: new Map(),
   };
-  const parts = { model, selection: { refreshSelectedCard() {} } };
-  const { rendering } = createBikeshareDisplay(createFakeEngine(), {
+  const parts = { model, display: { refreshSelectedCard() {} } };
+  const rendering = createBikeshareDisplay(createFakeEngine(), {
     state,
     services: { render: { governorRequestRender() {} } },
     parts,

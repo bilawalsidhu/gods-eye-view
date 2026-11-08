@@ -113,7 +113,7 @@ export function createSelection({ state, services, parts }) {
     if (event.key === 'Escape' && state._selectedKey) clearSelection();
   }
 
-  function installClickHandler(viewer) {
+  function installClickHandler() {
     if (state._clickHandler) return;
     state._clickHandler = parts.renderer.bindClick((picked) => {
       state._lastPickForTest = picked;

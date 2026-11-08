@@ -331,7 +331,7 @@ On the engine:
 
 - on the globe's imagery layers while the globe shows, else on the shown 3D
   tileset's own imagery layers (Cesium drapes imagery on tiles there), as
-  `src/maps/imageryHost.js` resolves it for the shell; with neither, the
+  `engine.imagery.surface()` reports it to layers; with neither, the
   layers wait;
 - the engine checks the surface on every frame while it holds a layer, and
   builds each layer again on the new stack after a switch;
@@ -474,8 +474,7 @@ against the native ellipsoidal occluder, including points near the limb.
 `engine.input.suspendCameraInputs()` disables camera gestures and returns an
 idempotent resume function. Suspensions are counted: only the last resume
 restores the state captured before the first suspension. This preserves an
-already-disabled camera. A `setCameraInputs()` call during suspension updates
-the state restored on resume. `cameraInputsEnabled()` reads the current state.
+already-disabled camera. `cameraInputsEnabled()` reads the current state.
 Cockpit, imagery-box drawing, CCTV calibration and infrastructure flights use
 these methods on every engine. Pointer claims remain separate from camera
 input suspension.
@@ -539,7 +538,7 @@ Positions stay live cached visual anchors. `trackedReadoutFor(engine)` resolves
 the service; destruction removes its listeners and clears only its own source.
 
 `scene.services.context` owns selection records and notifications. Layer publishers
-use `bindContextStore` with their current engine, or a context service captured by
+use `bindOverlayHost` with their current engine, or a context service captured by
 their display. It mirrors records to the page context slot and preserves the
 `gev:entity-selected`, `gev:entity-selection-cleared` and aircraft awareness event
 payloads for page consumers. A clear reaches the page only when that attachment

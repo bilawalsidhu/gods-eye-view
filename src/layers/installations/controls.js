@@ -49,7 +49,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     statsRefreshInterval: 1000,
 
     visitNamedMarkers(visitor) {
-      parts.namedMarkers?.visit(visitor);
+      parts.display?.namedMarkers?.visit(visitor);
     },
 
     /** Request a one-shot Google Maps Places search around the current map view. */
@@ -179,7 +179,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (!record || (!flyToSphere && !flyToBoundingSphere)) return false;
       // No camera flight without a real selection: a flight plus a stale subject
       // reads as success to Context navigation and strands NEXT on this item.
-      if (!parts.selection.selectRecord(record.id)) return false;
+      if (!parts.display.selectRecord(record.id)) return false;
       const sphere = {
         center: geo.cartesian3.fromDegrees(
           record.longitude,
@@ -226,7 +226,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     getStats() {
-      const namedMarkers = parts.namedMarkers?.stats();
+      const namedMarkers = parts.display?.namedMarkers?.stats();
       const subjectWindow =
         layerState.coverage?.kind === 'subject' &&
         layerState.contextPosition &&

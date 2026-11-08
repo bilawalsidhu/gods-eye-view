@@ -25,11 +25,6 @@ const STYLE = Object.freeze({
   order: 0,
 });
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createStreetLevelDisplay(null), /globe engine/);
-  assert.throws(() => createStreetLevelDisplay({}), /globe engine/);
-});
-
 test('a line colour is the CSS colour, its alpha replaced when asked', () => {
   assert.deepEqual(lineColor('#00d4ff'), [0, 0xd4 / 255, 1, 1]);
   assert.deepEqual(lineColor('#05cb63', 0.92), [

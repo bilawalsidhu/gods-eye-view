@@ -1093,7 +1093,6 @@ function createEngineRig(engine) {
   const place = (position, direction, up) =>
     camera.setView({ destination: position, orientation: { direction, up } });
   return {
-    kind: 'engine',
     owner: engine,
     engine,
     position: () => pose().position,
@@ -1255,42 +1254,9 @@ function engineRigFor(engine) {
   return rig;
 }
 
-/** The members an engine rig reads, as paths on the engine. */
-const ENGINE_RIG_MEMBERS = Object.freeze([
-  'camera.pose',
-  'camera.height',
-  'camera.setView',
-  'camera.lookAt',
-  'camera.release',
-  'camera.transform',
-  'camera.flightActive',
-  'camera.following',
-  'camera.cancelFlight',
-  'frames.preRender.addEventListener',
-  'camera.followChanged.addEventListener',
-  'host.size',
-  'projector.worldToWindow',
-  'render.request',
-]);
-
-/**
- * Whether the camera verbs (move_camera, and fly_route over a route list) can
- * drive this target: a globe engine with every contract member the rig
- * reads. The voice gate asks this instead of "is there a viewer".
- * @param {object|null|undefined} target A globe engine.
- * @returns {boolean}
- */
-export function cameraVerbsSupported(target) {
-  if (!target || target.isDestroyed?.()) return false;
-  return ENGINE_RIG_MEMBERS.every(
-    (path) =>
-      typeof path
-        .split('.')
-        .reduce(
-          (value, key) => (value == null ? value : value[key]),
-          target,
-        ) === 'function',
-  );
+/** Whether the engine can accept camera motions. */
+export function cameraVerbsSupported(engine) {
+  return Boolean(engine) && !engine.isDestroyed();
 }
 
 /* ── Motion state ───────────────────────────────────────────────────────── */
@@ -1705,7 +1671,6 @@ export function getActiveCameraMotion() {
     mode: _active.mode,
     speed: _active.speed,
     motionId: _active.motionId || 0,
-    rig: _active.rig?.kind ?? null,
   };
   if (_active.kind === 'route') {
     info.progress = _active.u;

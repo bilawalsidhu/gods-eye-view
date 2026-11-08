@@ -8,20 +8,11 @@ import {
   selectEntityContext,
   getSelectedEntityContext,
 } from '../data/contextStore.js';
-import {
-  clearOverlaySource,
-  setOverlayEntries,
-  setOverlaySourceVisible,
-} from '../overlays/worldOverlay.js';
+
 /** Existing standalone application operations, shared by its local layers. */
 export const localGeoJsonServices = Object.freeze({
   context,
-  overlayHost: Object.freeze({
-    forEngine: worldOverlayFor,
-    clearSource: clearOverlaySource,
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-  }),
+  overlayHost: worldOverlayFor,
   clearSelectedEntityContextForLayer,
   registerEntityContext,
   removeEntityContextsForLayer,

@@ -121,7 +121,7 @@ test('missing scene capabilities refuse with a structured result', async () => {
       return target[key];
     },
   });
-  delete engine.camera.lookAt;
+  engine.destroy();
   const runner = runnerOn(engine, { styleManager });
   // The runner subscribes to camera handoffs when it is made.
   touched.length = 0;
@@ -157,7 +157,7 @@ test('with a viewer radio still reports a missing layer', async () => {
       scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
       camera: { moveEnd: { addEventListener() {} } },
     },
-    engine: engineOverAustin(),
+    engine: engineOverAustin({ visualStyles: { thermal: [] } }),
     styleManager: {},
     dataManager: dataManagerWith({}),
   });
@@ -478,7 +478,7 @@ test('with a viewer the visual style still applies', async () => {
       scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
       camera: { moveEnd: { addEventListener() {} } },
     },
-    engine: engineOverAustin(),
+    engine: engineOverAustin({ visualStyles: { thermal: [] } }),
     styleManager: navigatingStyleManager({
       setStyle: (style) => calls.push(style),
     }),
@@ -487,50 +487,6 @@ test('with a viewer the visual style still applies', async () => {
   const result = await runner('set_visual_style', { style: 'thermal' });
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ['thermal']);
-});
-
-test('without a viewer a layer the engine lacks refuses instead of throwing', async () => {
-  const engine = engineOverAustin({ kind: 'navara' });
-  const runner = runnerOn(engine, {
-    dataManager: dataManagerWith({ flights: {} }),
-  });
-  const result = await runner('set_layer_visibility', {
-    layerId: 'cctv',
-    enabled: true,
-  });
-  assert.equal(result.ok, false);
-  assert.equal(result.code, UNAVAILABLE_ON_ENGINE);
-  assert.equal(result.layerId, 'cctv');
-  assert.equal(result.suggestion, '?engine=cesium');
-  assert.match(
-    result.error,
-    /The cctv layer is not available on the Navara engine yet/,
-  );
-  await assert.rejects(
-    runner('set_layer_visibility', { layerId: 'no-such-layer', enabled: true }),
-    /Unknown data layer/,
-    'a name no engine knows is still an unknown layer',
-  );
-});
-
-test('without a viewer analyst_query on a layer the engine lacks refuses', async () => {
-  const engine = engineOverAustin({ kind: 'navara' });
-  const runner = runnerOn(engine, {
-    dataManager: dataManagerWith({ flights: {} }),
-  });
-  const one = await runner('analyst_query', { layers: ['cctv'] });
-  assert.equal(one.ok, false);
-  assert.equal(one.code, UNAVAILABLE_ON_ENGINE);
-  assert.deepEqual(one.layerIds, ['cctv']);
-  assert.match(
-    one.error,
-    /^The cctv layer is not available on the Navara engine yet/,
-  );
-  const two = await runner('analyst_query', { layers: ['cctv', 'vessels'] });
-  assert.match(
-    two.error,
-    /^The cctv, ais-live-vessels layers are not available on the Navara engine yet\. Switch to the Cesium engine \(\?engine=cesium\) to use them\.$/,
-  );
 });
 
 test('stop_tracking with nothing tracked is a no-op success, also without the layers', async () => {
@@ -544,22 +500,4 @@ test('stop_tracking with nothing tracked is a no-op success, also without the la
   const result = await runner('stop_tracking', {});
   assert.equal(result.ok, true);
   assert.deepEqual(result.released, []);
-});
-
-test('the spoken refusal of an unavailable layer carries its reason', async () => {
-  const { SPEECH_BUILDERS } = await import('./speech.js');
-  const engine = engineOverAustin({ kind: 'navara' });
-  const runner = runnerOn(engine, {
-    dataManager: dataManagerWith({ flights: {} }),
-  });
-  const result = await runner('set_layer_visibility', {
-    layerId: 'cctv',
-    enabled: true,
-  });
-  const speech = SPEECH_BUILDERS.set_layer_visibility(result, {
-    layerId: 'cctv',
-    enabled: true,
-  });
-  assert.equal(speech.say, result.error);
-  assert.match(speech.say, /Switch to the Cesium engine/);
 });

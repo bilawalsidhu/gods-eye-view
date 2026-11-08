@@ -9,7 +9,7 @@ import { overlayHost } from './overlayHost.js';
 export function createApplicationAirQuality(options) {
   return createAirQualityLayer({
     overlayHost,
-    createRenderer: ({ engine }) => rendererFor('air-quality', engine),
+    rendererFactory: ({ engine }) => rendererFor('air-quality', engine),
     ...options,
   });
 }

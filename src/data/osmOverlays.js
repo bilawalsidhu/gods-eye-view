@@ -1,4 +1,4 @@
-import { NO_IMAGERY_HOST } from '../maps/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../layers/shared/imageryHost.js';
 
 /**
  * @file Open-data raster overlays: OpenSeaMap sea marks and OpenSnowMap ski

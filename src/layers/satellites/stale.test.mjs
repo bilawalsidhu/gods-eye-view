@@ -74,9 +74,9 @@ async function fixture(t) {
       create: ({ engine }) => createSatellitesDisplay(engine),
     },
     overlays: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
+      setEntries: noop,
+      setVisible: noop,
+      clearSource: noop,
     },
     layerState: { isExplicitLayerStateOrigin: () => false },
     focus: {

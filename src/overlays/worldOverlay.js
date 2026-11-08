@@ -2934,19 +2934,8 @@ export function createWorldOverlay(engine) {
   }
 
   return {
-    registerWorldOverlayPaintLane,
-    setOverlayEntries,
-    upsertOverlayEntry,
-    removeOverlayEntry,
-    clearOverlaySource,
-    setOverlaySourceVisible,
-    getOverlayPaintRect,
-    hitTestWorldOverlay,
-    getWorldOverlayDiagnostics,
-    subscribeWorldOverlayActions,
-    activateWorldOverlayAction,
-    initWorldOverlay,
-    destroyWorldOverlay,
+    upsertEntry: upsertOverlayEntry,
+    removeEntry: removeOverlayEntry,
     init: initWorldOverlay,
     destroy: destroyWorldOverlay,
     setEntries: setOverlayEntries,
@@ -2963,60 +2952,4 @@ export function createWorldOverlay(engine) {
 
 export function worldOverlayFor(engine) {
   return sceneServicesFor(engine)?.overlay;
-}
-
-export const forEngine = worldOverlayFor;
-
-export function registerWorldOverlayPaintLane(engine, ...args) {
-  return worldOverlayFor(engine)?.registerWorldOverlayPaintLane(...args);
-}
-
-export function setOverlayEntries(engine, ...args) {
-  return worldOverlayFor(engine)?.setOverlayEntries(...args);
-}
-
-export function upsertOverlayEntry(engine, ...args) {
-  return worldOverlayFor(engine)?.upsertOverlayEntry(...args);
-}
-
-export function removeOverlayEntry(engine, ...args) {
-  return worldOverlayFor(engine)?.removeOverlayEntry(...args);
-}
-
-export function clearOverlaySource(engine, ...args) {
-  return worldOverlayFor(engine)?.clearOverlaySource(...args);
-}
-
-export function setOverlaySourceVisible(engine, ...args) {
-  return worldOverlayFor(engine)?.setOverlaySourceVisible(...args);
-}
-
-export function getOverlayPaintRect(engine, ...args) {
-  return worldOverlayFor(engine)?.getOverlayPaintRect(...args);
-}
-
-export function hitTestWorldOverlay(engine, ...args) {
-  return worldOverlayFor(engine)?.hitTestWorldOverlay(...args);
-}
-
-export function getWorldOverlayDiagnostics(engine, ...args) {
-  return worldOverlayFor(engine)?.getWorldOverlayDiagnostics(...args);
-}
-
-export function subscribeWorldOverlayActions(engine, ...args) {
-  return worldOverlayFor(engine)?.subscribeWorldOverlayActions(...args);
-}
-
-export function activateWorldOverlayAction(engine, ...args) {
-  return worldOverlayFor(engine)?.activateWorldOverlayAction(...args);
-}
-
-export function initWorldOverlay(engine, ...args) {
-  if (!engine?.projector || !engine.frames?.postRender || !engine.host)
-    throw new TypeError('initWorldOverlay requires a globe engine');
-  return worldOverlayFor(engine)?.initWorldOverlay(...args);
-}
-
-export function destroyWorldOverlay(engine, ...args) {
-  return worldOverlayFor(engine)?.destroyWorldOverlay(...args);
 }

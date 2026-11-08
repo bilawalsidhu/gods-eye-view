@@ -796,11 +796,11 @@ test('Cockpit hides the complete top-center globe action group', () => {
 test('Reset releases Contact camera ownership through its selection-preserving route', () => {
   const resetStart = ui.indexOf('resetToGlobeView()');
   const contextRelease = ui.indexOf(
-    "militaryAwarenessLayer.releaseCameraOwnership?.({ origin: 'tool' })",
+    "releaseTrackers(this.services, { origin: 'tool' })",
     resetStart,
   );
   const satelliteRelease = ui.indexOf(
-    "satellitesLayer.stopTracking?.({ origin: 'tool' })",
+    'this.engine.camera.following()?.stop()',
     resetStart,
   );
 
@@ -841,10 +841,9 @@ test('Location navigation releases immediate routes before flight and deferred r
   const voiceStart = voiceActions.indexOf('beginDeferredLocationNavigation');
 
   assert.ok(releaseStart >= 0, 'shared Location camera handoff is missing');
-  assert.match(
-    ui.slice(releaseStart, releaseStart + 1800),
-    /militaryAwarenessLayer\.releaseCameraOwnership\?\.\(\{[\s\S]*?origin: trackingOrigin[\s\S]*?\}\)[\s\S]*?satellitesLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)[\s\S]*?rocketLaunchesLayer\.releaseCameraOwnership\?\.\(\)/,
-  );
+  assert.match(ui.slice(releaseStart, releaseStart + 1800),
+    /releaseTrackers\(this.tracking, \{[\s\S]*?origin: trackingOrigin/);
+
   assert.match(
     ui.slice(locationFlight, locationFlight + 900),
     /this\._runExplicitNavigation\('location',[\s\S]*?flyAction\(/,

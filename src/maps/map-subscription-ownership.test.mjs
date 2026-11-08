@@ -1,19 +1,9 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
 function fixture() {
   return new MapSourceController(
-    {
-      scene: {
-        globe: { show: true },
-        requestRender() {},
-        frameState: {
-          creditDisplay: { addStaticCredit() {}, removeStaticCredit() {} },
-        },
-        primitives: { add() {}, remove() {} },
-      },
-      imageryLayers: { add() {}, remove() {} },
-    },
     {
       registry: {
         defaultId: 'fixture',
@@ -24,7 +14,7 @@ function fixture() {
           },
         ],
       },
-      createImageryLayer: (provider) => ({ provider }),
+      engine: createFakeEngine(),
     },
   );
 }

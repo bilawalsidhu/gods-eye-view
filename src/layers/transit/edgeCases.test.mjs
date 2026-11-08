@@ -22,9 +22,9 @@ function harness(t) {
   t.mock.method(console, 'warn', () => {});
   const services = {
     overlays: {
-      setOverlayEntries() {},
-      setOverlaySourceVisible() {},
-      clearOverlaySource() {},
+      setEntries() {},
+      setVisible() {},
+      clearSource() {},
     },
     render: { governorRequestRender() {} },
     sprites: {},

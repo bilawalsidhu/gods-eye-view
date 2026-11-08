@@ -431,7 +431,7 @@ test('cables create no native labels, no per-frame callbacks and no engine impor
   );
   assert.match(
     source,
-    /setOverlayEntries/,
+    /setEntries/,
     'labels must flow through the shared world-overlay host',
   );
 });

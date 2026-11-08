@@ -127,9 +127,6 @@ test('fake input dispatches to subscribers and off removes them', () => {
   engine.fake.input('click', { position: geo.cartesian2.create(6, 7) });
   assert.deepEqual(seen, [geo.cartesian2.create(4, 5)]);
   assert.throws(() => engine.input.on('wheel', () => {}), /Unknown input type/);
-  engine.input.setCameraInputs(false);
-  assert.equal(engine.fake.cameraInputsEnabled, false);
-  engine.input.setCameraInputs(true);
   const resume = engine.input.suspendCameraInputs();
   const inner = engine.input.suspendCameraInputs();
   assert.equal(engine.input.cameraInputsEnabled(), false);

@@ -29,9 +29,7 @@ const LEVEL_LABELS = Object.freeze({
  */
 export function createGnssIntegrityLayer({
   source,
-  viewAnchor,
-  createRenderer = ({ engine, viewAnchor: anchor }) =>
-    createGnssDisplay(engine, { viewAnchor: anchor }),
+  rendererFactory = ({ engine }) => createGnssDisplay(engine),
   now = () => Date.now(),
   monotonicNow = () => performance.now(),
   windowMs: requestedWindowMs,
@@ -171,7 +169,7 @@ export function createGnssIntegrityLayer({
     attachRenderer(viewer, { engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid GNSS scene attachment');
-      renderer = createRenderer({ engine, viewAnchor });
+      renderer = rendererFactory({ engine });
       _removeCameraEnd = renderer.camera?.moveEnd?.addEventListener(
         scheduleCameraRefresh,
       );

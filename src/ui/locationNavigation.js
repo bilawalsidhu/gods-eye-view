@@ -1,3 +1,4 @@
+import { releaseTrackers } from './releaseTrackers.js';
 import * as geo from '../geo/index.js';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
@@ -327,17 +328,7 @@ export class LocationNavigation {
   }
 
   resetToGlobeView() {
-    const {
-      GLOBE_VIEW,
-      flyToGlobeView,
-      interruptCameraMotion,
-      flightsLayer,
-      militaryFlightsLayer,
-      satellitesLayer,
-      aisLiveVesselsLayer,
-      militaryAwarenessLayer,
-      rocketLaunchesLayer,
-    } = this.services;
+    const { GLOBE_VIEW, flyToGlobeView, interruptCameraMotion } = this.services;
     // Between two globe engines there is no camera to reset: nothing moves
     // and no navigation is stamped.
     if (this._disposed || !this.engine)
@@ -351,39 +342,7 @@ export class LocationNavigation {
     interruptCameraMotion('reset-globe');
     this._stopOrbit();
     this.cockpitView?.exit({ restoreTracking: false });
-    try {
-      // If awareness controls are unavailable, release the trackers directly.
-      if (typeof militaryAwarenessLayer?.releaseCameraOwnership !== 'function')
-        throw new Error('no military awareness controls');
-      militaryAwarenessLayer.releaseCameraOwnership?.({ origin: 'tool' });
-    } catch {
-      // Keep reset available if Context has not initialized completely.
-      try {
-        flightsLayer.stopTracking?.({ origin: 'tool' });
-      } catch {
-        /* best-effort release */
-      }
-      try {
-        militaryFlightsLayer.stopTracking?.({ origin: 'tool' });
-      } catch {
-        /* best-effort release */
-      }
-      try {
-        aisLiveVesselsLayer.clearSelection?.();
-      } catch {
-        /* best-effort release */
-      }
-    }
-    try {
-      satellitesLayer.stopTracking?.({ origin: 'tool' });
-    } catch {
-      /* best-effort release */
-    }
-    try {
-      rocketLaunchesLayer.releaseCameraOwnership?.();
-    } catch {
-      /* best-effort release */
-    }
+    releaseTrackers(this.services, { origin: 'tool' });
     this.engine.camera.following()?.stop();
     this.engine.camera.cancelFlight();
     this.engine.camera.release();

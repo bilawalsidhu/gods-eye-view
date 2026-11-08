@@ -41,7 +41,7 @@ function harness(t, makeHarness = GROUND_HARNESSES[0]) {
   h.setRecords([record]);
   h.setPhotoreal(true);
   h.start();
-  const selection = h.parts.selection;
+  const selection = h.parts.display;
   t.after(() => {
     h.destroy();
     if (previousWindow === undefined) delete globalThis.window;
@@ -93,7 +93,7 @@ test('entity selection and clear still release the installation card and fill', 
 
 test('destroy removes all installation context listeners', (t) => {
   const h = harness(t);
-  h.selection.destroy();
+  h.selection.destroyInteraction();
   context.selectTrackedSubjectContext({ id: 'other', layerId: 'flights' });
   for (const type of [
     'gev:entity-selected',

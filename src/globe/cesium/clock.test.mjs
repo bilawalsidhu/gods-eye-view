@@ -91,24 +91,6 @@ test('frameTime reads the latch; destroy removes it', () => {
   assert.equal(viewer.clock.onTick.numberOfListeners, 0);
 });
 
-test('a viewer without a clock latches on preUpdate', () => {
-  const viewer = createFakeViewer();
-  delete viewer.clock;
-  const wall = manualAppClock();
-  const { clock, destroy } = createCesiumClock(viewer, {
-    appClock: wall.appClock,
-  });
-  // Attached on first use: creating the clock adds no scene listener.
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
-  const before = clock.frameTime();
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
-  wall.advance(7);
-  viewer.scene.preUpdate.raiseEvent(viewer.scene);
-  wall.advance(2);
-  assert.equal(clock.frameTime(), before + 7);
-  destroy();
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
-});
 
 test('the viewer clock itself is left alone', () => {
   const viewer = createFakeViewer();

@@ -15,7 +15,7 @@ const PREVIEW = Object.freeze({
   fill: [0.545, 0.914, 1, 0.12],
   outline: { color: [0.545, 0.914, 1, 0.95], widthPx: 2 },
 });
-// What the layer calls a surface (src/maps/imageryHost.js kinds).
+// The host kinds exposed by engine imagery.
 const HOST_KIND = { globe: 'globe', tiles: 'tileset', none: 'none' };
 
 const boxKey = (box) =>
@@ -48,8 +48,6 @@ export function createRecentImageryDisplay(
     maxTileRequests = 6,
   } = {},
 ) {
-  if (!engine?.imagery || !engine?.ground)
-    throw new TypeError('The Recent Imagery display needs a globe engine');
   /** @type {Record<'a'|'b', null | { layer: object, candidate: object, box: object, alpha: number, split: string }>} */
   const owned = { a: null, b: null };
   let host = { identity: null, kind: 'none' };

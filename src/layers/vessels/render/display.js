@@ -75,8 +75,6 @@ export function createVesselsDisplay(
   engine,
   { drawAtlas = drawVesselAtlas } = {},
 ) {
-  if (!engine?.movers || !engine?.lines)
-    throw new TypeError('The vessels display needs a globe engine');
   let destroyed = false;
 
   // --- commits: once per frame listener, or in a microtask -----------------
@@ -113,22 +111,7 @@ export function createVesselsDisplay(
     wrap: inFrameDo,
     isDestroyed: () => destroyed,
   });
-  const base = layerView.view;
-  const view = {
-    get camera() {
-      return base.camera;
-    },
-    scene: base.scene,
-    horizon: () => base.horizon(),
-    worldToWindow: (position, result) => base.worldToWindow(position, result),
-    canvasSize: () => engine.host.size(),
-    requestRender: () => base.requestRender(),
-    on(event, listener) {
-      return event === 'preRender' || event === 'moveEnd'
-        ? base.on(event, listener)
-        : null;
-    },
-  };
+  const view = layerView.view;
 
   // --- the chevrons ------------------------------------------------------------
   let atlas = null;

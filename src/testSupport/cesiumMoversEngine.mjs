@@ -1,3 +1,4 @@
+import { installDomClasses } from './domClasses.mjs';
 // The Cesium engine over a real Cesium camera on a stub scene
 // (globe/cesium/testing/cameraViewer.mjs), set up for layers that draw
 // through engine.movers, engine.lines and the follow: Cesium's own
@@ -11,14 +12,7 @@ import { createCameraViewer } from '../globe/cesium/testing/cameraViewer.mjs';
 
 // Cesium's Material sorts uniform values with instanceof checks against these
 // DOM classes; Node has none of them.
-for (const name of [
-  'HTMLCanvasElement',
-  'HTMLImageElement',
-  'HTMLVideoElement',
-  'ImageBitmap',
-  'OffscreenCanvas',
-])
-  globalThis[name] ??= class {};
+installDomClasses();
 
 const items = (collection) =>
   Array.from({ length: collection.length }, (_, index) =>

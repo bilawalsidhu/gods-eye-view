@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LAYER_MANIFEST, CONTRACT_PRIMITIVES } from './renderers.js';
+import { LAYER_MANIFEST } from './renderers.js';
+const CONTRACT_PRIMITIVES = ['movers', 'lines', 'ground', 'imagery', 'meshes'];
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import * as geo from '../../geo/index.js';
 import { rgbaFromCss } from '../../layers/shared/color.js';
@@ -166,7 +167,7 @@ const cases = {
       },
     });
     engine.camera.setView({ destination: at(-97, 30, 2000) });
-    d.init(null, { onMove: noop });
+    d.init({ onMove: noop });
     d.setVisible(true);
     d.renderRecords();
     return { hide: () => d.setVisible(false) };
@@ -308,8 +309,8 @@ const cases = {
       },
     });
     layer.init(null, { engine });
-    display.lifecycle.methods.show();
-    display.rendering.ensureCityPoints(
+    display.show();
+    display.ensureCityPoints(
       'austin-capmetro',
       new Map([
         [
@@ -326,7 +327,7 @@ const cases = {
     );
     return { hide: () => layer.disable(), destroy: () => layer.destroy() };
   },
-  directions: (make) => {
+  directions: (make, engine) => {
     const d = make();
     d.setMarker('A', { lat: 0, lon: 0 });
     d.setRoute({
@@ -336,7 +337,7 @@ const cases = {
         [1, 1],
       ],
     });
-    const off = d.onClick(noop);
+    const off = engine.input.on('click', noop, { pick: true });
     d.show(true);
     return { hide: () => d.show(false), detach: off };
   },
@@ -388,9 +389,9 @@ const cases = {
         sources: [],
       },
     ]);
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     return {
-      hide: () => h.parts.lifecycle.methods.disable(),
+      hide: () => h.parts.display.disable(),
       destroy: () => h.destroy(),
     };
   },
@@ -587,9 +588,9 @@ function servicesFixture() {
     ground: { cachedGroundFloor: () => 20, warmGroundFloor: noop },
     globe: { getKeyholeGeometry: () => ({ radius: 500 }) },
     overlays: {
-      setOverlayEntries: overlayHost.setEntries,
-      clearOverlaySource: overlayHost.clearSource,
-      setOverlaySourceVisible: noop,
+      setEntries: overlayHost.setEntries,
+      clearSource: overlayHost.clearSource,
+      setVisible: noop,
     },
     picking: {
       registerPickOwner: (id, fn) => owners.set(id, fn),

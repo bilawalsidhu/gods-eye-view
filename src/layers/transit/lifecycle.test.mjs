@@ -1,3 +1,4 @@
+import { installDomClasses } from '../../testSupport/domClasses.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -267,9 +268,9 @@ function harness(
         unregisterPickOwner: (id) => pickOwners.delete(id),
       },
       overlays: {
-        setOverlayEntries: (id, entries) => overlaySources.set(id, entries),
-        setOverlaySourceVisible() {},
-        clearOverlaySource: (id) => overlaySources.delete(id),
+        setEntries: (id, entries) => overlaySources.set(id, entries),
+        setVisible() {},
+        clearSource: (id) => overlaySources.delete(id),
       },
       credits: {
         registerDynamicCredit: (_engine, credit) => credits.push(credit?.key),
@@ -712,19 +713,7 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
   const pending = new Promise((resolve) => {
     release = resolve;
   });
-  for (const name of [
-    'HTMLCanvasElement',
-    'HTMLImageElement',
-    'ImageBitmap',
-    'OffscreenCanvas',
-  ]) {
-    const prior = globalThis[name];
-    globalThis[name] = class {};
-    t.after(() => {
-      if (prior === undefined) delete globalThis[name];
-      else globalThis[name] = prior;
-    });
-  }
+  installDomClasses(t);
   t.mock.method(performance, 'now', () => Date.now() - 1_789_000_000_000);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -972,7 +961,6 @@ test('destroy releases every shared registration this layer took', async (t) => 
   );
   assert.deepEqual(app.engine.lines.list(), []);
   assert.equal(app.holds().includes('transit'), false);
-  assert.equal(app.state()._viewer, null);
   assert.equal(app.state()._dataManager, null);
 });
 
@@ -990,9 +978,9 @@ test('two layers built from the factory share no state', async (t) => {
       },
       picking: { registerPickOwner() {}, unregisterPickOwner() {} },
       overlays: {
-        setOverlayEntries() {},
-        setOverlaySourceVisible() {},
-        clearOverlaySource() {},
+        setEntries() {},
+        setVisible() {},
+        clearSource() {},
       },
       credits: {
         registerDynamicCredit() {},
@@ -3629,12 +3617,10 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
       },
       source: {},
       parts: {
-        selection: {
+        display: {
           _installClickHandler: noop,
           _uninstallClickHandler: noop,
           _clearSelection: noop,
-        },
-        viewport: {
           onCameraChanged: noop,
           runProximityCheck: noop,
           deactivateAllCities: noop,
@@ -3642,7 +3628,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
         ingestion: { abortAllInFlight: noop },
       },
     },
-  ).lifecycle.methods;
+  );
   const layers = { traffic, bikeshare: bike, transit: app.layer };
   const orders = [
     ['traffic', 'bikeshare', 'transit'],

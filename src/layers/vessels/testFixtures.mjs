@@ -105,10 +105,10 @@ export function services(renderer) {
     labels: {},
     picking,
     overlay: {
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
-      clearOverlaySource: noop,
-      hitTestWorldOverlay: () => null,
+      setEntries: noop,
+      setVisible: noop,
+      clearSource: noop,
+      hitTest: () => null,
     },
     geoid: { ensureGeoidReady: () => new Promise(noop), geoidHeight: () => 0 },
     sprites: {

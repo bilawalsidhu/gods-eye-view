@@ -16,8 +16,6 @@ export const earthquakePickId = (disc) => `earthquake:${disc.stableId}`;
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createEarthquakesDisplay(engine) {
-  if (!engine?.ground)
-    throw new TypeError('The earthquakes display needs a globe engine');
   const set = engine.ground.createSet({
     id: SET_ID,
     kind: 'disc',

@@ -18,8 +18,6 @@ let events = 0;
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createBhoteKoshiDisplay(engine) {
-  if (!engine?.imagery)
-    throw new TypeError('The Bhote Koshi display needs a globe engine');
   const id = `bhote-koshi-imagery-${++events}`;
   let layers = [];
   const stories = new Set();

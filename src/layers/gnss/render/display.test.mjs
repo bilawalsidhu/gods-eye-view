@@ -47,10 +47,6 @@ const near = (actual, expected, label, tolerance = 1e-9) =>
     `${label}: ${actual} vs ${expected}`,
   );
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createGnssDisplay(null), TypeError);
-});
-
 for (const makeHarness of GROUND_HARNESSES) {
   const { name } = makeHarness();
 

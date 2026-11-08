@@ -29,7 +29,7 @@ const READOUT_LIMIT = 5;
 export function createAirQualityLayer({
   source,
   overlayHost,
-  createRenderer = ({ engine }) => createAirQualityDisplay(engine),
+  rendererFactory = ({ engine }) => createAirQualityDisplay(engine),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
@@ -83,7 +83,7 @@ export function createAirQualityLayer({
       if (!initialized || renderer)
         throw new Error('Invalid air quality scene attachment');
       sceneEngine = engine;
-      renderer = createRenderer({ engine });
+      renderer = rendererFactory({ engine });
       renderer.setVisible(_enabled);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, _enabled);
       if (_readings.length) this._render();

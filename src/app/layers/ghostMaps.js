@@ -1,8 +1,7 @@
-import { worldOverlayFor } from '../../overlays/worldOverlay.js';
+import { overlayHost } from './overlayHost.js';
 import { rendererFor } from './renderers.js';
 import { createGhostMapsLayer } from '../../layers/ghostMaps/index.js';
 import * as picking from '../../data/pickRegistry.js';
-import * as overlays from '../../overlays/worldOverlay.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
@@ -12,13 +11,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
  */
 export function createApplicationGhostMaps(options) {
   return createGhostMapsLayer({
-    overlayHost: {
-      forEngine: worldOverlayFor,
-      setEntries: overlays.setOverlayEntries,
-      setVisible: overlays.setOverlaySourceVisible,
-      clearSource: overlays.clearOverlaySource,
-      hitTest: overlays.hitTestWorldOverlay,
-    },
+    overlayHost: overlayHost,
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     picking,
     pointer: { isPointerFree },

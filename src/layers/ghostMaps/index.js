@@ -543,7 +543,7 @@ export function createGhostMapsLayer({
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
       sceneEngine,
     );
-    _clickHandler = _display.onClick((click, pick) => {
+    _clickHandler = _display.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
       const cardHit = overlayHost.hitTest?.(
         click.position?.x,
@@ -554,7 +554,7 @@ export function createGhostMapsLayer({
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
-      const picked = pick();
+      const picked = click.picked;
       const key = picked ? pickedKey(picked) : null;
       if (key) {
         _selectedKey = key;

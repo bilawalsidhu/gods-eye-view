@@ -195,8 +195,6 @@ export function createGhostMapsDisplay(
     createCanvas = () => document.createElement('canvas'),
   } = {},
 ) {
-  if (!engine?.ground || !engine?.movers)
-    throw new TypeError('The GhostMaps display needs a globe engine');
   const paints = new Set();
   let sequence = 0;
   let destroyed = false;
@@ -296,7 +294,7 @@ export function createGhostMapsDisplay(
   return {
     requestRender: request,
     onClick: (run) =>
-      engine.input.on('click', (event) => run(event, () => event.picked), {
+      engine.input.on('click', run, {
         pick: true,
       }),
     draw(productId, features, color, markerImage) {

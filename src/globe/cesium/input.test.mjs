@@ -97,14 +97,6 @@ test('listeners share an action, removers are idempotent and the action goes wit
   assert.ok(!handler.actions.has(key));
 });
 
-test('setCameraInputs toggles the camera controller', () => {
-  const { viewer, input } = setup();
-  input.setCameraInputs(false);
-  assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, false);
-  input.setCameraInputs(true);
-  assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, true);
-});
-
 test('suspendCameraInputs counts and the last resume restores enableInputs', () => {
   const { viewer, input } = setup();
   const controller = viewer.scene.screenSpaceCameraController;
@@ -123,12 +115,6 @@ test('suspendCameraInputs counts and the last resume restores enableInputs', () 
   controller.enableInputs = false;
   input.suspendCameraInputs()();
   assert.equal(controller.enableInputs, false);
-  // A choice made under a suspension applies at its resume.
-  const resume = input.suspendCameraInputs();
-  input.setCameraInputs(true);
-  assert.equal(controller.enableInputs, false);
-  resume();
-  assert.equal(controller.enableInputs, true);
 });
 
 test('destroy destroys the handler', () => {

@@ -7,7 +7,7 @@
 //
 // The display:
 //   view                 camera, scene, horizon(), frustumTester(),
-//                        surfaceOwner, requestRender(), on('preRender', fn)
+//                        engine, requestRender(), on('preRender', fn)
 //   attach(), setVisible(bool), detach()
 //   markers.add({ id, image, position(), rotation(), show() }) → handle
 //     (the context and readout annotations go on it), remove(handle),

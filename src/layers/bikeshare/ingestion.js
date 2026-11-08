@@ -187,7 +187,7 @@ export function createIngestion({
           try {
             const statusMap = await loadCityStationStatus(cityId, generation);
             if (!isCurrent(cityId)) return;
-            parts.rendering?.applyStatusToPoints(cityId, statusMap);
+            parts.display?.applyStatusToPoints(cityId, statusMap);
             layerState._failedCityIds.delete(cityId);
             refreshed = true;
           } catch (error) {

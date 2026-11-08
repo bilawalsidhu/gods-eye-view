@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createWeatherLayer } from './index.js';
 import { createWeatherClock } from './clock.js';
 import { createWeatherDisplay } from './render/display.js';
-import { NO_IMAGERY_HOST } from './imageryHost.js';
+import { NO_IMAGERY_HOST } from '../shared/imageryHost.js';
 import { imageryDisplayTests } from '../../testSupport/imageryDisplayEngines.mjs';
 const { test, createEngine } = imageryDisplayTests();
 

@@ -1,4 +1,3 @@
-import { bindContextStore } from '../../data/bindContextStore.js';
 import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { createPhotoSlots } from './photos.js';
 import { createRendering } from './rendering.js';
@@ -75,7 +74,7 @@ export function createWildlifeSightingsLayer({
     retryAt: 0,
     failures: 0,
   };
-  context = bindContextStore(context, () => state.engine);
+  context = bindOverlayHost(context, () => state.engine);
   overlayHost = bindOverlayHost(overlayHost, () => state.engine);
   const parts = {};
   const services = {

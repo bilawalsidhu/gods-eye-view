@@ -1,3 +1,5 @@
+import { createCesiumMaps } from '../globe/cesium/maps.js';
+import { createCesiumCredits } from '../globe/cesium/credits.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
@@ -39,6 +41,7 @@ function fixture(registry, options = {}) {
         },
       },
       primitives: {
+        contains: (value) => primitives.includes(value),
         add(value) {
           primitives.push(value);
         },
@@ -58,16 +61,30 @@ function fixture(registry, options = {}) {
       },
     },
   };
-  const controller = new MapSourceController(viewer, {
-    registry,
+  viewer.creditDisplay = viewer.scene.frameState.creditDisplay;
+  const mapsOwner = createCesiumMaps(viewer, {
+    credits: createCesiumCredits(viewer).credits,
     createImageryLayer: (provider) => ({ provider }),
+    tilesetRef: {
+      current:
+        registry.sources.find((source) => source.tileset)?.tileset ?? null,
+    },
+  });
+  const controller = new MapSourceController({
+    registry,
+    engine: { kind: 'cesium', render: { request() {} }, maps: mapsOwner.maps },
     onChange: (state) => changes.push(state),
     ...options,
   });
+  const destroyController = controller.destroy.bind(controller);
+  controller.destroy = () => {
+    destroyController();
+    mapsOwner.destroy();
+  };
   return { viewer, controller, imagery, credits, primitives, removed, changes };
 }
 const settle = async () => {
-  for (let i = 0; i < 20; i++) await Promise.resolve();
+  for (let i = 0; i < 60; i++) await Promise.resolve();
 };
 const descriptor = (id) => ({ id, label: id, kind: 'imagery' });
 function publicFixture(options) {
@@ -386,20 +403,20 @@ for (const reactivate of [false, true]) {
     await env.controller.setStack('supplied');
     resolve(tileset);
     await loading;
-    assert.equal(env.primitives.length, 0);
+    assert.deepEqual(env.primitives, [supplied]);
     assert.equal(supplied.show, true);
     assert.equal(env.controller.getActiveId(), 'supplied');
     if (reactivate) {
       await env.controller.setStack('slow');
       await env.controller.setStack('slow');
-      assert.deepEqual(env.primitives, [tileset]);
+      assert.deepEqual(env.primitives, [supplied, tileset]);
       assert.equal(reads, 1);
       assert.equal(tileset.show, true);
       assert.equal(supplied.show, false);
     }
     env.controller.destroy();
     await settle();
-    assert.equal(env.primitives.length, 0);
+    assert.deepEqual(env.primitives, [supplied]);
     assert.equal(destroyed, 1);
   });
 }
@@ -858,7 +875,7 @@ async function engineFixture({ googleTileset = { show: true }, engine } = {}) {
     };
   }
   const changes = [];
-  const controller = new MapSourceController(null, {
+  const controller = new MapSourceController({
     registry,
     engine,
     onChange: (state) => changes.push(state),
@@ -929,7 +946,7 @@ test('on an engine owned tilesets are released through engine.maps and disposed'
   const engine = createFakeEngine();
   let destroyed = 0;
   const owned = { show: false, destroy: () => destroyed++ };
-  const controller = new MapSourceController(null, {
+  const controller = new MapSourceController({
     engine,
     registry: {
       defaultId: 'owned',
@@ -960,7 +977,7 @@ test('controller and Cesium engine: photoreal to a globe stack restores imagery 
   viewer.primitiveList.push(google);
   viewer.scene.globe.show = false;
   const engine = createCesiumEngine(viewer, {
-    tilesetRef: () => google,
+    tilesetRef: { current: google },
     requestRender: () => {},
     createImageryLayer: (provider) => ({ provider }),
   });
@@ -1015,7 +1032,7 @@ function navaraFixture() {
             create: () => built.push(`terrain:${source.terrain.id}`),
           };
       }
-      const controller = new MapSourceController(null, { registry, engine });
+      const controller = new MapSourceController({ registry, engine });
       return { engine, controller, built };
     },
   );

@@ -148,8 +148,6 @@ export function createLaunchHover({
  * @param {{ layerId?: string }} [options] Names the mover sets and lines.
  */
 export function createLaunchesDisplay(engine, { layerId = LAYER_ID } = {}) {
-  if (!engine?.movers || !engine?.lines)
-    throw new TypeError('The launches display needs a globe engine');
   let destroyed = false;
   let visible = false;
   let lineSeq = 0;

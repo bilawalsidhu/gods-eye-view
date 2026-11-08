@@ -38,9 +38,9 @@ export function createRendering({
 
   function renderCurrentLod(force = false) {
     if (
-      !layerState._dataSource ||
+      !layerState._renderer ||
       !layerState._fires.length ||
-      !layerState._viewer
+      !layerState._view
     ) {
       // A filter that leaves nothing shown must not leave the old heat behind.
       if (!layerState._fires.length) layerState._heatImagery?.setShow(false);
@@ -295,7 +295,7 @@ export function createRendering({
       // reports false, so this chain terminates instead of looping against a
       // down proxy (the next camera-driven rebuild retries).
       warmFireAnchorFloors(candidates).then((warmed) => {
-        if (!warmed || !layerState._enabled || !layerState._viewer) return;
+        if (!warmed || !layerState._enabled || !layerState._view) return;
         const currentLod = LOD_LEVELS[layerState._currentLodIndex];
         if (!currentLod || currentLod.mode !== 'detections') return;
         renderCurrentLod(true);
@@ -389,7 +389,7 @@ export function createRendering({
    */
 
   function fireHorizonOccluder() {
-    return layerState._renderer?.horizon() ?? null;
+    return layerState._renderer?.view.horizon() ?? null;
   }
 
   /**

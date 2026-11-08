@@ -1,3 +1,4 @@
+import { createGnssDisplay } from './render/display.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as geo from '../../geo/index.js';
@@ -39,10 +40,13 @@ function harness(
         return { ageMs: 0, ...snapshot };
       },
     },
-    viewAnchor: () => {
-      anchors.push(anchor);
-      return anchor;
-    },
+    rendererFactory: ({ engine }) =>
+      createGnssDisplay(engine, {
+        viewAnchor: () => {
+          anchors.push(anchor);
+          return anchor;
+        },
+      }),
     now: () => clock,
     monotonicNow: () => clock,
   });
@@ -650,7 +654,8 @@ test('monotonic camera scheduling is unaffected by wall-clock rollback', async (
         return { rows: [], ageMs: 0 };
       },
     },
-    viewAnchor: () => anchor,
+    rendererFactory: ({ engine }) =>
+      createGnssDisplay(engine, { viewAnchor: () => anchor }),
     now: () => wall,
     monotonicNow: () => mono,
   });

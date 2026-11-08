@@ -387,6 +387,7 @@ export function forEngine(engine) {
 export function isContextRecordActive(record, dataManager = null) {
   if (!record) return false;
   if (record.entity?.show === false) return false;
+  if (record.isVisible?.() === false) return false;
   if (record.dataSource && record.dataSource.show === false) return false;
   if (dataManager && record.layerId && !dataManager.isEnabled(record.layerId))
     return false;

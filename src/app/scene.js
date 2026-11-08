@@ -219,7 +219,7 @@ async function createRenderer({
 
   loaderStatus.textContent = t('Initializing systems...');
 
-  const mapStackController = new MapController(viewer, {
+  const mapStackController = new MapController({
     requestRender: (reason) => engine.render.request(reason),
     // Map sources reach the scene through the globe engine's maps.
     engine,

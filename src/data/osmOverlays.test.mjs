@@ -6,7 +6,7 @@ import {
   createOsmOverlayLayers,
   osmOverlayHiddenReason,
 } from './osmOverlays.js';
-import { NO_IMAGERY_HOST } from '../maps/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../layers/shared/imageryHost.js';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 /** A layer on the fake engine, whose imagery drapes where `surface()` says. */

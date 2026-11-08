@@ -85,8 +85,6 @@ export function screenRotation(position, bearingDeg, pose, previous = 0) {
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createStreetLevelDisplay(engine) {
-  if (!engine?.ground || !engine?.movers)
-    throw new TypeError('The Street Level display needs a globe engine');
   /** Live sprite groups and line handles, for destroy(). */
   const live = new Set();
   let serial = 0;

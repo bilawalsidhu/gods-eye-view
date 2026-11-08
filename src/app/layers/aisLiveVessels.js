@@ -2,7 +2,7 @@ import { createVesselLayer } from '../../layers/vessels/index.js';
 import * as context from '../../data/contextStore.js';
 import * as labels from '../../data/detectionDraw.js';
 import * as picking from '../../data/pickRegistry.js';
-import * as overlay from '../../overlays/worldOverlay.js';
+import { worldOverlayFor as overlay } from '../../overlays/worldOverlay.js';
 import * as geoid from '../../data/geoid.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as focus from '../../data/focusDeemphasis.js';

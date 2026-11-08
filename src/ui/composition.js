@@ -1,3 +1,4 @@
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
 /** Compose UI controls with the application's existing engines and layer instances. */
 import { StyleManager as ApplicationShell } from './applicationShell.js';
 import { LocationSearch } from './location.js';
@@ -26,12 +27,7 @@ import {
   destroyTrackedReadout,
   initTrackedReadout,
 } from '../data/trackedReadout.js';
-import {
-  activateWorldOverlayAction,
-  destroyWorldOverlay,
-  initWorldOverlay,
-  subscribeWorldOverlayActions,
-} from '../overlays/worldOverlay.js';
+
 import {
   destroyDetection,
   initDetection,
@@ -83,10 +79,7 @@ export class StyleManager extends ApplicationShell {
         setKeyholeFadeTuning,
         destroyTrackedReadout,
         initTrackedReadout,
-        destroyWorldOverlay,
-        initWorldOverlay,
-        subscribeWorldOverlayActions,
-        activateWorldOverlayAction,
+        worldOverlayFor,
         destroyDetection,
         initDetection,
         cycleDetectionMode,

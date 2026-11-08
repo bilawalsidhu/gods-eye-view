@@ -110,7 +110,6 @@ export class StyleManager extends ShellScene {
       ShareLinkManager,
       CelestialRing,
       initTrackedReadout,
-      initWorldOverlay,
       initDetection,
       setDetectionStyle,
       trafficLayer,

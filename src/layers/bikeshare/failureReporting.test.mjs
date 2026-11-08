@@ -19,9 +19,9 @@ import { createControls } from './controls.js';
 function makeLayer() {
   const services = {
     overlays: {
-      setOverlayEntries() {},
-      setOverlaySourceVisible() {},
-      clearOverlaySource() {},
+      setEntries() {},
+      setVisible() {},
+      clearSource() {},
     },
   };
   const state = createState({ services });
@@ -164,9 +164,9 @@ function makeLiveLayer() {
   const services = {
     render: { governorRequestRender() {} },
     overlays: {
-      setOverlayEntries() {},
-      setOverlaySourceVisible() {},
-      clearOverlaySource() {},
+      setEntries() {},
+      setVisible() {},
+      clearSource() {},
     },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
@@ -181,7 +181,7 @@ function makeLiveLayer() {
   // The view centre is the point under the camera.
   engine.fake.script('viewRectangle', undefined);
   const display = createBikeshareDisplay(engine, context);
-  Object.assign(parts, display);
+  parts.display = display;
   parts.queries = { collectDetectableStations: () => [] };
   const { methods: controls } = createControls(context);
 
@@ -190,7 +190,7 @@ function makeLiveLayer() {
       destination: geo.cartesian3.fromDegrees(where.lon, where.lat, height),
     });
   place(BETWEEN, LOW_M);
-  parts.lifecycle.methods.init();
+  parts.display.init();
 
   return {
     state,
@@ -198,13 +198,13 @@ function makeLiveLayer() {
     stats: () => controls.getStats(),
     moveTo(where, height = LOW_M) {
       place(where, height);
-      return parts.viewport.runProximityCheck();
+      return parts.display.runProximityCheck();
     },
     async enable() {
-      parts.lifecycle.methods.enable();
+      parts.display.enable();
       await settle();
     },
-    disable: () => parts.lifecycle.methods.disable(),
+    disable: () => parts.display.disable(),
     poll: () => parts.ingestion.methods.update(),
   };
 }

@@ -1,6 +1,6 @@
 import * as geo from '../../geo/index.js';
 import { createWeatherDisplay } from './render/display.js';
-import { engineImageryHost, imageryHostStatus } from './imageryHost.js';
+import { engineImageryHost, imageryHostStatus } from '../shared/imageryHost.js';
 import { weatherDisplay, insideExtent } from './display.js';
 import {
   RADAR_MAX_GAP_MS,

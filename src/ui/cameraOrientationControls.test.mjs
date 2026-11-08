@@ -21,6 +21,7 @@ import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 // is. A Viewer's canvas is its scene's.
 function withEngine(viewer) {
   viewer.canvas = viewer.scene.canvas;
+  viewer.clock ??= { onTick: new Cesium.Event() };
   viewer.engine = createCesiumEngine(viewer);
   return viewer;
 }

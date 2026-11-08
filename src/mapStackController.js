@@ -6,17 +6,16 @@ export { photorealUnavailableReason } from './maps/availability.js';
 
 /** Preserve the standalone entry point; applications can compose the source controller directly. */
 export class MapStackController extends MapSourceController {
-  constructor(viewer, options = {}) {
+  constructor(options = {}) {
     const googleApiKey =
       typeof window !== 'undefined' ? window.__GOOGLE_MAPS_API_KEY__ : '';
-    // Sources for the page's engine: Navara builds its own from the
-    // descriptions (src/maps/defaultSources.js). Without an engine, Cesium's.
+    // Navara builds sources from the map descriptions.
     const registry = createDefaultMapSources({
       ...options,
       googleApiKey,
-      engineKind: options.engine?.kind ?? 'cesium',
+      engineKind: options.engine.kind,
     });
-    super(viewer, {
+    super({
       registry,
       initialStack: options.googleTileset
         ? options.initialStack || 'photoreal'

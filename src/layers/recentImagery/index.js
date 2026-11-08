@@ -14,7 +14,7 @@
  * map is never retried in a loop.
  */
 import { searchHls } from './catalog.js';
-import { NO_IMAGERY_HOST, resolveImageryHost } from '../../maps/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../shared/imageryHost.js';
 import {
   CATALOG_DAYS,
   PRODUCTS,
@@ -23,7 +23,6 @@ import {
   boxFromRectangle,
   boxSideKm,
   dequantizeBox,
-  fitViewHeightM,
   formatCandidateReadout,
   parseCandidateKey,
   quantizeBox,
@@ -53,7 +52,6 @@ const COMPARISON_UNAVAILABLE = msg('Esri map unavailable · no swipe');
 const COMPARISON_NEEDS_GLOBE = msg('Swipe needs a globe map');
 const ESRI_KEPT = msg('Imagery stays on Esri · CLEAR to use Google 3D');
 /** ZOOM IN's flight time, in seconds. */
-const ZOOM_FIT_SECONDS = 1.2;
 const DEFAULT_SPLIT = 0.5;
 const SLOT_IDS = ['a', 'b'];
 const BOX_EDGES = ['west', 'south', 'east', 'north'];
@@ -67,32 +65,6 @@ const boxSignature = (box) =>
   box ? BOX_EDGES.map((edge) => Number(box[edge]).toFixed(6)).join(',') : '';
 const sourceOf = (product) => PRODUCTS[product]?.source || null;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
-const toRadians = (degrees) => (degrees * Math.PI) / 180;
-const ellipsoidOf = (viewer) =>
-  viewer?.scene?.ellipsoid || viewer?.scene?.globe?.ellipsoid || null;
-
-/**
- * The ground under the canvas centre, in degrees; null when the centre is
- * sky or the viewer cannot pick.
- * @param {object} viewer
- * @returns {{ lon: number, lat: number } | null}
- */
-function viewCentre(viewer) {
-  const ellipsoid = ellipsoidOf(viewer);
-  const canvas = viewer?.scene?.canvas;
-  const width = Number(canvas?.clientWidth);
-  const height = Number(canvas?.clientHeight);
-  if (!ellipsoid?.cartesianToCartographic || !(width > 0) || !(height > 0))
-    return null;
-  const hit = viewer.camera?.pickEllipsoid?.(
-    { x: width / 2, y: height / 2 },
-    ellipsoid,
-  );
-  const ground = hit ? ellipsoid.cartesianToCartographic(hit) : null;
-  return ground
-    ? { lon: toDegrees(ground.longitude), lat: toDegrees(ground.latitude) }
-    : null;
-}
 const modeFrom = (value) =>
   MODES.includes(value)
     ? value
@@ -102,22 +74,19 @@ const modeFrom = (value) =>
 
 /**
  * Create the layer.
- * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
+ * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
  */
 export function createRecentImageryLayer({
   catalog = { searchHls },
   renderer,
   rendererFactory,
   thumbnails,
-  host = resolveImageryHost,
   now = () => new Date(),
   days = CATALOG_DAYS,
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimeoutImpl = (id) => globalThis.clearTimeout(id),
 } = {}) {
-  let _viewer = null;
   let _engine = null;
-  let _tileset = null;
   let _mapStackController = null;
   let _dataManager = null;
   let _enabled = false;
@@ -374,11 +343,7 @@ export function createRecentImageryLayer({
   }
 
   function syncHost() {
-    const next = renderer?.resolveHost?.() ||
-      host({ viewer: _viewer, tileset: _tileset }) || {
-        collection: null,
-        kind: 'none',
-      };
+    const next = renderer.resolveHost();
     const changed =
       (next.identity || next.collection) !==
         (_hostInfo.identity || _hostInfo.collection) ||
@@ -808,15 +773,13 @@ export function createRecentImageryLayer({
     source: 'NASA GIBS · HLS + VIIRS',
     updateInterval: 0,
 
-    init(viewer, options) {
-      return this.attachRenderer(viewer, options);
+    init(_viewer, options) {
+      return this.attachRenderer(null, options);
     },
 
-    attachRenderer(viewer, { engine } = {}) {
-      _viewer = viewer || null;
+    attachRenderer(_viewer, { engine } = {}) {
       _engine = engine || null;
-      if (rendererFactory && !renderer)
-        renderer = rendererFactory({ viewer, engine });
+      if (rendererFactory && !renderer) renderer = rendererFactory({ engine });
       if (!renderer) throw new TypeError('Recent imagery requires a renderer');
       if (_enabled) syncRender();
       return true;
@@ -831,14 +794,13 @@ export function createRecentImageryLayer({
       renderer?.destroy();
       renderer = null;
       _hostInfo = { collection: null, kind: 'none' };
-      _viewer = _engine = _tileset = null;
+      _engine = null;
       _keptGeneration = null;
       await Promise.all([lease?.release(), _releasing]);
     },
 
-    enable(viewer) {
+    enable() {
       if (_destroyed) return false;
-      if (viewer) _viewer = viewer;
       _enabled = true;
       _comparisonError = null;
       _unsubscribeThumbnails?.();
@@ -907,9 +869,7 @@ export function createRecentImageryLayer({
       _listeners.clear();
       _rowListener = null;
       _toolHandler = null;
-      _viewer = null;
       _engine = null;
-      _tileset = null;
       _mapStackController = null;
       _dataManager = null;
       _destroyed = true;
@@ -936,8 +896,7 @@ export function createRecentImageryLayer({
     },
 
     /** The photoreal tileset, for draping while the globe is hidden. */
-    attachTileset(tileset) {
-      _tileset = tileset || null;
+    attachTileset() {
       if (_enabled && syncHost()) {
         syncRender();
         notify();
@@ -981,13 +940,10 @@ export function createRecentImageryLayer({
     /**
      * Use the camera's view rectangle as the box. A view wider than the cap
      * is refused with its size, never silently shrunk.
-     * @param {object} [viewer]
      * @returns {boolean}
      */
-    useCurrentView(viewer = _viewer) {
-      const rectangle =
-        _engine?.camera.viewRectangle() ||
-        viewer?.camera?.computeViewRectangle?.();
+    useCurrentView() {
+      const rectangle = _engine.camera.viewRectangle();
       if (!rectangle)
         return refuseBox('Point the camera at the ground to use the view');
       const box = boxFromRectangle(rectangle);
@@ -995,7 +951,7 @@ export function createRecentImageryLayer({
         const { width, height } = boxSideKm(box);
         return refuseBox(
           viewTooLargeMessage(Math.max(width, height)),
-          renderer?.viewCentre?.() || viewCentre(viewer) || boxCentre(box),
+          renderer.viewCentre() || boxCentre(box),
         );
       }
       return chooseBox(box);
@@ -1009,27 +965,7 @@ export function createRecentImageryLayer({
      */
     zoomToFit() {
       const target = _boxError ? _refusalTarget : null;
-      if (target && renderer?.zoomToFit) return renderer.zoomToFit(target);
-      const camera = _viewer?.camera;
-      const ellipsoid = ellipsoidOf(_viewer);
-      if (!target || !camera?.flyTo || !ellipsoid?.cartographicToCartesian)
-        return null;
-      const canvas = _viewer.scene?.canvas;
-      const height = fitViewHeightM({
-        width: canvas?.clientWidth,
-        height: canvas?.clientHeight,
-        fovy: camera.frustum?.fovy,
-      });
-      camera.flyTo({
-        destination: ellipsoid.cartographicToCartesian({
-          longitude: toRadians(target.lon),
-          latitude: toRadians(target.lat),
-          height,
-        }),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        duration: ZOOM_FIT_SECONDS,
-      });
-      return height;
+      return target ? renderer.zoomToFit(target) : null;
     },
 
     /** The box tool's transient ground preview, owned by the renderer. */

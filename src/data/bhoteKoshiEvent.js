@@ -4,12 +4,7 @@ import { waitForSignal } from '../sources/requestDeadline.js';
 import * as Cesium from 'cesium';
 import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
 import { isPointerFree } from './inputOwnership.js';
-import {
-  clearOverlaySource,
-  hitTestWorldOverlay,
-  setOverlayEntries,
-  setOverlaySourceVisible,
-} from '../overlays/worldOverlay.js';
+
 import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
 import {
   governorRequestRender,
@@ -107,13 +102,7 @@ const PASSIVE_ENABLE_ORIGINS = new Set([
   'dependency-restore',
 ]);
 
-const DEFAULT_OVERLAY_HOST = Object.freeze({
-  forEngine: worldOverlayFor,
-  setEntries: setOverlayEntries,
-  setVisible: setOverlaySourceVisible,
-  clearSource: clearOverlaySource,
-  hitTest: hitTestWorldOverlay,
-});
+const DEFAULT_OVERLAY_HOST = worldOverlayFor;
 const DEFAULT_RENDER_HOST = Object.freeze({
   request: governorRequestRender,
   hold: holdContinuousRender,
@@ -125,8 +114,6 @@ const DEFAULT_EVENT_LOADER = async () => {
     throw new Error(`Bhote Koshi event pack unavailable (${response.status})`);
   return response.json();
 };
-const DEFAULT_IMAGERY_PROVIDER_FACTORY = (url, options) =>
-  Cesium.SingleTileImageryProvider.fromUrl(url, options);
 const DEFAULT_TERRAIN_SAMPLER = async (viewer, observations) => {
   if (
     !viewer?.terrainProvider ||
@@ -1010,7 +997,6 @@ export function createBhoteKoshiEventLayer({
   overlayHost = DEFAULT_OVERLAY_HOST,
   renderHost = DEFAULT_RENDER_HOST,
   eventLoader = DEFAULT_EVENT_LOADER,
-  imageryProviderFactory = DEFAULT_IMAGERY_PROVIDER_FACTORY,
   terrainSampler = DEFAULT_TERRAIN_SAMPLER,
   mediaLoader = DEFAULT_MEDIA_LOADER,
   imageLoader = DEFAULT_MEDIA_LOADER,
@@ -1026,7 +1012,6 @@ export function createBhoteKoshiEventLayer({
   let _engine = null;
   let _native = null;
   let _nativeFlood = null;
-  let _providers = null;
   // The before and after images, decoded once for every engine the event
   // is drawn on (as Cesium's providers were kept across switches).
   let _imageryImages = null;
@@ -1046,9 +1031,6 @@ export function createBhoteKoshiEventLayer({
   let _panelFixed = null;
   let _offPanelLocale = null;
   let _splitControl = null;
-  let _beforeLayer = null;
-  let _afterLayer = null;
-  let _imageryLayerCollection = null;
   let _floodDataSource = null;
   let _floodSurfaceMode = null;
   let _floodHalo = null;
@@ -1189,53 +1171,25 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function createImagery(event, current = () => true) {
-    if (_native) {
-      // The engine's display draws the images through engine.imagery.
-      _imageryImages ??= Promise.all(
-        [event.imagery.before.path, event.imagery.after.path].map((path) =>
-          imageLoader(eventAsset(path)),
-        ),
-      );
-      let images;
-      try {
-        images = await _imageryImages;
-      } catch {
-        _imageryImages = null;
-        throw new Error('Bhote Koshi imagery unavailable');
-      }
-      await _native.loadImages(
-        event.imagery.rectangle,
-        images,
-        'Vantor WorldView Open Data · CC BY-NC 4.0',
-      );
-      if (_enabled && current()) setSplit(_split);
-      return;
-    }
-    const rectangle = Cesium.Rectangle.fromDegrees(
-      event.imagery.rectangle.west,
-      event.imagery.rectangle.south,
-      event.imagery.rectangle.east,
-      event.imagery.rectangle.north,
+    // The engine's display draws the images through engine.imagery.
+    _imageryImages ??= Promise.all(
+      [event.imagery.before.path, event.imagery.after.path].map((path) =>
+        imageLoader(eventAsset(path)),
+      ),
     );
-    const [beforeProvider, afterProvider] = await (_providers ??= Promise.all([
-      imageryProviderFactory(eventAsset(event.imagery.before.path), {
-        rectangle,
-        credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
-      }),
-      imageryProviderFactory(eventAsset(event.imagery.after.path), {
-        rectangle,
-        credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
-      }),
-    ]));
-    if (!_enabled || !current()) return;
-    _imageryLayerCollection = _viewer.imageryLayers;
-    _beforeLayer = _imageryLayerCollection.addImageryProvider(beforeProvider);
-    _afterLayer = _imageryLayerCollection.addImageryProvider(afterProvider);
-    _beforeLayer.splitDirection = Cesium.SplitDirection.LEFT;
-    _afterLayer.splitDirection = Cesium.SplitDirection.RIGHT;
-    _beforeLayer.alpha = 0.96;
-    _afterLayer.alpha = 0.96;
-    setSplit(_split);
+    let images;
+    try {
+      images = await _imageryImages;
+    } catch {
+      _imageryImages = null;
+      throw new Error('Bhote Koshi imagery unavailable');
+    }
+    await _native.loadImages(
+      event.imagery.rectangle,
+      images,
+      'Vantor WorldView Open Data · CC BY-NC 4.0',
+    );
+    if (_enabled && current()) setSplit(_split);
   }
 
   async function resolveEvidenceAnchors(event, signal) {
@@ -2654,9 +2608,8 @@ export function createBhoteKoshiEventLayer({
         disableDepthTestDistance: tileSafe ? Number.POSITIVE_INFINITY : 0,
       },
     });
-    // The engine's story backend, or Cesium's data sources.
+    // The engine's story display.
     _nativeFlood = _native?.draw(_floodDataSource) ?? null;
-    if (!_nativeFlood) _viewer.dataSources.add(_floodDataSource);
   }
 
   function syncFloodSurfaceMode() {
@@ -2669,7 +2622,6 @@ export function createBhoteKoshiEventLayer({
       return;
     _nativeFlood?.destroy();
     _nativeFlood = null;
-    _viewer?.dataSources.remove(_floodDataSource, true);
     _floodDataSource = null;
     _floodHalo = null;
     _floodCore = null;
@@ -3355,8 +3307,6 @@ export function createBhoteKoshiEventLayer({
       _panelRefs.progressInput.hidden = !scrubberAvailable;
     _splitControl?.setVisible(imageryAvailable);
     _native?.setVisible(imageryAvailable);
-    if (_beforeLayer) _beforeLayer.show = imageryAvailable;
-    if (_afterLayer) _afterLayer.show = imageryAvailable;
     if (_panelRefs?.caveat) {
       _panelRefs.caveat.textContent = imageryAvailable
         ? bhoteEventText(_event?.reconstruction?.caveat || '')
@@ -3538,14 +3488,6 @@ export function createBhoteKoshiEventLayer({
       focusView(_viewer, _event.viewpoints.corridor, _engine);
   }
 
-  function removeImagery() {
-    if (_beforeLayer) _imageryLayerCollection?.remove(_beforeLayer, true);
-    if (_afterLayer) _imageryLayerCollection?.remove(_afterLayer, true);
-    _beforeLayer = null;
-    _afterLayer = null;
-    _imageryLayerCollection = null;
-  }
-
   // Each attachment and release advances this. An attachment that resumes
   // after a release, or after its scene signal aborted, stops right there;
   // the release that follows it owns whatever it had already created.
@@ -3567,7 +3509,7 @@ export function createBhoteKoshiEventLayer({
     _viewer = viewer;
     _engine = engine;
     // The engine's display (src/layers/bhoteKoshi/render/display.js).
-    if (_engine) _native = createNativeRenderer?.(engine) ?? null;
+    _native = createNativeRenderer(engine);
     _embeddedMedia?.attachScene?.(viewer, engine);
     if (!_enabled) return;
     // Its enable has loaded the SDK; a restored attachment waits for it too.
@@ -3594,7 +3536,6 @@ export function createBhoteKoshiEventLayer({
     if (!current()) return;
     if (_floodDataSource) {
       _nativeFlood = _native?.draw(_floodDataSource) ?? null;
-      if (!_nativeFlood) await _viewer.dataSources.add(_floodDataSource);
       if (!current()) return;
     }
     registerDynamicCredit(engine, BHOTE_KOSHI_CREDIT);
@@ -3630,11 +3571,9 @@ export function createBhoteKoshiEventLayer({
     _splitControl?.destroy();
     _splitControl = null;
     _embeddedMedia?.attachScene?.(null, null);
-    removeImagery();
+    _native?.clear();
     _nativeFlood?.destroy();
     _nativeFlood = null;
-    if (_floodDataSource && _viewer)
-      _viewer.dataSources.remove(_floodDataSource, false);
     _native?.destroy();
     _native = null;
     _engine = _viewer = null;
@@ -3789,7 +3728,7 @@ export function createBhoteKoshiEventLayer({
     _witnessEmbedActive = false;
     overlayHost.clearSource(BHOTE_KOSHI_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(BHOTE_KOSHI_OVERLAY_SOURCE_ID, false);
-    removeImagery();
+    _native?.clear();
     _terrainPositions = [];
     _sourceShotPaths.clear();
     _scenePathPositionCache.clear();
@@ -3809,10 +3748,7 @@ export function createBhoteKoshiEventLayer({
     _nativeFlood?.destroy();
     _nativeFlood = null;
     _native?.clear();
-    _providers = null;
     _imageryImages = null;
-    if (_floodDataSource && _viewer)
-      _viewer.dataSources.remove(_floodDataSource, true);
     _floodDataSource = null;
     _floodSurfaceMode = null;
     _floodHalo = null;

@@ -229,7 +229,6 @@ test('parking or tearing down the Navara scene releases a running camera verb', 
       moveCamera({ motion: 'pan', direction: 'left', mode: 'continuous' }).ok,
       true,
     );
-    assert.equal(getActiveCameraMotion()?.rig, 'engine');
     // An engine switch parks the renderer (its scene's suspend); a page
     // teardown disposes it.
     if (end === 'park') cache.retain('navara');

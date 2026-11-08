@@ -1,4 +1,4 @@
-import { bindContextStore } from '../../data/bindContextStore.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
 
 export function createLifecycle({
@@ -9,7 +9,7 @@ export function createLifecycle({
   feed,
 }) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
-  const { clearSelectedEntityContextForLayer } = bindContextStore(
+  const { clearSelectedEntityContextForLayer } = bindOverlayHost(
     services.context,
     () => layerState._renderer?.engine,
   );
@@ -39,8 +39,7 @@ export function createLifecycle({
       if (layerState._renderer || !engine) return;
       layerState._renderer = config.renderer.create({ engine, id, services });
       if (!layerState._renderer) return;
-      layerState._viewer = layerState._renderer.view;
-      layerState._dataSource = layerState._renderer.dataSource;
+      layerState._view = layerState._renderer.view;
       layerState._renderer.setVisible(false);
       layerState._restoringViewport = waitForCameraRestore;
       if (layerState._enabled && !waitForCameraRestore) this.showRenderer();
@@ -67,7 +66,7 @@ export function createLifecycle({
       components.rendering.removeDetectionCollections();
       releaseHeat();
       layerState._renderer?.destroy();
-      layerState._renderer = layerState._viewer = layerState._dataSource = null;
+      layerState._renderer = layerState._view = null;
       layerState._pickIndexById.clear();
       layerState._labelCandidates = [];
       layerState._camSnapValid = false;
@@ -143,8 +142,8 @@ export function createLifecycle({
       clearSelectedEntityContextForLayer(id);
       layerState._renderer?.destroy();
       layerState._renderer = null;
-      layerState._viewer = null;
-      layerState._dataSource = null;
+      layerState._view = null;
+      layerState._renderer = null;
       layerState._allFires = [];
       layerState._allFiresByFrp = [];
       layerState._fires = [];

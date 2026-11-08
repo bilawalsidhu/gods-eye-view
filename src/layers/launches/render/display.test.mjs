@@ -79,10 +79,6 @@ const ORBIT = [
   geo.cartesian3.fromDegrees(-60, 31, 400_000),
 ];
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createLaunchesDisplay(null), TypeError);
-});
-
 for (const makeHarness of HARNESSES) {
   const { name } = makeHarness();
 

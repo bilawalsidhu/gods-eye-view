@@ -27,13 +27,17 @@ import {
  * @param {object} options.state Layer state.
  * @param {object} options.services Layer services.
  * @param {function(): void} [options.onSurfaceChange] Map stack changed.
- * @param {object} options.engine Engine adapter.
+ * @param {object} options.engine Globe engine.
  */
 export function createAlprOverlayCore({
   state,
   services,
   onSurfaceChange = () => {},
   engine,
+  markers,
+  syncMarker,
+  sampleHeight,
+  terrainHeight,
 }) {
   let lane,
     removeMapListener,
@@ -48,17 +52,29 @@ export function createAlprOverlayCore({
     if (!destroyed && state.enabled) lane?.requestPaint();
   };
 
+  function canvasOwned(marker, owned) {
+    if (marker.canvasOwned === owned) return;
+    marker.canvasOwned = owned;
+    syncMarker(marker);
+  }
+
+  function setShown(marker, shown) {
+    if (marker.shown === shown) return;
+    marker.shown = shown;
+    syncMarker(marker);
+  }
+
   function nativeVisible(marker, visible) {
     if (!marker) return;
-    engine.canvasOwned(marker, !visible);
-    engine.setShown(marker, visible);
+    canvasOwned(marker, !visible);
+    setShown(marker, visible);
   }
 
   function resetAnchors() {
-    for (const marker of engine.markers()) {
+    for (const marker of markers.values()) {
       marker.gevAlprCanvasPosition = null;
       marker.gevAlprWedge = null;
-      engine.setDisplayPosition(marker, null);
+      marker.displayPosition = null;
       nativeVisible(marker, true);
     }
     state.lastAnchorSampleAt = 0;
@@ -77,16 +93,16 @@ export function createAlprOverlayCore({
       record.longitude,
     );
     if (validAlprGroundHeight(floor)) height = floor + MARKER_FLOOR_LIFT_M;
-    else if (engine.surfaceSupported()) {
+    else if (engine.surface.supported) {
       if (budget.samples <= 0) return null;
       budget.samples -= 1;
       try {
-        height = engine.sampleHeight(record, marker);
+        height = sampleHeight(record, marker);
       } catch {
         /* streaming tiles */
       }
     }
-    if (!validAlprGroundHeight(height)) height = engine.terrainHeight(record);
+    if (!validAlprGroundHeight(height)) height = terrainHeight(record);
     if (!validAlprGroundHeight(height)) return null;
     setAnchor(record, marker, height);
     return marker.gevAlprCanvasPosition;
@@ -98,7 +114,13 @@ export function createAlprOverlayCore({
   }
 
   function setAnchor(record, marker, height) {
-    engine.placeAnchor(marker, record, height);
+    marker.gevAlprCanvasPosition = geo.cartesian3.fromDegrees(
+      record.longitude,
+      record.latitude,
+      height,
+    );
+    marker.resolved = true;
+    syncMarker(marker);
     marker.gevAlprWedge = directionWedgePositions(
       record,
       height,
@@ -115,7 +137,7 @@ export function createAlprOverlayCore({
    * rejected. Returns whether anchors remain to check.
    */
   function refineAnchors(budget) {
-    const camera = engine.cameraPose();
+    const camera = engine.camera.pose();
     const still =
       lastCamera &&
       camera.position &&
@@ -136,20 +158,20 @@ export function createAlprOverlayCore({
         position: geo.cartesian3.clone(camera.position),
         direction: geo.cartesian3.clone(camera.direction),
       };
-    if (!engine.surfaceSupported()) return false;
+    if (!engine.surface.supported) return false;
     let pending = false;
     for (const record of records) {
-      const marker = engine.marker(record.id);
+      const marker = markers.get(record.id);
       const anchor = marker?.gevAlprCanvasPosition;
       if (!anchor || marker.gevAlprSurfaceCheckedFor === anchor) continue;
-      if (!still || !engine.surfaceSettled() || budget.samples <= 0) {
+      if (!still || !engine.surface.tilesLoaded() || budget.samples <= 0) {
         pending = true;
         continue;
       }
       budget.samples -= 1;
       let sample;
       try {
-        sample = engine.sampleHeight(record, marker);
+        sample = sampleHeight(record, marker);
       } catch {
         /* streaming tiles */
       }
@@ -167,7 +189,7 @@ export function createAlprOverlayCore({
         setAnchor(record, marker, sample + MARKER_FLOOR_LIFT_M);
       marker.gevAlprSurfaceCheckedFor = marker.gevAlprCanvasPosition;
       if (marker.id === state.selectedId)
-        engine.setDisplayPosition(marker, marker.gevAlprCanvasPosition);
+        marker.displayPosition = marker.gevAlprCanvasPosition;
     }
     return pending;
   }
@@ -176,12 +198,29 @@ export function createAlprOverlayCore({
     const { ctx, width, height, keyhole } = frame;
     hits = [];
     if (!state.enabled || destroyed) return;
-    const { horizonVisible, project } = engine.projector(frame);
+    const horizonVisible = (point) => engine.projector.horizonVisible(point);
+    const matrix = frame.viewProjectionMatrix;
+    function project({ x, y, z }) {
+      const w = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+      if (!(w > 0)) return null;
+      return {
+        x:
+          (((matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12]) / w +
+            1) *
+            width) /
+          2,
+        y:
+          ((1 -
+            (matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13]) / w) *
+            height) /
+          2,
+      };
+    }
     let unresolved = false;
     const painted = [];
     const budget = { samples: ANCHOR_SAMPLES_PER_PAINT };
     for (const record of records) {
-      const marker = engine.marker(record.id);
+      const marker = markers.get(record.id);
       if (!marker) continue;
       const selected = record.id === state.selectedId;
       const image = images[selected ? 1 : 0];
@@ -199,20 +238,20 @@ export function createAlprOverlayCore({
         unresolved = true;
         continue;
       }
-      engine.canvasOwned(marker, true);
+      canvasOwned(marker, true);
       if (!horizonVisible(anchor)) {
-        engine.setShown(marker, false);
+        setShown(marker, false);
         continue;
       }
       const origin = project(anchor);
       if (!origin) {
-        engine.setShown(marker, false);
+        setShown(marker, false);
         continue;
       }
       const alpha =
         services.overlays.keyholeAlpha?.(origin.x, origin.y, keyhole) ?? 1;
       if (!(alpha > 0)) {
-        engine.setShown(marker, false);
+        setShown(marker, false);
         continue;
       }
       const wedge = marker.gevAlprWedge;
@@ -222,11 +261,10 @@ export function createAlprOverlayCore({
         if (
           left &&
           right &&
-          (!engine.cullOffscreenWedges ||
-            (Math.max(origin.x, left.x, right.x) >= -3 &&
-              Math.min(origin.x, left.x, right.x) <= width + 3 &&
-              Math.max(origin.y, left.y, right.y) >= -3 &&
-              Math.min(origin.y, left.y, right.y) <= height + 3))
+          Math.max(origin.x, left.x, right.x) >= -3 &&
+          Math.min(origin.x, left.x, right.x) <= width + 3 &&
+          Math.max(origin.y, left.y, right.y) >= -3 &&
+          Math.min(origin.y, left.y, right.y) <= height + 3
         ) {
           ctx.save();
           ctx.globalAlpha *= alpha;
@@ -240,10 +278,10 @@ export function createAlprOverlayCore({
         origin.y < -60 ||
         origin.y > height + 60
       ) {
-        engine.setShown(marker, false);
+        setShown(marker, false);
         continue;
       }
-      engine.setShown(marker, true);
+      setShown(marker, true);
       painted.push({
         record,
         origin,
@@ -251,10 +289,10 @@ export function createAlprOverlayCore({
         image,
         alpha,
         scale: markerScale(
-          geo.cartesian3.distance(engine.cameraPosition(), anchor),
+          geo.cartesian3.distance(engine.camera.livePosition, anchor),
         ),
       });
-      if (selected) engine.setDisplayPosition(marker, anchor);
+      if (selected) marker.displayPosition = anchor;
     }
     // Paint all glyphs after the wedges so one camera's cone cannot wash out another.
     for (const { record, origin, selected, image, alpha, scale } of painted) {
@@ -303,7 +341,7 @@ export function createAlprOverlayCore({
       if (!services.overlays?.registerPaintLane || typeof Image === 'undefined')
         return;
       lane = services.overlays.registerPaintLane('selected', paint, {
-        id: `alpr-${engine.createId()}`,
+        id: `alpr-${globalThis.crypto.randomUUID()}`,
         active: false,
       });
       images = [MARKER_IMAGE, SELECTED_IMAGE, BRACKETS_IMAGE].map((src) => {
@@ -316,9 +354,8 @@ export function createAlprOverlayCore({
     },
     sync(visible) {
       if (!lane) return;
-      for (const record of records)
-        nativeVisible(engine.marker(record.id), true);
-      const position = engine.cameraPosition();
+      for (const record of records) nativeVisible(markers.get(record.id), true);
+      const position = engine.camera.livePosition;
       records = visible
         .filter(
           (record) =>
@@ -363,8 +400,7 @@ export function createAlprOverlayCore({
     clear() {
       clearTimeout(retryTimer);
       retryTimer = null;
-      for (const record of records)
-        nativeVisible(engine.marker(record.id), true);
+      for (const record of records) nativeVisible(markers.get(record.id), true);
       records = [];
       hits = [];
       lane?.setActive(false);

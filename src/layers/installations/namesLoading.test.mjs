@@ -83,7 +83,7 @@ for (const stale of [false, true])
           scheduleUnavailableRetry() {},
         },
         model: { installationWithinViewport: () => true },
-        rendering: {
+        display: {
           renderRecords: () => publications.push(state.records),
           warmInstallationFloors() {},
         },

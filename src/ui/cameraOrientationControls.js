@@ -5,8 +5,7 @@ import { t } from '../i18n/index.js';
 // The camera is the globe engine's, and so is the follow: the followed
 // entity is engine.camera.following().native (on Cesium also an entity the
 // app put on viewer.trackedEntity). The viewer, when callers pass one, is
-// read only for its clock, and for its tracked entity when the engine
-// reports no follow.
+// read only for its clock.
 
 // Cesium's EasingFunction.CUBIC_IN_OUT (tween.js Cubic.InOut).
 function cubicInOut(amount) {
@@ -14,9 +13,9 @@ function cubicInOut(amount) {
   return 0.5 * ((amount -= 2) * amount * amount + 2);
 }
 
-function followedEntity(engine, viewer) {
+function followedEntity(engine) {
   const handle = engine?.camera.following?.();
-  return handle ? (handle.native ?? null) : (viewer?.trackedEntity ?? null);
+  return handle?.native ?? null;
 }
 
 // An engine's own follow (no tracked entity: Navara): its handle, which
@@ -24,7 +23,7 @@ function followedEntity(engine, viewer) {
 function engineFollow(engine, viewer) {
   const handle = engine?.camera.following?.();
   return handle &&
-    !followedEntity(engine, viewer) &&
+    !followedEntity(engine) &&
     typeof handle.target === 'function' &&
     typeof handle.retarget === 'function'
     ? handle
@@ -90,7 +89,7 @@ export function pickViewTarget(engine) {
  */
 export function readCameraTargetFrame(engine, viewer = null) {
   if (!engine) return null;
-  const entity = followedEntity(engine, viewer);
+  const entity = followedEntity(engine);
   const follow = engineFollow(engine, viewer);
   const center = entity
     ? trackedTarget(entity, viewer)
@@ -151,9 +150,7 @@ function setCameraTargetFrame(engine, frame, viewer = null) {
     return true;
   }
   try {
-    const trackedTransform = followedEntity(engine, viewer)
-      ? camera.transform()
-      : null;
+    const trackedTransform = followedEntity(engine) ? camera.transform() : null;
     camera.lookAt(frame.target, {
       heading: normalizedHeading(frame.heading),
       pitch: frame.pitch,
@@ -241,14 +238,14 @@ export function createCameraOrientationAnimator(
     if (!engine) return false;
     if (duration <= 0)
       return setCameraTargetFrame(engine, { ...frame, ...destination }, viewer);
-    const entity = followedEntity(engine, viewer);
+    const entity = followedEntity(engine);
     pending = destination;
     const start = now();
     const headingDelta = geo.math.negativePiToPi(
       destination.heading - frame.heading,
     );
     remove = engine.frames.preUpdate.addEventListener(() => {
-      if (engine.isDestroyed() || followedEntity(engine, viewer) !== entity) {
+      if (engine.isDestroyed() || followedEntity(engine) !== entity) {
         cancel();
         return;
       }
@@ -395,7 +392,6 @@ export function bindCameraOrientationControls({
   // moveEnd fires when the camera stops, which is where the pick is affordable.
   subscribe(engine?.camera.moveEnd, refreshTilt);
   subscribe(engine?.camera.followChanged, animator.cancel);
-  subscribe(viewer?.trackedEntityChanged, animator.cancel);
   for (const type of ['pointerdown', 'wheel']) {
     const canvas = engine?.host.canvas;
     canvas?.addEventListener?.(type, animator.cancel, { passive: true });

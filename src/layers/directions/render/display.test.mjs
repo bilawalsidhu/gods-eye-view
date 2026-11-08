@@ -162,10 +162,6 @@ function fixture(t, makeHarness, { document = true } = {}) {
   };
 }
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createDirectionsDisplay(null), TypeError);
-});
-
 for (const makeHarness of GROUND_HARNESSES) {
   const { name } = makeHarness();
 

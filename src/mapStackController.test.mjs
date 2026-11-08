@@ -6,7 +6,7 @@ import { createFakeEngine } from './globe/testing/fakeEngine.js';
 test('the map stack controller applies its stacks through a given globe engine', async () => {
   const engine = createFakeEngine();
   const tileset = { show: true };
-  const controller = new MapStackController(null, {
+  const controller = new MapStackController({
     engine,
     googleTileset: tileset,
   });
@@ -31,7 +31,7 @@ test('on a Navara engine the map stack controller opens on Google 3D from the br
     else globalThis.window = previous;
   });
   const engine = createFakeEngine({ kind: 'navara' });
-  const controller = new MapStackController(null, { engine });
+  const controller = new MapStackController({ engine });
   assert.equal(controller.getActiveId(), 'photoreal');
   assert.equal(controller.isStackAvailable('bing-aerial'), false);
   await controller.setStack('photoreal');
@@ -40,7 +40,7 @@ test('on a Navara engine the map stack controller opens on Google 3D from the br
   assert.equal('tileset' in photoreal, false);
   controller.destroy();
   window.__GOOGLE_MAPS_API_KEY__ = '';
-  const keyless = new MapStackController(null, {
+  const keyless = new MapStackController({
     engine: createFakeEngine({ kind: 'navara' }),
   });
   assert.equal(keyless.getActiveId(), 'esri-imagery');

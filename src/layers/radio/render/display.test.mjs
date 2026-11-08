@@ -180,9 +180,9 @@ function fixture(t, makeHarness) {
       },
       render: { governorRequestRender: noop },
       overlays: {
-        clearOverlaySource: (id) => entries.delete(id),
-        setOverlaySourceVisible: noop,
-        setOverlayEntries: (id, value) => entries.set(id, value),
+        clearSource: (id) => entries.delete(id),
+        setVisible: noop,
+        setEntries: (id, value) => entries.set(id, value),
       },
     },
     rendererFactory(value) {
@@ -215,10 +215,6 @@ function fixture(t, makeHarness) {
     },
   };
 }
-
-test('the display needs a globe engine', () => {
-  assert.throws(() => createRadioDisplay(null, {}), TypeError);
-});
 
 for (const makeHarness of HARNESSES) {
   const { name } = makeHarness();

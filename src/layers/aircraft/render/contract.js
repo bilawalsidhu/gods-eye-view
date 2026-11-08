@@ -50,14 +50,7 @@
  * @property {(position: object, result?: object) => ({x: number, y: number} | undefined)} worldToWindow
  * @property {() => void} requestRender
  * @property {(event: 'preRender'|'preUpdate'|'moveEnd', listener: Function) => () => void} on
- * @property {object} surfaceOwner What groundSnap/meshFloor sample through
- *   (the engine).
- * @property {object} surfaceScene What sampleMeshFloorCells takes.
- * @property {() => void} holdFrames Evidence capture: stop the engine's own
- *   frame loop (QA only; the contract has no frame hold, so it holds none).
- * @property {() => void} closeFrameLatch Evidence capture, one task later:
- *   let manual renders start without waiting for the loop's next frame.
- * @property {() => void} releaseFrames
+ * @property {object} engine The globe engine used for surface sampling.
  */
 
 /**

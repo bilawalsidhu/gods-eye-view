@@ -35,14 +35,13 @@ export function createInstallationsLayer({
       if (renderer)
         throw new Error('Installations layer is already initialized');
       const engine = options.engine ?? null;
-      renderer = rendererFactory({ ...context, viewer, engine });
-      if (!renderer?.lifecycle?.methods)
-        throw new Error('Installation renderer is unavailable');
-      Object.assign(parts, renderer);
-      const ready = renderer.lifecycle.methods.init(viewer, options);
+      renderer = rendererFactory({ ...context, engine });
+      if (!renderer) throw new Error('Installation renderer is unavailable');
+      parts.display = renderer;
+      const ready = renderer.init();
       if (state.enabled) {
-        renderer.lifecycle.methods.enable();
-        renderer.rendering.renderRecords({
+        renderer.enable();
+        renderer.renderRecords({
           claimSelection: Boolean(state.selectedId),
         });
       }
@@ -50,10 +49,10 @@ export function createInstallationsLayer({
     },
     enable(...args) {
       state.enabled = true;
-      return renderer?.lifecycle?.methods.enable(...args);
+      return renderer.enable(...args);
     },
     disable(...args) {
-      if (renderer) return renderer.lifecycle.methods.disable(...args);
+      if (renderer) return renderer.disable(...args);
       state.enabled = false;
       state.abort?.abort();
       state.abort = null;
@@ -71,14 +70,13 @@ export function createInstallationsLayer({
       );
       parts.ingestion.setInstallationStatus('idle');
     },
-    detachRenderer(viewer) {
-      renderer?.lifecycle.methods.detach(viewer);
+    detachRenderer() {
+      renderer.detach();
       renderer = null;
-      for (const key of ['rendering', 'namedMarkers', 'selection', 'lifecycle'])
-        delete parts[key];
+      parts.display = null;
     },
     destroy(...args) {
-      if (renderer) renderer.lifecycle.methods.destroy(...args);
+      if (renderer) renderer.destroy(...args);
       else {
         lifecycle.disable();
         source.destroy?.();

@@ -1,3 +1,4 @@
+import { releaseTrackers } from './releaseTrackers.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import {
@@ -136,54 +137,10 @@ export class NavigationController {
     preserveCameraFlight = false,
     trackingOrigin = 'tool',
   } = {}) {
-    const {
-      flightsLayer,
-      militaryFlightsLayer,
-      satellitesLayer,
-      aisLiveVesselsLayer,
-      militaryAwarenessLayer,
-      rocketLaunchesLayer,
-    } = this.tracking;
-    let contactSelected = false;
-    try {
-      // If awareness controls are unavailable, release the trackers directly.
-      if (typeof militaryAwarenessLayer?.releaseCameraOwnership !== 'function')
-        throw new Error('no military awareness controls');
-      contactSelected = Boolean(
-        militaryAwarenessLayer.releaseCameraOwnership?.({
-          preserveVesselSelection,
-          origin: trackingOrigin,
-        }),
-      );
-    } catch {
-      try {
-        flightsLayer.stopTracking?.({ origin: trackingOrigin });
-      } catch {
-        /* best-effort release */
-      }
-      try {
-        militaryFlightsLayer.stopTracking?.({ origin: trackingOrigin });
-      } catch {
-        /* best-effort release */
-      }
-      if (!preserveVesselSelection) {
-        try {
-          aisLiveVesselsLayer.clearSelection?.();
-        } catch {
-          /* best-effort release */
-        }
-      }
-    }
-    try {
-      satellitesLayer.stopTracking?.({ origin: trackingOrigin });
-    } catch {
-      /* best-effort release */
-    }
-    try {
-      rocketLaunchesLayer.releaseCameraOwnership?.();
-    } catch {
-      /* best-effort release */
-    }
+    const contactSelected = releaseTrackers(this.tracking, {
+      preserveVesselSelection,
+      origin: trackingOrigin,
+    });
     this.engine?.camera.following()?.stop();
     this.interruptCameraMotion('explicit-navigation');
     this.stopOrbit();

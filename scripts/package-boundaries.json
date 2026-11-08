@@ -1135,7 +1135,7 @@
       "src/data/feedState.js",
       "src/data/layerSnapshot.js",
       "src/ui/aircraftDisplay.js",
-      "src/layers/weather/imageryHost.js",
+      "src/layers/shared/imageryHost.js",
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
       "src/ui/pendingVisualSettings.js",
@@ -1240,7 +1240,8 @@
       "src/overlays/worldOverlayTokens.js",
       "src/time/clock.js",
       "src/data/contextStore.js",
-      "src/data/trackedReadout.js"
+      "src/data/trackedReadout.js",
+      "src/ui/releaseTrackers.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1466,7 +1467,7 @@
       "src/globe/contract.js",
       "src/layers/shared/color.js",
       "src/layers/aircraft/qaDrawn.js",
-      "src/data/bindContextStore.js"
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -1534,7 +1535,7 @@
       "src/time/clock.js",
       "src/globe/contract.js",
       "src/layers/aircraft/qaDrawn.js",
-      "src/data/bindContextStore.js"
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -1617,8 +1618,7 @@
       "src/globe/cesium/sceneProjection.js",
       "src/geo/",
       "src/globe/contract.js",
-      "src/overlays/bindOverlayHost.js",
-      "src/data/bindContextStore.js"
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },
@@ -1645,7 +1645,7 @@
       "src/layers/recentImagery/model.js",
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js",
+      "src/layers/shared/imageryHost.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/ar.json",
@@ -1701,8 +1701,7 @@
       "src/geo/",
       "src/layers/firms/rectangle.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js",
-      "src/data/bindContextStore.js"
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": []
   },
@@ -1745,8 +1744,7 @@
       "src/geo/",
       "src/time/clock.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js",
-      "src/data/bindContextStore.js"
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -2302,7 +2300,7 @@
       "src/maps/terrainRetry.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
-      "src/maps/imageryHost.js",
+      "src/layers/shared/imageryHost.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/ar.json",
@@ -3215,7 +3213,7 @@
       "src/scenes/sharing.js",
       "src/ui/sceneSharing.js",
       "src/ui/stores/sceneSharing.js",
-      "src/layers/weather/imageryHost.js",
+      "src/layers/shared/imageryHost.js",
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
@@ -3243,7 +3241,6 @@
       "src/layers/recentImagery/model.js",
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
       "src/ui/imageryBoxTool.js",
       "src/voice/pointerContext.js",
@@ -3449,7 +3446,6 @@
       "src/globe/navara/sonar.js",
       "src/globe/navara/surface.js",
       "src/globe/navara/viewOptions.js",
-      "src/app/engineChoice.js",
       "src/app/navaraMode.js",
       "src/annotations/navaraAnnotationRenderer.js",
       "src/annotations/drawSurface.js",
@@ -3629,7 +3625,7 @@
       "src/globe/exclusivePointer.js",
       "src/globe/cesium/followOffset.js",
       "src/overlays/bindOverlayHost.js",
-      "src/data/bindContextStore.js"
+      "src/ui/releaseTrackers.js"
     ],
     "external": [
       "hls.js",
@@ -4117,7 +4113,7 @@
       "src/layers/weather/infraredAlpha.js",
       "src/layers/weather/infraredImage.js",
       "src/layers/weather/source.js",
-      "src/layers/weather/imageryHost.js",
+      "src/layers/shared/imageryHost.js",
       "src/layers/cyclones/index.js",
       "src/layers/cyclones/rendering.js",
       "src/layers/cyclones/labels.js",
@@ -4147,7 +4143,6 @@
       "src/layers/recentImagery/model.js",
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js",
       "src/layers/streetLevel/index.js",
       "src/layers/streetLevel/uiState.js",
       "src/layers/streetLevel/pickRouter.js",
@@ -4391,8 +4386,7 @@
       "src/globe/meshes.js",
       "src/globe/exclusivePointer.js",
       "src/globe/cesium/followOffset.js",
-      "src/overlays/bindOverlayHost.js",
-      "src/data/bindContextStore.js"
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": [
       "hls.js",
@@ -4529,7 +4523,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/i18n/index.js",
-      "src/globe/contract.js"
+      "src/globe/contract.js",
+      "src/ui/releaseTrackers.js"
     ],
     "external": ["cesium"]
   },
@@ -5731,8 +5726,7 @@
       "src/layers/wildlifeSightings/display.js",
       "src/data/spriteOrder.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js",
-      "src/data/bindContextStore.js"
+      "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
   },

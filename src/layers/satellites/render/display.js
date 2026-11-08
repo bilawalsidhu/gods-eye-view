@@ -56,8 +56,6 @@ const depthTestOf = (distance) =>
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createSatellitesDisplay(engine) {
-  if (!engine?.movers || !engine?.lines)
-    throw new TypeError('The satellites display needs a globe engine');
   const banks = new Map();
   const points = new Map();
   const tracked = new Set();

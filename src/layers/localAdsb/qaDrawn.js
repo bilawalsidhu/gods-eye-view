@@ -1,5 +1,6 @@
-// On-demand QA snapshots of the cached local renderer state. Never read
-// an entity CallbackProperty: that would evaluate rendering during a probe.
+import { LOCAL_ADSB_DISPLAY_DISTANCE_M } from './render/display.js';
+
+// On-demand QA snapshots of the cached local renderer state.
 export function localAdsbQaDrawn(
   markers,
   models,
@@ -20,7 +21,7 @@ export function localAdsbQaDrawn(
       enabled &&
       !marker.modelOwnsVisual &&
       isVisible(marker) &&
-      distance <= 2_000_000,
+      distance <= LOCAL_ADSB_DISPLAY_DISTANCE_M,
     );
     const model = models?.get(marker.id);
     const matrix = model?.modelMatrix;

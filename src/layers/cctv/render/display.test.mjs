@@ -63,10 +63,6 @@ const recordFor = (state, id, extra = {}) => {
   return record;
 };
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createCctvDisplay(null, { state: {} }), TypeError);
-});
-
 for (const makeHarness of CCTV_HARNESSES) {
   const { name } = makeHarness();
 

@@ -108,9 +108,9 @@ export function createEngineLayerView(
       return cameraView;
     },
     scene,
-    surfaceOwner: engine,
-    surfaceScene: engine,
+    engine,
     frameNumber: () => frameNumber,
+    canvasSize: () => engine.host.size(),
     viewportHeightPx: () => engine.host.size().height,
     frustumTester() {
       const cam = freshCamera();
@@ -145,9 +145,6 @@ export function createEngineLayerView(
       );
     },
     isDestroyed: () => isDestroyed() || engine.isDestroyed?.() === true,
-    holdFrames() {},
-    closeFrameLatch() {},
-    releaseFrames() {},
   };
 
   return {

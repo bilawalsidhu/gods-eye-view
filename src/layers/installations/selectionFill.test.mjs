@@ -28,7 +28,7 @@ function harness(t, makeHarness) {
   h.state.selectedId = 'base';
   // Photoreal tiles shown: the globe is hidden.
   h.setPhotoreal(true);
-  h.parts.lifecycle.methods.init();
+  h.parts.display.init();
   t.after(() => {
     h.destroy();
     if (previousWindow === undefined) delete globalThis.window;
@@ -38,8 +38,8 @@ function harness(t, makeHarness) {
   return {
     h,
     record,
-    render: h.parts.rendering,
-    lifecycle: h.parts.lifecycle.methods,
+    render: h.parts.display,
+    lifecycle: h.parts.display,
     fill,
   };
 }

@@ -15,7 +15,7 @@ import * as credits from './dataCredits.js';
 import * as render from '../renderGovernor.js';
 import * as picking from './pickRegistry.js';
 import * as scenePick from './scenePick.js';
-import * as overlays from '../overlays/worldOverlay.js';
+import { worldOverlayFor as overlays } from '../overlays/worldOverlay.js';
 import * as camera from '../cameraVerbs.js';
 import * as ground from './groundFloor.js';
 import * as input from './inputOwnership.js';

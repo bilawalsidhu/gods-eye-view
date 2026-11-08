@@ -333,8 +333,6 @@ export function createFakeEngine(options = {}) {
   let moving = false;
   let lastFramePose = null;
   let lastChangedPose = null;
-  // The setCameraInputs choice and the suspensions held over it.
-  let cameraInputChoice = true;
   let cameraSuspensions = 0;
 
   const fake = {
@@ -793,6 +791,10 @@ export function createFakeEngine(options = {}) {
       ...fakeContactSonar(options.contactSonar, record),
     },
     surface: {
+      raycast(ray) {
+        record('surface.raycast', [ray]);
+        return scripted('raycast', [ray], () => undefined);
+      },
       sampleHeight(position, exclude) {
         record('surface.sampleHeight', [position, exclude]);
         return scripted('sampleHeight', [position, exclude], () => undefined);
@@ -848,11 +850,6 @@ export function createFakeEngine(options = {}) {
         listeners.add(entry);
         return () => listeners.delete(entry);
       },
-      setCameraInputs(enabled) {
-        record('input.setCameraInputs', [enabled]);
-        cameraInputChoice = Boolean(enabled);
-        fake.cameraInputsEnabled = cameraInputChoice && !cameraSuspensions;
-      },
       suspendCameraInputs() {
         record('input.suspendCameraInputs', []);
         cameraSuspensions++;
@@ -863,7 +860,7 @@ export function createFakeEngine(options = {}) {
           resumed = true;
           record('input.resumeCameraInputs', []);
           cameraSuspensions--;
-          fake.cameraInputsEnabled = cameraInputChoice && !cameraSuspensions;
+          fake.cameraInputsEnabled = !cameraSuspensions;
         };
       },
       cameraInputsEnabled: () => fake.cameraInputsEnabled,

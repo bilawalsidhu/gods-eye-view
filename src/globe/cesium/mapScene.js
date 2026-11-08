@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { createCesiumCredits } from './credits.js';
 import { createMapCredits } from '../../maps/credits.js';
 
 /**
@@ -10,15 +9,14 @@ import { createMapCredits } from '../../maps/credits.js';
  * @param {Cesium.Viewer} viewer
  * @param {{
  *   createImageryLayer?: (provider: object) => object,
- *   credits?: import('../contract.js').GlobeEngine['credits'],
- * }} [options] `credits`: the globe engine's credits (default: the viewer's
- *   credit display through the Cesium engine's credits).
+ *   credits: import('../contract.js').GlobeEngine['credits'],
+ * }} options `credits`: the globe engine's credits.
  */
 export function createMapScene(
   viewer,
   {
     createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
-    credits: engineCredits = createCesiumCredits(viewer).credits,
+    credits: engineCredits,
   } = {},
 ) {
   const credits = createMapCredits(engineCredits);

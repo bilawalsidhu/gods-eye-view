@@ -1,3 +1,4 @@
+import { installDomClasses } from '../testSupport/domClasses.mjs';
 // Outline names are drawn by the DOM annotation overlay, never as Cesium
 // text labels: the boundary data modules, the outline resolver and the
 // annotation renderers must not import or construct Cesium label primitives,
@@ -95,16 +96,7 @@ test('the static check catches a Cesium label however it is written', () => {
 
 test('drawing bundled place and neighborhood outlines creates no Cesium label', async (t) => {
   // Cesium's material setup checks for these browser image types.
-  for (const name of [
-    'HTMLCanvasElement',
-    'HTMLImageElement',
-    'ImageBitmap',
-    'OffscreenCanvas',
-  ]) {
-    if (name in globalThis) continue;
-    globalThis[name] = class {};
-    t.after(() => delete globalThis[name]);
-  }
+  installDomClasses(t);
   const featureSource = {};
   for (const method of FEATURE_SOURCE_METHODS)
     featureSource[method] = async () => null;

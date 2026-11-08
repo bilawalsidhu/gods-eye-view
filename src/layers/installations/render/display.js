@@ -151,8 +151,6 @@ export function createInstallationsDisplay(
   engine,
   { state, services, parts, source, overlayHost },
 ) {
-  if (!engine?.ground)
-    throw new TypeError('The installations display needs a globe engine');
   const { governorRequestRender } = services.render;
   const {
     clearSelectedEntityContextForLayer,
@@ -693,21 +691,17 @@ export function createInstallationsDisplay(
   };
 
   return {
-    lifecycle: { methods },
+    ...methods,
     namedMarkers,
-    rendering: {
-      installationSurfaceHeightM: parts.model.installationSurfaceHeightM,
-      clearSelectionFill,
-      syncSelectionFill,
-      clearRendered,
-      renderableRecords,
-      renderRecords,
-      warmInstallationFloors,
-    },
-    selection: {
-      selectRecord,
-      installInteraction,
-      destroy: destroyInteraction,
-    },
+    installationSurfaceHeightM: parts.model.installationSurfaceHeightM,
+    clearSelectionFill,
+    syncSelectionFill,
+    clearRendered,
+    renderableRecords,
+    renderRecords,
+    warmInstallationFloors,
+    selectRecord,
+    installInteraction,
+    destroyInteraction,
   };
 }

@@ -98,7 +98,7 @@ export function createStationPoints({ state, services, parts }, points) {
 
     // Clear selection if it belongs to the city being removed
     if (state._selectedKey && runtime.stationKeys.has(state._selectedKey))
-      parts.selection._clearSelection();
+      parts.display._clearSelection();
 
     for (const key of runtime.stationKeys) {
       const record = state._stationRenderMap.get(key);
@@ -159,7 +159,7 @@ export function createStationPoints({ state, services, parts }, points) {
       points.update?.(record);
     }
     points.afterUpdate?.();
-    parts.selection.refreshSelectedCard();
+    parts.display.refreshSelectedCard();
   }
 
   return { ensureCityPoints, removeCityPoints, applyStatusToPoints };

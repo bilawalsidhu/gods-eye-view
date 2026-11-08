@@ -51,7 +51,6 @@ const rgba = (css, alpha = 1) => rgbaFromCss(css).withAlpha(alpha).rgba();
  * @param {{ state: object, services: object, parts: object }} context
  */
 export function createRadioDisplay(engine, { state, services, parts }) {
-  if (!engine) throw new TypeError('The radio display needs a globe engine');
   let initialized = false;
   let visible = false;
   let sets = [];

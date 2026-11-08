@@ -25,7 +25,7 @@ class FakeShell {
 
 test('a candidate failing in a later part leaves the shell ready for the working engine', async () => {
   const sceneHost = createSceneHost();
-  const catalog = { get: (id) => ({ id }), unavailableMetadata: [] };
+  const catalog = { get: (id) => ({ id }) };
   const cesium = {
     kind: 'cesium',
     viewer: null,

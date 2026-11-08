@@ -119,22 +119,22 @@ test('on validates its arguments and returns an idempotent remover', () => {
   assert.equal(count, 0);
 });
 
-test('setCameraInputs toggles Navara camera control and user input cancels flights only while enabled', () => {
+test('suspending Navara controls preserves user input notifications', () => {
   const { canvas, input, cameraOptions, cameraInputs } = setup();
   canvas.dispatchEvent(pointer('pointerdown', 1, 1));
   canvas.dispatchEvent(new Event('wheel'));
   assert.deepEqual(cameraInputs, ['pointerdown', 'wheel']);
-  input.setCameraInputs(false);
+  const resume = input.suspendCameraInputs();
   canvas.dispatchEvent(pointer('pointerdown', 1, 1));
-  assert.deepEqual(cameraInputs, ['pointerdown', 'wheel']);
-  input.setCameraInputs(true);
+  assert.deepEqual(cameraInputs, ['pointerdown', 'wheel', 'pointerdown']);
+  resume();
   assert.deepEqual(cameraOptions, [
     { enableSpin: false, enableZoom: false, enableTilt: false },
     { enableSpin: true, enableZoom: true, enableTilt: true },
   ]);
 });
 
-test('suspendCameraInputs counts and keeps the setCameraInputs choice for the last resume', () => {
+test('suspendCameraInputs counts until the last resume', () => {
   const { input, cameraOptions } = setup();
   const on = { enableSpin: true, enableZoom: true, enableTilt: true };
   const off = { enableSpin: false, enableZoom: false, enableTilt: false };
@@ -145,11 +145,7 @@ test('suspendCameraInputs counts and keeps the setCameraInputs choice for the la
   inner();
   inner();
   assert.deepEqual(cameraOptions.at(-1), off);
-  input.setCameraInputs(false);
   outer();
-  assert.deepEqual(cameraOptions.at(-1), off);
-  assert.equal(input.cameraInputsEnabled(), false);
-  input.setCameraInputs(true);
   assert.deepEqual(cameraOptions.at(-1), on);
   assert.equal(input.cameraInputsEnabled(), true);
 });
@@ -165,10 +161,10 @@ test('destroy removes every DOM listener and later subscriptions are inert', () 
   assert.equal(canvas.listenerCount, 0);
 });
 
-test('setCameraInputs merges into the camera options set through the engine', () => {
+test('suspension merges into the camera options set through the engine', () => {
   const { input, cameraOptions } = setup();
   input.setCameraOptions({ minimumZoomDistance: 50, zoomSpeed: 2 });
-  input.setCameraInputs(false);
+  const resume = input.suspendCameraInputs();
   assert.deepEqual(cameraOptions.at(-1), {
     minimumZoomDistance: 50,
     zoomSpeed: 2,

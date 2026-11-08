@@ -42,7 +42,7 @@ function fakeShell() {
     _layerSession: null,
     services: {
       destroyTrackedReadout: record('destroyTrackedReadout'),
-      destroyWorldOverlay: record('destroyWorldOverlay'),
+      worldOverlayFor: () => ({ destroy: record('destroyWorldOverlay') }),
       destroyDetection: record('destroyDetection'),
       cctvLayer: 'cctv',
     },
@@ -314,7 +314,7 @@ test('a hosted shell uses the enclosing transition while direct calls wait outsi
   shell._sceneHost = host;
   const first = { engine: shell.engine };
   await host.attach(first);
-  const catalog = { get: () => ({}), unavailableMetadata: [] };
+  const catalog = { get: () => ({}) };
   await host.register(shellScenePart(shell, { builtOn: first, catalog }));
   let release;
   let entered;

@@ -87,10 +87,6 @@ const near = (actual, expected, label, tolerance = 1e-9) =>
     `${label}: ${actual} vs ${expected}`,
   );
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createPerimetersDisplay(null), TypeError);
-});
-
 for (const makeHarness of GROUND_HARNESSES) {
   const { name } = makeHarness();
 
@@ -263,7 +259,5 @@ test('the display ignores calls after destroy and destroys once', () => {
   display.replace([row]);
   assert.equal(h.listeners(), 0);
   display.onClick(() => {})();
-  assert.equal(display.pick({}), null);
-  assert.equal(display.pick({ picked: { id: 'x' } }).id, 'x');
   h.destroy();
 });

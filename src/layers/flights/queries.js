@@ -932,25 +932,15 @@ export function createQueries({
               const view = flightState._renderer?.view;
               if (!view || !Number.isFinite(startMs))
                 return { ok: false, nowMs: null };
-              view.holdFrames();
               setFocusEvidenceNowMs(startMs);
               flightState._lastFleetTickMs = startMs - FLEET_DR_INTERVAL_MS;
-              // Cross a browser task boundary, then close the renderer's pending-loop
-              // latch. Any already-queued callback still observes the false gate,
-              // while manual evidence renders can begin without waiting on VSYNC.
-              return new Promise((resolve) =>
-                setTimeout(() => {
-                  flightState._renderer?.view.closeFrameLatch();
-                  resolve({ ok: true, nowMs: startMs });
-                }, 0),
-              );
+              return { ok: true, nowMs: startMs };
             },
             advanceFrameClock(deltaMs = FLEET_DR_INTERVAL_MS) {
               return advanceFocusEvidenceNowMs(deltaMs);
             },
             releaseFrameClock() {
               setFocusEvidenceNowMs(null);
-              flightState._renderer?.view.releaseFrames();
             },
           }),
         }

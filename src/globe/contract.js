@@ -218,7 +218,7 @@
  *   The position moved onto the rendered scene along the geodetic normal.
  * @property {boolean} clampToHeightSupported
  * @property {() => boolean} tilesLoaded
- * @property {(ray: { origin: Cartesian3, direction: Cartesian3, far: number, exclude?: any[] }) => ({ position: Cartesian3, distance: number, object: any } | undefined)} [raycast]
+ * @property {(ray: { origin: Cartesian3, direction: Cartesian3, far: number, exclude?: any[] }) => ({ position: Cartesian3, distance: number, object: any } | undefined)} raycast
  *   Nearest visible scene object within finite positive `far` metres (Navara:
  *   loaded tile triangles). Direction
  *   is normalized by the adapter. Excluded roots/meshes and hidden objects do
@@ -319,15 +319,12 @@
  * @property {(type: InputType, listener: (event: InputEvent) => void, options?: InputOptions) => () => void} on
  *   As in Cesium, a listener with a modifier fires only while that key is
  *   held and one without fires only while no modifier is held.
- * @property {(enabled: boolean) => void} setCameraInputs Whether the user's
- *   drag, wheel and touch move the camera (Cesium's enableInputs). Under a
- *   suspension the choice is kept and applies at the last resume.
  * @property {() => () => void} suspendCameraInputs Camera inputs off until
  *   the returned resume (idempotent): for an owner that holds the camera for
  *   a while (the cockpit, a gizmo or box drag, a flight a gesture would
  *   cancel). Suspensions count: inputs stay off until the last one resumes,
  *   which brings back the state from before the first (Cesium: the
- *   controller's enableInputs as it was), or what setCameraInputs set since.
+ *   controller's enableInputs as it was).
  * @property {() => boolean} cameraInputsEnabled Whether the user's gestures
  *   move the camera now: on, and under no suspension.
  *
@@ -1016,10 +1013,10 @@ const SHAPE = {
     clampToHeight: isFunction,
     clampToHeightSupported: isBoolean,
     tilesLoaded: isFunction,
+    raycast: isFunction,
   },
   input: {
     on: isFunction,
-    setCameraInputs: isFunction,
     acquirePointer: isFunction,
     suspendCameraInputs: isFunction,
     cameraInputsEnabled: isFunction,

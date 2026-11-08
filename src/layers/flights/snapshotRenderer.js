@@ -328,22 +328,15 @@ export function createFlightSnapshotRenderer({
     // cell, budget-capped, viewer-proximate, google-3d regime only). Own
     // billboards/models are excluded so a vertical probe can't land on an
     // aircraft instead of the pavement.
-    sampleMeshFloorCells(
-      flightState._renderer?.view.surfaceScene,
-      floorWarmPoints,
-      {
-        excludeObjects:
-          flightState._renderer?.surfaceExclusions({
-            sprites: flightState._billboards.values(),
-            models: [
-              ...flightState._models.values(),
-              flightState._trackedModel,
-            ],
-          }) ?? [],
-        viewerLat: viewerLatDeg,
-        viewerLon: viewerLonDeg,
-      },
-    );
+    sampleMeshFloorCells(flightState._renderer?.view.engine, floorWarmPoints, {
+      excludeObjects:
+        flightState._renderer?.surfaceExclusions({
+          sprites: flightState._billboards.values(),
+          models: [...flightState._models.values(), flightState._trackedModel],
+        }) ?? [],
+      viewerLat: viewerLatDeg,
+      viewerLon: viewerLonDeg,
+    });
 
     // Round 5: the grounded exact-key warm that used to live here is gone —
     // see the note where _warmGroundedAircraftSurfaceCache was removed. The

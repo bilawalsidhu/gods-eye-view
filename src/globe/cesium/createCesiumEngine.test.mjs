@@ -1,3 +1,4 @@
+import { installDomClasses } from '../../testSupport/domClasses.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -118,6 +119,7 @@ test('the engine reads the Viewer aliases and builds on a minimal viewer', () =>
         projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
       },
     },
+    clock: { onTick: new Cesium.Event() },
     scene: { postRender, requestRender: () => renders++ },
   };
   const engine = createCesiumEngine(viewer);
@@ -247,14 +249,7 @@ test('movers and lines draw on the scene, answer picks with their pickId and go 
 test('the contract suite movers and lines checks pass on the Cesium engine (no pixels or pointer)', async (t) => {
   // Cesium's Material sorts uniform values with instanceof checks against
   // these DOM classes; Node has none of them.
-  for (const name of [
-    'HTMLCanvasElement',
-    'HTMLImageElement',
-    'HTMLVideoElement',
-    'ImageBitmap',
-    'OffscreenCanvas',
-  ])
-    globalThis[name] ??= class {};
+  installDomClasses();
   const handlers = createFakeEventHandlers();
   const { scene, engine, frame } = createCameraViewer({
     engineOptions: {

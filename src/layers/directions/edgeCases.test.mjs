@@ -56,7 +56,7 @@ function fixture(makeHarness = createFakeGroundHarness) {
       cachedGroundFloor: () => 0,
       warmGroundFloor() {},
     },
-    createRenderer: createDirectionsDisplay,
+    rendererFactory: createDirectionsDisplay,
   });
   layer._setOverlayHostForTest({
     setEntries() {},

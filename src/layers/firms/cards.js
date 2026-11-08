@@ -29,9 +29,9 @@ export function createCards({
 
   function rebuildAmbientLabels() {
     if (!layerState._renderer) return;
-    const scene = layerState._viewer.scene;
+    const scene = layerState._view.scene;
     const project = (position, result) =>
-      layerState._renderer.project(position, result);
+      layerState._renderer.view.worldToWindow(position, result);
     const now = Date.now();
     const entries = [];
     /** @type {Array<{x: number, y: number}>} Screen positions of accepted labels. */

@@ -311,7 +311,6 @@ export function createStandaloneApplication({
               const probe = createQaProbe({
                 engine: next.engine,
                 dataManager: context.data.dataManager,
-                availability: next.catalog.availability,
               });
               debug.layers = probe;
               defer(() => {

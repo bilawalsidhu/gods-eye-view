@@ -24,10 +24,9 @@ const plain = (position) =>
  * @param {{
  *   engine: import('../globe/contract.js').GlobeEngine,
  *   dataManager: object,
- *   availability: import('./layers/renderers.js').LayerAvailability,
  * }} options
  */
-export function createQaProbe({ engine, dataManager, availability }) {
+export function createQaProbe({ engine, dataManager }) {
   let frames = 0;
   const removeFrames = engine.frames.postRender.addEventListener(() => {
     frames++;
@@ -53,10 +52,10 @@ export function createQaProbe({ engine, dataManager, availability }) {
         id,
         name,
         enabled: Boolean(enabled),
-        available: availability.isAvailable(id),
+        available: true,
       })),
-    unavailable: () => availability.unavailable(),
-    available: (layerId) => availability.isAvailable(layerId),
+    unavailable: () => [],
+    available: (layerId) => dataManager.layers.has(layerId),
     enable: (layerId) =>
       dataManager.setEnabled(layerId, true, { origin: 'user' }),
     disable: (layerId) =>

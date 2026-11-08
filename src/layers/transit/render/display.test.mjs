@@ -233,10 +233,6 @@ const spec = (id, overrides = {}) => ({
   ...overrides,
 });
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createTransitDisplay(null, {}), TypeError);
-});
-
 test('the atlas holds every glyph the markers draw, once each', () => {
   const icons = transitAtlasIcons();
   assert.equal(new Set(icons).size, icons.length);

@@ -1,3 +1,4 @@
+import { createCesiumCredits } from './credits.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMapScene } from './mapScene.js';
@@ -25,7 +26,9 @@ function fixture() {
       },
     },
   };
+  viewer.creditDisplay = viewer.scene.frameState.creditDisplay;
   const scene = createMapScene(viewer, {
+    credits: createCesiumCredits(viewer).credits,
     createImageryLayer: (provider) => ({ provider }),
   });
   return { viewer, scene, layers, removed, credits };

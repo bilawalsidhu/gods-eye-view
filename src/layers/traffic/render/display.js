@@ -54,8 +54,6 @@ export function nearFarValue(scalar, distance) {
  *   clearHeat: () => void, excluded: () => object[], destroy: () => void }}
  */
 export function createTrafficDisplay(engine) {
-  if (!engine?.movers || !engine?.ground)
-    throw new TypeError('The traffic display needs a globe engine');
   const roles = ['outline', 'fill'];
   const sets = roles.map((role, order) =>
     engine.movers.createSet({

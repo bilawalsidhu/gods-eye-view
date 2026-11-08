@@ -9,21 +9,19 @@ import { createHistoryBudget } from '../../data/contactPlayback.js';
  * @returns {object}
  */
 export function createState({ services }) {
-  const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    services.overlays;
+  const { setEntries, setVisible, clearSource } = services.overlays;
 
   const state = {};
   state._historyBudget = createHistoryBudget();
 
   state.DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
   });
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
   /** The viewer the layer was initialized with (its renderer draws). */
-  state._viewer = null;
   /** The renderer's marker collections: the fleet and the vehicles mid-glide. */
   state._markers = null;
   state._animatedMarkers = null;

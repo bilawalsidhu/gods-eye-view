@@ -2,10 +2,7 @@ import { bindOverlayHost } from '../overlays/bindOverlayHost.js';
 import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import * as Cesium from 'cesium';
 import { cesiumSdkReady, loadCesiumSdk } from '../app/loadCesium.js';
-import {
-  clearOverlaySource,
-  setOverlayEntries,
-} from '../overlays/worldOverlay.js';
+
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   BHOTE_KOSHI_LOCATOR_CREDIT,
@@ -152,11 +149,7 @@ const BORDER_ACCENT = '#20e7f2';
 const INCIDENT_ACCENT = '#ffad55';
 const INCIDENT_COLOR = () => Cesium.Color.fromCssColorString(INCIDENT_ACCENT);
 
-const DEFAULT_OVERLAY_HOST = Object.freeze({
-  forEngine: worldOverlayFor,
-  setEntries: setOverlayEntries,
-  clearSource: clearOverlaySource,
-});
+const DEFAULT_OVERLAY_HOST = worldOverlayFor;
 
 // Applications supply their boundary resolver; the layer has no server-route dependency.
 const DEFAULT_BOUNDARY_RESOLVER = async () => null;
@@ -362,8 +355,6 @@ export function createBhoteKoshiLocatorLayer({
     overlayHost.clearSource(BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID);
     _native?.destroy();
     _native = null;
-    if (_dataSource && _viewer?.dataSources)
-      _viewer.dataSources.remove(_dataSource, true);
     _dataSource = null;
   }
 
@@ -1047,9 +1038,7 @@ export function createBhoteKoshiLocatorLayer({
 
   function connectDisplay() {
     if (!_dataSource) return;
-    if (_engine && createNativeRenderer)
-      _native = createNativeRenderer(_engine, _dataSource);
-    else if (_viewer) _viewer.dataSources.add(_dataSource);
+    _native = createNativeRenderer(_engine, _dataSource);
     registerDynamicCredit(_engine, BHOTE_KOSHI_LOCATOR_CREDIT);
     showOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
   }
@@ -1080,7 +1069,6 @@ export function createBhoteKoshiLocatorLayer({
     }
     _native?.destroy();
     _native = null;
-    if (_viewer && _dataSource) _viewer.dataSources.remove(_dataSource, false);
     hideOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
     _engine = _viewer = null;
   }

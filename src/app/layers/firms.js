@@ -1,10 +1,10 @@
-import { worldOverlayFor } from '../../overlays/worldOverlay.js';
+import { overlayHost } from './overlayHost.js';
 import { rendererFor } from './renderers.js';
 import { createFirmsHeatmapLayer as createLayer } from '../../layers/firms/index.js';
 import * as render from '../../renderGovernor.js';
 import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
-import * as overlays from '../../overlays/worldOverlay.js';
+import { worldOverlayFor as overlays } from '../../overlays/worldOverlay.js';
 import * as focus from '../../worldFocus.js';
 export const firmsServices = {
   render,
@@ -30,12 +30,6 @@ export function createApplicationFirms({ surface, ...options }) {
       create: ({ engine, ...renderOptions }) =>
         rendererFor('local-firms', engine, renderOptions),
     },
-    overlayHost: options.overlayHost ?? {
-      forEngine: worldOverlayFor,
-      setEntries: overlays.setOverlayEntries,
-      setVisible: overlays.setOverlaySourceVisible,
-      clearSource: overlays.clearOverlaySource,
-      hitTest: overlays.hitTestWorldOverlay,
-    },
+    overlayHost: options.overlayHost ?? overlayHost,
   });
 }

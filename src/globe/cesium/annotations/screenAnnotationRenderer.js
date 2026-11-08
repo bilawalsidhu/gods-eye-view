@@ -1,6 +1,7 @@
+import { worldOverlayFor } from '../../../overlays/worldOverlay.js';
 import * as Cesium from 'cesium';
 import * as geo from '../../../geo/index.js';
-import { getOverlayPaintRect } from '../../../overlays/worldOverlay.js';
+
 import {
   getActiveTrackedReadoutId,
   TRACKED_OVERLAY_SOURCE_ID,
@@ -72,7 +73,8 @@ export function createScreenAnnotationRenderer(
   target,
   {
     engine,
-    overlayPaintRect = (...args) => getOverlayPaintRect(engine, ...args),
+    overlayPaintRect = (...args) =>
+      worldOverlayFor(engine)?.getPaintRect(...args),
     activeTrackedReadoutId = () => getActiveTrackedReadoutId(engine),
     store = useScreenAnnotationsStore(applicationPinia()),
   } = {},

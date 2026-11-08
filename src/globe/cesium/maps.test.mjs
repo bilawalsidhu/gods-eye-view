@@ -4,6 +4,7 @@ import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../../maps/catalog.js';
 import { createDefaultMapSources } from '../../maps/defaultSources.js';
 import { ESRI_ATTRIBUTION_HTML } from './mapImagery.js';
+import { createCesiumCredits } from './credits.js';
 import { createCesiumMaps } from './maps.js';
 import { createFakeViewer } from './testing/fakeViewer.mjs';
 
@@ -13,6 +14,7 @@ function setup(options = {}) {
   const { maps, destroy } = createCesiumMaps(viewer, {
     requestRender: (reason) => renders.push(reason),
     createImageryLayer: (provider) => ({ provider }),
+    credits: createCesiumCredits(viewer).credits,
     ...options,
   });
   return { viewer, maps, destroy, renders };

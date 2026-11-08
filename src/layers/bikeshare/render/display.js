@@ -51,8 +51,6 @@ const SELECTED_ORDER = STATION_ORDER + 0.5;
  * @returns {{ rendering: object, selection: object, viewport: object, lifecycle: { methods: object } }}
  */
 export function createBikeshareDisplay(engine, context) {
-  if (!engine)
-    throw new TypeError('The bikeshare display needs a globe engine');
   const { state, services, parts } = context;
   const { registerPickOwner, unregisterPickOwner } = services.picking ?? {};
   let stations = null;
@@ -292,7 +290,7 @@ export function createBikeshareDisplay(engine, context) {
   function attachCamera() {
     if (state._cameraChangedAttached) return;
     removeCamera = engine.camera.changed.addEventListener(
-      parts.viewport.onCameraChanged,
+      parts.display.onCameraChanged,
     );
     claimCameraSensitivity(engine, LAYER_ID, 0.05);
     state._cameraChangedAttached = true;
@@ -305,7 +303,7 @@ export function createBikeshareDisplay(engine, context) {
     state._cameraChangedAttached = false;
   }
   function releaseInput() {
-    parts.selection._uninstallClickHandler();
+    parts.display._uninstallClickHandler();
     unregisterPickOwner?.(LAYER_ID, engine);
   }
 
@@ -334,7 +332,7 @@ export function createBikeshareDisplay(engine, context) {
     show() {
       setVisible(true);
       state._overlayHost.setVisible(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID, true);
-      parts.selection._installClickHandler();
+      parts.display._installClickHandler();
       // Pick ownership: station point ids are render-map keys.
       registerPickOwner?.(
         LAYER_ID,
@@ -342,7 +340,7 @@ export function createBikeshareDisplay(engine, context) {
         engine,
       );
       attachCamera();
-      void parts.viewport.runProximityCheck();
+      void parts.display.runProximityCheck();
     },
     /** Hides everything, stops every request and drops the cities. */
     disable() {
@@ -352,7 +350,7 @@ export function createBikeshareDisplay(engine, context) {
       state._altitudeGateEnabled = false;
       clearTimeout(state._cameraDebounceTimer);
       state._cameraDebounceTimer = null;
-      parts.selection._clearSelection();
+      parts.display._clearSelection();
       state._overlayHost.setVisible(
         BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
         false,
@@ -360,7 +358,7 @@ export function createBikeshareDisplay(engine, context) {
       releaseInput();
       detachCamera();
       parts.ingestion.abortAllInFlight();
-      parts.viewport.deactivateAllCities();
+      parts.display.deactivateAllCities();
       state._cityRuntime.clear();
       setVisible(false);
       state._count = 0;
@@ -369,7 +367,7 @@ export function createBikeshareDisplay(engine, context) {
     },
     /** Leaves this globe; the caches stay for the next one. */
     detach() {
-      parts.selection._clearSelection();
+      parts.display._clearSelection();
       releaseInput();
       detachCamera();
       destroySets();
@@ -382,7 +380,7 @@ export function createBikeshareDisplay(engine, context) {
       state._cameraDebounceTimer = null;
       if (state._enabled) methods.disable();
       else {
-        parts.selection._clearSelection();
+        parts.display._clearSelection();
         state._overlayHost.setVisible(
           BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
           false,
@@ -399,5 +397,5 @@ export function createBikeshareDisplay(engine, context) {
     },
   };
 
-  return { rendering, selection, viewport, lifecycle: { methods } };
+  return { ...rendering, ...selection, ...viewport, ...methods };
 }

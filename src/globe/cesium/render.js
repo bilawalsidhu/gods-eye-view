@@ -37,7 +37,7 @@ export function createCesiumRender(
   let removeFrameWatch = null;
   const watchFrames = () => {
     const { scene } = viewer;
-    if (removeFrameWatch || !scene.preUpdate?.addEventListener) return;
+    if (removeFrameWatch) return;
     const removers = [
       scene.preUpdate.addEventListener(() => {
         drawing = true;

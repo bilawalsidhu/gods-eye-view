@@ -38,9 +38,9 @@ function rig({ tle = async () => '1 25544U' } = {}) {
   const state = createState({
     services: {
       overlays: {
-        setOverlayEntries: noop,
-        setOverlaySourceVisible: noop,
-        clearOverlaySource: noop,
+        setEntries: noop,
+        setVisible: noop,
+        clearSource: noop,
       },
     },
   });

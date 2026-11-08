@@ -156,7 +156,7 @@ export function createLocalAdsbModels({
     // The vertical sample must hit the tile skin, not this aircraft's own
     // billboard or model.
     const height = groundSnap?.heightFor?.(
-      view.surfaceOwner,
+      view.engine,
       id,
       marker.position,
       () => [marker.entity, model].filter(Boolean),

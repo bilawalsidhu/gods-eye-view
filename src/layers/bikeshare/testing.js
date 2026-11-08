@@ -11,13 +11,13 @@ export function createTesting({ state: layerState, services, parts, source }) {
   /** Exercise the production selection path in focused runtime tests. */
 
   function _selectBikeshareStationForTest(key) {
-    parts.selection._selectStation(key);
+    parts.display._selectStation(key);
   }
 
   /** Exercise the production clear path and restore the production host seam. */
 
   function _clearBikeshareSelectionForTest() {
-    parts.selection._clearSelection();
+    parts.display._clearSelection();
     layerState._overlayHost = layerState.DEFAULT_OVERLAY_HOST;
   }
   return {

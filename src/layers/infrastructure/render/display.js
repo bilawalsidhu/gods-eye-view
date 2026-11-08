@@ -101,8 +101,6 @@ export function createInfrastructureDisplay(
     ...services,
     ...(services.context?.forEngine?.(engine) ?? services.context),
   };
-  if (!engine?.movers || !engine?.lines || !engine?.ground)
-    throw new TypeError('The infrastructure display needs a globe engine');
   const {
     id,
     name,

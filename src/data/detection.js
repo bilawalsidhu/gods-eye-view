@@ -1,3 +1,4 @@
+import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import { paintTransitBracket } from './detectionDraw.js';
 import * as geo from '../geo/index.js';
 import { governorRequestRender } from '../renderGovernor.js';
@@ -21,7 +22,7 @@ import {
   getKeyholeFadeTuning,
   keyholeLabelAlphaFromGeometry,
 } from '../celestialRing.js';
-import { registerWorldOverlayPaintLane } from '../overlays/worldOverlay.js';
+
 import {
   DETECTION_STYLE,
   DETECTION_THEME_MAP,
@@ -315,8 +316,7 @@ export function initDetection(engine, layers, onModeChange) {
   );
   _hostLayoutRevision = -1;
   _calloutCount = 0;
-  _hostLane = registerWorldOverlayPaintLane(
-    engine,
+  _hostLane = worldOverlayFor(engine)?.registerPaintLane(
     'detection',
     _paintDetectionLane,
     {
@@ -330,8 +330,7 @@ export function initDetection(engine, layers, onModeChange) {
   // solved. Both sit in the 'detection' lane — the host's bottom slot — so
   // callouts still paint under every ordinary overlay card and under the
   // tracked readout, exactly where they sat before.
-  _calloutLane = registerWorldOverlayPaintLane(
-    engine,
+  _calloutLane = worldOverlayFor(engine)?.registerPaintLane(
     'detection',
     _paintCalloutLane,
     {

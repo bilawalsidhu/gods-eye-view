@@ -1,4 +1,4 @@
-import { bindContextStore } from '../../data/bindContextStore.js';
+import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
@@ -16,7 +16,7 @@ export function createSelection({
     selectEntityContext,
     registerEntityContext,
     clearSelectedEntityContextForLayer,
-  } = bindContextStore(
+  } = bindOverlayHost(
     services.context,
     () => vesselState.state.renderer?.engine,
   );

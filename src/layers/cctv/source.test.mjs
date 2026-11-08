@@ -107,10 +107,10 @@ test('camera construction is inert and destruction cancels a pending catalog and
   const noop = () => {};
   const services = {
     overlays: {
-      clearOverlaySource: noop,
-      hitTestWorldOverlay: noop,
-      setOverlayEntries: noop,
-      setOverlaySourceVisible: noop,
+      clearSource: noop,
+      hitTest: noop,
+      setEntries: noop,
+      setVisible: noop,
     },
     activation: {},
     locations: {},

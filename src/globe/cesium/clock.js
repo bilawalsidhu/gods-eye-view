@@ -10,9 +10,7 @@
 // The latch is attached when the engine is created (the app creates it with
 // the scene), so it runs before any onTick listener added later; one added
 // before the engine existed would read the previous frame's time. destroy
-// removes it. A viewer without a clock (tests, a bare scene) latches on the
-// scene's preUpdate instead, attached on first use so creating the engine
-// adds no scene listener.
+// removes it.
 
 import { appClock as pageClock } from '../../time/clock.js';
 
@@ -23,32 +21,18 @@ import { appClock as pageClock } from '../../time/clock.js';
  * @returns {{ clock: import('../contract.js').GlobeClock, destroy: () => void }}
  */
 export function createCesiumClock(viewer, { appClock = pageClock } = {}) {
-  // A viewer-shaped object without a clock (tests, a bare scene): the
-  // scene's preUpdate opens the frame instead.
-  const tickSource = viewer.clock?.onTick ?? viewer.scene.preUpdate;
-  let removeTick = null;
-  let destroyed = false;
-  const onTick = () => {
-    appClock.beginFrame();
-  };
-  const attach = () => {
-    if (!removeTick && !destroyed)
-      removeTick = tickSource.addEventListener(onTick);
-  };
-  if (viewer.clock?.onTick) attach();
+  const removeTick = viewer.clock.onTick.addEventListener(() =>
+    appClock.beginFrame(),
+  );
   return {
     clock: {
       now: () => appClock.now(),
       frameTime() {
-        attach();
         return appClock.frameTime();
       },
     },
     destroy() {
-      destroyed = true;
-      const remove = removeTick;
-      removeTick = null;
-      remove?.();
+      removeTick();
     },
   };
 }

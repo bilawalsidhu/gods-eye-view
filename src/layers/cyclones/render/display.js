@@ -79,8 +79,6 @@ export function cycloneSphereVisible(sphere, camera) {
  *   cards and lead-hour labels publish to (labels.js has the default).
  */
 export function createCyclonesDisplay(engine, { overlayHost } = {}) {
-  if (!engine?.movers || !engine?.ground)
-    throw new TypeError('The cyclone display needs a globe engine');
   const labels = createCycloneLabels({ engine, host: overlayHost });
   // Mover set ids stay unique when a set is rebuilt larger.
   let setSeq = 0;

@@ -36,7 +36,7 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
     services: h.services,
     source: {},
   });
-  const life = parts.lifecycle.methods;
+  const life = parts.display;
   life.init();
   life.enable();
   assert.equal(

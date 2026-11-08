@@ -5,12 +5,7 @@ import * as geo from '../../geo/index.js';
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
 
 export function createVesselState({ source, services }) {
-  const {
-    setOverlayEntries,
-    setOverlaySourceVisible,
-    clearOverlaySource,
-    hitTestWorldOverlay,
-  } = bindOverlayHost(
+  const { setEntries, setVisible, clearSource, hitTest } = bindOverlayHost(
     services.overlay,
     () => vesselState.state.renderer?.engine,
   );
@@ -25,10 +20,10 @@ export function createVesselState({ source, services }) {
   vesselState._scratchFocusScreen = geo.cartesian2.create();
 
   vesselState.DEFAULT_VESSEL_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
-    hitTest: hitTestWorldOverlay,
+    setEntries: setEntries,
+    setVisible: setVisible,
+    clearSource: clearSource,
+    hitTest: hitTest,
   });
 
   vesselState._vesselOverlayHost = vesselState.DEFAULT_VESSEL_OVERLAY_HOST;

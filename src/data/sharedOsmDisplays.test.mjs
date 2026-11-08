@@ -1,3 +1,4 @@
+import { installDomClasses } from '../testSupport/domClasses.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
@@ -18,11 +19,7 @@ const noop = () => {};
 const overlayHost = { setEntries: noop, setVisible: noop, clearSource: noop };
 function viewer(t) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  for (const name of ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas']) {
-    const original = globalThis[name];
-    globalThis[name] = class {};
-    t.after(() => { if (original === undefined) delete globalThis[name]; else globalThis[name] = original; });
-  }
+  installDomClasses(t);
   const before = globalThis.document;
   globalThis.document = { addEventListener: noop, removeEventListener: noop };
   t.after(() => { if (before === undefined) delete globalThis.document; else globalThis.document = before; });
@@ -60,7 +57,7 @@ for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce th
 
 test('Nepal locator introduces the shared OSM credit', async (t) => {
   const v = viewer(t);
-  const layer = createBhoteKoshiLocatorLayer({ boundaryResolver: async () => ({ name: 'Nepal', ring: [[80, 26], [88, 26], [88, 30], [80, 30]] }), overlayHost, requestRender: noop, scheduleFrame: () => 1, cancelFrame: noop });
+  const layer = createBhoteKoshiLocatorLayer({ createNativeRenderer: () => ({ destroy: noop }), boundaryResolver: async () => ({ name: 'Nepal', ring: [[80, 26], [88, 26], [88, 30], [80, 30]] }), overlayHost, requestRender: noop, scheduleFrame: () => 1, cancelFrame: noop });
   await layer.init(v, { engine: cesiumCredits(v) }); await layer.enable(v, { origin: 'scene' });
   assertCredit(v); await layer.destroy(v);
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
@@ -78,7 +75,7 @@ test('Directions introduces the shared OSM credit when the requested route draws
   const engine = createFakeEngine();
   const layer = createDirectionsLayer({ source: createDirectionsSource(), services: {
     credits: { showOsmCredit, hideOsmCredit }, input, scenePick: {}, camera: {},
-    overlays: { setOverlayEntries: noop, setOverlaySourceVisible: noop, clearOverlaySource: noop },
+    overlays: { setEntries: noop, setVisible: noop, clearSource: noop },
     render: { governorRequestRender: noop },
     picking: { registerPickOwner: noop, unregisterPickOwner: noop },
     ground: { warmGroundFloor: noop },

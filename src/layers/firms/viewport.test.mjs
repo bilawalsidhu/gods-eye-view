@@ -25,7 +25,8 @@ function harness() {
   const layerState = {
     _enabled: true,
     _destroyed: false,
-    _viewer: { camera: { moveEnd }, scene: { preRender } },
+    _view: { camera: {} },
+    _renderer: { engine: { camera: { moveEnd }, frames: { preRender } } },
   };
   const viewport = createViewport({
     layerState,

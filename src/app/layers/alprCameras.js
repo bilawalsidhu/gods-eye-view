@@ -1,10 +1,11 @@
+import { worldOverlayFor } from '../../overlays/worldOverlay.js';
 import { rendererFor } from './renderers.js';
 import * as credits from '../../data/dataCredits.js';
 import { createAlprCamerasLayer } from '../../layers/alpr/index.js';
 import * as render from '../../renderGovernor.js';
 import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
-import { registerWorldOverlayPaintLane } from '../../overlays/worldOverlay.js';
+
 import { keyholeLabelAlphaFromGeometry } from '../../celestialRing.js';
 import { refreshTrackedReadout } from '../../data/trackedReadout.js';
 
@@ -31,7 +32,7 @@ export function createApplicationAlpr({
       groundFloor,
       overlays: {
         registerPaintLane: (lane, painter, options, engine) =>
-          registerWorldOverlayPaintLane(engine, lane, painter, options),
+          worldOverlayFor(engine)?.registerPaintLane(lane, painter, options),
         keyholeAlpha: keyholeLabelAlphaFromGeometry,
         refreshReadout: refreshTrackedReadout,
         subscribeMapStack(callback) {

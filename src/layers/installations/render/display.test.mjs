@@ -95,7 +95,7 @@ for (const makeHarness of GROUND_HARNESSES) {
 
   test(`sites are 9 px discs in their class colour, 13 px and white when selected, always on top (${name})`, (t) => {
     const h = setup(t, makeHarness);
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     const [disc] = h.markers(MARKER_SET_ID);
     assert.equal(h.markers(MARKER_SET_ID).length, 1);
     assert.equal(disc.pickId, 'osm:way:1', 'a pick names the site');
@@ -129,7 +129,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       assert.ok(selected.order > options.order, 'over the other discs');
     }
 
-    assert.equal(h.parts.selection.selectRecord('osm:way:1'), true);
+    assert.equal(h.parts.display.selectRecord('osm:way:1'), true);
     assert.equal(h.markers(MARKER_SET_ID).length, 0);
     const [chosen] = h.markers(SELECTED_MARKER_SET_ID);
     assert.equal(chosen.pickId, 'osm:way:1');
@@ -140,7 +140,7 @@ for (const makeHarness of GROUND_HARNESSES) {
   test(`a named area draws no disc but its outlines are drawn, as on Cesium (${name})`, (t) => {
     const named = namedRange();
     const h = setup(t, makeHarness, [airfield(), named]);
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     assert.deepEqual(
       h.markers(MARKER_SET_ID).map((disc) => disc.pickId),
       ['osm:way:1'],
@@ -160,7 +160,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     );
     assert.equal(namedDiscs[0].show, true);
     // Selected, it still draws no site disc, and its outlines stay.
-    h.parts.selection.selectRecord(named.id);
+    h.parts.display.selectRecord(named.id);
     assert.equal(h.markers(SELECTED_MARKER_SET_ID).length, 0);
     assert.equal(
       drawnOutlines(h).items.filter((item) => item.pickId === named.id).length,
@@ -170,7 +170,7 @@ for (const makeHarness of GROUND_HARNESSES) {
 
   test(`outlines are 2 px ground lines at 0.85 on both surfaces, rebuilt only for a changed site (${name})`, (t) => {
     const h = setup(t, makeHarness);
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     const set = drawnOutlines(h);
     assert.equal(set.options.kind, 'corridor');
     assert.equal(set.options.drape, 'both');
@@ -195,7 +195,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     };
     if (h.cesium) built(1);
     const commits = [0, 1].map((n) => h.set(`${OUTLINE_SET_ID}-${n}`).commits);
-    for (let i = 0; i < 5; i++) h.parts.rendering.renderRecords();
+    for (let i = 0; i < 5; i++) h.parts.display.renderRecords();
     assert.deepEqual(
       [0, 1].map((n) => h.set(`${OUTLINE_SET_ID}-${n}`).commits),
       commits,
@@ -208,7 +208,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       airfield(),
       { ...airfield(), id: 'osm:way:3', latitude: 30.2 },
     ]);
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     const counts = () =>
       [0, 1].map((n) => h.set(`${OUTLINE_SET_ID}-${n}`).items.length);
     if (h.cesium) {
@@ -226,13 +226,13 @@ for (const makeHarness of GROUND_HARNESSES) {
     const named = namedRange();
     const h = setup(t, makeHarness, [named]);
     h.setPhotoreal(true);
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     assert.equal(
       h.set(SELECTION_FILL_SET_ID),
       undefined,
       'no fill before a selection',
     );
-    h.parts.selection.selectRecord(named.id);
+    h.parts.display.selectRecord(named.id);
     const fill = h.set(SELECTION_FILL_SET_ID);
     assert.equal(fill.options.drape, 'tiles');
     assert.equal(fill.options.kind, 'polygon');
@@ -253,7 +253,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       );
     }
     const commits = fill.commits;
-    for (let i = 0; i < 10; i++) h.parts.rendering.renderRecords();
+    for (let i = 0; i < 10; i++) h.parts.display.renderRecords();
     assert.equal(
       h.set(SELECTION_FILL_SET_ID).commits,
       commits,
@@ -266,15 +266,15 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(h.set(SELECTION_FILL_SET_ID).options.drape, 'both');
     assert.equal(h.set(SELECTION_FILL_SET_ID).items.length, 1);
 
-    h.parts.lifecycle.methods.disable();
+    h.parts.display.disable();
     assert.equal(h.set(SELECTION_FILL_SET_ID).items.length, 0);
     assert.equal(
       h.mapStackRemoved(),
       1,
       'disable drops the map-stack listener',
     );
-    h.parts.lifecycle.methods.enable();
-    h.parts.rendering.syncSelectionFill();
+    h.parts.display.enable();
+    h.parts.display.syncSelectionFill();
     assert.equal(
       h.set(SELECTION_FILL_SET_ID).items.length,
       0,
@@ -284,7 +284,7 @@ for (const makeHarness of GROUND_HARNESSES) {
 
   test(`a click on a disc, an outline or the fill selects the site; the next click releases it (${name})`, (t) => {
     const h = setup(t, makeHarness);
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     h.click({ id: 'osm:way:1' });
     assert.equal(h.state.selectedId, 'osm:way:1');
     assert.equal(context.getSelectedEntityContext()?.id, 'osm:way:1');
@@ -304,7 +304,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     );
     h.click({ id: 'aircraft:1' });
     assert.equal(h.state.selectedId, null, 'another contact releases it');
-    h.parts.selection.selectRecord('osm:way:1');
+    h.parts.display.selectRecord('osm:way:1');
     h.click({ set: SELECTION_FILL_SET_ID, instance: 0 });
     assert.equal(
       h.state.selectedId,
@@ -323,7 +323,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     } finally {
       releasePointer(lease);
     }
-    h.parts.lifecycle.methods.disable();
+    h.parts.display.disable();
     h.click({ id: 'osm:way:1' });
     assert.equal(h.state.selectedId, null, 'a disabled layer ignores clicks');
   });
@@ -334,7 +334,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     h.floors.set(`${record.latitude},${record.longitude}`, 125);
     try {
       setLocale('ru');
-      h.parts.rendering.renderRecords();
+      h.parts.display.renderRecords();
       const handle = context.getContextStore().entities.get(record.id).entity;
       assert.equal(handle.gevTrackedId, `installations:${record.id}`);
       assert.deepEqual(handle.gevLabelModel, {
@@ -355,14 +355,14 @@ for (const makeHarness of GROUND_HARNESSES) {
       assert.equal(entry.layerName, 'Mapped Military Installations');
       assert.equal(entry.source, 'OpenStreetMap');
 
-      h.parts.rendering.renderRecords();
+      h.parts.display.renderRecords();
       assert.equal(
         context.getContextStore().entities.get(record.id).entity,
         handle,
         'a repaint with the same geometry keeps the handle',
       );
       h.setRecords([{ ...record, latitude: record.latitude + 0.001 }]);
-      h.parts.rendering.renderRecords();
+      h.parts.display.renderRecords();
       assert.notEqual(
         context.getContextStore().entities.get(record.id).entity,
         handle,
@@ -378,7 +378,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       warmFloors: () => new Promise((resolve) => (warm = resolve)),
     });
     const record = airfield();
-    h.parts.rendering.renderRecords();
+    h.parts.display.renderRecords();
     const heightOf = () =>
       geo.cartographic.fromCartesian(h.markers(MARKER_SET_ID)[0].position)
         .height;
@@ -386,7 +386,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       Math.abs(heightOf()) < 0.01,
       'a cold floor sits on the ellipsoid',
     );
-    h.parts.rendering.warmInstallationFloors([record]);
+    h.parts.display.warmInstallationFloors([record]);
     h.floors.set(`${record.latitude},${record.longitude}`, 2400);
     warm(true);
     await new Promise((resolve) => setImmediate(resolve));
@@ -399,10 +399,10 @@ for (const makeHarness of GROUND_HARNESSES) {
   test(`teardown removes every set and listener (${name})`, (t) => {
     const h = setup(t, makeHarness, [airfield(), namedRange()]);
     const changed = h.engine.camera.changed.numberOfListeners;
-    h.parts.rendering.renderRecords();
-    h.parts.selection.selectRecord('osm:way:1');
+    h.parts.display.renderRecords();
+    h.parts.display.selectRecord('osm:way:1');
     assert.ok(h.listeners() > 0);
-    h.parts.lifecycle.methods.detach();
+    h.parts.display.detach();
     assert.equal(h.listeners(), 0, 'no click listener');
     assert.equal(
       h.engine.camera.changed.numberOfListeners,

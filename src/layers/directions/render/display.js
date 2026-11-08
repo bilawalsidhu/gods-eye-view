@@ -83,8 +83,6 @@ function letterAtlas() {
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  */
 export function createDirectionsDisplay(engine) {
-  if (!engine?.ground || !engine?.movers || !engine?.input)
-    throw new TypeError('The Directions display needs a globe engine');
   const markers = engine.movers.createSet({
     id: DIRECTIONS_SET_IDS.markers,
     kind: 'point',
@@ -273,10 +271,6 @@ export function createDirectionsDisplay(engine) {
       route?.show(visible);
       placeMarkers();
       writeSteps();
-    },
-    /** Listens for clicks with the engine's pick; returns the remover. */
-    onClick(listener) {
-      return engine.input.on('click', listener, { pick: true });
     },
     destroy() {
       if (destroyed) return;

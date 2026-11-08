@@ -1,17 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CONTRACT_PRIMITIVES,
-  DRAWS_ITSELF,
   LAYER_MANIFEST,
-  createLayerAvailability,
-  layerAvailableOn,
   loadLayerRenderers,
-  registerLayerRenderers,
   rendererFor,
 } from './renderers.js';
 import { APPLICATION_LAYER_DIRECTORY } from './directory.js';
-import { ENGINE_KINDS, assertGlobeEngine } from '../../globe/contract.js';
+import { ENGINE_KINDS } from '../../globe/contract.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 test('the manifest lists every directory layer, in its order', () => {
@@ -22,25 +17,6 @@ test('the manifest lists every directory layer, in its order', () => {
   assert.ok(Object.isFrozen(LAYER_MANIFEST));
   for (const entry of Object.values(LAYER_MANIFEST))
     assert.ok(Object.isFrozen(entry));
-});
-
-test('the primitives a display needs are the contract primitives every engine has', () => {
-  const engine = createFakeEngine();
-  assertGlobeEngine(engine);
-  for (const name of CONTRACT_PRIMITIVES) assert.ok(engine[name], name);
-  for (const [id, entry] of Object.entries(LAYER_MANIFEST))
-    for (const name of entry.needs ?? [])
-      assert.ok(CONTRACT_PRIMITIVES.includes(name), `${id} needs ${name}`);
-});
-
-test('every layer shows on both engines, as before', () => {
-  for (const { id } of APPLICATION_LAYER_DIRECTORY)
-    for (const kind of ENGINE_KINDS)
-      assert.equal(layerAvailableOn(id, kind), true, `${id} on ${kind}`);
-  assert.equal(layerAvailableOn('flights', 'vulkan'), false);
-  assert.equal(layerAvailableOn('unknown', 'cesium'), false);
-  assert.equal(layerAvailableOn('toString', 'cesium'), false);
-  assert.equal(rendererFor('toString', createFakeEngine()), null);
 });
 
 test('the layers drawn through one display, and the ones that draw without one', () => {
@@ -94,29 +70,10 @@ test('the layers drawn through one display, and the ones that draw without one',
     ['wind'],
   );
   assert.deepEqual(Object.keys(LAYER_MANIFEST.cctv.backends), []);
-  assert.ok(LAYER_MANIFEST.cctv.needs.includes('meshes'));
-  // The layer that draws itself through the contract.
   assert.deepEqual(
-    kinds((entry) => !entry.display && entry.needs),
-    ['wildlife-sightings'],
+    kinds((entry) => !entry.display),
+    ['wildlife-sightings', 'sea-marks', 'ski-pistes'],
   );
-  // Without a display: drawn by the layer itself or by an engine-specific
-  // renderer.
-  const engines = Object.fromEntries(
-    kinds((entry) => entry.engines).map((id) => [
-      id,
-      Object.fromEntries(
-        Object.entries(LAYER_MANIFEST[id].engines).map(([kind, drawing]) => [
-          kind,
-          drawing === DRAWS_ITSELF ? 'itself' : 'renderer',
-        ]),
-      ),
-    ]),
-  );
-  assert.deepEqual(engines, {
-    'sea-marks': { cesium: 'itself', navara: 'itself' },
-    'ski-pistes': { cesium: 'itself', navara: 'itself' },
-  });
 });
 
 test('a display or an engine-specific renderer answers only after its engine loaded them', () => {
@@ -207,82 +164,5 @@ test('a layer that draws itself has no renderer; an unknown engine none either',
   const engine = createFakeEngine();
   for (const id of ['wildlife-sightings', 'sea-marks', 'ski-pistes'])
     assert.equal(rendererFor(id, engine), null, id);
-  assert.equal(rendererFor('flights', null), null);
-  assert.equal(rendererFor('flights', { kind: 'vulkan' }), null);
   engine.destroy();
-});
-
-test('a test engine of its own kind brings its renderers', () => {
-  const made = [];
-  registerLayerRenderers('renderers-test', {
-    flights: (engine, options) => {
-      made.push([engine.kind, options]);
-      return { destroy() {} };
-    },
-  });
-  const engine = { kind: 'renderers-test' };
-  assert.ok(rendererFor('flights', engine, { tint: 1 }));
-  assert.deepEqual(made, [['renderers-test', { tint: 1 }]]);
-  assert.equal(rendererFor('satellites', engine), null);
-  assert.throws(
-    () => registerLayerRenderers('renderers-test', { flights: () => ({}) }),
-    /already/,
-    'one renderer per layer and engine',
-  );
-  assert.throws(
-    () => registerLayerRenderers('renderers-test', { x: 42 }),
-    TypeError,
-  );
-  for (const kind of ENGINE_KINDS)
-    assert.throws(
-      () => registerLayerRenderers(kind, { flights: () => ({}) }),
-      /manifest/,
-    );
-});
-
-test('the layer availability API: engine, isAvailable, available, unavailable', () => {
-  const directory = [
-    { id: 'flights', name: 'Live Flights' },
-    { id: 'satellites', name: 'Satellites' },
-  ];
-  const availability = createLayerAvailability('navara', {
-    manifest: { flights: LAYER_MANIFEST.flights },
-    directory,
-  });
-  assert.equal(availability.engine, 'navara');
-  assert.equal(availability.isAvailable('flights'), true);
-  assert.equal(availability.isAvailable('satellites'), false);
-  assert.equal(availability.isAvailable('unknown'), false);
-  assert.equal(availability.isAvailable('toString'), false);
-  assert.deepEqual(availability.available(), [
-    { id: 'flights', name: 'Live Flights' },
-  ]);
-  assert.deepEqual(availability.unavailable(), [
-    { id: 'satellites', name: 'Satellites' },
-  ]);
-  // Fresh copies: a caller cannot change the answer.
-  availability.unavailable().push({ id: 'x', name: 'x' });
-  assert.equal(availability.unavailable().length, 1);
-  assert.ok(Object.isFrozen(availability));
-  // A layer without a display shows only on the engine kinds it lists.
-  const cesiumOnly = { wind: { engines: { cesium: DRAWS_ITSELF } } };
-  const wind = [{ id: 'wind', name: 'Wind' }];
-  for (const [kind, shown] of [
-    ['cesium', true],
-    ['navara', false],
-  ])
-    assert.equal(
-      createLayerAvailability(kind, {
-        manifest: cesiumOnly,
-        directory: wind,
-      }).isAvailable('wind'),
-      shown,
-      kind,
-    );
-  for (const kind of ENGINE_KINDS) {
-    const all = createLayerAvailability(kind);
-    assert.equal(all.unavailable().length, 0, kind);
-    assert.equal(all.available().length, APPLICATION_LAYER_DIRECTORY.length);
-  }
-  assert.throws(() => createLayerAvailability('vulkan'), TypeError);
 });

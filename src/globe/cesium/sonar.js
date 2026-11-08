@@ -70,11 +70,6 @@ export function createCesiumSonar(
   });
 
   function attach() {
-    if (
-      !scene?.postUpdate?.addEventListener ||
-      !scene?.preRender?.addEventListener
-    )
-      return null;
     const tracked = new Map();
     const matrix = new Cesium.Matrix4();
     const position = new Cesium.Cartesian3();

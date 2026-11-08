@@ -98,9 +98,7 @@ function domEvent(fields) {
 /**
  * Globe engine and document fakes for `initImageryBoxTool`. The canvas is
  * 1000 × 500 px mapped linearly onto 0.2° near Austin; y < 40 px is sky.
- * The engine input counts camera-input suspensions over the app's
- * setCameraInputs choice: `camera.inputs` is on while that choice is on
- * and nothing suspends them.
+ * The engine input counts camera-input suspensions.
  */
 export function boxToolFakes() {
   const camera = {
@@ -118,9 +116,6 @@ export function boxToolFakes() {
     releasePointerCapture: (id) => captured.delete(id),
   });
   const input = {
-    setCameraInputs(enabled) {
-      camera.choice = Boolean(enabled);
-    },
     cameraInputsEnabled: () => camera.inputs,
     suspendCameraInputs() {
       camera.suspended += 1;
@@ -227,6 +222,9 @@ export function fakeRenderer() {
   let peak = 0;
   return {
     calls,
+    resolveHost: () => ({ collection: {}, kind: 'globe' }),
+    viewCentre: () => null,
+    zoomToFit: () => false,
     rebind(next) {
       calls.push(['rebind', next.kind]);
       host = next;

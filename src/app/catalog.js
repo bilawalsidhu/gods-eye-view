@@ -47,24 +47,14 @@ export function createLayerCatalog(layers, metadata) {
   });
 }
 
-/**
- * Bind the current control surface to the exact instances registered by the
- * app. A layer the catalog leaves out on purpose (another engine's: in
- * `catalog.unavailableMetadata`) gets an empty stand-in, so the shell's
- * optional calls (`layer.method?.()`) do nothing; any other missing layer is
- * a wiring error.
- */
+/** Bind controls to the exact instances registered by the app. */
 export function catalogControlServices(catalog) {
   if (!catalog?.get)
     throw new TypeError('An application layer catalog is required');
-  const omitted = new Set(
-    (catalog.unavailableMetadata ?? []).map(({ id }) => id),
-  );
   return Object.fromEntries(
     Object.entries(CONTROL_LAYER_IDS).map(([role, id]) => {
       const layer = catalog.get(id);
       if (layer) return [role, layer];
-      if (omitted.has(id)) return [role, {}];
       throw new TypeError(`Control layer missing from catalog: ${id}`);
     }),
   );

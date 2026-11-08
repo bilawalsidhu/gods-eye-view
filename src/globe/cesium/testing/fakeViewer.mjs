@@ -136,6 +136,7 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
     canvas: { clientWidth: width, clientHeight: height },
     globe,
     preUpdate: new Cesium.Event(),
+    postUpdate: new Cesium.Event(),
     preRender: new Cesium.Event(),
     postRender: new Cesium.Event(),
     requestRenderMode: true,

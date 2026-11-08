@@ -1,8 +1,7 @@
-import { worldOverlayFor } from '../../overlays/worldOverlay.js';
+import { overlayHost } from './overlayHost.js';
 import { createDroneAirspaceLayer } from '../../layers/droneAirspace/index.js';
 import { rendererFor } from './renderers.js';
 import * as picking from '../../data/pickRegistry.js';
-import * as overlays from '../../overlays/worldOverlay.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 /**
@@ -12,14 +11,8 @@ import { isPointerFree } from '../../data/inputOwnership.js';
  */
 export function createApplicationDroneAirspace(options) {
   return createDroneAirspaceLayer({
-    overlayHost: {
-      forEngine: worldOverlayFor,
-      setEntries: overlays.setOverlayEntries,
-      setVisible: overlays.setOverlaySourceVisible,
-      clearSource: overlays.clearOverlaySource,
-      hitTest: overlays.hitTestWorldOverlay,
-    },
-    createRenderer: ({ engine }) => rendererFor('drone-airspace', engine),
+    overlayHost: overlayHost,
+    rendererFactory: ({ engine }) => rendererFor('drone-airspace', engine),
     picking,
     pointer: { isPointerFree },
     ...options,

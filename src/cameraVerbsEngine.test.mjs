@@ -354,7 +354,6 @@ test('a new verb supersedes the running one and stop ends it', (t) => {
   moveCamera({ motion: 'pan', direction: 'left', mode: 'continuous' });
   assert.notEqual(activeCameraMotionId(), orbitId);
   assert.equal(getActiveCameraMotion().kind, 'pan');
-  assert.equal(getActiveCameraMotion().rig, 'engine');
   assert.deepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
   engine.fake.resetCalls();
   run(0.3);
@@ -506,7 +505,6 @@ test('fly_route flies the installed engine camera and lands level', (t) => {
     () => {},
   );
   assert.equal(result.ok, true);
-  assert.equal(getActiveCameraMotion().rig, 'engine');
   run(3);
   const mid = getActiveCameraMotion();
   assert.ok(mid.traveledM > 0, 'departed');
@@ -557,18 +555,6 @@ test('cameraVerbsSupported names the targets the verbs can drive', () => {
   const engine = createFakeEngine();
   assert.equal(cameraVerbsSupported(engine), true);
   assert.equal(cameraVerbsSupported(null), false);
-  assert.equal(
-    cameraVerbsSupported({
-      camera: {},
-      scene: {},
-      clock: { onTick: new Cesium.Event() },
-    }),
-    false,
-    'a Cesium viewer is driven through its engine',
-  );
-  const partial = createFakeEngine();
-  partial.camera = { ...partial.camera, following: undefined };
-  assert.equal(cameraVerbsSupported(partial), false);
   engine.destroy();
   assert.equal(cameraVerbsSupported(engine), false);
 });

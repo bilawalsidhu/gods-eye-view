@@ -63,9 +63,9 @@ function fixture() {
     services: {
       render: { governorRequestRender() {} },
       overlays: {
-        setOverlayEntries: (id, value) => entries.set(id, value),
-        setOverlaySourceVisible() {},
-        clearOverlaySource: (id) => entries.delete(id),
+        setEntries: (id, value) => entries.set(id, value),
+        setVisible() {},
+        clearSource: (id) => entries.delete(id),
       },
     },
     rendererFactory: (context) => createBikeshareDisplay(engine, context),

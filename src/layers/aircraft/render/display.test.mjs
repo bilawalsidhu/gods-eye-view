@@ -109,10 +109,6 @@ const trackedSpec = (state) => ({
   rotation: () => 0.25,
 });
 
-test('the display needs a globe engine', () => {
-  assert.throws(() => createAircraftDisplay(null, { layerId: 'x' }), TypeError);
-});
-
 test('the atlas has every glyph at the fleet and tracked sizes', () => {
   const cells = aircraftIconCells();
   for (const key of cells.values())

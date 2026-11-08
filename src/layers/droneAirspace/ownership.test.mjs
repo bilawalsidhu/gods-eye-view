@@ -242,7 +242,7 @@ test('an engine switch keeps the zones and the selected card for the next globe'
       isOwnedByOtherLayer: () => false,
     },
     pointer: { isPointerFree: () => true },
-    createRenderer({ engine }) {
+    rendererFactory({ engine }) {
       const renderer = {
         engine,
         rows: [],

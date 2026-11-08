@@ -249,27 +249,19 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
     /_releaseFollowCamera\(\{[\s\S]*?\} = \{\}\) \{([\s\S]*?)\n  \}/,
     'follow release',
   );
-  ordered(
-    release,
-    [
-      'origin: trackingOrigin',
-      'satellitesLayer.stopTracking?.({ origin: trackingOrigin })',
-      'rocketLaunchesLayer.releaseCameraOwnership?.()',
-      'this.engine?.camera.following()?.stop();',
-      "interruptCameraMotion('explicit-navigation')",
-      'camera?.cancelFlight();',
-      'camera?.release();',
-    ],
-    'follow release',
-  );
-  assert.match(
-    release,
-    /flightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/,
-  );
-  assert.match(
-    release,
-    /militaryFlightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/,
-  );
+  ordered(release, [
+    'releaseTrackers(this.tracking, {', 'origin: trackingOrigin',
+    'this.engine?.camera.following()?.stop();',
+    "interruptCameraMotion('explicit-navigation')", 'camera?.cancelFlight();', 'camera?.release();',
+  ], 'follow release');
+  const trackers = fs.readFileSync(new URL('./ui/releaseTrackers.js', import.meta.url), 'utf8');
+  ordered(trackers, ['militaryAwarenessLayer.releaseCameraOwnership?.(',
+    'flightsLayer.stopTracking?.({ origin: options.origin })',
+    'militaryFlightsLayer.stopTracking?.({ origin: options.origin })',
+    'aisLiveVesselsLayer.clearSelection?.()',
+    'satellitesLayer.stopTracking?.({ origin: options.origin })',
+    'rocketLaunchesLayer.releaseCameraOwnership?.()',
+  ], 'tracker release');
 });
 
 test('validated voice camera destinations share the UI navigation authority facade', () => {

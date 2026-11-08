@@ -10,9 +10,9 @@ function replayRig() {
   const state = createState({
     services: {
       overlays: {
-        setOverlayEntries: noop,
-        setOverlaySourceVisible: noop,
-        clearOverlaySource: noop,
+        setEntries: noop,
+        setVisible: noop,
+        clearSource: noop,
       },
     },
   });

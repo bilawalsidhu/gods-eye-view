@@ -3,24 +3,10 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import militaryAwarenessLayer, {
-  _getAwarenessNavigationStateForTest,
-  _getAwarenessPanelRendersForTest,
-  awarenessClearMatchesSubject,
-  awarenessNeedsContinuousRender,
-  awarenessRefreshDecision,
-  awarenessRefreshIntervalMs,
-  awarenessRefreshRequired,
-  awarenessResultsAreLive,
-  buildAwarenessContextSnapshot,
-  canNavigateAwarenessNext,
-  contactsWindowFromSnapshot,
-  contextTargetFlyToAllowed,
-  summarizeInstallationViewport,
-  findCompatibleHistoryIndex,
-  AWARENESS_QUERY_LIMIT,
-  historySubjectSnapshot,
-} from './militaryAwareness.js';
+import { createAwarenessLayer, AWARENESS_QUERY_LIMIT } from '../layers/awareness/index.js';
+import * as navigation from '../navigationPolicy.js';
+import * as geometry from '../celestialRing.js';
+import * as render from '../renderGovernor.js';
 import flightsLayer, {
   _setTrackedFlightRefreshStateForTest,
 } from './flights.js';
@@ -46,14 +32,8 @@ import {
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 import { recordingAircraftRenderer } from '../testSupport/aircraftRecordingRenderer.mjs';
-import { registerLayerRenderers } from '../app/layers/renderers.js';
 
-// The layer's view of a stub viewer (render/display.js's interface), drawn
-// by nothing: these tests drive the layer's logic, not the ring. It reaches
-// the layer through the renderer registry, under an engine kind of its own.
-const VIEWER_ENGINE = 'awareness-viewer-test';
-registerLayerRenderers(VIEWER_ENGINE, {
-  'military-awareness': (engine) => {
+const createTestDisplay = (engine) => {
     const { viewer } = engine;
     return {
     engine,
@@ -73,12 +53,32 @@ registerLayerRenderers(VIEWER_ENGINE, {
     createRim: () => ({ move() {}, setAlpha() {}, destroy() {} }),
     createPulses: () => null,
   };
-  },
-});
+};
+const militaryAwarenessLayer = createAwarenessLayer({ services: {
+  flights: flightsLayer, military: militaryFlightsLayer, vessels: aisLiveVesselsLayer,
+  installations: militaryInstallationsLayer, navigation, geometry, render, renderer: createTestDisplay,
+} });
+const {
+  _getAwarenessNavigationStateForTest,
+  _getAwarenessPanelRendersForTest,
+  awarenessClearMatchesSubject,
+  awarenessNeedsContinuousRender,
+  awarenessRefreshDecision,
+  awarenessRefreshIntervalMs,
+  awarenessRefreshRequired,
+  awarenessResultsAreLive,
+  buildAwarenessContextSnapshot,
+  canNavigateAwarenessNext,
+  contactsWindowFromSnapshot,
+  contextTargetFlyToAllowed,
+  summarizeInstallationViewport,
+  findCompatibleHistoryIndex,
+  historySubjectSnapshot,
+} = militaryAwarenessLayer;
 const viewerEngines = new WeakMap();
 const viewerEngine = (viewer) => {
   if (!viewerEngines.has(viewer)) viewerEngines.set(viewer, {
-    kind: VIEWER_ENGINE, viewer,
+    kind: 'cesium', viewer,
     render: {
       request: () => viewer.scene.requestRender?.(),
       setContinuous: (enabled) => { viewer.scene.requestRenderMode = !enabled; },

@@ -3,7 +3,7 @@ import { createSatellitesLayer } from '../../layers/satellites/index.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as focus from '../../data/focusDeemphasis.js';
 import * as readout from '../../data/trackedReadout.js';
-import * as overlays from '../../overlays/worldOverlay.js';
+import { worldOverlayFor as overlays } from '../../overlays/worldOverlay.js';
 import * as context from '../../data/contextStore.js';
 import * as render from '../../renderGovernor.js';
 import * as layerState from '../../data/layerState.js';

@@ -151,9 +151,9 @@ function fixture(makeHarness, getStations) {
     services: {
       render: { governorRequestRender() {} },
       overlays: {
-        setOverlayEntries: (id, value) => entries.set(id, value),
-        setOverlaySourceVisible() {},
-        clearOverlaySource: (id) => entries.delete(id),
+        setEntries: (id, value) => entries.set(id, value),
+        setVisible() {},
+        clearSource: (id) => entries.delete(id),
       },
       picking: {
         registerPickOwner: (id, owns) => owners.set(id, owns),
@@ -185,10 +185,6 @@ function fixture(makeHarness, getStations) {
     count: (id) => h.engine.movers.list().find((set) => set.id === id)?.count,
   };
 }
-
-test('the display needs a globe engine', () => {
-  assert.throws(() => createBikeshareDisplay(null, {}), TypeError);
-});
 
 for (const makeHarness of HARNESSES) {
   const { name } = makeHarness();
@@ -344,7 +340,7 @@ for (const makeHarness of HARNESSES) {
         f.engine.camera.changed.raiseEvent(0.1);
         assert.equal(f.context.state._cameraDebounceTimer, null);
       }
-      const gate = f.display.viewport.shouldActivateAtAltitude;
+      const gate = f.display.shouldActivateAtAltitude;
       assert.equal(gate(49000), false);
       assert.equal(gate(48000), true);
       assert.equal(gate(51000), true);
@@ -437,7 +433,7 @@ test('a station without a published capacity re-derives it from every status pol
   try {
     f.layer.enable();
     await settle();
-    const { rendering } = f.display;
+    const rendering = f.display;
     const { model } = f.context.parts;
     const info = model.parseStationInformation({
       data: {
