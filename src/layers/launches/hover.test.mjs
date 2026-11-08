@@ -231,32 +231,49 @@ test('mission hover preserves the cursor of a pointer-owning tool', () => {
   assert.equal(viewer.scene.canvas.style.cursor, 'crosshair');
 });
 
-test('mission picks are read by the rendering part, which owns the entities', async () => {
+test('mission picks are read by the rendering part, which owns the draw sets', async () => {
   const { createRendering } = await import('./rendering.js');
-  const mission = { id: 'rocket-launch:abc' };
+  const { bindFakeDraw } = await import('../../testSupport/fakeDrawPort.mjs');
   const drilled = [];
-  const state = {
-    _viewer: {
-      scene: {
-        drillPick(position, limit) {
-          drilled.push([position, limit]);
-          return [{ id: { id: 'cable:1' } }, { id: mission }];
-        },
+  const viewer = {};
+  let hits = [];
+  const { unbind } = bindFakeDraw(viewer, {
+    query: {
+      drillPick(x, y, options) {
+        drilled.push([x, y, options]);
+        return hits;
       },
     },
-  };
+  });
+  const state = { _viewer: viewer };
   const rendering = createRendering({
     state,
     services: { satellites: {} },
     parts: {},
   });
+  rendering.attach(viewer);
+  const { sites, lines } = rendering.setIds;
+  hits = [
+    { set: 'cables:1', id: 'rocket-launch:zzz', surface: false },
+    { set: sites, id: 'rocket-launch:abc', surface: false },
+  ];
   assert.equal(rendering.launchMarkerAt({ x: 3, y: 4 }), true);
-  assert.deepEqual(drilled, [[{ x: 3, y: 4 }, 12]]);
+  assert.deepEqual(drilled, [[3, 4, { limit: 12 }]]);
+  assert.equal(rendering.launchIdFromPicks(hits), 'abc');
   assert.equal(
-    rendering.launchIdFromPicks([{ id: 'x' }, { id: mission }]),
-    'abc',
+    rendering.launchIdFromPicks([
+      { set: lines, id: 'rocket-trajectory:def:0', surface: false },
+    ]),
+    'def',
   );
-  assert.equal(rendering.launchIdFromPicks([{ id: 'x' }]), null);
+  assert.equal(
+    rendering.launchIdFromPicks([{ set: sites, id: 'x', surface: false }]),
+    null,
+  );
+  hits = [hits[0]];
+  assert.equal(rendering.launchMarkerAt({ x: 3, y: 4 }), false);
   state._viewer = null;
   assert.equal(rendering.launchMarkerAt({ x: 3, y: 4 }), false);
+  rendering.detach();
+  unbind();
 });

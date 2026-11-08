@@ -595,8 +595,24 @@ test('clamped shapes refuse what they cannot draw', () => {
     fill: '#fff',
     height: 'clampGround',
   };
+  // A rim fill is drawn on ellipses alone.
   assert.throws(
-    () => set.set([{ ...disc, fill: { preset: 'radialRim' } }]),
+    () =>
+      set.set([
+        {
+          ...disc,
+          geometry: {
+            kind: 'rectangle',
+            rect: { west: 0, south: 0, east: 1, north: 1 },
+          },
+          fill: {
+            preset: 'radialRim',
+            color: '#fff',
+            rimColor: '#fff',
+            rimWidth: 0.1,
+          },
+        },
+      ]),
     /colours only/,
   );
   assert.throws(
@@ -2114,8 +2130,9 @@ test('unchanged solid 3D lines settle into a static batch, changed there in plac
     s.built(translucentAgain);
     frame();
     assert.equal(opaqueAgain.show, true, 'swapped in once built');
-    assert.equal(polylines.length, 1, 'the glow alone left in the collection');
-    assert.equal(polylines.get(0).id.id, 'glow');
+    // The glow, hidden, is parked out of the collection, which would draw
+    // it on regardless; the batch took the rest.
+    assert.equal(polylines.length, 0, 'none left in the collection');
     // Show, colour and meta change in place on the batch.
     set.upsert([
       stem('a', 100, { show: false }),
@@ -2124,7 +2141,7 @@ test('unchanged solid 3D lines settle into a static batch, changed there in plac
     assert.equal(s.host(), host);
     assert.deepEqual([...s.attrs(opaqueAgain, 'a').show], [0]);
     assert.deepEqual([...s.attrs(opaqueAgain, 'c').color], [0, 0, 255, 255]);
-    assert.equal(polylines.length, 1, 'nothing left the batch');
+    assert.equal(polylines.length, 0, 'nothing left the batch');
     set.upsert([stem('a', 100, { meta: 'new' })]);
     assert.deepEqual([...s.attrs(opaqueAgain, 'a').show], [1]);
     assert.equal(opaqueAgain.geometryInstances[0].id.meta, 'new');
@@ -2133,8 +2150,8 @@ test('unchanged solid 3D lines settle into a static batch, changed there in plac
     set.upsert([stem('a', 900)]);
     assert.equal(s.host(), host);
     assert.deepEqual([...s.attrs(opaqueAgain, 'a').show], [0]);
-    assert.equal(polylines.length, 2);
-    const moved = polylines.get(1);
+    assert.equal(polylines.length, 1);
+    const moved = polylines.get(0);
     assert.equal(moved.id.id, 'a');
     assert.ok(
       Cesium.Cartesian3.equalsEpsilon(
@@ -2147,7 +2164,7 @@ test('unchanged solid 3D lines settle into a static batch, changed there in plac
     set.upsert([
       stem('c', 300, { style: { kind: 'solid', color: [0, 0, 1, 0.4] } }),
     ]);
-    assert.equal(polylines.length, 3);
+    assert.equal(polylines.length, 2);
     // Two lines are few beside a batch: they wait longer.
     s.settle();
     assert.equal(s.batches().length, 2, 'not yet');
@@ -2173,7 +2190,12 @@ test('unchanged solid 3D lines settle into a static batch, changed there in plac
     assert.deepEqual(s.batches(), next, 'the old batches are gone');
     assert.equal(opaqueAgain.isDestroyed(), true);
     assert.deepEqual([...s.attrs(next[1], 'b').show], [0]);
+    assert.equal(polylines.length, 0);
+    // The glow shown again draws in the collection, in place.
+    set.upsert([glow]);
+    assert.equal(s.host(), host);
     assert.equal(polylines.length, 1);
+    assert.equal(polylines.get(0).id.id, 'glow');
     // A line that looks different is still a rebuild.
     set.upsert([stem('b', 200, { widthPx: 5 })]);
     assert.notEqual(s.host(), host);
@@ -2981,12 +3003,15 @@ test('the FIRMS layer draws its fire glows as one GPU icon set on a viewer of it
   const at = Cesium.Cartographic.fromCartesian(set.position(strong, tau));
   assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) + 97.7) < 1e-6);
   assert.ok(Math.abs(at.height - 40) < 1e-3, 'at its anchor');
-  assert.deepEqual(drawHitOf(host._pickObject('firms-0', null, { show: true })), {
-    set: host.drawSetId,
-    id: 'firms-0',
-    meta: { layer: 'firms', id: 'firms-0' },
-    surface: false,
-  });
+  assert.deepEqual(
+    drawHitOf(host._pickObject('firms-0', null, { show: true })),
+    {
+      set: host.drawSetId,
+      id: 'firms-0',
+      meta: { layer: 'firms', id: 'firms-0' },
+      surface: false,
+    },
+  );
 
   // A rebuild that keeps one fire writes nothing for it and drops the other.
   const written = [];
@@ -3071,14 +3096,21 @@ test('the Radio layer draws its stations, clusters and selected marker as point 
     assert.equal(dots.length, 4);
     assert.ok(dots.every((dot) => dot instanceof Cesium.PointPrimitive));
     const lone = dots.find((dot) => dot.show);
-    assert.equal(lone.id.id, `radio:${stations[3].id}`, 'the others are in a cluster');
+    assert.equal(
+      lone.id.id,
+      `radio:${stations[3].id}`,
+      'the others are in a cluster',
+    );
     assert.equal(lone.pixelSize, 13);
     assert.equal(lone.outlineWidth, 1);
     assert.ok(Math.abs(lone.color.alpha - 0.86) < 1e-6);
     assert.equal(lone.disableDepthTestDistance, Number.POSITIVE_INFINITY);
     assert.equal(lone.distanceDisplayCondition.far, 50_000_000);
     assert.equal(lone.scaleByDistance.nearValue, 1.15);
-    assert.equal(radioStationIdFromPick({ primitive: lone, id: lone.id }), stations[3].id);
+    assert.equal(
+      radioStationIdFromPick({ primitive: lone, id: lone.id }),
+      stations[3].id,
+    );
 
     const [cluster] = rows(/^radio:\d+:clusters$/);
     assert.deepEqual(
@@ -3087,7 +3119,10 @@ test('the Radio layer draws its stations, clusters and selected marker as point 
     );
     assert.equal(cluster.pixelSize, 12 + Math.log2(3) * 1.6);
     assert.equal(cluster.outlineWidth, 2);
-    assert.equal(radioStationIdFromPick({ primitive: cluster, id: cluster.id }), stations[0].id);
+    assert.equal(
+      radioStationIdFromPick({ primitive: cluster, id: cluster.id }),
+      stations[0].id,
+    );
 
     radioLayer.selectStation(stations[3].id, { autoplay: false, focus: false });
     const [selected] = rows(/^radio:\d+:selected$/);
@@ -3097,7 +3132,10 @@ test('the Radio layer draws its stations, clusters and selected marker as point 
     assert.ok(bracket instanceof Cesium.Billboard);
     assert.equal(bracket.width, 40);
     assert.equal(bracket.scaleByDistance.farValue, 0.72);
-    assert.equal(radioStationIdFromPick({ primitive: bracket, id: bracket.id }), stations[3].id);
+    assert.equal(
+      radioStationIdFromPick({ primitive: bracket, id: bracket.id }),
+      stations[3].id,
+    );
   });
   assert.equal(scene.added.length, 0, 'gone with the layer');
 });
@@ -5641,5 +5679,173 @@ test('meshes draw their triangles in the frame at their origin', () =>
     assert.equal(host.get(0).appearance.closed, true);
     set.clear();
     assert.equal(host.length, 0);
+    set.dispose();
+  }));
+
+test('a pattern line draws its image along it, repeated, and an inertial line turns with the sky', () =>
+  withImageClasses(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.lines({ id: 'orbit-rings' });
+    const ring = [
+      { x: 7e6, y: 0, z: 0 },
+      { x: 0, y: 7e6, z: 0 },
+      { x: -7e6, y: 0, z: 0 },
+    ];
+    const pattern = { kind: 'pattern', image: 'marks.png', repeat: 4 };
+    set.set([
+      { id: 'fixed', positions: ring, widthPx: 3, mode: '3d', style: pattern },
+      {
+        id: 'sky',
+        positions: ring,
+        widthPx: 3,
+        mode: '3d',
+        style: pattern,
+        frame: 'inertial',
+      },
+    ]);
+    const host = scene.added[0];
+    assert.ok(host instanceof Cesium.PrimitiveCollection);
+    const fixed = host.get(0);
+    const inertial = host.get(1);
+    assert.ok(inertial instanceof Cesium.PolylineCollection);
+    const material = fixed.get(0).material;
+    assert.equal(material.type, 'Image');
+    assert.equal(material.uniforms.image, 'marks.png');
+    assert.deepEqual(material.uniforms.repeat, new Cesium.Cartesian2(4, 1));
+    assert.equal(material.isTranslucent(), true, 'its image has its alpha');
+    assert.equal(inertial.get(0).id.id, 'sky');
+    // Turned by sidereal time: the inertial x axis is drawn where the
+    // pseudo-fixed frame puts it now.
+    const turnedTo = () =>
+      Cesium.Matrix4.multiplyByPointAsVector(
+        inertial.modelMatrix,
+        Cesium.Cartesian3.UNIT_X,
+        new Cesium.Cartesian3(),
+      );
+    const expected = Cesium.Matrix3.multiplyByVector(
+      Cesium.Transforms.computeTemeToPseudoFixedMatrix(Cesium.JulianDate.now()),
+      Cesium.Cartesian3.UNIT_X,
+      new Cesium.Cartesian3(),
+    );
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(turnedTo(), expected, 1e-6),
+      'turned as Cesium turns TEME',
+    );
+    const realNow = Date.now;
+    try {
+      const at = realNow();
+      Date.now = () => at + 3_600_000;
+      frame();
+      const later = turnedTo();
+      // An hour turns the frame about 15 degrees about the pole.
+      const angle = Cesium.Cartesian3.angleBetween(later, expected);
+      assert.ok(Math.abs(Cesium.Math.toDegrees(angle) - 15.04) < 0.05);
+      assert.ok(Math.abs(later.z) < 1e-9);
+    } finally {
+      Date.now = realNow;
+    }
+    // Never settled into a static batch; shown and hidden in place. A
+    // hidden line that never settles leaves its collection, which would
+    // draw it on regardless, until it shows again.
+    for (let i = 0; i < SETTLE_FRAMES + 2; i++) frame();
+    const sky = (show) => ({
+      id: 'sky',
+      positions: ring,
+      widthPx: 3,
+      mode: '3d',
+      style: pattern,
+      frame: 'inertial',
+      show,
+    });
+    set.upsert([sky(false), { ...sky(false), id: 'fixed', frame: undefined }]);
+    assert.equal(scene.added[0], host, 'patched, not rebuilt');
+    assert.equal(inertial.length, 0);
+    assert.equal(fixed.length, 0);
+    set.upsert([sky(true)]);
+    assert.equal(scene.added[0], host);
+    assert.equal(inertial.length, 1);
+    assert.equal(inertial.get(0).show, true);
+    assert.equal(inertial.get(0).id.id, 'sky');
+    assert.equal(inertial.get(0).material.type, 'Image');
+    // Built hidden, it starts out of its collection.
+    const later = draw.lines({ id: 'orbit-rings-hidden' });
+    later.set([{ ...sky(false), id: 'parked' }]);
+    assert.equal(scene.added.at(-1).get(1).length, 0);
+    later.upsert([{ ...sky(true), id: 'parked' }]);
+    assert.equal(scene.added.at(-1).get(1).length, 1);
+    later.dispose();
+    assert.throws(
+      () =>
+        set.upsert([
+          {
+            id: 'draped',
+            positions: ring,
+            widthPx: 3,
+            mode: 'draped',
+            style: { kind: 'solid', color: '#fff' },
+            frame: 'inertial',
+          },
+        ]),
+      /inertial lines undraped/,
+    );
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('a clamped ellipse filled with a radial rim drapes its material, finely cut, pulled toward the eye', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.shapes({ id: 'pad-zone' });
+    const zone = {
+      id: 'zone',
+      geometry: {
+        kind: 'ellipse',
+        center: { lon: -80.6, lat: 28.6 },
+        semiMajor: 500,
+        semiMinor: 500,
+      },
+      fill: {
+        preset: 'radialRim',
+        color: [0.13, 0.9, 0.9, 0.105],
+        rimColor: [0.13, 0.9, 0.9, 0.72],
+        rimWidth: 0.033,
+      },
+      height: 'clampGround',
+      depthBias: 1,
+    };
+    set.set([zone]);
+    const host = scene.added[0];
+    let ground = null;
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.GroundPrimitive) ground = host.get(i);
+    assert.ok(ground);
+    const { appearance } = ground;
+    assert.ok(appearance instanceof Cesium.MaterialAppearance);
+    assert.equal(appearance.material.type, 'DrawRadialRimFill');
+    const { color, rimColor, rimWidth } = appearance.material.uniforms;
+    assert.ok(
+      color.equalsEpsilon(new Cesium.Color(0.13, 0.9, 0.9, 0.105), 1e-9),
+    );
+    assert.ok(
+      rimColor.equalsEpsilon(new Cesium.Color(0.13, 0.9, 0.9, 0.72), 1e-9),
+    );
+    assert.equal(rimWidth, 0.033);
+    assert.equal(appearance.renderState.polygonOffset.enabled, true);
+    assert.equal(appearance.renderState.depthMask, false);
+    assert.equal(ground.classificationType, Cesium.ClassificationType.BOTH);
+    const [instance] = ground.geometryInstances;
+    assert.ok(instance.geometry instanceof Cesium.EllipseGeometry);
+    assert.ok(
+      Math.abs(instance.geometry._granularity - Cesium.Math.toRadians(0.08)) <
+        1e-12,
+    );
+    assert.equal(instance.id.id, 'zone');
+    // Hidden and shown in place, once its primitive is ready.
+    Object.defineProperty(ground, 'ready', { value: true });
+    const shows = { show: Uint8Array.of(1) };
+    ground.getGeometryInstanceAttributes = () => shows;
+    set.upsert([{ ...zone, show: false }]);
+    assert.equal(scene.added[0], host, 'patched, not rebuilt');
+    assert.deepEqual([...shows.show], [0]);
     set.dispose();
   }));

@@ -71,7 +71,7 @@ async function fixture({ legacySource = false } = {}) {
   const state = createState({ services });
   state._enabled = true;
   state._lifecycleToken = 1;
-  state._dataSource = new Cesium.CustomDataSource('owned-qualification');
+  state._missionSets = { show: false, items: [] };
   const canvas = Object.assign(new EventTarget(), {
     disableRootEvents: true,
     onwheel: null,
@@ -82,9 +82,10 @@ async function fixture({ legacySource = false } = {}) {
     scene: { canvas, preRender: new Cesium.Event(), drillPick: () => [] },
   };
   bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
-  await viewer.dataSources.add(state._dataSource);
   // Only presentation boundaries are inert. Source, normalization, state,
   // ingestion, lifecycle, stats and feed-state policy execute unchanged.
+  // Mission draw sets attached and not let go: the fixture starts with one.
+  let attached = 1;
   const parts = {
     panel: {
       createMissionPanel: noop,
@@ -115,32 +116,31 @@ async function fixture({ legacySource = false } = {}) {
       destroyLaunchPadZonePrimitive: noop,
     },
     rendering: {
-      // As the rendering part owns the entities' data source.
-      attach(target) {
-        state._dataSource = new Cesium.CustomDataSource('rocket-launches');
-        state._dataSource.show = false;
-        target.dataSources.add(state._dataSource);
+      // As the rendering part owns the mission draw sets.
+      attach() {
+        state._missionSets = { show: false, items: [] };
+        attached += 1;
       },
-      detach(target) {
-        if (state._dataSource)
-          target.dataSources.remove(state._dataSource, true);
-        state._dataSource = null;
+      detach() {
+        if (state._missionSets) attached -= 1;
+        state._missionSets = null;
       },
       updateMissionFrame: noop,
-      missionsShown: () => Boolean(state._dataSource?.show),
+      missionsShown: () => Boolean(state._missionSets?.show),
       showMissions(shown) {
-        if (state._dataSource) state._dataSource.show = shown;
+        if (state._missionSets) state._missionSets.show = shown;
       },
-      clearLaunchEntities: () => state._dataSource?.entities.removeAll(),
+      clearLaunchEntities: () => {
+        if (state._missionSets) state._missionSets.items = [];
+      },
       launchIdFromPicks: () => null,
+      missionHitsAt: () => [],
+      followTargetFor: () => null,
       launchMarkerAt: () => false,
       addLaunchEntity(record) {
-        state._dataSource.entities.add({
-          id: record.id,
-          name: record.name,
-          position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
-        });
+        state._missionSets.items.push(record.id);
       },
+      flushLaunchEntities() {},
     },
   };
   const context = { state, services, parts, source };
@@ -153,7 +153,7 @@ async function fixture({ legacySource = false } = {}) {
     return {
       stats,
       feed: layerFeedState(stats),
-      rendered: state._dataSource?.entities.values.map((x) => x.id) || [],
+      rendered: state._missionSets?.items.slice() || [],
       enabled: state._enabled,
     };
   };
@@ -163,6 +163,7 @@ async function fixture({ legacySource = false } = {}) {
     source,
     current,
     viewer,
+    attachedSets: () => attached,
     init: () => parts.lifecycle.methods.init(viewer),
     update: () => parts.ingestion.methods.update(),
     disable: () => parts.lifecycle.methods.disable(),
@@ -317,15 +318,19 @@ test('destroy followed by actual init starts a clean instance with owned handler
     assert.equal(value.stats.lastUpdate, null);
     assert.equal(value.stats.error, null);
     assert.equal(value.enabled, false);
-    assert.equal(f.viewer.dataSources.length, 1);
+    assert.equal(f.attachedSets(), 1);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 1);
     const input = inputFor(f.viewer);
     const before = input.subscriberCount();
     assert.equal(typeof f.state._inputSubscription, 'function');
     await f.destroy();
     assert.equal(f.state._inputSubscription, null);
-    assert.equal(input.subscriberCount(), before - 2, 'click and hover');
-    assert.equal(f.viewer.dataSources.length, 0);
+    assert.equal(
+      input.subscriberCount(),
+      before - 3,
+      'click, hover and double-click follow',
+    );
+    assert.equal(f.attachedSets(), 0);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 0);
   } finally {
     await f.close();

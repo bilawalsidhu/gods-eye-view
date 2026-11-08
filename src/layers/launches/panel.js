@@ -313,7 +313,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
     if (
       !layerState._missionPanelReady ||
       !layerState._selectedLaunchId ||
-      !layerState._dataSource
+      !layerState._missionSets
     )
       return;
     const now = performance.now();

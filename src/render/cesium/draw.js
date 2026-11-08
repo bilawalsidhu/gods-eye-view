@@ -32,6 +32,7 @@
  * `findDraw` for one (`rendererOf.js`).
  */
 import * as Cesium from 'cesium';
+import { temeToPseudoFixed } from '../../geo/celestial.js';
 import { alongLength } from '../../geo/polyline.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
@@ -186,6 +187,56 @@ czm_material czm_getMaterial(czm_materialInput materialInput) {
   m.alpha = color.a * a;
   return m;
 }`;
+
+/** The `radialRim` fill's material type. */
+const RADIAL_RIM_MATERIAL = 'DrawRadialRimFill';
+
+/**
+ * Across the ellipse (`st` from its centre, 1 at its edge) the fill's
+ * colour, easing into the rim's over `rimWidth` (a fraction of the
+ * radius) just inside a soft edge; the rim glows a little.
+ */
+const RADIAL_RIM_SOURCE = `
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  czm_material material = czm_getDefaultMaterial(materialInput);
+  vec2 centered = (materialInput.st - vec2(0.5)) * 2.0;
+  float radius = length(centered);
+  float inside = 1.0 - smoothstep(0.985, 1.0, radius);
+  float rim = smoothstep(0.985 - rimWidth, 0.985, radius) * inside;
+  material.diffuse = mix(color.rgb, rimColor.rgb, rim);
+  material.emission = rimColor.rgb * rim * 0.35;
+  material.alpha = inside * mix(color.a, rimColor.a, rim);
+  return material;
+}`;
+
+/** How finely a rim-filled ellipse is cut, radians. */
+const RIM_GRANULARITY = Cesium.Math.toRadians(0.08);
+
+/**
+ * A ground fill pulled toward the eye (`depthBias`): depth-tested, not
+ * writing depth, offset toward the camera, alpha blended.
+ */
+const DEPTH_BIASED_STATE = Object.freeze({
+  depthTest: { enabled: true },
+  depthMask: false,
+  polygonOffset: { enabled: true, factor: -1, units: -4 },
+  blending: Cesium.BlendingState.ALPHA_BLEND,
+});
+
+/** A `radialRim` fill's material. */
+function radialRimMaterial(fill) {
+  const uniforms = {
+    color: toColor(fill.color),
+    rimColor: toColor(fill.rimColor),
+    rimWidth: fill.rimWidth,
+  };
+  // Built from its type, then given its values, as the line materials are.
+  const material = new Cesium.Material({
+    fabric: { type: RADIAL_RIM_MATERIAL, uniforms, source: RADIAL_RIM_SOURCE },
+  });
+  Object.assign(material.uniforms, uniforms);
+  return material;
+}
 
 /** The line styles the port drapes. */
 const DRAPED_STYLES = new Set(['solid', 'glow', 'dash', 'flow']);
@@ -1392,9 +1443,12 @@ export function createCesiumDraw({
     // values in the fabric would be merged into copies of the type's.
     const template = ({ type, source, uniforms }) =>
       source ? { type, source, uniforms } : { type };
+    // A pattern's image carries its own alpha: drawn in the translucent
+    // pass, whatever its colour.
+    const translucent = style.kind === 'pattern' ? { translucent: true } : {};
     const material =
       reveal === undefined
-        ? new Cesium.Material({ fabric: template(fabric) })
+        ? new Cesium.Material({ fabric: template(fabric), ...translucent })
         : new Cesium.Material({
             fabric: {
               type: `${REVEAL_MATERIAL}_${style.kind}`,
@@ -1402,6 +1456,7 @@ export function createCesiumDraw({
               uniforms: { reveal },
               source: REVEAL_SOURCE,
             },
+            ...translucent,
           });
     const drawn = reveal === undefined ? material : material.materials.revealed;
     Object.assign(drawn.uniforms, fabric.uniforms);
@@ -1473,6 +1528,15 @@ export function createCesiumDraw({
         return {
           type: 'PolylineArrow',
           uniforms: { color: toColor(style.color) },
+        };
+      case 'pattern':
+        // The image along the line `repeat` times, across its width once.
+        return {
+          type: 'Image',
+          uniforms: {
+            image: toImage(style.image),
+            repeat: new Cesium.Cartesian2(style.repeat, 1),
+          },
         };
       default:
         throw new Error(`the Cesium renderer has no ${style.kind} lines`);
@@ -1635,12 +1699,41 @@ export function createCesiumDraw({
     });
   }
 
+  /**
+   * Turn a line set's inertial lines to the sky at its motion clock's time
+   * now: the frame rotated by sidereal time from the Earth-fixed one.
+   */
+  function turnInertial(record) {
+    const lines = record.inertialLines;
+    if (!lines || lines.isDestroyed()) return;
+    const clock = record.spec.motionClock;
+    const ms =
+      clock?.kind === 'scene'
+        ? Cesium.JulianDate.toDate(
+            scene.frameState?.time ?? Cesium.JulianDate.now(),
+          ).getTime()
+        : Date.now() - (clock?.delayMs ?? 0);
+    const { x, y, z } = temeToPseudoFixed(ms);
+    lines.modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+      new Cesium.Matrix3(x.x, y.x, z.x, x.y, y.y, z.y, x.z, y.z, z.z),
+      Cesium.Cartesian3.ZERO,
+      lines.modelMatrix,
+    );
+  }
+
   function buildLines(record) {
     // Refused before anything changes, so the set keeps drawing as it was.
     for (const item of record.items.values())
       if (item.mode === 'draped' && !DRAPED_STYLES.has(item.style.kind))
         throw new Error(
           'the Cesium renderer drapes solid, glow, dash and flow lines only',
+        );
+      else if (
+        item.frame === 'inertial' &&
+        (item.mode === 'draped' || item.depthFailColor)
+      )
+        throw new Error(
+          'the Cesium renderer draws inertial lines undraped, without depth-fail colours',
         );
       else if (
         segmented(item) &&
@@ -1652,6 +1745,8 @@ export function createCesiumDraw({
           'the Cesium renderer colours and shows segments of draped solid lines only',
         );
     const polylines = new Cesium.PolylineCollection();
+    // Lines in the inertial frame, turned with the sky each frame.
+    let inertial = null;
     const draped = new Map();
     // Draped glow lines that look alike: one ground primitive and one
     // material for them all, so they recolour together in place.
@@ -1719,8 +1814,37 @@ export function createCesiumDraw({
         continue;
       }
       const id = pickId(record, item);
-      const { polyline, reveal } = addPolyline(record, polylines, item, id);
+      if (item.frame === 'inertial') {
+        inertial ??= new Cesium.PolylineCollection();
+        const { polyline, reveal, parked } = addPolyline(
+          record,
+          inertial,
+          item,
+          id,
+          true,
+        );
+        // Never settled into a static batch, which would not turn.
+        parts.set(item.id, {
+          look: lineLook(item),
+          shape: null,
+          positions: null,
+          id,
+          polyline,
+          reveal,
+          parked,
+          home: inertial,
+          batched: null,
+        });
+        continue;
+      }
       const settled = settles(item);
+      const { polyline, reveal, parked } = addPolyline(
+        record,
+        polylines,
+        item,
+        id,
+        !settled,
+      );
       parts.set(item.id, {
         look: lineLook(item),
         // How it draws but for its colour, and where it runs, to tell a
@@ -1730,6 +1854,9 @@ export function createCesiumDraw({
         id,
         polyline,
         reveal,
+        // Hidden, out of the collection until it shows (`addPolyline`).
+        parked,
+        home: polylines,
         // Drawn in the set's static batch instead (`settleLines`).
         batched: null,
       });
@@ -1738,12 +1865,15 @@ export function createCesiumDraw({
     // Lines in the collection that can settle into a static batch draw
     // beside it once they do.
     const settling = [...record.items.values()].some(settles);
-    if (deep || settling) {
+    if (deep || settling || inertial) {
       own = new Cesium.PrimitiveCollection();
       own.add(polylines);
       if (deep) own.add(deep);
+      if (inertial) own.add(inertial);
     }
     record.deepLines = deep;
+    record.inertialLines = inertial;
+    if (inertial) turnInertial(record);
     record.polylines = polylines;
     record.lineBox = settling ? own : null;
     record.batch = null;
@@ -2002,6 +2132,7 @@ export function createCesiumDraw({
         return false;
       // A viewer destroyed under the set took its batch with it.
       if (was.batched?.isDestroyed()) return false;
+      if (was.home?.isDestroyed()) return false;
       looks.push(look);
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
@@ -2028,7 +2159,7 @@ export function createCesiumDraw({
       const item = list[k];
       const was = parts.get(item.id);
       const show = item.show !== false;
-      if (was.polyline || was.batched) {
+      if (was.polyline || was.parked || was.batched) {
         patchUndraped(record, was, item, looks[k]);
         continue;
       }
@@ -2087,9 +2218,15 @@ export function createCesiumDraw({
   /**
    * An undraped line without a depth-fail colour in the set's polyline
    * collection, under pick id `id`; `reveal` is the material its reveal
-   * is set on, or null.
+   * is set on, or null. A hidden line that never settles (`park`) is
+   * parked instead, out of the collection (`polyline` null, `parked`
+   * true): the collection draws every line it holds, shown or not, each
+   * on a material and command of its own, every frame; a hidden line
+   * that settles costs nothing once in its static batch.
    */
-  function addPolyline(record, polylines, item, id) {
+  function addPolyline(record, polylines, item, id, park = false) {
+    if (park && item.show === false)
+      return { polyline: null, reveal: null, parked: true };
     const positions = linePositions(item);
     const reveal = revealed(item)
       ? revealUniform(item.revealFraction, positions)
@@ -2102,7 +2239,11 @@ export function createCesiumDraw({
       show: item.show !== false,
       id,
     });
-    return { polyline, reveal: reveal === undefined ? null : material };
+    return {
+      polyline,
+      reveal: reveal === undefined ? null : material,
+      parked: false,
+    };
   }
 
   /**
@@ -2112,6 +2253,7 @@ export function createCesiumDraw({
    */
   const settles = (item) =>
     item.mode !== 'draped' &&
+    item.frame !== 'inertial' &&
     !item.depthFailColor &&
     item.style.kind === 'solid' &&
     !revealed(item) &&
@@ -2179,6 +2321,25 @@ export function createCesiumDraw({
       was.positions = flatPositions(item.positions);
       Object.assign(was, addPolyline(record, record.polylines, item, was.id));
       unsettle(record);
+      return;
+    }
+    if (!show && !was.shape) {
+      // Parked out of the collection, which would draw it on regardless
+      // (a line that settles is hidden in its batch instead).
+      if (was.polyline) {
+        dropFlow(record, was.polyline.material, item.style);
+        was.home.remove(was.polyline);
+        was.polyline = null;
+        was.reveal = null;
+        requestRender();
+      }
+      was.parked = true;
+      return;
+    }
+    if (was.parked) {
+      // Back in the collection, as it now is.
+      Object.assign(was, addPolyline(record, was.home, item, was.id));
+      requestRender();
       return;
     }
     // Only a change a batch would draw unsettles the set: a show is taken
@@ -2585,8 +2746,11 @@ export function createCesiumDraw({
     }
   }
 
-  /** A clamped shape's fill geometry, on the ellipsoid for draping. */
-  function groundGeometry(item) {
+  /**
+   * A clamped shape's fill geometry, on the ellipsoid for draping; an
+   * ellipse with a rim fill is cut finely, so its rim runs round.
+   */
+  function groundGeometry(item, rimFill = null) {
     const g = item.geometry;
     switch (g.kind) {
       case 'polygon': {
@@ -2606,6 +2770,14 @@ export function createCesiumDraw({
           semiMajorAxis: g.semiMajor,
           semiMinorAxis: g.semiMinor,
           rotation: g.rotation ?? 0,
+          ...(rimFill
+            ? {
+                granularity: RIM_GRANULARITY,
+                vertexFormat:
+                  Cesium.MaterialAppearance.MaterialSupport.TEXTURED
+                    .vertexFormat,
+              }
+            : {}),
         });
       case 'rectangle':
         return new Cesium.RectangleGeometry({
@@ -2641,10 +2813,15 @@ export function createCesiumDraw({
         parts.set(item.id, { look: lookOf(item), id: null, ground: null });
         continue;
       }
-      const imageFill =
+      const objectFill =
         typeof item.fill === 'object' && !Array.isArray(item.fill)
           ? item.fill
           : null;
+      const rimFill =
+        objectFill?.preset === 'radialRim' && item.geometry.kind === 'ellipse'
+          ? objectFill
+          : null;
+      const imageFill = rimFill ? null : objectFill;
       if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
       if (item.extrudeHeight !== undefined)
@@ -2661,7 +2838,7 @@ export function createCesiumDraw({
       // load when they show.
       let geometry;
       try {
-        geometry = groundGeometry(item);
+        geometry = groundGeometry(item, rimFill);
       } catch (error) {
         if (item.show === false) continue;
         throw error;
@@ -2677,17 +2854,29 @@ export function createCesiumDraw({
       );
       const instance = new Cesium.GeometryInstance({
         geometry,
-        attributes: imageFill
-          ? { show }
-          : {
-              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                toColor(item.fill),
-              ),
-              show,
-            },
+        attributes:
+          imageFill || rimFill
+            ? { show }
+            : {
+                color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                  toColor(item.fill),
+                ),
+                show,
+              },
         id: part.id,
       });
       const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+      if (rimFill) {
+        // A rim fill is a ground primitive of its own, with its material.
+        batches.push({
+          clampTo,
+          instances: [instance],
+          parts: [part],
+          rimFill,
+          depthBias: item.depthBias,
+        });
+        continue;
+      }
       if (imageFill) {
         // An image fill is a ground primitive of its own, with its material.
         // (Cesium turns its texture wrongly across the antimeridian: its
@@ -2733,7 +2922,9 @@ export function createCesiumDraw({
               ...(batch.imageFill.repeat ?? [1, 1]),
             ),
           })
-        : null;
+        : batch.rimFill
+          ? radialRimMaterial(batch.rimFill)
+          : null;
       const ground = new Ground({
         geometryInstances: batch.instances,
         classificationType: classificationOf(batch.clampTo),
@@ -2746,6 +2937,15 @@ export function createCesiumDraw({
                   Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
                 translucent: true,
                 flat: true,
+                ...(batch.rimFill
+                  ? {
+                      closed: false,
+                      faceForward: true,
+                      ...(batch.depthBias
+                        ? { renderState: DEPTH_BIASED_STATE }
+                        : {}),
+                    }
+                  : {}),
               }),
             }
           : {}),
@@ -3103,6 +3303,8 @@ export function createCesiumDraw({
     beforeRender() {
       cullHorizon();
       runFlows();
+      for (const record of sets.values())
+        if (record.inertialLines) turnInertial(record);
       modelSets.beforeRender(sets.values());
       quadSets.beforeRender(sets.values());
     },

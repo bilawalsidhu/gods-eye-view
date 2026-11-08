@@ -182,7 +182,7 @@ export function createIngestion({
       if (
         !layerState._enabled ||
         token !== layerState._lifecycleToken ||
-        !layerState._dataSource
+        !layerState._missionSets
       )
         return;
       const activeTleText = layerState._activeTleText;
@@ -195,8 +195,9 @@ export function createIngestion({
       layerState._replayTracks.clear();
       layerState._orbitMatches = 0;
       launches.forEach((launch) =>
-        parts.rendering.addLaunchEntity(launch, activeTleText),
+        parts.rendering.addLaunchEntity(launch, activeTleText, { defer: true }),
       );
+      parts.rendering.flushLaunchEntities();
       layerState._renderedTleText = activeTleText;
       if (layerState._renderedTleText === layerState._activeTleText)
         clearPostTleRetry();

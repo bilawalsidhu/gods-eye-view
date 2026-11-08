@@ -224,6 +224,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'scenePick.js',
     'sensorPick.js',
     'sphere.js',
+    'stockFollow.js',
     'styleStages.js',
     'vector.js',
   ]);
