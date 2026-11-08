@@ -23,11 +23,11 @@ test('phone nav clears the shared safe-area-aware switcher bottom and measured h
   );
   assert.match(
     shell,
-    /body\.mobile-shell:not\(\.cockpit-mode\) #view-switcher\s*\{[^}]*bottom: var\(--mobile-view-switcher-bottom\)/,
+    /body\.mobile-shell:not\(\.cockpit-mode\) #view-switcher\s*\{[^}]*bottom: calc\(var\(--mobile-view-switcher-bottom\) \+ var\(--world-timeline-lift, 0px\)\)/,
   );
   assert.match(
     nav,
-    /body\.mobile-shell \.gev-nav\s*\{\s*bottom: calc\(\s*var\(--mobile-view-switcher-bottom\) \+\s*var\(--mobile-view-switcher-height, 0px\) \+ 8px\s*\)/,
+    /body\.mobile-shell \.gev-nav\s*\{\s*bottom: calc\(\s*var\(--mobile-view-switcher-bottom\) \+\s*var\(--world-timeline-lift, 0px\) \+\s*var\(--mobile-view-switcher-height, 0px\) \+ 8px\s*\)/,
   );
 });
 

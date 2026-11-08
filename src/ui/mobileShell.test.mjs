@@ -635,7 +635,7 @@ test('the phone shell keeps the required attribution visible', () => {
   // Share the rem-aware switcher offset, never the old fixed 106px lift.
   assert.match(
     idleCredit,
-    /bottom: var\(--mobile-view-switcher-bottom\) !important;/,
+    /bottom: calc\(\s*var\(--mobile-view-switcher-bottom\) \+ var\(--world-timeline-lift, 0px\)\s*\) !important;/,
   );
   assert.doesNotMatch(idleCredit, /106px/);
   const offset =
