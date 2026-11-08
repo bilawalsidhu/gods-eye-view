@@ -109,6 +109,14 @@ export const NYC_DOT_DISCLAIMER =
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {
+    key: 'usgs-volcanoes',
+    html: 'Volcano status: <a href="https://volcanoes.usgs.gov/vsc/api/" target="_blank" rel="noopener">U.S. Geological Survey</a>',
+  },
+  {
+    key: 'noaa-ovation',
+    html: 'Aurora forecast: <a href="https://www.swpc.noaa.gov/products/aurora-30-minute-forecast" target="_blank" rel="noopener">NOAA SWPC OVATION</a> · visualization is not an official NOAA product',
+  },
+  {
     key: 'opensky',
     html:
       'Flights: OpenSky Network — Schäfer et al., ' +

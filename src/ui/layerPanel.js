@@ -74,6 +74,7 @@ const PANEL_GROUPS = [
     ids: [
       'rocket-launches',
       'earthquakes',
+      'volcanoes',
       'local-firms',
       'fire-perimeters',
       'gnss-integrity',
@@ -93,6 +94,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'aurora',
     ],
   },
   // Directions renders in the Utilities panel, beside Draw and Import, and

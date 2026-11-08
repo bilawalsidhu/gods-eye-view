@@ -3484,5 +3484,9 @@
   "Close camera preview": "إغلاق معاينة الكاميرا",
   "Refresh map still": "تحديث صورة الخريطة الثابتة",
   "The map still uses a separate request and may show a different moment.": "تستخدم صورة الخريطة طلبًا منفصلًا وقد تعرض لحظة مختلفة.",
-  "Video plays from Québec 511, which sees your IP address.": "يُشغَّل الفيديو من Québec 511، الذي يرى عنوان IP الخاص بك."
+  "Video plays from Québec 511, which sees your IP address.": "يُشغَّل الفيديو من Québec 511، الذي يرى عنوان IP الخاص بك.",
+  "Volcano status": "حالة البراكين",
+  "Aurora forecast": "توقعات الشفق القطبي",
+  "NOAA OVATION forecast: {forecastTime}\nBrighter green = higher probability": "توقعات NOAA OVATION: {forecastTime}\nالأخضر الأكثر سطوعًا = احتمال أعلى",
+  "Public feed unavailable": "المصدر العام غير متاح"
 }

@@ -5,11 +5,14 @@ import { createDroneAirspaceSource } from '../layers/droneAirspace/source.js';
 import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
 import { createAdsbGnssSource } from '../layers/gnss/source.js';
 import { createWildlifeSightingsSource } from '../layers/wildlifeSightings/source.js';
+import { createPublicFeedSource } from '../layers/publicFeeds/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
   return {
     earthquakes: createUsgsEarthquakeSource(),
+    volcanoes: createPublicFeedSource('volcanoes'),
+    aurora: createPublicFeedSource('aurora'),
     'air-quality': createEcccAirQualitySource(),
     'fire-perimeters': createWfigsPerimeterSource(),
     'drone-airspace': createDroneAirspaceSource(),
