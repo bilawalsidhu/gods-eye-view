@@ -324,11 +324,13 @@ export function createCesiumDraw({
           record.gpu.write(list);
           return patched();
         }
-        // Points restyled or moved, and lines that only change how they show
-        // or where an undraped one runs, are changed where they are.
+        // Points restyled or moved, lines that only change how they show
+        // or where an undraped one runs, and clamped shapes that only show
+        // or hide, are changed where they are.
         if (
           patchPoints(record, list) ||
           patchLines(record, list) ||
+          patchShapes(record, list) ||
           (kind === 'models' && modelSets.upsert(record, list))
         ) {
           for (const item of list) items.set(item.id, item);
@@ -495,9 +497,17 @@ export function createCesiumDraw({
    * ground primitives), the new host's ground primitives stay hidden and
    * the old host keeps drawing until every one is ready, then they swap in
    * one frame, as the entities' ground batches do; a host still waiting
-   * when the next one comes is dropped.
+   * when the next one comes is dropped. With `groundShown` false, the new
+   * ground primitives show nothing yet (all their items are hidden), so
+   * the old host goes at once rather than wait for them.
    */
-  function replaceHost(record, host, ground = null, own = null) {
+  function replaceHost(
+    record,
+    host,
+    ground = null,
+    own = null,
+    groundShown = true,
+  ) {
     const old = record.host;
     const waiting = ground?.length ? ground : null;
     // The set keeps its place among the scene's primitives: a rebuild draws
@@ -516,6 +526,7 @@ export function createCesiumDraw({
     if (
       old &&
       waiting &&
+      groundShown &&
       !record.retiring &&
       !record.pending &&
       record.ground
@@ -523,7 +534,7 @@ export function createCesiumDraw({
       record.retiring = old;
       if (record.own) old.remove(record.own);
     } else if (old) scene.primitives.remove(old);
-    if (!waiting) retire(record);
+    if (!waiting || !groundShown) retire(record);
     // Hidden one by one: a hidden collection would not build them.
     if (waiting) for (const primitive of waiting) primitive.show = false;
     record.pending = waiting;
@@ -1647,6 +1658,15 @@ export function createCesiumDraw({
    * and the lines drawn alone since, hidden in their batches.
    */
   function showPending(record) {
+    for (const part of record.shapeParts?.values() ?? [])
+      if (
+        part.pendingShow !== undefined &&
+        part.ground &&
+        !part.ground.isDestroyed()
+      ) {
+        showOn(part.ground, part.id, part.pendingShow);
+        part.pendingShow = undefined;
+      }
     for (const part of record.lineParts?.values() ?? []) {
       if (part.batchHidden && part.batch && !part.batch.isDestroyed())
         showOn(part.batch, part.id, false);
@@ -1862,22 +1882,46 @@ export function createCesiumDraw({
    */
   function groundFills(record, items) {
     const batches = [];
+    // Each clamped item as drawn, for upserts that only show or hide it;
+    // the set keeps them once every one is built.
+    const parts = new Map();
+    record.shapeParts = null;
     for (const item of items) {
       if (item.outline)
         throw new Error('the Cesium renderer has no clamped outlines yet');
-      if (!item.fill || item.outlineOnly) continue;
+      if (!item.fill || item.outlineOnly) {
+        parts.set(item.id, { look: lookOf(item), id: null, ground: null });
+        continue;
+      }
       if (typeof item.fill === 'object' && !Array.isArray(item.fill))
         throw new Error('the Cesium renderer fills shapes with colours only');
       if (item.extrudeHeight !== undefined)
         throw new Error('the Cesium renderer cannot clamp extruded shapes');
+      // Hidden ones are built too, hidden, so showing them is a change of
+      // their show, not a rebuild of every fill; a hidden one it cannot
+      // build stays out, as before, and showing it rebuilds.
+      let geometry;
+      try {
+        geometry = groundGeometry(item);
+      } catch (error) {
+        if (item.show === false) continue;
+        throw error;
+      }
+      const part = {
+        look: lookOf(item),
+        id: pickId(record, item),
+        ground: null,
+      };
+      parts.set(item.id, part);
       const instance = new Cesium.GeometryInstance({
-        geometry: groundGeometry(item),
+        geometry,
         attributes: {
           color: Cesium.ColorGeometryInstanceAttribute.fromColor(
             toColor(item.fill),
           ),
+          show: new Cesium.ShowGeometryInstanceAttribute(item.show !== false),
         },
-        id: pickId(record, item),
+        id: part.id,
       });
       const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
       const rectangle = instance.geometry.rectangle;
@@ -1888,26 +1932,115 @@ export function createCesiumDraw({
         batch = {
           clampTo,
           instances: [],
+          parts: [],
           rectangles: new Cesium.RectangleCollisionChecker(),
         };
         batches.push(batch);
       }
       batch.rectangles.insert(String(batch.instances.length), rectangle);
       batch.instances.push(instance);
+      batch.parts.push(part);
     }
     const pickable = record.spec.pickable !== false;
     const Ground = pickable
       ? Cesium.GroundPrimitive
       : UnpickableGroundPrimitive;
-    return batches.map(
-      (batch) =>
-        new Ground({
-          geometryInstances: batch.instances,
-          classificationType: classificationOf(batch.clampTo),
-          allowPicking: pickable,
-        }),
-    );
+    const grounds = batches.map((batch) => {
+      const ground = new Ground({
+        geometryInstances: batch.instances,
+        classificationType: classificationOf(batch.clampTo),
+        allowPicking: pickable,
+      });
+      for (const part of batch.parts) part.ground = ground;
+      return ground;
+    });
+    record.shapeParts = parts;
+    return grounds;
   }
+
+  /**
+   * How a clamped shape draws, but for whether it shows and its `meta`: a
+   * copy of its values, so an item changed in place still reads as changed.
+   */
+  const lookOf = (item) => {
+    const { show, meta, ...look } = item;
+    return plainCopy(look);
+  };
+
+  /** A copy of plain data: arrays and objects copied, the rest kept. */
+  function plainCopy(value) {
+    if (Array.isArray(value) || ArrayBuffer.isView(value))
+      return Array.from(value, plainCopy);
+    if (!value || typeof value !== 'object') return value;
+    const out = {};
+    for (const key of Object.keys(value))
+      if (value[key] !== undefined) out[key] = plainCopy(value[key]);
+    return out;
+  }
+
+  /** Whether `value` holds what `look` (a `plainCopy`) holds. */
+  function sameValues(look, value) {
+    if (Array.isArray(look)) {
+      if (!(Array.isArray(value) || ArrayBuffer.isView(value))) return false;
+      if (look.length !== value.length) return false;
+      for (let i = 0; i < look.length; i++)
+        if (!sameValues(look[i], value[i])) return false;
+      return true;
+    }
+    if (look && typeof look === 'object') {
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        return false;
+      let count = 0;
+      for (const key of Object.keys(value)) {
+        if (value[key] === undefined) continue;
+        count += 1;
+        if (!(key in look) || !sameValues(look[key], value[key])) return false;
+      }
+      return count === Object.keys(look).length;
+    }
+    return look === value || (Number.isNaN(look) && Number.isNaN(value));
+  }
+
+  /** Whether `item` draws as the part's item did, but for show and `meta`. */
+  function sameLook(part, item) {
+    const { show, meta, ...look } = item;
+    return sameValues(part.look, look);
+  }
+
+  /**
+   * Upsert clamped shapes in place, without a rebuild, when every item is
+   * drawn now and looks the same: then only whether it shows and its
+   * `meta` change. A ground primitive still building takes the show once
+   * it is ready (`swapReady`). False, changing nothing, otherwise.
+   */
+  function patchShapes(record, list) {
+    const parts = record.shapeParts;
+    if (record.kind !== 'shapes' || !parts) return false;
+    for (const item of list) {
+      const was = parts.get(item.id);
+      if (!was || !sameLook(was, item)) return false;
+      if (was.ground?.isDestroyed()) return false;
+    }
+    for (const item of list) {
+      const was = parts.get(item.id);
+      if (!was.ground) continue;
+      was.id.meta = item.meta;
+      const show = item.show !== false;
+      if (was.ground.ready) {
+        showOn(was.ground, was.id, show);
+        was.pendingShow = undefined;
+      } else was.pendingShow = show;
+    }
+    return true;
+  }
+
+  /** Whether a hidden clamped item is a plain colour fill `groundFills` builds. */
+  const hiddenFillBuilds = (item) =>
+    Boolean(item.fill) &&
+    !item.outlineOnly &&
+    !item.outline &&
+    item.extrudeHeight === undefined &&
+    (typeof item.fill !== 'object' || Array.isArray(item.fill));
 
   function buildShapes(record) {
     const host = new Cesium.PrimitiveCollection();
@@ -1929,11 +2062,16 @@ export function createCesiumDraw({
       return material;
     };
     for (const item of record.items.values()) {
-      if (item.show === false) continue;
-      if (item.height === 'clampGround') {
+      // Clamped ones are built hidden as well (`groundFills`), when they
+      // are a fill it can draw: others hidden stay out, as before.
+      if (
+        item.height === 'clampGround' &&
+        (item.show !== false || hiddenFillBuilds(item))
+      ) {
         clamped.push(item);
         continue;
       }
+      if (item.show === false) continue;
       const imageFill =
         item.fill && typeof item.fill === 'object' && !Array.isArray(item.fill)
           ? item.fill
@@ -2033,7 +2171,15 @@ export function createCesiumDraw({
     host.add(outlines);
     const ground = groundFills(record, clamped);
     if (!ground.length) return replaceHost(record, host);
-    replaceHost(record, collect(host, ground), ground, host);
+    replaceHost(
+      record,
+      collect(host, ground),
+      ground,
+      host,
+      clamped.some(
+        (item) => item.show !== false && item.fill && !item.outlineOnly,
+      ),
+    );
   }
 
   const modelSets = createModelSets({

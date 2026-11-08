@@ -361,6 +361,219 @@ test('while a rebuild builds, only the old ground waits: the rest goes at once',
   assert.equal(scene.added.length, 0);
 });
 
+test('a clamped fill that only shows, hides or changes meta is changed in place', () => {
+  const { scene, draw, frame } = drawOver();
+  const set = draw.shapes({ id: 'toggles' });
+  // Apart, so one ground primitive holds them all.
+  const rings = new Map(
+    ['a', 'b', 'c'].map((id, i) => [
+      id,
+      [
+        { lon: i, lat: 0 },
+        { lon: i + 0.1, lat: 0 },
+        { lon: i + 0.1, lat: 0.1 },
+      ],
+    ]),
+  );
+  const fill = (id, show, meta = undefined) => ({
+    id,
+    geometry: { kind: 'polygon', rings: [rings.get(id)] },
+    fill: [1, 0, 0, 0.3],
+    height: 'clampGround',
+    show,
+    meta,
+  });
+  set.set([fill('a', true), fill('b', false)]);
+  const host = scene.added[0];
+  const groundOf = (h) => {
+    for (let i = 0; i < h.length; i++)
+      if (h.get(i) instanceof Cesium.GroundPrimitive) return h.get(i);
+    return null;
+  };
+  const ground = groundOf(host);
+  // A hidden one is built too, hidden.
+  const instances = ground.geometryInstances;
+  assert.deepEqual(
+    instances.map((instance) => [
+      instance.id.id,
+      [...instance.attributes.show.value],
+    ]),
+    [
+      ['a', [1]],
+      ['b', [0]],
+    ],
+  );
+  const shows = new Map(
+    instances.map((instance) => [
+      instance.id,
+      { show: Uint8Array.from(instance.attributes.show.value) },
+    ]),
+  );
+  const byItem = (id) => instances.find((i) => i.id.id === id).id;
+  ground.getGeometryInstanceAttributes = (id) => shows.get(id);
+  // Still building: the show waits for the swap.
+  set.upsert([fill('b', true, { n: 1 })]);
+  assert.equal(scene.added[0], host, 'not rebuilt');
+  assert.deepEqual([...shows.get(byItem('b')).show], [0]);
+  assert.deepEqual(byItem('b').meta, { n: 1 }, 'meta changed in place');
+  Object.defineProperty(ground, 'ready', { value: true });
+  frame();
+  assert.deepEqual([...shows.get(byItem('b')).show], [1]);
+  // Ready: written at once.
+  set.upsert([fill('a', false), fill('b', true, { n: 1 })]);
+  assert.equal(scene.added[0], host, 'still not rebuilt');
+  assert.deepEqual([...shows.get(byItem('a')).show], [0]);
+  // The same look written out anew is the same look.
+  set.upsert([
+    {
+      ...fill('a', true),
+      geometry: { kind: 'polygon', rings: [[...rings.get('a')]] },
+    },
+  ]);
+  assert.equal(scene.added[0], host);
+  assert.deepEqual([...shows.get(byItem('a')).show], [1]);
+  // An item changed in place is a new look: it rebuilds.
+  const reused = fill('a', true);
+  set.upsert([reused]);
+  assert.equal(scene.added[0], host);
+  reused.geometry.rings[0][0] = { lon: 0.05, lat: 0 };
+  set.upsert([reused]);
+  assert.notEqual(scene.added.at(-1), host, 'a moved corner rebuilds');
+  Object.defineProperty(groundOf(scene.added.at(-1)), 'ready', {
+    value: true,
+  });
+  frame();
+  const moved = scene.added.at(-1);
+  // Anything else rebuilds: a new colour, a new item.
+  set.upsert([{ ...fill('a', true), fill: [0, 1, 0, 0.3] }]);
+  assert.notEqual(scene.added.at(-1), moved, 'a new look rebuilds');
+  const rebuilt = scene.added.at(-1);
+  Object.defineProperty(groundOf(rebuilt), 'ready', { value: true });
+  frame();
+  set.upsert([fill('c', true)]);
+  assert.notEqual(scene.added.at(-1), rebuilt, 'a new item rebuilds');
+  set.dispose();
+  assert.equal(scene.added.length, 0);
+});
+
+test('hidden clamped fills wait for nothing, and the hidden ones it cannot build stay out', () => {
+  const { scene, draw, frame } = drawOver();
+  const set = draw.shapes({ id: 'hide-all' });
+  const fill = (id, lon, show, extra = {}) => ({
+    id,
+    geometry: {
+      kind: 'ellipse',
+      center: { lon, lat: 0 },
+      semiMajor: 1000,
+      semiMinor: 1000,
+    },
+    fill: '#fff',
+    height: 'clampGround',
+    show,
+    ...extra,
+  });
+  const groundsIn = (host) => {
+    const found = [];
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.GroundPrimitive)
+        found.push(host.get(i));
+    return found;
+  };
+  set.set([fill('a', 0, true), fill('b', 1, true)]);
+  const first = scene.added[0];
+  Object.defineProperty(groundsIn(first)[0], 'ready', { value: true });
+  frame();
+  // Everything hidden: nothing to wait for, the old fills go at once.
+  set.set([fill('a', 0, false), fill('b', 1, false)]);
+  assert.equal(scene.added.length, 1, 'the old host is gone');
+  assert.notEqual(scene.added[0], first);
+  // Hidden ones it could not draw shown are left out, as before.
+  assert.doesNotThrow(() =>
+    set.set([
+      fill('a', 0, false, { outline: '#000' }),
+      fill('b', 1, false, { extrudeHeight: 10 }),
+      fill('c', 2, false, { fill: { preset: 'radialRim' } }),
+      fill('d', 3, false, {
+        geometry: {
+          kind: 'ellipse',
+          center: { lon: 3, lat: 0 },
+          semiMajor: { byCameraHeight: { factor: 1, min: 1, max: 2 } },
+          semiMinor: 1000,
+        },
+      }),
+    ]),
+  );
+  assert.equal(groundsIn(scene.added.at(-1)).length, 0);
+  set.dispose();
+  assert.equal(scene.added.length, 0);
+});
+
+test('a show patched while a rebuild waits lands on the new fills, the old ones keep drawing', () => {
+  const { scene, draw, frame } = drawOver();
+  const set = draw.shapes({ id: 'patch-pending' });
+  const fill = (id, lon, show, color = '#fff') => ({
+    id,
+    geometry: {
+      kind: 'ellipse',
+      center: { lon, lat: 0 },
+      semiMajor: 1000,
+      semiMinor: 1000,
+    },
+    fill: color,
+    height: 'clampGround',
+    show,
+  });
+  const groundOf = (host) => {
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.GroundPrimitive) return host.get(i);
+    return null;
+  };
+  set.set([fill('a', 0, true), fill('b', 1, true)]);
+  const first = scene.added[0];
+  Object.defineProperty(groundOf(first), 'ready', { value: true });
+  frame();
+  // A new colour rebuilds; the old fills draw until the new ones are ready.
+  set.set([fill('a', 0, true, '#f00'), fill('b', 1, true, '#f00')]);
+  const second = scene.added.at(-1);
+  assert.equal(scene.added.length, 2, 'the old host waits');
+  const ground = groundOf(second);
+  const shows = new Map(
+    ground.geometryInstances.map((instance) => [
+      instance.id,
+      { show: Uint8Array.from(instance.attributes.show.value) },
+    ]),
+  );
+  ground.getGeometryInstanceAttributes = (id) => shows.get(id);
+  const idOf = (item) =>
+    ground.geometryInstances.find((i) => i.id.id === item).id;
+  set.upsert([fill('b', 1, false, '#f00')]);
+  set.upsert([fill('b', 1, true, '#f00')]);
+  set.upsert([fill('a', 0, false, '#f00')]);
+  assert.equal(scene.added.at(-1), second, 'patched, not rebuilt');
+  assert.deepEqual([...shows.get(idOf('a')).show], [1], 'queued until ready');
+  Object.defineProperty(ground, 'ready', { value: true });
+  frame();
+  assert.equal(scene.added.length, 1, 'swapped');
+  assert.deepEqual([...shows.get(idOf('a')).show], [0]);
+  assert.deepEqual([...shows.get(idOf('b')).show], [1], 'the last write wins');
+  // A rebuild after a patch builds the patched show.
+  set.upsert([fill('c', 2, true, '#f00')]);
+  const third = groundOf(scene.added.at(-1));
+  assert.deepEqual(
+    third.geometryInstances.map((instance) => [
+      instance.id.id,
+      [...instance.attributes.show.value],
+    ]),
+    [
+      ['a', [0]],
+      ['b', [1]],
+      ['c', [1]],
+    ],
+  );
+  set.dispose();
+  assert.equal(scene.added.length, 0);
+});
+
 test('clamped shapes refuse what they cannot draw', () => {
   const { draw } = drawOver();
   const set = draw.shapes({ id: 'refuse' });
