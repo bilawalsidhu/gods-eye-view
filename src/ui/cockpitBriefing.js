@@ -87,10 +87,7 @@ export function relocalizeBrief() {
   if (this.regionalBrief)
     this.renderRegionalBrief(this.regionalBrief, this.lastSubjectInfo);
   else if (this.brief.news.state)
-    this.renderRegionalBriefStatus(
-      this.brief.news.state,
-      this.lastSubjectInfo,
-    );
+    this.renderRegionalBriefStatus(this.brief.news.state, this.lastSubjectInfo);
 }
 
 export function setBriefAutoRotate(enabled) {
