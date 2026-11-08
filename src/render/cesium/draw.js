@@ -236,9 +236,14 @@ function flowTime(speed) {
   return (cells - Math.floor(cells)) / speed;
 }
 
+/** What `syncIcons` did: icons added or removed, or only changed in place. */
+const ICONS_CHANGED = 'changed';
+const ICONS_KEPT = 'kept';
+
 /**
  * The draw port over `scene`, and what the other ports read of it: the live
- * sets by id, a version that changes with them, the scene's 3D tilesets and
+ * sets by id, a version that changes with what height queries see through
+ * in them, the scene's 3D tilesets and
  * the clamp-state watch the frame loop runs after each draw.
  * @param {{scene: object, report: (error: unknown) => void,
  *   capabilities?: ReadonlySet<string>,
@@ -255,7 +260,9 @@ export function createCesiumDraw({
   requestRender: requestFrame = null,
 }) {
   const sets = new Map();
-  // Bumped on every change to the sets or what they hold.
+  // Bumped whenever what height queries see through may have changed: a
+  // set made, rebuilt, restyled or gone, or items added or removed (icons
+  // changed in place keep their pick ids, so they do not bump it).
   let setsVersion = 0;
   // A viewer can be destroyed before the layers drawing on it
   // let their sets go; those calls then have nothing left to do.
@@ -305,6 +312,12 @@ export function createCesiumDraw({
       setsVersion += 1;
       requestRender();
     };
+    // Icons changed in place: height queries see through the sets' pick
+    // ids, which an icon keeps, so only icons added or gone change them.
+    const iconsPatched = (synced) => {
+      if (synced === ICONS_CHANGED) setsVersion += 1;
+      requestRender();
+    };
     const handle = {
       id: spec.id,
       set(list) {
@@ -317,7 +330,8 @@ export function createCesiumDraw({
         items.clear();
         for (const item of list) items.set(item.id, item);
         // Icons are changed where they are, when they can be.
-        if (syncIcons(record, items.keys(), true)) return patched();
+        const synced = syncIcons(record, items.keys(), true);
+        if (synced) return iconsPatched(synced);
         rebuild();
         requestRender();
       },
@@ -343,13 +357,11 @@ export function createCesiumDraw({
           return;
         }
         for (const item of list) items.set(item.id, item);
-        if (
-          syncIcons(
-            record,
-            list.map((item) => item.id),
-          )
-        )
-          return patched();
+        const synced = syncIcons(
+          record,
+          list.map((item) => item.id),
+        );
+        if (synced) return iconsPatched(synced);
         rebuild();
         requestRender();
       },
@@ -359,7 +371,8 @@ export function createCesiumDraw({
           record.gpu.drop(ids);
           return patched();
         }
-        if (syncIcons(record, [])) return patched();
+        const synced = syncIcons(record, []);
+        if (synced) return iconsPatched(synced);
         rebuild();
         requestRender();
       },
@@ -369,7 +382,8 @@ export function createCesiumDraw({
           record.gpu.sync();
           return patched();
         }
-        if (syncIcons(record, [])) return patched();
+        const synced = syncIcons(record, []);
+        if (synced) return iconsPatched(synced);
         rebuild();
         requestRender();
       },
@@ -814,7 +828,8 @@ export function createCesiumDraw({
    * than it draws, when it is emptied, and when a generated image under a
    * key it has comes as a new canvas (its key's texture would not change).
    * False, changing nothing, otherwise, and when the set has no live
-   * collection of its own.
+   * collection of its own. When done, `ICONS_CHANGED` if icons were added
+   * or removed (the set's pick ids changed), else `ICONS_KEPT`.
    * @param {object} record
    * @param {Iterable<string>} touched Ids of items that may have changed.
    * @param {boolean} [reordered] The items were replaced, in a new order.
@@ -893,14 +908,18 @@ export function createCesiumDraw({
       const ids = new Set([...gone].map((billboard) => billboard.id));
       record.pickIds = record.pickIds.filter((id) => !ids.has(id));
     }
+    let added = false;
     for (const [id, item] of record.items) {
       const image = images.get(id);
       if (image === undefined) continue;
       const entry = drawn.get(id);
       if (entry) patchIcon(record, entry, item, image);
-      else addIcon(record, item, image);
+      else {
+        addIcon(record, item, image);
+        added = true;
+      }
     }
-    return true;
+    return added || gone.size ? ICONS_CHANGED : ICONS_KEPT;
   }
 
   function buildPoints(record) {
@@ -2254,8 +2273,9 @@ export function createCesiumDraw({
           const drawing = [];
           for (const [itemId, item] of record.items)
             if (item.image?.atlas === id) drawing.push(itemId);
-          if (syncIcons(record, drawing)) setsVersion += 1;
-          else record.rebuild();
+          const synced = syncIcons(record, drawing);
+          if (!synced) record.rebuild();
+          else if (synced === ICONS_CHANGED) setsVersion += 1;
           changed = true;
         }
       if (changed) scene.requestRender();

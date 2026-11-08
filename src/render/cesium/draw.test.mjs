@@ -1970,7 +1970,11 @@ test('icon sets change their billboards in place: restyled, moved, re-imaged, ad
   assert.deepEqual(a.id.meta, { n: 1 }, 'picks read the new meta');
   const moved = Cesium.Cartographic.fromCartesian(a.position);
   assert.ok(Math.abs(Cesium.Math.toDegrees(moved.longitude) - 2) < 1e-9);
-  assert.ok(part.version() > version, 'height queries see the change');
+  assert.equal(
+    part.version(),
+    version,
+    'changed in place, the pick ids height queries see through are the same',
+  );
 
   // Back to the defaults it dropped.
   set.upsert([icon('a', 2)]);
@@ -1980,9 +1984,12 @@ test('icon sets change their billboards in place: restyled, moved, re-imaged, ad
   set.upsert([icon('c', 3)]);
   assert.equal(scene.added[0], host, 'a new icon is added to it');
   assert.equal(host.length, 3);
+  const added = part.version();
+  assert.ok(added > version, 'a new pick id for height queries to see');
   set.remove(['b']);
   assert.equal(scene.added[0], host, 'and one removed from it');
   assert.equal(host.length, 2);
+  assert.ok(part.version() > added, 'and one gone');
   assert.deepEqual(
     record.pickIds.map((id) => id.id).sort(),
     ['a', 'c'],
@@ -2035,8 +2042,15 @@ test('an icon drawn from an atlas slot takes a re-registered slot in place', () 
   assert.equal(host.get(0), one, 'the same billboard');
   assert.equal(one.image, 'next.png');
   assert.equal(host.get(1).image, 'ring.png', 'the slot that came draws');
+  const version = part.version();
+  part.port.atlas('marks', { dot: 'again.png', ring: 'ring.png' });
+  assert.equal(scene.added[0], host, 'new images only: not rebuilt');
+  assert.equal(host.get(0), one, 'the same billboard');
+  assert.equal(one.image, 'again.png');
+  assert.equal(part.version(), version, 'the same pick ids');
   part.port.atlas('marks', { ring: 'ring.png' });
   assert.equal(host.length, 1, 'a slot gone takes its icon down');
+  assert.ok(part.version() > version, 'one pick id fewer');
   assert.equal(host.get(0).id.id, 'two');
   // A slot that comes for an icon ahead of one drawn rebuilds, in order.
   part.port.atlas('marks', { dot: 'dot.png', ring: 'ring.png' });
