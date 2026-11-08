@@ -9,4 +9,5 @@ export * from './vector.js';
 export * from './ellipsoid.js';
 export * from './frames.js';
 export * from './celestial.js';
+export * from './julian.js';
 export * from './quaternion.js';

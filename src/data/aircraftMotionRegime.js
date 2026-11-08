@@ -1,4 +1,12 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import {
+  julianFromEpochMs,
+  julianLessThan,
+  julianLessThanOrEquals,
+  julianToEpochMs,
+  secondsDifference,
+} from '../geo/julian.js';
+import { clone, distance } from '../geo/vector.js';
 import {
   courseBetweenCartesians,
   speedRamp,
@@ -26,28 +34,26 @@ export function fixTrackDeg(fix, info, fields) {
 }
 
 /**
- * The instant `epochMs` as a JulianDate (into `result` when given), for
+ * The instant `epochMs` as a Julian date (into `result` when given), for
  * `aircraftMotionRegime`'s `renderTime`.
  */
 export function julianAt(epochMs, result) {
-  return Cesium.JulianDate.fromDate(new Date(epochMs), result);
+  return julianFromEpochMs(epochMs, result);
 }
 
 /** A history fix's time in epoch ms: its `epochMs`, else its `time`'s. */
 export function fixEpochMs(fix) {
-  return Number.isFinite(fix.epochMs)
-    ? fix.epochMs
-    : Cesium.JulianDate.toDate(fix.time).getTime();
+  return Number.isFinite(fix.epochMs) ? fix.epochMs : julianToEpochMs(fix.time);
 }
 
 /** A feed fix's ECEF position, from its degrees and render altitude. */
 export function fixPosition(lonDeg, latDeg, heightM) {
-  return Cesium.Cartesian3.fromDegrees(lonDeg, latDeg, heightM);
+  return fromDegrees(lonDeg, latDeg, heightM);
 }
 
 /** A copy of a fix position, for a trail that keeps it. */
 export function copyPosition(position) {
-  return Cesium.Cartesian3.clone(position);
+  return clone(position);
 }
 
 /**
@@ -58,7 +64,7 @@ export function historyFix(epochMs, position, velocity, track) {
   return {
     time: julianAt(epochMs),
     epochMs,
-    position: Cesium.Cartesian3.clone(position),
+    position: clone(position),
     velocity,
     track,
   };
@@ -110,7 +116,7 @@ export function createMotionRegime() {
  *
  * @param {Array<object>} history Non-empty, oldest first.
  * @param {object|undefined} info The contact's record.
- * @param {Cesium.JulianDate} renderTime
+ * @param {{dayNumber: number, secondsOfDay: number}} renderTime A Julian date (geo/julian).
  * @param {AircraftRecordFields} fields
  * @param {object} result From `createMotionRegime`; returned filled in.
  */
@@ -125,12 +131,12 @@ export function aircraftMotionRegime(
     const a = history[i - 1];
     const b = history[i];
     if (
-      !Cesium.JulianDate.lessThanOrEquals(a.time, renderTime) ||
-      !Cesium.JulianDate.lessThanOrEquals(renderTime, b.time)
+      !julianLessThanOrEquals(a.time, renderTime) ||
+      !julianLessThanOrEquals(renderTime, b.time)
     )
       continue;
-    const span = Cesium.JulianDate.secondsDifference(b.time, a.time);
-    const chordLenM = Cesium.Cartesian3.distance(a.position, b.position);
+    const span = secondsDifference(b.time, a.time);
+    const chordLenM = distance(a.position, b.position);
     const speed =
       span > 0 ? chordLenM / span : (info && info[fields.speed]) || 0;
     const fallbackTrack = (info && info[fields.track]) || 0;
@@ -149,7 +155,7 @@ export function aircraftMotionRegime(
     return result;
   }
   const newest = history[history.length - 1];
-  const warming = Cesium.JulianDate.lessThan(renderTime, history[0].time);
+  const warming = julianLessThan(renderTime, history[0].time);
   result.kind = 'fix';
   result.fix = warming ? history[0] : newest;
   result.speed = fixSpeedMps(result.fix, info, fields);
@@ -166,7 +172,7 @@ export function aircraftMotionRegime(
           // allocating a Date per aircraft on every 12 Hz fleet tick.
           fixEpochMs: Number.isFinite(newest.epochMs)
             ? newest.epochMs
-            : Cesium.JulianDate.toDate(newest.time).getTime(),
+            : julianToEpochMs(newest.time),
           lastContactEpochMs: info?.lastContactEpochMs,
           // Permit one minute of contact grace but cap any cached-feed drift
           // at five minutes. Source backoff is exposed separately as a STALE cue.
