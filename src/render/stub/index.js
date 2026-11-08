@@ -1368,7 +1368,7 @@ export function createStubRenderer(options = {}) {
           .map((s) => `style:${s.id}`),
         ...(effectState.bloom?.enabled ? ['bloom'] : []),
         ...(effectState.sharpen?.enabled ? ['sharpen'] : []),
-        ...(effectState.modulation ? ['modulation'] : []),
+        ...(effectState.modulation ? ['screenModulation'] : []),
       ],
     }),
     on(event, cb) {

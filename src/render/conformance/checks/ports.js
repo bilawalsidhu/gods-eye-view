@@ -880,6 +880,78 @@ export function portChecks() {
       { capability: 'styles' },
     ),
     check(
+      'effects.screenModulation',
+      'a sector draws its pass, asks for a frame, and leaves picks alone',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({ id: 'conf:pick-swept' });
+        const pos = h.toEcef({
+          lon: AUSTIN.lon + 0.004,
+          lat: AUSTIN.lat,
+          height: 0,
+        });
+        const passes = () => r.effects.diagnostics().passes;
+        // The sweep stands 100 px left of the icon and points up, so the
+        // icon is outside the band, dimmed all the way.
+        const sector = (s) => ({
+          center: { x: s.x - 100, y: s.y },
+          angle: 0,
+          width: 0.3,
+          radius: 400,
+          floor: 0,
+          strength: 0.6,
+          color: '#00ff88',
+        });
+        // Whether one tick after `change`, with nothing else asked of it,
+        // draws: from idle, which is asserted first.
+        const drawsOnItsOwn = async (change) => {
+          deepEqual(await idleWatch(h, r, 1), [['u', false]], 'idle first');
+          let rendered = false;
+          const off = r.frame.on('postRender', () => (rendered = true));
+          try {
+            change();
+            await h.frame(r);
+          } finally {
+            off();
+          }
+          return rendered;
+        };
+        const demand = r.frame.mode() !== 'continuous';
+        try {
+          set.set([{ id: 'one', pos, image: DOT, size: [24, 24] }]);
+          await drawn(h, r);
+          await settled(r);
+          const s = r.query.project(pos);
+          ok(s, 'the icon projects');
+          const before = r.query.pick(s.x, s.y);
+          equal(before?.id, 'one', 'the icon picks');
+          equal(passes().includes('screenModulation'), false, 'off at first');
+          const setSector = () => r.effects.screenModulation(sector(s));
+          if (demand)
+            ok(await drawsOnItsOwn(setSector), 'setting asks for a frame');
+          else setSector();
+          await drawn(h, r);
+          ok(passes().includes('screenModulation'), 'the pass draws');
+          const hit = r.query.pick(s.x, s.y);
+          deepEqual(
+            [hit?.set, hit?.id],
+            [before.set, before.id],
+            'a dimmed icon picks as before',
+          );
+          const clear = () => r.effects.screenModulation(null);
+          if (demand)
+            ok(await drawsOnItsOwn(clear), 'clearing asks for a frame');
+          else clear();
+          await drawn(h, r);
+          equal(passes().includes('screenModulation'), false, 'gone on null');
+        } finally {
+          r.effects.screenModulation(null);
+          set.dispose();
+        }
+      },
+      { capability: 'screenModulation' },
+    ),
+    check(
       'draw.motion',
       'icons move by their segments on the set\u2019s motion clock',
       async (h, r) => {

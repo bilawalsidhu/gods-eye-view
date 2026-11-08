@@ -40,7 +40,17 @@ export interface StyleDefinition extends StyleDescriptor {
   shader: StyleShader;
 }
 
-/** A sweeping sector drawn over the frame (a sonar band), or null. */
+/**
+ * `screenModulation`: a sweeping band over the drawn markers (a sonar).
+ * Icons, points and models are dimmed toward `floor` and brought back to
+ * full inside the band, each by where its anchor is on screen; the map,
+ * lines and shapes draw as they are, and picks are unchanged. A radius of 0
+ * dims every marker to `floor` (the theme on, the sweep off). Setting a
+ * sector, or clearing it, asks for one frame; the app sets it again at
+ * `sonarCadenceHz`.
+ * `diagnostics().passes` lists `'screenModulation'` while it draws, so a
+ * sector set but not listed is unsupported.
+ */
 export interface ModulationSector {
   /** Centre of the sweep, CSS pixels. */
   center: { x: number; y: number };
@@ -48,7 +58,11 @@ export interface ModulationSector {
   angle: number;
   /** Width of the band, radians. */
   width: number;
-  /** 0..1. */
+  /** Reach of the band from `center`, CSS pixels. */
+  radius: number;
+  /** Alpha factor outside the band, 0..1. */
+  floor: number;
+  /** 0..1: how far a marker's colour is pulled toward `color`. */
   strength: number;
   color: string;
 }

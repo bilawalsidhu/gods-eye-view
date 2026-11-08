@@ -61,6 +61,11 @@ optional, so a renderer written before it still conforms:
   change `fields` itself rather than add to it, so the renderer follows
   `fields` before must follow them; only the stub lists it, and the Cesium
   adapter has no `fields` yet.
+- `ModulationSector` gains `radius` and `floor` and says what it modulates:
+  icons, points and models dimmed toward `floor` outside the band, the map,
+  lines and shapes as they are, picks unchanged. Its pass is named
+  `screenModulation`. This changes `screenModulation` itself; only the stub
+  lists it, and the Cesium adapter does not draw it yet.
 - `camera.on('changed', cb, { threshold })` measures each listener by its
   own threshold under the capability `cameraChangeThreshold`; a renderer
   without it fires every `changed` listener at 0.5.
