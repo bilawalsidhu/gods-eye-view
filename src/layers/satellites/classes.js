@@ -147,10 +147,14 @@ function launchYearOf(launchDate) {
 /**
  * The class a satellite belongs to.
  * @param {{noradId?: number, name?: string, group?: string|null,
+ *   groups?: string[]|null,
  *   ucs?: {purpose?: string|null}|null,
  *   satcat?: {objectType?: string, opsStatus?: string,
  *     launchDate?: string|null}|null,
- *   launchYear?: number|null, nowYear?: number}} subject `launchYear` is
+ *   launchYear?: number|null, nowYear?: number}} subject `groups` is every
+ *   CelesTrak group the TLE came in (`group` is the one it is shown under):
+ *   the first of them that names a class gives the last-resort class, so a
+ *   satellite in both `visual` and `resource` is still imaging. `launchYear` is
  *   the TLE designator's; SATCAT's launch date wins where it has one (an
  *   object deployed from the ISS carries the station's 1998 designator).
  * @returns {'stations'|'imaging'|'telecom'|'starlink'|'probes'|'debris'}
@@ -161,6 +165,7 @@ export function classifySatellite({
   group = null,
   ucs = null,
   satcat = null,
+  groups = null,
   launchYear = null,
   nowYear = new Date().getUTCFullYear(),
 } = {}) {
@@ -199,7 +204,10 @@ export function classifySatellite({
   )
     return 'debris';
 
-  return GROUP_CLASS[group] || 'probes';
+  const memberships = groups?.length ? groups : [group];
+  for (const membership of memberships)
+    if (GROUP_CLASS[membership]) return GROUP_CLASS[membership];
+  return 'probes';
 }
 
 /** Whether a class may be ridden in the Cockpit's orbital view. */

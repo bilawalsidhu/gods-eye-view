@@ -61,8 +61,10 @@ function ingestionFor(catalogText, { source: sourceExtras = {} } = {}) {
     catalog: {},
   };
   const source = {
-    async readGroup() {
-      return { ok: true, text: catalogText };
+    async readGroup(path) {
+      const text =
+        typeof catalogText === 'function' ? catalogText(path) : catalogText;
+      return { ok: true, text };
     },
     ...sourceExtras,
   };
@@ -141,9 +143,10 @@ test('a hanging SATCAT read neither holds the catalog nor is lost when it lands'
   const satcatAnswer = new Promise((resolve) => {
     answer = resolve;
   });
-  const { state, update } = ingestionFor(tleSet('OLD STAGE', '40115'), {
-    source: { readSatcat: () => satcatAnswer },
-  });
+  const { state, update } = ingestionFor(
+    (path) => (path === 'stations' ? tleSet('OLD STAGE', '40115') : ''),
+    { source: { readSatcat: () => satcatAnswer } },
+  );
   state._enabled = true;
   const settle = async () => {
     for (let turn = 0; turn < 20; turn += 1)
@@ -168,6 +171,45 @@ test('a hanging SATCAT read neither holds the catalog nor is lost when it lands'
   assert.equal(state._catalogRevision, revision + 1, 'the legend refreshes');
   assert.ok(state.visibilityApplied >= 1 && state.rowNotified >= 1);
   assert.equal(state._satcatState, 'stale', 'its staleness is kept');
+});
+
+test('a satellite in visual and resource is imaging, whichever group shows it', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  // A name no pattern knows, no UCS record and no SATCAT: only its groups.
+  const { state, update } = ingestionFor((path) =>
+    path === 'visual' || path === 'resource' ? tleSet('ZZ TESTSAT', '50001') : '',
+  );
+  await update();
+  const sat = state._catalog.get(50001);
+  assert.equal(sat.group, 'visual', 'shown under the first group');
+  assert.deepEqual(sat.groups, ['visual', 'resource']);
+  assert.equal(sat.satelliteClass, 'imaging');
+});
+
+test('a stale SATCAT copy never overrules a current read of the same object', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  const header =
+    'OBJECT_NAME,OBJECT_ID,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE,OWNER\n';
+  const { state, update } = ingestionFor(tleSet('ZZ TESTSAT', '50002'), {
+    source: {
+      // visual is current and says it died; resource, a cached copy, still
+      // says it works.
+      readSatcat: async (path) =>
+        path === 'visual'
+          ? { ok: true, text: `${header}ZZ TESTSAT,2015-001A,50002,PAY,-,US` }
+          : path === 'resource'
+            ? {
+                ok: true,
+                stale: true,
+                text: `${header}ZZ TESTSAT,2015-001A,50002,PAY,+,US`,
+              }
+            : { ok: true, text: header },
+    },
+  });
+  await update();
+  assert.equal(state._catalog.get(50002).satelliteClass, 'debris');
 });
 
 test('a failed SATCAT read is told on the layer row, not only the console', async (t) => {

@@ -72,8 +72,16 @@ export function createIngestion({
         continue;
       }
       if (group.stale && satcatState === 'current') satcatState = 'stale';
-      for (const [noradId, record] of group.records)
-        layerState._satcat.set(noradId, record);
+      for (const [noradId, record] of group.records) {
+        // A group served from the proxy's last copy never overrules a
+        // current read of the same object, from this merge or an earlier one.
+        const held = layerState._satcat.get(noradId);
+        if (group.stale && held && !held.stale) continue;
+        layerState._satcat.set(
+          noradId,
+          group.stale ? { ...record, stale: true } : record,
+        );
+      }
     }
     if (!groups.length) return;
     const changed = layerState._satcatState !== satcatState;
@@ -100,6 +108,7 @@ export function createIngestion({
         noradId,
         name: sat.name,
         group: sat.group,
+        groups: sat.groups,
         ucs: sat.ucs,
         satcat,
         launchYear: sat.launchYear,
@@ -259,6 +268,18 @@ export function createIngestion({
             allEntries.push({ ...e, group: r.tag, stale: r.stale });
         }
 
+        // Every group each TLE came in, keyed by its catalog-number column:
+        // the shown tag is the first, but classification reads them all.
+        const groupsByNumber = new Map();
+        for (const entry of allEntries) {
+          const number = String(entry.line1 || '')
+            .slice(2, 7)
+            .trim();
+          const groups = groupsByNumber.get(number);
+          if (!groups) groupsByNumber.set(number, [entry.group]);
+          else if (!groups.includes(entry.group)) groups.push(entry.group);
+        }
+
         // Deduplicate by NORAD ID — first (most specific) group tag wins
         const seen = new Set();
         let coreStale = false;
@@ -275,10 +296,16 @@ export function createIngestion({
           const launchYear = tleLineLaunchYear(entry.line1);
           const ucs = layerState._ucs?.get(noradId) || null;
           const satcat = layerState._satcat.get(noradId) || null;
+          const groups = groupsByNumber.get(
+            String(entry.line1 || '')
+              .slice(2, 7)
+              .trim(),
+          ) || [entry.group];
           layerState._catalog.set(noradId, {
             name: entry.name,
             satrec,
             group: entry.group,
+            groups,
             // satellite.js does not keep the designator the year match reads.
             launchYear,
             line1: entry.line1,
@@ -287,6 +314,7 @@ export function createIngestion({
               noradId,
               name: entry.name,
               group: entry.group,
+              groups,
               ucs,
               satcat,
               launchYear,
