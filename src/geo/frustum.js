@@ -60,3 +60,42 @@ export function sphereOutside(planes, center, radius) {
     if (dot(normal, center) + w < -radius) return true;
   return false;
 }
+
+/**
+ * Canvas coordinates (CSS px, origin top left) of world points on a `width`
+ * by `height` canvas, as the default renderer projects them from `pose`
+ * (its frustum's projection matrix times its view matrix, centred, no
+ * offset): one pose read for many points, rather than a renderer call per
+ * point. Null behind the eye and before the projection's clip plane at
+ * `2·far·near / (far + near)` (a little past `near`; `2·near` with no far
+ * plane), where the renderer's own projection answers nothing.
+ * @param {{position: object, direction: object, up: object, fovy: number,
+ *   aspectRatio: number, near: number, far: number}} pose
+ * @param {number} width
+ * @param {number} height
+ * @param {{x: number, y: number}} [out] Written and returned by every call.
+ * @returns {(p: {x: number, y: number, z: number}) =>
+ *   ({x: number, y: number}|null)}
+ */
+export function poseProjector(pose, width, height, out = { x: 0, y: 0 }) {
+  const { position: e, direction: d, up: u, near, far } = pose;
+  const r = cross(d, u);
+  const tanY = Math.tan(0.5 * pose.fovy);
+  const tanX = pose.aspectRatio * tanY;
+  // With no far plane the clip plane is at twice `near`, its limit.
+  const clipDepth = Number.isFinite(far)
+    ? (2 * far * near) / (far + near)
+    : 2 * near;
+  return (p) => {
+    const vx = p.x - e.x;
+    const vy = p.y - e.y;
+    const vz = p.z - e.z;
+    const depth = vx * d.x + vy * d.y + vz * d.z;
+    if (!(depth > 0) || depth < clipDepth) return null;
+    const x = (vx * r.x + vy * r.y + vz * r.z) / (depth * tanX);
+    const y = (vx * u.x + vy * u.y + vz * u.z) / (depth * tanY);
+    out.x = (x + 1) * 0.5 * width;
+    out.y = (1 - y) * 0.5 * height;
+    return out;
+  };
+}

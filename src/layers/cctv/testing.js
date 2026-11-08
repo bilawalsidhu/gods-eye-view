@@ -1,4 +1,13 @@
-import { createIconSet } from '../../data/iconSet.js';
+import { createIconBook } from '../../render/motion/iconBook.js';
+
+/** A draw set that draws nothing, for the icon book the tests read. */
+const testIconSet = () => ({
+  id: 'cctv:test:icons',
+  show: true,
+  upsert() {},
+  remove() {},
+  dispose() {},
+});
 
 export function createTesting({ state: layerState, services, parts, source }) {
   /** Test seam: republishes host entries through the real push path, so tests
@@ -102,7 +111,6 @@ export function createTesting({ state: layerState, services, parts, source }) {
     );
     layerState._coverageEntities = [];
     layerState._projectionEntities = [];
-    layerState._iconPrimitive = null;
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
     layerState._enabled = !!enabled;
@@ -116,8 +124,9 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
-    // A real set (no primitive): every record gets its row as init adds it.
-    layerState._icons = createIconSet();
+    // A real book (over a set that draws nothing): every record gets its
+    // icon as init adds it.
+    layerState._icons = createIconBook(testIconSet());
     for (const record of layerState._records)
       if (record?.camera?.id) parts.rendering.addCameraIcon(record);
   }
@@ -147,7 +156,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     };
   }
 
-  /** The layer's icon set, for tests that read what the rows draw. */
+  /** The layer's icon book, for tests that read what the icons draw. */
 
   function _cctvIconsForTest() {
     return layerState._icons;

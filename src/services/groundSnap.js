@@ -140,10 +140,11 @@ const SAMPLE_WINDOW_MS = 250;
 
 /**
  * True when the active photoreal tileset has finished streaming the tiles in
- * view (cctv.js's projectionTilesReady pattern: first Cesium3DTileset found in
- * scene.primitives, duck-typed via its boolean tilesLoaded). Sampling before
- * that both blows the frame budget on forced synchronous loads and produces
- * misses that would burn retry backoff for nothing. With NO tileset present
+ * view (the pattern CCTV's projectionTilesReady once used: first
+ * Cesium3DTileset found in scene.primitives, duck-typed via its boolean
+ * tilesLoaded). Sampling before that both blows the frame budget on forced
+ * synchronous loads and produces misses that would burn retry backoff for
+ * nothing. With NO tileset present
  * (OSM fallback) this returns true so the sample path is not permanently
  * blocked — the sample just misses and backs off.
  * @param {Cesium.Viewer} viewer

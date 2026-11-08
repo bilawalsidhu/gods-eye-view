@@ -13,9 +13,8 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
-  /** The catalog's icon set and the primitive that draws it. */
+  /** The catalog's camera icons: the icon book over their draw set. */
   layerState._icons = null;
-  layerState._iconPrimitive = null;
 
   layerState._records = [];
 
@@ -74,13 +73,8 @@ export function createState({ services }) {
 
   layerState._activeFocusStyleCount = 0;
 
-  // Screen-point scratches: the projections that fill them write only x and y.
-  layerState._scratchFocusScreen = { x: 0, y: 0 };
-
+  // The view pass's screen-point scratch: its projection writes only x and y.
   layerState._scratchViewScreen = { x: 0, y: 0 };
-
-  /** The view pass's view-projection matrix, column-major. */
-  layerState._scratchViewProjection = new Float64Array(16);
 
   // Counts view passes; a record shown by the latest pass carries its number.
 
@@ -165,13 +159,6 @@ export function createState({ services }) {
   layerState._gizmo = null;
 
   layerState._lastTransientNotifyAt = 0;
-
-  // Cached handle on the active Google Photorealistic 3D Tileset, discovered
-  // lazily from scene.primitives. Shared mesh-floor sampling is gated on its
-  // tilesLoaded flag so a coarse-LOD miss is never baked in. Cleared when the
-  // tileset is destroyed / the layer tears down.
-
-  layerState._activeTileset = null;
 
   // Task 5: last surface regime the record geometry was recomputed for. The
   // map-stack change listener compares the CURRENT regime (derived live from

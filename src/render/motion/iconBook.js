@@ -78,6 +78,15 @@ export function createIconBook(drawSet = null, { capabilities = null } = {}) {
       else if (expiresAt !== undefined) expiries.set(item.id, expiresAt);
       drawSet?.upsert([item]);
     },
+    /**
+     * Draw several items at once, as `put` draws one (a restyle: each keeps
+     * its motion's expiry), in one write to the set.
+     */
+    putMany(list) {
+      if (!list.length) return;
+      for (const item of list) items.set(item.id, item);
+      drawSet?.upsert(list);
+    },
     remove(id) {
       expiries.delete(id);
       if (items.delete(id)) drawSet?.remove([id]);

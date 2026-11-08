@@ -179,10 +179,14 @@ export const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
   heightM: 0,
 });
 
-/** Base64-encoded SVG camera icon for the camera icon rows. */
+/**
+ * Base64-encoded SVG camera icon for the camera icons. Icons rasterise an
+ * SVG at its own size, so it is 48 px: drawn at 24 px, 1.25× near scale on a
+ * 2× display draws it at 60 device px, and it stays sharp there.
+ */
 
 export const CAMERA_ICON = (() => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 36 36">
     <defs>
       <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="#c9f6ff"/>

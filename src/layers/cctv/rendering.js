@@ -1,10 +1,9 @@
-import * as Cesium from 'cesium';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
-  ACTIVE_CAMERA_COLOR as ACTIVE_CAMERA_RGBA,
+  ACTIVE_CAMERA_COLOR,
   CAMERA_ICON,
-  IDLE_CAMERA_COLOR as IDLE_CAMERA_RGBA,
-  LIVE_CAMERA_COLOR as LIVE_CAMERA_RGBA,
+  IDLE_CAMERA_COLOR,
+  LIVE_CAMERA_COLOR,
   ACTIVE_COVERAGE_CENTER,
   IDLE_COVERAGE_CENTER_MUTED,
   ACTIVE_COVERAGE_CENTER_DEPTHFAIL,
@@ -16,43 +15,49 @@ import {
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
 } from './policy.js';
-import { createIconSet } from '../../data/iconSet.js';
-import { writeHoldSegment } from '../../data/iconSegment.js';
-import { IconSetPrimitive } from '../../render/cesium/iconSetPrimitive.js';
-import { iconAtlas } from '../../data/iconAtlas.js';
-import { horizonOccluder } from '../../render/cesium/iconOrientation.js';
+import { createIconBook } from '../../render/motion/iconBook.js';
 import { frustumVolumeGeometryData } from '../../data/cctvViewshed.js';
-import { toColor } from '../../render/cesium/draw.js';
-import { drawHitOf } from '../../render/cesium/drawHit.js';
-import { findQuery } from '../../render/rendererOf.js';
-import { fromDegrees } from '../../geo/ellipsoid.js';
+import {
+  canvasOf,
+  drawOf,
+  findCamera,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
+import { fromDegrees, WGS84 } from '../../geo/ellipsoid.js';
 import { eastNorthUp } from '../../geo/frames.js';
-// Loads the factory a viewer of a caller's own gets its camera port from,
-// which the rest of the layer reads the eye through.
-import '../../render/cesium/camera.js';
-import '../../render/cesium/globe.js';
-
-// The policy's renderer colours as the Cesium colours the icons and lines take.
-const ACTIVE_CAMERA_COLOR = toColor(ACTIVE_CAMERA_RGBA);
-const IDLE_CAMERA_COLOR = toColor(IDLE_CAMERA_RGBA);
-const LIVE_CAMERA_COLOR = toColor(LIVE_CAMERA_RGBA);
+import { poseProjector } from '../../geo/frustum.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import { distance } from '../../geo/vector.js';
 
 /** An RGBA colour with another alpha. */
 const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
 
-/** The camera icon's drawn size (px). */
-const CAMERA_ICON_PX = 24;
+/** Icon sets made so far, by every layer: set ids unique to each. */
+let iconSets = 0;
+
+/** A point's coordinates, as an item keeps them. */
+const copyPoint = (p) => ({ x: p.x, y: p.y, z: p.z });
+
+/** Whether two points are the same, coordinate for coordinate. */
+const samePoint = (a, b) =>
+  !!a && !!b && a.x === b.x && a.y === b.y && a.z === b.z;
+
+/** Degrees to radians. */
+const toRadians = (degrees) => (degrees * Math.PI) / 180;
+
 /**
- * Its atlas raster: 1.25× near scale on a 2× display draws it at 60 device px,
- * so it is rasterised past the drawn size to stay sharp there.
+ * The camera icon's drawn size (px). Its SVG is 48 px (policy.js): 1.25×
+ * near scale on a 2× display draws it at 60 device px, so it is rasterised
+ * past the drawn size to stay sharp there.
  */
-const CAMERA_RASTER_PX = 48;
-const CAMERA_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
-  350,
-  1.25,
-  4_000_000,
-  0.42,
-);
+const CAMERA_ICON_PX = 24;
+const CAMERA_SCALE_BY_DISTANCE = Object.freeze({
+  near: 350,
+  nearValue: 1.25,
+  far: 4_000_000,
+  farValue: 0.42,
+});
 
 /**
  * The translucent frustum volume of one camera, as a mesh item: the same 5
@@ -104,70 +109,93 @@ export function createRendering({
   parts,
   source,
 }) {
-  /** The scene the icon primitive was added to. */
-  let iconScene = null;
-
   /**
-   * The catalog's icon set and the primitive that draws it. Cameras hold still,
-   * so each row is a hold segment and the primitive's clock only keeps segment
-   * times small. Rows draw depth-test-free (field-test fix 2026-07-06: the old
+   * The catalog's camera icons: an icon draw set, and the book the layer
+   * reads them back from (`render/motion/iconBook.js`), each item a camera
+   * by its id. Cameras hold still, so each item's motion is a hold at its
+   * mount. Items draw depth-test-free (field-test fix 2026-07-06: the old
    * finite depth-test distance re-engaged at far zoom, where the COARSE
    * far-LOD Google-3D mesh sits above the true ground and swallowed
-   * ground-anchored icons); the GPU culls the far side of the globe and
+   * ground-anchored icons); the set culls the far side of the globe and
    * refreshHorizonCulling thins the rest.
-   * @param {Cesium.Viewer} viewer
+   * @param {object} viewer The layer's viewer.
+   * @returns {string} The icon set's id, for the sprite order.
    */
   function createCameraIcons(viewer) {
     // A re-init against a new viewer replaces the icons; the old ones go.
     destroyCameraIcons();
-    const epoch = Cesium.JulianDate.now();
-    layerState._icons = createIconSet({ epoch });
-    layerState._iconPrimitive = new IconSetPrimitive({
-      set: layerState._icons,
-      renderTime: () => epoch,
-      requestRender: () => layerState._viewer?.scene?.requestRender?.(),
+    const set = drawOf(viewer).icons({
+      id: `cctv:${++iconSets}:icons`,
+      horizonCull: true,
     });
-    viewer.scene.primitives.add(layerState._iconPrimitive);
-    iconScene = viewer.scene;
-    return layerState._iconPrimitive;
+    // Columns of no rows put the set's host in the scene now, where the
+    // sprite order finds it, rather than with its first camera.
+    set.setColumns?.({ ids: [] });
+    layerState._icons = createIconBook(set);
+    return set.id;
   }
 
-  /**
-   * Take the icons out of the scene they were added to, whichever viewer the
-   * caller tears down, and free them: a destroyed primitive left in a live
-   * scene throws on its next frame.
-   */
+  /** Let the icon draw set go, whichever viewer the caller tears down. */
   function destroyCameraIcons() {
-    const primitive = layerState._iconPrimitive;
-    if (primitive && iconScene && !iconScene.isDestroyed?.())
-      iconScene.primitives.remove(primitive);
-    if (primitive && !primitive.isDestroyed()) primitive.destroy();
-    iconScene = null;
-    layerState._iconPrimitive = null;
+    layerState._icons?.dispose();
     layerState._icons = null;
   }
 
-  /** Add a camera record's icon row, idle and shown, at its position. */
-  function addCameraIcon(record) {
-    const set = layerState._icons;
+  /** The icon item a camera record draws, idle and shown, at its position. */
+  function cameraIconItem(record) {
     const id = record.camera.id;
-    const row = set.add(id, { layer: 'cctv', id });
-    const slot = iconAtlas.slot(CAMERA_ICON, CAMERA_RASTER_PX);
-    set.setImage(row, slot, slot);
-    set.setSize(row, CAMERA_ICON_PX, CAMERA_ICON_PX);
-    set.setScaleByDistance(row, CAMERA_SCALE_BY_DISTANCE);
-    set.setColor(row, cameraColorFor(record));
-    set.setShown(row, true);
-    moveCameraIcon(record);
+    return {
+      id,
+      pos: copyPoint(record.position),
+      image: CAMERA_ICON,
+      size: [CAMERA_ICON_PX, CAMERA_ICON_PX],
+      color: cameraColorFor(record),
+      scale: 1,
+      scaleByDistance: CAMERA_SCALE_BY_DISTANCE,
+      disableDepthTest: Infinity,
+      motion: { kind: 'hold' },
+      meta: { layer: 'cctv', id },
+      show: true,
+    };
   }
 
-  /** Hold a camera's row at its record's current position. */
+  /**
+   * A camera's icon item with `fields` changed, to write with the pass's
+   * others in one go (`writeCameraIcons`); null when none of them changes
+   * or it has no icon, so a large catalog writes only what changed.
+   */
+  function patchedCameraIcon(id, fields) {
+    const item = layerState._icons?.item(id);
+    if (!item) return null;
+    for (const key in fields)
+      if (item[key] !== fields[key]) return { ...item, ...fields };
+    return null;
+  }
+
+  /** Write a pass's changed icons, in one write to the set. */
+  function writeCameraIcons(items) {
+    if (items.length) layerState._icons?.putMany(items);
+  }
+
+  /** Add a camera record's icon, idle and shown, once it has a position. */
+  function addCameraIcon(record) {
+    const icons = layerState._icons;
+    if (!icons || !record.position) return;
+    icons.put(cameraIconItem(record));
+  }
+
+  /** Hold a camera's icon at its record's current position. */
   function moveCameraIcon(record) {
-    const set = layerState._icons;
-    const row = set?.row(record.camera.id) ?? -1;
-    if (row < 0 || !record.position) return;
-    writeHoldSegment(set.segments, row, record.position, 0);
-    set.segmentWritten(row);
+    const icons = layerState._icons;
+    if (!icons || !record.position) return;
+    const item = icons.item(record.camera.id);
+    // A camera whose icon waited for a position is drawn now.
+    if (!item) {
+      icons.put(cameraIconItem(record));
+      return;
+    }
+    if (samePoint(item.pos, record.position)) return;
+    icons.put({ ...item, pos: copyPoint(record.position) });
   }
 
   /** Icon color: active wins, then live-capable video feeds, then idle stills. */
@@ -204,21 +232,16 @@ export function createRendering({
       return;
     if (nowMs - layerState._lastFocusStyleAt < 80) return;
     layerState._lastFocusStyleAt = nowMs;
-    const scene = layerState._viewer.scene;
-    const camera = layerState._viewer.camera;
+    const query = findQuery(layerState._viewer);
+    const eye = findCamera(layerState._viewer)?.pose()?.position;
+    if (!query || !eye) return;
     const result = applyCctvFocusDeemphasis({
       records: layerState._records,
       target,
       previousActiveCount: layerState._activeFocusStyleCount,
       nowMs,
-      screenPositionFor: (position) =>
-        Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-          layerState._scratchFocusScreen,
-        ),
-      cameraDistanceFor: (position) =>
-        Cesium.Cartesian3.distance(camera.positionWC, position),
+      screenPositionFor: (position) => query.project(position),
+      cameraDistanceFor: (position) => distance(eye, position),
     });
     layerState._activeFocusStyleCount = result.activeCount;
   }
@@ -227,7 +250,7 @@ export function createRendering({
    * Apply the gated CCTV focus pass through the set's focus column (the shader
    * multiplies it into the base color's alpha).
    * @param {object} input
-   * @param {object} [input.icons] The icon set (defaults to the layer's).
+   * @param {object} [input.icons] The icon book (defaults to the layer's).
    * @returns {{writes:number,transitioning:boolean,activeCount:number,ran:boolean}}
    */
 
@@ -248,28 +271,30 @@ export function createRendering({
     let transitioning = false;
     let activeCount = 0;
     for (const record of records || []) {
-      const row = icons?.row(record.camera?.id) ?? -1;
-      if (row < 0) continue;
+      const id = record.camera?.id;
+      const item = icons?.item(id);
+      if (!item) continue;
       const position = record.position;
+      const scale = item.scale ?? 1;
       // CCTV never publishes a tracked focus target, so every icon is ambient.
-      const focus = advanceSpriteFocus(icons.metaAt(row), {
+      const focus = advanceSpriteFocus(item.meta, {
         // Keep hidden icons in the state/release pass so the active count cannot
         // drop while a stale dim alpha remains waiting to reappear.
         screenPosition:
-          !icons.shown(row) || !position ? null : screenPositionFor(position),
+          item.show === false || !position ? null : screenPositionFor(position),
         cameraDistance: position ? cameraDistanceFor(position) : Number.NaN,
         nowMs,
         target,
         params,
-        spriteHalfWidthPx: icons.width(row) * icons.scale(row) * 0.5,
-        spriteHalfHeightPx: icons.height(row) * icons.scale(row) * 0.5,
+        spriteHalfWidthPx: item.size[0] * scale * 0.5,
+        spriteHalfHeightPx: item.size[1] * scale * 0.5,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;
       // Order-independent narrow amendment to always-visible icons: CCTV
       // contacts retain a non-zero floor while yielding near the tracked target.
-      if (focusAlphaNeedsWrite(icons.focus(row), focus.factor, params)) {
-        icons.setFocus(row, focus.factor);
+      if (focusAlphaNeedsWrite(icons.focus(id), focus.factor, params)) {
+        icons.setFocus(id, focus.factor);
         writes += 1;
       }
     }
@@ -284,7 +309,7 @@ export function createRendering({
    */
   /**
    * Field-test fix (2026-07-06): horizon-culls camera icons on the CPU as the
-   * icon shader does on the GPU. With the Cesium globe hidden (Google-3D
+   * icon shader does on the GPU. With the globe hidden (Google-3D
    * regime) nothing writes far-side depth and the icons are always-on-top, so
    * the shown set (cards, geometry, the picker) must not include London's
    * cluster from a US viewpoint.
@@ -306,33 +331,32 @@ export function createRendering({
     if (
       !layerState._enabled ||
       !layerState._viewer ||
-      layerState._viewer.isDestroyed() ||
       !layerState._records.length
     )
       return false;
-    const { camera, scene } = layerState._viewer;
-    const width = scene.canvas.clientWidth || scene.canvas.width || 0;
-    const height = scene.canvas.clientHeight || scene.canvas.height || 0;
+    const pose = findCamera(layerState._viewer)?.pose();
+    if (!pose?.position) return false;
+    const canvas = canvasOf(layerState._viewer);
+    const width = canvas?.clientWidth || canvas?.width || 0;
+    const height = canvas?.clientHeight || canvas?.height || 0;
     const minX = -width * VIEW_ICON_MARGIN;
     const maxX = width * (1 + VIEW_ICON_MARGIN);
     const minY = -height * VIEW_ICON_MARGIN;
     const maxY = height * (1 + VIEW_ICON_MARGIN);
     // Ground metres one pixel covers per metre of distance from the viewer.
-    const fovy = Number.isFinite(camera.frustum?.fovy)
-      ? camera.frustum.fovy
-      : Math.PI / 3;
+    const fovy = Number.isFinite(pose.fovy) ? pose.fovy : Math.PI / 3;
     const metresPerPixelPerMetre =
       (2 * Math.tan(fovy / 2)) / Math.max(1, height);
-    const viewer = camera.positionWC;
-    // The horizon test of Cesium's EllipsoidalOccluder, inlined: this loop
+    const viewer = pose.position;
+    // The renderer's horizon test (geo/horizon.js), inlined: this loop
     // visits every camera in the catalog.
-    const inverseRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
+    const inverseRadii = WGS84.oneOverRadii;
     const cx = viewer.x * inverseRadii.x;
     const cy = viewer.y * inverseRadii.y;
     const cz = viewer.z * inverseRadii.z;
     const limbSquared = cx * cx + cy * cy + cz * cz - 1;
     const activeId = layerState._activeCameraId;
-    const project = screenProjector(scene, camera, width, height);
+    const project = screenProjector(pose, width, height);
     const pass = (layerState._viewPassId = (layerState._viewPassId || 0) + 1);
     const shown = [];
     const cells = new Map();
@@ -378,11 +402,14 @@ export function createRendering({
       record.viewPass = pass;
       shown.push(record);
     }
-    const icons = layerState._icons;
+    const writes = [];
     for (const record of layerState._records) {
-      const row = icons?.row(record.camera.id) ?? -1;
-      if (row >= 0) icons.setShown(row, record.viewPass === pass);
+      const item = patchedCameraIcon(record.camera.id, {
+        show: record.viewPass === pass,
+      });
+      if (item) writes.push(item);
     }
+    writeCameraIcons(writes);
     const previous = layerState._viewRecords;
     const changed =
       previous.length !== shown.length ||
@@ -392,37 +419,21 @@ export function createRendering({
   }
 
   /**
-   * Canvas coordinates for world positions. In 3D the pass multiplies by one
-   * view-projection matrix per call instead of Cesium's per-point
-   * cartesianToCanvasCoordinates, which dominated the pass on a large
-   * catalog; other scene modes keep Cesium's projection.
-   * @returns {(position: Cesium.Cartesian3) => ({x: number, y: number}|null)}
+   * Canvas coordinates for world positions, from the eye's pose by the
+   * renderer's perspective projection (geo/frustum.js): one pose read per
+   * pass rather than a renderer projection per point, which dominated the
+   * pass on a large catalog. Null behind the eye or before its near plane.
+   * A pose with no perspective field of view is projected by the renderer,
+   * point by point.
+   * @returns {(position: {x: number, y: number, z: number}) =>
+   *   ({x: number, y: number}|null)}
    */
-  function screenProjector(scene, camera, width, height) {
-    const out = layerState._scratchViewScreen;
-    const projection = camera.frustum?.projectionMatrix;
-    if (
-      scene.mode !== Cesium.SceneMode.SCENE3D ||
-      !projection ||
-      !camera.viewMatrix
-    )
-      return (position) => scene.cartesianToCanvasCoordinates(position, out);
-    const m = Cesium.Matrix4.multiply(
-      projection,
-      camera.viewMatrix,
-      layerState._scratchViewProjection,
-    );
-    return (p) => {
-      const w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
-      const z = m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14];
-      // Behind the eye or before the near plane: Cesium does not draw it.
-      if (!(w > 0) || z < 0) return null;
-      out.x =
-        ((m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12]) / w + 1) * 0.5 * width;
-      out.y =
-        (1 - (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w) * 0.5 * height;
-      return out;
-    };
+  function screenProjector(pose, width, height) {
+    if (Number.isFinite(pose.fovy) && Number.isFinite(pose.aspectRatio)) {
+      return poseProjector(pose, width, height, layerState._scratchViewScreen);
+    }
+    const query = findQuery(layerState._viewer);
+    return (position) => query?.project(position) ?? null;
   }
 
   /**
@@ -444,7 +455,7 @@ export function createRendering({
       return record.viewCellKey;
     const latStep = 2 ** level / 111_320;
     const row = Math.floor(lat / latStep);
-    const rowLat = Cesium.Math.toRadians((row + 0.5) * latStep);
+    const rowLat = toRadians((row + 0.5) * latStep);
     const lonStep = latStep / Math.max(0.05, Math.cos(rowLat));
     record.viewCellLevel = level;
     record.viewCellLat = lat;
@@ -530,16 +541,16 @@ export function createRendering({
         coverageVisible,
       );
     }
-    const icons = layerState._icons;
+    // Only changed icons are written, in one go after the pass, so across a
+    // large catalog only the changed rows upload.
+    const restyled = [];
     for (const record of layerState._records) {
       const isActive = record.camera.id === activeId;
-      const row = icons?.row(record.camera.id) ?? -1;
-      if (row >= 0) {
-        // The set skips unchanged writes, so across a large catalog only the
-        // changed rows upload.
-        icons.setColor(row, cameraColorFor(record));
-        icons.setScale(row, isActive ? 1.25 : 1.0);
-      }
+      const icon = patchedCameraIcon(record.camera.id, {
+        color: cameraColorFor(record),
+        scale: isActive ? 1.25 : 1.0,
+      });
+      if (icon) restyled.push(icon);
 
       if (
         layerState._enabled &&
@@ -632,48 +643,30 @@ export function createRendering({
       }
     }
 
+    writeCameraIcons(restyled);
     if (layerState._icons) layerState._icons.show = !!layerState._enabled;
     parts.projection.pauseInactiveProjectionFeeds(activeId);
   }
 
   /**
-   * Reports whether the active Google Photorealistic 3D Tileset (if any) has
-   * finished loading the tiles in view. Shared mesh-floor sampling is gated on
-   * this so a one-shot cell never bakes in a miss from still-streaming tiles.
-   * Discovers + caches the tileset lazily from scene
-   * primitives (the CCTV module holds only a `_viewer` reference). When no
-   * tileset is present (OSM fallback) this returns true so ground sampling is
-   * not permanently blocked.
+   * Reports whether the photorealistic tiles the scene draws have finished
+   * loading the tiles in view. Shared mesh-floor sampling is gated on this so
+   * a one-shot cell never bakes in a miss from still-streaming tiles.
    *
-   * Task 5 (review correction, spec §2): a HIDDEN tileset (`show === false`,
-   * i.e. a globe stack is active) must NOT report ready — Cesium 1.138's
-   * the shared sampler can only inspect *visible* 3D tilesets, so a sample taken
-   * against the hidden Google tileset would silently miss.
+   * Only the photoreal regime (the globe hidden under the tiles) can be
+   * ready: on a globe stack the tiles are hidden, and the shared sampler can
+   * only inspect tiles that are drawn, so a sample taken against them would
+   * silently miss (Task 5, spec §2). The tiles' readiness is the globe
+   * port's (`isSettled('tiles')`), true as well when no tiles are drawn.
    *
-   * @returns {boolean} True when tiles are loaded AND visible (or no tileset
-   *   exists to wait on).
+   * @returns {boolean} True when the regime is photoreal and its tiles in
+   *   view have loaded.
    */
 
   function projectionTilesReady() {
-    if (
-      !layerState._activeTileset ||
-      layerState._activeTileset.isDestroyed?.()
-    ) {
-      layerState._activeTileset = null;
-      const primitives = layerState._viewer?.scene?.primitives;
-      if (primitives && typeof primitives.get === 'function') {
-        for (let i = 0; i < primitives.length; i++) {
-          const p = primitives.get(i);
-          if (p instanceof Cesium.Cesium3DTileset && !p.isDestroyed?.()) {
-            layerState._activeTileset = p;
-            break;
-          }
-        }
-      }
-    }
-    if (!layerState._activeTileset) return true;
-    if (layerState._activeTileset.show === false) return false;
-    return layerState._activeTileset.tilesLoaded === true;
+    const globe = layerState._viewer ? findGlobe(layerState._viewer) : null;
+    if (!globe || globe.isGlobeVisible?.() !== false) return false;
+    return globe.isSettled('tiles') === true;
   }
 
   /**
@@ -803,66 +796,58 @@ export function createRendering({
   }
 
   /**
-   * Extracts a camera ID from a scene pick result by checking icon row IDs,
-   * primitive IDs, and the camera ids the layer keeps for its coverage entities.
-   * @param {Object|null} picked - Result from scene.pick().
-   * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.
+   * The camera a pick (a draw-port `Hit`: `event.drawHit`, `query.pick`)
+   * names: an item of the layer's own sets that its record still draws.
+   * @param {{set: string, id: string, meta?: object}|null} hit
+   * @returns {string|null} Camera ID, or null if the pick is not a CCTV item.
    */
 
-  function extractPickedCameraId(picked) {
-    if (!picked) return null;
+  function extractPickedCameraId(hit) {
+    if (!hit || typeof hit.set !== 'string' || typeof hit.id !== 'string')
+      return null;
+
+    // A camera icon: its item id is the upstream camera id, so a sibling
+    // may legitimately use the same string. A bare id match is not
+    // ownership proof: the layer's own icon set must have drawn the pick.
+    const icons = layerState._icons;
+    if (icons && hit.set === icons.setId)
+      return icons.has(hit.id) && layerState._recordById.has(hit.id)
+        ? hit.id
+        : null;
 
     // A coverage line or monitor plane: an item of the layer's own sets
     // that its record still draws.
-    const hit = drawHitOf(picked);
-    const role = hit ? parts.drawSets.roleOfSet(hit.set) : null;
-    if (role) {
-      const value = hit.meta?.cameraId;
-      const record =
-        typeof value === 'string' ? layerState._recordById.get(value) : null;
-      if (!record) return null;
-      const owns =
-        role === 'coverage'
-          ? Boolean(record.coverageEntities?.some((h) => h?.id === hit.id))
-          : record.projection?.plane?.id === hit.id ||
-            layerState._projectionEntities.some(
-              (runtime) =>
-                runtime?.cameraId === value && runtime.plane?.id === hit.id,
-            );
-      return owns ? value : null;
-    }
-
-    // Camera icon row IDs are intentionally the upstream camera ID, so a
-    // sibling may legitimately use the same string. A bare ID match is not
-    // ownership proof: require that this layer's icon set drew the pick.
-    const directId =
-      typeof picked.id === 'string'
-        ? picked.id
-        : typeof picked.primitive?.id === 'string'
-          ? picked.primitive.id
-          : null;
+    const role = parts.drawSets.roleOfSet(hit.set);
+    if (!role) return null;
+    const value = hit.meta?.cameraId;
     const record =
-      directId === null ? null : layerState._recordById.get(directId);
+      typeof value === 'string' ? layerState._recordById.get(value) : null;
     if (!record) return null;
-    return layerState._icons && picked.iconSet === layerState._icons
-      ? directId
-      : null;
+    const owns =
+      role === 'coverage'
+        ? Boolean(record.coverageEntities?.some((h) => h?.id === hit.id))
+        : record.projection?.plane?.id === hit.id ||
+          layerState._projectionEntities.some(
+            (runtime) =>
+              runtime?.cameraId === value && runtime.plane?.id === hit.id,
+          );
+    return owns ? value : null;
   }
 
   /**
    * The camera whose icon or coverage is under a screen position (CSS px),
-   * from one scene pick; null when none is, or the pick throws.
+   * from one pick; null when none is, or the pick throws.
    * @param {{x: number, y: number}} position
    * @returns {string|null}
    */
   function pickCameraIdAt(position) {
-    let picked = null;
+    let hit = null;
     try {
-      picked = layerState._viewer.scene.pick(position);
+      hit = findQuery(layerState._viewer)?.pick(position.x, position.y) ?? null;
     } catch {
-      picked = null;
+      hit = null;
     }
-    return extractPickedCameraId(picked);
+    return extractPickedCameraId(hit);
   }
 
   /**
@@ -870,17 +855,20 @@ export function createRendering({
    * canvas position of a world point on the near side of the horizon (null
    * behind it or off the projection).
    * @returns {{width: number, height: number,
-   *   screenOf: (position: object) => ({x: number, y: number}|undefined|null)}}
+   *   screenOf: (position: object) => ({x: number, y: number}|null)}}
    */
   function cardView() {
-    const { camera, scene } = layerState._viewer;
-    const occluder = horizonOccluder(camera);
+    const viewer = layerState._viewer;
+    const canvas = canvasOf(viewer);
+    const query = findQuery(viewer);
+    const eye = findCamera(viewer)?.pose()?.position;
+    const horizon = eye ? horizonFrom(eye) : null;
     return {
-      width: scene.canvas.clientWidth || scene.canvas.width || 0,
-      height: scene.canvas.clientHeight || scene.canvas.height || 0,
+      width: canvas?.clientWidth || canvas?.width || 0,
+      height: canvas?.clientHeight || canvas?.height || 0,
       screenOf: (position) =>
-        occluder.isPointVisible(position)
-          ? scene.cartesianToCanvasCoordinates(position)
+        query && horizon?.isPointVisible(position)
+          ? query.project(position)
           : null,
     };
   }

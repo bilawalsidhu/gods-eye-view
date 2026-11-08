@@ -349,6 +349,8 @@ test('default COVERAGE refresh materializes the active and visible camera frustu
 test('camera icons are violet for video feeds, cyan for stills, amber when active', () => {
   const record = (id, feedType) => ({
     camera: { ...UNCLAMPED_CAMERA, id, feedType, groundElevationM: 0 },
+    // Every catalog record is placed as it is made, and drawn there.
+    position: { x: 6378137, y: 0, z: 0 },
     coverageEntities: [],
     projection: null,
   });
@@ -370,18 +372,12 @@ test('camera icons are violet for video feeds, cyan for stills, amber when activ
     });
     refreshCoverageStyles();
     const icons = _cctvIconsForTest();
-    const color = (record) => icons.color(icons.row(record.camera.id));
-    const bytes = (c) =>
-      [c.red, c.green, c.blue, c.alpha].map(Cesium.Color.floatToByte);
-    const policyBytes = (rgba) => rgba.map(Cesium.Color.floatToByte);
-    assert.deepEqual(bytes(color(idleVideo)), policyBytes(LIVE_CAMERA_COLOR));
-    assert.deepEqual(bytes(color(idleStill)), policyBytes(IDLE_CAMERA_COLOR));
-    assert.deepEqual(
-      bytes(color(activeVideo)),
-      policyBytes(ACTIVE_CAMERA_COLOR),
-    );
-    assert.equal(icons.scale(icons.row(activeVideo.camera.id)), 1.25);
-    assert.equal(icons.scale(icons.row(idleVideo.camera.id)), 1);
+    const color = (record) => icons.item(record.camera.id).color;
+    assert.deepEqual(color(idleVideo), LIVE_CAMERA_COLOR);
+    assert.deepEqual(color(idleStill), IDLE_CAMERA_COLOR);
+    assert.deepEqual(color(activeVideo), ACTIVE_CAMERA_COLOR);
+    assert.equal(icons.item(activeVideo.camera.id).scale, 1.25);
+    assert.equal(icons.item(idleVideo.camera.id).scale, 1);
   } finally {
     _setCctvCoverageStateForTest({ enabled: false });
     unbind();
@@ -1154,29 +1150,36 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
     );
     assert.ok(coverage.items.has('cctv-shared-id-cap'));
     const lineHit = (set, id) => ({
-      id: { set, id, meta: { cameraId: 'shared-id' } },
+      set,
+      id,
+      meta: { cameraId: 'shared-id' },
+      surface: false,
     });
     assert.equal(
       _extractPickedCameraIdForTest({
+        set: _cctvIconsForTest().setId,
         id: 'shared-id',
-        iconSet: _cctvIconsForTest(),
-        primitive: { id: 'shared-id' },
+        surface: false,
       }),
       'shared-id',
     );
     assert.equal(
       _extractPickedCameraIdForTest({
+        set: 'sibling:1:icons',
         id: 'shared-id',
-        iconSet: {},
-        primitive: { id: 'shared-id' },
+        surface: false,
       }),
       null,
-      'a sibling primitive with the same canonical ID cannot activate CCTV',
+      "a sibling set's icon with the same canonical ID cannot activate CCTV",
     );
     assert.equal(
-      _extractPickedCameraIdForTest({ id: { id: 'shared-id' } }),
+      _extractPickedCameraIdForTest({
+        set: _cctvIconsForTest().setId,
+        id: 'not-a-camera',
+        surface: false,
+      }),
       null,
-      'a sibling Entity with the same canonical ID cannot activate CCTV',
+      'an id the icon book does not draw is not a camera',
     );
     assert.equal(
       _extractPickedCameraIdForTest(
@@ -1194,10 +1197,10 @@ test('CCTV camera extraction requires layer ownership, not a colliding sibling I
     );
     assert.equal(
       _extractPickedCameraIdForTest({
-        id: {
-          id: 'sibling-entity',
-          properties: { cctvCameraId: 'shared-id' },
-        },
+        set: 'sibling:1:entities',
+        id: 'sibling-entity',
+        meta: { cctvCameraId: 'shared-id', cameraId: 'shared-id' },
+        surface: false,
       }),
       null,
       'a sibling cannot impersonate CCTV by copying its property shape',

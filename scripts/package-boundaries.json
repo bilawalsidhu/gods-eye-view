@@ -2556,6 +2556,8 @@
       "src/layers/cctv/projection.js",
       "src/layers/cctv/videoPlayback.js",
       "src/layers/cctv/rendering.js",
+      "src/render/motion/iconBook.js",
+      "src/geo/frustum.js",
       "src/render/cesium/iconOrientation.js",
       "src/render/cesium/iconSetPrimitive.js",
       "src/data/iconSet.js",

@@ -22,7 +22,7 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
+  const { registerSpriteSet, restoreSpriteOrder } = services.sprites;
   const { activateCctvCameraFromWorldClick } = services.activation;
   const { resolvePickId, registerPickOwner, unregisterPickOwner } =
     services.picking;
@@ -176,9 +176,6 @@ export function createLifecycle({
     layerState._lastError = null;
     layerState._lastFocusStyleAt = 0;
     layerState._activeFocusStyleCount = 0;
-    // FIX ①/③: the discovered tileset handle is scene-scoped — drop it so a fresh
-    // init re-discovers against the current scene primitives.
-    layerState._activeTileset = null;
     // Task 5: the applied-regime tracker is record-set-scoped — a fresh init
     // recomputes it against the then-current scene.
     layerState._lastAppliedRegime = null;
@@ -208,10 +205,10 @@ export function createLifecycle({
       layerState._lastViewContext = '';
       layerState._calibrationById = parts.calibration.loadCalibrationStore();
 
-      registerSpriteCollection(
-        'cctv',
-        parts.rendering.createCameraIcons(layerState._viewer),
-      );
+      // A host without the sprite order still draws the icons, in the
+      // order they were added.
+      const iconSetId = parts.rendering.createCameraIcons(layerState._viewer);
+      registerSpriteSet?.('cctv', iconSetId);
 
       const sources = await parts.catalog.loadCameraSources();
       const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
@@ -399,7 +396,9 @@ export function createLifecycle({
         (event) => {
           if (!layerState._enabled) return;
           const picked = event.pick;
-          const cameraId = parts.selection.extractPickedCameraId(picked);
+          const cameraId = parts.selection.extractPickedCameraId(
+            event.drawHit ?? null,
+          );
           if (cameraId) {
             activateCctvCameraFromWorldClick(
               cameraId,
