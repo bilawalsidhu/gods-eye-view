@@ -234,6 +234,12 @@ body.mobile-shell .gev-nav {
       calc(100dvh - 130px - var(--mobile-top-inset, 0px))
     );
   }
+
+  /* With the timeline up, tabs, voice and timeline leave no room for the
+     control above the attribution line; pinch and drag still move the map. */
+  body.mobile-shell:has(#world-timeline) .gev-nav {
+    display: none;
+  }
 }
 
 /* Sheets own the touch surface; hide nav below their backdrop. */
