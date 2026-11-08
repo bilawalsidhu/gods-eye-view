@@ -415,8 +415,16 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     ? lookTilt(orbitalLookReadoutParts(state.lookTarget))
     : null;
   const swathScale = offset ? offNadirSwathScale(tilt) : 1;
-  // Tilted past the limb, the view's centre looks into space: no swath.
-  const seesEarth = !offset || offNadirCentreMeetsEarth(info.altitudeM, tilt);
+  // Tilted past the limb, the view's centre looks into space: no swath. The
+  // camera eases toward the target, so both must meet the Earth; the HUD
+  // republishes on its cadence, so the swath appears once the view arrives.
+  const seesEarth =
+    !offset ||
+    (offNadirCentreMeetsEarth(info.altitudeM, tilt) &&
+      offNadirCentreMeetsEarth(info.altitudeM, {
+        northDeg: state.lookView?.pitchDeg ?? 0,
+        eastDeg: state.lookView?.yawDeg ?? 0,
+      }));
   this.publishOrbital({
     name: info.name,
     classLabel: info.classLabel || '',
