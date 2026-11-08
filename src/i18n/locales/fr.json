@@ -3302,5 +3302,14 @@
   "Refresh map still": "Actualiser l’image fixe sur la carte",
   "The map still uses a separate request and may show a different moment.": "L’image fixe de la carte utilise une requête distincte et peut montrer un autre moment.",
   "Video plays from Québec 511, which sees your IP address.": "La vidéo est lue depuis Québec 511, qui voit votre adresse IP.",
-  "COURSE HOLD · AIS": "VERROU ROUTE · AIS"
+  "COURSE HOLD · AIS": "VERROU ROUTE · AIS",
+  "World time": "Heure du monde",
+  "Back to live": "Revenir au direct",
+  "Live": "Direct",
+  "1 h/s": "1 h/s",
+  "1 d/s": "1 j/s",
+  "1 wk/s": "1 sem/s",
+  "Play speed": "Vitesse de lecture",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Faites défiler ou pincez pour zoomer, glissez pour vous déplacer · double-clic pour tout voir",
+  "1 min/s": "1 min/s"
 }

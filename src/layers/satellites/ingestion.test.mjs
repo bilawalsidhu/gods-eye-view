@@ -33,6 +33,8 @@ function ingestionFor(catalogText) {
     _denseLoadToken: 0,
     _catalogRevision: 0,
     _params: { catalog: 'core', showOrbits: false },
+    now: Date.now,
+    coverageChanged() {},
   };
   const parts = {
     orbits: {

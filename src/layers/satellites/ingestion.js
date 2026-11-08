@@ -103,7 +103,7 @@ export function createIngestion({
         layerState._denseLoadToken++; // cancel any in-flight dense load against the old catalog
         parts.labels._syncIssOverlay();
 
-        const now = new Date();
+        const now = new Date(layerState.now());
 
         // Process all TLE entries in CATALOG_GROUPS order
         const allEntries = [];
@@ -195,6 +195,7 @@ export function createIngestion({
         // the rebuild must not block on that.
         void parts.tracking._reconcileTrackedSubjectContext();
         parts.tracking._applyPendingTrackingRestore();
+        layerState.coverageChanged();
       } catch (e) {
         if (updateSignal.aborted || e?.name === 'AbortError') {
           throw new DOMException('Satellite update aborted', 'AbortError');

@@ -90,6 +90,7 @@
     "./infrastructure/lod": "./src/data/localGeojsonLod.js",
     "./application": "./src/app/application.js",
     "./application/viewer": "./src/app/viewer.js",
+    "./time": "./src/time/worldClock.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },

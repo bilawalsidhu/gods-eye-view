@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -150,6 +151,14 @@ export function createState({ services }) {
   /** Optional deterministic clock used only by the production-frame test seam. */
 
   state._trackedFrameNowForTest = null;
+
+  /** The time satellites are propagated to, in epoch ms. */
+
+  state.now = worldTimeFor('satellites');
+
+  /** The catalog changed, so the time satellites can be shown at may have. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
 
   // Scratch variables
 

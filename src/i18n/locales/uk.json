@@ -3378,5 +3378,14 @@
   "Refresh map still": "Оновити кадр на карті",
   "The map still uses a separate request and may show a different moment.": "Кадр на карті запитується окремо та може показувати інший момент.",
   "Video plays from Québec 511, which sees your IP address.": "Відео відтворюється з Québec 511, який бачить вашу IP-адресу.",
-  "COURSE HOLD · AIS": "УТРИМАННЯ ШЛЯХОВОГО КУТА · AIS"
+  "COURSE HOLD · AIS": "УТРИМАННЯ ШЛЯХОВОГО КУТА · AIS",
+  "World time": "Світовий час",
+  "Back to live": "Повернутися до прямого ефіру",
+  "Live": "Зараз",
+  "1 h/s": "1 год/с",
+  "1 d/s": "1 дн/с",
+  "1 wk/s": "1 тиж/с",
+  "Play speed": "Швидкість відтворення",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутіть або зведіть пальці для масштабу, перетягніть для переміщення · подвійне клацання — показати все",
+  "1 min/s": "1 хв/с"
 }

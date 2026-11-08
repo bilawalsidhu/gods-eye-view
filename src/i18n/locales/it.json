@@ -3302,5 +3302,14 @@
   "Refresh map still": "Aggiorna immagine fissa sulla mappa",
   "The map still uses a separate request and may show a different moment.": "L’immagine sulla mappa usa una richiesta separata e può mostrare un momento diverso.",
   "Video plays from Québec 511, which sees your IP address.": "Il video viene riprodotto da Québec 511, che vede il tuo indirizzo IP.",
-  "COURSE HOLD · AIS": "BLOCCO ROTTA · AIS"
+  "COURSE HOLD · AIS": "BLOCCO ROTTA · AIS",
+  "World time": "Ora del mondo",
+  "Back to live": "Torna alla diretta",
+  "Live": "Diretta",
+  "1 h/s": "1 h/s",
+  "1 d/s": "1 g/s",
+  "1 wk/s": "1 sett/s",
+  "Play speed": "Velocità di riproduzione",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scorri o pizzica per lo zoom, trascina per spostarti · doppio clic per vedere tutto",
+  "1 min/s": "1 min/s"
 }
