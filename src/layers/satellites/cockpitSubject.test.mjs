@@ -138,7 +138,7 @@ async function fixture(t) {
   await parts.lifecycle.methods.init(viewer);
   await parts.ingestion.methods.update(viewer);
   parts.lifecycle.methods.enable(viewer);
-  // GPS is TELECOM, hidden by default; these tests need its point on screen.
+  // GPS is TELECOM; these tests need its point on screen whatever the default.
   parts.controls.methods.setParams({ classes: { telecom: true } });
   Object.assign(console, { log, warn });
   t.after(() => {
@@ -357,6 +357,38 @@ test('untracking a held subject gives its marks back', async (t) => {
   assert.equal(f.state._points.get(ISS_NORAD).show, true);
 });
 
+test('a catalog refresh while held keeps the subject and its companions hidden', async (t) => {
+  const f = await fixture(t);
+  f.track(ISS_NORAD);
+  f.nextFrame();
+  f.methods.setCockpitSubject(ISS_NORAD);
+  const log = console.log;
+  console.log = () => {};
+  try {
+    await f.parts.ingestion.methods.update(f.viewer);
+  } finally {
+    console.log = log;
+  }
+  f.nextFrame();
+  assert.equal(f.state._points.get(COMPANION).show, false, 'companion');
+  assert.equal(f.state._points.get(ISS_NORAD).show, false, 'tracked point');
+  f.methods.setCockpitSubject(null);
+  assert.equal(f.state._points.get(COMPANION).show, true, 'given back');
+});
+
+test('untracking a held ISS leaves its ring hidden while Stations is off', async (t) => {
+  const f = await fixture(t);
+  f.track(ISS_NORAD);
+  f.nextFrame();
+  f.methods.setCockpitSubject(ISS_NORAD);
+  f.methods.setParams({ classes: 'itpd' });
+  f.nextFrame();
+  f.methods.stopTracking();
+  assert.equal(f.ring(ISS_NORAD).show, false);
+  f.methods.setParams({ classes: 'sitpd' });
+  assert.equal(f.ring(ISS_NORAD).show, true);
+});
+
 test('tracking without a Cockpit subject keeps its marks', async (t) => {
   const f = await fixture(t);
   f.track(GPS);
@@ -535,8 +567,18 @@ test('the ground track bearing comes from the SGP4 velocity, less the Earth turn
 test('the subject says whether its class may be ridden', () => {
   const fix = { latitude: 0, longitude: 0, altitude: 400_000 };
   const subject = (satelliteClass) =>
-    satelliteCockpitInfo(1, { name: 'X', group: 'visual', satelliteClass }, fix);
+    satelliteCockpitInfo(
+      1,
+      { name: 'X', group: 'visual', satelliteClass },
+      fix,
+    );
   assert.equal(subject('debris').enterable, false);
-  for (const satelliteClass of ['stations', 'imaging', 'telecom', 'starlink', 'probes'])
+  for (const satelliteClass of [
+    'stations',
+    'imaging',
+    'telecom',
+    'starlink',
+    'probes',
+  ])
     assert.equal(subject(satelliteClass).enterable, true, satelliteClass);
 });
