@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { findCamera, findQuery } from '../render/rendererOf.js';
 
 /**
@@ -31,7 +30,6 @@ export const DEFAULT_FOCUS_DEEMPHASIS_PARAMS = Object.freeze({
 let _params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS };
 let _focusTarget = null;
 const _spriteStates = new WeakMap();
-const _scratchScreen = new Cesium.Cartesian2();
 const _advanceResult = {
   factor: 1,
   changed: false,
@@ -173,67 +171,11 @@ export function resetFocusDeemphasisParams() {
 
 /**
  * Publish a focus target from the exact world position already cached by its
- * tracking/render path. Callers must never re-derive a position here: a second
+ * tracking/render path, through the renderer bound to `viewer`: its query
+ * port projects the position and its camera's pose gives the distance.
+ * Callers must never re-derive a position here: a second
  * propagation/dead-reckoning sample at a different frame phase recreates the
  * tracked-target jitter class this service is designed to avoid.
- *
- * @param {object} input
- * @param {string} input.ownerLayer
- * @param {string|number} input.id
- * @param {Cesium.Scene} input.scene
- * @param {Cesium.Camera} input.camera
- * @param {Cesium.Cartesian3} input.displayPosition Cached display position.
- * @param {number} [input.widthPx=24] Projected visual width before padding.
- * @param {number} [input.heightPx=24] Projected visual height before padding.
- * @param {Partial<typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS>} [input.params]
- * @returns {object|null} Published target, or null when it cannot be projected.
- */
-export function publishFocusTargetFromCachedPosition({
-  ownerLayer,
-  id,
-  scene,
-  camera,
-  displayPosition,
-  widthPx = 24,
-  heightPx = 24,
-  params,
-}) {
-  if (
-    !ownerLayer ||
-    id === null ||
-    id === undefined ||
-    !scene ||
-    !camera ||
-    !displayPosition
-  ) {
-    clearFocusTarget(ownerLayer, id);
-    return null;
-  }
-  const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-    scene,
-    displayPosition,
-    _scratchScreen,
-  );
-  return publishFocusRect({
-    ownerLayer,
-    id,
-    screen,
-    cameraDistance: Cesium.Cartesian3.distance(
-      camera.positionWC,
-      displayPosition,
-    ),
-    frameNumber: scene.frameState?.frameNumber ?? -1,
-    widthPx,
-    heightPx,
-    params,
-  });
-}
-
-/**
- * `publishFocusTargetFromCachedPosition` through the renderer bound to
- * `viewer`: its query port projects the cached position and its camera's
- * pose gives the distance. Same contract: the position must be the one the
- * tracking/render path already cached this frame.
  *
  * @param {object} input
  * @param {string} input.ownerLayer
@@ -521,68 +463,6 @@ export function advanceSpriteFocus(
   _advanceResult.active = active;
   _advanceResult.desired = desired;
   return _advanceResult;
-}
-
-/**
- * Project and advance one world-anchored sprite using an owning layer's
- * existing render pass.
- * @param {object} sprite Stable primitive identity.
- * @param {Cesium.Cartesian3} position Current cached/rendered world position.
- * @param {Cesium.Scene} scene
- * @param {Cesium.Camera} camera
- * @param {number} nowMs
- * @param {object|null} [target]
- * @param {Partial<typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS>} [params]
- * @param {number} [spriteHalfWidthPx=0]
- * @param {number} [spriteHalfHeightPx=spriteHalfWidthPx]
- * @returns {{factor:number, changed:boolean, transitioning:boolean,active:boolean,desired:number}}
- */
-export function advanceProjectedSpriteFocus(
-  sprite,
-  position,
-  scene,
-  camera,
-  nowMs,
-  target = _focusTarget,
-  params,
-  spriteHalfWidthPx = 0,
-  spriteHalfHeightPx = spriteHalfWidthPx,
-) {
-  // Common case: nothing tracked and this sprite holds no dimming state —
-  // advanceSpriteFocus would return identity without reading the projection,
-  // so skip the worldToWindowCoordinates round trip entirely (it was N
-  // wasted projections per fleet tick with nothing tracked). Sprites still
-  // relaxing keep their state entry until fully settled (see the delete at
-  // the transition tail), so they keep projecting until done. (perf item 8)
-  if (!target && !_spriteStates.has(sprite)) {
-    _advanceResult.factor = 1;
-    _advanceResult.changed = false;
-    _advanceResult.transitioning = false;
-    _advanceResult.active = false;
-    _advanceResult.desired = 1;
-    return _advanceResult;
-  }
-  const screen =
-    position && scene
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-          _scratchScreen,
-        )
-      : null;
-  const cameraDistance =
-    position && camera?.positionWC
-      ? Cesium.Cartesian3.distance(camera.positionWC, position)
-      : Number.NaN;
-  return advanceSpriteFocus(sprite, {
-    screenPosition: screen,
-    cameraDistance,
-    nowMs,
-    target,
-    params,
-    spriteHalfWidthPx,
-    spriteHalfHeightPx,
-  });
 }
 
 /**

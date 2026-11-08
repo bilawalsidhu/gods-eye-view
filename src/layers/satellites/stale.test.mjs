@@ -78,7 +78,7 @@ async function fixture(t) {
     layerState: { isExplicitLayerStateOrigin: () => false },
     focus: {
       clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
+      publishFocusTargetAt: noop,
       getFocusTarget: () => null,
     },
     context: {

@@ -48,7 +48,7 @@ export function createRendering({
     nearFarScalarValueAtDistance,
     advanceSpriteFocus,
     focusAlphaNeedsWrite,
-    publishFocusTargetFromCachedPosition,
+    publishFocusTargetAt,
   } = services.focus;
 
   const scratchFocusScreen = new Cesium.Cartesian2();
@@ -252,11 +252,7 @@ export function createRendering({
 
   /** Publish the tracked satellite's focus rectangle from its cached position. */
   function _publishTrackedFocus(target) {
-    publishFocusTargetFromCachedPosition({
-      ...target,
-      scene: layerState._viewer?.scene,
-      camera: layerState._viewer?.camera,
-    });
+    publishFocusTargetAt({ ...target, viewer: layerState._viewer });
   }
 
   /**
