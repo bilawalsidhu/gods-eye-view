@@ -65,7 +65,7 @@ function subjectCanvasPosition() {
 }
 
 /**
- * Note where the followed track is drawn as a press begins, for a
+ * Note where the selected ship is drawn as a press begins, for a
  * double-click whose first click moves it. The second press of the gesture
  * keeps the first one's picture: by then the first click may have moved it.
  * @param {number} [nowMs]
@@ -74,6 +74,12 @@ export function onScenePointerDown(nowMs = performance.now()) {
   if (this.active || this.destroyed) return;
   const start = this.doubleClickStart;
   if (start && nowMs - start.atMs <= DOUBLE_CLICK_MEMORY_MS) return;
+  // Only a ship moves under its own click (selecting it re-centres the
+  // camera); a followed aircraft stays put, so its hit area stays its own.
+  if (this.resolveEntryKind() !== 'vessel') {
+    this.doubleClickStart = null;
+    return;
+  }
   const at = subjectCanvasPosition.call(this);
   this.doubleClickStart = at ? { x: at.x, y: at.y, atMs: nowMs } : null;
 }

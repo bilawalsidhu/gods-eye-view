@@ -1415,6 +1415,28 @@ test('a fix the feed keeps re-serving goes on ageing into a stale feed', async (
   assert.match($('#cockpit-aircraft-meta').textContent, /STALE FEED/);
 });
 
+test('a followed aircraft keeps its own double-click hit area', async (t) => {
+  const aircraftInfo = {
+    icao24: 'abc123',
+    callsign: 'TEST1',
+    latitude: 54.5,
+    longitude: 10.2,
+    altitudeM: 3000,
+    velocityMps: 200,
+    track: 45,
+    onGround: false,
+  };
+  const { cockpit, viewer, aircraft } = fixture(t, { aircraftInfo });
+  viewer.trackedEntity = aircraft;
+  heightSensitiveProjection(viewer);
+  // Drawn at (400, -2700) as the press begins, at (600, -2700) by the
+  // double-click: a click there is not on the aircraft.
+  cockpit.onScenePointerDown(1000);
+  heightSensitiveProjection(viewer, { x: 600 });
+  assert.equal(cockpit.onSceneDoubleClick({ x: 400, y: -2700 }, 1250), false);
+  assert.equal(cockpit.active, false);
+});
+
 test("a double-click's second press keeps the first press's picture of the ship", async (t) => {
   const { cockpit, viewer, store } = fixture(t);
   heightSensitiveProjection(viewer);
