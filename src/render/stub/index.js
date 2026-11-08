@@ -509,9 +509,38 @@ export function createStubRenderer(options = {}) {
   if (capabilities.has('fields'))
     draw.field = (spec) => {
       const handle = simpleHandle('field', spec);
+      const record = sets.get(spec.id);
+      // 'drawn': once the next render after the spec or an update has drawn
+      // it, while it shows.
+      const drawnListeners = [];
+      let owed = true;
+      const key = { field: spec.id };
+      frameFlushes.set(key, () => {
+        if (!owed || !record.show || sets.get(spec.id) !== record) return;
+        owed = false;
+        deliver(drawnListeners);
+      });
+      const dispose = handle.dispose;
+      handle.dispose = () => {
+        frameFlushes.delete(key);
+        for (const entry of drawnListeners) entry.live = false;
+        drawnListeners.length = 0;
+        dispose();
+      };
       handle.update = (patch) => {
-        Object.assign(sets.get(spec.id).spec, patch);
+        Object.assign(record.spec, patch);
+        owed = true;
         requestRender('draw');
+      };
+      handle.on = (event, cb) => {
+        if (event !== 'drawn') return () => {};
+        const entry = { cb, live: true };
+        drawnListeners.push(entry);
+        return () => {
+          entry.live = false;
+          const i = drawnListeners.indexOf(entry);
+          if (i >= 0) drawnListeners.splice(i, 1);
+        };
       };
       return handle;
     };

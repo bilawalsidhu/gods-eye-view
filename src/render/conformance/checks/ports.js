@@ -722,6 +722,71 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.field.rasterShell',
+      "a shell's 'drawn' comes once per change, never while hidden",
+      async (h, r) => {
+        await overAustin(h, r, 20000);
+        const svg = (fill) => ({
+          svg: `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${fill}"/></svg>`,
+        });
+        const errors = [];
+        const offError = r.on('error', (e) => errors.push(e));
+        const field = r.draw.field({
+          kind: 'rasterShell',
+          id: 'conf:shell',
+          image: svg('#0a84ff'),
+          rectangle: { west: -98.5, south: 29.5, east: -97, north: 31 },
+          heightM: 8000,
+          alpha: 0.6,
+        });
+        let drawnCount = 0;
+        const off = field.on('drawn', () => (drawnCount += 1));
+        // Frames until 'drawn' has come `want` times, for at most 20 s.
+        const until = async (want) => {
+          const deadline = Date.now() + 20000;
+          while (drawnCount < want && Date.now() < deadline)
+            await drawn(h, r, 1);
+        };
+        try {
+          await until(1);
+          equal(drawnCount, 1, 'drawn once made');
+          await drawn(h, r, 4);
+          equal(drawnCount, 1, 'not again while nothing changes');
+          field.update({ image: svg('#ff3b30') });
+          await until(2);
+          equal(drawnCount, 2, 'drawn after a new image');
+          field.update({ alpha: 0.3 });
+          await until(3);
+          equal(drawnCount, 3, 'drawn after a new alpha');
+          field.show = false;
+          field.update({ liftM: 500 });
+          await drawn(h, r, 6);
+          equal(drawnCount, 3, 'never while hidden');
+          field.show = true;
+          await until(4);
+          equal(drawnCount, 4, 'drawn once shown again');
+          await drawn(h, r, 4);
+          equal(drawnCount, 4, 'and only once');
+          deepEqual(errors, [], 'no errors');
+          await listenerRules(
+            r,
+            "field.on('drawn')",
+            (cb) => field.on('drawn', cb),
+            async () => {
+              const want = drawnCount + 1;
+              field.update({ alpha: drawnCount % 2 ? 0.4 : 0.5 });
+              await until(want);
+            },
+          );
+        } finally {
+          off();
+          offError();
+          field.dispose();
+        }
+      },
+      { capability: 'fields' },
+    ),
+    check(
       'draw.drawOrder',
       'of sets drawn over depth, the higher draw order is on top and picked',
       async (h, r) => {

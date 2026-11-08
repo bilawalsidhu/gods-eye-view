@@ -53,6 +53,14 @@ optional, so a renderer written before it still conforms:
   normals) that only darkens, at most `strength` opacity. The Cesium port
   draws it as a globe material it takes only while no one else holds the
   globe's material; it has no `relief` kind.
+- Fields: `windStreamlines` takes `alpha` (changed without a rebuild) and
+  `paused`; `rasterShell` replaces `detailWindow` with
+  `detail: {image, rectangle}`, a sharper image drawn in place of the base
+  one, and says how shells stack, blend and update. `FieldHandle.on('drawn')`
+  says once per spec or `update` that it is drawn, never while hidden. These
+  change `fields` itself rather than add to it, so the renderer follows
+  `fields` before must follow them; only the stub lists it, and the Cesium
+  adapter has no `fields` yet.
 - `camera.on('changed', cb, { threshold })` measures each listener by its
   own threshold under the capability `cameraChangeThreshold`; a renderer
   without it fires every `changed` listener at 0.5.

@@ -407,6 +407,10 @@ export type FieldSpec =
       style: { color: Color; widthPx: number; speedFactor?: number };
       /** Draw height, metres; omitted drapes on the surface. */
       heightM?: number;
+      /** 0..1, changeable without a rebuild (fade by height). */
+      alpha?: number;
+      /** Draw the paths still, dimmed. */
+      paused?: boolean;
     }
   | {
       kind: 'scalarRaster';
@@ -420,20 +424,36 @@ export type FieldSpec =
       alpha?: number;
     }
   | {
+      /**
+       * A raster on a sphere raised above the ground. Shells draw in
+       * ascending `heightM`, alpha-blended and unlit; they are never picked
+       * and never in height queries. Changing `liftM` or `alpha` never
+       * rebuilds. An `update` that changes `image`, `rectangle` or `detail`
+       * keeps drawing what it drew until the new content can be drawn whole.
+       */
       kind: 'rasterShell';
       id: string;
-      /** A raster on a sphere raised above the ground. */
       image: ImageRef;
       rectangle: GeoRect;
       heightM: number;
       liftM?: number;
-      /** Full detail inside this rectangle only. */
-      detailWindow?: GeoRect;
+      /**
+       * A sharper image drawn in place of `image` inside its own
+       * `rectangle`, never blended with it; null or omitted: none.
+       */
+      detail?: { image: ImageRef; rectangle: GeoRect } | null;
       alpha?: number;
     };
 
 export interface FieldHandle extends Handle {
   update(patch: Partial<FieldSpec>): void;
+  /**
+   * `fields`: what the spec or the last `update` asked for is drawn now.
+   * Once per such change; never while hidden. Changes made before one is
+   * drawn (the spec and updates, or updates while hidden) are told once,
+   * when the latest is drawn.
+   */
+  on(event: 'drawn', cb: () => void): Off;
 }
 
 export type CelestialSpec =
