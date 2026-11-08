@@ -129,7 +129,7 @@ export function createHud(ctx) {
   function fmtSep(m) {
     if (m >= 10e3) return `${fmtNum(m / 1000)}<small>km</small>`;
     if (m >= 1000) return `${(m / 1000).toFixed(1)}<small>km</small>`;
-    return `${Math.round(m / 5) * 5}<small>m</small>`;
+    return `${Math.round(m / 10) * 10}<small>m</small>`;
   }
   function perSecond(r) {
     if (r < 90) return `${Math.round(r)} sec`;
