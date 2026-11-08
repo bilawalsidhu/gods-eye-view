@@ -15,7 +15,6 @@
   "src/layers/launches/launchPad.js",
   "src/layers/launches/orbitRendering.js",
   "src/layers/launches/rendering.js",
-  "src/layers/radio/rendering.js",
   "src/layers/recentImagery/rendering.js",
   "src/layers/satellites/rendering.js",
   "src/layers/traffic/rendering.js",

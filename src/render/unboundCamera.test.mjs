@@ -92,6 +92,9 @@ const DRAW_FROM_CALLER = new Set([
   // Its heat cells and fire glows draw through `drawOf`; its cards and LOD
   // watcher read the eye, projection and frames through the ports.
   './layers/firms',
+  // Its station dots, clusters and selected marker draw through `drawOf`;
+  // it clusters them on screen through the camera and query ports.
+  './layers/radio',
   // Its data packs draw through `drawOf`; its flights ask `cameraOf`, which
   // throws until then too.
   './scenes',

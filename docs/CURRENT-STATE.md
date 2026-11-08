@@ -1335,6 +1335,14 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+The stations, their clusters and the selected marker draw through the
+renderer's draw port, and the layer no longer reaches Cesium. Stations drawn
+too close together on screen stand behind one cluster dot, grouped as the
+default renderer's entity clustering grouped them (`geo/screenCluster.js`,
+42 px, three or more), reclustered as the camera moves and when the filter
+changes. A caller handing the layer a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT

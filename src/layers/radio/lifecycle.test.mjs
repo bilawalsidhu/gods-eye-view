@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createLifecycle } from './lifecycle.js';
 import { createRendering } from './rendering.js';
 import { createState } from './state.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 const overlays = () => ({
   clearOverlaySource() {},
@@ -10,7 +11,7 @@ const overlays = () => ({
   setOverlayEntries() {},
 });
 
-/** A viewer whose data sources and entities record what was done to them. */
+/** A viewer whose data sources and entities would record what was done to them. */
 function recordingViewer() {
   const calls = [];
   return {
@@ -24,7 +25,7 @@ function recordingViewer() {
   };
 }
 
-test('the stations data source is added once, clustered, and removed with its listener', () => {
+test('the stations draw sets are made once, cluster on camera moves, and go with their listener', () => {
   const services = {
     ground: { cachedGroundFloor: () => null },
     overlays: overlays(),
@@ -33,28 +34,52 @@ test('the stations data source is added once, clustered, and removed with its li
   const state = createState({ services });
   const rendering = createRendering({ state, services, parts: {} });
   const viewer = recordingViewer();
-  state._viewer = viewer;
+  const changed = new Set();
+  const camera = {
+    pose: () => null,
+    on(event, cb) {
+      assert.equal(event, 'changed');
+      changed.add(cb);
+      return () => changed.delete(cb);
+    },
+  };
+  const { draw, unbind } = bindFakeDraw(viewer, { camera });
+  try {
+    state._viewer = viewer;
 
-  rendering.installDataSource(viewer);
-  const source = state._dataSource;
-  assert.ok(source, 'a data source is made');
-  assert.equal(source.name, 'Radio stations');
-  assert.equal(source.clustering.enabled, true);
-  assert.equal(typeof state._removeClusterListener, 'function');
-  rendering.installDataSource(viewer);
-  assert.deepEqual(viewer.calls, [['add', source]], 'added once');
+    rendering.installDataSource(viewer);
+    const ids = () =>
+      [...draw.sets.values()]
+        .filter((set) => !set.disposed)
+        .map((set) => `${set.kind}:${set.spec.id.replace(/^radio:\d+:/, '')}`);
+    assert.deepEqual(ids(), [
+      'points:stations',
+      'points:clusters',
+      'points:selected',
+      'icons:selected-bracket',
+    ]);
+    assert.equal(changed.size, 1, 'clusters again as the camera moves');
+    rendering.installDataSource(viewer);
+    assert.equal(ids().length, 4, 'made once');
 
-  rendering.setStationsShown(false);
-  assert.equal(source.show, false);
+    rendering.setStationsShown(false);
+    assert.equal(draw.find('radio:').show, false);
+    assert.equal(
+      [...draw.sets.values()].find((set) => set.spec.id.endsWith(':clusters'))
+        .show,
+      false,
+    );
 
-  rendering.removeDataSource();
-  assert.deepEqual(viewer.calls.at(-1), ['remove', source, true]);
-  assert.equal(state._dataSource, null);
-  assert.equal(state._removeClusterListener, null);
-  assert.equal(source.clustering.clusterEvent.numberOfListeners, 0);
+    rendering.removeDataSource();
+    assert.deepEqual(ids(), [], 'every set goes');
+    assert.equal(changed.size, 0, 'and its camera listener');
+    assert.deepEqual(viewer.calls, [], 'no Cesium data source or entity');
+  } finally {
+    unbind();
+  }
 });
 
-test('the lifecycle leaves the Cesium data source and entities to the rendering part', () => {
+test("the lifecycle leaves the stations' draw sets to the rendering part", () => {
   const services = { overlays: overlays() };
   const state = createState({ services });
   const done = [];

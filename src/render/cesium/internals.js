@@ -47,15 +47,6 @@ export function billboardCollectionOf(billboard) {
 }
 
 /**
- * The point collection an `EntityCluster` draws its cluster markers into.
- * @param {object} clustering Cesium EntityCluster.
- * @returns {object|null} Cesium PointPrimitiveCollection.
- */
-export function clusterPointCollection(clustering) {
-  return clustering?._clusterPointCollection || null;
-}
-
-/**
  * Close the widget's pending render-loop latch after `useDefaultRenderLoop`
  * is set false, so a callback already queued sees the loop as stopped and
  * manual renders start without waiting a vsync.

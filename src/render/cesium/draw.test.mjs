@@ -3009,6 +3009,99 @@ test('the FIRMS layer draws its fire glows as one GPU icon set on a viewer of it
   assert.equal(scene.added.length, 0);
 });
 
+test('the Radio layer draws its stations, clusters and selected marker as point and billboard sets', async () => {
+  const { withRadioLayer, radioStationRow } =
+    await import('../../testSupport/radioLayerHarness.mjs');
+  const { radioLayer, radioStationIdFromPick } =
+    await import('../../data/radio.js');
+  const { fromDegrees, toLonLatH, WGS84 } =
+    await import('../../geo/ellipsoid.js');
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  // A flat projection, 1000 CSS px a degree from (-98, 31) at the top left.
+  const renderer = {
+    draw: part.port,
+    canvas: { clientWidth: 2000, clientHeight: 1000 },
+    camera: {
+      pose: () => ({ position: fromDegrees(-97, 30, 1e6), height: 1e6 }),
+      on: () => () => {},
+    },
+    query: {
+      project(p) {
+        const { lon, lat } = toLonLatH(p, WGS84);
+        return { x: (lon + 98) * 1000, y: (31 - lat) * 1000 };
+      },
+    },
+  };
+  const station = (n, lon, lat) =>
+    radioStationRow({
+      id: `00000000-0000-4000-8000-0000000000${String(n).padStart(2, '0')}`,
+      name: `Station ${n}`,
+      lon,
+      lat,
+      tags: ['news'],
+      streamUrl: `https://radio.example.com/${n}.mp3`,
+    });
+  const stations = [
+    station(1, -97.0, 30.0),
+    station(2, -96.98, 30.0),
+    station(3, -97.0, 29.98),
+    station(4, -96.5, 30.0),
+  ];
+  await withRadioLayer({ stations, renderer }, async () => {
+    const rows = (pattern) => {
+      const out = [];
+      for (const host of scene.added) {
+        const collections =
+          host instanceof Cesium.PrimitiveCollection
+            ? [host.get(0), host.get(1)]
+            : [host];
+        for (const collection of collections)
+          for (let i = 0; i < (collection?.length ?? 0); i += 1) {
+            const primitive = collection.get(i);
+            if (pattern.test(primitive.id?.set)) out.push(primitive);
+          }
+      }
+      return out;
+    };
+    const dots = rows(/^radio:\d+:stations$/);
+    assert.equal(dots.length, 4);
+    assert.ok(dots.every((dot) => dot instanceof Cesium.PointPrimitive));
+    const lone = dots.find((dot) => dot.show);
+    assert.equal(lone.id.id, `radio:${stations[3].id}`, 'the others are in a cluster');
+    assert.equal(lone.pixelSize, 13);
+    assert.equal(lone.outlineWidth, 1);
+    assert.ok(Math.abs(lone.color.alpha - 0.86) < 1e-6);
+    assert.equal(lone.disableDepthTestDistance, Number.POSITIVE_INFINITY);
+    assert.equal(lone.distanceDisplayCondition.far, 50_000_000);
+    assert.equal(lone.scaleByDistance.nearValue, 1.15);
+    assert.equal(radioStationIdFromPick({ primitive: lone, id: lone.id }), stations[3].id);
+
+    const [cluster] = rows(/^radio:\d+:clusters$/);
+    assert.deepEqual(
+      cluster.id.meta.stationIds,
+      stations.slice(0, 3).map((s) => s.id),
+    );
+    assert.equal(cluster.pixelSize, 12 + Math.log2(3) * 1.6);
+    assert.equal(cluster.outlineWidth, 2);
+    assert.equal(radioStationIdFromPick({ primitive: cluster, id: cluster.id }), stations[0].id);
+
+    radioLayer.selectStation(stations[3].id, { autoplay: false, focus: false });
+    const [selected] = rows(/^radio:\d+:selected$/);
+    const [bracket] = rows(/^radio:\d+:selected-bracket$/);
+    assert.equal(selected.pixelSize, 14);
+    assert.equal(selected.id.id, `radio:selected:${stations[3].id}`);
+    assert.ok(bracket instanceof Cesium.Billboard);
+    assert.equal(bracket.width, 40);
+    assert.equal(bracket.scaleByDistance.farValue, 0.72);
+    assert.equal(radioStationIdFromPick({ primitive: bracket, id: bracket.id }), stations[3].id);
+  });
+  assert.equal(scene.added.length, 0, 'gone with the layer');
+});
+
 test('vessels on a host with no sprite-set registry still draw, and say so once', async (t) => {
   const warnings = [];
   t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));

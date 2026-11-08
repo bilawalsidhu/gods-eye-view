@@ -10,7 +10,6 @@ import {
   billboardLoadError,
   cameraFlightActive,
   closeRenderLoopLatch,
-  clusterPointCollection,
   commandExtents,
   creditDisplayContents,
   defaultView,
@@ -43,7 +42,6 @@ test('every private field the app reaches is still declared by the installed Ces
     [ENGINE, 'Scene/Picking.js', '_pickOffscreenView'],
     [ENGINE, 'Scene/View.js', '_commandExtents'],
     [ENGINE, 'Scene/Billboard.js', '_billboardCollection'],
-    [ENGINE, 'DataSources/EntityCluster.js', '_clusterPointCollection'],
     [ENGINE, 'Widget/CesiumWidget.js', '_renderLoopRunning'],
     [WIDGETS, 'Viewer/Viewer.js', '_cesiumWidget'],
     [ENGINE, 'Renderer/Context.js', '_gl'],
@@ -125,11 +123,6 @@ test('the helpers read and write exactly those fields', () => {
     billboardCollectionOf({ _billboardCollection: collection }),
     collection,
   );
-  assert.equal(
-    clusterPointCollection({ _clusterPointCollection: collection }),
-    collection,
-  );
-  assert.equal(clusterPointCollection(undefined), null);
   const widget = { _renderLoopRunning: true };
   closeRenderLoopLatch({ _cesiumWidget: widget });
   assert.equal(widget._renderLoopRunning, false);
