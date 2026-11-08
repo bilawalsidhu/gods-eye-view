@@ -403,6 +403,86 @@ function carrisMetropolitanaRouteLabel(routeId) {
 }
 
 /**
+ * Route ids that wrap the rider-facing line in a fixed prefix, suffix or
+ * zero-padding. The returned function yields the captured line, or the id
+ * unchanged when it does not match the operator's pattern.
+ * @param {RegExp} pattern One capture group: the line a rider would say.
+ * @returns {(routeId: string|null) => string|null}
+ */
+function routeIdPattern(pattern) {
+  return (routeId) => {
+    const match = pattern.exec(routeId ?? '');
+    return match ? match[1] : routeId;
+  };
+}
+
+/** Prague PID: `L125` is line 125. */
+const pidRouteLabel = routeIdPattern(/^L(\d+)$/);
+/** Zero-padded numbers (Edmonton `005`, Toulon `0002`, Bordeaux `01`). */
+const unpaddedRouteLabel = routeIdPattern(/^0+(\d+\w*)$/);
+/** Turin GTT appends `U` (urban) to the line: `10NU` is night line 10N. */
+const gttRouteLabel = routeIdPattern(/^(\w+?)U$/);
+/** Venice ACTV appends the network: `5.1_UN` is waterbus line 5.1, `53E_ES` bus 53E. */
+const actvRouteLabel = routeIdPattern(/^(.+)_[A-Z]{2}$/);
+/** BC Transit appends the system: `95-VIC` is Victoria route 95. */
+const bcTransitRouteLabel = routeIdPattern(/^(.+)-VIC$/);
+/** Carris (Lisbon city) appends a variant: `172_1` is route 172. */
+const carrisRouteLabel = routeIdPattern(/^(\w+)_\d+$/);
+/** bus-tracker.fr prefixes the network: `TCAR:93` is Rouen line 93. */
+const busTrackerRouteLabel = routeIdPattern(/^[A-Z]+:(.+)$/);
+/** BAS.MY Johor appends a fixed operator code: `J33CWLMYJB` is route J33. */
+const mybasJohorRouteLabel = routeIdPattern(/^(.+?)CWLMYJB$/);
+
+/**
+ * Le Havre LiA runs its two tram lines as A and B; every other line is a bus.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function liaRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  return /^(?:[A-Z]+:)?[AB]$/.test(routeId) ? 'tram' : 'bus';
+}
+
+/**
+ * Prague PID numbers its day and night trams below 100 and its buses from 100
+ * up; anything else (rail, ferries, the funicular) is left unresolved.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function pidRouteMode(routeId) {
+  const match = /^L(\d+)$/.exec(routeId ?? '');
+  if (!match) return 'unknown';
+  return Number(match[1]) < 100 ? 'tram' : 'bus';
+}
+
+/**
+ * Bordeaux TBM runs trams on lettered lines A–D; every numbered line is a bus.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function tbmRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  return /^[A-D]$/.test(routeId) ? 'tram' : 'bus';
+}
+
+/**
+ * A registry entry, frozen with its centre and terms, and switched on.
+ * @param {object} fields
+ * @returns {Readonly<object>}
+ */
+function transitFeed(fields) {
+  return Object.freeze({
+    defaultEnabled: true,
+    ...fields,
+    center: Object.freeze({ ...fields.center }),
+    terms: Object.freeze({ ...fields.terms }),
+    ...(fields.headers
+      ? { headers: Object.freeze({ ...fields.headers }) }
+      : {}),
+  });
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -849,6 +929,562 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     defaultMode: 'bus',
     routeLabel: carrisMetropolitanaRouteLabel,
     speedUnit: 'km/h',
+  }),
+  transitFeed({
+    id: 'pid-praha',
+    name: 'Prague PID',
+    operator: 'Pražská integrovaná doprava (PID), via Golemio',
+    region: 'Prague and Central Bohemia, Czechia',
+    // PID reaches across Central Bohemia: on 2026-11-08, 95% of 923 vehicles
+    // sat within 58 km of Prague, the farthest at 98 km.
+    center: { lat: 50.08, lon: 14.45 },
+    loadRadiusKm: 60,
+    url: 'https://api.golemio.cz/v2/vehiclepositions/gtfsrt/vehicle_positions.pb',
+    license: 'CC BY',
+    licenseUrl: 'https://pid.cz/o-systemu/opendata/',
+    attribution: 'Pražská integrovaná doprava (PID) / Golemio',
+    terms: {
+      quote:
+        'Data, která lze stáhnout přímo zde z webu, jsou stejně jako celý obsah webu opatřena licencí CC-BY',
+      note: 'The PID open-data page lists this realtime feed and licenses the data it publishes under CC BY, crediting the author and any changes. The same page says data served from other sources follows that source’s licence; the feed is served by Golemio, the city’s data platform, which states none of its own. Keyless since the catalogue moved it off the X-Access-Token endpoint. Speeds are m/s, checked against movement on 2026-11-07. Route ids are `L` plus the line number; lines below 100 are trams.',
+    },
+    defaultMode: 'bus',
+    routeLabel: pidRouteLabel,
+    routeMode: pidRouteMode,
+  }),
+  transitFeed({
+    id: 'ztm-warszawa',
+    name: 'Warsaw buses and trams',
+    operator: 'Miasto Stołeczne Warszawa, relayed by mkuran.pl',
+    region: 'Warsaw, Poland',
+    center: { lat: 52.25, lon: 21.02 },
+    loadRadiusKm: 30,
+    url: 'https://mkuran.pl/gtfs/warsaw/vehicles.pb',
+    license: 'Warsaw Open Data Project Usage Terms',
+    licenseUrl: 'https://mkuran.pl/gtfs/',
+    attribution: 'Miasto Stołeczne Warszawa (api.um.warszawa.pl)',
+    terms: {
+      quote:
+        'The City Hall requires a credit by providing the name Miasto Stołeczne Warszawa, data download date (use the timestamp from the FeedHeader) and link to http://api.um.warszawa.pl.',
+      note: 'Positions come from the Warsaw City Hall API, repackaged as GTFS-RT by Mikołaj Kuranowski’s unofficial feed. The credit names the city and its API; the download date it asks for is the feed timestamp the layer already shows with each snapshot. Vehicle timestamps ran about two minutes old on 2026-11-07, which the delayed playback absorbs.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'tbm-bordeaux',
+    name: 'Bordeaux TBM',
+    operator: 'Transports Bordeaux Métropole (TBM), Bordeaux Métropole',
+    region: 'Bordeaux, France',
+    center: { lat: 44.85, lon: -0.65 },
+    loadRadiusKm: 20,
+    url: 'https://bdx.mecatran.com/utw/ws/gtfsfeed/vehicles/bordeaux?apiKey=opendata-bordeaux-metropole-flux-gtfs-rt',
+    license: 'Licence Ouverte / Etalab 2.0',
+    licenseUrl:
+      'https://transport.data.gouv.fr/datasets/offres-de-services-bus-tram-et-scolaire-au-format-gtfs-netex-gtfs-rt-siri-lite',
+    attribution: 'Bordeaux Métropole (TBM)',
+    terms: {
+      quote: 'licence: fr-lo',
+      note: 'The quote is the licence field of the national access point’s dataset record (fr-lo is the Licence Ouverte), which asks only for credit. The `apiKey` in the URL is not a credential: it is the same fixed string printed in the open-data listing for everyone. Speeds are m/s. Trams run on lettered lines A–D; numbered lines are buses.',
+    },
+    defaultMode: 'bus',
+    routeLabel: unpaddedRouteLabel,
+    routeMode: tbmRouteMode,
+  }),
+  transitFeed({
+    id: 'sendai-city-bus',
+    name: 'Sendai City Bus',
+    operator: 'Sendai City Transportation Bureau (仙台市交通局), via ODPT',
+    region: 'Sendai, Japan',
+    center: { lat: 38.27, lon: 140.82 },
+    loadRadiusKm: 22,
+    url: 'https://api-public.odpt.org/api/v4/gtfs/realtime/odpt_SendaiMunicipal_bus_realtime_information_vehicle',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    attribution: '仙台市交通局 (Sendai City Transportation Bureau) / ODPT',
+    terms: {
+      quote: 'https://creativecommons.org/licenses/by/4.0/',
+      note: 'Served by the Open Data Challenge for Public Transportation (ODPT) public API, which needs no key for this feed; the catalogue records CC BY 4.0 as its licence. Vehicle timestamps ran about two minutes old on 2026-11-07. Speeds are m/s.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'ztm-poznan',
+    name: 'Poznań buses and trams',
+    operator: 'Zarząd Transportu Miejskiego w Poznaniu (ZTM Poznań)',
+    region: 'Poznań, Poland',
+    center: { lat: 52.39, lon: 16.92 },
+    loadRadiusKm: 20,
+    url: 'https://www.ztm.poznan.pl/pl/dla-deweloperow/getGtfsRtFile/?file=vehicle_positions.pb',
+    license: 'ZTM Poznań open-data terms',
+    licenseUrl: 'https://www.ztm.poznan.pl/otwarte-dane/dla-deweloperow/',
+    attribution: 'Zarząd Transportu Miejskiego w Poznaniu (processed)',
+    terms: {
+      quote:
+        'Treści udostępniane są bezwnioskowo i bezpłatnie, na zasadach powszechnego dostępu i stanowią źródło informacji.',
+      note: 'Reuse is free on three conditions: name the source, give the date of the last update, and say the data were processed. The credit names ZTM and says processed; the snapshot timestamp is the update date. The feed carries no bearing, so heading comes from movement between fixes.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'ztm-gdansk',
+    name: 'Gdańsk buses and trams',
+    operator: 'Zarząd Transportu Miejskiego w Gdańsku (ZTM Gdańsk)',
+    region: 'Gdańsk, Poland',
+    center: { lat: 54.35, lon: 18.6 },
+    loadRadiusKm: 20,
+    url: 'https://ckan2.multimediagdansk.pl/gtfs-rt?feed=vehiclePositions',
+    license: 'CC BY 4.0',
+    licenseUrl:
+      'https://dane.gov.pl/pl/dataset/38599,rozklady-jazdy-i-lokalizacja-przystankow-gtfs-rt',
+    attribution: 'Zarząd Transportu Miejskiego w Gdańsku',
+    terms: {
+      note: 'The national catalogue (dane.gov.pl) lists this dataset under CC BY 4.0. No bearing; heading comes from movement. Speeds are m/s.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'ets-edmonton',
+    name: 'Edmonton Transit Service',
+    operator: 'City of Edmonton (Edmonton Transit Service)',
+    region: 'Edmonton, AB',
+    center: { lat: 53.53, lon: -113.52 },
+    loadRadiusKm: 25,
+    url: 'https://gtfs.edmonton.ca/TMGTFSRealTimeWebService/Vehicle/VehiclePositions.pb',
+    license: 'City of Edmonton Open Data Agreement',
+    licenseUrl:
+      'https://www.edmonton.ca/transportation/Web-version2.1-OpenDataAgreement.pdf',
+    attribution:
+      'Contains information licensed under the Open Data Agreement – City of Edmonton',
+    terms: {
+      note: 'The agreement is the same municipal template as Mississauga and Burlington: a licence to use, modify and distribute for any lawful purpose, in any medium. It was read from search excerpts; the PDF itself would not extract here. Route ids are zero-padded. Speeds are m/s.',
+    },
+    defaultMode: 'bus',
+    routeLabel: unpaddedRouteLabel,
+  }),
+  transitFeed({
+    id: 'halifax-transit',
+    name: 'Halifax Transit',
+    operator: 'Halifax Regional Municipality (Halifax Transit)',
+    region: 'Halifax, NS',
+    center: { lat: 44.7, lon: -63.6 },
+    loadRadiusKm: 22,
+    url: 'https://gtfs.halifax.ca/realtime/Vehicle/VehiclePositions.pb',
+    license: 'Halifax Open Data Licence',
+    licenseUrl: 'https://www.halifax.ca/home/open-data/open-data-licence',
+    attribution: 'Halifax Regional Municipality (Halifax Transit)',
+    terms: {
+      note: 'The catalogue points at Halifax’s open-data licence; the licence page renders only in a browser and was not quoted. Speeds are m/s.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'bc-transit-victoria',
+    name: 'Victoria Regional Transit',
+    operator: 'BC Transit (Victoria Regional Transit System)',
+    region: 'Victoria, BC',
+    center: { lat: 48.53, lon: -123.43 },
+    loadRadiusKm: 28,
+    url: 'https://bct.tmix.se/gtfs-realtime/vehicleupdates.pb?operatorIds=48',
+    license: 'BC Transit Open Data Terms of Use',
+    licenseUrl: 'https://www.bctransit.com/open-data/terms-of-use',
+    attribution: 'BC Transit',
+    terms: {
+      quote:
+        'BC Transit grants you a limited, revocable and non-exclusive license to use, reproduce, and redistribute the Data in accordance with these Terms.',
+      note: 'The grant is revocable, like the Ontario municipal templates. Route ids carry a `-VIC` system suffix. Speeds are m/s.',
+    },
+    defaultMode: 'bus',
+    routeLabel: bcTransitRouteLabel,
+  }),
+  transitFeed({
+    id: 'tam-montpellier',
+    name: 'Montpellier TaM',
+    operator: 'Montpellier Méditerranée Métropole (TaM)',
+    region: 'Montpellier, France',
+    center: { lat: 43.61, lon: 3.87 },
+    loadRadiusKm: 20,
+    url: 'https://gtfsproxy.e-tam.fr/COMMON/VehiclePosition.pb',
+    license: 'ODbL',
+    licenseUrl:
+      'https://transport.data.gouv.fr/datasets/offre-de-transport-tam-en-temps-reel-gtfs-rt-urbain-et-suburbain',
+    attribution: 'Montpellier Méditerranée Métropole (TaM)',
+    terms: {
+      quote: 'licence: odc-odbl',
+      note: 'The quote is the dataset record’s licence field. ODbL asks for credit and share-alike on a derived database; the layer redistributes no database, it draws the positions. Speeds are km/h: readings ran 3.3 times the measured movement on 2026-11-07, so the proxy converts them.',
+    },
+    defaultMode: 'bus',
+    speedUnit: 'km/h',
+  }),
+  transitFeed({
+    id: 'ztp-krakow-bus',
+    name: 'Kraków buses',
+    operator: 'Zarząd Transportu Publicznego w Krakowie (ZTP Kraków)',
+    region: 'Kraków, Poland',
+    center: { lat: 50.06, lon: 19.94 },
+    loadRadiusKm: 22,
+    url: 'https://gtfs.ztp.krakow.pl/VehiclePositions_A.pb',
+    license: 'No licence stated',
+    licenseUrl: 'https://gtfs.ztp.krakow.pl/',
+    attribution: 'Zarząd Transportu Publicznego w Krakowie',
+    terms: {
+      note: 'ZTP publishes this feed keyless on its own GTFS server and lists it in the Mobility Database, but states no licence there or on dane.gov.pl. Shipped on the same basis as Metro Transit and OVapi; switch it off if ZTP objects.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'ztp-krakow-tram',
+    name: 'Kraków trams',
+    operator: 'Zarząd Transportu Publicznego w Krakowie (ZTP Kraków)',
+    region: 'Kraków, Poland',
+    center: { lat: 50.06, lon: 19.94 },
+    loadRadiusKm: 22,
+    url: 'https://gtfs.ztp.krakow.pl/VehiclePositions_T.pb',
+    license: 'No licence stated',
+    licenseUrl: 'https://gtfs.ztp.krakow.pl/',
+    attribution: 'Zarząd Transportu Publicznego w Krakowie',
+    terms: { note: 'Same server and basis as the bus feed.' },
+    defaultMode: 'tram',
+  }),
+  transitFeed({
+    id: 'vilnius-transport',
+    name: 'Vilnius public transport',
+    operator: 'SĮ Susisiekimo paslaugos, Vilnius',
+    region: 'Vilnius, Lithuania',
+    center: { lat: 54.69, lon: 25.28 },
+    loadRadiusKm: 20,
+    url: 'https://www.stops.lt/vilnius/vehicle_positions.pb',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2383',
+    attribution: 'SĮ Susisiekimo paslaugos (stops.lt)',
+    terms: {
+      note: 'Published keyless by the city transport agency on stops.lt; no licence found. Shipped on the same basis as Metro Transit and OVapi. Answered 522 once on 2026-11-07 and normally since.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'tpbi-bucuresti',
+    name: 'Bucharest public transport',
+    operator: 'Asociația de Dezvoltare Intercomunitară TPBI, Bucharest–Ilfov',
+    region: 'Bucharest, Romania',
+    center: { lat: 44.43, lon: 26.1 },
+    loadRadiusKm: 25,
+    url: 'https://gtfs.tpbi.ro/api/gtfs-rt/vehiclePositions',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2104',
+    attribution: 'TPBI (Transport Public București–Ilfov)',
+    terms: {
+      note: 'Keyless public endpoint from the metropolitan transport authority; no licence found. Same basis as Metro Transit and OVapi.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'roma-mobilita',
+    name: 'Rome public transport',
+    operator: 'Roma Servizi per la Mobilità',
+    region: 'Rome, Italy',
+    center: { lat: 41.89, lon: 12.5 },
+    loadRadiusKm: 35,
+    url: 'https://romamobilita.it/wp-content/uploads/shared/rome_rtgtfs_vehicle_positions_feed.pb',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1776',
+    attribution: 'Roma Servizi per la Mobilità',
+    terms: {
+      note: 'Keyless file on the agency’s own site; the catalogue’s older `/sites/default/files/` path now 404s. No licence found; same basis as Metro Transit and OVapi. Fewer than one vehicle in five carries a bearing, so most headings come from movement.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'gtt-torino',
+    name: 'Turin GTT',
+    operator: 'Gruppo Torinese Trasporti (GTT)',
+    region: 'Turin, Italy',
+    center: { lat: 45.07, lon: 7.68 },
+    loadRadiusKm: 20,
+    url: 'https://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2696',
+    attribution: 'Gruppo Torinese Trasporti (GTT)',
+    terms: {
+      note: 'Official keyless endpoint; no licence found. Same basis as Metro Transit and OVapi. Route ids append `U` for urban lines.',
+    },
+    defaultMode: 'bus',
+    routeLabel: gttRouteLabel,
+  }),
+  transitFeed({
+    id: 'actv-venezia-bus',
+    name: 'Venice ACTV buses',
+    operator: 'Azienda del Consorzio Trasporti Veneziano (ACTV)',
+    region: 'Venice, Italy',
+    center: { lat: 45.4, lon: 12.2 },
+    loadRadiusKm: 38,
+    url: 'https://tpl.actv.it/aut/GTFSRT/vehiclePositions',
+    license: 'ACTV open-data catalogue',
+    licenseUrl:
+      'https://actv.avmspa.it/it/content/catalogo-dei-dati-metadati-e-banche-dati-actv',
+    attribution: 'ACTV S.p.A.',
+    terms: {
+      note: 'ACTV lists this feed in its own open-data catalogue; that page would not render for a script, so its licence is not quoted. Same basis as Metro Transit and OVapi. Route ids append a two-letter network code (`_UM`, `_ES`, `_UN`).',
+    },
+    defaultMode: 'bus',
+    routeLabel: actvRouteLabel,
+  }),
+  transitFeed({
+    id: 'actv-venezia-waterbus',
+    name: 'Venice ACTV waterbuses',
+    operator: 'Azienda del Consorzio Trasporti Veneziano (ACTV) Navigazione',
+    region: 'Venice, Italy',
+    center: { lat: 45.43, lon: 12.33 },
+    loadRadiusKm: 15,
+    url: 'https://tpl.actv.it/nav/GTFSRT/vehiclePositions',
+    license: 'ACTV open-data catalogue',
+    licenseUrl:
+      'https://actv.avmspa.it/it/content/catalogo-dei-dati-metadati-e-banche-dati-actv',
+    attribution: 'ACTV S.p.A.',
+    terms: { note: 'Same catalogue and basis as the ACTV bus feed.' },
+    defaultMode: 'ferry',
+    routeLabel: actvRouteLabel,
+  }),
+  transitFeed({
+    id: 'adelaide-metro',
+    name: 'Adelaide Metro',
+    operator: 'Adelaide Metro (Government of South Australia)',
+    region: 'Adelaide, SA',
+    center: { lat: -34.93, lon: 138.6 },
+    loadRadiusKm: 35,
+    url: 'https://gtfs.adelaidemetro.com.au/v1/realtime/vehicle_positions',
+    // Any Accept naming a protobuf type gets base64 text labelled JSON; only
+    // */* returns the binary feed (checked 2026-11-08).
+    headers: { Accept: '*/*' },
+    license: 'No licence stated for the realtime feed',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1772',
+    attribution: 'Adelaide Metro',
+    terms: {
+      note: 'Official keyless endpoint; the state catalogue page refused automated reads, so no licence is quoted. Same basis as Metro Transit and OVapi. Speeds are m/s. The server picks its encoding from Accept, hence the override.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'marta-atlanta',
+    name: 'MARTA buses',
+    operator: 'Metropolitan Atlanta Rapid Transit Authority (MARTA)',
+    region: 'Atlanta, GA',
+    center: { lat: 33.78, lon: -84.39 },
+    loadRadiusKm: 35,
+    url: 'https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-1601',
+    attribution: 'MARTA',
+    terms: {
+      note: 'Official keyless endpoint; no licence found. Same basis as Metro Transit and OVapi. Speeds are m/s.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'rtd-denver',
+    name: 'Denver RTD',
+    operator: 'Regional Transportation District (RTD), Denver',
+    region: 'Denver, CO',
+    center: { lat: 39.75, lon: -104.99 },
+    loadRadiusKm: 55,
+    url: 'https://open-data.rtd-denver.com/files/gtfs-rt/rtd/VehiclePosition.pb',
+    license: 'RTD GTFS-realtime licence agreement',
+    licenseUrl:
+      'https://www.rtd-denver.com/business-center/open-spatial-data/gtfs-realtime-license-agreement',
+    attribution: 'Regional Transportation District (RTD)',
+    terms: {
+      note: 'RTD links a licence agreement for its realtime feeds; the page refused automated reads (403), so it is not quoted. The feed itself is keyless. Speeds are m/s.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'ctp-cluj',
+    name: 'Cluj-Napoca CTP',
+    operator: 'Compania de Transport Public Cluj-Napoca',
+    region: 'Cluj-Napoca, Romania',
+    center: { lat: 46.77, lon: 23.59 },
+    loadRadiusKm: 15,
+    url: 'https://cluj-rt-feed.gtfs.ro/vehiclePositions',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2614',
+    attribution: 'Compania de Transport Public Cluj-Napoca',
+    terms: {
+      note: 'Keyless; no licence found. Same basis as Metro Transit and OVapi.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'ctp-iasi',
+    name: 'Iași CTP',
+    operator: 'Compania de Transport Public Iași',
+    region: 'Iași, Romania',
+    center: { lat: 47.16, lon: 27.59 },
+    loadRadiusKm: 15,
+    url: 'https://iasi-rt-feed.gtfs.ro/vehiclePositions',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2118',
+    attribution: 'Compania de Transport Public Iași',
+    terms: {
+      note: 'Keyless; no licence found. Same basis as Metro Transit and OVapi.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'mpk-rzeszow',
+    name: 'Rzeszów city transport',
+    operator: 'Rzeszowski Transport Miejski (MPK Rzeszów)',
+    region: 'Rzeszów, Poland',
+    center: { lat: 50.04, lon: 22.0 },
+    loadRadiusKm: 15,
+    url: 'https://www.mpkrzeszow.pl/gtfs/rt/gtfsrt.pb',
+    license: 'MPK Rzeszów open data',
+    licenseUrl: 'https://www.mpkrzeszow.pl/otwartedane/',
+    attribution: 'MPK Rzeszów',
+    terms: {
+      note: 'Listed on the operator’s open-data page, which names no licence. No bearing; heading comes from movement.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'emt-malaga',
+    name: 'Málaga EMT',
+    operator: 'Empresa Malagueña de Transportes (EMT)',
+    region: 'Málaga, Spain',
+    center: { lat: 36.72, lon: -4.42 },
+    loadRadiusKm: 15,
+    url: 'https://gtfs.emtmalaga.es/GTFSRTapi/api/vehicleposition',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2213',
+    attribution: 'EMT Málaga',
+    terms: {
+      note: 'Keyless; no licence found. Same basis as Metro Transit and OVapi. No bearing; heading comes from movement.',
+    },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'carris-lisboa',
+    name: 'Carris (Lisbon city)',
+    operator: 'Carris – Companhia Carris de Ferro de Lisboa',
+    region: 'Lisbon, Portugal',
+    center: { lat: 38.74, lon: -9.15 },
+    loadRadiusKm: 15,
+    url: 'https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS/realtime/vehiclepositions',
+    license: 'No licence stated',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-2930',
+    attribution: 'Carris',
+    terms: {
+      note: 'Keyless official gateway; no licence found. Same basis as Metro Transit and OVapi. Carries neither bearing nor speed, and vehicle reports run about a minute old. Route ids append a variant.',
+    },
+    defaultMode: 'bus',
+    routeLabel: carrisRouteLabel,
+  }),
+  transitFeed({
+    id: 'mybas-johor',
+    name: 'BAS.MY Johor Bahru',
+    operator: 'BAS.MY, via data.gov.my',
+    region: 'Johor Bahru, Malaysia',
+    center: { lat: 1.51, lon: 103.75 },
+    loadRadiusKm: 35,
+    url: 'https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-johor/',
+    license: 'No licence stated for the feed',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3174',
+    attribution: 'BAS.MY / data.gov.my',
+    terms: {
+      note: 'Served keyless by Malaysia’s national open-data API; no licence for the feed was found. Same basis as Metro Transit and OVapi. Without the trailing slash the API redirects. Route ids append an operator code.',
+    },
+    defaultMode: 'bus',
+    routeLabel: mybasJohorRouteLabel,
+  }),
+  transitFeed({
+    id: 'mybas-kota-bharu',
+    name: 'BAS.MY Kota Bharu',
+    operator: 'BAS.MY, via data.gov.my',
+    region: 'Kota Bharu, Malaysia',
+    // Routes run south into Kelantan: 95% of vehicles within 58 km on 2026-11-08.
+    center: { lat: 6.06, lon: 102.22 },
+    loadRadiusKm: 60,
+    url: 'https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-kota-bharu/',
+    license: 'No licence stated for the feed',
+    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3169',
+    attribution: 'BAS.MY / data.gov.my',
+    terms: { note: 'Same API and basis as Johor Bahru.' },
+    defaultMode: 'bus',
+  }),
+  transitFeed({
+    id: 'astuce-rouen',
+    name: 'Rouen Astuce',
+    operator: 'Métropole Rouen Normandie (Astuce), relayed by bus-tracker.fr',
+    region: 'Rouen, France',
+    center: { lat: 49.44, lon: 1.1 },
+    loadRadiusKm: 20,
+    url: 'https://gtfs.bus-tracker.fr/gtfs-rt/tcar/?tcar=1&tae=1&tni=1',
+    license: 'Licence Ouverte 2.0',
+    licenseUrl:
+      'https://transport.data.gouv.fr/datasets/donnees-statiques-et-temps-reel-du-reseau-astuce-metropole-rouen-normandie',
+    attribution: 'Métropole Rouen Normandie (Astuce) / bus-tracker.fr',
+    terms: {
+      quote: 'licence: lov2',
+      note: 'The metropolis publishes its realtime data under the Licence Ouverte (dataset record quoted); this registry reads it through bus-tracker.fr, an unofficial relay that merges the city’s networks into one GTFS-RT file. Route ids carry the network prefix (`TCAR:`).',
+    },
+    defaultMode: 'bus',
+    routeLabel: busTrackerRouteLabel,
+  }),
+  transitFeed({
+    id: 'mpm-toulon',
+    name: 'Toulon Mistral',
+    operator: 'Métropole Toulon Provence Méditerranée (réseau Mistral)',
+    region: 'Toulon, France',
+    center: { lat: 43.12, lon: 5.94 },
+    loadRadiusKm: 18,
+    url: 'https://feed-rdtpm-toulon.ratpdev.com/VehiclePosition/GTFS-RT',
+    license: 'Licence Ouverte 2.0',
+    licenseUrl:
+      'https://transport.data.gouv.fr/datasets/reseau-de-transport-urbain-de-la-metropole-toulon-provence-mediterranee',
+    attribution: 'Métropole Toulon Provence Méditerranée (Mistral)',
+    terms: {
+      quote: 'licence: lov2',
+      note: 'Dataset record’s licence field quoted. Speeds are km/h: readings ran 3.5 times the measured movement on 2026-11-07, so the proxy converts them. Route ids are zero-padded.',
+    },
+    defaultMode: 'bus',
+    routeLabel: unpaddedRouteLabel,
+    speedUnit: 'km/h',
+  }),
+  transitFeed({
+    id: 'lia-le-havre',
+    name: 'Le Havre LiA',
+    operator: 'Le Havre Seine Métropole (LiA), relayed by bus-tracker.fr',
+    region: 'Le Havre, France',
+    center: { lat: 49.49, lon: 0.11 },
+    loadRadiusKm: 18,
+    url: 'https://gtfs.bus-tracker.fr/gtfs-rt/lia/vehicle-positions',
+    license: 'ODbL',
+    licenseUrl:
+      'https://transport.data.gouv.fr/datasets/reseau-de-transport-en-commun-lia-gtfs-siri',
+    attribution: 'Le Havre Seine Métropole (LiA) / bus-tracker.fr',
+    terms: {
+      quote: 'licence: odc-odbl',
+      note: 'The network publishes under ODbL (dataset record quoted); read through the bus-tracker.fr relay, which converts its SIRI feed to GTFS-RT. The layer draws positions and redistributes no database. Lines A and B are the tramway.',
+    },
+    defaultMode: 'bus',
+    routeLabel: busTrackerRouteLabel,
+    routeMode: liaRouteMode,
+  }),
+  transitFeed({
+    id: 'filbleu-tours',
+    name: 'Tours Fil Bleu',
+    operator: 'Syndicat des Mobilités de Touraine (Fil Bleu)',
+    region: 'Tours, France',
+    center: { lat: 47.39, lon: 0.69 },
+    loadRadiusKm: 18,
+    url: 'https://data.filbleu.fr/ws-tr/gtfs-rt/opendata/vehicle-positions',
+    license: 'Licence Ouverte 2.0',
+    licenseUrl:
+      'https://transport.data.gouv.fr/datasets/fil-bleu-syndicat-des-mobilites-gtfs-gtfs-rt',
+    attribution: 'Fil Bleu – Syndicat des Mobilités de Touraine',
+    terms: {
+      quote: 'licence: lov2',
+      note: 'Dataset record’s licence field quoted.',
+    },
+    defaultMode: 'bus',
   }),
 ]);
 

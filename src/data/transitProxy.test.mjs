@@ -396,3 +396,13 @@ test('client history validates response bounds, epochs and cancellation through 
     { name: 'AbortError' },
   );
 });
+
+test('Adelaide asks for */* because a protobuf Accept gets base64 text back', () => {
+  const headers = transitUpstreamHeaders(getTransitFeed('adelaide-metro'));
+  assert.equal(headers.Accept, '*/*');
+  // Every other feed keeps the protobuf-first Accept.
+  assert.match(
+    transitUpstreamHeaders(getTransitFeed('mbta')).Accept,
+    /protobuf/,
+  );
+});
