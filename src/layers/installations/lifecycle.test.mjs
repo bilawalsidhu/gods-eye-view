@@ -25,9 +25,9 @@ for (const source of [
       viewer,
       records: source ? [{ id: 'base', sources: [source] }] : [],
       recordById: new Map(),
-      dataSource: { show: false },
     };
     let markersVisible = false;
+    let drawnShown = false;
     const parts = {
       namedMarkers: {
         enable: () => {
@@ -38,7 +38,13 @@ for (const source of [
           markersVisible = false;
         },
       },
-      rendering: { attach: noop, detach: noop },
+      rendering: {
+        attach: noop,
+        detach: noop,
+        setShown: (shown) => {
+          drawnShown = shown;
+        },
+      },
       viewport: { clearUnavailableRetry: noop },
       ingestion: { setInstallationStatus: noop },
     };
@@ -61,12 +67,12 @@ for (const source of [
     try {
       for (let cycle = 0; cycle < 2; cycle++) {
         lifecycle.enable();
-        assert.equal(state.dataSource.show, true);
+        assert.equal(drawnShown, true);
         assert.equal(markersVisible, true);
         // No renderRecords or successful fetch occurs between toggles.
         assert.equal(visibleCredits.size, expected);
         lifecycle.disable();
-        assert.equal(state.dataSource.show, false);
+        assert.equal(drawnShown, false);
         assert.equal(markersVisible, false);
         assert.equal(visibleCredits.size, 0);
       }

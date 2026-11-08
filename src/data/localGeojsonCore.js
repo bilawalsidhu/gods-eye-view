@@ -8,13 +8,8 @@ import {
   findQuery,
 } from '../render/rendererOf.js';
 import { cssColor } from '../render/color.js';
-import {
-  WGS84,
-  fromDegrees,
-  fromDegreesInto,
-  toLonLatH,
-} from '../geo/ellipsoid.js';
-import { offsetFromHeadingPitchRange } from '../geo/frames.js';
+import { fromDegrees, fromDegreesInto, toLonLatH } from '../geo/ellipsoid.js';
+import { followOffsetFitting } from '../geo/frames.js';
 import { sphereFromPoints } from '../geo/sphere.js';
 import { densifyRhumb } from '../geo/rhumb.js';
 import { heightsOf } from '../queries/heights.js';
@@ -321,32 +316,19 @@ const STEM_WIDTH_PX = 3.5;
 const PIN_SIZE_PX = 8;
 const BLACK = Object.freeze([0, 0, 0, 1]);
 
-/** The range the default renderer frames a sphere of no size from. */
-const MINIMUM_FIT_RANGE_M = 100;
-
 /**
  * Where the camera frames a part it starts following, as the default
- * renderer framed an entity it started following with no view of its own:
- * looking at the bounds' centre, heading north, pitched down 45° (steeper
- * far from the ground), at the range that fits the bounds in view, within
- * the camera's zoom limits. Returned as the eye's offset from the centre,
- * east-north-up there; `at` is where the part stands.
+ * renderer framed an entity it started following with no view of its own
+ * (`followOffsetFitting`); `at` is where the part stands.
  */
 function followViewFrom(sphere, at, camera) {
   const pose = camera.pose?.();
-  const fovy = Number.isFinite(pose?.fovy) ? pose.fovy : Math.PI / 3;
-  const aspect = Number.isFinite(pose?.aspectRatio) ? pose.aspectRatio : 1;
-  const tanPhi = Math.tan(fovy / 2);
-  const tanTheta = aspect * tanPhi;
-  let range =
-    sphere.radius === 0
-      ? MINIMUM_FIT_RANGE_M
-      : Math.max(sphere.radius / tanTheta, sphere.radius / tanPhi);
-  const { minDistance = 0, maxDistance = Infinity } = camera.controls ?? {};
-  range = Math.min(Math.max(range, minDistance), maxDistance);
-  const factor =
-    2 - 1 / Math.max(1, Math.hypot(at.x, at.y, at.z) / WGS84.radii.x);
-  return offsetFromHeadingPitchRange(0, (-Math.PI / 4) * factor, range);
+  return followOffsetFitting(sphere, at, {
+    fovy: pose?.fovy,
+    aspectRatio: pose?.aspectRatio,
+    minDistance: camera.controls?.minDistance,
+    maxDistance: camera.controls?.maxDistance,
+  });
 }
 
 /** The GeoJSON loader's `marker-size` names, in pixels. */

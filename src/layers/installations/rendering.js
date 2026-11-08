@@ -1,22 +1,38 @@
 import { installationClassLabel, installationTitle } from './classLabel.js';
-import * as Cesium from 'cesium';
-// Still Cesium for its entities, so this layer loads the unbound camera
-// factory its other parts reach the renderer through.
-import '../../render/cesium/camera.js';
 import { t } from '../../i18n/index.js';
+import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
+import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { entityFollowTarget } from '../../data/followed.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { followOffsetFitting } from '../../geo/frames.js';
+import { sphereFromPoints } from '../../geo/sphere.js';
+import { heightsOf } from '../../queries/heights.js';
 import {
-  CAMERA_CHANGED_THRESHOLD,
-  LAYER_ID,
-  MAX_RENDERED,
-  COLOR_BY_CLASS,
-} from './policy.js';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import { entityRecord } from '../../data/entityRecords.js';
-import { installationMarkers } from './markerState.js';
+  drawOf,
+  findCamera,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
 
+let instances = 0;
+
+const DOT_OUTLINE = Object.freeze([0, 0, 0, 0.8]);
+const SELECTED_DOT = Object.freeze([1, 1, 1, 1]);
+
+/** A record's footprint polygons, each its rings of `[lon, lat]`. */
+const footprintsOf = (record) =>
+  record.footprints || (record.footprint ? [[record.footprint]] : []);
+
+/** A record's outline polylines of `[lon, lat]`. */
+const outlinesOf = (record) =>
+  record.outlineLines || (record.footprint ? [record.footprint] : []);
+
+/**
+ * The installations layer's drawing: a draw-port point set of site dots, a
+ * point set of the selected site's dot (so selecting one restyles no other
+ * dot), a line set of their ground outlines and a shape set of the selected
+ * site's footprint fill, on the viewer's renderer (`drawOf`).
+ */
 export function createRendering({
   state: layerState,
   services,
@@ -33,27 +49,48 @@ export function createRendering({
   const { governorRequestRender } = services.render;
   const { warmFireAnchorFloors } = services.anchors;
 
-  /** A record's class colour, for the entities. */
-  function colorFor(record) {
+  /** A record's class colour with alpha `alpha`, as the draw port takes it. */
+  function colorFor(record, alpha = null) {
     const [r, g, b, a] = parts.model.colorFor(record);
-    return new Cesium.Color(r, g, b, a);
+    return [r, g, b, alpha ?? a];
   }
 
   /**
-   * The layer's entities. They stay entities: the camera can follow a site
-   * (double-click), and the tracked card reads what it shows from them.
+   * Make the layer's draw sets, hidden until the layer is enabled, and
+   * follow a site on a double-click.
    */
   function attach(viewer) {
-    layerState.dataSource = new Cesium.CustomDataSource(
-      'military-installations',
-    );
-    viewer.dataSources.add(layerState.dataSource);
+    const draw = drawOf(viewer);
+    selectedDotKey = null;
+    const prefix = `${LAYER_ID}:${++instances}`;
+    layerState.sets = {
+      dots: draw.points({ id: `${prefix}:dots`, show: false }),
+      selected: draw.points({ id: `${prefix}:selected`, show: false }),
+      outlines: draw.lines({ id: `${prefix}:outlines`, show: false }),
+      fills: draw.shapes({ id: `${prefix}:fills`, show: false }),
+    };
   }
 
-  function detach(viewer) {
-    if (layerState.dataSource && viewer)
-      viewer.dataSources.remove(layerState.dataSource, true);
-    layerState.dataSource = null;
+  function detach() {
+    stopFollow();
+    if (layerState.sets)
+      for (const set of Object.values(layerState.sets)) set.dispose();
+    layerState.sets = null;
+  }
+
+  /** Show or hide everything the layer draws. */
+  function setShown(shown) {
+    if (!layerState.sets) return;
+    for (const set of Object.values(layerState.sets)) set.show = shown;
+    if (!shown) stopFollow();
+  }
+
+  /** Whether `setId` is one of this layer's sets. */
+  function ownsSet(setId) {
+    return Boolean(
+      layerState.sets &&
+      Object.values(layerState.sets).some((set) => set.id === setId),
+    );
   }
 
   /**
@@ -75,8 +112,7 @@ export function createRendering({
   const selectedFillIds = [];
 
   function clearSelectionFill() {
-    for (const id of selectedFillIds)
-      layerState.dataSource?.entities.removeById(id);
+    if (selectedFillIds.length) layerState.sets?.fills.remove(selectedFillIds);
     selectedFillIds.length = 0;
     selectedFillKey = null;
   }
@@ -84,68 +120,63 @@ export function createRendering({
   /** Ground geometry classifies the active surface; no height/extrusion plane. */
   function syncSelectionFill() {
     const record =
-      layerState.enabled && layerState.recordById.get(layerState.selectedId);
+      layerState.enabled &&
+      layerState.sets &&
+      layerState.recordById.get(layerState.selectedId);
     if (!record) {
       clearSelectionFill();
       return;
     }
-    const classificationType =
-      layerState.viewer.scene.globe?.show === false
-        ? Cesium.ClassificationType.CESIUM_3D_TILE
-        : Cesium.ClassificationType.BOTH;
-    const key = `${record.id}|${renderKey(record)}|${classificationType}`;
+    // Tiles alone while the globe surface is hidden, as under photoreal.
+    const clampTo =
+      findGlobe(layerState.viewer)?.isGlobeVisible?.() === false
+        ? 'tiles'
+        : 'both';
+    const key = `${record.id}|${renderKey(record)}|${clampTo}`;
     if (key === selectedFillKey) return;
     clearSelectionFill();
     selectedFillKey = key;
-    const footprints =
-      record.footprints || (record.footprint ? [[record.footprint]] : []);
-    const material = new Cesium.ColorMaterialProperty(
-      colorFor(record).withAlpha(0.22),
-    );
-    for (let i = 0; i < footprints.length; i++) {
-      const rings = footprints[i];
-      const positions = (ring) =>
-        ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat));
-      const fill = layerState.dataSource.entities.add({
-        id: `${record.id}:selected-fill:${i}`,
-        polygon: {
-          hierarchy: new Cesium.PolygonHierarchy(
-            positions(rings[0]),
-            rings
-              .slice(1)
-              .map((ring) => new Cesium.PolygonHierarchy(positions(ring))),
-          ),
-          material,
-          classificationType,
-        },
-      });
-      installationMarkers.write(fill).recordId = record.id;
-      selectedFillIds.push(fill.id);
-    }
+    const fill = colorFor(record, 0.22);
+    const meta = { installationId: record.id };
+    const items = footprintsOf(record).map((rings, i) => ({
+      id: `${record.id}:selected-fill:${i}`,
+      geometry: {
+        kind: 'polygon',
+        rings: rings.map((ring) => ring.map(([lon, lat]) => ({ lon, lat }))),
+      },
+      fill,
+      height: 'clampGround',
+      clampTo,
+      meta,
+    }));
+    if (items.length) layerState.sets.fills.upsert(items);
+    for (const item of items) selectedFillIds.push(item.id);
     governorRequestRender('installation-selection-fill');
   }
 
   function clearRendered() {
     clearSelectionFill();
-    if (layerState.dataSource?.entities)
-      layerState.dataSource.entities.removeAll();
+    stopFollow();
+    if (layerState.sets) {
+      layerState.sets.dots.clear();
+      layerState.sets.selected.clear();
+      layerState.sets.outlines.clear();
+    }
+    selectedDotKey = null;
     layerState.renderedKeys.clear();
     removeEntityContextsForLayer(LAYER_ID);
   }
 
   /**
    * Geometry identity of one rendered record. Records whose key is unchanged
-   * keep their Cesium entities across refreshes: ground-clamped outlines and
-   * classification fills rebuild asynchronously, so recreating them on every
-   * reload made unchanged sites blink.
+   * keep their drawn items across refreshes, only restyled or moved in
+   * place, so an unchanged site never blinks.
    * @param {object} record Installation record.
    * @returns {string} Stable key for the record's drawn geometry.
    */
   function renderKey(record) {
-    const footprints =
-      record.footprints || (record.footprint ? [[record.footprint]] : []);
-    const outlines =
-      record.outlineLines || (record.footprint ? [record.footprint] : []);
+    const footprints = footprintsOf(record);
+    const outlines = outlinesOf(record);
     let points = 0;
     for (const rings of footprints)
       for (const ring of rings) points += ring.length;
@@ -162,22 +193,84 @@ export function createRendering({
     ].join('|');
   }
 
-  function removeRecordEntities(id) {
-    const entities = layerState.dataSource.entities;
-    for (const entityId of layerState.renderedKeys.get(id)?.entityIds || [])
-      entities.removeById(entityId);
+  /**
+   * A site's dot. The selected site's is hidden here and drawn larger, in
+   * white, by the selected set (`selectedDotItem`): a clamped dot is
+   * restyled only by drawing it again, so its own set never changes look.
+   */
+  function dotItem(record, rendered) {
+    return {
+      id: record.id,
+      pos: {
+        lon: record.longitude,
+        lat: record.latitude,
+        height: rendered.heightM,
+      },
+      height: 'clampGround',
+      show: !record.namedArea && !rendered.selected,
+      pixelSize: 9,
+      color: colorFor(record),
+      outlineColor: DOT_OUTLINE,
+      outlineWidth: 1,
+      disableDepthTest: Number.POSITIVE_INFINITY,
+      meta: rendered.carrier,
+    };
+  }
+
+  /** The selected site's dot, as its own set draws it. */
+  function selectedDotItem(record, rendered) {
+    return {
+      ...dotItem(record, rendered),
+      show: true,
+      pixelSize: 13,
+      color: SELECTED_DOT,
+    };
+  }
+
+  /** What the selected set draws now (site, place, height), or null. */
+  let selectedDotKey = null;
+
+  /** Draw the selected site's dot, when it has one shown. */
+  function syncSelectedDot() {
+    const sets = layerState.sets;
+    if (!sets) return;
+    const rendered = layerState.selectedId
+      ? layerState.renderedKeys.get(layerState.selectedId)
+      : null;
+    const record = rendered
+      ? layerState.recordById.get(layerState.selectedId)
+      : null;
+    const key =
+      record && rendered.selected && !record.namedArea
+        ? [record.id, record.longitude, record.latitude, rendered.heightM].join(
+            '|',
+          )
+        : null;
+    if (key === selectedDotKey) return;
+    selectedDotKey = key;
+    if (key) sets.selected.set([selectedDotItem(record, rendered)]);
+    else sets.selected.clear();
+  }
+
+  /** Stop drawing a record's dot and outlines, and following it. */
+  function removeRecordItems(id, dotIds, outlineIds) {
+    const rendered = layerState.renderedKeys.get(id);
+    if (!rendered) return;
+    dotIds.push(id);
+    outlineIds.push(...rendered.outlineIds);
+    if (follow?.recordId === id) stopFollow();
     layerState.renderedKeys.delete(id);
   }
 
   /**
-   * The records that get entities this paint: the nearest `MAX_RENDERED`, plus
+   * The records that get drawn this paint: the nearest `MAX_RENDERED`, plus
    * the selected one when it falls outside that window.
    *
    * Context navigation walks the FULL nearby cohort, which is not bounded by the
-   * render cap, so selecting item 701+ used to produce no entity at all — the
-   * camera flew, `getById` returned null, and the selection was silently dropped
+   * render cap, so selecting item 701+ used to produce no marker at all — the
+   * camera flew, the lookup returned null, and the selection was silently dropped
    * on the floor, leaving the Context subject stale so NEXT offered the same
-   * installation forever. One extra entity keeps every cohort item selectable
+   * installation forever. One extra marker keeps every cohort item selectable
    * and the cohort count honest.
    * @returns {Array<object>} Records to render this paint.
    */
@@ -218,7 +311,7 @@ export function createRendering({
       }
     }
     // Post-moveEnd debounced fetches commit after the camera settles; the
-    // rebuilt entities need one frame in idle mode. (perf wave 2 fix)
+    // rebuilt markers need one frame in idle mode. (perf wave 2 fix)
     governorRequestRender('installations-render');
     if (
       layerState.records.some((r) =>
@@ -237,81 +330,74 @@ export function createRendering({
     const keys = new Map(
       records.map((record) => [record.id, renderKey(record)]),
     );
-    const entities = layerState.dataSource.entities;
-    entities.suspendEvents();
+    const removedDots = [];
+    const removedOutlines = [];
     for (const [id, rendered] of [...layerState.renderedKeys])
-      if (keys.get(id) !== rendered.key) removeRecordEntities(id);
+      if (keys.get(id) !== rendered.key)
+        removeRecordItems(id, removedDots, removedOutlines);
+    const dots = [];
+    const outlines = [];
     for (const record of records) {
-      const color = colorFor(record);
       const surfaceHeightM = installationSurfaceHeightM(record);
-      const displayPosition = Cesium.Cartesian3.fromDegrees(
+      const selectedRecord = record.id === layerState.selectedId;
+      const retained = layerState.renderedKeys.get(record.id);
+      if (retained) {
+        // Same geometry: update the marker in place (selection, floor height).
+        let changed = false;
+        if (retained.heightM !== surfaceHeightM) {
+          retained.heightM = surfaceHeightM;
+          const displayPosition = fromDegrees(
+            record.longitude,
+            record.latitude,
+            surfaceHeightM,
+          );
+          entityRecord(retained.carrier).displayPosition = () =>
+            displayPosition;
+          changed = true;
+        }
+        if (retained.selected !== selectedRecord) {
+          retained.selected = selectedRecord;
+          changed = true;
+        }
+        if (changed) dots.push(dotItem(record, retained));
+        continue;
+      }
+      const displayPosition = fromDegrees(
         record.longitude,
         record.latitude,
         surfaceHeightM,
       );
-      const selectedRecord = record.id === layerState.selectedId;
-      const retained = layerState.renderedKeys.has(record.id)
-        ? entities.getById(record.id)
-        : null;
-      if (retained) {
-        // Same geometry: update the marker in place (selection, floor height).
-        const marker = installationMarkers.write(retained);
-        if (marker.heightM !== surfaceHeightM) {
-          marker.heightM = surfaceHeightM;
-          retained.position = displayPosition;
-          entityRecord(retained).displayPosition = () => displayPosition;
-        }
-        if (marker.selected !== selectedRecord) {
-          marker.selected = selectedRecord;
-          retained.point.pixelSize = selectedRecord ? 13 : 9;
-          retained.point.color = selectedRecord ? Cesium.Color.WHITE : color;
-        }
-        continue;
-      }
-      const entityIds = [record.id];
-      layerState.renderedKeys.set(record.id, {
+      // What the dot's pick carries and the shared selection, the tracked
+      // card and a follow read this site through.
+      const carrier = { id: record.id, installationId: record.id };
+      const rendered = {
         key: keys.get(record.id),
-        entityIds,
-      });
-      const entity = layerState.dataSource.entities.add({
-        id: record.id,
-        position: displayPosition,
-        point: {
-          show: !record.namedArea,
-          pixelSize: record.id === layerState.selectedId ? 13 : 9,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          color:
-            record.id === layerState.selectedId ? Cesium.Color.WHITE : color,
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
-          outlineWidth: 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-      });
-      const outlines =
-        record.outlineLines || (record.footprint ? [record.footprint] : []);
-      for (let i = 0; i < outlines.length; i++) {
-        const outline = layerState.dataSource.entities.add({
-          id: `${record.id}:outline:${i}`,
-          polyline: {
-            positions: outlines[i].map(([lon, lat]) =>
-              Cesium.Cartesian3.fromDegrees(lon, lat),
-            ),
-            width: 2,
-            material: color.withAlpha(0.85),
-            clampToGround: true,
-            classificationType: Cesium.ClassificationType.BOTH,
-          },
-        });
-        installationMarkers.write(outline).recordId = record.id;
-        entityIds.push(outline.id);
-      }
-      Object.assign(installationMarkers.write(entity), {
+        outlineIds: [],
+        carrier,
         heightM: surfaceHeightM,
         selected: selectedRecord,
-      });
-      entityRecord(entity).trackedId = `installations:${record.id}`;
-      entityRecord(entity).displayPosition = () => displayPosition;
-      entityRecord(entity).labelModel = {
+      };
+      layerState.renderedKeys.set(record.id, rendered);
+      dots.push(dotItem(record, rendered));
+      const outlineColor = colorFor(record, 0.85);
+      const outlineMeta = { installationId: record.id };
+      const lines = outlinesOf(record);
+      for (let i = 0; i < lines.length; i++) {
+        const id = `${record.id}:outline:${i}`;
+        outlines.push({
+          id,
+          positions: lines[i].map(([lon, lat]) => fromDegrees(lon, lat)),
+          widthPx: 2,
+          mode: 'draped',
+          clampTo: 'both',
+          style: { kind: 'solid', color: outlineColor },
+          meta: outlineMeta,
+        });
+        rendered.outlineIds.push(id);
+      }
+      entityRecord(carrier).trackedId = `installations:${record.id}`;
+      entityRecord(carrier).displayPosition = () => displayPosition;
+      entityRecord(carrier).labelModel = {
         title: installationTitle(record.name) || t('MAPPED INSTALLATION'),
         details: [
           installationClassLabel(record.class),
@@ -319,7 +405,7 @@ export function createRendering({
         ],
         accent: COLOR_BY_CLASS[record.class] || '#9ca6b0',
       };
-      registerEntityContext(entity, {
+      registerEntityContext(carrier, {
         id: record.id,
         layerId: LAYER_ID,
         layerName:
@@ -340,17 +426,114 @@ export function createRendering({
         },
       });
     }
-    entities.resumeEvents();
-    const selectedEntity = layerState.selectedId
-      ? layerState.dataSource.entities.getById(layerState.selectedId)
+    const sets = layerState.sets;
+    if (removedDots.length) sets.dots.remove(removedDots);
+    if (removedOutlines.length) sets.outlines.remove(removedOutlines);
+    if (dots.length) sets.dots.upsert(dots);
+    if (outlines.length) sets.outlines.upsert(outlines);
+    syncSelectedDot();
+    const selected = layerState.selectedId
+      ? layerState.renderedKeys.get(layerState.selectedId)
       : null;
-    if (selectedEntity && (claimSelection || migratedSelection))
-      selectEntityContext(selectedEntity);
-    else if (!selectedEntity) layerState.selectedId = null;
+    if (selected && (claimSelection || migratedSelection))
+      selectEntityContext(selected.carrier);
+    else if (!selected) layerState.selectedId = null;
     // Re-register rebuilt geometry and migrate aliases before pruning old context.
     removeEntityContextsForLayer(LAYER_ID, { retainIds: new Set(keys.keys()) });
     parts.namedMarkers?.sync(layerState.records);
     syncSelectionFill();
+  }
+
+  /** The follow a double-click started, while the camera keeps it. */
+  let follow = null;
+
+  /**
+   * Follow the site whose dot is under `position`, as the default renderer
+   * followed the site's entity on a double-click: by the site's display
+   * position, framed as that renderer framed an entity it started
+   * following. A double-click on an outline or the selected fill, which had
+   * no position to follow, zooms to it at once instead.
+   * @param {{x: number, y: number}} position Canvas pixels.
+   */
+  function followAt(position) {
+    const viewer = layerState.viewer;
+    if (!layerState.enabled || !layerState.sets) return;
+    const query = findQuery(viewer);
+    const hit = query?.pick(position.x, position.y);
+    if (!hit || !ownsSet(hit.set)) return;
+    const camera = findCamera(viewer);
+    if (!camera) return;
+    const recordId = hit.meta?.installationId;
+    const record = layerState.recordById.get(recordId);
+    if (!record) return;
+    try {
+      if (
+        hit.set !== layerState.sets.dots.id &&
+        hit.set !== layerState.sets.selected.id
+      ) {
+        const points = partPoints(record, hit.id);
+        if (!points.length) return;
+        // Following nothing then, as that zoom stopped any follow first.
+        if (camera.followed) camera.follow(null);
+        camera.flyToBounds(sphereFromPoints(points), { durationS: 0 });
+        return;
+      }
+      const rendered = layerState.renderedKeys.get(recordId);
+      if (!rendered) return;
+      const { carrier } = rendered;
+      const shown = readEntityRecord(carrier)?.displayPosition?.();
+      if (!shown) return;
+      // Centred where the dot is drawn, on the surface under it when its
+      // height is loaded (the cached floor may not be yet), and held there
+      // as the stock follow held the dot's bounding sphere.
+      const surface = heightsOf(viewer).now({
+        lon: record.longitude,
+        lat: record.latitude,
+      });
+      const at = Number.isFinite(surface)
+        ? fromDegrees(record.longitude, record.latitude, surface)
+        : shown;
+      const pose = camera.pose?.();
+      const target = entityFollowTarget(carrier, {
+        key: `installations:${record.id}`,
+        position: () => at,
+        frame: 'enu',
+        viewFrom: followOffsetFitting({ center: at, radius: 0 }, at, {
+          fovy: pose?.fovy,
+          aspectRatio: pose?.aspectRatio,
+          minDistance: camera.controls?.minDistance,
+          maxDistance: camera.controls?.maxDistance,
+        }),
+      });
+      camera.follow(target);
+      follow = { target, recordId };
+    } catch (error) {
+      // A camera that cannot follow leaves the view where it is, as a
+      // viewer without entity tracking did on a double-click.
+      console.warn(`${LAYER_ID}: cannot follow`, error);
+    }
+  }
+
+  /** The ground points of a record's outline or fill item `itemId`. */
+  function partPoints(record, itemId) {
+    const outline = /:outline:(\d+)$/.exec(itemId);
+    if (outline) {
+      const line = outlinesOf(record)[Number(outline[1])] || [];
+      return line.map(([lon, lat]) => fromDegrees(lon, lat));
+    }
+    const fill = /:selected-fill:(\d+)$/.exec(itemId);
+    if (fill) {
+      const rings = footprintsOf(record)[Number(fill[1])] || [];
+      return rings.flat().map(([lon, lat]) => fromDegrees(lon, lat));
+    }
+    return [];
+  }
+
+  /** Stop a follow this layer started, if the camera still keeps it. */
+  function stopFollow() {
+    const camera = follow && findCamera(layerState.viewer);
+    if (follow && camera?.followed === follow.target) camera.follow(null);
+    follow = null;
   }
 
   /**
@@ -383,7 +566,7 @@ export function createRendering({
       .map((record) => ({ lat: record.latitude, lon: record.longitude }));
     if (!cold.length) return;
     warmFireAnchorFloors(cold).then(() => {
-      if (!layerState.enabled || !layerState.dataSource) return;
+      if (!layerState.enabled || !layerState.sets) return;
       if (
         !cold.some((point) => cachedGroundFloor(point.lat, point.lon) != null)
       )
@@ -391,26 +574,13 @@ export function createRendering({
       renderRecords();
     });
   }
-  /**
-   * While the layer is on, the Cesium camera reports changes at the layer's
-   * threshold to its own `changed` listeners too (the camera port measures
-   * each listener's threshold itself).
-   */
-  function claimCameraChanges() {
-    claimCameraSensitivity(
-      layerState.viewer.camera,
-      LAYER_ID,
-      CAMERA_CHANGED_THRESHOLD,
-    );
-  }
-  function releaseCameraChanges() {
-    releaseCameraSensitivity(layerState.viewer?.camera, LAYER_ID);
-  }
   return {
     attach,
     detach,
-    claimCameraChanges,
-    releaseCameraChanges,
+    setShown,
+    ownsSet,
+    followAt,
+    stopFollow,
     installationSurfaceHeightM,
     clearSelectionFill,
     syncSelectionFill,

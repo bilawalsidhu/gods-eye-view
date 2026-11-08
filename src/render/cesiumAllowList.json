@@ -11,7 +11,6 @@
   "src/input/dispatcher.js",
   "src/input/sensorPick.js",
   "src/layers/ghostMaps/index.js",
-  "src/layers/installations/rendering.js",
   "src/layers/launches/launchPad.js",
   "src/layers/launches/orbitRendering.js",
   "src/layers/launches/rendering.js",

@@ -2276,9 +2276,17 @@ which embeds the MAP_KEY.
   windows reuse the active load. Disabling or returning Contacts to passive mode
   clears its anchor; passive refreshes cannot reclaim it. Background repaints
   refresh context records without publishing a new selection.
-  Installation tiles decode only the `landuse` layer. Reloads keep the Cesium
-  entities of sites whose geometry is unchanged, so outlines and fills do not
-  blink. While Contacts has a subject, the layer loads a window around it
+  Installation tiles decode only the `landuse` layer. The site dots, the
+  selected site's dot (a set of its own, so selecting one redraws no other),
+  their ground outlines and the selected site's fill are renderer draw sets;
+  reloads keep the drawn items of sites whose geometry is unchanged, so
+  outlines and fills do not blink. A double-click on a dot follows the site
+  through the camera port, centred on the surface under it (one on an outline
+  or fill zooms to it), as the default renderer's double-click followed its
+  entity; hiding the layer stops that follow. The layer no longer reaches
+  Cesium; a caller handing it a Cesium viewer, with no
+  renderer bound, loads the `./render/cesium/unbound` export once first.
+  While Contacts has a subject, the layer loads a window around it
   instead of the camera view (100 km half-width at mid latitudes, shrinking so
   it fits 16 z9 tiles), moves it only after the subject travels 20 km, and
   ignores camera `moveEnd`; clearing the subject returns to the viewport. The

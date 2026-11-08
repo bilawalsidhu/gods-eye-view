@@ -26,7 +26,7 @@ function setup(t) {
   bindFakeCesiumCamera(state.viewer, { draw, query: fakeSceneQuery(state.viewer), frame: fakeSceneFrame(state.viewer) });
   const services = { render: { governorRequestRender() {} }, picking: { registerPickOwner() {}, unregisterPickOwner() {} }, context: { clearSelectedEntityContextForLayer() {} } };
   let loads = 0;
-  const parts = { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { attach() { state.dataSource = { show: false }; }, detach() {}, installationSurfaceHeightM: () => 0, clearRendered() {} }, viewport: { scheduleLoad: () => loads++, clearUnavailableRetry() {} }, selection: { installInteraction() {} }, ingestion: { setInstallationStatus() {} } };
+  const parts = { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { attach() {}, setShown() {}, detach() {}, installationSurfaceHeightM: () => 0, clearRendered() {} }, viewport: { scheduleLoad: () => loads++, clearUnavailableRetry() {} }, selection: { installInteraction() {} }, ingestion: { setInstallationStatus() {} } };
   const ctx = { state, services, parts, source: {}, overlayHost };
   parts.namedMarkers = createNamedMarkers(ctx);
   const lifecycle = createLifecycle(ctx).methods;

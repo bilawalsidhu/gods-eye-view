@@ -1795,6 +1795,100 @@ test('the installations layer draws its named markers as outlined point primitiv
   assert.equal(scene.added.includes(host), false);
 });
 
+test('the installations layer draws its site dots, outlines and selected dot on a viewer of its own', async () => {
+  const { createRendering } =
+    await import('../../layers/installations/rendering.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const record = (id, lon) => ({
+    id,
+    name: `Site ${id}`,
+    class: 'base',
+    latitude: 30,
+    longitude: lon,
+    namedArea: false,
+    outlineLines: [
+      [
+        [lon, 30],
+        [lon + 0.01, 30],
+      ],
+    ],
+  });
+  const records = [record('a', -97), record('b', -98)];
+  const state = {
+    viewer,
+    enabled: true,
+    selectedId: null,
+    records,
+    recordById: new Map(records.map((r) => [r.id, r])),
+    renderedKeys: new Map(),
+  };
+  const noop = () => {};
+  const rendering = createRendering({
+    state,
+    services: {
+      ground: { floorAltitudeM: () => 0, cachedGroundFloor: () => 0 },
+      anchors: {},
+      render: { governorRequestRender: noop },
+      context: {
+        registerEntityContext: noop,
+        removeEntityContextsForLayer: noop,
+        selectEntityContext: noop,
+        getSelectedEntityContext: () =>
+          state.selectedId ? { id: state.selectedId } : null,
+        clearSelectedEntityContextForLayer: noop,
+      },
+    },
+    parts: {
+      model: {
+        colorFor: (r, alpha = 1) => [1, 165 / 255, 0, alpha],
+        installationSourceLabel: () => 'OpenStreetMap',
+      },
+    },
+  });
+  rendering.attach(viewer);
+  rendering.renderRecords();
+  const billboards = (setId) => {
+    const out = [];
+    const visit = (node) => {
+      for (let i = 0; i < (node?.length ?? 0); i += 1) {
+        const child = node.get(i);
+        if (child?.id?.set === setId) out.push(child);
+        else if (typeof child?.get === 'function') visit(child);
+      }
+    };
+    for (const host of scene.added)
+      if (host.id?.set === setId) out.push(host);
+      else visit(host);
+    return out;
+  };
+  const dotsId = state.sets.dots.id;
+  const dots = billboards(dotsId);
+  assert.equal(dots.length, 2);
+  assert.ok(dots.every((dot) => dot instanceof Cesium.Billboard));
+  assert.ok(
+    dots.every(
+      (dot) => dot.heightReference === Cesium.HeightReference.CLAMP_TO_GROUND,
+    ),
+  );
+  assert.ok(dots.every((dot) => dot.id.meta?.installationId));
+  // Selecting a site hides its dot where it is and draws the selected one
+  // in its own set: no other dot is drawn again.
+  state.selectedId = 'b';
+  rendering.renderRecords();
+  const after = billboards(dotsId);
+  assert.equal(after.length, 2);
+  assert.ok(after.every((dot, i) => dot === dots[i]), 'the same billboards');
+  assert.equal(after.find((dot) => dot.id.id === 'b').show, false);
+  assert.equal(after.find((dot) => dot.id.id === 'a').show, true);
+  const [selected] = billboards(state.sets.selected.id);
+  assert.ok(selected instanceof Cesium.Billboard);
+  assert.equal(selected.id.id, 'b');
+  assert.equal(selected.id.meta, dots.find((dot) => dot.id.id === 'b').id.meta);
+  rendering.detach();
+  assert.equal(scene.added.length, 0, 'gone with the layer');
+});
+
 test('the ALPR layer draws its badges as icons that follow the ground, restyled in place', async () => {
   const { alprMarkers, createAlprMarkerSet } =
     await import('../../layers/alpr/markerState.js');

@@ -4,7 +4,7 @@
  * east-north-up frame at a point, rotation about an axis, and the offset a
  * heading, pitch and range puts an eye at.
  */
-import { geodeticSurfaceNormal } from './ellipsoid.js';
+import { WGS84, geodeticSurfaceNormal } from './ellipsoid.js';
 import {
   EPSILON14,
   PI_OVER_TWO,
@@ -112,4 +112,35 @@ export function offsetFromHeadingPitchRange(heading, pitch, range) {
     -h,
   );
   return scale(negate(offset), range);
+}
+
+/** The range the default renderer frames a sphere of no size from. */
+const MINIMUM_FIT_RANGE_M = 100;
+
+/**
+ * Where the eye stands to follow a target, as the default renderer framed
+ * an entity it started following with no view of its own: looking at the
+ * centre of `sphere`, heading north, pitched down 45° (steeper far from the
+ * ground), at the range that fits the sphere in view (100 m for one of no
+ * size), within the camera's zoom limits. Returned as the eye's offset from
+ * the centre, east-north-up there; `at` is where the target stands.
+ * @param {{radius: number}} sphere
+ * @param {{x: number, y: number, z: number}} at
+ * @param {{fovy?: number, aspectRatio?: number, minDistance?: number,
+ *   maxDistance?: number}} view The camera's field of view and zoom limits.
+ */
+export function followOffsetFitting(sphere, at, view = {}) {
+  const fovy = Number.isFinite(view.fovy) ? view.fovy : Math.PI / 3;
+  const aspect = Number.isFinite(view.aspectRatio) ? view.aspectRatio : 1;
+  const tanPhi = Math.tan(fovy / 2);
+  const tanTheta = aspect * tanPhi;
+  let range =
+    sphere.radius === 0
+      ? MINIMUM_FIT_RANGE_M
+      : Math.max(sphere.radius / tanTheta, sphere.radius / tanPhi);
+  const { minDistance = 0, maxDistance = Infinity } = view;
+  range = Math.min(Math.max(range, minDistance), maxDistance);
+  const factor =
+    2 - 1 / Math.max(1, Math.hypot(at.x, at.y, at.z) / WGS84.radii.x);
+  return offsetFromHeadingPitchRange(0, (-Math.PI / 4) * factor, range);
 }
