@@ -301,6 +301,8 @@
   "AVAILABLE MISSIONS": "المهام المتاحة",
   "SELECT A MISSION TO INSPECT": "اختر مهمة لفحصها",
   "LOADING 30-DAY MISSION INDEX": "جارٍ تحميل فهرس مهام 30 يومًا",
+  "Space Missions unavailable: the mission index could not load. Try again later.": "المهام الفضائية غير متاحة: تعذّر تحميل فهرس المهام. حاول مرة أخرى لاحقًا.",
+  "30-DAY MISSION INDEX UNAVAILABLE": "فهرس مهام 30 يومًا غير متاح",
   "RADIO": "الراديو",
   "ENABLE": "تفعيل",
   "Previous filtered radio station": "محطة الراديو السابقة في القائمة المصفّاة",
@@ -1747,6 +1749,11 @@
   "TomTom roads first; OpenStreetMap fills the rest, simulated": "طرق TomTom أولًا؛ ويكمل OpenStreetMap الباقي بتدفق محاكى",
   "TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)": "طرق TomTom أولًا؛ ويكمل OpenStreetMap الباقي بتدفق محاكى (يحتاج إلى مفتاح TomTom)",
   "Hybrid": "هجين",
+  "Lines": "خطوط",
+  "Dots": "نقاط",
+  "Road lines colored by live flow: green to red": "خطوط الطرق ملوّنة حسب التدفق المباشر: من الأخضر إلى الأحمر",
+  "Moving dots colored by live flow": "نقاط متحركة ملوّنة حسب التدفق المباشر",
+  "Moving dots": "نقاط متحركة",
   "TomTom key unavailable": "مفتاح TomTom غير متاح",
   "TomTom daily budget reached": "بلغت الحصة اليومية لـ TomTom",
   "Monthly traffic allowance used": "تم استهلاك حصة حركة المرور الشهرية",
@@ -3473,5 +3480,9 @@
   "Maximum event age: {days}d; undated markers are kept": "الحد الأقصى لعمر الحدث: {days} يوم؛ تُحفظ العلامات غير المؤرخة",
   "event age filter|All": "الكل",
   "Event age": "عمر الحدث",
-  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ"
+  "Event age: {days}d · undated kept": "عمر الحدث: {days} يوم · الاحتفاظ بغير المؤرخ",
+  "Close camera preview": "إغلاق معاينة الكاميرا",
+  "Refresh map still": "تحديث صورة الخريطة الثابتة",
+  "The map still uses a separate request and may show a different moment.": "تستخدم صورة الخريطة طلبًا منفصلًا وقد تعرض لحظة مختلفة.",
+  "Video plays from Québec 511, which sees your IP address.": "يُشغَّل الفيديو من Québec 511، الذي يرى عنوان IP الخاص بك."
 }
