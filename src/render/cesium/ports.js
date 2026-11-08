@@ -44,6 +44,7 @@ const GLOBE_CAPABILITIES = [
   'imageryOnTiles',
   'splitSwipe',
   'imageHooks',
+  'globeVisibility',
 ];
 
 /**
@@ -67,7 +68,13 @@ export function cesiumCapabilities(scene, only) {
     ...queryCapabilities(scene),
   ];
   const allowed = only && new Set(only);
-  return all.filter((c) => !allowed || allowed.has(c));
+  return all.filter(
+    (c) =>
+      (!allowed || allowed.has(c)) &&
+      // Visibility reads back only from a globe that keeps it: a scene
+      // made without one gives no reading.
+      (c !== 'globeVisibility' || typeof scene?.globe?.show === 'boolean'),
+  );
 }
 
 /**

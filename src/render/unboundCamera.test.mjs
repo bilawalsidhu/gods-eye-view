@@ -7,7 +7,8 @@
  * builds `findCredits`' port for such a viewer the same way.
  * Likewise an entry that reaches a caller of `findEffects` must load
  * `render/cesium/effects.js`, which provides the effects factory, and one
- * that reaches a caller of `findGlobe` must load `render/cesium/globe.js`.
+ * that reaches a caller of `findGlobe` must load `render/cesium/globe.js`,
+ * or be such a Cesium-free entry (below).
  * An entry that reaches a caller of `findDraw` or `drawOf` loads
  * `render/cesium/draw.js` the same way (the camera factory loads it),
  * unless it is Cesium-free: then it is listed in `DRAW_FROM_CALLER`, and
@@ -287,8 +288,10 @@ test('every public entry that reaches a findEffects caller loads the unbound eff
 
 test('every public entry that reaches a findGlobe caller loads the unbound globe factory', () => {
   // A caller may take `findGlobe` as a default rather than call it, so any
-  // use of the name counts.
-  checkLookupFactory('findGlobe', GLOBE_FACTORY);
+  // use of the name counts. A Cesium-free entry with no globe port (its
+  // caller has not loaded `./render/cesium/unbound`) reads the globe as
+  // unknown.
+  checkLookupFactory('findGlobe', GLOBE_FACTORY, { fromCaller: true });
 });
 
 test('every public entry that reaches a findQuery or queryOf caller loads the unbound query factory, or its caller can', () => {

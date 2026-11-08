@@ -2618,6 +2618,17 @@ export function portChecks() {
       { capability: 'splitSwipe' },
     ),
     check(
+      'globe.visible',
+      'the globe surface reads back as it was shown or hidden',
+      (h, r) => {
+        r.globe.setGlobeVisible(false);
+        equal(r.globe.isGlobeVisible(), false, 'hidden');
+        r.globe.setGlobeVisible(true);
+        equal(r.globe.isGlobeVisible(), true, 'shown');
+      },
+      { capability: 'globeVisibility' },
+    ),
+    check(
       'globe.sky',
       'sky settings round-trip and keep unchanged keys',
       (h, r) => {

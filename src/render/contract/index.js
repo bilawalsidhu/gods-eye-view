@@ -46,6 +46,7 @@ export const CAPABILITIES = Object.freeze([
   'bloom',
   'sharpen',
   'followAutodetect',
+  'globeVisibility',
   'benchmark',
 ]);
 
@@ -147,6 +148,7 @@ export const PORTS = deepFreeze({
       'isSettled',
       'on',
     ),
+    ['isGlobeVisible', 'globeVisibility'],
     ['setSurfaceShading', 'surfaceShading'],
     ['setClouds', 'clouds'],
     ['setWater', 'water'],

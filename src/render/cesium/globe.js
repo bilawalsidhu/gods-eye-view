@@ -438,6 +438,8 @@ export function createCesiumGlobe(
       return progressListeners.on(cb);
     },
   };
+  if (can('globeVisibility'))
+    port.isGlobeVisible = () => scene.globe?.show === true;
   if (can('splitSwipe')) {
     // Cesium's split starts at the canvas's left edge, as the scene was
     // made: a `left` layer shows once the split moves.
@@ -469,8 +471,13 @@ export function createCesiumGlobe(
 // built over it: imagery and the sky as the renderer's would.
 provideUnboundGlobe((viewer) => {
   if (!viewer?.scene) return null;
+  // Visibility reads back only from a globe that keeps it: a scene made
+  // without one gives no reading, so its callers keep their own default.
+  const capabilities = new Set(['imageHooks', 'imageryOnTiles', 'splitSwipe']);
+  if (typeof viewer.scene.globe?.show === 'boolean')
+    capabilities.add('globeVisibility');
   const { port, dispose } = createCesiumGlobe(viewer, {
-    capabilities: new Set(['imageHooks', 'imageryOnTiles', 'splitSwipe']),
+    capabilities,
     requestRender: () => viewer.scene.requestRender?.(),
   });
   // A renderer bound later leaves it running: its layers keep following

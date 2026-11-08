@@ -206,5 +206,7 @@ export type Capability =
   | 'sharpen'
   /** Following with an automatically chosen frame (orbit or north-up). */
   | 'followAutodetect'
+  /** Reading back whether the globe surface is shown (`globe.isGlobeVisible`). */
+  | 'globeVisibility'
   /** A built-in quality benchmark. */
   | 'benchmark';

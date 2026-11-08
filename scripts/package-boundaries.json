@@ -1813,6 +1813,10 @@
     "exports": ["./render/cesium/unbound"],
     "modules": [
       "src/render/cesium/unbound.js",
+      "src/render/cesium/globe.js",
+      "src/maps/google3d.js",
+      "src/render/cesium/imagery.js",
+      "src/render/cesium/tileRequests.js",
       "src/data/iconSetPrimitive.js",
       "src/data/aircraftRecession.js",
       "src/data/motionModel.js",
@@ -2462,6 +2466,10 @@
   "cctv-layer": {
     "exports": ["./layers/cctv"],
     "modules": [
+      "src/maps/google3d.js",
+      "src/render/cesium/globe.js",
+      "src/render/cesium/imagery.js",
+      "src/render/cesium/tileRequests.js",
       "src/data/headingDegrees.js",
       "src/data/cctvCards.js",
       "src/data/cctvGizmo.js",

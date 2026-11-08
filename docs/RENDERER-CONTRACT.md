@@ -31,6 +31,12 @@ exposes nine ports, each typed in its own file in `src/render/contract/`:
 | `credits` | `credits.d.ts` | Data credits owed                                                              |
 | `quality` | `quality.d.ts` | Quality knobs, device facts, frame signals, benchmark                          |
 
+Some members and options were added to version `0` later. Each is
+optional, so a renderer written before it still conforms:
+
+- `globe.isGlobeVisible()` (capability `globeVisibility`) reads back whether
+  the globe surface is shown, for code that holds only the scene.
+
 The renderer itself (`renderer.d.ts`) adds capture, pixel reads, settling,
 resize, context loss and `destroy`. `common.d.ts` holds the shared shapes
 (ECEF positions, colours, listener semantics) and the capability list.

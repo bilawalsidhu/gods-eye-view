@@ -28,6 +28,7 @@ import { toColor } from '../../render/cesium/draw.js';
 // Loads the factory a viewer of a caller's own gets its camera port from,
 // which the rest of the layer reads the eye through.
 import '../../render/cesium/camera.js';
+import '../../render/cesium/globe.js';
 
 // The policy's renderer colours as the Cesium colours the icons and lines take.
 const ACTIVE_CAMERA_COLOR = toColor(ACTIVE_CAMERA_RGBA);

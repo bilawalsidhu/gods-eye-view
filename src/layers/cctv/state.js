@@ -175,7 +175,7 @@ export function createState({ services }) {
 
   // Task 5: last surface regime the record geometry was recomputed for. The
   // map-stack change listener compares the CURRENT regime (derived live from
-  // scene.globe.show) against this so bing→osm switches (same 'terrain-globe'
+  // whether the renderer shows the globe) against this so bing→osm switches (same 'terrain-globe'
   // regime) don't trigger a pointless full-catalog rewrite.
 
   layerState._lastAppliedRegime = null;

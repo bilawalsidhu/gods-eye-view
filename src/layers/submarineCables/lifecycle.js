@@ -15,14 +15,14 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
 
     init(viewer) {
       state._viewer = viewer;
-      state._clampTo = cableClassificationTypeForScene(viewer?.scene);
+      state._clampTo = cableClassificationTypeForScene(viewer);
       parts.rendering.attach(viewer);
       if (!state._mapStackListener && mapStackEventTarget?.addEventListener) {
         state._mapStackListener = (event) => {
           parts.rendering.applyCableClassification(
             event?.detail?.activeId
               ? cableClassificationTypeForStack(event.detail.activeId)
-              : cableClassificationTypeForScene(state._viewer?.scene),
+              : cableClassificationTypeForScene(state._viewer),
           );
         };
         mapStackEventTarget.addEventListener(

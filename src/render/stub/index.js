@@ -917,6 +917,7 @@ export function createStubRenderer(options = {}) {
     ...(options.sky ?? {}),
   };
   let photorealStatus = { route: 'none' };
+  let globeVisible = true;
 
   function addImagery(spec, index) {
     if (
@@ -1055,6 +1056,7 @@ export function createStubRenderer(options = {}) {
     },
     setGlobeVisible(visible) {
       log('globe', 'setGlobeVisible', [visible]);
+      globeVisible = Boolean(visible);
       requestRender('base');
     },
     imagery: {
@@ -1078,6 +1080,8 @@ export function createStubRenderer(options = {}) {
       };
     },
   };
+  if (capabilities.has('globeVisibility'))
+    globe.isGlobeVisible = () => globeVisible;
   if (capabilities.has('surfaceShading'))
     globe.setSurfaceShading = (shading) => {
       log('globe', 'setSurfaceShading', [shading]);

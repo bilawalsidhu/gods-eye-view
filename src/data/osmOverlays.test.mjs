@@ -14,6 +14,10 @@ function fakeGlobe() {
   const layers = [];
   return {
     layers,
+    visible: true,
+    isGlobeVisible() {
+      return this.visible;
+    },
     imagery: {
       add(spec) {
         const layer = {
@@ -52,7 +56,7 @@ function fakeMapStack() {
 
 function setup(overlay = OSM_OVERLAYS[0]) {
   const globe = fakeGlobe();
-  const viewer = { scene: { globe: { show: true } } };
+  const viewer = {};
   const layer = createOsmOverlayLayer(overlay, {
     globeOf: (given) => (given === viewer ? globe : null),
   });
@@ -152,14 +156,15 @@ test('with no surface to drape on the row explains itself, and recovers when one
 
 test('without a map stack, the viewer’s globe decides, polled by the stats', () => {
   const globe = fakeGlobe();
-  const viewer = { scene: { globe: { show: false } } };
+  globe.visible = false;
+  const viewer = {};
   const layer = createOsmOverlayLayer(OSM_OVERLAYS[0], {
     globeOf: () => globe,
   });
   layer.init(viewer);
   layer.enable();
   assert.equal(layer.getStats().error, NO_IMAGERY_HOST);
-  viewer.scene.globe.show = true;
+  globe.visible = true;
   assert.equal(layer.getStats().error, null);
 });
 
@@ -177,7 +182,7 @@ test('an overlay enabled before its viewer has a globe port adds it once one doe
   const globe = fakeGlobe();
   let port = null;
   const layer = createOsmOverlayLayer(OSM_OVERLAYS[0], { globeOf: () => port });
-  layer.init({ scene: { globe: { show: true } } });
+  layer.init({});
   layer.enable();
   assert.equal(layer.diagnostics().ownedCount, 0);
   port = globe;

@@ -1,3 +1,4 @@
+import { findGlobe } from '../../render/rendererOf.js';
 import { CABLE_GLOBE_STACK_IDS } from './policy.js';
 
 /**
@@ -20,15 +21,18 @@ export function cableClassificationTypeForStack(activeId) {
 }
 
 /**
- * Derive the active surface from live scene state. The boot-time
+ * Derive the active surface from what the renderer draws. The boot-time
  * `setStack(..., { silent: true })` fires no 'gev:map-stack-changed' event,
  * so the initial surface is read the way the height-datum listeners do: the
  * photoreal regime is exactly "globe hidden".
- * @param {{globe?: {show?: boolean}}|null|undefined} scene
+ * @param {object|null|undefined} host The scene object the renderer is bound
+ *   to (the viewer); `both` when it has none, or one that cannot say whether
+ *   the globe is shown.
  * @returns {'tiles'|'terrain'|'both'}
  */
 
-export function cableClassificationTypeForScene(scene) {
-  if (!scene?.globe) return 'both';
-  return scene.globe.show === false ? 'tiles' : 'terrain';
+export function cableClassificationTypeForScene(host) {
+  const visible = findGlobe(host)?.isGlobeVisible?.();
+  if (typeof visible !== 'boolean') return 'both';
+  return visible ? 'terrain' : 'tiles';
 }

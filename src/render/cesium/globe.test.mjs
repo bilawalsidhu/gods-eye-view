@@ -4,7 +4,13 @@ import * as Cesium from 'cesium';
 import { createCesiumGlobe, markBaseTileset } from './globe.js';
 import { hookProvider, TILE_RETRY_DELAY_MS, xyzTileUrl } from './imagery.js';
 
-const ALL = new Set(['imageHooks', 'imageryOnTiles', 'splitSwipe', 'terrain']);
+const ALL = new Set([
+  'imageHooks',
+  'imageryOnTiles',
+  'splitSwipe',
+  'terrain',
+  'globeVisibility',
+]);
 const url = (name) => `https://${name}.invalid/{z}/{x}/{y}.png`;
 
 function fakeScene() {
@@ -458,8 +464,14 @@ test('globe visibility, settling and progress', () => {
   const { scene, port, tick } = setup();
   port.setGlobeVisible(false);
   assert.equal(scene.globe.show, false);
+  assert.equal(port.isGlobeVisible(), false);
   assert.equal(port.isSettled('terrain'), true, 'a hidden globe loads nothing');
   port.setGlobeVisible(true);
+  assert.equal(port.isGlobeVisible(), true);
+  // It reads the scene, whoever changed it.
+  scene.globe.show = false;
+  assert.equal(port.isGlobeVisible(), false);
+  scene.globe.show = true;
   scene.globe.tilesLoaded = false;
   assert.equal(port.isSettled('terrain'), false);
   assert.equal(port.isSettled('base'), false);

@@ -85,12 +85,12 @@ export function createOsmOverlayLayer(overlay, { globeOf = findGlobe } = {}) {
 
   /**
    * What the overlay drapes on: the map stack's record, or with no map
-   * stack, whether the viewer's globe is shown.
+   * stack, whether the renderer shows the globe.
    */
   function drapeSurface() {
     const recorded = mapStack?.getDrapeSurface?.();
     if (recorded) return recorded;
-    return viewer?.scene?.globe?.show === true ? 'globe' : 'none';
+    return globeOf(viewer)?.isGlobeVisible?.() === true ? 'globe' : 'none';
   }
 
   /** Add or remove the owned imagery layer to match the state. */

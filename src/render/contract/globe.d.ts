@@ -258,6 +258,13 @@ export interface GlobePort {
   setTerrain(spec: TerrainSpec | null): Promise<void>;
   /** Show or hide the globe surface (hidden under photoreal). */
   setGlobeVisible(visible: boolean): void;
+  /**
+   * `globeVisibility`: whether the globe surface is shown now, as
+   * `setGlobeVisible` or whoever last set it left it. For code that only holds
+   * the scene and must know whether the surface it drapes on or samples is
+   * drawn.
+   */
+  isGlobeVisible?(): boolean;
   /** `surfaceShading`. */
   setSurfaceShading?(shading: SurfaceShading | null): void;
   /** `clouds`: the renderer's volumetric clouds, or none. */

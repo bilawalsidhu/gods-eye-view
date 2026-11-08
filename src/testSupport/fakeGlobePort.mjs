@@ -98,6 +98,7 @@ export function fakeGlobePort({ settled = () => true } = {}) {
     setGlobeVisible(visible) {
       globeVisible = Boolean(visible);
     },
+    isGlobeVisible: () => globeVisible,
     get globeVisible() {
       return globeVisible;
     },

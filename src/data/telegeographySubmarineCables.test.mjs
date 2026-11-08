@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../mapStackController.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { bindRenderer } from '../render/rendererOf.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
@@ -216,15 +217,32 @@ test('cable ground lines drape on exactly the active surface on every stack', ()
 
   // Boot fires no stack event; the initial value derives from live scene
   // state exactly like the height-datum listeners: photoreal ⇔ globe hidden.
+  let globeShown = false;
+  const host = {};
+  const unbind = bindRenderer(host, {
+    globe: { isGlobeVisible: () => globeShown },
+  });
+  assert.equal(cableClassificationTypeForScene(host), 'tiles');
+  globeShown = true;
+  assert.equal(cableClassificationTypeForScene(host), 'terrain');
+  unbind();
+  assert.equal(cableClassificationTypeForScene(null), 'both');
+  // A scene that cannot say whether the globe is shown: every surface.
+  const other = {};
+  const unbindOther = bindRenderer(other, { globe: {} });
+  assert.equal(cableClassificationTypeForScene(other), 'both');
+  unbindOther();
+  // A viewer of its own with no renderer bound reads its globe through the
+  // unbound port; with no globe it gives no reading.
   assert.equal(
-    cableClassificationTypeForScene({ globe: { show: false } }),
+    cableClassificationTypeForScene({ scene: { globe: { show: false } } }),
     'tiles',
   );
   assert.equal(
-    cableClassificationTypeForScene({ globe: { show: true } }),
+    cableClassificationTypeForScene({ scene: { globe: { show: true } } }),
     'terrain',
   );
-  assert.equal(cableClassificationTypeForScene(null), 'both');
+  assert.equal(cableClassificationTypeForScene({ scene: {} }), 'both');
 });
 
 test('cable reference sweep gate is dirty-only — no timer path', () => {

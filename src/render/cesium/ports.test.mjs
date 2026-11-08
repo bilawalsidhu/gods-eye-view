@@ -22,7 +22,14 @@ test('capabilities follow what the scene supports', () => {
     'splitSwipe',
     'imageHooks',
   ];
+  const globe = { show: true };
   assert.deepEqual(cesiumCapabilities({}), ['models', ...effects]);
+  // A scene with a globe reads its visibility back.
+  assert.deepEqual(cesiumCapabilities({ globe }), [
+    'models',
+    ...effects,
+    'globeVisibility',
+  ]);
   assert.deepEqual(cesiumCapabilities({ pickPositionSupported: true }), [
     'models',
     ...effects,
@@ -30,12 +37,14 @@ test('capabilities follow what the scene supports', () => {
   ]);
   assert.deepEqual(
     cesiumCapabilities({
+      globe,
       pickPositionSupported: true,
       sampleHeightSupported: true,
     }),
     [
       'models',
       ...effects,
+      'globeVisibility',
       'pickPosition',
       'sampleHeight',
       'finestHeights',
