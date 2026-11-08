@@ -3,7 +3,7 @@ import { horizonFrom } from '../../geo/horizon.js';
 import { densifyRhumb } from '../../geo/rhumb.js';
 import { distance, toRadians } from '../../geo/vector.js';
 import { cssColor } from '../../render/color.js';
-import { cameraOf, drawOf } from '../../render/rendererOf.js';
+import { cameraOf, canvasOf, drawOf } from '../../render/rendererOf.js';
 import {
   clampLabel,
   createCableOverlayEntry,
@@ -418,7 +418,7 @@ export function createRendering({ state }) {
     const pose = cameraOf(viewer).pose();
     const cameraPos = pose?.position;
     if (!cameraPos) return false;
-    const canvasHeight = viewer.scene?.canvas?.clientHeight || 1080;
+    const canvasHeight = canvasOf(viewer)?.clientHeight || 1080;
     // The field of view along the canvas's longer side.
     const fov =
       pose.aspectRatio > 1

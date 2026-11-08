@@ -17,7 +17,7 @@ import {
   tn,
   translateKnown,
 } from '../i18n/index.js';
-import { createImagerySplit } from './imagerySplit.js';
+import { createImagerySplit, globeSplitTarget } from './imagerySplit.js';
 import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
@@ -27,6 +27,7 @@ import {
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
 import { pointerOwnerName } from '../data/pointerOwnerNames.js';
+import { canvasOf, findGlobe } from '../render/rendererOf.js';
 
 const PANEL_ID = 'recent-imagery-panel';
 const OVERVIEW_MIN_BOX_KM = 25;
@@ -701,7 +702,7 @@ export function createRecentImageryPanel({
     }
     if (!live || split || destroyed) return;
     split = createSplit({
-      scene: viewer?.scene,
+      scene: globeSplitTarget(findGlobe(viewer)),
       initialValue: snapshot.split,
       id: 'recent-imagery-split-line',
       handleClass: 'recent-imagery-split-handle',
@@ -722,7 +723,7 @@ export function createRecentImageryPanel({
           right: rightPercent,
         }),
       getViewportWidth: () =>
-        Number(viewer?.scene?.canvas?.clientWidth) ||
+        Number(canvasOf(viewer)?.clientWidth) ||
         Number(document.documentElement?.clientWidth) ||
         0,
       onChange: (value) => layer.setSplit(value),

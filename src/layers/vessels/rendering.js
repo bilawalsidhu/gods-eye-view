@@ -10,6 +10,7 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { horizonFrom, liftedForHorizon } from '../../geo/horizon.js';
 import { distance } from '../../geo/vector.js';
 import {
+  canvasOf,
   drawOf,
   findCamera,
   findFrame,
@@ -552,7 +553,7 @@ export function createRendering({
    */
 
   function publishVesselOverlayEntries(entries) {
-    const canvas = state.viewer?.scene?.canvas || state.viewer?.canvas;
+    const canvas = canvasOf(state.viewer);
     const width = Number(canvas?.clientWidth) || 0;
     const height = Number(canvas?.clientHeight) || 0;
     const ambientLimit = vesselOverlayCohortLimit(

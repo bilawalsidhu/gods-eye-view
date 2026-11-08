@@ -23,17 +23,17 @@ import {
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
 import { acquireImageryComparison } from '../maps/imageryComparison.js';
-import { createImagerySplit } from '../ui/imagerySplit.js';
+import { createImagerySplit, globeSplitTarget } from '../ui/imagerySplit.js';
 import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { heightsOf } from '../queries/heights.js';
 import {
   cameraOf,
+  canvasOf,
   drawOf,
   findCamera,
   findGlobe,
-  rendererOf,
 } from '../render/rendererOf.js';
 import { hexColor } from '../render/color.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
@@ -2704,26 +2704,13 @@ export function createBhoteKoshiEventLayer({
   /** The canvas the scene is drawn on, for its pointer events. */
   function sceneCanvas() {
     if (!_viewer) return null;
-    return rendererOf(_viewer)?.canvas ?? _viewer.scene?.canvas ?? null;
-  }
-
-  /** The split as the divider moves it: the globe's, through its port. */
-  function splitScene() {
-    const imagery = findGlobe(_viewer)?.imagery;
-    if (!imagery?.setSplit) return null;
-    return {
-      get splitPosition() {
-        return imagery.getSplit();
-      },
-      set splitPosition(value) {
-        imagery.setSplit(value);
-      },
-    };
+    return canvasOf(_viewer);
   }
 
   function createSplitControl(event) {
     _splitControl = createImagerySplit({
-      scene: splitScene(),
+      // The split as the divider moves it: the globe's, through its port.
+      scene: globeSplitTarget(findGlobe(_viewer)),
       initialValue: _split,
       id: 'bhote-koshi-split-line',
       handleClass: 'bhote-koshi-split-handle',

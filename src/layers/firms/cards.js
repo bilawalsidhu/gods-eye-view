@@ -4,6 +4,7 @@ import {
   FIRMS_AMBIENT_COHORT_LIMIT,
 } from '../../data/firmsLabels.js';
 import { MAX_AMBIENT_LABELS, LABEL_VIEW_MARGIN_PX } from './policy.js';
+import { canvasOf } from '../../render/rendererOf.js';
 
 export function createCards({
   layerState,
@@ -29,7 +30,6 @@ export function createCards({
 
   function rebuildAmbientLabels() {
     if (!layerState._viewer) return;
-    const scene = layerState._viewer.scene;
     const { query } = components.rendering.scenePorts();
     const project = (position) => query?.project(position) ?? null;
     const now = Date.now();
@@ -70,8 +70,9 @@ export function createCards({
       }
     }
 
-    const width = scene.canvas.clientWidth;
-    const height = scene.canvas.clientHeight;
+    const canvas = canvasOf(layerState._viewer);
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
     let ambientCount = 0;
 
     for (const candidate of layerState._labelCandidates) {

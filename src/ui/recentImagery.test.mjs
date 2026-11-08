@@ -17,6 +17,7 @@ import {
   settle,
 } from '../layers/recentImagery/testDoubles.mjs';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
 
 const S18 = 'S30:2026-09-18';
 const L16 = 'L30:2026-09-16';
@@ -130,7 +131,8 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     camera: {},
     scene: { canvas: { clientWidth: 1000 }, requestRender() {} },
   };
-  bindFakeCesiumCamera(viewer);
+  const globe = fakeGlobePort();
+  bindFakeCesiumCamera(viewer, { globe });
   layer.init(viewer);
   layer.attachMapStackController(controller);
   let active = false;
@@ -213,6 +215,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     ...dom,
     layer,
     viewer,
+    globe,
     renderer,
     thumbnails,
     catalog,
@@ -879,6 +882,9 @@ test('the divider exists only while a swipe is live, labelled A / B or IMAGE / B
   assert.equal(f.splits.length, 1);
   assert.deepEqual(labels(), ['IMAGE', 'BASEMAP']);
   assert.equal(f.splits[0].options.id, 'recent-imagery-split-line');
+  // The divider moves the globe's split, through the renderer's globe port.
+  f.splits[0].options.scene.splitPosition = 0.3;
+  assert.equal(f.globe.imagery.getSplit(), 0.3);
   assert.deepEqual(swapState(), [false, false, 'false', 'false']);
   assert.deepEqual(directions(), ['left', undefined]);
   // VS BASEMAP: SWAP puts the image right of the basemap, and back.

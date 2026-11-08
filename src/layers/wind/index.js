@@ -7,7 +7,7 @@ import {
 } from './presentation.js';
 import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
 import { createWindInspectionMarker } from './inspectionMarker.js';
-import { findQuery } from '../../render/rendererOf.js';
+import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 
@@ -81,7 +81,7 @@ export function createWindLayer({
   };
   const sample = (position) => {
     const view = viewer
-      ? { query: findQuery(viewer), canvas: viewer.scene?.canvas }
+      ? { query: findQuery(viewer), canvas: canvasOf(viewer) }
       : {};
     reading = inspectWindAtCenter(manifest, view, {
       position,

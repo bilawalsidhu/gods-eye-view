@@ -3,6 +3,7 @@ import {
   hasStructuredViewIdentity,
 } from './realtimeProtocol.js';
 import { cameraPoseKey } from './pointerContext.js';
+import { canvasOf } from '../render/rendererOf.js';
 
 /** The live viewer's camera pose identity (Cesium-free read). */
 function readViewerCameraKey() {
@@ -20,7 +21,7 @@ const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
 export async function captureViewportImage() {
   const viewer = window.__godsEyeView?.viewer;
   const source =
-    viewer?.scene?.canvas ||
+    canvasOf(viewer) ||
     document.querySelector('#cesiumContainer .cesium-widget canvas');
   if (!source || !source.width || !source.height) return null;
   // No fresh frame (hidden, or the bounded render wait timed out) → no
@@ -130,7 +131,7 @@ export function pointerCropRect({
  */
 async function capturePointerCrop(screenPx) {
   const viewer = window.__godsEyeView?.viewer;
-  const source = viewer?.scene?.canvas;
+  const source = canvasOf(viewer);
   if (!source?.width || !source?.height || !screenPx) return null;
   const fresh = await renderFreshPointerFrame(viewer);
   if (!fresh) return null;

@@ -1,6 +1,6 @@
 import { WGS84 } from '../../geo/ellipsoid.js';
 import { dot, magnitude, normalize, toDegrees } from '../../geo/vector.js';
-import { findQuery } from '../../render/rendererOf.js';
+import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg } from '../../i18n/index.js';
 import {
   createCyberSonarSampler,
@@ -489,7 +489,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       hideReplayVehicleOverlay();
       return null;
     }
-    const canvas = layerState._viewer.scene.canvas;
+    const canvas = canvasOf(layerState._viewer);
     if (
       windowPosition.x < -80 ||
       windowPosition.y < -100 ||

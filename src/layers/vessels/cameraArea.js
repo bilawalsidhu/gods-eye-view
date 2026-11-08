@@ -1,5 +1,5 @@
 import { toLonLatH } from '../../geo/ellipsoid.js';
-import { findCamera, findQuery } from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import { viewAreaRadiusKm } from './viewArea.js';
 
 /**
@@ -13,7 +13,7 @@ export function vesselViewArea(viewer) {
   const radiusKm = viewAreaRadiusKm(pose?.height);
   if (radiusKm == null) return null;
   let { lat, lon } = pose;
-  const canvas = viewer?.scene?.canvas;
+  const canvas = canvasOf(viewer);
   if (canvas?.clientWidth && canvas?.clientHeight) {
     try {
       const hit = findQuery(viewer)?.pickEllipsoid(

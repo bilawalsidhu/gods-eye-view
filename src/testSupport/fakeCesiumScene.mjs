@@ -20,6 +20,7 @@
  * - frame: phases from the scene's own `preUpdate`, `preRender` and
  *   `postRender` events.
  * - draw: a fake draw port (`fakeDrawPort.mjs`) unless one is given.
+ * - canvas: the double's `canvas`, else its scene's.
  */
 import * as Cesium from 'cesium';
 import { bindRenderer } from '../render/rendererOf.js';
@@ -209,6 +210,15 @@ export function bindFakeCesiumScene(viewer, { draw = fakeDrawPort() } = {}) {
   };
   const query = fakeSceneQuery(viewer);
   const frame = fakeSceneFrame(viewer);
-  const unbind = bindRenderer(viewer, { draw, camera, query, frame });
+  const unbind = bindRenderer(viewer, {
+    // The double's canvas, as `bindFakeCesiumCamera`'s renderer reports it.
+    get canvas() {
+      return viewer.canvas ?? viewer.scene?.canvas;
+    },
+    draw,
+    camera,
+    query,
+    frame,
+  });
   return { draw, camera, query, frame, unbind };
 }

@@ -23,7 +23,12 @@ import {
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { alprIconPosition, alprMarkers } from './markerState.js';
 import { horizonFrom } from '../../geo/horizon.js';
-import { cameraOf, findCredits, findQuery } from '../../render/rendererOf.js';
+import {
+  cameraOf,
+  canvasOf,
+  findCredits,
+  findQuery,
+} from '../../render/rendererOf.js';
 
 /** A `#rrggbb` colour as `rgb(r,g,b)`, the form the readout card has always had. */
 function cssRgb(hex) {
@@ -162,7 +167,7 @@ export function createAlprPresentation({ state, services, source }) {
    * @returns {number|null} Count, or null without a scene to project into.
    */
   function countOnScreen() {
-    const canvas = state.viewer?.scene?.canvas;
+    const canvas = canvasOf(state.viewer);
     const width = canvas?.clientWidth || canvas?.width;
     const height = canvas?.clientHeight || canvas?.height;
     const query = findQuery(state.viewer);
@@ -266,7 +271,7 @@ export function createAlprPresentation({ state, services, source }) {
   // that point instead; the camera-to-ground range keeps zoom-out queries capped.
   function viewportBox(viewer) {
     const query = findQuery(viewer);
-    const canvas = viewer?.scene?.canvas;
+    const canvas = canvasOf(viewer);
     if (typeof query?.pickEllipsoid === 'function' && canvas) {
       const width = canvas.clientWidth || canvas.width;
       const height = canvas.clientHeight || canvas.height;

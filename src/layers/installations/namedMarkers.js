@@ -7,6 +7,7 @@ import { fromDegrees } from '../../geo/index.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import {
   cameraOf,
+  canvasOf,
   drawOf,
   findFrame,
   findQuery,
@@ -57,8 +58,8 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
       !same(pose.position, lastPose.position) ||
       !same(pose.direction, lastPose.direction) ||
       !same(pose.up, lastPose.up) ||
-      width !== viewer.scene.canvas.clientWidth ||
-      height !== viewer.scene.canvas.clientHeight
+      width !== canvasOf(viewer).clientWidth ||
+      height !== canvasOf(viewer).clientHeight
     );
   }
 
@@ -69,8 +70,9 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
   function refresh(pose = null) {
     const viewer = state.viewer;
     if (!state.enabled || !points) return;
-    width = viewer.scene.canvas.clientWidth;
-    height = viewer.scene.canvas.clientHeight;
+    const canvas = canvasOf(viewer);
+    width = canvas.clientWidth;
+    height = canvas.clientHeight;
     pose ??= cameraOf(viewer).pose();
     lastPose = {
       position: { ...pose.position },
@@ -175,7 +177,7 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
 
   function sync(records) {
     const viewer = state.viewer;
-    if (!viewer?.scene) return;
+    if (!viewer) return;
     points ??= drawOf(viewer).points({ id: setId, horizonCull: true });
     points.show = state.enabled;
     const named = records

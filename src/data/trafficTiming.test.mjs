@@ -231,6 +231,9 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     setLongitude(longitude);
     viewer = {
       camera,
+      get canvas() {
+        return this.scene?.canvas;
+      },
       scene: {
         canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
         preRender,

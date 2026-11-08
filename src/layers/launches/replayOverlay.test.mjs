@@ -122,7 +122,12 @@ test('the scene chrome renders the overlay in the globe container', async (t) =>
 
 test('the replay overlay sits where the query port projects the vehicle, facing along its path', async () => {
   const { bindRenderer } = await import('../../render/rendererOf.js');
-  const viewer = { scene: { canvas: { clientWidth: 800, clientHeight: 600 } } };
+  const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
+    scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
+  };
   const projected = [];
   let behindEye = false;
   // The path runs along x; the port puts x metres at x pixels, y = 300.

@@ -80,7 +80,7 @@ test('superseding a stalled pass aborts promptly without clearing newer loading'
 // and the near plane, and window positions from the scene itself.
 const ANGLE = 35 * Math.PI / 180;
 function portView(scene) {
-  const viewer = { scene };
+  const viewer = { scene, canvas: scene.canvas };
   const position = { x: 0, y: 0, z: 450 };
   const direction = { x: 0, y: Math.cos(ANGLE), z: -Math.sin(ANGLE) };
   bindRenderer(viewer, {
@@ -213,6 +213,9 @@ function flowFixture(source) {
     _roadMode: 'osm',
     _parseRoads: (data) => data.roads,
     _viewer: {
+      get canvas() {
+        return this.scene?.canvas;
+      },
       scene: {
         globe: {
           show: true,

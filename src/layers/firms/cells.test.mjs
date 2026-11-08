@@ -53,6 +53,9 @@ function harness(fires, heightM, { sceneFromViewer = false } = {}) {
         heightM,
       ),
     },
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas: { clientWidth: 800, clientHeight: 600 },
       preRender: new Cesium.Event(),

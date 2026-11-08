@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   bindRenderer,
   cameraOf,
+  canvasOf,
   drawOf,
   findCamera,
   findCredits,
@@ -25,6 +26,19 @@ test('a scene finds its renderer until it is unbound', () => {
   assert.throws(() => bindRenderer(scene, { id: 'other' }), /already has/);
   unbind();
   assert.equal(rendererOf(scene), null);
+});
+
+test("canvasOf answers with the renderer's canvas, else the host's own", () => {
+  const own = { id: 'own' };
+  const drawn = { id: 'drawn' };
+  const scene = { canvas: own };
+  assert.equal(canvasOf(scene), own);
+  assert.equal(canvasOf({}), null);
+  assert.equal(canvasOf(null), null);
+  const unbind = bindRenderer(scene, { canvas: drawn });
+  assert.equal(canvasOf(scene), drawn);
+  unbind();
+  assert.equal(canvasOf(scene), own);
 });
 
 test('a stale unbind leaves a later binding alone', () => {

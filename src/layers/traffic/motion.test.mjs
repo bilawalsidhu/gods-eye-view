@@ -32,7 +32,12 @@ function setup(t) {
   state._enabled = true;
   state._liveMode = true;
   state._pointCollection = new C.PointPrimitiveCollection();
-  state._viewer = { scene: {} };
+  state._viewer = {
+    scene: {},
+    get canvas() {
+      return this.scene?.canvas;
+    },
+  };
   const parts = {
     rendering: {
       removeHeatLines() {},
@@ -735,6 +740,9 @@ test('selection asks the query port for depth and screen positions, and the came
     segmentDist: [11],
   });
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas: { clientWidth: 1000, clientHeight: 800 },
       globe: { show: true, tilesLoaded: true, getHeight: () => 0 },
@@ -813,6 +821,9 @@ test('selection asks the query port for depth and screen positions, and the came
 
 test('height easing stops visible waypoints at the camera near plane', () => {
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas: { clientWidth: 1000, clientHeight: 800 },
       camera: {},
@@ -879,7 +890,7 @@ test('height easing through the Cesium ports stops at the near plane of a looked
   const centre = C.Cartesian3.fromDegrees(0, 0, 0);
   // A transformed camera: lookAt leaves the camera in the target's frame.
   scene.camera.lookAt(centre, new C.HeadingPitchRange(0, -0.5, 600));
-  const viewer = { scene, camera: scene.camera };
+  const viewer = { scene, camera: scene.camera, canvas: scene.canvas };
   const eyeDepth = (p) =>
     -C.Matrix4.multiplyByPoint(scene.camera.viewMatrix, p, new C.Cartesian3())
       .z;

@@ -15,6 +15,7 @@ import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import { validateBox } from '../layers/recentImagery/model.js';
 import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
 import { msg } from '../i18n/index.js';
+import { canvasOf } from '../render/rendererOf.js';
 
 /** The id this tool claims the pointer under. */
 export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
@@ -39,7 +40,7 @@ export function initImageryBoxTool({
   pickWorld = pickWorldFromScreen,
   documentRef = globalThis.document,
 } = {}) {
-  if (!viewer?.scene || typeof onBox !== 'function') return null;
+  if (!viewer || typeof onBox !== 'function') return null;
 
   let active = false;
   let destroyed = false;
@@ -62,7 +63,7 @@ export function initImageryBoxTool({
   const setPreview = (visible) => preview.setVisible(visible);
   const worldAt = (position) => {
     if (!position) return null;
-    const canvas = viewer.scene.canvas;
+    const canvas = canvasOf(viewer);
     const w = canvas?.clientWidth || canvas?.width || 1;
     const h = canvas?.clientHeight || canvas?.height || 1;
     const point = pickWorld(viewer, position.x / w, position.y / h);

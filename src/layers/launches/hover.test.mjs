@@ -156,7 +156,12 @@ test('mission hover throttles, clears on motion/hidden, and releases listeners',
     removeEventListener: (_n, fn) => listeners.delete(fn),
   };
   const camera = fakeCameraPort();
-  const viewer = { scene: { canvas: { style: {} } } };
+  const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
+    scene: { canvas: { style: {} } },
+  };
   bindRenderer(viewer, { camera: camera.port });
   const hover = createLaunchHover({
     viewer,

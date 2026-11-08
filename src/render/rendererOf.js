@@ -187,6 +187,16 @@ export function bindRenderer(host, renderer) {
 export const rendererOf = (host) => (host && renderers.get(host)) || null;
 
 /**
+ * The canvas the renderer bound to `host` draws in; with none bound, the
+ * scene object's own `canvas` (a viewer's), the same element the default
+ * renderer reports. For sizing by it and listening on it as DOM.
+ * @param {object|null|undefined} host
+ * @returns {HTMLCanvasElement|null}
+ */
+export const canvasOf = (host) =>
+  rendererOf(host)?.canvas ?? host?.canvas ?? null;
+
+/**
  * The camera port of the renderer bound to `host`; with no renderer bound,
  * one built over `host` by the provided factory and kept with it while
  * `host` lives.

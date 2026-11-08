@@ -1,5 +1,5 @@
 import { pickAt as defaultPickAt } from '../input/dispatcher.js';
-import { findCamera } from '../render/rendererOf.js';
+import { canvasOf, findCamera } from '../render/rendererOf.js';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { cameraPoseKey } from './pointerContext.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
@@ -37,9 +37,8 @@ export function createPointerPicker({
   pickAt = defaultPickAt,
 }) {
   return function pickPointer(x, y) {
-    const scene = viewer?.scene;
-    const canvas = scene?.canvas;
-    if (!scene || !canvas) return null;
+    const canvas = canvasOf(viewer);
+    if (!canvas) return null;
     const width = canvas.clientWidth || canvas.width || 0;
     const height = canvas.clientHeight || canvas.height || 0;
     if (!width || !height) return null;

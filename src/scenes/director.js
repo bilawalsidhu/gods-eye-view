@@ -22,7 +22,7 @@ import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import { toRadians } from '../geo/vector.js';
-import { cameraOf, findCamera, rendererOf } from '../render/rendererOf.js';
+import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -137,7 +137,7 @@ export class SceneDirector {
     this._cameraHandoffUnsubscribe =
       styleManager.subscribeCameraHandoff?.(yieldCamera);
     // A viewer of the caller's own, with no renderer bound, has its canvas.
-    const canvas = rendererOf(viewer)?.canvas ?? viewer.scene?.canvas;
+    const canvas = canvasOf(viewer);
     for (const event of ['pointerdown', 'wheel'])
       canvas?.addEventListener(event, yieldCamera, { passive: true });
     this._removeCameraInput = () => {

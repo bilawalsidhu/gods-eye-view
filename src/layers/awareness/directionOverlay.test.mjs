@@ -24,6 +24,9 @@ function overlay(screenAngle) {
   });
   const viewer = {
     container,
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
   };
   bindRenderer(viewer, { camera: camera.port });

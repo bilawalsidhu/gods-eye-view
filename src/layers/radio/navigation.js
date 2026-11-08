@@ -6,7 +6,7 @@ import {
   GLOBAL_RADIO_ALTITUDE_M,
   RADIO_GLOBE_RECENTER_MAX_HEIGHT_M,
 } from './policy.js';
-import { cameraOf, findCamera } from '../../render/rendererOf.js';
+import { cameraOf, canvasOf, findCamera } from '../../render/rendererOf.js';
 
 export function createNavigation({
   state: layerState,
@@ -157,7 +157,7 @@ export function createNavigation({
 
   function radioGlobeRecenterPlan(viewer = layerState._viewer) {
     const pose = findCamera(viewer)?.pose() ?? null;
-    const canvas = viewer?.scene?.canvas;
+    const canvas = canvasOf(viewer);
     const width = canvas?.clientWidth || canvas?.width;
     const height = canvas?.clientHeight || canvas?.height;
     // The eye at the earth's centre has no geodetic position.

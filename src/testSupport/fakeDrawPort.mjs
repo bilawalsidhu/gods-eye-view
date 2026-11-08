@@ -94,6 +94,13 @@ export function fakeDrawPort() {
  */
 export function bindFakeDraw(viewer, renderer = {}) {
   const draw = fakeDrawPort();
-  const unbind = bindRenderer(viewer, { ...renderer, draw });
+  const unbind = bindRenderer(viewer, {
+    // The double's canvas, as `bindFakeCesiumCamera`'s renderer reports it.
+    get canvas() {
+      return viewer.canvas ?? viewer.scene?.canvas;
+    },
+    ...renderer,
+    draw,
+  });
   return { draw, unbind };
 }

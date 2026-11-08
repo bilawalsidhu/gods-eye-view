@@ -25,6 +25,26 @@ function defaultValueText(beforePercent, afterPercent) {
 }
 
 /**
+ * A globe port's split as `createImagerySplit` writes it (its `scene`): the
+ * divider moves the globe's split through the port. Null when the globe
+ * has no split.
+ * @param {import('../render/contract/globe').GlobePort|null|undefined} globe
+ * @returns {{splitPosition: number}|null}
+ */
+export function globeSplitTarget(globe) {
+  const imagery = globe?.imagery;
+  if (!imagery?.setSplit) return null;
+  return {
+    get splitPosition() {
+      return imagery.getSplit();
+    },
+    set splitPosition(value) {
+      imagery.setSplit(value);
+    },
+  };
+}
+
+/**
  * Split divider for before/after imagery comparison.
  *
  * Owns the divider's value, pointer capture, keyboard, ARIA, a CSS custom

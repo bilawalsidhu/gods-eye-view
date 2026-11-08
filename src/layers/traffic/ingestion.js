@@ -2,7 +2,7 @@ import { requestWithDeadline } from '../../sources/requestDeadline.js';
 import { resolveRoadMode, ROAD_SOURCE_LABELS } from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import { RoadRequestError, roadRequestError } from './source.js';
-import { loadedSurfaceHeight } from './surface.js';
+import { viewerRoadSurface } from './surface.js';
 import {
   isUnavailableCapability,
   sourceResponseError,
@@ -273,8 +273,7 @@ export function createIngestion({
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
     // A miss is the local mesh still loading.
     if (!Number.isFinite(estimated))
-      estimated = loadedSurfaceHeight(
-        layerState._viewer?.scene,
+      estimated = viewerRoadSurface(layerState._viewer).loadedHeight(
         { lon: centerLon, lat: centerLat },
         [layerState._pointCollection],
       );

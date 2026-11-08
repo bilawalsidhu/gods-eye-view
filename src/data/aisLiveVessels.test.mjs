@@ -1590,6 +1590,9 @@ test('vessel host publication preserves the shipped grid winner and separation s
   const winner = makeCandidate('200', 'NAMED WINNER', 40, 30, 16);
   const separated = makeCandidate('300', 'SEPARATED', 400, 300, 3);
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: { canvas: { clientWidth: 1600, clientHeight: 900 } },
   };
   const unbind = bindRenderer(viewer, {
@@ -1657,7 +1660,12 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
   });
   _setVesselOverlayHostForTest(host);
   _setVesselStateForTest({
-    viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
+    viewer: {
+      get canvas() {
+        return this.scene?.canvas;
+      },
+      scene: { canvas: { clientWidth: 1600, clientHeight: 900 } },
+    },
     records: [record],
     selectedRecord: record,
   });

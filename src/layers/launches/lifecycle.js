@@ -1,6 +1,6 @@
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor } from '../../input/dispatcher.js';
-import { findCamera, findFrame } from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
 
@@ -25,8 +25,9 @@ export function createLaunchHover({
   let pendingPosition = null;
   let trailingTimer = null;
   const clearCursor = () => {
-    if (ownsCursor && viewer.scene.canvas.style.cursor === 'pointer')
-      viewer.scene.canvas.style.cursor = '';
+    const canvas = canvasOf(viewer);
+    if (ownsCursor && canvas.style.cursor === 'pointer')
+      canvas.style.cursor = '';
     ownsCursor = false;
   };
   const cancelTrailing = () => {
@@ -60,7 +61,7 @@ export function createLaunchHover({
   const pick = (position, at) => {
     lastPick = at;
     if (launchAt(position)) {
-      viewer.scene.canvas.style.cursor = 'pointer';
+      canvasOf(viewer).style.cursor = 'pointer';
       ownsCursor = true;
     } else clearCursor();
   };
@@ -215,8 +216,8 @@ export function createLifecycle({
       parts.selection.stopMissionZoomAnchor();
       parts.rendering.showMissions(false);
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
-      if (layerState._viewer?.scene?.canvas)
-        layerState._viewer.scene.canvas.style.cursor = '';
+      const canvas = canvasOf(layerState._viewer);
+      if (canvas) canvas.style.cursor = '';
       parts.launchPad.hideLaunchPadZone();
       parts.overlays.hideReplayVehicleOverlay();
       layerState._selectedLaunchId = null;

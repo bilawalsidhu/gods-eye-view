@@ -11,7 +11,7 @@ import {
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
 import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
 import { formatAwarenessDirection } from './presentation.js';
-import { drawOf, findCamera } from '../../render/rendererOf.js';
+import { canvasOf, drawOf, findCamera } from '../../render/rendererOf.js';
 import {
   PI_OVER_TWO,
   distance,
@@ -145,7 +145,7 @@ export function createRendering({
       return;
     }
 
-    const canvas = layerState.viewer.scene.canvas;
+    const canvas = canvasOf(layerState.viewer);
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     const sonar = isCyberSonarActive()

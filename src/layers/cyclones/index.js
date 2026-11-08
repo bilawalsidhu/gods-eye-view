@@ -23,7 +23,7 @@ import {
   translateKnown,
 } from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cameraOf, canvasOf } from '../../render/rendererOf.js';
 
 // "10-12 15:00 UTC" never breaks across lines: no-break spaces, and a word
 // joiner after the hyphen (JetBrains Mono has no U+2011 non-breaking hyphen).
@@ -98,12 +98,12 @@ export function createCyclonesLayer({
     rendering?.setSelection(id);
   }
   function installSelection() {
-    if (selectionOwner || !viewer?.scene?.canvas) return;
+    const canvas = canvasOf(viewer);
+    if (selectionOwner || !canvas) return;
     const owner = {};
     selectionOwner = owner;
     // Snapshot before sibling bubble listeners can rebuild the overlay hit
     // rectangles. A vessel selection does that synchronously in the same click.
-    const canvas = viewer.scene.canvas;
     let capturedHit = null;
     const overlayHit = (x, y) => {
       const hit = hitTestOverlay(x, y);

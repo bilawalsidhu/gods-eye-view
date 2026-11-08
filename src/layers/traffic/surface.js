@@ -80,6 +80,22 @@ export function trafficSurfaceReady(scene) {
   return currentRenderedFrame(scene)?.ready === true;
 }
 
+/**
+ * The surface reads here over the scene `viewer` draws, for code that holds
+ * the viewer: the scene is read once, as this is called.
+ * @param {object|undefined} viewer
+ */
+export function viewerRoadSurface(viewer) {
+  const scene = viewer?.scene;
+  return {
+    drawnReady: () => drawnSurfaceReady(scene),
+    ready: () => trafficSurfaceReady(scene),
+    prepare: (roads, ...rest) => prepareRoadSurfaces(roads, scene, ...rest),
+    loadedHeight: (location, exclude) =>
+      loadedSurfaceHeight(scene, location, exclude),
+  };
+}
+
 /** Preserve bends and insert height samples at most 150 m apart, splitting long roads. */
 export function roadSurfaceChunks(coordinates) {
   const chunks = [];

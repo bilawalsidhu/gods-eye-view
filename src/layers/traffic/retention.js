@@ -4,7 +4,7 @@ import {
   equalsEpsilon,
   lerpInto,
 } from '../../geo/vector.js';
-import { findCamera, findQuery } from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import { MAX_DOTS, roadDotBudget } from './policy.js';
 
 export const DOT_CHANGE_BUDGET = 768;
@@ -207,15 +207,15 @@ export function createRetention({ state, parts }) {
    */
   function frameView() {
     const viewer = state._viewer;
-    const scene = viewer?.scene;
-    if (!scene?.canvas?.clientHeight) return null;
+    const canvas = canvasOf(viewer);
+    if (!canvas?.clientHeight) return null;
     const query = findQuery(viewer);
     if (!query) return null;
     return {
       query,
       pose: findCamera(viewer)?.pose() ?? null,
-      width: scene.canvas.clientWidth,
-      height: scene.canvas.clientHeight,
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
     };
   }
   function easeHeights(dt) {

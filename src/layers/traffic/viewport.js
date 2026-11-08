@@ -1,6 +1,6 @@
 import { createReticleFootprint } from './footprint.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
-import { findCamera, findQuery } from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import {
   deriveFetchCenter,
   clampBoundsAroundCenter,
@@ -27,7 +27,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   /** The canvas size in CSS pixels, as the layer has always read it. */
   function canvasSize() {
-    const canvas = layerState._viewer.scene.canvas;
+    const canvas = canvasOf(layerState._viewer);
     return {
       width: canvas.clientWidth || canvas.width,
       height: canvas.clientHeight || canvas.height,

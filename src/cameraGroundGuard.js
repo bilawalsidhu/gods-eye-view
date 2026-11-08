@@ -18,7 +18,7 @@ import { onFollowChanged } from './data/followed.js';
 import { ownCameraArrival } from './data/cameraArrival.js';
 import { distance, dot, fromDegrees, toLonLatH } from './geo/index.js';
 import { heightsOf } from './queries/heights.js';
-import { findCamera } from './render/rendererOf.js';
+import { canvasOf, findCamera } from './render/rendererOf.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
@@ -141,7 +141,7 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     isStale = () => false,
     onLift = null,
   } = options;
-  if (!viewer?.scene || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
+  if (!viewer || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
     return () => {};
 
   // Without a readable pose the guard could not tell a later owner's move.
@@ -150,7 +150,7 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
 
   let timer = null;
   let done = false;
-  const canvas = viewer.scene.canvas;
+  const canvas = canvasOf(viewer);
   const documentRef = canvas?.ownerDocument;
   const removers = [];
   let release = () => {};

@@ -7,6 +7,9 @@ import { vesselViewArea } from './cameraArea.js';
 /** A viewer whose camera and query ports answer as given. */
 function viewerWith({ height, lon = 4, lat = 52, hit, size = [1600, 900] }) {
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: { canvas: { clientWidth: size[0], clientHeight: size[1] } },
   };
   const picks = [];

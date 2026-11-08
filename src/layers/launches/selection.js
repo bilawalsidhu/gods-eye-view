@@ -12,7 +12,7 @@ import {
   vec,
 } from '../../geo/vector.js';
 import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
-import { cameraOf, findCamera } from '../../render/rendererOf.js';
+import { cameraOf, canvasOf, findCamera } from '../../render/rendererOf.js';
 
 export function createSelection({
   state: layerState,
@@ -23,7 +23,7 @@ export function createSelection({
   const { getKeyholeGeometry } = services.geometry;
 
   function focusFullGlobe(viewer, duration = 2.4) {
-    const canvas = viewer?.scene?.canvas;
+    const canvas = canvasOf(viewer);
     const height = canvas?.clientHeight || canvas?.height;
     const width = canvas?.clientWidth || canvas?.width;
     if (!(width > 0) || !(height > 0)) return;
@@ -121,7 +121,7 @@ export function createSelection({
     const launchPosition = fromDegrees(launch.lon, launch.lat);
     let range = 18000000;
     if (orbitPositions?.length > 1) {
-      const canvas = layerState._viewer.scene.canvas;
+      const canvas = canvasOf(layerState._viewer);
       const fovy = camera.pose().fovy || toRadians(60);
       const aspect = Math.max(
         0.1,

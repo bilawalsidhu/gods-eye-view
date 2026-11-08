@@ -1,6 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance, dot } from '../../geo/vector.js';
-import { findCamera } from '../../render/rendererOf.js';
+import { canvasOf, findCamera } from '../../render/rendererOf.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
@@ -365,7 +365,7 @@ export function createLifecycle({
       attachViewListeners();
       // A resize or rotation changes what is on screen without moving the
       // camera.
-      const canvas = layerState._viewer.scene?.canvas;
+      const canvas = canvasOf(layerState._viewer);
       if (layerState._viewResizeCanvas !== canvas) {
         // A re-init against a new viewer observes its canvas instead.
         layerState._viewResizeObserver?.disconnect();

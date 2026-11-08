@@ -1,6 +1,6 @@
 import { useWindInspectionStore } from '../../ui/stores/windInspection.js';
 import { applicationPinia } from '../../ui/vueRuntime.js';
-import { findFrame, findQuery } from '../../render/rendererOf.js';
+import { canvasOf, findFrame, findQuery } from '../../render/rendererOf.js';
 
 /**
  * One passive marker for the captured location; it never samples on camera
@@ -33,7 +33,7 @@ export function createWindInspectionMarker({
   return {
     show(position) {
       clear();
-      const canvas = viewer?.scene?.canvas;
+      const canvas = canvasOf(viewer);
       const query = viewer ? findQuery(viewer) : null;
       const frame = viewer ? findFrame(viewer) : null;
       if (!position || !container?.ownerDocument || !canvas || !query || !frame)

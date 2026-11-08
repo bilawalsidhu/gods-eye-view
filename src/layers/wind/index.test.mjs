@@ -317,6 +317,9 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   let center = fromDegrees(0, 0);
   const viewer = {
     container,
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas: { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
     },

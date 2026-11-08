@@ -100,6 +100,9 @@ export function boxToolFakes() {
   const sources = [];
   const viewer = {
     renders: 0,
+    get canvas() {
+      return this.scene.canvas;
+    },
     scene: {
       canvas: { clientWidth: 1000, clientHeight: 500 },
       screenSpaceCameraController: { enableInputs: true },

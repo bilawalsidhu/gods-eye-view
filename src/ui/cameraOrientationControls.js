@@ -17,7 +17,12 @@ import {
   TWO_PI,
   zeroToTwoPi,
 } from '../geo/index.js';
-import { findCamera, findFrame, findQuery } from '../render/rendererOf.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
 import { placeFollowEye } from './shareFollow.js';
 
 function trackedTarget(viewer) {
@@ -55,7 +60,7 @@ function cubicInOut(k) {
 /** Return the world position under the center of the canvas, when available. */
 export function pickViewTarget(viewer) {
   const query = findQuery(viewer);
-  const canvas = viewer?.scene?.canvas;
+  const canvas = canvasOf(viewer);
   if (!query || !canvas) return null;
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
@@ -329,7 +334,7 @@ export function bindCameraOrientationControls({
   subscribe(findCamera(viewer)?.on('moveEnd', refreshTilt));
   if (viewer) removers.push(onFollowChanged(viewer, animator.cancel));
   for (const type of ['pointerdown', 'wheel']) {
-    const canvas = viewer?.scene?.canvas;
+    const canvas = canvasOf(viewer);
     canvas?.addEventListener?.(type, animator.cancel, { passive: true });
     removers.push(() => canvas?.removeEventListener?.(type, animator.cancel));
   }

@@ -114,6 +114,9 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 100, top: 200 });
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas,
       pick() {
@@ -308,6 +311,9 @@ test('a click on a storm card or lead-hour label selects that storm without pick
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas,
       pick() {

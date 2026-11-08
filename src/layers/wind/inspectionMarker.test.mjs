@@ -26,6 +26,9 @@ function fixture(t) {
   const projected = [];
   const requests = [];
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas: {
         clientWidth: 800,

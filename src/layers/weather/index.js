@@ -11,7 +11,12 @@ import {
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
-import { cameraOf, findCamera, findQuery } from '../../render/rendererOf.js';
+import {
+  cameraOf,
+  canvasOf,
+  findCamera,
+  findQuery,
+} from '../../render/rendererOf.js';
 
 /**
  * A stored (English) failure in the language. HTTP failures from source.js
@@ -580,7 +585,7 @@ export function createWeatherLayer({
       const shownProblem = problem ? presentWeatherProblem(problem) : null;
       const shownHost = hostStatus ? t(hostStatus) : null;
       const b = manifest?.bounds;
-      const canvas = viewer?.scene?.canvas;
+      const canvas = canvasOf(viewer);
       const point =
         canvas &&
         findQuery(viewer)?.pickEllipsoid(
