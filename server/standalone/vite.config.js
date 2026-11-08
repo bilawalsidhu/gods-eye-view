@@ -16,7 +16,8 @@ export function standaloneConfig(
   { command, mode },
   { nominatimStorageDir } = {},
 ) {
-  const loaded = loadEnv(mode, root, '');
+  // GEV_STATE_DIR (desktop app) relocates the writable .env; default is the checkout.
+  const loaded = loadEnv(mode, process.env.GEV_STATE_DIR || root, '');
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
