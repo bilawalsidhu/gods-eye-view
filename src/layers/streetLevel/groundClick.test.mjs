@@ -3,6 +3,7 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
 import * as scenePick from '../../data/scenePick.js';
+import { pickGroundPosition } from '../../input/dispatcher.js';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { streetPorts } from '../../testSupport/streetLevelFakes.mjs';
 
@@ -70,7 +71,7 @@ function harness({
   const click = (pick) =>
     openAtGround({
       surface: scenePick.isSurfacePick(pick),
-      ground: () => scenePick.pickGroundPosition(state.viewer, { x: 1, y: 1 }),
+      ground: () => pickGroundPosition(state.viewer, { x: 1, y: 1 }),
     });
   return { opened, click };
 }

@@ -163,7 +163,7 @@ test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
 });
 
 test('the ground under a click: the rendered surface, else the ellipsoid, never the sky', async () => {
-  const { pickGroundPosition } = await import('./scenePick.js');
+  const { pickGroundPosition } = await import('../input/dispatcher.js');
   const ground = { x: 6378137, y: 0, z: 0 };
   const sky = { x: 500, y: 0, z: 0 };
   const viewer = (picked, ellipsoid) => ({

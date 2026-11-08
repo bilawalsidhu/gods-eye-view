@@ -44,7 +44,7 @@ import {
   pickContact,
   resolvePickId,
 } from '../data/pickRegistry.js';
-import { isSurfacePick, pickGroundPosition } from '../data/scenePick.js';
+import { isPickedWorldPosition, isSurfacePick } from '../data/scenePick.js';
 import { sensorPickPosition } from './sensorPick.js';
 
 // A tool takes the pointer with a lease before it subscribes with one.
@@ -55,6 +55,40 @@ export {
   pointerOwner,
   releasePointer,
 } from '../data/inputOwnership.js';
+
+/**
+ * The world position under a screen point: the rendered surface where the
+ * depth buffer has it, else the ellipsoid; null over the sky.
+ *
+ * @param {object} viewer A Cesium viewer.
+ * @param {{x: number, y: number}} screenPosition
+ * @returns {{x: number, y: number, z: number}|null} A Cartesian3.
+ */
+export function pickGroundPosition(viewer, screenPosition) {
+  const scene = viewer?.scene;
+  let position = null;
+  if (
+    scene?.pickPositionSupported &&
+    typeof scene.pickPosition === 'function'
+  ) {
+    try {
+      position = scene.pickPosition(screenPosition);
+    } catch {
+      position = null;
+    }
+  }
+  if (
+    !isPickedWorldPosition(position) &&
+    typeof viewer?.camera?.pickEllipsoid === 'function'
+  ) {
+    try {
+      position = viewer.camera.pickEllipsoid(screenPosition);
+    } catch {
+      position = null;
+    }
+  }
+  return isPickedWorldPosition(position) ? position : null;
+}
 
 /** The handler event types the scene's input port binds, for test doubles. */
 export const HANDLER_EVENT_TYPES = Cesium.ScreenSpaceEventType;

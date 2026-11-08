@@ -1,6 +1,7 @@
 import { weatherTileUrl } from './source.js';
 import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
 import { imageryHostStatus } from './imageryHost.js';
+import { globeImageryHost } from './shellRendering.js';
 import { drawMosaicTile } from './rasterTiles.js';
 import { weatherDisplay } from './display.js';
 import { msg } from '../../i18n/index.js';
@@ -600,7 +601,7 @@ export function createWeatherRendering({
   frameOf = findFrame,
   toBitmap = (canvas) =>
     globalThis.createImageBitmap(canvas, { premultiplyAlpha: 'none' }),
-  getHost = () => ({ collection: viewer.imageryLayers, kind: 'globe' }),
+  getHost = () => globeImageryHost(viewer),
   onChange = () => {},
   timeoutMs = 25_000,
   now = () => performance.now(),
