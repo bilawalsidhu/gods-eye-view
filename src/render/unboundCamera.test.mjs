@@ -100,6 +100,9 @@ const DRAW_FROM_CALLER = new Set([
   // draw, size and fly through the ports alone.
   './infrastructure',
   './infrastructure/geojson',
+  // Not wholly Cesium-free (its pointer input still is), but its missions
+  // draw, pick and fly through the ports alone.
+  './layers/launches',
 ]);
 
 /**

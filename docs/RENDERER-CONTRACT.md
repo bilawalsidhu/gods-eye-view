@@ -51,6 +51,14 @@ optional, so a renderer written before it still conforms:
   on a ground primitive of its own. A renderer that predates it draws the
   rectangle unturned.
 
+The Cesium port also draws `pattern` line styles (the image repeated
+`repeat` times along the line, in the translucent pass), lines in the
+`inertial` frame (turned each frame by the set's motion clock; never draped
+and never batched), and `radialRim` fills on clamped ellipses (`rimWidth` a
+fraction of the radius; `depthBias` pulls the fill toward the eye). A hidden
+line that cannot settle into a static batch leaves its polyline collection
+until it shows again, since the collection draws every line it holds.
+
 The renderer itself (`renderer.d.ts`) adds capture, pixel reads, settling,
 resize, context loss and `destroy`. `common.d.ts` holds the shared shapes
 (ECEF positions, colours, listener semantics) and the capability list.

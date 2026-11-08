@@ -1,6 +1,7 @@
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
+import { followOnDoubleClick } from '../../data/stockFollow.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
 
@@ -140,7 +141,10 @@ export function createLifecycle({
       const input = inputFor(viewer);
       const unsubscribeClick = input.onClick((event) => {
         if (!layerState._enabled || !parts.rendering.missionsShown()) return;
-        const launchId = parts.rendering.launchIdFromPicks(event.drill(12));
+        // The click's pick position (CSS px), as the click picked it.
+        const launchId = parts.rendering.launchIdFromPicks(
+          parts.rendering.missionHitsAt(event.position, 12),
+        );
         if (!launchId) return;
         parts.selection.setSelectedMission(launchId);
         parts.selection.focusMission(
@@ -153,11 +157,22 @@ export function createLifecycle({
         launchAt: parts.rendering.launchMarkerAt,
       });
       const unsubscribeHover = input.onPointer('move', hover.move);
+      // A double-click follows a mission point, as the default renderer
+      // followed the missions' entities.
+      layerState._stockFollow = followOnDoubleClick({
+        viewer,
+        inputFor: () => input,
+        name: 'rocket-launches',
+        enabled: () => layerState._enabled && parts.rendering.missionsShown(),
+        targetFor: parts.rendering.followTargetFor,
+      });
       layerState._inputSubscription = () => {
         unsubscribeClick();
         unsubscribeHover();
+        layerState._stockFollow?.destroy();
+        layerState._stockFollow = null;
       };
-      // Apply horizon visibility before Cesium traverses and picks the scene.
+      // Apply horizon visibility before the renderer draws and picks.
       // A postRender write is one frame late and can remain visibly stale when
       // request-on-demand rendering stops after a globe camera move.
       layerState._declutterHandler =
@@ -215,6 +230,7 @@ export function createLifecycle({
       parts.replay.stopMissionReplay();
       parts.selection.stopMissionZoomAnchor();
       parts.rendering.showMissions(false);
+      layerState._stockFollow?.stop();
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
       const canvas = canvasOf(layerState._viewer);
       if (canvas) canvas.style.cursor = '';
@@ -254,7 +270,7 @@ export function createLifecycle({
       layerState._replayTracks.clear();
       parts.panel.clearMissionPanel();
       layerState._viewer = null;
-      parts.rendering.detach(viewer);
+      parts.rendering.detach();
       layerState._count = 0;
       layerState._orbitMatches = 0;
       layerState._lastUpdate = null;

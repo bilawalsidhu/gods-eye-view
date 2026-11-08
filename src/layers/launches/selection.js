@@ -79,7 +79,7 @@ export function createSelection({
       stopMissionZoomAnchor();
       parts.rendering.selectLaunchEntity(null);
     }
-    if (!layerState._dataSource) return;
+    if (!layerState._missionSets) return;
     parts.rendering.isolateMission(launchId);
     parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
     parts.overlays.syncMissionOverlayEntries();

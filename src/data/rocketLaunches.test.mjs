@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { bindRenderer } from '../render/rendererOf.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { gstime } from 'satellite.js';
 import { createModel } from '../layers/launches/model.js';
@@ -1159,37 +1160,34 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     removeEventListener(type) { listeners.delete(`document:${type}`); },
   };
   const canvas = new FakeElement('canvas');
-  const dataSources = [];
-  const camera = {
-    positionCartographic: null,
-    positionWC: Cesium.Cartesian3.fromDegrees(-80.604, 28.608, 18_000_000),
-    cancelFlight() {},
-    lookAtTransform() {},
-  };
+  let eye = fromDegrees(-80.604, 28.608, 18_000_000);
   const scene = {
     canvas,
-    camera,
-    frameState: { frameNumber: 1 },
     postRender: new Cesium.Event(),
     preRender: new Cesium.Event(),
     preUpdate: new Cesium.Event(),
-    primitives: { add: (primitive) => primitive, remove: () => true },
-    drillPick: () => [],
   };
-  const viewer = {
-    camera,
-    scene,
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
+  const viewer = { scene };
+  const { draw } = bindFakeDraw(viewer, {
+    frame: fakeSceneFrame(viewer),
+    camera: {
+      // No pose to fly from: the full-globe framing on enable stays put.
+      pose: () => ({ lon: Number.NaN, lat: Number.NaN, height: 18_000_000, position: eye, fovy: Number.NaN }),
+      on: () => () => {},
+      release() {},
+      cancelFlight() {},
     },
-    selectedEntity: undefined,
+    query: { drillPick: () => [] },
+  });
+  // The mission sets' items by id, across the layer's draw sets.
+  const missionItems = () => {
+    const items = new Map();
+    for (const record of draw.sets.values())
+      if (!record.disposed && /:(lines|sites|markers)$/.test(record.spec.id))
+        for (const [id, item] of record.items) items.set(id, item);
+    return items;
   };
-  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
+  const item = (id) => missionItems().get(id);
   const hostCalls = [];
   const host = {
     setEntries: (...args) => hostCalls.push(['entries', ...args]),
@@ -1245,9 +1243,10 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     await rocketLaunchesLayer.enable();
     await rocketLaunchesLayer.update();
 
-    const entities = dataSources[0].entities.values;
-    assert.ok(entities.length >= 7, 'runtime guard requires the populated mission build path');
-    assert.ok(entities.every((entity) => entity.label === undefined));
+    assert.ok(missionItems().size >= 7, 'runtime guard requires the populated mission build path');
+    // Every set is a kind with no world text: labels are the host's.
+    const kinds = new Set(['lines', 'points', 'icons', 'shapes']);
+    assert.ok([...draw.sets.values()].every((record) => kinds.has(record.kind)));
     const ambientPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID
     ));
@@ -1259,26 +1258,25 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       collisionCapacity: ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
       moving: false,
     });
-    const launchEntity = dataSources[0].entities.getById('rocket-launch:mission-runtime');
-    assert.deepEqual(
+    assert.equal(
       ambientPublication[2][0].position,
-      launchEntity.position.getValue(Cesium.JulianDate.now()),
-      'ambient host marker must reuse the entity anchor Cartesian',
+      item('rocket-launch:mission-runtime').pos,
+      'ambient host marker must reuse the site marker anchor',
     );
     const frameTime = Cesium.JulianDate.now();
     scene.preRender.raiseEvent(scene, frameTime);
-    assert.equal(launchEntity.point.show.getValue(frameTime), true);
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(99.396, -28.608, 18_000_000);
+    assert.equal(item('rocket-launch:mission-runtime').show, true);
+    eye = fromDegrees(99.396, -28.608, 18_000_000);
     scene.preRender.raiseEvent(scene, frameTime);
     assert.equal(
-      launchEntity.point.show.getValue(frameTime),
+      item('rocket-launch:mission-runtime').show,
       false,
       'pre-render horizon pass must hide a rear-side depth-free mission dot before draw and pick',
     );
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(-80.604, 28.608, 18_000_000);
+    eye = fromDegrees(-80.604, 28.608, 18_000_000);
     scene.preRender.raiseEvent(scene, frameTime);
     assert.equal(
-      launchEntity.point.show.getValue(frameTime),
+      item('rocket-launch:mission-runtime').show,
       true,
       'mission dot must return when its surface anchor faces the camera again',
     );
@@ -1304,17 +1302,16 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       && entry.paintLane === 'selected'
       && entry.edgeFade === 'keyhole'
     )));
-    const satelliteEntity = dataSources[0].entities.getById('rocket-satellite:mission-runtime');
-    const satellitePosition = satelliteEntity.position.getValue(Cesium.JulianDate.now());
-    assert.equal(
+    scene.preRender.raiseEvent(scene, frameTime);
+    assert.deepEqual(
       selectedPublication[2][2].position(),
-      satellitePosition,
-      'payload host getter must return the exact per-frame live-position cache',
+      item('rocket-satellite:mission-runtime').pos,
+      'payload host getter must return where the frame drew the payload',
     );
 
-    // Jitter regression net: live-state propagation advances at most once per
-    // frameNumber, and the host getter is a pure read that never advances it.
-    // Without both halves, the host label and the native dot can propagate to
+    // Jitter regression net: live-state propagation advances at most once a
+    // frame, and the host getter is a pure read that never advances it.
+    // Without both halves, the host label and the drawn dot can propagate to
     // different wall-clock instants inside one frame — the documented
     // label-separation jitter class.
     const payloadEntry = selectedPublication[2][2];
@@ -1322,52 +1319,40 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     try {
       let nowMs = realDateNow();
       Date.now = () => nowMs;
-      scene.frameState.frameNumber = 41;
-      const frameA = Cesium.Cartesian3.clone(
-        satelliteEntity.position.getValue(Cesium.JulianDate.now()),
-      );
+      scene.preRender.raiseEvent(scene, frameTime);
+      const frameA = { ...item('rocket-satellite:mission-runtime').pos };
+      assert.deepEqual({ ...payloadEntry.position() }, frameA);
       nowMs += 30_000;
       assert.deepEqual(
-        Cesium.Cartesian3.clone(satelliteEntity.position.getValue(Cesium.JulianDate.now())),
+        { ...payloadEntry.position() },
         frameA,
-        'a second native read in the same frame must not re-propagate',
+        'host getter must not advance propagation between frames',
       );
-      nowMs += 30_000;
-      scene.frameState.frameNumber = 42;
+      scene.preRender.raiseEvent(scene, frameTime);
+      const frameB = { ...item('rocket-satellite:mission-runtime').pos };
+      assert.notDeepEqual(frameB, frameA, 'a new frame propagates (non-vacuous)');
       assert.deepEqual(
-        Cesium.Cartesian3.clone(payloadEntry.position()),
-        frameA,
-        'host getter must not advance propagation, even on a new frame',
-      );
-      const frameB = Cesium.Cartesian3.clone(
-        satelliteEntity.position.getValue(Cesium.JulianDate.now()),
-      );
-      assert.notDeepEqual(frameB, frameA, 'native read on a new frame propagates (non-vacuous)');
-      assert.deepEqual(
-        Cesium.Cartesian3.clone(payloadEntry.position()),
+        { ...payloadEntry.position() },
         frameB,
-        'host getter reads the advanced cache after native propagation',
+        'host getter reads the advanced cache after the frame drew it',
       );
     } finally {
       Date.now = realDateNow;
-      scene.frameState.frameNumber = 1;
     }
-    const reentryEntity = dataSources[0].entities.getById('rocket-reentry:mission-runtime:0');
     assert.deepEqual(
       selectedPublication[2][1].position,
-      reentryEntity.polyline.positions.getValue(Cesium.JulianDate.now())[0],
-      're-entry host label must reuse the recovery-path interface Cartesian',
+      item('rocket-reentry:mission-runtime:0').positions[0],
+      're-entry host label must reuse the recovery-path interface point',
     );
-    const transferEntity = dataSources[0].entities.getById('rocket-transfer:mission-runtime');
     assert.deepEqual(
       selectedPublication[2][3].position,
-      transferEntity.polyline.positions.getValue(Cesium.JulianDate.now()).at(-1),
-      'orbit host label must reuse the insertion Cartesian',
+      item('rocket-transfer:mission-runtime').positions.at(-1),
+      'orbit host label must reuse the insertion point',
     );
 
     launchName = 'Mission Refresh | Gauntlet Payload';
     await rocketLaunchesLayer.update();
-    assert.ok(dataSources[0].entities.values.every((entity) => entity.label === undefined));
+    assert.ok(missionItems().size >= 7);
     const refreshPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID
     ));
@@ -1390,7 +1375,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     ]);
     await rocketLaunchesLayer.destroy(viewer);
     initialized = false;
-    assert.equal(dataSources.length, 0);
+    assert.ok([...draw.sets.values()].every((record) => record.disposed));
     assert.deepEqual(hostCalls.slice(-4), [
       ['clear', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false],

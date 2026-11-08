@@ -1,5 +1,20 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { distance } from '../../geo/vector.js';
+import { findCamera, findFrame } from '../../render/rendererOf.js';
+import { hexColor } from '../../render/color.js';
 import { LAUNCH_PAD_ZONE_RADIUS_M } from './policy.js';
+
+/** The zone's colour: a faint fill under a brighter rim. */
+const ZONE_COLOR = '#22e6e6';
+const ZONE_FILL_ALPHA = 0.105;
+const ZONE_RIM_ALPHA = 0.72;
+/** The rim's width, a fraction of the zone's radius. */
+const ZONE_RIM_WIDTH = 0.033;
+/**
+ * Pulled toward the eye, metres, so the zone is not buried by the pad's
+ * mesh at oblique angles, without a height that would float it.
+ */
+const ZONE_DEPTH_BIAS_M = 1;
 
 export function createLaunchPad({
   state: layerState,
@@ -7,140 +22,97 @@ export function createLaunchPad({
   parts,
   source,
 }) {
+  function zoneSet() {
+    return layerState._missionSets?.pad ?? null;
+  }
+
   function hideLaunchPadZone() {
-    if (layerState._launchPadZonePrimitive)
-      layerState._launchPadZonePrimitive.show = false;
+    const item = layerState._launchPadZoneItem;
+    if (!item || item.show === false) return;
+    layerState._launchPadZoneItem = { ...item, show: false };
+    zoneSet()?.upsert([layerState._launchPadZoneItem]);
   }
 
   function removeLaunchPadZonePrimitive() {
-    if (
-      layerState._launchPadZonePrimitive &&
-      layerState._viewer?.scene?.primitives
-    ) {
-      layerState._viewer.scene.primitives.remove(
-        layerState._launchPadZonePrimitive,
-      );
-    }
-    layerState._launchPadZonePrimitive = null;
+    if (layerState._launchPadZoneItem) zoneSet()?.clear();
+    layerState._launchPadZoneItem = null;
     layerState._launchPadZoneLaunchId = null;
   }
 
+  /** The zone drawn around a launch's pad, draped on the ground. */
   function createLaunchPadZonePrimitive(launch) {
     removeLaunchPadZonePrimitive();
-    const material = new Cesium.Material({
-      fabric: {
-        type: 'GevLaunchPadZone',
-        uniforms: {
-          color: Cesium.Color.fromCssColorString('#22e6e6'),
-          fillAlpha: 0.105,
-          rimAlpha: 0.72,
-        },
-        source: `
-        czm_material czm_getMaterial(czm_materialInput materialInput) {
-          czm_material material = czm_getDefaultMaterial(materialInput);
-          vec2 centered = (materialInput.st - vec2(0.5)) * 2.0;
-          float radius = length(centered);
-          float inside = 1.0 - smoothstep(0.985, 1.0, radius);
-          float rim = smoothstep(0.952, 0.985, radius) * inside;
-          material.diffuse = color.rgb;
-          material.emission = color.rgb * rim * 0.35;
-          material.alpha = color.a * inside * mix(fillAlpha, rimAlpha, rim);
-          return material;
-        }`,
+    const item = {
+      id: `rocket-pad-zone:${launch.id}`,
+      geometry: {
+        kind: 'ellipse',
+        center: { lon: launch.lon, lat: launch.lat },
+        semiMajor: LAUNCH_PAD_ZONE_RADIUS_M,
+        semiMinor: LAUNCH_PAD_ZONE_RADIUS_M,
       },
-    });
-    const geometry = new Cesium.EllipseGeometry({
-      center: Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat),
-      semiMajorAxis: LAUNCH_PAD_ZONE_RADIUS_M,
-      semiMinorAxis: LAUNCH_PAD_ZONE_RADIUS_M,
-      granularity: Cesium.Math.toRadians(0.08),
-      vertexFormat:
-        Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
-    });
-    layerState._launchPadZonePrimitive =
-      layerState._viewer.scene.primitives.add(
-        new Cesium.GroundPrimitive({
-          geometryInstances: new Cesium.GeometryInstance({
-            geometry,
-            id: `rocket-pad-zone:${launch.id}`,
-          }),
-          appearance: new Cesium.MaterialAppearance({
-            material,
-            translucent: true,
-            closed: false,
-            faceForward: true,
-            flat: true,
-            // Keep the zone classified onto the photoreal surface, but bias only its
-            // rasterized depth toward the camera. This avoids coplanar fragments
-            // being intermittently buried by the launch-pad mesh at oblique angles
-            // without adding a world-space height that would make the ring float.
-            renderState: {
-              depthTest: {
-                enabled: true,
-              },
-              depthMask: false,
-              polygonOffset: {
-                enabled: true,
-                factor: -1,
-                units: -4,
-              },
-              blending: Cesium.BlendingState.ALPHA_BLEND,
-            },
-          }),
-          classificationType: Cesium.ClassificationType.BOTH,
-          asynchronous: true,
-          show: true,
-        }),
-      );
+      fill: {
+        preset: 'radialRim',
+        color: hexColor(ZONE_COLOR, ZONE_FILL_ALPHA),
+        rimColor: hexColor(ZONE_COLOR, ZONE_RIM_ALPHA),
+        rimWidth: ZONE_RIM_WIDTH,
+      },
+      height: 'clampGround',
+      clampTo: 'both',
+      depthBias: ZONE_DEPTH_BIAS_M,
+      show: true,
+    };
+    layerState._launchPadZoneItem = item;
+    zoneSet()?.set([item]);
     layerState._launchPadZoneLaunchId = launch.id;
+  }
+
+  /** Before each frame: the rings' labels, and the selected pad's zone. */
+  function updateLaunchPadZone() {
+    if (!layerState._enabled || !parts.rendering.missionsShown()) {
+      hideLaunchPadZone();
+      return;
+    }
+    const nowMs = Date.now();
+    if (nowMs - layerState._lastMissionRingRotationMs >= 1000) {
+      parts.orbitRendering.updateMissionOrbitPrimitiveFrames(nowMs);
+      layerState._lastMissionRingRotationMs = nowMs;
+    }
+    const launch = layerState._launches.find(
+      (item) => item.id === layerState._selectedLaunchId,
+    );
+    const pose = findCamera(layerState._viewer)?.pose();
+    if (!launch || !pose) {
+      hideLaunchPadZone();
+      return;
+    }
+    const launchPosition = fromDegrees(launch.lon, launch.lat);
+    const visible = parts.policyHelpers.launchPadZoneVisible({
+      layerActive: parts.rendering.missionsShown(),
+      selectedLaunchId: layerState._selectedLaunchId,
+      launchId: launch.id,
+      cameraHeightM: pose.height,
+      cameraDistanceM: distance(pose.position, launchPosition),
+    });
+    if (!visible) {
+      hideLaunchPadZone();
+      return;
+    }
+    if (layerState._launchPadZoneLaunchId !== launch.id)
+      createLaunchPadZonePrimitive(launch);
+    else if (layerState._launchPadZoneItem.show === false) {
+      layerState._launchPadZoneItem = {
+        ...layerState._launchPadZoneItem,
+        show: true,
+      };
+      zoneSet()?.upsert([layerState._launchPadZoneItem]);
+    }
   }
 
   function initLaunchPadZonePrimitive() {
     if (!layerState._viewer || layerState._launchPadZoneRemover) return;
     layerState._launchPadZoneRemover =
-      layerState._viewer.scene.preRender.addEventListener(() => {
-        if (!layerState._enabled || !layerState._dataSource?.show) {
-          hideLaunchPadZone();
-          return;
-        }
-        const nowMs = Date.now();
-        if (nowMs - layerState._lastMissionRingRotationMs >= 1000) {
-          layerState._missionRingDate.setTime(nowMs);
-          parts.orbitRendering.updateMissionOrbitPrimitiveFrames(
-            layerState._missionRingDate,
-          );
-          layerState._lastMissionRingRotationMs = nowMs;
-        }
-        const launch = layerState._launches.find(
-          (item) => item.id === layerState._selectedLaunchId,
-        );
-        const camera = layerState._viewer?.camera;
-        if (!launch || !camera) {
-          hideLaunchPadZone();
-          return;
-        }
-        const launchPosition = Cesium.Cartesian3.fromDegrees(
-          launch.lon,
-          launch.lat,
-        );
-        const visible = parts.policyHelpers.launchPadZoneVisible({
-          layerActive: Boolean(layerState._dataSource?.show),
-          selectedLaunchId: layerState._selectedLaunchId,
-          launchId: launch.id,
-          cameraHeightM: camera.positionCartographic?.height,
-          cameraDistanceM: Cesium.Cartesian3.distance(
-            camera.positionWC,
-            launchPosition,
-          ),
-        });
-        if (!visible) {
-          hideLaunchPadZone();
-          return;
-        }
-        if (layerState._launchPadZoneLaunchId !== launch.id)
-          createLaunchPadZonePrimitive(launch);
-        layerState._launchPadZonePrimitive.show = true;
-      });
+      findFrame(layerState._viewer)?.on('preRender', updateLaunchPadZone) ??
+      null;
   }
 
   function destroyLaunchPadZonePrimitive() {
@@ -154,5 +126,6 @@ export function createLaunchPad({
     createLaunchPadZonePrimitive,
     initLaunchPadZonePrimitive,
     destroyLaunchPadZonePrimitive,
+    updateLaunchPadZone,
   };
 }

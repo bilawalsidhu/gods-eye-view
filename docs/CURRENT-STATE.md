@@ -1073,6 +1073,10 @@ fresh core rebuild or lifecycle reset replaces the corresponding ownership.
 Source adapters retain the existing CelesTrak and Launch Library
 endpoints; standalone entries provide scene services and the satellite dependency.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
+Its markers, lines, live rings and pad zone are renderer draw sets, and it
+follows a mission through the camera port, so a caller handing it a Cesium
+viewer, with no renderer bound, loads the
+`./render/cesium/unbound` export once first.
 Launch Library pad coordinates retain unknown values: missing fields use the
 reported location coordinates when available, and launches without a known pad
 position stay off the map. Genuine zero coordinates remain valid. Undisclosed
