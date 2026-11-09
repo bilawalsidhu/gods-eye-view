@@ -5,6 +5,7 @@ import { formatNumber, getLocale, t } from '../../../i18n/index.js';
 import {
   formatCockpitCoordinate,
   formatTleEpochUtc,
+  tleAgeParts,
 } from '../../cockpitPresentation.js';
 import {
   loadFlagUrl,
@@ -52,8 +53,11 @@ const subPointText = computed(() => {
 
 const zoomSteps = computed(() => orbital.value?.zoomSteps || [1]);
 const zoom = computed(() => orbital.value?.zoom ?? zoomSteps.value[0]);
+// The SENSOR step lands between ladder steps, e.g. 5.7×.
 const zoomText = computed(() =>
-  t('ZOOM {zoom}×', { zoom: formatNumber(zoom.value) }),
+  t('ZOOM {zoom}×', {
+    zoom: formatNumber(zoom.value, { maximumFractionDigits: 1 }),
+  }),
 );
 const maxZoom = computed(
   () => orbital.value?.maxZoom ?? Math.max(...zoomSteps.value),
@@ -61,6 +65,11 @@ const maxZoom = computed(
 const atWidest = computed(() => zoom.value <= Math.min(...zoomSteps.value));
 const atTightest = computed(() => zoom.value >= maxZoom.value);
 
+// The imaging sensor's swath: a strip drawn to scale across the view, its
+// width as a readout, and the SENSOR step that zooms the view to it. Off
+// nadir the strip stays, the readout scales as the view's swath does (≈),
+// and the SENSOR step, a nadir framing, is hidden.
+const sensor = computed(() => orbital.value?.sensor || null);
 // Track-up turns the frame to the ground track; north's pointer turns back.
 const trackUp = computed(() => orbital.value?.trackUp === true);
 const northPointerStyle = computed(() => {
@@ -77,11 +86,42 @@ const northLetterStyle = computed(() => {
     : null;
 });
 
-// A focused zoom button that turns off at the end of its range hands focus
-// on instead of dropping it to the page. The watchers run before the
-// re-render, while it still has focus.
+const sensorStripStyle = computed(() => {
+  const fraction = sensor.value?.stripFraction;
+  return finite(fraction) && fraction > 0
+    ? { width: `${(fraction * 100).toFixed(3)}%` }
+    : null;
+});
+const sensorText = computed(() => {
+  const km = sensor.value?.swathKm;
+  if (!finite(km)) return '';
+  const look = orbital.value?.look;
+  if (look?.offset === true) {
+    const scale = look.swathScale;
+    if (!finite(scale)) return '';
+    return t('SENSOR SWATH ≈ {value} KM', {
+      value: formatNumber(km * scale, { maximumFractionDigits: 1 }),
+    });
+  }
+  // As published: 13.1 km, 185 km.
+  return t('SENSOR SWATH {value} KM', {
+    value: formatNumber(km, { maximumFractionDigits: 1 }),
+  });
+});
+const sensorStepShown = computed(
+  () =>
+    finite(sensor.value?.zoom) &&
+    finite(orbital.value?.footprintKm) &&
+    orbital.value?.look?.offset !== true,
+);
+
+// A focused control that turns off (a zoom button at the end of its range,
+// SENSOR as the view tilts away) hands focus on instead of dropping it to the
+// page. The watchers run before the re-render, while it still has focus.
 const zoomInButton = ref(null);
 const zoomOutButton = ref(null);
+const sensorButton = ref(null);
+const nadirButton = ref(null);
 const handFocus = (from, to) => {
   if (!from || document.activeElement !== from) return;
   nextTick(() =>
@@ -98,6 +138,11 @@ watch(
 watch(
   atWidest,
   (now) => now && handFocus(zoomOutButton.value, () => zoomInButton.value),
+  { flush: 'pre' },
+);
+watch(
+  sensorStepShown,
+  (shown) => !shown && handFocus(sensorButton.value, () => nadirButton.value),
   { flush: 'pre' },
 );
 
@@ -185,6 +230,12 @@ const identParts = computed(() => {
   if (o.cosparId) parts.push(o.cosparId);
   const epoch = formatTleEpochUtc(o.tle?.epochMs);
   if (epoch) parts.push(t('EPOCH {time}', { time: epoch }));
+  const age = tleAgeParts(o.tleAgeMs);
+  if (age?.unit === 'under-hour') parts.push(t('<1 H OLD'));
+  else if (age?.unit === 'hours')
+    parts.push(t('{value} H OLD', { value: formatNumber(age.value) }));
+  else if (age?.unit === 'days')
+    parts.push(t('{value} D OLD', { value: formatNumber(age.value) }));
   return parts;
 });
 const identText = computed(() => identParts.value.join(' · '));
@@ -229,6 +280,8 @@ const lensStyle = computed(() => {
           <span v-if="trackUp" class="cockpit-orbital-north-letter" :style="northLetterStyle">{{ t('N') }}</span>
         </span>
       </div>
+      <!-- The imaging sensor's swath, to scale across the view. -->
+      <div v-if="sensorStripStyle" class="cockpit-orbital-sensor-strip" :style="sensorStripStyle" aria-hidden="true"></div>
       <!-- Under the vision selector: where the ground track is. -->
       <p v-if="placeText" id="cockpit-orbital-over" class="cockpit-orbital-over"><span>{{ t('CURRENTLY OVER') }}</span> <strong>{{ placeText }}</strong></p>
       <div class="cockpit-orbital-readout">
@@ -265,7 +318,7 @@ const lensStyle = computed(() => {
         <!-- Shown only while the view is tilted off nadir: where it looks and the way back. -->
         <div v-if="look.offset" class="cockpit-orbital-look">
           <span id="cockpit-orbital-look-readout" class="cockpit-orbital-look-readout" aria-live="polite">{{ look.readout }}</span>
-          <button id="cockpit-orbital-nadir" type="button" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</button>
+          <button id="cockpit-orbital-nadir" ref="nadirButton" type="button" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</button>
         </div>
       </div>
       <div class="cockpit-orbital-optics">
@@ -273,6 +326,8 @@ const lensStyle = computed(() => {
         <span class="cockpit-orbital-zoom" aria-live="polite">{{ zoomText }}</span>
         <button id="cockpit-orbital-zoom-in" ref="zoomInButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atTightest" :aria-label="t('Zoom in')" :title="t('Zoom in (+)')" aria-keyshortcuts="+ =">+</button>
         <span v-if="swathText" class="cockpit-orbital-swath">{{ swathText }}</span>
+        <span v-if="sensorText" class="cockpit-orbital-swath cockpit-orbital-sensor-swath">{{ sensorText }}</span>
+        <button v-if="sensorStepShown" id="cockpit-orbital-sensor" ref="sensorButton" type="button" class="cockpit-orbital-sensor-step" :aria-label="t('Zoom to the imaging sensor swath')" :title="t('Zoom to the imaging sensor swath')">{{ t('SENSOR') }}</button>
       </div>
     </template>
   </section>

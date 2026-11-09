@@ -155,6 +155,12 @@ export const DATA_CREDITS = [
       '(UCS-Satellite-Database 5-1-2023), Union of Concerned Scientists',
   },
   {
+    key: 'imaging-sensors',
+    html:
+      'Imaging sensor swaths: operator and agency specifications, ' +
+      'cited per platform',
+  },
+  {
     key: 'launch-library-2',
     html:
       'Space mission launch, payload &amp; recovery metadata: ' +
