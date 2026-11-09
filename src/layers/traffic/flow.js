@@ -38,7 +38,15 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const status = Number.isFinite(error.status)
       ? error.status
       : Number(message.match(/HTTP (\d{3})/)?.[1]);
+    const code = typeof error.code === 'string' ? error.code : null;
     // English in state; trafficFeedPresentation translates it for the panel.
+    // A hosted deployment limits each account (code from the server); the
+    // local proxy has one daily budget (`budget`) and answers `no_key`.
+    if (code === 'USAGE_LIMIT_REACHED')
+      return msg('Monthly traffic allowance used');
+    if (code === 'RATE_LIMITED') return msg('Traffic rate limit reached');
+    if (status === 503 && code && code !== 'no_key')
+      return msg('Traffic service unavailable');
     if (status === 503) return msg('TomTom key unavailable');
     if (status === 429) return msg('TomTom daily budget reached');
     if (status === 502 || status === 504)
