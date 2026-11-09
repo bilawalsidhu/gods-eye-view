@@ -32,7 +32,7 @@ A `tn()` entry needs two forms. `Intl.PluralRules('sv')` picks:
 | `one`   | 1                           | 1 kamera    |
 | `other` | everything else: 0, 2, 1,5… | 3 kameror   |
 
-Abbreviated units and codes do not change: «{count} MEDD.», «{count} HÖRDA».
+Abbreviated units and codes do not change: «{count} MEDD.».
 
 ## Glossary
 
@@ -81,4 +81,4 @@ Abbreviated units and codes do not change: «{count} MEDD.», «{count} HÖRDA»
 | click / tap / press a key                      | klicka / tryck / tryck på tangenten                             |
 | card / label (on the map) / clear (layers)     | kort / etikett / stäng av                                       |
 | frame (weather, video) / image                 | bildruta / bild                                                 |
-| road condition / incident / roadwork           | väglag / händelse / vägarbete                                   |
+| incident                                       | händelse                                                        |
