@@ -935,6 +935,100 @@ export function createCesiumDraw({
     return look;
   }
 
+  /**
+   * What a billboard draws of an icon item but its position, image, `meta`
+   * and `lodGroup`, as plain values: the course rotation follows the
+   * position, so it is written with it.
+   */
+  function iconStyleOf(record, item) {
+    const color = item.color;
+    const curve = (c) =>
+      c ? [c.near, c.nearValue, c.far, c.farValue] : undefined;
+    return {
+      width: item.size[0],
+      height: item.size[1],
+      scale: item.scale,
+      color:
+        Array.isArray(color) || ArrayBuffer.isView(color) ? [...color] : color,
+      alpha: item.alpha,
+      focus: item.focus,
+      anchor: item.anchor,
+      disableDepthTest: item.disableDepthTest,
+      heightMode: item.height,
+      clampTo: record.spec.clampTo,
+      show: item.show,
+      displayRange: item.displayRange ? [...item.displayRange] : undefined,
+      scaleByDistance: curve(item.scaleByDistance),
+      fadeByDistance: curve(item.fadeByDistance),
+      rotationMode: item.rotationMode,
+      rotation: item.rotation,
+      course: item.course,
+    };
+  }
+
+  /** Whether `item` draws as `style` (`iconStyleOf`) says, but its position. */
+  function sameIconStyle(style, record, item) {
+    const sameList = (a, b) => {
+      if (!a || !b) return a === b;
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
+    };
+    const sameCurve = (a, c) =>
+      !a || !c
+        ? !a && !c
+        : a[0] === c.near &&
+          a[1] === c.nearValue &&
+          a[2] === c.far &&
+          a[3] === c.farValue;
+    const color = item.color;
+    return (
+      style.width === item.size[0] &&
+      style.height === item.size[1] &&
+      style.scale === item.scale &&
+      (Array.isArray(color) || ArrayBuffer.isView(color)
+        ? Array.isArray(style.color) && sameList(style.color, color)
+        : style.color === color) &&
+      style.alpha === item.alpha &&
+      style.focus === item.focus &&
+      style.anchor === item.anchor &&
+      style.disableDepthTest === item.disableDepthTest &&
+      style.heightMode === item.height &&
+      style.clampTo === record.spec.clampTo &&
+      style.show === item.show &&
+      sameList(style.displayRange, item.displayRange) &&
+      sameCurve(style.scaleByDistance, item.scaleByDistance) &&
+      sameCurve(style.fadeByDistance, item.fadeByDistance) &&
+      style.rotationMode === item.rotationMode &&
+      style.rotation === item.rotation &&
+      style.course === item.course
+    );
+  }
+
+  const movedEnu = new Cesium.Matrix4();
+  const movedAxis = new Cesium.Cartesian3();
+  /**
+   * Move a drawn icon whose look is unchanged (`sameIconStyle`): its
+   * position, the course rotation that follows it, and its pick record.
+   */
+  function moveIcon(record, entry, item) {
+    const { billboard, placed } = entry;
+    const position = toCartesianInto(item.pos, placed.position);
+    billboard.position = position;
+    if (item.rotationMode === 'course') {
+      Cesium.Transforms.eastNorthUpToFixedFrame(position, undefined, movedEnu);
+      // The billboard copies the axis it is given.
+      billboard.alignedAxis = Cesium.Matrix4.multiplyByPointAsVector(
+        movedEnu,
+        Cesium.Cartesian3.UNIT_Y,
+        movedAxis,
+      );
+    }
+    billboard.id.meta = item.meta;
+    billboard.id.lodGroup = item.lodGroup;
+    billboard.show = shownNow(record, placed);
+  }
+
   /** Give a billboard its image: a generated one under its key. */
   function setIconImage(record, billboard, image) {
     if (isKeyed(image)) billboard.setImage(image.key, image.canvas);
@@ -957,6 +1051,8 @@ export function createCesiumDraw({
       placed,
       image: imageKeyOf(image),
       canvas: image?.canvas,
+      // What it is drawn as, for `patchIcon`'s quick path.
+      style: iconStyleOf(record, item),
     });
   }
 
@@ -968,6 +1064,17 @@ export function createCesiumDraw({
    */
   function patchIcon(record, entry, item, image) {
     const { billboard, placed } = entry;
+    // Drawn as it was but for where it is: only that is written, so a set
+    // whose icons move every frame costs little more than the moves.
+    if (
+      entry.style &&
+      imageKeyOf(image) === entry.image &&
+      sameIconStyle(entry.style, record, item)
+    ) {
+      moveIcon(record, entry, item);
+      return;
+    }
+    entry.style = iconStyleOf(record, item);
     const position = toCartesian(item.pos);
     const look = iconLook(record, item, position);
     // Sized first: a new SVG image rasterises at the billboard's size.
@@ -984,6 +1091,42 @@ export function createCesiumDraw({
     placed.position = position;
     placed.shown = look.show;
     billboard.show = shownNow(record, placed);
+  }
+
+  /**
+   * `syncIcons`' quick case: every item is drawn, every touched one keeps
+   * the image it is drawn with, and nothing drawn has gone, so each touched
+   * one is changed where it is and nothing is added, removed or reordered.
+   * False, changing nothing, otherwise.
+   * @param {object} record
+   * @param {readonly string[]} touched
+   */
+  function patchDrawnIcons(record, touched) {
+    const drawn = record.billboards;
+    // Nothing to remove: every item drawn, and nothing drawn but items.
+    if (
+      !Array.isArray(touched) ||
+      touched.length === 0 ||
+      drawn.size !== record.items.size
+    )
+      return false;
+    for (const id of touched) {
+      const entry = drawn.get(id);
+      const item = record.items.get(id);
+      if (!entry || !item) return false;
+      const image = iconImage(record, item.image);
+      if (
+        image === undefined ||
+        imageKeyOf(image) !== entry.image ||
+        (isKeyed(image) && image.canvas !== entry.canvas)
+      )
+        return false;
+    }
+    for (const id of touched) {
+      const item = record.items.get(id);
+      patchIcon(record, drawn.get(id), item, iconImage(record, item.image));
+    }
+    return true;
   }
 
   /**
@@ -1015,6 +1158,7 @@ export function createCesiumDraw({
       host.isDestroyed()
     )
       return false;
+    if (!reordered && patchDrawnIcons(record, touched)) return ICONS_KEPT;
     const images = new Map();
     for (const id of touched) {
       const item = record.items.get(id);

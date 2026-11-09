@@ -2823,6 +2823,91 @@ test('icon sets change their billboards in place: restyled, moved, re-imaged, ad
   assert.equal(scene.added.length, 0);
 });
 
+test('icons that only move are moved on the billboards they have, and still restyle', () => {
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const set = part.port.icons({ id: 'icons:moving' });
+  const icon = (lon, extra = {}) => ({
+    id: 'a',
+    pos: Cesium.Cartesian3.fromDegrees(lon, 10, 20),
+    image: 'a.png',
+    size: [20, 20],
+    color: [1, 0, 0, 1],
+    rotationMode: 'screen',
+    rotation: 0.25,
+    disableDepthTest: Infinity,
+    meta: { lon },
+    ...extra,
+  });
+  set.set([icon(0), { ...icon(5), id: 'b' }]);
+  const [host] = scene.added;
+  const a = host.get(0);
+  const version = part.version();
+  // Only moved: its look is not written again.
+  let restyles = 0;
+  const width = Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(a),
+    'width',
+  );
+  Object.defineProperty(a, 'width', {
+    get: width.get,
+    set(value) {
+      restyles += 1;
+      width.set.call(this, value);
+    },
+    configurable: true,
+  });
+  for (const lon of [1, 2, 3]) set.upsert([icon(lon)]);
+  assert.equal(restyles, 0, 'moved, not restyled');
+  assert.equal(scene.added[0], host, 'the same collection');
+  assert.equal(host.get(0), a, 'the same billboard');
+  const at = Cesium.Cartographic.fromCartesian(a.position);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(at.longitude) - 3) < 1e-9);
+  assert.ok(Math.abs(at.height - 20) < 1e-6);
+  assert.equal(a.rotation, 0.25);
+  assert.ok(Cesium.Color.equals(a.color, Cesium.Color.RED));
+  assert.deepEqual(a.id.meta, { lon: 3 }, 'picks read the latest meta');
+  assert.equal(part.version(), version, 'nothing added or removed');
+
+  // A look that changes after moves is drawn, then moves go on from it.
+  set.upsert([icon(3, { color: [0, 1, 0, 1], rotation: 1, size: [30, 30] })]);
+  assert.equal(restyles, 1, 'restyled once');
+  assert.ok(Cesium.Color.equals(a.color, Cesium.Color.LIME));
+  assert.equal(a.rotation, 1);
+  assert.equal(a.width, 30);
+  set.upsert([icon(4, { color: [0, 1, 0, 1], rotation: 1, size: [30, 30] })]);
+  assert.ok(Cesium.Color.equals(a.color, Cesium.Color.LIME));
+  assert.equal(a.width, 30);
+  const moved = Cesium.Cartographic.fromCartesian(a.position);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(moved.longitude) - 4) < 1e-9);
+
+  // A course-turned icon's axis follows where it moves.
+  const course = (lon) =>
+    icon(lon, { rotationMode: 'course', course: 90, rotation: undefined });
+  set.upsert([course(4)]);
+  set.upsert([course(60)]);
+  const north = Cesium.Matrix4.multiplyByPointAsVector(
+    Cesium.Transforms.eastNorthUpToFixedFrame(
+      Cesium.Cartesian3.fromDegrees(60, 10, 20),
+    ),
+    Cesium.Cartesian3.UNIT_Y,
+    new Cesium.Cartesian3(),
+  );
+  assert.ok(Cesium.Cartesian3.equalsEpsilon(a.alignedAxis, north, 1e-12));
+  assert.equal(a.rotation, -Cesium.Math.toRadians(90));
+  // Hidden in place, while it moves.
+  set.upsert([{ ...course(61), show: false }]);
+  assert.equal(a.show, false);
+  set.upsert([{ ...course(62), show: false }]);
+  assert.equal(a.show, false);
+  set.upsert([course(63)]);
+  assert.equal(a.show, true);
+  set.dispose();
+});
+
 test('an icon drawn from an atlas slot takes a re-registered slot in place', () => {
   const scene = fakeScene();
   const part = createCesiumDraw({
