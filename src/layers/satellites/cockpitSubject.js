@@ -75,6 +75,8 @@ function satelliteIdentity(noradId, sat) {
       satelliteOwner({ ucs: sat.ucs, satcat: sat.satcat, satelliteClass }),
     ),
     operator: satelliteOperator({ ucs: sat.ucs, satelliteClass }),
+    // src/layers/satellites/sensors.js entry, or null: the orbital view's sensor swath.
+    sensor: sat.sensor ?? null,
   });
   sat.cockpitIdentity = identity;
   return identity;
@@ -95,8 +97,8 @@ function freezeOwner(owner) {
  * @param {number} noradId NORAD catalog number.
  * @param {{name?: string, group?: string}|null} sat Catalog entry.
  * @param {{latitude: number, longitude: number, altitude: number,
- *   speedMps?: number|null, groundTrackDeg?: number|null}|null} fix Per-frame
- *   SGP4 sample (orbits.js propagatePosition).
+ *   speedMps?: number|null, groundTrackDeg?: number|null, atMs?: number}|null}
+ *   fix Per-frame SGP4 sample (orbits.js propagatePosition), at `atMs`.
  * @returns {object|null} Subject info, or null without a usable fix.
  */
 export function satelliteCockpitInfo(noradId, sat, fix) {
@@ -120,6 +122,9 @@ export function satelliteCockpitInfo(noradId, sat, fix) {
     altitudeM: altitude,
     // SGP4's TEME velocity: the inertial orbital speed, not ground speed.
     velocityMps: Number.isFinite(fix.speedMps) ? fix.speedMps : null,
+    // The time the position is at (epoch ms), the satellites' world-clock
+    // time; null when the sample does not say.
+    atMs: Number.isFinite(fix.atMs) ? fix.atMs : null,
     // Degrees clockwise from north; null for a geostationary satellite.
     groundTrackDeg: Number.isFinite(fix.groundTrackDeg)
       ? fix.groundTrackDeg
@@ -138,6 +143,7 @@ export function satelliteCockpitInfo(noradId, sat, fix) {
     // owners), label: English name } or null.
     owner: identity.owner,
     operator: identity.operator,
+    sensor: identity.sensor,
   };
 }
 

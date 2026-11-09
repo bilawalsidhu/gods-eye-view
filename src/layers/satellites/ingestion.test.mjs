@@ -293,3 +293,23 @@ test('a current SATCAT read is kept between updates; a failed one is asked again
   await update();
   assert.equal(reads, 3 * perUpdate, 'a failed read is asked again');
 });
+
+test('a failed imaging-sensor pack is warned about, as the UCS pack is', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  const warn = t.mock.method(console, 'warn', () => {});
+  const { state, update } = ingestionFor(tleSet('OLD STAGE', '40115'), {
+    source: {
+      readSensors: async () => {
+        throw new Error('chunk failed');
+      },
+    },
+  });
+  await update();
+  assert.ok(
+    warn.mock.calls.some((call) =>
+      /sensor pack unavailable/i.test(call.arguments[0]),
+    ),
+    'the failure is not swallowed',
+  );
+  assert.equal(state._catalog.get(40115).sensor, null, 'base zoom steps');
+});

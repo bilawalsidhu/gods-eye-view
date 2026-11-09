@@ -354,6 +354,15 @@
   transform: translateX(-50%);
   white-space: nowrap;
 }
+/* With a sensor's swath and step the strip is longer: it may wrap on a
+   narrow screen rather than run off it. */
+@media (max-width: 720px) {
+  .cockpit-orbital-optics {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: calc(100vw - 32px);
+  }
+}
 .cockpit-orbital-zoom-button {
   width: 28px;
   height: 24px;
@@ -496,4 +505,42 @@
 }
 body.cockpit-orbit #view-switcher button {
   border-radius: 2px;
+}
+
+/* The imaging sensor's narrowest swath, to scale across the view's width. The
+   view is track-up, so the swath runs top to bottom along the ground track. */
+.cockpit-orbital-sensor-strip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  min-width: 2px;
+  border-inline: 1px dashed var(--orbital-line);
+  background: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 6%,
+    transparent
+  );
+  transform: translateX(-50%);
+}
+.cockpit-orbital-sensor-swath {
+  color: var(--cockpit-accent, #00dcff);
+}
+.cockpit-orbital-sensor-step {
+  padding: 3px 8px;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cockpit-orbital-sensor-step:hover,
+.cockpit-orbital-sensor-step:focus-visible {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: #fff;
+  outline: none;
 }
