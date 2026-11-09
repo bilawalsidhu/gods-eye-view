@@ -2,7 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStubRenderer } from './index.js';
 import { createStubHarness } from './harness.js';
-import { runConformance } from '../conformance/index.js';
+import {
+  CAMERA_SCRIPTS,
+  runConformance,
+  usesInput,
+} from '../conformance/index.js';
 import { toEcef } from './math.js';
 
 test('the stub passes the conformance suite', async () => {
@@ -15,7 +19,12 @@ test('the stub passes the conformance suite', async () => {
   const skipped = report.results
     .filter((r) => r.status === 'skip')
     .map((r) => r.id);
-  assert.deepEqual(skipped, []);
+  // Its camera takes no user gestures: the drag and wheel scripts are for
+  // a camera that does (a controller over it, say).
+  assert.deepEqual(
+    skipped,
+    CAMERA_SCRIPTS.filter(usesInput).map((s) => `camera.trace.${s.name}`),
+  );
 });
 
 test('a frame runs the contract’s steps in order', () => {

@@ -3,7 +3,11 @@
  * view rules the traces cannot show.
  */
 import goldens from '../goldens/camera.json' with { type: 'json' };
-import { CAMERA_SCRIPTS, SCRIPT_VIEWPORT } from '../cameraScripts.js';
+import {
+  CAMERA_SCRIPTS,
+  SCRIPT_VIEWPORT,
+  usesInput,
+} from '../cameraScripts.js';
 import { contractDriver, runCameraScript } from '../cameraRunner.js';
 import { deepEqual, equal, near, nearAngle, nearVec, ok } from '../expect.js';
 
@@ -136,6 +140,11 @@ export function cameraChecks() {
     async run(h) {
       const expected = goldens.scripts[script.name];
       ok(expected, `no reference trace for ${script.name}`);
+      const input = usesInput(script);
+      if (input && h.cameraInput && !h.pointer)
+        throw new Error('a harness with cameraInput needs pointer');
+      if (input && !h.cameraInput)
+        return { skip: 'the harness has no camera that answers pointer input' };
       const r = await fresh(h);
       try {
         if (script.capability && !r.capabilities.has(script.capability))
@@ -144,6 +153,12 @@ export function cameraChecks() {
           contractDriver(r, {
             frame: () => h.frame(r),
             toEcef: lonLatToEcef(h),
+            ...(input
+              ? {
+                  pointer: (type, x, y, extra) =>
+                    h.pointer(r, type, x, y, extra),
+                }
+              : {}),
           }),
           script,
         );

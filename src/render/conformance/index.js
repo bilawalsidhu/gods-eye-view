@@ -19,7 +19,8 @@
  * ```
  *
  * Optional harness members widen what is checked: `pointer(r, type, x, y)`
- * (synthetic input), `scriptHeights(r, fn)` (heights from a function),
+ * (synthetic input; with `cameraInput`, the camera scripts' drags and
+ * wheels too), `scriptHeights(r, fn)` (heights from a function),
  * `wallTime(r)` (the wall clock a `live` motion clock reads),
  * `assets.model` (a glTF URL). `create` may return null when it cannot
  * make a renderer with fewer capabilities; those checks are then skipped.
@@ -46,6 +47,10 @@ import { portChecks } from './checks/ports.js';
  * @property {ConformanceTolerance} tolerance
  * @property {'trace'|'endpoints'} flightPaths Whether flight paths are compared frame by frame, or only where flights end.
  * @property {(r: object, type: string, x: number, y: number, extra?: object) => void|Promise<void>} [pointer]
+ *   A move's `x, y` is where it started and `extra.endPosition` where it
+ *   went; `extra` also has `button` (a move's the one held), `modifiers`
+ *   and, for a wheel, `delta` in the input port's lines.
+ * @property {boolean} [cameraInput] The renderer's camera moves on pointer input sent through `pointer` (its own gestures, or a camera controller's): the camera scripts with `input` steps run.
  * @property {(r: object, fn: (point: {lon: number, lat: number}, against?: string) => number|null) => void} [scriptHeights]
  * @property {(r: object) => number} [wallTime] Epoch ms the renderer's `live` motion clock reads.
  * @property {{model?: string}} [assets]
@@ -111,7 +116,7 @@ export async function runConformance(harness, options = {}) {
   };
 }
 
-export { CAMERA_SCRIPTS, SCRIPT_VIEWPORT } from './cameraScripts.js';
+export { CAMERA_SCRIPTS, SCRIPT_VIEWPORT, usesInput } from './cameraScripts.js';
 export { CALIBRATION_PATH, REFERENCE_SCENES, sceneSupport } from './scenes.js';
 export {
   VISUAL_TOLERANCE,

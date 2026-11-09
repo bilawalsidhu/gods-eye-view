@@ -207,8 +207,9 @@ renderer under test:
 - `tolerance` and `flightPaths`.
 
 Optional members widen what is checked: `pointer` for synthetic input,
-`scriptHeights`, `assets.model`, and `assets.missingModel` (a model url
-that fails to load, for the `loadFailed` check).
+`cameraInput` (the camera answers that input: the drag and wheel traces
+run), `scriptHeights`, `assets.model`, and `assets.missingModel` (a model
+url that fails to load, for the `loadFailed` check).
 
 There are two layers of checks.
 
@@ -231,6 +232,22 @@ match each recorded pose:
 - within 1 mm in position, 1e-9 in unit vectors and angles, and 1e-3 px on
   screen;
 - with every flight ending within one frame of the recording.
+
+Some scripts move the camera by user input: left, middle, Shift and Ctrl
+drags, and wheels in pixel and line mode. The recorder runs those on
+Cesium's own `ScreenSpaceCameraController`, fed the DOM events the script
+describes, with `Date` on the virtual clock too (its coasting reads it). A
+renderer under test gets them through its harness's `pointer`, a wheel as
+the input port's lines. Only a harness with `cameraInput` runs them: the
+stub's camera takes no gestures, so it skips them; a camera controller
+over the stub would run them. `cameraPort.test.mjs` runs them on Cesium's
+controls under the Cesium camera port, each wheel sent back as lines.
+
+A wheel's `delta` is lines as Cesium counts them: a pixel-mode wheel at
+40 px a line and a page at 3 lines (`src/render/input/wheel.js`). Turning
+lines back into pixels at 40 px a line gives Cesium's own wheel in every
+mode, so a controller that does that zooms as Cesium does in Chrome (pixel
+mode) and Firefox (line mode) alike.
 
 `src/render/cesium/cameraGoldens.test.mjs` fails when the installed Cesium
 no longer records the committed traces. After a Cesium upgrade or a script

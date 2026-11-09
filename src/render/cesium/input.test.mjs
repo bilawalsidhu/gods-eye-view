@@ -240,7 +240,7 @@ test('ctrlWheelZoom installs the zoom and takes it out again', () => {
   assert.deepEqual(s.wheelZoom, ['on', 'off', 'on', 'off']);
 });
 
-test('wheel is in lines, where the pointer is over the canvas', () => {
+test('wheel is in lines as the reference counts them, where the pointer is over the canvas', () => {
   const s = setup();
   const wheels = [];
   s.port.on('wheel', (ev) =>
@@ -259,10 +259,18 @@ test('wheel is in lines, where the pointer is over the canvas', () => {
     deltaY: -3,
     deltaMode: 1,
   });
+  s.canvas.dispatch('wheel', {
+    clientX: 10,
+    clientY: 20,
+    deltaY: 1,
+    deltaMode: 2,
+  });
   assert.deepEqual(wheels[0][0], { x: 100, y: 200 });
-  assert.equal(wheels[0][1], 3);
+  // 40 px a line, 3 lines a page: Cesium's own 40 px a line and 120 a page.
+  assert.equal(wheels[0][1], 2.5);
   assert.equal(wheels[0][2].ctrl, true);
   assert.equal(wheels[1][1], -3);
+  assert.equal(wheels[2][1], 3);
 });
 
 test('a pinch is the scale since the last event, at its midpoint', () => {

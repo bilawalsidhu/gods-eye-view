@@ -5,6 +5,14 @@
  * either a renderer through the contract ({@link contractDriver}) or the
  * reference recorder's own.
  */
+import { wheelLines } from '../input/wheel.js';
+
+const NO_MODIFIERS = Object.freeze({
+  shift: false,
+  ctrl: false,
+  alt: false,
+  meta: false,
+});
 
 /**
  * @typedef {object} CameraDriver
@@ -18,6 +26,20 @@
  * @property {(position: object) => boolean} occluded
  * @property {() => boolean} flying
  * @property {(position: object) => object} toEcef
+ * @property {(ev: ScriptPointer) => void|Promise<void>} [pointer] For scripts with `input` steps.
+ */
+
+/**
+ * A script's pointer event: `position` is where it happened (for a move,
+ * where the pointer was) and `endPosition` where a move went; a wheel has
+ * the DOM's `deltaY` and `deltaMode`.
+ * @typedef {object} ScriptPointer
+ * @property {'down'|'move'|'up'|'wheel'} type
+ * @property {{x: number, y: number}} position
+ * @property {{x: number, y: number}} [endPosition]
+ * @property {0|1|2} button
+ * @property {{shift: boolean, ctrl: boolean, alt: boolean, meta: boolean}} modifiers
+ * @property {{deltaY: number, deltaMode: number}} [wheel]
  */
 
 /** The parts of a pose a trace keeps. */
@@ -47,8 +69,33 @@ export async function runCameraScript(driver, script) {
   const flights = [];
   const listeners = [];
   let frame = 0;
+  // Where the pointer is, for the next move's start, and the button held
+  // since the last press (a move carries it, as an input port reports it).
+  // Only a press or a move puts the pointer somewhere, as in the reference:
+  // a wheel or a release elsewhere leaves the next move starting where the
+  // pointer last went.
+  let pointerAt = null;
+  let held = null;
   for (const [index, step] of script.steps.entries()) {
-    if (step.do === 'frames') {
+    if (step.input) {
+      const at = { x: step.x, y: step.y };
+      const ev = {
+        type: step.input,
+        position: step.input === 'move' ? (pointerAt ?? at) : at,
+        ...(step.input === 'move' ? { endPosition: at } : {}),
+        button: step.button ?? (step.input === 'move' ? held : null) ?? 0,
+        modifiers: { ...NO_MODIFIERS, ...(step.modifiers ?? {}) },
+        ...(step.input === 'wheel'
+          ? { wheel: { deltaY: step.deltaY, deltaMode: step.deltaMode ?? 0 } }
+          : {}),
+      };
+      if (step.input === 'down' || step.input === 'move') pointerAt = at;
+      if (step.input === 'down') held = ev.button;
+      else if (step.input === 'up') held = null;
+      if (!driver.pointer)
+        throw new Error('this driver takes no pointer input');
+      await driver.pointer(ev);
+    } else if (step.do === 'frames') {
       for (let i = 0; i < step.count; i++) {
         frame += 1;
         await driver.frame();
@@ -143,7 +190,10 @@ function resolveArgs(driver, name, args) {
 /**
  * A driver over a renderer, through the contract only.
  * @param {import('../contract/renderer').Renderer} renderer
- * @param {{frame: () => void|Promise<void>, toEcef: (p: object) => object}} hooks
+ * `hooks.pointer(type, x, y, extra)` sends a pointer event the way a
+ * harness's `pointer` does; a wheel goes as the input port's lines.
+ * @param {{frame: () => void|Promise<void>, toEcef: (p: object) => object,
+ *   pointer?: (type: string, x: number, y: number, extra: object) => void|Promise<void>}} hooks
  * @returns {CameraDriver}
  */
 export function contractDriver(renderer, hooks) {
@@ -167,5 +217,16 @@ export function contractDriver(renderer, hooks) {
     matrices: () => camera.matrices(),
     viewRectangle: () => camera.viewRectangle(),
     toEcef: hooks.toEcef,
+    ...(hooks.pointer
+      ? {
+          pointer: (ev) =>
+            hooks.pointer(ev.type, ev.position.x, ev.position.y, {
+              button: ev.button,
+              modifiers: ev.modifiers,
+              ...(ev.endPosition ? { endPosition: ev.endPosition } : {}),
+              ...(ev.wheel ? { delta: wheelLines(ev.wheel) } : {}),
+            }),
+        }
+      : {}),
   };
 }

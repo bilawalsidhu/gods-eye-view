@@ -26,6 +26,7 @@ import * as Cesium from 'cesium';
 import { createInputRouter } from '../input/router.js';
 import { acquireCameraInput } from './cameraInput.js';
 import { installTrackpadPinchZoom } from './ctrlWheelZoom.js';
+import { wheelLines } from '../input/wheel.js';
 
 const T = Cesium.ScreenSpaceEventType;
 const MODIFIERS = [
@@ -52,8 +53,6 @@ const DOM_EVENTS = [
   'touchcancel',
   'dblclick',
 ];
-/** A wheel notch scrolls 100 px in Chrome, which it counts as three lines. */
-const PX_PER_LINE = 100 / 3;
 /** A drill is run at least this deep and sliced, so asks share one pass. */
 const DRILL_DEPTH = 16;
 const NO_MODIFIERS = Object.freeze({
@@ -440,16 +439,11 @@ export function createCesiumInput(
 
   const onWheel = (event) => {
     const rect = canvas.getBoundingClientRect?.() ?? { left: 0, top: 0 };
-    const lines =
-      event.deltaMode === 1
-        ? event.deltaY
-        : event.deltaMode === 2
-          ? (event.deltaY * (canvas.clientHeight || 0)) / PX_PER_LINE
-          : event.deltaY / PX_PER_LINE;
     deliver(
       'wheel',
       { x: event.clientX - rect.left, y: event.clientY - rect.top },
-      { delta: lines },
+      // Lines as the reference counts them (`../input/wheel.js`).
+      { delta: wheelLines(event) },
       event,
     );
   };

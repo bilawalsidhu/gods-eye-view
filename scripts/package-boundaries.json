@@ -49,6 +49,7 @@
       "src/render/cesium/common.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/input/sensorPick.js",
@@ -964,6 +965,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -1273,6 +1275,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -1448,6 +1451,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -1579,6 +1583,7 @@
       "src/render/cesium/common.js",
       "src/render/rendererOf.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/render/cesium/internals.js"
@@ -1690,6 +1695,7 @@
       "src/render/cesium/common.js",
       "src/render/rendererOf.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -1812,6 +1818,7 @@
       "src/render/cesium/internals.js",
       "src/render/rendererOf.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js"
@@ -1988,6 +1995,7 @@
       "src/render/cesium/internals.js",
       "src/render/cesium/common.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js"
@@ -2076,6 +2084,7 @@
       "src/render/rendererOf.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -2167,6 +2176,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -2266,6 +2276,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -2488,6 +2499,7 @@
       "src/render/cesium/internals.js",
       "src/render/cesium/common.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
@@ -2604,6 +2616,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -2719,6 +2732,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/queries/heights.js"
@@ -2792,6 +2806,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/queries/heights.js"
@@ -2891,6 +2906,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/render/cesium/internals.js"
@@ -2957,6 +2973,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js"
     ],
@@ -4209,6 +4226,7 @@
       "src/input/dispatcher.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/input/router.js",
       "src/queries/heights.js",
       "src/render/cesium/internals.js",
@@ -4891,6 +4909,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/queries/heights.js",
@@ -5047,6 +5066,7 @@
       "src/render/cesium/internals.js",
       "src/render/cesium/common.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
@@ -5357,6 +5377,7 @@
       "src/render/cesium/common.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js"
@@ -5733,6 +5754,7 @@
       "src/render/cesium/drawHit.js",
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/queries/heights.js",
@@ -5834,6 +5856,7 @@
       "src/render/cesium/cameraInput.js",
       "src/render/cesium/common.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
@@ -5916,6 +5939,7 @@
       "src/render/cesium/common.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js"
@@ -6064,6 +6088,7 @@
       "src/render/rendererOf.js",
       "src/data/entityRecords.js",
       "src/render/cesium/input.js",
+      "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
@@ -6359,6 +6384,7 @@
       "src/render/conformance/cameraScripts.js",
       "src/render/conformance/visual.js",
       "src/render/conformance/cameraRunner.js",
+      "src/render/input/wheel.js",
       "src/render/conformance/expect.js",
       "src/render/conformance/checks/ports.js",
       "src/render/stub/math.js",

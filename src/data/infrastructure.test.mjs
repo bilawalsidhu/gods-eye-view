@@ -227,6 +227,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'stockFollow.js',
     'styleStages.js',
     'vector.js',
+    'wheel.js',
   ]);
   assert.deepEqual(
     entry.imports,

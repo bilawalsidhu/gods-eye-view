@@ -10,11 +10,20 @@
  * Cesium has one `changed` threshold per camera, where the contract has one
  * per listener, so a script that listens at several thresholds is run once
  * per threshold and each count is taken from its own run.
+ *
+ * A script with `input` steps runs a real `ScreenSpaceCameraController`
+ * over a stand-in canvas: its pointer and wheel events go to the
+ * controller's own event handler as the DOM would give them (mouse events,
+ * Cesium's choice where there are no pointer events), and the controller
+ * updates each frame where Cesium's scene updates it, after the tweens.
+ * `Date`, which the controller's inertia reads, runs on the virtual clock
+ * too.
  */
 import * as Cesium from 'cesium';
 import {
   CAMERA_SCRIPTS,
   SCRIPT_VIEWPORT,
+  usesInput,
 } from '../conformance/cameraScripts.js';
 import { runCameraScript } from '../conformance/cameraRunner.js';
 import { updateCameraChanged } from './internals.js';
@@ -36,23 +45,79 @@ const EASINGS = {
 /** One frame of the virtual clock, ms. */
 export const FRAME_MS = 1000 / 60;
 
-/** Run `fn` with `performance.now()` reading the virtual clock. */
+/** The epoch `Date` reads at virtual time 0. */
+const VIRTUAL_EPOCH_MS = Date.UTC(2026, 0, 1);
+
+/** Run `fn` with `performance.now()` and `Date` reading the virtual clock. */
 export async function withVirtualClock(fn) {
   const real = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  const RealDate = globalThis.Date;
   const clock = { now: 0 };
   Object.defineProperty(globalThis, 'performance', {
     configurable: true,
     value: { now: () => clock.now, mark() {}, measure() {} },
   });
+  // A function, not a subclass: `Date()` called plainly still gives a
+  // string, and dates made before stay `instanceof Date`.
+  function VirtualDate(...args) {
+    if (!new.target)
+      return new RealDate(VIRTUAL_EPOCH_MS + clock.now).toString();
+    return args.length
+      ? new RealDate(...args)
+      : new RealDate(VIRTUAL_EPOCH_MS + clock.now);
+  }
+  Object.setPrototypeOf(VirtualDate, RealDate);
+  VirtualDate.prototype = RealDate.prototype;
+  VirtualDate.now = () => VIRTUAL_EPOCH_MS + clock.now;
+  globalThis.Date = VirtualDate;
   try {
     return await fn(clock);
   } finally {
+    globalThis.Date = RealDate;
     if (real) Object.defineProperty(globalThis, 'performance', real);
   }
 }
 
-/** A Cesium camera on a scene with no globe, sized as the scripts' viewport. */
-export function headlessCamera() {
+/**
+ * A canvas for a controller's event handler: it keeps the listeners the
+ * handler adds, and `dispatch` calls them as the DOM would. Its root
+ * events stay on it (`disableRootEvents`), as there is no document; the
+ * handler still compares its element with one, so a `document` stands in
+ * while an event is handled, where there is none.
+ */
+function standInCanvas() {
+  const listeners = new Map();
+  return {
+    clientWidth: SCRIPT_VIEWPORT.width,
+    clientHeight: SCRIPT_VIEWPORT.height,
+    disableRootEvents: true,
+    onwheel: null,
+    getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    addEventListener(type, fn) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(fn);
+    },
+    removeEventListener(type, fn) {
+      listeners.get(type)?.delete(fn);
+    },
+    dispatch(type, event) {
+      const own = typeof globalThis.document === 'undefined';
+      if (own) globalThis.document = {};
+      try {
+        for (const fn of [...(listeners.get(type) ?? [])]) fn(event);
+      } finally {
+        if (own) delete globalThis.document;
+      }
+    },
+  };
+}
+
+/**
+ * A Cesium camera on a scene with no globe, sized as the scripts' viewport.
+ * With `input`, the scene has a real controller over a stand-in canvas.
+ * @param {{input?: boolean}} [options]
+ */
+export function headlessCamera({ input = false } = {}) {
   const scene = {
     canvas: {
       clientWidth: SCRIPT_VIEWPORT.width,
@@ -75,8 +140,57 @@ export function headlessCamera() {
   const camera = new Cesium.Camera(scene);
   scene.camera = camera;
   camera.frustum.aspectRatio = SCRIPT_VIEWPORT.width / SCRIPT_VIEWPORT.height;
+  if (input) {
+    scene.canvas = standInCanvas();
+    // What the controller's update reads off a real scene.
+    scene.verticalExaggeration = 1;
+    scene.verticalExaggerationRelativeHeight = 0;
+    scene.screenSpaceCameraController = new Cesium.ScreenSpaceCameraController(
+      scene,
+    );
+  }
   return { scene, camera };
 }
+
+/**
+ * Send a script pointer event (`ScriptPointer`, `cameraRunner.js`) to a
+ * scene made by `headlessCamera({ input: true })`, as the DOM mouse or
+ * wheel event Cesium reads.
+ */
+export function dispatchPointer(scene, ev) {
+  scene.canvas.dispatch(DOM_TYPES[ev.type], domEvent(ev));
+}
+
+function domEvent(ev) {
+  const at = ev.endPosition ?? ev.position;
+  return {
+    button: ev.button,
+    clientX: at.x,
+    clientY: at.y,
+    shiftKey: ev.modifiers.shift,
+    ctrlKey: ev.modifiers.ctrl,
+    altKey: ev.modifiers.alt,
+    metaKey: ev.modifiers.meta,
+    ...(ev.wheel
+      ? {
+          deltaX: 0,
+          deltaY: ev.wheel.deltaY,
+          deltaMode: ev.wheel.deltaMode,
+          DOM_DELTA_PIXEL: 0,
+          DOM_DELTA_LINE: 1,
+          DOM_DELTA_PAGE: 2,
+        }
+      : {}),
+    preventDefault() {},
+  };
+}
+
+const DOM_TYPES = {
+  down: 'mousedown',
+  move: 'mousemove',
+  up: 'mouseup',
+  wheel: 'wheel',
+};
 
 const cart = (p) => new Cesium.Cartesian3(p.x, p.y, p.z);
 const toEcef = (p) =>
@@ -101,8 +215,9 @@ function orientationOf(orientation) {
 }
 
 /** A driver for {@link runCameraScript} over a headless Cesium camera. */
-function cesiumDriver(clock, threshold) {
-  const { scene, camera } = headlessCamera();
+function cesiumDriver(clock, threshold, input = false) {
+  const { scene, camera } = headlessCamera({ input });
+  const controller = input ? scene.screenSpaceCameraController : null;
   let flying = false;
   let changedCount = 0;
   camera.percentageChanged = threshold ?? 0.5;
@@ -223,8 +338,14 @@ function cesiumDriver(clock, threshold) {
     frame() {
       clock.now += FRAME_MS;
       scene.tweens.update();
+      controller?.update();
       updateCameraChanged(camera);
     },
+    ...(input
+      ? {
+          pointer: (ev) => dispatchPointer(scene, ev),
+        }
+      : {}),
     listen: () => () => changedCount,
     pose() {
       const c = camera.positionCartographic;
@@ -295,14 +416,15 @@ async function recordScript(script) {
   const thresholds = script.steps
     .filter((step) => step.do === 'listen')
     .map((step) => step.threshold);
+  const input = usesInput(script);
   const base = await withVirtualClock((clock) =>
-    runCameraScript(cesiumDriver(clock, undefined), script),
+    runCameraScript(cesiumDriver(clock, undefined, input), script),
   );
   if (!thresholds.length) return base;
   const counts = [];
   for (const threshold of thresholds) {
     const run = await withVirtualClock((clock) =>
-      runCameraScript(cesiumDriver(clock, threshold), script),
+      runCameraScript(cesiumDriver(clock, threshold, input), script),
     );
     const changed = run.records.find((r) => r.kind === 'changed');
     counts.push({ threshold, count: changed.value[0].count });
