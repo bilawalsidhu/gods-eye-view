@@ -15,6 +15,57 @@ import {
 } from '../../sources/tle.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
+/** The Earth's rotation rate, rad/s (WGS84). */
+const EARTH_ROTATION_RAD_S = 7.292115e-5;
+
+/** Below this ground speed a satellite holds still over the ground (GEO), m/s. */
+const GROUND_TRACK_MIN_SPEED_MPS = 10;
+
+/**
+ * The ground track's bearing, degrees clockwise from north, from one SGP4
+ * state: the inertial velocity turned into the Earth-fixed frame, less the
+ * Earth's rotation under the satellite, read in the east/north plane at the
+ * sub-satellite point. Null without a velocity, or for a satellite that holds
+ * still over the ground (geostationary).
+ * @param {{x: number, y: number, z: number}} positionKm TEME position, km.
+ * @param {{x: number, y: number, z: number}|null} velocityKmS TEME velocity, km/s.
+ * @param {number} gmst Greenwich mean sidereal time, radians.
+ * @param {number} latitudeDeg Sub-satellite latitude.
+ * @param {number} longitudeDeg Sub-satellite longitude.
+ * @returns {number|null}
+ */
+export function groundTrackBearingDeg(
+  positionKm,
+  velocityKmS,
+  gmst,
+  latitudeDeg,
+  longitudeDeg,
+) {
+  if (!positionKm || !velocityKmS || !Number.isFinite(gmst)) return null;
+  const cosG = Math.cos(gmst);
+  const sinG = Math.sin(gmst);
+  // TEME to Earth-fixed is a turn about z by GMST.
+  const rx = cosG * positionKm.x + sinG * positionKm.y;
+  const ry = -sinG * positionKm.x + cosG * positionKm.y;
+  const vx =
+    (cosG * velocityKmS.x + sinG * velocityKmS.y + EARTH_ROTATION_RAD_S * ry) *
+    1000;
+  const vy =
+    (-sinG * velocityKmS.x + cosG * velocityKmS.y - EARTH_ROTATION_RAD_S * rx) *
+    1000;
+  const vz = velocityKmS.z * 1000;
+  const φ = (latitudeDeg * Math.PI) / 180;
+  const λ = (longitudeDeg * Math.PI) / 180;
+  const east = -Math.sin(λ) * vx + Math.cos(λ) * vy;
+  const north =
+    -Math.sin(φ) * Math.cos(λ) * vx -
+    Math.sin(φ) * Math.sin(λ) * vy +
+    Math.cos(φ) * vz;
+  if (![east, north].every(Number.isFinite)) return null;
+  if (Math.hypot(east, north) < GROUND_TRACK_MIN_SPEED_MPS) return null;
+  return ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
+}
+
 export function createOrbits({ state: layerState, services, parts, source }) {
   /**
    * Build the rigid ECEF transform that keeps an orbit path baked at one GMST
@@ -68,11 +119,20 @@ export function createOrbits({ state: layerState, services, parts, source }) {
         ? Math.hypot(velocity.x, velocity.y, velocity.z) * 1000
         : null;
 
+      const latitude = degreesLat(geo.latitude);
+      const longitude = degreesLong(geo.longitude);
       return {
-        longitude: degreesLong(geo.longitude),
-        latitude: degreesLat(geo.latitude),
+        longitude,
+        latitude,
         altitude: geo.height * 1000, // km → meters
         speedMps: Number.isFinite(speedMps) ? speedMps : null,
+        groundTrackDeg: groundTrackBearingDeg(
+          posVel.position,
+          velocity,
+          gmst,
+          latitude,
+          longitude,
+        ),
       };
     } catch {
       return null;
@@ -137,7 +197,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     lonDeg,
     minElevDeg = 10,
     requireVisible = false,
-    fromMs = Date.now(),
+    fromMs = layerState.now(),
   }) {
     return getNextSatellitePass(ISS_NORAD, {
       latDeg,
@@ -167,7 +227,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
       lonDeg,
       minElevDeg = 10,
       requireVisible = false,
-      fromMs = Date.now(),
+      fromMs = layerState.now(),
     },
   ) {
     const id = Number(noradId);
@@ -271,7 +331,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   }
 
   function orbitTrackFromRecord(name, satrec) {
-    const referenceDate = new Date();
+    const referenceDate = new Date(layerState.now());
     const current = propagatePosition(satrec, referenceDate);
     if (!current) return null;
     return {
