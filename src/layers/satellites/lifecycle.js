@@ -1,5 +1,10 @@
 import * as Cesium from 'cesium';
-import { ISS_OVERLAY_SOURCE_ID } from './policy.js';
+import {
+  ISS_NORAD,
+  ISS_OVERLAY_SOURCE_ID,
+  SATELLITE_COVERAGE_MS,
+} from './policy.js';
+import { worldClock } from '../../time/worldClock.js';
 
 export function createLifecycle({
   state: layerState,
@@ -8,6 +13,20 @@ export function createLifecycle({
   source,
 }) {
   const { clearFocusTarget } = services.focus;
+  // While on with a catalog, satellites can be shown at any time in reach of
+  // their element sets. Registered once; off, the layer has no time to show,
+  // and each step tells the clock once it has settled.
+  worldClock.register({
+    id: 'satellites',
+    coverage: () => {
+      if (!layerState._enabled || !layerState._catalog.size) return null;
+      const now = worldClock.wallNow();
+      return {
+        start: now - SATELLITE_COVERAGE_MS,
+        end: now + SATELLITE_COVERAGE_MS,
+      };
+    },
+  });
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -32,6 +51,10 @@ export function createLifecycle({
       layerState._trackedFrameNumber = -1;
       layerState._trackedFrameGeo = null;
       layerState._trackedFrameNowForTest = null;
+      // The new catalog's points and rings carry no hold.
+      layerState._cockpitHiddenPoints = new Set();
+      layerState._cockpitHiddenPath = null;
+      layerState._cockpitHiddenDot = false;
       layerState._lastFocusUpdate = 0;
       layerState._activeFocusCount = 0;
       layerState._enabled = false;
@@ -46,6 +69,7 @@ export function createLifecycle({
       layerState._denseStatus = 'idle';
       layerState._denseError = null;
       layerState._catalogRevision++;
+      layerState.coverageChanged();
 
       // Point primitives for satellite dots
       layerState._pointCollection = new Cesium.PointPrimitiveCollection();
@@ -72,11 +96,14 @@ export function createLifecycle({
             layerState._params.showPoints,
           );
       // Orbit ring primitives + persistent ISS host label — show them
-      for (const path of layerState._orbitPaths.values())
-        path.primitive.show = parts.controls.satelliteVisualsVisible(
-          layerState._enabled,
-          layerState._params.showOrbits,
-        );
+      for (const [noradId, path] of layerState._orbitPaths)
+        path.primitive.show =
+          noradId === ISS_NORAD
+            ? parts.controls._issOrbitVisible()
+            : parts.controls.satelliteVisualsVisible(
+                layerState._enabled,
+                layerState._params.showOrbits,
+              );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation
       parts.interaction._installClickHandler(viewer);
@@ -92,6 +119,7 @@ export function createLifecycle({
         );
       }
       parts.tracking._applyPendingTrackingRestore();
+      layerState.coverageChanged();
     },
 
     disable(viewer) {
@@ -119,6 +147,7 @@ export function createLifecycle({
         layerState._preRenderListener();
         layerState._preRenderListener = null;
       }
+      layerState.coverageChanged();
     },
 
     destroy(viewer) {
@@ -176,6 +205,7 @@ export function createLifecycle({
         failedGroups: [],
       };
       layerState._viewer = null;
+      layerState.coverageChanged();
     },
   };
 

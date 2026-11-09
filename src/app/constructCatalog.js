@@ -1,7 +1,8 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
+import { worldClock } from '../time/worldClock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
-import { createCyclonesLayer } from '../layers/cyclones/index.js';
+import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
@@ -30,6 +31,7 @@ import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
+import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -77,7 +79,7 @@ export function createApplicationCatalog({
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
   const militaryRegistry = createMilitaryRegistry();
-  const weatherClock = createWeatherClock();
+  const weatherClock = createWeatherClock({ world: worldClock });
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
     militaryRegistry.dispose();
@@ -137,6 +139,10 @@ export function createApplicationCatalog({
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
         }),
+        createApplicationWildlifeSightings({
+          source: sources['wildlife-sightings'],
+          groundFloor: surface.groundFloor,
+        }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,
@@ -177,7 +183,7 @@ export function createApplicationCatalog({
           id: 'weather-lightning',
           clock: weatherClock,
         }),
-        createCyclonesLayer({ feed: sources.cyclones }),
+        createApplicationCyclones({ feed: sources.cyclones }),
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),

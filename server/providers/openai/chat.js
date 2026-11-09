@@ -64,6 +64,30 @@ function validMessages(messages) {
   return !pending.length;
 }
 
+/**
+ * A tool schema without the `pattern`s Chat Completions refuses: it answers
+ * 400 for a whole request whose tool uses Unicode property classes (`\p{L}`),
+ * as `resolve_area`'s area ids do. Every argument is still checked against
+ * the action's own contract before the tool runs, so the model loses a hint,
+ * not a rule. Realtime voice accepts these patterns and keeps them.
+ */
+export function chatSchema(schema) {
+  if (Array.isArray(schema)) return schema.map(chatSchema);
+  if (!object(schema)) return schema;
+  return Object.fromEntries(
+    Object.entries(schema)
+      .filter(
+        ([key, value]) =>
+          !(
+            key === 'pattern' &&
+            typeof value === 'string' &&
+            /\\[pP]\{/.test(value)
+          ),
+      )
+      .map(([key, value]) => [key, chatSchema(value)]),
+  );
+}
+
 export function createOpenAiChatHandler({
   annotationGuidance,
   tools = GEV_REALTIME_TOOLS,
@@ -126,7 +150,12 @@ export function createOpenAiChatHandler({
           tools: offeredTools(tools, { overpass }).map(
             ({ name, description, parameters }) => ({
               type: 'function',
-              function: { name, description, parameters, strict: false },
+              function: {
+                name,
+                description,
+                parameters: chatSchema(parameters),
+                strict: false,
+              },
             }),
           ),
         },
