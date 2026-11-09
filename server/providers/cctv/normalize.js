@@ -650,6 +650,10 @@ export function normalizeSourceItem(item) {
     feedType: normalizeFeedType(item.feedType || item.type || ''),
     url: typeof item.url === 'string' ? item.url : '',
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
+    frameRefreshMs: toFiniteNumber(item.frameRefreshMs),
+    sourceUrl: typeof item.sourceUrl === 'string' ? item.sourceUrl : '',
+    accuracyM: toFiniteNumber(item.accuracyM),
+    positionSource: String(item.positionSource || ''),
     license: String(item.license || item.licenseNote || ''),
     // Per-camera attribution for feeds a partner supplies inside a pack
     // (DriveBC: TransLink, city cameras). Shown beside the provider.

@@ -28,7 +28,10 @@ export function publishCockpitSignals() {
         target: item.target && {
           layerId: item.target.layerId,
           id: item.target.id,
-          label: t('Select flight {title}', { title: item.title }),
+          // Orbit's site and satellite rows name their own action.
+          label:
+            item.target.label ??
+            t('Select flight {title}', { title: item.title }),
         },
       };
     }),
@@ -212,6 +215,14 @@ export function handleSignalClick(event) {
   );
   if (!target) return;
   event.preventDefault();
+  // In orbit the rows are sites and satellites (cockpitOrbitalSignals.js).
+  if (
+    this.handleOrbitalSignalClick?.(
+      target.dataset.signalLayer,
+      target.dataset.signalId,
+    )
+  )
+    return;
   this.services.militaryAwarenessLayer.focusTarget?.(
     target.dataset.signalLayer,
     target.dataset.signalId,
