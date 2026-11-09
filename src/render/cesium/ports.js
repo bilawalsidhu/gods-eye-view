@@ -66,6 +66,8 @@ export function cesiumCapabilities(scene, only) {
     'models',
     'quads',
     'meshes',
+    // Raster shells; other field kinds are refused.
+    'fields',
     'followFrame',
     'cameraChangeThreshold',
     ...GPU_ICON_CAPABILITIES,

@@ -871,6 +871,8 @@
   "src/layers/weather/rendering.js",
   "src/layers/weather/shellRendering.js",
   "src/layers/weather/shellRendering.test.mjs",
+  "src/render/cesium/drawFields.js",
+  "src/render/cesium/drawFields.test.mjs",
   "src/layers/weather/infraredAlpha.js",
   "src/layers/weather/infraredAlpha.test.mjs",
   "src/layers/weather/infraredImage.js",

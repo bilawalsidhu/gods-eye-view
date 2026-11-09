@@ -8,7 +8,9 @@ import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import {
   createShellCesium,
   createShellScene,
+  renderShells,
 } from '../weather/shellFixture.mjs';
+import { createCesiumFields } from '../../render/cesium/drawFields.js';
 
 function event() {
   const listeners = new Set();
@@ -197,8 +199,9 @@ function harness({
     },
     isDestroyed: () => false,
   };
+  const shellCesium = shell ? createShellCesium() : null;
   const cesium = {
-    ...(shell ? createShellCesium() : {}),
+    ...(shellCesium ?? {}),
     GeographicTilingScheme: Cesium.GeographicTilingScheme,
     Credit: Cesium.Credit,
     Event: Cesium.Event,
@@ -220,11 +223,17 @@ function harness({
       }
     },
   };
+  const fields = shellCesium
+    ? createCesiumFields({ scene: viewer.scene, cesium: shellCesium })
+    : null;
+  const draw = fields && { field: (spec) => fields.field(spec) };
   const rendering = createWindRendering({
     cesium,
     container,
     getViewer: () => viewer,
     globeOf: (given) => (given === viewer ? globe : null),
+    // The Cesium draw port's raster shells, over the doubles.
+    drawOf: (given) => (given === viewer ? draw : null),
     createGpuRendering,
     onStatusChange,
     getHost,
@@ -245,7 +254,7 @@ function harness({
     motion,
     preRender,
     viewer,
-    cesium,
+    cesium: shellCesium ?? cesium,
     imagery,
     removed,
     primitives: () => shellScene?.primitives.items ?? [],
@@ -1028,10 +1037,14 @@ test('scalar field becomes a raised shell on 3D Tiles and survives no-host event
   eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
   assert.equal(h.imagery.length, 0);
   assert.equal(h.removed[0].destroy, true);
+  // It shows once its geometry and image are ready.
+  renderShells(h.cesium, h.viewer.scene);
   const [primitive] = h.primitives();
   const geometry = primitive.options.geometryInstances.geometry.options;
   assert.equal(geometry.height, 5_000);
-  assert.equal(geometry.rectangle, h.cesium.Rectangle.MAX_VALUE);
+  assert.ok(
+    h.cesium.Rectangle.equals(geometry.rectangle, h.cesium.Rectangle.MAX_VALUE),
+  );
   const material = primitive.appearance.material;
   assert.equal(h.textures.length, 2);
   assert.equal(material.uniforms.image, h.textures[1]);
@@ -1121,6 +1134,7 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     h.rendering.setOptions({ overlay });
     h.rendering.setField(field);
     h.rendering.start();
+    renderShells(h.cesium, h.viewer.scene);
     assert.equal(h.imagery.length, 0);
     const [primitive] = h.primitives();
     const { uniforms } = primitive.appearance.material;
@@ -1185,6 +1199,7 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
       },
     });
     h.rendering.start();
+    renderShells(h.cesium, h.viewer.scene);
     const [primitive] = h.primitives();
     const textures = h.textures.length;
     const baseAlpha = overlay === 'temperature' ? 1 : 0.85;

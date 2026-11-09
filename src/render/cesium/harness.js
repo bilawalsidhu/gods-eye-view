@@ -40,6 +40,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.columns.shown',
   'draw.drawOrder',
   'draw.drillPick',
+  'draw.field.rasterShell',
   'draw.icons.distance',
   'draw.icons.update',
   'draw.lines.depthFailDash',

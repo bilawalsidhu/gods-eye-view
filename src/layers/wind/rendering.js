@@ -5,12 +5,12 @@ import * as Cesium from 'cesium';
 import '../../render/cesium/globe.js';
 import '../../render/cesium/camera.js';
 import {
-  createShellSurface,
+  followShellLift,
   WEATHER_SHELL_HEIGHTS,
 } from '../weather/shellRendering.js';
 import { createWindRelief } from './relief.js';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
-import { findGlobe } from '../../render/rendererOf.js';
+import { findDraw, findGlobe } from '../../render/rendererOf.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { msg } from '../../i18n/index.js';
 import { createWindGpuRendering } from './gpuRendering.js';
@@ -63,6 +63,58 @@ function sameWind(previous, next, previousField, nextField) {
   return true;
 }
 
+let windShells = 0;
+
+/** The colour field as a raised shell over the whole globe, through the
+ * draw port's raster-shell field; it rises with the camera. */
+function createWindShell(viewer, draw, texture, alpha) {
+  const seq = (windShells += 1);
+  const height = WEATHER_SHELL_HEIGHTS.wind;
+  const field = draw.field({
+    kind: 'rasterShell',
+    id: `wind-shell:${seq}`,
+    image: { canvas: texture, key: `wind-shell:${seq}` },
+    rectangle: { west: -180, south: -90, east: 180, north: 90 },
+    heightM: height,
+    alpha,
+  });
+  let shownAlpha = alpha;
+  let drawn = false;
+  let owed = true;
+  field.on('drawn', () => {
+    drawn = true;
+    owed = false;
+  });
+  const offLift = followShellLift(viewer, (liftM) => {
+    owed = true;
+    field.update({ liftM });
+  });
+  return {
+    setAlpha(value) {
+      if (value === shownAlpha) return;
+      shownAlpha = value;
+      owed = true;
+      field.update({ alpha: value });
+    },
+    setShow(value) {
+      field.show = Boolean(value);
+    },
+    destroy() {
+      offLift();
+      field.dispose();
+    },
+    getDiagnostics: () => ({
+      height,
+      ready: drawn,
+      uploaded: drawn,
+      show: field.show,
+      alpha: shownAlpha,
+      rendering: owed && field.show,
+      detail: { uploaded: false, window: null },
+    }),
+  };
+}
+
 /** Globe-projected surface flow plus one owned, static colour field: globe
  * imagery on the globe host, a raised shell on the 3D Tiles host. */
 export function createWindRendering({
@@ -73,6 +125,7 @@ export function createWindRendering({
   eventTarget = globalThis.window,
   createGpuRendering = createWindGpuRendering,
   globeOf = findGlobe,
+  drawOf = findDraw,
   onStatusChange,
 } = {}) {
   // The host the shell names, else the viewer's globe imagery.
@@ -362,7 +415,8 @@ export function createWindRendering({
       imageryError = fieldUnavailableText(overlay);
       return;
     }
-    if (kind === 'tileset' ? !cesium.Primitive : !globe) {
+    const draw = kind === 'tileset' ? drawOf(viewer) : null;
+    if (kind === 'tileset' ? !draw?.field : !globe) {
       imageryError = msg('Globe imagery unavailable');
       return;
     }
@@ -375,15 +429,13 @@ export function createWindRendering({
       pixels.data.set(raster.rgba);
       ctx.putImageData(pixels, 0, 0);
       if (kind === 'tileset') {
-        shell = createShellSurface({
+        shell = createWindShell(
           viewer,
-          cesium,
-          rectangle: cesium.Rectangle.MAX_VALUE,
-          height: WEATHER_SHELL_HEIGHTS.wind,
-        });
-        shell.setImage(texture);
+          draw,
+          texture,
+          overlay === 'temperature' ? 1 : 0.85,
+        );
         imageryKind = kind;
-        shell.setAlpha(overlay === 'temperature' ? 1 : 0.85);
         updateImageryFade(viewer.scene.camera, true);
         viewer.scene?.requestRender?.();
         return;

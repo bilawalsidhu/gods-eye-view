@@ -5,7 +5,6 @@
   "src/app/scene.js",
   "src/app/viewer.js",
   "src/data/geoImportPins.js",
-  "src/layers/weather/shellRendering.js",
   "src/layers/wind/gpuRendering.js",
   "src/layers/wind/relief.js",
   "src/layers/wind/rendering.js",
