@@ -1538,8 +1538,8 @@ HUD on, in its Tactical and Cyber layouts). Turning Live AIS Vessels off ends
 the bridge: the layer then has no subject (`getCockpitSubject` returns null).
 The bridge picture uses AIS alone, so no other feed being off makes it partial.
 Voice (`control_cockpit`) and the selection entry transaction stay aircraft-only;
-voice `enter` on a bridge is refused before it touches tracking, with the
-reason to exit the bridge first.
+voice `enter` on a bridge or in an orbital view is refused before it touches
+tracking, with the reason to exit it first.
 The vessel layer supplies the subject (`getCockpitSubject`), hides that ship's
 sprite, card, detection bracket and trail while it is held
 (`setCockpitSubject`), and
@@ -1633,7 +1633,10 @@ frame, with no ground clamp. Entry opens in the plain optical vision style
 with Google 3D tiles shown, which stay coarse from hundreds of kilometres up,
 the map switches to Esri imagery, and exit puts it back unless the operator
 picked another map meanwhile; another owner already holding the map (an
-imagery comparison) keeps it as it is. The Cockpit cloud pass is off in orbit
+imagery comparison) keeps it as it is. While orbit holds the lease, Recent
+Imagery cannot take it: turned on in orbit, the layer reports the comparison
+in use until, after exit, it is turned off and on again or its shown days
+are cleared and picked again. The Cockpit cloud pass is off in orbit
 (it fades out above 24 km); cloud cover from orbit is the Weather layer's,
 and the saved cloud preference stands for the next aircraft or bridge. The layer hides the satellite's dot, docked
 companions, its own orbit ring and its detection bracket, and draws every
@@ -5830,6 +5833,13 @@ and unreachable upstream (502/504) separately from road geometry.
   explicit-empty form); unknown option tokens are ignored. Restoration
   settles independently per layer so one failed or unavailable source cannot
   block its siblings.
+- An application that registers fewer layers (an embedder with a smaller
+  catalog) keeps only its own: `LayerStateCoordinator` drops enabled-layer ids
+  the application did not register before it normalizes a share, saved state or
+  explicit change, so such a layer is never restored, written to local storage
+  or carried into a link this application shares. Options that depend on a
+  dropped layer (a tracked selection) go with it. An application with every
+  layer registered is unchanged.
 - Layer tokens are permanent public compatibility identifiers. The reservation
   JSON ledger at `src/data/layerStateTokenReservations.json` pins all existing
   one-character assignments (all letters plus `0`, `1` and

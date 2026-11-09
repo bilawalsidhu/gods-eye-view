@@ -14,6 +14,7 @@ import {
   nadirOrientation,
   nextOrbitalZoom,
   offNadirAngleDeg,
+  offNadirCentreMeetsEarth,
   offNadirSwathScale,
   orbitalMaxZoom,
   sensorStripFraction,
@@ -571,4 +572,17 @@ test('the tiles ahead are the ones the points fall in, bounded and new', () => {
     [],
   );
   assert.deepEqual(tilesForPoints({}, points, 13), []);
+});
+
+test('a view tilted past the limb no longer meets the Earth', () => {
+  // GEO: the Earth spans about 8.7 degrees either side of nadir.
+  assert.equal(offNadirCentreMeetsEarth(35_786_000, { northDeg: 5 }), true);
+  assert.equal(offNadirCentreMeetsEarth(35_786_000, { northDeg: 15 }), false);
+  // LEO: a 30 degree tilt still lands on the ground.
+  assert.equal(
+    offNadirCentreMeetsEarth(420_000, { northDeg: 20, eastDeg: 20 }),
+    true,
+  );
+  assert.equal(offNadirCentreMeetsEarth(420_000, { eastDeg: 80 }), false);
+  assert.equal(offNadirCentreMeetsEarth(NaN, {}), false);
 });

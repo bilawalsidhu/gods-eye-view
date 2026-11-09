@@ -202,16 +202,24 @@ export function createCockpitSubject({ state: layerState, parts }) {
       // The tracked primitive stays hidden: its entity draws the dot.
       if (noradId !== tracked) _setPointShown(noradId, true);
     }
+    // Re-applied every sync: a catalog rebuild replaces the point
+    // primitives, and the new ones arrive shown.
     for (const noradId of companions) {
-      if (noradId === tracked || hiddenPoints.has(noradId)) continue;
+      if (noradId === tracked) continue;
       hiddenPoints.add(noradId);
       _setPointShown(noradId, false);
+    }
+    if (held) {
+      const trackedPoint = layerState._points.get(tracked);
+      if (trackedPoint) trackedPoint.show = false;
     }
 
     const hiddenPath = layerState._cockpitHiddenPath;
     if (hiddenPath !== null && (!held || hiddenPath !== tracked)) {
       const path = layerState._orbitPaths.get(hiddenPath);
-      if (path)
+      // The ISS's ring also follows its class (and its tracking).
+      if (path && hiddenPath === ISS_NORAD) parts.controls._syncIssOrbit();
+      else if (path)
         path.primitive.show = parts.controls.satelliteVisualsVisible(
           layerState._enabled,
           layerState._params.showOrbits,

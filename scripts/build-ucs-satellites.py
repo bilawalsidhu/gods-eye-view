@@ -29,9 +29,6 @@ COLUMNS = {
     'operator': 'Operator/Owner',
     'operatorCountry': 'Country of Operator/Owner',
     'purpose': 'Purpose',
-    'detailedPurpose': 'Detailed Purpose',
-    'users': 'Users',
-    'orbitClass': 'Class of Orbit',
 }
 STARLINK = re.compile(r'\bstarlink\b', re.I)
 
@@ -65,11 +62,12 @@ def build(xlsx: Path) -> dict:
         except (TypeError, ValueError):
             invalid_norad += 1
             continue
+        if norad <= 0:
+            invalid_norad += 1
+            continue
         record = [norad]
         for key, column in COLUMNS.items():
             text = clean(row[header[column]])
-            if key == 'orbitClass':
-                text = text.upper()
             if text not in index[key]:
                 index[key][text] = len(tables[key])
                 tables[key].append(text)

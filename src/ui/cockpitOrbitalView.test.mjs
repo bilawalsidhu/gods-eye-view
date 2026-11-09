@@ -35,7 +35,7 @@ const ISS = Object.freeze({
   id: '25544',
   noradId: 25544,
   name: 'ISS (ZARYA)',
-  classKey: 'station',
+  satelliteClass: 'stations',
   classLabel: 'STATION · ISS',
   latitude: 30,
   longitude: -97,
@@ -826,10 +826,6 @@ test('a map already leased elsewhere does not keep orbit out', async (t) => {
   assert.equal(store.orbital, null);
 });
 
-/**
- * A double-click `offsetPx` from where the followed satellite is drawn; the
- * scene projects the satellite to (400, 300) on a canvas at (10, 20).
- */
 /**
  * A double-click `offsetPx` from where the followed satellite is drawn, at
  * (400, 300) on the canvas, through Cesium's double-click handler.

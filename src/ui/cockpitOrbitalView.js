@@ -19,6 +19,7 @@ import {
   nextOrbitalZoom,
   offNadirAngleDeg,
   offNadirOrientation,
+  offNadirCentreMeetsEarth,
   offNadirSwathScale,
   orbitalBaseFovRad,
   orbitalMaxZoom,
@@ -31,6 +32,7 @@ import {
   zoomTransitionState,
 } from '../cockpitOrbital.js';
 import {
+  clampOrbitalLook,
   easeLook,
   lookIsOffset,
   orbitalLookReadoutParts,
@@ -568,9 +570,25 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   const maxZoom = orbitalMaxZoomFor.call(this, info);
   const swathKm = sensorSwathKm(info);
   const trackUp = Number.isFinite(info.groundTrackDeg);
-  const swathScale = offset
-    ? offNadirSwathScale(lookTilt(orbitalLookReadoutParts(state.lookTarget)))
-    : 1;
+  const tilt = offset
+    ? lookTilt(orbitalLookReadoutParts(state.lookTarget))
+    : null;
+  const swathScale = offset ? offNadirSwathScale(tilt) : 1;
+  // Tilted past the limb, the view's centre looks into space: no swath. The
+  // camera eases toward the target, so both must meet the Earth; the HUD
+  // republishes on its cadence, so the swath appears once the view arrives.
+  // Exact angles here, not the whole degrees the readout rounds to.
+  const target = clampOrbitalLook(state.lookTarget);
+  const seesEarth =
+    !offset ||
+    (offNadirCentreMeetsEarth(info.altitudeM, {
+      northDeg: target.pitchDeg,
+      eastDeg: target.yawDeg,
+    }) &&
+      offNadirCentreMeetsEarth(info.altitudeM, {
+        northDeg: state.lookView?.pitchDeg ?? 0,
+        eastDeg: state.lookView?.yawDeg ?? 0,
+      }));
   this.publishOrbital({
     name: info.name,
     classLabel: info.classLabel || '',
@@ -603,7 +621,7 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
       // the nadir footprint (`offNadirSwathScale`); 1 and null at nadir.
       swathScale,
       swathKm:
-        offset && Number.isFinite(footprintKm)
+        offset && seesEarth && Number.isFinite(footprintKm)
           ? footprintKm * swathScale
           : null,
     },

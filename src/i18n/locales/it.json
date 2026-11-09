@@ -3360,5 +3360,14 @@
   "COURSE HOLD · AIS": "BLOCCO ROTTA · AIS",
   "Zoom in (+)": "Avvicina (+)",
   "Zoom out (−)": "Allontana (−)",
-  "ORBITAL VIEW · OFF-NADIR": "VISTA ORBITALE · FUORI NADIR"
+  "ORBITAL VIEW · OFF-NADIR": "VISTA ORBITALE · FUORI NADIR",
+  "World time": "Ora del mondo",
+  "Back to live": "Torna alla diretta",
+  "Live": "Diretta",
+  "1 h/s": "1 h/s",
+  "1 d/s": "1 g/s",
+  "1 wk/s": "1 sett/s",
+  "Play speed": "Velocità di riproduzione",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scorri o pizzica per lo zoom, trascina per spostarti · doppio clic per vedere tutto",
+  "1 min/s": "1 min/s"
 }

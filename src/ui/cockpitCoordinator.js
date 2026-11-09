@@ -189,6 +189,12 @@ export class CockpitCoordinator {
     // vessel selection before the entry can run, leaving neither.
     if (this.cockpitView?.active && this.cockpitView.subjectKind === 'vessel')
       return 'Cockpit is on a vessel bridge — exit the bridge first, then track an aircraft to enter Cockpit';
+    // Likewise in orbit: the aircraft's tracking takes the satellite's.
+    if (
+      this.cockpitView?.active &&
+      this.cockpitView.subjectKind === 'satellite'
+    )
+      return 'Cockpit is in an orbital view — exit it first, then track an aircraft to enter Cockpit';
     if (!this._aircraftLayerEnabled)
       return 'No aircraft layer is on — turn on Flights or Military Flights and track an aircraft to enter Cockpit';
     return null;

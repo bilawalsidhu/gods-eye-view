@@ -22,9 +22,7 @@ const PACK_URL = new URL(
 /**
  * One UCS row: what UCS says about a satellite's operator and purpose.
  * @typedef {{noradId: number, operator: string|null,
- *   operatorCountry: string|null, purpose: string|null,
- *   detailedPurpose: string|null, users: string|null,
- *   orbitClass: string|null}} UcsSatellite
+ *   operatorCountry: string|null, purpose: string|null}} UcsSatellite
  */
 
 /**

@@ -34,18 +34,17 @@ DATA_SOURCES.md.
 
 **Curation:**
 
-- Kept columns: Operator/Owner, Country of Operator/Owner, Purpose, Detailed
-  Purpose, Users, Class of Orbit (upper-cased, which folds the source's one
-  `LEo`). Everything else (masses, contractors, launch data, sources) is left
-  out.
+- Kept columns: Operator/Owner, Country of Operator/Owner and Purpose, the
+  ones the layer reads. Everything else (detailed purpose, users, orbits,
+  masses, contractors, launch data, sources) is left out.
 - Repeated text is stored once in `strings`; each record is
-  `[noradId, operator, operatorCountry, purpose, detailedPurpose, users,
-  orbitClass]` with string-table indexes, `0` meaning empty.
+  `[noradId, operator, operatorCountry, purpose]` with string-table indexes,
+  `0` meaning empty.
 - The 3,996 Starlink rows are dropped: every Starlink object is classed and
   credited to SpaceX by name, so they would only add size.
-- Rows without a readable NORAD number are dropped and counted apart from
-  duplicate NORAD numbers (the first row of a duplicate is kept); both counts
-  are 0 in this release.
+- Rows without a readable, positive NORAD number are dropped and counted apart
+  from duplicate NORAD numbers (the first row of a duplicate is kept); both
+  counts are 0 in this release.
 - Owner countries stay as UCS writes them ("USA", "USA/Japan", "ESA",
   "Multinational"); `src/layers/satellites/classes.js` normalises them, together with
   CelesTrak SATCAT owner codes, in one table.

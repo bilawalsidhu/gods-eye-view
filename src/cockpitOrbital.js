@@ -449,6 +449,21 @@ export function offNadirAngleDeg({ northDeg = 0, eastDeg = 0 } = {}) {
 }
 
 /**
+ * Whether the view's centre, tilted off nadir, still meets the Earth: its
+ * angle from nadir (`offNadirAngleDeg`) is within the Earth's angular radius
+ * from the satellite, asin(R / (R + altitude)).
+ * @param {number} altitudeM
+ * @param {{northDeg?: number, eastDeg?: number}} [offset]
+ * @returns {boolean}
+ */
+export function offNadirCentreMeetsEarth(altitudeM, offset = {}) {
+  if (!Number.isFinite(altitudeM) || altitudeM <= 0) return false;
+  const R = ORBITAL_EARTH_RADIUS_M;
+  const limbDeg = (Math.asin(R / (R + altitudeM)) * 180) / Math.PI;
+  return offNadirAngleDeg(offset) < limbDeg;
+}
+
+/**
  * Roughly how much wider the ground across the frame is at the centre of a
  * tilted view than at nadir, on a flat Earth: tilting across the frame (east,
  * the frame's right) stretches its width by 1/cos², tilting along it (north,

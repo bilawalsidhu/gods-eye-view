@@ -3284,5 +3284,14 @@
   "COURSE HOLD · AIS": "KURS FIX · AIS",
   "Zoom in (+)": "Hineinzoomen (+)",
   "Zoom out (−)": "Herauszoomen (−)",
-  "ORBITAL VIEW · OFF-NADIR": "ORBITALANSICHT · NADIRABWEICHUNG"
+  "ORBITAL VIEW · OFF-NADIR": "ORBITALANSICHT · NADIRABWEICHUNG",
+  "World time": "Weltzeit",
+  "Back to live": "Zurück zu live",
+  "Live": "Live",
+  "1 h/s": "1 Std./s",
+  "1 d/s": "1 Tag/s",
+  "1 wk/s": "1 Wo./s",
+  "Play speed": "Wiedergabegeschwindigkeit",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben · Doppelklick zeigt alles",
+  "1 min/s": "1 Min./s"
 }

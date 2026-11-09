@@ -89,7 +89,7 @@ export function onScenePointerDown(nowMs = performance.now()) {
 
 /**
  * Enter first person when the followed track itself is double-clicked: the
- * same entry, and the same gates, as C and the entry buttons. The click may
+ * same entry, and the same gates, as the entry buttons. The click may
  * land where the track is drawn now or where it was as the gesture began. A
  * double-click anywhere else, or one a tool owns (drawing ends a shape with
  * one), is left alone.

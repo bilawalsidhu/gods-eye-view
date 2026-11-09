@@ -40,6 +40,8 @@ function ingestionFor(catalogText, { source: sourceExtras = {} } = {}) {
     _params: { catalog: 'core', showOrbits: false },
     _satcat: new Map(),
     _ucs: null,
+    now: Date.now,
+    coverageChanged() {},
   };
   const parts = {
     orbits: {
