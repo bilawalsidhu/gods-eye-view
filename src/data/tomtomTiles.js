@@ -1,9 +1,10 @@
 /**
- * @file Pure tile math + budget accounting for the TomTom traffic-flow proxy.
+ * @file Pure tile math for the TomTom traffic-flow proxy; budget helpers are
+ * re-exported from `./tileBudget.js`.
  *
  * Shared by the `/api/tomtom` vite plugin (server-side: coordinate validation,
  * daily budget governor) and `src/layers/traffic/flowSource.js` (client-side: which tiles
- * cover the current traffic fetch bounds). Zero dependencies, Cesium-free, so
+ * cover the current traffic fetch bounds). No external dependencies, Cesium-free, so
  * both sides can unit-test against it with node:test.
  *
  * Slippy scheme: standard Web Mercator XYZ, y grows southward

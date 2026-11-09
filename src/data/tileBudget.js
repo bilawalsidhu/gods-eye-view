@@ -22,29 +22,29 @@ export function utcDayKey(epochMs = Date.now()) {
 }
 
 /**
- * Normalize a persisted budget state against today's UTC day key.
- * Rolls the counter to zero on day change; replaces missing/corrupt state.
- * Returns the SAME object when it is already valid for `dayKey` (cheap to
- * call on every request).
+ * Normalize a persisted budget state against the current period key.
+ * Rolls the counter to zero when the period changes; replaces missing/corrupt
+ * state. Returns the SAME object when it is already valid for `periodKey`
+ * (cheap to call on every request).
  *
  * @param {{date:string, count:number}|null|undefined} state - Persisted state.
- * @param {string} dayKey - Today's UTC day key (from `utcDayKey`).
- * @returns {{date:string, count:number}} Valid state for `dayKey`.
+ * @param {string} periodKey - Current period key, e.g. from `utcDayKey`.
+ * @returns {{date:string, count:number}} Valid state for `periodKey`.
  */
-export function normalizeBudget(state, dayKey) {
+export function normalizeBudget(state, periodKey) {
   const valid =
     Boolean(state) &&
-    state.date === dayKey &&
+    state.date === periodKey &&
     Number.isFinite(state.count) &&
     state.count >= 0;
-  return valid ? state : { date: dayKey, count: 0 };
+  return valid ? state : { date: periodKey, count: 0 };
 }
 
 /**
- * Whether the daily soft cap has been reached.
+ * Whether the soft cap for the current period has been reached.
  *
  * @param {{count:number}} state - Normalized budget state.
- * @param {number} limit - Daily tile budget; non-positive/invalid never blocks.
+ * @param {number} limit - Budget per period; non-positive/invalid never blocks.
  * @returns {boolean} True when `count >= limit`.
  */
 export function isOverBudget(state, limit) {
