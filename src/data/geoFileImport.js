@@ -1,10 +1,7 @@
 /** Session-local geodata loading with bounded geometry and local-only file references. */
 import { createImportImageBudget } from './geoImportImages.js';
-import {
-  loadImportedGeoJson,
-  loadImportedKml,
-  settleImportedSource,
-} from './geoImportPins.js';
+import { readGeoJsonFeatures, readKmlFeatures } from './geoImportFeatures.js';
+import { settleImportedDrawing } from './geoImportPins.js';
 import {
   GeoImportError,
   MAX_IMPORT_ENTITIES,
@@ -204,8 +201,8 @@ export function countGeoJsonGeometry(
       MultiPolygon: 3,
     }[node.type];
     if (depth !== undefined) {
-      // Multipart geometries create one Cesium entity per component, even
-      // when the document wraps them in just one Feature.
+      // Multipart geometries are one map object per component, even when
+      // the document wraps them in just one Feature.
       entities += node.type.startsWith('Multi')
         ? Array.isArray(node.coordinates)
           ? node.coordinates.length
@@ -285,7 +282,7 @@ function overLimitError({ over, features }) {
 }
 
 // The import uses WGS84 ground footprints and a short name only. Remove
-// loader-sensitive metadata before Cesium allocates properties or entity IDs.
+// everything else before the features are read.
 function prepareGeoJson(geojson) {
   const stack = [geojson];
   while (stack.length) {
@@ -512,7 +509,7 @@ export function kmzImageResolver(
  * Strip everything from a parsed KML document that would make the page reach
  * outside the file. `resolveLocal(href)` returns a URL for an image packed in
  * the same KMZ (or null); every other href is removed, so icons fall back to
- * Cesium's default pin and a ground overlay without a local image is dropped.
+ * the default pin and a ground overlay without a local image is dropped.
  * @param {Document} doc
  * @param {(href: string) => string|null} [resolveLocal]
  * @returns {{removed: number}} How many elements were taken out.
@@ -526,8 +523,8 @@ export function sanitizeKmlDocument(doc, resolveLocal = () => null) {
     }
   };
   // One snapshot and pass, rather than rescanning the whole XML tree for
-  // every discarded element type. Strip unused metadata before the loader
-  // constructs descriptions, availability intervals and camera objects.
+  // every discarded element type. Strip unused metadata (descriptions,
+  // times and cameras) before the features are read.
   for (const el of [...doc.getElementsByTagName('*')])
     if (
       KML_REMOVED_ELEMENTS.has(el.localName) ||
@@ -549,8 +546,8 @@ export function sanitizeKmlDocument(doc, resolveLocal = () => null) {
         drop(overlay);
         continue;
       }
-      // An empty Icon explicitly hides the billboard in Cesium. Remove the
-      // blocked icon definition so the loader supplies its local default pin.
+      // An empty Icon explicitly hides the icon. Remove the blocked icon
+      // definition so the placemark gets the local default pin.
       // Authored empty Icons (with no blocked href) still mean no marker.
       drop(
         icon?.localName === 'Icon' && icon.parentNode?.localName === 'IconStyle'
@@ -571,9 +568,8 @@ export function sanitizeKmlDocument(doc, resolveLocal = () => null) {
         !childrenNamed(pair, 'Style').length)
     )
       drop(pair);
-  // Draw recorded KML paths as their original static vertices. Letting the
-  // loader build time-dynamic tracks would expand each into thousands of
-  // interpolated points later and exceed the checked geometry budget.
+  // Draw recorded KML paths as their original static vertices, the
+  // geometry the budget checked, never as time-dynamic tracks.
   for (const track of elementsNamed(doc, 'Track')) {
     const line = doc.createElementNS(
       'http://www.opengis.net/kml/2.2',
@@ -639,11 +635,11 @@ const childText = (el, localName) =>
   (childrenNamed(el, localName)[0]?.textContent || '').trim();
 
 /**
- * Share identical styles before the loader builds their graphics. Inline
+ * Share identical styles before the features are read. Inline
  * overrides stay inline StyleMaps, so an existing styleUrl still supplies
  * properties the override leaves unset. Named references are redirected.
  * Random-color styles remain unchanged; duplicate IDs
- * keep the loader's original precedence instead of being rewritten.
+ * keep their original precedence instead of being rewritten.
  * @param {Document} doc Sanitized KML.
  * @param {{serializeStyle?: Function, maxStyles?: number}} [options]
  * @returns {number} Number of original style blocks replaced.
@@ -746,8 +742,8 @@ export function deduplicateKmlStyles(
 }
 
 /**
- * Count placemarks and vertices in a parsed KML document before Cesium reads
- * it: every `<coordinates>` tuple and every `gx:coord`, plus normalized
+ * Count placemarks and vertices in a parsed KML document before it is read:
+ * every `<coordinates>` tuple and every `gx:coord`, plus normalized
  * style definitions and distinct image `<href>` values (`links`).
  * Inline StyleMaps are references, not additional shared style definitions.
  * @param {Document} doc
@@ -797,8 +793,8 @@ export function countKmlGeometry(
       )
         throw new GeoImportError(msg('That KML has invalid geometry bounds.'));
     }
-    // Cesium creates entities for folders, a parent for every placemark, and
-    // a child for each geometry in a MultiGeometry, including nested containers.
+    // A map object for each folder, a parent for every placemark, and a
+    // child for each geometry in a MultiGeometry, including nested containers.
     if (
       name === 'Placemark' ||
       name === 'Folder' ||
@@ -1040,7 +1036,7 @@ export function repairKmlRootNamespaces(value, what = 'KML') {
 
 /** Parse KML or GPX with the shared namespace repairs and XML validation. */
 export function parseXml(text, what) {
-  // Match the namespace repairs Cesium applies to ordinary exported KML.
+  // The namespace repairs ordinary exported KML needs.
   if (what !== 'GPX') text = repairKmlRootNamespaces(text, what);
   const doc = new DOMParser().parseFromString(
     String(text).replace(/^﻿/, ''),
@@ -1099,11 +1095,11 @@ function checkLocalImages(doc, entries = new Map(), main = '') {
 }
 
 /**
- * Load a ground footprint, retaining explicit KML altitude modes. Call mount after
- * adding the source; revoke owns pin and blob cleanup.
+ * Load a ground footprint, retaining explicit KML altitude modes. Call mount
+ * to draw it; revoke owns the drawing and blob cleanup.
  * @param {File|Blob & {name?: string}} file
  * @param {{viewer: object, color?: string}} options `color` is a CSS color.
- * @returns {Promise<{dataSource: object, name: string,
+ * @returns {Promise<{drawing: object, name: string,
  *   format: string, entityCount: number, removed: number, mount: Function, revoke: Function}>}
  */
 export async function loadGeoFile(
@@ -1131,11 +1127,11 @@ export async function loadGeoFile(
   const urls = [];
   let drawn;
   const revoke = () => {
-    drawn?.pins.destroy();
+    drawn?.drawing.destroy();
     urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
   };
   const name = importDisplayName(file.name);
-  let dataSource;
+  let read;
   let removed = 0;
   try {
     if (format === 'geojson' || format === 'gpx') {
@@ -1151,7 +1147,7 @@ export async function loadGeoFile(
         throw new GeoImportError(msg('That file has nothing to draw.'));
       prepareGeoJson(geojson);
       bytes = null;
-      dataSource = await loadImportedGeoJson(geojson, { color, signal });
+      read = readGeoJsonFeatures(geojson, color);
     } else {
       let text;
       let entries;
@@ -1180,7 +1176,7 @@ export async function loadGeoFile(
       deduplicateKmlStyles(doc);
       const normalizedSize = countKmlGeometry(doc);
       if (normalizedSize.over) throw overLimitError(normalizedSize);
-      dataSource = await loadImportedKml(doc, viewer, signal);
+      read = readKmlFeatures(doc);
     }
   } catch (error) {
     revoke();
@@ -1192,21 +1188,21 @@ export async function loadGeoFile(
     );
   }
   try {
-    drawn = await settleImportedSource(dataSource, viewer, signal);
+    drawn = await settleImportedDrawing(read, viewer, signal);
   } catch (error) {
     revoke();
     throw error;
   }
-  // The display name travels beside the data source (the file name, not
+  // The display name travels beside the drawing (the file name, not
   // anything the document says about itself).
   return {
-    dataSource,
+    drawing: drawn.drawing,
     name,
     format,
     entityCount: drawn.entityCount,
     removed,
     revoke,
-    mount: () => drawn.pins.mount(),
+    mount: () => drawn.drawing.mount(),
     refreshGround: drawn.refreshGround,
   };
 }

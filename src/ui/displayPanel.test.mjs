@@ -411,12 +411,11 @@ test('the imported files render what the file import publishes and keep focus', 
   const viewer = {
     container: document.createElement('div'),
     scene: { requestRender() {} },
-    dataSources: { add: async (ds) => ds, remove: () => true },
   };
   const tool = initGeoFileImport({
     viewer,
     load: async (file) => ({
-      dataSource: { show: true },
+      drawing: { show: true, destroy() {} },
       name: file.name,
       format: file.name.endsWith('.kml') ? 'kml' : 'geojson',
       entityCount: 2,

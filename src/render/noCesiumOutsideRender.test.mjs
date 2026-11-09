@@ -255,6 +255,40 @@ test('only allow-listed files outside the Cesium adapter reach Cesium', () => {
   );
 });
 
+test('the scan still recognises each way of reaching Cesium', () => {
+  // With the list empty, the check above passes vacuously unless the scan
+  // still sees Cesium; these are the forms the header lists.
+  const reaches = (code, file = 'src/x/y.js') => {
+    const { imports, takesNamespace } = scan(code);
+    return takesNamespace || imports.some((s) => reachesCesium(file, s));
+  };
+  for (const code of [
+    "import * as C from 'cesium';",
+    "import { Viewer } from '@cesium/engine';",
+    "import x from '../../node_modules/cesium/Source/Cesium.js';",
+    "import x from '/node_modules/cesium/index.js?v=1';",
+    "import { draw } from '../render/cesium/draw.js';",
+    "export * from '../render/cesium/draw.js';",
+    "const m = import('cesium');",
+    'function f(Cesium) {}',
+    'const { cesium } = deps;',
+    'const c = window.Cesium;',
+    'Cesium.Color.RED;',
+  ])
+    assert.ok(reaches(code), code);
+  for (const code of [
+    "import { drawOf } from '../render/rendererOf.js';",
+    'const cesiumLike = 1; Cesium2.x;',
+  ])
+    assert.ok(!reaches(code), code);
+  assert.ok(
+    vueScript(
+      'a.vue',
+      '<script src="../render/cesium/draw.js"></script>',
+    ).external.some((s) => reachesCesium('src/ui/a.vue', s)),
+  );
+});
+
 test('every allow-listed file still reaches Cesium', () => {
   const present = new Set(runtimeFiles);
   const stale = allowList.filter(

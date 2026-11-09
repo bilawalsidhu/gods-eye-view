@@ -153,7 +153,8 @@ back to Cesium. Both lists only ever shrink.
 - `src/render/cesiumAllowList.json` lists the files outside the Cesium
   adapter (`src/render/cesium/`) that may still import or be handed Cesium
   (`src/render/noCesiumOutsideRender.test.mjs`). A file leaves the list
-  when it no longer drives Cesium at all; nothing is added. Two files name
+  when it no longer drives Cesium at all; nothing is added. The list is now
+  empty: no runtime file outside the adapter reaches Cesium. Two files name
   the adapter by design and are not on it: the application scene
   (`src/app/scene.js`), the composition root that picks the Cesium renderer,
   may import `src/render/cesium/application.js` and nothing else of the

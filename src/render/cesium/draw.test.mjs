@@ -3356,6 +3356,59 @@ test('a draped line shown after it is ready keeps that show through the swap', (
     set.dispose();
   }));
 
+test('an icon stands off its position by its pixel offset, and back when it has none', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.icons({ id: 'offset-pins' });
+  const icon = (pixelOffset) => ({
+    id: 'a',
+    pos: { lon: 0, lat: 0 },
+    image: 'pin.png',
+    size: [8, 8],
+    ...(pixelOffset ? { pixelOffset } : {}),
+  });
+  set.set([icon({ x: 3, y: -4 })]);
+  const pin = () => scene.added[0].get(0);
+  assert.deepEqual([pin().pixelOffset.x, pin().pixelOffset.y], [3, -4]);
+  set.upsert([icon({ x: 0, y: 6 })]);
+  assert.deepEqual([pin().pixelOffset.x, pin().pixelOffset.y], [0, 6]);
+  set.upsert([icon()]);
+  assert.deepEqual([pin().pixelOffset.x, pin().pixelOffset.y], [0, 0]);
+  set.dispose();
+});
+
+test('a wall stands up from the ellipsoid to its positions, with or without a fill', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.shapes({ id: 'walls' });
+  const wall = (id, fill) => ({
+    id,
+    geometry: {
+      kind: 'wall',
+      positions: [
+        { lon: 0, lat: 0, height: 100 },
+        { lon: 0.01, lat: 0, height: 150 },
+      ],
+    },
+    fill,
+    outline: [1, 1, 0, 1],
+  });
+  set.set([wall('filled', [0, 0, 1, 0.5]), wall('outline', null)]);
+  const geometries = [];
+  const walk = (primitive) => {
+    if (!primitive) return;
+    if (primitive instanceof Cesium.PrimitiveCollection)
+      for (let i = 0; i < primitive.length; i++) walk(primitive.get(i));
+    for (const instance of [primitive.geometryInstances ?? []].flat())
+      geometries.push([instance.id?.id, instance.geometry.constructor.name]);
+  };
+  scene.added.forEach(walk);
+  assert.deepEqual(geometries.sort(), [
+    ['filled', 'WallGeometry'],
+    ['filled', 'WallOutlineGeometry'],
+    ['outline', 'WallOutlineGeometry'],
+  ]);
+  set.dispose();
+});
+
 test('icons blend as their set says', () => {
   const { scene, draw } = drawOver();
   const set = draw.icons({ id: 'pins', blend: 'translucent' });
@@ -4229,6 +4282,7 @@ test('an unclamped shape filled with an image draws a textured primitive and fre
     assert.ok(appearance instanceof Cesium.MaterialAppearance);
     assert.equal(appearance.material.type, 'Image');
     assert.equal(appearance.material.uniforms.image, 'picture.png');
+    assert.equal(appearance.isTranslucent(), true, 'its own alpha blends');
     assert.deepEqual(
       appearance.material.uniforms.repeat,
       new Cesium.Cartesian2(2, 3),

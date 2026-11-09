@@ -9,7 +9,7 @@ import { findCamera } from '../render/rendererOf.js';
 
 /**
  * Fly synchronously to a footprint, `[lon, lat, height]` points (degrees,
- * metres) such as a file's (`dataSourcePoints`); later navigation always
+ * metres) such as a file's (`importedDrawingPoints`); later navigation always
  * owns its camera. False when there is nothing to frame or no camera.
  */
 export function flyToFootprint(
