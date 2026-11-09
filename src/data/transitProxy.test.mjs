@@ -12,6 +12,7 @@ import {
   repairVehicleTimestamps,
   resolveTransitRoute,
   transitCacheState,
+  transitFeedTtlMs,
   transitRedirectDecision,
   transitResponseHeaders,
   transitUpstreamHeaders,
@@ -137,6 +138,7 @@ function encodeFeed({
     const position = new PbfWriter();
     position.writeFloatField(1, entity.lat);
     position.writeFloatField(2, entity.lon);
+    if (entity.speed != null) position.writeFloatField(5, entity.speed);
     vehicle.writeBytesField(2, position.finish());
     if (entity.timestamp) vehicle.writeVarintField(5, entity.timestamp);
     const descriptor = new PbfWriter();
@@ -284,6 +286,36 @@ test('the snapshot builder fills timestamps from the header it decoded', () => {
   assert.equal(snapshot.feedTimestamp, 1_700_000_000);
 });
 
+test('Rio speeds pass through as the m/s they are published in', () => {
+  // Checked against vehicle movement on 2026-11-05.
+  const bytes = encodeFeed({
+    entities: [{ id: 'moving', lat: -22.9, lon: -43.2, speed: 10 }],
+  });
+  const rio = buildTransitSnapshot(getTransitFeed('smtr-rio-onibus'), bytes, 1);
+  assert.equal(rio.vehicles[0].speedMps, 10);
+});
+
+test('Carris Metropolitana km/h speeds leave the proxy as m/s', () => {
+  // 2026-11-07: readings of 31-33 matched 6-9 m/s of measured movement.
+  const bytes = encodeFeed({
+    entities: [
+      { id: 'moving', lat: 38.72, lon: -9.14, speed: 36 },
+      { id: 'parked', lat: 38.73, lon: -9.15 },
+    ],
+  });
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  const lisbon = buildTransitSnapshot(feed, bytes, 1);
+  const byId = Object.fromEntries(lisbon.vehicles.map((v) => [v.id, v]));
+  assert.ok(Math.abs(byId.moving.speedMps - 10) < 1e-6);
+  assert.equal(byId.parked.speedMps, null, 'no speed stays no speed');
+  const szczecin = buildTransitSnapshot(
+    getTransitFeed('zditm-szczecin'),
+    encodeFeed({ entities: [{ id: 'm', lat: 53.43, lon: 14.55, speed: 10 }] }),
+    1,
+  );
+  assert.equal(szczecin.vehicles[0].speedMps, 10, 'm/s feeds are untouched');
+});
+
 test('conditional-request validators and gzip ride along with feed identification', () => {
   const entur = getTransitFeed('entur-norway');
   const plain = transitUpstreamHeaders(entur);
@@ -364,4 +396,25 @@ test('client history validates response bounds, epochs and cancellation through 
     }),
     { name: 'AbortError' },
   );
+});
+
+test('Adelaide asks for */* because a protobuf Accept gets base64 text back', () => {
+  const headers = transitUpstreamHeaders(getTransitFeed('adelaide-metro'));
+  assert.equal(headers.Accept, '*/*');
+  // Every other feed keeps the protobuf-first Accept.
+  assert.match(
+    transitUpstreamHeaders(getTransitFeed('mbta')).Accept,
+    /protobuf/,
+  );
+});
+
+test('a feed refreshMs stretches its fresh window, never shortens it', () => {
+  const johor = getTransitFeed('mybas-johor');
+  assert.equal(transitFeedTtlMs(johor), 30_000);
+  assert.equal(transitFeedTtlMs(getTransitFeed('mbta')), TRANSIT_PROXY_TTL_MS);
+  assert.equal(transitFeedTtlMs({ refreshMs: 1_000 }), TRANSIT_PROXY_TTL_MS);
+  const now = 1_000_000;
+  const entry = { at: now - 20_000 };
+  assert.equal(transitCacheState(entry, now), 'stale');
+  assert.equal(transitCacheState(entry, now, transitFeedTtlMs(johor)), 'fresh');
 });

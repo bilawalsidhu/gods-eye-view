@@ -10,7 +10,7 @@ import {
   parseHkCameraLocationsXml,
 } from '../../server/providers/cctv/sources.js';
 import {
-  DEFAULT_CCTV_MAX_SOURCES,
+  CCTV_SHARED_SOURCE_SLOTS,
   DEFAULT_HK_CAMERAS_URL,
   DEFAULT_HK_MAX_SOURCES,
   HK_ANCHORS,
@@ -396,8 +396,8 @@ test('CCTV_HK_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
   }
 });
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+test('the shared catalog slots are not raised to make room for this pack', () => {
+  assert.equal(CCTV_SHARED_SOURCE_SLOTS, 4000);
 });
 
 test('the HK pack default sits above the full TD catalog and anchors the New Territories', () => {
@@ -406,7 +406,7 @@ test('the HK pack default sits above the full TD catalog and anchors the New Ter
     'default cap should keep nearly all published TD cameras',
   );
   assert.ok(
-    DEFAULT_HK_MAX_SOURCES <= DEFAULT_CCTV_MAX_SOURCES,
+    DEFAULT_HK_MAX_SOURCES <= CCTV_SHARED_SOURCE_SLOTS,
     'a single pack must not outgrow the catalog-wide ceiling alone',
   );
   const places = HK_ANCHORS.map(
