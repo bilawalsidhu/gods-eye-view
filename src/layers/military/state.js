@@ -1,6 +1,7 @@
 import { MilitaryFlightRecords } from './records.js';
 import { createMilitaryFeed } from './ingestion.js';
 import * as Cesium from 'cesium';
+import { worldTimeFor } from '../../time/worldClock.js';
 
 export function createFlightState({ source, services }) {
   const { createGroundSnap } = services.groundSnap;
@@ -11,6 +12,8 @@ export function createFlightState({ source, services }) {
     ...services.groundFloor,
   });
   flightState._cullPositions = new Map();
+  /** The time contacts are drawn behind by the render delay, in epoch ms. */
+  flightState.now = worldTimeFor('military');
 
   /** Per-class model spec for THIS layer (2026-08-16, owner playtest ask:
    *  military contacts should read as their WEIGHT CLASS, always in this layer's
