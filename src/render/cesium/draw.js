@@ -3177,7 +3177,7 @@ export function createCesiumDraw({
       ? Cesium.Cartographic.fromCartesian(toCartesian(pos)).height
       : (pos.height ?? 0);
 
-  function shapeGeometry(item) {
+  function shapeGeometry(item, vertexFormat) {
     const g = item.geometry;
     const extrudedHeight = item.extrudeHeight;
     switch (g.kind) {
@@ -3194,7 +3194,7 @@ export function createCesiumDraw({
           perPositionHeight: g.perPositionHeight,
         };
         return {
-          fill: new Cesium.PolygonGeometry(polygon),
+          fill: new Cesium.PolygonGeometry({ ...polygon, vertexFormat }),
           // Extruded, its outline is the volume's edges (both faces and the
           // walls' corners), as the entities' extruded polygons draw it.
           outline:
@@ -3219,7 +3219,7 @@ export function createCesiumDraw({
           extrudedHeight,
         };
         return {
-          fill: new Cesium.EllipseGeometry(ellipse),
+          fill: new Cesium.EllipseGeometry({ ...ellipse, vertexFormat }),
           // Its outline is an outline geometry, as the entities' ellipses draw it.
           outline: item.outline
             ? new Cesium.EllipseOutlineGeometry(ellipse)
@@ -3240,6 +3240,7 @@ export function createCesiumDraw({
             // An image fill turns with the rectangle, as a KML overlay's does.
             rotation: g.rotation ?? 0,
             stRotation: g.rotation ?? 0,
+            vertexFormat,
           }),
         };
       case 'box': {
@@ -3247,6 +3248,7 @@ export function createCesiumDraw({
         return {
           fill: Cesium.BoxGeometry.fromDimensions({
             dimensions: new Cesium.Cartesian3(d.x, d.y, d.z),
+            vertexFormat,
           }),
           modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(
             toCartesian(g.center),
@@ -4089,7 +4091,16 @@ export function createCesiumDraw({
           : null;
       if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
-      const shape = shapeGeometry(item);
+      // A colour fill's geometry carries what its appearance reads, as the
+      // entities' do. With texture coordinates too, Cesium packs them with
+      // the normals, which a colour appearance then misreads: a lit colour
+      // fill shaded darker than the same entity.
+      const shape = shapeGeometry(
+        item,
+        imageFill
+          ? Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat
+          : Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+      );
       const id = pickId(record, item);
       const pulse = pulseOf(item);
       const part = {

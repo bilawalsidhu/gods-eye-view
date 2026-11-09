@@ -941,6 +941,78 @@ test('shapes that only change colour, pulse, show or meta change in place; a pul
     set.dispose();
   }));
 
+test('colour fills carry what their appearance reads, as entities do', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.shapes({ id: 'formats' });
+    const ring = [
+      { lon: 0, lat: 0, height: 10 },
+      { lon: 0.001, lat: 0, height: 10 },
+      { lon: 0.001, lat: 0.001, height: 10 },
+    ];
+    set.set([
+      {
+        id: 'column',
+        geometry: { kind: 'polygon', rings: [ring] },
+        fill: [1, 0.7, 0.3, 0.45],
+        extrudeHeight: 100,
+        height: 'absolute',
+      },
+      {
+        id: 'box',
+        geometry: {
+          kind: 'box',
+          center: { lon: 1, lat: 0, height: 10 },
+          dimensions: { x: 10, y: 10, z: 10 },
+        },
+        fill: '#fff',
+        height: 'absolute',
+      },
+      {
+        id: 'disc',
+        geometry: {
+          kind: 'ellipse',
+          center: { lon: 2, lat: 0, height: 10 },
+          semiMajor: 50,
+          semiMinor: 30,
+        },
+        fill: '#fff',
+        extrudeHeight: 40,
+        height: 'absolute',
+      },
+      {
+        id: 'slab',
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 3, south: 0, east: 3.01, north: 0.01 },
+          height: 10,
+        },
+        fill: '#fff',
+        extrudeHeight: 40,
+        height: 'absolute',
+      },
+    ]);
+    const host = scene.added[0];
+    const formats = [];
+    const walk = (c) => {
+      for (let i = 0; i < c.length; i++) {
+        const p = c.get(i);
+        if (typeof p.length === 'number' && p.get) walk(p);
+        else if (p instanceof Cesium.Primitive && p.geometryInstances?.geometry)
+          formats.push(p.geometryInstances.geometry._vertexFormat);
+      }
+    };
+    walk(host);
+    assert.equal(formats.length, 4);
+    // Position and normal only: with texture coordinates too, Cesium packs
+    // them with the normals, and the colour appearance misreads them.
+    for (const format of formats) {
+      assert.equal(format.normal, true);
+      assert.equal(format.st, false);
+    }
+    set.dispose();
+  }));
+
 test('a pulse the Cesium renderer cannot run is refused before anything changes', () => {
   const { scene, draw } = drawOver();
   const set = draw.shapes({ id: 'pulses' });
@@ -4083,6 +4155,8 @@ test('an unclamped shape filled with an image draws a textured primitive and fre
       [true, true, true],
     );
     assert.ok(geometryInstances.geometry instanceof Cesium.RectangleGeometry);
+    // Texture coordinates for the image, as its appearance reads them.
+    assert.equal(geometryInstances.geometry._vertexFormat.st, true);
     assert.equal(geometryInstances.id.id, 'image');
     assert.equal(
       drawHitOf({ primitive, id: geometryInstances.id }).set,
