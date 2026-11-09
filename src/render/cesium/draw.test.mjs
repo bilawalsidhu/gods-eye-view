@@ -6,6 +6,7 @@ import {
   createCesiumDraw,
   FEW_LOOSE_LINES,
   LONG_SETTLE_FRAMES,
+  MOVING_SHAPES,
   revealUniform,
   SETTLE_FRAMES,
   unboundDrawPart,
@@ -5915,5 +5916,343 @@ test('a clamped ellipse filled with a radial rim drapes its material, finely cut
     set.upsert([{ ...zone, show: false }]);
     assert.equal(scene.added[0], host, 'patched, not rebuilt');
     assert.deepEqual([...shows.show], [0]);
+    set.dispose();
+  }));
+
+test('a clamped fill that moves or resizes is drawn where it now is in the same frame, once terrain heights are loaded', () =>
+  withTerrainHeights(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'dragged' });
+    const box = (id, east, extra = {}) => ({
+      id,
+      geometry: {
+        kind: 'rectangle',
+        rect: { west: 0, south: 0, east, north: 1 },
+      },
+      fill: [0.5, 0.9, 1, 0.12],
+      height: 'clampGround',
+      ...extra,
+    });
+    set.set([
+      box('a', 1),
+      box('b', 3, {
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 2, south: 0, east: 3, north: 1 },
+        },
+      }),
+    ]);
+    const host = scene.added[0];
+    const groundOf = (h) => {
+      for (let i = 0; i < h.length; i++)
+        if (h.get(i) instanceof Cesium.GroundPrimitive) return h.get(i);
+      return null;
+    };
+    const batch = groundOf(host);
+    const shows = new Map();
+    const attributesOf = (primitive) => {
+      primitive.getGeometryInstanceAttributes = (id) => {
+        const key = `${primitive.geometryInstances.length}:${id.id}`;
+        if (!shows.has(key)) shows.set(key, { show: new Uint8Array([1]) });
+        return shows.get(key);
+      };
+    };
+    attributesOf(batch);
+    // Resized while its batch still builds: drawn alone, built at once.
+    set.upsert([box('a', 1.5, { meta: 'dragged' })]);
+    assert.equal(scene.added[0], host, 'the set is not rebuilt');
+    const solo = host.get(host.length - 1);
+    assert.ok(solo instanceof Cesium.GroundPrimitive);
+    assert.equal(solo.asynchronous, false, 'built in the frame it is drawn');
+    const instance = solo.geometryInstances[0];
+    assert.equal(instance.id.id, 'a');
+    assert.equal(instance.id.meta, 'dragged');
+    assert.equal(
+      instance.id,
+      batch.geometryInstances.find((i) => i.id.id === 'a').id,
+      'the same pick id',
+    );
+    assert.ok(
+      Cesium.Rectangle.equalsEpsilon(
+        instance.geometry._rectangle,
+        Cesium.Rectangle.fromDegrees(0, 0, 1.5, 1),
+        1e-12,
+      ),
+    );
+    // Its place in the batch is hidden once the batch is ready; the rest draws.
+    Object.defineProperty(batch, 'ready', { value: true });
+    frame();
+    assert.deepEqual([...shows.get('2:a').show], [0], 'hidden in the batch');
+    assert.equal(shows.get('2:b'), undefined, 'the other untouched');
+    // Moved again: the one built for it is replaced.
+    set.upsert([box('a', 2)]);
+    const again = host.get(host.length - 1);
+    assert.notEqual(again, solo);
+    assert.ok(solo.isDestroyed(), 'the old one goes');
+    // A show change on a ready one is in place; one not yet drawn is built again.
+    Object.defineProperty(again, 'ready', { value: true });
+    attributesOf(again);
+    set.upsert([box('a', 2, { show: false })]);
+    assert.equal(host.get(host.length - 1), again);
+    assert.deepEqual([...shows.get('1:a').show], [0]);
+    // A new colour is a new look: the set rebuilds.
+    set.upsert([box('a', 2, { fill: [1, 0, 0, 0.5] })]);
+    assert.notEqual(scene.added.at(-1), host, 'rebuilt');
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('a moved clamped fill is hidden where a rebuild in flight still draws it', () =>
+  withTerrainHeights(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'retiring' });
+    const box = (id, east, fill = [0.5, 0.9, 1, 0.12]) => ({
+      id,
+      geometry: {
+        kind: 'rectangle',
+        rect: { west: 0, south: 0, east, north: 1 },
+      },
+      fill,
+      height: 'clampGround',
+    });
+    set.set([box('a', 1)]);
+    const first = scene.added[0];
+    const groundOf = (h) => {
+      for (let i = 0; i < h.length; i++)
+        if (h.get(i) instanceof Cesium.GroundPrimitive) return h.get(i);
+      return null;
+    };
+    const old = groundOf(first);
+    Object.defineProperty(old, 'ready', { value: true });
+    frame();
+    const shown = { show: new Uint8Array([1]) };
+    old.getGeometryInstanceAttributes = () => shown;
+    // A new colour rebuilds; the old host draws on until the new is ready.
+    set.upsert([box('a', 1, [1, 0, 0, 0.5])]);
+    const second = scene.added.find((p) => p !== first);
+    assert.ok(
+      second && scene.added.includes(first),
+      'both drawn while it builds',
+    );
+    // Moved meanwhile: drawn alone in the new host, and gone from the old one.
+    set.upsert([box('a', 2, [1, 0, 0, 0.5])]);
+    assert.ok(second.get(second.length - 1).asynchronous === false);
+    assert.deepEqual(
+      [...shown.show],
+      [0],
+      'hidden where the old host draws it',
+    );
+    set.dispose();
+  }));
+
+/** A clamped colour rectangle from 0° to `east`°, for the move tests. */
+const groundBox = (id, east, extra = {}) => ({
+  id,
+  geometry: {
+    kind: 'rectangle',
+    rect: { west: 0, south: 0, east, north: 1 },
+  },
+  fill: [0.5, 0.9, 1, 0.12],
+  height: 'clampGround',
+  ...extra,
+});
+
+/** Every ground primitive in a host built, with a show to read and set. */
+const groundsReady = (host) => {
+  for (let i = 0; i < host.length; i++) {
+    const ground = host.get(i);
+    if (!(ground instanceof Cesium.GroundPrimitive)) continue;
+    Object.defineProperty(ground, 'ready', { value: true });
+    const show = { show: new Uint8Array([1]) };
+    ground.getGeometryInstanceAttributes = () => show;
+  }
+};
+
+/** The first ground primitive in a host, or null. */
+const firstGround = (host) => {
+  for (let i = 0; i < host.length; i++)
+    if (host.get(i) instanceof Cesium.GroundPrimitive) return host.get(i);
+  return null;
+};
+
+test('moved clamped fills go back into a rebuilt batch once they have been still for a while', () =>
+  withTerrainHeights(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'settling' });
+    set.set([groundBox('a', 1), groundBox('b', 2)]);
+    const host = scene.added[0];
+    groundsReady(host);
+    frame();
+    set.upsert([groundBox('a', 1.5)]);
+    for (let i = 0; i < SETTLE_FRAMES - 1; i++) frame();
+    // Moved again before it settled: it waits from there.
+    set.upsert([groundBox('a', 1.6)]);
+    for (let i = 0; i < SETTLE_FRAMES - 1; i++) frame();
+    assert.deepEqual(scene.added, [host], 'not rebuilt while it moves');
+    frame();
+    assert.equal(scene.added.length, 2, 'rebuilt once still');
+    const rebuilt = scene.added.find((p) => p !== host);
+    const instances = [];
+    for (let i = 0; i < rebuilt.length; i++)
+      if (rebuilt.get(i) instanceof Cesium.GroundPrimitive)
+        instances.push(...rebuilt.get(i).geometryInstances);
+    assert.deepEqual(
+      instances.map((i) => i.id.id).sort(),
+      ['a', 'b'],
+      'both in the new batches',
+    );
+    assert.ok(
+      rebuilt.get(0).asynchronous !== false,
+      'built as a batch, not alone',
+    );
+    assert.ok(
+      Cesium.Rectangle.equalsEpsilon(
+        instances.find((i) => i.id.id === 'a').geometry._rectangle,
+        Cesium.Rectangle.fromDegrees(0, 0, 1.6, 1),
+        1e-12,
+      ),
+      'where it last moved',
+    );
+    // The host drawing it alone draws until the rebuild is ready.
+    assert.ok(scene.added.includes(host));
+    for (let i = 0; i < SETTLE_FRAMES * 2; i++) frame();
+    assert.equal(scene.added.length, 2, 'it settles once');
+    set.dispose();
+  }));
+
+test('an upsert that would draw more clamped fills alone than MOVING_SHAPES rebuilds instead', () =>
+  withTerrainHeights(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'many', pickable: false });
+    const ids = Array.from({ length: MOVING_SHAPES + 1 }, (_, i) => `s${i}`);
+    set.set(ids.map((id) => groundBox(id, 1)));
+    const host = scene.added[0];
+    groundsReady(host);
+    frame();
+    // A set that does not pick draws one alone without picking.
+    set.upsert([groundBox('s0', 1.5)]);
+    const solo = host.get(host.length - 1);
+    assert.equal(solo.asynchronous, false);
+    assert.equal(solo.allowPicking, false);
+    assert.deepEqual(scene.added, [host]);
+    set.upsert(ids.slice(1, MOVING_SHAPES).map((id) => groundBox(id, 1.5)));
+    assert.deepEqual(scene.added, [host], 'MOVING_SHAPES alone at most');
+    set.upsert([groundBox(ids.at(-1), 1.5)]);
+    assert.equal(scene.added.length, 2, 'one more rebuilds the set');
+    set.dispose();
+  }));
+
+test('a clamped fill moved before terrain heights load rebuilds its set', () => {
+  const heights = Cesium.ApproximateTerrainHeights;
+  if (heights.initialized) return;
+  const { scene, draw } = drawOver();
+  const set = draw.shapes({ id: 'no-heights' });
+  set.set([groundBox('a', 1)]);
+  const host = scene.added[0];
+  set.upsert([groundBox('a', 1.5)]);
+  assert.ok(
+    !scene.added.includes(host) || scene.added.length > 1,
+    'rebuilt, not drawn alone',
+  );
+  set.dispose();
+});
+
+test('a moved clamped fill shows again where the retiring host draws it when the host drawing it alone goes unbuilt', () =>
+  withTerrainHeights(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'twice' });
+    set.set([groundBox('a', 1)]);
+    const first = scene.added[0];
+    const old = firstGround(first);
+    Object.defineProperty(old, 'ready', { value: true });
+    frame();
+    const shown = { show: new Uint8Array([1]) };
+    old.getGeometryInstanceAttributes = () => shown;
+    set.upsert([groundBox('a', 1, { fill: [1, 0, 0, 0.5] })]);
+    set.upsert([groundBox('a', 2, { fill: [1, 0, 0, 0.5] })]);
+    assert.deepEqual([...shown.show], [0], 'hidden while drawn alone');
+    // A second rebuild drops the host drawing it alone, still building.
+    set.upsert([groundBox('a', 2, { fill: [0, 1, 0, 0.5] })]);
+    assert.ok(scene.added.includes(first), 'the retiring host draws on');
+    assert.equal(scene.added.length, 2);
+    assert.deepEqual([...shown.show], [1], 'drawn where it was, not gone');
+    set.dispose();
+  }));
+
+/** Ground primitives in a host built, each instance's show kept by id. */
+const groundsReadyById = (host, shows = new Map()) => {
+  for (let i = 0; i < host.length; i++) {
+    const ground = host.get(i);
+    if (!(ground instanceof Cesium.GroundPrimitive)) continue;
+    Object.defineProperty(ground, 'ready', { value: true });
+    ground.getGeometryInstanceAttributes = (id) => {
+      if (!shows.has(id.id)) {
+        const shown = ground.geometryInstances.find((g) => g.id === id)
+          ?.attributes.show.value[0];
+        shows.set(id.id, { show: new Uint8Array([shown ?? 1]) });
+      }
+      return shows.get(id.id);
+    };
+  }
+  return shows;
+};
+
+test('a hidden clamped fill moved while its set rebuilds stays hidden when a second rebuild comes', () =>
+  withTerrainHeights(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'hidden-twice' });
+    set.set([
+      groundBox('a', 1, { show: false }),
+      groundBox('b', 1, {
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 5, south: 0, east: 6, north: 1 },
+        },
+      }),
+    ]);
+    const first = scene.added[0];
+    const shows = groundsReadyById(first);
+    frame();
+    const b = (fill) =>
+      groundBox('b', 1, {
+        geometry: {
+          kind: 'rectangle',
+          rect: { west: 5, south: 0, east: 6, north: 1 },
+        },
+        fill,
+      });
+    set.upsert([b([1, 0, 0, 0.5])]);
+    set.upsert([groundBox('a', 2, { show: false })]);
+    set.upsert([b([0, 1, 0, 0.5])]);
+    assert.ok(scene.added.includes(first), 'the retiring host draws on');
+    assert.deepEqual([...shows.get('a').show], [0], 'a stays hidden');
+    set.dispose();
+  }));
+
+test('clamped fills drawn alone by a host still retiring count toward MOVING_SHAPES', () =>
+  withTerrainHeights(() => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw.shapes({ id: 'cap-retiring' });
+    const ids = Array.from(
+      { length: MOVING_SHAPES * 2 + 1 },
+      (_, i) => `s${i}`,
+    );
+    set.set(ids.map((id) => groundBox(id, 1)));
+    const first = scene.added[0];
+    groundsReady(first);
+    frame();
+    // Half the cap moved, then a rebuild while they are drawn alone.
+    set.upsert(ids.slice(0, MOVING_SHAPES).map((id) => groundBox(id, 1.5)));
+    set.upsert([groundBox(ids.at(-1), 1, { fill: [1, 0, 0, 0.5] })]);
+    assert.equal(scene.added.length, 2, 'rebuilding, the old host retiring');
+    const second = scene.added.find((p) => p !== first);
+    const before = second.length;
+    // Others moved while it builds: over the cap counted with the retiring
+    // host's, so the set rebuilds rather than draw them alone.
+    set.upsert([groundBox(ids[MOVING_SHAPES], 1.5)]);
+    assert.ok(
+      !scene.added.includes(second) || second.length === before,
+      'nothing more drawn alone',
+    );
     set.dispose();
   }));

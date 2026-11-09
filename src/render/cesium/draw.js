@@ -323,6 +323,13 @@ export const SETTLE_FRAMES = 30;
 export const FEW_LOOSE_LINES = 64;
 export const LONG_SETTLE_FRAMES = 300;
 
+/**
+ * Clamped fills a set draws alone at most, each where it last moved
+ * (`moveShape`): an upsert that would draw more alone rebuilds the set's
+ * batches instead, as each costs a primitive and is built in the frame.
+ */
+export const MOVING_SHAPES = 16;
+
 /** What `syncIcons` did: icons added or removed, or only changed in place. */
 const ICONS_CHANGED = 'changed';
 const ICONS_KEPT = 'kept';
@@ -446,8 +453,8 @@ export function createCesiumDraw({
           return;
         }
         // Lines that only change how they show or where an undraped one
-        // runs, and clamped shapes that only show or hide, are changed
-        // where they are.
+        // runs, and clamped shapes that only show or hide, or a few colour
+        // fills that only move (`moveShape`), are changed where they are.
         if (
           patchLines(record, list) ||
           patchShapes(record, list) ||
@@ -661,7 +668,12 @@ export function createCesiumDraw({
     ) {
       record.retiring = old;
       if (record.own) old.remove(record.own);
-    } else if (old) scene.primitives.remove(old);
+    } else if (old) {
+      scene.primitives.remove(old);
+      // Shapes drawn alone in the host that goes show again where the host
+      // still retiring draws them, until the new one is ready.
+      showRetiringShapes(record);
+    }
     if (!waiting || !groundShown) retire(record);
     // Hidden one by one: a hidden collection would not build them.
     if (waiting) for (const primitive of waiting) primitive.show = false;
@@ -754,6 +766,8 @@ export function createCesiumDraw({
     record.retiring = null;
     record.retiringFlows = null;
     record.retiringParts = null;
+    record.retiringShapeParts = null;
+    record.retiringHiddenShapes = null;
   }
 
   /**
@@ -2625,7 +2639,10 @@ export function createCesiumDraw({
    * and the lines drawn alone since, hidden in their batches.
    */
   function showPending(record) {
-    for (const part of record.shapeParts?.values() ?? [])
+    for (const part of record.shapeParts?.values() ?? []) {
+      // A shape drawn alone since it moved stays hidden in its batch.
+      if (part.batchHidden && part.batch && !part.batch.isDestroyed())
+        showOn(part.batch, part.id, false);
       if (
         part.pendingShow !== undefined &&
         part.ground &&
@@ -2634,6 +2651,7 @@ export function createCesiumDraw({
         showOn(part.ground, part.id, part.pendingShow);
         part.pendingShow = undefined;
       }
+    }
     for (const part of record.lineParts?.values() ?? []) {
       if (part.batchHidden && part.batch && !part.batch.isDestroyed())
         showOn(part.batch, part.id, false);
@@ -2869,6 +2887,9 @@ export function createCesiumDraw({
     // Each clamped item as drawn, for upserts that only show or hide it;
     // the set keeps them once every one is built.
     const parts = new Map();
+    // The shapes as the host this build replaces draws them, while it
+    // still draws; a host already retiring keeps its own.
+    if (!record.retiring) record.retiringShapeParts = record.shapeParts ?? null;
     record.shapeParts = null;
     for (const item of items) {
       if (item.outline)
@@ -3084,27 +3105,196 @@ export function createCesiumDraw({
    * Upsert clamped shapes in place, without a rebuild, when every item is
    * drawn now and looks the same: then only whether it shows and its
    * `meta` change. A ground primitive still building takes the show once
-   * it is ready (`swapReady`). False, changing nothing, otherwise.
+   * it is ready (`swapReady`). A plain colour fill whose geometry alone
+   * changed is drawn alone where it now is (`moveShape`), while no more
+   * than `MOVING_SHAPES` would be. False, changing nothing, otherwise.
    */
   function patchShapes(record, list) {
     const parts = record.shapeParts;
     if (record.kind !== 'shapes' || !parts) return false;
+    // Each item's way in: `true` moves it (`moveShape`), else it only
+    // shows, hides or takes its `meta`.
+    const moves = [];
     for (const item of list) {
       const was = parts.get(item.id);
-      if (!was || !sameLook(was, item)) return false;
-      if (was.ground?.isDestroyed()) return false;
+      if (!was) return false;
+      if (was.ground?.isDestroyed() || was.batch?.isDestroyed()) return false;
+      if (sameLook(was, item)) {
+        moves.push(false);
+        continue;
+      }
+      if (!movable(record, was, item)) return false;
+      moves.push(true);
     }
-    for (const item of list) {
+    // Drawn alone after this upsert: a few at most, or the batches rebuild.
+    const alone = new Set();
+    for (const [id, part] of parts) if (part.solo) alone.add(id);
+    list.forEach((item, k) => moves[k] && alone.add(item.id));
+    // Those the host still retiring draws alone count too, until it goes.
+    let retiringAlone = 0;
+    if (record.retiring)
+      for (const part of record.retiringShapeParts?.values() ?? [])
+        if (part.solo && part.ground && !part.ground.isDestroyed())
+          retiringAlone += 1;
+    if (alone.size + retiringAlone > MOVING_SHAPES) return false;
+    list.forEach((item, k) => {
       const was = parts.get(item.id);
-      if (!was.ground) continue;
+      if (moves[k]) return moveShape(record, was, item);
+      if (!was.ground) return;
       was.id.meta = item.meta;
       const show = item.show !== false;
       if (was.ground.ready) {
         showOn(was.ground, was.id, show);
         was.pendingShow = undefined;
+      } else if (was.solo) {
+        // Not yet drawn, it is built again showing as asked.
+        moveShape(record, was, item);
       } else was.pendingShow = show;
-    }
+    });
     return true;
+  }
+
+  /** Whether a clamped item is a plain colour fill, drawn in a batch. */
+  const colourFill = (item) =>
+    item.height === 'clampGround' &&
+    Boolean(item.fill) &&
+    !item.outlineOnly &&
+    !item.outline &&
+    item.extrudeHeight === undefined &&
+    (typeof item.fill !== 'object' || Array.isArray(item.fill));
+
+  /** How a clamped shape draws, but for its geometry, show and `meta`. */
+  const placedLookOf = (item) => {
+    const { show, meta, geometry, ...look } = item;
+    return plainCopy(look);
+  };
+
+  /**
+   * Whether a clamped colour fill's upsert moves or reshapes it and nothing
+   * else: then it is drawn alone where it now is, built in this frame,
+   * which needs Cesium's terrain heights loaded.
+   */
+  function movable(record, was, item) {
+    if (!was.id || !was.ground || !colourFill(item)) return false;
+    if (!colourFill(was.look)) return false;
+    if (!sameValues(placedLookOf(was.look), placedLookOf(item))) return false;
+    // Refused geometry (an ellipse radius by camera height) rebuilds, to throw.
+    const g = item.geometry;
+    if (
+      g?.kind === 'ellipse' &&
+      (typeof g.semiMajor !== 'number' || typeof g.semiMinor !== 'number')
+    )
+      return false;
+    if (!['polygon', 'ellipse', 'rectangle'].includes(g?.kind)) return false;
+    return groundSyncs() && typeof record.host?.add === 'function';
+  }
+
+  /**
+   * Draw a clamped colour fill where it now is, in this frame: on a ground
+   * primitive of its own built at once, in place of its own one (or of its
+   * place in its batch, hidden there), as a moved draped line is drawn
+   * (`moveDraped`). A shape dragged every frame draws every frame, where a
+   * rebuild would build its batch anew each time and never finish.
+   */
+  function moveShape(record, part, item) {
+    const host = record.host;
+    if (part.solo) {
+      if (part.ground && !part.ground.isDestroyed()) host.remove(part.ground);
+    } else {
+      part.batch = part.ground;
+      part.batchHidden = true;
+      // Its batch draws on without it, hidden now or once it is ready.
+      if (part.batch.ready) showOn(part.batch, part.id, false);
+    }
+    hideRetiringShape(record, item.id);
+    record.shapesStill = 0;
+    part.solo = true;
+    part.pendingShow = undefined;
+    part.look = lookOf(item);
+    part.id.meta = item.meta;
+    const pickable = record.spec.pickable !== false;
+    const Ground = pickable
+      ? Cesium.GroundPrimitive
+      : UnpickableGroundPrimitive;
+    part.ground = new Ground({
+      geometryInstances: [
+        new Cesium.GeometryInstance({
+          geometry: groundGeometry(item),
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+              toColor(item.fill),
+            ),
+            show: new Cesium.ShowGeometryInstanceAttribute(item.show !== false),
+          },
+          id: part.id,
+        }),
+      ],
+      classificationType: classificationOf(
+        item.clampTo ?? record.spec.clampTo ?? 'both',
+      ),
+      allowPicking: pickable,
+      asynchronous: false,
+    });
+    host.add(part.ground);
+  }
+
+  /**
+   * Hide where the host a set is rebuilding from still draws a clamped
+   * shape, once it is drawn where it now is: else both would draw (and
+   * pick) until the rebuild is ready.
+   */
+  function hideRetiringShape(record, id) {
+    const part = record.retiring && record.retiringShapeParts?.get(id);
+    const ground = part?.ground;
+    if (!ground || ground.isDestroyed() || !ground.ready) return;
+    const hidden = (record.retiringHiddenShapes ??= new Set());
+    // Only one it drew: one hidden there already stays hidden.
+    if (!hidden.has(id) && !shownOn(ground, part.id)) return;
+    showOn(ground, part.id, false);
+    hidden.add(id);
+  }
+
+  /** Whether the instance under pick id `id` in a ready ground primitive shows. */
+  const shownOn = (ground, id) =>
+    ground.getGeometryInstanceAttributes(id).show[0] !== 0;
+
+  /**
+   * Show again the shapes `hideRetiringShape` hid where the retiring host
+   * draws them: the host that drew them alone is gone before it was ready.
+   */
+  function showRetiringShapes(record) {
+    const hidden = record.retiringHiddenShapes;
+    record.retiringHiddenShapes = null;
+    if (!record.retiring || !hidden) return;
+    for (const id of hidden) {
+      const ground = record.retiringShapeParts?.get(id)?.ground;
+      if (!ground || ground.isDestroyed() || !ground.ready) continue;
+      // As it is now: one since hidden or removed stays hidden.
+      const item = record.items.get(id);
+      if (!item || item.show === false) continue;
+      showOn(ground, record.retiringShapeParts.get(id).id, true);
+    }
+  }
+
+  /**
+   * After a draw: a shape set whose shapes drawn alone have not moved for
+   * `SETTLE_FRAMES` drawn frames rebuilds, so they go back into its
+   * batches; the host drawing them alone draws until the rebuild is ready.
+   */
+  function settleShapes(record) {
+    if (record.pending || !record.shapeParts) return;
+    let alone = false;
+    for (const part of record.shapeParts.values())
+      if (part.solo) {
+        alone = true;
+        break;
+      }
+    if (!alone) return;
+    record.shapesStill = (record.shapesStill ?? 0) + 1;
+    if (record.shapesStill < SETTLE_FRAMES) return;
+    record.shapesStill = 0;
+    record.rebuild();
+    requestRender();
   }
 
   /** Whether a hidden clamped item is a plain colour fill `groundFills` builds. */
@@ -3393,6 +3583,12 @@ export function createCesiumDraw({
           } catch (error) {
             // Its lines stay in the collection, which draws them all.
             record.lineBox = null;
+            report(error);
+          }
+        else if (record.kind === 'shapes')
+          try {
+            settleShapes(record);
+          } catch (error) {
             report(error);
           }
       // Rows moving on a live clock, and flowing lines, draw on in the
