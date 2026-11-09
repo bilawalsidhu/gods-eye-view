@@ -1,7 +1,11 @@
 import { QUERY_LIMIT, QUERY_SNAP_DEGREES } from './policy.js';
+import { singleLine, SAFE_TAG_MAX } from '../../textSafety.js';
 
 function textTag(value) {
-  const t = String(value ?? '').trim();
+  // OSM tags are attacker-editable and arrive in tool output as if ours: anyone
+  // can set `operator` to a string with newlines and a fake instruction. Flatten
+  // and cap here, before the value is ever carried in a record.
+  const t = singleLine(value, SAFE_TAG_MAX);
   return t || null;
 }
 

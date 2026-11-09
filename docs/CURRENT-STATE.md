@@ -378,6 +378,14 @@ Tool argument string lengths follow JSON Schema Unicode code-point counts, so su
 
 Query timestamps outside the representable Date range are reported as null, preserving the rest of the result row.
 
+Text that arrives from OSM reaches tool output as data, never as layout. Any OSM
+editor can set an ALPR `operator` tag or a place name, so licence-plate-reader
+tags, place labels and analyst result fields are flattened to a single line and
+capped (120 characters for tag-like values, 180 for descriptions) before they
+are carried into a Realtime model turn or an MCP response. Control characters
+become spaces rather than being deleted, so neighbouring words do not fuse into
+a new one.
+
 `gods-eye-view/tools` defines queries that answer questions from the app's data,
 and `gods-eye-view/tools/mcp` exposes a composed catalog over the Model Context
 Protocol. `npm run mcp` serves Core's tools over stdio to a local MCP client,
