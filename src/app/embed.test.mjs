@@ -5,7 +5,9 @@ import {
   installViews,
   isEmbedded,
   keepPanelRendering,
+  panelAwareVisibility,
 } from './embed.js';
+import { LayerLifecycle } from '../data/lifecycle.js';
 import { createView } from '../view/index.js';
 
 const fakeViewer = () => {
@@ -144,6 +146,12 @@ test('an embedded page takes views only from its parent and answers it', async (
     id: 3,
     view: { camera: { lat: 1, lon: 2 }, layers: ['flights'] },
   });
+  // A view kept from before Snow was retired still applies, on Normal.
+  send(parent, {
+    type: 'gev:view',
+    id: 4,
+    view: { camera: { lat: 1, lon: 2 }, style: 'snow' },
+  });
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.deepEqual(posted[1], {
     type: 'gev:view-applied',
@@ -159,11 +167,19 @@ test('an embedded page takes views only from its parent and answers it', async (
         name === 'set_layer_visibility' && args.layerId === 'flights',
     ),
   );
+  assert.equal(posted[3].id, 4);
+  assert.equal(posted[3].ok, true);
+  assert.ok(
+    calls.some(
+      ([name, args]) => name === 'set_visual_style' && args.style === 'normal',
+    ),
+  );
   assert.equal(posted.filter((message) => message.id === 1).length, 0);
   // Ready names no data and goes to any parent; answers go only to the
   // origin that asked.
   assert.deepEqual(targets, [
     '*',
+    'https://host.example',
     'https://host.example',
     'https://host.example',
   ]);
@@ -209,6 +225,60 @@ test('an app loaded inline into a panel page talks through its own window', asyn
   } finally {
     delete globalThis.GEV_EMBED_INLINE;
   }
+});
+
+test('polled layers keep refreshing in an inline panel its host reports hidden', async (t) => {
+  const listeners = new Set();
+  const doc = {
+    hidden: true,
+    visibilityState: 'hidden',
+    addEventListener: (_type, fn) => listeners.add(fn),
+    removeEventListener: (_type, fn) => listeners.delete(fn),
+  };
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) await Promise.resolve();
+  };
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1000 });
+  let updates = 0;
+  const manager = new LayerLifecycle(
+    {},
+    { visibilityTarget: panelAwareVisibility(doc) },
+  );
+  manager.register({
+    id: 'flights',
+    name: 'flights',
+    icon: '',
+    source: 'test',
+    updateInterval: 1000,
+    async init() {},
+    enable() {},
+    disable() {},
+    async update() {
+      updates++;
+      await Promise.resolve();
+    },
+    getStats: () => ({ count: 0, lastUpdate: null }),
+  });
+  globalThis.GEV_EMBED_INLINE = true;
+  try {
+    await manager.setEnabled('flights', true);
+    await settle();
+    const enabled = updates;
+    t.mock.timers.tick(1000);
+    await settle();
+    t.mock.timers.tick(1000);
+    await settle();
+    assert.equal(updates, enabled + 2, 'the panel keeps polling');
+
+    delete globalThis.GEV_EMBED_INLINE;
+    t.mock.timers.tick(1000);
+    await settle();
+    assert.equal(updates, enabled + 2, 'outside a panel a hidden page pauses');
+  } finally {
+    delete globalThis.GEV_EMBED_INLINE;
+    await manager.destroyAll();
+  }
+  assert.equal(listeners.size, 0);
 });
 
 test('annotations in a link are drawn after it restores, embedded or not', async () => {
