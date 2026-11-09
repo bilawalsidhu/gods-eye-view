@@ -22,12 +22,7 @@ const road = (level, length = 100, x = 0) => ({
   ],
 });
 
-function setup({
-  live = true,
-  heatline = true,
-  preset = 'normal',
-  supported = true,
-} = {}) {
+function setup({ live = true, heatline = true, preset = 'normal' } = {}) {
   const draw = fakeDrawPort();
   const demand = [];
   const state = {
@@ -37,7 +32,6 @@ function setup({
     _stylePreset: preset,
     _heatJam: [],
     _heatLineCount: 0,
-    _heatSupported: supported,
     _heatSet: draw.lines({ id: 'traffic:1:heat', clampTo: 'tiles' }),
   };
   const rendering = createRendering({
@@ -144,14 +138,9 @@ test('no heat-lines in simulation or with the mode off, and removal empties the 
   assert.equal(items().length, 0, 'nothing to pulse');
 });
 
-test('where lines cannot drape, no heat-lines are drawn and that is said once', (t) => {
-  const warn = t.mock.method(console, 'warn', () => {});
-  const { state, rendering, items } = setup({ supported: null });
-  state._viewer = { scene: {} };
+test('heat-lines are asked for draped whatever the renderer, with no check of their own', () => {
+  const { rendering, items } = setup();
   rendering.rebuildHeatLines([road(0.2)]);
-  rendering.rebuildHeatLines([road(0.2)]);
-  assert.equal(items().length, 0);
-  assert.equal(state._heatSupported, false);
-  assert.equal(warn.mock.callCount(), 1);
-  assert.equal(rendering.heatPulsing(), false);
+  assert.equal(items().length, 1);
+  assert.equal(items()[0].mode, 'draped');
 });

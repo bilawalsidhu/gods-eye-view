@@ -10,9 +10,27 @@ import {
   findGlobe,
   findQuery,
 } from '../../render/rendererOf.js';
-import { surfaceTilesReady, trafficSurfaceKey } from './rendering.js';
+/**
+ * What heights are sampled against now: the globe port's surface identity,
+ * which changes when the base, terrain or photoreal route is swapped or the
+ * globe is shown or hidden, and never on camera moves or tile loads. A
+ * renderer without one (`surfaceIdentity`) names a single surface (0), so
+ * cached heights live as long as the layer's cache.
+ * @param {object|undefined} viewer
+ * @returns {number}
+ */
+export function trafficSurfaceKey(viewer) {
+  return findGlobe(viewer)?.surfaceVersion?.() ?? 0;
+}
 
-export { trafficSurfaceKey };
+/**
+ * Whether the drawn surface has loaded what is in view: the globe's terrain
+ * while it is shown, otherwise the shown 3D tiles (false with neither).
+ * @param {object|undefined} viewer
+ */
+function surfaceTilesReady(viewer) {
+  return findGlobe(viewer)?.isSettled('surface') === true;
+}
 
 /** Whether the globe surface is drawn (else tiles alone are). */
 const globeShown = (viewer) => findGlobe(viewer)?.isGlobeVisible?.() === true;

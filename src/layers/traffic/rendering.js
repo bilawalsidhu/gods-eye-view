@@ -12,20 +12,6 @@ import {
 } from './policy.js';
 import { distance } from '../../geo/vector.js';
 import { findCamera } from '../../render/rendererOf.js';
-// The layer's other parts reach the renderer through the unbound camera
-// factory (with its query port) and globe factory, loaded here with the
-// adapter this file needs.
-import '../../render/cesium/camera.js';
-import '../../render/cesium/globe.js';
-// What the dots' surface is, and whether it has loaded, the renderer
-// contract cannot say: the Cesium adapter reads it off the scene.
-import {
-  drapesLines,
-  surfaceTilesReady,
-  surfaceKey as trafficSurfaceKey,
-} from '../../render/cesium/surfaceState.js';
-
-export { surfaceTilesReady, trafficSurfaceKey };
 
 export function createRendering({
   state: layerState,
@@ -66,7 +52,8 @@ export function createRendering({
    * on top. Lines of the layer's heat-line draw set, draped on the tiles;
    * the jam lines pulse together (`pulseHeatLines`). Capped at
    * HEAT_LINE_CAP (jam first, longest first); overflow is logged. No-op in
-   * sim mode, when the heatline mode is off, or where lines cannot drape.
+   * sim mode or when the heatline mode is off. A renderer that cannot drape
+   * draws them over the surface instead (the draw port's `overlay`).
    *
    * @param {Array} roads - Road objects visible in the current render.
    */
@@ -81,18 +68,6 @@ export function createRendering({
       removeHeatLines();
       return;
     }
-    if (layerState._heatSupported === null) {
-      layerState._heatSupported = drapesLines(layerState._viewer);
-      if (!layerState._heatSupported)
-        console.warn(
-          '[Data:Traffic] Draped lines unsupported — heat-lines disabled',
-        );
-    }
-    if (!layerState._heatSupported) {
-      removeHeatLines();
-      return;
-    }
-
     const candidates = [];
     for (const road of roads) {
       const flow = road.flow;

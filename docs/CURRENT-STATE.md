@@ -1041,7 +1041,7 @@ The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.
 
-Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger; only the surface identity, tile readiness and draped-line support are still read off the Cesium scene.
+Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and
 `./layers/bikeshare`. Traffic separates road requests, ingestion, animation,

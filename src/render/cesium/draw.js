@@ -790,6 +790,7 @@ export function createCesiumDraw({
   // eye is hidden, as layers drawn without depth test used to do themselves.
   let occluder = null;
   function cullHorizon() {
+    cullOverlayLines();
     for (const record of sets.values()) {
       if (!record.spec.horizonCull || !record.placed.length) continue;
       const horizon = horizonNow();
@@ -797,6 +798,26 @@ export function createCesiumDraw({
       for (const placed of record.placed) {
         const show = placed.shown && horizon.isPointVisible(placed.position);
         if (placed.primitive.show !== show) placed.primitive.show = show;
+      }
+    }
+  }
+
+  /**
+   * Draped lines drawn over the surface (where the scene cannot drape) show
+   * while any of their ends or middle is this side of the horizon.
+   */
+  function cullOverlayLines() {
+    let horizon;
+    for (const record of sets.values()) {
+      if (!record.overlayLines?.length) continue;
+      horizon ??= horizonNow();
+      for (const line of record.overlayLines) {
+        // With no horizon (2D) every line shows as it was asked to.
+        const show =
+          line.shown &&
+          (!horizon || line.ends.some((p) => horizon.isPointVisible(p)));
+        if (line.part.deep && line.part.deep.show !== show)
+          line.part.deep.show = show;
       }
     }
   }
@@ -1849,8 +1870,11 @@ export function createCesiumDraw({
           width: item.widthPx,
           vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT,
           // Straight between the positions, as the collection's lines are
-          // (geodesic ones come densified).
-          arcType: Cesium.ArcType.NONE,
+          // (geodesic ones come densified); one drawn for a draped line
+          // follows the surface's curve between them, as draping does.
+          arcType: item.overlaid
+            ? Cesium.ArcType.GEODESIC
+            : Cesium.ArcType.NONE,
         }),
         id,
       }),
@@ -1958,6 +1982,125 @@ export function createCesiumDraw({
     );
   }
 
+  /** Whether the scene can drape lines (Cesium's ground polylines need
+   *  depth textures, which every WebGL 2 context has). */
+  const drapes = () => scene.frameState?.context?.depthTexture !== false;
+
+  /**
+   * A draped line as drawn where the scene cannot drape: undraped along its
+   * positions, in its colour where the surface hides it (so it draws over
+   * the surface), as one colour where it had segments of its own. One with
+   * segments runs from its first shown segment to its last, and is hidden
+   * with none shown.
+   */
+  function overlayLine(item) {
+    if (item.mode !== 'draped') return item;
+    const { segmentColors, segmentShow, clampTo, ...rest } = item;
+    const line = {
+      ...rest,
+      mode: '3d',
+      depthFailColor: item.style.color,
+      overlaid: true,
+    };
+    if (segmentShow?.length) {
+      const first = segmentShow.indexOf(true);
+      const last = segmentShow.lastIndexOf(true);
+      if (first < 0) line.show = false;
+      else if (first > 0 || last < segmentShow.length - 1)
+        line.positions = linePositions(item).slice(first, last + 2);
+    }
+    return line;
+  }
+
+  /**
+   * Recolour, in place, a line drawn over the surface for a draped one whose
+   * positions are the ones it was built from. False, changing nothing, for
+   * one that moved or is revealed.
+   */
+  function overlayRecoloured(record, part, item) {
+    const deep = part.deep;
+    if (!item.overlaid || !deep || revealed(item)) return false;
+    if (!flatEquals(item.positions, part.overlayFrom)) return false;
+    // Only its colour may have changed (`patchLines` checked its look).
+    deep.appearance.material.uniforms.color = toColor(item.style.color);
+    deep.depthFailAppearance.material.uniforms.color = toColor(
+      item.style.color,
+    );
+    const line = record.overlayLines.find((entry) => entry.part === part);
+    if (line) line.shown = item.show !== false;
+    else deep.show = item.show !== false;
+    return true;
+  }
+
+  /** An overlay line's look but its colours (its depth-fail colour is its
+   *  colour too). */
+  const overlayShape = (item) =>
+    lineLook({ ...item, depthFailColor: null }, true);
+
+  /** Stop tracking a line no longer drawn over the surface for a draped
+   *  one. */
+  function overlayLeft(record, part) {
+    const lines = record.overlayLines;
+    const at = lines ? lines.findIndex((line) => line.part === part) : -1;
+    if (at >= 0) lines.splice(at, 1);
+    part.overlayFrom = undefined;
+    part.overlayShape = undefined;
+  }
+
+  /** Track a patched overlay line for the horizon cull, as built now. */
+  function overlayMoved(record, part, item) {
+    part.overlayFrom = flatPositions(item.positions);
+    part.overlayShape = overlayShape(item);
+    const lines = record.overlayLines;
+    const at = lines.findIndex((line) => line.part === part);
+    if (at >= 0) lines.splice(at, 1);
+    if (!part.deep) return;
+    lines.push({
+      part,
+      shown: item.show !== false,
+      ends: overlayEnds(item.positions),
+    });
+  }
+
+  /**
+   * Points along a line for the horizon test: up to 16 of its positions,
+   * evenly spread, and between each two the point on the surface's curve
+   * halfway (so a long arc under the eye is not taken as past the horizon).
+   */
+  function overlayEnds(positions) {
+    const all = linePositions({ positions });
+    if (!all.length) return [];
+    const picks = Math.min(all.length, 16);
+    const probes = [];
+    let previous = null;
+    for (let k = 0; k < picks; k++) {
+      const at =
+        all[Math.round((k * (all.length - 1)) / Math.max(1, picks - 1))];
+      if (previous) {
+        const mid = Cesium.Cartesian3.midpoint(
+          previous,
+          at,
+          new Cesium.Cartesian3(),
+        );
+        const radius =
+          (Cesium.Cartesian3.magnitude(previous) +
+            Cesium.Cartesian3.magnitude(at)) /
+          2;
+        if (Cesium.Cartesian3.magnitude(mid) > 0)
+          probes.push(
+            Cesium.Cartesian3.multiplyByScalar(
+              Cesium.Cartesian3.normalize(mid, mid),
+              radius,
+              mid,
+            ),
+          );
+      }
+      probes.push(at);
+      previous = at;
+    }
+    return probes;
+  }
+
   function buildLines(record) {
     // Refused before anything changes, so the set keeps drawing as it was.
     for (const item of record.items.values())
@@ -1981,6 +2124,14 @@ export function createCesiumDraw({
         throw new Error(
           'the Cesium renderer colours and shows segments of draped solid lines only',
         );
+    // Where the scene cannot drape at all, draped lines draw over the
+    // surface instead (`overlay`): undraped, in their own colour where the
+    // surface hides them, and hidden past the horizon (`cullOverlayLines`).
+    const overlay = !drapes();
+    const items = overlay
+      ? [...record.items.values()].map(overlayLine)
+      : [...record.items.values()];
+    record.overlayLines = overlay ? [] : null;
     const polylines = new Cesium.PolylineCollection();
     // Lines in the inertial frame, turned with the sky each frame.
     let inertial = null;
@@ -2003,7 +2154,7 @@ export function createCesiumDraw({
     // Lines with a depth-fail colour, beside the collection.
     let deep = null;
     const looks = lineLooks();
-    for (const item of record.items.values()) {
+    for (const item of items) {
       if (item.mode === 'draped') {
         const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
         const part = {
@@ -2047,7 +2198,18 @@ export function createCesiumDraw({
         const id = pickId(record, item);
         const primitive = depthFailLine(record, item, id);
         if (primitive) deep.add(primitive);
-        parts.set(item.id, { look: lineLook(item), id, deep: primitive });
+        const part = { look: lineLook(item), id, deep: primitive };
+        if (item.overlaid) {
+          part.overlayFrom = flatPositions(item.positions);
+          part.overlayShape = overlayShape(item);
+        }
+        parts.set(item.id, part);
+        if (item.overlaid && primitive)
+          record.overlayLines.push({
+            part,
+            shown: item.show !== false,
+            ends: overlayEnds(item.positions),
+          });
         continue;
       }
       const id = pickId(record, item);
@@ -2101,7 +2263,7 @@ export function createCesiumDraw({
     let own = polylines;
     // Lines in the collection that can settle into a static batch draw
     // beside it once they do.
-    const settling = [...record.items.values()].some(settles);
+    const settling = items.some(settles);
     if (deep || settling || inertial) {
       own = new Cesium.PrimitiveCollection();
       own.add(polylines);
@@ -2296,6 +2458,17 @@ export function createCesiumDraw({
     was.shape === looks.shape(item);
 
   /**
+   * Whether a line drawn over the surface for a draped one changes only its
+   * colour where it runs: it takes the new one in place
+   * (`overlayRecoloured`).
+   */
+  const recolourableOverlay = (was, item, looks) =>
+    Boolean(item.overlaid && was.deep && was.overlayShape) &&
+    flatEquals(item.positions, was.overlayFrom) &&
+    !revealed(item) &&
+    was.overlayShape === overlayShape(item);
+
+  /**
    * The colours the glow lines sharing a material that `list` recolours
    * are given together: each such material and the item whose colour it
    * takes, when every line it draws ends the upsert with one look (its
@@ -2351,6 +2524,10 @@ export function createCesiumDraw({
   function patchLines(record, list) {
     const parts = record.lineParts;
     if (record.kind !== 'lines' || !parts) return false;
+    // Where the scene cannot drape, draped lines are patched as the lines
+    // drawn over the surface for them, each built anew alone where it
+    // changes (as any line with a depth-fail colour is).
+    if (record.overlayLines) list = list.map(overlayLine);
     // Each draped line's positions, flattened once for both passes.
     const flats = new Map();
     // Each item's look, in order: an item sent twice is changed twice.
@@ -2364,7 +2541,8 @@ export function createCesiumDraw({
       if (
         was.look !== look &&
         !recolourable(was, item, lookOf) &&
-        !recolourableSolid(was, item, lookOf)
+        !recolourableSolid(was, item, lookOf) &&
+        !recolourableOverlay(was, item, lookOf)
       )
         return false;
       // A viewer destroyed under the set took its batch with it.
@@ -2400,7 +2578,7 @@ export function createCesiumDraw({
         patchUndraped(record, was, item, looks[k]);
         continue;
       }
-      if (was.look !== looks[k]) {
+      if (was.look !== looks[k] && was.deep === undefined) {
         // A line drawing on a shared material took its colour above.
         if (!was.shared || was.solo)
           was.material.uniforms.color = toColor(item.style.color);
@@ -2408,6 +2586,10 @@ export function createCesiumDraw({
       }
       if (was.deep !== undefined) {
         was.id.meta = item.meta;
+        was.look = looks[k];
+        // One drawn for a draped line that runs where it ran takes its new
+        // look in place (heat-lines pulse every frame).
+        if (overlayRecoloured(record, was, item)) continue;
         // Built anew where it now runs, under the same pick id.
         const deep = record.deepLines;
         const old = was.deep;
@@ -2418,6 +2600,8 @@ export function createCesiumDraw({
         was.deep = depthFailLine(record, item, was.id);
         if (was.deep) deep.add(was.deep);
         if (old) deep.remove(old);
+        if (item.overlaid) overlayMoved(record, was, item);
+        else if (was.overlayFrom) overlayLeft(record, was);
         continue;
       }
       was.id.meta = item.meta;
@@ -3653,13 +3837,13 @@ export function createCesiumDraw({
    * drape them onto 3D tiles yet, so over shown tiles it is `overlay`.
    * Terrain and the ellipsoid take draped items wherever Cesium drapes at
    * all: its draped lines and image fills need depth textures, which every
-   * WebGL 2 context has; without them it says `overlay`. (It still builds
-   * them as ground primitives there: the overlay drawing itself is not
-   * built, since only a WebGL 1 context without the extension lacks them.)
+   * WebGL 2 context has; without them it says `overlay`, and draws draped
+   * lines over the surface (`overlayLine`). Clamped shapes there are still
+   * built as ground primitives: only a WebGL 1 context without the
+   * extension lacks depth textures.
    */
   const clampState = () =>
-    scene.frameState?.context?.depthTexture === false ||
-    tilesets().some((tileset) => tileset.show)
+    !drapes() || tilesets().some((tileset) => tileset.show)
       ? 'overlay'
       : 'draped';
   const clampListeners = listenerList(report);
