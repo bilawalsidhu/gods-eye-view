@@ -79,6 +79,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
    * @param {boolean} [options.enabled=true] Layer enabled state.
    * @param {'off'|'on'|'viewshed'} [options.coverageMode='on'] Coverage mode.
    * @param {boolean} [options.showProjection=false] Projection visibility.
+   * @param {Map<string, Object>} [options.healthById] Health rows by camera id.
    * @returns {void}
    */
 
@@ -89,6 +90,8 @@ export function createTesting({ state: layerState, services, parts, source }) {
     enabled = true,
     coverageMode = 'on',
     showProjection = false,
+    healthById = new Map(),
+    openingCameraProvisional = false,
   } = {}) {
     layerState._viewer = viewer;
     layerState._records = Array.isArray(records) ? records : [];
@@ -102,12 +105,18 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._billboards = null;
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
+    layerState._openingCameraProvisional = !!openingCameraProvisional;
     layerState._enabled = !!enabled;
     layerState._coverageMode = parts.model.normalizeCoverageMode(
       coverageMode,
       'on',
     );
     layerState._showProjection = !!showProjection;
+    layerState._healthById = healthById;
+    layerState._viewRecords = [];
+    layerState._cameraIndexCache = null;
+    layerState._coverageVisibleIds = new Set();
+    layerState._neighborCountCache = null;
   }
   return {
     _pushAmbientCardEntriesForTest,

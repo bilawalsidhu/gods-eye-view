@@ -171,6 +171,46 @@ test('bike share reports uncovered areas and failed systems honestly', async () 
   );
 });
 
+test('bike share excludes blank coordinates without losing stations on the prime meridian', async () => {
+  const stations = [
+    { station_id: 'blank', lat: 51.5, lon: ' ' },
+    { station_id: 'zero', lat: 51.5, lon: 0 },
+  ];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: [system('fixture', 'Fixture Bikes', 51.5, 0)],
+        async getStations(url) {
+          return {
+            data: {
+              stations: url.endsWith('station_information.json')
+                ? stations
+                : stations.map(({ station_id }) => ({
+                    station_id,
+                    num_bikes_available: 4,
+                  })),
+            },
+          };
+        },
+      },
+    },
+  });
+  const result = await catalog.call('get_bike_share', {
+    area: { lat: 51.5, lon: 0, radius_km: 2 },
+  });
+  assert.deepEqual(
+    result.data.rows.map((row) => row.station_id),
+    ['zero'],
+  );
+  assert.equal(result.data.total, 1);
+  assert.equal(result.data.rows[0].lon, 0);
+  assert.equal(
+    result.summary,
+    '1 bike-share station in 2 km around 51.500, 0.000 with 4 bikes available.',
+  );
+});
+
 const feed = {
   id: 'capmetro',
   name: 'CapMetro',
@@ -553,6 +593,47 @@ test('traffic counts only roads inside a radius area and reports missing tiles',
   const partial = await call(flow(across, true), circle);
   assert.equal(partial.data.partial, true);
   assert.match(partial.summary, /Some map tiles did not load/);
+});
+
+test('traffic says when the proxy served cached tiles, and how old the oldest is', async () => {
+  const road = [
+    {
+      coords: [
+        [-0.2, 0],
+        [0.2, 0],
+      ],
+      trafficLevel: 0.9,
+    },
+  ];
+  const call = (detail) =>
+    composeCatalog({
+      tools: coreTools,
+      services: {
+        traffic: {
+          getStatus: async () => ({ hasKey: true }),
+          fetchFlowDetail: async () => ({
+            segments: road,
+            partial: false,
+            ...detail,
+          }),
+        },
+      },
+    }).call('get_traffic_flow', { area: { lat: 0, lon: 0, radius_km: 10 } });
+  const oldest = Date.UTC(2026, 9, 16, 8);
+  const stale = await call({ stale: true, oldestTileAt: oldest });
+  assert.equal(stale.data.stale, true);
+  assert.equal(stale.data.oldest_tile_at, '2026-10-16T08:00:00.000Z');
+  assert.match(
+    stale.summary,
+    /cached copies, the oldest from 2026-10-16T08:00:00\.000Z, so traffic may be out of date\./,
+  );
+  const live = await call({ stale: false, oldestTileAt: oldest });
+  assert.equal(live.data.stale, false);
+  assert.doesNotMatch(live.summary, /out of date/);
+  // A source that can't tell (no freshness fields) isn't reported as stale.
+  const unknown = await call({});
+  assert.equal(unknown.data.stale, false);
+  assert.equal(unknown.data.oldest_tile_at, null);
 });
 
 test('a whole-world bike-share search names every system it skipped', async () => {

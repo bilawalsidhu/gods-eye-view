@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import test from 'node:test';
 import { GevRealtimeController } from './realtimeController.js';
 
@@ -15,15 +16,7 @@ function fixture({ pointer = null, onUserSend = () => {} } = {}) {
     backend: {},
     debugSink: null,
     pointer,
-    ui: {
-      root: {
-        dataset: {},
-        classList: { remove() {} },
-        querySelectorAll: () => [],
-      },
-      status: {},
-      detail: {},
-    },
+    ui: createTestVoiceUi(),
   });
   controller.dc = {
     readyState: 'open',
