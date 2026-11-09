@@ -54,8 +54,7 @@ export function acceptsGzip(request) {
  * @returns {Promise<Buffer|null>}
  */
 export async function gzipBody(body) {
-  if (body == null) return null;
-  const raw = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+  const raw = Buffer.isBuffer(body) ? body : Buffer.from(body);
   if (raw.byteLength < MIN_COMPRESSED_BYTES) return null;
   const compressed = await gzipAsync(raw);
   return compressed.byteLength < raw.byteLength ? compressed : null;

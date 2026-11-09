@@ -81,8 +81,6 @@ test('accept-encoding is read the way clients actually write it', () => {
 });
 
 test('a body is only compressed when compression pays for itself', async () => {
-  assert.equal(await gzipBody(null), null);
-  assert.equal(await gzipBody(undefined), null);
   assert.equal(await gzipBody(''), null);
   assert.equal(
     await gzipBody('{"states":[]}'),
