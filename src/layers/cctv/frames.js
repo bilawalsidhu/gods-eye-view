@@ -45,6 +45,9 @@ export function fitToProjection(sourceW, sourceH) {
 
 const _scratchPoints = [];
 const _scratchSphere = new Cesium.BoundingSphere();
+const _scratchCartographic = new Cesium.Cartographic();
+// Close to the reference ellipsoid, it is not a reliable terrain horizon.
+const LOW_VIEWER_HEIGHT_M = 1000;
 
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
@@ -244,7 +247,8 @@ export function createFrames({ state: layerState, services, parts, source }) {
   /**
    * Whether a camera's monitor plane can be on screen: the mount, the far cap
    * and its corners are bounded by one sphere that is tested against the view
-   * frustum, and at least one of those points must be above the horizon.
+   * frustum, and at least one of those points must be above the horizon when
+   * the reference ellipsoid is a reliable occluder for this view.
    * Anything this cannot judge (no viewer, a 2D or Columbus scene, no geometry
    * yet) counts as visible, so a missing input never blocks a picture.
    * @param {Object} record - Camera record.
@@ -277,8 +281,30 @@ export function createFrames({ state: layerState, services, parts, source }) {
       typeof camera.frustum?.computeCullingVolume !== 'function'
     )
       return true;
-    const occluder = horizonOccluder(camera);
-    if (!points.some((point) => occluder.isPointVisible(point))) return false;
+    // The reference ellipsoid can lie above the actual street. Near the
+    // surface its horizon would incorrectly hide nearby below-ellipsoid planes;
+    // let the frustum alone decide at low altitude or when height is unknown.
+    const height = Cesium.Cartographic.fromCartesian(
+      camera.positionWC,
+      Cesium.Ellipsoid.WGS84,
+      _scratchCartographic,
+    )?.height;
+    const pointsAboveEllipsoid = points.every((point) => {
+      const h = Cesium.Cartographic.fromCartesian(
+        point,
+        Cesium.Ellipsoid.WGS84,
+        _scratchCartographic,
+      )?.height;
+      return Number.isFinite(h) && h >= 0;
+    });
+    if (
+      Number.isFinite(height) &&
+      height >= LOW_VIEWER_HEIGHT_M &&
+      pointsAboveEllipsoid
+    ) {
+      const occluder = horizonOccluder(camera);
+      if (!points.some((point) => occluder.isPointVisible(point))) return false;
+    }
     const culling = camera.frustum.computeCullingVolume(
       camera.positionWC,
       camera.directionWC,
