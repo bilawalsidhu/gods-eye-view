@@ -10,7 +10,8 @@
  *
  * PURE data module: no Cesium, node-testable. Each pack loads lazily on the
  * first lookup that needs it (divisions on the first land hit, places on the
- * first radius) and is indexed once; a country's division rings are decoded
+ * first radius) and is indexed once, and the loading status names them while
+ * one is on its way (`placePacksLoading`); a country's division rings are decoded
  * the first time a point falls inside it. A failed load is retried later
  * (see `createRetryableLoader`). No network.
  */
@@ -45,6 +46,53 @@ const PACKS = {
     import.meta.url,
   ),
 };
+
+/** The packs on their way now, for the loading status. */
+const loadingPacks = new Set();
+const loadingListeners = new Set();
+
+function notifyLoading() {
+  for (const listener of [...loadingListeners]) {
+    try {
+      listener();
+    } catch {
+      /* A status listener never breaks a lookup. */
+    }
+  }
+}
+
+/** A pack load that the loading status counts while it runs. */
+function reportedLoad(name, load) {
+  return async () => {
+    loadingPacks.add(name);
+    notifyLoading();
+    try {
+      return await load();
+    } finally {
+      loadingPacks.delete(name);
+      notifyLoading();
+    }
+  };
+}
+
+/**
+ * Whether a place pack is loading now. The packs load lazily, on the first
+ * lookup that needs them, so the loading status says so meanwhile.
+ * @returns {boolean}
+ */
+export function placePacksLoading() {
+  return loadingPacks.size > 0;
+}
+
+/**
+ * Hear each start and end of a place pack load.
+ * @param {() => void} listener
+ * @returns {() => void} Stops listening.
+ */
+export function onPlacePacksLoadingChange(listener) {
+  loadingListeners.add(listener);
+  return () => loadingListeners.delete(listener);
+}
 
 /** Test seam: count pack loads (lazy-loading contract). */
 export const placePackLoads = { divisions: 0, places: 0 };
@@ -106,7 +154,7 @@ function ringRank(ring) {
   return (Math.abs(sum) / 2) * Math.cos((meanLat * Math.PI) / 180);
 }
 
-const loadPlaces = createRetryableLoader(async () => {
+async function readPlaces() {
   const [countries, marine] = await Promise.all([
     loadBundledJson(PACKS.countries),
     loadBundledJson(PACKS.marine),
@@ -142,10 +190,11 @@ const loadPlaces = createRetryableLoader(async () => {
     });
   }
   return { land, water };
-});
+}
+const loadPlaces = createRetryableLoader(reportedLoad('places', readPlaces));
 
 /** Divisions grouped by country code; rings decoded per country on demand. */
-const loadDivisions = createRetryableLoader(async () => {
+async function readDivisions() {
   placePackLoads.divisions += 1;
   const pack = await loadBundledJson(PACKS.divisions);
   const decimals = pack.meta?.decimals ?? 3;
@@ -157,7 +206,10 @@ const loadDivisions = createRetryableLoader(async () => {
     byCountry.set(feature.iso2, list);
   }
   return { byCountry, decoded: new Map() };
-});
+}
+const loadDivisions = createRetryableLoader(
+  reportedLoad('divisions', readDivisions),
+);
 
 /** The first-level division holding a point inside country `code`, or null. */
 async function divisionAt(code, lat, lon) {
@@ -179,7 +231,7 @@ async function divisionAt(code, lat, lon) {
   return null;
 }
 
-const loadPopulatedPlaces = createRetryableLoader(async () => {
+async function readPopulatedPlaces() {
   placePackLoads.places += 1;
   const pack = await loadBundledJson(PACKS.places);
   return (pack.places || []).filter(
@@ -189,7 +241,10 @@ const loadPopulatedPlaces = createRetryableLoader(async () => {
       Number.isFinite(row[1]) &&
       Number.isFinite(row[2]),
   );
-});
+}
+const loadPopulatedPlaces = createRetryableLoader(
+  reportedLoad('populated-places', readPopulatedPlaces),
+);
 
 /**
  * The most prominent populated place within `radiusKm` of a point (lowest

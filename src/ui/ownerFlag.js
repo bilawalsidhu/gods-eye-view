@@ -1,34 +1,75 @@
 /**
- * The owner mark beside a satellite's name: the owner country's flag (an SVG
- * from flag-icons — Windows draws no flag emoji), or a short text badge for
- * an organisation without one (ESA, EUMETSAT, "Multinational"). Each flag is
- * its own lazily fetched asset; only the shown one ever loads.
+ * The owner mark beside a satellite's name: the owner country's flag, or a
+ * short text badge for an organisation without one (ESA, EUMETSAT,
+ * "Multinational"). Windows draws no flag emoji, so the flags are pictures:
+ * one sheet of every owner country's flag (`scripts/build-owner-flags.mjs`,
+ * from flag-icons), loaded once at startup (`preloadOwnerFlags`), so riding
+ * a satellite never waits for its flag.
  */
+
+import { OWNER_FLAG_SHEET } from './ownerFlagSheet.js';
+
+/** The flag sheet's URL. */
+export const OWNER_FLAG_SHEET_URL = new URL(
+  '../data/local_data/owner_flags/owner_flags.png',
+  import.meta.url,
+).href;
+
+/** Each flag's place on the sheet, by ISO code. */
+const SHEET_INDEX = new Map(
+  OWNER_FLAG_SHEET.codes.map((code, index) => [code, index]),
+);
+
+let sheetLoad = null;
 
 /**
- * Flag URL loaders by path; empty under node:test, which has no glob. The
- * glob is eager so the bundle carries only the URL strings: a lazy glob would
- * emit a JS stub chunk per flag (~270), two requests for each flag shown.
- * The SVG itself is still fetched only when an <img> shows it.
+ * Load the flag sheet, once; the app calls this at startup. A failed load
+ * is asked again by the next caller, so a flag shown later can still come.
+ * @param {{createImage?: () => {onload: Function|null, onerror: Function|null,
+ *   src: string}}} [options] Test seam.
+ * @returns {Promise<boolean>} Whether the sheet is ready to draw from.
  */
-let FLAG_LOADERS = {};
-try {
-  const urls = import.meta.glob('/node_modules/flag-icons/flags/4x3/*.svg', {
-    query: '?url&no-inline',
-    import: 'default',
-    eager: true,
-    // flag-icons lives in node_modules, which globs skip by default.
-    exhaustive: true,
+export function preloadOwnerFlags({
+  createImage = () => new globalThis.Image(),
+} = {}) {
+  if (sheetLoad) return sheetLoad;
+  let image;
+  try {
+    image = createImage();
+  } catch {
+    return Promise.resolve(false);
+  }
+  const load = new Promise((resolve) => {
+    image.onload = () => resolve(true);
+    image.onerror = () => {
+      if (sheetLoad === load) sheetLoad = null;
+      resolve(false);
+    };
   });
-  FLAG_LOADERS = Object.fromEntries(
-    Object.entries(urls).map(([path, url]) => [path, () => url]),
-  );
-} catch {
-  /* Not under Vite. */
+  sheetLoad = load;
+  image.src = OWNER_FLAG_SHEET_URL;
+  return load;
 }
 
-const FLAG_PATH = (code) =>
-  `/node_modules/flag-icons/flags/4x3/${code.toLowerCase()}.svg`;
+/**
+ * How to draw a flag from the sheet at a size: the sheet as the element's
+ * background, scaled and shifted onto the flag's cell.
+ * @param {string} code ISO 3166-1 alpha-2, upper case.
+ * @param {{widthPx?: number, heightPx?: number}} [size] CSS pixels.
+ * @returns {{backgroundImage: string, backgroundSize: string,
+ *   backgroundPosition: string}|null} Null for a code not on the sheet.
+ */
+export function ownerFlagStyle(code, { widthPx = 20, heightPx = 15 } = {}) {
+  const index = SHEET_INDEX.get(code);
+  if (index === undefined) return null;
+  const column = index % OWNER_FLAG_SHEET.columns;
+  const row = Math.floor(index / OWNER_FLAG_SHEET.columns);
+  return {
+    backgroundImage: `url("${OWNER_FLAG_SHEET_URL}")`,
+    backgroundSize: `${OWNER_FLAG_SHEET.columns * widthPx}px ${OWNER_FLAG_SHEET.rows * heightPx}px`,
+    backgroundPosition: `${-column * widthPx}px ${-row * heightPx}px`,
+  };
+}
 
 /** An ISO 3166-1 alpha-2 code, upper case, or null. */
 function isoCode(value) {
@@ -56,55 +97,39 @@ export function regionName(code, locale) {
 /**
  * How to mark a satellite's owner.
  * @param {{countryCode: string|null, label: string|null}|null|undefined} owner
- * @param {{locale?: string, loaders?: object}} [options]
+ * @param {{locale?: string, flags?: {has: (code: string) => boolean}}}
+ *   [options] `flags`: the codes with a flag (the sheet's).
  * @returns {{kind: 'flag', code: string, label: string}
  *   | {kind: 'badge', label: string, title: string}
  *   | null} A flag (with the country's localized name as its label), a text
  *   badge for an owner with no flag to show, or nothing when unknown.
  */
-export function ownerMark(
-  owner,
-  { locale = 'en', loaders = FLAG_LOADERS } = {},
-) {
+export function ownerMark(owner, { locale = 'en', flags = SHEET_INDEX } = {}) {
   const code = isoCode(owner?.countryCode);
   const label = String(owner?.label ?? '').trim();
   if (code) {
     const name = regionName(code, locale) || label || code;
-    if (loaders[FLAG_PATH(code)]) return { kind: 'flag', code, label: name };
+    if (flags.has(code)) return { kind: 'flag', code, label: name };
     return { kind: 'badge', label: label || code, title: name };
   }
   return label ? { kind: 'badge', label, title: label } : null;
 }
 
 /**
- * What the readout shows for an owner once its flag has loaded or failed: the
- * flag, or a badge (the country code when the flag would not load, so the
- * owner never disappears), or nothing for an unknown owner.
+ * What the readout shows for an owner once the flag sheet has loaded or
+ * failed: the flag, or a badge (the country code when the sheet would not
+ * load, so the owner never disappears), or nothing for an unknown owner.
  * @param {ReturnType<typeof ownerMark>} mark
- * @param {{url?: string|null, failed?: boolean}} [flag] The flag's load state.
- * @returns {{kind: 'flag', url: string, label: string}
+ * @param {{ready?: boolean, failed?: boolean}} [sheet] The sheet's state.
+ * @returns {{kind: 'flag', style: object, label: string}
  *   | {kind: 'badge', label: string, title: string} | null}
  */
-export function shownOwnerMark(mark, { url = null, failed = false } = {}) {
+export function shownOwnerMark(mark, { ready = false, failed = false } = {}) {
   if (!mark) return null;
   if (mark.kind === 'badge') return mark;
-  if (failed) {
+  const style = ownerFlagStyle(mark.code);
+  if (failed || !style) {
     return { kind: 'badge', label: mark.code.toUpperCase(), title: mark.label };
   }
-  return url ? { kind: 'flag', url, label: mark.label } : null;
-}
-
-/**
- * Fetch a flag's URL.
- * @param {string} code ISO 3166-1 alpha-2.
- * @returns {Promise<string|null>}
- */
-export async function loadFlagUrl(code, loaders = FLAG_LOADERS) {
-  const load = loaders[FLAG_PATH(String(code))];
-  if (!load) return null;
-  try {
-    return (await load()) || null;
-  } catch {
-    return null;
-  }
+  return ready ? { kind: 'flag', style, label: mark.label } : null;
 }

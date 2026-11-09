@@ -64,6 +64,25 @@ import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
+import {
+  onPlacePacksLoadingChange,
+  placePacksLoading,
+} from '../data/placeBelow.js';
+import { LOADING_NAME_KEYS } from './layerNames.js';
+import { preloadOwnerFlags } from './ownerFlag.js';
+
+/** The place packs, as one more loading entry while they are on their way. */
+const PLACE_PACKS_LOADING = Object.freeze({
+  id: 'place-names',
+  name: LOADING_NAME_KEYS['place-names'],
+  enabled: true,
+  stats: Object.freeze({ loading: true }),
+});
+
+/** The data layers, with the place packs while they load. */
+function withPlacePacks(layers) {
+  return placePacksLoading() ? [...layers, PLACE_PACKS_LOADING] : layers;
+}
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -158,8 +177,15 @@ export class StyleManager extends ShellFacade {
     // Vue views share this runtime and its stores; dispose unmounts them.
     this._ui = createUiRuntime({ pinia: applicationPinia() });
     this._feedback = new ShellFeedback({
-      readLayers: () => this._dataManager?.getAll?.() || [],
+      readLayers: () => withPlacePacks(this._dataManager?.getAll?.() || []),
     });
+    // The satellite owner flags load with the app, not on the first ride.
+    preloadOwnerFlags();
+    // The place names under a Cockpit load on its first lookup: the loading
+    // status names them meanwhile.
+    this._offPlacePacks = onPlacePacksLoadingChange(() =>
+      this._updateGlobalLoadingFeedback(),
+    );
     this.viewer = viewer;
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -1825,6 +1851,7 @@ export class StyleManager extends ShellFacade {
     this._wildlifeSightingCard?.destroy();
     this._ui.destroy();
     this._panelChrome.destroy();
+    this._offPlacePacks();
     this._feedback.destroy();
 
     this._displayBindings.destroy();

@@ -1786,15 +1786,19 @@ names it and the country in the reader's language through `Intl.DisplayNames`,
 "Sichuan, China", and from 8× the most prominent populated place within half
 the view's smaller side, so it is in the picture, "Sichuan, China · near
 Chengdu", from a bundled pack of Natural Earth populated places loaded on
-first use; else the smallest named sea, gulf, strait, channel, sound or bay;
+first use (each pack loads on the first lookup that needs it, and the
+top-centre loading status lists "Place names" until it arrives); else the
+smallest named sea, gulf, strait, channel, sound or bay;
 else the ocean; nothing in a coastline gap), at most every 2 s and only after
 20 km of ground travel, or at once when a zoom step changes how much ground
 the view shows. A division or populated-places pack that fails to load drops
 only that part (the country still shows); a lookup that fails outright hides
 the band rather than leave the last place up, and the next HUD beat looks
 again. The readout card puts
-the owner country's flag (an SVG from `flag-icons`, fetched only for the shown
-country) or a text badge for an organisation before the name, the operator
+the owner country's flag (drawn from one 15 KB sheet of every owner
+country's flag, built from `flag-icons` by `scripts/build-owner-flags.mjs`
+and loaded at startup, so a ride never waits for a flag; if the sheet will
+not load the country code shows as a badge) or a text badge for an organisation before the name, the operator
 under it, and a NORAD · COSPAR · TLE-epoch line, ending with the element
 set's age (`<1 H OLD`, then whole hours, then whole days: the gap, either
 side, between the epoch and the world-clock time the satellite is shown at), whose TLE button

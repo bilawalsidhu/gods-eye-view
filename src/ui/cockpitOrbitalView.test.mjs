@@ -1466,10 +1466,10 @@ test('the pre-load is throttled, at the level Cesium draws, and waits out a tilt
   }
   // The level Cesium's own selection takes for this view, worked by hand:
   // at 16x from 617 km the 900 px canvas is ~49.5 m a pixel. The ellipsoid
-  // terrain's level-zero error is 6378137 · 2π / 4 / 130 ≈ 77,067 m; it first
-  // meets Cesium's screen-space error of 2 px (≤ 99 m) at level 10, 75.3 m.
+  // terrain's level-zero error is 6378137 · 2π / 4 / 128 ≈ 78,272 m; it first
+  // meets Cesium's screen-space error of 2 px (≤ 99 m) at level 10, 76.4 m.
   // A Web Mercator level-zero texel at 30° is 6378137 · 2π · cos 30° / 256
-  // ≈ 135,566 m, so the imagery level is round(log2(135,566 / 75.3)) = 11.
+  // ≈ 135,570 m, so the imagery level is round(log2(135,570 / 76.4)) = 11.
   assert.equal(Number(requests[0].split('/')[0]), 11);
 });
 
