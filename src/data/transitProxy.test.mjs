@@ -12,6 +12,7 @@ import {
   repairVehicleTimestamps,
   resolveTransitRoute,
   transitCacheState,
+  transitFeedTtlMs,
   transitRedirectDecision,
   transitResponseHeaders,
   transitUpstreamHeaders,
@@ -405,4 +406,15 @@ test('Adelaide asks for */* because a protobuf Accept gets base64 text back', ()
     transitUpstreamHeaders(getTransitFeed('mbta')).Accept,
     /protobuf/,
   );
+});
+
+test('a feed refreshMs stretches its fresh window, never shortens it', () => {
+  const johor = getTransitFeed('mybas-johor');
+  assert.equal(transitFeedTtlMs(johor), 30_000);
+  assert.equal(transitFeedTtlMs(getTransitFeed('mbta')), TRANSIT_PROXY_TTL_MS);
+  assert.equal(transitFeedTtlMs({ refreshMs: 1_000 }), TRANSIT_PROXY_TTL_MS);
+  const now = 1_000_000;
+  const entry = { at: now - 20_000 };
+  assert.equal(transitCacheState(entry, now), 'stale');
+  assert.equal(transitCacheState(entry, now, transitFeedTtlMs(johor)), 'fresh');
 });

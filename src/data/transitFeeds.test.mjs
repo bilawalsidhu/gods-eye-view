@@ -701,7 +701,6 @@ test('trams, waterbuses and buses are told apart where the ids allow it', () => 
   const mode = (id, routeId) => transitModeFor(getTransitFeed(id), routeId);
   assert.equal(mode('pid-praha', 'L22'), 'tram');
   assert.equal(mode('pid-praha', 'L135'), 'bus');
-  assert.equal(mode('tbm-bordeaux', 'A'), 'tram');
   assert.equal(mode('tbm-bordeaux', '16'), 'bus');
   assert.equal(mode('lia-le-havre', 'B'), 'tram');
   assert.equal(mode('lia-le-havre', '3'), 'bus');
@@ -718,4 +717,60 @@ test('feeds that publish km/h are marked for conversion, and only those', () => 
     'mpm-toulon',
     'tam-montpellier',
   ]);
+});
+
+// Route ids as the live feeds and the operators' own GTFS routes.txt carried
+// them on 2026-11-09: the ranges and numbered tram ids are not guessable from
+// the line names riders see.
+test('Prague route-id ranges give metro, trains, ferries and trolleybuses their mode', () => {
+  const feed = getTransitFeed('pid-praha');
+  const read = (routeId) => [
+    transitModeFor(feed, routeId),
+    transitRouteLabel(feed, routeId),
+  ];
+  assert.deepEqual(read('L22'), ['tram', '22']);
+  assert.deepEqual(read('L58'), ['bus', '58'], 'trolleybus');
+  assert.deepEqual(read('L49'), ['rail', 'LD'], 'Petřín funicular');
+  assert.deepEqual(read('L135'), ['bus', '135']);
+  assert.deepEqual(read('L803'), ['bus', 'X3']);
+  assert.deepEqual(read('L991'), ['subway', 'A']);
+  assert.deepEqual(read('L993'), ['subway', 'C']);
+  assert.deepEqual(read('L1004'), ['rail', 'S4']);
+  assert.deepEqual(read('L1109'), ['rail', 'R9']);
+  assert.deepEqual(read('L1204'), ['rail', 'L1204'], 'no label to derive');
+  assert.deepEqual(read('L1801'), ['ferry', 'P1']);
+  assert.deepEqual(read('L1703'), ['bus', 'L1703']);
+  assert.deepEqual(read('L2841'), ['bus', '841']);
+  assert.deepEqual(read('S4'), ['bus', 'S4'], 'unknown ids keep the default');
+});
+
+test('Bordeaux trams ride numbered route ids and keep their letters', () => {
+  const feed = getTransitFeed('tbm-bordeaux');
+  for (const [routeId, line] of [
+    ['59', 'A'],
+    ['62', 'D'],
+    ['163', 'E'],
+  ]) {
+    assert.equal(transitModeFor(feed, routeId), 'tram', routeId);
+    assert.equal(transitRouteLabel(feed, routeId), line);
+  }
+  assert.equal(transitModeFor(feed, '952'), 'ferry');
+  assert.equal(transitModeFor(feed, '01'), 'bus');
+  assert.equal(transitRouteLabel(feed, '01'), '1');
+});
+
+test('Rouen Métro and Calypso are not buses', () => {
+  const feed = getTransitFeed('astuce-rouen');
+  assert.equal(transitModeFor(feed, 'TCAR:90'), 'tram');
+  assert.equal(transitRouteLabel(feed, 'TCAR:90'), 'Métro');
+  assert.equal(transitModeFor(feed, 'TCAR:99'), 'ferry');
+  assert.equal(transitModeFor(feed, 'TCAR:93'), 'bus');
+  assert.equal(transitRouteLabel(feed, 'TAE:F'), 'F');
+  assert.equal(transitModeFor(getTransitFeed('lia-le-havre'), 'FUNI'), 'rail');
+});
+
+test('data.gov.my feeds ask the proxy for no more than its 4 a minute', () => {
+  for (const id of ['mybas-johor', 'mybas-kota-bharu']) {
+    assert.ok(getTransitFeed(id).refreshMs >= 30_000, id);
+  }
 });

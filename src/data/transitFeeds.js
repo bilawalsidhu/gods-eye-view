@@ -416,8 +416,6 @@ function routeIdPattern(pattern) {
   };
 }
 
-/** Prague PID: `L125` is line 125. */
-const pidRouteLabel = routeIdPattern(/^L(\d+)$/);
 /** Zero-padded numbers (Edmonton `005`, Toulon `0002`, Bordeaux `01`). */
 const unpaddedRouteLabel = routeIdPattern(/^0+(\d+\w*)$/);
 /** Turin GTT appends `U` (urban) to the line: `10NU` is night line 10N. */
@@ -434,35 +432,110 @@ const busTrackerRouteLabel = routeIdPattern(/^[A-Z]+:(.+)$/);
 const mybasJohorRouteLabel = routeIdPattern(/^(.+?)CWLMYJB$/);
 
 /**
- * Le Havre LiA runs its two tram lines as A and B; every other line is a bus.
+ * Le Havre LiA runs its two tram lines as A and B and the funicular as
+ * `FUNI`; every other line is a bus.
  * @param {string|null} routeId
  * @returns {string}
  */
 function liaRouteMode(routeId) {
   if (!routeId) return 'unknown';
+  if (routeId === 'FUNI') return 'rail';
   return /^(?:[A-Z]+:)?[AB]$/.test(routeId) ? 'tram' : 'bus';
 }
 
 /**
- * Prague PID numbers its day and night trams below 100 and its buses from 100
- * up; anything else (rail, ferries, the funicular) is left unresolved.
- * @param {string|null} routeId
- * @returns {string}
+ * Rouen Astuce lines that are not buses, by bus-tracker.fr route id, from the
+ * relay's own `astuce-tcar.zip` routes.txt (checked 2026-11-09): line 90 is
+ * the Métro (GTFS type 1, a light rail that runs mostly on the street) and 99
+ * the Calypso river boat.
  */
-function pidRouteMode(routeId) {
-  const match = /^L(\d+)$/.exec(routeId ?? '');
-  if (!match) return 'unknown';
-  return Number(match[1]) < 100 ? 'tram' : 'bus';
+const ASTUCE_ROUTES = Object.freeze({
+  'TCAR:90': Object.freeze({ mode: 'tram', label: 'Métro' }),
+  'TCAR:99': Object.freeze({ mode: 'ferry', label: 'Calypso' }),
+});
+
+/** @param {string|null} routeId @returns {string} */
+function astuceRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  return ASTUCE_ROUTES[routeId]?.mode ?? 'bus';
+}
+
+/** `TCAR:93` is Rouen line 93; the Métro and Calypso keep their names. */
+function astuceRouteLabel(routeId) {
+  return ASTUCE_ROUTES[routeId ?? '']?.label ?? busTrackerRouteLabel(routeId);
 }
 
 /**
- * Bordeaux TBM runs trams on lettered lines A–D; every numbered line is a bus.
+ * Prague PID route ids are `L` plus a number whose range says what runs it,
+ * per PID's GTFS routes.txt (data.pid.cz, checked 2026-11-09): 1–99 trams
+ * (50–59 trolleybuses, 49 the Petřín funicular `LD`), 100–990 buses (the
+ * 800s are the X replacement lines, `L803` is X3), 991–993 metro A–C,
+ * 1000s and 1100s the S and R trains (`L1004` is S4, `L1109` R9), the rest
+ * of 1200–1399 other trains, 1700s town buses, 1800s the P ferries, and from
+ * 2000 more buses (`L2841` is 841). A label the range cannot give stays the
+ * route id.
+ * @param {string|null} routeId
+ * @returns {{mode: string, label: string|null}}
+ */
+function pidRoute(routeId) {
+  const match = /^L(\d+)$/.exec(routeId ?? '');
+  if (!match) return { mode: 'unknown', label: routeId };
+  const n = Number(match[1]);
+  if (n === 49) return { mode: 'rail', label: 'LD' };
+  if (n >= 50 && n <= 59) return { mode: 'bus', label: String(n) };
+  if (n < 100) return { mode: 'tram', label: String(n) };
+  if (n >= 800 && n < 900) return { mode: 'bus', label: `X${n - 800}` };
+  if (n < 991) return { mode: 'bus', label: String(n) };
+  if (n <= 993) return { mode: 'subway', label: 'ABC'[n - 991] };
+  if (n >= 1000 && n < 1100) return { mode: 'rail', label: `S${n - 1000}` };
+  if (n >= 1100 && n < 1200) return { mode: 'rail', label: `R${n - 1100}` };
+  if (n >= 1200 && n < 1400) return { mode: 'rail', label: routeId };
+  if (n >= 1800 && n < 1900) return { mode: 'ferry', label: `P${n - 1800}` };
+  if (n >= 2800 && n < 2900) return { mode: 'bus', label: String(n - 2000) };
+  return { mode: n >= 1700 ? 'bus' : 'unknown', label: routeId };
+}
+
+/** @param {string|null} routeId @returns {string} */
+function pidRouteMode(routeId) {
+  return pidRoute(routeId).mode;
+}
+
+/** @param {string|null} routeId @returns {string|null} */
+function pidRouteLabel(routeId) {
+  return pidRoute(routeId).label;
+}
+
+/**
+ * Bordeaux TBM tram and boat lines by route id, from TBM's static GTFS
+ * routes.txt (checked 2026-11-09): the trams are numbered ids, not letters.
+ */
+const TBM_TRAM_LINES = Object.freeze({
+  59: 'A',
+  60: 'B',
+  61: 'C',
+  62: 'D',
+  163: 'E',
+  164: 'F',
+});
+const TBM_BOAT_LINES = new Set(['951', '952', '953']);
+
+/**
+ * Bordeaux TBM: trams A–F and the BAT³ river shuttles; every other line is a
+ * bus.
  * @param {string|null} routeId
  * @returns {string}
  */
 function tbmRouteMode(routeId) {
   if (!routeId) return 'unknown';
-  return /^[A-D]$/.test(routeId) ? 'tram' : 'bus';
+  if (Object.hasOwn(TBM_TRAM_LINES, routeId)) return 'tram';
+  return TBM_BOAT_LINES.has(routeId) ? 'ferry' : 'bus';
+}
+
+/** `59` is tram A; zero-padded bus ids lose their padding (`01` is 1). */
+function tbmRouteLabel(routeId) {
+  return Object.hasOwn(TBM_TRAM_LINES, routeId ?? '')
+    ? TBM_TRAM_LINES[routeId]
+    : unpaddedRouteLabel(routeId);
 }
 
 /**
@@ -491,10 +564,14 @@ function transitFeed(fields) {
  *   url: string, headers?: Record<string, string>,
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
- *   speedUnit?: 'km/h',
+ *   speedUnit?: 'km/h', refreshMs?: number, sourceUrl?: string,
+ *   creditDated?: boolean,
  * }>>}
  * `speedUnit` marks a feed that publishes km/h where the spec requires m/s;
- * the proxy converts it before the snapshot leaves the server.
+ * the proxy converts it before the snapshot leaves the server. `refreshMs`
+ * stretches the proxy's cache for an upstream that rate-limits below one
+ * request per 15 s TTL. `sourceUrl` and `creditDated` add a link and a date
+ * to the credit for licences that ask for them (`transitFeedCredit`).
  */
 export const TRANSIT_FEED_REGISTRY = Object.freeze([
   Object.freeze({
@@ -884,7 +961,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     defaultMode: 'bus',
     routeLabel: rioRouteLabel,
   }),
-  Object.freeze({
+  transitFeed({
     id: 'zditm-szczecin',
     name: 'Szczecin buses and trams',
     operator:
@@ -892,40 +969,38 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     region: 'Szczecin, Poland',
     // Every vehicle in a 2026-11-05 snapshot sat between 53.34–53.55 N and
     // 14.44–14.77 E, inside 20 km of this point.
-    center: Object.freeze({ lat: 53.44, lon: 14.56 }),
+    center: { lat: 53.44, lon: 14.56 },
     loadRadiusKm: 25,
     url: 'https://www.zditm.szczecin.pl/storage/gtfs/gtfs-rt-vehicles.pb',
     license: 'CC0 1.0',
     licenseUrl: 'https://www.zditm.szczecin.pl/en/zditm/for-developers',
     attribution:
       'Zarząd Dróg i Transportu Miejskiego w Szczecinie (ZDiTM Szczecin)',
-    defaultEnabled: true,
-    terms: Object.freeze({
+    terms: {
       quote:
         'The data are provided free of charge under the CC0 1.0 licence, for use in any context, with no prior notification required.',
       note: 'CC0 needs no credit; it is given anyway as a courtesy. ZDiTM gives no guarantee of accuracy or completeness. The developer page says the feed updates every minute; measured on 2026-11-05 the file changed about every 20 seconds, with vehicle timestamps up to 50 seconds old. Speeds are m/s: checked against vehicle movement between two snapshots. The feed carries no route id at all, so every vehicle takes the feed default mode even though the city also runs trams.',
-    }),
+    },
     defaultMode: 'bus',
   }),
-  Object.freeze({
+  transitFeed({
     id: 'carris-metropolitana-lisboa',
     name: 'Carris Metropolitana',
     operator: 'Carris Metropolitana (TML), Lisbon Metropolitan Area',
     region: 'Lisbon Metropolitan Area, Portugal',
     // Every vehicle in a 2026-11-07 snapshot, from Mafra to Setúbal, sat
     // between 38.47–39.00 N and 9.47–8.79 W, inside 40 km of this point.
-    center: Object.freeze({ lat: 38.73, lon: -9.13 }),
+    center: { lat: 38.73, lon: -9.13 },
     loadRadiusKm: 45,
     url: 'https://api.carrismetropolitana.pt/v2/vehicles.pb',
     license: 'No separate licence for the realtime feed',
     licenseUrl: 'https://github.com/carrismetropolitana/api',
     attribution: 'Carris Metropolitana',
-    defaultEnabled: true,
-    terms: Object.freeze({
+    terms: {
       quote:
         'GET /vehicles.pb — Returns vehicle locations in Protobuf format, following the GTFS-RT Vehicle Locations standard.',
       note: 'The operator publishes this feed keyless and documented for developers in its public API repository, but states no licence for the realtime endpoint; its static GTFS (github.com/carrismetropolitana/gtfs) is CC BY 4.0. Credited as a courtesy, on the same basis as the Metro Transit and OVapi feeds; switch it off if Carris objects. The quote above is the API README, not a licence. `/vehicles.pb` answers with a 307 to `/v2/vehicles.pb`, so the registry points at the target. Speeds are km/h, not the m/s the spec requires: 2026-11-07 readings of 31–33 matched 6–9 m/s of measured movement, so the proxy converts them. Vehicle reports arrive every 30–50 seconds. Route ids are the GTFS route id inside an area prefix and are read as the line number.',
-    }),
+    },
     defaultMode: 'bus',
     routeLabel: carrisMetropolitanaRouteLabel,
     speedUnit: 'km/h',
@@ -946,7 +1021,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     terms: {
       quote:
         'Data, která lze stáhnout přímo zde z webu, jsou stejně jako celý obsah webu opatřena licencí CC-BY',
-      note: 'The PID open-data page lists this realtime feed and licenses the data it publishes under CC BY, crediting the author and any changes. The same page says data served from other sources follows that source’s licence; the feed is served by Golemio, the city’s data platform, which states none of its own. Keyless since the catalogue moved it off the X-Access-Token endpoint. Speeds are m/s, checked against movement on 2026-11-07. Route ids are `L` plus the line number; lines below 100 are trams.',
+      note: 'The PID open-data page lists this realtime feed and licenses the data it publishes under CC BY, crediting the author and any changes. The same page says data served from other sources follows that source’s licence; the feed is served by Golemio, the city’s data platform, which states none of its own. Keyless since the catalogue moved it off the X-Access-Token endpoint. Speeds are m/s, checked against movement on 2026-11-07. Route ids are `L` plus a number whose range gives the mode and the line (metro `L991` is A, train `L1004` is S4, ferry `L1801` is P1); `pidRoute` holds the table, read from PID’s GTFS routes.txt on 2026-11-09.',
     },
     defaultMode: 'bus',
     routeLabel: pidRouteLabel,
@@ -963,10 +1038,12 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'Warsaw Open Data Project Usage Terms',
     licenseUrl: 'https://mkuran.pl/gtfs/',
     attribution: 'Miasto Stołeczne Warszawa (api.um.warszawa.pl)',
+    sourceUrl: 'http://api.um.warszawa.pl',
+    creditDated: true,
     terms: {
       quote:
         'The City Hall requires a credit by providing the name Miasto Stołeczne Warszawa, data download date (use the timestamp from the FeedHeader) and link to http://api.um.warszawa.pl.',
-      note: 'Positions come from the Warsaw City Hall API, repackaged as GTFS-RT by Mikołaj Kuranowski’s unofficial feed. The credit names the city and its API; the download date it asks for is the feed timestamp the layer already shows with each snapshot. Vehicle timestamps ran about two minutes old on 2026-11-07, which the delayed playback absorbs.',
+      note: 'Positions come from the Warsaw City Hall API, repackaged as GTFS-RT by Mikołaj Kuranowski’s unofficial feed. The credit names the city, links its API (`sourceUrl`) and carries the date of the feed timestamp (`creditDated`), the three things the terms ask for. Vehicle timestamps ran about two minutes old on 2026-11-07, which the delayed playback absorbs.',
     },
     defaultMode: 'bus',
   }),
@@ -984,10 +1061,10 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     attribution: 'Bordeaux Métropole (TBM)',
     terms: {
       quote: 'licence: fr-lo',
-      note: 'The quote is the licence field of the national access point’s dataset record (fr-lo is the Licence Ouverte), which asks only for credit. The `apiKey` in the URL is not a credential: it is the same fixed string printed in the open-data listing for everyone. Speeds are m/s. Trams run on lettered lines A–D; numbered lines are buses.',
+      note: 'The quote is the licence field of the national access point’s dataset record (fr-lo is the Licence Ouverte), which asks only for credit. The `apiKey` in the URL is not a credential: it is the same fixed string printed in the open-data listing for everyone. Speeds are m/s. The trams (A–F) and BAT³ boats ride numbered route ids (tram A is `59`), so `tbmRouteMode` and `tbmRouteLabel` map them from TBM’s static GTFS; other numbered lines are buses.',
     },
     defaultMode: 'bus',
-    routeLabel: unpaddedRouteLabel,
+    routeLabel: tbmRouteLabel,
     routeMode: tbmRouteMode,
   }),
   transitFeed({
@@ -1018,10 +1095,11 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     license: 'ZTM Poznań open-data terms',
     licenseUrl: 'https://www.ztm.poznan.pl/otwarte-dane/dla-deweloperow/',
     attribution: 'Zarząd Transportu Miejskiego w Poznaniu (processed)',
+    creditDated: true,
     terms: {
       quote:
         'Treści udostępniane są bezwnioskowo i bezpłatnie, na zasadach powszechnego dostępu i stanowią źródło informacji.',
-      note: 'Reuse is free on three conditions: name the source, give the date of the last update, and say the data were processed. The credit names ZTM and says processed; the snapshot timestamp is the update date. The feed carries no bearing, so heading comes from movement between fixes.',
+      note: 'Reuse is free on three conditions: name the source, give the date of the last update, and say the data were processed. The credit names ZTM, says processed, and carries the date of the feed timestamp (`creditDated`) as the update date. The feed carries no bearing, so heading comes from movement between fixes.',
     },
     defaultMode: 'bus',
   }),
@@ -1295,7 +1373,9 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       'https://www.rtd-denver.com/business-center/open-spatial-data/gtfs-realtime-license-agreement',
     attribution: 'Regional Transportation District (RTD)',
     terms: {
-      note: 'RTD links a licence agreement for its realtime feeds; the page refused automated reads (403), so it is not quoted. The feed itself is keyless. Speeds are m/s.',
+      quote:
+        'RTD hereby grants you non-exclusive, limited and revocable rights to use, reproduce, and redistribute the Data',
+      note: 'Read 2026-11-09. The agreement is a click-through (“By clicking to download the Data files, you confirm that you have read and agree”) that RTD may change without notice; it permits redistribution, asks for no credit wording, and bars RTD trademarks from being used with the data, so the credit stays plain text. The feed itself is keyless. Speeds are m/s.',
     },
     defaultMode: 'bus',
   }),
@@ -1388,11 +1468,16 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     center: { lat: 1.51, lon: 103.75 },
     loadRadiusKm: 35,
     url: 'https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-johor/',
-    license: 'No licence stated for the feed',
-    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3174',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://developer.data.gov.my/realtime-api/gtfs-realtime',
     attribution: 'BAS.MY / data.gov.my',
+    // data.gov.my allows 4 GTFS-Realtime requests a minute and refreshes
+    // vehicle positions every 30 seconds, so the proxy asks half as often as
+    // the default 15 s TTL would.
+    refreshMs: 30_000,
     terms: {
-      note: 'Served keyless by Malaysia’s national open-data API; no licence for the feed was found. Same basis as Metro Transit and OVapi. Without the trailing slash the API redirects. Route ids append an operator code.',
+      quote: 'All GTFS Realtime feeds are licensed under CC BY 4.0.',
+      note: 'Served keyless by Malaysia’s national open-data API (developer.data.gov.my, read 2026-11-09). Its rate-limit page caps GTFS Realtime at 4 requests a minute and answers 429 above that; the feed updates every 30 seconds, hence `refreshMs`. Without the trailing slash the API redirects. Route ids append an operator code.',
     },
     defaultMode: 'bus',
     routeLabel: mybasJohorRouteLabel,
@@ -1406,10 +1491,14 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     center: { lat: 6.06, lon: 102.22 },
     loadRadiusKm: 60,
     url: 'https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-kota-bharu/',
-    license: 'No licence stated for the feed',
-    licenseUrl: 'https://mobilitydatabase.org/feeds/gtfs_rt/mdb-3169',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://developer.data.gov.my/realtime-api/gtfs-realtime',
     attribution: 'BAS.MY / data.gov.my',
-    terms: { note: 'Same API and basis as Johor Bahru.' },
+    refreshMs: 30_000,
+    terms: {
+      quote: 'All GTFS Realtime feeds are licensed under CC BY 4.0.',
+      note: 'Same API, licence and rate limit as Johor Bahru.',
+    },
     defaultMode: 'bus',
   }),
   transitFeed({
@@ -1426,10 +1515,11 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     attribution: 'Métropole Rouen Normandie (Astuce) / bus-tracker.fr',
     terms: {
       quote: 'licence: lov2',
-      note: 'The metropolis publishes its realtime data under the Licence Ouverte (dataset record quoted); this registry reads it through bus-tracker.fr, an unofficial relay that merges the city’s networks into one GTFS-RT file. Route ids carry the network prefix (`TCAR:`).',
+      note: 'The metropolis publishes its realtime data under the Licence Ouverte (dataset record quoted); this registry reads it through bus-tracker.fr, an unofficial relay that merges the city’s networks into one GTFS-RT file. Route ids carry the network prefix (`TCAR:`); `TCAR:90` is the Métro (a street-running light rail, drawn as a tram) and `TCAR:99` the Calypso boat.',
     },
     defaultMode: 'bus',
-    routeLabel: busTrackerRouteLabel,
+    routeLabel: astuceRouteLabel,
+    routeMode: astuceRouteMode,
   }),
   transitFeed({
     id: 'mpm-toulon',
