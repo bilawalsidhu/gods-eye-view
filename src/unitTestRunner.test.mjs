@@ -98,7 +98,6 @@ test('parallel batches stay under the Windows command-line limit (#1631)', () =>
       `batch of ${batch.length} files needs ${chars} characters, over the Windows limit`,
     );
   }
-
 });
 
 test('batching kicks in for an oversized suite (#1631)', () => {
