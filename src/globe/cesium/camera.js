@@ -147,6 +147,7 @@ export function createCesiumCamera(viewer) {
   // The engine's own flight, so flightActive is exact even for flights that
   // completed synchronously (Cesium keeps no current flight for those).
   let flight = null;
+  let completing = false;
   function trackFlight(options) {
     const token = {};
     flight = token;
@@ -161,7 +162,9 @@ export function createCesiumCamera(viewer) {
       },
       cancel: () => {
         end();
-        options.cancel?.();
+        // Cesium's completeFlight removes the tween (its cancel) before it
+        // lands the flight (its complete).
+        if (!completing) options.cancel?.();
       },
     };
   }
@@ -271,6 +274,14 @@ export function createCesiumCamera(viewer) {
     cancelFlight() {
       cesium.cancelFlight();
       flight = null;
+    },
+    completeFlight() {
+      completing = true;
+      try {
+        cesium.completeFlight();
+      } finally {
+        completing = false;
+      }
     },
     zoomIn(amount = cesium.defaultZoomAmount) {
       cesium.zoomIn(amount);

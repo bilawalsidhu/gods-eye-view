@@ -2,6 +2,7 @@
 /**
  * Keyless station-name regression against the real globe and bike-share tool.
  * Run with a dev or QA preview server and an explicitly assigned --url.
+ * --w2 adds raster checks that import source modules: dev server only.
  * GBFS documents are synthetic; no operator feed or provider key is required.
  */
 import assert from 'node:assert/strict';
@@ -138,6 +139,13 @@ async function open(mode = 'normal') {
     { information, status, mode },
   );
   await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
+  if (
+    extended &&
+    !(await page.evaluate(() =>
+      Boolean(document.querySelector('script[src="/@vite/client"]')),
+    ))
+  )
+    throw new Error('--w2 requires a Vite dev server; omit --w2 for preview');
   await page.waitForFunction(
     () =>
       window.__godsEyeView?.dataManager && window.__godsEyeView?.voiceCommands,

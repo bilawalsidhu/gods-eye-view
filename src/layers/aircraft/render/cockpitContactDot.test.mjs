@@ -66,3 +66,51 @@ test('a cockpit contact draws the contact dot, not the aircraft silhouette', asy
   display.destroy();
   engine.destroy();
 });
+
+// The dot bank, rebuilt for capacity after its first contact turned back
+// into a silhouette, keeps the dot atlas.
+test('a regrown cockpit-dot bank keeps the dot atlas', async () => {
+  const engine = createFakeEngine();
+  const display = createAircraftDisplay(engine, {
+    layerId: 'flights',
+    order: 8,
+    headingOffsetDeg: 180,
+    drawAtlas,
+  });
+  await display.whenReady();
+  display.fleet.attach();
+  const add = (i) =>
+    display.fleet.add({
+      position: geo.cartesian3.fromDegrees(-97.7 + i * 0.001, 30.2, 3000),
+      image: aircraftIcon('airliner'),
+      width: 20,
+      height: 20,
+      scale: 1,
+      rotation: 0,
+      color: { red: 1, green: 1, blue: 1, alpha: 1 },
+      id: `c${i}`,
+      show: true,
+    });
+  const first = add(0);
+  await settle();
+  first.image = cockpitContactDotImage(); // far: the dot bank is created from it
+  const dotBank = first.gevBank;
+  first.image = aircraftIcon('airliner'); // near again: back to the silhouette
+  const others = [];
+  for (let i = 1; i <= 1100; i++) {
+    const s = add(i);
+    s.image = cockpitContactDotImage();
+    others.push(s);
+  }
+  engine.fake.frames(2);
+  await settle();
+  assert.equal(others[0].gevBank, dotBank);
+  const url = engine.fake.moverSet(dotBank.set.id).options.sprite.atlas.url;
+  assert.equal(
+    url,
+    cockpitContactDotImage(),
+    'the regrown dot bank draws another image',
+  );
+  display.destroy();
+  engine.destroy();
+});

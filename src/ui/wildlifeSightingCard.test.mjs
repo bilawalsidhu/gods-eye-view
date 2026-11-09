@@ -836,3 +836,35 @@ test('remounting a selected sighting does not pan the new engine', async (contex
   await settle();
   assert.equal(pans, 0);
 });
+
+test('remounting a selected sighting leaves keyboard focus where it is', async (context) => {
+  const f = fixture(context);
+  await f.click();
+  f.card.destroy();
+  // The engine switch is made from the Globe Engine picker.
+  const picker = document.body.appendChild(document.createElement('select'));
+  picker.focus();
+  const ui = createUiRuntime();
+  const card = createWildlifeSightingCard({
+    layer: f.layer,
+    ui,
+    engine: f.engine,
+    documentRef: document,
+    windowRef: f.windowRef,
+    now: () => NOW,
+    project: () => ({ x: 100, y: 100 }),
+    pan: () => true,
+  });
+  context.after(() => {
+    card.destroy();
+    ui.destroy();
+  });
+  await settle();
+  assert.ok(f.cardElement(), 'the carried selection opens the card');
+  // A primitive: the reporter would print two DOM elements very slowly.
+  assert.equal(
+    document.activeElement === picker,
+    true,
+    `focus moved to ${document.activeElement?.tagName}`,
+  );
+});

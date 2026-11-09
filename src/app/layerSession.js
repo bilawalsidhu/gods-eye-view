@@ -15,7 +15,7 @@
  * @property {{draw?: ReturnType<typeof import('../annotations/drawTool.js').createSessionDrawTool>, geoImport?: ReturnType<typeof import('../ui/geoFileImport.js').createGeoFileImport>}} tools Session tools.
  * @property {ReturnType<typeof import('../voice/gevRealtime.js').createSceneVoice> | null} voice Session voice.
  * @property {{locale?: () => void, placeSearch?: object, sceneChrome?: boolean}} chrome Standalone startup and scene factory.
- * @property {Map<string, {entry: object | null, enabled: boolean, durable: boolean | undefined}> | null} handoffLayers Switch coordinator: outgoing layer intentions.
+ * @property {Map<string, {entry: object | null, enabled: boolean, durable: boolean | undefined, visit: boolean}> | null} handoffLayers Switch coordinator: outgoing layer intentions; visit restores the incoming address's options instead of keeping the live options.
  * @property {boolean} restoringView Switch coordinator: incoming address restoration.
  * @property {() => boolean} switching Switch coordinator: voice waits while busy.
  * @property {object | null} selectionContext Scene factory: selected record carried to the next attachment.

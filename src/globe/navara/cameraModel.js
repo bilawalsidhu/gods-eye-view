@@ -206,27 +206,34 @@ export function createCameraModel({
       options.complete?.();
       return;
     }
-    const current = { options, resume: port.suspendCameraInputs?.() };
-    flight = current;
-    // Navara moves the camera from here on; read it back every frame.
-    pushed = null;
+    const pose = navaraPose(target.position, target.direction, target.up);
     const flyOptions = {};
     if (options.duration !== undefined)
       flyOptions.duration = options.duration * 1000;
     if (options.easing !== undefined)
       flyOptions.easing = NAVARA_EASINGS[options.easing];
-    port
-      .fly(navaraPose(target.position, target.direction, target.up), flyOptions)
-      .then(
-        (arrived) => {
-          if (flight !== current || destroyed) return;
-          if (!arrived) return endFlight(current, 'cancel');
-          endFlight(current, 'complete');
-          land(options, target);
-          options.complete?.();
-        },
-        () => endFlight(current, 'cancel'),
-      );
+    const current = { options, target, resume: port.suspendCameraInputs?.() };
+    flight = current;
+    let pending;
+    try {
+      pending = port.fly(pose, flyOptions);
+    } catch (error) {
+      // As in Cesium, a flight that cannot start reports only the exception.
+      endFlight(current, 'fail');
+      throw error;
+    }
+    // Navara moves the camera from here on; read it back every frame.
+    pushed = null;
+    pending.then(
+      (arrived) => {
+        if (flight !== current || destroyed) return;
+        if (!arrived) return endFlight(current, 'cancel');
+        endFlight(current, 'complete');
+        land(options, target);
+        options.complete?.();
+      },
+      () => endFlight(current, 'cancel'),
+    );
   }
 
   /** Reads Navara's drawn camera; called once per frame before preRender. */
@@ -383,6 +390,16 @@ export function createCameraModel({
     cancelFlight() {
       announce();
       cancelCurrentFlight();
+    },
+    completeFlight() {
+      const current = flight;
+      if (!current) return;
+      endFlight(current, 'complete');
+      // Cesium lands it through setView, a command.
+      announce();
+      port.stop();
+      land(current.options, current.target);
+      current.options.complete?.();
     },
     zoomIn(amount = DEFAULT_ZOOM_AMOUNT) {
       place({

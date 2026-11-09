@@ -212,6 +212,16 @@ test('a sprite sits on the terrain; under Google 3D on the tiles, placed again w
   assert.ok(Math.abs(heightOf(google.drawn().position) - 12) < 1e-6);
 });
 
+test('a sprite off screen waits on the terrain, not on the ellipsoid', () => {
+  const harness = streetLevelMap({ view: true });
+  harness.engine.fake.script('terrainHeight', () => 120);
+  harness.engine.projector.worldToWindow = () => undefined;
+  const { group, row, drawn } = oneSprite(harness);
+  assert.ok(Math.abs(heightOf(drawn().position) - 120) < 1e-6);
+  group.move(row, { lon: -121.4945 });
+  assert.ok(Math.abs(heightOf(drawn().position) - 120) < 1e-6, 'moved');
+});
+
 test('a sprite without any ground sits on the ellipsoid', () => {
   const harness = streetLevelMap({ view: true });
   harness.engine.fake.script('terrainHeight', () => undefined);
@@ -317,4 +327,97 @@ test('destroying the display takes everything it still draws', () => {
   assert.equal(harness.engine.ground.list().length, 0);
   assert.equal(harness.engine.movers.list().length, 0);
   harness.map.destroy();
+});
+
+// Under Google 3D a settle (tilesLoaded false -> true) measures a long
+// sequence's cones with sampleHeight (a pick render each on Cesium) a few per
+// pass, not all in one frame.
+test('a settle under Google 3D samples a bounded number of cones per frame', async (t) => {
+  const harness = streetLevelMap({ view: true });
+  t.after(() => harness.engine.destroy());
+  t.after(() => harness.map.destroy());
+  const { fake } = harness.engine;
+  fake.script('terrainHeight', () => 12);
+  await harness.engine.maps.setPhotorealTiles({ kind: 'photoreal' });
+  let samples = 0;
+  fake.script('sampleHeight', (_point, exclude) => {
+    assert.ok(
+      harness.engine.movers
+        .list()
+        .every(({ id }) => exclude.some((set) => set.id === id)),
+      'samples exclude every current sprite set',
+    );
+    samples++;
+    return 31;
+  });
+  fake.script('tilesLoaded', true);
+  const group = harness.map.sprites('test-cones', { order: -1 });
+  for (let i = 0; i < 400; i++)
+    group.add({
+      pickId: `p:${i}`,
+      lon: -121.4944 + i * 1e-5,
+      lat: 38.5816,
+      bearing: 0,
+      image: 'data:image/svg+xml;utf8,<svg/>',
+      imageKey: 'glyph',
+      sizePx: 26,
+    });
+  assert.equal(
+    samples,
+    0,
+    'adding cones does not synchronously pick the surface',
+  );
+  harness.frame();
+  assert.ok(samples > 0 && samples <= 16, `initial pass sampled ${samples}`);
+  fake.script('tilesLoaded', false);
+  harness.frame();
+  samples = 0;
+  fake.script('tilesLoaded', true);
+  harness.frame();
+  assert.ok(
+    samples <= 16,
+    `one settle frame ran ${samples} sampleHeight calls for 400 cones`,
+  );
+  harness.engine.projector.worldToWindow = () => undefined;
+  samples = 0;
+  harness.engine.camera.moveEnd.raiseEvent();
+  assert.equal(samples, 0, 'off-screen cones are not sampled');
+  group.destroy();
+});
+
+test('slow surface samples stop at the time budget and remaining cones resume', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const harness = streetLevelMap({ view: true });
+  t.after(() => harness.engine.destroy());
+  t.after(() => harness.map.destroy());
+  await harness.engine.maps.setPhotorealTiles({ kind: 'photoreal' });
+  harness.engine.fake.script('tilesLoaded', true);
+  harness.engine.fake.frames(2);
+  harness.engine.projector.worldToWindow = () => ({ x: 100, y: 100 });
+  let clock = 0;
+  let samples = 0;
+  t.mock.method(performance, 'now', () => clock);
+  harness.engine.fake.script('sampleHeight', () => {
+    samples++;
+    clock += 3;
+    return 31;
+  });
+  const group = harness.map.sprites('slow-cones');
+  for (let i = 0; i < 6; i++)
+    group.add({
+      pickId: `cone:${i}`,
+      lon: 0,
+      lat: 0,
+      bearing: 0,
+      image: 'data:,',
+      imageKey: 'cone',
+      sizePx: 26,
+    });
+  harness.frame();
+  assert.equal(samples, 2, 'a pass stops once its samples have spent 4 ms');
+  t.mock.timers.runAll();
+  assert.equal(samples, 6, 'all visible cones are eventually placed');
+  const before = samples;
+  harness.frame();
+  assert.equal(samples, before, 'a parked surface is not sampled again');
 });

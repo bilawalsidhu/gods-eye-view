@@ -30,7 +30,7 @@ export function panelBuildConfig(config) {
         // The panel runs Cesium: the Navara mode and Navara's wind mesh
         // (the panel's only paths to Navara and three) become stubs.
         {
-          find: /^(?:\.\/|.*\/app\/)navaraMode\.js$|\/globe\/navara\/windFlowMesh\.js$/,
+          find: /^(?:\.\/|.*\/app\/)navaraMode\.js$|^.*\/globe\/navara\/windFlowMesh\.js$/,
           replacement: fileURLToPath(
             new URL('./panelNavara.js', import.meta.url),
           ),

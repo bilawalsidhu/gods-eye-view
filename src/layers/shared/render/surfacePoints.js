@@ -31,14 +31,22 @@ const plausible = (height) =>
  *   placement replaces (keeping the height in `surfaceHeight`); one with
  *   `show === false` is skipped.
  * @param {() => void} options.request Asks for a frame after a placement.
+ * @param {number} [options.heightOffset=0] Metres above the surface.
+ * @param {boolean} [options.estimateGround=false] Screen-test a point not
+ *   measured yet on the loaded terrain (under 3D tiles without it, at the
+ *   ground under the camera) rather than where it stands now.
  * @returns {{ place: () => void, destroy: () => void }} `place()` measures
  *   the points not yet placed on this surface (new points, for example).
  */
-export function createSurfacePoints(engine, { groups, request }) {
+export function createSurfacePoints(
+  engine,
+  { groups, request, heightOffset = 0, estimateGround = false },
+) {
   let revision = 0;
   let timer = null;
   let destroyed = false;
   let tilesLoaded = engine.surface.tilesLoaded();
+  let photoreal = engine.maps?.photorealActive?.() === true;
 
   function onScreen(position, size) {
     const screen = engine.projector.worldToWindow(position);
@@ -53,6 +61,16 @@ export function createSurfacePoints(engine, { groups, request }) {
     );
   }
 
+  // Under 3D tiles Cesium hides the globe, which then loads no terrain: the
+  // ground under the camera stands in for it in the screen test.
+  function groundUnderCamera(exclude) {
+    const height = engine.surface.sampleHeight(
+      geo.cartographic.fromCartesian(engine.camera.livePosition),
+      exclude,
+    );
+    return plausible(height) ? height : Number.NaN;
+  }
+
   // Points off screen are passed over until the next move or tile load.
   function place() {
     clearTimeout(timer);
@@ -63,6 +81,7 @@ export function createSurfacePoints(engine, { groups, request }) {
     const started = performance.now();
     let samples = 0;
     let moved = false;
+    let cameraGround;
     for (const { set, points, exclude = [set] } of groups()) {
       if (!set) continue;
       let changed = false;
@@ -79,20 +98,40 @@ export function createSurfacePoints(engine, { groups, request }) {
           return;
         }
         point.surfaceRevision = revision;
-        if (point.show === false || !onScreen(point.position, size)) continue;
+        if (point.show === false) continue;
+        const estimate = estimateGround && point.surfaceHeight === undefined;
+        const terrain = estimate
+          ? engine.surface.terrainHeight(point.cartographic)
+          : undefined;
+        let ground = terrain;
+        if (estimate && tiles && !plausible(ground)) {
+          if (cameraGround === undefined) {
+            samples++;
+            cameraGround = groundUnderCamera(exclude);
+          }
+          ground = cameraGround;
+        }
+        const position = plausible(ground)
+          ? geo.cartesian3.fromRadians(
+              point.cartographic.longitude,
+              point.cartographic.latitude,
+              ground + heightOffset,
+            )
+          : point.position;
+        if (!onScreen(position, size)) continue;
         samples++;
         let height = tiles
           ? engine.surface.sampleHeight(point.cartographic, exclude)
           : undefined;
         if (!plausible(height))
-          height = engine.surface.terrainHeight(point.cartographic);
+          height = terrain ?? engine.surface.terrainHeight(point.cartographic);
         if (!plausible(height)) continue;
         if (Math.abs(height - point.surfaceHeight) < HEIGHT_EPSILON_M) continue;
         point.surfaceHeight = height;
         point.position = geo.cartesian3.fromRadians(
           point.cartographic.longitude,
           point.cartographic.latitude,
-          height,
+          height + heightOffset,
         );
         set.set(index, { position: point.position });
         changed = true;
@@ -110,8 +149,10 @@ export function createSurfacePoints(engine, { groups, request }) {
   const removeMoveEnd = engine.camera.moveEnd.addEventListener(refine);
   const removeFrame = engine.frames.preRender.addEventListener(() => {
     const loaded = engine.surface.tilesLoaded();
-    if (loaded && !tilesLoaded) refine();
+    const tiles = engine.maps?.photorealActive?.() === true;
+    if ((loaded && !tilesLoaded) || tiles !== photoreal) refine();
     tilesLoaded = loaded;
+    photoreal = tiles;
   });
 
   return {

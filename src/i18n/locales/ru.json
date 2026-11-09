@@ -3328,5 +3328,7 @@
   "Globe engine failed to start. Running {engine}: {message}": "Не удалось запустить движок глобуса. Работает {engine}: {message}",
   "Bing imagery is not available on the experimental Navara engine": "Снимки Bing недоступны в экспериментальном движке Navara",
   "NOT ON THIS ENGINE": "НЕТ В ЭТОМ ДВИЖКЕ",
-  "Kept in the link: {layers}": "Сохранены в ссылке: {layers}"
+  "Kept in the link: {layers}": "Сохранены в ссылке: {layers}",
+  "Could not start {engine}: {message}": "Не удалось запустить {engine}: {message}",
+  "Choose an engine to try again.": "Выберите движок, чтобы попробовать снова."
 }

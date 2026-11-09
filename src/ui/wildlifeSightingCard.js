@@ -195,7 +195,7 @@ export function createWildlifeSightingCard({
       position({ allowPan: metadata?.explicitSelection === true });
       if (moving) startFrameUpdates();
       // Focus the container so keyboard navigation starts inside the card.
-      if (fresh)
+      if (metadata?.explicitSelection === true)
         host
           .querySelector('[data-wildlife-sighting-card]')
           ?.focus?.({ preventScroll: true });

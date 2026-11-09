@@ -1295,12 +1295,13 @@ export class ShellFacade {
   }
 
   /**
-   * Displays a temporary toast notification for 2 seconds.
+   * Displays a temporary toast notification.
    * @param {string} message - Text to show in the toast.
+   * @param {number} [durationMs=2000] How long the notice stays visible.
    * @returns {void}
    */
-  _showToast(message) {
-    return this._feedback._showToast(message);
+  _showToast(message, durationMs) {
+    return this._feedback._showToast(message, durationMs);
   }
 
   /** One 3D toggle drives BOTH aircraft layers (commercial + military) so all planes flip together. */

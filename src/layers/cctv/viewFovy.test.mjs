@@ -31,7 +31,6 @@ test('icon thinning uses the camera vertical FOV, not a pi/3 fallback', () => {
     horizonTest: () => () => true,
     project: () => ({ x: 960, y: 540 }),
     distance: () => 2000,
-    // Accessor the fix is expected to add (any name works if the stub follows).
     cameraPose: () => pose,
     fovy: () => pose.fovy,
     engine: { camera: { pose: () => pose } },

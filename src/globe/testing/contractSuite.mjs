@@ -1491,6 +1491,40 @@ export function createContractSuite(
       },
     ],
     [
+      'camera.completeFlight: lands a running flight at once and calls complete',
+      async () => {
+        await nadirView();
+        camera.completeFlight();
+        const outcome = [];
+        const destination = cartesian3.fromDegrees(100, 0, 5e6);
+        camera.flyTo({
+          destination,
+          orientation: { heading: 0.5, pitch: -0.8, roll: 0 },
+          duration: 5,
+          complete: () => outcome.push('complete'),
+          cancel: () => outcome.push('cancel'),
+        });
+        await settle(2);
+        camera.completeFlight();
+        ensure(
+          outcome.join() === 'complete',
+          `completeFlight returned with [${outcome}] instead of [complete]`,
+        );
+        ensure(!camera.flightActive(), 'the flight is still active');
+        const pose = camera.pose();
+        near(
+          cartesian3.distance(pose.position, destination),
+          0,
+          0.01,
+          'position error (m)',
+        );
+        near(angleBetween(pose.heading, 0.5), 0, 1e-6, 'heading error');
+        near(pose.pitch, -0.8, 1e-6, 'pitch');
+        await settle(3);
+        ensure(outcome.join() === 'complete', `flight ended with ${outcome}`);
+      },
+    ],
+    [
       'camera.setView: cancels an active flight and retains its destination',
       async () => {
         await nadirView();

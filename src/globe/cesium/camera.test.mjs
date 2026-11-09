@@ -132,6 +132,33 @@ test('flightActive also reports a flight started straight on the Cesium camera',
   assert.equal(camera.flightActive(), false);
 });
 
+test('completeFlight lands at the destination and calls complete only', () => {
+  const { scene, engine } = createCameraViewer();
+  // Cesium's own flight: a real tween collection under the real camera.
+  scene.tweens = new Cesium.TweenCollection();
+  scene.screenSpaceCameraController = { enableInputs: true };
+  const outcome = [];
+  const destination = geo.cartesian3.fromDegrees(86.925, 27.988, 40000);
+  engine.camera.completeFlight();
+  engine.camera.flyTo({
+    destination,
+    orientation: { heading: 0.5, pitch: -0.8, roll: 0 },
+    duration: 8,
+    complete: () => outcome.push('complete'),
+    cancel: () => outcome.push('cancel'),
+  });
+  assert.equal(engine.camera.flightActive(), true);
+  engine.camera.completeFlight();
+  assert.deepEqual(outcome, ['complete']);
+  assert.equal(engine.camera.flightActive(), false);
+  assert.equal(scene.screenSpaceCameraController.enableInputs, true);
+  const pose = engine.camera.pose();
+  assert.ok(geo.cartesian3.distance(pose.position, destination) < 0.01);
+  assert.ok(Math.abs(pose.heading - 0.5) < 1e-6);
+  assert.ok(Math.abs(pose.pitch + 0.8) < 1e-6);
+  engine.destroy();
+});
+
 test('setView with direction and up keeps the exact basis next to nadir', () => {
   const { camera, engine } = createCameraViewer();
   const unit = (x, y, z) =>

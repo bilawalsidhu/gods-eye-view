@@ -442,6 +442,42 @@ test('a model that fails to load marks its instance failed, once', async (t) => 
   assert.equal(set.failed(), false, 'a destroyed set reports nothing');
 });
 
+// A layer removes an instance by moving its last one into the freed index
+// (src/layers/shared/render/moverBank.js).
+test('an instance moved into a failed index loads its own model', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  let loads = 0;
+  const { movers } = setup({
+    loadModel: async (options) => {
+      if (loads++ === 0) throw new Error('503');
+      return fakeModel(options);
+    },
+  });
+  const set = movers.createSet({
+    id: 'fleet',
+    kind: 'model',
+    capacity: 2,
+    model: { url: '/a.glb' },
+  });
+  set.set(0, { position: at(0, 0), pickId: 'a' });
+  set.set(1, { position: at(1, 0), pickId: 'b' });
+  set.setCount(2);
+  set.commit();
+  await settle();
+  assert.equal(set.failed(0), true);
+  assert.equal(set.failed(1), false);
+  // 'a' is removed: 'b' moves into index 0.
+  set.set(0, { position: at(1, 0), pickId: 'b' });
+  set.setCount(1);
+  assert.equal(set.failed(0), false, "'b' does not take the failure of 'a'");
+  assert.equal(set.failed(), false);
+  set.commit();
+  await settle();
+  assert.equal(loads, 3, 'index 0 loads again for its new instance');
+  assert.equal(set.failed(0), false);
+  set.destroy();
+});
+
 test('identify names the set, instance and pickId of a picked billboard or point', async () => {
   const { movers, root, identify, viewer } = setup();
   // The fake camera is over (0°, ~1°), 7000 km from the centre.

@@ -3103,5 +3103,7 @@
   "Globe engine failed to start. Running {engine}: {message}": "地球儀エンジンを起動できませんでした。{engine} で実行中：{message}",
   "Bing imagery is not available on the experimental Navara engine": "Bing画像は実験版 Navara エンジンでは利用できません",
   "NOT ON THIS ENGINE": "このエンジンでは非対応",
-  "Kept in the link: {layers}": "リンクに保持：{layers}"
+  "Kept in the link: {layers}": "リンクに保持：{layers}",
+  "Could not start {engine}: {message}": "{engine} を起動できませんでした：{message}",
+  "Choose an engine to try again.": "エンジンを選んでもう一度お試しください。"
 }

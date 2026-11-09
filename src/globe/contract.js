@@ -106,6 +106,9 @@
  * @property {() => Matrix4} transform A copy of the current camera transform.
  * @property {() => void} release lookAtTransform(IDENTITY).
  * @property {() => void} cancelFlight
+ * @property {() => void} completeFlight Cesium's completeFlight: a running
+ *   flight lands at once (its destination and end transform) and calls
+ *   `complete`, not `cancel`; without a flight it does nothing.
  * @property {(amount?: number) => void} zoomIn Moves `amount` metres along direction.
  * @property {(amount?: number) => void} zoomOut Moves `amount` metres against direction.
  * @property {() => ({ west: number, south: number, east: number, north: number } | undefined)} viewRectangle
@@ -221,6 +224,7 @@
  *   ellipsoid. Rejects when the terrain cannot be sampled (Cesium: one
  *   without tile availability). The terrain is the one shown at the call;
  *   maps.terrainRevision tells when it changed since.
+ * @property {(position: Cartesian3, exclude?: any[]) => (Cartesian3 | undefined)} clampToHeight
  *   The position moved onto the rendered scene along the geodetic normal.
  * @property {boolean} clampToHeightSupported
  * @property {() => boolean} tilesLoaded
@@ -472,6 +476,7 @@
  * @property {(index?: number) => boolean} failed Whether what the set draws
  *   failed to load (with an index, what that instance draws): it stays not
  *   ready and is not tried again; a layer that retries makes a new set.
+ *   Cesium loads per instance: an index given another pickId loads again.
  * @property {() => void} destroy
  *
  * @typedef {object} GlobeMovers
@@ -980,6 +985,7 @@ const SHAPE = {
     transform: isFunction,
     release: isFunction,
     cancelFlight: isFunction,
+    completeFlight: isFunction,
     zoomIn: isFunction,
     zoomOut: isFunction,
     viewRectangle: isFunction,

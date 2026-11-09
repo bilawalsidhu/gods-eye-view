@@ -374,9 +374,9 @@ export class ShellFeedback {
     this._loadingFeedbackTicker = null;
   }
 
-  _showToast(message) {
+  _showToast(message, durationMs) {
     if (this.destroyed) return;
-    this._toast.show(message);
+    this._toast.show(message, durationMs);
   }
   destroy() {
     if (this.destroyed) return;

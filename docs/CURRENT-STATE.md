@@ -169,9 +169,14 @@ one application, and only the globe-bound parts move to the next engine.
 - **Choosing the engine.** A choice read from storage (no `?engine=`) that
   fails to start opens Cesium instead, stores Cesium in `gev.engine` and the
   address, and says so in a toast ("Globe engine failed to start. Running
-  Cesium: …"). An explicit `?engine=` that fails keeps the error and the
-  engine picker on the loading screen, so another choice retries without a
-  reload. Back and Forward to an address without `?engine=` use the engine
+  Cesium: …") once the shared view is restored; the toast stays 6 s. An
+  explicit `?engine=` that fails keeps the loading screen with the error
+  naming the engine ("Could not start Navara: …") and an engine picker
+  labelled "Choose an engine to try again.", focused on its first choice, so
+  another choice retries without a reload; a retry that starts keeps the
+  loading screen until its view is restored. The loading screen lifts only
+  after the start-up share-link restore (the camera has landed) and at least
+  1 s. Back and Forward to an address without `?engine=` use the engine
   the page started with, not a `gev.engine` another tab has changed since.
   A switch that fails and leaves the previous engine running names that
   engine in its toast. The Globe Engine picker is a compact field that keeps
@@ -201,8 +206,9 @@ one application, and only the globe-bound parts move to the next engine.
   skipped and named. Among its members: `surface.sampleTerrainMostDetailed`
   (terrain heights at the finest level, fetched where not loaded),
   `maps.terrainRevision()` (changes when the terrain shown is replaced),
-  `render.maxTextureSize()` and `MoverSet.failed()` (a model or atlas that
-  will not load). Navara also has Cesium's `contactSonarDiagnostics()`,
+  `render.maxTextureSize()`, `MoverSet.failed()` (a model or atlas that
+  will not load) and `camera.completeFlight()` (a running flight lands at
+  once, as Cesium's). Navara also has Cesium's `contactSonarDiagnostics()`,
   outside the contract.
 - **Navara's ground and imagery passes.** Navara draws ground fills and
   corridors in one screen pass classified on the scene depth
@@ -274,8 +280,10 @@ one application, and only the globe-bound parts move to the next engine.
 - **The session owns the state.** Catalog, layer models, sources, selection,
   camera mode and URL state outlive a switch. A picker switch hands the
   outgoing camera's exact pose to the incoming one (the address rounds it to
-  1e-4°, whole metres and whole degrees); a history visit takes the entry's
-  view. A layer that is a session model
+  1e-4°, whole metres and whole degrees); a pick made during a camera flight
+  first lands it (`camera.completeFlight`, Cesium's completeFlight), so the
+  incoming engine stands at its destination. A history visit takes the
+  entry's view. A layer that is a session model
   gets `attachRenderer(viewer, { engine })` / `detachRenderer()` instead of being rebuilt,
   so its data is not fetched again. The outgoing globe is parked
   (`src/standalone/rendererCache.js`), so switching back within three minutes
@@ -303,10 +311,14 @@ one application, and only the globe-bound parts move to the next engine.
   are measured, at most 16 and 4 ms a pass, again after the camera moves and
   tiles load; a height that holds is not written again, so a parked camera
   asks for no frames. Submarine cable landing markers stand on the surface by
-  the same rule and draw over the scene within 2.5 km of the camera. OSM Places refines heights only for places on
-  screen, within a per-pass budget, after camera moves and tile loads, and
-  drops implausible samples. Directions' A/B markers and Street Level's cones
-  move again once tiles load, under Google 3D too. Traffic's road heights are
+  the same rule and draw over the scene within 2.5 km of the camera. OSM
+  Places (2 m over the surface) and Street Level's cones and position marker
+  follow the same rule; a point not measured yet is screen-tested on the
+  loaded terrain (under Google 3D on Cesium, whose hidden globe loads none,
+  at the ground under the camera), and a Street Level sprite waits on the
+  loaded terrain until it is measured. Switching Google 3D on or off measures
+  these points again. Directions' A/B markers move again once tiles load,
+  under Google 3D too. Traffic's road heights are
   sampled again when the terrain changes (`maps.terrainRevision`), and cars
   on roads below the ellipsoid are not culled by the WGS84 horizon. The
   weather shell halves its images (to 1024 px wide) when the GPU's texture
@@ -314,7 +326,11 @@ one application, and only the globe-bound parts move to the next engine.
   stays hidden after a switch, and the active camera's obstruction probe runs
   again once the new engine's surface is ready. A tracked aircraft's glTF
   that the engine did not load is loaded again in a new mover set after a
-  backoff and given up after a failure budget; far contacts in Cockpit draw
+  backoff and given up after a failure budget; a fleet model of Flights,
+  Military or Local ADS-B that failed gives its slot back at once (the
+  contact stays a glyph), and its glTF is fetched again in a new mover set
+  no sooner than 1.5 s later, when the next aircraft of that class is
+  admitted; far contacts in Cockpit draw
   as dots from their own sprite set.
 - **Layer state and cards after a switch.** A history visit across engines
   applies the visited entry's layer options that differ from the live
@@ -2318,7 +2334,8 @@ translation entries do not interrupt loading of the other stations. This covers
 station names, not complete GBFS v3 support.
 `scripts/qa-gbfs-names.mjs` checks synthetic localized names through the real layer,
 station selection, keyboard dismissal, mobile cards and bike-share tool against
-either a dev or preview server (`--url` selects the target).
+either a dev or preview server (`--url` selects the target); the `--w2`
+raster checks import source modules and need the dev server.
 
 The station reader addresses the proxy as `/api/gbfs/<encoded feed URL>`; the
 feed address is read from the path, and a query-string form is refused with a 400. GBFS refuses upstream redirects and enforces its 5 MiB response cap while
@@ -6308,8 +6325,8 @@ request viewbox and continues searching without that geographic preference.
 ### Import Your Own Files (October 2026)
 
 - UTILITIES ▸ **Import** reads GeoJSON (`.geojson`/`.json`), KML, KMZ and GPX from the picker or a file drop anywhere in the app. Each file gets show/hide, Fly-to and Remove controls. GeoJSON and GPX use the row's color; KML/KMZ retain their styles and show a hatched swatch. The file bytes remain on the device for the page session. Rendered overlays can appear in map screenshots sent through voice or other existing screenshot tools.
-- **Ground and height.** GeoJSON XYZ coordinates become ground footprints. `geoFileImport.js` and `geoImportKml.js` produce plain records; one `geoImportDisplay.js` draws them on ground, movers, lines and imagery on every engine, without loading Cesium. Ground paths follow great circles and retain segment gaps. Pins use square sprite canvases preserving Cesium's icon placement and styles; a file's icon looks share a budget of 16 million canvas pixels, so many distinct styles draw at the same size from lower-resolution textures. A KML heading turns with the camera's heading, staying measured from north. Ground and relative pins sample loaded terrain and, at camera heights below 250 km with a tile surface, `engine.surface.clampToHeight` for the pins in the window; absolute pins keep their height. The first sampling and every refresh run in batches of 256 that yield between them; refreshes go through the controller's serial queue after camera/map changes and terrain completion, retaining the last available height on misses. Ground pins ignore scene depth and are horizon-culled. Removal destroys every owned drawing set.
-- **Drawing limits.** Raised polygons draw their fills (meshes) and outlines at their vertices' heights. Ground overlays take their colour's tint and alpha; a rotated one is turned on a canvas over the box around it, and an absolute one is raised to its altitude, as Cesium does (a relative one drapes, as on Cesium). Wall fills, extruded prisms, `gx:LatLonQuad`, a rotated overlay whose box passes a pole and a raised plain-colour overlay are counted as undrawn; wall top edges and polygon top geometry remain. Rhumb edges become great circles. Packed image overlays draw on both engines. A GeoJSON line of one point or a polygon of fewer than three distinct corners is not a record, so a file of only those is refused as having nothing to draw.
+- **Ground and height.** GeoJSON XYZ coordinates become ground footprints. `geoFileImport.js` and `geoImportKml.js` produce plain records; one `geoImportDisplay.js` draws them on ground, movers, lines and imagery on every engine, without loading Cesium. Ground paths follow great circles and retain segment gaps. Pins use square sprite canvases preserving Cesium's icon placement and styles; a file's icon looks share a budget of 16 million canvas pixels, so many distinct styles draw at the same size from lower-resolution textures. A KML heading turns with the camera's heading, staying measured from north. Ground and relative pins sample loaded terrain and, at camera heights below 250 km with a tile surface, `engine.surface.clampToHeight` for the pins in the window; absolute pins keep their height. The first sampling and every refresh run in batches of 256 that yield between them; refreshes go through the controller's serial queue after camera/map changes and terrain completion, retaining the last available height on misses; on a tile surface a pin outside the window keeps its last tile height, which the window test also uses. Ground pins ignore scene depth and are horizon-culled. Removal destroys every owned drawing set.
+- **Drawing limits.** Raised polygons draw their fills (meshes triangulated in the plane tangent to the Earth, as Cesium's perPositionHeight) and outlines at their vertices' heights; a raised polygon of more than 128 rings is not drawn, and one of more than 4,096 vertices draws only its outlines (both counted as undrawn). Ground overlays take their colour's tint and alpha and stack by KML `drawOrder`, then document order (a file imported later draws over); a rotated one is turned on a canvas over the box around it; a file's tinted and turned canvases share a budget of 16 million pixels and equal ones are drawn once; an absolute image overlay is a textured mesh fixed at its altitude, as Cesium's rectangle at a height (a relative one drapes, as on Cesium). Wall fills, extruded prisms, `gx:LatLonQuad`, a rotated overlay whose box passes a pole and a raised plain-colour overlay are counted as undrawn; wall top edges and polygon top geometry remain. Rhumb edges become great circles. Packed image overlays draw on both engines. A GeoJSON line of one point or a polygon of fewer than three distinct corners is not a record, so a file of only those is refused as having nothing to draw. A hole of fewer than three distinct corners is dropped; a ground polygon the ground contract still refuses is counted as undrawn.
 - **Navigation.** Row Fly-to uses `runImmediateNavigation('file', …)`; Cockpit can refuse it and existing follow/track ownership is released first. Automatic Fly-to is stamped when a batch is submitted and reasserted before flying. Pointer/wheel gestures and newer navigation supersede it, including time spent in the queue. Framing uses every finite visible point/path/polygon-hole/wall vertex plus rectangular overlay bounds, with viewport-aware range and a nadir view. The target uses available terrain/cached ground height and the ground guard on arrival. Empty footprints never fall back to deferred `viewer.flyTo`.
 - **Clock.** Imports expose no source clock and no entity availability. KML times/view metadata are removed before loading; recorded tracks become static lines. GPX segments remain separate and GPX times are ignored. The shared clock stays unchanged.
 - **Input handling.** Coordinates and GeoJSON geometry types are checked before drawing allocation. Only short plain names reach the record model; file IDs, custom CRS and styling properties are removed. KML feature/geometry IDs are removed while Style/StyleMap references remain. Local style references are trimmed, incomplete style pairs removed, hidden-folder flags normalized to the import's show control, and unsupported prototype-named elements removed. UTF-16 BOMs and common KML namespace export defects are handled. Empty drawable content is refused. A loader failure or timeout does not hold the next file indefinitely; teardown aborts pending waits.

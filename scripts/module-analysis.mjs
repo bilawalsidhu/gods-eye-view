@@ -18,11 +18,11 @@ const browserGlobals = new Set([
 
 /**
  * Inspect literal module dependencies and browser-platform references without
- * executing code. With `dynamic`, also list the import() specifiers apart.
+ * executing code. With `dynamic`, also list the static (not import())
+ * specifiers apart.
  */
 export function analyzeModule(source, { dynamic = false, filename = '' } = {}) {
   const imports = [];
-  const dynamicImports = [];
   const staticImports = [];
   const browser = new Set();
   function walk(node, parent, field) {
@@ -41,9 +41,8 @@ export function analyzeModule(source, { dynamic = false, filename = '' } = {}) {
           'Computed module imports are not allowed in runtime code',
         );
       imports.push(node.source.value);
-      if (node.type === 'ImportExpression')
-        dynamicImports.push(node.source.value);
-      else staticImports.push(node.source.value);
+      if (node.type !== 'ImportExpression')
+        staticImports.push(node.source.value);
     }
     if (node.type === 'CallExpression' && node.callee?.name === 'require')
       throw new Error('Runtime modules must use ES imports');
@@ -86,7 +85,7 @@ export function analyzeModule(source, { dynamic = false, filename = '' } = {}) {
   return {
     imports,
     browser: [...browser],
-    ...(dynamic && { dynamicImports, staticImports }),
+    ...(dynamic && { staticImports }),
   };
 }
 

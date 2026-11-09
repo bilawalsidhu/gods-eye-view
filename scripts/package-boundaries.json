@@ -47,6 +47,7 @@
       "src/ui/views/index.js",
       "src/ui/views/CockpitView.vue",
       "src/ui/views/CommandDockView.vue",
+      "src/app/engineChoice.js",
       "src/ui/views/ContextView.vue",
       "src/ui/views/panels/RadioPanel.vue",
       "src/ui/views/panels/SdrCard.vue",
@@ -2141,6 +2142,7 @@
       "src/layers/shared/color.js",
       "src/globe/cameraMath.js",
       "src/layers/streetLevel/render/display.js",
+      "src/layers/shared/render/surfacePoints.js",
       "src/globe/contract.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile", "mapillary-js"]

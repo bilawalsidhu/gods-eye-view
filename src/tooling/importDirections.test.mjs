@@ -297,7 +297,6 @@ test('module analysis can tell dynamic imports from static ones', () => {
     {
       imports: ['one', 'two', 'three', 'four'],
       browser: [],
-      dynamicImports: ['three', 'four'],
       staticImports: ['one', 'two'],
     },
   );

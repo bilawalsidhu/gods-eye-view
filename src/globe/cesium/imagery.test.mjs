@@ -623,3 +623,39 @@ test('a raised layer is a shell over its rectangle; a staged image swaps once it
   layer.destroy();
   assert.equal(shells[1].destroyed, true);
 });
+
+async function swapped(f, layer, extra = {}) {
+  const staged = layer.setSource(
+    tiles({ url: 'https://next.example/{z}/{x}/{y}.png', ...extra }),
+    { staged: true },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  const incoming = drawnOn(f)[1];
+  const request = incoming.imageryProvider.requestImage(0, 0, 1);
+  f.providers[1].pending[0]('tile');
+  await request;
+  f.render();
+  f.render();
+  assert.equal(await staged, true);
+  return incoming;
+}
+
+test('after a staged swap a credit-only change reaches the drawn provider', async () => {
+  const f = stagingFixture();
+  const layer = f.imagery.createLayer({ id: 'a', source: tiles() });
+  const incoming = await swapped(f, layer, { credit: 'Old' });
+  layer.setSource(
+    tiles({ url: 'https://next.example/{z}/{x}/{y}.png', credit: 'New' }),
+  );
+  assert.equal(incoming.imageryProvider.credit?.html, 'New');
+});
+
+test('after a staged swap the drawn provider still loads new tiles', async () => {
+  const f = stagingFixture();
+  const layer = f.imagery.createLayer({ id: 'a', source: tiles() });
+  const incoming = await swapped(f, layer);
+  f.render();
+  assert.deepEqual(drawnOn(f), [incoming]);
+  const next = incoming.imageryProvider.requestImage(5, 3, 4);
+  assert.ok(next instanceof Promise, 'a new tile after the swap is requested');
+});

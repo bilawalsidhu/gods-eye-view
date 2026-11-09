@@ -25,7 +25,7 @@ function fakeHarness() {
     engine,
     /** The surface under every place answers `height` (undefined: none). */
     surface(height) {
-      engine.fake.script('sampleHeight', height);
+      engine.fake.script('terrainHeight', height);
     },
     destroy: () => engine.destroy(),
   };
@@ -79,7 +79,6 @@ for (const makeHarness of HARNESSES) {
   });
 
   test(`places sit 2 m over the sampled surface, read again after a move (${name})`, (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
     const h = makeHarness();
     const display = createOsmPlacesDisplay(h.engine);
     const position = () =>
@@ -89,14 +88,17 @@ for (const makeHarness of HARNESSES) {
       })();
     try {
       h.surface(undefined);
+      h.engine.fake.script('tilesLoaded', false);
       display.setVisible(true);
       display.replace(places);
       assert.ok(Math.abs(heightOf(position()) - 2) < 1e-6, 'no surface yet');
       h.surface(1340);
-      t.mock.timers.tick(500);
+      h.engine.fake.frames(1);
+      h.engine.fake.script('tilesLoaded', true);
+      h.engine.fake.frames(1);
       assert.ok(
         Math.abs(heightOf(position()) - 1342) < 1e-6,
-        'asked again shortly after',
+        'asked again once the terrain loads',
       );
       h.surface(1360);
       h.engine.camera.moveEnd.raiseEvent();
@@ -151,7 +153,7 @@ test('places refine loaded heights after tiles settle', (t) => {
   engine.projector.horizonVisible = () => true;
   let height = 50;
   let loaded = false;
-  engine.fake.script('sampleHeight', () => height);
+  engine.fake.script('terrainHeight', () => height);
   engine.fake.script('tilesLoaded', () => loaded);
   const display = createOsmPlacesDisplay(engine);
   t.after(() => display.destroy());
@@ -169,11 +171,12 @@ test('places refine loaded heights after tiles settle', (t) => {
   );
 });
 
-test('large searches only sample visible places within a per-pass budget', (t) => {
+test('large searches only sample visible places within a per-pass budget', async (t) => {
   const engine = createFakeEngine();
   t.after(() => engine.destroy());
   engine.projector.worldToWindow = () => ({ x: 100, y: 100 });
   engine.projector.horizonVisible = () => true;
+  await engine.maps.setPhotorealTiles({ id: 'photoreal' });
   let samples = 0;
   engine.fake.script('sampleHeight', () => {
     samples++;
@@ -191,3 +194,56 @@ test('large searches only sample visible places within a per-pass budget', (t) =
   engine.camera.moveEnd.raiseEvent();
   assert.equal(samples, 0, 'off-screen places are not sampled');
 });
+
+// A place mid-view whose unmeasured point (2 m above the ellipsoid)
+// projects off screen is still measured.
+// Under 3D tiles Cesium hides the globe, and with it the terrain.
+for (const [tiles, terrain] of [
+  [false, 1300],
+  [true, 1300],
+  [true, undefined],
+])
+  test(`a visible place on high ground is measured before culling (tiles: ${tiles}, terrain: ${terrain})`, async () => {
+    const engine = createFakeEngine({
+      longitude: geo.math.toRadians(85.31),
+      latitude: geo.math.toRadians(27.7),
+      altitude: 1500,
+    });
+    // The ground under the place is at 1300 m; the camera, 200 m above it,
+    // sees it mid-frame, while the point 1300 m lower projects below the frame.
+    if (tiles) await engine.maps.setPhotorealTiles({ id: 'photoreal' });
+    engine.fake.script('terrainHeight', terrain);
+    let samples = 0;
+    engine.fake.script('sampleHeight', () => (samples++, 1300));
+    engine.projector.horizonVisible = () => true;
+    engine.projector.worldToWindow = (position) =>
+      geo.cartographic.fromCartesian(position).height > 1000
+        ? { x: 600, y: 450 }
+        : { x: 600, y: 2400 };
+    const display = createOsmPlacesDisplay(engine);
+    try {
+      display.replace([
+        { id: 'node/1', name: 'Town hall', lat: 27.7, lon: 85.31 },
+      ]);
+      display.setVisible(true);
+      engine.fake.emit('camera.moveEnd');
+      assert.equal(
+        samples > 0,
+        tiles,
+        'pick samples are only needed under 3D tiles',
+      );
+      const { positions } = engine.fake.moverSet('osm-places').store;
+      const height = geo.cartographic.fromCartesian({
+        x: positions[0],
+        y: positions[1],
+        z: positions[2],
+      }).height;
+      assert.ok(
+        Math.abs(height - 1302) < 0.01,
+        'the place stands above the visible ground',
+      );
+    } finally {
+      display.destroy();
+      engine.destroy();
+    }
+  });

@@ -17,8 +17,8 @@
 // @property {ImportedOverlay[]} overlays
 // @property {Object<string, number>} undrawn What the file has that no
 //   engine draws, by kind (`wall`, `extruded`, `latLonQuad`), counted;
-//   the display adds the overlays it cannot draw (`rotatedOverlay`,
-//   `raisedOverlay`).
+//   the display adds overlays and polygons it cannot draw (`rotatedOverlay`,
+//   `raisedOverlay`, `polygon`, `complexPolygon`).
 //
 // @typedef {object} ImportedPoint
 // @property {number[]} position
@@ -63,6 +63,7 @@
 // @property {string|null} url Its image, or null for a plain colour.
 // @property {{ west: number, south: number, east: number, north: number }} rectangle
 // @property {number[]} color Multiplies the image; its alpha fades it.
+// @property {number} drawOrder Higher overlays draw over lower ones.
 // @property {number} rotation Degrees counter-clockwise (KML LatLonBox).
 // @property {number} altitude Metres (KML altitude); Cesium raises an
 //   absolute overlay to it.
@@ -98,6 +99,10 @@ export const recordCount = (records) =>
   records.lines.length +
   records.polygons.length +
   records.overlays.length;
+
+/** A ring needs three different ground positions to enclose a fill. */
+export const hasRingVertices = (ring) =>
+  new Set(ring?.map(([lon, lat]) => `${lon},${lat}`)).size >= 3;
 
 /** `#rrggbb` as rgba in 0..1, with Cesium.Color.fromCssColorString's bytes. */
 export function rgbaOfHex(css, alpha = 1) {
@@ -175,13 +180,10 @@ export function geoJsonRecords(geojson, color) {
           color: stroke,
           widthPx: GEOJSON_STROKE_PX,
         });
-      else if (
-        kind === 'Polygon' &&
-        new Set(part[0]?.map(([lon, lat]) => `${lon},${lat}`)).size >= 3
-      )
+      else if (kind === 'Polygon' && hasRingVertices(part[0]))
         records.polygons.push({
           name,
-          rings: part.map((ring) => ring.map(position)),
+          rings: part.filter(hasRingVertices).map((ring) => ring.map(position)),
           raised: false,
           fill,
           outline: { color: stroke, widthPx: GEOJSON_STROKE_PX },

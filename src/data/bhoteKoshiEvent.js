@@ -1205,10 +1205,13 @@ export function createBhoteKoshiEventLayer({
     try {
       if (_engine && !_viewer) {
         const revision = _engine.maps.terrainRevision();
-        const heights = await _engine.surface.sampleTerrainMostDetailed(
-          observations.map(({ lon, lat }) =>
-            Cesium.Cartographic.fromDegrees(lon, lat),
+        const heights = await waitForSignal(
+          _engine.surface.sampleTerrainMostDetailed(
+            observations.map(({ lon, lat }) =>
+              Cesium.Cartographic.fromDegrees(lon, lat),
+            ),
           ),
+          signal,
         );
         // Heights of a terrain replaced meanwhile are not the one shown.
         if (_engine.maps.terrainRevision() === revision)

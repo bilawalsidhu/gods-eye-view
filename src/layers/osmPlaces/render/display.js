@@ -6,17 +6,13 @@
 
 import * as geo from '../../../geo/index.js';
 import { rgbaFromCss } from '../../shared/color.js';
+import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
 import { OSM_PLACES_LAYER_ID, OSM_PLACE_COLOR } from '../model.js';
 
 // Above the sampled surface, so a point does not sink into it.
 const HEIGHT_OFFSET_M = 2;
 // The voice search's result cap; a larger set grows the batch.
 const INITIAL_CAPACITY = 256;
-// While the surface under a place has not loaded, its height is asked again.
-const RESAMPLE_MS = 500;
-const RESAMPLE_TRIES = 20;
-const SAMPLES_PER_PASS = 16;
-const SAMPLE_BUDGET_MS = 4;
 // Under the moving contacts (src/data/spriteOrder.js), as map data.
 const POINT_ORDER = -1;
 
@@ -32,11 +28,14 @@ export function createOsmPlacesDisplay(engine) {
   let set = null,
     capacity = 0,
     visible = false,
-    records = [],
-    destroyed = false,
-    retry = null,
-    revision = 0;
-  const heights = new Map();
+    points = [],
+    destroyed = false;
+  const surface = createSurfacePoints(engine, {
+    groups: () => [{ set, points: visible ? points : [] }],
+    request: () => engine.render.request(OSM_PLACES_LAYER_ID),
+    heightOffset: HEIGHT_OFFSET_M,
+    estimateGround: true,
+  });
   function ensure(count) {
     if (set && count <= capacity) return;
     set?.destroy();
@@ -53,98 +52,20 @@ export function createOsmPlacesDisplay(engine) {
   }
   function draw() {
     if (destroyed) return;
-    clearTimeout(retry);
-    retry = null;
-    const shown = visible ? records : [];
+    const shown = visible ? points : [];
     ensure(shown.length);
-    const sampling = engine.surface.supported;
-    let sampleTime = 0;
-    const now = Date.now();
-    const size = engine.host.size();
-    let samples = 0;
-    let delay = Infinity;
-    shown.forEach((record, index) => {
-      let cached = heights.get(record);
-      if (!cached || cached.revision !== revision) {
-        cached = {
-          height: cached?.height ?? 0,
-          revision,
-          attempts: 0,
-          nextAt: 0,
-          resolved: false,
-        };
-        heights.set(record, cached);
-      }
-      let position = geo.cartesian3.fromDegrees(
-        record.lon,
-        record.lat,
-        cached.height + HEIGHT_OFFSET_M,
-      );
-      const screen = engine.projector.horizonVisible(position)
-        ? engine.projector.worldToWindow(position)
-        : null;
-      const inView =
-        screen &&
-        screen.x >= 0 &&
-        screen.y >= 0 &&
-        screen.x < size.width &&
-        screen.y < size.height;
-      if (
-        sampling &&
-        inView &&
-        !cached.resolved &&
-        cached.attempts < RESAMPLE_TRIES
-      ) {
-        if (
-          now >= cached.nextAt &&
-          samples < SAMPLES_PER_PASS &&
-          sampleTime < SAMPLE_BUDGET_MS
-        ) {
-          const started = performance.now();
-          const sampled = engine.surface.sampleHeight(
-            geo.cartographic.fromDegrees(record.lon, record.lat),
-            [set],
-          );
-          sampleTime += performance.now() - started;
-          samples++;
-          cached.attempts++;
-          cached.nextAt = now + RESAMPLE_MS;
-          // Cesium samples kilometres underground while tiles stream.
-          if (Number.isFinite(sampled) && sampled >= -500 && sampled <= 9000) {
-            cached.height = sampled;
-            cached.resolved = true;
-            position = geo.cartesian3.fromDegrees(
-              record.lon,
-              record.lat,
-              sampled + HEIGHT_OFFSET_M,
-            );
-          }
-        }
-        if (!cached.resolved && cached.attempts < RESAMPLE_TRIES)
-          delay = Math.min(delay, Math.max(0, cached.nextAt - now));
-      }
+    shown.forEach((point, index) => {
       set.set(index, {
-        position,
+        position: point.position,
         color,
         show: true,
-        pickId: osmPlacePickId(record),
+        pickId: osmPlacePickId(point.record),
       });
     });
     set.setCount(shown.length);
     set.commit();
-    if (Number.isFinite(delay)) retry = setTimeout(draw, delay);
+    surface.place();
   }
-  function refine() {
-    revision++;
-    if (visible && records.length) draw();
-  }
-  const removeMoveEnd = engine.camera.moveEnd.addEventListener(refine);
-  let tilesLoaded = engine.surface.tilesLoaded();
-  const removeSurface = engine.frames.preRender.addEventListener(() => {
-    const loaded = engine.surface.tilesLoaded();
-    if (loaded && !tilesLoaded) refine();
-    tilesLoaded = loaded;
-  });
   return {
     setVisible(show) {
       if (visible === Boolean(show)) return;
@@ -152,21 +73,24 @@ export function createOsmPlacesDisplay(engine) {
       draw();
     },
     replace(next) {
-      records = next.slice();
-      heights.clear();
-      revision++;
+      points = next.map((record) => ({
+        record,
+        cartographic: geo.cartographic.fromDegrees(record.lon, record.lat),
+        position: geo.cartesian3.fromDegrees(
+          record.lon,
+          record.lat,
+          HEIGHT_OFFSET_M,
+        ),
+      }));
       draw();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      clearTimeout(retry);
-      removeMoveEnd();
-      removeSurface();
-      heights.clear();
+      surface.destroy();
       set?.destroy();
       set = null;
-      records = [];
+      points = [];
       engine.render.request('osm-places-destroy');
     },
   };

@@ -10,6 +10,7 @@ import {
   createStrict,
   localPreview,
   openPage,
+  waitForCameraAtRest,
   waitForEngine,
 } from './qa-strict-harness.mjs';
 
@@ -86,18 +87,7 @@ await strict.run({}, async (b) => {
       },
       fromDegrees(WILDLIFE_VIEW.lon, WILDLIFE_VIEW.lat, WILDLIFE_VIEW.alt),
     );
-  // Until the camera has held still for a second (a focus flight is over).
-  const still = () =>
-    p.waitForFunction(
-      () => {
-        const pose = window.__godsEyeView.engine.camera.pose().position;
-        const key = [pose.x, pose.y, pose.z].map((v) => v.toFixed(1)).join();
-        if (window.__qaWildPose?.key !== key)
-          window.__qaWildPose = { key, at: performance.now() };
-        return performance.now() - window.__qaWildPose.at > 1000;
-      },
-      { timeout: 30000, polling: 100 },
-    );
+  const still = () => waitForCameraAtRest(p, { timeout: 30000 });
   // What the engine draws for the layer, and what its picker answers at each
   // sighting's anchor.
   const drawing = () =>

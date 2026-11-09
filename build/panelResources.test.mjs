@@ -27,7 +27,10 @@ test('the panel replaces Navara entry points and retains browser aliases', () =>
   );
   assert.ok(alias.replacement.endsWith('/build/panelNavara.js'));
   // Navara's wind mesh imports three; the Cesium wind backend stays.
-  assert.ok(alias.find.test('../../globe/navara/windFlowMesh.js'));
+  assert.equal(
+    '../../globe/navara/windFlowMesh.js'.replace(alias.find, alias.replacement),
+    alias.replacement,
+  );
   assert.equal(alias.find.test('../../globe/cesium/windFlow.js'), false);
   assert.ok(config.resolve.alias.includes(browser.resolve.alias[0]));
 });

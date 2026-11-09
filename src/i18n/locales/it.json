@@ -3253,5 +3253,7 @@
   "Globe engine failed to start. Running {engine}: {message}": "Impossibile avviare il motore del globo. È in uso {engine}: {message}",
   "Bing imagery is not available on the experimental Navara engine": "Le immagini Bing non sono disponibili nel motore sperimentale Navara",
   "NOT ON THIS ENGINE": "NON IN QUESTO MOTORE",
-  "Kept in the link: {layers}": "Conservati nel link: {layers}"
+  "Kept in the link: {layers}": "Conservati nel link: {layers}",
+  "Could not start {engine}: {message}": "Impossibile avviare {engine}: {message}",
+  "Choose an engine to try again.": "Scegli un motore per riprovare."
 }

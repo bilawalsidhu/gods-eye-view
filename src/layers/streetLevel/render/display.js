@@ -13,12 +13,13 @@
 // on the same engine (`display.engine`).
 //
 // The contract has no ground clamping for sprites: a sprite sits on the
-// terrain, or under Google 3D on the rendered tiles (one sample each), and
-// is placed again whenever the surface settles.
+// terrain, or under Google 3D on the rendered tiles, measured on screen a
+// few per pass and again after moves and tile loads
+// (../../shared/render/surfacePoints.js).
 
 import * as geo from '../../../geo/index.js';
 import { rgbaFromCss } from '../../shared/color.js';
-import { plausibleSurfaceHeight } from '../view.js';
+import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
 
 /** Lines per ground set: smaller sets build, and show, sooner. */
 export const SEQUENCE_LINE_BATCH = 120;
@@ -89,39 +90,6 @@ export function createStreetLevelDisplay(engine) {
   const live = new Set();
   let serial = 0;
 
-  const tilesShown = () => engine.maps?.photorealActive?.() === true;
-
-  /**
-   * Ground height (m) under a point and whether it came from the surface
-   * shown: the terrain on the globe; under Google 3D the rendered tiles
-   * (`exclude`: the sprites themselves), else the terrain. Null when
-   * neither answers.
-   */
-  function groundHeight(lon, lat, exclude) {
-    const carto = geo.cartographic.fromDegrees(lon, lat);
-    let terrain;
-    try {
-      terrain = engine.surface.terrainHeightSupported
-        ? engine.surface.terrainHeight(carto)
-        : undefined;
-    } catch {
-      terrain = undefined;
-    }
-    const known = Number.isFinite(terrain);
-    if (!tilesShown()) return { height: known ? terrain : null, exact: known };
-    let sampled;
-    try {
-      sampled = engine.surface.supported
-        ? engine.surface.sampleHeight(carto, exclude)
-        : undefined;
-    } catch {
-      sampled = undefined;
-    }
-    if (plausibleSurfaceHeight(sampled))
-      return { height: sampled, exact: true };
-    return { height: known ? terrain : null, exact: false };
-  }
-
   /**
    * A group of sprites, each `{ pickId, lon, lat, bearing, image, imageKey,
    * sizePx, scaleByDistance? }`: one sprite set per `imageKey`, at `order`
@@ -136,8 +104,8 @@ export function createStreetLevelDisplay(engine) {
     let visible = true;
     let dirty = true;
     let lastPose = '';
-    let settled = null;
-    let tiles = tilesShown();
+    let surfaceGroups = [];
+    let placementPending = true;
     let destroyed = false;
 
     const wake = () => {
@@ -147,10 +115,26 @@ export function createStreetLevelDisplay(engine) {
     };
     const ownSets = () => [...banks.values()].map(({ bank }) => bank);
 
-    function place(row) {
-      const { height, exact } = groundHeight(row.lon, row.lat, ownSets());
-      row.position = geo.cartesian3.fromDegrees(row.lon, row.lat, height ?? 0);
-      row.exact = exact;
+    // Rows change their instance index: a placement pass still queued must
+    // not write by the old one.
+    function changed() {
+      placementPending = true;
+      surfaceGroups = [];
+      wake();
+    }
+
+    // On the loaded terrain until measured: a sprite off screen waits for
+    // its measure, and a camera move can bring it into view first.
+    function locate(row) {
+      row.cartographic = geo.cartographic.fromDegrees(row.lon, row.lat);
+      const terrain = engine.surface.terrainHeight(row.cartographic);
+      row.position = geo.cartesian3.fromDegrees(
+        row.lon,
+        row.lat,
+        Number.isFinite(terrain) ? terrain : 0,
+      );
+      delete row.surfaceHeight;
+      delete row.surfaceRevision;
     }
 
     function bankFor(key, first, count) {
@@ -179,15 +163,6 @@ export function createStreetLevelDisplay(engine) {
 
     function paint() {
       if (destroyed) return;
-      // Loaded detail can replace the surface under an already placed sprite.
-      const loaded = engine.surface.tilesLoaded();
-      const nowTiles = tilesShown();
-      if ((loaded && settled === false) || nowTiles !== tiles) {
-        for (const row of rows) place(row);
-        dirty = true;
-      }
-      settled = loaded;
-      tiles = nowTiles;
       if (!rows.size && !dirty) return;
       const pose = engine.camera.pose();
       const signature = [
@@ -199,7 +174,6 @@ export function createStreetLevelDisplay(engine) {
         pose.roll,
       ].join('/');
       if (!dirty && signature === lastPose) return;
-      dirty = false;
       lastPose = signature;
       const groups = new Map();
       if (visible)
@@ -219,6 +193,17 @@ export function createStreetLevelDisplay(engine) {
           record.bank.commit();
         }
       }
+      if (placementPending) {
+        placementPending = false;
+        surfaceGroups = [...groups].map(([key, points]) => ({
+          set: bankFor(key, points[0], points.length),
+          points,
+        }));
+        const exclude = ownSets();
+        for (const group of surfaceGroups) group.exclude = exclude;
+        surface.place();
+      }
+      dirty = false;
       for (const [key, group] of groups) {
         const bank = bankFor(key, group[0], group.length);
         group.forEach((row, index) => {
@@ -246,13 +231,18 @@ export function createStreetLevelDisplay(engine) {
     }
 
     const removePaint = engine.frames.preRender.addEventListener(paint);
+    const surface = createSurfacePoints(engine, {
+      groups: () => surfaceGroups,
+      request: wake,
+      estimateGround: true,
+    });
     const group = {
       /** Adds a sprite; the returned row is its handle. */
       add(spec) {
-        const row = { ...spec, rotation: 0, position: null, exact: false };
-        place(row);
+        const row = { ...spec, rotation: 0 };
+        locate(row);
         rows.add(row);
-        wake();
+        changed();
         return row;
       },
       /** Moves or turns a sprite (`lon`, `lat`, `bearing`). */
@@ -260,19 +250,19 @@ export function createStreetLevelDisplay(engine) {
         if (!rows.has(row)) return;
         const moved = lon !== row.lon || lat !== row.lat;
         Object.assign(row, { lon, lat, bearing });
-        if (moved) place(row);
-        wake();
+        if (moved) locate(row);
+        changed();
       },
       remove(row) {
-        if (rows.delete(row)) wake();
+        if (rows.delete(row)) changed();
       },
       removeAll() {
         rows.clear();
-        wake();
+        changed();
       },
       show(value) {
         visible = value !== false;
-        wake();
+        changed();
       },
       shown: () => visible,
       count: () => rows.size,
@@ -280,6 +270,7 @@ export function createStreetLevelDisplay(engine) {
         if (destroyed) return;
         destroyed = true;
         removePaint();
+        surface.destroy();
         for (const { bank } of banks.values()) bank.destroy();
         banks.clear();
         rows.clear();

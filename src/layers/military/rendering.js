@@ -805,6 +805,10 @@ export function createRendering({
     const occluder = view.horizon();
     const focusTarget = getFocusTarget();
 
+    // A model the engine failed to load gives its slot back, in view or not;
+    // the renderer loads its class again after a backoff.
+    for (const [icao24, model] of flightState._models)
+      if (model.failed) _releaseModel(icao24);
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
     // Drop all models the moment we leave it (toggled off / zoomed out) so billboards resume.
     const useModels = _modelRegimeActive();

@@ -6,10 +6,15 @@ import { GROUND_HARNESSES } from '../testSupport/groundDisplayEngines.mjs';
 import { drawImportedFile } from './geoImportDisplay.js';
 import { emptyRecords, geoJsonRecords } from './geoImportRecords.js';
 
-// A 2D context that only records what draws.
+// A 2D context that only records what draws; its image data is one pixel.
 const createCanvas = () => ({
   getContext: () =>
-    new Proxy({}, { get: (_, key) => (key in {} ? undefined : () => {}) }),
+    new Proxy(
+      { getImageData: () => ({ data: new Uint8ClampedArray(4) }) },
+      {
+        get: (target, key) => target[key] ?? (key in {} ? undefined : () => {}),
+      },
+    ),
 });
 
 for (const make of GROUND_HARNESSES) {
@@ -235,6 +240,49 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
+    'a pin on the tiles keeps its height while out of the window',
+    async ({ engine }) => {
+      engine.imagery.surface = () => 'tiles';
+      engine.camera.height = () => 1000;
+      engine.projector.horizonVisible = () => true;
+      let visible = true;
+      engine.projector.worldToWindow = () => (visible ? { x: 1, y: 1 } : null);
+      engine.surface.clampToHeight = (position) => {
+        const at = geo.cartographic.fromCartesian(position);
+        return geo.cartesian3.fromRadians(at.longitude, at.latitude, 500);
+      };
+      const drawing = await drawImportedFile(
+        engine,
+        geoJsonRecords({ type: 'Point', coordinates: [1, 2] }, '#39d0ff'),
+        { createCanvas },
+      );
+      const height = () => Math.round(drawing.footprint()[0][2]);
+      assert.equal(height(), 500);
+      visible = false;
+      await drawing.refreshGround();
+      assert.equal(height(), 500, 'the measured tile height was replaced');
+      let projected;
+      engine.projector.worldToWindow = (position) => {
+        projected = Math.round(geo.cartographic.fromCartesian(position).height);
+        return projected >= 500 ? { x: 1, y: 1 } : null;
+      };
+      engine.surface.clampToHeight = () =>
+        geo.cartesian3.fromDegrees(1, 2, 700);
+      await drawing.refreshGround();
+      assert.equal(projected, 500, 'visibility uses the last measured height');
+      assert.equal(height(), 700);
+      engine.surface.clampToHeight = () => undefined;
+      await drawing.refreshGround();
+      assert.equal(
+        height(),
+        700,
+        'a missing tile sample keeps the last height',
+      );
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
     'fills keep holes, raised outlines and plain overlays',
     async ({ engine, set }) => {
       const records = geoJsonRecords(
@@ -287,6 +335,240 @@ for (const make of GROUND_HARNESSES) {
       drawing.destroy();
     },
   );
+
+  displayTest(
+    'icon variants of one file stay within a canvas budget',
+    async ({ engine }) => {
+      const records = emptyRecords();
+      for (let i = 0; i < 2000; i++)
+        records.points.push({
+          position: [1, 2, 0],
+          altitude: 'ground',
+          icon: { image: { url: 'blob:icon' }, scale: 10 + i / 1000 },
+        });
+      const canvases = [];
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas: () => {
+          const canvas = createCanvas();
+          canvases.push(canvas);
+          return canvas;
+        },
+        loadImage: async () => ({ width: 32, height: 32 }),
+        pixelRatio: 2,
+      });
+      const bytes = canvases.reduce((n, c) => n + c.width * c.height * 4, 0);
+      assert.ok(bytes <= 64 * 2 ** 20, `canvas bytes ${bytes / 2 ** 20} MiB`);
+      drawing.destroy();
+    },
+  );
+
+  displayTest('a raised polygon fill keeps its heights', async ({ engine }) => {
+    const meshes = [];
+    const create = engine.meshes.createMesh;
+    engine.meshes.createMesh = (options) => {
+      meshes.push(options);
+      return create(options);
+    };
+    const records = emptyRecords();
+    records.polygons.push({
+      rings: [
+        [
+          [0, 0, 1000],
+          [1, 0, 1000],
+          [1, 1, 1000],
+        ],
+      ],
+      raised: true,
+      fill: [1, 0, 0, 1],
+      outline: { color: [1, 1, 1, 1], widthPx: 1 },
+    });
+    const drawing = await drawImportedFile(engine, records, { createCanvas });
+    assert.equal(engine.ground.list().length, 0);
+    assert.equal(meshes.length, 1);
+    assert.equal(meshes[0].positions[0], 6379137);
+    assert.equal(meshes[0].indices.length, 3);
+    drawing.destroy();
+  });
+
+  displayTest(
+    'a raised polygon whose vertices share one latitude keeps its fill',
+    async ({ engine }) => {
+      const records = emptyRecords();
+      records.polygons.push({
+        rings: [
+          [
+            [0, 85, 100000],
+            [120, 85, 100000],
+            [-120, 85, 100000],
+          ],
+        ],
+        raised: true,
+        fill: [0, 1, 0, 0.6],
+        outline: null,
+      });
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      assert.equal(engine.meshes.list().length, 1, 'no fill mesh');
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'a raised polygon with 10 000 holes does not block the import',
+    async ({ engine }) => {
+      const records = emptyRecords();
+      const outer = Array.from({ length: 1000 }, (_, i) => {
+        const a = (i / 1000) * 2 * Math.PI;
+        return [10 * Math.cos(a), 10 * Math.sin(a), 1000];
+      });
+      const holes = [];
+      for (let i = 0; i < 100; i++)
+        for (let j = 0; j < 100; j++) {
+          const [x, y, d] = [-6 + 0.12 * i, -6 + 0.12 * j, 0.03];
+          holes.push([
+            [x, y, 1000],
+            [x + d, y, 1000],
+            [x + d, y + d, 1000],
+            [x, y + d, 1000],
+          ]);
+        }
+      records.polygons.push({
+        rings: [outer, ...holes],
+        raised: true,
+        fill: [0, 1, 0, 0.6],
+        outline: { color: [1, 1, 1, 1], widthPx: 1 },
+      });
+      const started = performance.now();
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      const ms = Math.round(performance.now() - started);
+      assert.ok(ms < 1000, `the import step took ${ms} ms (41 000 vertices)`);
+      assert.deepEqual(drawing.report, {
+        drawn: 0,
+        undrawn: 1,
+        kinds: { complexPolygon: 1 },
+      });
+      assert.equal(engine.meshes.list().length + engine.lines.list().length, 0);
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'a raised fill past the vertex bound is counted, its outline drawn',
+    async ({ engine }) => {
+      const records = emptyRecords();
+      const outer = Array.from({ length: 5000 }, (_, i) => {
+        const angle = (i * 2 * Math.PI) / 5000;
+        return [10 * Math.cos(angle), 10 * Math.sin(angle), 1000];
+      });
+      records.polygons.push({
+        rings: [outer],
+        raised: true,
+        fill: [1, 0, 0, 1],
+        outline: { color: [1, 1, 1, 1], widthPx: 1 },
+      });
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      assert.deepEqual(drawing.report, {
+        drawn: 1,
+        undrawn: 1,
+        kinds: { complexPolygon: 1 },
+      });
+      assert.equal(engine.meshes.list().length, 0);
+      assert.equal(engine.lines.list().length, 1);
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'a polygon with a degenerate hole draws its outer ring',
+    async ({ engine }) => {
+      const records = geoJsonRecords(
+        {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [0, 0],
+              [2, 0],
+              [2, 2],
+              [0, 2],
+              [0, 0],
+            ],
+            [
+              [1, 1],
+              [1.1, 1.1],
+              [1, 1],
+            ],
+          ],
+        },
+        '#39d0ff',
+      );
+      assert.equal(records.polygons[0].rings.length, 1);
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      assert.deepEqual(drawing.report, { drawn: 1, undrawn: 0, kinds: {} });
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'a polygon the ground contract rejects is counted undrawn',
+    async ({ engine }) => {
+      const records = geoJsonRecords(
+        {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [0, 0],
+              [2, 0],
+              [2, 2],
+            ],
+          ],
+        },
+        '#39d0ff',
+      );
+      records.polygons[0].rings.push([
+        [1, 1],
+        [1.1, 1.1],
+        [1, 1],
+      ]);
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      assert.deepEqual(drawing.report, {
+        drawn: 0,
+        undrawn: 1,
+        kinds: { polygon: 1 },
+      });
+      drawing.destroy();
+    },
+  );
+
+  for (const kind of ['Polygon', 'LineString'])
+    displayTest(
+      `a failed ${kind} ground set is released`,
+      async ({ engine }) => {
+        const create = engine.ground.createSet;
+        engine.ground.createSet = (options) => {
+          const set = create(options);
+          set.replace = () => {
+            throw new Error('replacement failed');
+          };
+          return set;
+        };
+        const positions = [
+          [0, 0],
+          [2, 0],
+          [2, 2],
+        ];
+        const records = geoJsonRecords(
+          {
+            type: kind,
+            coordinates: kind === 'Polygon' ? [positions] : positions,
+          },
+          '#39d0ff',
+        );
+        await assert.rejects(
+          drawImportedFile(engine, records, { createCanvas }),
+          /replacement failed/,
+        );
+        assert.equal(engine.ground.list().length, 0);
+      },
+    );
 
   displayTest(
     'failed icon composition releases geometry already created',
@@ -383,6 +665,39 @@ for (const make of GROUND_HARNESSES) {
     };
     return layers;
   };
+
+  displayTest(
+    'overlay drawOrder ranks images stably above the raster layers',
+    async ({ engine }) => {
+      const layers = overlayLayer(engine);
+      const records = emptyRecords();
+      records.overlays = [10, -2, undefined, 10].map((drawOrder, index) => ({
+        url: `blob:overlay-${index}`,
+        drawOrder,
+        color: [1, 1, 1, 1],
+        rectangle: { west: 0, south: 0, east: 1, north: 1 },
+      }));
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      const later = emptyRecords();
+      later.overlays = [{ ...records.overlays[0], url: 'blob:later' }];
+      later.overlays[0].drawOrder = -5;
+      const over = await drawImportedFile(engine, later, { createCanvas });
+      const urls = new Map(layers.map(({ id, source }) => [id, source.url]));
+      assert.deepEqual(
+        engine.imagery.list().map(({ id }) => urls.get(id)),
+        [
+          'blob:overlay-1',
+          'blob:overlay-2',
+          'blob:overlay-0',
+          'blob:overlay-3',
+          'blob:later',
+        ],
+        'bottom first; a file imported later draws over this one',
+      );
+      over.destroy();
+      drawing.destroy();
+    },
+  );
 
   displayTest(
     'colored overlays multiply image RGB and retain layer alpha',
@@ -502,9 +817,193 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
-    'an absolute overlay is raised to its altitude, a relative one drapes',
+    'a turned plain-colour overlay past the pole does not fail the file',
+    async ({ engine }) => {
+      const records = geoJsonRecords(
+        { type: 'Point', coordinates: [1, 2] },
+        '#39d0ff',
+      );
+      records.overlays.push({
+        url: null,
+        color: [1, 0, 0, 0.5],
+        rectangle: { west: 0, south: 80, east: 30, north: 89 },
+        rotation: 45,
+      });
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      assert.deepEqual(drawing.report, {
+        drawn: 1,
+        undrawn: 1,
+        kinds: { rotatedOverlay: 1 },
+      });
+      assert.equal(engine.ground.list().length, 0);
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'a tinted, unturned overlay over all longitudes still draws',
     async ({ engine }) => {
       const layers = overlayLayer(engine);
+      const records = emptyRecords();
+      records.overlays.push({
+        url: 'blob:overlay',
+        color: [1, 0, 0, 1],
+        rectangle: { west: -180, south: -90, east: 180, north: 90 },
+        rotation: 0,
+      });
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas,
+        loadImage: async () => ({ width: 64, height: 32 }),
+      });
+      assert.deepEqual(drawing.report.kinds, {}, 'counted undrawn');
+      assert.equal(layers.length, 1);
+      assert.deepEqual(
+        { ...layers[0].source.rectangle },
+        { west: -180, south: -90, east: 180, north: 90 },
+      );
+      drawing.destroy();
+    },
+  );
+
+  // Canvases made, their pixels counted.
+  const countedCanvases = () => {
+    const canvases = [];
+    return {
+      canvases,
+      pixels: () => canvases.reduce((n, c) => n + c.width * c.height, 0),
+      createCanvas: () => {
+        const canvas = createCanvas();
+        canvases.push(canvas);
+        return canvas;
+      },
+    };
+  };
+  const OVERLAY_PIXELS = 16 * 1024 * 1024;
+
+  displayTest(
+    'turned overlays sharing one small image share one bounded canvas',
+    async ({ engine }) => {
+      const counted = countedCanvases();
+      const records = emptyRecords();
+      for (let i = 0; i < 20; i++)
+        records.overlays.push({
+          url: 'blob:overlay',
+          color: [1, 1, 1, 1],
+          rectangle: { west: i, south: 10, east: i + 10, north: 10.01 },
+          rotation: 45,
+        });
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas: counted.createCanvas,
+        loadImage: async () => ({ width: 64, height: 64 }),
+      });
+      assert.equal(drawing.report.drawn, 20);
+      assert.equal(counted.canvases.length, 1, 'equal looks share a canvas');
+      // Each of 20 overlays may hold a twentieth of the budget.
+      const side = Math.floor(Math.sqrt(OVERLAY_PIXELS / 20));
+      const [canvas] = counted.canvases;
+      assert.ok(
+        canvas.width <= side && canvas.height <= side,
+        `${canvas.width}`,
+      );
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'distinct tints of a large image stay within the canvas budget',
+    async ({ engine }) => {
+      const counted = countedCanvases();
+      const records = emptyRecords();
+      for (let i = 0; i < 100; i++)
+        records.overlays.push({
+          url: 'blob:overlay',
+          color: [1, i / 100, 0, 1],
+          rectangle: { west: 0, south: 0, east: 1, north: 1 },
+          rotation: 0,
+        });
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas: counted.createCanvas,
+        loadImage: async () => ({ width: 4096, height: 4096 }),
+      });
+      assert.equal(drawing.report.drawn, 100);
+      assert.equal(counted.canvases.length, 100);
+      assert.ok(
+        counted.pixels() <= OVERLAY_PIXELS,
+        `${Math.round((counted.pixels() * 4) / 2 ** 20)} MiB of canvas RGBA`,
+      );
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'a shared overlay canvas keeps each rectangle and its aspect ratio',
+    async ({ engine }) => {
+      const counted = countedCanvases();
+      const layers = overlayLayer(engine);
+      const records = emptyRecords();
+      for (const rectangle of [
+        { west: 0, south: 0, east: 2, north: 1 },
+        { west: 10, south: 0, east: 12, north: 1 },
+        { west: 0, south: 0, east: 1, north: 2 },
+      ])
+        records.overlays.push({
+          url: 'blob:overlay',
+          color: [1, 1, 1, 1],
+          rectangle,
+          rotation: 45,
+        });
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas: counted.createCanvas,
+        loadImage: async () => ({ width: 64, height: 32 }),
+      });
+      assert.equal(counted.canvases.length, 2);
+      assert.equal(layers[0].source.image, layers[1].source.image);
+      assert.notEqual(layers[0].source.image, layers[2].source.image);
+      assert.ok(
+        Math.abs(
+          layers[1].source.rectangle.west -
+            layers[0].source.rectangle.west -
+            10,
+        ) < 1e-9,
+      );
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'a turned overlay keeps every source pixel of an image squeezed on one axis',
+    async ({ engine }) => {
+      const { calls, canvas } = recordingCanvas();
+      const records = emptyRecords();
+      // 32 pixels a degree across, 64 up: both axes draw at 64.
+      records.overlays.push({
+        url: 'blob:overlay',
+        color: [1, 1, 1, 1],
+        rectangle: { west: 0, south: 0, east: 2, north: 1 },
+        rotation: 30,
+      });
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas: () => canvas,
+        loadImage: async () => ({ width: 64, height: 64 }),
+      });
+      const [, , , width, height] = calls.find(
+        ([name]) => name === 'drawImage',
+      );
+      assert.deepEqual([width, height], [128, 64]);
+      drawing.destroy();
+    },
+  );
+
+  displayTest(
+    'an absolute overlay stays at its altitude while a relative one drapes',
+    async ({ engine }) => {
+      const layers = overlayLayer(engine);
+      const meshes = [];
+      const create = engine.meshes.createMesh;
+      engine.meshes.createMesh = (options) => {
+        meshes.push(options);
+        return create(options);
+      };
       const records = emptyRecords();
       for (const altitudeMode of ['absolute', 'relative'])
         records.overlays.push({
@@ -515,10 +1014,58 @@ for (const make of GROUND_HARNESSES) {
           rectangle: { west: 0, south: 0, east: 1, north: 1 },
           rotation: 0,
         });
-      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas,
+        loadImage: async () => ({ width: 32, height: 32 }),
+      });
       assert.deepEqual(drawing.report, { drawn: 2, undrawn: 0, kinds: {} });
-      assert.equal(layers[0].raise, 1000);
-      assert.equal(layers[1].raise, undefined);
+      assert.equal(meshes.length, 1);
+      assert.equal(layers.length, 1);
+      assert.equal(layers[0].raise, undefined);
+      const mesh = meshes[0];
+      assert.equal(mesh.image.width, 32);
+      assert.equal(mesh.uv.length, (mesh.positions.length / 3) * 2);
+      // A fixed height, not imagery's shell that rises with the camera.
+      for (let i = 0; i < mesh.positions.length; i += 3) {
+        const position = geo.cartesian3.create(
+          ...mesh.positions.slice(i, i + 3),
+        );
+        const { height } = geo.cartographic.fromCartesian(position);
+        assert.ok(Math.abs(height - 1000) < 0.01, `${height}`);
+      }
+      drawing.destroy();
+      assert.equal(engine.meshes.list().length, 0);
+    },
+  );
+
+  displayTest(
+    'absolute overlays share decoded images and report missing ones',
+    async ({ engine }) => {
+      const records = emptyRecords();
+      for (const url of ['blob:overlay', 'blob:overlay', 'blob:missing'])
+        records.overlays.push({
+          url,
+          altitudeMode: 'absolute',
+          altitude: 1000,
+          color: [1, 1, 1, 1],
+          rectangle: { west: 0, south: 0, east: 1, north: 1 },
+        });
+      let loads = 0;
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas,
+        loadImage: async (url) => {
+          loads++;
+          if (url === 'blob:missing') throw new Error('image unavailable');
+          return { width: 32, height: 32 };
+        },
+      });
+      assert.equal(loads, 2);
+      assert.equal(engine.meshes.list().length, 2);
+      assert.deepEqual(drawing.report, {
+        drawn: 2,
+        undrawn: 1,
+        kinds: { raisedOverlay: 1 },
+      });
       drawing.destroy();
     },
   );

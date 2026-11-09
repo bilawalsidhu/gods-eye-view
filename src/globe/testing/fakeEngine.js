@@ -590,6 +590,14 @@ export function createFakeEngine(options = {}) {
       command('camera.cancelFlight', []);
       cancelCurrentFlight();
     },
+    completeFlight() {
+      const current = flight;
+      if (!current) return record('camera.completeFlight', []);
+      flight = null;
+      command('camera.completeFlight', []);
+      land(current, current.target);
+      current.complete?.();
+    },
     zoomIn(amount = DEFAULT_ZOOM_AMOUNT) {
       record('camera.zoomIn', [amount]);
       state.position = sum(state.position, scaled(state.direction, amount));

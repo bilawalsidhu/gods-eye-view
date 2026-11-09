@@ -9,18 +9,18 @@
 //   geoImportPins.js); points on the ground draw over the scene and are
 //   hidden beyond the horizon instead, as Cesium's clamped billboards
 //   ignored the depth test;
-// - ground overlays: one image imagery layer each over its rectangle, its
-//   image tinted and turned on a canvas when the KML says so, an absolute
-//   one raised to its altitude; a plain colour is a ground fill.
+// - ground overlays: image layers, or textured meshes at absolute altitudes,
+//   tinted and turned on a canvas when the KML says so; a plain colour is
+//   a ground fill.
 // Nothing is pickable: an imported file has no card. Ground heights under
 // the points come from engine.surface, sampled again by refreshGround():
 // the terrain where the globe is drawn, else (3D tiles) the scene drawn
 // under a low camera, never an imported point (as Cesium's import kept its
 // pins out of height queries).
 
-import earcut from 'earcut';
 import * as geo from '../geo/index.js';
 import { normalizeGroundItem } from '../globe/ground.js';
+import { polygonShape, rectangleShape } from '../scenes/dataPacks/shapes.js';
 import { composeIcon } from './geoImportPins.js';
 import { recordFootprint } from './geoImportRecords.js';
 
@@ -37,8 +37,15 @@ const CLAMP_TILES_BELOW_M = 250_000;
 const BATCH = 256;
 // Canvas pixels every imported icon look shares (64 MiB of RGBA).
 const ICON_PIXEL_BUDGET = 16 * 1024 * 1024;
+// Canvas pixels every tinted or turned ground overlay of a file shares.
+const OVERLAY_PIXEL_BUDGET = 16 * 1024 * 1024;
 // The longest side of a tinted or turned ground overlay's canvas.
 const MAX_OVERLAY_SIDE = 4096;
+// earcut runs on the main thread and grows quadratically with holes and
+// vertices: a raised polygon past these draws no fill (past the rings, not
+// even its outlines, one line each).
+const MAX_RAISED_RINGS = 128;
+const MAX_RAISED_VERTICES = 4096;
 let serial = 0;
 // Each engine's imported point sets, left out of each other's ground.
 const pointSets = new WeakMap();
@@ -85,7 +92,7 @@ function overlayBox({ rectangle, rotation = 0 }) {
 // What a ground overlay's image layer draws: its image tinted by the
 // overlay's colour and turned by its rotation onto the box around the
 // turned image (transparent outside it). Null when that box passes a pole.
-async function overlayImage(overlay, loadImage, createCanvas) {
+async function overlayImage(overlay, loadImage, createCanvas, maxSide, cache) {
   const tint = overlay.color.slice(0, 3);
   const { box, center, angle } = overlayBox(overlay);
   if (tint.every((value) => value === 1) && !angle)
@@ -102,8 +109,14 @@ async function overlayImage(overlay, loadImage, createCanvas) {
     east: center[0] + spanX / 2,
     north: center[1] + spanY / 2,
   };
-  if (rectangle.south < -90 || rectangle.north > 90 || spanX >= 360)
+  if (angle && (rectangle.south < -90 || rectangle.north > 90 || spanX >= 360))
     return null;
+  const wrap = (lon) => (lon > 180 ? lon - 360 : lon < -180 ? lon + 360 : lon);
+  const bounds = angle
+    ? { ...rectangle, west: wrap(rectangle.west), east: wrap(rectangle.east) }
+    : overlay.rectangle;
+  const key = JSON.stringify([overlay.url, tint, angle, width / height]);
+  if (cache.has(key)) return { image: cache.get(key), rectangle: bounds };
   let image;
   try {
     image = await loadImage(overlay.url);
@@ -116,13 +129,13 @@ async function overlayImage(overlay, loadImage, createCanvas) {
     image.naturalHeight || image.height,
   ];
   // Pixels per degree: one scale on both axes when turned, so the image
-  // turns in degrees as Cesium's does.
+  // turns in degrees as Cesium's does (the canvas budget bounds its size).
   let [scaleX, scaleY] = [natural[0] / width, natural[1] / height];
   if (angle) scaleX = scaleY = Math.max(scaleX, scaleY);
   const fit = Math.min(
     1,
-    MAX_OVERLAY_SIDE / (spanX * scaleX),
-    MAX_OVERLAY_SIDE / (spanY * scaleY),
+    maxSide / (spanX * scaleX),
+    maxSide / (spanY * scaleY),
   );
   [scaleX, scaleY] = [scaleX * fit, scaleY * fit];
   const canvas = createCanvas();
@@ -146,15 +159,8 @@ async function overlayImage(overlay, loadImage, createCanvas) {
         pixels.data[i + channel] *= tint[channel];
     context.putImageData(pixels, 0, 0);
   }
-  const wrap = (lon) => (lon > 180 ? lon - 360 : lon < -180 ? lon + 360 : lon);
-  return {
-    image: canvas,
-    rectangle: {
-      ...rectangle,
-      west: wrap(rectangle.west),
-      east: wrap(rectangle.east),
-    },
-  };
+  cache.set(key, canvas);
+  return { image: canvas, rectangle: bounds };
 }
 
 // KML headings are from north (Cesium's billboard on the Earth's axis):
@@ -240,27 +246,22 @@ export async function drawImportedFile(
     const fills = [];
     for (const polygon of records.polygons) {
       let any = false;
+      if (polygon.raised && polygon.rings.length > MAX_RAISED_RINGS) {
+        kinds.complexPolygon = (kinds.complexPolygon ?? 0) + 1;
+        continue;
+      }
       if (polygon.fill && polygon.raised) {
-        const vertices = polygon.rings.flat();
-        const origin = vertices[0]?.[0] ?? 0;
-        const xy = vertices.flatMap(([lon, lat]) => [
-          origin + ((((lon - origin + 180) % 360) + 360) % 360) - 180,
-          lat,
-        ]);
-        let count = 0;
-        const holes = polygon.rings
-          .slice(0, -1)
-          .map((ring) => (count += ring.length));
-        const indices = earcut(xy, holes);
-        if (indices.length) {
+        const vertices = polygon.rings.reduce((n, ring) => n + ring.length, 0);
+        const shape =
+          vertices <= MAX_RAISED_VERTICES && polygonShape(polygon.rings);
+        if (vertices > MAX_RAISED_VERTICES)
+          kinds.complexPolygon = (kinds.complexPolygon ?? 0) + 1;
+        if (shape) {
           meshes.push(
             engine.meshes.createMesh({
               id: `${prefix}-fill-${meshes.length}`,
-              positions: vertices.flatMap((vertex) => {
-                const { x, y, z } = cartesian(vertex);
-                return [x, y, z];
-              }),
-              indices,
+              positions: shape.attributes.position.values,
+              indices: shape.indices,
               color: polygon.fill,
               show: shown,
             }),
@@ -275,7 +276,7 @@ export async function drawImportedFile(
         if (item) {
           fills.push(item);
           any = true;
-        }
+        } else kinds.polygon = (kinds.polygon ?? 0) + 1;
       }
       if (polygon.raised && polygon.outline)
         for (const ring of polygon.rings) {
@@ -293,16 +294,62 @@ export async function drawImportedFile(
         }
       if (any) drawn++;
     }
-    for (const overlay of records.overlays) {
+    const overlayCache = new Map();
+    const overlayImages = new Map();
+    const overlaySide = Math.min(
+      MAX_OVERLAY_SIDE,
+      Math.floor(
+        Math.sqrt(OVERLAY_PIXEL_BUDGET / Math.max(1, records.overlays.length)),
+      ),
+    );
+    // KML drawOrder, then the document's: equal layer orders draw in
+    // creation order, and a file imported later over this one.
+    const overlays = [...records.overlays].sort(
+      (a, b) => (a.drawOrder ?? 0) - (b.drawOrder ?? 0),
+    );
+    for (const overlay of overlays) {
       // Cesium raises only an absolute overlay, to its altitude.
       const raise =
         overlay.altitudeMode === 'absolute' && overlay.altitude > 0
           ? overlay.altitude
           : undefined;
       if (overlay.url) {
-        const prepared = await overlayImage(overlay, loadImage, createCanvas);
+        const prepared = await overlayImage(
+          overlay,
+          loadImage,
+          createCanvas,
+          overlaySide,
+          overlayCache,
+        );
         if (!prepared) {
           kinds.rotatedOverlay = (kinds.rotatedOverlay ?? 0) + 1;
+          continue;
+        }
+        if (raise) {
+          let image = prepared.image ?? overlayImages.get(overlay.url);
+          if (!image) {
+            try {
+              image = await loadImage(overlay.url);
+              overlayImages.set(overlay.url, image);
+            } catch {
+              kinds.raisedOverlay = (kinds.raisedOverlay ?? 0) + 1;
+              continue;
+            }
+          }
+          const { west, south, east, north } = prepared.rectangle;
+          const shape = rectangleShape([west, south, east, north], raise);
+          meshes.push(
+            engine.meshes.createMesh({
+              id: `${prefix}-overlay-${meshes.length}`,
+              positions: shape.attributes.position.values,
+              indices: shape.indices,
+              uv: shape.attributes.st.values,
+              image,
+              color: [1, 1, 1, Math.min(0.99, overlay.color[3])],
+              show: shown,
+            }),
+          );
+          drawn++;
           continue;
         }
         layers.push(
@@ -313,7 +360,6 @@ export async function drawImportedFile(
             alpha: Math.min(0.99, overlay.color[3]),
             show: shown,
             order: OVERLAY_ORDER,
-            ...(raise ? { raise } : {}),
           }),
         );
         drawn++;
@@ -336,7 +382,12 @@ export async function drawImportedFile(
           [box.west, box.north],
         ].map(turn),
       ];
-      fills.push({ rings, fill: overlay.color });
+      const fill = checked('polygon', { rings, fill: overlay.color });
+      if (!fill) {
+        kinds.rotatedOverlay = (kinds.rotatedOverlay ?? 0) + 1;
+        continue;
+      }
+      fills.push(fill);
       drawn++;
     }
     if (fills.length) {
@@ -345,10 +396,10 @@ export async function drawImportedFile(
         kind: 'polygon',
         order: POLYGON_ORDER,
       });
+      groundSets.push(set);
       set.replace(fills);
       set.commit();
       set.show(shown);
-      groundSets.push(set);
     }
 
     const corridors = [];
@@ -379,10 +430,10 @@ export async function drawImportedFile(
         kind: 'corridor',
         order: LINE_ORDER,
       });
+      groundSets.push(set);
       set.replace(corridors);
       set.commit();
       set.show(shown);
-      groundSets.push(set);
     }
 
     for (const point of records.points) {
@@ -507,6 +558,9 @@ export async function drawImportedFile(
         ? Math.max(0, terrain)
         : terrain
       : (pin.ground ?? 0);
+    // On tiles the last height found stays until the tiles answer again:
+    // the terrain under them is not where the pin stands.
+    if (tiles) ground = pin.ground ?? ground;
     if (
       tiles &&
       inWindow(geo.cartesian3.fromDegrees(pin.lon, pin.lat, ground), size)

@@ -436,12 +436,25 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* A start error is steady text, not pulsing progress. */
+.loader-status[role='alert'] {
+  color: var(--text-primary);
+  animation: none;
+}
+
 /* After a failed globe switch: start an engine again without a reload. */
 .engine-switch-retry {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
   margin-top: 16px;
+}
+
+.engine-switch-retry p {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--text-primary);
 }
 
 .engine-switch-retry button {

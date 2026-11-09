@@ -7,6 +7,7 @@ import { describeError } from './standalone/errors.js';
 import { createEngineAddress } from './standalone/engineSwitch.js';
 import {
   DEFAULT_ENGINE_CHOICE,
+  ENGINE_NAMES,
   ENGINE_STORAGE_KEY,
   engineOfChoice,
   resolveEngineKind,
@@ -30,6 +31,7 @@ const geospatial =
 
 const display = useDisplayStore(applicationPinia());
 const loading = document.getElementById('loading-screen');
+let showingStartFailure = false;
 let application;
 let engineSwitch = null;
 // ?parkedMs= shortens how long a parked globe waits before it is released,
@@ -125,56 +127,77 @@ function present() {
     button.disabled = busy;
 }
 
-// Product names: never translated.
-const ENGINE_NAMES = {
-  cesium: 'Cesium',
-  navara: 'Navara',
-  'navara-hd': 'Navara HD',
-};
-
 // No engine runs after a failed recovery. The error stays on the loading
 // screen with an engine picker, so a new attempt needs no reload.
 function offerEngineRetry() {
   const content = loading.querySelector('.loader-content') ?? loading;
-  if (content.querySelector('.engine-switch-retry')) return;
+  const existing = content.querySelector('.engine-switch-retry');
+  if (existing) {
+    existing.querySelector('button')?.focus();
+    return;
+  }
   const group = document.createElement('div');
   group.className = 'engine-switch-retry';
   group.setAttribute('role', 'group');
-  group.setAttribute('aria-label', t('Globe Engine'));
+  const label = document.createElement('p');
+  label.id = 'engine-switch-retry-label';
+  label.textContent = t('Choose an engine to try again.');
+  group.setAttribute('aria-labelledby', label.id);
+  group.append(label);
   for (const [kind, name] of Object.entries(ENGINE_NAMES)) {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.engine = kind;
     button.textContent = name;
     button.setAttribute('translate', 'no');
-    button.addEventListener('click', () => select(kind));
+    button.addEventListener('click', () => {
+      // The retry's progress replaces the error: no longer an alert.
+      loading.querySelector('.loader-status').removeAttribute('role');
+      select(kind);
+    });
     group.append(button);
   }
   content.append(group);
+  group.querySelector('button').focus();
 }
 
 function withdrawEngineRetry() {
   loading.querySelector('.engine-switch-retry')?.remove();
+  if (!showingStartFailure) return;
+  showingStartFailure = false;
+  loading.classList.add('hidden');
 }
 
-function report(error) {
+function report(error, kind) {
+  showingStartFailure = true;
   console.error("God's Eye View initialization failed:", error);
-  loading.querySelector('.loader-status').textContent = t('Error: {message}', {
-    message: describeError(error),
-  });
+  const status = loading.querySelector('.loader-status');
+  status.setAttribute('role', 'alert');
+  status.textContent = kind
+    ? t('Could not start {engine}: {message}', {
+        engine: ENGINE_NAMES[kind] ?? kind,
+        message: describeError(error),
+      })
+    : t('Error: {message}', { message: describeError(error) });
   loading.classList.remove('hidden');
 }
 
 // A globe that failed to start while another runs: say which one runs.
 function showStartFailure(error, running) {
   const style = liveComponents()?.controls.styleManager;
-  style?._showToast(
-    t('Globe engine failed to start. Running {engine}: {message}', {
-      engine: ENGINE_NAMES[running] ?? running,
-      message: describeError(error),
-    }),
-  );
-  return Boolean(style);
+  if (!style) return false;
+  void Promise.resolve(style.initialRestorePromise).then(() => {
+    if (signal.aborted || liveComponents()?.controls.styleManager !== style)
+      return;
+    style._showToast(
+      t('Globe engine failed to start. Running {engine}: {message}', {
+        engine: ENGINE_NAMES[running] ?? running,
+        message: describeError(error),
+      }),
+      6000,
+    );
+  });
+  return true;
 }
 
 function select(next) {
@@ -232,15 +255,17 @@ async function start(kind, { fallback = false, rememberChoice = false } = {}) {
       renderers,
       diagnostics: session,
       keepFrame: keepGlobeFrame,
-      onSettled() {
-        withdrawEngineRetry();
-        loading.classList.add('hidden');
-      },
+      onSettled: withdrawEngineRetry,
       address: createEngineAddress({
         location,
         history,
-        flush: () =>
-          liveComponents()?.controls.styleManager.shareLinkManager?.flush(),
+        flush: () => {
+          const live = liveComponents();
+          // A pick made mid-flight hands over the flight's destination, as
+          // if it had landed (Cesium's completeFlight), not a midpoint.
+          live?.scene.engine.camera.completeFlight();
+          live?.controls.styleManager.shareLinkManager?.flush();
+        },
       }),
       remember,
       onChange: present,
@@ -250,8 +275,9 @@ async function start(kind, { fallback = false, rememberChoice = false } = {}) {
         offerEngineRetry();
       },
     });
+    if (showingStartFailure)
+      await liveComponents()?.controls.styleManager.initialRestorePromise;
     withdrawEngineRetry();
-    loading.classList.add('hidden');
     present();
     // A history visit made while the first engine started.
     void engineSwitch.reconcile();
@@ -262,7 +288,7 @@ async function start(kind, { fallback = false, rememberChoice = false } = {}) {
       await start(DEFAULT_ENGINE_CHOICE, { rememberChoice: true });
       showStartFailure(error, DEFAULT_ENGINE_CHOICE);
     } else {
-      report(error);
+      report(error, kind);
       offerEngineRetry();
     }
   } finally {

@@ -1,7 +1,4 @@
-// get_entity_context in_view must list a datacenter/dam drawn in the middle of
-// the screen. The infrastructure display registers its context rows without
-// __localBaseCartesian, which visibleEntityContexts (src/voice/gevActions.js)
-// requires, so every infrastructure record is skipped.
+// In-view entity context includes infrastructure drawn on screen.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../../geo/index.js';

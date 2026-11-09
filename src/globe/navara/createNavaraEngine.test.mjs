@@ -739,3 +739,33 @@ test('ground picks use the visible surface and fall back to the globe', async ()
   assert.equal(engine.picker.pick(at)?.id, 'roof');
   engine.destroy();
 });
+
+// Cesium's CameraFlightPath turns the camera inputs off for the flight, so a
+// gesture never cancels it; layers/infrastructure suspends the inputs for the
+// same reason ("Camera input would cancel the flight").
+test('a wheel during a flight with the camera inputs suspended does not cancel it', async () => {
+  const { engine, view } = setup();
+  const outcome = [];
+  const restore = engine.input.suspendCameraInputs();
+  engine.camera.flyTo({
+    destination: cartesian3.fromDegrees(100, 0, 5e6),
+    duration: 1.5,
+    complete: () => outcome.push('complete'),
+    cancel: () => outcome.push('cancel'),
+  });
+  view.canvas.dispatchEvent(new Event('wheel'));
+  view.canvas.dispatchEvent(new Event('pointerdown'));
+  assert.deepEqual(outcome, [], 'the flight goes on');
+  assert.equal(engine.camera.flightActive(), true);
+  restore();
+  assert.equal(
+    engine.input.cameraInputsEnabled(),
+    false,
+    'the flight keeps its own suspension',
+  );
+  view.flights[0].resolve(true);
+  await Promise.resolve();
+  assert.deepEqual(outcome, ['complete']);
+  assert.equal(engine.input.cameraInputsEnabled(), true);
+  engine.destroy();
+});

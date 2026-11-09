@@ -273,6 +273,67 @@ test('easings map onto Navara presets and an omitted one stays Navara’s own', 
   assert.equal(port.flights.at(-1).options.duration, undefined);
 });
 
+test('an invalid flight pose does not suspend camera inputs', () => {
+  const { camera, port } = setup();
+  let suspensions = 0;
+  port.suspendCameraInputs = () => {
+    suspensions++;
+    return () => {};
+  };
+  assert.throws(
+    () =>
+      camera.flyTo({
+        destination: cartesian3.create(),
+        orientation: {
+          direction: cartesian3.create(0, 0, -1),
+          up: cartesian3.create(0, 1, 0),
+        },
+        duration: 2,
+      }),
+    TypeError,
+  );
+  assert.equal(suspensions, 0);
+  assert.equal(camera.flightActive(), false);
+  assert.equal(port.flights.length, 0);
+});
+
+test('a synchronous flight failure releases the camera inputs', async (context) => {
+  for (const method of ['flyTo', 'flyToSphere'])
+    await context.test(method, () => {
+      const { camera, port, model } = setup();
+      const outcome = [];
+      let suspensions = 0;
+      port.suspendCameraInputs = () => {
+        suspensions++;
+        return () => suspensions--;
+      };
+      const error = new Error('Flight could not start');
+      port.fly = () => {
+        throw error;
+      };
+      const destination = cartesian3.fromDegrees(10, 45, 5000);
+      const options = {
+        duration: 2,
+        complete: () => outcome.push('complete'),
+        cancel: () => outcome.push('cancel'),
+      };
+      assert.throws(
+        () =>
+          method === 'flyTo'
+            ? camera.flyTo({ destination, ...options })
+            : camera.flyToSphere({ center: destination, radius: 100 }, options),
+        (thrown) => thrown === error,
+      );
+      assert.equal(camera.flightActive(), false);
+      assert.equal(suspensions, 0);
+      assert.deepEqual(outcome, [], 'the exception alone reports it');
+      camera.cancelFlight();
+      model.destroy();
+      assert.equal(suspensions, 0, 'the failed flight resumes only once');
+      assert.deepEqual(outcome, []);
+    });
+});
+
 test('cancelFlight stops Navara in place and calls cancel, never complete', async () => {
   const { camera, port } = setup();
   const outcome = [];
@@ -288,6 +349,43 @@ test('cancelFlight stops Navara in place and calls cancel, never complete', asyn
   port.flights[0].settle(false);
   await flush();
   assert.deepEqual(outcome, ['cancel']);
+});
+
+test('completeFlight lands at the destination and calls complete, as Cesium', async () => {
+  const { camera, port } = setup();
+  const outcome = [];
+  let suspensions = 0;
+  port.suspendCameraInputs = () => {
+    suspensions++;
+    return () => suspensions--;
+  };
+  const destination = cartesian3.fromDegrees(86.925, 27.988, 40000);
+  camera.completeFlight();
+  assert.equal(port.stops, 0, 'without a flight it does nothing');
+  camera.flyTo({
+    destination,
+    orientation: { heading: 0.5, pitch: -0.8, roll: 0 },
+    duration: 8,
+    endTransform: matrix4.IDENTITY,
+    complete: () => outcome.push('complete'),
+    cancel: () => outcome.push('cancel'),
+  });
+  // Navara is midway when the flight is completed.
+  const midway = cartesian3.fromDegrees(50, 15, 8e6);
+  port.drawn = { position: midway, ...orientationVectors(midway, 0, -1, 0) };
+  camera.completeFlight();
+  assert.deepEqual(outcome, ['complete']);
+  assert.equal(camera.flightActive(), false);
+  assert.equal(suspensions, 0, 'the camera inputs are back');
+  assert.equal(port.stops, 1);
+  const pose = camera.pose();
+  near(cartesian3.distance(pose.position, destination), 0, 1e-6, 'position');
+  near(pose.heading, 0.5, 1e-9, 'heading');
+  near(pose.pitch, -0.8, 1e-9, 'pitch');
+  near(port.applied.at(-1).height, 40000, 1e-6, 'pushed to Navara');
+  port.flights[0].settle(false);
+  await flush();
+  assert.deepEqual(outcome, ['complete']);
 });
 
 test('a newer flight cancels the previous one', async () => {
@@ -547,4 +645,43 @@ test('setView cancels a model flight before its promise settles', async () => {
     1e-6,
     'setView stays',
   );
+});
+
+// Cesium's Camera._updateCameraChanged: direction angle / (fovy / 2), and
+// heading or roll change / π, each against percentageChanged (0.5).
+test('turning in place raises changed as Cesium does', () => {
+  const { camera, frame } = setup();
+  const destination = cartesian3.fromDegrees(10, 45, 5000);
+  camera.setView({
+    destination,
+    orientation: { heading: 0, pitch: -math.PI_OVER_TWO, roll: 0 },
+  });
+  frame();
+  frame();
+  let changed = 0;
+  camera.changed.addEventListener(() => changed++);
+  // Tilt from straight down to 45° on the spot: 45° > half the fovy.
+  camera.setView({
+    destination,
+    orientation: { heading: 0, pitch: -(Math.PI / 4), roll: 0 },
+  });
+  frame();
+  assert.equal(changed, 1, 'a 45° tilt in place');
+  // Heading +170° looking straight down (north-up reset): direction unchanged.
+  camera.setView({
+    destination,
+    orientation: { heading: 0, pitch: -math.PI_OVER_TWO, roll: 0 },
+  });
+  frame();
+  const before = changed;
+  camera.setView({
+    destination,
+    orientation: {
+      heading: math.toRadians(170),
+      pitch: -math.PI_OVER_TWO,
+      roll: 0,
+    },
+  });
+  frame();
+  assert.equal(changed, before + 1, 'a 170° heading turn in the nadir');
 });

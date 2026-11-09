@@ -231,8 +231,13 @@ function modelPart(options, store, { factories, requestRender, owners }) {
   const { model, pickable } = options;
   const models = [];
   const loading = [];
-  // Instances whose model failed: not tried again (MoverSet.failed).
+  // Instances whose model failed: not tried again (MoverSet.failed). An
+  // index holds the pickId it failed for: a layer moves another instance
+  // into a freed index, and that one loads its own model.
   const failed = [];
+  const failedFor = [];
+  const failedNow = (index) =>
+    failed[index] === true && failedFor[index] === store.pickIds[index];
   let destroyed = false;
   const place = (item, index) => {
     const { orientations } = store;
@@ -292,6 +297,7 @@ function modelPart(options, store, { factories, requestRender, owners }) {
       .catch((error) => {
         if (destroyed) return;
         failed[index] = true;
+        failedFor[index] = store.pickIds[index];
         console.warn(`[movers] ${options.id}: model failed`, error);
       });
   };
@@ -306,13 +312,15 @@ function modelPart(options, store, { factories, requestRender, owners }) {
       return true;
     },
     failed(index) {
-      if (index !== undefined) return failed[index] === true;
-      for (let at = 0; at < store.count; at++) if (failed[at]) return true;
+      if (index !== undefined) return failedNow(index);
+      for (let at = 0; at < store.count; at++) if (failedNow(at)) return true;
       return false;
     },
     commit(range) {
       if (range)
         for (let index = range.from; index < range.to; index++) {
+          if (failed[index] && !failedNow(index))
+            failed[index] = loading[index] = false;
           if (index < store.count) ensure(index);
           if (models[index]) place(models[index], index);
         }
@@ -323,6 +331,7 @@ function modelPart(options, store, { factories, requestRender, owners }) {
       models.length = 0;
       loading.length = 0;
       failed.length = 0;
+      failedFor.length = 0;
     },
   };
 }

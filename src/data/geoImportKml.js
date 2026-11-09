@@ -9,7 +9,11 @@
 // overlays as image rectangles. Labels are not drawn (the import never
 // drew them); walls and extruded polygons are counted in `undrawn`.
 
-import { emptyRecords, importFeatureName } from './geoImportRecords.js';
+import {
+  emptyRecords,
+  hasRingVertices,
+  importFeatureName,
+} from './geoImportRecords.js';
 
 // KmlDataSource's billboard: 32 px, scaled by camera distance.
 const BILLBOARD_SIZE = 32;
@@ -328,7 +332,7 @@ function readGeometry(geometry, style, name, records) {
           coordinates(first(ring, 'coordinates')),
         ),
       )
-      .filter((ring) => ring.length);
+      .filter(hasRingVertices);
     const poly = style.poly ?? { outline: true, outlineColor: WHITE };
     const raised = altitude !== 'ground';
     if (raised && extrude)
@@ -379,6 +383,7 @@ function readGroundOverlay(el, records) {
     url,
     rectangle,
     color,
+    drawOrder: numberOf(el, 'drawOrder') ?? 0,
     rotation: numberOf(box, 'rotation') ?? 0,
     altitude: numberOf(el, 'altitude') ?? 0,
     altitudeMode: altitudeOf(el),

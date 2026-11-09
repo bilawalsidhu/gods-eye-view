@@ -12,12 +12,18 @@ const settle = async () => {
   for (let i = 0; i < 15; i++) await new Promise((r) => setTimeout(r, 0));
 };
 
-function boot(t, { search = '', failures = ['navara'] } = {}) {
+function boot(
+  t,
+  { search = '', failures = ['navara'], initialRestorePromise } = {},
+) {
   document.body.innerHTML =
     '<div id="loading-screen"><div class="loader-content"><p class="loader-status"></p></div></div>';
   const starts = [];
   const switches = [];
   const toasts = [];
+  const toastDurations = [];
+  const flushes = [];
+  const addresses = [];
   const stored = new Map([[choices.ENGINE_STORAGE_KEY, 'navara']]);
   const location = { search, href: `https://example.test/${search}` };
   const localStorage = {
@@ -46,11 +52,14 @@ function boot(t, { search = '', failures = ['navara'] } = {}) {
         search: location.search,
         storage: localStorage,
       }),
-    createEngineAddress: () => ({
-      restore(kind) {
-        location.search = `?engine=${kind}`;
-      },
-    }),
+    createEngineAddress: (options) => {
+      addresses.push(options);
+      return {
+        restore(kind) {
+          location.search = `?engine=${kind}`;
+        },
+      };
+    },
     createSceneSwitcher: (options) => {
       switches.push(options);
       return {
@@ -63,24 +72,46 @@ function boot(t, { search = '', failures = ['navara'] } = {}) {
         select: async () => {},
       };
     },
-    createStandaloneApplication: ({ engineKind }) => ({
-      async start() {
-        starts.push(engineKind);
-        if (failures.includes(engineKind)) throw new Error('Engine failed');
-      },
-      async destroy() {},
-      getState: () => ({
-        status: failures.includes(engineKind) ? 'failed' : 'ready',
-      }),
-      getComponents: () => ({
-        scene: { engine: {} },
-        controls: { styleManager: { _showToast: (text) => toasts.push(text) } },
-      }),
-    }),
+    createStandaloneApplication: ({ engineKind }) => {
+      const styleManager = {
+        initialRestorePromise,
+        shareLinkManager: { flush: () => flushes.push('share link') },
+        _showToast(text, durationMs) {
+          toasts.push(text);
+          toastDurations.push(durationMs);
+        },
+      };
+      return {
+        async start() {
+          starts.push(engineKind);
+          if (failures.includes(engineKind)) throw new Error('Engine failed');
+        },
+        async destroy() {},
+        getState: () => ({
+          status: failures.includes(engineKind) ? 'failed' : 'ready',
+        }),
+        getComponents: () => ({
+          scene: {
+            engine: {
+              camera: { completeFlight: () => flushes.push('flight') },
+            },
+          },
+          controls: { styleManager },
+        }),
+      };
+    },
     console: { error() {} },
   };
   new Function(...Object.keys(deps), source)(...Object.values(deps));
-  return { starts, switches, stored, toasts };
+  return {
+    starts,
+    switches,
+    stored,
+    toasts,
+    toastDurations,
+    flushes,
+    addresses,
+  };
 }
 
 test('a failed stored engine falls back to Cesium and remembers the recovery', async (t) => {
@@ -92,6 +123,7 @@ test('a failed stored engine falls back to Cesium and remembers the recovery', a
   assert.deepEqual(f.toasts, [
     'Globe engine failed to start. Running Cesium: Engine failed',
   ]);
+  assert.deepEqual(f.toastDurations, [6000]);
 });
 
 test('a failed explicit first engine offers a usable retry picker', async (t) => {
@@ -100,7 +132,16 @@ test('a failed explicit first engine offers a usable retry picker', async (t) =>
   assert.deepEqual(f.starts, ['navara']);
   const retry = document.querySelector('[data-engine="cesium"]');
   assert.ok(retry);
+  assert.ok(document.activeElement === retry);
+  const status = document.querySelector('.loader-status');
+  assert.equal(status.textContent, 'Could not start Navara: Engine failed');
+  assert.equal(status.getAttribute('role'), 'alert');
+  assert.equal(
+    document.getElementById('engine-switch-retry-label').textContent,
+    'Choose an engine to try again.',
+  );
   retry.click();
+  assert.equal(status.getAttribute('role'), null);
   await settle();
   assert.deepEqual(f.starts, ['navara', 'cesium']);
   assert.equal(f.switches[0].kind, 'cesium');
@@ -114,7 +155,60 @@ test('a recovered engine switch names the globe that remains running', async (t)
     recovered: true,
     kind: 'cesium',
   });
+  await settle();
   assert.deepEqual(f.toasts, [
     'Globe engine failed to start. Running Cesium: Initialization failed',
   ]);
+});
+
+test('the startup cover stays until the share-link restore settles', async (t) => {
+  // start() has resolved; startApplicationChrome hides the cover once the
+  // share restore (initialRestorePromise) settles.
+  const f = boot(t, { search: '?engine=cesium', failures: [] });
+  await settle();
+  assert.deepEqual(f.starts, ['cesium']);
+  const loading = document.getElementById('loading-screen');
+  assert.equal(loading.classList.contains('hidden'), false);
+  f.switches[0].onSettled();
+  assert.equal(loading.classList.contains('hidden'), false);
+});
+
+test('the fallback notice waits for the restored view', async (t) => {
+  let restore;
+  const initialRestorePromise = new Promise((resolve) => {
+    restore = resolve;
+  });
+  const f = boot(t, { initialRestorePromise });
+  await settle();
+  assert.deepEqual(f.starts, ['navara', 'cesium']);
+  assert.deepEqual(f.toasts, []);
+  restore();
+  await settle();
+  assert.deepEqual(f.toasts, [
+    'Globe engine failed to start. Running Cesium: Engine failed',
+  ]);
+});
+
+test('a successful retry keeps the failure cover until its view is restored', async (t) => {
+  let restore;
+  const initialRestorePromise = new Promise((resolve) => {
+    restore = resolve;
+  });
+  boot(t, { search: '?engine=navara', initialRestorePromise });
+  await settle();
+  document.querySelector('[data-engine="cesium"]').click();
+  await settle();
+  const loading = document.getElementById('loading-screen');
+  assert.equal(loading.classList.contains('hidden'), false);
+  restore();
+  await settle();
+  assert.equal(loading.classList.contains('hidden'), true);
+  assert.equal(document.querySelector('.engine-switch-retry'), null);
+});
+
+test('a pick made mid-flight lands the flight before the view is written', async (t) => {
+  const f = boot(t, { search: '?engine=cesium', failures: [] });
+  await settle();
+  f.addresses.find((options) => options.flush).flush();
+  assert.deepEqual(f.flushes, ['flight', 'share link']);
 });

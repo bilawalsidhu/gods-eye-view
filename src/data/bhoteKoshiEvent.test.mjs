@@ -3211,7 +3211,7 @@ test('Bhote Koshi republishes its evidence cards to the incoming engine overlay'
 
 // The event on a Navara engine double: its surface samples the terrain at
 // its finest level (or fails to), and its loaded terrain answers `terrain`.
-async function navaraEvidenceCard({ sample }) {
+async function navaraEvidenceCard({ sample, signal }) {
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   installEventDom();
   globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
@@ -3251,7 +3251,7 @@ async function navaraEvidenceCard({ sample }) {
     renderHost: { request() {}, hold() {}, release() {} },
   });
   await layer.init(null, { engine });
-  await layer.enable(null, { origin: 'local-restore' });
+  await layer.enable(null, { origin: 'local-restore', signal });
   const [first] = event.evidenceSpine;
   const card = entries.find(
     (entry) => entry.id === `evidence-card-${first.id}`,
@@ -3276,6 +3276,42 @@ test('Navara evidence anchors stand on the most detailed terrain', async () => {
   } finally {
     await layer.disable();
     await layer.destroy();
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});
+
+test('Navara evidence sampling stops waiting when enable is cancelled', async () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const controller = new AbortController();
+  const started = Promise.withResolvers();
+  const sample = Promise.withResolvers();
+  const enabling = navaraEvidenceCard({
+    signal: controller.signal,
+    sample: () => {
+      started.resolve();
+      return sample.promise;
+    },
+  });
+  let timer;
+  try {
+    await started.promise;
+    controller.abort();
+    const outcome = await Promise.race([
+      enabling.then(
+        () => 'enabled',
+        (error) => error.name,
+      ),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve('still waiting'), 100);
+      }),
+    ]);
+    assert.equal(outcome, 'AbortError');
+  } finally {
+    clearTimeout(timer);
+    sample.resolve([]);
+    await enabling.catch(() => {});
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
   }

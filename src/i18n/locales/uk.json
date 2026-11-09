@@ -3328,5 +3328,7 @@
   "Globe engine failed to start. Running {engine}: {message}": "Не вдалося запустити рушій глобуса. Працює {engine}: {message}",
   "Bing imagery is not available on the experimental Navara engine": "Знімки Bing недоступні в експериментальному рушії Navara",
   "NOT ON THIS ENGINE": "НЕМАЄ В ЦЬОМУ РУШІЇ",
-  "Kept in the link: {layers}": "Збережено в посиланні: {layers}"
+  "Kept in the link: {layers}": "Збережено в посиланні: {layers}",
+  "Could not start {engine}: {message}": "Не вдалося запустити {engine}: {message}",
+  "Choose an engine to try again.": "Виберіть рушій, щоб спробувати знову."
 }

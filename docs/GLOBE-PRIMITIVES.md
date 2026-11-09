@@ -38,7 +38,9 @@ Instances move every frame without a rebuild. `depthTest` decides whether
 the scene hides them. A pick returns the instance's `pickId` when the set is
 `pickable`. `ready(index?)` says whether a model's glTF or a sprite atlas has
 loaded and `failed(index?)` whether it failed to: a failed set is not loaded
-again, so a layer that retries makes a new set.
+again, so a layer that retries makes a new set. Cesium loads a model per
+instance: an index written with another `pickId` loads its own model, so an
+instance moved into a failed index does not inherit the failure.
 
 ## Lines: polylines in the air
 

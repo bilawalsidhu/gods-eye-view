@@ -66,6 +66,10 @@ export function createEngineAddress({ location, history, flush = () => {} }) {
  * (`addressLayerIds`): the layer-state coordinator keeps it running as it
  * was where the incoming address agrees (always after a pick) and follows a
  * visited entry where it differs (handoffTargetEnabled).
+ * @param {import('../app/layerSession.js').LayerSession} session
+ * @param {object} [options]
+ * @param {Iterable<string> | null} [options.addressLayerIds] Layers listed by the outgoing address.
+ * @param {boolean} [options.visit=false] Restore a history entry's layer options; a picker change keeps the live options.
  */
 export function handOffSession(
   session,

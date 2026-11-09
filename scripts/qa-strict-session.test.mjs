@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { quantile, slope } from './qa-strict-session.mjs';
 import { strictArguments, waitForCameraAtRest } from './qa-strict-harness.mjs';
 
@@ -46,31 +47,67 @@ test('the runner hands each scenario its layers and its manifest path', () => {
   });
 });
 
-test('the camera is at rest once a flight has landed and it stays still', async () => {
-  // A selection's flight holds the inputs off; once they are on, the camera
-  // still moves one more sample before it stays put.
-  const poses = [0, 400, 900, 900, 1250, 1250, 1250];
-  const inputs = [false, false, false, false, true, true, true];
+// A page whose camera answers one sampled position (x, metres) and input
+// state per waitForFunction poll; `polls()` counts the polls taken.
+function cameraPage(t, positions, inputs, globals = {}) {
   let frame = 0;
   const engine = {
-    camera: { pose: () => ({ position: { x: poses[frame], y: 0, z: 6.4e6 } }) },
+    camera: {
+      pose: () => ({ position: { x: positions[frame], y: 0, z: 6.4e6 } }),
+    },
     input: { cameraInputsEnabled: () => inputs[frame] },
   };
   const previous = globalThis.window;
-  globalThis.window = { __godsEyeView: { engine } };
+  globalThis.window = { __godsEyeView: { engine }, ...globals };
+  t.after(() => {
+    globalThis.window = previous;
+  });
   const page = {
     evaluate: async (fn) => fn(),
     async waitForFunction(fn) {
-      for (; frame < poses.length; frame++) if (fn()) return;
+      for (; frame < positions.length; frame++) if (fn()) return;
       throw new Error('timed out');
     },
   };
-  try {
-    await waitForCameraAtRest(page);
-    // Not while the flight holds the inputs (sample 3 repeats a pose), nor
-    // while the camera moves (sample 4).
-    assert.equal(frame, 5);
-  } finally {
-    globalThis.window = previous;
-  }
+  return { page, polls: () => frame };
+}
+
+test('the camera is at rest once a flight has landed and it stays still', async (t) => {
+  // A selection's flight holds the inputs off; once they are on, the camera
+  // still moves one more sample before it stays put.
+  const { page, polls } = cameraPage(
+    t,
+    [0, 400, 900, 900, 1250, 1250, 1250],
+    [false, false, false, false, true, true, true],
+  );
+  await waitForCameraAtRest(page);
+  // Not while the flight holds the inputs (sample 3 repeats a pose), nor
+  // while the camera moves (sample 4).
+  assert.equal(polls(), 5);
+});
+
+test('qa-wildlife-switch waits for the focus flight even when the camera was already still', async (t) => {
+  // A rest the scenario recorded before the click is no rest of the flight.
+  const { page, polls } = cameraPage(
+    t,
+    [0, 0, 100, 500, 500],
+    [false, false, false, true, true],
+    {
+      __qaWildPose: { key: '0.0,0.0,6400000.0', at: performance.now() - 5000 },
+    },
+  );
+  const source = readFileSync(
+    new URL('./qa-wildlife-switch.mjs', import.meta.url),
+    'utf8',
+  );
+  const still = new Function(
+    'p',
+    'waitForCameraAtRest',
+    `${source.slice(
+      source.indexOf('  const still ='),
+      source.indexOf('  // What the engine draws'),
+    )}\nreturn still;`,
+  )(page, waitForCameraAtRest);
+  await still();
+  assert.equal(polls(), 4);
 });

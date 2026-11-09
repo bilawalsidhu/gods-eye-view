@@ -4,9 +4,15 @@ export const ENGINE_STORAGE_KEY = 'gev.engine';
 /**
  * The globe choices: Cesium, Navara at CSS pixels without MSAA (as Cesium
  * draws), and Navara HD at the device pixel ratio with MSAA 4 (on a 2x
- * screen about 1 GiB more: 2.7 GiB against 1.8).
+ * screen about 1 GiB more: 2.7 GiB against 1.8). The names are product
+ * names, never translated.
  */
-export const ENGINE_CHOICES = Object.freeze(['cesium', 'navara', 'navara-hd']);
+export const ENGINE_NAMES = Object.freeze({
+  cesium: 'Cesium',
+  navara: 'Navara',
+  'navara-hd': 'Navara HD',
+});
+export const ENGINE_CHOICES = Object.freeze(Object.keys(ENGINE_NAMES));
 
 /** The choice without one made, and the one a failed start falls back to. */
 export const DEFAULT_ENGINE_CHOICE = ENGINE_CHOICES[0];
