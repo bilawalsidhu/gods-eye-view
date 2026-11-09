@@ -20,9 +20,8 @@ let _openskyTokenPromise = null;
 /** @type {string|null} Cached upstream response body (JSON text). */
 let _openskyCacheBody = null;
 /**
- * @type {Buffer|null} Gzip of `_openskyCacheBody`, written in the same step as
- * the body it encodes so the two can never describe different snapshots. Null
- * whenever the cached body is too small to be worth a frame.
+ * @type {Buffer|null} Gzip of `_openskyCacheBody`, written together with it.
+ * Null when the body is not worth compressing.
  */
 let _openskyCacheGzip = null;
 /** @type {number} HTTP status of the cached response. */
@@ -409,9 +408,8 @@ async function fetchAdsbLolPointFallback(req) {
         const body = JSON.stringify(normalized);
         const record = {
           body,
-          // Compressed with the body it belongs to, so a cache entry served
-          // many times pays for the frame once. Entries are bounded by
-          // ADSBLOL_POINT_CACHE_MAX, so the extra residency is bounded too.
+          // Compressed once per entry; ADSBLOL_POINT_CACHE_MAX bounds the
+          // extra memory.
           gzip: await gzipBody(body),
           cachedAt: Date.now(),
           count: normalized.states.length,
@@ -647,9 +645,8 @@ export function openSkyProxy() {
             // Only cache successful responses — error responses (401/403/429/5xx)
             // should not be served from cache on subsequent requests
             if (upstream.ok) {
-              // The frame is built before either slot is written so the two
-              // are always published together: a request arriving mid-refresh
-              // reads the previous body with the previous body's frame.
+              // Compress before writing either slot, so a request arriving
+              // mid-refresh still reads a body with its own frame.
               const frame = await gzipBody(body);
               _openskyCacheBody = body;
               _openskyCacheGzip = frame;
@@ -763,9 +760,8 @@ export function openSkyProxy() {
           }
         }
 
-        // Only the coalesced refresh caches, so the gzip slot belongs to this
-        // body only when this body is the one it stored. An error response is
-        // not cached and must not borrow the previous snapshot's frame.
+        // The frame belongs to this body only if this body was cached. An
+        // uncached error must not borrow the previous snapshot's frame.
         const encoded = encodedBody(
           req,
           body,

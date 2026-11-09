@@ -615,8 +615,7 @@ test('the OpenSky snapshot is compressed for clients that ask, and an error body
     if (upstreamStatus !== 200)
       return new Response('{"error":"upstream"}', { status: upstreamStatus });
     const sourceSeconds = Math.floor((now - snapshotAgeMs) / 1000);
-    // A healthy credit budget, so the proxy keeps its 9 s base TTL and the
-    // clock advances below are unambiguously past it.
+    // Healthy credits keep the 9 s base TTL, so the clock jumps below clear it.
     return Response.json(
       {
         time: sourceSeconds,
@@ -634,8 +633,7 @@ test('the OpenSky snapshot is compressed for clients that ask, and an error body
     );
   });
 
-  // A module instance of its own: the snapshot cache, its frame and the
-  // adaptive TTL are module state, and this test reasons about all three.
+  // A fresh module: the snapshot cache, its frame and the TTL are module state.
   const isolated = await import(
     `../../server/providers/aircraft/opensky.js?compression=${now}`
   );
@@ -648,25 +646,25 @@ test('the OpenSky snapshot is compressed for clients that ask, and an error body
   assert.equal(compressed.headers.vary, 'Accept-Encoding');
   assert.ok(Buffer.isBuffer(compressed.body));
 
-  // Same snapshot from cache, this time to a client that offered nothing: the
-  // identity bytes, and the compressed frame above must decode to exactly them.
+  // Same cached snapshot, no Accept-Encoding: identity bytes, which the frame
+  // above must decode to.
   const identity = await states('/api/flights');
   assert.equal(identity.headers['x-opensky-cache'], 'HIT');
   assert.equal(identity.headers['content-encoding'], undefined);
   assert.equal(identity.headers.vary, 'Accept-Encoding');
   assert.equal(gunzipSync(compressed.body).toString(), identity.body);
 
-  // A client that names gzip and refuses it with q=0 is a non-gzip client.
+  // `gzip;q=0` refuses gzip.
   const refused = await states('/api/flights', '/', 'GET', {
     'accept-encoding': 'gzip;q=0',
   });
   assert.equal(refused.headers['content-encoding'], undefined);
   assert.equal(refused.body, identity.body);
 
-  // An upstream rejection is not cached, so it has no frame of its own. It must
-  // not be sent under the previous snapshot's Content-Encoding.
+  // An upstream rejection is not cached, so it must not carry the previous
+  // snapshot's Content-Encoding.
   upstreamStatus = 403;
-  now += 60000; // past the 9 s base TTL this fresh instance starts with
+  now += 60000; // past the 9 s base TTL
   const rejected = await states('/api/flights', '/', 'GET', {
     'accept-encoding': 'gzip',
   });
@@ -674,9 +672,8 @@ test('the OpenSky snapshot is compressed for clients that ask, and an error body
   assert.equal(rejected.headers['content-encoding'], undefined);
   assert.ok(JSON.parse(rejected.body).error, 'a readable error body');
 
-  // The regional fallback is a fifth body this route can answer with. It is
-  // cached the same way and so it negotiates the same way: a snapshot too old
-  // to serve hands the request to adsb.lol, compressed.
+  // A snapshot too old to serve falls back to adsb.lol, which negotiates the
+  // same way.
   upstreamStatus = 200;
   snapshotAgeMs = 3600000;
   now += 60000;

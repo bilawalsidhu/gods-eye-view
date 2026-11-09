@@ -4,39 +4,25 @@ import { promisify } from 'node:util';
 const gzipAsync = promisify(gzip);
 
 /**
- * Response compression for proxies that already hold a whole body in memory.
+ * Opt-in gzip for text bodies a proxy already holds in memory.
  *
- * Deliberately not a middleware. Two response paths in this tree must never be
- * wrapped: `cctv/media.js` streams a piped body and answers byte-range requests
- * with 206, and `wind/gfs.js` also serves ranges — a wrapper that buffered or
- * re-encoded those would break playback and range semantics. Seven providers
- * additionally forward an upstream `content-type` verbatim, including already
- * compressed binary formats that gzip would only make larger.
- *
- * So compression is opt-in at the call site, for bodies the proxy holds and
- * knows to be text. The failure mode of forgetting a site is a response that is
- * merely uncompressed, never a corrupt one — but only as long as the encoded
- * body and its `Content-Encoding` are chosen together, which is why
- * `encodedBody` returns both rather than exposing them separately.
+ * Not a middleware: `cctv/media.js` streams bodies and answers range requests,
+ * and several providers forward binary upstream types that gzip only grows.
+ * `encodedBody` returns the body with its headers so the two cannot disagree.
  */
 
-/** Below this, a gzip frame costs more than the bytes it saves. */
+/** Skip compression for bodies smaller than 1 KiB. */
 const MIN_COMPRESSED_BYTES = 1024;
 
 /**
- * The `qvalue` grammar of RFC 9110 section 12.4.2: zero to three decimals
- * below one, or one with only zeros after it. Matching the whole token rather
- * than parsing a numeric prefix is what makes `q=1oops` and the out-of-range
- * `q=2` unreadable instead of quietly rounding to something acceptable.
+ * RFC 9110 section 12.4.2 `qvalue`. Matching the whole token keeps `q=1oops`
+ * and `q=2` unreadable instead of rounding them into acceptance.
  */
 const QVALUE = /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/;
 
 /**
- * Whether the client offered gzip in `Accept-Encoding`.
- *
- * Anything this cannot read confidently — a missing header, a malformed or
- * out-of-range quality value, the `x-gzip` alias — reads as "no", because the
- * fallback is an identity response every client can decode.
+ * Whether `Accept-Encoding` offers gzip. Anything unreadable (no header, a bad
+ * q value, `x-gzip`) reads as no: every client can decode identity.
  *
  * @param {import('node:http').IncomingMessage} request
  * @returns {boolean}
@@ -51,23 +37,18 @@ export function acceptsGzip(request) {
       .map((parameter) => parameter.trim().toLowerCase())
       .find((parameter) => parameter.startsWith('q='));
     if (quality === undefined) return true;
-    // `q=0` is the one way a client can name an encoding and still refuse it.
+    // `q=0` names gzip and refuses it.
     const value = quality.slice(2);
     return QVALUE.test(value) && Number(value) > 0;
   });
 }
 
 /**
- * Gzip a body once, for callers that cache it and serve it many times.
+ * Gzip a body once for a caller that caches it. Async, so the ~860 KB OpenSky
+ * snapshot does not block other requests while it compresses.
  *
- * OpenSky's snapshot is ~860 KB and is held for the cache TTL, so this is paid
- * per refresh rather than per request. It runs off the event loop on purpose:
- * on that snapshot the synchronous call stalls every other in-flight request by
- * 11 ms, while this stalls them by under 1 ms and costs the caller — which is
- * already waiting on an upstream fetch — about 5 ms more of its own latency.
- *
- * Returns null when the body is too small to be worth a frame, so callers can
- * store the result directly and treat null as "serve identity".
+ * Returns null, meaning "serve identity", when the body is under 1 KiB or gzip
+ * does not shrink it.
  *
  * @param {string|Buffer} body - the exact bytes the identity response sends.
  * @returns {Promise<Buffer|null>}
@@ -81,11 +62,9 @@ export async function gzipBody(body) {
 }
 
 /**
- * Pick the body to send and the headers that describe it, together.
- *
- * `Vary: Accept-Encoding` is set on both branches, not only the compressed one:
- * a cache that stored an identity response without it would later hand those
- * bytes to a client that asked for gzip, and vice versa.
+ * Pick the body and the headers that describe it. `Vary` is on both branches
+ * so a shared cache never serves one encoding to a client that asked for the
+ * other.
  *
  * @param {import('node:http').IncomingMessage} request
  * @param {string|Buffer} identity - the uncompressed body.

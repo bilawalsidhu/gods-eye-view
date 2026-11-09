@@ -17,7 +17,7 @@ function request(acceptEncoding) {
   };
 }
 
-/** Repetitive JSON, the shape of an actual snapshot body. */
+/** Repetitive JSON shaped like a snapshot body. */
 function snapshotBody(states = 200) {
   return JSON.stringify({
     time: 1700000000,
@@ -33,10 +33,7 @@ function snapshotBody(states = 200) {
   });
 }
 
-/**
- * Deterministic high-entropy bytes. Random data would do, but a seeded sequence
- * keeps the "gzip made it bigger" assertion from depending on luck.
- */
+/** Seeded high-entropy bytes, so the "gzip made it bigger" check is stable. */
 function incompressibleBytes(length) {
   const bytes = Buffer.alloc(length);
   let state = 123456789;
@@ -61,16 +58,15 @@ test('accept-encoding is read the way clients actually write it', () => {
   assert.equal(acceptsGzip({}), false);
   assert.equal(acceptsGzip(undefined), false);
 
-  // A quality of zero names gzip and refuses it (RFC 9110 section 12.4.2).
+  // `q=0` names gzip and refuses it (RFC 9110 section 12.4.2).
   assert.equal(acceptsGzip(request('gzip;q=0')), false);
   assert.equal(acceptsGzip(request('gzip;q=0.000')), false);
   assert.equal(acceptsGzip(request('gzip;q=0.001')), true);
   assert.equal(acceptsGzip(request('gzip;q=1')), true);
   assert.equal(acceptsGzip(request('gzip;q=1.000')), true);
 
-  // A quality that is not a whole `qvalue` is unreadable, not a number with
-  // trailing noise: the grammar allows three decimals and a ceiling of 1, so
-  // these must not round into acceptance.
+  // A q that is not a whole `qvalue` is unreadable and must not round into
+  // acceptance.
   assert.equal(acceptsGzip(request('gzip;q=bogus')), false);
   assert.equal(acceptsGzip(request('gzip;q=1oops')), false);
   assert.equal(acceptsGzip(request('gzip;q=0.5abc')), false);
@@ -102,8 +98,7 @@ test('a body is only compressed when compression pays for itself', async () => {
   assert.ok(compressed.byteLength < Buffer.byteLength(identity));
   assert.equal(gunzipSync(compressed).toString(), identity);
 
-  // Buffers are accepted as-is, and data that gzip cannot shrink is refused
-  // rather than served as a larger response.
+  // Buffers are accepted as-is; data gzip cannot shrink stays uncompressed.
   assert.ok((await gzipBody(Buffer.from(identity))) !== null);
   assert.equal(await gzipBody(incompressibleBytes(4096)), null);
 });
@@ -118,8 +113,7 @@ test('the encoded body and the header that names it are chosen together', async 
   assert.equal(negotiated.headers.Vary, 'Accept-Encoding');
   assert.equal(gunzipSync(negotiated.body).toString(), identity);
 
-  // Offered but not wanted: identity bytes, and no Content-Encoding to
-  // contradict them.
+  // Offered but refused: identity bytes and no Content-Encoding.
   const refused = encodedBody(request('br'), identity, compressed);
   assert.equal(refused.body, identity);
   assert.equal(refused.headers['Content-Encoding'], undefined);
@@ -130,8 +124,7 @@ test('the encoded body and the header that names it are chosen together', async 
   assert.equal(unavailable.body, identity);
   assert.equal(unavailable.headers['Content-Encoding'], undefined);
 
-  // Vary is on both branches: without it a shared cache could hand a stored
-  // response to a client whose Accept-Encoding it was not selected for.
+  // Vary is on both branches, so a shared cache cannot serve the wrong encoding.
   assert.equal(unavailable.headers.Vary, 'Accept-Encoding');
   assert.equal(
     encodedBody(request(undefined), identity, compressed).headers.Vary,
