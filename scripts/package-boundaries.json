@@ -204,12 +204,13 @@
   "viewer": {
     "exports": ["./application/viewer"],
     "modules": [
-      "src/app/viewer.js",
+      "src/render/cesium/applicationViewer.js",
       "src/app/atmosphereCompat.js",
-      "src/sky/starrySky.js",
+      "src/render/cesium/starrySky.js",
       "src/sky/stars.js",
       "src/data/bundledJson.js",
-      "src/renderGovernor.js"
+      "src/renderGovernor.js",
+      "src/sky/icrf.js"
     ],
     "external": ["cesium"]
   },
@@ -1045,7 +1046,6 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
-      "src/sky/starrySky.js",
       "src/render/cesium/effects.js",
       "src/render/cesium/screenModulation.js",
       "src/render/cesium/globe.js",
@@ -1286,7 +1286,8 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/sky/icrf.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1900,7 +1901,12 @@
       "src/render/cesium/mapImagery.js",
       "src/maps/terrainRetry.js",
       "src/render/cesium/mapTerrain.js",
-      "src/render/cesium/mapEngine.js"
+      "src/render/cesium/mapEngine.js",
+      "src/data/bundledJson.js",
+      "src/renderGovernor.js",
+      "src/sky/icrf.js",
+      "src/sky/stars.js",
+      "src/render/cesium/starrySky.js"
     ],
     "external": ["cesium"]
   },
@@ -3342,9 +3348,9 @@
       "src/app/surfaceServices.js",
       "src/app/tools.js",
       "src/data/followed.js",
-      "src/app/viewer.js",
+      "src/render/cesium/applicationViewer.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/sky/starrySky.js",
+      "src/render/cesium/starrySky.js",
       "src/sky/stars.js",
       "src/app/atmosphereCompat.js",
       "src/bloom.js",
@@ -4288,7 +4294,8 @@
       "src/maps/startupRoute.js",
       "src/maps/engine.js",
       "src/maps/attribution.js",
-      "src/render/cesium/mapEngine.js"
+      "src/render/cesium/mapEngine.js",
+      "src/sky/icrf.js"
     ],
     "external": [
       "hls.js",

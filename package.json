@@ -89,7 +89,7 @@
     "./infrastructure/geojson": "./src/data/localGeojsonCore.js",
     "./infrastructure/lod": "./src/data/localGeojsonLod.js",
     "./application": "./src/app/application.js",
-    "./application/viewer": "./src/app/viewer.js",
+    "./application/viewer": "./src/render/cesium/applicationViewer.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },

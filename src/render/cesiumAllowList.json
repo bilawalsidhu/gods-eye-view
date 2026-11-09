@@ -2,8 +2,6 @@
   "dev/conformance/main.js",
   "src/app/embed.js",
   "src/app/scene.js",
-  "src/app/viewer.js",
   "src/data/geoImportPins.js",
-  "src/sky/starrySky.js",
   "src/ui/applicationShell.js"
 ]

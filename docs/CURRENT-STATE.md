@@ -1502,10 +1502,11 @@ The clear control presents busy state while its existing action owns the transac
 
 ## Sky background
 
-`src/sky/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
+`src/render/cesium/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
 Bright Star Catalogue stars and a soft ESO/S. Brunier Milky Way. Both layers
 rotate from ICRF/J2000 into the Earth-fixed frame at the scene clock, with
-a TEME fallback while Cesium's IAU 2006 tables load. Bundled assets and
+a TEME fallback while Cesium's IAU 2006 tables load. The precise rotation reaches
+Cesium-free code (the celestial ring) through `src/sky/icrf.js`. Bundled assets and
 their provenance are documented in `src/data/local_data/sky/README.md`.
 
 Anime fades out the Milky Way with its style intensity to avoid cel-shaded

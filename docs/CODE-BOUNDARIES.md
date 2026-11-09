@@ -468,6 +468,10 @@ release listeners; pending action feedback is limited to its current owner.
 rendering, HUD and share operations. `src/standalone/controls.js` provides the running
 application's instances. The shell
 imports no standalone bootstrap or concrete live layer implementation.
+The celestial ring's precise ICRF rotation comes from the renderer
+(`src/sky/icrf.js`): the application's renderer provides it; a shell given a
+viewer with no renderer bound gets it once `./render/cesium/unbound` has loaded, and
+falls back to the TEME approximation until then.
 Panel layout, position/drag, notices, recording and deferred UI work have separate
 owners with synchronous cleanup. Existing scene, share and HUD engines retain
 their entry points. `ui/styles` loads the ordered stylesheet entry; component
