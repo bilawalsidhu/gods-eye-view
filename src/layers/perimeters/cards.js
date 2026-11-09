@@ -159,8 +159,6 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
   // the known cause, behavior and complexity values and the wording around them.
   const facts = [];
   if (Number.isFinite(row.acres)) {
-    // WFIGS reports sizes to the hundredth of an acre; a fire under one acre
-    // keeps them rather than reading "0 ac".
     const acres =
       row.acres < 1 ? Math.round(row.acres * 100) / 100 : Math.round(row.acres);
     facts.push(
