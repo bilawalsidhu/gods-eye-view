@@ -924,6 +924,7 @@ test('parseUsage adds Anthropic cache tokens to input and needs both counts', ()
     null,
   );
   assert.equal(parseUsage('anthropic', {}), null);
+});
 
 test('OpenAI chat schemas drop only the patterns Chat Completions refuses', () => {
   assert.match(JSON.stringify(GEV_REALTIME_TOOLS), /\\\\[pP]\{/);
