@@ -30,10 +30,13 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'telegeography-submarine-cables': msg('Submarine Cables'),
   'local-firms': msg('FIRMS Active Fires'),
   'local-adsb': msg('Local ADS-B'),
+  'osm-places': msg('OSM Places'),
   transit: msg('Transit'),
   'recent-imagery': msg('Recent Imagery'),
   'fire-perimeters': msg('Fire Perimeters'),
   'gnss-integrity': msg('GNSS Integrity'),
+  'drone-airspace': msg('Prohibited & Restricted Airspace'),
+  'wildlife-sightings': msg('Wildlife Sightings'),
   's2-ghostmaps': msg('S2 GhostMaps'),
   wind: msg('Wind'),
   'weather-radar': msg('Rain radar'),
@@ -43,6 +46,8 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'air-quality': msg('Air quality'),
   directions: msg('Directions'),
   'alpr-cameras': msg('ALPR Cameras'),
+  'sea-marks': msg('Sea Marks'),
+  'ski-pistes': msg('Ski Pistes'),
 });
 
 /** The layer panel's own English names, where they differ from the module's. */
@@ -56,12 +61,19 @@ export const PANEL_LABEL_KEYS = Object.freeze({
   'local-firms': msg('Active Fires'),
 });
 
+/** What the loading status names for a load that is not a layer's. */
+export const LOADING_NAME_KEYS = Object.freeze({
+  'place-names': msg('Place names'),
+});
+
 // Looked up by the English text, so a surface that holds `layer.name` keeps
 // its English data and only the shown text translates.
 const MODULE_NAME_KEYS = new Map(
-  [...Object.values(LAYER_NAME_KEYS), ...Object.values(PANEL_LABEL_KEYS)].map(
-    (key) => [key, key],
-  ),
+  [
+    ...Object.values(LAYER_NAME_KEYS),
+    ...Object.values(PANEL_LABEL_KEYS),
+    ...Object.values(LOADING_NAME_KEYS),
+  ].map((key) => [key, key]),
 );
 
 /**
@@ -136,4 +148,18 @@ export function sourceLabel(source) {
   return source.includes(' · ')
     ? source.split(' · ').map(translateKnown).join(' · ')
     : translateKnown(source);
+}
+
+/**
+ * A provider name with the feed state it answered in, so a fallback or stale
+ * snapshot does not read as the live primary feed.
+ * @param {string} source English source name.
+ * @param {'fallback'|'stale'|null} status Feed state from `layerFeedState`.
+ * @returns {string}
+ */
+export function sourceStatusLabel(source, status) {
+  const name = sourceLabel(source);
+  if (status === 'fallback') return `${name} · ${t('FALLBACK')}`;
+  if (status === 'stale') return `${name} · ${t('STALE')}`;
+  return name;
 }

@@ -112,6 +112,8 @@ export function createCctvLayer({ services, source }) {
       _setCctvCoverageStateForTest: parts.testing._setCctvCoverageStateForTest,
       focusCctvRecord: parts.navigation.focusCctvRecord,
       maybeAutoHop: parts.navigation.maybeAutoHop,
+      openingCameraId: parts.navigation.openingCameraId,
+      reopenNearestCamera: parts.navigation.reopenNearestCamera,
       cctvCycleIndex: parts.navigation.cctvCycleIndex,
     },
   );
