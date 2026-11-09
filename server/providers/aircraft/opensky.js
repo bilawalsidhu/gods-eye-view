@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback.js';
+import { encodedBody, gzipBody } from '../common/compress.js';
 import {
   coalesceProxyRequest,
   readResponseJsonCapped,
@@ -18,6 +19,11 @@ let _openskyTokenExpiry = 0;
 let _openskyTokenPromise = null;
 /** @type {string|null} Cached upstream response body (JSON text). */
 let _openskyCacheBody = null;
+/**
+ * @type {Buffer|null} Gzip of `_openskyCacheBody`, written together with it.
+ * Null when the body is not worth compressing.
+ */
+let _openskyCacheGzip = null;
 /** @type {number} HTTP status of the cached response. */
 let _openskyCacheStatus = 0;
 /** @type {number} Epoch-ms when the response was cached. */
@@ -399,8 +405,12 @@ async function fetchAdsbLolPointFallback(req) {
           ADSBLOL_POINT_MAX_RESPONSE_BYTES,
         );
         const normalized = normalizeAdsbLolPointResponse(payload);
+        const body = JSON.stringify(normalized);
         const record = {
-          body: JSON.stringify(normalized),
+          body,
+          // Compressed once per entry; ADSBLOL_POINT_CACHE_MAX bounds the
+          // extra memory.
+          gzip: await gzipBody(body),
           cachedAt: Date.now(),
           count: normalized.states.length,
         };
@@ -429,6 +439,7 @@ async function fetchAdsbLolPointFallback(req) {
 async function serveAdsbLolPointFallback(req, res, requestedMode, reason) {
   const fallback = await fetchAdsbLolPointFallback(req);
   if (!fallback) return false;
+  const encoded = encodedBody(req, fallback.body, fallback.gzip);
   res.writeHead(200, {
     ...buildOpenSkyHeaders({
       cacheStatus: fallback.cacheStatus,
@@ -439,8 +450,9 @@ async function serveAdsbLolPointFallback(req, res, requestedMode, reason) {
     'X-Flight-Source': 'adsb.lol',
     'X-Flight-Coverage': `${ADSBLOL_POINT_RADIUS_NM}nm regional fallback`,
     'X-Flight-Count': String(fallback.count),
+    ...encoded.headers,
   });
-  res.end(fallback.body);
+  res.end(encoded.body);
   return true;
 }
 
@@ -526,9 +538,13 @@ export function openSkyProxy() {
             reason: 'cached',
           };
           const isStale = now - _openskyCacheTime >= _openskyTtlMs;
-          res.writeHead(
-            _openskyCacheStatus || 200,
-            buildOpenSkyHeaders({
+          const encoded = encodedBody(
+            req,
+            _openskyCacheBody,
+            _openskyCacheGzip,
+          );
+          res.writeHead(_openskyCacheStatus || 200, {
+            ...buildOpenSkyHeaders({
               cacheStatus: isStale ? 'STALE' : 'HIT',
               requestedMode: cachedMeta.requestedMode || requestedMode,
               usedMode: cachedMeta.usedMode || 'unknown',
@@ -544,8 +560,9 @@ export function openSkyProxy() {
                 ? (_openskyCooldownUntil - now) / 1000
                 : undefined,
             }),
-          );
-          res.end(_openskyCacheBody);
+            ...encoded.headers,
+          });
+          res.end(encoded.body);
           return;
         }
         // Cooling down with nothing cached (cold start into a rate limit):
@@ -640,7 +657,11 @@ export function openSkyProxy() {
             // Only cache successful responses — error responses (401/403/429/5xx)
             // should not be served from cache on subsequent requests
             if (upstream.ok) {
+              // Compress before writing either slot, so a request arriving
+              // mid-refresh still reads a body with its own frame.
+              const frame = await gzipBody(body);
               _openskyCacheBody = body;
+              _openskyCacheGzip = frame;
               _openskyCacheStatus = upstream.status;
               _openskyCacheTime = now;
               _openskyCacheSourceEpochMs = sourceEpochMs;
@@ -693,9 +714,13 @@ export function openSkyProxy() {
           // Serve the last-good body instead of the 429 when we have one —
           // the layer keeps rendering (STALE-cued) instead of dying.
           if (_openskyCacheBody && _openskyCacheStatus === 200) {
-            res.writeHead(
-              200,
-              buildOpenSkyHeaders({
+            const encoded = encodedBody(
+              req,
+              _openskyCacheBody,
+              _openskyCacheGzip,
+            );
+            res.writeHead(200, {
+              ...buildOpenSkyHeaders({
                 cacheStatus: 'STALE',
                 requestedMode,
                 usedMode,
@@ -703,8 +728,9 @@ export function openSkyProxy() {
                 staleSeconds: (now - _openskyCacheTime) / 1000,
                 retryAfterSeconds: cooldownMs / 1000,
               }),
-            );
-            res.end(_openskyCacheBody);
+              ...encoded.headers,
+            });
+            res.end(encoded.body);
             return;
           }
         }
@@ -746,16 +772,23 @@ export function openSkyProxy() {
           }
         }
 
-        res.writeHead(
-          upstream.status,
-          buildOpenSkyHeaders({
+        // The frame belongs to this body only if this body was cached. An
+        // uncached error must not borrow the previous snapshot's frame.
+        const encoded = encodedBody(
+          req,
+          body,
+          _openskyCacheBody === body ? _openskyCacheGzip : null,
+        );
+        res.writeHead(upstream.status, {
+          ...buildOpenSkyHeaders({
             cacheStatus: 'MISS',
             requestedMode,
             usedMode,
             reason,
           }),
-        );
-        res.end(body);
+          ...encoded.headers,
+        });
+        res.end(encoded.body);
       } catch (e) {
         console.error('[OpenSky Proxy]', e.message);
         if (_openskyCacheBody) {
@@ -766,17 +799,22 @@ export function openSkyProxy() {
             usedMode: 'unknown',
             reason: 'cached_stale',
           };
-          res.writeHead(
-            _openskyCacheStatus || 200,
-            buildOpenSkyHeaders({
+          const encoded = encodedBody(
+            req,
+            _openskyCacheBody,
+            _openskyCacheGzip,
+          );
+          res.writeHead(_openskyCacheStatus || 200, {
+            ...buildOpenSkyHeaders({
               cacheStatus: 'STALE',
               requestedMode:
                 cachedMeta.requestedMode || OPENSKY_AUTH_MODE_DEFAULT,
               usedMode: cachedMeta.usedMode || 'unknown',
               reason: cachedMeta.reason || 'cached_stale',
             }),
-          );
-          res.end(_openskyCacheBody);
+            ...encoded.headers,
+          });
+          res.end(encoded.body);
           return;
         }
         const requestedMode = normalizeOpenSkyAuthMode(
