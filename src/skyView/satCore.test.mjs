@@ -62,9 +62,13 @@ function separationDeg(az1, el1, az2, el2) {
 }
 
 test('core groups and ISS id mirror the satellites layer (policy.js)', () => {
+  // The sky loads the layer's original six groups, in the layer's dedupe
+  // order. Groups the layer appends after them (Earth observation, science)
+  // are classed by the layer's SATCAT classes, which the sky does not use, so
+  // they stay out of the sky catalogue; that is a decision to keep, not drift.
   assert.deepEqual(
     SKY_CORE_GROUPS.map((g) => ({ ...g })),
-    CATALOG_GROUPS.map((g) => ({ ...g })),
+    CATALOG_GROUPS.slice(0, SKY_CORE_GROUPS.length).map((g) => ({ ...g })),
   );
   assert.equal(ISS_NORAD, LAYER_ISS_NORAD);
 });
