@@ -970,6 +970,41 @@ test('a direct Context selection promotes its owned tracker layer before persist
   coordinator.destroy();
 });
 
+test('a satellite class choice is saved, shared and restored', async () => {
+  const storage = memoryStorage();
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage,
+  });
+  await coordinator.start();
+  await manager.setEnabled('satellites', true, { origin: 'user' });
+  assert.equal(
+    coordinator.getDurableState().options.satellites.classes,
+    'sitpd',
+    'every class but Starlink by default',
+  );
+  manager.setLayerParams(
+    'satellites',
+    { classes: { debris: false } },
+    { origin: 'user' },
+  );
+  const durable = coordinator.getDurableState();
+  assert.equal(durable.options.satellites.classes, 'sitp');
+  assert.equal(
+    new URLSearchParams(encode(durable)).get('lo')?.includes('s.k.sitp'),
+    true,
+  );
+  coordinator.destroy();
+
+  // A reload hands the layer its letters back (the layer decodes them:
+  // src/data/satelliteClass.test.mjs).
+  const reloaded = productionManager();
+  const next = new LayerStateCoordinator(reloaded, shareSink(), { storage });
+  await next.start();
+  assert.equal(reloaded.getLayerParams('satellites')?.classes, 'sitp');
+  next.destroy();
+});
+
 test('explicit Flight to Satellite replacement keeps the new Satellite ID durable', async () => {
   const manager = productionManager();
   const coordinator = new LayerStateCoordinator(manager, shareSink(), {
@@ -3120,4 +3155,71 @@ test('Active Fires: the codec accepts whole megawatts in bounds and the three co
     minFrp: 5,
     confidence: 'nominal',
   });
+});
+
+// An application built without a layer (a smaller catalog) receives a link or
+// saved state from a build that has it: the layer is neither restored nor
+// stored nor carried into the links this application shares.
+function managerWithout(withheld) {
+  const manager = new DataLayerManager({});
+  for (const id of REGISTERED_LAYER_IDS)
+    if (!withheld.includes(id)) manager.register(fakeLayer(id));
+  manager.finalizeRegistrations(
+    LAYER_STATE_REGISTRY.filter(({ id }) => !withheld.includes(id)),
+  );
+  return manager;
+}
+
+test('layers the application did not register are never restored, stored or shared', async () => {
+  const manager = managerWithout(['earthquakes']);
+  const storage = memoryStorage();
+  const share = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, share, { storage });
+  const incoming = createDefaultLayerState();
+  incoming.enabledLayerIds = ['earthquakes', 'traffic'];
+  await coordinator.start({ shareLayerState: incoming });
+
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['traffic']);
+  assert.deepEqual(share.provider().enabledLayerIds, ['traffic']);
+  assert.equal(manager.layers.has('earthquakes'), false);
+
+  await manager.setEnabled('cctv', true, { origin: 'user' });
+  const [[, written]] = storage.writes;
+  assert.deepEqual(parseStoredLayerState(written).enabledLayerIds, [
+    'cctv',
+    'traffic',
+  ]);
+  assert.deepEqual(share.provider().enabledLayerIds, ['cctv', 'traffic']);
+
+  await coordinator.applyShareLayerState({ shareLayerState: incoming });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['traffic']);
+  coordinator.destroy();
+
+  const saved = createDefaultLayerState();
+  saved.enabledLayerIds = ['earthquakes', 'traffic'];
+  const local = new LayerStateCoordinator(
+    managerWithout(['earthquakes']),
+    shareSink(),
+    { storage: memoryStorage(serializeStoredLayerState(saved)) },
+  );
+  await local.start();
+  assert.equal(local.source, 'local');
+  assert.deepEqual(local.getDurableState().enabledLayerIds, ['traffic']);
+  local.destroy();
+});
+
+test('an application with every layer registered keeps every requested layer', async () => {
+  const coordinator = new LayerStateCoordinator(
+    productionManager(),
+    shareSink(),
+    { storage: memoryStorage() },
+  );
+  const incoming = createDefaultLayerState();
+  incoming.enabledLayerIds = ['earthquakes', 'traffic'];
+  await coordinator.start({ shareLayerState: incoming });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+    'traffic',
+  ]);
+  coordinator.destroy();
 });

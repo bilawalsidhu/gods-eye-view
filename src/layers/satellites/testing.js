@@ -26,10 +26,14 @@ export function createTesting({ state: layerState, services, parts, source }) {
     // Extra catalog/point rows so a test can exercise a docked cluster (and a
     // control satellite that must NOT be treated as part of it).
     neighbours = [],
+    // Optional class of the tracked satellite and class visibility, e.g.
+    // { telecom: false }.
+    satelliteClass = undefined,
+    classes = null,
   }) {
     layerState._viewer = viewer;
     layerState._catalog = new Map([
-      [noradId, { name, satrec, group: 'stations' }],
+      [noradId, { name, satrec, group: 'stations', satelliteClass }],
     ]);
     layerState._points = new Map([[noradId, point]]);
     for (const neighbour of neighbours) {
@@ -37,6 +41,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
         name: neighbour.name,
         satrec: neighbour.satrec || satrec,
         group: neighbour.group || 'stations',
+        satelliteClass: neighbour.satelliteClass,
       });
       layerState._points.set(neighbour.noradId, neighbour.point);
     }
@@ -51,6 +56,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
       catalog: 'core',
       showPoints: false,
       showOrbits: false,
+      ...(classes ? { classes } : {}),
     };
     layerState._enabled = true;
   }
