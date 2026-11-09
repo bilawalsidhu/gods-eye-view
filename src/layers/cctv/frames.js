@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import {
   FRAME_SIGNATURE_W,
   FRAME_SIGNATURE_H,
@@ -45,9 +44,15 @@ export function fitToProjection(sourceW, sourceH) {
 
 const _scratchPoints = [];
 const _scratchSphere = new Cesium.BoundingSphere();
-const _scratchCartographic = new Cesium.Cartographic();
-// Close to the reference ellipsoid, it is not a reliable terrain horizon.
-const LOW_VIEWER_HEIGHT_M = 1000;
+// Keep the occluding surface below common negative geoid undulations.
+const HORIZON_MARGIN_M = 200;
+const _radii = Cesium.Ellipsoid.WGS84.radii;
+const _horizonEllipsoid = new Cesium.Ellipsoid(
+  _radii.x - HORIZON_MARGIN_M,
+  _radii.y - HORIZON_MARGIN_M,
+  _radii.z - HORIZON_MARGIN_M,
+);
+const _horizonOccluder = new Cesium.EllipsoidalOccluder(_horizonEllipsoid);
 
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
@@ -281,30 +286,11 @@ export function createFrames({ state: layerState, services, parts, source }) {
       typeof camera.frustum?.computeCullingVolume !== 'function'
     )
       return true;
-    // The reference ellipsoid can lie above the actual street. Near the
-    // surface its horizon would incorrectly hide nearby below-ellipsoid planes;
-    // let the frustum alone decide at low altitude or when height is unknown.
-    const height = Cesium.Cartographic.fromCartesian(
-      camera.positionWC,
-      Cesium.Ellipsoid.WGS84,
-      _scratchCartographic,
-    )?.height;
-    const pointsAboveEllipsoid = points.every((point) => {
-      const h = Cesium.Cartographic.fromCartesian(
-        point,
-        Cesium.Ellipsoid.WGS84,
-        _scratchCartographic,
-      )?.height;
-      return Number.isFinite(h) && h >= 0;
-    });
-    if (
-      Number.isFinite(height) &&
-      height >= LOW_VIEWER_HEIGHT_M &&
-      pointsAboveEllipsoid
-    ) {
-      const occluder = horizonOccluder(camera);
-      if (!points.some((point) => occluder.isPointVisible(point))) return false;
-    }
+    // WGS84 can be above the actual street; cull against a surface below it
+    // instead, while retaining far-side occlusion for low and high viewers.
+    _horizonOccluder.cameraPosition = camera.positionWC;
+    if (!points.some((point) => _horizonOccluder.isPointVisible(point)))
+      return false;
     const culling = camera.frustum.computeCullingVolume(
       camera.positionWC,
       camera.directionWC,

@@ -290,6 +290,44 @@ test('a nearby plane below the ellipsoid still fetches for a low viewer', () => 
   );
 });
 
+test('the horizon still rejects a negative-height plane on the far side', () => {
+  for (const altitude of [4, 30000, 2e7]) {
+    const record = planeRecord();
+    const mount = point(0, 0, -18);
+    const cap = point(0.00054, 0, -18);
+    record.billboard.position = mount;
+    record.frustumPositions = { mount, capCenter: cap };
+    const position = point(180, 0, altitude);
+    const direction = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(mount, position, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const viewer = viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z);
+    const sphere = Cesium.BoundingSphere.fromPoints([mount, cap]);
+    assert.notEqual(
+      viewer.camera.frustum
+        .computeCullingVolume(position, direction, viewer.camera.upWC)
+        .computeVisibility(sphere),
+      Cesium.Intersect.OUTSIDE,
+    );
+    assert.equal(framesFor(viewer).projectionInView(record), false);
+  }
+});
+
+test('a low viewer can see a plane beyond the WGS84 horizon', () => {
+  const record = planeRecord();
+  const mount = point(0, 0, 1);
+  record.billboard.position = mount;
+  record.frustumPositions = { mount };
+  const position = point(0.2, 0, 4);
+  const direction = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(mount, position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const viewer = viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z);
+  assert.equal(framesFor(viewer).projectionInView(record), true);
+});
+
 test('a plane below the horizon is not fetched', () => {
   const far = point(180, 0, 30000);
   const viewer = viewerAt(
