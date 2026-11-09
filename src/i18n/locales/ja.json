@@ -2454,6 +2454,10 @@
   "No feed here yet · {n} regions available": {
     "other": "ここにはまだフィードがありません · 利用可能な地域 {n}か所"
   },
+  "Fly below {km} km to a covered city": "{km} km未満まで高度を下げ、カバー範囲内の都市へ移動してください",
+  "No bike share here yet · {n} systems available": {
+    "other": "ここにはまだシェアサイクルがありません · 利用可能なシステム {n}件"
+  },
   "degraded": "性能低下",
   "stale": "更新遅延",
   "partial": "部分的",

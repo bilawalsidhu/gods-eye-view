@@ -2584,6 +2584,12 @@
     "many": "Ancora nessun feed qui · {n} di regioni disponibili",
     "other": "Ancora nessun feed qui · {n} regioni disponibili"
   },
+  "Fly below {km} km to a covered city": "Scendi sotto {km} km su una città coperta",
+  "No bike share here yet · {n} systems available": {
+    "one": "Ancora nessun bike sharing qui · {n} sistema disponibile",
+    "many": "Ancora nessun bike sharing qui · {n} di sistemi disponibili",
+    "other": "Ancora nessun bike sharing qui · {n} sistemi disponibili"
+  },
   "degraded": "degradato",
   "stale": "obsoleto",
   "partial": "parziale",
