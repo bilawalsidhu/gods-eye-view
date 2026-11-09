@@ -34,7 +34,7 @@ export function createSelection({
     if (layerState._clickSubscription || !layerState._viewer) return;
     const input = inputFor(layerState._viewer);
     layerState._clickSubscription = input.onClick((event) => {
-      const picked = event.pick;
+      const picked = event.topHit;
       const fire = pickedFire(event.drawHit);
       if (fire) {
         selectAndFocusFire(fire);

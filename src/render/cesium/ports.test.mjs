@@ -7,6 +7,7 @@ import {
   listenerList,
 } from './ports.js';
 import { updateCameraChanged } from './internals.js';
+import { createNativeClick } from './nativeClick.js';
 
 test('capabilities follow what the scene supports', () => {
   const effects = [
@@ -121,7 +122,11 @@ function fakeWidget(overrides = {}) {
   const calls = [];
   const primitives = [];
   const scene = {
-    camera: { moveStart: event(), moveEnd: event() },
+    camera: {
+      moveStart: event(),
+      moveEnd: event(),
+      pickEllipsoid: () => undefined,
+    },
     primitives: {
       add: (p) => primitives.push(p),
       remove: (p) => primitives.splice(primitives.indexOf(p), 1),
@@ -218,6 +223,82 @@ test('pick under something unpickable stops at what hides the rest', () => {
   picked = [top, { primitive: 'a tile' }, { id: { set: 'u', id: 'under' } }];
   const hit = ports.query.pick(1, 1);
   assert.equal(hit.surface, true, 'the tile hides it: the surface');
+  ports.dispose();
+});
+
+test('a surface hit over the ellipsoid makes its depth pick only when its position is read', () => {
+  let depthPicks = 0;
+  const { widget, scene } = fakeWidget({
+    pickPosition: () => (depthPicks++, { x: 6378200, y: 0, z: 0 }),
+  });
+  scene.camera.pickEllipsoid = () => ({ x: 6378137, y: 0, z: 0 });
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  const hit = ports.query.pick(1, 1);
+  assert.equal(hit.surface, true);
+  assert.equal(depthPicks, 0, 'no depth pass for a click nobody grounds');
+  assert.equal(hit.position.x, 6378200, 'the rendered surface, once read');
+  assert.equal(hit.position.x, 6378200);
+  assert.equal(depthPicks, 1);
+  // Over the sky the depth pick decides whether there is a surface at all.
+  scene.camera.pickEllipsoid = () => undefined;
+  scene.pickPosition = () => undefined;
+  assert.equal(ports.query.pick(1, 1), null);
+  ports.dispose();
+});
+
+test('a sky pick makes no depth pass unless something may be there', () => {
+  let depthPicks = 0;
+  let globeHit = null;
+  let picked;
+  const { widget, scene } = fakeWidget({
+    pick: () => picked,
+    pickPosition: () => (depthPicks++, { x: 6378200, y: 0, z: 0 }),
+  });
+  scene.camera.pickEllipsoid = () => undefined;
+  scene.camera.getPickRay = () => ({
+    origin: { x: 7e6, y: 0, z: 0 },
+    direction: { x: 0, y: 1, z: 0 },
+  });
+  scene.globe.pick = () => globeHit;
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  assert.equal(ports.query.pick(1, 1), null, 'nothing there: the sky');
+  assert.equal(depthPicks, 0);
+  // A mountain above the horizon: a globe tile on the ray.
+  globeHit = { x: 6378000, y: 0, z: 0 };
+  assert.equal(ports.query.pick(1, 1).surface, true);
+  assert.equal(depthPicks, 1);
+  // Something drawn outside the sets against the sky.
+  globeHit = null;
+  picked = { primitive: {} };
+  ports.query.pick(1, 1);
+  assert.equal(depthPicks, 2);
+  // A failing depth pick finds no surface, so what was picked is still read.
+  scene.pickPosition = () => {
+    throw new Error('no depth');
+  };
+  assert.equal(ports.query.pick(1, 1), null);
+  // A throwing camera answers nothing rather than failing the pick.
+  picked = undefined;
+  scene.camera.pickEllipsoid = () => {
+    throw new Error('no camera');
+  };
+  assert.equal(ports.query.pick(1, 1), null);
+  ports.dispose();
+});
+
+test("an empty click's renderer pick and its own Cesium pick are one pass", () => {
+  let passes = 0;
+  const { widget, scene } = fakeWidget({
+    pick: () => (passes++, undefined),
+    pickPosition: () => (passes++, { x: 6378200, y: 0, z: 0 }),
+  });
+  scene.camera.pickEllipsoid = () => ({ x: 6378137, y: 0, z: 0 });
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  assert.equal(ports.query.pick(4, 5).surface, true);
+  const click = createNativeClick(scene, { x: 4, y: 5 });
+  assert.equal(click.foreign(), null);
+  assert.equal(click.native.pick, undefined);
+  assert.equal(passes, 1);
   ports.dispose();
 });
 

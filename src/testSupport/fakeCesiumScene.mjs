@@ -10,7 +10,10 @@
  *   `frustum.projectionMatrix`; `viewRectangle()` from its
  *   `computeViewRectangle()`, in degrees; events from its own `moveEnd`,
  *   `moveStart` and `changed`.
- * - query: `sampleHeightNow` through the scene's height service;
+ * - query: `pick` and `drillPick` through the scene's own, naming a pick of
+ *   a draw-set item (its pick id `{set, id}`) as the renderer does and
+ *   anything else as the map (`drillPick`: draw-set items only);
+ *   `sampleHeightNow` through the scene's height service;
  *   `pickPosition` through the scene's, where `pickPositionSupported`;
  *   `pickRay` and `pickEllipsoid` through the double camera's, when it has
  *   them; `pickGlobe` through the scene's globe; `project`
@@ -25,6 +28,8 @@
 import * as Cesium from 'cesium';
 import { bindRenderer } from '../render/rendererOf.js';
 import { heightsFor } from '../render/cesium/heights.js';
+import { drawHitOf } from '../render/cesium/drawHit.js';
+import { rememberPick } from '../render/cesium/pickMemo.js';
 import { fakeDrawPort } from './fakeDrawPort.mjs';
 
 const toCartesian = (p) => new Cesium.Cartesian3(p.x, p.y, p.z);
@@ -44,12 +49,53 @@ const cameraOfDouble = (viewer) =>
     : viewer.scene.camera;
 
 /**
+ * A query port's `pick` and `drillPick` over a viewer double's own
+ * `scene.pick` and `drillPick`: a pick of a draw-set item (its pick id
+ * `{set, id}`) is that item's `Hit`, anything else the map; a drill names
+ * draw-set items only. A pick is noted as the Cesium query port notes its
+ * own, so a click's own Cesium picks reuse it.
+ * @param {object} viewer
+ */
+export function fakeScenePicks(viewer) {
+  const at = (x, y) => new Cesium.Cartesian2(x, y);
+  return {
+    pick(x, y, window = {}) {
+      const width = window.width ?? 3;
+      const height = window.height ?? 3;
+      const scene = viewer.scene;
+      if (typeof scene?.pick !== 'function') return null;
+      const picked = scene.pick(at(x, y), width, height);
+      rememberPick(scene, x, y, width, height, picked);
+      return drawHitOf(picked) ?? { set: '', id: '', surface: true };
+    },
+    drillPick(x, y, { width, height, limit } = {}) {
+      const scene = viewer.scene;
+      if (typeof scene?.drillPick !== 'function' || limit === 0) return [];
+      const hits = [];
+      for (const picked of scene.drillPick(
+        at(x, y),
+        limit === undefined ? undefined : Math.max(limit, 16),
+        width,
+        height,
+      ) ?? []) {
+        const hit = drawHitOf(picked);
+        if (!hit) continue;
+        hits.push(hit);
+        if (limit !== undefined && hits.length >= limit) break;
+      }
+      return hits;
+    },
+  };
+}
+
+/**
  * The query port `bindFakeCesiumScene` binds, on its own, for a test that
  * binds its other ports another way (`bindFakeCesiumCamera`'s `ports`).
  * @param {object} viewer
  */
 export function fakeSceneQuery(viewer) {
   return {
+    ...fakeScenePicks(viewer),
     project(position) {
       // The position itself, so a stub can tell positions apart by identity.
       const s = Cesium.SceneTransforms.worldToWindowCoordinates(

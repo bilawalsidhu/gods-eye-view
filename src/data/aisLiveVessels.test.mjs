@@ -1158,7 +1158,8 @@ test('vessel touch interaction yields to the first nearby flight behind map tile
     // The click's shared drill: the 14 px touch window, at least 8 deep.
     assert.deepEqual([width, height], [14, 14]);
     assert.ok(limit >= 8);
-    return [tile, { id: 'a1b2c3' }];
+    // The flight's icon: a draw-set item.
+    return [tile, { id: { set: 'flights:1', id: 'a1b2c3' } }];
   };
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });

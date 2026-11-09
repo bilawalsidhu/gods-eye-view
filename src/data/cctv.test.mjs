@@ -1078,7 +1078,7 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
   assert.equal(cctvEmptyClickDeselects(null, { activeCameraId: null }), false);
   assert.equal(
     cctvEmptyClickDeselects(
-      { id: 'registered-sibling' },
+      { set: 'flights:1', id: 'registered-sibling', surface: false },
       {
         activeCameraId: 'cam-1',
       },
@@ -1087,7 +1087,7 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
   );
   assert.equal(
     cctvEmptyClickDeselects(
-      { id: { id: 'unregistered-local-entity' } },
+      { set: '', id: 'unregistered-local-entity', surface: false },
       {
         activeCameraId: 'cam-1',
       },
@@ -1096,7 +1096,7 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
   );
   assert.equal(
     cctvEmptyClickDeselects(
-      { primitive: { id: 'unregistered-primitive' } },
+      { set: '', id: 'unregistered-primitive', surface: false },
       {
         activeCameraId: 'cam-1',
       },
@@ -1105,7 +1105,7 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
   );
   assert.equal(
     cctvEmptyClickDeselects(
-      { id: '' },
+      { set: '', id: '', surface: false },
       {
         activeCameraId: 'cam-1',
       },
@@ -1115,13 +1115,13 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
   );
   assert.equal(
     cctvEmptyClickDeselects(
-      { primitive: {} },
+      { set: '', id: null, surface: false },
       {
         activeCameraId: 'cam-1',
       },
     ),
     true,
-    'an ID-less surface pick remains true empty space',
+    'something with no id remains true empty space',
   );
 
   const initSource = componentFunctionSource(cctvLayer.init);

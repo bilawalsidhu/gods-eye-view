@@ -227,7 +227,7 @@ export function createFirePerimetersLayer({
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
-      const picked = event.pick;
+      const picked = event.topHit;
       const incidentId = picked ? pickedIncidentId(event.drawHit) : null;
       if (incidentId) {
         abortLinkVerification();

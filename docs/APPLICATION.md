@@ -89,8 +89,8 @@ standalone share-restoration result keep their existing separate contracts.
 
 `gods-eye-view/input` exports `inputFor(viewer)`, the scene's one input
 dispatcher. Every layer and tool takes its pointer input from it, and so can
-the caller: one `ScreenSpaceEventHandler` per scene, and a click picked once
-and handed to every subscriber.
+the caller: one pointer handler per viewer, and a click picked once and
+handed to every subscriber.
 
 ```js
 import { inputFor } from 'gods-eye-view/input';
@@ -107,19 +107,29 @@ off();
 box), so a vertex placed on an aircraft is not also a click on it. Its event
 reads lazily; a subscriber that reads nothing costs no pick:
 
-| Member             | What it is                                                           |
-| ------------------ | -------------------------------------------------------------------- |
-| `screenPosition`   | Where the user clicked, in CSS pixels; for DOM and overlay hit-tests |
-| `position`         | Where that lands in the pick buffer (corrected under sensor styles)  |
-| `gesture`          | `{ travelPx, durationMs }` of the press, to tell a click from a drag |
-| `pick`             | `scene.pick` at `position`                                           |
-| `hit`              | `pick`, or on a coarse pointer the contact under a surface pick      |
-| `id`, `ownerId`    | The hit's pick id and the layer that registered it, or `null`        |
-| `meta`             | The hit's own metadata, when its pick carries any                    |
-| `surface`          | Whether the hit is the map itself                                    |
-| `drill(limit)`     | `scene.drillPick`, shared by every subscriber of the click           |
-| `pickWindow(w, h)` | `scene.pick` over a `w`×`h` window around `position`                 |
-| `ground()`         | The world position under the click, or `null` over the sky           |
+| Member               | What it is                                                                |
+| -------------------- | ------------------------------------------------------------------------- |
+| `screenPosition`     | Where the user clicked, in CSS pixels; for DOM and overlay hit-tests      |
+| `position`           | Where that lands in the pick buffer (corrected under sensor styles)       |
+| `gesture`            | `{ travelPx, durationMs }` of the press, to tell a click from a drag      |
+| `topHit`             | The renderer's `Hit` on top at `position`, or `null` for the map itself   |
+| `drawHit`            | `topHit` when it is an item of a draw set, else `null`                    |
+| `hit`                | `topHit`, or on a coarse pointer the contact under a surface pick         |
+| `id`, `ownerId`      | The hit's pick id and the layer that registered it, or `null`             |
+| `meta`               | The hit's own metadata, when it carries any                               |
+| `surface`            | Whether the hit is the map itself                                         |
+| `drill(limit)`       | The draw-set `Hit`s under the click, shared by every subscriber           |
+| `windowHit(w, h)`    | `{ id, drawHit, surface }` of a pick over a `w`×`h` window                |
+| `ground()`           | The world position under the click, or `null` over the sky                |
+| `native`             | The renderer adapter's own `{ pick, pickWindow(w, h), drill(limit) }`     |
+| `pick`, `pickWindow` | `native.pick` and `native.pickWindow`, for code bound to the engine picks |
+
+A hit is the renderer contract's `Hit` (`src/render/contract/query.d.ts`).
+Something drawn outside the renderer's draw port is a `Hit` with `set: ''`,
+named by the adapter. Positions are plain `{ x, y }` objects. The dispatcher
+takes its pointer events from the renderer's input port and its picks from
+its query port, so a viewer with no renderer bound needs the Cesium adapter's
+factories loaded (`gods-eye-view/render/cesium/unbound`), or `inputFor` throws.
 
 `onPointer(type, fn, { lease })` subscribes to `down`, `move`, `up`, `click`
 or `dblclick`; with a lease it runs only while that lease is current. A tool
@@ -129,7 +139,7 @@ subscriber off its clicks; `isPointerFree()` and `pointerOwner()` report who
 holds it. `suspendCamera(reason)` and `suppressStockClicks()` return their
 own release: camera input and the viewer's stock select and double-click-track
 come back when the last hold is released, so two holders cannot undo each
-other. The dispatcher owns the camera controller's `enableInputs`: a direct
+other. The renderer's input port owns the camera controller's `enableInputs`: a direct
 write (Cesium's camera flights make one when they start and end) is kept, but
 reads true only while no hold is out. A caller-supplied `createScene` that creates its own viewer registers
 `defer(() => inputFor(viewer).destroy())` right after it; the standalone scene

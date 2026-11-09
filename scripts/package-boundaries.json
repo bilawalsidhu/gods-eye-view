@@ -1065,6 +1065,7 @@
       "src/data/iconAtlas.js",
       "src/render/cesium/frame.js",
       "src/render/cesium/query.js",
+      "src/render/cesium/pickMemo.js",
       "src/render/cesium/heights.js",
       "src/queries/heights.js",
       "src/render/cesium/draw.js",
@@ -1076,6 +1077,7 @@
       "src/render/motion/iconMotion.js",
       "src/data/followed.js",
       "src/render/cesium/camera.js",
+      "src/render/cesium/nativeClick.js",
       "src/render/cesium/cameraControls.js",
       "src/render/cesium/credits.js",
       "src/render/creditMarkup.js",
@@ -1872,7 +1874,15 @@
       "src/render/cesium/follow.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/common.js",
-      "src/render/rendererOf.js"
+      "src/render/rendererOf.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/render/cesium/pickMemo.js",
+      "src/render/cesium/ctrlWheelZoom.js",
+      "src/render/cesium/nativeClick.js",
+      "src/render/input/router.js",
+      "src/render/input/wheel.js",
+      "src/render/cesium/input.js"
     ],
     "external": ["cesium"]
   },
@@ -2449,7 +2459,15 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/data/pickRegistry.js",
+      "src/data/scenePick.js",
+      "src/render/input/wheel.js",
+      "src/render/cesium/pickMemo.js",
+      "src/render/cesium/nativeClick.js",
+      "src/render/input/router.js",
+      "src/render/cesium/ctrlWheelZoom.js",
+      "src/render/cesium/input.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -3081,7 +3099,15 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/render/input/wheel.js",
+      "src/render/cesium/ctrlWheelZoom.js",
+      "src/render/input/router.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/render/cesium/input.js",
+      "src/render/cesium/pickMemo.js",
+      "src/render/cesium/nativeClick.js"
     ],
     "external": ["cesium"]
   },
@@ -4231,7 +4257,9 @@
       "src/render/input/router.js",
       "src/queries/heights.js",
       "src/render/cesium/internals.js",
-      "src/render/cesium/tileRequests.js"
+      "src/render/cesium/tileRequests.js",
+      "src/render/cesium/nativeClick.js",
+      "src/render/cesium/pickMemo.js"
     ],
     "external": [
       "hls.js",
@@ -4914,7 +4942,9 @@
       "src/render/input/router.js",
       "src/queries/heights.js",
       "src/render/cesium/tileRequests.js",
-      "src/render/cesium/internals.js"
+      "src/render/cesium/internals.js",
+      "src/render/cesium/pickMemo.js",
+      "src/render/cesium/nativeClick.js"
     ],
     "external": [
       "hls.js",
@@ -5040,7 +5070,14 @@
       "src/data/local_data/us_census_places/files.js",
       "src/data/local_data/wof_neighborhoods/files.js",
       "src/queries/heights.js",
-      "src/render/cesium/internals.js"
+      "src/render/cesium/internals.js",
+      "src/render/cesium/pickMemo.js",
+      "src/data/pickRegistry.js",
+      "src/render/input/wheel.js",
+      "src/render/cesium/ctrlWheelZoom.js",
+      "src/render/input/router.js",
+      "src/render/cesium/nativeClick.js",
+      "src/render/cesium/input.js"
     ],
     "external": [
       "cesium",
@@ -5074,7 +5111,8 @@
       "src/styles/styleStages.js",
       "src/data/inputOwnership.js",
       "src/data/pickRegistry.js",
-      "src/data/scenePick.js"
+      "src/data/scenePick.js",
+      "src/render/rendererOf.js"
     ],
     "external": ["cesium"]
   },
@@ -5757,7 +5795,9 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/queries/heights.js",
-      "src/render/cesium/internals.js"
+      "src/render/cesium/internals.js",
+      "src/render/cesium/pickMemo.js",
+      "src/render/cesium/nativeClick.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -5859,7 +5899,9 @@
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
       "src/queries/heights.js",
-      "src/render/cesium/internals.js"
+      "src/render/cesium/internals.js",
+      "src/render/cesium/pickMemo.js",
+      "src/render/cesium/nativeClick.js"
     ],
     "external": ["cesium", "pbf"]
   },

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { inputFor } from './dispatcher.js';
+import { inputFor, pickAt } from './dispatcher.js';
+import { bindRenderer } from '../render/rendererOf.js';
 import {
   FAKE_EVENT_TYPES,
   FakeScreenSpaceEventHandler as FakeHandler,
@@ -26,6 +27,7 @@ function harness({ pick = () => undefined, drillPick = () => [] } = {}) {
   stock.setInputAction(stockDouble, TYPES.LEFT_DOUBLE_CLICK);
   let clock = 0;
   const viewer = {
+    isDestroyed: () => false,
     screenSpaceEventHandler: stock,
     camera: { pickEllipsoid: () => null },
     scene: {
@@ -331,7 +333,9 @@ test('stock clicks come back by identity after the last hold', (t) => {
 });
 
 test('drills of different depths on one click share a pass', (t) => {
-  const hits = Array.from({ length: 20 }, (_, i) => ({ id: `hit-${i}` }));
+  const hits = Array.from({ length: 20 }, (_, i) => ({
+    id: { set: 'test:1', id: `hit-${i}` },
+  }));
   const h = harness({ drillPick: (_p, limit) => hits.slice(0, limit) });
   t.after(() => h.input.destroy());
   const lengths = [];
@@ -343,7 +347,7 @@ test('drills of different depths on one click share a pass', (t) => {
   assert.equal(h.calls.drillPick, 1);
 });
 
-test('a touch tap’s contact search is the click’s own drill', (t) => {
+function coarsePointer(t) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia');
   Object.defineProperty(globalThis, 'matchMedia', {
     configurable: true,
@@ -353,26 +357,72 @@ test('a touch tap’s contact search is the click’s own drill', (t) => {
     if (previous) Object.defineProperty(globalThis, 'matchMedia', previous);
     else delete globalThis.matchMedia;
   });
+}
+
+test('a touch tap finds the contact under the map, in one drill of its own', (t) => {
+  coarsePointer(t);
   registerPickOwner('test-owner', (id) => id === 'plane-1');
   t.after(() => unregisterPickOwner('test-owner'));
   const tile = { primitive: { isCesium3DTileset: true } };
-  const h = harness({ pick: () => tile, drillPick: () => [{ id: 'plane-1' }] });
+  const drills = [];
+  const h = harness({
+    pick: () => tile,
+    drillPick: (_p, limit, width, height) => {
+      drills.push([limit, width, height]);
+      return [tile, { id: { set: 'test:1', id: 'plane-1' } }];
+    },
+  });
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onClick((event) => seen.push(event.id, event.drawHit));
+  h.click();
+  assert.deepEqual(seen, ['plane-1', null]);
+  assert.deepEqual(drills, [[8, 14, 14]], 'eight deep, as before');
+});
+
+test('a touch tap finds a contact drawn outside the draw port', (t) => {
+  coarsePointer(t);
+  registerPickOwner('test-owner', (id) => id === 'bus-1');
+  t.after(() => unregisterPickOwner('test-owner'));
+  const h = harness({
+    pick: () => undefined,
+    drillPick: () => [{ primitive: { id: 'bus-1' } }],
+  });
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onClick((event) => seen.push(event.id, event.ownerId));
+  h.click();
+  assert.deepEqual(seen, ['bus-1', 'test-owner']);
+});
+
+test('a touch tap stops at something drawn outside the draw port over a contact', (t) => {
+  coarsePointer(t);
+  registerPickOwner('test-owner', (id) => id === 'plane-1');
+  t.after(() => unregisterPickOwner('test-owner'));
+  const h = harness({
+    pick: () => undefined,
+    drillPick: () => [
+      { primitive: { id: 'unowned' } },
+      { id: { set: 'test:1', id: 'plane-1' } },
+    ],
+  });
   t.after(() => h.input.destroy());
   const seen = [];
   h.input.onClick((event) => seen.push(event.id));
-  h.input.onClick((event) => seen.push(event.drill(8, 14, 14).length));
   h.click();
-  assert.deepEqual(seen, ['plane-1', 1]);
-  assert.equal(h.calls.drillPick, 1);
+  assert.deepEqual(seen, [null], 'the map under the tap, as before');
 });
 
-test('a short drill answers deeper asks without another pass', (t) => {
-  const h = harness({ drillPick: () => [{ id: 'only' }] });
+test('a deeper ask than a short drill looks again: it held draw-set items only', (t) => {
+  const h = harness({
+    drillPick: () => [{ id: { set: 'test:1', id: 'only' } }],
+  });
   t.after(() => h.input.destroy());
   h.input.onClick((event) => event.drill(8));
+  h.input.onClick((event) => event.drill(12));
   h.input.onClick((event) => event.drill(40));
   h.click();
-  assert.equal(h.calls.drillPick, 1);
+  assert.equal(h.calls.drillPick, 2, '16 deep, then 40');
 });
 
 test('one failing subscriber does not stop the rest', (t) => {
@@ -455,4 +505,171 @@ test('a move carries its pick-buffer position, sensor-corrected as a click is', 
 test('the dispatcher is the package input export', async () => {
   const exported = await import('gods-eye-view/input');
   assert.equal(exported.inputFor, inputFor);
+});
+
+test('something drawn outside the draw port is the top hit, with no set, and never a draw hit', (t) => {
+  registerPickOwner('test-owner', (id) => id === 'bus-1');
+  t.after(() => unregisterPickOwner('test-owner'));
+  let picked = { primitive: { id: 'bus-1' } };
+  const h = harness({ pick: () => picked });
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onClick((event) =>
+    seen.push({
+      top: event.topHit,
+      draw: event.drawHit,
+      id: event.id,
+      owner: event.ownerId,
+      surface: event.surface,
+      native: event.native.pick,
+    }),
+  );
+  h.click();
+  assert.equal(h.calls.pick, 1, "the adapter's own pick reuses the renderer's");
+  assert.deepEqual(seen[0].top, { set: '', id: 'bus-1', surface: false });
+  assert.equal(seen[0].draw, null);
+  assert.equal(seen[0].id, 'bus-1');
+  assert.equal(seen[0].owner, 'test-owner');
+  assert.equal(seen[0].surface, false);
+  assert.equal(
+    seen[0].native,
+    picked,
+    "the engine's own pick, for code bound to it",
+  );
+  picked = { primitive: { isCesium3DTileset: true } };
+  h.click();
+  assert.equal(seen[1].top, null, 'tiles are the map');
+  assert.equal(seen[1].surface, true);
+  assert.equal(seen[1].id, null);
+});
+
+test('pick and pickWindow still hand over the engine pick objects, one pass each', (t) => {
+  const picked = { primitive: { id: 'bus-1' } };
+  const h = harness({ pick: () => picked });
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onClick((event) =>
+    seen.push({
+      pick: event.pick,
+      window: event.pickWindow(9, 9),
+      windowId: event.windowHit(9, 9).id,
+    }),
+  );
+  h.click();
+  assert.equal(seen[0].pick, picked);
+  assert.equal(seen[0].window, picked);
+  assert.equal(seen[0].windowId, 'bus-1');
+  assert.equal(h.calls.pick, 2, 'one pass at 3x3 and one at 9x9');
+});
+
+test("a draw-set item the renderer's sets do not hold is still the click's draw hit", (t) => {
+  const picked = { id: { set: 'kept:1', id: 'a', meta: { k: 1 } } };
+  const h = harness({ pick: () => picked });
+  t.after(() => h.input.destroy());
+  // The renderer's pick names nothing there: its sets do not hold `kept:1`.
+  t.after(bindRenderer(h.viewer, { query: { pick: () => null } }));
+  const seen = [];
+  h.input.onClick((event) => seen.push(event.drawHit?.id, event.meta?.k));
+  h.click();
+  assert.deepEqual(seen, ['a', 1]);
+});
+
+test("a click's engine pick is the renderer's pass, even when read later", async (t) => {
+  let picked = { primitive: { id: 'bus-1' } };
+  const h = harness({ pick: () => picked });
+  t.after(() => h.input.destroy());
+  const events = [];
+  h.input.onClick((event) => events.push(event) && event.topHit);
+  h.click();
+  picked = { primitive: { id: 'bus-2' } };
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(events[0].topHit.id, 'bus-1');
+  assert.equal(events[0].pick.primitive.id, 'bus-1');
+  assert.equal(events[0].native.pick.primitive.id, 'bus-1');
+  assert.equal(h.calls.pick, 1);
+});
+
+test('positions are plain CSS pixels', (t) => {
+  const h = harness();
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onPointer('down', (event) => seen.push(event.position));
+  h.input.onPointer('move', (event) => seen.push(event.endPosition));
+  h.input.onClick((event) => seen.push(event.screenPosition, event.position));
+  h.handler.fire(TYPES.MOUSE_MOVE, { endPosition: { x: 3, y: 4 } });
+  h.click(5, 6);
+  for (const position of seen) {
+    assert.equal(Object.getPrototypeOf(position), Object.prototype);
+    assert.deepEqual(Object.keys(position), ['x', 'y']);
+  }
+  assert.deepEqual(seen.at(-1), { x: 5, y: 6 });
+});
+
+test("a viewer's renderer gives the dispatcher its input and query ports", (t) => {
+  const listeners = new Map();
+  const holds = [];
+  const port = {
+    on(type, cb) {
+      listeners.set(type, cb);
+      return () => listeners.delete(type);
+    },
+    suspendCameraControls(reason) {
+      holds.push(reason);
+      return () => holds.splice(holds.indexOf(reason), 1);
+    },
+    behaviours: {
+      select: { enabled: true, suppress: () => () => {} },
+      dblclickFollow: { enabled: false, suppress: () => () => {} },
+    },
+  };
+  const hit = { set: 'quakes:1', id: 'quake:a', surface: false };
+  const asked = [];
+  const query = {
+    pick: (x, y, window) => (asked.push(['pick', x, y, window]), hit),
+    drillPick: () => [],
+    pickPosition: () => ({ x: 6378137, y: 0, z: 0 }),
+    pickEllipsoid: () => null,
+  };
+  const viewer = {};
+  const unbind = bindRenderer(viewer, { input: port, query });
+  t.after(unbind);
+  const input = inputFor(viewer);
+  t.after(() => input.destroy());
+  assert.equal(input.stockEnabled('select'), true);
+  assert.equal(input.stockEnabled('dblclickFollow'), false);
+  input.suspendCamera('drag');
+  assert.deepEqual(holds, ['drag']);
+  const seen = [];
+  input.onClick((event) => seen.push([event.drawHit, event.ground()]));
+  listeners.get('click')({
+    type: 'click',
+    position: { x: 7, y: 8 },
+    button: 0,
+    modifiers: { shift: false, ctrl: false, alt: false, meta: false },
+  });
+  assert.equal(seen[0][0], hit);
+  assert.deepEqual(seen[0][1], { x: 6378137, y: 0, z: 0 });
+  assert.deepEqual(asked, [['pick', 7, 8, undefined]]);
+  assert.equal(pickAt(viewer, 1, 2), hit, 'point-and-ask picks the same way');
+  input.destroy();
+  assert.deepEqual(holds, [], "destroy gives back the dispatcher's holds");
+  assert.equal(listeners.size, 0);
+});
+
+test('a viewer with no renderer and no adapter factory cannot take input', () => {
+  // The adapter's factory builds over anything with a scene: this has none.
+  assert.throws(() => inputFor({}), /no renderer to take input with/);
+});
+
+test('point-and-ask: nothing but the map is no hit; a failing pick is none', (t) => {
+  const surface = { set: '', id: '', surface: true };
+  const viewer = {};
+  let pick = () => surface;
+  t.after(bindRenderer(viewer, { query: { pick: (...a) => pick(...a) } }));
+  assert.equal(pickAt(viewer, 0, 0), null);
+  pick = () => {
+    throw new Error('context lost');
+  };
+  assert.equal(pickAt(viewer, 0, 0), null);
+  assert.equal(pickAt(null, 0, 0), null);
 });

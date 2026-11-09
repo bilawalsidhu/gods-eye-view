@@ -42,6 +42,8 @@ const GLOBE_FACTORY = 'src/render/cesium/globe.js';
 const DRAW_FACTORY = 'src/render/cesium/draw.js';
 const QUERY_FACTORY = 'src/render/cesium/query.js';
 const FRAME_FACTORY = 'src/render/cesium/frame.js';
+const INPUT_FACTORY = 'src/render/cesium/input.js';
+const NATIVE_CLICK = 'src/render/cesium/nativeClick.js';
 const UNBOUND = 'src/render/cesium/unbound.js';
 
 /**
@@ -106,16 +108,14 @@ const DRAW_FROM_CALLER = new Set([
   // Asks `findQuery` instead, and answers null rather than throw until the
   // caller has loaded the factory.
   './queries/heights',
-  // Their fleet icons draw through `drawOf`. Not wholly Cesium-free (pointer
-  // input still is), but none of their modules loads a factory.
+  // Their fleet icons draw through `drawOf`; they take clicks through the
+  // dispatcher (`findInput`, `findQuery`).
   './layers/flights',
   './layers/military',
-  // Not wholly Cesium-free (its pointer input still is), but its layers
-  // draw, size and fly through the ports alone.
+  // Its layers draw, size, fly and take clicks through the ports alone.
   './infrastructure',
   './infrastructure/geojson',
-  // Not wholly Cesium-free (its pointer input still is), but its missions
-  // draw, pick and fly through the ports alone.
+  // Its missions draw, pick and fly through the ports alone.
   './layers/launches',
   // Its pins, footprints and outlines draw through `drawOf`; its horizon
   // cull reads the camera and frame ports.
@@ -129,8 +129,11 @@ const DRAW_FROM_CALLER = new Set([
  * `./render/cesium/unbound`.
  */
 const CAMERA_FROM_CALLER = new Set([
-  // Not wholly Cesium-free (its pointer input still is), but it loads no
-  // factory: Cockpit moves the camera on the frame port's preUpdate, and
+  // The click dispatcher: it takes input, picks and grounds through
+  // `findInput`, `findQuery` and the adapter's native clicks.
+  './input',
+  // It loads no factory: Cockpit moves the camera on the frame port's
+  // preUpdate, and
   // `frameOf` throws, naming the export, until the caller has loaded it.
   './ui/cockpit',
   './ui/navigation',
@@ -341,10 +344,17 @@ test('every public entry that reaches a findFrame or frameOf caller loads the un
   });
 });
 
-test('the unbound camera factory loads the unbound query and frame factories', () => {
+test('every public entry that reaches a findInput or nativeClickOf caller loads the unbound input factory and native clicks, or its caller can', () => {
+  checkLookupFactory('findInput', INPUT_FACTORY, { fromCaller: true });
+  checkLookupFactory('nativeClickOf', NATIVE_CLICK, { fromCaller: true });
+});
+
+test('the unbound camera factory loads the unbound query, frame and input factories and native clicks', () => {
   const loaded = reachable(FACTORY, { eager: true });
   assert.ok(loaded.has(QUERY_FACTORY));
   assert.ok(loaded.has(FRAME_FACTORY));
+  assert.ok(loaded.has(INPUT_FACTORY));
+  assert.ok(loaded.has(NATIVE_CLICK));
 });
 
 test('the unbound export brings every unbound factory', () => {
@@ -355,6 +365,8 @@ test('the unbound export brings every unbound factory', () => {
     DRAW_FACTORY,
     QUERY_FACTORY,
     FRAME_FACTORY,
+    INPUT_FACTORY,
+    NATIVE_CLICK,
     'src/render/cesium/credits.js',
   ])
     assert.ok(loaded.has(factory), factory);

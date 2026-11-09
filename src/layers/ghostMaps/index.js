@@ -615,7 +615,7 @@ export function createGhostMapsLayer({
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
-      const picked = event.pick;
+      const picked = event.topHit;
       const key = picked ? hitKey(event.drawHit) : null;
       if (key) {
         _selectedKey = key;

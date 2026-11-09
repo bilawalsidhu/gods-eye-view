@@ -9,7 +9,12 @@ import {
   findCredits,
   findDraw,
   findEffects,
+  findInput,
+  nativeClickOf,
+  provideNativeClick,
   provideUnboundCamera,
+  provideUnboundInput,
+  releaseUnboundInput,
   provideUnboundCredits,
   provideUnboundDraw,
   provideUnboundEffects,
@@ -214,4 +219,77 @@ test('with no renderer bound, findDraw builds one draw port per scene; a rendere
   destroyed = true;
   assert.throws(() => drawOf(gone), /destroyed/);
   assert.equal(built.find((entry) => entry.port === port).disposed, 1);
+});
+
+test("with no renderer bound, findInput builds one input port per scene, given the building call's options; a renderer replaces it", (t) => {
+  t.after(() => provideUnboundInput(null));
+  const built = [];
+  provideUnboundInput((host, options) => {
+    if (!host.scene) return null;
+    const entry = { port: { id: built.length }, options, disposed: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  const options = { now: () => 0 };
+  assert.equal(findInput(viewer, options), built[0].port);
+  assert.equal(built[0].options, options);
+  assert.equal(findInput(viewer, { other: true }), built[0].port, 'kept');
+  assert.equal(findInput({}), null);
+  releaseUnboundInput(viewer, { not: 'it' });
+  assert.equal(built[0].disposed, 0, 'another port is left alone');
+  releaseUnboundInput(viewer, built[0].port);
+  assert.equal(built[0].disposed, 1);
+  assert.equal(findInput(viewer), built[1].port, 'a new one after release');
+  const input = { on() {} };
+  const unbind = bindRenderer(viewer, { input });
+  assert.equal(built[1].disposed, 1, "the renderer's supersedes it");
+  assert.equal(findInput(viewer), input);
+  releaseUnboundInput(viewer, input);
+  assert.equal(findInput(viewer), input, "a renderer's own stays");
+  unbind();
+});
+
+test('a renderer bound later leaves a kept input port working for its holder until released', (t) => {
+  t.after(() => provideUnboundInput(null));
+  const built = [];
+  provideUnboundInput(() => {
+    const entry = { port: { id: built.length }, disposed: 0, keep: true };
+    entry.dispose = () => (entry.disposed += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  const held = findInput(viewer);
+  const input = { on() {} };
+  const unbind = bindRenderer(viewer, { input });
+  t.after(unbind);
+  assert.equal(built[0].disposed, 0, 'its holder still listens on it');
+  assert.equal(findInput(viewer), input, 'new callers get the renderer’s');
+  releaseUnboundInput(viewer, held);
+  assert.equal(built[0].disposed, 1, 'let go of by its holder');
+  releaseUnboundInput(viewer, held);
+  assert.equal(built[0].disposed, 1, 'once');
+});
+
+test("nativeClickOf answers from the adapter's factory, never for a destroyed scene", (t) => {
+  t.after(() => provideNativeClick(null));
+  assert.equal(
+    nativeClickOf({ scene: {} }, { x: 0, y: 0 }),
+    null,
+    'none provided',
+  );
+  const asked = [];
+  provideNativeClick((host, at) => {
+    asked.push([host, at]);
+    return host.scene ? { native: { pick: 'raw' }, foreign: () => null } : null;
+  });
+  const viewer = { scene: {} };
+  const at = { x: 1, y: 2 };
+  assert.equal(nativeClickOf(viewer, at).native.pick, 'raw');
+  assert.deepEqual(asked, [[viewer, at]]);
+  assert.equal(nativeClickOf({}, at), null);
+  assert.equal(nativeClickOf(null, at), null);
+  assert.equal(nativeClickOf({ scene: {}, isDestroyed: () => true }, at), null);
 });

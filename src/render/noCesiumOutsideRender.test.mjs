@@ -40,6 +40,7 @@ const allowList = JSON.parse(readFileSync(path.join(root, LIST), 'utf8'));
 const SCOPES = ['src', 'server', 'dev'];
 /** Not runtime code, though not named `.test`: imported by tests only. */
 const TEST_ONLY = new Set([
+  'src/input/testDoubles.mjs',
   'src/layers/recentImagery/testDoubles.mjs',
   'src/layers/weather/shellFixture.mjs',
   'src/overlays/worldOverlayAllocation.worker.mjs',

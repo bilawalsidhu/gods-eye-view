@@ -128,9 +128,9 @@ test('construction is inert and initialization creates one owned pipeline', () =
   f.effects.initPostProcess();
   assert.equal(f.stages.size, 6);
   assert.ok([...f.stages].every((stage) => !stage.enabled));
-  assert.equal(styleStagesOf(f.effects.viewer.scene), f.effects.stages);
+  assert.equal(styleStagesOf(f.effects.viewer), f.effects.stages);
   f.effects.destroy();
-  assert.equal(styleStagesOf(f.effects.viewer.scene), null);
+  assert.equal(styleStagesOf(f.effects.viewer), null);
 });
 
 test('crossfade uses the established 500ms easing and settles without idle frames', () => {

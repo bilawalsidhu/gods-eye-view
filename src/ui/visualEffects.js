@@ -94,7 +94,7 @@ export class VisualEffects {
       this.stages[name] = this.styleRecord(name, definition);
     }
     this.stageEntries = Object.entries(this.stages);
-    this.forgetStages = registerStyleStages(this.viewer?.scene, this.stages);
+    this.forgetStages = registerStyleStages(this.viewer, this.stages);
   }
 
   /** A style's record, its uniforms written through to the renderer. */

@@ -36,7 +36,7 @@ export function createInteraction({
         ? stationId
         : null;
     };
-    const primaryPick = event.pick;
+    const primaryPick = event.topHit;
     const primaryStationId = stationFromPick(primaryPick);
     if (primaryStationId) return primaryStationId;
     const primaryId = resolvePickId(primaryPick);

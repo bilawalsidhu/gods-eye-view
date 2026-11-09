@@ -30,7 +30,7 @@ test('an aircraft billboard resolves through its pick owner to a live label', ()
       },
     },
   });
-  const picked = { id: 'a1b2c3', primitive: {} };
+  const picked = { set: 'flights:1', id: 'a1b2c3', surface: false };
   assert.equal(findPickOwner('a1b2c3'), 'flights');
   assert.deepEqual(resolvePickedContext(picked, { dataManager }), {
     layerId: 'flights',
@@ -44,26 +44,6 @@ test('an aircraft billboard resolves through its pick owner to a live label', ()
   unregisterPickOwner('flights');
 });
 
-test('an entity-backed feature resolves through the context store', () => {
-  const entity = { show: true };
-  registerEntityContext(entity, {
-    id: 'local-datacenters:7',
-    layerId: 'local-datacenters',
-    label: 'Data Center 7',
-    latitude: 30.1,
-    longitude: -97.6,
-  });
-  const out = resolvePickedContext({ id: entity }, { dataManager: manager() });
-  assert.deepEqual(out, {
-    layerId: 'local-datacenters',
-    id: 'local-datacenters:7',
-    label: 'Data Center 7',
-    kind: 'feature',
-    lat: 30.1,
-    lon: -97.6,
-  });
-});
-
 test('a draw-set item resolves through the context record its meta carries', () => {
   const carrier = { show: true };
   registerEntityContext(carrier, {
@@ -73,8 +53,8 @@ test('a draw-set item resolves through the context record its meta carries', () 
     latitude: 30.3,
     longitude: -97.5,
   });
-  // A Cesium pick of a draw-set item: its id is the item's pick id.
-  const picked = { id: { set: 'local-datacenters#1:fills', id: '8', meta: carrier }, primitive: {} };
+  // A draw-set item's hit carries the item's meta as it was given.
+  const picked = { set: 'local-datacenters#1:fills', id: '8', meta: carrier, surface: false };
   assert.deepEqual(resolvePickedContext(picked, { dataManager: manager() }), {
     layerId: 'local-datacenters',
     id: 'local-datacenters:8',
@@ -88,12 +68,22 @@ test('a draw-set item resolves through the context record its meta carries', () 
   assert.equal(resolvePickedContext(picked, { dataManager: manager() }), null);
 });
 
+test('something drawn outside the draw port resolves through its pick owner', () => {
+  registerPickOwner('flights', (id) => id === 'z9');
+  const out = resolvePickedContext({ set: '', id: 'z9', surface: false }, { dataManager: manager() });
+  assert.equal(out?.layerId, 'flights');
+  assert.equal(out?.id, 'z9');
+  unregisterPickOwner('flights');
+});
+
 test('disabled layers, trails and empty picks never resolve', () => {
   registerPickOwner('military', (id) => id === 'm1');
-  assert.equal(resolvePickedContext({ id: 'm1' }, { dataManager: manager() }), null, 'military is disabled');
+  const hit = (id) => ({ set: 'x:1', id, surface: false });
+  assert.equal(resolvePickedContext(hit('m1'), { dataManager: manager() }), null, 'military is disabled');
   unregisterPickOwner('military');
-  assert.equal(resolvePickedContext({ id: 'gev-trail:1' }, { dataManager: manager() }), null);
+  assert.equal(resolvePickedContext(hit('gev-trail:1'), { dataManager: manager() }), null);
   assert.equal(resolvePickedContext(null), null);
-  assert.equal(resolvePickedContext({ id: 'unknown' }, { dataManager: manager() }), null);
+  assert.equal(resolvePickedContext({ set: '', id: '', surface: true }), null);
+  assert.equal(resolvePickedContext(hit('unknown'), { dataManager: manager() }), null);
   assert.equal(pickedKindForLayer('ais-live-vessels'), 'vessel');
 });

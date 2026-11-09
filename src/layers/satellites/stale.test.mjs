@@ -1,3 +1,5 @@
+// The click dispatcher's input port over a viewer double: the Cesium adapter's.
+import '../../render/cesium/input.js';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter, once } from 'node:events';

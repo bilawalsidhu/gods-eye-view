@@ -395,7 +395,7 @@ export function createLifecycle({
         input,
         (event) => {
           if (!layerState._enabled) return;
-          const picked = event.pick;
+          const picked = event.topHit;
           const cameraId = parts.selection.extractPickedCameraId(
             event.drawHit ?? null,
           );

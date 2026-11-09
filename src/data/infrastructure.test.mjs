@@ -131,21 +131,18 @@ test('two viewers use their supplied contexts and dispose independently', async 
     );
     // A click picks the feature's stem, as the renderer's pick names it.
     const viewer = {
-      scene: {
-        screenSpaceCameraController: { enableInputs: true },
-        pick: () => {
-          const [stem] = fake.set('stems').items.values();
-          return {
-            id: {
-              set: fake.set('stems').spec.id,
-              id: stem.id,
-              meta: stem.meta,
-            },
-          };
-        },
-      },
+      scene: { screenSpaceCameraController: { enableInputs: true } },
     };
     const fake = bindFakeGroundRenderer(viewer);
+    fake.setPick(() => {
+      const [stem] = fake.set('stems').items.values();
+      return {
+        set: fake.set('stems').spec.id,
+        id: stem.id,
+        meta: stem.meta,
+        surface: false,
+      };
+    });
     const input = fakeInput(viewer);
     return { layer, viewer, fake, click: () => input.click({ x: 0, y: 0 }) };
   });
@@ -196,44 +193,33 @@ test('consumer build includes only infrastructure code and resolves assets under
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
-  // It draws through the renderer's ports: a viewer of the caller's own
-  // draws once the caller has loaded `./render/cesium/unbound`.
+  // It draws and takes clicks through the renderer's ports: a viewer of the
+  // renderer bound draws once the caller has loaded
+  // `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
-    'cameraControls.js',
-    'cameraInput.js',
     'color.js',
-    'ctrlWheelZoom.js',
     'dispatcher.js',
-    'drawHit.js',
     'ellipsoid.js',
-    'follow.js',
     'frames.js',
     'geojsonPins.js',
     'heights.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
-    'input.js',
     'inputOwnership.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
     'pickRegistry.js',
     'rendererOf.js',
     'rhumb.js',
-    'router.js',
     'scenePick.js',
     'sensorPick.js',
     'sphere.js',
     'stockFollow.js',
     'styleStages.js',
     'vector.js',
-    'wheel.js',
   ]);
-  assert.deepEqual(
-    entry.imports,
-    ['cesium'],
-    'the viewer supplies the same Cesium dependency',
-  );
+  assert.deepEqual(entry.imports, [], 'it reaches no Cesium of its own');
   for (const name of ['datacenters', 'dams']) {
     const asset = output.find(
       (item) => item.type === 'asset' && item.fileName.includes(name),

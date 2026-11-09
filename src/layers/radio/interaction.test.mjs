@@ -21,12 +21,15 @@ function interaction() {
   });
 }
 
+/** A draw-set item's hit. */
+const hit = (id, set = 'radio:1:stations') => ({ set, id, surface: false });
+
 /** A click event whose drill answers only with the window it is asked for. */
 function clickEvent({ pick, windowHits = [] }) {
   const drills = [];
   return {
     drills,
-    pick,
+    topHit: pick ?? null,
     drill(limit, width, height) {
       drills.push([limit, width, height]);
       return width === RADIO_PICK_WINDOW_PX && height === RADIO_PICK_WINDOW_PX
@@ -40,7 +43,7 @@ test('a near miss finds the station through one windowed drill', () => {
   const { pickedRadioStationAt } = interaction();
   const event = clickEvent({
     pick: undefined,
-    windowHits: [{ id: 'tile' }, { id: 'radio:kexp' }],
+    windowHits: [hit('notes:1', 'notes:1'), hit('radio:kexp')],
   });
   assert.equal(pickedRadioStationAt(event), 'kexp');
   assert.deepEqual(event.drills, [
@@ -50,12 +53,12 @@ test('a near miss finds the station through one windowed drill', () => {
 
 test('a direct hit needs no drill, and another layer’s contact keeps its click', () => {
   const { pickedRadioStationAt } = interaction();
-  const direct = clickEvent({ pick: { id: 'radio:kexp' } });
+  const direct = clickEvent({ pick: hit('radio:kexp') });
   assert.equal(pickedRadioStationAt(direct), 'kexp');
   assert.deepEqual(direct.drills, []);
   const other = clickEvent({
-    pick: { id: 'flight-1' },
-    windowHits: [{ id: 'radio:kexp' }],
+    pick: hit('flight-1', 'flights:1'),
+    windowHits: [hit('radio:kexp')],
   });
   assert.equal(pickedRadioStationAt(other), null);
 });

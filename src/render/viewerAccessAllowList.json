@@ -7,7 +7,6 @@
   "src/celestialRing.js": 1,
   "src/data/bhoteKoshiEmbeddedMedia.js": 1,
   "src/data/followed.js": 5,
-  "src/data/pickRegistry.js": 3,
   "src/data/spriteOrder.js": 2,
   "src/layers/flights/motion.js": 1,
   "src/layers/military/motion.js": 1,
@@ -17,6 +16,5 @@
   "src/maps/imageryHost.js": 4,
   "src/overlays/worldOverlay.js": 1,
   "src/ui/shareRestoration.js": 4,
-  "src/ui/visualEffects.js": 1,
   "src/voice/gevActions.js": 1
 }

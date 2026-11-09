@@ -3,17 +3,17 @@ import { readEntityRecord } from './entityRecords.js';
 import { findPickOwner, resolvePickId } from './pickRegistry.js';
 
 /**
- * Resolve a `scene.pick()` result to the identity a person would name: which
- * layer, which record, and its display label.
+ * Resolve a pick (the contract's `Hit`, as `pickAt` in
+ * src/input/dispatcher.js gives it) to the identity a person would name:
+ * which layer, which record, and its display label.
  *
  * Two lanes, in order:
- *  1. Context-store carriers. Entity-backed layers (selected vessels, fires,
- *     installations) write a `contextId` into the picked object's entity
- *     record, and layers drawing through the draw port (infrastructure
- *     GeoJSON) into a draw item's `meta`; the store record already carries
- *     the label and position voice uses everywhere else.
- *  2. Pick owners. Primitive-backed layers (aircraft, satellites, vessels)
- *     register an ownership predicate in `pickRegistry`; the owning layer's
+ *  1. Context-store carriers. Layers drawing through the draw port
+ *     (infrastructure GeoJSON, ALPR) write a `contextId` into a draw item's
+ *     `meta`; the store record already carries the label and position voice
+ *     uses everywhere else.
+ *  2. Pick owners. Layers (aircraft, satellites, vessels) register an
+ *     ownership predicate in `pickRegistry`; the owning layer's
  *     `findByQuery` turns the pick id into a live descriptor.
  *
  * Trails claim their pick ids only to make clicks inert, so they never
@@ -47,28 +47,11 @@ export function pickedKindForLayer(layerId) {
   return KIND_BY_LAYER[layerId] || 'feature';
 }
 
-/** A pick of a draw-set item (its id is `{set, id, meta}`): the item's `meta`. */
-function drawItemMeta(picked) {
-  const id = picked?.id;
-  return id && typeof id.set === 'string' && typeof id.id === 'string'
-    ? id.meta
-    : undefined;
-}
-
-function contextCarrierRecord(picked, dataManager) {
-  const store = getContextStore();
-  for (const carrier of [
-    picked?.id,
-    picked?.primitive?.id,
-    picked?.primitive,
-    drawItemMeta(picked),
-  ]) {
-    const contextId = readEntityRecord(carrier)?.contextId;
-    if (!contextId) continue;
-    const record = store.entities.get(contextId);
-    if (record && isContextRecordActive(record, dataManager)) return record;
-  }
-  return null;
+function contextCarrierRecord(hit, dataManager) {
+  const contextId = readEntityRecord(hit?.meta)?.contextId;
+  if (!contextId) return null;
+  const record = getContextStore().entities.get(contextId);
+  return record && isContextRecordActive(record, dataManager) ? record : null;
 }
 
 function fromRecord(record) {
@@ -104,13 +87,13 @@ function descriptorLabel(found, fallback) {
 }
 
 /**
- * @param {object|null} picked Result of `scene.pick()`.
+ * @param {import('../render/contract/query').Hit|null} picked
  * @param {object} [options]
  * @param {object} [options.dataManager] Layer lifecycle (enabled state, modules).
  * @returns {{layerId: string, id: string, label: string, kind: string, lat: number|null, lon: number|null, altitudeM?: number|null}|null}
  */
 export function resolvePickedContext(picked, { dataManager = null } = {}) {
-  if (!picked) return null;
+  if (!picked || picked.surface) return null;
   const record = contextCarrierRecord(picked, dataManager);
   if (record) return fromRecord(record);
 

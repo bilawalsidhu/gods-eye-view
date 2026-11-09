@@ -46,15 +46,14 @@ import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
 
 /**
- * The icao a pick carries: a draw-set item's id (the icon and model sets'
- * rows), a string pick id, or a primitive's id.
+ * The icao a click's hit carries (`event.hit`, the contract's `Hit`): a
+ * draw-set item's id (the icon and model sets' rows), or the id of
+ * something drawn outside the draw port (a hit with no set).
  */
-function aircraftPickId(picked) {
-  const id = picked?.id;
-  if (typeof id === 'string') return id;
-  if (id && typeof id.set === 'string' && typeof id.id === 'string')
-    return isOtherTrackedIconSet(id.set, 'flights') ? undefined : id.id;
-  return picked?.primitive?.id;
+function aircraftPickId(hit) {
+  if (!hit || hit.surface) return undefined;
+  if (!hit.set) return hit.id || undefined;
+  return isOtherTrackedIconSet(hit.set, 'flights') ? undefined : hit.id;
 }
 
 export function createTracking({

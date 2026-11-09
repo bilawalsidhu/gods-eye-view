@@ -1,7 +1,6 @@
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { inputFor } from '../../input/dispatcher.js';
-import { isSurfacePick } from '../../data/scenePick.js';
 import {
   registerPickOwner,
   unregisterPickOwner,
@@ -167,11 +166,11 @@ export function createCyclonesLayer({
         if (id) layer.setParams({ stormId: id });
         return;
       }
-      // A storm's own drawing names it; empty map (the globe, or 3D tiles,
-      // which pick as tileset content without an id) clears the selection.
+      // A storm's own drawing names it; empty map (the globe, or 3D tiles)
+      // clears the selection.
       const id = rendering?.pickStorm(event.drawHit);
       if (id) layer.setParams({ stormId: id });
-      else if (isSurfacePick(event.pick)) layer.setParams({ clear: true });
+      else if (!event.topHit) layer.setParams({ clear: true });
     });
     owner.unsubscribe = unsubscribe;
   }

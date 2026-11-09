@@ -16,6 +16,8 @@ const renderers = new WeakMap();
  */
 function unboundPorts(member) {
   const built = new WeakMap();
+  /** Ports superseded while their holder still used them (`keep`). */
+  const keptPorts = new WeakMap();
   let build = null;
   return {
     provide(factory) {
@@ -23,23 +25,36 @@ function unboundPorts(member) {
     },
     drop(host, port) {
       const entry = built.get(host);
-      if (!entry || (port !== undefined && entry.port !== port)) return;
+      if (!entry || (port !== undefined && entry.port !== port)) {
+        // A port a renderer superseded but its holder kept: its holder's to
+        // let go of.
+        const kept = port !== undefined && keptPorts.get(port);
+        if (kept) {
+          keptPorts.delete(port);
+          kept.dispose();
+        }
+        return;
+      }
       built.delete(host);
       entry.dispose();
     },
     /**
-     * A renderer bound to `host` supersedes its built port: released when
-     * it can be (it stops working for new callers but keeps what it did),
-     * else disposed.
+     * A renderer bound to `host` supersedes its built port: kept working
+     * for whoever holds it when it says so (`keep`, an input port a
+     * dispatcher listens on, let go of through `drop(host, port)`), else
+     * released when it can be (it stops working for new callers but keeps
+     * what it did), else disposed.
      */
     supersede(host) {
       const entry = built.get(host);
       if (!entry) return;
       built.delete(host);
-      if (entry.release) entry.release();
+      if (entry.keep) keptPorts.set(entry.port, entry);
+      else if (entry.release) entry.release();
       else entry.dispose();
     },
-    find(host) {
+    /** `options` reach `build` only when it is the call that builds. */
+    find(host, options) {
       const port = rendererOf(host)?.[member];
       if (port) return port;
       if (!host || typeof host !== 'object') return null;
@@ -50,7 +65,7 @@ function unboundPorts(member) {
       }
       let entry = built.get(host);
       if (!entry && build) {
-        entry = build(host);
+        entry = build(host, options);
         if (entry) built.set(host, entry);
       }
       return entry?.port ?? null;
@@ -67,6 +82,10 @@ const unboundCredits = unboundPorts('credits');
 const unboundDraws = unboundPorts('draw');
 const unboundQueries = unboundPorts('query');
 const unboundFrames = unboundPorts('frame');
+const unboundInputs = unboundPorts('input');
+
+/** What a click's raw engine picks are built with (`provideNativeClick`). */
+let nativeClicks = null;
 
 /**
  * Provide the factory `cameraOf` builds a camera port with for a scene
@@ -118,6 +137,29 @@ export function provideUnboundQuery(build) {
  */
 export function provideUnboundFrame(build) {
   unboundFrames.provide(build);
+}
+
+/**
+ * Provide the factory `findInput` builds an input port with for a scene
+ * object no renderer is bound to, as `provideUnboundCamera` does. It is
+ * given the `options` of the `findInput` call that builds, for test
+ * doubles. A renderer bound later does not take the port from whoever
+ * listens on it: it works until `releaseUnboundInput`.
+ * @param {(host: object, options?: object) => ({port: object, dispose: () => void, keep?: boolean} | null)} build
+ */
+export function provideUnboundInput(build) {
+  unboundInputs.provide(build);
+}
+
+/**
+ * Provide what `nativeClickOf` builds a click's raw engine picks with. Not
+ * part of the renderer contract: the renderer adapter provides it as it
+ * loads, for what the app still draws outside the draw port and for code that
+ * still reads the engine's own pick objects; a later call replaces it.
+ * @param {(host: object, position: {x: number, y: number}) => (NativeClick | null)} build
+ */
+export function provideNativeClick(build) {
+  nativeClicks = build;
 }
 
 /**
@@ -174,6 +216,7 @@ export function bindRenderer(host, renderer) {
   unboundDraws.supersede(host);
   unboundQueries.drop(host);
   unboundFrames.drop(host);
+  unboundInputs.supersede(host);
   renderers.set(host, renderer);
   return () => {
     if (renderers.get(host) === renderer) renderers.delete(host);
@@ -339,6 +382,64 @@ export function frameOf(host) {
   const frame = findFrame(host);
   if (frame) return frame;
   throw noPort(host, 'run frames with');
+}
+
+/**
+ * The input port of the renderer bound to `host`; with no renderer bound,
+ * one built over `host` by the provided factory and kept with it while
+ * `host` lives, as `findCamera` does. Bound later, a renderer's own
+ * replaces it: its listeners hear nothing more.
+ * @param {object|null|undefined} host
+ * @param {object} [options] For the factory, when this call builds the
+ *   port (test doubles: a fake event source, a clock).
+ * @returns {import('./contract/input').InputPort | null}
+ */
+export function findInput(host, options) {
+  return unboundInputs.find(host, options);
+}
+
+/**
+ * Let go of `port`, if it is the input port `findInput` built for `host`
+ * (even one a renderer bound since superseded): its listeners hear nothing
+ * more. A renderer's own port, or one built later, is left alone.
+ * @param {object|null|undefined} host
+ * @param {object|null|undefined} port
+ */
+export function releaseUnboundInput(host, port) {
+  if (host && typeof host === 'object' && port) unboundInputs.drop(host, port);
+}
+
+/**
+ * A click's raw engine picks, built by the adapter's `provideNativeClick`.
+ * @typedef {object} NativeClick
+ * @property {{pick: unknown, pickWindow: (width: number, height: number) => unknown,
+ *   drill: (limit?: number, width?: number, height?: number) => unknown[]}} native
+ *   The engine's own picks at the click, each made at most once, for code
+ *   still bound to the engine.
+ * @property {(limit?: number, width?: number, height?: number) => import('./contract/query').Hit[]} drillHits
+ *   `native.drill` read as hits: draw-set items as the query port gives
+ *   them, the map as surface hits, and anything else as a hit with no set
+ *   (its id null when it has none). For a touch's contact search, which
+ *   stops at whatever is drawn over a contact.
+ * @property {(width?: number, height?: number) => ({id: string|null} | import('./contract/query').Hit | null)} foreign
+ *   What is on top there as the engine sees it, read where the renderer's
+ *   pick names nothing: something drawn outside the draw port by its id
+ *   (null when it has none), a draw-set item the renderer's sets do not
+ *   hold as its hit; null when the top is the map or nothing.
+ */
+
+/**
+ * The raw engine picks of a click at `position` (CSS pixels, in the pick
+ * buffer), from the factory the renderer adapter provided; null when there
+ * is none, or it has nothing for `host`.
+ * @param {object|null|undefined} host
+ * @param {{x: number, y: number}} position
+ * @returns {NativeClick | null}
+ */
+export function nativeClickOf(host, position) {
+  if (!nativeClicks || !host || typeof host !== 'object') return null;
+  if (host.isDestroyed?.()) return null;
+  return nativeClicks(host, position) ?? null;
 }
 
 /**

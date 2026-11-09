@@ -17,6 +17,7 @@ import { findDraw, provideUnboundQuery } from '../rendererOf.js';
 import { toCartesian } from './common.js';
 import { unboundDrawPart } from './draw.js';
 import { drawHitOf } from './drawHit.js';
+import { rememberPick } from './pickMemo.js';
 
 /** The fewest things a bounded drill looks through (`QueryPort.drillPick`). */
 const DRILL_DEPTH = 16;
@@ -73,10 +74,45 @@ export function createCesiumQuery({
 
   const hitOf = ({ id }) => drawHitOf({ id });
 
-  /** The globe (or ellipsoid) under a pixel, as a surface hit. */
-  function surfaceHit(x, y) {
-    const position = query.pickPosition(x, y) ?? query.pickEllipsoid(x, y);
-    return position ? { set: '', id: '', surface: true, position } : null;
+  /** A query that throws answers nothing. */
+  const quietly = (fn) => {
+    try {
+      return fn();
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * The globe (or ellipsoid) under a pixel, as a surface hit. Where the
+   * ellipsoid is under it, its position is the depth pick's (another pass
+   * over the scene), made when first read. Where it is not, the depth pick
+   * decides, unless nothing was picked there and no globe tile is on the
+   * pixel's ray: the sky, with no pass. A depth pick that throws finds no
+   * surface, so what was picked there is still read.
+   */
+  function surfaceHit(x, y, picked) {
+    const ellipsoid = quietly(() => query.pickEllipsoid(x, y));
+    if (!ellipsoid) {
+      if (
+        picked == null &&
+        !quietly(() => query.pickGlobe(query.pickRay(x, y)))
+      )
+        return null;
+      const position = quietly(() => query.pickPosition(x, y));
+      return position ? { set: '', id: '', surface: true, position } : null;
+    }
+    let position;
+    const hit = { set: '', id: '', surface: true };
+    Object.defineProperty(hit, 'position', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        position ??= quietly(() => query.pickPosition(x, y)) ?? ellipsoid;
+        return position;
+      },
+    });
+    return hit;
   }
 
   /**
@@ -270,9 +306,11 @@ export function createCesiumQuery({
 
   const query = {
     pick(x, y, window = {}) {
-      const owner = ownerOf(
-        scene.pick(screen(x, y), window.width ?? 3, window.height ?? 3),
-      );
+      const width = window.width ?? 3;
+      const height = window.height ?? 3;
+      const picked = scene.pick(screen(x, y), width, height);
+      rememberPick(scene, x, y, width, height, picked);
+      const owner = ownerOf(picked);
       if (owner && pickable(owner)) return hitOf(owner);
       // Something unpickable is on top: the first pickable item under it,
       // unless something else hides it.
@@ -285,7 +323,7 @@ export function createCesiumQuery({
         });
         if (under) return under;
       }
-      return surfaceHit(x, y);
+      return surfaceHit(x, y, picked);
     },
     drillPick: (x, y, options = {}) =>
       drill(x, y, { ...options, untilForeign: false }),

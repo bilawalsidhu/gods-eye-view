@@ -45,7 +45,7 @@ export function createInteraction({
 
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!layerState._enabled) return;
-      const picked = event.pick;
+      const picked = event.topHit;
       const hit = event.drawHit;
 
       // Clicking the tracked satellite's own dot — ignore

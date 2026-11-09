@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- `gods-eye-view/input` no longer reaches Cesium: the dispatcher takes its
+  pointer events from the renderer's input port and its picks from the query
+  port. A click's `hit`, `topHit`, `drawHit` and `drill()` hits, and
+  `pickAt`'s result, are the renderer contract's `Hit`; positions are plain
+  `{ x, y }`; `HANDLER_EVENT_TYPES` is gone. Cesium's own picks stay on
+  `event.native` (and `event.pick` and `event.pickWindow`). A viewer of your
+  own with no renderer bound needs `gods-eye-view/render/cesium/unbound`
+  loaded once first (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

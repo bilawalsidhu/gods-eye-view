@@ -15,6 +15,9 @@ const tests = (file) =>
   file.endsWith('.test.mjs') ||
   file.startsWith('src/testSupport/') ||
   file.startsWith('src/tooling/') ||
+  // Test doubles outside src/testSupport, imported by tests only.
+  file === 'src/input/testDoubles.mjs' ||
+  file === 'src/layers/recentImagery/testDoubles.mjs' ||
   file === 'src/overlays/worldOverlayAllocation.worker.mjs';
 const source = (file) =>
   file.startsWith('src/sources/') ||

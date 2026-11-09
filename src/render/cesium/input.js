@@ -27,6 +27,7 @@ import { createInputRouter } from '../input/router.js';
 import { acquireCameraInput } from './cameraInput.js';
 import { installTrackpadPinchZoom } from './ctrlWheelZoom.js';
 import { wheelLines } from '../input/wheel.js';
+import { provideUnboundInput } from '../rendererOf.js';
 
 const T = Cesium.ScreenSpaceEventType;
 const MODIFIERS = [
@@ -94,8 +95,7 @@ function pointerTypeOf(dom, otherwise = 'mouse') {
 const inputs = new WeakMap();
 
 /**
- * The input port made for a scene, while it lives: the application's
- * dispatcher (src/input/dispatcher.js) delivers through it.
+ * The input port made for a scene, while it lives.
  * @param {object} scene
  * @returns {ReturnType<typeof createCesiumInput> | null}
  */
@@ -477,3 +477,29 @@ export function createCesiumInput(
   inputs.set(scene, self);
   return self;
 }
+
+// A Cesium viewer with no renderer bound to it gets an
+// input port over its canvas when code first asks `findInput` for one (the
+// application's dispatcher, src/input/dispatcher.js). Its clicks carry no
+// picks: the dispatcher makes its own through `findQuery`. The viewer is its
+// owner's, so its stock actions stay on its own handler, taken off only
+// while suppressed. `options` are the test doubles' (`createHandler`, `now`,
+// `document`).
+provideUnboundInput((viewer, options = {}) => {
+  const scene = viewer?.scene;
+  if (!scene || typeof scene !== 'object') return null;
+  // A port someone already made for the scene (a harness's): borrowed.
+  const made = inputs.get(scene);
+  if (made) return { port: made.port, dispose() {} };
+  const { createHandler, now, document } = options;
+  const input = createCesiumInput(viewer, {
+    report: (error) => console.error('Pointer input failed', error),
+    takeStock: false,
+    ...(createHandler ? { createHandler } : {}),
+    ...(now ? { now } : {}),
+    ...(document !== undefined ? { document } : {}),
+  });
+  // Kept for its dispatcher when a renderer is bound later, as the
+  // dispatcher's clicks would otherwise stop.
+  return { port: input.port, dispose: () => input.dispose(), keep: true };
+});

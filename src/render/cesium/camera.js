@@ -12,11 +12,13 @@ import { cameraFlightActive } from './internals.js';
 import { createCesiumFollow } from './follow.js';
 import { createCesiumControls } from './cameraControls.js';
 import { cameraOf, findCamera, provideUnboundCamera } from '../rendererOf.js';
-// Loads the factories an unbound viewer gets its credits, draw, frame and
-// query ports from.
+// Loads the factories an unbound viewer gets its credits, draw, frame,
+// input and query ports from, and a click's own Cesium picks.
 import './credits.js';
 import './draw.js';
 import './frame.js';
+import './input.js';
+import './nativeClick.js';
 import './query.js';
 
 /**
