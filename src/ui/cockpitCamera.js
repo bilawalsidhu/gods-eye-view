@@ -1,6 +1,7 @@
 /** Camera placement, ground acquisition and motion correction for the Cockpit controller. */
 import { cameraOf, findFrame } from '../render/rendererOf.js';
 import { followedPosition } from '../data/followed.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 import { trackedEntityDrawn } from './cockpitTrackingController.js';
 import {
   add,
@@ -179,7 +180,7 @@ export function update() {
         this.lastGroundProbeMs = nowMs;
         const eye = cameraOf(this.viewer).pose();
         this.services.sampleMeshFloorCells(this.viewer, groundPoint, {
-          excludeObjects: [this.trackedEntity],
+          sets: readEntityRecord(this.trackedEntity)?.groundSets?.() ?? [],
           viewerLat: eye.lat,
           viewerLon: eye.lon,
         });

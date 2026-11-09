@@ -1148,6 +1148,16 @@ Red Line trains on the Longfellow Bridge 6–9 m under the deck. Residual: the
 probe is vertical, so a vehicle directly under a deck or a roof overhang reads
 the structure above it.
 
+The sampler and the aircraft ground snap (`src/services/groundSnap.js`) reach
+the renderer only through its ports: the camera's `pose()` for the probe
+height gate, the globe's `isGlobeVisible()` (the sampler runs only with
+the globe hidden) and `isSettled('surface')` (sampler) and
+`isSettled('tiles')` with `isSettled('surface')` (snap) for whether the tiles
+have streamed, and the query
+port's heights, seeing through the caller's draw sets by id. Cockpit's ground
+probe names the tracked contact's icon and model sets, which the flights and
+military layers keep on its entity record (`groundSets`).
+
 ## Vessel components and sources
 
 `src/data/aisLiveVessels.js` assembles `createVesselLayer` from the

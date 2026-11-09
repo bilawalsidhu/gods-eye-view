@@ -6,6 +6,9 @@ import { unregisterSpriteCollection } from '../../data/spriteOrder.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
+// Ports built over a viewer of the test's own, with no renderer bound: the
+// adapter's factories load as `./render/cesium/unbound` loads them.
+import '../../render/cesium/unbound.js';
 
 const raw = (lat, lon, frp) => ({
   lat,

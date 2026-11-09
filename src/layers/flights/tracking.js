@@ -932,6 +932,13 @@ export function createTracking({
     );
     flightState._trackedEntity = holder;
     entityRecord(holder).drawn = () => flightState._trackedEntity === holder;
+    // The draw sets a height sample under the contact sees through (its
+    // icons and models), for Cockpit's ground probe.
+    entityRecord(holder).groundSets = () => {
+      const sets = [...parts.rendering._groundSampleExclusions().sets];
+      if (trackedIcon.setId) sets.push(trackedIcon.setId);
+      return sets;
+    };
     trackedIcon.show({
       id: icao24,
       image: _trackedBillboardImage(),

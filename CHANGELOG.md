@@ -10,6 +10,13 @@
   `event.native` (and `event.pick` and `event.pickWindow`). A viewer of your
   own with no renderer bound needs `gods-eye-view/render/cesium/unbound`
   loaded once first (samehkhamis).
+- `gods-eye-view/application/operations` no longer reaches Cesium: ground
+  snapping and mesh floor sampling ask the renderer's globe, camera and query
+  ports, and see through the caller's draw sets by id (the raw
+  `excludeObjects` option and exclusion callbacks are gone). A viewer of your
+  own with no renderer bound needs `gods-eye-view/render/cesium/unbound`
+  loaded once first, or location framing throws and snaps answer nothing
+  (samehkhamis).
 
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
