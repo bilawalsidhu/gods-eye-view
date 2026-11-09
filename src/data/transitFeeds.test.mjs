@@ -552,3 +552,229 @@ test('Rio feeds are CC BY 4.0 and live', () => {
     'Rio has a DATA_SOURCES row',
   );
 });
+
+test('Szczecin is CC0, live, covers the city and not Berlin', () => {
+  const feed = getTransitFeed('zditm-szczecin');
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(feed.license, 'CC0 1.0');
+  assert.equal(
+    feed.licenseUrl,
+    'https://www.zditm.szczecin.pl/en/zditm/for-developers',
+  );
+  assert.match(feed.terms.quote, /CC0 1\.0 licence/);
+  assert.match(feed.attribution, /ZDiTM/);
+  assert.equal(feed.routeLabel, undefined, 'the feed has no route ids');
+  assert.equal(transitModeFor(feed, null), 'bus');
+  const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  assert.ok(ids(53.4285, 14.5528).includes('zditm-szczecin'), 'city centre');
+  assert.ok(ids(53.5, 14.7).includes('zditm-szczecin'), 'north-east edge');
+  assert.ok(!ids(52.52, 13.405).includes('zditm-szczecin'), 'Berlin');
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources.split('\n').some((l) => l.startsWith('| **ZDiTM Szczecin')),
+    'Szczecin has a DATA_SOURCES row',
+  );
+});
+
+test('Carris Metropolitana covers Lisbon from Mafra to Setúbal, not Porto', () => {
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  assert.equal(feed.defaultEnabled, true);
+  assert.equal(feed.url, 'https://api.carrismetropolitana.pt/v2/vehicles.pb');
+  assert.equal(feed.speedUnit, 'km/h');
+  assert.match(feed.terms.note, /no licence for the realtime endpoint/);
+  const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
+  for (const [place, lat, lon] of [
+    ['Lisbon', 38.7223, -9.1393],
+    ['Mafra', 38.9369, -9.3277],
+    ['Setúbal', 38.5244, -8.8882],
+  ]) {
+    assert.ok(ids(lat, lon).includes(feed.id), place);
+  }
+  assert.ok(!ids(41.1579, -8.6291).includes(feed.id), 'Porto');
+  const sources = readFileSync(
+    new URL('../../DATA_SOURCES.md', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    sources.split('\n').some((l) => l.startsWith('| **Carris Metropolitana')),
+    'Lisbon has a DATA_SOURCES row',
+  );
+});
+
+test('Carris Metropolitana route ids read as the line number on the bus', () => {
+  const feed = getTransitFeed('carris-metropolitana-lisboa');
+  assert.equal(transitRouteLabel(feed, '[LA77N]1708_0'), '1708');
+  assert.equal(transitRouteLabel(feed, '[BNA17]2772_1'), '2772');
+  assert.equal(transitRouteLabel(feed, 'unexpected'), 'unexpected');
+  assert.equal(transitRouteLabel(feed, null), null);
+});
+
+// The 2026-11 batch: one landmark per feed, inside its own radius.
+const NEW_CITY_LANDMARKS = {
+  'pid-praha': [50.0875, 14.4213],
+  'ztm-warszawa': [52.2297, 21.0122],
+  'tbm-bordeaux': [44.8378, -0.5792],
+  'sendai-city-bus': [38.2602, 140.8824],
+  'ztm-poznan': [52.4064, 16.9252],
+  'ztm-gdansk': [54.352, 18.6466],
+  'ets-edmonton': [53.5461, -113.4938],
+  'halifax-transit': [44.6488, -63.5752],
+  'bc-transit-victoria': [48.4284, -123.3656],
+  'tam-montpellier': [43.6108, 3.8767],
+  'ztp-krakow-bus': [50.0614, 19.9366],
+  'ztp-krakow-tram': [50.0614, 19.9366],
+  'vilnius-transport': [54.6872, 25.2797],
+  'tpbi-bucuresti': [44.4268, 26.1025],
+  'roma-mobilita': [41.9028, 12.4964],
+  'gtt-torino': [45.0703, 7.6869],
+  'actv-venezia-bus': [45.4408, 12.3155],
+  'actv-venezia-waterbus': [45.4408, 12.3155],
+  'adelaide-metro': [-34.9285, 138.6007],
+  'marta-atlanta': [33.749, -84.388],
+  'rtd-denver': [39.7392, -104.9903],
+  'ctp-cluj': [46.7712, 23.6236],
+  'ctp-iasi': [47.1585, 27.6014],
+  'mpk-rzeszow': [50.0412, 21.9991],
+  'emt-malaga': [36.7213, -4.4214],
+  'carris-lisboa': [38.7223, -9.1393],
+  'mybas-johor': [1.4927, 103.7414],
+  'mybas-kota-bharu': [6.1254, 102.2381],
+  'astuce-rouen': [49.4432, 1.0999],
+  'mpm-toulon': [43.1242, 5.928],
+  'lia-le-havre': [49.4944, 0.1079],
+  'filbleu-tours': [47.3941, 0.6848],
+};
+
+test('every city in the 2026-11 batch is live, licensed and covers its own centre', () => {
+  for (const [id, [lat, lon]] of Object.entries(NEW_CITY_LANDMARKS)) {
+    const feed = getTransitFeed(id);
+    assert.ok(feed, `${id} is routable`);
+    assert.ok(
+      publicTransitCatalog().some((f) => f.id === id),
+      `${id} is offered to the browser`,
+    );
+    assert.ok(feed.terms?.note, `${id} records the basis it ships on`);
+    assert.ok(
+      transitFeedsInRange(lat, lon).some((f) => f.id === id),
+      `${id} covers its city`,
+    );
+  }
+  // A feed's radius stays local: Warsaw is not polled for Kraków.
+  assert.ok(
+    !transitFeedsInRange(50.0614, 19.9366).some((f) => f.id === 'ztm-warszawa'),
+  );
+});
+
+test('feeds with no stated licence say so and name the basis they ship on', () => {
+  for (const feed of TRANSIT_FEED_REGISTRY.filter((f) =>
+    /^No licence stated/.test(f.license),
+  )) {
+    assert.match(
+      feed.terms.note,
+      /Metro Transit and OVapi|Same .*basis/,
+      `${feed.id} names its basis`,
+    );
+  }
+});
+
+test('route ids in the 2026-11 batch read as the line on the vehicle', () => {
+  const label = (id, routeId) => transitRouteLabel(getTransitFeed(id), routeId);
+  assert.equal(label('pid-praha', 'L135'), '135');
+  assert.equal(label('ets-edmonton', '009'), '9');
+  assert.equal(label('mpm-toulon', '0002'), '2');
+  assert.equal(label('gtt-torino', '10NU'), '10N');
+  assert.equal(label('actv-venezia-waterbus', '5.1_UN'), '5.1');
+  assert.equal(label('actv-venezia-bus', '53E_ES'), '53E');
+  assert.equal(label('bc-transit-victoria', '95-VIC'), '95');
+  assert.equal(label('carris-lisboa', '172_1'), '172');
+  assert.equal(label('astuce-rouen', 'TCAR:93'), '93');
+  assert.equal(label('mybas-johor', 'J33CWLMYJB'), 'J33');
+  // Unmatched and absent ids pass through untouched.
+  assert.equal(label('pid-praha', 'S4'), 'S4');
+  assert.equal(label('gtt-torino', null), null);
+});
+
+test('trams, waterbuses and buses are told apart where the ids allow it', () => {
+  const mode = (id, routeId) => transitModeFor(getTransitFeed(id), routeId);
+  assert.equal(mode('pid-praha', 'L22'), 'tram');
+  assert.equal(mode('pid-praha', 'L135'), 'bus');
+  assert.equal(mode('tbm-bordeaux', '16'), 'bus');
+  assert.equal(mode('lia-le-havre', '8-B'), 'tram');
+  assert.equal(mode('lia-le-havre', '8-C3'), 'bus');
+  assert.equal(mode('ztp-krakow-tram', null), 'tram');
+  assert.equal(mode('actv-venezia-waterbus', '1_UN'), 'ferry');
+});
+
+test('feeds that publish km/h are marked for conversion, and only those', () => {
+  const kmh = TRANSIT_FEED_REGISTRY.filter((f) => f.speedUnit === 'km/h')
+    .map((f) => f.id)
+    .sort();
+  assert.deepEqual(kmh, [
+    'carris-metropolitana-lisboa',
+    'mpm-toulon',
+    'tam-montpellier',
+  ]);
+});
+
+// Route ids as the live feeds and the operators' own GTFS routes.txt carried
+// them on 2026-11-09: the ranges and numbered tram ids are not guessable from
+// the line names riders see.
+test('Prague route-id ranges give metro, trains, ferries and trolleybuses their mode', () => {
+  const feed = getTransitFeed('pid-praha');
+  const read = (routeId) => [
+    transitModeFor(feed, routeId),
+    transitRouteLabel(feed, routeId),
+  ];
+  assert.deepEqual(read('L22'), ['tram', '22']);
+  assert.deepEqual(read('L58'), ['bus', '58'], 'trolleybus');
+  assert.deepEqual(read('L49'), ['rail', 'LD'], 'Petřín funicular');
+  assert.deepEqual(read('L135'), ['bus', '135']);
+  assert.deepEqual(read('L803'), ['bus', 'X3']);
+  assert.deepEqual(read('L991'), ['subway', 'A']);
+  assert.deepEqual(read('L993'), ['subway', 'C']);
+  assert.deepEqual(read('L1004'), ['rail', 'S4']);
+  assert.deepEqual(read('L1109'), ['rail', 'R9']);
+  assert.deepEqual(read('L1204'), ['rail', 'L1204'], 'no label to derive');
+  assert.deepEqual(read('L1801'), ['ferry', 'P1']);
+  assert.deepEqual(read('L1703'), ['bus', 'L1703']);
+  assert.deepEqual(read('L2841'), ['bus', '841']);
+  assert.deepEqual(read('S4'), ['bus', 'S4'], 'unknown ids keep the default');
+});
+
+test('Bordeaux trams ride numbered route ids and keep their letters', () => {
+  const feed = getTransitFeed('tbm-bordeaux');
+  for (const [routeId, line] of [
+    ['59', 'A'],
+    ['62', 'D'],
+    ['163', 'E'],
+  ]) {
+    assert.equal(transitModeFor(feed, routeId), 'tram', routeId);
+    assert.equal(transitRouteLabel(feed, routeId), line);
+  }
+  assert.equal(transitModeFor(feed, '952'), 'ferry');
+  assert.equal(transitModeFor(feed, '01'), 'bus');
+  assert.equal(transitRouteLabel(feed, '01'), '1');
+});
+
+test('Rouen Métro and Calypso are not buses; Le Havre reads its own ids', () => {
+  const feed = getTransitFeed('astuce-rouen');
+  assert.equal(transitModeFor(feed, 'TCAR:90'), 'tram');
+  assert.equal(transitRouteLabel(feed, 'TCAR:90'), 'Métro');
+  assert.equal(transitModeFor(feed, 'TCAR:99'), 'ferry');
+  assert.equal(transitModeFor(feed, 'TCAR:93'), 'bus');
+  assert.equal(transitRouteLabel(feed, 'TAE:F'), 'F');
+  const lia = getTransitFeed('lia-le-havre');
+  assert.equal(transitModeFor(lia, '8-FUNI'), 'rail');
+  assert.equal(transitRouteLabel(lia, '8-C3'), 'C3');
+  assert.equal(transitRouteLabel(lia, '8-09'), '9');
+  assert.equal(transitRouteLabel(lia, '8-A'), 'A');
+});
+
+test('data.gov.my feeds ask the proxy for no more than its 4 a minute', () => {
+  for (const id of ['mybas-johor', 'mybas-kota-bharu']) {
+    assert.ok(getTransitFeed(id).refreshMs >= 30_000, id);
+  }
+});
