@@ -52,21 +52,23 @@ export function createRendering({
     if (basePositions.length < 2) return;
 
     const pathColor = color || Cesium.Color.CYAN;
+    // Kept so the Cockpit's orbit dim (cockpitSubject.js) restores exactly.
+    const baseColor = pathColor.withAlpha(0.6);
+    const baseDepthFailColor = pathColor.withAlpha(0.35);
+    const instanceId = `satellite-orbit:${noradId}`;
 
     const primitive = new Cesium.Primitive({
       geometryInstances: new Cesium.GeometryInstance({
+        id: instanceId,
         geometry: new Cesium.PolylineGeometry({
           positions: basePositions,
           width: noradId === ISS_NORAD ? 2.5 : 2.0,
           vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
         }),
         attributes: {
-          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-            pathColor.withAlpha(0.6),
-          ),
-          depthFailColor: Cesium.ColorGeometryInstanceAttribute.fromColor(
-            pathColor.withAlpha(0.35),
-          ),
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(baseColor),
+          depthFailColor:
+            Cesium.ColorGeometryInstanceAttribute.fromColor(baseDepthFailColor),
         },
       }),
       appearance: new Cesium.PolylineColorAppearance({ translucent: true }),
@@ -86,6 +88,11 @@ export function createRendering({
       // GMST value (gstime is pure), so delta starts at exactly 0 and the
       // initial identity modelMatrix is correct until the first ring tick.
       gmstAtBake: gstime(bakeDate),
+      instanceId,
+      baseColor,
+      baseDepthFailColor,
+      // The alpha multiple last written to the instance (1: as built).
+      alphaFactor: 1,
     });
   }
 
@@ -152,7 +159,8 @@ export function createRendering({
 
   /**
    * Propagate all CORE satellite positions and update point primitives.
-   * (~840 sats ≈ 1.6 ms/pass — fine at the 1s/200ms cadence.) Dense extras are
+   * (About 1,300 core satellites: ~840 measured at ≈ 1.6 ms/pass, so ≈ 2.5 ms,
+   * fine at the 1s/200ms cadence.) Dense extras are
    * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
    */
 
@@ -216,6 +224,10 @@ export function createRendering({
         point.position = layerState._trackedFrameCartesian; // primitive setter clones
       }
     }
+
+    // While the Cockpit rides the tracked satellite, keep its marks hidden.
+    if (layerState._cockpitSubjectNorad !== null)
+      parts.cockpit?._syncCockpitSubjectVisuals();
 
     _updatePointFocus(now);
 
