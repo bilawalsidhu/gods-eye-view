@@ -496,6 +496,15 @@ export function openSkyProxy() {
         // This mount also matches its /track route, served by its own handler.
         if (new URL(req.url || '/', 'http://localhost').pathname !== '/')
           return next();
+        // After the /track hand-off, so /track keeps its own method handling.
+        if (req.method !== 'GET') {
+          res.writeHead(405, {
+            'Content-Type': 'application/json',
+            Allow: 'GET',
+          });
+          res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          return;
+        }
         res.setHeader('X-Feed-Source', 'OpenSky Network');
         const requestedMode = normalizeOpenSkyAuthMode(
           process.env.OPENSKY_AUTH_MODE,
