@@ -927,6 +927,101 @@ export function transitFeedsInRange(lat, lon, slackKm = 0) {
     .map(({ feed }) => feed);
 }
 
+/** Longitude `lon` normalised into [west, west + 360). */
+function unwrapLon(lon, west) {
+  return west + ((((lon - west) % 360) + 360) % 360);
+}
+
+/**
+ * Great-circle distance (km) from a point to the nearest point of one edge of
+ * a view rectangle, the edge given as a function of t in [0, 1]. A coarse pass
+ * finds the nearest sample, then a ternary search refines between its
+ * neighbours: distance along a meridian or a parallel of a bounded view is
+ * unimodal around its minimum.
+ */
+function edgeDistanceKm(lat, lon, edgeAt) {
+  const SAMPLES = 16;
+  const at = (t) => {
+    const p = edgeAt(t);
+    return haversineKm(lat, lon, p.lat, p.lon);
+  };
+  let best = 0;
+  let bestKm = Infinity;
+  for (let i = 0; i <= SAMPLES; i++) {
+    const km = at(i / SAMPLES);
+    if (km < bestKm) {
+      bestKm = km;
+      best = i;
+    }
+  }
+  let lo = Math.max(0, best - 1) / SAMPLES;
+  let hi = Math.min(SAMPLES, best + 1) / SAMPLES;
+  for (let i = 0; i < 40; i++) {
+    const a = lo + (hi - lo) / 3;
+    const b = hi - (hi - lo) / 3;
+    if (at(a) <= at(b)) hi = b;
+    else lo = a;
+  }
+  return Math.min(bestKm, at((lo + hi) / 2));
+}
+
+/**
+ * Whether a coverage circle reaches into a view rectangle (degrees; `west` may
+ * be greater than `east` when the view crosses the antimeridian).
+ * @param {{lat:number, lon:number, radiusKm:number}} circle
+ * @param {{south:number, north:number, west:number, east:number}} rect
+ * @param {number} [slackKm=0]
+ * @returns {boolean}
+ */
+export function circleIntersectsViewRect(circle, rect, slackKm = 0) {
+  const { south, north, west } = rect;
+  const east = rect.east < west ? rect.east + 360 : rect.east;
+  const lon = unwrapLon(circle.lon, west);
+  if (circle.lat >= south && circle.lat <= north && lon <= east) return true;
+  const reach = circle.radiusKm + Math.max(0, slackKm);
+  const edges = [
+    (t) => ({ lat: south + (north - south) * t, lon: west }),
+    (t) => ({ lat: south + (north - south) * t, lon: east }),
+    (t) => ({ lat: south, lon: west + (east - west) * t }),
+    (t) => ({ lat: north, lon: west + (east - west) * t }),
+  ];
+  return edges.some(
+    (edgeAt) => edgeDistanceKm(circle.lat, circle.lon, edgeAt) <= reach,
+  );
+}
+
+/**
+ * Feeds with a coverage circle that reaches into the view rectangle, nearest
+ * to the view's centre first. For wide views, where the centre of the screen
+ * can sit outside a feed's coverage while the feed's region fills the screen.
+ * @param {{south:number, north:number, west:number, east:number}} rect Degrees.
+ * @param {number} [slackKm=0] Extra radius (hysteresis), as in
+ *   transitFeedsInRange.
+ * @returns {object[]}
+ */
+export function transitFeedsInView(rect, slackKm = 0) {
+  if (
+    ![rect?.south, rect?.north, rect?.west, rect?.east].every(Number.isFinite)
+  )
+    return [];
+  const centerLat = (rect.south + rect.north) / 2;
+  const east = rect.east < rect.west ? rect.east + 360 : rect.east;
+  const centerLon = (rect.west + east) / 2;
+  return TRANSIT_ENABLED_FEEDS.map((feed) => {
+    const circles = coverageCircles(feed);
+    const hit = circles.some((circle) =>
+      circleIntersectsViewRect(circle, rect, slackKm),
+    );
+    const km = Math.min(
+      ...circles.map((c) => haversineKm(centerLat, centerLon, c.lat, c.lon)),
+    );
+    return { feed, hit, km };
+  })
+    .filter(({ hit }) => hit)
+    .sort((a, b) => a.km - b.km)
+    .map(({ feed }) => feed);
+}
+
 /**
  * A mode the feed itself reported for the vehicle (Entur's Vehicles API does),
  * or null when it is absent or not one the layer knows.

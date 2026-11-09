@@ -11,8 +11,10 @@ import {
   transitUpstreamHeaders,
 } from './transitProxy.js';
 import {
+  circleIntersectsViewRect,
   getTransitFeed,
   transitFeedsInRange,
+  transitFeedsInView,
   transitModeFor,
   transitModeResolved,
 } from './transitFeeds.js';
@@ -185,6 +187,87 @@ test('Entur covers the whole country, from Lindesnes to Vardø', () => {
       `${city} is covered by Entur`,
     );
   }
+});
+
+test('a whole-country view of Norway polls Entur though its centre is in Sweden', () => {
+  // Lindesnes to Vardø on screen: the centre of that view (64.5N 17.8E) is in
+  // Sweden, outside every Entur circle, so the centre check alone finds nothing
+  // while the screen is full of Norway.
+  const norway = { south: 57.9, north: 71.2, west: 4.5, east: 31.2 };
+  assert.equal(
+    transitFeedsInRange(64.5, 17.8).some((f) => f.id === 'entur-norway'),
+    false,
+  );
+  assert.ok(
+    transitFeedsInView(norway).some((f) => f.id === 'entur-norway'),
+    'a circle reaching into the view polls Entur',
+  );
+  // A view of Sweden that shows no Norway still does not.
+  for (const [place, view] of [
+    [
+      'Stockholm and Uppsala',
+      { south: 58.5, north: 60.5, west: 16, east: 19.5 },
+    ],
+    ['Umeå and the Gulf', { south: 62.8, north: 64.8, west: 18.5, east: 22 }],
+  ]) {
+    assert.equal(
+      transitFeedsInView(view, 40).some((f) => f.id === 'entur-norway'),
+      false,
+      `${place} does not poll Entur`,
+    );
+  }
+});
+
+test('a coverage circle meets a view rectangle at its edge and across the antimeridian', () => {
+  const circle = { lat: 60, lon: 10, radiusKm: 100 };
+  // Inside, ~55 km off the east edge (inside the radius), ~170 km off it.
+  assert.ok(
+    circleIntersectsViewRect(circle, {
+      south: 59,
+      north: 61,
+      west: 9,
+      east: 11,
+    }),
+  );
+  assert.ok(
+    circleIntersectsViewRect(circle, {
+      south: 59,
+      north: 61,
+      west: 11,
+      east: 13,
+    }),
+  );
+  assert.equal(
+    circleIntersectsViewRect(circle, {
+      south: 59,
+      north: 61,
+      west: 13,
+      east: 15,
+    }),
+    false,
+  );
+  // The slack widens the reach.
+  assert.ok(
+    circleIntersectsViewRect(
+      circle,
+      { south: 59, north: 61, west: 13, east: 15 },
+      80,
+    ),
+  );
+  // A view from 170E to 170W holds a circle centred at 179.5W.
+  assert.ok(
+    circleIntersectsViewRect(
+      { lat: -17, lon: -179.5, radiusKm: 10 },
+      { south: -20, north: -15, west: 170, east: -170 },
+    ),
+  );
+  assert.equal(
+    circleIntersectsViewRect(
+      { lat: -17, lon: 160, radiusKm: 10 },
+      { south: -20, north: -15, west: 170, east: -170 },
+    ),
+    false,
+  );
 });
 
 test('Entur is not polled from a neighbouring city, even past the range slack', () => {
