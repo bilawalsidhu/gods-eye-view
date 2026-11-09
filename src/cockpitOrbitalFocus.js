@@ -24,8 +24,9 @@ export const ORBITAL_FOCUS_EASE_TAU_MS = 250;
 /** How often the orbital Live Signals rows are rebuilt, ms. */
 export const ORBITAL_REACH_REFRESH_MS = 1000;
 
-/** The most mapped sites offered for the rows, nearest to nadir first. */
-export const ORBITAL_REACH_LIST_MAX = 6;
+/** WGS84 semi-axes squared, m²: the surface normal for the horizon test. */
+const WGS84_A2 = 6378137 ** 2;
+const WGS84_B2 = 6356752.314245179 ** 2;
 
 /** Slack on the reach limit so a target held exactly at 45° stays. */
 const REACH_EPSILON_DEG = 1e-6;
@@ -71,14 +72,15 @@ export function focusLook(nadir, satellite, target) {
   const along = dot(v, nadir.direction);
   const up = dot(v, nadir.up);
   const right = Math.min(1, Math.max(-1, dot(v, nadir.right)));
-  // The target's own zenith: the satellite is above its horizon when the
-  // line from the target to it points up.
-  const targetRadius = Math.hypot(target.x, target.y, target.z);
+  // The target's own zenith, the WGS84 surface normal there: the satellite
+  // is above its horizon when the line from the target to it points up.
+  const normal = {
+    x: target.x / WGS84_A2,
+    y: target.y / WGS84_A2,
+    z: target.z / WGS84_B2,
+  };
   const visible =
-    targetRadius > 0 &&
-    -(line.x * target.x + line.y * target.y + line.z * target.z) /
-      targetRadius >
-      0;
+    Math.hypot(normal.x, normal.y, normal.z) > 0 && -dot(line, normal) > 0;
   const yawDeg = toDegrees(Math.asin(right));
   const pitchDeg = toDegrees(Math.atan2(up, along));
   return {
@@ -103,38 +105,6 @@ export function focusInReach(look) {
     Number.isFinite(look.pitchDeg) &&
     Math.abs(look.yawDeg) <= limit &&
     Math.abs(look.pitchDeg) <= limit
-  );
-}
-
-/**
- * Whether `target` is inside the picture as it is now framed.
- * @param {{direction: object, up: object, right: object}} view The camera's
- *   orientation (the nadir frame tilted by the eased look).
- * @param {{x: number, y: number, z: number}} satellite ECEF, metres.
- * @param {{x: number, y: number, z: number}} target ECEF, metres.
- * @param {{verticalFovRad: number, aspect?: number}} frame
- * @returns {boolean}
- */
-export function inFrame(
-  view,
-  satellite,
-  target,
-  { verticalFovRad, aspect = 1 },
-) {
-  if (!view || !finiteVector(satellite) || !finiteVector(target)) return false;
-  if (!(verticalFovRad > 0)) return false;
-  const line = {
-    x: target.x - satellite.x,
-    y: target.y - satellite.y,
-    z: target.z - satellite.z,
-  };
-  const along = dot(line, view.direction);
-  if (!(along > 0)) return false;
-  const halfTan = Math.tan(verticalFovRad / 2);
-  const ratio = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
-  return (
-    Math.abs(dot(line, view.up)) / along <= halfTan &&
-    Math.abs(dot(line, view.right)) / along <= halfTan * ratio
   );
 }
 
@@ -171,53 +141,23 @@ export function focusEaseDtMs(dtMs) {
 }
 
 /**
- * The mapped points the view shows now or can be turned to: those facing
- * the satellite and either within the off-nadir reach (`reachable`) or in
- * the frame as it is. Nearest to nadir first, at most `max`.
+ * The mapped points the view can be turned to: those facing the satellite
+ * and within the off-nadir reach, nearest to nadir first.
  * @param {Iterable<{key: string, position: {x: number, y: number,
  *   z: number}}>} candidates
- * @param {{nadir: object, view: object, satellite: object,
- *   verticalFovRad: number, aspect?: number, max?: number}} frame
- * @returns {{count: number, entries: Array<{key: string,
- *   offNadirDeg: number, reachable: boolean, look: object}>}} `count` is
- *   every point in reach, `entries` the nearest.
+ * @param {{nadir: object, satellite: object}} frame
+ * @returns {Array<{key: string, offNadirDeg: number, look: object}>}
  */
-export function pointsInReach(
-  candidates,
-  {
-    nadir,
-    view,
-    satellite,
-    verticalFovRad,
-    aspect = 1,
-    max = ORBITAL_REACH_LIST_MAX,
-  },
-) {
+export function pointsInReach(candidates, { nadir, satellite }) {
   const entries = [];
-  if (!nadir || !finiteVector(satellite)) return { count: 0, entries };
+  if (!nadir || !finiteVector(satellite)) return entries;
   for (const candidate of candidates) {
     const look = focusLook(nadir, satellite, candidate?.position);
-    if (!look?.visible) continue;
-    const reachable = focusInReach(look);
-    if (
-      !reachable &&
-      !inFrame(view, satellite, candidate.position, { verticalFovRad, aspect })
-    )
-      continue;
-    entries.push({
-      key: candidate.key,
-      offNadirDeg: look.offNadirDeg,
-      reachable,
-      look,
-    });
+    if (!focusInReach(look)) continue;
+    entries.push({ key: candidate.key, offNadirDeg: look.offNadirDeg, look });
   }
-  entries.sort(
+  return entries.sort(
     (a, b) =>
       a.offNadirDeg - b.offNadirDeg || String(a.key).localeCompare(b.key),
   );
-  const limit =
-    max === Infinity || (Number.isInteger(max) && max >= 0)
-      ? max
-      : ORBITAL_REACH_LIST_MAX;
-  return { count: entries.length, entries: entries.slice(0, limit) };
 }

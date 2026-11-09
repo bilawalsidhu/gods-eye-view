@@ -389,10 +389,14 @@ export function createControls({ state: layerState, services, parts, source }) {
       { excludeIds = [], excludeClasses = [] } = {},
     ) {
       const nearest = [];
-      if (!center || !layerState._points || layerState._points.size === 0)
+      const cap = Number.isFinite(maxCount) ? Math.floor(maxCount) : 8;
+      if (
+        cap < 1 ||
+        !center ||
+        !layerState._points ||
+        layerState._points.size === 0
+      )
         return nearest;
-      const cap =
-        Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 8;
       const excluded = new Set(excludeIds.map(String));
       const classes = new Set(excludeClasses);
       const dense = layerState._denseIds.length > 0;

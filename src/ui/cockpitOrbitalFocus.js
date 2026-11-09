@@ -10,10 +10,7 @@
  */
 import * as Cesium from 'cesium';
 import { clampOrbitalLook, easeLook } from '../cockpitLook.js';
-import {
-  ORBITAL_EARTH_RADIUS_M,
-  offNadirOrientation,
-} from '../cockpitOrbital.js';
+import { ORBITAL_EARTH_RADIUS_M } from '../cockpitOrbital.js';
 import {
   easeFocusRemainder,
   focusEaseDtMs,
@@ -181,8 +178,12 @@ function startFocus(site) {
 export function releaseOrbitalFocus({ handOver = false } = {}) {
   const state = this.orbital;
   if (!state?.focus) {
-    // An arrow during the ease back takes the arrows' own clock again.
-    if (handOver && state) state.focusReleasing = false;
+    // An arrow during the ease back takes the arrows' own clock again and
+    // tilts on from where the view is, not from the nadir it was easing to.
+    if (handOver && state?.focusReleasing) {
+      state.lookTarget = clampOrbitalLook(state.lookView);
+      state.focusReleasing = false;
+    }
     return false;
   }
   state.focus = null;
@@ -249,8 +250,7 @@ export function onOrbitalClick(position) {
   if (site) {
     if (state.focus?.key === String(site.id)) return true;
     if (startFocus.call(this, site)) return true;
-    // A mapped site beyond the reach leaves the view as it is.
-    return false;
+    // A mapped site beyond the reach is a click elsewhere: the focus ends.
   }
   releaseOrbitalFocus.call(this);
   return false;
@@ -283,8 +283,9 @@ export function routeSceneClick() {
 /**
  * The orbital view's look for one frame, while a focus holds or is ending.
  * A held focus aims at its target: the live look plus whatever is left of
- * the turn onto it. The focus ends, easing back, when its site is gone (its
- * layer off, the site no longer loaded) or beyond the reach. Also rebuilds
+ * the turn onto it. The focus ends, easing back, when its layer is turned
+ * off or its site is beyond the reach (a site the layer stops loading is
+ * held from its last record). Also rebuilds
  * the orbital Live Signals rows on their own clock.
  * @param {object} state The orbital session.
  * @param {{direction: object, up: object, right: object}} nadir This
@@ -389,9 +390,8 @@ export function orbitalFocusReadout() {
  * with the layer off.
  * @param {{latitude: number, longitude: number, altitudeM: number}} info
  *   The ridden satellite.
- * @returns {{count: number, entries: Array<{site: object,
- *   offNadirDeg: number, focused: boolean}>}} `count` also counts sites in
- *   the frame but beyond the reach.
+ * @returns {{entries: Array<{site: object, offNadirDeg: number,
+ *   focused: boolean}>}}
  */
 export function orbitalSitesInReach(info) {
   const state = this.orbital;
@@ -401,9 +401,9 @@ export function orbitalSitesInReach(info) {
   // then, and no row is left to focus from.
   if (state && !sitesLayerOn(this)) state.listedSites = new Map();
   if (!frame || typeof layer?.getNearby !== 'function' || !sitesLayerOn(this))
-    return { count: 0, entries: [] };
+    return { entries: [] };
   if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude))
-    return { count: 0, entries: [] };
+    return { entries: [] };
   const rangeM = reachGroundRangeM(info.altitudeM);
   let sites = [];
   try {
@@ -449,27 +449,15 @@ export function orbitalSitesInReach(info) {
         seenMs: nowMs,
       });
   state.listedSites = remembered;
-  const frustum = this.viewer.camera?.frustum;
-  const reach = pointsInReach(candidates, {
-    nadir: frame.nadir,
-    view: offNadirOrientation(frame.nadir, {
-      northDeg: state.lookView.pitchDeg,
-      eastDeg: state.lookView.yawDeg,
-    }),
-    satellite: frame.position,
-    verticalFovRad: state.verticalFov,
-    aspect: Number.isFinite(frustum?.aspectRatio) ? frustum.aspectRatio : 1,
-    max: Infinity,
-  });
   const focusKey = state.focus?.key ?? null;
   return {
-    count: reach.count,
-    entries: reach.entries
-      .filter((entry) => entry.reachable)
-      .map(({ key, offNadirDeg }) => ({
-        site: byId.get(key),
-        offNadirDeg,
-        focused: key === focusKey,
-      })),
+    entries: pointsInReach(candidates, {
+      nadir: frame.nadir,
+      satellite: frame.position,
+    }).map(({ key, offNadirDeg }) => ({
+      site: byId.get(key),
+      offNadirDeg,
+      focused: key === focusKey,
+    })),
   };
 }

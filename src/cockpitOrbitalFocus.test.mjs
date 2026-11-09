@@ -6,12 +6,10 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
   ORBITAL_FOCUS_EASE_TAU_MS,
-  ORBITAL_REACH_LIST_MAX,
   easeFocusRemainder,
   focusEaseDtMs,
   focusInReach,
   focusLook,
-  inFrame,
   pointsInReach,
 } from './cockpitOrbitalFocus.js';
 import {
@@ -200,50 +198,30 @@ test('the reach list keeps points in reach or in frame, nearest first, bounded',
   for (let i = 0; i < 80; i += 1)
     candidates.push({ key: `east-${i}`, position: geodeticToEcef(0, i * 0.1) });
   candidates.push({ key: 'far-side', position: geodeticToEcef(0, 180) });
-  const frame = {
-    nadir,
-    view: nadir,
-    satellite,
-    verticalFovRad: (60 * Math.PI) / 180,
-    aspect: 16 / 9,
-  };
-  const all = pointsInReach(candidates, { ...frame, max: 100 });
-  assert.ok(all.entries.every((entry) => entry.key !== 'far-side'));
-  const angles = all.entries.map((entry) => entry.offNadirDeg);
+  const entries = pointsInReach(candidates, { nadir, satellite });
+  assert.ok(entries.every((entry) => entry.key !== 'far-side'));
+  const angles = entries.map((entry) => entry.offNadirDeg);
   assert.deepEqual(angles, [...angles].sort((a, b) => a - b), 'nearest first');
-  assert.equal(all.entries[0].key, 'east-0');
-  assert.equal(all.entries[0].offNadirDeg, 0);
-  // The widest frame (16:9 at 60° tall) reaches past 45° across: those
-  // points are listed, but cannot be focused.
-  const beyond = all.entries.filter((entry) => !entry.reachable);
-  assert.ok(beyond.length > 0, 'some only in frame');
-  for (const entry of beyond) assert.ok(Math.abs(entry.look.yawDeg) > 45);
-  for (const entry of all.entries.filter((e) => e.reachable))
-    assert.ok(Math.abs(entry.look.yawDeg) <= 45);
-  // Out of frame and out of reach: not listed.
-  assert.ok(all.count < 80);
-
-  const bounded = pointsInReach(candidates, frame);
-  assert.equal(bounded.entries.length, ORBITAL_REACH_LIST_MAX);
-  assert.equal(bounded.count, all.count, 'the count is all of them');
-  assert.deepEqual(
-    bounded.entries.map((entry) => entry.key),
-    all.entries.slice(0, ORBITAL_REACH_LIST_MAX).map((entry) => entry.key),
-  );
-  assert.deepEqual(pointsInReach([], frame), { count: 0, entries: [] });
+  assert.equal(entries[0].key, 'east-0');
+  assert.equal(entries[0].offNadirDeg, 0);
+  // Only those within the 45° tilt are listed.
+  assert.ok(entries.length > 0 && entries.length < 80);
+  for (const entry of entries) assert.ok(Math.abs(entry.look.yawDeg) <= 45);
+  const beyond = focusLook(nadir, satellite, candidates[entries.length].position);
+  assert.ok(Math.abs(beyond.yawDeg) > 45, 'the next one east is past the reach');
+  assert.deepEqual(pointsInReach([], { nadir, satellite }), []);
 });
 
-test('in frame follows the view, its height and its width', () => {
-  const satellite = satelliteAt(0, 0);
-  const nadir = nadirOrientation(satellite);
-  const target = geodeticToEcef(0, 3);
-  const narrow = { verticalFovRad: (5 * Math.PI) / 180, aspect: 1 };
-  assert.equal(inFrame(nadir, satellite, target, narrow), false);
-  const look = focusLook(nadir, satellite, target);
-  const tilted = offNadirOrientation(nadir, {
-    northDeg: look.pitchDeg,
-    eastDeg: look.yawDeg,
-  });
-  assert.equal(inFrame(tilted, satellite, target, narrow), true);
-  assert.equal(inFrame(tilted, satellite, target, { verticalFovRad: 0 }), false);
+test('the horizon is the ground’s own: the WGS84 surface normal, not the centre line', () => {
+  const target = geodeticToEcef(45, 0);
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(target);
+  const satelliteAtElevation = (elevationDeg) => {
+    const e = Cesium.Math.toRadians(elevationDeg);
+    const local = new Cesium.Cartesian3(0, -Math.cos(e) * 4e7, Math.sin(e) * 4e7);
+    return Cesium.Matrix4.multiplyByPoint(enu, local, new Cesium.Cartesian3());
+  };
+  const below = satelliteAtElevation(-0.1);
+  assert.equal(focusLook(nadirOrientation(below), below, target).visible, false);
+  const above = satelliteAtElevation(0.1);
+  assert.equal(focusLook(nadirOrientation(above), above, target).visible, true);
 });

@@ -573,9 +573,14 @@ test('a click on a site marker focuses it through the layer; a click elsewhere e
   const largest = run(scene, LAND_FRAMES, { drift: 0 });
   assert.ok(largest < MAX_TURN_PER_FRAME_DEG);
   assert.ok(offNadir(scene.shots.at(-1)) < 1e-6);
-  // A site beyond the reach is not focused.
+  // A site beyond the reach is not focused, and ends a focus as a click
+  // elsewhere does.
   scene.click(SITES.far.at);
   assert.equal(cockpit.orbital.focus ?? null, null);
+  scene.click(SITES.alpha.at);
+  assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
+  scene.click(SITES.far.at);
+  assert.equal(cockpit.orbital.focus, null);
 });
 
 test('a click a tool owns is left alone', async (t) => {
@@ -676,7 +681,12 @@ test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) =
   run(scene, 5);
   const before = Cesium.Cartesian3.clone(scene.shots.at(-1).destination);
 
+  const firstTrack = cockpit.signalItems.find((item) => item.key === 'track');
+  firstTrack.timestamp -= 60_000;
   satelliteRow(scene, 49260).click();
+  const newTrack = cockpit.signalItems.filter((item) => item.key === 'track');
+  assert.equal(newTrack.length, 1);
+  assert.ok(newTrack[0].timestamp > firstTrack.timestamp, 'the new ride’s own time');
   assert.deepEqual(satellites.calls.slice(-2), [['track', 49260], ['subject', 49260]]);
   assert.equal(viewer.trackedEntity, undefined, 'the Cockpit keeps the camera');
   assert.equal(cockpit.subjectId, 49260);
@@ -793,6 +803,8 @@ test('an arrow during the ease back from a focus turns on the arrows’ clock', 
   scene.click(EMPTY_GROUND);
   scene.frame();
   assert.equal(cockpit.orbital.focusReleasing, true);
+  const view = { ...cockpit.orbital.lookView };
+  assert.ok(Math.abs(view.pitchDeg) > 1 || Math.abs(view.yawDeg) > 1, 'still turned');
   cockpit.onKeyDown({
     key: 'ArrowUp',
     target: document.body,
@@ -800,6 +812,12 @@ test('an arrow during the ease back from a focus turns on the arrows’ clock', 
     stopImmediatePropagation() {},
   });
   assert.equal(cockpit.orbital.focusReleasing, false);
+  // The arrow tilts on from where the view is, not from nadir.
+  assert.ok(
+    Math.abs(cockpit.orbital.lookTarget.yawDeg - view.yawDeg) < 1e-6,
+    'across kept',
+  );
+  assert.ok(cockpit.orbital.lookTarget.pitchDeg > view.pitchDeg, 'tilted on up');
 });
 
 test('leaving orbit leaves no orbital rows to act on', async (t) => {

@@ -1708,7 +1708,8 @@ time. TRACK ACQUIRED stays first. Then:
 
 - **Sites**: the Mapped Installations layer's loaded records around the
   sub-satellite point (`getNearby`, asked only as far as the reach extends
-  over the ground) that face the satellite and lie within the off-nadir
+  over the ground, and never past 3,000 km, so from a high orbit only the
+  sites within 3,000 km of the point below are listed) that face the satellite and lie within the off-nadir
   reach, nearest to nadir first, the focused site always among them. A row
   reads the site's name over its class and off-nadir angle; its button
   (`Keep the camera on …`) focuses the site, and on the focused site's row,
@@ -1727,7 +1728,10 @@ time. TRACK ACQUIRED stays first. Then:
   back to nadir, and the camera hops to the new satellite along the great
   circle over 1.2 s (cut under reduced motion), keeping the zoom. Until the
   camera is on the new satellite the page shows only TRACK ACQUIRED and
-  RETURN, then rebuilds at once.
+  RETURN (and SITES STANDBY with Mapped Installations off), then rebuilds
+  at once. The new satellite's TRACK ACQUIRED carries the time it was
+  ridden. The hop starts from where the camera was, which does not follow
+  the old satellite on.
 
 Sites take two rows while satellites fill the rest, more when there are
 fewer satellites. The Contact card stays hidden in orbit.
@@ -1741,7 +1745,8 @@ with the arrows' easing on a slower clock (250 ms time constant, about
 0.75 s to 95%), then holds the site exactly, and cuts under
 `prefers-reduced-motion`. A single click on a site's marker focuses it too:
 the pick is resolved through the layer's own pick ids (`findByPick`: a named
-marker's `{ installationId }` or a site entity). A click anywhere else, the
+marker's `{ installationId }` or a site entity). A click anywhere else
+(a site beyond the reach included), the
 focused site's row, NADIR, Home or `0` ends the focus and the view eases
 back to nadir on the same clock; an arrow ends it (or the ease back) and
 tilts on from where the view is. The layer reloads its thinned view as the

@@ -64,4 +64,7 @@ test('the nearest shown satellites come first, bounded, with their distance', ()
   assert.equal(nearest[0].satelliteClass, 'imaging');
   assert.equal(methods.getNearestPositions(CENTRE, 1, { excludeIds: [6] })[0].label, 'DEB');
   assert.deepEqual(methods.getNearestPositions(null, 3), []);
+  assert.deepEqual(methods.getNearestPositions(CENTRE, 0), []);
+  assert.deepEqual(methods.getNearestPositions(CENTRE, 0.5), []);
+  assert.equal(methods.getNearestPositions(CENTRE, 2.5).length, 2);
 });

@@ -150,6 +150,9 @@ export function switchOrbitalSatellite(noradId) {
   this.lastHudUpdateMs = 0;
   this.lastContextUpdateMs = 0;
   this.dispatchCockpitModeChanged(true, info);
+  // The new satellite's TRACK ACQUIRED replaces the old one, time and all.
+  this.signalItems = this.signalItems.filter((item) => item.key !== 'track');
+  this.signalSignatures.delete('track');
   this.pushCockpitSignal(
     'track',
     'track',

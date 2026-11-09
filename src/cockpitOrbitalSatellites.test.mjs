@@ -26,3 +26,16 @@ test('the hop follows the great circle and lands on the satellite', () => {
   assert.ok(Math.abs(Math.atan2(mid.y, mid.x) - Math.PI / 4) < 1e-9);
   assert.equal(hopPosition(null, to, 0.5), null);
 });
+
+test('a hop to the opposite side goes round the Earth, not through it', () => {
+  const from = at(0, 0, 400_000);
+  const to = at(0, 180, 400_000);
+  const radius = Cesium.Cartesian3.magnitude(from);
+  for (const p of [0.25, 0.5, 0.75]) {
+    const point = hopPosition(from, to, p);
+    assert.ok(Math.abs(Math.hypot(point.x, point.y, point.z) - radius) < 1e-3, `p=${p}`);
+  }
+  const end = hopPosition(from, to, 1);
+  for (const axis of ['x', 'y', 'z'])
+    assert.ok(Math.abs(end[axis] - to[axis]) < 1e-3, axis);
+});
