@@ -1131,6 +1131,7 @@
   "src/tools/views.test.mjs",
   "src/app/embed.test.mjs",
   "src/render/cesium/panelRendering.js",
+  "src/render/cesium/application.js",
   "src/render/cesium/panelRendering.test.mjs",
   "src/tools/globePanel.test.mjs",
   "src/costEndpointThrottle.test.mjs",

@@ -153,7 +153,13 @@ back to Cesium. Both lists only ever shrink.
 - `src/render/cesiumAllowList.json` lists the files outside the Cesium
   adapter (`src/render/cesium/`) that may still import or be handed Cesium
   (`src/render/noCesiumOutsideRender.test.mjs`). A file leaves the list
-  when it no longer drives Cesium at all; nothing is added.
+  when it no longer drives Cesium at all; nothing is added. Two files name
+  the adapter by design and are not on it: the application scene
+  (`src/app/scene.js`), the composition root that picks the Cesium renderer,
+  may import `src/render/cesium/application.js` and nothing else of the
+  adapter; the conformance page (`dev/conformance/main.js`) may import the
+  adapter's harness and scene renderer. The test names both
+  (`ADAPTER_ENTRIES`), and that list is never grown.
 - `src/render/viewerAccessAllowList.json` counts, per file off that list,
   the Cesium-shaped accesses through the viewer it still makes
   (`src/render/viewerAccess.test.mjs`): the viewer's `entities`,

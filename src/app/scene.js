@@ -1,15 +1,17 @@
 import { createApplicationOperations } from './operations.js';
-import * as Cesium from 'cesium';
+// The application's composition root: it picks the Cesium renderer, and
+// this is the only part of the adapter it imports.
 import {
+  applicationViewerHooks,
   cesiumRenderer,
   cesiumViewerOf,
-} from '../render/cesium/appRenderer.js';
-import { trimStaleSceneCommands } from '../render/cesium/sceneCommandRelease.js';
-import { keepPanelRendering } from '../render/cesium/panelRendering.js';
+  loadApplicationPhotoreal,
+  releaseApplicationPhotoreal,
+  showApplicationPhotoreal,
+} from '../render/cesium/application.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
-import { loadPhotorealisticTileset } from '../render/cesium/google3d.js';
 import { initLogoGaze } from '../logoGaze.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
@@ -97,21 +99,17 @@ export async function createApplicationScene({
     googleApiKey || googleTokens || cesiumToken
       ? t('Loading Google 3D Tiles...')
       : t('Loading the keyless globe...');
-  const photoreal = await loadPhotorealisticTileset(Cesium, {
+  const photoreal = await loadApplicationPhotoreal({
     googleApiKey,
     googleTokens,
     cesiumToken,
   });
   const tileset = photoreal.tileset;
   // A provider can finish after cancellation; retain ownership of its result.
-  defer(() => {
-    if (tileset && !tileset.isDestroyed()) {
-      if (!viewer.scene.primitives.remove(tileset)) tileset.destroy();
-    }
-  });
+  defer(() => releaseApplicationPhotoreal(viewer, tileset));
   signal.throwIfAborted();
   if (tileset) {
-    viewer.scene.primitives.add(tileset);
+    showApplicationPhotoreal(viewer, tileset);
     // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
     // Google Photorealistic 3D Tiles provide their own terrain/elevation.
     renderer.globe.setGlobeVisible(false);
@@ -167,14 +165,8 @@ export async function createApplicationScene({
     mapStackController,
     operations,
     input,
-    // Drops the draw commands the scene keeps after it stops drawing them;
-    // run after a drawn frame (see src/sceneCommandRelease.js).
-    trimStaleCommands: () => trimStaleSceneCommands(viewer.scene),
-    // Keeps the globe drawing in an inline panel whose host stops animation
-    // frames (embed mode, src/app/embed.js).
-    keepPanelRendering: (options) => keepPanelRendering(viewer, options),
-    // Whether an entity is one of the viewer's own (Cockpit asks whether
-    // the aircraft it flies still draws).
-    viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
+    // Trims stale draw commands, keeps an inline panel drawing, and says
+    // whether an entity is the viewer's own (render/cesium/application.js).
+    ...applicationViewerHooks(viewer),
   };
 }
