@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- `gods-eye-view/application/layers` and `gods-eye-view/standalone/catalog`
+  no longer reach Cesium: the weather shells and the wind layer's colour
+  shell and flow draw through the renderer's `draw.field` (`rasterShell` and
+  `windStreamlines`, which the Cesium renderer now draws), and the wind
+  relief is the globe port's `hillshade` surface shading. The flow animates
+  as before, and still falls back to the canvas where the renderer refuses
+  it. A viewer with no renderer bound needs
+  `gods-eye-view/render/cesium/unbound` loaded once first (samehkhamis).
 - `gods-eye-view/input` no longer reaches Cesium: the dispatcher takes its
   pointer events from the renderer's input port and its picks from the query
   port. A click's `hit`, `topHit`, `drawHit` and `drill()` hits, and

@@ -7,6 +7,7 @@ import * as Cesium from 'cesium';
 import { Color, ImageryLayerCollection, GeographicTilingScheme } from 'cesium';
 import { NO_IMAGERY_HOST } from './imageryHost.js';
 import { createWeatherShell } from './shellRendering.js';
+import { createCesiumFields } from '../../render/cesium/drawFields.js';
 import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
@@ -222,6 +223,9 @@ function renderingHarness(options = {}) {
     Credit: Cesium.Credit,
     Rectangle: Cesium.Rectangle,
   };
+  // The Cesium draw port's raster shells, over the doubles.
+  const fields = createCesiumFields({ scene: viewer.scene, cesium });
+  const draw = { field: (spec) => fields.field(spec) };
   const rendering = createWeatherRendering({
     viewer,
     globeOf: () => globe,
@@ -230,7 +234,12 @@ function renderingHarness(options = {}) {
     frameOf: () => frame,
     toBitmap: (canvas) => canvas,
     createShell: (shellOptions) =>
-      createWeatherShell({ ...shellOptions, cesium }),
+      createWeatherShell({
+        ...shellOptions,
+        drawOf: () => draw,
+        cameraOf: cameraOver,
+        frameOf: () => frame,
+      }),
     fetchImpl: async () => mockResponse(),
     decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
     createCanvas,

@@ -40,6 +40,7 @@ import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 import { createModelSets } from './drawModels.js';
 import { createMeshSets } from './drawMeshes.js';
 import { createQuadSets } from './drawQuads.js';
+import { createCesiumFields } from './drawFields.js';
 
 /** The contract's colour as Cesium's. */
 export function toColor(color, alpha = 1) {
@@ -358,6 +359,8 @@ export function createCesiumDraw({
   requestRender: requestFrame = null,
 }) {
   const sets = new Map();
+  // Fields share the sets' ids.
+  const fieldPart = createCesiumFields({ scene, report });
   let setSeq = 0;
   // Bumped whenever what height queries see through may have changed: a
   // set made, rebuilt, restyled or gone, or items added or removed (icons
@@ -371,7 +374,8 @@ export function createCesiumDraw({
   };
 
   function makeSet(kind, spec, build) {
-    if (sets.has(spec.id)) throw new Error(`a set with id ${spec.id} is live`);
+    if (sets.has(spec.id) || fieldPart.has(spec.id))
+      throw new Error(`a set with id ${spec.id} is live`);
     const items = new Map();
     const listeners = {
       ready: listenerList(report),
@@ -3868,6 +3872,15 @@ export function createCesiumDraw({
       makeSet('quads', { ...spec }, (record) => quadSets.build(record)),
     meshes: (spec) =>
       makeSet('meshes', { ...spec }, (record) => meshSets.build(record)),
+    ...(capabilities.has('fields')
+      ? {
+          field(spec) {
+            if (sets.has(spec?.id))
+              throw new Error(`a set with id ${spec.id} is live`);
+            return fieldPart.field(spec);
+          },
+        }
+      : {}),
     clampState,
     on(event, cb) {
       if (event !== 'clampState') return () => {};
@@ -3950,6 +3963,8 @@ export function createCesiumDraw({
      */
     dispose({ removeHosts = false } = {}) {
       clampListeners.clear();
+      // Fields go with the port, and their frame listeners with them.
+      fieldPart.dispose();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) {
         if (removeHosts && !scene.isDestroyed?.()) {
@@ -3989,7 +4004,11 @@ provideUnboundDraw((viewer) => {
     typeof scene.requestRender !== 'function'
   )
     return null;
-  const part = createCesiumDraw({ scene, report: uncaught });
+  const part = createCesiumDraw({
+    scene,
+    report: uncaught,
+    capabilities: new Set([...GPU_ICON_CAPABILITIES, 'fields']),
+  });
   unboundParts.set(part.port, part);
   const offs = [
     scene.preRender?.addEventListener?.(() => part.beforeRender()),

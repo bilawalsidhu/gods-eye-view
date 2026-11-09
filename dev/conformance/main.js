@@ -137,67 +137,76 @@ async function runScenes({ record = false, only } = {}) {
         continue;
       }
       status(`${scene.id}…`);
-      await drawScene(renderer, scene, ctx, async (view, capture, settle) => {
-        const name = referenceName(scene.id, view.name);
-        const figure = document.createElement('figure');
-        $('views').append(figure);
-        if (settle.state !== 'settled') {
-          const detail = `${settle.state}: ${settle.blockers.join(', ')}`;
+      // A scene the renderer refuses fails alone; the others still draw.
+      try {
+        await drawScene(renderer, scene, ctx, async (view, capture, settle) => {
+          const name = referenceName(scene.id, view.name);
+          const figure = document.createElement('figure');
+          $('views').append(figure);
+          if (settle.state !== 'settled') {
+            const detail = `${settle.state}: ${settle.blockers.join(', ')}`;
+            results.push({
+              scene: scene.id,
+              view: view.name,
+              status: 'fail',
+              detail,
+            });
+            figure.innerHTML = `<img src="${objectUrl(capture)}"><figcaption class="fail">${name}: ${escape(detail)}</figcaption>`;
+            return;
+          }
+          if (record) {
+            const res = await fetch(SAVE + name, {
+              method: 'PUT',
+              body: capture,
+            });
+            results.push({
+              scene: scene.id,
+              view: view.name,
+              status: res.ok ? 'recorded' : 'fail',
+              detail: res.ok ? undefined : `save ${res.status}`,
+            });
+            figure.innerHTML = `<img src="${objectUrl(capture)}"><figcaption>${name}: recorded</figcaption>`;
+            return;
+          }
+          const refBlob = await reference(name);
+          if (!refBlob) {
+            results.push({
+              scene: scene.id,
+              view: view.name,
+              status: 'fail',
+              detail: 'no reference',
+            });
+            figure.innerHTML = `<img src="${objectUrl(capture)}"><figcaption class="fail">${name}: no reference</figcaption>`;
+            return;
+          }
+          const [actual, expected] = await Promise.all([
+            pixels(capture),
+            pixels(refBlob),
+          ]);
+          const diff = new Uint8ClampedArray(actual.data.length);
+          const outcome = compareImages(actual, expected, { diff });
           results.push({
             scene: scene.id,
             view: view.name,
-            status: 'fail',
-            detail,
+            status: outcome.match ? 'pass' : 'fail',
+            diffFraction: outcome.diffFraction,
+            solidPixels: outcome.solidPixels,
+            mismatchedPixels: outcome.mismatchedPixels,
+            ...(outcome.reason ? { detail: outcome.reason } : {}),
           });
-          figure.innerHTML = `<img src="${objectUrl(capture)}"><figcaption class="fail">${name}: ${escape(detail)}</figcaption>`;
-          return;
-        }
-        if (record) {
-          const res = await fetch(SAVE + name, {
-            method: 'PUT',
-            body: capture,
-          });
-          results.push({
-            scene: scene.id,
-            view: view.name,
-            status: res.ok ? 'recorded' : 'fail',
-            detail: res.ok ? undefined : `save ${res.status}`,
-          });
-          figure.innerHTML = `<img src="${objectUrl(capture)}"><figcaption>${name}: recorded</figcaption>`;
-          return;
-        }
-        const refBlob = await reference(name);
-        if (!refBlob) {
-          results.push({
-            scene: scene.id,
-            view: view.name,
-            status: 'fail',
-            detail: 'no reference',
-          });
-          figure.innerHTML = `<img src="${objectUrl(capture)}"><figcaption class="fail">${name}: no reference</figcaption>`;
-          return;
-        }
-        const [actual, expected] = await Promise.all([
-          pixels(capture),
-          pixels(refBlob),
-        ]);
-        const diff = new Uint8ClampedArray(actual.data.length);
-        const outcome = compareImages(actual, expected, { diff });
+          const diffUrl = outcome.reason
+            ? ''
+            : await toUrl(new ImageData(diff, actual.width, actual.height));
+          figure.innerHTML = `<div class="row"><img src="${objectUrl(capture)}" title="${which}"><img src="${objectUrl(refBlob)}" title="reference"><img src="${diffUrl}" title="difference"></div>
+          <figcaption class="${outcome.match ? 'pass' : 'fail'}">${name}: ${outcome.solidPixels} solid, ${outcome.mismatchedPixels} unexcused, ${(outcome.diffFraction * 100).toFixed(3)}% differ ${outcome.reason ?? ''}</figcaption>`;
+        });
+      } catch (error) {
         results.push({
           scene: scene.id,
-          view: view.name,
-          status: outcome.match ? 'pass' : 'fail',
-          diffFraction: outcome.diffFraction,
-          solidPixels: outcome.solidPixels,
-          mismatchedPixels: outcome.mismatchedPixels,
-          ...(outcome.reason ? { detail: outcome.reason } : {}),
+          status: 'fail',
+          detail: String(error?.message ?? error),
         });
-        const diffUrl = outcome.reason
-          ? ''
-          : await toUrl(new ImageData(diff, actual.width, actual.height));
-        figure.innerHTML = `<div class="row"><img src="${objectUrl(capture)}" title="${which}"><img src="${objectUrl(refBlob)}" title="reference"><img src="${diffUrl}" title="difference"></div>
-          <figcaption class="${outcome.match ? 'pass' : 'fail'}">${name}: ${outcome.solidPixels} solid, ${outcome.mismatchedPixels} unexcused, ${(outcome.diffFraction * 100).toFixed(3)}% differ ${outcome.reason ?? ''}</figcaption>`;
-      });
+      }
     }
     if (record) {
       // A partial recording keeps the other scenes' entries.

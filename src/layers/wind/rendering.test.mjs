@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
-
 import { createWindRendering } from './rendering.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import {
   createShellCesium,
   createShellScene,
+  renderShells,
 } from '../weather/shellFixture.mjs';
+import { createCesiumFields } from '../../render/cesium/drawFields.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
 
 function event() {
   const listeners = new Set();
@@ -177,6 +178,7 @@ function harness({
   const viewer = {
     container,
     imageryLayers,
+    canvas,
     scene: {
       canvas,
       camera: {
@@ -197,34 +199,49 @@ function harness({
     },
     isDestroyed: () => false,
   };
-  const cesium = {
-    ...(shell ? createShellCesium() : {}),
-    GeographicTilingScheme: Cesium.GeographicTilingScheme,
-    Credit: Cesium.Credit,
-    Event: Cesium.Event,
-    Cartesian3: { fromDegrees: (lon, lat) => ({ lon, lat }) },
-    Ellipsoid: { WGS84: {} },
-    Rectangle: { MAX_VALUE: {} },
-    EllipsoidalOccluder: class {
-      isPointVisible() {
-        return !occluded;
-      }
+  const shellCesium = shell ? createShellCesium() : null;
+  // The camera, frame and query ports over the doubles above, read live.
+  const cameraPort = {
+    pose() {
+      const camera = viewer.scene.camera;
+      return {
+        position: camera.positionWC,
+        heading: camera.heading,
+        pitch: camera.pitch,
+        roll: camera.roll,
+        height: camera.positionCartographic?.height,
+      };
     },
-    SceneTransforms: {
-      worldToWindowCoordinates: projected ?? (() => ({ x: 100, y: 100 })),
-    },
-    SingleTileImageryProvider: class {
-      constructor(options) {
-        this.options = options;
-        this.errorEvent = event();
-      }
-    },
+    viewRectangle: () => viewer.scene.camera.viewRectangle?.() ?? null,
+    on: (name, cb) =>
+      name === 'moveEnd'
+        ? viewer.scene.camera.moveEnd.addEventListener(cb)
+        : () => {},
   };
+  const framePort = {
+    on: (name, cb) =>
+      name === 'preRender' ? preRender.addEventListener(cb) : () => {},
+    requestRender: () => viewer.scene.requestRender(),
+  };
+  // Projections see the point as degrees, as the doubles above were written.
+  const project = projected ?? (() => ({ x: 100, y: 100 }));
+  const queryPort = {
+    isOccluded: () => occluded,
+    project: (point) => project(viewer.scene, toLonLatH(point)),
+  };
+  const fields = shellCesium
+    ? createCesiumFields({ scene: viewer.scene, cesium: shellCesium })
+    : null;
+  const draw = fields && { field: (spec) => fields.field(spec) };
   const rendering = createWindRendering({
-    cesium,
     container,
     getViewer: () => viewer,
     globeOf: (given) => (given === viewer ? globe : null),
+    // The Cesium draw port's raster shells, over the doubles.
+    drawOf: (given) => (given === viewer ? draw : null),
+    cameraOf: (given) => (given === viewer ? cameraPort : null),
+    frameOf: (given) => (given === viewer ? framePort : null),
+    queryOf: (given) => (given === viewer ? queryPort : null),
     createGpuRendering,
     onStatusChange,
     getHost,
@@ -245,7 +262,7 @@ function harness({
     motion,
     preRender,
     viewer,
-    cesium,
+    cesium: shellCesium,
     imagery,
     removed,
     primitives: () => shellScene?.primitives.items ?? [],
@@ -444,11 +461,11 @@ test('scalar imagery builds once, survives pause, replaces cleanly, and releases
 
 for (const overlay of ['speed', 'pressure', 'temperature']) {
   test(`${overlay} imagery fades with log camera height and resumes from idle`, () => {
+    let camera = null;
     const gpu = {
       supported: () => true,
       setField: () => true,
-      updateVisibility: (camera) => camera.positionCartographic.height > 15000,
-      tick() {},
+      updateVisibility: () => camera.positionCartographic.height > 15000,
       setOptions() {},
       clear() {},
       destroy() {},
@@ -456,7 +473,7 @@ for (const overlay of ['speed', 'pressure', 'temperature']) {
       getDiagnostics: () => ({ ready: true }),
     };
     const h = harness({ createGpuRendering: () => gpu });
-    const camera = h.viewer.scene.camera;
+    camera = h.viewer.scene.camera;
     const baseAlpha = overlay === 'temperature' ? 1 : 0.85;
     const snapshot = {
       grid: FIELD,
@@ -586,11 +603,11 @@ test('a large camera move immediately refills the newly visible region', () => {
       y: 300 + point.lat * 20,
     }),
   });
-  h.viewer.scene.camera.computeViewRectangle = () => ({
-    west: ((center - 10) * Math.PI) / 180,
-    east: ((center + 10) * Math.PI) / 180,
-    south: (-10 * Math.PI) / 180,
-    north: (10 * Math.PI) / 180,
+  h.viewer.scene.camera.viewRectangle = () => ({
+    west: center - 10,
+    east: center + 10,
+    south: -10,
+    north: 10,
   });
   h.rendering.attach();
   h.rendering.setField(FIELD);
@@ -615,11 +632,11 @@ test('world-anchored wind glyphs remain readable at low FPS without accelerating
       y: 300 + point.lat * 20,
     }),
   });
-  h.viewer.scene.camera.computeViewRectangle = () => ({
-    west: (-5 * Math.PI) / 180,
-    east: (5 * Math.PI) / 180,
-    south: (-0.001 * Math.PI) / 180,
-    north: (0.001 * Math.PI) / 180,
+  h.viewer.scene.camera.viewRectangle = () => ({
+    west: -5,
+    east: 5,
+    south: -0.001,
+    north: 0.001,
   });
   h.rendering.attach();
   h.rendering.setField(FIELD);
@@ -664,11 +681,11 @@ test('world-anchored wind glyphs remain readable at low FPS without accelerating
   h.rendering.destroy();
 });
 
-test('GPU flow uses one scheduler, rebuilds only across viewport budgets, and pauses cleanly', () => {
+test('GPU flow leaves animation to the renderer, rebuilds only across viewport budgets, and pauses cleanly', () => {
   let builds = 0,
-    ticks = 0,
     cleared = 0,
     destroyed = 0;
+  const options = [];
   const gpu = {
     supported: () => true,
     updateVisibility: () => true,
@@ -677,10 +694,9 @@ test('GPU flow uses one scheduler, rebuilds only across viewport budgets, and pa
       builds++;
       return true;
     },
-    tick() {
-      ticks++;
+    setOptions(value) {
+      options.push(value.paused);
     },
-    setOptions() {},
     clear() {
       cleared++;
     },
@@ -691,16 +707,12 @@ test('GPU flow uses one scheduler, rebuilds only across viewport budgets, and pa
     getDiagnostics: () => ({ ready: true, pathCount: 1 }),
   };
   const h = harness({ createGpuRendering: () => gpu });
-  let renders = 0;
-  h.viewer.scene.requestRender = () => {
-    renders++;
-  };
   h.rendering.attach();
   h.rendering.setField({ grid: FIELD, u: FIELD.u, v: FIELD.v });
   h.rendering.start();
-  h.callbacks.shift()(16);
   assert.equal(h.rendering.getDiagnostics().renderMode, 'gpu-streamlines');
-  assert.ok(ticks > 0 && renders > 0);
+  assert.equal(h.pending.size, 0, 'the renderer moves the highlight');
+  assert.equal(options.at(-1), false);
   assert.equal(h.strokes.length, 0);
   h.viewer.scene.camera.positionWC.x = 10;
   h.preRender.emit();
@@ -710,7 +722,7 @@ test('GPU flow uses one scheduler, rebuilds only across viewport budgets, and pa
     'camera changes project geometry without rebuilding paths',
   );
   h.rendering.setOptions({ paused: true });
-  assert.equal(h.pending.size, 0);
+  assert.equal(options.at(-1), true, 'the pause reaches the renderer');
   h.canvas.clientWidth = 390;
   h.preRender.emit();
   assert.equal(builds, 2, 'crossing the narrow viewport boundary rebakes once');
@@ -735,7 +747,6 @@ for (const paused of [false, true]) {
         ready = false;
         return true;
       },
-      tick() {},
       setOptions() {},
       clear() {},
       destroy() {},
@@ -787,18 +798,14 @@ for (const paused of [false, true]) {
   });
 }
 
-test('scalar snapshots retain identical GPU wind geometry and animation phase', () => {
+test('scalar snapshots retain identical GPU wind geometry, and so its animation phase', () => {
   let builds = 0;
-  const times = [];
   const gpu = {
     supported: () => true,
     updateVisibility: () => true,
     setField() {
       builds++;
       return true;
-    },
-    tick(time) {
-      times.push(time);
     },
     setOptions() {},
     clear() {},
@@ -824,9 +831,6 @@ test('scalar snapshots retain identical GPU wind geometry and animation phase', 
   h.rendering.attach();
   h.rendering.setField(snapshot());
   h.rendering.start();
-  h.callbacks.shift()(16);
-  h.callbacks.shift()(1016);
-  const phase = times.at(-1);
   h.rendering.setOptions({ overlay: 'temperature' });
   h.rendering.setField(
     snapshot({
@@ -843,11 +847,6 @@ test('scalar snapshots retain identical GPU wind geometry and animation phase', 
     'freshly decoded equal arrays reuse the worker-built primitive',
   );
   assert.equal(h.imagery.length, 1, 'new scalar field is still installed');
-  h.callbacks.shift()(1032);
-  assert.ok(
-    times.at(-1) >= phase,
-    'scalar acquisition does not reset travelling highlights',
-  );
   h.rendering.setField(
     snapshot({
       scalar: {
@@ -890,7 +889,6 @@ for (const [label, change] of Object.entries({
         builds++;
         return true;
       },
-      tick() {},
       setOptions() {},
       clear() {},
       destroy() {},
@@ -918,25 +916,25 @@ for (const [label, change] of Object.entries({
 }
 
 for (const eventName of ['preRender', 'moveEnd']) {
-  test(`GPU height suspension resumes from camera ${eventName} without preRender`, () => {
-    const times = [];
+  test(`GPU height fade follows camera ${eventName} with no frames of its own`, () => {
     let visible = false;
-    let inFrustum = true;
+    let fades = 0;
+    const options = [];
     const gpu = {
       supported: () => true,
       setField: () => true,
-      updateVisibility(camera) {
-        visible = camera.positionCartographic.height > 15000 && inFrustum;
+      updateVisibility() {
+        fades++;
+        visible = camera.positionCartographic.height > 15000;
         return visible;
       },
-      tick(time) {
-        times.push(time);
+      setOptions(value) {
+        options.push(value.paused);
       },
-      setOptions() {},
       clear() {},
       destroy() {},
       getParticleCount: () => 1,
-      getDiagnostics: () => ({ ready: true, visibleCells: Number(visible) }),
+      getDiagnostics: () => ({ ready: true }),
     };
     const h = harness({ createGpuRendering: () => gpu });
     const camera = h.viewer.scene.camera;
@@ -949,52 +947,27 @@ for (const eventName of ['preRender', 'moveEnd']) {
     h.preRender.emit();
     assert.equal(h.pending.size, 0);
     assert.equal(renders, 0);
-    assert.equal(times.length, 0);
+    assert.equal(visible, false);
     assert.equal(camera.percentageChanged, 0.5);
     assert.equal(camera.changed.size, 0);
 
     camera.positionCartographic.height = 60000;
+    const before = fades;
     (eventName === 'preRender' ? h.preRender : camera.moveEnd).emit();
+    assert.ok(fades > before, 'the fade follows the camera');
+    assert.equal(visible, true);
     assert.equal(
       renders,
       eventName === 'preRender' ? 0 : 1,
       'moveEnd wakes the parked scene',
     );
-    assert.equal(h.pending.size, 1);
-    h.callbacks.shift()(16);
-    assert.equal(times.length, 1);
-    const phase = times.at(-1);
-    const queued = h.callbacks.shift();
-    camera.positionCartographic.height = 15000;
-    h.preRender.emit();
-    const parkedRenders = renders;
-    queued(100000);
-    assert.equal(h.pending.size, 0);
-    assert.equal(renders, parkedRenders);
-    assert.equal(times.length, 1, 'parked draw cannot tick or advance phase');
-
-    camera.positionCartographic.height = 60000;
-    (eventName === 'preRender' ? h.preRender : camera.moveEnd).emit();
-    h.callbacks.shift()(200000);
-    assert.ok(
-      times.at(-1) - phase < 0.1,
-      'idle time does not jump animation phase',
-    );
-    inFrustum = false;
-    h.preRender.emit();
-    assert.equal(h.pending.size, 0, 'frustum-hidden cells also park');
-    inFrustum = true;
+    assert.equal(h.pending.size, 0, 'the renderer animates, not the layer');
     h.rendering.setOptions({ paused: true });
-    (eventName === 'preRender' ? h.preRender : camera.moveEnd).emit();
-    assert.equal(h.pending.size, 0, 'camera events respect pause');
+    assert.equal(options.at(-1), true);
     h.rendering.setOptions({ paused: false });
-    globalThis.document.hidden = true;
-    h.visibility.emit();
-    (eventName === 'preRender' ? h.preRender : camera.moveEnd).emit();
-    assert.equal(h.pending.size, 0, 'camera events respect hidden documents');
-    globalThis.document.hidden = false;
-    h.visibility.emit();
-    assert.equal(h.pending.size, 1);
+    assert.equal(options.at(-1), false);
+    h.rendering.stop();
+    assert.equal(options.at(-1), true, 'a stopped layer holds the flow still');
     h.rendering.destroy();
     assert.equal(h.pending.size, 0);
     assert.equal(camera.changed.size, 0);
@@ -1028,10 +1001,14 @@ test('scalar field becomes a raised shell on 3D Tiles and survives no-host event
   eventTarget.dispatchEvent(new Event('gev:map-stack-changed'));
   assert.equal(h.imagery.length, 0);
   assert.equal(h.removed[0].destroy, true);
+  // It shows once its geometry and image are ready.
+  renderShells(h.cesium, h.viewer.scene);
   const [primitive] = h.primitives();
   const geometry = primitive.options.geometryInstances.geometry.options;
   assert.equal(geometry.height, 5_000);
-  assert.equal(geometry.rectangle, h.cesium.Rectangle.MAX_VALUE);
+  assert.ok(
+    h.cesium.Rectangle.equals(geometry.rectangle, h.cesium.Rectangle.MAX_VALUE),
+  );
   const material = primitive.appearance.material;
   assert.equal(h.textures.length, 2);
   assert.equal(material.uniforms.image, h.textures[1]);
@@ -1094,7 +1071,6 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
       supported: () => true,
       setField: () => true,
       updateVisibility: () => true,
-      tick() {},
       setOptions() {},
       clear() {},
       destroy() {},
@@ -1121,6 +1097,7 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
     h.rendering.setOptions({ overlay });
     h.rendering.setField(field);
     h.rendering.start();
+    renderShells(h.cesium, h.viewer.scene);
     assert.equal(h.imagery.length, 0);
     const [primitive] = h.primitives();
     const { uniforms } = primitive.appearance.material;
@@ -1185,6 +1162,7 @@ for (const overlay of ['speed', 'temperature', 'pressure']) {
       },
     });
     h.rendering.start();
+    renderShells(h.cesium, h.viewer.scene);
     const [primitive] = h.primitives();
     const textures = h.textures.length;
     const baseAlpha = overlay === 'temperature' ? 1 : 0.85;
