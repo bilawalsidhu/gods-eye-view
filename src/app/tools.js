@@ -35,6 +35,7 @@ export function createApplicationTools({
   startChrome,
   onSceneDirector,
   sceneDataPacks,
+  drawMarkActions = [],
   signal,
   defer,
 }) {
@@ -80,12 +81,15 @@ export function createApplicationTools({
   // while a session is open, so its teardown belongs to the application
   // lifetime rather than to whoever last pressed the button. A row's fly-to
   // goes through the shell's navigation policy, as Import's does.
+  // `drawMarkActions` are an application's own buttons on a drawn area's or
+  // line's row (annotations/drawMarks.js); the standalone shell adds none.
   const drawTool = initDrawTool({
     viewer,
     annotations,
     navigation: styleManager,
     publish: (view) => displayStore.publishDraw(view),
     connect: connectDisplay,
+    markActions: drawMarkActions,
   });
   defer(() => drawTool?.destroy());
   // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its

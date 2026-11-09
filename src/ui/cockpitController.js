@@ -1,6 +1,8 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
 import {
   readAircraftInfo,
+  readSatelliteInfo,
+  readVesselInfo,
   readSubjectLayerId,
   resolveEntryKind,
   dispatchCockpitModeChanged,
@@ -15,10 +17,35 @@ import {
 } from './cockpitTrackingController.js';
 import { update } from './cockpitCamera.js';
 import {
+  beginOrbital,
+  endOrbital,
+  resetOrbitalLook,
+  jumpToSensorSwath,
+  onOrbitalWheel,
+  stepOrbitalZoom,
+  turnOrbitalLook,
+  updateOrbital,
+  updateOrbitalHud,
+} from './cockpitOrbitalView.js';
+import {
+  onOrbitalClick,
+  onOrbitalDoubleClick,
+  routeSceneClick,
+  toggleOrbitalFocus,
+} from './cockpitOrbitalFocus.js';
+import {
+  handleOrbitalSignalClick,
+  refreshOrbitalSignals,
+  updateOrbitalSignals,
+} from './cockpitOrbitalSignals.js';
+import { rideOrbitalSatellite } from './cockpitOrbitalSatellites.js';
+import {
   publishInstrumentsView,
   publishRouteView,
   updateHud,
   updateRoute,
+  updateRadar,
+  presentLook,
   syncWeatherToggle,
   setVisionMode,
   cycleVisionMode,
@@ -67,9 +94,20 @@ import {
 import {
   onKeyDown,
   onSceneDoubleClick,
+  onScenePointerDown,
   routeSceneDoubleClick,
 } from './cockpitInput.js';
+import { DEFAULT_RADAR_RANGE_NM, nextRadarRange } from '../cockpitRadar.js';
+import { VESSEL_BRIDGE_PITCH_DEG } from '../cockpitSubjects.js';
+import { stepLook } from '../cockpitLook.js';
 import * as Cesium from 'cesium';
+
+/** Whether the user asked for reduced motion: look turns then jump. */
+function prefersReducedMotion() {
+  return Boolean(
+    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+  );
+}
 
 export class CockpitViewController {
   constructor(
@@ -80,6 +118,8 @@ export class CockpitViewController {
       getInitialVisionMode = null,
       onCameraTakeover = null,
       isEntryAllowed = null,
+      isBridgeEntryAllowed = null,
+      isOrbitEntryAllowed = null,
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
@@ -93,6 +133,21 @@ export class CockpitViewController {
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
+    /**
+     * 'aircraft', 'vessel' or 'satellite' while active; which subject the
+     * camera rides.
+     */
+    this.subjectKind = null;
+    /**
+     * The vessel subject's MMSI or the satellite's NORAD id; aircraft are
+     * identified by trackedEntity.
+     */
+    this.subjectId = null;
+    /**
+     * The orbital view's zoom, look and saved field of view while a
+     * satellite is ridden (src/ui/cockpitOrbitalView.js); null otherwise.
+     */
+    this.orbital = null;
     this.trackedEntity = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
@@ -105,6 +160,14 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
+    /**
+     * Where the bridge view is turned to (`lookTarget`) and where the camera
+     * looks on its way there (`lookView`): yaw off the bow, starboard
+     * positive, and absolute pitch. Aircraft never turn it.
+     */
+    this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
+    this.lookView = { ...this.lookTarget };
+    this.lookLastMs = 0;
     this.entry = document.getElementById('cockpit-entry');
     this.tr3bToggle = document.getElementById('tr3b-toggle');
     this._tr3bSignature = null;
@@ -130,6 +193,16 @@ export class CockpitViewController {
         : () => false;
     this.isEntryAllowed =
       typeof isEntryAllowed === 'function' ? isEntryAllowed : () => true;
+    // Without a supplied gate there is no vessel layer to ride either.
+    this.isBridgeEntryAllowed =
+      typeof isBridgeEntryAllowed === 'function'
+        ? isBridgeEntryAllowed
+        : () => false;
+    // Nor a satellite layer to ride without one.
+    this.isOrbitEntryAllowed =
+      typeof isOrbitEntryAllowed === 'function'
+        ? isOrbitEntryAllowed
+        : () => false;
     this.isUtilityDisclosureOpen =
       typeof isUtilityDisclosureOpen === 'function'
         ? isUtilityDisclosureOpen
@@ -164,9 +237,16 @@ export class CockpitViewController {
     this.publishVision = publish.vision ?? (() => {});
     this.publishSignals = publish.signals ?? (() => {});
     this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
+    this.publishRadar = publish.radar ?? (() => {});
+    this.publishOrbital = publish.orbital ?? (() => {});
+    /** The bridge radar's range in nautical miles; kept across bridges. */
+    this.radarRangeNm = DEFAULT_RADAR_RANGE_NM;
     this.presence = {
       active: false,
       entryAvailable: false,
+      // Which subject the entry button would enter, and the active subject.
+      entryKind: null,
+      subjectKind: null,
       tr3b: null,
       context: false,
       // The Contact and briefing cards' collapse, which their toggles show.
@@ -179,7 +259,8 @@ export class CockpitViewController {
     this.contextView = createContextState();
     this.brief = createBriefState();
     this.briefTimer = null;
-    this.lastAircraftInfo = null;
+    // The last aircraft or vessel the HUD drew.
+    this.lastSubjectInfo = null;
     this.regionalBrief = null;
     this.regionalBriefAnchor = null;
     this.regionalBriefFetchedAt = 0;
@@ -216,9 +297,25 @@ export class CockpitViewController {
     );
     this._listen(this.entry, 'click', () => this.enter());
     // Double-clicking the followed track is a third way in.
+    this._listen(
+      viewer.scene?.canvas,
+      'pointerdown',
+      () => this.onScenePointerDown(),
+      true,
+    );
     this._listenerRemovers.push(routeSceneDoubleClick.call(this));
+    // In orbit a click on a mapped point keeps the camera on it.
+    this._listenerRemovers.push(routeSceneClick.call(this));
+    // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
+    // off while the Cockpit holds the camera).
+    this._listen(
+      viewer.scene?.canvas,
+      'wheel',
+      (event) => this.onOrbitalWheel(event),
+      { passive: false },
+    );
     // The readout's entry renders inside the Intel HUD, which may mount after
-    // this controller, so its clicks are delegated.
+    // this controller; delegated like the radar's range button.
     this._listen(document, 'click', (event) => {
       if (event.target?.closest?.('#cockpit-entry-readout')) this.enter();
     });
@@ -247,6 +344,26 @@ export class CockpitViewController {
     });
     this._listen(window, 'gev:cockpit-weather-state', (event) => {
       this.syncWeatherToggle(event?.detail?.enabled !== false);
+    });
+    // The radar mounts only on a bridge, so its range button is delegated.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-radar-range'))
+        this.cycleRadarRange();
+    });
+    // The look-ahead button shows only on a turned bridge view; delegated.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-look-ahead')) this.lookAhead();
+    });
+    // The orbital HUD mounts only in orbit, so its controls are delegated.
+    this._listen(document, 'click', (event) => {
+      const target = event.target;
+      if (target?.closest?.('#cockpit-orbital-zoom-in'))
+        this.stepOrbitalZoom(1);
+      else if (target?.closest?.('#cockpit-orbital-zoom-out'))
+        this.stepOrbitalZoom(-1);
+      else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
+      else if (target?.closest?.('#cockpit-orbital-sensor'))
+        this.jumpToSensorSwath();
     });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
@@ -289,6 +406,108 @@ export class CockpitViewController {
   readAircraftInfo() {
     return readAircraftInfo.call(this);
   }
+  readVesselInfo() {
+    return readVesselInfo.call(this);
+  }
+  readSatelliteInfo() {
+    return readSatelliteInfo.call(this);
+  }
+  beginOrbital() {
+    return beginOrbital.call(this);
+  }
+  endOrbital() {
+    return endOrbital.call(this);
+  }
+  updateOrbital(nowMs) {
+    return updateOrbital.call(this, nowMs);
+  }
+  updateOrbitalHud(info, nowMs) {
+    return updateOrbitalHud.call(this, info, nowMs);
+  }
+  /**
+   * Step the orbital view's optical zoom (the + and − keys and buttons).
+   * @param {number} direction Positive zooms in, negative out.
+   * @returns {boolean} True when the zoom changed.
+   */
+  stepOrbitalZoom(direction) {
+    return stepOrbitalZoom.call(this, direction);
+  }
+  jumpToSensorSwath() {
+    return jumpToSensorSwath.call(this);
+  }
+  onOrbitalWheel(event) {
+    return onOrbitalWheel.call(this, event);
+  }
+  /**
+   * A click on the orbital picture: on a mapped point in reach it keeps the
+   * camera on that point; anywhere else it ends such a focus.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when the click focused a point.
+   */
+  onOrbitalClick(position) {
+    return onOrbitalClick.call(this, position);
+  }
+  /**
+   * A double-click on the orbital picture: on a mapped ground point it keeps
+   * or starts the focus there instead of letting Cesium track the point.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when it was taken.
+   */
+  onOrbitalDoubleClick(position) {
+    return onOrbitalDoubleClick.call(this, position);
+  }
+  /**
+   * A site's orbital Live Signals row: focus that site, switch to it, or end
+   * the focus held on it.
+   * @param {string} key The site's id in the Mapped Installations layer.
+   * @returns {boolean} True when the focus changed.
+   */
+  toggleOrbitalFocus(key) {
+    return toggleOrbitalFocus.call(this, key);
+  }
+  /** Rebuild the orbital Live Signals rows now. */
+  refreshOrbitalSignals() {
+    return refreshOrbitalSignals.call(this);
+  }
+  /** Rebuild the orbital Live Signals rows on their clock. */
+  updateOrbitalSignals(nowMs) {
+    return updateOrbitalSignals.call(this, nowMs);
+  }
+  /**
+   * Ride the satellite an orbital Live Signals row names (RETURN goes back).
+   * @param {number|string} noradId
+   * @returns {boolean} True when the ridden satellite changed.
+   */
+  rideOrbitalSatellite(noradId) {
+    return rideOrbitalSatellite.call(this, noradId);
+  }
+  /**
+   * A click on an orbital Live Signals row.
+   * @returns {boolean} True in orbit.
+   */
+  handleOrbitalSignalClick(layerId, id) {
+    return handleOrbitalSignalClick.call(this, layerId, id);
+  }
+  /**
+   * Tilt the orbital view one arrow step off nadir.
+   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
+   * @returns {boolean} True in an orbital view.
+   */
+  turnOrbitalLook(step) {
+    return turnOrbitalLook.call(this, step);
+  }
+  /**
+   * The NADIR control and the Home and 0 keys in orbit: back to pure nadir.
+   * Focus leaves the button before it hides.
+   * @returns {boolean} True in an orbital view.
+   */
+  orbitalNadir() {
+    const button = document.getElementById('cockpit-orbital-nadir');
+    const hadFocus = !!button && button.contains(document.activeElement);
+    const reset = resetOrbitalLook.call(this);
+    if (reset && hadFocus) this.mapViewButton?.focus({ preventScroll: true });
+    return reset;
+  }
   readSubjectLayerId() {
     return readSubjectLayerId.call(this);
   }
@@ -316,8 +535,8 @@ export class CockpitViewController {
   _adoptTrackedEntity(nowMs, suppliedInfo) {
     return _adoptTrackedEntity.call(this, nowMs, suppliedInfo);
   }
-  enter() {
-    return enter.call(this);
+  enter(options) {
+    return enter.call(this, options);
   }
   exit(options) {
     return exit.call(this, options);
@@ -336,6 +555,58 @@ export class CockpitViewController {
   }
   updateRoute(info) {
     return updateRoute.call(this, info);
+  }
+  updateRadar(info) {
+    return updateRadar.call(this, info);
+  }
+  /** Step the bridge radar to its next range and redraw it at once. */
+  cycleRadarRange() {
+    this.radarRangeNm = nextRadarRange(this.radarRangeNm);
+    if (this.active && this.subjectKind === 'vessel' && this.lastSubjectInfo)
+      this.updateRadar(this.lastSubjectInfo);
+  }
+  presentLook() {
+    return presentLook.call(this);
+  }
+  /**
+   * Turn the bridge view one arrow step (see `lookKeyStep`). The camera
+   * eases there unless the user prefers reduced motion.
+   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
+   * @returns {boolean} True when a bridge view was turned.
+   */
+  turnLook(step) {
+    if (!this.active || this.subjectKind !== 'vessel' || !step) return false;
+    this.lookTarget = stepLook(this.lookTarget, step);
+    if (prefersReducedMotion()) this.lookView = { ...this.lookTarget };
+    this.presentLook();
+    this.publishInstrumentsView();
+    return true;
+  }
+  /**
+   * Point the bridge view back over the bow at the rest pitch.
+   * @param {{immediate?: boolean}} [options] Jump there instead of easing,
+   *   as entry and exit do.
+   */
+  resetLook({ immediate = false } = {}) {
+    this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
+    if (immediate || prefersReducedMotion())
+      this.lookView = { ...this.lookTarget };
+    this.lookLastMs = performance.now();
+    this.presentLook();
+    this.publishInstrumentsView();
+  }
+  /**
+   * The LOOK AHEAD control and the Home and 0 keys: ease the bridge view
+   * back over the bow. Focus leaves the button before it hides.
+   * @returns {boolean} True on a bridge.
+   */
+  lookAhead() {
+    if (!this.active || this.subjectKind !== 'vessel') return false;
+    const button = document.getElementById('cockpit-look-ahead');
+    const hadFocus = !!button && button.contains(document.activeElement);
+    this.resetLook();
+    if (hadFocus) this.mapViewButton?.focus({ preventScroll: true });
+    return true;
   }
   syncWeatherToggle(enabled) {
     return syncWeatherToggle.call(this, enabled);
@@ -426,8 +697,11 @@ export class CockpitViewController {
   onKeyDown(event) {
     return onKeyDown.call(this, event);
   }
-  onSceneDoubleClick(position) {
-    return onSceneDoubleClick.call(this, position);
+  onSceneDoubleClick(position, nowMs) {
+    return onSceneDoubleClick.call(this, position, nowMs);
+  }
+  onScenePointerDown(nowMs) {
+    return onScenePointerDown.call(this, nowMs);
   }
 
   handleSignalClick(event) {
@@ -444,10 +718,10 @@ export class CockpitViewController {
     this.relocalizeBrief();
     this.publishVision(createVisionState(this.visionMode));
     this.routeSignature = null;
-    if (this.active && this.lastAircraftInfo) {
+    if (this.active && this.lastSubjectInfo) {
       this.rewordingSignals = true;
       try {
-        this.updateHud(this.lastAircraftInfo, performance.now(), true);
+        this.updateHud(this.lastSubjectInfo, performance.now(), true);
       } finally {
         this.rewordingSignals = false;
       }
