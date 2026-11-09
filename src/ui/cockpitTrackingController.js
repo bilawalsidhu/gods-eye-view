@@ -1,9 +1,16 @@
 /** Tracking identity, entry, exit and contact navigation for the Cockpit controller. */
 import { t } from '../i18n/index.js';
 import {
+  formatHeadingReadout,
   normalizeHeading,
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
+
+/** The camera's own heading in degrees, or 0 when it has none. */
+function cameraHeadingDeg(camera) {
+  const heading = camera?.heading;
+  return Number.isFinite(heading) ? (heading * 180) / Math.PI : 0;
+}
 
 export function readAircraftInfo() {
   // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
@@ -16,14 +23,57 @@ export function readAircraftInfo() {
   });
 }
 
+/** The selected vessel the bridge view would ride, or rides; null without one. */
+export function readVesselInfo() {
+  return this.services.aisLiveVesselsLayer?.getCockpitSubject?.() || null;
+}
+
+/** The tracked satellite the orbital view would ride, or rides; null without one. */
+export function readSatelliteInfo() {
+  return this.services.satellitesLayer?.getCockpitSubject?.() || null;
+}
+
+/**
+ * The layer the active view rides: Live AIS Vessels on a bridge, Satellites
+ * in orbit, else the aircraft's own layer. It is read from the tracked
+ * entity's id once the layer has dropped its tracking, so a layer turned off
+ * still names itself.
+ * @returns {'flights'|'military'|'ais-live-vessels'|'satellites'|null}
+ */
+export function readSubjectLayerId() {
+  if (!this.active) return null;
+  if (this.subjectKind === 'vessel') return 'ais-live-vessels';
+  if (this.subjectKind === 'satellite') return 'satellites';
+  const layerId = this.readAircraftInfo()?.layerId;
+  if (layerId) return layerId;
+  const [prefix] = String(this.trackedEntity?.gevTrackedId || '').split(':');
+  return ['flights', 'military'].includes(prefix) ? prefix : null;
+}
+
+/**
+ * The subject entry would take: a Cesium-tracked aircraft first, then the
+ * tracked satellite, else the selected vessel. Vessels never take Cesium
+ * tracking, so an aircraft and a vessel cannot be live through the same owner.
+ * @returns {'aircraft'|'satellite'|'vessel'|null}
+ */
+export function resolveEntryKind() {
+  if (this.readAircraftInfo() && this.viewer.trackedEntity?.position)
+    return 'aircraft';
+  if (this.readSatelliteInfo()) return 'satellite';
+  return this.readVesselInfo() ? 'vessel' : null;
+}
+
 export function dispatchCockpitModeChanged(active, info = null) {
   const subjectId = active
-    ? String(info?.icao24 || '')
+    ? String(info?.icao24 || info?.mmsi || info?.noradId || '')
         .trim()
         .toLowerCase() || null
     : null;
   const layerId =
-    active && ['flights', 'military'].includes(info?.layerId)
+    active &&
+    ['flights', 'military', 'ais-live-vessels', 'satellites'].includes(
+      info?.layerId,
+    )
       ? info.layerId
       : null;
   window.dispatchEvent(
@@ -49,18 +99,27 @@ export function toggleTrackedTr3b() {
   return true;
 }
 
+/**
+ * Publish which Cockpit surfaces are shown: the entry button, the TR-3B chip,
+ * the HUD with its exit and reset buttons and briefing card, and the Contact
+ * card. The views bind these; nothing else writes their visibility.
+ */
+export function publishPresenceView() {
+  const presence = this.presence;
+  this.publishPresence({
+    ...presence,
+    tr3b: presence.tr3b && { ...presence.tr3b },
+  });
+}
+
 export function syncTr3bToggle(info) {
-  if (!this.tr3bToggle) return;
   const icao24 = String(info?.icao24 || '').trim();
   const converted = !!icao24 && this.services.isTr3b(icao24);
   const signature = icao24 ? `${icao24}:${converted ? 1 : 0}` : '';
   if (this._tr3bSignature === signature) return;
   this._tr3bSignature = signature;
-  this.tr3bToggle.hidden = !icao24;
-  this.tr3bToggle.setAttribute('aria-pressed', converted ? 'true' : 'false');
-  this.tr3bToggle.title = converted
-    ? t('Restore real aircraft')
-    : t('Reclassify as TR-3B');
+  this.presence.tr3b = icao24 ? { converted } : null;
+  this.publishPresenceView();
 }
 
 export function syncEntry() {
@@ -69,19 +128,35 @@ export function syncEntry() {
   const info = this.readAircraftInfo();
   const trackedContact = !!(info && this.viewer.trackedEntity?.position);
   this.syncTr3bToggle(trackedContact ? info : null);
-  const available = !!(this.isEntryAllowed() && trackedContact);
-  // Change-only DOM writes: this runs on a preUpdate cadence, and
-  // unconditional `hidden` assignments invalidate style/layout every frame
-  // even when nothing changed. (perf item 9)
-  if (this._entryAvailable === available) return;
-  this._entryAvailable = available;
-  if (this.entry) this.entry.hidden = !available;
-  if (this.mapViewButton) this.mapViewButton.hidden = true;
-  if (this.resetGlobeButton) this.resetGlobeButton.hidden = true;
+  const orbitContact = !trackedContact && !!this.readSatelliteInfo();
+  const bridgeContact =
+    !trackedContact && !orbitContact && !!this.readVesselInfo();
+  let entryKind = null;
+  if (trackedContact) entryKind = this.isEntryAllowed() ? 'aircraft' : null;
+  else if (orbitContact)
+    entryKind = this.isOrbitEntryAllowed() ? 'satellite' : null;
+  else if (bridgeContact)
+    entryKind = this.isBridgeEntryAllowed() ? 'vessel' : null;
+  const available = entryKind !== null;
+  // Change-only publishes: this runs on a preUpdate cadence, and a fresh
+  // presence every frame would re-render the views even when nothing
+  // changed. (perf item 9)
+  if (
+    this.presence.entryAvailable === available &&
+    this.presence.entryKind === entryKind
+  )
+    return;
+  this.presence.entryAvailable = available;
+  this.presence.entryKind = entryKind;
+  this.publishPresenceView();
 }
 
 export function navigateContext(direction, options = {}) {
   if (this.destroyed) return false;
+  // Contact navigation moves between aircraft; a bridge does not jump ship
+  // and an orbital view stays with its satellite.
+  if (this.subjectKind === 'vessel' || this.subjectKind === 'satellite')
+    return false;
   const method = direction < 0 ? 'navigatePrevious' : 'navigateNext';
   const wasActive = this.active;
   if (wasActive) this.contextNavigationDeadlineMs = performance.now() + 1500;
@@ -100,6 +175,10 @@ export function navigateContext(direction, options = {}) {
 }
 
 export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
+  // An aircraft tracked from the bridge or from orbit ends that view (see the
+  // vessel and orbital camera updates); it is never adopted as its subject.
+  if (this.subjectKind === 'vessel' || this.subjectKind === 'satellite')
+    return false;
   const nextEntity = this.viewer.trackedEntity;
   if (
     !this.active ||
@@ -123,17 +202,38 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
   this.lastContextUpdateMs = 0;
   this.lastCameraUpdateMs = 0;
   this.contextNavigationDeadlineMs = 0;
+  this.onRide?.(info.layerId);
   this.dispatchCockpitModeChanged(true, info);
   return true;
 }
 
-export function enter() {
+/**
+ * Enter first person on a tracked aircraft or, with none tracked, the
+ * tracked satellite's orbital view or the selected vessel's bridge.
+ * @param {{kind?: 'aircraft'|'satellite'|'vessel'|null}} [options] Restrict
+ *   entry to one subject kind; voice entry is aircraft-only.
+ * @returns {boolean} True when the view was entered.
+ */
+export function enter({ kind = null } = {}) {
   if (this.destroyed) return false;
   if (this.active) return false;
-  if (!this.isEntryAllowed()) return false;
-  const info = this.readAircraftInfo();
-  const entity = this.viewer.trackedEntity;
-  if (!info || !entity?.position) return false;
+  const subjectKind = kind ?? this.resolveEntryKind() ?? 'aircraft';
+  const vessel = subjectKind === 'vessel';
+  const satellite = subjectKind === 'satellite';
+  const allowed = vessel
+    ? this.isBridgeEntryAllowed()
+    : satellite
+      ? this.isOrbitEntryAllowed()
+      : this.isEntryAllowed();
+  if (!allowed) return false;
+  const info = vessel
+    ? this.readVesselInfo()
+    : satellite
+      ? this.readSatelliteInfo()
+      : this.readAircraftInfo();
+  // Only an aircraft is ridden through its Cesium entity.
+  const entity = vessel || satellite ? null : this.viewer.trackedEntity;
+  if (!info || (!vessel && !satellite && !entity?.position)) return false;
   this.entryFocusOrigin =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -141,10 +241,31 @@ export function enter() {
   // Retire deferred navigation before cancelFlight can run its callbacks.
   this.onCameraTakeover?.();
   this.viewer.camera.cancelFlight();
+  this.subjectKind = subjectKind;
+  // Each session reads its own water: never a height left from the last.
+  this.vesselWaterline = null;
+  this.vesselFix = null;
+  this.subjectId = vessel ? info.mmsi : satellite ? info.noradId : null;
   this.trackedEntity = entity;
-  this.trackedEntityWasShown = entity.show;
-  entity.show = false;
-  this.heading = normalizeHeading(info.track ?? 0);
+  if (entity) {
+    this.trackedEntityWasShown = entity.show;
+    entity.show = false;
+  } else if (satellite) {
+    // The layer hides the satellite's own marks and dims the other orbits.
+    this.services.satellitesLayer?.setCockpitSubject?.(info.noradId);
+    this.beginOrbital();
+  } else {
+    this.services.aisLiveVesselsLayer?.setCockpitSubject?.(info.mmsi);
+  }
+  // A ship reporting neither heading nor course keeps the camera's own
+  // heading: no direction is made up for it.
+  this.heading = normalizeHeading(
+    Number.isFinite(info.track)
+      ? info.track
+      : vessel
+        ? cameraHeadingDeg(this.viewer.camera)
+        : 0,
+  );
   this.lastFrameMs = performance.now();
   this.lastCameraUpdateMs = 0;
   this.lastHudUpdateMs = 0;
@@ -154,9 +275,10 @@ export function enter() {
   this.surfaceWaitStartedMs = performance.now();
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
-  this.lastCompassSignature = '';
   this.cockpitAnchorValid = false;
   this.lastCameraUpdateMs = 0;
+  // Every bridge opens looking over the bow.
+  this.resetLook({ immediate: true });
   this.active = true;
   // Cockpit animates the camera from preUpdate every frame — preUpdate only
   // runs on rendered frames, so idle mode would freeze the cockpit solid.
@@ -165,43 +287,78 @@ export function enter() {
   this.viewer.trackedEntity = undefined;
   this.viewer.scene.screenSpaceCameraController.enableInputs = false;
   document.body.classList.add('cockpit-mode');
-  // Activation writes entry/quick/map visibility directly, bypassing
-  // syncEntry's change-only cache — invalidate it so the exit-path
-  // syncEntry re-applies every write (notably re-hiding mapViewButton).
-  this._entryAvailable = undefined;
-  if (this.entry) this.entry.hidden = true;
-  if (this.tr3bToggle) {
-    this.tr3bToggle.hidden = true;
-    this._tr3bSignature = null;
-  }
-  if (this.mapViewButton) this.mapViewButton.hidden = false;
-  if (this.resetGlobeButton) this.resetGlobeButton.hidden = false;
-  if (this.hud) this.hud.hidden = false;
-  if (this.signalStream) this.signalStream.hidden = false;
-  this.hud?.classList.add('signals-active');
+  // Bridge styling reaches surfaces outside the HUD (exit row, side panels).
+  if (vessel) document.body.classList.add('cockpit-bridge');
+  if (satellite) document.body.classList.add('cockpit-orbit');
+  // Activation hides the entry and TR-3B chip; clearing the chip's signature
+  // lets the exit-path syncEntry publish it again.
+  this._tr3bSignature = null;
+  Object.assign(this.presence, {
+    active: true,
+    entryAvailable: false,
+    entryKind: null,
+    subjectKind,
+    tr3b: null,
+  });
+  this.publishPresenceView();
+  // Only a bridge has a radar.
+  if (!vessel) this.publishRadar(null);
   this.signalItems = [];
   this.signalSignatures.clear();
   this.showBriefPage(0);
   this.startBriefRotation();
-  const trackLabel =
-    info.callsign || info.registration || info.icao24 || t('AIRCRAFT');
-  const trackHeading = String(
-    Math.round(normalizeHeading(info.track ?? 0)),
-  ).padStart(3, '0');
-  this.pushCockpitSignal(
-    'track',
-    'track',
-    t('TRACK ACQUIRED'),
-    t('{label} · COURSE {heading}°', {
-      label: trackLabel,
-      heading: trackHeading,
-    }),
-  );
+  const trackHeading = formatHeadingReadout(info.track ?? 0);
+  if (satellite) {
+    this.pushCockpitSignal(
+      'track',
+      'track',
+      t('TRACK ACQUIRED'),
+      t('{label} · NADIR VIEW', { label: info.name }),
+    );
+  } else if (vessel) {
+    this.pushCockpitSignal(
+      'track',
+      'track',
+      t('TRACK ACQUIRED'),
+      // A ship with no true heading is held on its course over ground; one
+      // with neither is named without a direction.
+      info.trackSource === 'course'
+        ? t('{label} · COURSE {heading}°', {
+            label: info.name,
+            heading: trackHeading,
+          })
+        : info.trackSource === 'heading'
+          ? t('{label} · HEADING {heading}°', {
+              label: info.name,
+              heading: trackHeading,
+            })
+          : t('{label} · NO HEADING', { label: info.name }),
+    );
+  } else {
+    const trackLabel =
+      info.callsign || info.registration || info.icao24 || t('AIRCRAFT');
+    this.pushCockpitSignal(
+      'track',
+      'track',
+      t('TRACK ACQUIRED'),
+      t('{label} · COURSE {heading}°', {
+        label: trackLabel,
+        heading: trackHeading,
+      }),
+    );
+  }
   this.updateHud(info, performance.now(), true);
-  this.setVisionMode(this.getInitialVisionMode());
+  // Orbit always opens in the plain optical picture; the vision styles stay
+  // one click away.
+  this.setVisionMode(satellite ? 'optical' : this.getInitialVisionMode());
   this.scheduleContextLayout();
-  this.mapViewButton?.focus({ preventScroll: true });
+  // The exit button shows when Vue flushes the presence; focus it after.
+  Promise.resolve().then(() => {
+    if (this.active && !this.destroyed)
+      this.mapViewButton?.focus({ preventScroll: true });
+  });
   this.onEntered?.();
+  this.onRide?.(info.layerId);
   this.dispatchCockpitModeChanged(true, info);
   return true;
 }
@@ -209,10 +366,18 @@ export function enter() {
 export function exit({ restoreTracking = true } = {}) {
   if (!this.active) return false;
   const entity = this.trackedEntity;
+  const vesselSubject = this.subjectKind === 'vessel' ? this.subjectId : null;
+  const satelliteSubject =
+    this.subjectKind === 'satellite' ? this.subjectId : null;
   this.active = false;
+  this.subjectKind = null;
+  this.vesselWaterline = null;
+  this.vesselFix = null;
+  this.subjectId = null;
   this.services.releaseContinuousRender('cockpit');
   this.trackedEntity = null;
   this.heading = null;
+  this.resetLook({ immediate: true });
   this.cockpitAnchorValid = false;
   this.surfaceWaitStartedMs = 0;
   this.surfaceAcquiring = false;
@@ -220,39 +385,64 @@ export function exit({ restoreTracking = true } = {}) {
   this.lastHudUpdateMs = 0;
   this.lastContextUpdateMs = 0;
   this.contextNavigationDeadlineMs = 0;
-  this.lastCompassSignature = '';
   this.stopBriefRotation();
   this.regionalBriefAbort?.abort();
   this.regionalBriefAbort = null;
   this.regionalBriefRequestToken += 1;
   this.regionalBriefSubjectId = null;
-  document.body.classList.remove('cockpit-mode');
+  document.body.classList.remove(
+    'cockpit-mode',
+    'cockpit-bridge',
+    'cockpit-orbit',
+  );
+  // The camera's own field of view returns before any follow resumes.
+  this.endOrbital();
   this.onExited?.();
-  this.hud?.style.removeProperty('--cockpit-utility-top');
-  this.hud?.style.removeProperty('--cockpit-utility-max-height');
-  if (this.hud) this.hud.hidden = true;
-  if (this.route) this.route.hidden = true;
+  this.publishUtilityLayout(null);
+  this.presence.active = false;
+  this.presence.subjectKind = null;
+  this.publishPresenceView();
+  this.routeView.visible = false;
   this.clearPredictiveRoute();
+  this.publishRadar(null);
   this.setVisionMode('optical');
-  if (this.signalStream) this.signalStream.hidden = true;
-  this.hud?.classList.remove('signals-active');
   this.viewer.scene.screenSpaceCameraController.enableInputs = true;
   if (entity && this.viewer.entities.contains(entity))
     entity.show = this.trackedEntityWasShown;
   this.trackedEntityWasShown = true;
+  if (vesselSubject)
+    this.services.aisLiveVesselsLayer?.setCockpitSubject?.(null);
+  if (satelliteSubject !== null)
+    this.services.satellitesLayer?.setCockpitSubject?.(null);
   this.dispatchCockpitModeChanged(false);
   if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
     this.viewer.trackedEntity = entity;
     this.restoreTrackingFrame(entity);
+  } else if (restoreTracking && vesselSubject) {
+    // Back to the selected vessel's map view, through the layer's own focus.
+    this.services.aisLiveVesselsLayer?.focusSelectedVessel?.();
+  } else if (restoreTracking && satelliteSubject !== null) {
+    // Back to the satellite's follow camera, through the layer's own refocus.
+    this.services.satellitesLayer?.refocusTrackedById?.(satelliteSubject);
   }
   this.syncEntry();
+  // Back to whichever entry was used: the Contacts button or the readout's.
+  const readoutEntry = document.getElementById('cockpit-entry-readout');
   const restoreTarget =
-    this.entryFocusOrigin === this.entry
-      ? this.entry
+    this.entryFocusOrigin === this.entry ||
+    (readoutEntry && this.entryFocusOrigin === readoutEntry)
+      ? this.entryFocusOrigin
       : this.entry || this.entryFocusOrigin;
   this.entryFocusOrigin = null;
-  if (!this.destroyed && restoreTarget?.isConnected && !restoreTarget.hidden) {
-    restoreTarget.focus({ preventScroll: true });
-  }
+  // The entry shows when Vue flushes the presence; read it after.
+  Promise.resolve().then(() => {
+    if (
+      !this.destroyed &&
+      !this.active &&
+      restoreTarget?.isConnected &&
+      !restoreTarget.hidden
+    )
+      restoreTarget.focus({ preventScroll: true });
+  });
   return true;
 }

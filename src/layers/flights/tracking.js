@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import { formatNumber, t } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
@@ -24,6 +25,7 @@ import {
   TRAIL_COLOR,
   CYAN_TRANSPARENT,
 } from './policy.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createTracking({
   flightState,
@@ -126,7 +128,7 @@ export function createTracking({
           ? `${Math.round(described.velocityMps * 1.944)} kt`
           : '',
         heading: Number.isFinite(described.track)
-          ? `${Math.round(described.track)}°`
+          ? `${roundHeadingDegrees(described.track)}°`
           : '',
         route: route || '',
         icao24,
@@ -382,7 +384,7 @@ export function createTracking({
     // would draw the trail in front of the plane. They join the trail via _appendTrailFix
     // as they age past the delay.
     const seedRenderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
+      julianAt(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );
