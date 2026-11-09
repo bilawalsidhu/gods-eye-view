@@ -620,8 +620,6 @@ test('the snapshot method check hands each /track route on to its own handler', 
     });
     const res = {
       statusCode: 200,
-      headers: {},
-      setHeader() {},
       writeHead(s) {
         this.statusCode = s;
       },
