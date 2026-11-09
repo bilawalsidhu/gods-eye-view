@@ -10,6 +10,7 @@ range geometry with no network dependency.
 | `marine.json` | `ne_10m_geography_marine_polys` (seas, gulfs, straits, bays, …) | 292 named |
 | `countries.json` | `ne_10m_admin_0_countries` (countries) | 256 |
 | `states_provinces.json` | `ne_10m_admin_1_states_provinces` (states, provinces and other first-level units) | 4,587 named |
+| `populated_places.json` | `ne_10m_populated_places_simple` (cities and towns, as points) | 7,342 |
 
 **Source:** Natural Earth 10m physical vectors, via the canonical
 [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector)
@@ -103,3 +104,23 @@ Includes England, Scotland, Wales and Northern Ireland from
 `ne_10m_admin_0_map_units.geojson` at the same commit (SHA-256
 `57da82be755f4afccd8f3b14251bb2752f5df1395f47d2d86f817470c4a48862`).
 Result: 945,843 bytes; 260 features, 2,088 parts, 122,788 vertices.
+
+## Populated places (`populated_places.json`)
+
+The orbital view's "near <city>" (`src/data/placeBelow.js`): from 8x it
+names the most prominent place within half the view's width.
+
+**Source:** `geojson/ne_10m_populated_places_simple.geojson` at the pinned
+commit `ca96624a56bd078437bca8184e78163e5039ad19` (SHA-256
+`fd3fa867a320cbd5c5b6bb5bc550afeec2939fb2cef688e508007282a55ac42f`, the file
+the admin-1 build already reads), fetched 2026-11-04. Public domain, as above.
+
+**Regenerate:** `node scripts/build-admin-packs.mjs --only places`.
+
+**Schema:** `meta` (source, URL, hash, license, curation) and `places[]`, each
+`[name, latitude, longitude, scalerank, rank_max]`: `scalerank` 0 (most
+prominent) to 10, `rank_max` the population class (0 to 14, higher is
+larger). Sorted by `scalerank`, then `rank_max` descending, then name.
+
+**Curation:** every place kept; all other attributes dropped; coordinates
+rounded to 3 decimals (~110 m). Result: 229,461 bytes (98,444 with gzip -9).
