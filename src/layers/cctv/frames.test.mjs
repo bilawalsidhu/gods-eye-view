@@ -251,6 +251,45 @@ test('a plane behind the camera is not fetched, but a forced refresh is', () => 
   assert.match(record.projection.image.src, /projTs=/);
 });
 
+test('a nearby plane below the ellipsoid still fetches for a low viewer', () => {
+  const record = planeRecord();
+  const mount = point(0, 0, -18);
+  const cap = point(0.00054, 0, -18);
+  const position = point(0.00135, 0, 4);
+  record.billboard.position = mount;
+  record.frustumPositions = { mount, capCenter: cap };
+  const direction = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(cap, position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const viewer = viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z);
+  const sphere = Cesium.BoundingSphere.fromPoints([mount, cap]);
+  const culling = viewer.camera.frustum.computeCullingVolume(
+    position,
+    direction,
+    viewer.camera.upWC,
+  );
+  assert.notEqual(culling.computeVisibility(sphere), Cesium.Intersect.OUTSIDE);
+  const frames = framesFor(viewer);
+  assert.equal(frames.projectionInView(record), true);
+  frames.refreshProjectionImage(record);
+  assert.match(record.projection.image.src, /projTs=/);
+
+  // An above-threshold viewer still needs a conservative result when the
+  // entire plane itself is below the reference ellipsoid.
+  const high = point(0.00135, 0, 1200);
+  const highDirection = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(cap, high, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  assert.equal(
+    framesFor(
+      viewerAt(high, highDirection, Cesium.Cartesian3.UNIT_Z),
+    ).projectionInView(record),
+    true,
+  );
+});
+
 test('a plane below the horizon is not fetched', () => {
   const far = point(180, 0, 30000);
   const viewer = viewerAt(
