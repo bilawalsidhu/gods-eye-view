@@ -5,6 +5,8 @@ import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../mapStackController.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { bindRenderer } from '../render/rendererOf.js';
+// A viewer with no renderer bound reads its globe through the unbound port.
+import '../render/cesium/globe.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';

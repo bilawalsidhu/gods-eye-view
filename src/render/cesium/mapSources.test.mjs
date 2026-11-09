@@ -1,9 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createIonImagery } from './imagery.js';
-import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
-import { createDefaultMapSources } from './defaultSources.js';
+import { createIonImagery } from './mapImagery.js';
+import { createWorldTerrain, createKeylessTerrain } from './mapTerrain.js';
+import { createDefaultMapSources } from '../../maps/defaultSources.js';
+import { MAP_STACKS } from '../../maps/catalog.js';
+import { mapEngine } from '../../maps/engine.js';
+import { cesiumMapEngine } from './mapEngine.js';
+
+test('loading the Cesium map engine provides it to the map stacks', () => {
+  assert.equal(mapEngine(), cesiumMapEngine);
+});
+
+test('ion stacks name the Cesium ion world imagery assets', () => {
+  const styles = Object.fromEntries(
+    MAP_STACKS.filter(({ kind }) => kind === 'ion').map(({ id, style }) => [
+      id,
+      style,
+    ]),
+  );
+  assert.deepEqual(styles, {
+    'bing-aerial': Cesium.IonWorldImageryStyle.AERIAL,
+    'bing-labels': Cesium.IonWorldImageryStyle.AERIAL_WITH_LABELS,
+  });
+});
 
 test('Esri uses Re:Earth without keys and preserves ion terrain when configured', async () => {
   const originalTerrain = Cesium.CesiumTerrainProvider.fromUrl;
@@ -22,7 +42,6 @@ test('Esri uses Re:Earth without keys and preserves ion terrain when configured'
     );
     assert.equal(esri.available, true);
     assert.equal(esri.terrain.id, 'keyless');
-    assert.equal(esri.terrain.create, createKeylessTerrain);
     await esri.terrain.create();
     // A Resource, not a bare URL: the retry policy rides on it (terrainRetry.js).
     assert.equal(calls.length, 1);

@@ -558,7 +558,7 @@ Keyless terrain tiles retry when Re:Earth throttles them. The browser fetches
 `terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain` directly; no
 proxy in this repository sees those requests (`/api/terrain/heights` is the
 separate point-height endpoint), and the upstream edge answers zoom-out bursts
-with HTTP 429 under load. `src/maps/terrain.js` hands Cesium a `Resource`
+with HTTP 429 under load. `src/render/cesium/mapTerrain.js` hands Cesium a `Resource`
 whose retry policy (`src/maps/terrainRetry.js`) every derived tile fetch
 inherits: 429, 502, 503 and 504 replies retry up to three times, 750 ms
 doubling to a 15 s cap, with every retry waiting behind one shared cooldown
@@ -6649,6 +6649,17 @@ token, then construct the Bing provider with `tileProtocol: 'https'`. Both style
 request HTTPS tiles even on HTTP localhost, with the existing Content Security
 Policy unchanged. Ion attribution and Bing's per-tile credits are preserved;
 other ion imagery assets continue through the SDK's standard ion factory.
+
+The imagery, terrain and 3D factories are the Cesium renderer's
+(`src/render/cesium/mapImagery.js`, `mapTerrain.js`, `google3d.js`; the
+package exports `./maps/imagery`, `./maps/terrain` and `./maps/3d` point
+there). The catalog, the default registry and the controller are
+Cesium-free: they reach those factories, and the viewer operations a
+switch makes (imagery layers, terrain, the globe's visibility, tilesets),
+through the map engine (`src/maps/engine.js`), which the Cesium renderer
+provides as it loads (`src/render/cesium/mapEngine.js`). A viewer with no
+renderer bound gets it, with the other unbound ports, from the package's
+`./render/cesium/unbound` export.
 
 The controller accepts other source registries without adding provider branches.
 Each instance caches source construction, ignores superseded scene changes and

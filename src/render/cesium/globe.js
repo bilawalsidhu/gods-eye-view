@@ -15,7 +15,7 @@
  * the scene has no part for (stars without a sky box, say) is kept as set.
  */
 import * as Cesium from 'cesium';
-import { loadPhotorealisticTileset } from '../../maps/google3d.js';
+import { loadPhotorealisticTileset } from './google3d.js';
 import { provideUnboundGlobe } from '../rendererOf.js';
 import { isBaseTileset, markBaseTileset } from '../baseTilesets.js';
 import { listenerList, uncaught } from './common.js';

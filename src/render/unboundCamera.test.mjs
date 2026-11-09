@@ -171,6 +171,9 @@ const CAMERA_FROM_CALLER = new Set([
   // Its ground snap, mesh floor sampler, annotation resolver and location
   // framing ask the camera, globe and query ports; it loads no factory.
   './application/operations',
+  // It shows its source's credit through `findCredits`, and switches stacks
+  // through the map engine that `./render/cesium/unbound` provides too.
+  './maps/controller',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

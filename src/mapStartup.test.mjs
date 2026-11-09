@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { createGoogleTokenSource } from './maps/googleTokens.js';
-import {
-  loadPhotorealisticTileset,
-  selectMapStartupRoute,
-} from './mapStartup.js';
+import { selectMapStartupRoute } from './mapStartup.js';
+import { loadPhotorealisticTileset } from './render/cesium/google3d.js';
 
 function fakeCesium(outcomes = []) {
   const calls = [];

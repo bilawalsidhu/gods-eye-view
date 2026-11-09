@@ -8,7 +8,7 @@ import { trimStaleSceneCommands } from '../render/cesium/sceneCommandRelease.js'
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
-import { loadPhotorealisticTileset } from '../mapStartup.js';
+import { loadPhotorealisticTileset } from '../render/cesium/google3d.js';
 import { initLogoGaze } from '../logoGaze.js';
 import { inputFor } from '../input/dispatcher.js';
 import {

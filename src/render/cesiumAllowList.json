@@ -4,11 +4,6 @@
   "src/app/scene.js",
   "src/app/viewer.js",
   "src/data/geoImportPins.js",
-  "src/maps/catalog.js",
-  "src/maps/controller.js",
-  "src/maps/google3d.js",
-  "src/maps/imagery.js",
-  "src/maps/terrain.js",
   "src/sky/starrySky.js",
   "src/ui/applicationShell.js"
 ]

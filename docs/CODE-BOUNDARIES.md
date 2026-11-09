@@ -505,6 +505,15 @@ perform no network requests and discover no additional modules.
 standard sources and their setup/fallback policy. The standalone facade wires
 these to the application's render governor.
 
+`maps/imagery`, `maps/terrain` and `maps/3d` are the Cesium renderer's
+(`src/render/cesium/`). `maps/controller` and `maps/defaults` are
+Cesium-free: they make their scene changes and build their providers
+through the map engine the renderer provides as it loads
+(`src/maps/engine.js`). The application's renderer provides it; with a
+viewer with no renderer bound, load `./render/cesium/unbound` once first, or pass the
+engine as the controller's and `createDefaultMapSources`' `engine` option.
+Without one, constructing a controller throws, naming that export.
+
 A registry supplies `sources`, `defaultId`, `unknownId` and optional `recoveryId`.
 Each source has a user-facing `descriptor`, availability/reason, and either an
 `imagery({ signal })` factory or a supplied `tileset`/`createTileset({ signal })`.
