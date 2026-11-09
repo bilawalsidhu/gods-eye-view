@@ -55,3 +55,37 @@ test('one lookup that loads several packs reads as one load', async () => {
   assert.deepEqual(heard, [true, false], 'no gap between the packs');
   stop();
 });
+
+test('a load is not blamed for packs that failed in an earlier one', async () => {
+  const place = await import('./placeBelow.js?two-failed');
+  let fail = true;
+  const pack = (name) =>
+    place.reportedPlacePackLoad(name, async () => {
+      if (fail) throw new Error('offline');
+      return name;
+    });
+  const divisions = pack('divisions');
+  const places = pack('places');
+  await assert.rejects(divisions());
+  await assert.rejects(places());
+  assert.equal(place.placePacksStatus().failed, true);
+  fail = false;
+  // One lookup retries both, one after the other.
+  const lookup = place.placeBelow(48.86, 2.35, {
+    detail: {
+      division: async () => divisions(),
+      near: async () => places(),
+    },
+  });
+  const statuses = [];
+  const stop = place.onPlacePacksLoadingChange(() =>
+    statuses.push(place.placePacksStatus()),
+  );
+  await lookup;
+  stop();
+  assert.ok(statuses.length > 0);
+  assert.ok(
+    statuses.every((status) => status.failed === false),
+    'the earlier failures do not colour this load',
+  );
+});

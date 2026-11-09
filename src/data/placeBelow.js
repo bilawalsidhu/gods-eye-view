@@ -47,7 +47,11 @@ const PACKS = {
   ),
 };
 
-/** The packs on their way now, and those whose last load failed. */
+/**
+ * The packs on their way now, and those that failed in the current load (or
+ * the last one): a load starts with no failures, so a retry that lands is
+ * not blamed for a pack that failed before.
+ */
 const loadingPacks = new Set();
 const failedPacks = new Set();
 // One lookup loads its packs one after another (countries and seas, then
@@ -67,9 +71,14 @@ function notifyLoading() {
   }
 }
 
+/** Whether the status shows a load on its way. */
+function loadingNow() {
+  return loadingPacks.size > 0 || (lookupLoaded && lookupsInFlight > 0);
+}
+
 /**
  * A pack load that the loading status follows: on its way while it runs,
- * failed from a failure until it is tried again.
+ * and failed, if it fails, until the next load starts.
  * @template T
  * @param {string} name
  * @param {() => Promise<T>} load
@@ -77,15 +86,13 @@ function notifyLoading() {
  */
 export function reportedPlacePackLoad(name, load) {
   return async () => {
-    // A retry is a fresh try: its batch ends on what this load does.
-    failedPacks.delete(name);
+    // A fresh load forgets earlier failures: it ends on what it loads.
+    if (!loadingNow()) failedPacks.clear();
     if (lookupsInFlight > 0) lookupLoaded = true;
     loadingPacks.add(name);
     notifyLoading();
     try {
-      const result = await load();
-      failedPacks.delete(name);
-      return result;
+      return await load();
     } catch (error) {
       failedPacks.add(name);
       throw error;
@@ -104,7 +111,7 @@ export function reportedPlacePackLoad(name, load) {
  */
 export function placePacksStatus() {
   return {
-    loading: loadingPacks.size > 0 || (lookupLoaded && lookupsInFlight > 0),
+    loading: loadingNow(),
     failed: failedPacks.size > 0,
   };
 }
