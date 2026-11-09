@@ -3983,3 +3983,54 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     'selected unknown course also stays screen-up',
   );
 });
+
+test('a view with no feed reads its coverage prompt, not an undated feed', async (t) => {
+  const app = harness(t);
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.ok(app.layer.getStats().lastUpdate, 'Boston has a dated snapshot');
+
+  // London has no registered feed: the row prompts instead of dating Boston's
+  // last snapshot over an empty map.
+  app.lookAt({ west: -0.2, south: 51.45, east: -0.05, north: 51.55 });
+  app.advance(1_000);
+  const away = app.layer.getStats();
+  assert.equal(away.status, 'zoom-in');
+  assert.equal(away.count, 0);
+  assert.equal(away.lastUpdate, null);
+  assert.match(
+    away.statusMessage,
+    /^No feed here yet · \d+ regions available$/,
+  );
+  assert.equal(away.coverage, away.statusMessage);
+
+  // Above the altitude gate the prompt says how low to fly.
+  app.viewer.camera.positionCartographic.height = 10_000_000;
+  app.lookAt({ west: -0.2, south: 51.45, east: -0.05, north: 51.55 });
+  app.advance(1_000);
+  assert.equal(
+    app.layer.getStats().statusMessage,
+    'Fly below 2,850 km to a covered region',
+  );
+});
+
+test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) => {
+  // 2,900 km is under ACTIVATION_ALTITUDE_M but above the enter threshold.
+  const app = harness(t, { altitude: 2_900_000 });
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.deepEqual(app.requested, [], 'nothing loads over Boston');
+  assert.equal(
+    app.layer.getStats().statusMessage,
+    'Fly below 2,850 km to a covered region',
+  );
+});
