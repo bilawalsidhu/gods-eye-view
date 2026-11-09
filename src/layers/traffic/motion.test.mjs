@@ -759,7 +759,7 @@ test('selection asks the query port for depth and screen positions, and the came
     camera: {
       pose: () => (poses++, { position: { x: eye.x, y: eye.y, z: eye.z } }),
     },
-    globe: { isGlobeVisible: () => true },
+    globe: { isGlobeVisible: () => true, isSettled: () => true },
     query: {
       sampleHeightNow: () => 0,
       pickPosition(x, y) {

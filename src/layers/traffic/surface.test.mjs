@@ -346,7 +346,7 @@ test('rendered road depth is geographically checked, bounded, and avoids mesh re
   );
 });
 
-test('surface keys reuse identity without building arrays or strings on unchanged frames', (t) => {
+test('surface keys follow the globe port’s surface identity, building nothing on unchanged frames', (t) => {
   const tiles = [
     { show: true, tilesLoaded: true },
     { show: true, tilesLoaded: false },

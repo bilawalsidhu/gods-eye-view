@@ -1041,7 +1041,7 @@ The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.
 
-Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger; only the surface identity, tile readiness and draped-line support are still read off the Cesium scene.
+Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and
 `./layers/bikeshare`. Traffic separates road requests, ingestion, animation,
@@ -1147,6 +1147,16 @@ drew 23.5 m above the street, on the garage roof) and a centre in the river put
 Red Line trains on the Longfellow Bridge 6–9 m under the deck. Residual: the
 probe is vertical, so a vehicle directly under a deck or a roof overhang reads
 the structure above it.
+
+The sampler and the aircraft ground snap (`src/services/groundSnap.js`) reach
+the renderer only through its ports: the camera's `pose()` for the probe
+height gate, the globe's `isGlobeVisible()` (the sampler runs only with
+the globe hidden) and `isSettled('surface')` (sampler) and
+`isSettled('tiles')` with `isSettled('surface')` (snap) for whether the tiles
+have streamed, and the query
+port's heights, seeing through the caller's draw sets by id. Cockpit's ground
+probe names the tracked contact's icon and model sets, which the flights and
+military layers keep on its entity record (`groundSets`).
 
 ## Vessel components and sources
 

@@ -517,6 +517,10 @@ test('a grounded Cockpit probes the mesh from the camera and keeps the eye above
         GROUND_FLOOR_LIFT_M: 0,
       },
     });
+    // The tracked contact names the draw sets its probe sees through.
+    withEntityRecord(owner.trackedEntity, {
+      groundSets: () => ['flights-models:1', 'flights-tracked-icon:1'],
+    });
     // The surface wait is over: Cockpit flies on the ground floor.
     owner.surfaceWaitStartedMs = -1e9;
     owner.update();
@@ -525,7 +529,7 @@ test('a grounded Cockpit probes the mesh from the camera and keeps the eye above
     assert.equal(host, viewer);
     assert.deepEqual(points, [{ lat: 30.19, lon: -97.67 }]);
     assert.deepEqual(options, {
-      excludeObjects: [owner.trackedEntity],
+      sets: ['flights-models:1', 'flights-tracked-icon:1'],
       viewerLat: 30.2,
       viewerLon: -97.7,
     });

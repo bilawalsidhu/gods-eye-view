@@ -4594,7 +4594,6 @@ test('the traffic layer drapes its heat-lines on the tiles and pulses the jam on
       _presetDots: 'off',
       _heatJam: [],
       _heatLineCount: 0,
-      _heatSupported: true,
       _heatSet: draw.lines({ id: 'traffic:1:heat', clampTo: 'tiles' }),
     };
     const rendering = createRendering({
@@ -4646,6 +4645,237 @@ test('the traffic layer drapes its heat-lines on the tiles and pulses the jam on
     assert.equal(scene.added.length, 0);
   });
 });
+
+test('where the scene cannot drape, draped lines draw over the surface and hide past the horizon', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    scene.frameState.context = { depthTexture: false };
+    const { draw, frame } = drawOver(scene);
+    assert.equal(draw.clampState(), 'overlay');
+    const set = draw.lines({ id: 'heat', clampTo: 'tiles' });
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+    const firstPositions = [at(0), at(0.01)];
+    set.set([
+      {
+        id: 'jam',
+        positions: firstPositions,
+        widthPx: 4,
+        mode: 'draped',
+        style: { kind: 'glow', color: [1, 0, 0, 0.8], power: 0.25 },
+      },
+    ]);
+    const host = scene.added[0];
+    const all = [];
+    const walk = (p) => {
+      all.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+    };
+    walk(host);
+    assert.ok(
+      !all.some((p) => p instanceof Cesium.GroundPolylinePrimitive),
+      'no ground polyline',
+    );
+    const line = all.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    assert.ok(line, 'drawn where the surface hides it too');
+    const failColor = line.depthFailAppearance.material.uniforms.color;
+    assert.ok(Math.abs(failColor.red - 1) < 1e-6 && failColor.green === 0);
+    // The eye over the line's side of the Earth: shown.
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 0, 0);
+    frame();
+    assert.equal(line.show, true);
+    // The eye over the far side: past the horizon, hidden.
+    scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
+    frame();
+    assert.equal(line.show, false);
+    // A recolour where it runs (a pulse) takes the colour in place, and the
+    // line stays hidden past the horizon: nothing is built anew.
+    const hostBefore = scene.added[0];
+    set.upsert([
+      {
+        id: 'jam',
+        positions: firstPositions,
+        widthPx: 4,
+        mode: 'draped',
+        style: { kind: 'glow', color: [1, 0, 0, 0.4], power: 0.25 },
+      },
+    ]);
+    frame();
+    assert.equal(line.show, false, 'still past the horizon');
+    const after = [];
+    const walkAfter = (p) => {
+      after.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walkAfter(p.get(i));
+    };
+    walkAfter(scene.added[0]);
+    assert.equal(scene.added[0], hostBefore, 'the set is not rebuilt');
+    assert.ok(after.includes(line), 'the same line draws');
+    assert.ok(
+      Math.abs(line.appearance.material.uniforms.color.alpha - 0.4) < 1e-6,
+    );
+    assert.ok(
+      Math.abs(line.depthFailAppearance.material.uniforms.color.alpha - 0.4) <
+        1e-6,
+    );
+    // In 2D there is no horizon: it shows as asked.
+    scene.mode = Cesium.SceneMode.SCENE2D;
+    frame();
+    assert.equal(line.show, true, 'shown in 2D');
+    scene.mode = Cesium.SceneMode.SCENE3D;
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 0, 0);
+    frame();
+    // Moved, it alone is built anew, still over the surface and culled.
+    set.upsert([
+      {
+        id: 'jam',
+        positions: [at(0), at(0.02)],
+        widthPx: 4,
+        mode: 'draped',
+        style: { kind: 'glow', color: [1, 0, 0, 0.4], power: 0.25 },
+      },
+    ]);
+    assert.equal(scene.added[0], hostBefore, 'patched, not rebuilt');
+    const moved = [];
+    const walkMoved = (p) => {
+      moved.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walkMoved(p.get(i));
+    };
+    walkMoved(scene.added[0]);
+    const rebuilt = moved.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    assert.ok(rebuilt && rebuilt !== line, 'built anew where it moved');
+    assert.ok(!moved.includes(line), 'the old line is gone');
+    scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
+    frame();
+    assert.equal(rebuilt.show, false);
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('where the scene cannot drape, an overlay line is culled by its whole arc, and patched by what its positions hold', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    scene.frameState.context = { depthTexture: false };
+    const { draw, frame } = drawOver(scene);
+    const set = draw.lines({ id: 'arc', clampTo: 'tiles' });
+    const find = () => {
+      const all = [];
+      const walk = (p) => {
+        all.push(p);
+        if (typeof p?.get === 'function' && Number.isFinite(p.length))
+          for (let i = 0; i < p.length; i++) walk(p.get(i));
+      };
+      walk(scene.added[0]);
+      return all.find(
+        (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+      );
+    };
+    // Its ends are past the horizon, but the arc runs under the eye.
+    const a = Cesium.Cartesian3.fromDegrees(-80, 0, 0);
+    const b = Cesium.Cartesian3.fromDegrees(80, 0, 0);
+    const positions = new Float64Array([a.x, a.y, a.z, b.x, b.y, b.z]);
+    const item = (style) => ({
+      id: 'arc',
+      positions,
+      widthPx: 2,
+      mode: 'draped',
+      style: { kind: 'solid', color: style },
+    });
+    set.set([item([1, 0, 0, 1])]);
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 0, 0);
+    frame();
+    const line = find();
+    assert.equal(line.show, true, 'shown: its middle is in view');
+    // The same buffer, changed in place: built anew where it now runs.
+    const c = Cesium.Cartesian3.fromDegrees(10, 0, 0);
+    positions.set([c.x, c.y, c.z], 3);
+    set.upsert([item([1, 0, 0, 1])]);
+    const moved = find();
+    assert.notEqual(moved, line, 'built anew');
+    // Moved past the horizon, then upserted as an ordinary line in view:
+    // it is no longer culled by where the overlay was.
+    const far = new Float64Array(6);
+    const f1 = Cesium.Cartesian3.fromDegrees(179, 0, 0);
+    const f2 = Cesium.Cartesian3.fromDegrees(179.5, 0, 0);
+    far.set([f1.x, f1.y, f1.z, f2.x, f2.y, f2.z]);
+    set.upsert([{ ...item([1, 0, 0, 1]), positions: far }]);
+    frame();
+    assert.equal(find().show, false, 'past the horizon');
+    set.upsert([
+      {
+        id: 'arc',
+        positions: [
+          Cesium.Cartesian3.fromDegrees(0, 0, 0),
+          Cesium.Cartesian3.fromDegrees(0.5, 0, 0),
+        ],
+        widthPx: 2,
+        mode: '3d',
+        depthFailColor: [1, 0, 0, 1],
+        style: { kind: 'solid', color: [1, 0, 0, 1] },
+      },
+    ]);
+    const plain = find();
+    frame();
+    assert.equal(plain.show, true, 'not culled by the overlay it was');
+    set.dispose();
+  }));
+
+test('where the scene cannot drape, a segmented draped line runs over its shown segments only', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    scene.frameState.context = { depthTexture: false };
+    const { draw } = drawOver(scene);
+    const set = draw.lines({ id: 'trail', clampTo: 'tiles' });
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+    const positions = [at(0), at(0.01), at(0.02), at(0.03)];
+    const red = [1, 0, 0, 1];
+    const find = () => {
+      const all = [];
+      const walk = (p) => {
+        all.push(p);
+        if (typeof p?.get === 'function' && Number.isFinite(p.length))
+          for (let i = 0; i < p.length; i++) walk(p.get(i));
+      };
+      walk(scene.added[0]);
+      return all.find(
+        (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+      );
+    };
+    set.set([
+      {
+        id: 'trail',
+        positions,
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: red },
+        segmentColors: [red, red, red],
+        segmentShow: [true, true, false],
+      },
+    ]);
+    const line = find();
+    assert.ok(line, 'drawn over the surface');
+    const drawn = line.geometryInstances.geometry._positions;
+    assert.equal(drawn.length, 3, 'up to its last shown segment');
+    assert.ok(Cesium.Cartesian3.equals(drawn[2], positions[2]));
+    set.set([
+      {
+        id: 'trail',
+        positions,
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: red },
+        segmentColors: [red, red, red],
+        segmentShow: [false, false, false],
+      },
+    ]);
+    assert.equal(find()?.show ?? false, false, 'hidden with none shown');
+    set.dispose();
+  }));
 
 test('revealFraction draws a line up to that fraction of its length, and changes in place', () =>
   withImageClasses(() => {

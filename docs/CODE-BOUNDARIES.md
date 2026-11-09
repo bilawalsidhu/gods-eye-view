@@ -569,6 +569,13 @@ separate from standalone setup. Scene construction returns these operations; the
 catalog and controls use the same surface owner. Layers still own their individual
 ground-snap caches and model resources.
 
+The entry is Cesium-free: ground snapping and mesh floor sampling ask the
+renderer's globe (`isSettled`), camera (`pose`) and query (heights) ports, and
+see through the caller's draw sets by id. A viewer with no renderer bound needs
+the Cesium adapter's factories loaded (`gods-eye-view/render/cesium/unbound`)
+first; until then the snap and the sampler answer nothing and location framing
+throws, naming that export.
+
 Terrain cancellation rejects late replies before caching, clears floor queues and
 removes the map-stack listener. Annotation lookup caches are instance-owned and
 cleared on cancellation. Geometry selection and floor policies are unchanged.

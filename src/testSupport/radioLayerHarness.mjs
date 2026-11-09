@@ -1,6 +1,9 @@
 import { radioLayer } from '../data/radio.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { bindFakeDraw } from './fakeDrawPort.mjs';
+// The layer's clicks and floors take a viewer of the test's own, as a
+// renderer bound: its factories load as `./render/cesium/unbound` loads them.
+import '../render/cesium/unbound.js';
 
 export function radioStationRow(overrides = {}) {
   return {

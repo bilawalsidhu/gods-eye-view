@@ -123,9 +123,16 @@ const DRAW_FROM_CALLER = new Set([
   // Its moving and still vehicle icons draw through `drawOf`; it projects,
   // culls, follows and samples floors through the ports.
   './layers/transit',
-  // Not Cesium-free (its legacy mesh floor sampler is), but its layer draws
-  // and reads the view through the ports alone.
+  // Its layer draws and reads the view through the ports alone, and its mesh
+  // floor sampler asks the camera, globe and query ports.
   './layers/transit/standalone',
+  // Its dots and heat-lines draw through `drawOf`; it reads the eye, the
+  // surface (its identity and whether it has loaded) and heights through
+  // the camera, globe and query ports.
+  './layers/traffic',
+  // It configures the sources of layers, the traffic layer's among them,
+  // that draw and read the surface through the ports alone.
+  './application/sources',
 ]);
 
 /**
@@ -153,6 +160,9 @@ const CAMERA_FROM_CALLER = new Set([
   // renderer the application gives it (`rendering.js`, which draws the box
   // preview through `drawOf`) is Cesium-free too.
   './layers/recent-imagery',
+  // Its ground snap, mesh floor sampler, annotation resolver and location
+  // framing ask the camera, globe and query ports; it loads no factory.
+  './application/operations',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));

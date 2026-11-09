@@ -182,10 +182,6 @@ export function createState({ services }) {
 
   layerState._heatLineCount = 0;
 
-  /** @type {boolean|null} Whether lines can drape here, checked once. */
-
-  layerState._heatSupported = null;
-
   /** @type {number} Altitude of the last render, for late-flow heat rebuilds. */
 
   layerState._lastRenderAltitude = 0;

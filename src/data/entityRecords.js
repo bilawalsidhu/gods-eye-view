@@ -14,6 +14,8 @@
  * - `selectionOrigin`: what started the selection (`'user'`, …).
  * - `sprite`: a tracked billboard's pushed `{ width, height, scale, scaleByDistance }`, for
  *   the close-range camera guard and the screen annotations' tracked footprint.
+ * - `groundSets()`: the draw set ids a height sample under the contact sees through (its own
+ *   icons and models), for Cockpit's ground probe.
  *
  * A layer's private per-entity state goes in its own store ({@link createEntityStore}).
  */

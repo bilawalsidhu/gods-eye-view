@@ -10,6 +10,26 @@
   `event.native` (and `event.pick` and `event.pickWindow`). A viewer of your
   own with no renderer bound needs `gods-eye-view/render/cesium/unbound`
   loaded once first (samehkhamis).
+- `gods-eye-view/application/operations` no longer reaches Cesium: ground
+  snapping and mesh floor sampling ask the renderer's globe, camera and query
+  ports, and see through the caller's draw sets by id (the raw
+  `excludeObjects` option and exclusion callbacks are gone). A viewer of your
+  own with no renderer bound needs `gods-eye-view/render/cesium/unbound`
+  loaded once first, or location framing throws and snaps answer nothing
+  (samehkhamis).
+- `gods-eye-view/layers/traffic` (and `gods-eye-view/application/sources`,
+  which reaches it) no longer reaches Cesium: the layer keys cached road
+  heights by the globe port's `surfaceVersion()` and waits on
+  `isSettled('surface')`. Heat-lines are always asked for draped; a renderer
+  that cannot drape draws them over the surface instead of the layer
+  dropping them. A viewer with no renderer bound needs
+  `gods-eye-view/render/cesium/unbound` loaded once first (samehkhamis).
+- Where the Cesium renderer cannot drape (a WebGL context without depth
+  textures), every draped line now draws over the surface, as the renderer
+  contract asks: along the surface's curve between its positions, in its
+  colour where the surface hides it, hidden past the horizon. Segment colours
+  are dropped (it draws in its style colour) and it runs from its first shown
+  segment to its last (samehkhamis).
 
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 

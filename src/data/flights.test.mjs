@@ -526,6 +526,10 @@ test('real civil track path creates no native label and publishes every cached h
     );
     assert.ok(entity.position, 'Cockpit sees a contact it can fly');
     assert.equal(readEntityRecord(entity).drawn(), true);
+    assert.ok(
+      Array.isArray(readEntityRecord(entity).groundSets()),
+      'Cockpit asks which draw sets its ground probe sees through',
+    );
     assert.equal(entity.show, true);
     assert.equal(entity.label, undefined);
     assert.ok(

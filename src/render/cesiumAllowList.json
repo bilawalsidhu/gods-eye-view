@@ -7,7 +7,6 @@
   "src/cyberSonarGpu.js",
   "src/cyberSonarScene.js",
   "src/data/geoImportPins.js",
-  "src/layers/traffic/rendering.js",
   "src/layers/weather/shellRendering.js",
   "src/layers/wind/gpuRendering.js",
   "src/layers/wind/relief.js",
@@ -17,8 +16,6 @@
   "src/maps/google3d.js",
   "src/maps/imagery.js",
   "src/maps/terrain.js",
-  "src/services/groundSnap.js",
-  "src/services/meshFloorSampler.js",
   "src/sky/starrySky.js",
   "src/ui/applicationShell.js"
 ]

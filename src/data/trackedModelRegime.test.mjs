@@ -164,7 +164,8 @@ if (typeof globalThis.window === 'undefined') {
 
 /** A viewer stub whose camera altitude the test can move between evaluations.
  *  Its renderer has a fake draw port (`viewer.draw`) the layer's model sets
- *  are made on, and a query port whose height samples are `sampleHeight`'s. */
+ *  are made on, a globe whose drawn tiles settle as `viewer.tileset` says, and
+ *  a query port whose height samples are `sampleHeight`'s. */
 function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undefined } = {}) {
   const tileset = { show: true, tilesLoaded };
   const draw = fakeDrawPort();
@@ -177,7 +178,6 @@ function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undef
     scene: {
       canvas: { clientHeight: 900 },
       frameState: { frameNumber: 1 },
-      primitives: { length: 1, get() { return tileset; } },
       sampleHeight,
     },
     tileset,
@@ -187,6 +187,7 @@ function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undef
   };
   return bindFakeCesiumCamera(viewer, {
     draw,
+    globe: { isSettled: (kind) => kind !== 'tiles' || tileset.tilesLoaded },
     query: { sampleHeightNow: () => sampleHeight() },
     canvas: viewer.scene.canvas,
   });
