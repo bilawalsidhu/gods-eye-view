@@ -1701,12 +1701,12 @@ export function portChecks() {
         await overAustin(h, r);
         const set = r.draw.icons({ id: 'conf:atlas' });
         const at = (lon) => h.toEcef({ lon, lat: AUSTIN.lat, height: 0 });
-        // A generated slot too, where there is a page to make it in.
+        // A generated slot too, where there is a canvas that draws in 2D.
         const canvas = globalThis.document?.createElement('canvas');
+        const g = canvas?.getContext?.('2d');
         const slots = { svg: ['dot', DOT, AUSTIN.lon - 0.002] };
-        if (canvas) {
+        if (g) {
           canvas.width = canvas.height = 16;
-          const g = canvas.getContext('2d');
           g.fillStyle = '#fff';
           g.fillRect(0, 0, 16, 16);
           slots.canvas = [
