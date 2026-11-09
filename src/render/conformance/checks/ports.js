@@ -787,6 +787,64 @@ export function portChecks() {
       { capability: 'fields' },
     ),
     check(
+      'draw.field.windStreamlines',
+      "streamlines' 'drawn' comes once per change, never while hidden",
+      async (h, r) => {
+        await overAustin(h, r, 2000000);
+        const width = 8;
+        const height = 5;
+        const errors = [];
+        const offError = r.on('error', (e) => errors.push(e));
+        const field = r.draw.field({
+          kind: 'windStreamlines',
+          id: 'conf:wind',
+          u: new Float32Array(width * height).fill(12),
+          v: new Float32Array(width * height).fill(4),
+          width,
+          height,
+          rectangle: { west: -180, south: -80, east: 180, north: 80 },
+          pathBudget: 200,
+          steps: 8,
+          style: { color: '#80c9e6', widthPx: 2 },
+          heightM: 12000,
+          alpha: 1,
+        });
+        let drawnCount = 0;
+        const off = field.on('drawn', () => (drawnCount += 1));
+        // Frames until 'drawn' has come `want` times, for at most 20 s.
+        const until = async (want) => {
+          const deadline = Date.now() + 20000;
+          while (drawnCount < want && Date.now() < deadline)
+            await drawn(h, r, 1);
+        };
+        try {
+          await until(1);
+          equal(drawnCount, 1, 'drawn once made');
+          await drawn(h, r, 4);
+          equal(drawnCount, 1, 'not again while nothing changes');
+          field.update({ alpha: 0.5 });
+          await until(2);
+          equal(drawnCount, 2, 'drawn after a new alpha');
+          field.update({ paused: true });
+          await until(3);
+          equal(drawnCount, 3, 'drawn once paused');
+          field.show = false;
+          field.update({ alpha: 0.4 });
+          await drawn(h, r, 6);
+          equal(drawnCount, 3, 'never while hidden');
+          field.show = true;
+          await until(4);
+          equal(drawnCount, 4, 'drawn once shown again');
+          deepEqual(errors, [], 'no errors');
+        } finally {
+          off();
+          offError();
+          field.dispose();
+        }
+      },
+      { capability: 'fields' },
+    ),
+    check(
       'draw.drawOrder',
       'of sets drawn over depth, the higher draw order is on top and picked',
       async (h, r) => {

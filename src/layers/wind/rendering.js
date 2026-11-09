@@ -159,12 +159,10 @@ export function createWindRendering({
   let bounds = null;
   let cameraChanged = true;
   let painted = 0;
-  const gpu = createGpuRendering({ cesium, getViewer });
+  const gpu = createGpuRendering({ getViewer, drawOf });
   let gpuActive = false;
-  let gpuVisible = false;
   let reportedGpuReady = null;
   let gpuNarrow = false;
-  let flowTime = 0;
   const relief = createWindRelief({ cesium, getViewer });
   const signature = Array(8).fill(null);
   const wind = { u: 0, v: 0 };
@@ -202,7 +200,7 @@ export function createWindRendering({
       canvas &&
       !hidden() &&
       !still() &&
-      (!gpuActive || gpuVisible) &&
+      !gpuActive &&
       frame === null
     )
       frame = globalThis.requestAnimationFrame(draw);
@@ -507,14 +505,8 @@ export function createWindRendering({
         motionChanged();
         visibilityUpdated = true;
       }
-      if (gpuActive && viewer && !visibilityUpdated) {
-        gpuVisible = gpu.updateVisibility(viewer.scene.camera);
-        if (gpuVisible) schedule();
-        else {
-          cancel();
-          lastTime = null;
-        }
-      }
+      // The renderer culls and animates the streamlines; this fades them.
+      if (gpuActive && viewer && !visibilityUpdated) gpu.updateVisibility();
       const ready = gpuActive ? gpu.getDiagnostics().ready : null;
       if (ready !== reportedGpuReady) {
         reportedGpuReady = ready;
@@ -542,12 +534,7 @@ export function createWindRendering({
     const viewer = viewerReady();
     if (gpuActive) {
       if (viewer) updateImageryFade(viewer.scene.camera);
-      gpuVisible = viewer ? gpu.updateVisibility(viewer.scene.camera) : false;
-      if (gpuVisible) {
-        gpu.tick(flowTime);
-        viewer.scene.requestRender();
-        schedule();
-      }
+      if (viewer) gpu.updateVisibility();
       return;
     }
     if (still() && viewer) paint(viewer, 0, true);
@@ -705,26 +692,17 @@ export function createWindRendering({
 
   function draw(time) {
     frame = null;
-    if (!running || !field || hidden() || still()) return;
-    if (gpuActive && !gpuVisible) {
-      lastTime = null;
-      return;
-    }
+    if (!running || !field || hidden() || still() || gpuActive) return;
     const viewer = viewerReady();
     if (!viewer) return;
     try {
-      const resized = !gpuActive && resize(viewer);
+      const resized = resize(viewer);
       if (resized) cameraChanged = true;
       const elapsed =
         lastTime === null ? 1 / 60 : Math.max(0, (time - lastTime) / 1000);
       // Limit full particle paints to 30 Hz while preserving elapsed-time motion/fading.
       if (lastTime === null || elapsed >= 0.032 || cameraChanged) {
-        if (gpuActive) {
-          flowTime += elapsed;
-          gpu.tick(flowTime);
-          viewer.scene.requestRender();
-          cameraChanged = false;
-        } else paint(viewer, Math.min(0.1, elapsed), false, elapsed);
+        paint(viewer, Math.min(0.1, elapsed), false, elapsed);
         lastTime = time;
       }
     } catch (error) {
@@ -773,7 +751,6 @@ export function createWindRendering({
         if (!reuseGeometry) {
           gpuActive = gpu.supported() && gpu.setField(field);
           reportedGpuReady = gpuActive ? gpu.getDiagnostics().ready : null;
-          flowTime = 0;
         }
         clearPixels();
         particles = [];
@@ -827,9 +804,7 @@ export function createWindRendering({
       gpu.clear();
       relief.clear();
       gpuActive = false;
-      gpuVisible = false;
       reportedGpuReady = null;
-      flowTime = 0;
       removeImagery();
       imageryError = null;
       clearPixels();
