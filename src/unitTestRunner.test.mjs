@@ -99,13 +99,36 @@ test('parallel batches stay under the Windows command-line limit (#1631)', () =>
     );
   }
 
-  // The real suite needed more than one batch at #1631's count — assert the
-  // guard is actually exercised rather than trivially satisfied.
-  const singleChars = overhead + plan.parallel.reduce((sum, file) => sum + file.length + 3, 0);
+});
+
+test('batching kicks in for an oversized suite (#1631)', () => {
+  // Fixed synthetic input, independent of the repository's suite size and
+  // of process.execPath: 500 fixed-length paths need ~41k characters, over
+  // the Windows 32,767 limit on any machine, so the guard must split them.
+  const synthetic = Array.from(
+    { length: 500 },
+    (_, index) => `src/${'m'.repeat(60)}/module-${index}.test.mjs`,
+  );
+  const overhead =
+    process.execPath.length + 1 +
+    UNIT_TEST_NODE_FLAGS.join(' ').length + 1 +
+    '--test'.length;
+  const singleChars = overhead + synthetic.reduce((sum, file) => sum + file.length + 3, 0);
   assert.ok(
     singleChars > 32_767,
-    `expected the unbatched parallel suite (${singleChars} chars) to exceed the Windows limit`,
+    `expected the synthetic suite (${singleChars} chars) to exceed the Windows limit`,
   );
+
+  const batches = batchUnitTestFiles(synthetic);
+  assert.ok(batches.length > 1, 'synthetic oversized suite must need several batches');
+  assert.deepEqual(batches.flat(), synthetic);
+  for (const batch of batches) {
+    const chars = overhead + batch.reduce((sum, file) => sum + file.length + 3, 0);
+    assert.ok(
+      chars <= UNIT_TEST_ARGV_CHAR_BUDGET,
+      `batch of ${batch.length} files needs ${chars} characters (budget ${UNIT_TEST_ARGV_CHAR_BUDGET})`,
+    );
+  }
 });
 
 test('batching degenerates safely (#1631)', () => {
