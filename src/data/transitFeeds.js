@@ -453,7 +453,9 @@ function liaRouteMode(routeId) {
  * rail that runs mostly on the street) and 99 the Calypso river boat.
  */
 const ASTUCE_ROUTES = Object.freeze({
+  // i18n-ignore: line name, as on the vehicle
   'TCAR:90': Object.freeze({ mode: 'tram', label: 'Métro' }),
+  // i18n-ignore: line name, as on the vehicle
   'TCAR:99': Object.freeze({ mode: 'ferry', label: 'Calypso' }),
 });
 
@@ -484,11 +486,13 @@ function pidRoute(routeId) {
   const match = /^L(\d+)$/.exec(routeId ?? '');
   if (!match) return { mode: 'unknown', label: routeId };
   const n = Number(match[1]);
+  // i18n-ignore: line code, as signed
   if (n === 49) return { mode: 'rail', label: 'LD' };
   if (n >= 50 && n <= 59) return { mode: 'bus', label: String(n) };
   if (n < 100) return { mode: 'tram', label: String(n) };
   if (n >= 800 && n < 900) return { mode: 'bus', label: `X${n - 800}` };
   if (n < 991) return { mode: 'bus', label: String(n) };
+  // i18n-ignore: metro line letters, as signed
   if (n <= 993) return { mode: 'subway', label: 'ABC'[n - 991] };
   if (n >= 1000 && n < 1100) return { mode: 'rail', label: `S${n - 1000}` };
   if (n >= 1100 && n < 1200) return { mode: 'rail', label: `R${n - 1100}` };
