@@ -7,39 +7,25 @@
  * one without (a line) is zoomed to at once instead. It runs only while the
  * renderer's own double-click follow is on (a tool can hold it off).
  */
-import { WGS84 } from '../geo/ellipsoid.js';
-import { offsetFromHeadingPitchRange } from '../geo/frames.js';
+import { followOffsetFitting } from '../geo/frames.js';
 import { findCamera, findQuery } from '../render/rendererOf.js';
 
-/** The range the default renderer frames a sphere of no size from. */
-const MINIMUM_FIT_RANGE_M = 100;
-
 /**
- * Where the camera frames a part it starts following, as the default
- * renderer framed an entity it started following with no view of its own:
- * looking at the bounds' centre, heading north, pitched down 45° (steeper
- * far from the ground), at the range that fits the bounds in view, within
- * the camera's zoom limits. Returned as the eye's offset from the centre,
- * east-north-up there; `at` is where the part stands.
+ * Where the camera frames a part it starts following: `followOffsetFitting`
+ * with the camera port's field of view and zoom limits.
  * @param {{center: {x: number, y: number, z: number}, radius: number}} sphere
  * @param {{x: number, y: number, z: number}} at
  * @param {object} camera The camera port.
  */
 export function followViewFrom(sphere, at, camera) {
   const pose = camera.pose?.();
-  const fovy = Number.isFinite(pose?.fovy) ? pose.fovy : Math.PI / 3;
-  const aspect = Number.isFinite(pose?.aspectRatio) ? pose.aspectRatio : 1;
-  const tanPhi = Math.tan(fovy / 2);
-  const tanTheta = aspect * tanPhi;
-  let range =
-    sphere.radius === 0
-      ? MINIMUM_FIT_RANGE_M
-      : Math.max(sphere.radius / tanTheta, sphere.radius / tanPhi);
-  const { minDistance = 0, maxDistance = Infinity } = camera.controls ?? {};
-  range = Math.min(Math.max(range, minDistance), maxDistance);
-  const factor =
-    2 - 1 / Math.max(1, Math.hypot(at.x, at.y, at.z) / WGS84.radii.x);
-  return offsetFromHeadingPitchRange(0, (-Math.PI / 4) * factor, range);
+  const { minDistance, maxDistance } = camera.controls ?? {};
+  return followOffsetFitting(sphere, at, {
+    fovy: pose?.fovy,
+    aspectRatio: pose?.aspectRatio,
+    minDistance,
+    maxDistance,
+  });
 }
 
 /**
