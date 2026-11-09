@@ -22,8 +22,10 @@ function finiteVector(v) {
 /**
  * Where the camera is part-way through a hop: along the great circle
  * between the two positions (never through the Earth), its distance from the
- * centre interpolated linearly. Opposite ends turn about a fixed axis
- * square to them, so even then the path stays off the Earth.
+ * centre interpolated linearly. The circle is the one through both ends, so
+ * the path moves smoothly as the destination does, however far round it
+ * lies; only exactly opposite ends, which no single circle joins, turn about
+ * a fixed axis square to them.
  * @param {{x: number, y: number, z: number}} from
  * @param {{x: number, y: number, z: number}} to
  * @param {number} progress Eased, 0..1.
@@ -37,39 +39,36 @@ export function hopPosition(from, to, progress) {
   if (!(ra > 0) || !(rb > 0)) return null;
   const a = { x: from.x / ra, y: from.y / ra, z: from.z / ra };
   const b = { x: to.x / rb, y: to.y / rb, z: to.z / rb };
-  const cosine = Math.min(1, Math.max(-1, a.x * b.x + a.y * b.y + a.z * b.z));
-  const omega = Math.acos(cosine);
+  const cosine = a.x * b.x + a.y * b.y + a.z * b.z;
+  // The direction the circle leaves `a` in: `b` less its part along `a`.
+  let c = {
+    x: b.x - cosine * a.x,
+    y: b.y - cosine * a.y,
+    z: b.z - cosine * a.z,
+  };
+  let rc = Math.hypot(c.x, c.y, c.z);
   const r = ra + (rb - ra) * p;
-  if (Math.PI - omega < 1e-6) {
-    // No single great circle joins opposite points: turn about the axis
-    // square to `a` that is least aligned with the Earth's.
+  const omega = Math.atan2(rc, cosine);
+  if (!(rc > 1e-12)) {
+    if (cosine > 0) return { x: a.x * r, y: a.y * r, z: a.z * r };
+    // Opposite ends: set off square to `a`, northward (or, near a pole,
+    // toward the prime meridian).
     const pole =
       Math.abs(a.z) < 0.9 ? { x: 0, y: 0, z: 1 } : { x: 1, y: 0, z: 0 };
     const along = pole.x * a.x + pole.y * a.y + pole.z * a.z;
-    const c = {
+    c = {
       x: pole.x - along * a.x,
       y: pole.y - along * a.y,
       z: pole.z - along * a.z,
     };
-    const rc = Math.hypot(c.x, c.y, c.z);
-    const cos = Math.cos(p * Math.PI);
-    const sin = Math.sin(p * Math.PI);
-    return {
-      x: (a.x * cos + (c.x / rc) * sin) * r,
-      y: (a.y * cos + (c.y / rc) * sin) * r,
-      z: (a.z * cos + (c.z / rc) * sin) * r,
-    };
+    rc = Math.hypot(c.x, c.y, c.z);
   }
-  let ka = 1 - p;
-  let kb = p;
-  if (omega > 1e-9) {
-    const sine = Math.sin(omega);
-    ka = Math.sin((1 - p) * omega) / sine;
-    kb = Math.sin(p * omega) / sine;
-  }
+  const angle = p * omega;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle) / rc;
   return {
-    x: (a.x * ka + b.x * kb) * r,
-    y: (a.y * ka + b.y * kb) * r,
-    z: (a.z * ka + b.z * kb) * r,
+    x: (a.x * cos + c.x * sin) * r,
+    y: (a.y * cos + c.y * sin) * r,
+    z: (a.z * cos + c.z * sin) * r,
   };
 }

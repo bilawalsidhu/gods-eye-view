@@ -1709,8 +1709,8 @@ time. TRACK ACQUIRED stays first. Then:
 - **Sites**: the Mapped Installations layer's loaded records around the
   sub-satellite point (`getNearby`, asked only as far as the reach extends
   over the ground, and never past 3,000 km, so from a high orbit only the
-  sites within 3,000 km of the point below are listed) that face the satellite and lie within the off-nadir
-  reach, nearest to nadir first, the focused site always among them. A row
+  sites within 3,000 km of the point below are listed) that face the
+  satellite and lie within the off-nadir reach, nearest to nadir first, the focused site always among them. A row
   reads the site's name over its class and off-nadir angle; its button
   (`Keep the camera on …`) focuses the site, and on the focused site's row,
   marked as the subject is (`FOCUS · …`, `Release the camera from …`), ends

@@ -33,9 +33,41 @@ test('a hop to the opposite side goes round the Earth, not through it', () => {
   const radius = Cesium.Cartesian3.magnitude(from);
   for (const p of [0.25, 0.5, 0.75]) {
     const point = hopPosition(from, to, p);
-    assert.ok(Math.abs(Math.hypot(point.x, point.y, point.z) - radius) < 1e-3, `p=${p}`);
+    assert.ok(
+      Math.abs(Math.hypot(point.x, point.y, point.z) - radius) < 1e-3,
+      `p=${p}`,
+    );
   }
   const end = hopPosition(from, to, 1);
   for (const axis of ['x', 'y', 'z'])
     assert.ok(Math.abs(end[axis] - to[axis]) < 1e-3, axis);
+});
+
+test('a hop to nearly the opposite side moves smoothly as the destination does', () => {
+  const r = 6_778_137;
+  const from = { x: r, y: 0, z: 0 };
+  const near = (delta) => ({
+    x: -r * Math.cos(delta),
+    y: r * Math.sin(delta),
+    z: 0,
+  });
+  const mid = (delta) => hopPosition(from, near(delta), 0.5);
+  const [a, b] = [mid(0.999e-6), mid(1.001e-6)];
+  assert.ok(
+    Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1,
+    'no jump between neighbours',
+  );
+  for (const delta of [1e-3, 1e-6, 1e-9]) {
+    const to = near(delta);
+    const end = hopPosition(from, to, 1);
+    assert.ok(
+      Math.hypot(end.x - to.x, end.y - to.y, end.z - to.z) < 1e-3,
+      `lands at ${delta}`,
+    );
+    const half = mid(delta);
+    assert.ok(
+      Math.abs(Math.hypot(half.x, half.y, half.z) - r) < 1e-3,
+      `round at ${delta}`,
+    );
+  }
 });
