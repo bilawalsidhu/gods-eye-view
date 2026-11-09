@@ -126,3 +126,49 @@ test('a lifecycle owner cannot acquire a layer panel even through an unused impo
   );
   await assert.rejects(checkPackageBoundaries(root), /unowned module.*panel/);
 });
+
+test('a declared dependency owns the asset files it ships, and only those', async (t) => {
+  const asset = (pkg) =>
+    `import url from './node_modules/${pkg}/flags/aa.svg?url&no-inline'; export const value = url;`;
+  const root = await fixture(t, asset('flags'));
+  for (const pkg of ['flags', 'flags-extra', 'stray']) {
+    await mkdir(path.join(root, 'node_modules', pkg, 'flags'), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(root, 'node_modules', pkg, 'flags/aa.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg"/>',
+    );
+  }
+  await writeFile(
+    path.join(root, 'package.json'),
+    JSON.stringify({
+      name: 'boundary-fixture',
+      type: 'module',
+      exports: { './feature': './entry.js' },
+      dependencies: { flags: '1.0.0' },
+    }),
+  );
+  await writeFile(
+    path.join(root, 'scripts/package-boundaries.json'),
+    JSON.stringify({
+      feature: {
+        exports: ['./feature'],
+        modules: ['entry.js'],
+        external: ['flags'],
+      },
+    }),
+  );
+  // The entry and the flag it ships.
+  assert.deepEqual(await checkPackageBoundaries(root), [
+    { name: 'feature', exports: 1, modules: 2 },
+  ]);
+  // An undeclared package's file, and one whose name only starts the same.
+  for (const pkg of ['stray', 'flags-extra']) {
+    await writeFile(path.join(root, 'entry.js'), asset(pkg));
+    await assert.rejects(
+      checkPackageBoundaries(root),
+      new RegExp(`unowned module.*node_modules/${pkg}/`),
+    );
+  }
+});

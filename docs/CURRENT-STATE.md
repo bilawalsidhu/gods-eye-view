@@ -1658,14 +1658,16 @@ the satellite's live altitude and the window's shape is still at least as
 wide as that swath (`orbitalMaxZoom` in `src/cockpitOrbital.js`); when the
 cap falls below the zoom shown, the view steps back to it. Unconfirmed
 swaths add no steps, but are still drawn, read out and offered to SENSOR.
-The sensor's swath is drawn to scale as a strip along the ground track with
+The sensor's swath is drawn to scale as a strip along the ground track (its
+width follows the view through a zoom step, not ahead of it) with
 a SENSOR SWATH readout, and a SENSOR button zooms to exactly that width when
 it lies between 1× and the cap. No strip is drawn for a geostationary view
 (no ground track; its sensors image areas, not strips) or a SAR (it images
 to one side of nadir, not under it); the readout stays. Tilted off nadir
 the strip stays (view and swath widen alike), the readout scales as the swath
 readout does (`SENSOR SWATH ≈ 191 KM`), and SENSOR, a nadir framing, is
-hidden; tilted past the Earth's limb neither the sensor nor the swath reads. A swath is confirmed only on the operator's, an agency's (ESA's
+hidden; tilted past the Earth's limb neither the sensor nor the swath
+reads. A swath is confirmed only on the operator's, an agency's (ESA's
 eoPortal included) or an academic page for its platform. From
 16×, with flat imagery on the globe (not Google 3D tiles) and the view at
 nadir, every 2 s the view asks the base imagery layer for the tiles it will
