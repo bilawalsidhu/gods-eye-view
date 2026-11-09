@@ -305,8 +305,8 @@ test('satellite azimuths that round to 360 read as 0', async () => {
     tools: coreTools,
     services: { satellites: satellites(), clock: CLOCK },
   });
-  // These points are chosen so the ISS's raw azimuths fall just below 360°;
-  // pin that first, so the test cannot pass on a raw value already near 0.
+  // At these points the ISS's raw azimuths fall just below 360°; check that
+  // first so the test cannot pass on a raw value near 0.
   const [, line1, line2] = TLE.split('\n');
   const iss = twoline2satrec(line1, line2);
   const nearNorth = (deg) => deg > 359.5 && deg < 360;
