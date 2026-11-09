@@ -56,36 +56,56 @@ test('one lookup that loads several packs reads as one load', async () => {
   stop();
 });
 
-test('a load is not blamed for packs that failed in an earlier one', async () => {
-  const place = await import('./placeBelow.js?two-failed');
-  let fail = true;
+/** Two stand-in packs (not real pack names) that fail while named in `fail`. */
+function standInPacks(place, fail) {
   const pack = (name) =>
     place.reportedPlacePackLoad(name, async () => {
-      if (fail) throw new Error('offline');
+      if (fail.has(name)) throw new Error('offline');
       return name;
     });
-  const divisions = pack('divisions');
-  const places = pack('places');
-  await assert.rejects(divisions());
-  await assert.rejects(places());
-  assert.equal(place.placePacksStatus().failed, true);
-  fail = false;
-  // One lookup retries both, one after the other.
-  const lookup = place.placeBelow(48.86, 2.35, {
-    detail: {
-      division: async () => divisions(),
-      near: async () => places(),
-    },
-  });
+  return { first: pack('stand-in-first'), second: pack('stand-in-second') };
+}
+
+/** The statuses one lookup that loads both stand-ins reports, start to end. */
+async function lookupStatuses(place, { first, second }) {
   const statuses = [];
   const stop = place.onPlacePacksLoadingChange(() =>
     statuses.push(place.placePacksStatus()),
   );
-  await lookup;
+  await place.placeBelow(48.86, 2.35, {
+    detail: { division: async () => first(), near: async () => second() },
+  });
   stop();
-  assert.ok(statuses.length > 0);
+  return statuses;
+}
+
+test('a load is not blamed for packs that failed in an earlier one', async () => {
+  const place = await import('./placeBelow.js?two-failed');
+  const fail = new Set(['stand-in-first', 'stand-in-second']);
+  const packs = standInPacks(place, fail);
+  await assert.rejects(packs.first());
+  await assert.rejects(packs.second());
+  assert.equal(place.placePacksStatus().failed, true);
+  fail.clear();
+  const statuses = await lookupStatuses(place, packs);
+  assert.deepEqual(statuses[0], { loading: true, failed: false });
   assert.ok(
     statuses.every((status) => status.failed === false),
     'the earlier failures do not colour this load',
   );
+  assert.deepEqual(place.placePacksStatus(), {
+    loading: false,
+    failed: false,
+  });
+});
+
+test('a pack that fails in a load keeps it failed when the next one lands', async () => {
+  const place = await import('./placeBelow.js?mixed');
+  const packs = standInPacks(place, new Set(['stand-in-first']));
+  const statuses = await lookupStatuses(place, packs);
+  assert.deepEqual(statuses.at(-1), { loading: false, failed: true });
+  assert.deepEqual(place.placePacksStatus(), {
+    loading: false,
+    failed: true,
+  });
 });

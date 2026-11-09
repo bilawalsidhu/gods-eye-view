@@ -50,7 +50,8 @@ const PACKS = {
 /**
  * The packs on their way now, and those that failed in the current load (or
  * the last one): a load starts with no failures, so a retry that lands is
- * not blamed for a pack that failed before.
+ * not blamed for a pack that failed before. (A load that does not need the
+ * failed pack clears it too; the next lookup that needs it tries it again.)
  */
 const loadingPacks = new Set();
 const failedPacks = new Set();
