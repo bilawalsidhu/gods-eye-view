@@ -11,6 +11,8 @@ import {
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
   compassDivisions,
+  compassMarkerSlot,
+  scrollingCompassDivisions,
   formatAltitudeRulerTick,
   formatCockpitContextScope,
   formatCockpitEmergency,
@@ -149,6 +151,46 @@ test('slewHeading follows the shortest arc across north', () => {
 
 test('compass divisions remain ordered across north', () => {
   assert.deepEqual(compassDivisions(359), [270, 300, 330, 0, 30, 60, 90]);
+});
+
+test('compass marks sit in division slots off the caret, or off the tape', () => {
+  // Measured from the exact heading under the caret, not the nearest division.
+  assert.equal(compassMarkerSlot(350, 350), 0);
+  assert.equal(compassMarkerSlot(35, 350), 1.5);
+  assert.equal(compassMarkerSlot(260, 350), -3);
+  assert.equal(compassMarkerSlot(80, 350), 3);
+  assert.equal(compassMarkerSlot(90, 350), null);
+  assert.equal(compassMarkerSlot(180, 350), null);
+  assert.equal(compassMarkerSlot(Number.NaN, 0), null);
+});
+
+test('a scrolling tape puts the exact heading under the caret', () => {
+  // At 100° the divisions sit a third of a slot off their snapped places,
+  // so the bow mark (also 100°) lines up with the caret, not 10° beside it.
+  const tape = scrollingCompassDivisions(100);
+  assert.deepEqual(
+    tape.map(({ heading }) => heading),
+    [330, 0, 30, 60, 90, 120, 150, 180, 210],
+  );
+  const nearest = tape.find((division) => division.nearest);
+  assert.equal(nearest.heading, 90);
+  assert.equal(nearest.slot, -0.3333);
+  assert.equal(tape.find(({ heading }) => heading === 120).slot, 0.6667);
+  assert.equal(compassMarkerSlot(100, 100), 0);
+  assert.equal(compassMarkerSlot(90, 100), nearest.slot);
+  // Across north the slots stay continuous.
+  assert.deepEqual(
+    scrollingCompassDivisions(355, 1).map(({ heading, slot }) => [
+      heading,
+      slot,
+    ]),
+    [
+      [330, -0.8333],
+      [0, 0.1667],
+      [30, 1.1667],
+    ],
+  );
+  assert.deepEqual(scrollingCompassDivisions(Number.NaN), []);
 });
 
 test('compass labels use cardinals where exact and degrees elsewhere', () => {

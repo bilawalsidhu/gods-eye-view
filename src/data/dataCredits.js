@@ -143,9 +143,22 @@ export const DATA_CREDITS = [
   {
     key: 'celestrak',
     html:
-      'Satellites (TLEs): CelesTrak ' +
+      'Satellites (TLEs and SATCAT): CelesTrak ' +
       '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>), ' +
       'Dr. T.S. Kelso',
+  },
+  {
+    key: 'ucs-satellite-database',
+    html:
+      'Satellite operators and purposes: ' +
+      '<a href="https://www.ucsusa.org/satellite_database" target="_blank" rel="noopener">UCS Satellite Database</a> ' +
+      '(UCS-Satellite-Database 5-1-2023), Union of Concerned Scientists',
+  },
+  {
+    key: 'imaging-sensors',
+    html:
+      'Imaging sensor swaths: operator and agency specifications, ' +
+      'cited per platform',
   },
   {
     key: 'launch-library-2',
