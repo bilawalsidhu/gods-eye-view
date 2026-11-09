@@ -3927,6 +3927,7 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     _rotationRevision: -1,
     _cameraRevision: 0,
     _rotationDirty: false,
+    now: () => Date.now(),
   };
   const noop = () => {};
   const rendering = createRendering({
