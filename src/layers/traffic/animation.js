@@ -20,6 +20,34 @@ export function createAnimation({
   parts,
   source,
 }) {
+  function syncRenderDemand() {
+    // Hidden dots (`dots` off) need no frames. Lines need them only while
+    // their asynchronous geometry builds (or old lines wait to be retired),
+    // and the heat-line prototype's jam batch while it pulses.
+    const lines = [
+      layerState._heatJamPrim,
+      layerState._heatSlowPrim,
+      layerState._heatFreePrim,
+    ].filter(Boolean);
+    const needed = Boolean(
+      layerState._enabled &&
+      ((layerState._showDots !== false && layerState._dots.length) ||
+        (layerState._heatJamPrim && !layerState._showLines) ||
+        layerState._heatRetired?.length ||
+        lines.some((primitive) => !primitive.ready)),
+    );
+    // Height easing only runs in a held frame. Settle it before releasing, so
+    // a population emptied mid-correction cannot report loading forever.
+    if (!needed && layerState._heightPending) parts.retention.finishHeights();
+    if (needed === Boolean(layerState._renderHeld)) return;
+    layerState._renderHeld = needed;
+    if (needed) {
+      layerState._lastAnimTime = 0;
+      services.render.holdContinuousRender('traffic');
+      layerState._viewer?.scene?.requestRender?.();
+    } else services.render.releaseContinuousRender('traffic');
+  }
+
   /**
    * Spawn animated dot primitives along a single road.
    *
@@ -188,6 +216,7 @@ export function createAnimation({
             : null,
       });
     }
+    syncRenderDemand();
   }
 
   /**
@@ -206,6 +235,9 @@ export function createAnimation({
    */
 
   function animate() {
+    parts.rendering.retireHeatLines?.();
+    syncRenderDemand();
+    if (!layerState._renderHeld) return;
     const now = Date.now();
     // Delta time in seconds, capped to avoid jumps when returning from background tab
     const dt = layerState._lastAnimTime
@@ -297,8 +329,9 @@ export function createAnimation({
     }
 
     // Jam heat-lines throb (~1.6 s period) — one shared material uniform for
-    // the whole jam batch, no geometry rebuild. Null outside live heatline mode.
-    if (layerState._heatJamPrim?.appearance) {
+    // the whole jam batch, no geometry rebuild. Null outside live heatline
+    // mode; the steady flow lines (`lines` toggle) never pulse.
+    if (layerState._heatJamPrim?.appearance && !layerState._showLines) {
       layerState._heatJamPrim.appearance.material.uniforms.color.alpha =
         HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260);
     }
@@ -339,6 +372,13 @@ export function createAnimation({
     layerState._count = 0;
     layerState._bucketCounts = { free: 0, slow: 0, jam: 0, sim: 0 };
     layerState._closedRoads = 0;
+    syncRenderDemand();
   }
-  return { spawnDotsForRoad, animate, maybeStopLight, clearDots };
+  return {
+    spawnDotsForRoad,
+    animate,
+    maybeStopLight,
+    clearDots,
+    syncRenderDemand,
+  };
 }

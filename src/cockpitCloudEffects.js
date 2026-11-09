@@ -171,10 +171,22 @@ export function cockpitWeatherEnabledFromStoredValue(value) {
 }
 
 /**
+ * Whether the cloud pass runs for a Cockpit subject's layer. Not in orbit:
+ * the pass fades out above 24 km (weatherAltitudeFactors), so a satellite
+ * would pay for it and see nothing. The saved preference is left as it is
+ * for the next aircraft or bridge; cloud cover from orbit is the Weather
+ * layer's.
+ * @param {string|null|undefined} layerId
+ */
+export function cockpitCloudsShowFor(layerId) {
+  return layerId !== 'satellites';
+}
+
+/**
  * Weather-backed volumetric cloud pass that exists only while cockpit mode is
  * active. It owns no Cesium fog/post-process stages and cannot affect map mode.
  */
-export class CockpitCloudEffectsController {
+class CockpitCloudEffectsController {
   constructor(viewer, { weatherService = applicationServices.weather } = {}) {
     this.weatherService = weatherService;
     this.viewer = viewer;
@@ -207,10 +219,12 @@ export class CockpitCloudEffectsController {
     this.enabled = this.readEnabledPreference();
 
     this.onResize = () => this.resize();
+    this.orbit = false;
     this.onCockpitMode = (event) => {
       const active =
         event?.detail?.active ??
         document.body.classList.contains('cockpit-mode');
+      this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
       if (active && this.enabled) this.start();
       else this.stop();
     };
@@ -344,7 +358,8 @@ export class CockpitCloudEffectsController {
       this.destroyed ||
       !this.enabled ||
       this.frame !== null ||
-      this.suspended
+      this.suspended ||
+      this.orbit
     )
       return;
     if (!this.gl) {

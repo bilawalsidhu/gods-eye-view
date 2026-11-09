@@ -35,6 +35,7 @@ export function buildPlaybackQueue(
  * releaseScene(scene, token?) leaves a previously loaded scene before playback
  * (false refuses that initial handoff). Between scenes and during final cleanup
  * it receives no cancelled token, so resource release can finish after Stop.
+ * The first error wins when the final release also fails.
  * An empty/already-cancelled queue acquires and releases no resources.
  *
  * @param {Array<{scene:Object, shot:Object}>} queue Normalized, fixed shot queue.
@@ -53,6 +54,7 @@ export async function playSceneQueue(
   const cancelled = () => Boolean(token.cancelled || token.signal?.aborted);
   let activeScene = null;
   let completedShots = 0;
+  let runFailed = false;
   try {
     if (!queue.length || cancelled()) {
       return {
@@ -68,8 +70,9 @@ export async function playSceneQueue(
     for (let index = 0; index < queue.length && !cancelled(); index++) {
       const { scene, shot } = queue[index];
       if (activeScene && activeScene.id !== scene.id) {
-        await adapter.releaseScene(activeScene);
+        const toRelease = activeScene;
         activeScene = null;
+        await adapter.releaseScene(toRelease);
         if (cancelled()) break;
       }
       activeScene = scene;
@@ -82,8 +85,23 @@ export async function playSceneQueue(
     }
     if (!cancelled()) await adapter.complete?.();
     return { status: cancelled() ? 'cancelled' : 'completed', completedShots };
+  } catch (error) {
+    runFailed = true;
+    throw error;
   } finally {
-    if (releaseOnFinish && activeScene) await adapter.releaseScene(activeScene);
+    if (releaseOnFinish && activeScene) {
+      const toRelease = activeScene;
+      activeScene = null;
+      try {
+        await adapter.releaseScene(toRelease);
+      } catch (error) {
+        if (runFailed) {
+          console.warn('[Scenes] Scene release failed:', error);
+        } else {
+          throw error;
+        }
+      }
+    }
   }
 }
 

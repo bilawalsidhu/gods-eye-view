@@ -48,7 +48,8 @@ export function defaultGatewayFromRouteTable(text) {
 
 /**
  * Decide this launch's trusted-peer list. An operator value always wins, so a
- * compose override stays authoritative; otherwise the gateway alone is
+ * compose override stays authoritative; `none` trusts no additional peers.
+ * An unset or blank value means the gateway alone is
  * trusted. No gateway trusts nothing and Provider Settings stays loopback-only,
  * exactly as under `npm run dev`.
  * @param {{env?: NodeJS.ProcessEnv, routeTable?: string}} input
@@ -56,6 +57,7 @@ export function defaultGatewayFromRouteTable(text) {
  */
 export function resolveTrustedPeers({ env = process.env, routeTable = '' } = {}) {
   const explicit = String(env.GEV_KEY_SETUP_TRUSTED_PEERS ?? '').trim();
+  if (explicit.toLowerCase() === 'none') return '';
   if (explicit) return explicit;
   return defaultGatewayFromRouteTable(routeTable) ?? '';
 }
@@ -109,15 +111,17 @@ async function start() {
     String(process.env.GEV_KEY_SETUP_TRUSTED_PEERS ?? '').trim(),
   );
   const trustedPeers = resolveTrustedPeers({ routeTable: readRouteTable() });
+  // Set even an empty list before Vite loads .env: the resolved launcher policy
+  // must remain authoritative when there is no trusted gateway.
+  process.env.GEV_KEY_SETUP_TRUSTED_PEERS = trustedPeers;
   if (trustedPeers) {
-    // Set before Vite is imported: the dev server snapshots process.env during
-    // configuration, and the admission gate reads it per request.
-    process.env.GEV_KEY_SETUP_TRUSTED_PEERS = trustedPeers;
     console.log(
       fromOperator
         ? `[Docker] Provider Settings trusted peers: ${trustedPeers} (GEV_KEY_SETUP_TRUSTED_PEERS).`
         : `[Docker] Provider Settings trusts the container gateway (${trustedPeers}).`,
     );
+  } else if (fromOperator) {
+    console.log('[Docker] Provider Settings trusts no additional peers (GEV_KEY_SETUP_TRUSTED_PEERS=none).');
   } else {
     console.log('[Docker] No default gateway; Provider Settings stays loopback-only.');
   }

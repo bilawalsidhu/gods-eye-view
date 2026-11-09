@@ -5,9 +5,6 @@ import {
   PROJECTION_CANVAS_HEIGHT,
   PROJECTION_MATTE_COLOR,
   PROJECTION_TEXTURE_SWAP_MS,
-  ACTIVE_FRAME_REFRESH_MS,
-  FRAME_ENDPOINT,
-  MEDIA_ENDPOINT,
   PROJECTION_ACTIVE_REFRESH_MS,
   PROJECTION_IDLE_REFRESH_MS,
   PLACEHOLDER_REPAINT_MS,
@@ -258,11 +255,20 @@ export function createFrames({ state: layerState, services, parts, source }) {
     // clears this latch so the next normal tick can refresh.
     if (runtime.imageLoading) return;
     const now = Date.now();
-    const refreshMs =
+    const defaultRefreshMs =
       record.camera.id === layerState._activeCameraId
         ? PROJECTION_ACTIVE_REFRESH_MS
         : PROJECTION_IDLE_REFRESH_MS;
-    if (!force && now - runtime.lastImageRefreshAt < refreshMs) return;
+    const sourceRefreshMs = parts.model.safeNumber(
+      record.camera.frameRefreshMs,
+      0,
+    );
+    const refreshMs = Math.max(defaultRefreshMs, sourceRefreshMs);
+    const sinceLastRefresh = now - runtime.lastImageRefreshAt;
+    // Forced activation may skip the normal active interval, but it cannot
+    // bypass a provider's explicit minimum between image requests.
+    if (sourceRefreshMs > 0 && sinceLastRefresh < sourceRefreshMs) return;
+    if (!force && sinceLastRefresh < refreshMs) return;
     runtime.lastImageRefreshAt = now;
 
     const frameUrl = frameUrlFor(record.camera, refreshMs);

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
@@ -25,6 +26,7 @@ import {
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
 } from './policy.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createTracking({
   flightState,
@@ -47,7 +49,7 @@ export function createTracking({
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
   const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
 
   function _emitAwarenessEvent(type, detail) {
     if (
@@ -120,7 +122,7 @@ export function createTracking({
           ? `${Math.round(described.velocityMps * 1.944)} kt`
           : '',
         heading: Number.isFinite(described.track)
-          ? `${Math.round(described.track)}°`
+          ? `${roundHeadingDegrees(described.track)}°`
           : '',
         icao24,
         // Honesty cue: the contact is coasting on dead reckoning, so the
@@ -499,7 +501,7 @@ export function createTracking({
     // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
     // would draw the trail in front of the plane. They join via _appendTrailFix as they age.
     const seedRenderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
+      julianAt(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );
@@ -593,7 +595,7 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget adsb.lol readsb trace backfill (PRD F2). Trace points are
+   * Fire-and-forget optional source history backfill (PRD F2). Trace points are
    * stride-thinned to the remaining vertex budget, then spliced strictly older
    * than the oldest seeded fix AHEAD of the locally accumulated fine segment,
    * capped at TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/
@@ -1079,7 +1081,9 @@ export function createTracking({
       // first-person reference. Empty globe clicks are inert until the user
       // exits with C, Escape, or the dedicated button.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = viewer.scene.pick(click.position);
+      const picked = pickContact
+        ? pickContact(viewer.scene, click.position)
+        : viewer.scene.pick(click.position);
 
       if (picked) {
         // Clicking the tracked entity itself -- ignore (don't deselect)
