@@ -329,7 +329,7 @@ and MODIS NRT (Terra + Aqua), clamped to the trailing 24 h, cached 30 min to res
 transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16. Suomi NPP (`VIIRS_SNPP_NRT`)
-is no longer requested: NASA stopped delivering its data on 2026-11-02.
+is not requested: NASA stopped delivering it on 2026-11-02.
 
 ### UCS Satellite Database (`ucs_satellites/`)
 

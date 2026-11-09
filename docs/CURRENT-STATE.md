@@ -2860,9 +2860,7 @@ reporting are unchanged.
 ## FIRMS source status
 
 The FIRMS proxy requests VIIRS NOAA-20, VIIRS NOAA-21 and MODIS NRT (Terra and
-Aqua). It no longer requests VIIRS Suomi NPP: NASA stopped delivering Suomi NPP
-data on 2026-11-02, and the source returned no rows while still costing one
-MAP_KEY transaction per refresh.
+Aqua). It skips VIIRS Suomi NPP, which NASA stopped delivering on 2026-11-02.
 
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
 The `get_active_fires` tool reports acquisition times as UTC ISO timestamps,
