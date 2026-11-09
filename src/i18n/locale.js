@@ -64,7 +64,8 @@ export function intlLocale(locale) {
 
 /**
  * Map any language tag to a shipped locale: 'ru-RU' and 'RU' → 'ru',
- * 'ar-EG' and 'ar-SA' → 'ar', 'he-IL' and 'he' → 'he',
+ * 'ar-EG' and 'ar-SA' → 'ar', 'he-IL' and 'he' → 'he', and the
+ * legacy tag 'iw'/'iw-IL' → 'he',
  * 'de-AT' and 'de_CH' → 'de', 'ja-JP' → 'ja',
  * 'pt-BR' and 'pt-PT' → 'pt' (Brazilian Portuguese),
  * 'zh', 'zh-CN' and 'zh-Hans-SG' → 'zh-CN';
@@ -80,6 +81,7 @@ export function normalizeLocale(candidate) {
       ? 'zh-Hant'
       : 'zh-CN';
   }
+  if (primary === 'iw') return 'he';
   return LOCALES.includes(primary) ? primary : null;
 }
 

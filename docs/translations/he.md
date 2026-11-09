@@ -7,7 +7,7 @@ Catalog: `src/i18n/locales/he.json`. General rules: [TRANSLATORS.md](../TRANSLAT
 - Address the user with a masculine imperative, Google style: הסתר, הצג, נסה שוב, התקרב. Menu items and tooltips take the noun form: הסרת {name}, הרחבת {name}, שינוי הצבע של {name}.
 - Sentence case: Hebrew has no case forms, so UPPERCASE English is normal sentence style here; short HUD labels stay short, favor an abbreviation over a wrapped line.
 - Keep the `·`, `—`, `→`, `↗`, `…` separators. Latin codes read inside RTL text because the app isolates interpolated values; leave them alone.
-- Units follow the catalog: ק"מ, מ׳, קמ"ש, שנ', דק', שע'; instrument chips keep the Latin unit (MW, KM, FT, KTS, kn) and codes (HDG, FOV, CAL, SRC, REC) exactly as in English — see `same-as-english.json`.
+- Units follow the catalog: ק"מ, מ׳, קמ"ש, שנ', דק', שע'. Instrument readouts and formatted shared-unit labels keep the Latin units (km, NM, FT, KTS, MW, KM/S); catalog prose outside those readouts keeps ק"מ/מ׳. Codes like HDG, FOV, CAL, SRC, REC stay exactly as in English — see `same-as-english.json`.
 
 ## Digits and direction
 
@@ -19,11 +19,11 @@ Catalog: `src/i18n/locales/he.json`. General rules: [TRANSLATORS.md](../TRANSLAT
 
 A `tn()` entry needs three forms under `Intl.PluralRules('he')`:
 
-| Form    | Counts                    | Example        |
-| ------- | ------------------------- | -------------- |
-| `one`   | 1                         | 1 מצלמה        |
-| `two`   | 2                         | 2 מצלמות       |
-| `other` | 0, 3, 10, 100, fractions… | 5 מצלמות       |
+| Form    | Counts                       | Example        |
+| ------- | ---------------------------- | -------------- |
+| `one`   | 1 and fractions below 1      | 1 מצלמה · 0.5  |
+| `two`   | 2                            | 2 מצלמות       |
+| `other` | 0, 3, 10, 100, integers…     | 5 מצלמות       |
 
 With {count} shown as a digit, `two` and `other` share the plural noun (2 מצלמות, 5 מצלמות); `one` takes the singular (1 מצלמה). For constructs that resist agreement with a noun (אין, הכול, זמין), phrase around the number: "{count} תחנות מדווחות" is fine, but prefer "ממתין: {count}" over a mismatched genitive chain.
 
@@ -37,7 +37,7 @@ With {count} shown as a digit, `two` and `other` share the plural noun (2 מצל
 | LIVE / live data / LIVE TRACK                  | חי / נתונים חיים / מעקב חי                            |
 | SIMULATED                                      | מדומה                                                 |
 | stale / degraded / unavailable                 | מיושן / מופחת / לא זמין                               |
-| key (API key) / POWER UP                       | מפתח / אתחול                                          |
+| key (API key) / POWER UP                       | מפתח / שדרוג                                          |
 | globe / map / map source / basemap             | גלובוס / מפה / מקור מפה / מפת בסיס                    |
 | aircraft / flight / military flight            | מטוס (כלי טיס in class lists) / טיסה / טיסה צבאית     |
 | vessel / ship / ships                          | אונייה / אוניות                                       |
@@ -48,10 +48,10 @@ With {count} shown as a digit, `two` and `other` share the plural noun (2 מצל
 | camera / CCTV camera / ALPR camera             | מצלמה / מצלמת CCTV / מצלמת ALPR                       |
 | earthquake / active fire / cyclone             | רעידת אדמה / שרפה פעילה / ציקלון                      |
 | scene / shot                                   | סצנה / שוט                                            |
-| briefing / panel / dock                        | דיווח / פאנל / עגינה                                  |
+| briefing / panel / dock                        | תדריך / פאנל / עגינה                                  |
 | visual preset / style                          | ערכת ראייה / סגנון                                   |
 | Scope (circular viewport mask) / keyhole       | סקופ / חור המנעול                                    |
-| heading (compass °) / course                   | כיוון / מסלול                                         |
+| heading (compass °) / course                   | כיוון / מהלך                                         |
 | HDG / BRG / CRS / FOV / DEST / SPD / RANGE     | בלי שינוי — קודי מכשיר                               |
 | advisory (NHC/CPHC cyclone)                    | ייעוץ; Advisory center — מרכז הייעוץ                  |
 | Street View (Google)                           | Street View, בלי תרגום                                |
@@ -59,7 +59,7 @@ With {count} shown as a digit, `two` and `other` share the plural noun (2 מצל
 | WHOT/BHOT, Ironbow, CRT, NVG, FLIR             | בלי שינוי — קודים ושמות מצבים                        |
 | PREV / NEXT                                    | הקודם / הבא                                           |
 | anchor / data pack / asset bundle (scene)      | עוגן / חבילת נתונים / חבילת נכסים                   |
+| forecast (weather)                             | תחזית                                                 |
 | witness / geolocated source                    | עד ראייה / מקור נתון גיאוגרפית                        |
 | contained (wildland fire) / FRP                | הכלה / FRP, בלי שינוי                                 |
 
-Latin product, provider and dataset names stay as printed: Google Maps, Cesium ion, OpenSky, ADS-B, AIS, KartaView, Mapillary, Panoramax, Overpass, InciWeb, iNaturalist, Acartia, NASA FIRMS, NOAA, USGS, CelesTrak, TomTom, Sentinel-2, Landsat, VIIRS, HLS, S2 GhostMaps, TeleGeography.

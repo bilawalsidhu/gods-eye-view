@@ -1250,7 +1250,6 @@
     "DEST ---°",
     "SQUAWK {code} · {status}",
     "DEST {bearing}",
-    "Space Missions",
     "CCTV",
     "S2 GhostMaps",
     "Street Level",
@@ -1264,7 +1263,6 @@
     "km",
     "min",
     "dB",
-    "LEVEL",
     "KTS",
     "FT",
     "FLT",
@@ -1281,16 +1279,14 @@
     "STARLINK",
     "STARLINK ···",
     "STARLINK ✕",
-    "LOOK STBD {bearing}°",
-    "LOOK PORT {bearing}°",
-    "LOOK ASTERN",
     "LOOK {elevation}",
-    "{vesselType} · {feedState} · EYE {height}",
     "{range} NM",
     "OFF-NADIR {angle}° · {offset}",
     "NORAD {id}",
     "EPOCH {time}",
     "TLE",
-    "OFF-NADIR {angle}°"
+    "OFF-NADIR {angle}°",
+    "{value} KM/S",
+    "Ironbow"
   ]
 }

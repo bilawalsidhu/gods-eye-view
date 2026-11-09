@@ -1,6 +1,7 @@
-/* Right-to-left languages (Arabic). The chrome mirrors through logical
-   properties in the component sheets (inset-inline-*, margin-inline-*); this
-   sheet holds only what logical properties cannot express. */
+/* Right-to-left languages (Arabic, Hebrew). The chrome mirrors through
+   logical properties in the component sheets (inset-inline-*,
+   margin-inline-*); this sheet holds only what logical properties cannot
+   express. */
 
 /* Arabic letters join: letter-spacing tears every word into separate glyphs.
    Latin marked translate="no" and the intel HUD's Latin telemetry keep their
@@ -63,10 +64,9 @@ html:lang(ar) :is(#intel-hud, #cockpit-hud) {
 /* Hebrew: JetBrains Mono and Inter also lack Hebrew glyphs. Noto Sans Hebrew
    (loaded with the other Google fonts; its files download only when the page
    shows Hebrew) leads the stack so the body text keeps one proportional
-   Hebrew face across platforms. Hebrew letters do not join like Arabic, but
-   tracking still reads as gaps inside a word, so the body is released from it
-   the same way; Latin marked translate="no" keeps its tracking. The intel and
-   cockpit HUDs keep JetBrains Mono for their Latin telemetry. */
+   Hebrew face across platforms. Hebrew letters do not join, so tracking on
+   them only spaces a word out; the body is released the same way, and the
+   HUDs keep their instrument tracking inside. */
 html:lang(he) {
   --font-mono:
     'Noto Sans Hebrew', 'JetBrains Mono', 'SF Mono', 'Fira Code', Tahoma,
@@ -75,7 +75,10 @@ html:lang(he) {
     'Inter', 'Noto Sans Hebrew', -apple-system, BlinkMacSystemFont, Tahoma,
     sans-serif;
 }
-html:lang(he)
+/* The Global Context lines and their buttons set ui-monospace through the
+   `font` shorthand; in both RTL languages the words come from the page's
+   own font stack. */
+html:is(:lang(ar), :lang(he))
   :is(
     #military-awareness-panel,
     .military-awareness-controls button,
@@ -86,6 +89,13 @@ html:lang(he)
     .tr3b-toggle
   ) {
   font-family: var(--font-mono);
+}
+/* The intel and cockpit HUDs keep JetBrains Mono leading for their Latin
+   telemetry and column-aligned digits, with the language's face behind it. */
+html:lang(ar) :is(#intel-hud, #cockpit-hud) {
+  --font-mono:
+    'JetBrains Mono', 'SF Mono', 'Fira Code', 'Noto Sans Arabic', 'Geeza Pro',
+    Tahoma, monospace;
 }
 html:lang(he) :is(#intel-hud, #cockpit-hud) {
   --font-mono:
