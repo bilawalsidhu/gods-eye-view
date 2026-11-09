@@ -132,9 +132,11 @@ export function createCards({ state: layerState, services, parts, source }) {
           record.camera.lon,
         ),
         inView,
-        isVideo: parts.model.isVideoFeedType(
-          parts.model.normalizeFeedType(record.camera.feedType),
-        ),
+        // Québec's browser-only sources have no registered frame endpoint;
+        // keep them out of still-card fill just like video feeds.
+        isVideo:
+          parts.model.isVideoFeedCamera(record.camera) ||
+          parts.model.isBrowserOverlayCamera(record.camera),
         sx,
         sy,
       });
