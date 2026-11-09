@@ -4707,6 +4707,10 @@ by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
+The incident card rounds the WFIGS size to whole acres, except under one acre,
+where it keeps the reported hundredths: a 0.25-acre fire reads `0.25 ac`, not
+`0 ac`.
+
 Prohibited & Restricted Airspace is off by default (share-link token `8`) and sits in
 Infrastructure. The proxy pages `TYPE_CODE IN ('P','R')` from the FAA SUA
 FeatureServer, caps the body, and reuses a one-hour snapshot, serving the last
