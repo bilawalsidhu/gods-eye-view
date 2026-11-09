@@ -69,28 +69,34 @@ test('the sheet holds every owner country a satellite can be marked with', () =>
   );
   // The PNG is as large as its layout says (width and height at bytes 16-23).
   const png = readFileSync(new URL(OWNER_FLAG_SHEET_URL));
+  const { cellWidthPx, cellHeightPx, gutterPx } = OWNER_FLAG_SHEET;
   assert.equal(
     png.readUInt32BE(16),
-    OWNER_FLAG_SHEET.columns * OWNER_FLAG_SHEET.cellWidthPx,
+    OWNER_FLAG_SHEET.columns * (cellWidthPx + gutterPx),
   );
   assert.equal(
     png.readUInt32BE(20),
-    OWNER_FLAG_SHEET.rows * OWNER_FLAG_SHEET.cellHeightPx,
+    OWNER_FLAG_SHEET.rows * (cellHeightPx + gutterPx),
   );
 });
 
 test('a flag is drawn from its cell of the sheet, at the size asked', () => {
+  // 40 × 30 sheet cells with a 2 px gutter, drawn at 20 × 15: each cell and
+  // its gutter is 21 × 16 CSS pixels.
+  assert.equal(OWNER_FLAG_SHEET.cellWidthPx, 40);
+  assert.equal(OWNER_FLAG_SHEET.cellHeightPx, 30);
+  assert.equal(OWNER_FLAG_SHEET.gutterPx, 2);
   const columns = OWNER_FLAG_SHEET.columns;
   const index = OWNER_FLAG_SHEET.codes.indexOf('US');
   const style = ownerFlagStyle('US');
   assert.equal(style.backgroundImage, `url("${OWNER_FLAG_SHEET_URL}")`);
   assert.equal(
     style.backgroundSize,
-    `${columns * 20}px ${OWNER_FLAG_SHEET.rows * 15}px`,
+    `${columns * 21}px ${OWNER_FLAG_SHEET.rows * 16}px`,
   );
   assert.equal(
     style.backgroundPosition,
-    `${-(index % columns) * 20}px ${-Math.floor(index / columns) * 15}px`,
+    `${-(index % columns) * 21}px ${-Math.floor(index / columns) * 16}px`,
   );
   // The first flag sits at the corner.
   assert.equal(

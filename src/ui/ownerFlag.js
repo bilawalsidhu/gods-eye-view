@@ -62,12 +62,18 @@ export function preloadOwnerFlags({
 export function ownerFlagStyle(code, { widthPx = 20, heightPx = 15 } = {}) {
   const index = SHEET_INDEX.get(code);
   if (index === undefined) return null;
-  const column = index % OWNER_FLAG_SHEET.columns;
-  const row = Math.floor(index / OWNER_FLAG_SHEET.columns);
+  const sheet = OWNER_FLAG_SHEET;
+  const column = index % sheet.columns;
+  const row = Math.floor(index / sheet.columns);
+  // A cell and its gutter, in CSS pixels at this size.
+  const pitchX =
+    (widthPx * (sheet.cellWidthPx + sheet.gutterPx)) / sheet.cellWidthPx;
+  const pitchY =
+    (heightPx * (sheet.cellHeightPx + sheet.gutterPx)) / sheet.cellHeightPx;
   return {
     backgroundImage: `url("${OWNER_FLAG_SHEET_URL}")`,
-    backgroundSize: `${OWNER_FLAG_SHEET.columns * widthPx}px ${OWNER_FLAG_SHEET.rows * heightPx}px`,
-    backgroundPosition: `${-column * widthPx}px ${-row * heightPx}px`,
+    backgroundSize: `${sheet.columns * pitchX}px ${sheet.rows * pitchY}px`,
+    backgroundPosition: `${-column * pitchX}px ${-row * pitchY}px`,
   };
 }
 

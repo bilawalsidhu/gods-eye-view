@@ -200,6 +200,9 @@
   border: 1px solid var(--orbital-faint);
   border-radius: 1px;
   background-repeat: no-repeat;
+  /* Only the flag's own cell: the sheet's neighbours stay out from under
+     the border. */
+  background-clip: content-box;
 }
 .cockpit-orbital-owner-badge {
   flex: none;

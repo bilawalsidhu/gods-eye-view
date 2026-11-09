@@ -3,6 +3,7 @@
 export const OWNER_FLAG_SHEET = Object.freeze({
   cellWidthPx: 40,
   cellHeightPx: 30,
+  gutterPx: 2,
   columns: 16,
   rows: 7,
   codes: Object.freeze([

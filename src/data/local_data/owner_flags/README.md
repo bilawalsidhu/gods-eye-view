@@ -3,7 +3,8 @@
 `owner_flags.png` is one sheet of every owner country a satellite can be
 marked with (`OWNER_COUNTRY_CODES` in `src/layers/satellites/classes.js`),
 drawn at 40 × 30 px (twice the orbital readout's 20 × 15) in sorted code
-order, 16 to a row. `src/ui/ownerFlag.js` loads it once at startup and draws
+order, 16 to a row, each followed by 2 transparent pixels so a scaled flag
+never smooths into its neighbour. `src/ui/ownerFlag.js` loads it once at startup and draws
 each flag from its cell; the layout is `src/ui/ownerFlagSheet.js`.
 
 **Source:** the 4:3 SVGs of [flag-icons](https://github.com/lipis/flag-icons)

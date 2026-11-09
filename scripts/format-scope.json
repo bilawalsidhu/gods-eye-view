@@ -1366,5 +1366,7 @@
   "server/providers/inaturalist/proxy.fixture.mjs",
   "scripts/build-owner-flags.mjs",
   "src/ui/ownerFlagSheet.js",
-  "src/data/placePacksLoading.test.mjs"
+  "src/data/placePacksLoading.test.mjs",
+  "src/ui/placePacksLoading.js",
+  "src/ui/placePacksLoading.test.mjs"
 ]

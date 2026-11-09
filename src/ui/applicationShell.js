@@ -64,25 +64,9 @@ import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
-import {
-  onPlacePacksLoadingChange,
-  placePacksLoading,
-} from '../data/placeBelow.js';
-import { LOADING_NAME_KEYS } from './layerNames.js';
+import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import { withPlacePacks } from './placePacksLoading.js';
 import { preloadOwnerFlags } from './ownerFlag.js';
-
-/** The place packs, as one more loading entry while they are on their way. */
-const PLACE_PACKS_LOADING = Object.freeze({
-  id: 'place-names',
-  name: LOADING_NAME_KEYS['place-names'],
-  enabled: true,
-  stats: Object.freeze({ loading: true }),
-});
-
-/** The data layers, with the place packs while they load. */
-function withPlacePacks(layers) {
-  return placePacksLoading() ? [...layers, PLACE_PACKS_LOADING] : layers;
-}
 
 /**
  * Central UI orchestrator for the God's Eye View application.

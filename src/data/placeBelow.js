@@ -11,7 +11,7 @@
  * PURE data module: no Cesium, node-testable. Each pack loads lazily on the
  * first lookup that needs it (divisions on the first land hit, places on the
  * first radius) and is indexed once, and the loading status names them while
- * one is on its way (`placePacksLoading`); a country's division rings are decoded
+ * one is on its way (`placePacksStatus`); a country's division rings are decoded
  * the first time a point falls inside it. A failed load is retried later
  * (see `createRetryableLoader`). No network.
  */
@@ -47,8 +47,9 @@ const PACKS = {
   ),
 };
 
-/** The packs on their way now, for the loading status. */
+/** The packs on their way now, and those whose last load failed. */
 const loadingPacks = new Set();
+const failedPacks = new Set();
 const loadingListeners = new Set();
 
 function notifyLoading() {
@@ -61,13 +62,25 @@ function notifyLoading() {
   }
 }
 
-/** A pack load that the loading status counts while it runs. */
-function reportedLoad(name, load) {
+/**
+ * A pack load that the loading status follows: on its way while it runs,
+ * failed until a later load of it succeeds.
+ * @template T
+ * @param {string} name
+ * @param {() => Promise<T>} load
+ * @returns {() => Promise<T>}
+ */
+export function reportedPlacePackLoad(name, load) {
   return async () => {
     loadingPacks.add(name);
     notifyLoading();
     try {
-      return await load();
+      const result = await load();
+      failedPacks.delete(name);
+      return result;
+    } catch (error) {
+      failedPacks.add(name);
+      throw error;
     } finally {
       loadingPacks.delete(name);
       notifyLoading();
@@ -76,12 +89,13 @@ function reportedLoad(name, load) {
 }
 
 /**
- * Whether a place pack is loading now. The packs load lazily, on the first
- * lookup that needs them, so the loading status says so meanwhile.
- * @returns {boolean}
+ * The place packs' state for the loading status. The packs load lazily, on
+ * the first lookup that needs them, so the status says so meanwhile, and
+ * says when one would not load.
+ * @returns {{loading: boolean, failed: boolean}}
  */
-export function placePacksLoading() {
-  return loadingPacks.size > 0;
+export function placePacksStatus() {
+  return { loading: loadingPacks.size > 0, failed: failedPacks.size > 0 };
 }
 
 /**
@@ -191,7 +205,9 @@ async function readPlaces() {
   }
   return { land, water };
 }
-const loadPlaces = createRetryableLoader(reportedLoad('places', readPlaces));
+const loadPlaces = createRetryableLoader(
+  reportedPlacePackLoad('places', readPlaces),
+);
 
 /** Divisions grouped by country code; rings decoded per country on demand. */
 async function readDivisions() {
@@ -208,7 +224,7 @@ async function readDivisions() {
   return { byCountry, decoded: new Map() };
 }
 const loadDivisions = createRetryableLoader(
-  reportedLoad('divisions', readDivisions),
+  reportedPlacePackLoad('divisions', readDivisions),
 );
 
 /** The first-level division holding a point inside country `code`, or null. */
@@ -243,7 +259,7 @@ async function readPopulatedPlaces() {
   );
 }
 const loadPopulatedPlaces = createRetryableLoader(
-  reportedLoad('populated-places', readPopulatedPlaces),
+  reportedPlacePackLoad('populated-places', readPopulatedPlaces),
 );
 
 /**

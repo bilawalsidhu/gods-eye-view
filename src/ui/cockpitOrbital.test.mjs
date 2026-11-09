@@ -222,14 +222,20 @@ test('an owner country shows its flag from the sheet, or its code if the sheet w
   await settle();
   // No sheet: the code, so the owner never disappears.
   assert.equal(f.text('.cockpit-orbital-owner-badge'), 'US');
+  // Another satellite of the same country asks again.
+  f.store.publishOrbital({ ...f.store.orbital, noradId: 43013 });
+  await nextTick();
+  assert.equal(images.length, 2, 'a new ride asks again');
+  images[1].onerror();
+  await settle();
   // The next flag asks again; this time the sheet comes.
   f.store.publishOrbital({
     ...f.store.orbital,
     owner: { countryCode: 'FR', label: 'France' },
   });
   await nextTick();
-  assert.equal(images.length, 2);
-  images[1].onload();
+  assert.equal(images.length, 3);
+  images[2].onload();
   await settle();
   const flag = f.section().querySelector('.cockpit-orbital-flag');
   assert.equal(flag.getAttribute('role'), 'img');

@@ -195,9 +195,14 @@ const mark = computed(() =>
 const flagsReady = ref(false);
 const flagsFailed = ref(false);
 watch(
-  () => (mark.value?.kind === 'flag' ? mark.value.code : null),
-  async (code) => {
-    if (!code || flagsReady.value) return;
+  // Keyed on the satellite too: after a failed load, the next ride asks
+  // again even when its owner is the same country.
+  () =>
+    mark.value?.kind === 'flag'
+      ? `${mark.value.code}:${orbital.value?.noradId ?? ''}`
+      : null,
+  async (key) => {
+    if (!key || flagsReady.value) return;
     const ready = await preloadOwnerFlags();
     flagsReady.value = ready;
     flagsFailed.value = !ready;
