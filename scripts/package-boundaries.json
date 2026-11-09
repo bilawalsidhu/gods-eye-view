@@ -2169,7 +2169,6 @@
   "installations-layer": {
     "exports": ["./layers/installations"],
     "modules": [
-      "src/data/cameraSensitivity.js",
       "src/data/installationFeedback.js",
       "src/data/militaryInstallationData.js",
       "src/data/installationNames.js",
@@ -2336,7 +2335,6 @@
   "traffic-layer": {
     "exports": ["./layers/traffic"],
     "modules": [
-      "src/data/cameraSensitivity.js",
       "src/data/flowMatch.js",
       "src/data/tomtomTiles.js",
       "src/data/trafficBounds.js",
@@ -2455,7 +2453,6 @@
       "src/layers/bikeshare/viewport.js",
       "src/geo/vector.js",
       "src/data/inputOwnership.js",
-      "src/data/cameraSensitivity.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/ar.json",
@@ -3913,7 +3910,6 @@
       "src/layers/transit/state.js",
       "src/layers/transit/testing.js",
       "src/layers/transit/viewport.js",
-      "src/data/cameraSensitivity.js",
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",
       "src/data/transitProxy.js",
@@ -4707,7 +4703,6 @@
       "src/layers/transit/state.js",
       "src/layers/transit/testing.js",
       "src/layers/transit/viewport.js",
-      "src/data/cameraSensitivity.js",
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",
       "src/data/transitProxy.js",
@@ -5636,7 +5631,6 @@
       "src/geo/vector.js",
       "src/render/cesium/common.js",
       "src/data/approxDistance.js",
-      "src/data/cameraSensitivity.js",
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",
       "src/render/color.js",
@@ -5776,7 +5770,6 @@
       "src/geo/polyline.js",
       "src/render/cesium/gpuIcons.js",
       "src/render/motion/iconMotion.js",
-      "src/data/cameraSensitivity.js",
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",
       "src/render/color.js",

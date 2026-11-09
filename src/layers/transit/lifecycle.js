@@ -5,8 +5,7 @@ import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
 /**
  * Init / enable / disable / update / destroy for one Transit layer instance.
  * Everything acquired here is released here — primitives, listeners, the sprite
- * registration, the pick owner, the render hold, and the camera sensitivity
- * this layer borrowed.
+ * registration, the pick owner, the render hold, and the camera listener.
  * @param {object} context
  * @returns {object}
  */
@@ -139,7 +138,8 @@ export function createLifecycle({ state, services, parts }) {
       registerPickOwner('transit', (pickedId) => state._vehicles.has(pickedId));
       if (!state._cameraChangedAttached) {
         parts.rendering.watchCamera(viewer, parts.viewport.onCameraChanged);
-        state._cameraChangedAttached = true;
+        // Attached only with a camera to listen to, so a later enable retries.
+        state._cameraChangedAttached = state._cameraChangedOff !== null;
       }
       parts.rendering.startFrames(viewer);
       parts.viewport.runProximityCheck();
@@ -169,10 +169,9 @@ export function createLifecycle({ state, services, parts }) {
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
       parts.selection.removeClickHandler();
       unregisterPickOwner('transit');
-      if (state._cameraChangedAttached) {
-        parts.rendering.unwatchCamera(viewer, parts.viewport.onCameraChanged);
-        state._cameraChangedAttached = false;
-      }
+      // Unconditional: whatever watching started, none of it outlives this.
+      parts.rendering.unwatchCamera();
+      state._cameraChangedAttached = false;
       parts.rendering.stopFrames();
       parts.ingestion.abortAllInFlight();
       state._activeFeeds.clear();

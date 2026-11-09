@@ -2,11 +2,9 @@ import * as Cesium from 'cesium';
 // The Cesium camera factory: given a viewer of a caller's own, with no
 // renderer bound, the layer's camera reads find a camera port.
 import '../../render/cesium/camera.js';
+import '../../render/cesium/frame.js';
 import { webglContext } from '../../render/cesium/internals.js';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
+import { findCamera, findFrame } from '../../render/rendererOf.js';
 import {
   cameraPoseSignature,
   perspectiveProjectedRotation,
@@ -122,32 +120,39 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
-   * Listen for the camera moving, borrowing its change sensitivity through
-   * the shared claim ledger.
+   * Listen for the camera moving, at this layer's own threshold.
    *
-   * `camera.changed` fires on a percentage of the view moving, and this layer
-   * needs a finer trigger than the default to notice it has entered a feed's
-   * coverage. It is a single shared number, so the claim is registered by name
-   * rather than written directly: comparing the VALUE on the way out could not
-   * tell this layer's 0.05 from anybody else's, and handing back the coarse
-   * default while Bikeshare was still relying on a fine one was exactly the
-   * bug that produced.
+   * The camera port measures `changed` per listener, so this layer's finer
+   * trigger (it needs to notice it has entered a feed's coverage) is its own
+   * and leaves every other listener's untouched.
    * @param {object} viewer
    * @param {() => void} onChanged
    */
   function watchCamera(viewer, onChanged) {
-    viewer.camera.changed.addEventListener(onChanged);
-    claimCameraSensitivity(
-      viewer?.camera,
-      'transit',
-      CAMERA_PERCENTAGE_CHANGED,
-    );
+    unwatchCamera();
+    state._cameraChangedOff =
+      findCamera(viewer)?.on('changed', onChanged, {
+        threshold: CAMERA_PERCENTAGE_CHANGED,
+      }) ?? null;
+    // A new listener measures from the view at the next tick, so a move made
+    // before that tick never reaches it: look again once that tick is past.
+    if (!state._cameraChangedOff) return;
+    let ticks = 0;
+    state._cameraFirstTickOff =
+      findFrame(viewer)?.on('preUpdate', () => {
+        if (++ticks < 2) return;
+        state._cameraFirstTickOff?.();
+        state._cameraFirstTickOff = null;
+        onChanged();
+      }) ?? null;
   }
 
-  /** Stop listening and give the claim up; the camera keeps anyone else's. */
-  function unwatchCamera(viewer, onChanged) {
-    viewer.camera.changed.removeEventListener(onChanged);
-    releaseCameraSensitivity(viewer?.camera, 'transit');
+  /** Stop listening for the camera moving. */
+  function unwatchCamera() {
+    state._cameraChangedOff?.();
+    state._cameraChangedOff = null;
+    state._cameraFirstTickOff?.();
+    state._cameraFirstTickOff = null;
   }
 
   /** Run the per-frame glide before each render, once. */

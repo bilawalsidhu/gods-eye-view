@@ -29,11 +29,6 @@ const lat = (entry) =>
     Cesium.Cartographic.fromCartesian(entry.marker.position).latitude,
   );
 import {
-  cameraSensitivityClaims,
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import {
   _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
   governorRequestRender,
@@ -209,6 +204,8 @@ function harness(
 
   const preRender = new Cesium.Event();
   const cameraChanged = new Cesium.Event();
+  const cameraListeners = new Set();
+  const preUpdates = new Set();
   const viewer = {
     camera: {
       changed: cameraChanged,
@@ -317,7 +314,28 @@ function harness(
   const unbindCamera = bindRenderer(viewer, {
     draw,
     query: fakeSceneQuery(viewer),
+    // Only the tick the layer's camera listener waits on.
+    frame: {
+      on(phase, cb) {
+        if (phase !== 'preUpdate') return () => {};
+        preUpdates.add(cb);
+        return () => preUpdates.delete(cb);
+      },
+      requestRender() {},
+    },
     camera: {
+      // `changed` listeners, each at its own threshold, fired by the fake
+      // camera's own event as a real camera move fires them.
+      on(event, cb, options = {}) {
+        if (event !== 'changed') return () => {};
+        const listener = { cb, threshold: options.threshold ?? 0.5 };
+        cameraListeners.add(listener);
+        const remove = cameraChanged.addEventListener(cb);
+        return () => {
+          cameraListeners.delete(listener);
+          remove();
+        };
+      },
       pose() {
         const carto = viewer.camera.positionCartographic;
         return {
@@ -365,6 +383,16 @@ function harness(
     layer,
     viewer,
     draw,
+    /** One frame tick, as the frame port's `preUpdate` hears it. */
+    tick() {
+      for (const cb of [...preUpdates]) cb({ frame: 0 });
+    },
+    /** Move the view rectangle without the camera reporting the move. */
+    moveQuietly(next) {
+      Object.assign(viewRect, next);
+    },
+    /** The thresholds of the camera port's `changed` listeners. */
+    cameraThresholds: () => [...cameraListeners].map((l) => l.threshold),
     input,
     primitives,
     sprites,
@@ -878,63 +906,42 @@ test('the render hold follows real motion, and is released when everything settl
   );
   assert.equal(app.viewer.scene.requestRenderMode, true);
 });
-test('disable hands back the camera sensitivity it borrowed', async (t) => {
+test('the layer listens to the camera at its own fine threshold while enabled', async (t) => {
   const app = harness(t);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5);
+  assert.deepEqual(app.cameraThresholds(), []);
   app.layer.enable(app.viewer);
-  assert.equal(
-    app.viewer.camera.percentageChanged,
-    0.05,
-    'the layer needs a finer camera trigger',
+  assert.deepEqual(
+    app.cameraThresholds(),
+    [0.05],
+    'the layer needs a finer camera trigger, as its own',
   );
-  app.layer.disable(app.viewer);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5, 'and gives it back');
-});
-
-test('disable leaves the fine camera trigger another layer asked for', async (t) => {
-  // The sequence that broke it: two layers ask for the SAME sensitivity, so
-  // the value on the camera cannot say who owns it. Transit used to compare
-  // the number, find its own 0.05 still there, and hand the coarse default
-  // back while Bikeshare was still driving off the fine one.
-  const app = harness(t);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5);
-
-  app.layer.enable(app.viewer);
-  assert.equal(app.viewer.camera.percentageChanged, 0.05);
-
-  claimCameraSensitivity(app.viewer.camera, 'bikeshare', 0.05);
-  app.layer.disable(app.viewer);
-
-  assert.equal(
-    app.viewer.camera.percentageChanged,
-    0.05,
-    'bikeshare is still enabled, so the fine trigger stays',
-  );
-  assert.deepEqual(cameraSensitivityClaims(app.viewer.camera), ['bikeshare']);
-
-  releaseCameraSensitivity(app.viewer.camera, 'bikeshare');
   assert.equal(
     app.viewer.camera.percentageChanged,
     0.5,
-    'and the original returns once the last claim is gone',
-  );
-  assert.deepEqual(cameraSensitivityClaims(app.viewer.camera), []);
-});
-
-test('a finer claim wins while it stands, and the coarser one survives it', async (t) => {
-  const app = harness(t);
-  app.layer.enable(app.viewer);
-  claimCameraSensitivity(app.viewer.camera, 'traffic', 0.01);
-  assert.equal(app.viewer.camera.percentageChanged, 0.01);
-
-  releaseCameraSensitivity(app.viewer.camera, 'traffic');
-  assert.equal(
-    app.viewer.camera.percentageChanged,
-    0.05,
-    'transit still needs its own trigger',
+    'and leaves the camera every other listener shares as it was',
   );
   app.layer.disable(app.viewer);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5);
+  assert.deepEqual(app.cameraThresholds(), [], 'and stops on disable');
+});
+
+test('a move before the camera listener first measures is still looked at', async (t) => {
+  const app = harness(t);
+  app.layer.enable(app.viewer);
+  // The move lands before the listener's first tick, so it is the view the
+  // listener measures from and never reports.
+  app.moveQuietly({ west: -71.2, south: 10, east: -71.0, north: 10.2 });
+  app.tick();
+  assert.ok(app.state()._viewBounds.south > 40, 'not looked at yet');
+  app.tick();
+  assert.ok(
+    app.state()._viewBounds.south < 11,
+    'looked at once the first tick is past',
+  );
+  app.moveQuietly({ west: -71.2, south: 42.3, east: -71.0, north: 42.5 });
+  app.tick();
+  app.tick();
+  assert.ok(app.state()._viewBounds.south < 11, 'once, not every tick');
+  app.layer.disable(app.viewer);
 });
 
 test('destroy releases every shared registration this layer took', async (t) => {
@@ -957,6 +964,7 @@ test('destroy releases every shared registration this layer took', async (t) => 
   assert.equal(app.primitives.length, 2);
 
   app.layer.destroy(app.viewer);
+  assert.deepEqual(app.cameraThresholds(), [], 'the camera listener goes');
   assert.equal(
     app.sprites.has('transit'),
     false,
@@ -3617,7 +3625,7 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
   assert.equal(entry.track.resets, 0);
 });
 
-test('the actual Transit lifecycle retains its sensitivity in every enable/disable order, Traffic and Bikeshare among them', async (t) => {
+test('the actual Transit lifecycle keeps exactly its own camera listener in every enable/disable order, Traffic and Bikeshare among them', async (t) => {
   const { createLifecycle: trafficLifecycle } =
     await import('../traffic/lifecycle.js');
   const { createLifecycle: bikeLifecycle } =
@@ -3696,6 +3704,7 @@ test('the actual Transit lifecycle retains its sensitivity in every enable/disab
     },
     transit: app.layer,
   };
+  // Only transit listens on this viewer's camera port.
   const claimants = new Set(['transit']);
   const orders = [
     ['traffic', 'bikeshare', 'transit'],
@@ -3718,27 +3727,21 @@ test('the actual Transit lifecycle retains its sensitivity in every enable/disab
             assert.equal(trafficCamera.listenerCount('changed'), 1);
             assert.equal(trafficFrames.size, 1);
           }
-          assert.equal(
-            app.viewer.camera.percentageChanged,
-            active.size ? 0.05 : 0.5,
-          );
           assert.deepEqual(
-            new Set(cameraSensitivityClaims(app.viewer.camera)),
-            active,
+            app.cameraThresholds(),
+            active.has('transit') ? [0.05] : [],
           );
+          assert.equal(app.viewer.camera.percentageChanged, 0.5);
         }
         for (const id of disable) {
           layers[id].disable(app.viewer);
           active.delete(id);
-          assert.equal(
-            app.viewer.camera.percentageChanged,
-            active.size ? 0.05 : 0.5,
+          assert.deepEqual(
+            app.cameraThresholds(),
+            active.has('transit') ? [0.05] : [],
             `${enable} / ${disable} after ${id}`,
           );
-          assert.deepEqual(
-            new Set(cameraSensitivityClaims(app.viewer.camera)),
-            active,
-          );
+          assert.equal(app.viewer.camera.percentageChanged, 0.5);
         }
         assert.equal(bikeCamera.listenerCount('changed'), 0);
         assert.equal(trafficCamera.listenerCount('changed'), 0);

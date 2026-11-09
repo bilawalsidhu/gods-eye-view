@@ -834,7 +834,6 @@
   "src/tooling/transitProvider.test.mjs",
   "src/app/layers/transit.js",
   "src/data/transitIcons.js",
-  "src/data/cameraSensitivity.js",
   "src/data/contactPlayback.js",
   "src/data/contactTrailRenderer.js",
   "src/data/contactTrailRenderer.test.mjs",

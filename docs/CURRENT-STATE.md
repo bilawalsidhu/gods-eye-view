@@ -4629,8 +4629,9 @@ Playback reserves numeric scratch before the first sample, including unknown
 heights, and reuses caller-owned sample and segment storage.
 
 **Scene work.** Stationary and animated billboards use separate, adjacent
-collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
-sensitivity claims; the original sensitivity returns after the last release.
+collections above CCTV and Bikeshare. Transit listens to the camera port at its
+own `changed` threshold (0.05); the port measures each listener separately, so no
+layer changes another's camera trigger.
 Visibility checks combine the camera frustum and ellipsoid occlusion at no more
 than 4 Hz; missing map bounds do not admit the globe's far side. Camera arrivals
 rebuild an unprepared or cold marker corridor during that visibility sweep,
