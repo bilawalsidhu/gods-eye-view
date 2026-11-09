@@ -22,6 +22,8 @@
 //      path here tolerates storage being absent, broken, or full, and the
 //      feature works without it; the URL is simply forgotten between visits.
 
+import { msg } from '../i18n/marker.js';
+
 const STORAGE_KEY = 'gev.atc.streamUrl';
 
 /** Longest URL accepted. Real stream URLs are far shorter; this is a guard
@@ -48,34 +50,36 @@ function safeStorage() {
  * Check a pasted stream URL without storing it.
  * @param {string} candidate - What the viewer typed or pasted.
  * @returns {{ok: true, url: string}|{ok: false, error: string}} The normalised
- *   URL, or a sentence explaining the refusal that a panel can show verbatim.
+ *   URL, or a sentence explaining the refusal. The sentence is English marked
+ *   for translation: a panel renders it through `t()`.
  */
 export function validateStreamUrl(candidate) {
   const text = String(candidate ?? '').trim();
-  if (!text) return { ok: false, error: 'Enter a stream URL.' };
+  if (!text) return { ok: false, error: msg('Enter a stream URL.') };
   if (text.length > MAX_URL_LENGTH) {
-    return { ok: false, error: 'That does not look like a stream URL.' };
+    return { ok: false, error: msg('That does not look like a stream URL.') };
   }
   let parsed;
   try {
     parsed = new URL(text);
   } catch {
-    return { ok: false, error: 'That is not a valid URL.' };
+    return { ok: false, error: msg('That is not a valid URL.') };
   }
   if (parsed.protocol === 'http:') {
     // Worth its own message: this is the one a viewer will actually hit, by
     // pasting a working http stream and being unable to see why it is silent.
     return {
       ok: false,
-      error:
-        'Only https:// streams can play here — a browser blocks http:// audio ' +
-        'on an https page, silently.',
+      error: msg(
+        'Only https:// streams can play here — a browser blocks http:// audio on an https page, silently.',
+      ),
     };
   }
   if (parsed.protocol !== 'https:') {
-    return { ok: false, error: 'Only https:// stream URLs are accepted.' };
+    return { ok: false, error: msg('Only https:// stream URLs are accepted.') };
   }
-  if (!parsed.hostname) return { ok: false, error: 'That URL has no host.' };
+  if (!parsed.hostname)
+    return { ok: false, error: msg('That URL has no host.') };
   return { ok: true, url: parsed.toString() };
 }
 

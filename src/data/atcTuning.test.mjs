@@ -47,7 +47,7 @@ test('it falls down the order rather than showing nothing', () => {
 });
 
 test('an uncontrolled field is reported AS uncontrolled, not as a match', () => {
-  // The majority case: 5,902 of the 9,562 packed airports publish no tower,
+  // The majority case: 6,036 of the 9,562 packed airports publish no tower,
   // ground, approach or ATIS at all. Handing back a CTAF with matchedPhase
   // true would let a panel caption it "Ground 122.8" — a controller that does
   // not exist.
@@ -96,18 +96,25 @@ test('the reference airport follows the route when the aircraft has one', async 
   // Climbing out, the field it just left still owns it — even if a bigger
   // airport is nearer. The route is already plausibility-gated by the flights
   // layer, so when present it is better evidence than proximity.
+  const route = { origin: { code: 'KAUS' }, destination: { code: 'KDEN' } };
   const climbingOut = {
-    latitude: 32.9,
-    longitude: -97.0,
+    latitude: 30.25,
+    longitude: -97.6,
     verticalRateMps: 8,
     onGround: false,
-    route: { origin: { code: 'KAUS' }, destination: { code: 'KDEN' } },
+    route,
   };
   const departure = await chooseReferenceAirport(climbingOut);
   assert.equal(departure.airport.ident, 'KAUS');
   assert.equal(departure.basis, 'origin');
 
-  const descending = { ...climbingOut, verticalRateMps: -8 };
+  const descending = {
+    latitude: 39.9,
+    longitude: -104.7,
+    verticalRateMps: -8,
+    onGround: false,
+    route,
+  };
   const arrival = await chooseReferenceAirport(descending);
   assert.equal(arrival.airport.ident, 'KDEN');
   assert.equal(arrival.basis, 'destination');
@@ -115,6 +122,79 @@ test('the reference airport follows the route when the aircraft has one', async 
   // Level: neither end of the route is more relevant than where it is now.
   const level = { ...climbingOut, verticalRateMps: 0 };
   assert.equal((await chooseReferenceAirport(level)).basis, 'nearest');
+});
+
+test('a route end is found by its coordinates, since adsbdb codes are mostly IATA', async () => {
+  // adsbdb gives the IATA code where there is one ("AUS"); the pack is keyed on
+  // OurAirports idents ("KAUS"). Looked up as an ident, "AUS" finds nothing —
+  // or a different field that happens to use the same local code — so the
+  // route end's coordinates are what identify the airport.
+  const climbingOut = {
+    latitude: 30.25,
+    longitude: -97.6,
+    verticalRateMps: 8,
+    onGround: false,
+    route: {
+      origin: { code: 'AUS', lat: 30.1944, lon: -97.6698 },
+      destination: { code: 'DEN', lat: 39.8617, lon: -104.6731 },
+    },
+  };
+  const result = await chooseReferenceAirport(climbingOut);
+  assert.equal(result.airport.ident, 'KAUS');
+  assert.equal(result.basis, 'origin');
+  // The same IATA code with no coordinates is not an ident, so it is not used
+  // as one: proximity answers instead.
+  const noCoordinates = {
+    ...climbingOut,
+    route: { origin: { code: 'AUS' }, destination: { code: 'DEN' } },
+  };
+  assert.equal((await chooseReferenceAirport(noCoordinates)).basis, 'nearest');
+});
+
+test('a route end that is far from the aircraft is not believed', async () => {
+  // Climbing out of Austin with a (stale or mismatched) route that says the
+  // origin is Denver, 1,200 km away: nobody in Denver is listening to this
+  // aircraft. The route is only evidence while the airport is in range.
+  const result = await chooseReferenceAirport({
+    latitude: 30.25,
+    longitude: -97.6,
+    verticalRateMps: 8,
+    onGround: false,
+    route: {
+      origin: { code: 'KDEN', lat: 39.8617, lon: -104.6731 },
+      destination: { code: 'KAUS' },
+    },
+  });
+  assert.equal(result.basis, 'nearest');
+  assert.equal(result.airport.ident, 'KAUS');
+  // ...and a tighter radius applies to the route airport as well.
+  const tight = await chooseReferenceAirport(
+    {
+      latitude: 30.25,
+      longitude: -97.6,
+      verticalRateMps: 8,
+      onGround: false,
+      route: { origin: { code: 'KAUS' }, destination: { code: 'KDEN' } },
+    },
+    { maxKm: 1 },
+  );
+  assert.equal(tight.airport, null);
+  assert.equal(tight.basis, 'none');
+});
+
+test('route coordinates that match no packed airport fall back to proximity', async () => {
+  // An airport with no VHF frequency is not in the pack. Taking the nearest
+  // packed field to such a point could name a strip kilometres away, which is
+  // why the match radius is small.
+  const result = await chooseReferenceAirport({
+    latitude: 30.25,
+    longitude: -97.6,
+    verticalRateMps: 8,
+    onGround: false,
+    route: { origin: { code: 'XXX', lat: 0, lon: -30 }, destination: null },
+  });
+  assert.equal(result.basis, 'nearest');
+  assert.equal(result.airport.ident, 'KAUS');
 });
 
 test('an unroutable or unknown route code falls back to proximity', async () => {
@@ -234,4 +314,33 @@ test('junk in does not throw', async () => {
     assert.equal(result.airport, null);
     assert.equal(result.reason, NO_TUNING_REASON.NO_AIRPORT);
   }
+});
+
+test('an area-centre frequency at an uncontrolled airport is right for cruise, and says so', async () => {
+  // `controlled` describes the airport. A cruising aircraft is rightly offered
+  // the area centre filed against a field that has no tower of its own, with no
+  // reason attached — and the airport still reads as uncontrolled.
+  const { airports } = await loadAtcFrequencies();
+  const centerOnly = airports.find(
+    (a) =>
+      a.frequencies.some((f) => f.type === 'CNTR') &&
+      !a.frequencies.some((f) =>
+        ['TWR', 'GND', 'APP', 'ATIS'].includes(f.type),
+      ),
+  );
+  assert.ok(centerOnly, 'the pack should carry a Center-only airport');
+  const result = await resolveAtcTuning({
+    latitude: centerOnly.lat,
+    longitude: centerOnly.lon,
+    altitudeM: (centerOnly.elevationM ?? 0) + 10_000,
+    velocityMps: 230,
+    verticalRateMps: 0,
+    onGround: false,
+  });
+  assert.equal(result.airport.ident, centerOnly.ident);
+  assert.equal(result.phase, FLIGHT_PHASE.CRUISE);
+  assert.equal(result.frequency.type, 'CNTR');
+  assert.equal(result.matchedPhase, true);
+  assert.equal(result.reason, null);
+  assert.equal(result.controlled, false);
 });

@@ -17,10 +17,19 @@
 //   - changing station RENEWS rather than re-claims, so ATC does not revoke
 //     itself mid-start.
 //
+// The claim is taken once the stream has actually started, not when play() is
+// called. A stream that never plays (blocked autoplay, dead URL, mixed content)
+// must not have silenced the radio for nothing, and it cannot be given back —
+// a revoked producer has already stopped. The price is that the previous
+// source keeps sounding for the moment the stream takes to start.
+//
+// `error` is English marked for translation; a panel renders it through `t()`.
+//
 // The element is injected rather than constructed so the whole state machine
 // is testable without a DOM. In the app the default factory is used.
 
 import { claimAudio, releaseAudio } from './audioOwnership.js';
+import { msg } from '../i18n/marker.js';
 
 export const ATC_AUDIO_OWNER = 'atc';
 
@@ -114,18 +123,17 @@ export function createAtcAudio(options = {}) {
     async play(nextUrl) {
       const target = String(nextUrl ?? '').trim();
       if (!target) {
-        set(ATC_AUDIO_STATE.ERROR, 'No stream URL.');
+        set(ATC_AUDIO_STATE.ERROR, msg('No stream URL.'));
         return false;
       }
       if (!audio) audio = createAudio();
       if (!audio) {
-        set(ATC_AUDIO_STATE.ERROR, 'Audio is not available in this browser.');
+        set(
+          ATC_AUDIO_STATE.ERROR,
+          msg('Audio is not available in this browser.'),
+        );
         return false;
       }
-      // Renew rather than re-claim: this controller may already hold the
-      // audio, and a plain claim would fire its own onRevoked and stop the
-      // playback it is starting.
-      lease = claimAudio(ATC_AUDIO_OWNER, { onRevoked, renew: lease });
       const mine = ++generation;
       url = target;
       set(ATC_AUDIO_STATE.LOADING);
@@ -135,17 +143,29 @@ export function createAtcAudio(options = {}) {
         if (started?.then) await started;
         // Between the await and here, another producer may have taken the
         // audio, or a newer play() may have superseded this one.
+        // Superseded while the stream was starting (a stop, a revocation or a
+        // newer play): whoever moved on owns the element and the claim now.
         if (mine !== generation) return false;
+        // Renew rather than re-claim: this controller may already hold the
+        // audio (a station change), and a plain claim would fire its own
+        // onRevoked and stop the playback it just started.
+        lease = claimAudio(ATC_AUDIO_OWNER, { onRevoked, renew: lease });
         set(ATC_AUDIO_STATE.PLAYING);
         return true;
       } catch (cause) {
         if (mine !== generation) return false;
         silence();
+        // Nothing is playing, so nothing is claimed: a failed station change
+        // must not leave a lease behind for a silent element.
+        releaseAudio(lease);
+        lease = null;
         set(
           ATC_AUDIO_STATE.ERROR,
           cause?.name === 'NotAllowedError'
-            ? 'The browser blocked playback until you interact with the page.'
-            : 'That stream would not play.',
+            ? msg(
+                'The browser blocked playback until you interact with the page.',
+              )
+            : msg('That stream would not play.'),
         );
         return false;
       }

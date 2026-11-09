@@ -7,7 +7,7 @@
 // table from flight phase to frequency class (taxi→GND, takeoff→TWR,
 // cruise→CNTR, approach→ATIS) applied unconditionally. The bundled pack says
 // that table is a fiction almost everywhere: of its 9,562 airports only 443
-// publish all four of TWR/GND/APP/ATIS and 5,902 publish none of them. So the
+// publish all four of TWR/GND/APP/ATIS and 6,036 publish none of them. So the
 // phase produces a PREFERENCE ORDER, the airport's own published classes
 // decide what is actually available, and when nothing in the order is
 // published the caller is told that in words rather than shown a blank.
@@ -24,6 +24,16 @@ import {
   isControlled,
   nearestAirportsWithFrequencies,
 } from './ourAirportsAtc.js';
+import { greatCircleKm } from '../geoDistance.js';
+import { msg } from '../i18n/marker.js';
+
+/**
+ * How far a route airport's published coordinates may sit from the pack's own
+ * position for the same airport and still be taken as it. Two sources place
+ * one airport within a few kilometres of each other; this is wide enough for
+ * that and too narrow to reach the next field along.
+ */
+const ROUTE_MATCH_KM = 5;
 
 /**
  * Frequency classes to prefer for each phase, best first.
@@ -69,14 +79,18 @@ export const CLASS_KIND = Object.freeze({
   AFIS: 'advisory',
 });
 
-/** Why no frequency could be offered, in words a panel can print verbatim. */
+/**
+ * Why no frequency could be offered. English marked for translation: a panel
+ * renders a reason through `t()`.
+ */
 export const NO_TUNING_REASON = Object.freeze({
-  NO_AIRPORT: 'No airport with published frequencies within range.',
-  UNCONTROLLED:
-    'Uncontrolled field — no tower, ground or approach frequency published. ' +
-    'Pilots self-announce on the common traffic advisory frequency.',
-  NO_MATCHING_CLASS:
+  NO_AIRPORT: msg('No airport with published frequencies within range.'),
+  UNCONTROLLED: msg(
+    'Uncontrolled field — no tower, ground or approach frequency published. Pilots self-announce on the common traffic advisory frequency.',
+  ),
+  NO_MATCHING_CLASS: msg(
     'This airport publishes no frequency for that part of the flight.',
+  ),
 });
 
 /**
@@ -125,13 +139,16 @@ export function tuneAirportForPhase(airport, phase) {
  * route comes from the tracked descriptor's adsbdb enrichment and is already
  * plausibility-gated by the flights layer, so when it is present it is better
  * evidence than proximity — an aircraft climbing out of a field ten miles from
- * a bigger one is talking to the field it left, not the bigger one.
+ * a bigger one is talking to the field it left, not the bigger one. It is only
+ * believed while the airport is within `maxKm` of the aircraft: a route end
+ * further away than the search radius says nothing about who is listening now.
  *
  * Keyed on DIRECTION, not on the full phase, and that is deliberate: the phase
  * needs the chosen airport's elevation, so asking for it here would be
  * circular. Direction needs neither an airport nor an altitude.
  * @param {object} info - Tracked-aircraft descriptor.
- * @param {{maxKm?: number}} [options] - Search radius for the proximity fallback.
+ * @param {{maxKm?: number}} [options] - Search radius, for both the route
+ *   airport's distance from the aircraft and the proximity fallback.
  * @returns {Promise<{airport: object|null, basis: string}>} The airport and how
  *   it was chosen (`'origin'`, `'destination'` or `'nearest'`).
  */
@@ -142,16 +159,14 @@ export async function chooseReferenceAirport(info, options = {}) {
     direction === FLIGHT_DIRECTION.GROUND ||
     direction === FLIGHT_DIRECTION.CLIMBING;
   const arriving = direction === FLIGHT_DIRECTION.DESCENDING;
-  const routeIdent = departing
-    ? info?.route?.origin?.code
+  const routeEnd = departing
+    ? info?.route?.origin
     : arriving
-      ? info?.route?.destination?.code
+      ? info?.route?.destination
       : null;
-  if (routeIdent) {
-    const airport = await airportByIdent(routeIdent);
-    if (airport) {
-      return { airport, basis: departing ? 'origin' : 'destination' };
-    }
+  const routed = await packAirportForRouteEnd(routeEnd);
+  if (routed && isWithinRange(info, routed, maxKm)) {
+    return { airport: routed, basis: departing ? 'origin' : 'destination' };
   }
   const [nearest] = await nearestAirportsWithFrequencies(
     info?.latitude,
@@ -159,6 +174,42 @@ export async function chooseReferenceAirport(info, options = {}) {
     { limit: 1, maxKm },
   );
   return { airport: nearest || null, basis: nearest ? 'nearest' : 'none' };
+}
+
+/**
+ * The pack airport for one end of an adsbdb route, or null.
+ *
+ * adsbdb publishes the IATA code where there is one and the ICAO code only
+ * otherwise, while the pack is keyed on OurAirports idents (ICAO, or a local
+ * code). A three-letter IATA code is therefore not an ident, and where it
+ * happens to equal one it can name a different field. The route end's own
+ * coordinates are the reliable key; a code is used only when they are missing
+ * and it is shaped like an ICAO one.
+ * @param {{code?: string, lat?: number|null, lon?: number|null}|null|undefined} end
+ *   Route origin or destination.
+ * @returns {Promise<object|null>} The pack airport, or null.
+ */
+async function packAirportForRouteEnd(end) {
+  if (!end) return null;
+  if (Number.isFinite(end.lat) && Number.isFinite(end.lon)) {
+    const [hit] = await nearestAirportsWithFrequencies(end.lat, end.lon, {
+      limit: 1,
+      maxKm: ROUTE_MATCH_KM,
+    });
+    return hit || null;
+  }
+  const code = typeof end.code === 'string' ? end.code.trim() : '';
+  return /^[A-Za-z0-9]{4}$/.test(code) ? airportByIdent(code) : null;
+}
+
+/** An unknown aircraft position cannot rule an airport out, so it does not. */
+function isWithinRange(info, airport, maxKm) {
+  if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude)) {
+    return true;
+  }
+  return (
+    greatCircleKm({ lat: info.latitude, lon: info.longitude }, airport) <= maxKm
+  );
 }
 
 /**
@@ -171,8 +222,7 @@ export async function chooseReferenceAirport(info, options = {}) {
  * classifying against sea level, which is wrong by the field elevation — 1,655 m
  * at Denver, enough to put an aircraft on short final into the cruise band.
  * @param {object} info - Tracked-aircraft descriptor (`getTrackedInfo()`).
- * @param {{maxKm?: number}} [options] - Search radius for the nearest-airport
- *   fallback.
+ * @param {{maxKm?: number}} [options] - Search radius, see `chooseReferenceAirport`.
  * @returns {Promise<{airport: object|null, basis: string, phase: string,
  *   phaseLabel: string, aglM: number|null, missing: string[],
  *   frequency: object|null, positionLabel: string|null, kind: string|null,
@@ -180,6 +230,9 @@ export async function chooseReferenceAirport(info, options = {}) {
  *   Everything a panel needs, with
  *   `reason` populated whenever `frequency` is null or came from the advisory
  *   fallback, and `missing` naming the inputs the phase could not be built on.
+ *   `controlled` describes the AIRPORT, not the frequency: a cruising aircraft
+ *   is offered an area-centre frequency at a field that has no tower of its
+ *   own, and `reason` is null because that frequency is the right one.
  */
 export async function resolveAtcTuning(info, options = {}) {
   const { airport, basis } = await chooseReferenceAirport(info, options);

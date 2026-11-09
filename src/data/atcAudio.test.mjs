@@ -297,3 +297,41 @@ test('destroy releases the audio and forgets its subscribers', async () => {
   await atc.play(URL_A);
   assert.equal(seen.length, before + 1, 'and nothing after destroy is');
 });
+
+test('a stream that fails to play does not silence what was already playing', async () => {
+  // The claim is taken when the stream has started, not when play() is called:
+  // a refused or dead stream must not have stopped the radio for nothing.
+  let radioStopped = 0;
+  claimAudio('radio', {
+    onRevoked: () => {
+      radioStopped += 1;
+    },
+  });
+  const atc = createAtcAudio({
+    createAudio: () => fakeAudio({ failWith: new Error('404') }),
+  });
+  assert.equal(await atc.play(URL_A), false);
+  assert.equal(radioStopped, 0, 'the radio must still be playing');
+  assert.equal(audioOwner(), 'radio');
+});
+
+test('the claim waits for the stream to start', async () => {
+  claimAudio('radio');
+  const atc = createAtcAudio({
+    createAudio: () => fakeAudio({ pending: true }),
+  });
+  atc.play(URL_A);
+  assert.equal(atc.getState().state, ATC_AUDIO_STATE.LOADING);
+  assert.equal(audioOwner(), 'radio', 'still loading, so nothing is taken yet');
+});
+
+test('a failed station change gives the audio back instead of holding it silently', async () => {
+  const element = fakeAudio();
+  const atc = createAtcAudio({ createAudio: () => element });
+  await atc.play(URL_A);
+  assert.equal(audioOwner(), 'atc');
+  element.play = () => Promise.reject(new Error('404'));
+  assert.equal(await atc.play(URL_B), false);
+  assert.equal(atc.getState().state, ATC_AUDIO_STATE.ERROR);
+  assert.equal(isAudioFree(), true, 'a silent element must not hold the claim');
+});

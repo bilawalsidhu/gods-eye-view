@@ -22,6 +22,8 @@
 // that". Both are results, not errors — a caller renders what it knows and
 // says what it does not.
 
+import { msg } from '../i18n/marker.js';
+
 /**
  * Ground speed at or above which an aircraft on the ground is on a runway
  * rather than a taxiway — 50 kt. Taxi speed limits sit far below this, and a
@@ -76,15 +78,15 @@ export const FLIGHT_PHASE = Object.freeze({
 
 /** What a reader should be told each phase means. */
 export const FLIGHT_PHASE_LABELS = Object.freeze({
-  taxi: 'Taxiing',
-  runway: 'On the runway',
-  takeoff: 'Taking off',
-  climb: 'Climbing out',
-  cruise: 'En route',
-  descent: 'Descending',
-  approach: 'On approach',
-  airborne: 'Airborne',
-  unknown: 'Unknown',
+  taxi: msg('Taxiing'),
+  runway: msg('On the runway'),
+  takeoff: msg('Taking off'),
+  climb: msg('Climbing out'),
+  cruise: msg('En route'),
+  descent: msg('Descending'),
+  approach: msg('On approach'),
+  airborne: msg('Airborne'),
+  unknown: msg('Unknown'),
 });
 
 const finite = (value) => (Number.isFinite(value) ? value : null);
@@ -142,7 +144,10 @@ export function classifyFlightPhase(info, reference = {}) {
 
   if (altitudeM === null) {
     // No altitude. The ground flag is all that is left: an explicit `false`
-    // still says airborne; anything else says nothing at all.
+    // still says airborne; anything else says nothing at all. A descriptor
+    // built by the flights layer always carries a boolean (records.js reads
+    // `on_ground === true`), so UNKNOWN is reachable only from a hand-built
+    // descriptor with the flag absent.
     return result(
       info?.onGround === false ? FLIGHT_PHASE.AIRBORNE : FLIGHT_PHASE.UNKNOWN,
     );
