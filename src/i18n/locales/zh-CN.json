@@ -2355,6 +2355,10 @@
   "No feed here yet · {n} regions available": {
     "other": "此处暂无数据源 · 有 {n} 个覆盖区域"
   },
+  "Fly below {km} km to a covered city": "请降至 {km} km 以下并飞往有覆盖的城市",
+  "No bike share here yet · {n} systems available": {
+    "other": "此处暂无共享单车 · 有 {n} 个可用系统"
+  },
   "degraded": "降级",
   "stale": "过期",
   "partial": "部分可用",
