@@ -98,7 +98,7 @@ const renderingSource = await readFile(
 );
 const frameSource = renderingSource
   .split('function onPreRender()')[1]
-  .split('const occluder')[0];
+  .split('const candidatePosition')[0];
 check(
   'frame pass does not scan the fleet or copy the moving set',
   !/_vehicles\.values|\[\.\.\.state\._moving\]/.test(frameSource),
@@ -1609,7 +1609,8 @@ try {
         key: entry.key,
         x,
         y,
-        pickKey: picked?.id ?? picked?.primitive?.id ?? null,
+        // A draw-port pick carries {set, id, meta}; the vehicle is its id.
+        pickKey: picked?.id?.id ?? picked?.id ?? picked?.primitive?.id ?? null,
       };
     });
     let anchor = null;
