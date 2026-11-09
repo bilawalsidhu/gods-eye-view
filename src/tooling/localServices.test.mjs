@@ -25,6 +25,8 @@ import {
   offeredTools,
   realtimeTools,
 } from '../../server/providers/openai/tools.js';
+import { geocodeProxy } from '../../server/providers/regional/place.js';
+import { allowedMethods } from '../../server/providers/common/methods.js';
 import { createDebugLogHandler } from '../../server/providers/openai/debug-log.js';
 import { attachVoiceResult } from '../voice/speech.js';
 import { sanitizeDebugValue } from '../voice/realtimeDiagnostics.js';
@@ -109,9 +111,11 @@ test('standalone service guards run in development and preview without upstream 
       [weatherEffectsProxy, '/api/weather-effects'],
     ]) {
       const routes = install(factory(), preview);
+      const rejected = await request(routes.get(route), { method: 'DELETE' });
+      assert.equal(rejected.status, 405);
       assert.equal(
-        (await request(routes.get(route), { method: 'DELETE' })).status,
-        405,
+        rejected.headers.allow,
+        route === '/api/overpass' ? 'POST' : 'GET',
       );
       assert.equal(
         (
@@ -123,6 +127,61 @@ test('standalone service guards run in development and preview without upstream 
       );
     }
   }
+});
+
+test('405 responses declare the methods each route accepts', async (t) => {
+  t.mock.method(globalThis, 'fetch', () => {
+    throw Error('rejected methods must not fetch');
+  });
+  const openai = install(openAiRealtimeProxy({ sourceRoot: root(t) }));
+  const setup = install(keySetupEndpoint({ sourceRoot: root(t) }));
+  for (const [handler, method, allow] of [
+    [openai.get('/api/realtime/token'), 'DELETE', 'GET, POST'],
+    [openai.get('/api/realtime/oauth-status'), 'POST', 'GET'],
+    [openai.get('/api/realtime/oauth-login'), 'GET', 'POST'],
+    [openai.get('/api/openai/hud-summary'), 'GET', 'POST'],
+    [openai.get('/api/realtime/debug-log'), 'GET', 'POST'],
+    [setup.get('/api/setup/status'), 'POST', 'GET'],
+    [setup.get('/api/setup/keys'), 'GET', 'POST'],
+  ]) {
+    const rejected = await request(handler, { method });
+    assert.equal(rejected.status, 405);
+    assert.equal(rejected.headers.allow, allow);
+  }
+  // /api/overpass/status also answers GET; other paths take POST queries only.
+  const overpass = install(overpassProxy()).get('/api/overpass');
+  const probe = await request(overpass, { method: 'HEAD', url: '/status' });
+  assert.equal(probe.status, 405);
+  assert.equal(probe.headers.allow, 'GET, POST');
+});
+
+test('geocode search and outline reject methods with Allow in dev and preview', async () => {
+  const unavailable = () => {
+    throw Error('rejected methods must not acquire upstream');
+  };
+  for (const preview of [false, true]) {
+    const routes = install(
+      geocodeProxy({ search: unavailable, outline: unavailable }),
+      preview,
+    );
+    for (const url of ['/?q=Austin', '/outline?query=Austin']) {
+      const rejected = await request(routes.get('/api/geocode'), {
+        method: 'POST',
+        url,
+      });
+      assert.equal(rejected.status, 405);
+      assert.equal(rejected.headers.allow, 'GET');
+      assert.deepEqual(rejected.json(), { error: 'Method Not Allowed' });
+    }
+  }
+});
+
+test('allowedMethods keeps route order, drops repeats and rejects malformed methods', () => {
+  assert.equal(allowedMethods('GET', 'HEAD', 'GET'), 'GET, HEAD');
+  assert.equal(allowedMethods('POST'), 'POST');
+  assert.throws(() => allowedMethods(), TypeError);
+  assert.throws(() => allowedMethods('get'), TypeError);
+  assert.throws(() => allowedMethods('GET, POST'), TypeError);
 });
 
 test('weather-only requests share upstream work and retain fresh and stale responses', async (t) => {

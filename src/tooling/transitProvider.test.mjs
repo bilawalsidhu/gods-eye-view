@@ -429,3 +429,16 @@ test('development and preview mount the same transit service and close it on shu
     plugin.closeBundle();
   }
 });
+
+test('a rejected method names the one method the transit proxy accepts', async () => {
+  const call = install(
+    transitProxy({
+      fetchImpl: async () => {
+        throw new Error('rejected methods must not fetch');
+      },
+    }),
+  );
+  const rejected = await call('/feeds', 'POST');
+  assert.equal(rejected.status, 405);
+  assert.equal(rejected.headers.get('Allow'), 'GET');
+});

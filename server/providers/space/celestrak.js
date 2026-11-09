@@ -7,6 +7,7 @@ import {
 import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import { readResponseTextCapped } from '../common/http.js';
+import { allowedMethods } from '../common/methods.js';
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -157,7 +158,7 @@ export function celestrakProxy() {
       // browsers but keep the documented reverse-proxy deployment working.
       if (admitSameSiteKeyless(req, res)) return;
       if (req.method !== 'GET') {
-        res.writeHead(405);
+        res.writeHead(405, { Allow: allowedMethods('GET') });
         res.end();
         return;
       }

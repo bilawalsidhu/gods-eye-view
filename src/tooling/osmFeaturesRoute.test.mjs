@@ -253,7 +253,7 @@ function mount(
   };
   const request = (search, route = '/api/osm/features', headers, from) =>
     start(search, route, headers, from).promise;
-  return { request, start, writes };
+  return { request, start, writes, routes };
 }
 
 test('a search without a limit lists up to 500 features', async () => {
@@ -445,6 +445,41 @@ test('a cached answer is served only by the Overpass instance that gave it', asy
     2,
     'the new instance is asked, not the old answer served',
   );
+});
+
+test('a wrong method is refused with the method the route accepts', async () => {
+  let upstream = 0;
+  const { routes } = mount(async () => {
+    upstream += 1;
+    return { status: 200, body: JSON.stringify({ elements: [] }) };
+  });
+  for (const method of ['POST', 'PUT', 'DELETE', 'HEAD']) {
+    const refused = await new Promise((resolve) => {
+      const res = {
+        writableEnded: false,
+        writeHead(status, headers) {
+          res.status = status;
+          res.headers = headers;
+        },
+        end() {
+          res.writableEnded = true;
+          resolve(res);
+        },
+      };
+      routes.get('/api/osm/features')(
+        {
+          method,
+          url: '/?preset=hospital&bbox=0,0,2,2',
+          headers: {},
+          socket: { remoteAddress: '10.9.0.1' },
+        },
+        res,
+      );
+    });
+    assert.equal(refused.status, 405, method);
+    assert.equal(refused.headers.Allow, 'GET', method);
+  }
+  assert.equal(upstream, 0, 'no refused method reaches Overpass');
 });
 
 test('a cross-site page cannot spend the operator Overpass', async () => {
