@@ -364,6 +364,14 @@ const COUNTRY_NAMES = Object.freeze({
   ZW: 'Zimbabwe',
 });
 
+/**
+ * Every owner country a satellite can be marked with, sorted: the flags
+ * `scripts/build-owner-flags.mjs` draws into the owner flag sheet.
+ */
+export const OWNER_COUNTRY_CODES = Object.freeze(
+  Object.keys(COUNTRY_NAMES).sort(),
+);
+
 // UCS "Country of Operator/Owner" → ISO code. Joint owners ("USA/Japan") and
 // organisations are not countries and resolve through ORGANISATIONS or as a
 // joint label.

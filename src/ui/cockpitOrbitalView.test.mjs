@@ -26,7 +26,6 @@ import {
 } from '../cockpitOrbital.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { prefetchImageryAhead } from './cockpitOrbitalView.js';
-import { imageryLevelForView } from '../cockpitOrbital.js';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
 
 const ISS = Object.freeze({
@@ -1161,6 +1160,27 @@ function imageryGlobe(viewer, { requestImage } = {}) {
 
 const WORLDVIEW_ON_TRACK = Object.freeze({ ...WORLDVIEW, groundTrackDeg: 52 });
 
+test('the sensor strip follows the view through a zoom step, not ahead of it', async (t) => {
+  const { cockpit, store, clock } = await orbitAt(t, {
+    satellite: WORLDVIEW,
+    reducedMotion: false,
+  });
+  const strip = () => store.orbital.sensor.stripFraction;
+  const atOne = strip();
+  assert.ok(atOne > 0 && atOne < 1);
+  press(cockpit, '+');
+  cockpit.update();
+  near(strip(), atOne, 'the step starts at 1x, and so does the strip');
+  clock.advance(ORBITAL_ZOOM_TRANSITION_MS / 2);
+  cockpit.update();
+  const midway = strip();
+  clock.advance(ORBITAL_ZOOM_TRANSITION_MS + 1000);
+  cockpit.update();
+  const atTwo = strip();
+  assert.ok(atTwo > atOne * 1.5, 'twice the zoom, about twice the share');
+  assert.ok(midway > atOne && midway < atTwo, 'part-way through the step');
+});
+
 test('from 16x the imagery ahead of the ground track is pre-loaded', async (t) => {
   const { cockpit, viewer, store, clock } = await orbitAt(t, {
     satellite: WORLDVIEW_ON_TRACK,
@@ -1444,16 +1464,13 @@ test('the pre-load is throttled, at the level Cesium draws, and waits out a tilt
     );
     assert.equal(request.type, Cesium.RequestType.IMAGERY);
   }
-  // The level Cesium's own selection takes for this view.
-  const fov = fovForZoom(orbitalBaseFovRad(WORLDVIEW.altitudeM), 16);
-  const metresPerPixel =
-    (WORLDVIEW.altitudeM * 2 * Math.tan(fov / 2)) /
-    viewer.scene.canvas.clientHeight;
-  const expected = imageryLevelForView(new Cesium.WebMercatorTilingScheme(), {
-    metresPerPixel,
-    latitudeDeg: WORLDVIEW.latitude,
-  });
-  assert.equal(Number(requests[0].split('/')[0]), expected);
+  // The level Cesium's own selection takes for this view, worked by hand:
+  // at 16x from 617 km the 900 px canvas is ~49.5 m a pixel. The ellipsoid
+  // terrain's level-zero error is 6378137 · 2π / 4 / 128 ≈ 78,272 m; it first
+  // meets Cesium's screen-space error of 2 px (≤ 99 m) at level 10, 76.4 m.
+  // A Web Mercator level-zero texel at 30° is 6378137 · 2π · cos 30° / 256
+  // ≈ 135,570 m, so the imagery level is round(log2(135,570 / 76.4)) = 11.
+  assert.equal(Number(requests[0].split('/')[0]), 11);
 });
 
 test('the TLE age is measured from the time the satellite is shown at', async (t) => {

@@ -631,6 +631,11 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     : canvasAspect(this.viewer);
   const settledFov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
   const footprintKm = footprintWidthKm(info.altitudeM, settledFov, aspect);
+  // The strip is drawn over the picture, so it follows the view as a step
+  // zooms (republished every frame then), not the step it is heading for.
+  const shownKm = Number.isFinite(state.verticalFov)
+    ? footprintWidthKm(info.altitudeM, state.verticalFov, aspect)
+    : footprintKm;
   const maxZoom = orbitalMaxZoomFor.call(this, info);
   const swathKm = sensorSwathKm(info);
   const trackUp = Number.isFinite(info.groundTrackDeg);
@@ -687,7 +692,7 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
             // along, and a SAR images to one side of nadir, not under it.
             stripFraction:
               trackUp && info.sensor?.type !== 'SAR'
-                ? sensorStripFraction(swathKm, footprintKm)
+                ? sensorStripFraction(swathKm, shownKm)
                 : null,
             zoom: sensorSwathZoom(info.altitudeM, swathKm, aspect, maxZoom),
           },

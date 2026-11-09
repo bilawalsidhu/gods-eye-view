@@ -64,6 +64,9 @@ import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
+import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import { withPlacePacks } from './placePacksLoading.js';
+import { preloadOwnerFlags } from './ownerFlag.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -158,8 +161,15 @@ export class StyleManager extends ShellFacade {
     // Vue views share this runtime and its stores; dispose unmounts them.
     this._ui = createUiRuntime({ pinia: applicationPinia() });
     this._feedback = new ShellFeedback({
-      readLayers: () => this._dataManager?.getAll?.() || [],
+      readLayers: () => withPlacePacks(this._dataManager?.getAll?.() || []),
     });
+    // The satellite owner flags load with the app, not on the first ride.
+    preloadOwnerFlags();
+    // The place names under a Cockpit load on its first lookup: the loading
+    // status names them meanwhile.
+    this._offPlacePacks = onPlacePacksLoadingChange(() =>
+      this._updateGlobalLoadingFeedback(),
+    );
     this.viewer = viewer;
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -1825,6 +1835,7 @@ export class StyleManager extends ShellFacade {
     this._wildlifeSightingCard?.destroy();
     this._ui.destroy();
     this._panelChrome.destroy();
+    this._offPlacePacks();
     this._feedback.destroy();
 
     this._displayBindings.destroy();

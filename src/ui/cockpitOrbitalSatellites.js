@@ -144,6 +144,9 @@ export function switchOrbitalSatellite(noradId) {
   // until the camera is on the new one, they list no sites or satellites.
   state.awaitingFrame = true;
   state.previousUp = null;
+  // The field of view is still the old satellite's until the next frame; the
+  // HUD published below sizes the strip from the settled zoom meanwhile.
+  state.verticalFov = null;
   state.place = undefined;
   state.placeTracker?.reset?.();
   state.prefetched?.clear?.();
