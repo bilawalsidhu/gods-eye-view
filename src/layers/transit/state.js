@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { createHistoryBudget } from '../../data/contactPlayback.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 
 /**
  * One Transit layer's mutable scene state. Every field lives on the instance,
@@ -14,6 +15,8 @@ export function createState({ services }) {
 
   const state = {};
   state._historyBudget = createHistoryBudget();
+  /** The time vehicles play back behind by their display delay, in epoch ms. */
+  state.now = worldTimeFor('transit');
 
   state.DEFAULT_OVERLAY_HOST = Object.freeze({
     setEntries: setOverlayEntries,
@@ -112,7 +115,7 @@ export function createState({ services }) {
   state._cockpitVision = false;
   /** @type {Array<[string, EventListener]>} window listeners to remove on destroy. */
   state._styleListeners = [];
-  /** @type {{ refreshLayerStats?: () => void }|null} */
+  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} */
   state._dataManager = null;
   /** @type {number|null} */
   state._lastUpdate = null;

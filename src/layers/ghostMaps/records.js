@@ -1,4 +1,4 @@
-// Pure helpers for GhostMaps placemarks: description tables to plain fields,
+// Pure helpers for GhostMaps placemarks: report fields and event dates,
 // KML colors, and card text wrapping. Strings in, data out — description
 // markup is only ever read as text, never inserted into the page.
 
@@ -51,6 +51,106 @@ const MAX_FIELDS = 24;
 const MAX_VALUE = 600;
 const MAX_LINKS = 6;
 
+// Use the same leaf rows for report cards and event dates, without the card's
+// field-count/value-length limits affecting the age filter.
+function* descriptionRows(source) {
+  for (const row of source.matchAll(
+    /<tr\b[^>]*>((?:(?!<tr\b)[\s\S])*?)<\/tr\s*>/gi,
+  )) {
+    const cells = [
+      ...row[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]\s*>/gi),
+    ].map((cell) => cell[1]);
+    if (cells.length === 2)
+      yield {
+        label: htmlToText(cells[0]),
+        value: htmlToText(cells[1]),
+        markup: cells[1],
+      };
+  }
+}
+
+export const GHOSTMAPS_DEFAULT_AGE_DAYS = 7;
+export const GHOSTMAPS_AGE_OPTIONS = Object.freeze([1, 3, 7, 14, 30, null]);
+
+/** ArcGIS US dates (optionally with a time) and ISO dates, interpreted in UTC
+ * when no zone is supplied. A date without a time means the whole UTC day, so
+ * it resolves to the day's last millisecond: "1d" still shows yesterday's
+ * reports. Reject calendar rollovers instead of guessing. */
+export function parseGhostMapsEventDate(value) {
+  const input = String(value ?? '').trim();
+  const us =
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM))?$/i.exec(
+      input,
+    );
+  const iso =
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/.exec(
+      input,
+    );
+  if (!us && !iso) return null;
+  const year = Number(us ? us[3] : iso[1]);
+  const month = Number(us ? us[1] : iso[2]);
+  const day = Number(us ? us[2] : iso[3]);
+  let hour = Number(us?.[4] ?? iso?.[4] ?? 0);
+  const minute = Number(us?.[5] ?? iso?.[5] ?? 0);
+  const second = Number(us?.[6] ?? iso?.[6] ?? 0);
+  if (us?.[7]) {
+    if (hour < 1 || hour > 12) return null;
+    hour = (hour % 12) + (us[7].toUpperCase() === 'PM' ? 12 : 0);
+  }
+  const at = Date.UTC(year, month - 1, day, hour, minute, second);
+  const date = new Date(at);
+  if (
+    year < 1900 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    date.getUTCDate() !== day ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  )
+    return null;
+  if (iso?.[4]) {
+    const zoned = /(?:Z|[+-]\d{2}:\d{2})$/.test(input) ? input : `${input}Z`;
+    const parsed = Date.parse(zoned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return us?.[4] ? at : at + 86400_000 - 1;
+}
+
+/** The event's date, never its report/upload date or dates mentioned in prose. */
+export function ghostMapsEventDate(description) {
+  const rows = [
+    ...descriptionRows(
+      String(description ?? '').replace(
+        /<(script|style|head)\b[\s\S]*?<\/\1\s*>/gi,
+        ' ',
+      ),
+    ),
+  ];
+  for (const name of ['dateofevent', 'eventdate', 'date']) {
+    for (const { label, value } of rows) {
+      if (label.toLowerCase().replace(/[\s_]+/g, '') !== name) continue;
+      const at = parseGhostMapsEventDate(value);
+      if (at !== null) return at;
+    }
+  }
+  return null;
+}
+
+/** Unknown and future dates stay visible; only a confirmed old event expires. */
+export function isGhostMapsEventExpired(
+  dateMs,
+  now = Date.now(),
+  ageDays = GHOSTMAPS_DEFAULT_AGE_DAYS,
+) {
+  return (
+    ageDays !== null &&
+    Number.isFinite(dateMs) &&
+    dateMs < now - ageDays * 86400_000
+  );
+}
+
 /**
  * Fields and links from a placemark description. ArcGIS "popup" exports are a
  * two-column table (label, value); anything else becomes one unlabelled field.
@@ -73,18 +173,10 @@ export function parseDescriptionFields(html) {
   };
   // Innermost rows only: ArcGIS nests the field table inside an outer row,
   // and only leaf rows with exactly two cells are label/value pairs.
-  for (const row of source.matchAll(
-    /<tr\b[^>]*>((?:(?!<tr\b)[\s\S])*?)<\/tr\s*>/gi,
-  )) {
-    const cells = [
-      ...row[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]\s*>/gi),
-    ].map((cell) => cell[1]);
-    if (cells.length !== 2) continue;
-    const label = htmlToText(cells[0]);
-    const value = htmlToText(cells[1]);
+  for (const { label, value, markup } of descriptionRows(source)) {
     if (!label || SKIPPED_LABELS.has(label.toLowerCase())) continue;
     if (EMPTY_VALUES.has(value.toLowerCase())) continue;
-    addLinks(cells[1]);
+    addLinks(markup);
     // A bare research link is carried by `links`; the card does not need
     // the URL twice.
     if (/^https?:\/\/\S+$/i.test(value)) continue;

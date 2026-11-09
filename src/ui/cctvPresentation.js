@@ -154,6 +154,20 @@ export function _renderCctvState(state) {
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
+  const selectionRevision = Number(state?.activeCameraReselection);
+  const reselected =
+    this._lastQuebecSelectionRevision !== null &&
+    Number.isFinite(selectionRevision) &&
+    selectionRevision !== this._lastQuebecSelectionRevision;
+  this._lastQuebecSelectionRevision = Number.isFinite(selectionRevision)
+    ? selectionRevision
+    : null;
+  const isQuebecCamera =
+    enabled && activeCamera?.sourceKind?.startsWith('quebec-');
+  this._quebecCctvOverlay?.setCamera(isQuebecCamera ? activeCamera : null, {
+    reselected,
+  });
+  if (this._cctvFrameWrap) this._cctvFrameWrap.hidden = Boolean(isQuebecCamera);
 
   // Auto-expand the panel when the active camera CHANGES to a new non-null
   // id while the layer is enabled. Covers click-on-globe, panel controls,
@@ -241,7 +255,8 @@ export function _renderCctvState(state) {
 
   this.store.publish(presentCctvPanel(state, enabled));
 
-  const liveIntent = enabled && !!activeCamera?.isVideo;
+  const liveIntent =
+    enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
   this.store.setLive(liveIntent);
   if (this._cctvVideo) {
     const visible =
@@ -261,8 +276,9 @@ export function _renderCctvState(state) {
   }
 
   if (this._cctvFrame && !liveIntent) {
-    const nextSrc = enabled ? activeCamera?.frameUrl : null;
-    const nextCameraId = enabled ? activeCamera?.id || '' : '';
+    const nextSrc = enabled && !isQuebecCamera ? activeCamera?.frameUrl : null;
+    const nextCameraId =
+      enabled && !isQuebecCamera ? activeCamera?.id || '' : '';
     const cameraChanged = this._frame.cameraId !== nextCameraId;
     const frameLoading = this._frame.loading;
     // A same-camera refresh waits for the current image to settle. Replacing

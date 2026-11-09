@@ -44,7 +44,7 @@ CCTV_NSW_ENABLED="${CCTV_NSW_ENABLED:-1}"
 CCTV_NSW_MAX_SOURCES="${CCTV_NSW_MAX_SOURCES:-250}"
 CCTV_CALGARY_ENABLED="${CCTV_CALGARY_ENABLED:-1}"
 CCTV_CALGARY_MAX_SOURCES="${CCTV_CALGARY_MAX_SOURCES:-220}"
-CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-4000}"
+CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-7350}"
 
 # Capture which provider credentials genuinely came from the parent shell
 # before this launcher resolves dotenv and Keychain fallbacks. Only names are

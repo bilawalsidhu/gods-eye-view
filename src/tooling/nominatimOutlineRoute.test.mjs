@@ -684,25 +684,34 @@ test('the disk cache survives a restart and stays within its bounds', async () =
     await createNominatimCache({ dir, now: time.now }).get('k0'),
     null,
   );
-  assert.equal(
-    fs.statSync(dir).mode & 0o777,
-    0o700,
-    'the query cache directory is private',
-  );
+  // The cache is private only through POSIX mode bits. Windows has none
+  // (directories stat as 0o666) and the cache keeps the checkout's ACLs,
+  // so these checks run, and privacy holds, only on POSIX systems.
+  const posixModes = process.platform !== 'win32';
+  if (posixModes) {
+    assert.equal(
+      fs.statSync(dir).mode & 0o777,
+      0o700,
+      'the query cache directory is private (POSIX modes)',
+    );
+  }
   const text = fs
     .readdirSync(dir)
     .filter((name) => name.endsWith('.json'))
     .map((name) => fs.readFileSync(path.join(dir, name), 'utf8'))
     .join('\n');
   assert.equal(text.includes('k4'), false, 'disk entries never store raw keys');
-  for (const name of fs
-    .readdirSync(dir)
-    .filter((entry) => entry.endsWith('.json')))
-    assert.equal(
-      fs.statSync(path.join(dir, name)).mode & 0o777,
-      0o600,
-      `${name} is private`,
-    );
+  if (posixModes) {
+    for (const name of fs
+      .readdirSync(dir)
+      .filter((entry) => entry.endsWith('.json'))) {
+      assert.equal(
+        fs.statSync(path.join(dir, name)).mode & 0o777,
+        0o600,
+        `${name} is private (POSIX modes)`,
+      );
+    }
+  }
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -1137,7 +1146,7 @@ test('the outline route answers OK with polygons and validates its input', async
   assert.equal((await request('/elsewhere')).status, 'next');
 });
 
-test('the outline route leaves administrative geometry hooks to the annotation layer', async (t) => {
+test('the outline route serializes only selected-row administrative identity', async (t) => {
   const { fetchImpl } = stubFetch(async (url) => {
     const query = new URL(url).searchParams.get('q');
     const fixtures = {
@@ -1195,8 +1204,8 @@ test('the outline route leaves administrative geometry hooks to the annotation l
 
   const verified = await request('/outline?q=Bagmati%20Province&kind=admin');
   assert.equal(verified.status, 200);
-  assert.equal('adminArea' in verified.body.outline, false);
-  assert.equal('adminLevel' in verified.body.outline, false);
+  assert.equal(verified.body.outline.adminArea, 'Bagmati Province');
+  assert.equal(verified.body.outline.adminLevel, 'admin1');
 
   for (const query of [
     'Northern Region',
@@ -1231,7 +1240,7 @@ test('the outline route leaves administrative geometry hooks to the annotation l
   const retired = await request('/outline?q=Bagmati%20Zone&kind=admin');
   assert.equal(retired.status, 200);
   assert.equal(retired.body.status, 'OK');
-  assert.equal('adminArea' in retired.body.outline, false);
+  assert.equal(retired.body.outline.adminArea, 'Bagmati Zone');
   assert.equal('adminLevel' in retired.body.outline, false);
 
   const city = await request('/outline?q=Austin&kind=city');
