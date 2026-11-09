@@ -3201,5 +3201,14 @@
   "COURSE HOLD · AIS": "对地航向保持 · AIS",
   "Zoom in (+)": "放大 (+)",
   "Zoom out (−)": "缩小 (−)",
-  "ORBITAL VIEW · OFF-NADIR": "轨道视图 · 偏离天底"
+  "ORBITAL VIEW · OFF-NADIR": "轨道视图 · 偏离天底",
+  "World time": "世界时间",
+  "Back to live": "返回实时",
+  "Live": "实时",
+  "1 h/s": "1 小时/秒",
+  "1 d/s": "1 天/秒",
+  "1 wk/s": "1 周/秒",
+  "Play speed": "播放速度",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "滚动或双指缩放，拖动以移动 · 双击查看全部",
+  "1 min/s": "1 分钟/秒"
 }

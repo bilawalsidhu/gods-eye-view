@@ -197,7 +197,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     lonDeg,
     minElevDeg = 10,
     requireVisible = false,
-    fromMs = Date.now(),
+    fromMs = layerState.now(),
   }) {
     return getNextSatellitePass(ISS_NORAD, {
       latDeg,
@@ -227,7 +227,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
       lonDeg,
       minElevDeg = 10,
       requireVisible = false,
-      fromMs = Date.now(),
+      fromMs = layerState.now(),
     },
   ) {
     const id = Number(noradId);
@@ -331,7 +331,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   }
 
   function orbitTrackFromRecord(name, satrec) {
-    const referenceDate = new Date();
+    const referenceDate = new Date(layerState.now());
     const current = propagatePosition(satrec, referenceDate);
     if (!current) return null;
     return {

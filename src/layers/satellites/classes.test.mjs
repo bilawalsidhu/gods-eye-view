@@ -326,6 +326,7 @@ test('a failed Starlink load hides the core catalog Starlink points again', asyn
     _detectionObjects: new Map(),
     _trackedNorad: null,
     _activeUpdateControllers: new Set(),
+    coverageChanged() {},
   };
   const catalog = createCatalog({
     state,
@@ -384,6 +385,7 @@ test('enabling the layer leaves a hidden Stations class without its ISS ring', a
       [90001, other],
     ]),
     _points: new Map(),
+    coverageChanged() {},
   };
   const { methods } = createLifecycle({
     state,
