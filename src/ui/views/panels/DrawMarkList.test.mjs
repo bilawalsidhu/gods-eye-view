@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
-import { presentDrawMarks } from '../../../annotations/drawMarks.js';
+import { drawMarkActions, presentDrawMarks } from '../../../annotations/drawMarks.js';
 import { useDisplayStore } from '../../stores/display.js';
 import DrawMarkList from './DrawMarkList.vue';
 
@@ -34,8 +34,8 @@ function mount(t) {
   return { store, calls };
 }
 
-async function show(store, marks) {
-  store.publishDraw({ active: true, shape: 'area', color: 'primary', hint: '', marks: presentDrawMarks(marks) });
+async function show(store, marks, actions = []) {
+  store.publishDraw({ active: true, shape: 'area', color: 'primary', hint: '', marks: presentDrawMarks(marks, drawMarkActions(actions)) });
   await nextTick();
 }
 const row = (id) => document.querySelector(`#draw-mark-list [data-mark-id="${id}"]`);
@@ -61,6 +61,32 @@ test('lists only hand-drawn marks, named or by kind, with Import-style actions',
   assert.equal(control('a2', 'toggle').hasAttribute('aria-pressed'), false, 'the label says the state');
   assert.equal(control('a2', 'fly').getAttribute('aria-label'), 'Fly to Camp');
   assert.equal(control('a2', 'remove').getAttribute('aria-label'), 'Remove Camp');
+});
+
+test('an application\'s row actions sit before fly to, labelled, and act on their mark', async (t) => {
+  const { store, calls } = mount(t);
+  const tag = { id: 'tag', icon: 'sell', label: (name) => `Tag ${name}`, shapes: ['line'], run: () => {} };
+  await show(store, [{ ...LINE, path: [[0, 0], [1, 0]] }, PIN], [tag]);
+  const button = control('a1', 'action-tag');
+  assert.equal(button.getAttribute('aria-label'), 'Tag Line · 950 m');
+  assert.equal(button.textContent, 'sell');
+  assert.equal(button.nextElementSibling, control('a1', 'fly'));
+  assert.equal(control('a2', 'action-tag'), null, 'a pin is not offered a line action');
+  button.click();
+  assert.deepEqual(calls, [['runDrawMarkAction', 'a1', 'tag']]);
+  const note = row('a1').querySelector('.draw-mark-note');
+  assert.equal(note.getAttribute('role'), 'status');
+  assert.equal(note.textContent, '');
+  assert.equal(row('a2').querySelector('.draw-mark-note'), null, 'a row without actions has no note');
+  const line = { ...LINE, path: [[0, 0], [1, 0]] };
+  store.publishDraw({ active: true, shape: 'area', color: 'primary', hint: '', marks: presentDrawMarks([line], drawMarkActions([tag]), new Map([['a1', { busy: true, text: '' }]])) });
+  await nextTick();
+  assert.equal(control('a1', 'action-tag').getAttribute('aria-disabled'), 'true');
+  assert.equal(row('a1').querySelector('.draw-mark-note').textContent, '…');
+  store.publishDraw({ active: true, shape: 'area', color: 'primary', hint: '', marks: presentDrawMarks([line], drawMarkActions([tag]), new Map([['a1', { busy: false, text: 'Tagged' }]])) });
+  await nextTick();
+  assert.equal(control('a1', 'action-tag').getAttribute('aria-disabled'), 'false');
+  assert.equal(row('a1').querySelector('.draw-mark-note').textContent, 'Tagged');
 });
 
 test('show/hide, fly to and remove act on that one mark', async (t) => {
