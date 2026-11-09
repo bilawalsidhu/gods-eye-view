@@ -3369,5 +3369,17 @@
   "Live": "חי",
   "Back to live": "חזרה לחי",
   "STARLINK ···": "STARLINK ···",
-  "STARLINK ✕": "STARLINK ✕"
+  "STARLINK ✕": "STARLINK ✕",
+  "SITES STANDBY": "האתרים בהמתנה",
+  "ENABLE MAPPED INSTALLATIONS FOR SITE PINGS": "הפעל את המתקנים הממופים כדי לקבל צפצופי אתרים",
+  "Unnamed site": "אתר ללא שם",
+  "OFF-NADIR {angle}°": "OFF-NADIR {angle}°",
+  "Release the camera from {name}": "שחרור המצלמה מ-{name}",
+  "Keep the camera on {name}": "השארת המצלמה על {name}",
+  "RETURN · {name}": "חזרה · {name}",
+  "PREVIOUS SATELLITE": "הלוויין הקודם",
+  "Return to {name}": "חזרה אל {name}",
+  "SATELLITE": "לוויין",
+  "Ride {name}": "רכיבה על {name}",
+  "FOCUS · {name}": "מוקד · {name}"
 }
