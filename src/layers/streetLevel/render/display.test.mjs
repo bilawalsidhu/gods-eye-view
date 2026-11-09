@@ -199,13 +199,13 @@ test('a sprite sits on the terrain; under Google 3D on the tiles, placed again w
     excluded.every((list) => Array.isArray(list)),
     'its own sprites are left out of the sample',
   );
-  // On the tiles now: a later settle samples nothing again.
-  const samples = excluded.length;
+  // A later settle can replace the coarse tiles under the sprite.
+  tiles = 45;
   fake.script('tilesLoaded', false);
   harness.frame();
   fake.script('tilesLoaded', true);
   harness.frame();
-  assert.equal(excluded.length, samples);
+  assert.ok(Math.abs(heightOf(google.drawn().position) - 45) < 1e-6);
   // An implausible sample (tiles still streaming) is not ground.
   tiles = -14_886;
   google.group.move(google.row, { lon: -121.4945 });

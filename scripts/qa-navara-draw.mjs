@@ -48,7 +48,9 @@ await strict.run(
         (k) =>
           window.__godsEyeView?.engine?.kind === k &&
           window.__gevDrawTool?.attached &&
-          !document.querySelector('#globe-engine')?.disabled &&
+          !document.querySelector(
+            '#globe-engine:is([disabled], [aria-busy="true"])',
+          ) &&
           !document.querySelector('.engine-switch-frame') &&
           document.querySelector('#loading-screen.hidden'),
         { timeout: 120000 },

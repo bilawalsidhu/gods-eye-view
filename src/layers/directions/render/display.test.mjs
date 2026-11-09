@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as geo from '../../../geo/index.js';
+import { createFakeEngine } from '../../../globe/testing/fakeEngine.js';
 import { GROUND_HARNESSES } from '../../../testSupport/groundDisplayEngines.mjs';
 import { createApplicationDirectionsLayer } from '../../../data/directions.js';
 import {
@@ -323,4 +324,30 @@ test('an engine switch redraws the route, dots and markers on the new engine onl
   assert.equal(movers(IDS.markers).rows[0].show, true);
   assert.equal(movers(IDS.markers).rows[1].show, true);
   f.layer.detachRenderer();
+});
+
+test('route endpoints refine when the surface finishes loading', (t) => {
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  let height;
+  let loaded = false;
+  engine.fake.script('sampleHeight', () => height);
+  engine.fake.script('tilesLoaded', () => loaded);
+  const display = createDirectionsDisplay(engine);
+  t.after(() => display.destroy());
+  display.setMarker('a', { lon: 0, lat: 0 });
+  engine.fake.frames(1);
+  height = 340;
+  loaded = true;
+  engine.fake.frames(1);
+  const { positions } = engine.fake.moverSet('directions-markers').store;
+  assert.ok(
+    Math.abs(
+      geo.cartographic.fromCartesian({
+        x: positions[0],
+        y: positions[1],
+        z: positions[2],
+      }).height - 340,
+    ) < 0.01,
+  );
 });

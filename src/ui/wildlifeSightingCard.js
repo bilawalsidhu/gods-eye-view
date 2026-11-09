@@ -192,7 +192,7 @@ export function createWildlifeSightingCard({
     if (fresh) panForId = null;
     nextTick(() => {
       if (destroyed || !selected.value) return;
-      position({ allowPan: fresh || metadata?.explicitSelection === true });
+      position({ allowPan: metadata?.explicitSelection === true });
       if (moving) startFrameUpdates();
       // Focus the container so keyboard navigation starts inside the card.
       if (fresh)

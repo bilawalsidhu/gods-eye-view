@@ -44,6 +44,8 @@ const SCENE_REVEAL_RENDER_HOLD = 'bhote-koshi-scene-beat-reveal';
 const SCENE_PATH_RENDER_HOLD = 'bhote-koshi-scene-path-travel';
 const SCENE_MEDIA_MIN_PLAYBACK_SECONDS = 6;
 const SCENE_MEDIA_EXIT_SECONDS = 0.65;
+// A camera this near an evidence anchor has the valley's terrain loaded.
+const EVIDENCE_REFINE_M = 25_000;
 const BHOTE_EVENT_ACCENT = WORLD_OVERLAY_STYLE.accent;
 const FLOOD_COLOR = () =>
   Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
@@ -1050,6 +1052,9 @@ export function createBhoteKoshiEventLayer({
   let _evidenceTimeline = [];
   let _evidenceAnchors = [];
   let _evidenceFrameSlots = [];
+  let _evidenceEntries = [];
+  // Evidence anchors at the pack's elevations (no terrain sample).
+  const _fallbackAnchors = new WeakSet();
   let _evidenceVideo = null;
   let _evidenceVideoIndex = -1;
   let _evidenceVideoReady = false;
@@ -1198,14 +1203,17 @@ export function createBhoteKoshiEventLayer({
       : [];
     let sampled = null;
     try {
-      sampled =
-        _engine && !_viewer
-          ? observations.map(({ lon, lat }) => ({
-              height: _engine.surface.terrainHeight(
-                Cesium.Cartographic.fromDegrees(lon, lat),
-              ),
-            }))
-          : await terrainSampler(_viewer, observations, { signal });
+      if (_engine && !_viewer) {
+        const revision = _engine.maps.terrainRevision();
+        const heights = await _engine.surface.sampleTerrainMostDetailed(
+          observations.map(({ lon, lat }) =>
+            Cesium.Cartographic.fromDegrees(lon, lat),
+          ),
+        );
+        // Heights of a terrain replaced meanwhile are not the one shown.
+        if (_engine.maps.terrainRevision() === revision)
+          sampled = heights.map((height) => ({ height }));
+      } else sampled = await terrainSampler(_viewer, observations, { signal });
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       console.warn(
@@ -1217,12 +1225,33 @@ export function createBhoteKoshiEventLayer({
     return observations.map((observation, index) => {
       const sampledHeight = Number(sampled?.[index]?.height);
       const fallbackHeight = Number(observation.fallbackElevationM) || 0;
-      return Cesium.Cartesian3.fromDegrees(
+      const anchor = Cesium.Cartesian3.fromDegrees(
         observation.lon,
         observation.lat,
         (Number.isFinite(sampledHeight) ? sampledHeight : fallbackHeight) + 18,
       );
+      if (!Number.isFinite(sampledHeight)) _fallbackAnchors.add(anchor);
+      return anchor;
     });
+  }
+
+  // An anchor at the pack's elevation, on Navara, moves onto the terrain
+  // loaded under a near camera (the valley's, not an overview tile's), in
+  // place, so the card's cull position follows.
+  function refineEvidenceAnchor(index) {
+    const anchor = _evidenceAnchors[index];
+    if (!anchor || _viewer || !_engine || !_fallbackAnchors.has(anchor))
+      return anchor || null;
+    const live = _engine.camera.livePosition;
+    if (!live || Cesium.Cartesian3.distance(live, anchor) > EVIDENCE_REFINE_M)
+      return anchor;
+    const { lon, lat } = _evidenceTimeline[index]?.observation ?? {};
+    const height = Number.isFinite(lon)
+      ? _engine.surface.terrainHeight(Cesium.Cartographic.fromDegrees(lon, lat))
+      : undefined;
+    if (Number.isFinite(height))
+      Cesium.Cartesian3.fromDegrees(lon, lat, height + 18, undefined, anchor);
+    return anchor;
   }
 
   function evidencePositionGetter(index, breadcrumb = false) {
@@ -1245,13 +1274,13 @@ export function createBhoteKoshiEventLayer({
           _sceneMediaPlaybackCompletedBeatId
         )
           return null;
-        return _evidenceAnchors[index] || null;
+        return refineEvidenceAnchor(index);
       }
       const activeIndex = activeEvidenceIndex(_progress, _evidenceTimeline);
       if (breadcrumb ? index >= activeIndex : index !== activeIndex)
         return null;
       if (!breadcrumb && index === _embeddedEvidenceIndex) return null;
-      return _evidenceAnchors[index] || null;
+      return refineEvidenceAnchor(index);
     };
   }
 
@@ -2448,7 +2477,12 @@ export function createBhoteKoshiEventLayer({
         placement: 'above',
       });
     }
-    overlayHost.setEntries(BHOTE_KOSHI_OVERLAY_SOURCE_ID, entries, {
+    _evidenceEntries = entries;
+    restoreEvidenceEntries();
+  }
+
+  function restoreEvidenceEntries() {
+    overlayHost.setEntries(BHOTE_KOSHI_OVERLAY_SOURCE_ID, _evidenceEntries, {
       cohortLimit: 16,
       collisionCapacity: 12,
       moving: false,
@@ -3557,6 +3591,7 @@ export function createBhoteKoshiEventLayer({
       return;
     }
     createSplitControl(_event);
+    restoreEvidenceEntries();
     syncPresentationMode();
     attachCameraInputRelease();
     attachEvidenceCardActivation();
@@ -3739,6 +3774,7 @@ export function createBhoteKoshiEventLayer({
     _corridorPositionCache = { visibleCount: -1, positions: [] };
     _evidenceTimeline = [];
     _evidenceAnchors = [];
+    _evidenceEntries = [];
     _cinematicKeyframes = [];
     for (const slot of _evidenceFrameSlots) {
       closeFrame(slot.frame);

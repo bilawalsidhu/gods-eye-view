@@ -35,7 +35,7 @@ export function createSceneSwitcher({
     return components.scene?.engine ? components : null;
   };
 
-  async function leave(from, _to, _change, transaction) {
+  async function leave(from, _to, change, transaction) {
     const components = liveComponents();
     if (components) {
       cover ??= keepFrame?.(components.scene.engine);
@@ -44,6 +44,7 @@ export function createSceneSwitcher({
       handOffSession(layerSession, {
         addressLayerIds:
           style.shareLinkManager?.currentLayerState?.()?.enabledLayerIds,
+        visit: change?.visit === true,
       });
       renderers.retain(from);
       await getApplication().detachScene({ handoff: true }, transaction);

@@ -18,7 +18,7 @@
  *   node scripts/qa-overlay-baseline.mjs --engine=navara
  *
  * Engine-neutral: the camera and frames go through the globe engine and the
- * layers through the QA probe (window.__godsEyeView.layers, dev server only).
+ * layers through the public engine and data manager surfaces.
  * A scene whose layers the engine does not have is SKIPPED. The inventory
  * counts the globe contract's sets (movers, lines, ground, imagery) on both
  * engines; on Cesium it also counts what is left of Entities, LabelGraphics
@@ -29,6 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { fromDegrees } from '../src/geo/cartesian3.js';
 
 const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const DEFAULT_URL = 'http://localhost:4176';
@@ -362,7 +363,7 @@ async function installPageInstrumentation(page) {
 async function waitForApp(page) {
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView?.layers && window.__godsEyeView?.dataManager),
+    () => Boolean(window.__godsEyeView?.engine && window.__godsEyeView?.dataManager),
     { timeout: 60_000 },
   );
   await page.evaluate(() => {
@@ -375,17 +376,16 @@ async function waitForApp(page) {
 
 async function setCamera(page, camera) {
   if (!camera) return;
-  await page.evaluate(async ([lon, lat, height, heading, pitch]) => {
+  await page.evaluate(([destination, heading, pitch]) => {
     const { engine, viewer } = window.__godsEyeView;
-    const geo = await import('/src/geo/index.js');
     engine.camera.cancelFlight();
     viewer?.scene.tweens?.removeAll?.();
     engine.camera.setView({
-      destination: geo.cartesian3.fromDegrees(lon, lat, height),
+      destination,
       orientation: { heading, pitch, roll: 0 },
     });
     engine.render.request('qa-overlay-baseline');
-  }, camera);
+  }, [fromDegrees(...camera.slice(0, 3)), ...camera.slice(3)]);
 }
 
 async function readLayerState(page, layerId) {
@@ -646,7 +646,7 @@ async function prepareTrackedFlight(page, cockpit) {
   });
   if (!tracked.ok) return `Civil tracking unavailable (${tracked.reason})`;
   try {
-    await page.waitForFunction(() => Boolean(window.__godsEyeView.layers.following()), { timeout: 10_000 });
+    await page.waitForFunction(() => Boolean(window.__godsEyeView.engine.camera.following()), { timeout: 10_000 });
   } catch {
     return 'Civil tracking did not create a tracked entity';
   }
@@ -679,7 +679,7 @@ async function prepareMission(page) {
   });
   if (!selected) return 'Mission roster did not expose a selectable mission';
   try {
-    await page.waitForFunction(() => Boolean(window.__godsEyeView.layers.drawn('rocket-launches')?.selected), { timeout: 10_000 });
+    await page.waitForFunction(() => Boolean(window.__godsEyeView.dataManager.layers.get('rocket-launches')?.module?.qaDrawn?.()?.selected), { timeout: 10_000 });
   } catch {
     return 'Mission selection did not reach the layer probe';
   }
@@ -689,7 +689,7 @@ async function prepareMission(page) {
 
 async function prepareScene(page, scene) {
   const missing = await page.evaluate(
-    (ids) => ids.filter((id) => !window.__godsEyeView.layers.available(id)),
+    (ids) => ids.filter((id) => !window.__godsEyeView.dataManager.layers.has(id)),
     scene.layers,
   );
   if (missing.length)

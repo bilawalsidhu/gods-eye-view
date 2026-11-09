@@ -3321,5 +3321,12 @@
   "Maximum event age: {days}d; undated markers are kept": "Максимальний вік події: {days} дн.; позначки без дати збережено",
   "event age filter|All": "Усі",
   "Event age": "Вік події",
-  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено"
+  "Event age: {days}d · undated kept": "Вік події: {days} дн. · позначки без дати збережено",
+  "Data layers: {layers}": "Шари даних: {layers}",
+  "No registered data layers": "Немає зареєстрованих шарів даних",
+  "DAYLIGHT VIEW": "ДЕННИЙ ВИГЛЯД",
+  "Globe engine failed to start. Running {engine}: {message}": "Не вдалося запустити рушій глобуса. Працює {engine}: {message}",
+  "Bing imagery is not available on the experimental Navara engine": "Знімки Bing недоступні в експериментальному рушії Navara",
+  "NOT ON THIS ENGINE": "НЕМАЄ В ЦЬОМУ РУШІЇ",
+  "Kept in the link: {layers}": "Збережено в посиланні: {layers}"
 }

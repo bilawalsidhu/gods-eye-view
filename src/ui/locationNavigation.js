@@ -7,12 +7,10 @@ import { LocationControls } from './location.js';
 /**
  * Own destination selection, lookup, orbit and world-jump lifetime. The camera
  * is the globe `engine`'s, and a world jump stops its follow
- * (`engine.camera.following()`); `viewer` is optional and only clears a
- * Cesium tracked entity the engine does not report.
+ * (`engine.camera.following()`).
  */
 export class LocationNavigation {
   constructor({
-    viewer = null,
     engine = null,
     placeSearch,
     services,
@@ -23,7 +21,7 @@ export class LocationNavigation {
   }) {
     Object.assign(
       this,
-      { viewer, engine, placeSearch, services, navigation, readCockpit },
+      { engine, placeSearch, services, navigation, readCockpit },
       elements,
       operations,
     );
@@ -405,7 +403,6 @@ export class LocationNavigation {
     controls?.closeSearch();
   }
 
-  /** Revoke callbacks and settle owned camera work before the viewer is released. */
   /**
    * Leave the globe (an engine switch): its reset flight, world-jump
    * transition and orbit end; the search, its text and the readout stay.
@@ -420,14 +417,12 @@ export class LocationNavigation {
       this._stopOrbit();
     }
     this.orbitController?.attachEngine(null);
-    this.viewer = null;
     this.engine = null;
   }
 
   /** Navigate on another globe (an engine switch). */
-  attachScene({ viewer = null, engine = null } = {}) {
+  attachScene({ engine = null } = {}) {
     if (this._disposed) return;
-    this.viewer = viewer;
     this.engine = engine;
     this.orbitController?.attachEngine(engine);
   }

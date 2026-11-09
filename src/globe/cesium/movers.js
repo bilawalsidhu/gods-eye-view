@@ -150,6 +150,7 @@ function spritePart(scene, options, store, ports) {
       }
     }
   };
+  let atlasFailed = false;
   // Instances wait for the atlas; then everything written so far is applied.
   factories
     .cropCells(sprite.atlas, store.cellKeys)
@@ -159,10 +160,14 @@ function spritePart(scene, options, store, ports) {
       apply(0, Math.max(store.count, billboards.length));
       requestRender('movers');
     })
-    .catch((error) => console.warn(`[movers] ${id}: atlas failed`, error));
+    .catch((error) => {
+      atlasFailed = true;
+      console.warn(`[movers] ${id}: atlas failed`, error);
+    });
   return {
     primitive: collection,
     ready: () => cells !== null,
+    failed: () => atlasFailed,
     commit(range) {
       if (cells && range) apply(range.from, range.to);
       requestRender('movers');
@@ -226,6 +231,8 @@ function modelPart(options, store, { factories, requestRender, owners }) {
   const { model, pickable } = options;
   const models = [];
   const loading = [];
+  // Instances whose model failed: not tried again (MoverSet.failed).
+  const failed = [];
   let destroyed = false;
   const place = (item, index) => {
     const { orientations } = store;
@@ -282,9 +289,11 @@ function modelPart(options, store, { factories, requestRender, owners }) {
         collection.add(item);
         requestRender('movers');
       })
-      .catch((error) =>
-        console.warn(`[movers] ${options.id}: model failed`, error),
-      );
+      .catch((error) => {
+        if (destroyed) return;
+        failed[index] = true;
+        console.warn(`[movers] ${options.id}: model failed`, error);
+      });
   };
   return {
     primitive: collection,
@@ -295,6 +304,11 @@ function modelPart(options, store, { factories, requestRender, owners }) {
       for (let at = 0; at < store.count; at++)
         if (!models[at]?.ready) return false;
       return true;
+    },
+    failed(index) {
+      if (index !== undefined) return failed[index] === true;
+      for (let at = 0; at < store.count; at++) if (failed[at]) return true;
+      return false;
     },
     commit(range) {
       if (range)
@@ -308,6 +322,7 @@ function modelPart(options, store, { factories, requestRender, owners }) {
       destroyed = true;
       models.length = 0;
       loading.length = 0;
+      failed.length = 0;
     },
   };
 }
@@ -360,6 +375,7 @@ export function createCesiumMovers(
     return {
       primitive,
       ready: part.ready,
+      failed: part.failed,
       commit: () => part.commit(store.dirty()),
       destroy() {
         part.destroy();

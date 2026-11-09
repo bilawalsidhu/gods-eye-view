@@ -6,6 +6,7 @@ import { cameraPoseKey, createPointerTracker } from './pointerContext.js';
 import { createPointerPicker } from './pointerPick.js';
 import { createReferentRegistry } from './referents.js';
 import { createSceneRunner } from './sceneRunner.js';
+import { createAreaStore } from '../data/areaStore.js';
 export * from './realtimeController.js';
 
 const ACTION_NAMES = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
@@ -45,6 +46,14 @@ export function withToolCatalog(runner, loadCatalog) {
  */
 export function createSceneVoice(options) {
   const scene = { engine: null };
+  let areaAnnotations = null;
+  const areaStore =
+    options.areaOptions?.store ??
+    createAreaStore({
+      isPinned: (areaId) =>
+        areaAnnotations?.list?.().some((anno) => anno?.areaId === areaId) ??
+        false,
+    });
   const cameraKey = () => cameraPoseKey(scene.engine);
   let pick = null;
   // Point-and-ask: the tracker and referents are shared by the runner (which
@@ -74,6 +83,7 @@ export function createSceneVoice(options) {
           deixis,
           analystMemory,
           layerEnabledAt,
+          areaOptions: { ...options.areaOptions, store: areaStore },
           readVoicePanelOperation: () =>
             commands?.captureVoicePanelOperation?.(),
         }),
@@ -141,6 +151,7 @@ export function createSceneVoice(options) {
       if (lifetime?.aborted) return;
       detachScene();
       const engine = attached.engine ?? null;
+      areaAnnotations = attached.annotations ?? null;
       scene.engine = engine;
       shell = attached.styleManager ?? null;
       pick = createPointerPicker({

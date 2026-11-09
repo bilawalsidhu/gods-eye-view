@@ -59,6 +59,21 @@ test('terrainHeight asks the globe', () => {
   assert.equal(surface.terrainHeight(place), undefined);
 });
 
+test('sampleTerrainMostDetailed: 0 on the ellipsoid; a terrain without availability rejects', async () => {
+  const { surface, scene } = setup();
+  const place = geo.cartographic.fromDegrees(85.9, 27.9, 0);
+  scene.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  assert.deepEqual(
+    await surface.sampleTerrainMostDetailed([place, place]),
+    [0, 0],
+  );
+  scene.terrainProvider = { availability: undefined };
+  await assert.rejects(
+    surface.sampleTerrainMostDetailed([place]),
+    /no tile availability/,
+  );
+});
+
 test('clampToHeight returns a geo value', () => {
   const { viewer, surface } = setup();
   const exclude = [];

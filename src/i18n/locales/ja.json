@@ -3096,5 +3096,12 @@
   "Maximum event age: {days}d; undated markers are kept": "イベントの最大経過日数：{days}日。日付のないマーカーは保持",
   "event age filter|All": "すべて",
   "Event age": "経過日数",
-  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持"
+  "Event age: {days}d · undated kept": "経過日数：{days}日以内 · 日付なしは保持",
+  "Data layers: {layers}": "データレイヤー：{layers}",
+  "No registered data layers": "登録済みのデータレイヤーはありません",
+  "DAYLIGHT VIEW": "昼光ビュー",
+  "Globe engine failed to start. Running {engine}: {message}": "地球儀エンジンを起動できませんでした。{engine} で実行中：{message}",
+  "Bing imagery is not available on the experimental Navara engine": "Bing画像は実験版 Navara エンジンでは利用できません",
+  "NOT ON THIS ENGINE": "このエンジンでは非対応",
+  "Kept in the link: {layers}": "リンクに保持：{layers}"
 }

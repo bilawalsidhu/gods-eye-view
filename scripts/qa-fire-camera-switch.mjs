@@ -2,7 +2,12 @@ import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { installAlprFixture, cameras } from './fixtures/layers/alpr.mjs';
 import { firmsFixture, FIRMS_VALID_COUNT } from './fixtures/layers/firms.mjs';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  clickEmptyGround,
+  createStrict,
+  localPreview,
+  waitForCameraAtRest,
+} from './qa-strict-harness.mjs';
 const url = localPreview(process.argv[2]),
   fire = process.argv.includes('--fires'),
   id = fire ? 'local-firms' : 'alpr-cameras';
@@ -113,36 +118,14 @@ await strict.run({}, async (b) => {
     );
   // A click on empty ground (nothing picked there, nothing covering it).
   const clickEmpty = async () => {
-    const handle = await p.waitForFunction(
-      () => {
-        const { engine } = window.__godsEyeView;
-        const canvas = engine.host.canvas;
-        const box = canvas.getBoundingClientRect();
-        for (let y = 240; y < 600; y += 9)
-          for (let x = 440; x < 840; x += 9) {
-            if (
-              !canvas.contains(
-                document.elementFromPoint(box.left + x, box.top + y),
-              )
-            )
-              continue;
-            let free = true;
-            for (const [dx, dy] of [
-              [0, 0],
-              [6, 0],
-              [-6, 0],
-              [0, 6],
-              [0, -6],
-            ])
-              if (engine.picker.pick({ x: x + dx, y: y + dy })) free = false;
-            if (free) return { x: box.left + x, y: box.top + y };
-          }
-        return false;
-      },
-      { timeout: 15000 },
-    );
-    const at = await handle.jsonValue();
-    await p.mouse.click(at.x, at.y);
+    await clickEmptyGround(p, {
+      left: 440,
+      top: 240,
+      right: 840,
+      bottom: 600,
+      step: 9,
+      radius: 6,
+    });
     await p.waitForFunction(
       (fire) =>
         fire
@@ -165,6 +148,10 @@ await strict.run({}, async (b) => {
     xy,
   );
   await new Promise((r) => setTimeout(r, 1600));
+  // The selection flies the camera to the record (1.9 s, longer on a busy
+  // machine); a switch before it lands opens the other engine on a view
+  // between the two, where the record can be off screen.
+  await waitForCameraAtRest(p);
   const expectedId = fire
     ? await p.evaluate(() => window.qaGround.getSelectedInfo().id)
     : xy.id;

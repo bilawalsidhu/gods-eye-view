@@ -306,3 +306,23 @@ test('the cockpit eye stays above the engine surface when the aircraft reads bel
     env.restore();
   }
 });
+
+test('locale changes relocalize the cockpit until it is disposed', async () => {
+  const { getLocale, setLocale } = await import('../i18n/index.js');
+  const locale = getLocale();
+  const env = environment();
+  const owner = new CockpitViewController(env.engine, { services: {} });
+  let updates = 0;
+  owner.relocalize = () => updates++;
+  try {
+    setLocale(locale === 'de' ? 'en' : 'de');
+    assert.equal(updates, 1);
+    owner.dispose();
+    setLocale(locale);
+    assert.equal(updates, 1);
+  } finally {
+    owner.dispose();
+    setLocale(locale);
+    env.restore();
+  }
+});

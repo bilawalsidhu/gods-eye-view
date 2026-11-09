@@ -658,6 +658,7 @@ export function createInfrastructureDisplay(
             })
           : null,
       };
+      row.__localBaseCartesian = row.base;
       rows.set(row.id, row);
       services.registerEntityContext?.(row, {
         id: row.pickId,

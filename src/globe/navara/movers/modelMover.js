@@ -199,10 +199,14 @@ export function createModelMover(
   };
 
   const group = { meshes: [], pickMeshes: [], ready: null };
+  let failed = false;
   const asset = load(model.url).catch(() => {
     // A missing asset keeps the layer's glyph fallback. Do not leak the
     // rejected loader promise (or its URL) through descriptor creation.
-    if (!disposed) console.warn('[globe] Model asset unavailable');
+    if (!disposed) {
+      failed = true;
+      console.warn('[globe] Model asset unavailable');
+    }
     return null;
   });
   group.ready = asset.then((gltf) => {
@@ -259,7 +263,6 @@ export function createModelMover(
         overlay.add(tint);
       }
       materials.push(material);
-      if (tint) materials.push(tint.material);
       parts.push({ mesh, tint, local: child.matrixWorld.clone() });
       group.meshes.push(mesh);
       group.pickMeshes.push(tint ?? mesh);
@@ -288,6 +291,7 @@ export function createModelMover(
     group,
     uniforms,
     ready: () => loaded,
+    failed: () => failed,
     origin: () => origin,
     /**
      * The drawn radius (px) of an instance at its last write, or null when

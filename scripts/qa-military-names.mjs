@@ -152,14 +152,15 @@ try {
     await settle();
     const before = await stats();
     const overlaps = await page.evaluate(async () => {
-      const { getOverlayPaintRect } =
-        (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
+      const { getPaintRect } = (
+        await import('/src/overlays/worldOverlay.js')
+      ).worldOverlayFor(window.__godsEyeView.engine);
       const layer = window.__godsEyeView.dataManager.layers.get(
         'military-installations',
       ).module;
       const rects = [];
       layer.visitNamedMarkers((id) => {
-        const rect = getOverlayPaintRect('military-installations', id);
+        const rect = getPaintRect('military-installations', id);
         if (rect) rects.push(rect);
       });
       let overlaps = 0;
@@ -223,9 +224,7 @@ try {
         opacityProperty: true,
       }),
       labels:
-        host.getWorldOverlayDiagnostics().paintedBySource[
-          'military-installations'
-        ] || 0,
+        host.getDiagnostics().paintedBySource['military-installations'] || 0,
     };
   });
   assert.ok(
@@ -244,10 +243,10 @@ try {
     ),
   );
   result.disabled = await page.evaluate(async () => {
-    const host = (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
-    return host.getWorldOverlayDiagnostics().entriesBySource[
-      'military-installations'
-    ];
+    const host = (
+      await import('/src/overlays/worldOverlay.js')
+    ).worldOverlayFor(window.__godsEyeView.engine);
+    return host.getDiagnostics().entriesBySource['military-installations'];
   });
   assert.equal(result.disabled, 0);
   await page.evaluate(() =>
@@ -266,8 +265,9 @@ try {
   }
   await page.evaluate(async () => {
     const C = await import('/node_modules/cesium/Build/Cesium/index.js');
-    const { getOverlayPaintRect } =
-      (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
+    const { getPaintRect } = (
+      await import('/src/overlays/worldOverlay.js')
+    ).worldOverlayFor(window.__godsEyeView.engine);
     const g = window.__godsEyeView;
     const layer = g.dataManager.layers.get('military-installations').module;
     const overlay = document.createElement('div');
@@ -284,7 +284,7 @@ try {
           labels = [],
           rects = [];
         layer.visitNamedMarkers((id, point) => {
-          const rect = getOverlayPaintRect('military-installations', id);
+          const rect = getPaintRect('military-installations', id);
           if (rect) rects.push(rect);
           const p = C.SceneTransforms.worldToWindowCoordinates(
             g.viewer.scene,

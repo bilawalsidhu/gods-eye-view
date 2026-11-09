@@ -26,6 +26,7 @@ function setup() {
       },
     },
     navigation: { maybeAutoHop() {} },
+    selection: { getActiveRecord: () => record },
     presentation: {
       notifyListeners() {
         calls.notify++;
@@ -99,4 +100,26 @@ test('a tick resuming after an engine switch released the renderer does no scene
   assert.deepEqual(await tick, { changed: false });
   assert.equal(sceneWork, 0);
   assert.equal(h.calls.notify, 1);
+});
+
+test('an engine switch probes the active camera once the new surface is ready', async () => {
+  const h = setup();
+  const probes = [];
+  h.parts.geometry = {
+    runActivationObstructionProbe: (record) => probes.push(['probe', record]),
+    applyFrustumGeometry: (record, ground) =>
+      probes.push(['geometry', record, ground]),
+  };
+  h.parts.ground.groundAltFor = () => 12;
+  h.record.surfaceProbePending = true;
+  h.state._tilesReadyReenqueued = false;
+  assert.equal((await h.layer.update()).changed, true);
+  assert.deepEqual(probes, [
+    ['probe', h.record],
+    ['geometry', h.record, 12],
+  ]);
+  assert.equal(h.record.activationDone, true, 're-selecting it is a no-op');
+  h.state._tilesReadyReenqueued = false;
+  await h.layer.update();
+  assert.equal(probes.length, 2, 'one probe per engine switch');
 });

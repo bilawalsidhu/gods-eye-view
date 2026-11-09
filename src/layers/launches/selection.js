@@ -107,7 +107,11 @@ export function createSelection({
       layerState._engine.camera.release();
   }
 
-  function startMissionZoomAnchor(launch, initialRange) {
+  function startMissionZoomAnchor(
+    launch,
+    initialRange,
+    { resuming = false } = {},
+  ) {
     if (!layerState._engine || !launch || layerState._replayCameraLaunchId)
       return;
     stopMissionZoomAnchor();
@@ -118,6 +122,12 @@ export function createSelection({
     );
     layerState._missionZoomAnchorId = launch.id;
     layerState._missionZoomRange = range;
+    if (resuming) {
+      layerState._engine.camera.lookAtTransform(
+        geo.transforms.eastNorthUpToFixedFrame(target),
+      );
+      return;
+    }
     layerState._engine.camera.lookAt(target, {
       heading: 0,
       pitch: parts.camera.missionZoomPitch(range),

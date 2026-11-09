@@ -333,8 +333,8 @@ export class ShellScene extends ShellFacade {
         militaryAwarenessLayer,
         rocketLaunchesLayer,
       };
-      this._navigation.setScene({ viewer, engine });
-      this._locationNavigation.attachScene({ viewer, engine });
+      this._navigation.setScene({ engine });
+      this._locationNavigation.attachScene({ engine });
       this.hud.attachEngine(engine, { viewer });
       this.shareLinkManager.attachEngine(engine);
       this._displayBindings.attachEngine(engine);

@@ -287,12 +287,6 @@ export function getColumn(matrix, index, result) {
 
 /** The inverse of a rotation-plus-translation matrix (no scale or shear). */
 export function inverseTransformation(matrix, result) {
-  // This function is an optimized version of the below 4 lines.
-  // const rT = Matrix3.transpose(Matrix4.getMatrix3(matrix));
-  // const rTN = Matrix3.negate(rT);
-  // const rTT = Matrix3.multiplyByVector(rTN, Matrix4.getTranslation(matrix));
-  // return Matrix4.fromRotationTranslation(rT, rTT, result);
-
   const matrix0 = matrix[0];
   const matrix1 = matrix[1];
   const matrix2 = matrix[2];

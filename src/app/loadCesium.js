@@ -7,7 +7,7 @@
 // - `viewer()`: a Cesium globe is about to start: the SDK and the widget
 //   styles;
 // - `sdk()`: a feature that still builds on Cesium's entity model (the Nepal
-//   event and locator, imported KML) is used on Navara: the SDK alone.
+//   event and locator) is used on Navara: the SDK alone.
 export function createCesiumLoader({
   document = globalThis.document,
   globals = globalThis,
@@ -45,6 +45,9 @@ export function createCesiumLoader({
   const ready = () =>
     !script ||
     Object.getOwnPropertyDescriptor(globals, 'Cesium')?.value != null;
+  // A page whose markup ran Cesium.js before this loader also carries its
+  // widget styles (the MCP panel build, which cannot load files by URL).
+  const preloaded = script && ready();
   const sdk = () => {
     if (ready()) return Promise.resolve();
     sdkPending ??= load('script', `${root()}Cesium.js`).catch((error) => {
@@ -54,6 +57,7 @@ export function createCesiumLoader({
     return sdkPending;
   };
   const styles = () => {
+    if (preloaded) return Promise.resolve();
     stylesPending ??= load('link', `${root()}Widgets/widgets.css`).catch(
       (error) => {
         stylesPending = null;

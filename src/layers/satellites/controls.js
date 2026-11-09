@@ -422,10 +422,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (params.showOrbits !== undefined) {
         layerState._params.showOrbits = params.showOrbits !== false;
         for (const path of layerState._orbitPaths.values())
-          path.primitive.show = satelliteVisualsVisible(
-            layerState._enabled,
-            layerState._params.showOrbits,
-          );
+          if (path.primitive)
+            path.primitive.show = satelliteVisualsVisible(
+              layerState._enabled,
+              layerState._params.showOrbits,
+            );
         parts.labels._syncIssOverlay();
       }
       if (catalogChanged && catalog === 'dense') {

@@ -672,3 +672,53 @@ test('edge:telegeography-submarine-cables: a click on a cable beside its landing
     `reference at ${geo.math.toDegrees(target.longitude)}°`,
   );
 });
+
+test('landing point markers stand on the coastal 3D tiles, pickable at close range', async (t) => {
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  await engine.maps.setPhotorealTiles({ id: 'photoreal' });
+  engine.projector.worldToWindow = () => ({ x: 100, y: 100 });
+  let height = 40;
+  let loaded = false;
+  engine.fake.script('sampleHeight', () => height);
+  engine.fake.script('tilesLoaded', () => loaded);
+  const display = createCablesDisplay(engine, {
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+  });
+  t.after(() => display.destroy());
+  display.show({
+    cables: [],
+    landingPoints: {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: 'coast',
+          properties: {},
+          geometry: { type: 'Point', coordinates: [0, 0] },
+        },
+      ],
+    },
+  });
+  const { options } = engine.fake.moverSet(
+    `${CABLE_OVERLAY_SOURCE_ID}-markers`,
+  );
+  assert.deepEqual(options.depthTest, { disableWithinM: 2500 });
+  assert.equal(options.pickable, true);
+  const altitude = () => {
+    const { store } = engine.fake.moverSet(
+      `${CABLE_OVERLAY_SOURCE_ID}-markers`,
+    );
+    return geo.cartographic.fromCartesian({
+      x: store.positions[0],
+      y: store.positions[1],
+      z: store.positions[2],
+    }).height;
+  };
+  assert.ok(Math.abs(altitude() - 40) < 0.01, 'on the tiles, not under them');
+  engine.fake.frames(1);
+  height = 46;
+  loaded = true;
+  engine.fake.frames(1);
+  assert.ok(Math.abs(altitude() - 46) < 0.01, 'refined once tiles load');
+});

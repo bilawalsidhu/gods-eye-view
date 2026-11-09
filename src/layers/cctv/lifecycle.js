@@ -45,11 +45,11 @@ export function createLifecycle({
 
   /** Records the camera pose the last view pass ran at. */
   function noteViewPose() {
-    const camera = layerState._viewer?.camera;
-    if (!camera?.positionWC) return;
+    const camera = parts.renderer?.cameraPose();
+    if (!camera?.position) return;
     layerState._viewPose = {
-      position: geo.cartesian3.clone(camera.positionWC),
-      direction: camera.directionWC && geo.cartesian3.clone(camera.directionWC),
+      position: geo.cartesian3.clone(camera.position),
+      direction: camera.direction && geo.cartesian3.clone(camera.direction),
     };
   }
 
@@ -59,16 +59,14 @@ export function createLifecycle({
    * would otherwise rerun the full pass on every tick.
    */
   function viewPoseChanged() {
-    const camera = layerState._viewer?.camera;
+    const camera = parts.renderer?.cameraPose();
     const pose = layerState._viewPose;
-    if (!pose || !camera?.positionWC) return true;
-    const height = Math.max(1, camera.positionCartographic?.height ?? 0);
-    const moved = geo.cartesian3.distance(camera.positionWC, pose.position);
+    if (!pose || !camera?.position) return true;
+    const height = Math.max(1, camera.cartographic?.height ?? 0);
+    const moved = geo.cartesian3.distance(camera.position, pose.position);
     if (moved > height * VIEW_MOTION_MIN_MOVE_FRACTION) return true;
-    if (!pose.direction || !camera.directionWC) return false;
-    return (
-      geo.cartesian3.dot(camera.directionWC, pose.direction) < MIN_TURN_COS
-    );
+    if (!pose.direction || !camera.direction) return false;
+    return geo.cartesian3.dot(camera.direction, pose.direction) < MIN_TURN_COS;
   }
 
   function viewMotionTick() {
@@ -428,6 +426,7 @@ export function createLifecycle({
       const renderer = createRenderer(viewer, options);
       layerState._restoringViewport = Boolean(options.waitForCameraRestore);
       renderer.createMarkers();
+      const active = parts.selection.getActiveRecord();
       for (const record of layerState._records) {
         record.billboard = renderer.createMarker(
           record.camera,
@@ -436,7 +435,13 @@ export function createLifecycle({
         record.groundResolved = {};
         record.groundSamples = {};
         record.probeClampRangeM = null;
+        // The new surface is unprobed: update() probes the active camera
+        // once its tiles are in.
+        record.surfaceProbePending =
+          record === active && record.activationDone === true;
+        record.activationDone = false;
       }
+      renderer.setMarkersVisible(layerState._enabled);
       bindScene(viewer, options);
       if (!layerState._restoringViewport && layerState._enabled)
         this.resumeDisplay();

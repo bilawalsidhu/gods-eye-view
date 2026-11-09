@@ -486,3 +486,36 @@ test('the search toggle opens the field, and a lookup marks it', async (t) => {
   assert.equal(field.classList.contains('searching'), false);
   assert.equal(field.classList.contains('expanded'), false);
 });
+
+test('the engine picker stays focusable and announces an engine switch', async (t) => {
+  const { $, pinia } = fixture(t);
+  const display = useDisplayStore(pinia);
+  const selected = [];
+  const select = (kind) => selected.push(kind);
+  display.presentGlobeEngine({ kind: 'cesium', busy: false, select });
+  await nextTick();
+  const picker = $('#globe-engine');
+  picker.focus();
+  display.presentGlobeEngine({ kind: 'cesium', busy: true, select });
+  await nextTick();
+  assert.equal(picker.disabled, false);
+  assert.equal(document.activeElement, picker);
+  assert.equal(picker.getAttribute('aria-busy'), 'true');
+  assert.equal(picker.getAttribute('aria-disabled'), 'true');
+  assert.equal(
+    $('#globe-engine-status').textContent,
+    'Initializing systems...',
+  );
+  picker.value = 'navara';
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.deepEqual(selected, []);
+  await nextTick();
+  assert.equal(picker.value, 'cesium', 'a refused pick is put back');
+  display.presentGlobeEngine({ kind: 'navara', busy: false, select });
+  await nextTick();
+  assert.equal(document.activeElement, picker);
+  assert.equal(picker.value, 'navara');
+  assert.ok(picker.classList.contains('gev-field'));
+  assert.equal($('#globe-engine-status').getAttribute('role'), 'status');
+  assert.equal($('#globe-engine-status').textContent, 'Navara');
+});

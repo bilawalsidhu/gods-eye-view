@@ -392,3 +392,49 @@ test('a tile overlay stays above the base imagery across map switches and credit
   remove();
   destroy();
 });
+
+test('world terrain publishes endpoint credits and removes them on replacement', async () => {
+  const view = fakeView();
+  const { maps, destroy } = createNavaraMaps(view, {
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        url: 'https://terrain.example/',
+        accessToken: 'temporary',
+        attributions: [{ html: 'Terrain provider', collapsible: false }],
+      }),
+    }),
+  });
+  await maps.setTerrain({ kind: 'world', accessToken: 'configured' });
+  assert.ok(
+    view.shown.some((credit) => credit.attributionHtml === 'Terrain provider'),
+  );
+  assert.ok(view.opened > 0);
+  await maps.setTerrain({ kind: 'ellipsoid' });
+  assert.deepEqual(view.shown, []);
+  destroy();
+});
+
+test('terrainRevision counts terrain shown or cleared; sampling reads the shown source', async () => {
+  const view = fakeView();
+  const sampled = [];
+  view.sampleTerrainMostDetailed = async (source, positions) => {
+    sampled.push({ source, positions });
+    return positions.map(({ lat, lng }) => ({ lat, lng, height: lat + lng }));
+  };
+  const navara = createNavaraMaps(view);
+  const { maps } = navara;
+  const place = { longitude: Math.PI / 4, latitude: Math.PI / 6, height: 0 };
+  assert.deepEqual(await navara.sampleTerrain([place]), [0], 'the ellipsoid');
+  await maps.setTerrain({ kind: 'keyless' });
+  assert.equal(maps.terrainRevision(), 1);
+  const [height] = await navara.sampleTerrain([place]);
+  assert.ok(Math.abs(height - 75) < 1e-9);
+  assert.equal(sampled[0].source, layersOf(view, 'terrain')[0].desc.source);
+  await maps.setTerrain({ kind: 'keyless' });
+  assert.equal(maps.terrainRevision(), 1, 'the same terrain again');
+  await maps.setTerrain({ kind: 'ellipsoid' });
+  assert.equal(maps.terrainRevision(), 2);
+  await maps.setTerrain({ kind: 'ellipsoid' });
+  assert.equal(maps.terrainRevision(), 2, 'nothing to clear');
+});

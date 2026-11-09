@@ -9,7 +9,7 @@
 // colour pulled toward the scanner tint by that factor and its alpha scaled
 // by it.
 // Positions, picks and the instance data stay as the layers set them.
-// Models keep their colours (Cesium tints them on the CPU).
+// Models apply the same treatment after lighting (movers/modelTint.js).
 
 const views = new WeakMap();
 

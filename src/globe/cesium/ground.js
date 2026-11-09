@@ -492,7 +492,7 @@ export function createCesiumGround(
         for (const primitive of drawn) {
           primitive.gevGroundSet = options.id;
           slot.add(primitive);
-          building.add(primitive);
+          if (slot.show) building.add(primitive);
         }
         watch();
         animate();
@@ -505,6 +505,12 @@ export function createCesiumGround(
       },
       show(visible) {
         slot.show = visible;
+        for (const primitive of drawn) {
+          if (visible && (!primitive.ready || !surfaceReady()))
+            building.add(primitive);
+          else building.delete(primitive);
+        }
+        if (building.size) watch();
         animate();
         requestRender('ground');
       },

@@ -8,12 +8,11 @@ export async function runTransitHeadingRegression(base, check) {
   base = transitQaBase(base);
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath:
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    executablePath: chromeExecutablePath(),
     args: [
       '--no-sandbox',
       '--disable-background-timer-throttling',
-      '--use-angle=metal',
+      ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []),
       '--enable-gpu',
     ],
   });

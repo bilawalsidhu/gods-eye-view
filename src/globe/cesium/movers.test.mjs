@@ -412,6 +412,36 @@ test('a model that loads after its set is destroyed is released', async () => {
   assert.equal(root().length, 0);
 });
 
+test('a model that fails to load marks its instance failed, once', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  let loads = 0;
+  const { movers } = setup({
+    loadModel: async () => {
+      loads++;
+      throw new Error('404');
+    },
+  });
+  const set = movers.createSet({
+    id: 'broken',
+    kind: 'model',
+    capacity: 1,
+    model: { url: '/a.glb' },
+  });
+  set.set(0, { position: at(0, 0) });
+  set.setCount(1);
+  set.commit();
+  assert.equal(set.failed(), false, 'still loading');
+  await settle();
+  assert.equal(set.failed(0), true);
+  assert.equal(set.failed(), true);
+  assert.equal(set.ready(), false);
+  set.commit();
+  await settle();
+  assert.equal(loads, 1, 'not tried again');
+  set.destroy();
+  assert.equal(set.failed(), false, 'a destroyed set reports nothing');
+});
+
 test('identify names the set, instance and pickId of a picked billboard or point', async () => {
   const { movers, root, identify, viewer } = setup();
   // The fake camera is over (0°, ~1°), 7000 km from the centre.

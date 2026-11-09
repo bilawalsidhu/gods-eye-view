@@ -12,6 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { parse } from '@babel/parser';
+import { vueScripts } from './vue-scripts.mjs';
 
 const root = new URL('..', import.meta.url);
 
@@ -24,7 +25,7 @@ export function sourceFiles() {
     .split('\n')
     .filter(
       (path) =>
-        /\.(?:js|mjs)$/.test(path) &&
+        /\.(?:js|mjs|vue)$/.test(path) &&
         !/\.test\.m?js$/.test(path) &&
         !path.startsWith('src/testSupport/') &&
         !path.includes('/testing/') &&
@@ -75,7 +76,7 @@ function isReference(node, parent, key) {
     parent.type === 'ImportSpecifier' ||
     parent.type === 'ImportNamespaceSpecifier' ||
     parent.type === 'ImportDefaultSpecifier' ||
-    parent.type === 'ExportSpecifier'
+    (parent.type === 'ExportSpecifier' && key !== 'local')
   )
     return false;
   if (parent.type === 'LabeledStatement' || parent.type === 'BreakStatement')
@@ -89,6 +90,10 @@ function isReference(node, parent, key) {
  * members and heritage run at load and stay not deferred.
  */
 export function loadTimeReferences(code, path = '<module>') {
+  if (path.endsWith('.vue'))
+    return vueScripts(code, path).flatMap((script) =>
+      loadTimeReferences(script).map((reference) => ({ ...reference, path })),
+    );
   const program = parse(code, {
     sourceType: 'module',
     plugins: ['classProperties', 'classStaticBlock', 'importAttributes'],

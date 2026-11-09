@@ -130,6 +130,7 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
     );
     return {
       ready: mover.ready,
+      failed: mover.failed,
       commit() {
         mover.commit(store.dirty());
         request();
@@ -168,6 +169,7 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
     });
     return {
       ready: mover.ready,
+      failed: mover.failed,
       pickRadiusPx: mover.pickRadiusPx,
       commit() {
         mover.commit(store.dirty());

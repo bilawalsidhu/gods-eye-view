@@ -5,7 +5,12 @@ import {
 import { createRendererCache } from './standalone/rendererCache.js';
 import { describeError } from './standalone/errors.js';
 import { createEngineAddress } from './standalone/engineSwitch.js';
-import { ENGINE_STORAGE_KEY, engineOfChoice } from './app/engineChoice.js';
+import {
+  DEFAULT_ENGINE_CHOICE,
+  ENGINE_STORAGE_KEY,
+  engineOfChoice,
+  resolveEngineKind,
+} from './app/engineChoice.js';
 import { createSceneSwitcher } from './standalone/sceneSwitcher.js';
 import { createLayerSession } from './app/layerSession.js';
 import { createSessionDiagnostics } from './app/sessionDiagnostics.js';
@@ -73,7 +78,7 @@ window.addEventListener('pagehide', (event) => {
 // settle() hands the address back to whichever engine then runs.
 window.addEventListener('popstate', () => {
   if (!engineSwitch) return;
-  if (pageEngineKind() !== engineSwitch.state().engine)
+  if (requestedEngineKind() !== engineSwitch.state().engine)
     application
       ?.getComponents()
       .controls?.styleManager?.shareLinkManager?.holdNavigation?.();
@@ -120,6 +125,13 @@ function present() {
     button.disabled = busy;
 }
 
+// Product names: never translated.
+const ENGINE_NAMES = {
+  cesium: 'Cesium',
+  navara: 'Navara',
+  'navara-hd': 'Navara HD',
+};
+
 // No engine runs after a failed recovery. The error stays on the loading
 // screen with an engine picker, so a new attempt needs no reload.
 function offerEngineRetry() {
@@ -129,11 +141,7 @@ function offerEngineRetry() {
   group.className = 'engine-switch-retry';
   group.setAttribute('role', 'group');
   group.setAttribute('aria-label', t('Globe Engine'));
-  for (const [kind, name] of [
-    ['cesium', 'Cesium'],
-    ['navara', 'Navara'],
-    ['navara-hd', 'Navara HD'],
-  ]) {
+  for (const [kind, name] of Object.entries(ENGINE_NAMES)) {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.engine = kind;
@@ -157,8 +165,21 @@ function report(error) {
   loading.classList.remove('hidden');
 }
 
+// A globe that failed to start while another runs: say which one runs.
+function showStartFailure(error, running) {
+  const style = liveComponents()?.controls.styleManager;
+  style?._showToast(
+    t('Globe engine failed to start. Running {engine}: {message}', {
+      engine: ENGINE_NAMES[running] ?? running,
+      message: describeError(error),
+    }),
+  );
+  return Boolean(style);
+}
+
 function select(next) {
-  void engineSwitch?.select(next);
+  if (engineSwitch) void engineSwitch.select(next);
+  else if (!starting) void start(next, { rememberChoice: true });
 }
 
 // Keep the last visible frame while the first visit initializes the other renderer.
@@ -177,14 +198,32 @@ function keepGlobeFrame(engine) {
   return frame;
 }
 
-const initialKind = pageEngineKind();
-createApplication(initialKind, false)
-  .start()
-  .then(() => {
+let initialKind = pageEngineKind();
+let starting = false;
+const requestedEngineKind = () =>
+  resolveEngineKind({ search: location.search, fallback: initialKind });
+
+function remember(kind) {
+  try {
+    localStorage.setItem(ENGINE_STORAGE_KEY, kind);
+  } catch {
+    // The current URL still carries the choice when storage is blocked.
+  }
+}
+
+async function start(kind, { fallback = false, rememberChoice = false } = {}) {
+  starting = true;
+  try {
+    await createApplication(kind, false).start();
+    if (rememberChoice) {
+      initialKind = kind;
+      remember(kind);
+      createEngineAddress({ location, history }).restore(kind);
+    }
     session.count('attachments');
     engineSwitch = createSceneSwitcher({
-      kind: initialKind,
-      requested: pageEngineKind,
+      kind,
+      requested: requestedEngineKind,
       signal,
       getApplication: () => application,
       startApplication: (kind, transition) =>
@@ -203,25 +242,36 @@ createApplication(initialKind, false)
         flush: () =>
           liveComponents()?.controls.styleManager.shareLinkManager?.flush(),
       }),
-      remember(kind) {
-        try {
-          localStorage.setItem(ENGINE_STORAGE_KEY, kind);
-        } catch {
-          // The current URL still carries the choice when storage is blocked.
-        }
-      },
+      remember,
       onChange: present,
-      onFailure(error, { recovered }) {
-        const style = recovered && liveComponents()?.controls.styleManager;
-        if (style) return style._showToast(describeError(error));
+      onFailure(error, { recovered, kind: running }) {
+        if (recovered && showStartFailure(error, running)) return;
         report(error);
         offerEngineRetry();
       },
     });
+    withdrawEngineRetry();
+    loading.classList.add('hidden');
     present();
     // A history visit made while the first engine started.
     void engineSwitch.reconcile();
-  })
-  .catch(report);
+  } catch (error) {
+    await application?.destroy().catch(report);
+    if (fallback && kind !== DEFAULT_ENGINE_CHOICE) {
+      // A stored choice that cannot start would fail on every visit.
+      await start(DEFAULT_ENGINE_CHOICE, { rememberChoice: true });
+      showStartFailure(error, DEFAULT_ENGINE_CHOICE);
+    } else {
+      report(error);
+      offerEngineRetry();
+    }
+  } finally {
+    starting = false;
+  }
+}
+
+void start(initialKind, {
+  fallback: !new URLSearchParams(location.search).has('engine'),
+});
 
 export { application };

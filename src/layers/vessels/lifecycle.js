@@ -287,8 +287,7 @@ export function createLifecycle({
   }
 
   function bindVisibleScene(activeViewer, scene) {
-    // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
-    // the registry resolver reduces it to the record's mmsi (a string key).
+    // Only MMSI picks present in the live record map belong to this layer.
     registerPickOwner(
       'ais-live-vessels',
       (pickedId) => state.records.byMmsi.has(pickedId),

@@ -662,9 +662,7 @@ class CockpitCloudEffectsController {
   }
 
   /**
-   * Free the GPU objects and the canvas's WebGL context. The application is
-   * rebuilt on every globe switch, and browsers cap live contexts, so a
-   * destroyed controller must not leave its context for garbage collection.
+   * Free GPU objects and the canvas's WebGL context: browsers cap live contexts.
    */
   releaseRenderer() {
     const gl = this.gl;

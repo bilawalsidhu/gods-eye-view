@@ -272,7 +272,6 @@ function cesiumToolBackend({ engine, tileset }) {
     viewer,
     startupChrome: {},
     board: () => ({ viewer, engine, tileset }),
-    draw: () => ({ engine }),
     // The tileset lets the layer drape while the globe is hidden.
     recentImagery(layer) {
       layer.attachTileset(tileset);
@@ -353,7 +352,7 @@ async function attachEngineTools(
     { layerSession, placeSearch, operations },
     defer,
   );
-  attachDraw(backend.draw, { layerSession, annotations, styleManager }, defer);
+  attachDraw(engine, { layerSession, annotations, styleManager }, defer);
   // Import draws through the globe contract, the same on every engine.
   attachGeoImport(
     { engine },
@@ -483,13 +482,13 @@ function attachBoard(
 }
 
 /**
- * UTILITIES ▸ Draw on this globe (`drawScene()`: its input and preview):
+ * UTILITIES ▸ Draw on this globe (its engine input and preview):
  * the tool claims the globe's pointer while a sketch is open, so a switch
  * ends an open sketch and keeps the chosen shape and colour. Returns the
  * tool (null on a page without it or without the board).
  */
 function attachDraw(
-  drawScene,
+  engine,
   { layerSession, annotations, styleManager },
   defer,
 ) {
@@ -500,7 +499,7 @@ function attachDraw(
     styleManager,
     defer,
   });
-  drawTool?.attachScene({ ...drawScene(), navigation: styleManager });
+  drawTool?.attachScene({ engine, navigation: styleManager });
   defer(() => drawTool?.detachScene());
   return drawTool;
 }

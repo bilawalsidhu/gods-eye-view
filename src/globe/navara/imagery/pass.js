@@ -91,17 +91,17 @@ vec3 paint(vec3 color, sampler2D image, vec4 rect, vec4 bounds, vec4 look, vec4 
   if ((look.y < 0.0 && x > uSplit) || (look.y > 0.0 && x < uSplit)) return color;
   if (!inRect(geo, rect)) return color;
   if (look.w > 0.5 && inRect(geo, cut)) return color;
-  float lon = geo.x < rect.x ? geo.x + 360.0 : geo.x;
   vec2 at;
   vec2 dx;
   vec2 dy;
   if (look.z > 0.5) {
-    vec2 m = vec2(merc.x + (lon - geo.x) / 360.0, merc.y);
+    vec2 m = vec2(merc.x < bounds.x ? merc.x + 1.0 : merc.x, merc.y);
     at = (m - bounds.xy) / bounds.zw;
     dx = mercDx / bounds.zw;
     dy = mercDy / bounds.zw;
   } else {
     vec2 span = vec2(bounds.z - bounds.x, bounds.y - bounds.w);
+    float lon = geo.x < bounds.x ? geo.x + 360.0 : geo.x;
     at = vec2(lon - bounds.x, geo.y - bounds.w) / span;
     dx = geoDx / span;
     dy = geoDy / span;

@@ -76,6 +76,14 @@ test('the SDK is not loaded where the page already has it or imports its module'
   assert.equal(dev.elements.length, 0);
 });
 
+test('a page that ran Cesium.js from its markup loads no styles either', async () => {
+  // The panel build's HTML lists Cesium.js and widgets.css; the panel host
+  // answers only those, not a stylesheet added later.
+  const { elements, loader } = fixture({ Cesium: {} });
+  await loader.viewer();
+  assert.equal(elements.length, 0);
+});
+
 test('a failed Cesium asset load can be retried and preserves the configured base', async () => {
   const { elements, globals, loader } = fixture({
     CESIUM_BASE_URL: '/custom/',

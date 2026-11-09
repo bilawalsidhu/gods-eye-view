@@ -394,9 +394,11 @@ export function createImageryRegistry(
           if (options.raise === null)
             fail('only a raised layer takes a detail');
           const detail = normalizeImageryDetail(next ?? null);
+          const pending = detailing !== null;
           dropDetail();
           if (!detail) {
-            if (state.detail === null) return Promise.resolve(true);
+            // A detail still loading is cleared too: the backend may draw it.
+            if (state.detail === null && !pending) return Promise.resolve(true);
             state.detail = null;
             part.detail?.(null, () => {});
             return Promise.resolve(true);
@@ -504,12 +506,23 @@ export const geographicY = (lat) =>
  */
 export function imageryTilePlan(box, rectangle, level, scheme = 'webMercator') {
   const geographic = scheme === 'geographic';
-  let area = { ...box };
-  if (rectangle && rectangle.east >= rectangle.west) {
+  const sourceEast = box.east < box.west ? box.east + 360 : box.east;
+  let area = { ...box, east: sourceEast };
+  if (rectangle) {
     const degrees = 180 / Math.PI;
+    const west = rectangle.west * degrees;
+    const east =
+      rectangle.east * degrees + (rectangle.east < rectangle.west ? 360 : 0);
+    const spans = [-360, 0, 360]
+      .map((shift) => [
+        Math.max(box.west + shift, west),
+        Math.min(sourceEast + shift, east),
+      ])
+      .filter(([left, right]) => left < right);
+    if (!spans.length) return null;
     area = {
-      west: Math.max(box.west, rectangle.west * degrees),
-      east: Math.min(box.east, rectangle.east * degrees),
+      west: Math.min(...spans.map(([left]) => left)),
+      east: Math.max(...spans.map(([, right]) => right)),
       south: Math.max(box.south, rectangle.south * degrees),
       north: Math.min(box.north, rectangle.north * degrees),
     };
@@ -522,10 +535,7 @@ export function imageryTilePlan(box, rectangle, level, scheme = 'webMercator') {
     const rows = 2 ** z;
     const x = Math.max(0, Math.floor(toX(area.west) * columns));
     const y = Math.max(0, Math.floor(toY(area.north) * rows));
-    const right = Math.min(
-      columns - 1,
-      Math.ceil(toX(area.east) * columns) - 1,
-    );
+    const right = Math.ceil(toX(area.east) * columns) - 1;
     const bottom = Math.min(rows - 1, Math.ceil(toY(area.south) * rows) - 1);
     const width = right - x + 1,
       height = bottom - y + 1;

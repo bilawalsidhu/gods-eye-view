@@ -164,7 +164,6 @@ export class StyleManager extends ShellScene {
     this.placeSearch = placeSearch;
 
     this._navigation = new NavigationController({
-      viewer,
       engine,
       tracking: {
         flightsLayer,
@@ -196,7 +195,6 @@ export class StyleManager extends ShellScene {
     this._cockpitDisplayModeHandler = null;
 
     this._locationNavigation = new LocationNavigation({
-      viewer,
       engine,
       placeSearch,
       navigation: this._navigation,

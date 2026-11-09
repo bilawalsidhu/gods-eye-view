@@ -374,7 +374,7 @@ export function createGevActionRunner({
       cameraHandoffs += 1;
     }) ?? null;
   let analystEngine;
-  // Area handles live for this runner (the page): resolve_area, the
+  // Area handles live for the page session: resolve_area, the
   // analyst's region/area/drawn scopes, find_imagery and osm_query all read
   // the same store.
   const voiceAreas = createVoiceAreas({
@@ -3314,12 +3314,14 @@ export async function getBasemapLabelContext(
 
   const latitude = Number(geo.math.toDegrees(viewTarget.latitude).toFixed(6));
   const longitude = Number(geo.math.toDegrees(viewTarget.longitude).toFixed(6));
+  const pose = engine.camera.pose();
   const view = placeLookupView({
     latitude,
     longitude,
     rangeM: viewTargetRangeM(engine, viewTarget, cameraHeightM),
-    fovRad: engine.camera.pose().fovy,
-    aspectRatio: engine.camera.pose().aspectRatio,
+    fovRad:
+      2 * Math.atan(Math.tan(pose.fovy / 2) * Math.max(1, pose.aspectRatio)),
+    aspectRatio: pose.aspectRatio,
     tier: basemapLookupTier(cameraHeightM),
   });
   if (

@@ -440,10 +440,11 @@ export async function pickEngine(
           ?.getAttribute('aria-expanded') === 'true',
     );
   }
-  await page.waitForSelector('#globe-engine:not([disabled])', {
-    visible: true,
-    timeout: 90000,
-  });
+  // The picker stays focusable while busy: aria-busy marks a switch.
+  await page.waitForSelector(
+    '#globe-engine:not([disabled]):not([aria-busy="true"])',
+    { visible: true, timeout: 90000 },
+  );
   const from = await page.$eval('#globe-engine', (el) => el.value);
   assert.notEqual(from, kind, `the picker already shows ${kind}`);
   // The key typed below is `kind`'s first letter: it selects the next option
@@ -479,14 +480,16 @@ export async function pickEngine(
     );
     window.__qaPickObserver?.disconnect();
     window.__qaPickObserver = new MutationObserver(() => {
-      const disabled = document.querySelector('#globe-engine')?.disabled;
+      const disabled = document.querySelector(
+        '#globe-engine:is([disabled], [aria-busy="true"])',
+      );
       if (disabled) window.__qaPick.busy = true;
       else if (window.__qaPick.busy && window.__qaPick.idleAt == null)
         window.__qaPick.idleAt = performance.now();
     });
     window.__qaPickObserver.observe(document.body, {
       attributes: true,
-      attributeFilter: ['disabled'],
+      attributeFilter: ['disabled', 'aria-busy'],
       subtree: true,
     });
     const describe = (hit) =>
@@ -523,8 +526,10 @@ export async function pickEngine(
   // Whatever the person does next, right after the key (no round trip to
   // the page in between).
   if (afterInput) await afterInput();
+  // The change starts a cold switch at once: Cesium.js then runs as one
+  // task, seconds long under CPU throttling, before the page answers.
   await page.waitForFunction(() => window.__qaPick?.changed, {
-    timeout: 5000,
+    timeout: 30000,
     polling: 50,
   });
   // Headless Chrome opens no menu for a click on the select: the key
@@ -538,7 +543,9 @@ export async function pickEngine(
   await page.waitForFunction(
     () =>
       (window.__qaPick.busy &&
-        !document.querySelector('#globe-engine')?.disabled &&
+        !document.querySelector(
+          '#globe-engine:is([disabled], [aria-busy="true"])',
+        ) &&
         document.querySelector('#loading-screen.hidden') &&
         !document.querySelector('.engine-switch-frame')) ||
       document.querySelector('.engine-switch-retry'),
@@ -572,7 +579,9 @@ export async function waitForEngine(page, kind, { timeout = 120000 } = {}) {
       window.__godsEyeView?.engine?.kind ===
         (expected === 'cesium' ? 'cesium' : 'navara') &&
       document.querySelector('#globe-engine')?.value === expected &&
-      !document.querySelector('#globe-engine')?.disabled &&
+      !document.querySelector(
+        '#globe-engine:is([disabled], [aria-busy="true"])',
+      ) &&
       !document.querySelector('.engine-switch-frame') &&
       document.querySelector('#loading-screen.hidden'),
     { timeout },
@@ -836,4 +845,66 @@ export function createStrict({
     },
   };
   return strict;
+}
+
+/** Click uncovered canvas where the engine picks nothing within the radius. */
+export async function clickEmptyGround(
+  page,
+  { left, top, right, bottom, step = 9, radius = 6 },
+) {
+  const handle = await page.waitForFunction(
+    ({ left, top, right, bottom, step, radius }) => {
+      const { engine } = window.__godsEyeView;
+      const canvas = engine.host.canvas;
+      const box = canvas.getBoundingClientRect();
+      for (let y = top; y < bottom; y += step)
+        for (let x = left; x < right; x += step) {
+          if (
+            !canvas.contains(
+              document.elementFromPoint(box.left + x, box.top + y),
+            )
+          )
+            continue;
+          const free = [
+            [0, 0],
+            [radius, 0],
+            [-radius, 0],
+            [0, radius],
+            [0, -radius],
+          ].every(([dx, dy]) => !engine.picker.pick({ x: x + dx, y: y + dy }));
+          if (free) return { x: box.left + x, y: box.top + y };
+        }
+      return false;
+    },
+    { timeout: 15000 },
+    { left, top, right, bottom, step, radius },
+  );
+  try {
+    const at = await handle.jsonValue();
+    await page.mouse.click(at.x, at.y);
+  } finally {
+    await handle.dispose();
+  }
+}
+
+/**
+ * Wait until no flight holds the camera and it stays still. A selection's
+ * camera transfer is a flight; on both engines a flight turns the camera
+ * inputs off, and a click does not cut it short.
+ */
+export async function waitForCameraAtRest(page, { timeout = 15000 } = {}) {
+  await page.evaluate(() => {
+    window.__qaRestPose = null;
+  });
+  await page.waitForFunction(
+    () => {
+      const { engine } = window.__godsEyeView;
+      const { x, y, z } = engine.camera.pose().position;
+      const pose = [x, y, z].map((value) => value.toFixed(2)).join();
+      const still = window.__qaRestPose === pose;
+      window.__qaRestPose = pose;
+      return still && engine.input.cameraInputsEnabled();
+    },
+    { timeout, polling: 100 },
+  );
 }

@@ -25,6 +25,17 @@ export function createFlightSnapshotRenderer({
   const { refreshMilitaryRegistryIfStale, isMilitaryIcao } = militaryRegistry;
   const { warmGroundFloor } = groundFloor;
   const { sampleMeshFloorCells } = meshFloor;
+  // A low contact is horizon-culled from 12 m up: its ground can lie below
+  // the ellipsoid.
+  function setCullPosition(id, meta) {
+    flightState._cullPositions.set(
+      id,
+      meta.renderAltitudeM < 10
+        ? geo.cartesian3.fromDegrees(meta.rawLon, meta.rawLat, 12)
+        : null,
+    );
+  }
+
   function presentContact(icao24, meta, position, prevMeta, groundFlipped) {
     const isTracked = icao24 === flightState._trackedIcao;
     if (flightState._billboards.has(icao24)) {
@@ -101,6 +112,7 @@ export function createFlightSnapshotRenderer({
         meta.rawLat,
         meta.renderAltitudeM,
       );
+      setCullPosition(id, meta);
       presentContact(id, meta, position, null, false);
     }
   }
@@ -164,12 +176,7 @@ export function createFlightSnapshotRenderer({
       );
       // Either flip retires the previous one-shot ground sample.
       if (groundFlipped) flightState._groundSnap.forget(icao24);
-      flightState._cullPositions.set(
-        icao24,
-        meta.renderAltitudeM < 10
-          ? geo.cartesian3.fromDegrees(meta.rawLon, meta.rawLat, 12)
-          : null,
-      );
+      setCullPosition(icao24, meta);
       const isTracked = icao24 === flightState._trackedIcao;
 
       // Append to position history stamped with the FEED's fix epoch

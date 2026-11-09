@@ -61,6 +61,7 @@ export function createNavaraGround(
   };
   const pack = (entry) => {
     entry.pack = packSet(entry.options.kind, entry.items, { terrainHeight });
+    entry.pack.drape = entry.options.drape;
     for (
       let at = REVEAL_OFFSET;
       at < entry.pack.items.length;

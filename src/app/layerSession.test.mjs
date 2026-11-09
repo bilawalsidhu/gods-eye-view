@@ -29,6 +29,7 @@ test('a session retains layer intentions through handoff but never after page te
     entry,
     enabled: true,
     durable: true,
+    visit: false,
   });
   resumeSession(session);
   assert.deepEqual(calls, ['suspend', 'viewport', 'resume']);

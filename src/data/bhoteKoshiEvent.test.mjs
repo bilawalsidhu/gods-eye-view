@@ -3133,3 +3133,182 @@ test('Bhote Koshi stops waiting for a stalled map switch when its scene is relea
     globalThis.window = originalWindow;
   }
 });
+
+test('Bhote Koshi republishes its evidence cards to the incoming engine overlay', async () => {
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  const first = eventViewer();
+  const second = eventViewer();
+  const engineB = {
+    id: 'B',
+    host: { canvas: second.scene.canvas },
+    camera: second.camera,
+  };
+  const hosts = new Map();
+  const hostFor = (engine) => {
+    const key = engine ?? 'A';
+    if (!hosts.has(key))
+      hosts.set(key, {
+        entries: new Map(),
+        setEntries(id, e) {
+          this.entries.set(id, e);
+        },
+        setVisible() {},
+        clearSource(id) {
+          this.entries.delete(id);
+        },
+        hitTest() {
+          return null;
+        },
+      });
+    return hosts.get(key);
+  };
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imageLoader: async (url) => ({ url }),
+    embeddedMediaFactory: () => ({
+      show() {},
+      hide() {},
+      pause() {},
+      destroy() {},
+    }),
+    overlayHost: hostFor,
+    renderHost: { request() {}, hold() {}, release() {} },
+  });
+  layer.attachMapStackController({
+    getActiveId: () => 'esri-imagery',
+    getSwitchGeneration: () => 1,
+    async setStack() {},
+  });
+  const manager = new LayerLifecycle(first);
+  manager.register(layer);
+  try {
+    assert.equal(
+      await manager.setEnabled(layer.id, true, { origin: 'local-restore' }),
+      true,
+    );
+    const a = hostFor(null);
+    assert.ok(
+      [...a.entries.values()].some((e) => e.length > 0),
+      'first engine got the cards',
+    );
+    await layer.detachRenderer();
+    await layer.attachRenderer(second, { engine: engineB });
+    const b = hostFor(engineB);
+    assert.ok(
+      [...b.entries.values()].some((e) => e.length > 0),
+      'incoming engine overlay should get the cards',
+    );
+  } finally {
+    await manager.destroyLayer(layer.id);
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});
+
+// The event on a Navara engine double: its surface samples the terrain at
+// its finest level (or fails to), and its loaded terrain answers `terrain`.
+async function navaraEvidenceCard({ sample }) {
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  const entries = [];
+  const engine = {
+    terrain: 3500,
+    host: { canvas: eventViewer().scene.canvas },
+    surface: {
+      terrainHeight: () => engine.terrain,
+      sampleTerrainMostDetailed: sample,
+    },
+    maps: { terrainRevision: () => 1 },
+    camera: { livePosition: Cesium.Cartesian3.fromDegrees(0, 0, 1e7) },
+  };
+  const layer = buildEventLayer({
+    eventLoader: async () => event,
+    imageLoader: async (url) => ({ url }),
+    createNativeRenderer: () => ({
+      loadImages: async () => {},
+      draw: () => ({ destroy() {} }),
+      setVisible() {},
+      setSplit() {},
+      clear() {},
+      destroy() {},
+    }),
+    embeddedMediaFactory: () => ({
+      show() {},
+      hide() {},
+      pause() {},
+      destroy() {},
+    }),
+    overlayHost: {
+      setEntries: (_id, value) => entries.push(...value),
+      setVisible() {},
+      clearSource() {},
+    },
+    renderHost: { request() {}, hold() {}, release() {} },
+  });
+  await layer.init(null, { engine });
+  await layer.enable(null, { origin: 'local-restore' });
+  const [first] = event.evidenceSpine;
+  const card = entries.find(
+    (entry) => entry.id === `evidence-card-${first.id}`,
+  );
+  return {
+    engine,
+    layer,
+    card,
+    first,
+    height: () => Cesium.Cartographic.fromCartesian(card.cullPosition).height,
+  };
+}
+
+test('Navara evidence anchors stand on the most detailed terrain', async () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const { layer, height } = await navaraEvidenceCard({
+    sample: async (places) => places.map(() => 1234),
+  });
+  try {
+    assert.ok(Math.abs(height() - 1252) < 0.01, `${height()}`);
+  } finally {
+    await layer.disable();
+    await layer.destroy();
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});
+
+test('Navara evidence anchors without a terrain sample follow the terrain near the camera', async () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const { engine, layer, card, first, height } = await navaraEvidenceCard({
+    sample: async () => {
+      throw new Error('no terrain');
+    },
+  });
+  try {
+    const pack = first.fallbackElevationM + 18;
+    assert.ok(Math.abs(height() - pack) < 0.01, 'the pack elevation');
+    card.position();
+    assert.ok(Math.abs(height() - pack) < 0.01, 'a far camera keeps it');
+    engine.camera.livePosition = Cesium.Cartesian3.fromDegrees(
+      first.lon,
+      first.lat,
+      6000,
+    );
+    engine.terrain = 2000;
+    assert.ok(card.position(), 'the first card is shown');
+    assert.ok(
+      Math.abs(height() - 2018) < 0.01,
+      'a near camera reads the terrain',
+    );
+  } finally {
+    await layer.disable();
+    await layer.destroy();
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});

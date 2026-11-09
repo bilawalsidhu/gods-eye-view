@@ -11,10 +11,9 @@ const shots = process.env.QA_SHOTS || 'qa-shots/transit-recovery';
 await mkdir(shots, { recursive: true });
 const browser = await puppeteer.launch({
   headless: true,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: chromeExecutablePath(),
   args: [
-    '--use-angle=metal',
+    ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []),
     '--enable-gpu',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',

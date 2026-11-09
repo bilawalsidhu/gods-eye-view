@@ -15,7 +15,11 @@ const places = [
 ];
 
 function fakeHarness() {
-  const engine = createFakeEngine();
+  const engine = createFakeEngine({
+    longitude: geo.math.toRadians(85.31),
+    latitude: geo.math.toRadians(27.7),
+    altitude: 20000,
+  });
   return {
     name: 'the fake engine',
     engine,
@@ -75,7 +79,7 @@ for (const makeHarness of HARNESSES) {
   });
 
   test(`places sit 2 m over the sampled surface, read again after a move (${name})`, (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
     const h = makeHarness();
     const display = createOsmPlacesDisplay(h.engine);
     const position = () =>
@@ -139,3 +143,51 @@ for (const makeHarness of HARNESSES) {
     }
   });
 }
+
+test('places refine loaded heights after tiles settle', (t) => {
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  engine.projector.worldToWindow = () => ({ x: 100, y: 100 });
+  engine.projector.horizonVisible = () => true;
+  let height = 50;
+  let loaded = false;
+  engine.fake.script('sampleHeight', () => height);
+  engine.fake.script('tilesLoaded', () => loaded);
+  const display = createOsmPlacesDisplay(engine);
+  t.after(() => display.destroy());
+  display.setVisible(true);
+  display.replace([{ id: 'place', lon: 0, lat: 0 }]);
+  engine.fake.frames(1);
+  height = 70;
+  loaded = true;
+  engine.fake.frames(1);
+  const { positions } = engine.fake.moverSet('osm-places').store;
+  assert.ok(
+    Math.abs(
+      heightOf({ x: positions[0], y: positions[1], z: positions[2] }) - 72,
+    ) < 0.01,
+  );
+});
+
+test('large searches only sample visible places within a per-pass budget', (t) => {
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  engine.projector.worldToWindow = () => ({ x: 100, y: 100 });
+  engine.projector.horizonVisible = () => true;
+  let samples = 0;
+  engine.fake.script('sampleHeight', () => {
+    samples++;
+    return 30;
+  });
+  const display = createOsmPlacesDisplay(engine);
+  t.after(() => display.destroy());
+  display.setVisible(true);
+  display.replace(
+    Array.from({ length: 500 }, (_, i) => ({ id: String(i), lon: 0, lat: 0 })),
+  );
+  assert.ok(samples > 0 && samples <= 16, `sampled ${samples}`);
+  engine.projector.worldToWindow = () => undefined;
+  samples = 0;
+  engine.camera.moveEnd.raiseEvent();
+  assert.equal(samples, 0, 'off-screen places are not sampled');
+});

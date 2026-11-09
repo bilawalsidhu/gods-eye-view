@@ -206,7 +206,7 @@ export class CockpitViewController {
     this.scratchAnchorCartographic = geo.cartographic.create();
     this.scratchCameraCartographic = geo.cartographic.create();
     this.scratchTargetCartographic = geo.cartographic.create();
-    this._listenerRemovers = [];
+    this._listenerRemovers = [onLocaleChange(() => this.relocalize())];
 
     // Camera mutations belong before scene update/culling. Changing the camera
     // from preRender makes 3D Tiles discover a new view after traversal and can

@@ -795,6 +795,22 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   outline: 2px solid currentColor;
 }
 
+/* While a switch runs the picker keeps focus (aria-disabled, not disabled). */
+#globe-engine[aria-busy='true'] {
+  opacity: var(--gev-field-disabled-opacity, 0.45);
+  cursor: progress;
+}
+
+/* Announces the switch to screen readers only. */
+#globe-engine-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .map-source-section {
   display: grid;
   gap: 6px;

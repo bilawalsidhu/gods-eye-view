@@ -10,8 +10,9 @@ export async function checkInstallationPan(page, dir) {
   );
   await sleep(3000);
   await page.evaluate(async () => {
-    const { getOverlayPaintRect } =
-      (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
+    const { getPaintRect } = (
+      await import('/src/overlays/worldOverlay.js')
+    ).worldOverlayFor(window.__godsEyeView.engine);
     const g = window.__godsEyeView;
     const installations = g.dataManager.layers.get(
       'military-installations',
@@ -28,10 +29,10 @@ export async function checkInstallationPan(page, dir) {
       const sites = [],
         centers = [];
       installations.visitNamedMarkers((id) => {
-        if (getOverlayPaintRect('military-installations', id)) sites.push(id);
+        if (getPaintRect('military-installations', id)) sites.push(id);
       });
       for (const id of centerIds)
-        if (getOverlayPaintRect('local-datacenters', id)) centers.push(id);
+        if (getPaintRect('local-datacenters', id)) centers.push(id);
       window.__polishPanFrames.push({ t: performance.now(), sites, centers });
     });
   });
@@ -187,8 +188,9 @@ export async function checkInstallationSelection(
         window.__polishSelectionFrames = [];
         const { getSelectedEntityContext } =
           await import('/src/data/contextStore.js');
-        const { getOverlayPaintRect, getWorldOverlayDiagnostics } =
-          (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
+        const { getPaintRect, getDiagnostics } = (
+          await import('/src/overlays/worldOverlay.js')
+        ).worldOverlayFor(window.__godsEyeView.engine);
         // The selected site's fill is one engine.ground polygon set
         // (render/display.js SELECTION_FILL_SET_ID), an item per footprint
         // part; the layer owns no Cesium entities or ground primitives.
@@ -225,17 +227,13 @@ export async function checkInstallationSelection(
           g.viewer.scene.postRender.addEventListener(() => {
             window.__polishSelectionFrames.push({
               paints: window.__polishTitlePaints.splice(0).length,
-              own: Boolean(
-                getOverlayPaintRect('military-installations', record.id),
-              ),
+              own: Boolean(getPaintRect('military-installations', record.id)),
               tracked: Boolean(
-                getOverlayPaintRect('tracked', `installations:${record.id}`),
+                getPaintRect('tracked', `installations:${record.id}`),
               ),
               selected: getSelectedEntityContext()?.id === record.id,
               total:
-                getWorldOverlayDiagnostics().paintedBySource[
-                  'military-installations'
-                ] || 0,
+                getDiagnostics().paintedBySource['military-installations'] || 0,
             });
           });
         return {

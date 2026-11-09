@@ -90,12 +90,22 @@ export function detailWindow(footprint, bounds, previous = null) {
   return previous && sameEdges(previous, next) ? previous : next;
 }
 
+// Halves, down to 1024 px wide, on devices with a smaller texture limit.
+function fitTexture({ width, height }, limit) {
+  while (limit > 0 && width > limit && width > 1024) {
+    width /= 2;
+    height /= 2;
+  }
+  return { width, height };
+}
+
 /** Observed weather on 3D Tiles: one raised shell per product and one
  * full-extent image per frame. The previous image stays until the next is ready.
  * Inside a window around the view the same surface samples a sharper image of
  * that area, so the two images share one mesh and never blend. The surfaces
  * are the engine's (`createSurface`, render/display.js), as are the render
- * requests, the view footprint and the camera's move-end event. */
+ * requests, the view footprint, the camera's move-end event and the GPU's
+ * texture limit. */
 export function createWeatherShell({
   product,
   height = WEATHER_SHELL_HEIGHTS[product],
@@ -111,11 +121,12 @@ export function createWeatherShell({
   requestRender,
   viewRectangle,
   moveEnd,
+  maxTextureSize = Infinity,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
-  const size = { ...WEATHER_IMAGE_SIZES[product] };
-  const detailSize = { ...WEATHER_DETAIL_SIZE };
+  const size = fitTexture(WEATHER_IMAGE_SIZES[product], maxTextureSize);
+  const detailSize = fitTexture(WEATHER_DETAIL_SIZE, maxTextureSize);
   const infrared = product === 'clouds' || product === 'clouds-regional';
   // Global infrared contrast depends on the requested extent, so a window would
   // not match the image around it; the globe host also shows one mosaic.

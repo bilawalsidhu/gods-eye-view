@@ -2259,6 +2259,7 @@
       "src/layers/shared/selectionKeeper.js",
       "src/layers/shared/color.js",
       "src/layers/submarineCables/render/display.js",
+      "src/layers/shared/render/surfacePoints.js",
       "src/overlays/bindOverlayHost.js"
     ],
     "external": ["cesium"]
@@ -3595,6 +3596,7 @@
       "src/layers/earthquakes/render/display.js",
       "src/layers/airQuality/render/display.js",
       "src/layers/submarineCables/render/display.js",
+      "src/layers/shared/render/surfacePoints.js",
       "src/layers/firms/render/sprites.js",
       "src/layers/cyclones/render/display.js",
       "src/layers/droneAirspace/render/display.js",
@@ -4352,6 +4354,7 @@
       "src/layers/gnss/render/display.js",
       "src/layers/firms/render/sprites.js",
       "src/layers/submarineCables/render/display.js",
+      "src/layers/shared/render/surfacePoints.js",
       "src/layers/perimeters/render/display.js",
       "src/layers/droneAirspace/render/display.js",
       "src/globe/ground.js",
@@ -4539,6 +4542,7 @@
   "ui-share-restoration": {
     "exports": ["./ui/share-restoration"],
     "modules": [
+      "src/ui/layerNames.js",
       "src/i18n/marker.js",
       "src/data/installationFeedback.js",
       "src/data/idSwitches.js",

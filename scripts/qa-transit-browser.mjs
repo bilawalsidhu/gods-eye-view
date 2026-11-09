@@ -201,7 +201,7 @@ export async function sampleTransitPixels(page, palette) {
               ?.getDetectionDiagnostics?.()
               ?.calloutRects?.filter((r) => r.alpha > 0.01) || [];
           if (state._selectedKey) {
-            const card = overlay?.getOverlayPaintRect(
+            const card = overlay?.getPaintRect(
               'transit-selected',
               state._selectedKey,
             );

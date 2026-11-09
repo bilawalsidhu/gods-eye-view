@@ -274,3 +274,22 @@ test('destroying a revealed corridor leaves the next ground set with fresh pass 
   }
   port.destroy();
 });
+
+test('ground sets carry their surface classification into the frame texture', async () => {
+  const { matrix4 } = await import('../../../geo/index.js');
+  const pass = fakePass();
+  const port = createNavaraGround(fakeView(), { createPass: () => pass });
+  for (const [drape, expected] of [
+    ['terrain', 1],
+    ['tiles', 2],
+    ['both', 0],
+  ]) {
+    const set = port.ground.createSet({ id: drape, kind: 'polygon', drape });
+    set.replace([square(0)]);
+    set.commit();
+    const state = pass.owner.state;
+    state.update(matrix4.IDENTITY, matrix4.IDENTITY, 800, 600);
+    assert.equal(state.frames.data[(state.count - 1) * 16 + 15], expected);
+  }
+  port.destroy();
+});

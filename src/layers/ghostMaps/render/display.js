@@ -8,11 +8,13 @@
 // outline adds `:outline`), which the layer resolves to its report.
 // Placemarks draw over the scene (depth test off) and are hidden beyond the
 // horizon instead, as they would sink into terrain and 3D tiles otherwise.
+// They stand on the sampled surface, measured for the ones on screen.
 
 import * as geo from '../../../geo/index.js';
 import { normalizeGroundItem } from '../../../globe/ground.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import { imageAtlasLayout } from '../../shared/render/imageAtlas.js';
+import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
 
 const LAYER_ID = 's2-ghostmaps';
 const TRANSPARENT = Object.freeze([0, 0, 0, 0]);
@@ -85,7 +87,7 @@ function editionItems(productId, features, color, markerImage) {
           report: index,
           id,
           url,
-          // On the ellipsoid: movers have no ground clamp.
+          cartographic: geo.cartographic.fromDegrees(lon, lat),
           position: geo.cartesian3.fromDegrees(lon, lat),
           horizon: geo.cartesian3.fromDegrees(lon, lat, HORIZON_LIFT_M),
           scale: ghostMapsIconScale(style),
@@ -201,6 +203,11 @@ export function createGhostMapsDisplay(
   let removeCull = null;
   const lastCamera = geo.cartesian3.create(Number.NaN, 0, 0);
   const request = () => engine.render.request(LAYER_ID);
+  const surface = createSurfacePoints(engine, {
+    groups: () =>
+      [...paints].map((paint) => ({ set: paint.sprites, points: paint.pins })),
+    request,
+  });
 
   // Hides the placemarks beyond the horizon; true when any show changed.
   function cull(paint) {
@@ -289,6 +296,7 @@ export function createGhostMapsDisplay(
       pin.show = engine.projector.horizonVisible(pin.horizon);
     writePins(paint);
     syncCull();
+    surface.place();
   }
 
   return {
@@ -341,6 +349,7 @@ export function createGhostMapsDisplay(
         syncCull();
         request();
       };
+      paint.dispose = dispose;
       let ready;
       try {
         commitGround(paint);
@@ -378,9 +387,10 @@ export function createGhostMapsDisplay(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      surface.destroy();
       removeCull?.();
       removeCull = null;
-      paints.clear();
+      for (const paint of paints) paint.dispose();
     },
   };
 }

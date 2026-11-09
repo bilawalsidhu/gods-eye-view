@@ -472,3 +472,30 @@ test('non-pickable ground fills skip pick commands and retain normal drawing', (
   port.destroy();
   assert.equal(fill.isDestroyed(), true);
 });
+
+test('hidden unready ground stops build frames and resumes when shown', () => {
+  const viewer = createFakeViewer();
+  viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
+  const requests = [];
+  const primitive = () => ({
+    ready: false,
+    destroy() {},
+    isDestroyed: () => false,
+  });
+  const part = createCesiumGround(viewer, {
+    factories: { fills: primitive, lines: primitive },
+    requestRender: (why) => requests.push(why),
+  });
+  const set = part.ground.createSet({ id: 'hidden', kind: 'disc' });
+  set.replace([{ center: [0, 0], radiusM: 100, fill: [1, 0, 0, 1] }]);
+  set.commit();
+  set.show(false);
+  requests.length = 0;
+  viewer.scene.postRender.raiseEvent();
+  assert.ok(!requests.includes('ground-build'));
+  set.show(true);
+  requests.length = 0;
+  viewer.scene.postRender.raiseEvent();
+  assert.ok(requests.includes('ground-build'));
+  part.destroy();
+});

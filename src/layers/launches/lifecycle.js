@@ -113,6 +113,7 @@ export function createLifecycle({
           parts.selection.startMissionZoomAnchor(
             launch,
             layerState._missionZoomRange,
+            { resuming: true },
           );
       }
       layerState._resumeRenderer?.();
@@ -124,6 +125,9 @@ export function createLifecycle({
       layerState._waitForRenderer ??= new Promise((resolve) => {
         layerState._resumeRenderer = resolve;
       });
+      layerState._replayCameraHeading = layerState._replayTracks.get(
+        layerState._replayCameraLaunchId,
+      )?.lastCameraHeading;
       layerState._replayCameraToken++;
       layerState._replayCameraRemover?.();
       layerState._missionZoomAnchorRemover?.();
@@ -177,7 +181,7 @@ export function createLifecycle({
       getRenderer()?.setVisible(true);
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
       // Snapshot the existing follow before the mission flight releases it.
-      await parts.ingestion.captureSatelliteDependency();
+      const dependency = parts.ingestion.captureSatelliteDependency();
       if (layerState._lastUpdate === null) {
         // A new attempt at an index that never loaded starts from loading.
         layerState._lastError = null;
@@ -205,6 +209,7 @@ export function createLifecycle({
           layerState._explicitSelection,
         );
       else parts.selection.setSelectedMission(null, false);
+      await dependency;
     },
 
     async disable() {

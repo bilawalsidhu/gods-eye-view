@@ -133,3 +133,19 @@ test('vessel fixture answers a relative track URL and retains its full snapshot'
   });
   assert.equal((await vessels.getSnapshot({})).records.length, 12000);
 });
+
+test('fixture counts cannot exceed the QA fleet budget', () => {
+  for (const count of [
+    '10001',
+    '1e9',
+    '9007199254740992',
+    'Infinity',
+    '0',
+    '1.5',
+  ])
+    assert.throws(
+      () => parseQaFeed(`?qaFeed=flights:synthetic:${count}`),
+      TypeError,
+    );
+  assert.equal(parseQaFeed('?qaFeed=flights:synthetic:10000')[0].count, 10000);
+});

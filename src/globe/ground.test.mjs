@@ -394,6 +394,44 @@ test('CPU picks find the item under the picked ground, on top first', () => {
   assert.deepEqual(ids(), []);
 });
 
+test('CPU picks skip a set draped only on the other surface', () => {
+  const { ground, live } = createGroundRegistry(() => ({
+    commit() {},
+    show() {},
+    destroy() {},
+  }));
+  for (const drape of ['terrain', 'tiles', 'both']) {
+    const set = ground.createSet({
+      id: drape,
+      kind: 'disc',
+      pickable: true,
+      drape,
+    });
+    set.replace([
+      { center: [1, 1], radiusM: 1e4, fill: [1, 1, 1, 1], pickId: drape },
+    ]);
+    set.commit();
+  }
+  let under = 'terrain';
+  const picks = createGroundPicks({
+    pickGlobe: () => geo.cartesian3.fromDegrees(1, 1),
+    camera: {
+      livePosition: geo.cartesian3.fromDegrees(1, 1, 1e5),
+      pose: () => ({ fovy: Math.PI / 3 }),
+    },
+    size: () => ({ width: 1000, height: 1000 }),
+    sets: () => [...live.values()],
+    surface: () => under,
+  });
+  const ids = () =>
+    picks({ x: 0, y: 0 })
+      .map(({ result }) => result.id)
+      .sort();
+  assert.deepEqual(ids(), ['both', 'terrain']);
+  under = 'tiles';
+  assert.deepEqual(ids(), ['both', 'tiles']);
+});
+
 test('radial discs copy and validate their alpha envelope', () => {
   const radial = {
     fillAlpha: 0.105,

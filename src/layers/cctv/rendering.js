@@ -177,7 +177,7 @@ export function createRendering({
     const minY = -height * VIEW_ICON_MARGIN;
     const maxY = height * (1 + VIEW_ICON_MARGIN);
     // Ground metres one pixel covers per metre of distance from the viewer.
-    const fovy = layerState._viewer?.camera?.frustum?.fovy || Math.PI / 3;
+    const fovy = parts.renderer.cameraPose()?.fovy || Math.PI / 3;
     const metresPerPixelPerMetre =
       (2 * Math.tan(fovy / 2)) / Math.max(1, height);
     const activeId = layerState._activeCameraId;

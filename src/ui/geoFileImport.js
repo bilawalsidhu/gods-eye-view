@@ -403,6 +403,7 @@ export function createGeoFileImport({
           return;
         }
         await draw(item, attached, loaded);
+        if (!imports.includes(item)) undraw(item);
       } catch {
         if (destroyed || scene !== attached) return;
         setHint(`${item.name}: ${t('That file could not be read.')}`);

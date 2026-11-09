@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { msg, t } from '../../i18n/index.js';
 import { vPanelState } from '../rail/panelState.js';
 import UiButton from '../kit/UiButton.vue';
+import UiSelect from '../kit/UiSelect.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { useDisplayStore } from '../stores/display.js';
 import { computed } from 'vue';
@@ -18,6 +19,8 @@ import VoiceControl from './panels/VoiceControl.vue';
 // button calls the Display controls' owner, a chip the map source controls.
 const display = useDisplayStore();
 const { style, mapSource, mapSourceControls, globeEngine } = storeToRefs(display);
+// Product names, as the picker's options show them.
+const ENGINE_NAMES = { cesium: 'Cesium', navara: 'Navara', 'navara-hd': 'Navara HD' };
 // LocationControls publishes the location tray; pills call the controls,
 // and the search field keeps their listeners.
 const { view: loc, controls: locationControls } = storeToRefs(useLocationStore());
@@ -115,13 +118,14 @@ function selectMapSource(chip) {
       <div v-if="globeEngine" id="globe-engine-control">
         <label class="map-source-heading" for="globe-engine">
           {{ t('Globe Engine') }}
-          <select id="globe-engine" class="pp-select" translate="no" :value="globeEngine.kind" :disabled="globeEngine.busy"
-            @change="globeEngine.select($event.target.value)">
+          <UiSelect id="globe-engine" class="gev-field gev-field--compact" translate="no" :model-value="globeEngine.kind" :aria-disabled="String(globeEngine.busy)" :aria-busy="String(globeEngine.busy)"
+            @update:model-value="!globeEngine.busy && globeEngine.select($event)">
             <option value="cesium">Cesium</option>
             <option value="navara">Navara</option>
             <option value="navara-hd">Navara HD</option>
-          </select>
+          </UiSelect>
         </label>
+        <span id="globe-engine-status" role="status">{{ globeEngine.busy ? t('Initializing systems...') : ENGINE_NAMES[globeEngine.kind] }}</span>
       </div>
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">

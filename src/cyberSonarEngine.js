@@ -1,6 +1,6 @@
 // The Cyber HUD sonar's contact treatment on the globe engine, which draws
 // it (render.setContactSonar, the `contactSonar` capability: Navara's
-// sprite and point movers, Cesium's native draw commands and models). Each
+// movers, Cesium's native draw commands and models). Each
 // drawn frame hands the engine the theme's state, the sweep's settings and
 // its angle on the shared clock (the CSS sweep's), so the contacts and the
 // rings turn together; while the sweep runs over visible contacts a parked
@@ -36,12 +36,9 @@ export function cyberSonarEngineState(
   };
 }
 
-/** Sprite and point instances the engine draws (models keep their colours). */
+/** Every mover instance the engine holds, on screen or not. */
 const contactCount = (engine) =>
-  engine.movers
-    .list()
-    .filter((set) => set.kind !== 'model')
-    .reduce((count, set) => count + set.count, 0);
+  engine.movers.list().reduce((count, set) => count + set.count, 0);
 
 const UNSUPPORTED_MESSAGE =
   'Contact GPU unavailable. Native contacts remain visible.';
@@ -85,12 +82,13 @@ export function createCyberSonarEngineScene(
     if (isCyberSonarActive({ root })) syncCyberSonarAnimation(root);
     engine.render.setContactSonar(cyberSonarEngineState(now(), root));
   });
-  // Contacts the sweep passes over: the engine's movers, and what its own
-  // treatment drew (Cesium's tinted models and visible native batches).
+  // Contacts the sweep passes over on screen, as the engine's treatment
+  // reports them (Navara's movers in view; Cesium's tinted models and
+  // visible native batches); an engine without a report, all its movers.
   const contactsShown = () => {
-    if (contactCount(engine)) return true;
     const drawn = diagnostics();
-    return Boolean(drawn?.contacts || drawn?.gpu?.visibleCommands);
+    if (!drawn) return contactCount(engine) > 0;
+    return Boolean(drawn.contacts || drawn.gpu?.visibleCommands);
   };
   const removePostRender = engine.frames.postRender.addEventListener(() => {
     // A treatment lost while the scene is parked (Sonar OFF, reduced

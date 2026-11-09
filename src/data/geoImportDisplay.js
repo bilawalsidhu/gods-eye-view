@@ -1,9 +1,7 @@
 // One imported file (UTILITIES ▸ Import) drawn on the globe contract, the
 // same on every engine, from its plain records (src/data/geoImportRecords.js),
 // with Cesium's look as the reference:
-// - polygons: one ground 'polygon' set of their fills; a raised polygon
-//   (KML absolute or relative) also gets its outline as lines at its
-//   heights, as Cesium drew it (its fill drapes: the ground has no heights);
+// - polygons: ground fills, or meshes and outlines at the vertices' heights;
 // - ground lines: one ground 'corridor' set in pixels, over the fills;
 // - lines in the air: one engine line each;
 // - points: one sprite set per look, each sprite a square centred on its
@@ -11,13 +9,16 @@
 //   geoImportPins.js); points on the ground draw over the scene and are
 //   hidden beyond the horizon instead, as Cesium's clamped billboards
 //   ignored the depth test;
-// - ground overlays: one image imagery layer each over its rectangle.
+// - ground overlays: one image imagery layer each over its rectangle, its
+//   image tinted and turned on a canvas when the KML says so, an absolute
+//   one raised to its altitude; a plain colour is a ground fill.
 // Nothing is pickable: an imported file has no card. Ground heights under
 // the points come from engine.surface, sampled again by refreshGround():
 // the terrain where the globe is drawn, else (3D tiles) the scene drawn
 // under a low camera, never an imported point (as Cesium's import kept its
 // pins out of height queries).
 
+import earcut from 'earcut';
 import * as geo from '../geo/index.js';
 import { normalizeGroundItem } from '../globe/ground.js';
 import { composeIcon } from './geoImportPins.js';
@@ -34,6 +35,10 @@ const HORIZON_LIFT_M = 2000;
 // drawn now; higher up the terrain answers (Cesium's 250 km).
 const CLAMP_TILES_BELOW_M = 250_000;
 const BATCH = 256;
+// Canvas pixels every imported icon look shares (64 MiB of RGBA).
+const ICON_PIXEL_BUDGET = 16 * 1024 * 1024;
+// The longest side of a tinted or turned ground overlay's canvas.
+const MAX_OVERLAY_SIDE = 4096;
 let serial = 0;
 // Each engine's imported point sets, left out of each other's ground.
 const pointSets = new WeakMap();
@@ -59,6 +64,103 @@ function checked(kind, item) {
     return null;
   }
 }
+
+// A ground overlay's box with east past west across 180°, and how a corner
+// turns by its rotation: KML's degrees counter-clockwise about the centre,
+// in longitude and latitude (Cesium's rectangle rotation).
+function overlayBox({ rectangle, rotation = 0 }) {
+  const { west, south, north } = rectangle;
+  const east = rectangle.east < west ? rectangle.east + 360 : rectangle.east;
+  const box = { west, south, east, north };
+  const center = [(west + east) / 2, (south + north) / 2];
+  const angle = (rotation * Math.PI) / 180;
+  const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+  const turn = ([lon, lat]) => {
+    const [x, y] = [lon - center[0], lat - center[1]];
+    return [center[0] + x * cos - y * sin, center[1] + x * sin + y * cos];
+  };
+  return { box, center, angle, turn };
+}
+
+// What a ground overlay's image layer draws: its image tinted by the
+// overlay's colour and turned by its rotation onto the box around the
+// turned image (transparent outside it). Null when that box passes a pole.
+async function overlayImage(overlay, loadImage, createCanvas) {
+  const tint = overlay.color.slice(0, 3);
+  const { box, center, angle } = overlayBox(overlay);
+  if (tint.every((value) => value === 1) && !angle)
+    return { url: overlay.url, rectangle: overlay.rectangle };
+  const [width, height] = [box.east - box.west, box.north - box.south];
+  const [cos, sin] = [Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle))];
+  const [spanX, spanY] = [
+    width * cos + height * sin,
+    width * sin + height * cos,
+  ];
+  const rectangle = {
+    west: center[0] - spanX / 2,
+    south: center[1] - spanY / 2,
+    east: center[0] + spanX / 2,
+    north: center[1] + spanY / 2,
+  };
+  if (rectangle.south < -90 || rectangle.north > 90 || spanX >= 360)
+    return null;
+  let image;
+  try {
+    image = await loadImage(overlay.url);
+  } catch {
+    // An image that does not decode draws nothing, as on the plain path.
+    return { url: overlay.url, rectangle: overlay.rectangle };
+  }
+  const natural = [
+    image.naturalWidth || image.width,
+    image.naturalHeight || image.height,
+  ];
+  // Pixels per degree: one scale on both axes when turned, so the image
+  // turns in degrees as Cesium's does.
+  let [scaleX, scaleY] = [natural[0] / width, natural[1] / height];
+  if (angle) scaleX = scaleY = Math.max(scaleX, scaleY);
+  const fit = Math.min(
+    1,
+    MAX_OVERLAY_SIDE / (spanX * scaleX),
+    MAX_OVERLAY_SIDE / (spanY * scaleY),
+  );
+  [scaleX, scaleY] = [scaleX * fit, scaleY * fit];
+  const canvas = createCanvas();
+  canvas.width = Math.max(1, Math.round(spanX * scaleX));
+  canvas.height = Math.max(1, Math.round(spanY * scaleY));
+  const context = canvas.getContext('2d');
+  context.translate(canvas.width / 2, canvas.height / 2);
+  // The canvas's y runs south: a counter-clockwise turn is a negative one.
+  context.rotate(-angle);
+  context.drawImage(
+    image,
+    (-width * scaleX) / 2,
+    (-height * scaleY) / 2,
+    width * scaleX,
+    height * scaleY,
+  );
+  if (tint.some((value) => value !== 1)) {
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < pixels.data.length; i += 4)
+      for (let channel = 0; channel < 3; channel++)
+        pixels.data[i + channel] *= tint[channel];
+    context.putImageData(pixels, 0, 0);
+  }
+  const wrap = (lon) => (lon > 180 ? lon - 360 : lon < -180 ? lon + 360 : lon);
+  return {
+    image: canvas,
+    rectangle: {
+      ...rectangle,
+      west: wrap(rectangle.west),
+      east: wrap(rectangle.east),
+    },
+  };
+}
+
+// KML headings are from north (Cesium's billboard on the Earth's axis):
+// the sprite turns on screen with the camera's heading.
+const turnsWithCamera = (look) => look.pins.some((pin) => pin.rotation);
+const onScreen = (pin, heading) => (pin.rotation ? pin.rotation + heading : 0);
 
 const flat = (positions) => positions.map(([lon, lat]) => [lon, lat]);
 const cartesian = ([lon, lat, height = 0]) =>
@@ -110,6 +212,9 @@ export async function drawImportedFile(
   let removeCull = null;
   const groundSets = [];
   const lines = [];
+  const meshes = [];
+  const pins = [];
+  const kinds = { ...records.undrawn };
   const layers = [];
   const looks = new Map();
   let drawn = 0;
@@ -120,12 +225,14 @@ export async function drawImportedFile(
     removeCull = null;
     for (const set of groundSets.splice(0)) set.destroy();
     for (const line of lines.splice(0)) line.destroy();
+    for (const mesh of meshes.splice(0)) mesh.destroy();
     for (const layer of layers.splice(0)) layer.destroy();
     for (const look of looks.values()) {
       pointSetsOf(engine).delete(look.set);
       look.set?.destroy();
     }
     looks.clear();
+    pins.length = 0;
   }
 
   try {
@@ -133,7 +240,34 @@ export async function drawImportedFile(
     const fills = [];
     for (const polygon of records.polygons) {
       let any = false;
-      if (polygon.fill) {
+      if (polygon.fill && polygon.raised) {
+        const vertices = polygon.rings.flat();
+        const origin = vertices[0]?.[0] ?? 0;
+        const xy = vertices.flatMap(([lon, lat]) => [
+          origin + ((((lon - origin + 180) % 360) + 360) % 360) - 180,
+          lat,
+        ]);
+        let count = 0;
+        const holes = polygon.rings
+          .slice(0, -1)
+          .map((ring) => (count += ring.length));
+        const indices = earcut(xy, holes);
+        if (indices.length) {
+          meshes.push(
+            engine.meshes.createMesh({
+              id: `${prefix}-fill-${meshes.length}`,
+              positions: vertices.flatMap((vertex) => {
+                const { x, y, z } = cartesian(vertex);
+                return [x, y, z];
+              }),
+              indices,
+              color: polygon.fill,
+              show: shown,
+            }),
+          );
+          any = true;
+        }
+      } else if (polygon.fill) {
         const item = checked('polygon', {
           rings: polygon.rings.map(flat),
           fill: polygon.fill,
@@ -160,34 +294,47 @@ export async function drawImportedFile(
       if (any) drawn++;
     }
     for (const overlay of records.overlays) {
+      // Cesium raises only an absolute overlay, to its altitude.
+      const raise =
+        overlay.altitudeMode === 'absolute' && overlay.altitude > 0
+          ? overlay.altitude
+          : undefined;
       if (overlay.url) {
+        const prepared = await overlayImage(overlay, loadImage, createCanvas);
+        if (!prepared) {
+          kinds.rotatedOverlay = (kinds.rotatedOverlay ?? 0) + 1;
+          continue;
+        }
         layers.push(
           engine.imagery.createLayer({
             id: `${prefix}-overlay-${layers.length}`,
-            source: {
-              kind: 'image',
-              url: overlay.url,
-              rectangle: overlay.rectangle,
-            },
+            source: { kind: 'image', ...prepared },
             // Cesium's transparent image material: at most 0.99.
             alpha: Math.min(0.99, overlay.color[3]),
             show: shown,
             order: OVERLAY_ORDER,
+            ...(raise ? { raise } : {}),
           }),
         );
         drawn++;
         continue;
       }
+      // A plain colour draws as a ground fill.
+      if (raise) {
+        kinds.raisedOverlay = (kinds.raisedOverlay ?? 0) + 1;
+        continue;
+      }
       const { west, south, east, north } = overlay.rectangle;
       const item = checked('cell', { west, south, east, north });
       if (!item) continue;
+      const { box, turn } = overlayBox(overlay);
       const rings = [
         [
-          [west, south],
-          [east < west ? east + 360 : east, south],
-          [east < west ? east + 360 : east, north],
-          [west, north],
-        ],
+          [box.west, box.south],
+          [box.east, box.south],
+          [box.east, box.north],
+          [box.west, box.north],
+        ].map(turn),
       ];
       fills.push({ rings, fill: overlay.color });
       drawn++;
@@ -261,6 +408,11 @@ export async function drawImportedFile(
         rotation: point.icon.rotation ?? 0,
       });
     }
+    pins.push(...[...looks.values()].flatMap((look) => look.pins));
+    const maxSide = Math.min(
+      512,
+      Math.floor(Math.sqrt(ICON_PIXEL_BUDGET / Math.max(1, looks.size))),
+    );
     await Promise.all(
       [...looks.values()].map(async (look) => {
         const url = look.icon.image?.url;
@@ -279,6 +431,7 @@ export async function drawImportedFile(
           image,
           createCanvas,
           ratio: pixelRatio,
+          maxSide,
         });
         look.set = engine.movers.createSet({
           id: `${prefix}-pins-${look.depth}-${looks.size}-${++serial}`,
@@ -299,7 +452,11 @@ export async function drawImportedFile(
       }),
     );
     if (destroyed) throw new Error('The imported file was removed');
-    settle(heightContext());
+    for (let from = 0; from < pins.length; from += BATCH) {
+      settle(heightContext(), from, from + BATCH);
+      if (from + BATCH < pins.length)
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     for (const look of looks.values()) writePins(look);
     syncCull();
   } catch (error) {
@@ -316,11 +473,30 @@ export async function drawImportedFile(
       (engine.imagery?.surface?.() ?? 'globe') !== 'globe' &&
       surface.clampToHeightSupported &&
       engine.camera.height() < CLAMP_TILES_BELOW_M;
-    return { surface, tiles, exclude: [...pointSetsOf(engine)] };
+    return {
+      surface,
+      tiles,
+      exclude: [...pointSetsOf(engine)],
+      size: tiles ? engine.host.size() : null,
+    };
+  }
+
+  // Whether a position is in the window now: clamping to 3D tiles reads
+  // the tiles drawn, and a point elsewhere would only cost the query.
+  function inWindow(position, { width, height }) {
+    if (!engine.projector.horizonVisible(position)) return false;
+    const screen = engine.projector.worldToWindow(position);
+    return (
+      Boolean(screen) &&
+      screen.x >= 0 &&
+      screen.y >= 0 &&
+      screen.x <= width &&
+      screen.y <= height
+    );
   }
 
   // The ground under a pin, falling back to the last known one.
-  function groundUnder(pin, { surface, tiles, exclude }) {
+  function groundUnder(pin, { surface, tiles, exclude, size }) {
     const at = geo.cartographic.fromDegrees(pin.lon, pin.lat, 0);
     const terrain = surface.terrainHeightSupported
       ? surface.terrainHeight(at)
@@ -331,7 +507,10 @@ export async function drawImportedFile(
         ? Math.max(0, terrain)
         : terrain
       : (pin.ground ?? 0);
-    if (tiles) {
+    if (
+      tiles &&
+      inWindow(geo.cartesian3.fromDegrees(pin.lon, pin.lat, ground), size)
+    ) {
       const top = surface.clampToHeight(
         geo.cartesian3.fromDegrees(pin.lon, pin.lat, Math.max(0, ground)),
         exclude,
@@ -342,33 +521,33 @@ export async function drawImportedFile(
     return ground;
   }
 
-  function settle(context, from = 0, to = Infinity) {
-    let at = 0;
-    for (const look of looks.values())
-      for (const pin of look.pins) {
-        if (at++ < from || at > to) continue;
-        if (pin.height === null) pin.ground = groundUnder(pin, context);
-        const height = pin.height ?? pin.ground + pin.offset;
-        pin.position = geo.cartesian3.fromDegrees(pin.lon, pin.lat, height);
-        pin.horizon = geo.cartesian3.fromDegrees(
-          pin.lon,
-          pin.lat,
-          height + HORIZON_LIFT_M,
-        );
-      }
+  function settle(context, from = 0, to = pins.length) {
+    for (let i = from; i < Math.min(to, pins.length); i++) {
+      const pin = pins[i];
+      if (pin.height === null) pin.ground = groundUnder(pin, context);
+      const height = pin.height ?? pin.ground + pin.offset;
+      pin.position = geo.cartesian3.fromDegrees(pin.lon, pin.lat, height);
+      pin.horizon = geo.cartesian3.fromDegrees(
+        pin.lon,
+        pin.lat,
+        height + HORIZON_LIFT_M,
+      );
+    }
   }
 
   function writePins(look) {
     const { set, pins } = look;
     if (!set) return;
     const culled = look.depth === 'always';
+    const heading = turnsWithCamera(look) ? engine.camera.pose().heading : 0;
     pins.forEach((pin, index) => {
       if (culled) pin.show = engine.projector.horizonVisible(pin.horizon);
+      pin.drawnRotation = onScreen(pin, heading);
       set.set(index, {
         position: pin.position,
         cell: 'icon',
         color: pin.color,
-        rotation: pin.rotation,
+        rotation: pin.drawnRotation,
         show: pin.show,
       });
     });
@@ -377,14 +556,18 @@ export async function drawImportedFile(
     set.commit();
   }
 
-  // Hides the ground points beyond the horizon; true when any show changed.
-  function cull(look) {
+  // Hides the ground points beyond the horizon and turns the headed ones
+  // with the camera; true when any changed.
+  function cull(look, heading) {
     let changed = false;
     look.pins.forEach((pin, index) => {
-      const show = engine.projector.horizonVisible(pin.horizon);
-      if (show === pin.show) return;
+      const show =
+        look.depth !== 'always' || engine.projector.horizonVisible(pin.horizon);
+      const rotation = onScreen(pin, heading);
+      if (show === pin.show && rotation === pin.drawnRotation) return;
       pin.show = show;
-      look.set.set(index, { show });
+      pin.drawnRotation = rotation;
+      look.set.set(index, { show, rotation });
       changed = true;
     });
     if (changed) look.set.commit();
@@ -392,33 +575,39 @@ export async function drawImportedFile(
   }
   function syncCull() {
     const culled = [...looks.values()].filter(
-      (look) => look.set && look.depth === 'always',
+      (look) => look.set && (look.depth === 'always' || turnsWithCamera(look)),
     );
     if (!culled.length || !shown) {
       removeCull?.();
       removeCull = null;
       return;
     }
+    const turning = culled.some(turnsWithCamera);
     const lastCamera = geo.cartesian3.create(Number.NaN, 0, 0);
+    let lastHeading = Number.NaN;
     removeCull ??= engine.frames.preRender.addEventListener(() => {
       const live = engine.camera.livePosition;
-      if (geo.cartesian3.equals(live, lastCamera)) return;
+      const heading = turning ? engine.camera.pose().heading : 0;
+      if (geo.cartesian3.equals(live, lastCamera) && heading === lastHeading)
+        return;
+      lastHeading = heading;
       geo.cartesian3.clone(live, lastCamera);
       let changed = false;
-      for (const look of culled) changed = cull(look) || changed;
+      for (const look of culled) changed = cull(look, heading) || changed;
       if (changed) request();
     });
   }
 
-  const undrawn = Object.values(records.undrawn).reduce((n, c) => n + c, 0);
+  const undrawn = Object.values(kinds).reduce((n, c) => n + c, 0);
   return {
-    report: { drawn, undrawn, kinds: { ...records.undrawn } },
+    report: { drawn, undrawn, kinds },
     setShow(visibleNow) {
       visibleNow = Boolean(visibleNow);
       if (destroyed || visibleNow === shown) return;
       shown = visibleNow;
       for (const set of groundSets) set.show(shown);
       for (const line of lines) line.show(shown);
+      for (const mesh of meshes) mesh.show(shown);
       for (const layer of layers) layer.show(shown);
       for (const look of looks.values()) {
         look.set?.setCount(shown ? look.count : 0);
@@ -444,7 +633,7 @@ export async function drawImportedFile(
     },
     /** Sample the ground under the points again (a map or the terrain changed). */
     async refreshGround(signal) {
-      const total = [...looks.values()].reduce((n, l) => n + l.pins.length, 0);
+      const total = pins.length;
       for (let from = 0; from < total; from += BATCH) {
         signal?.throwIfAborted();
         if (destroyed) return;

@@ -2,6 +2,7 @@
 // the view's HDR effects. This keeps MSAA from spreading HDR tint into edges.
 import { InstancedMesh } from 'three';
 import { OVERLAY_DEPTH_FRAGMENT } from '../overlayDepth.js';
+import { DETACHED_SONAR, SONAR_VERTEX } from '../sonar.js';
 
 // three's pinned ACESFilmicToneMapping, with the view's public exposure.
 const ACES = `
@@ -18,6 +19,7 @@ vec3 gevModelAces(vec3 color) {
 
 export function createModelTint(mesh, uniforms, overlayUniforms) {
   const material = mesh.material.clone();
+  material.transparent = true;
   material.depthTest = false;
   material.depthWrite = false;
   material.toneMapped = false;
@@ -25,22 +27,22 @@ export function createModelTint(mesh, uniforms, overlayUniforms) {
     ? 'gl_FragColor.rgb'
     : 'gevModelAces(gl_FragColor.rgb)';
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms, overlayUniforms, {
+    Object.assign(shader.uniforms, DETACHED_SONAR, uniforms, overlayUniforms, {
       uGevDepthMode: { value: 1 },
     });
     shader.vertexShader = shader.vertexShader
       .replace(
         'void main() {',
-        'attribute vec4 gevColor;\nvarying vec4 vGevColor;\nvarying float vGevDepthFree;\nvoid main() {',
+        `attribute vec4 gevColor;\nvarying vec4 vGevColor;\nvarying float vGevDepthFree;\nvarying float vGevSonarFactor;\nuniform vec2 uGevResolution;\n${SONAR_VERTEX}\nvoid main() {`,
       )
       .replace(
         '#include <begin_vertex>',
-        '#include <begin_vertex>\nvGevColor = gevColor;\nvGevDepthFree = 0.0;',
+        '#include <begin_vertex>\nvGevColor = gevColor;\nvGevDepthFree = 0.0;\nvGevSonarFactor = gevSonarFactor(projectionMatrix * modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0), uGevResolution);',
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
-        `uniform float uGevBlend;\nuniform float uGevAmbient;\nvarying vec4 vGevColor;\n${ACES}\n${OVERLAY_DEPTH_FRAGMENT}\nvoid main() {`,
+        `uniform float uGevBlend;\nuniform float uGevAmbient;\nvarying vec4 vGevColor;\n${ACES}\nvarying float vGevSonarFactor;\n${SONAR_VERTEX}\n${OVERLAY_DEPTH_FRAGMENT}\nvoid main() {`,
       )
       .replace(
         '#include <logdepthbuf_fragment>',
@@ -56,7 +58,7 @@ export function createModelTint(mesh, uniforms, overlayUniforms) {
       )
       .replace(
         '#include <opaque_fragment>',
-        `#include <opaque_fragment>\nvec3 gevLitSrgb = sRGBTransferOETF(vec4(${lit}, 1.0)).rgb;\ngl_FragColor.rgb = sRGBTransferEOTF(vec4(mix(gevLitSrgb, vGevColor.rgb, uGevBlend), 1.0)).rgb;`,
+        `#include <opaque_fragment>\nvec3 gevLitSrgb = sRGBTransferOETF(vec4(${lit}, 1.0)).rgb;\nvec4 gevContact = gevSonarColor(vec4(mix(gevLitSrgb, vGevColor.rgb, uGevBlend), gl_FragColor.a), vGevSonarFactor);\ngl_FragColor = vec4(sRGBTransferEOTF(gevContact).rgb, gevContact.a);`,
       );
   };
   material.customProgramCacheKey = () => 'gev-model-lit-display-color';

@@ -2297,13 +2297,19 @@ export function createAnnotationResolver({
   /**
    * Whether a depth pick landed on the camera itself: something drawn into
    * the depth buffer at the near plane (Navara's screen-space preview lines
-   * and sprites) reads back as a point a metre or so from the camera. Such a
-   * pick is a miss; the ray's globe hit answers instead.
+   * and sprites) reads back as a point near the camera, the nearer the lower
+   * the camera. Such a pick is a miss; the ray's globe hit answers instead.
+   * The scale is the rendered surface under the ray, not sea level, so a
+   * camera just above high terrain keeps its ground.
    */
   function depthAtCamera(engine, screen, hit) {
     const camera = engine.camera.livePosition;
-    const ground = engine.camera.pickEllipsoid(screen);
-    const reference = ground ? geo.cartesian3.distance(ground, camera) : 0;
+    let ground = engine.picker.pickGlobe(screen);
+    if (!isPickedWorldPosition(ground))
+      ground = engine.camera.pickEllipsoid(screen);
+    const reference = isPickedWorldPosition(ground)
+      ? geo.cartesian3.distance(ground, camera)
+      : 0;
     return geo.cartesian3.distance(hit, camera) < Math.max(2, 0.01 * reference);
   }
 
@@ -2340,8 +2346,8 @@ export function createAnnotationResolver({
         const hit = engine.picker.pickPosition(screen);
         return hit && !depthAtCamera(engine, screen, hit) ? hit : undefined;
       },
-      () => engine.camera.pickEllipsoid(screen),
       () => engine.picker.pickGlobe(screen),
+      () => engine.camera.pickEllipsoid(screen),
     ];
     for (const stage of stages) {
       let cart = null;

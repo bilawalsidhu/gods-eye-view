@@ -29,6 +29,17 @@ export function createIngestion({
         parts.model.projectionTilesReady()
       ) {
         layerState._tilesReadyReenqueued = true;
+        const active = parts.selection.getActiveRecord();
+        if (active?.surfaceProbePending) {
+          active.surfaceProbePending = false;
+          parts.geometry.runActivationObstructionProbe(active);
+          parts.geometry.applyFrustumGeometry(
+            active,
+            parts.ground.groundAltFor(active),
+          );
+          active.activationDone = true;
+          changed = true;
+        }
         // Per-regime resolution (Task 5): only records unresolved for the
         // CURRENT surface regime need the completion pass. On globe stacks
         // projectionTilesReady() is false while a (hidden) Google tileset

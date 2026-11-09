@@ -159,7 +159,7 @@ export function createLocalAdsbModels({
       view.engine,
       id,
       marker.position,
-      () => [marker.entity, model].filter(Boolean),
+      () => [id],
     );
     if (!Number.isFinite(height)) return null;
     const carto = geo.cartographic.fromCartesian(

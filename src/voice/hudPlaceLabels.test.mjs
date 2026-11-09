@@ -368,3 +368,17 @@ test('cached-only lookups read every cached viewport sample and never request', 
   assert.ok(b.placeLabels.includes(cachedLabel));
   assert.deepEqual(service.calls, before);
 });
+
+test('basemap lookup measures the horizontal camera span', async () => {
+  const { viewer } = createViewer({
+    latitude: 30,
+    longitude: -97,
+    heightM: 1000,
+  });
+  const result = await getBasemapLabelContext(viewer, createService(), {
+    cachedOnly: true,
+  });
+  assert.ok(
+    Math.abs(result.view.spanM - 2 * 1000 * Math.tan(Math.PI / 6) * 1.5) < 1,
+  );
+});

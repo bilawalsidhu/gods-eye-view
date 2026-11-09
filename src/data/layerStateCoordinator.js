@@ -404,25 +404,6 @@ export class LayerStateCoordinator {
             live,
             enabled.has(entry.id),
           );
-          // A same-document engine choice retains operational layer intents.
-          // The share still owns durable preferences and later history visits.
-          if (
-            live &&
-            this.dataManager.layers.get(entry.id) === live.entry &&
-            !live.entry.lifecycleUncertain &&
-            live.entry.enabled === targetEnabled
-          ) {
-            return {
-              layerId: entry.id,
-              targetEnabled,
-              origin,
-              phase: 'retained',
-              ...currentLayerOutcome(this.dataManager, entry.id),
-              appliedOptions: {},
-              persistenceWrite: false,
-              succeeded: true,
-            };
-          }
           const options = layerOptionsForRestore(this._durableState, entry.id);
           if (origin === LAYER_RESTORE_ORIGINS.share && options) {
             for (const trackingKey of Object.values(
@@ -443,6 +424,37 @@ export class LayerStateCoordinator {
               errorClass: 'cancelled',
               persistenceWrite: false,
               succeeded: false,
+            };
+          }
+          // A same-document engine choice retains operational layer intents.
+          // The share still owns durable preferences and later history visits:
+          // on a visit, the entry's options that differ from the live layer
+          // apply; a pick keeps the live layer as it is.
+          if (
+            live &&
+            this.dataManager.layers.get(entry.id) === live.entry &&
+            !live.entry.lifecycleUncertain &&
+            live.entry.enabled === targetEnabled
+          ) {
+            const current = this.dataManager.getLayerParams(entry.id);
+            const changed =
+              live.visit === true &&
+              options &&
+              Object.entries(options).some(
+                ([key, value]) => !Object.is(current?.[key], value),
+              );
+            const succeeded =
+              !changed ||
+              this.dataManager.setLayerParams(entry.id, options, { origin });
+            return {
+              layerId: entry.id,
+              targetEnabled,
+              origin,
+              phase: 'retained',
+              ...currentLayerOutcome(this.dataManager, entry.id),
+              appliedOptions: changed && succeeded ? options : {},
+              persistenceWrite: false,
+              succeeded,
             };
           }
           // Reserve passive option state before any asynchronous lifecycle work.

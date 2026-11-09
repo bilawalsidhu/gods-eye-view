@@ -17,6 +17,7 @@ export function layersNotOnThisEngine(results) {
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { t, msg, formatDate } from '../i18n/index.js';
+import { localizeLayerName } from './layerNames.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
 
@@ -411,9 +412,11 @@ export class ShareRestoration {
     if (this._disposed || !Array.isArray(results)) return;
     const names = layersNotOnThisEngine(results);
     if (!names.length) return;
-    this.showStatus('NOT ON THIS ENGINE', {
+    this.showStatus(t('NOT ON THIS ENGINE'), {
       state: 'retry',
-      detail: `Kept in the link: ${names.join(', ')}`,
+      detail: t('Kept in the link: {layers}', {
+        layers: names.map(localizeLayerName).join(', '),
+      }),
       // Long enough to read a list of layer names; the engine's own
       // persistent notice comes back afterwards (ShellFeedback).
       dwellMs: NOT_ON_THIS_ENGINE_DWELL_MS,

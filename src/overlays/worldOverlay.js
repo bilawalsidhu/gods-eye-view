@@ -1149,12 +1149,6 @@ export function createWorldOverlay(engine) {
   }
 
   /**
-   * True when a candidate survives the explicit horizon/viewport policies.
-   * The horizon test prefers `entry.cullPosition` when the source supplied one
-   * (see normalizeOverlayEntry) so a sub-ellipsoid render anchor is not
-   * false-hidden near the limb; everything else still uses the render position.
-   */
-  /**
    * Return true when a rectangle intersects any cached UI exclusion box.
    * `count` lets pooled buffers expose a live prefix without truncating.
    */

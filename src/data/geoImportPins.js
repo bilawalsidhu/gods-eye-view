@@ -87,7 +87,10 @@ export function iconBox(icon, natural) {
  * `ratio` canvas pixels per CSS pixel. Returns the canvas and the sprite's
  * side in CSS pixels.
  */
-export function composeIcon(icon, { image, createCanvas, ratio = 1 } = {}) {
+export function composeIcon(
+  icon,
+  { image, createCanvas, ratio = 1, maxSide = 512 } = {},
+) {
   const natural = image
     ? {
         width: image.naturalWidth || image.width,
@@ -96,7 +99,7 @@ export function composeIcon(icon, { image, createCanvas, ratio = 1 } = {}) {
     : undefined;
   const box = iconBox(icon, natural);
   // At least one canvas pixel per icon pixel, at most 512 a side.
-  const k = Math.min(ratio, 512 / box.side);
+  const k = Math.min(ratio, maxSide / box.side);
   const canvas = createCanvas();
   canvas.width = Math.max(1, Math.ceil(box.side * k));
   canvas.height = canvas.width;

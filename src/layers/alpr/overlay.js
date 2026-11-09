@@ -19,6 +19,8 @@ import {
   validAlprGroundHeight,
 } from './visuals.js';
 
+let overlaySequence = 0;
+
 /**
  * Canvas artwork for the nearest ALPR cameras over each engine's native
  * markers, with bounded surface refinement. The engine adapter owns marker
@@ -341,7 +343,7 @@ export function createAlprOverlayCore({
       if (!services.overlays?.registerPaintLane || typeof Image === 'undefined')
         return;
       lane = services.overlays.registerPaintLane('selected', paint, {
-        id: `alpr-${globalThis.crypto.randomUUID()}`,
+        id: `alpr-${++overlaySequence}`,
         active: false,
       });
       images = [MARKER_IMAGE, SELECTED_IMAGE, BRACKETS_IMAGE].map((src) => {

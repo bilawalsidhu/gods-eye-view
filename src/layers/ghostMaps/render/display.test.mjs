@@ -414,3 +414,79 @@ test('an edition destroyed while its icons decode draws no placemarks', async ()
     /destroyed/,
   );
 });
+
+test('placemarks follow the loaded surface and refine after tiles settle', async (t) => {
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  engine.projector.worldToWindow = () => ({ x: 100, y: 100 });
+  let height = 350;
+  let loaded = false;
+  engine.fake.script('terrainHeight', () => height);
+  engine.fake.script('tilesLoaded', () => loaded);
+  const display = createGhostMapsDisplay(engine, iconSeams());
+  t.after(() => display.destroy());
+  const paint = display.draw(
+    'cip',
+    new Map([
+      [
+        0,
+        {
+          style: {},
+          geometries: [{ type: 'point', position: [0, 0] }],
+        },
+      ],
+    ]),
+    PRODUCT,
+    markerImage,
+  );
+  t.after(() => paint.destroy());
+  await paint.ready;
+  const altitude = () => {
+    const { store } = engine.fake.moverSet('s2-ghostmaps:cip:1:pins');
+    return geo.cartographic.fromCartesian({
+      x: store.positions[0],
+      y: store.positions[1],
+      z: store.positions[2],
+    }).height;
+  };
+  assert.ok(Math.abs(altitude() - 350) < 0.01);
+  engine.fake.frames(1);
+  height = 420;
+  loaded = true;
+  engine.fake.frames(1);
+  assert.ok(Math.abs(altitude() - 420) < 0.01);
+});
+
+test('a large edition measures only on-screen placemarks, a few per pass', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  let onScreen = 0;
+  engine.projector.worldToWindow = () =>
+    onScreen-- > 0 ? { x: 100, y: 100 } : undefined;
+  let samples = 0;
+  engine.fake.script('terrainHeight', () => {
+    samples++;
+    return 30;
+  });
+  const display = createGhostMapsDisplay(engine, iconSeams());
+  t.after(() => display.destroy());
+  const features = new Map(
+    Array.from({ length: 2000 }, (_, index) => [
+      index,
+      {
+        style: {},
+        geometries: [{ type: 'point', position: [index / 100, 0] }],
+      },
+    ]),
+  );
+  onScreen = 40;
+  const paint = display.draw('cip', features, PRODUCT, markerImage);
+  t.after(() => paint.destroy());
+  await paint.ready;
+  assert.ok(samples > 0 && samples <= 16, `first pass sampled ${samples}`);
+  t.mock.timers.tick(0);
+  t.mock.timers.tick(0);
+  t.mock.timers.tick(0);
+  assert.equal(samples, 40, 'every on-screen placemark, none off screen');
+});

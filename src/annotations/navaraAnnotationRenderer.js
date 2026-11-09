@@ -245,6 +245,7 @@ export function createNavaraWorldAnnotationRenderer(
 export function createNavaraAnnotationRenderer(engine, views, { screen } = {}) {
   const world = createNavaraWorldAnnotationRenderer(engine, views);
   const renderer = createHybridAnnotationRenderer(null, {
+    engine,
     world,
     screenScene: screenSceneFromEngine(engine),
     screen,

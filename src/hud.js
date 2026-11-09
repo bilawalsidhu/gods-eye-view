@@ -561,7 +561,7 @@ export class IntelHUD {
     // i18n-ignore: sensor codes
     readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
     if (this.engine?.host.container?.hasAttribute?.('data-terrain-daylight'))
-      readouts.alt += ' · DAYLIGHT VIEW';
+      readouts.alt += ` · ${t('DAYLIGHT VIEW')}`;
 
     // Collection timestamp
     const now = new Date();

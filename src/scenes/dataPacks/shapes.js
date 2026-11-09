@@ -6,9 +6,6 @@ import * as geo from '../../geo/index.js';
 const GRANULARITY_DEGREES = 1;
 
 function shape(positions, indices, st = null) {
-  const center = geo.cartesian3.create();
-  for (const p of positions) geo.cartesian3.add(center, p, center);
-  geo.cartesian3.divideByScalar(center, positions.length || 1, center);
   const values = new Float64Array(positions.length * 3);
   positions.forEach((p, i) => values.set([p.x, p.y, p.z], i * 3));
   return {
@@ -17,7 +14,6 @@ function shape(positions, indices, st = null) {
       ...(st ? { st: { values: st } } : {}),
     },
     indices: new Uint32Array(indices),
-    boundingSphere: { center },
   };
 }
 

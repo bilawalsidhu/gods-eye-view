@@ -115,7 +115,7 @@ test("Cesium's workers get embedded files from memory and other requests from th
   }
 });
 
-test('the panel build leaves out the initial-chunk guard (it inlines Navara)', () => {
+test('the single-chunk panel build leaves out the initial-chunk guard', () => {
   const kept = { name: 'kept' };
   const config = panelBuildConfig({
     build: {

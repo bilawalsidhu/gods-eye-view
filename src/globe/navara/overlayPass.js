@@ -165,6 +165,17 @@ export class GevOverlayPass extends Pass {
       resolution[0],
       resolution[1],
     );
+    if (signature) {
+      // The sonar's uniforms change the glyphs only while it applies; its
+      // angle moves every frame even then, so it is left out otherwise.
+      const uniforms = this.overlay.uniforms;
+      const enabled = uniforms.uGevSonarEnabled?.value >= 0.5;
+      const [angle, range, floor, active] = uniforms.uGevSonar?.value ?? [];
+      signature.push(enabled);
+      if (enabled) signature.push(floor, active);
+      if (enabled && active >= 0.5)
+        signature.push(angle, range, uniforms.uGevSonarSector?.value);
+    }
     const targetWidth = resolution[0];
     const targetHeight = resolution[1];
     if (

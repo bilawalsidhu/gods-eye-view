@@ -1,5 +1,5 @@
 // How the transit vehicles and the selected vehicle's trail draw
-// (engine.movers sprite sets, engine.lines).
+// (engine.movers sprite sets, engine.ground corridors).
 
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 

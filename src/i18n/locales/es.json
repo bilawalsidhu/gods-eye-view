@@ -3246,5 +3246,12 @@
   "Maximum event age: {days}d; undated markers are kept": "Antigüedad máxima: {days} días; se conservan los marcadores sin fecha",
   "event age filter|All": "Todos",
   "Event age": "Antigüedad",
-  "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha"
+  "Event age: {days}d · undated kept": "Antigüedad: {days} días · se conservan los marcadores sin fecha",
+  "Data layers: {layers}": "Capas de datos: {layers}",
+  "No registered data layers": "No hay capas de datos registradas",
+  "DAYLIGHT VIEW": "VISTA DIURNA",
+  "Globe engine failed to start. Running {engine}: {message}": "No se pudo iniciar el motor del globo. Se usa {engine}: {message}",
+  "Bing imagery is not available on the experimental Navara engine": "Las imágenes de Bing no están disponibles en el motor experimental Navara",
+  "NOT ON THIS ENGINE": "NO EN ESTE MOTOR",
+  "Kept in the link: {layers}": "Se conservan en el enlace: {layers}"
 }

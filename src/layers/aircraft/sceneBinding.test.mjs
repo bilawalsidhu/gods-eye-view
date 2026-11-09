@@ -81,17 +81,14 @@ function binding(flightState, tracked) {
 test('resuming an aircraft on Cesium preserves the pending share navigation', (t) => {
   const shell = observedShell(t);
   let restored;
-  binding(
-    { initialized: true, _trackedIcao: 'a00000', _preloadModel: {} },
-    (id, options) => {
-      restored = { id, ...options };
-      follow(
-        shell.followChanged,
-        { gevSelectionOrigin: options.origin },
-        options.resume,
-      );
-    },
-  ).attachRenderer({});
+  binding({ initialized: true, _trackedIcao: 'a00000' }, (id, options) => {
+    restored = { id, ...options };
+    follow(
+      shell.followChanged,
+      { gevSelectionOrigin: options.origin },
+      options.resume,
+    );
+  }).attachRenderer({});
   assert.equal(restored.id, 'a00000');
   assert.equal(restored.resume, true);
   assert.equal(
@@ -126,7 +123,6 @@ test('an engine switch resumes the aircraft with the origin it was selected by',
   const flightState = {
     initialized: true,
     _trackedIcao: 'a00000',
-    _preloadModel: null,
     _modelEpoch: 0,
     _modelPending: new Map(),
     _modelGen: new Map(),
@@ -136,12 +132,10 @@ test('an engine switch resumes the aircraft with the origin it was selected by',
     _groundSnap: new Map(),
   };
   const scene = binding(flightState, (id, options) => calls.push(options));
-  flightState._preloadModel = {};
   scene.attachRenderer({});
   assert.equal(calls[0].origin, 'programmatic');
   flightState._trackedEntity = { gevSelectionOrigin: 'voice' };
   scene.detachRenderer({});
-  flightState._preloadModel = {};
   scene.attachRenderer({});
   assert.equal(calls[1].origin, 'voice');
   assert.equal(calls[1].resume, true);

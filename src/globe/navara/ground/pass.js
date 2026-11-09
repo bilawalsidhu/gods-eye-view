@@ -44,6 +44,7 @@ const float = (value) => (Number.isInteger(value) ? `${value}.0` : `${value}`);
 const fragmentShader = /* glsl */ `
 uniform sampler2D tAllDepth;
 uniform sampler2D tSurfaceDepth;
+uniform sampler2D tGlobeDepth;
 uniform highp sampler2D tFrames;
 uniform highp sampler2D tStyles;
 uniform highp sampler2D tSegments;
@@ -73,7 +74,7 @@ vec3 blendCorridor(vec3 color, int item, float nearest, vec2 normal, float along
   // Metres a pixel spans across the line (the screen gradient of the
   // distance to it): its width in pixels the same at any angle, as Cesium's.
   float pixel = max(length(vec2(dot(normal, localDx), dot(normal, localDy))), 1e-4);
-  float halfWidth = shape.x > 0.0 ? shape.x * 0.5 * pixel : shape.y * 0.5;
+  float halfWidth = shape.x > 0.0 ? shape.x * uPixelRatio * 0.5 * pixel : shape.y * 0.5;
   float cover = clamp((halfWidth - nearest) / pixel + 0.5, 0.0, 1.0);
   if (cover <= 0.0) return color;
   vec4 fill = atSlot(tItems, at);
@@ -137,6 +138,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   float surface = texture2D(tSurfaceDepth, uv).r;
   // The packed depth also holds forward meshes, which are not ground.
   if (depth < surface - 2e-7) return;
+  float globeDepth = unpackRGBAToDepth(texture2D(tGlobeDepth, uv));
+  bool onTiles = surface < globeDepth - 2e-7;
   vec3 color = toDisplay(inputColor.rgb);
   // The pixel's ground in world space, once: every corridor tile tests the
   // same value, so exactly one tile of a set holds it.
@@ -150,7 +153,9 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     vec4 origin = atSlot(tFrames, id * ${TEXELS});
     vec4 east = atSlot(tFrames, id * ${TEXELS} + 1);
     vec4 north = atSlot(tFrames, id * ${TEXELS} + 2);
-    vec3 up = atSlot(tFrames, id * ${TEXELS} + 3).xyz;
+    vec4 surfaceFrame = atSlot(tFrames, id * ${TEXELS} + 3);
+    if ((surfaceFrame.w == 1.0 && onTiles) || (surfaceFrame.w == 2.0 && !onTiles)) continue;
+    vec3 up = surfaceFrame.xyz;
     vec4 span = atSlot(tStyles, id * ${STYLE_TEXELS} + 3);
     vec3 delta = point - origin.xyz;
     float height = dot(delta, up);
@@ -190,7 +195,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
       // A pixel past the bins (beyond an open side) takes the bin nearest
       // it, with a margin that reaches it too.
       float past = length(max(vec2(0.0), max(place.xy - local, local - open.zw)));
-      float need = (lineColor.z * pixelMax + past) / (${float(MARGIN_RATIO)} * shape.y);
+      float need = (lineColor.z * uPixelRatio * pixelMax + past) / (${float(MARGIN_RATIO)} * shape.y);
       int level = need <= 1.0 ? 0 : min(int(lineColor.w + 0.5), int(ceil(log2(need))));
       int columns = int(shape.z + 0.5);
       int rows = int(shape.w + 0.5);
@@ -264,7 +269,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
       vec2 centre = vec2(0.0);
       vec4 grid = atSlot(tStyles, id * ${STYLE_TEXELS} + 4);
       if (grid.x > 0.5 &&
-          (length(localDx) + length(localDy)) * (shape.y * 0.5 + 1.5) <= grid.z * 0.5) {
+          (length(localDx) + length(localDy)) * (shape.y * uPixelRatio * 0.5 + 1.5) <= grid.z * 0.5) {
         vec2 origin = atSlot(tStyles, id * ${STYLE_TEXELS} + 5).xy;
         ivec2 cell = ivec2(floor((local - origin) / grid.z));
         // Off the grid: outside the area, beyond any edge's reach.
@@ -317,7 +322,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     if (fillColor.a > 0.0)
       color = mix(color, fillColor.rgb, fillColor.a * clamp(inward / pixel + 0.5, 0.0, 1.0));
     if (lineColor.a > 0.0 && shape.y > 0.0)
-      color = mix(color, lineColor.rgb, lineColor.a * clamp(shape.y * 0.5 - nearest / pixel + 0.5, 0.0, 1.0));
+      color = mix(color, lineColor.rgb, lineColor.a * clamp(shape.y * uPixelRatio * 0.5 - nearest / pixel + 0.5, 0.0, 1.0));
   }
   outputColor = vec4(toLinear(color), inputColor.a);
 }
@@ -401,6 +406,7 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
       attributes: EffectAttribute.CONVOLUTION,
       uniforms: new Map([
         ...groundSurfaceUniforms(),
+        ['tGlobeDepth', new Uniform(null)],
         ['tFrames', new Uniform(null)],
         ['tStyles', new Uniform(null)],
         ['tSegments', new Uniform(null)],
@@ -425,12 +431,15 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
     updateGroundSurface(this.effect, camera, this.ctx, mrt);
     const input = this.ctx.getInputBuffer();
     const { state } = owner;
+    const cssWidth = this.view.canvas?.clientWidth;
+    const pixelRatio = cssWidth > 0 ? input.width / cssWidth : 1;
     if (
       state.update(
         camera.matrixWorldInverse.elements,
         camera.projectionMatrix.elements,
         input.width,
         input.height,
+        pixelRatio,
       )
     ) {
       const textures = owner.textures;
@@ -444,10 +453,10 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
       textures.candidates.needsUpdate = true;
     }
     const u = this.effect.uniforms;
+    u.get('tGlobeDepth').value = mrt.globeDepthBuffer;
     u.get('uViewToWorld').value.copy(camera.matrixWorld);
     u.get('uTime').value = groundSeconds();
-    const cssWidth = this.view.canvas?.clientWidth;
-    u.get('uPixelRatio').value = cssWidth > 0 ? input.width / cssWidth : 1;
+    u.get('uPixelRatio').value = pixelRatio;
     u.get('tFrames').value = owner.textures.frames;
     u.get('tStyles').value = owner.textures.styles;
     u.get('tSegments').value = owner.textures.segments;

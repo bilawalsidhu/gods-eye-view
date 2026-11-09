@@ -97,6 +97,12 @@ export function createCesiumMaps(
   let currentTiles = null;
   let creditOwner = null;
   let destroyed = false;
+  // Every terrain the globe takes counts, a fallback to the ellipsoid too.
+  let terrainRevision = 0;
+  const offTerrain =
+    viewer.scene.globe?.terrainProviderChanged?.addEventListener(
+      () => terrainRevision++,
+    );
 
   const startupTileset = () =>
     (typeof tilesetRef === 'function' ? tilesetRef() : tilesetRef?.current) ??
@@ -214,6 +220,7 @@ export function createCesiumMaps(
     },
     photorealActive: () => tilesets().some((tileset) => tileset.show === true),
     current: () => ({ baseImagery: currentBase, photoreal: currentTiles }),
+    terrainRevision: () => terrainRevision,
   };
 
   return {
@@ -224,6 +231,7 @@ export function createCesiumMaps(
       if (destroyed) return;
       destroyed = true;
       abort.abort();
+      offTerrain?.();
       mapScene.destroy();
       for (const promise of providers.values())
         void promise.then(dispose, () => {});

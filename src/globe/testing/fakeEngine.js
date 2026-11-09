@@ -77,9 +77,11 @@ const SCRIPTABLE = new Set([
   'sampleHeight',
   'sampleHeightDetailed',
   'terrainHeight',
+  'sampleTerrainMostDetailed',
   'clampToHeight',
   'tilesLoaded',
   'worldToWindow',
+  'moverFailed',
 ]);
 const EASINGS = {
   linear: (t) => t,
@@ -254,13 +256,16 @@ export function createFakeEngine(options = {}) {
     };
   });
   // Movers keep their store for tests; commit counts as a render request.
-  const moverRegistry = createMoverRegistry(() => {
+  const moverRegistry = createMoverRegistry((options) => {
     const part = {
       commits: 0,
       commit() {
         part.commits++;
         fake.renderRequests++;
       },
+      // Scripted as 'moverFailed' (set id, index) for a load that fails.
+      failed: (index) =>
+        scripted('moverFailed', [options.id, index], () => false),
       destroy() {},
     };
     return part;
@@ -340,7 +345,14 @@ export function createFakeEngine(options = {}) {
     renderRequests: 0,
     cameraInputsEnabled: true,
     credits: [],
-    maps: { imagery: undefined, terrain: undefined, photoreal: null },
+    maps: {
+      imagery: undefined,
+      terrain: undefined,
+      photoreal: null,
+      terrainRevision: 0,
+    },
+    // render.maxTextureSize: a common WebGL2 limit; tests set a smaller one.
+    maxTextureSize: 4096,
     destroyed: false,
   };
   const record = (method, args) => fake.calls.push({ method, args });
@@ -523,6 +535,7 @@ export function createFakeEngine(options = {}) {
       command('camera.setView', [view]);
       if (!view?.destination)
         throw new TypeError('setView needs a destination');
+      cancelCurrentFlight();
       apply(viewFor(view.destination, view.orientation, CESIUM_DEFAULTS));
     },
     flyTo(flightOptions) {
@@ -780,6 +793,7 @@ export function createFakeEngine(options = {}) {
         continuous = Boolean(enabled);
       },
       isContinuous: () => continuous,
+      maxTextureSize: () => fake.maxTextureSize,
       setSharpen(options) {
         record('render.setSharpen', [options]);
         sharpen = mergeSharpen(sharpen, options);
@@ -823,6 +837,14 @@ export function createFakeEngine(options = {}) {
         return scripted('terrainHeight', [position], () => 0);
       },
       terrainHeightSupported: true,
+      async sampleTerrainMostDetailed(positions) {
+        record('surface.sampleTerrainMostDetailed', [positions]);
+        return scripted('sampleTerrainMostDetailed', [positions], () =>
+          positions.map((position) =>
+            scripted('terrainHeight', [position], () => 0),
+          ),
+        );
+      },
       clampToHeight(position, exclude) {
         record('surface.clampToHeight', [position, exclude]);
         return scripted('clampToHeight', [position, exclude], () => undefined);
@@ -894,6 +916,7 @@ export function createFakeEngine(options = {}) {
         )
           throw new TypeError(`Unknown terrain source: ${kind}`);
         fake.maps.terrain = source;
+        fake.maps.terrainRevision++;
       },
       async setPhotorealTiles(source) {
         record('maps.setPhotorealTiles', [source]);
@@ -914,6 +937,7 @@ export function createFakeEngine(options = {}) {
         baseImagery: fake.maps.imagery ?? null,
         photoreal: fake.maps.photoreal,
       }),
+      terrainRevision: () => fake.maps.terrainRevision,
     },
     destroy() {
       record('destroy', []);

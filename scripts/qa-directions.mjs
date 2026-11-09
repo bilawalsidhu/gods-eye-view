@@ -36,8 +36,7 @@ const check = (name, passed, detail = '') => {
 
 const browser = await puppeteer.launch({
   headless: process.env.QA_HEADFUL === '1' ? false : true,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: chromeExecutablePath(),
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',

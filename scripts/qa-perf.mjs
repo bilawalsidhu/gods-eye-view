@@ -71,7 +71,7 @@
  * Usage: node scripts/qa-perf.mjs [--url http://localhost:4173] [--engine=cesium|navara]
  * Engine-neutral: the camera, frames and layers go through the globe engine
  * and the QA probe (window.__godsEyeView.layers); on an engine without a
- * layer (Navara today) that layer's checks are SKIPPED, not failed.
+ * layer that layer's checks are SKIPPED, not failed.
  * Requires a running dev server. Headless; flags disable occlusion
  * throttling so rAF cadence is trustworthy (hidden-pane gotcha).
  */
@@ -338,14 +338,16 @@ try {
   await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('retro'); });
   await new Promise((r) => setTimeout(r, 900)); // crossfade + first ticks
   const dAnim = await diag();
-  // The animated styles are Cesium post-process stages; Navara draws its own
-  // looks and has no style animation (a known gap, not a regression).
+  // This assertion checks the Cesium style-anim render hold.
   if (engineKind === 'cesium') {
     check('animated style takes the style-anim hold (continuous)', dAnim?.mode === 'continuous' && dAnim.holds.includes('style-anim'), dAnim);
     const animFrames = await countFrames(2_000);
     check('animated style keeps frames flowing (≥50% rAF)', animFrames.renders >= animFrames.rafs * 0.5, animFrames);
   } else {
-    skip('animated style takes the style-anim hold and keeps frames flowing', `the visual styles are Cesium post stages; ${engineKind} has none`);
+    skip(
+      'animated style takes the style-anim hold and keeps frames flowing',
+      `this check measures the Cesium style-anim hold, not ${engineKind} animation`,
+    );
   }
   // Returning to normal keeps detection ON by design (it is the default, and
   // detection persists across style switches). Since 2026-08-22 detection holds

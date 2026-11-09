@@ -524,6 +524,7 @@ export function composeGround(packs) {
     0,
   );
   const frames64 = new Float64Array(count * 13);
+  const drapes = new Uint8Array(count);
   const volumes = new Float64Array(count * 4);
   const heights = new Float64Array(count * 2);
   const styles = texelStorage(count * STYLE_TEXELS);
@@ -543,6 +544,11 @@ export function composeGround(packs) {
   let run = 0;
   let look = 0;
   for (const pack of packs) {
+    drapes.fill(
+      pack.drape === 'terrain' ? 1 : pack.drape === 'tiles' ? 2 : 0,
+      item,
+      item + pack.count,
+    );
     frames64.set(pack.frames, item * 13);
     volumes.set(pack.volumes, item * 4);
     heights.set(pack.heights, item * 2);
@@ -585,6 +591,7 @@ export function composeGround(packs) {
   const box = new Float64Array(4);
   const lastView = new Float64Array(16).fill(Number.NaN);
   const lastProjection = new Float64Array(16).fill(Number.NaN);
+  let lastPixelRatio = 1;
   let lastWidth = 0;
   let lastHeight = 0;
   const clampTo = (value, max) => Math.min(max - 1, Math.max(0, value));
@@ -602,8 +609,11 @@ export function composeGround(packs) {
       return candidates;
     },
     /** True when the frames, grid or candidates changed (upload them). */
-    update(view, projection, width, height) {
-      let changed = width !== lastWidth || height !== lastHeight;
+    update(view, projection, width, height, pixelRatio = 1) {
+      let changed =
+        width !== lastWidth ||
+        height !== lastHeight ||
+        pixelRatio !== lastPixelRatio;
       for (let index = 0; index < 16 && !changed; index++)
         changed =
           view[index] !== lastView[index] ||
@@ -613,6 +623,7 @@ export function composeGround(packs) {
       lastProjection.set(projection);
       lastWidth = width;
       lastHeight = height;
+      lastPixelRatio = pixelRatio;
       const m = view;
       counts.fill(0);
       for (let index = 0; index < count; index++) {
@@ -636,11 +647,12 @@ export function composeGround(packs) {
         frames.data.set(viewFrame.subarray(3, 6), t + 4);
         frames.data.set(viewFrame.subarray(6, 9), t + 8);
         frames.data.set(viewFrame.subarray(9, 12), t + 12);
+        frames.data[t + 15] = drapes[index];
         const v = index * 4;
         // The item's extent in its plane and its padding in pixels, for
         // the shader's early rejection.
         frames.data[t + 7] = volumes[v];
-        frames.data[t + 11] = volumes[v + 3];
+        frames.data[t + 11] = volumes[v + 3] * pixelRatio;
         const distance = Math.hypot(viewFrame[0], viewFrame[1], viewFrame[2]);
         // Heights relative to the plane's origin on the ellipsoid; the
         // plane dips under the curve by r²/2R at the item's edge.
@@ -665,8 +677,8 @@ export function composeGround(packs) {
           ranges[r] = -1;
           continue;
         }
-        const padX = (2 * volumes[v + 3]) / Math.max(1, width);
-        const padY = (2 * volumes[v + 3]) / Math.max(1, height);
+        const padX = (2 * volumes[v + 3] * pixelRatio) / Math.max(1, width);
+        const padY = (2 * volumes[v + 3] * pixelRatio) / Math.max(1, height);
         ranges[r] = clampTo(
           Math.floor(((box[0] - padX) * 0.5 + 0.5) * GRID_COLS),
           GRID_COLS,

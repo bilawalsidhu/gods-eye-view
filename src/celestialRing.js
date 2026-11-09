@@ -410,6 +410,7 @@ export class CelestialRing {
     viewer,
     { enabled = true, onAutoDisable = null, store, engine = null } = {},
   ) {
+    this._engine = engine ?? (viewer?.kind ? viewer : null);
     this._engineView = viewer?.kind ? createCelestialView(viewer) : null;
     this.viewer = this._engineView?.view ?? viewer;
     this._projector = engine?.projector ?? null;
@@ -603,7 +604,7 @@ export class CelestialRing {
       this._focusInProgress = false;
       this.viewer.scene.requestRender?.();
     };
-    flyCelestialViewer(this.viewer, {
+    const flight = {
       destination: geo.cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
@@ -620,7 +621,10 @@ export class CelestialRing {
         finishFocus();
         if (!this.isGlobeFullyVisible()) this._autoDisable();
       },
-    });
+    };
+    if (this._engine)
+      this._engine.camera.flyTo({ ...flight, easing: 'cubicInOut' });
+    else flyCelestialViewer(this.viewer, flight);
     return true;
   }
 

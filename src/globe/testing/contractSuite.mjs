@@ -1491,6 +1491,31 @@ export function createContractSuite(
       },
     ],
     [
+      'camera.setView: cancels an active flight and retains its destination',
+      async () => {
+        await nadirView();
+        const outcome = [];
+        camera.flyTo({
+          destination: cartesian3.fromDegrees(100, 0, 5e6),
+          duration: 5,
+          complete: () => outcome.push('complete'),
+          cancel: () => outcome.push('cancel'),
+        });
+        await settle(2);
+        const destination = cartesian3.fromDegrees(20, 10, 200000);
+        camera.setView({ destination });
+        await settle(3);
+        ensure(outcome.join() === 'cancel', `flight ended with ${outcome}`);
+        ensure(!camera.flightActive(), 'setView left the flight active');
+        near(
+          cartesian3.distance(camera.pose().position, destination),
+          0,
+          0.01,
+          'setView position error (m)',
+        );
+      },
+    ],
+    [
       'camera.flyTo: a newer flight cancels the previous one',
       async () => {
         await nadirView();

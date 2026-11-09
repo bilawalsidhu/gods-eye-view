@@ -2138,3 +2138,40 @@ for (const createHarness of GROUND_HARNESSES) {
     }
   });
 }
+
+test('seek waits for a scene reattachment after loading data packs', async () => {
+  const { director, restore } = makeDirector();
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  let waiting = false;
+  let activated = false;
+  director._applyDataPacks = async () => {
+    director._sceneGate = gate;
+    return true;
+  };
+  director._waitForScene = async () => {
+    waiting = true;
+    await gate;
+    return true;
+  };
+  director._activateInteractions = () => {
+    activated = true;
+  };
+  try {
+    const seeking = director.seekScene('scene-1', 0.25);
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    assert.equal(activated, false);
+    assert.equal(waiting, true);
+    director._sceneGate = null;
+    release();
+    await seeking;
+    assert.equal(activated, true);
+  } finally {
+    director._sceneGate = null;
+    release();
+    await director.destroy();
+    restore();
+  }
+});

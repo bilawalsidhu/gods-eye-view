@@ -7,8 +7,8 @@
  *   node scripts/qa-label-readability.mjs --url http://localhost:4244 --tag after [--engine=cesium|navara]
  *
  * Engine-neutral: camera, tiles and layers go through the globe engine and the
- * QA probe; an engine without the flights/satellites layers (Navara today)
- * shoots the scenes without a contact field and says so.
+ * QA probe; an engine without the flights/satellites layers shoots the
+ * scenes without a contact field and says so.
  *
  * Every scene pins its own camera pose AND substitutes a deterministic
  * synthetic contact field for the live pollers, so a `before` run and an

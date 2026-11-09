@@ -38,3 +38,57 @@ test('missions preserve the satellite target before their focus flight releases 
     else globalThis.document = previous;
   }
 });
+
+test('missions begin their entry flight while the satellite catalog loads', async () => {
+  let resolve;
+  const pending = new Promise((done) => {
+    resolve = done;
+  });
+  let flew = false;
+  const lifecycle = createLifecycle({
+    state: { _engine: {} },
+    services: { render: {} },
+    getRenderer: () => ({ setVisible() {} }),
+    parts: {
+      orbitRendering: { syncMissionOrbitPrimitiveVisibility() {} },
+      selection: {
+        focusFullGlobe() {
+          flew = true;
+        },
+        setSelectedMission() {},
+      },
+      ingestion: { captureSatelliteDependency: () => pending },
+    },
+  });
+  const enabling = lifecycle.methods._enableBody();
+  assert.equal(flew, true);
+  resolve();
+  await enabling;
+});
+
+test('detaching retains the active replay heading before replacing its track', () => {
+  const state = {
+    _renderer: { destroy() {} },
+    _replayCameraLaunchId: 'mission',
+    _replayTracks: new Map([['mission', { lastCameraHeading: 1.2 }]]),
+    _missionOverlayRecords: new Map(),
+    _satelliteTelemetry: new Map(),
+  };
+  const noop = () => {};
+  const lifecycle = createLifecycle({
+    state,
+    services: { render: {} },
+    parts: {
+      launchPad: { destroyLaunchPadZonePrimitive: noop },
+      orbitRendering: { removeMissionOrbitPrimitives: noop },
+      overlays: {
+        clearMissionOverlaySources: noop,
+        destroyReplayVehicleOverlay: noop,
+      },
+      rendering: { removeMissionElements: noop },
+    },
+  });
+  lifecycle.methods.detachRenderer();
+  assert.equal(state._replayTracks.size, 0);
+  assert.equal(state._replayCameraHeading, 1.2);
+});

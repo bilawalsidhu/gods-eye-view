@@ -9,12 +9,10 @@ import {
 
 /**
  * Own camera authority generations, pending search UI and tracking handoff.
- * The camera is the globe `engine`'s. `viewer` is optional and only clears
- * Cesium's tracked entity.
+ * The camera and tracked subject belong to the globe `engine`.
  */
 export class NavigationController {
   constructor({
-    viewer = null,
     engine = null,
     tracking,
     settleSearch = () => {},
@@ -29,7 +27,6 @@ export class NavigationController {
     cancelOrientation = () => {},
   }) {
     Object.assign(this, {
-      viewer,
       engine,
       tracking,
       settleSearch,
@@ -234,7 +231,7 @@ export class NavigationController {
    * flight cannot land on the next one. `retainScene` keeps the selection a
    * handoff carries across.
    */
-  setScene({ viewer = null, engine = null } = {}, { retainScene = true } = {}) {
+  setScene({ engine = null } = {}, { retainScene = true } = {}) {
     if (this._disposed) return;
     if (this.engine && engine !== this.engine) {
       cancelCameraArrival(this.engine);
@@ -243,7 +240,6 @@ export class NavigationController {
         clearSearchedLocation: false,
       });
     }
-    this.viewer = viewer;
     this.engine = engine;
   }
   /** Subscribe to ownership changes without claiming the camera or exposing mutable state. */

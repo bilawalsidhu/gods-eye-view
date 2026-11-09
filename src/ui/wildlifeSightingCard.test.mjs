@@ -808,3 +808,31 @@ test('newly mounted chrome repositions the open card without camera events or id
     'closing disconnects structural observation',
   );
 });
+
+test('remounting a selected sighting does not pan the new engine', async (context) => {
+  const f = fixture(context);
+  await f.click();
+  f.card.destroy();
+  f.obstacle('.hud-top-left', rect(0, 0, 260, 160));
+  const ui = createUiRuntime();
+  let pans = 0;
+  const card = createWildlifeSightingCard({
+    layer: f.layer,
+    ui,
+    engine: f.engine,
+    documentRef: document,
+    windowRef: f.windowRef,
+    now: () => NOW,
+    project: () => ({ x: 100, y: 100 }),
+    pan: () => {
+      pans++;
+      return true;
+    },
+  });
+  context.after(() => {
+    card.destroy();
+    ui.destroy();
+  });
+  await settle();
+  assert.equal(pans, 0);
+});

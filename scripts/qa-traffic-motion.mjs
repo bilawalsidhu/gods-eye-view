@@ -121,12 +121,14 @@ try {
       // place every frame; it never empties and refills a collection).
       // --baseline records the pre-contract build, whose PointPrimitive
       // collections sat in scene.primitives and were rebuilt by removeAll.
-      const engine = window.__godsEyeView.engine;
-      const createMoverSet = engine.movers.createSet.bind(engine.movers);
-      engine.movers.createSet = (options) => {
-        if (/^traffic-(fill|outline)$/.test(options?.id ?? '')) rebuilds++;
-        return createMoverSet(options);
-      };
+      if (!baseline) {
+        const engine = window.__godsEyeView.engine;
+        const createMoverSet = engine.movers.createSet.bind(engine.movers);
+        engine.movers.createSet = (options) => {
+          if (/^traffic-(fill|outline)$/.test(options?.id ?? '')) rebuilds++;
+          return createMoverSet(options);
+        };
+      }
       function discoverCollections() {
         if (!baseline) return;
         for (let i = 0; i < scene.primitives.length; i++) {

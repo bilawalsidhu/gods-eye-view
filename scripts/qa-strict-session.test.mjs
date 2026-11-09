@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { quantile, slope } from './qa-strict-session.mjs';
-import { strictArguments } from './qa-strict-harness.mjs';
+import { strictArguments, waitForCameraAtRest } from './qa-strict-harness.mjs';
 
 test('slope is the least-squares growth per step', () => {
   assert.equal(slope([[0, 5]]), 0);
@@ -44,4 +44,33 @@ test('the runner hands each scenario its layers and its manifest path', () => {
     layers: null,
     evidence: process.env.QA_STRICT_EVIDENCE ?? null,
   });
+});
+
+test('the camera is at rest once a flight has landed and it stays still', async () => {
+  // A selection's flight holds the inputs off; once they are on, the camera
+  // still moves one more sample before it stays put.
+  const poses = [0, 400, 900, 900, 1250, 1250, 1250];
+  const inputs = [false, false, false, false, true, true, true];
+  let frame = 0;
+  const engine = {
+    camera: { pose: () => ({ position: { x: poses[frame], y: 0, z: 6.4e6 } }) },
+    input: { cameraInputsEnabled: () => inputs[frame] },
+  };
+  const previous = globalThis.window;
+  globalThis.window = { __godsEyeView: { engine } };
+  const page = {
+    evaluate: async (fn) => fn(),
+    async waitForFunction(fn) {
+      for (; frame < poses.length; frame++) if (fn()) return;
+      throw new Error('timed out');
+    },
+  };
+  try {
+    await waitForCameraAtRest(page);
+    // Not while the flight holds the inputs (sample 3 repeats a pose), nor
+    // while the camera moves (sample 4).
+    assert.equal(frame, 5);
+  } finally {
+    globalThis.window = previous;
+  }
 });

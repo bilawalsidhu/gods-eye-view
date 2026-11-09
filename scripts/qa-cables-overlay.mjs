@@ -111,7 +111,7 @@ try {
   // paths in one engine.ground corridor set, landing points and reference
   // tips in mover sets, stems in engine.lines, labels on the world-overlay
   // host. It owns no Cesium DataSource or Entity any more.
-  const counts = await page.evaluate((layerId) => {
+  const counts = await page.evaluate((layerId, legacy) => {
     const gev = window.__godsEyeView;
     const v = gev.viewer;
     const engine = gev.engine;
@@ -126,6 +126,7 @@ try {
       out.layerDataSources++;
       out.layerEntities += ds.entities.values.length;
     }
+    if (legacy) return out;
     for (const set of engine.ground.list()) {
       if (set.id !== `${layerId}-paths`) continue;
       out.pathSets++;
@@ -146,7 +147,7 @@ try {
     const stats = gev.dataManager.layers.get(layerId)?.module?.getStats?.() || {};
     out.referenceLabelCount = stats.referenceLabelCount ?? null;
     return out;
-  }, LAYER_ID);
+  }, LAYER_ID, legacy);
   report(control ? 'counts (control, cables OFF)' : 'counts with cables ON', counts);
 
   // ── a. per-frame scene.render cost over a ~10 s driven orbit ─────────

@@ -1,4 +1,5 @@
 import { parsers } from 'prettier/plugins/babel.mjs';
+import { vueScripts } from './vue-scripts.mjs';
 
 const browserGlobals = new Set([
   'window',
@@ -19,9 +20,10 @@ const browserGlobals = new Set([
  * Inspect literal module dependencies and browser-platform references without
  * executing code. With `dynamic`, also list the import() specifiers apart.
  */
-export function analyzeModule(source, { dynamic = false } = {}) {
+export function analyzeModule(source, { dynamic = false, filename = '' } = {}) {
   const imports = [];
   const dynamicImports = [];
+  const staticImports = [];
   const browser = new Set();
   function walk(node, parent, field) {
     if (!node || typeof node !== 'object') return;
@@ -41,6 +43,7 @@ export function analyzeModule(source, { dynamic = false } = {}) {
       imports.push(node.source.value);
       if (node.type === 'ImportExpression')
         dynamicImports.push(node.source.value);
+      else staticImports.push(node.source.value);
     }
     if (node.type === 'CallExpression' && node.callee?.name === 'require')
       throw new Error('Runtime modules must use ES imports');
@@ -76,11 +79,14 @@ export function analyzeModule(source, { dynamic = false } = {}) {
       else if (value && typeof value === 'object') walk(value, node, key);
     }
   }
-  walk(parsers.babel.parse(source));
+  for (const script of filename.endsWith('.vue')
+    ? vueScripts(source, filename)
+    : [source])
+    walk(parsers.babel.parse(script));
   return {
     imports,
     browser: [...browser],
-    ...(dynamic && { dynamicImports }),
+    ...(dynamic && { dynamicImports, staticImports }),
   };
 }
 

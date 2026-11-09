@@ -8,8 +8,8 @@ import {
 import { terrainSourceFor } from '../globe/cesium/terrain.js';
 import { t } from '../i18n/index.js';
 
-const NAVARA_ION_IMAGERY_REASON =
-  'Bing imagery is not available on the experimental Navara engine';
+const navaraIonImageryReason = () =>
+  t('Bing imagery is not available on the experimental Navara engine');
 
 /**
  * Select sources and setup guidance without putting provider branches in the
@@ -53,7 +53,7 @@ export function createDefaultMapSources({
         available: !ionImageryOnNavara && (!descriptor.requiresIon || hasIon),
         // Read when shown, so it follows the locale.
         unavailableReason: ionImageryOnNavara
-          ? NAVARA_ION_IMAGERY_REASON
+          ? navaraIonImageryReason
           : descriptor.requiresIon
             ? () =>
                 t('Needs {envVars} — add it in Provider Settings', {

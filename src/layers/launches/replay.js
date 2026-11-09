@@ -367,7 +367,10 @@ export function createReplay({
     const initialHeading = parts.camera.replayInitialCameraHeading(
       track.ascentPath,
     );
-    track.lastCameraHeading = initialHeading;
+    track.lastCameraHeading =
+      resuming && Number.isFinite(layerState._replayCameraHeading)
+        ? layerState._replayCameraHeading
+        : initialHeading;
     syncReplayButton();
     parts.overlays.syncMissionOverlayEntries();
     if (!resuming) {

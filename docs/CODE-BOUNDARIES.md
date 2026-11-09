@@ -80,10 +80,17 @@ self-package imports, symlinks and unreachable files.
 Runtime SDK imports are restricted by directory, including unreachable modules:
 `cesium` and `@cesium/*` belong in `src/globe/cesium/`; `three`,
 `postprocessing` and `@navaramap/*` belong in `src/globe/navara/`. Package
-subpaths, re-exports and literal dynamic imports obey the same rule. Tests and
-Node test support retain their existing exemptions. The production script
-loader is `src/app/loadCesium.js`; it imports no SDK package and needs no
-exception. There is no blanket exception for layer `render/` directories.
+subpaths, re-exports and literal dynamic imports obey the same rule, and the
+`<script>` blocks of Vue components count as runtime modules. A module outside
+the Navara engine reaches it only through `import()`: a static import of the
+same specifier fails even beside a dynamic one. Tests and Node test support
+retain their existing exemptions. The production script loader is
+`src/app/loadCesium.js`; it imports no SDK package and needs no exception, and
+it adds no `widgets.css` when the page's markup has already run `Cesium.js`
+(the MCP panel). The panel build replaces `src/app/navaraMode.js` and
+`src/globe/navara/windFlowMesh.js` with stubs (`build/panelNavara.js`), so the
+panel carries no Navara or three. There is no blanket exception for layer
+`render/` directories.
 
 The temporary `engineImportExceptions` list in `scripts/package-boundaries.json`
 contains exact file/package pairs with reasons. The checker reports the used
@@ -579,9 +586,9 @@ services into each family factory. Standalone provider selection lives in
 dependency graph, excluding standalone setup and compatibility layer instances.
 
 `src/app/layers/renderers.js` is the layer manifest. Its lazy display loaders
-resolve the shared factories exported by `displays.js`; `needs` names required
-contract primitives. The only display backend options are wind streamlines,
-loaded from the engine folders. A missing wind backend leaves the raster field
+resolve the shared factories exported by `displays.js` through `display`. All
+five drawing primitives are required by the globe contract. The only display
+backend options are wind streamlines, loaded from the engine folders. A missing wind backend leaves the raster field
 available. Wildlife Sightings draws itself through the contract; Sea Marks and
 Ski Pistes use their overlay controller. No layer display imports an engine SDK.
 `displayRehearsal.test.mjs` loads every manifest display on the fake engine with

@@ -298,6 +298,7 @@ test('module analysis can tell dynamic imports from static ones', () => {
       imports: ['one', 'two', 'three', 'four'],
       browser: [],
       dynamicImports: ['three', 'four'],
+      staticImports: ['one', 'two'],
     },
   );
 });
@@ -505,4 +506,33 @@ test('symlink aliases do not hide renderer ownership', (t) => {
     'junction',
   );
   assert.throws(() => checkImportDirections(root), /rendering|symlinks/);
+});
+
+test('a dynamic import does not excuse a static import of the same engine', (t) => {
+  const { root, write } = fixture(t);
+  write(
+    'src/app/scene.js',
+    "import '../globe/navara/index.js'; import('../globe/navara/index.js');",
+  );
+  write('src/globe/navara/index.js');
+  assert.throws(
+    () => checkImportDirections(root),
+    /only through a dynamic import/,
+  );
+});
+
+test('Vue script and script setup follow SDK ownership', (t) => {
+  const { root, write } = fixture(t);
+  write(
+    'src/ui/View.vue',
+    `<template><div /></template><script>import 'cesium';</script><script setup>import 'three';</script>`,
+  );
+  assert.throws(
+    () => checkImportDirections(root),
+    (error) => {
+      assert.match(error.message, /cesium imports belong/);
+      assert.match(error.message, /three imports belong/);
+      return true;
+    },
+  );
 });

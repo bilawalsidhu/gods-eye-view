@@ -347,7 +347,7 @@ export function createMoverStore(options) {
  */
 export function createMoverSet(
   store,
-  { id, commit, destroy, ready = () => true },
+  { id, commit, destroy, ready = () => true, failed = () => false },
 ) {
   let destroyed = false;
   const alive = () => {
@@ -373,6 +373,8 @@ export function createMoverSet(
     // Whether what it draws has loaded (a model's glTF, an atlas image); with
     // an index, what that instance draws.
     ready: (index) => !destroyed && ready(index) === true,
+    // Whether that load failed for good (the set is not tried again).
+    failed: (index) => !destroyed && failed(index) === true,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -409,6 +411,7 @@ export function createMoverRegistry(build) {
           part.destroy();
         },
         ready: (index) => (part.ready ? part.ready(index) : true),
+        failed: (index) => part.failed?.(index) === true,
       });
       sets.set(options.id, entry);
       return entry.set;

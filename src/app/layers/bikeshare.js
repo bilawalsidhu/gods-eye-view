@@ -4,11 +4,6 @@ import * as render from '../../renderGovernor.js';
 import * as picking from '../../data/pickRegistry.js';
 import { worldOverlayFor as overlays } from '../../overlays/worldOverlay.js';
 
-/**
- * Construct one layer using the application scene owners and a supplied
- * source; it draws with the engine's renderer from the manifest
- * (render/display.js on every engine).
- */
 export function createApplicationBikeshare({ source }) {
   return createBikeshareLayer({
     source,

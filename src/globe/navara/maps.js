@@ -13,9 +13,9 @@
 // - photoreal: Google 3D tiles with a browser key only (no server proxy),
 //   with Google's logo and the tiles' own
 //   copyright lines (creditLayerId) on screen. Showing them hides the base
-//   imagery, as MapSourceController removes it; clearing them does not bring
-//   it back until setBaseImagery. Hidden, not deleted: deleting the last
-//   raster layer stops Navara 0.2.1 loading terrain at the current view.
+//   imagery; clearing them restores the last base imagery and its credit.
+//   Hidden, not deleted: deleting the last raster layer stops Navara 0.2.1
+//   loading terrain at the current view.
 
 import {
   SENTINEL2_CREDIT,
@@ -124,6 +124,8 @@ export function createNavaraMaps(
   // call made last decides what shows.
   const generations = { display: 0, terrain: 0 };
   let destroyed = false;
+  // maps.terrainRevision: one more for every terrain shown or cleared.
+  let terrainRevision = 0;
 
   function retire(slot) {
     if (!slot) return;
@@ -137,6 +139,7 @@ export function createNavaraMaps(
     const slot = slots[name];
     slots[name] = null;
     retire(slot);
+    if (name === 'terrain' && slot) terrainRevision++;
   }
 
   // The new layer goes in before the old one goes: deleting the last raster
@@ -150,6 +153,7 @@ export function createNavaraMaps(
       typeof credit === 'function' ? credit(layer) : credit,
     );
     retire(previous);
+    if (name === 'terrain') terrainRevision++;
     if (shown.length) view.attribution?.add(shown);
     slots[name] = {
       key,
@@ -204,6 +208,7 @@ export function createNavaraMaps(
           type: 'quantized-mesh',
           url: `${endpoint.url}{z}/{x}/{y}.terrain?v=1.2.0`,
           token: endpoint.accessToken,
+          attributions: endpoint.attributions ?? [],
         };
       }
       default:
@@ -249,7 +254,16 @@ export function createNavaraMaps(
         return;
       }
       if (slots.terrain?.key === description.url) return;
-      show('terrain', description.url, description, { type: 'terrain' });
+      const { attributions = [], ...sourceDesc } = description;
+      show(
+        'terrain',
+        description.url,
+        sourceDesc,
+        { type: 'terrain' },
+        attributions.map(({ html }) => ({ attributionHtml: html })),
+      );
+      if (attributions.some(({ collapsible }) => collapsible === false))
+        view.attribution?.show();
     },
     async setPhotorealTiles(source) {
       const generation = ++generations.display;
@@ -329,10 +343,29 @@ export function createNavaraMaps(
       };
     },
     current: () => ({ baseImagery: currentBase, photoreal: tilesSource }),
+    terrainRevision: () => terrainRevision,
   };
 
   return {
     maps,
+    /**
+     * surface.sampleTerrainMostDetailed: the terrain shown sampled at its
+     * finest level (Navara fetches the tiles); 0 on the ellipsoid.
+     */
+    async sampleTerrain(positions) {
+      const source = slots.terrain?.source;
+      if (!source) return positions.map(() => 0);
+      const sampled = await view.sampleTerrainMostDetailed(
+        source,
+        positions.map((place) => ({
+          lat: (place.latitude * 180) / Math.PI,
+          lng: (place.longitude * 180) / Math.PI,
+        })),
+      );
+      return sampled.map(({ height }) =>
+        Number.isFinite(height) ? height : undefined,
+      );
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;

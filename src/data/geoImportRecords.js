@@ -16,7 +16,9 @@
 // @property {ImportedPolygon[]} polygons
 // @property {ImportedOverlay[]} overlays
 // @property {Object<string, number>} undrawn What the file has that no
-//   engine draws, by kind (`wall`, `extruded`, `latLonQuad`), counted.
+//   engine draws, by kind (`wall`, `extruded`, `latLonQuad`), counted;
+//   the display adds the overlays it cannot draw (`rotatedOverlay`,
+//   `raisedOverlay`).
 //
 // @typedef {object} ImportedPoint
 // @property {number[]} position
@@ -62,6 +64,9 @@
 // @property {{ west: number, south: number, east: number, north: number }} rectangle
 // @property {number[]} color Multiplies the image; its alpha fades it.
 // @property {number} rotation Degrees counter-clockwise (KML LatLonBox).
+// @property {number} altitude Metres (KML altitude); Cesium raises an
+//   absolute overlay to it.
+// @property {'ground'|'relative'|'absolute'} altitudeMode
 
 /** Longest plain-text name kept from a file's features. */
 const MAX_IMPORT_NAME_LENGTH = 120;
@@ -162,7 +167,7 @@ export function geoJsonRecords(geojson, color) {
             origin: 'bottom',
           },
         });
-      else if (kind === 'LineString')
+      else if (kind === 'LineString' && part.length >= 2)
         records.lines.push({
           name,
           positions: part.map(position),
@@ -170,7 +175,10 @@ export function geoJsonRecords(geojson, color) {
           color: stroke,
           widthPx: GEOJSON_STROKE_PX,
         });
-      else if (kind === 'Polygon' && part[0]?.length)
+      else if (
+        kind === 'Polygon' &&
+        new Set(part[0]?.map(([lon, lat]) => `${lon},${lat}`)).size >= 3
+      )
         records.polygons.push({
           name,
           rings: part.map((ring) => ring.map(position)),

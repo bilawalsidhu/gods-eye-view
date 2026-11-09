@@ -779,8 +779,6 @@ export function createAircraftTracking({
     skipViewerUntrack = false,
     { evicted = false, origin = 'programmatic' } = {},
   ) {
-    flightState._trackedCameraFrameStop?.();
-    flightState._trackedCameraFrameStop = null;
     if (!flightState._trackedIcao) {
       clearFocusTarget(focusId);
       return;
@@ -910,16 +908,7 @@ export function createAircraftTracking({
     // DISPLAY-rail 3D toggle, which arms the FLEET. The plane the user zooms into always
     // resolves into an aircraft.
     //
-    // The billboard stays SHOWN at all times and is hidden by going TRANSPARENT (alpha 0), not by
-    // show=false. This is deliberate: viewer.trackedEntity derives the follow-camera framing from
-    // the entity's bounding sphere, and a 3D model graphic reports a PENDING sphere until its glTF
-    // finishes loading. If we hid the billboard outright, tracking a plane while already zoomed in
-    // would stall the centering until the model loaded. A shown-but-transparent billboard always
-    // supplies a ready sphere, so framing is instant; we only drop its alpha once the model GLB is
-    // preloaded (_planeModelLoaded), so there's neither a billboard+model double-image nor a gap.
-    // The tracked entity is a PURE BILLBOARD — no label or model graphic. The 3D model for the
-    // tracked plane is a standalone primitive driven by _updateTrackedModel(); keeping it off the
-    // entity is what makes the follow-camera's bounding sphere always ready (see _trackedModel).
+    // The tracked sprite becomes transparent only while the standalone model is ready and shown.
     flightState._trackedEntity = flightState._renderer.tracked.create({
       // Dead-reckoning position — smooth continuous motion between API updates.
       position: getTrackedPosition,
@@ -1014,8 +1003,7 @@ export function createAircraftTracking({
       const restoring = resume || origin === 'share-restore';
       if (restoring) entity.gevRestoring = true;
       try {
-        flightState._trackedCameraFrameStop =
-          flightState._renderer.follow.start(entity);
+        flightState._renderer.follow.start(entity);
       } finally {
         if (restoring) delete entity.gevRestoring;
       }

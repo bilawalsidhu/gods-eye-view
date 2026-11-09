@@ -125,11 +125,13 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
         ),
     ),
   };
+  let terrainProvider;
   const globe = {
     show: true,
     tilesLoaded: true,
     getHeight: record('globe.getHeight', () => 12.5),
     pick: record('globe.pick', () => new Cesium.Cartesian3(6378137, 3, 4)),
+    terrainProviderChanged: new Cesium.Event(),
   };
   const scene = {
     camera,
@@ -222,7 +224,14 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
       currentTime: Cesium.JulianDate.fromIso8601('2026-10-16T12:00:00Z'),
     },
     imageryList,
-    terrainProvider: undefined,
+    // As Viewer's: the globe takes it and says so.
+    get terrainProvider() {
+      return terrainProvider;
+    },
+    set terrainProvider(provider) {
+      terrainProvider = provider;
+      globe.terrainProviderChanged.raiseEvent(provider);
+    },
     imageryLayers: {
       add: record('imageryLayers.add', (layer, index) =>
         imageryList.splice(index ?? imageryList.length, 0, layer),

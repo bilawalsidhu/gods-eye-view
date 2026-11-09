@@ -227,23 +227,27 @@ function cesiumSampling(texture, encoded = false) {
 }
 
 /** The atlas as a three texture (a canvas at once, a URL once loaded). */
-function atlasTexture(atlas, encoded, onLoad) {
+function atlasTexture(atlas, encoded, onLoad, onError) {
   if (atlas.canvas)
     return cesiumSampling(new CanvasTexture(atlas.canvas), encoded);
   const texture = cesiumSampling(new Texture(), encoded);
   const image = new Image();
   image.crossOrigin = 'anonymous';
   const release = () => {
-    image.onload = null;
+    image.onload = image.onerror = null;
     texture.image = null;
     texture.removeEventListener('dispose', release);
   };
   texture.addEventListener('dispose', release);
   image.onload = () => {
-    image.onload = null;
+    image.onload = image.onerror = null;
     texture.image = image;
     texture.needsUpdate = true;
     onLoad();
+  };
+  image.onerror = () => {
+    image.onload = image.onerror = null;
+    onError();
   };
   image.src = atlas.url;
   return texture;
@@ -313,14 +317,22 @@ export function createMoverMesh(
   };
   // A canvas atlas is there at once; a URL one once its image loads.
   let textureReady = point || Boolean(options.sprite.atlas.canvas);
+  let textureFailed = false;
   const encodedAtlas = !point && options.sharpen === true;
   const material = new MeshBasicMaterial({
     map: point
       ? null
-      : atlasTexture(options.sprite.atlas, encodedAtlas, () => {
-          textureReady = true;
-          onTextureLoad();
-        }),
+      : atlasTexture(
+          options.sprite.atlas,
+          encodedAtlas,
+          () => {
+            textureReady = true;
+            onTextureLoad();
+          },
+          () => {
+            textureFailed = true;
+          },
+        ),
     transparent: true,
     alphaTest: point || encodedAtlas ? 0.005 : 0.02,
     // Drawn after tone mapping, with no depth buffer: the shader tests the
@@ -382,6 +394,7 @@ export function createMoverMesh(
     mesh,
     uniforms,
     ready: () => textureReady,
+    failed: () => textureFailed,
     origin: () => origin,
     /** Writes the changed instances; the origin starts at the first one. */
     commit(range) {

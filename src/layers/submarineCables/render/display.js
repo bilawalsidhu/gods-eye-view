@@ -2,8 +2,8 @@ import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 // The submarine cables on the globe contract, the same on every engine:
 // - cable paths: one engine.ground corridor set (2.5 px, each cable's own
 //   colour at 0.92), draped on the active map stack's surface;
-// - landing points: a point mover set at the ground (the 6 px GeoJSON pin's
-//   width and colour);
+// - landing points: a point mover set on the sampled surface (the 6 px
+//   GeoJSON pin's width and colour);
 // - references: per cable and landing point, a tip point mover high enough
 //   for a ~66 px stem, sized on the sweep cadence, with its label on the
 //   shared world-overlay host;
@@ -14,6 +14,7 @@ import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 import * as geo from '../../../geo/index.js';
 import { isPointerFree } from '../../../data/inputOwnership.js';
 import { rgbaFromCss } from '../../shared/color.js';
+import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
 import {
   featureLabel,
   featureReference,
@@ -213,11 +214,10 @@ export function createCablesDisplay(
     }
     for (const set of tipSets.values()) set.commit();
     if (markers) {
-      markerRows.forEach((row, index) =>
-        markers.set(index, {
-          show: engine.projector.horizonVisible(row.base),
-        }),
-      );
+      markerRows.forEach((row, index) => {
+        row.show = engine.projector.horizonVisible(row.base);
+        markers.set(index, { show: row.show });
+      });
       markers.commit();
     }
     const winners = selectCableReferenceLabelWinners([...records.values()]);
@@ -365,6 +365,7 @@ export function createCablesDisplay(
           items.push({ positions, ...style.path(feature), pickId: id });
         for (const point of shapes.points)
           rows.push({
+            cartographic: geo.cartographic.fromDegrees(point[0], point[1]),
             position: geo.cartesian3.fromDegrees(point[0], point[1]),
             base,
             color: style.marker,
@@ -380,7 +381,7 @@ export function createCablesDisplay(
         id: `${ID}-markers`,
         kind: 'point',
         capacity: rows.length,
-        depthTest: 'normal',
+        depthTest: { disableWithinM: 2500 },
         pickable: true,
         point: { sizePx: MARKER_PX, outlinePx: 0 },
       });
@@ -457,7 +458,21 @@ export function createCablesDisplay(
       try {
         build(next);
         dataset = next;
+        const surface = createSurfacePoints(engine, {
+          // The reference tips and stems stand over the landing points.
+          groups: () => [
+            {
+              set: markers,
+              points: markerRows,
+              exclude: [markers, stemBatch, ...tipSets.values()].filter(
+                Boolean,
+              ),
+            },
+          ],
+          request: wake,
+        });
         removers.push(
+          surface.destroy,
           engine.input.on('click', onClick, { pick: true }),
           engine.camera.moveEnd.addEventListener(() => {
             gate.markDirty();
@@ -465,6 +480,7 @@ export function createCablesDisplay(
           }),
           engine.frames.preRender.addEventListener(sweep),
         );
+        surface.place();
         publisher.show();
         // A hide cleared the host source: an identical cohort republishes.
         resetSignature();

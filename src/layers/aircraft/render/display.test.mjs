@@ -316,8 +316,7 @@ for (const makeHarness of HARNESSES) {
     assert.equal(read().x, state.position.x, 'the position, per frame');
     assert.equal(read().alpha, 0, 'the colour, per frame');
 
-    const stop = display.follow.start(handle);
-    assert.equal(typeof stop, 'function');
+    display.follow.start(handle);
     const following = engine.camera.following();
     assert.equal(following, handle.gevFollowHandle);
     assert.equal(following.native, handle, 'cockpit follows the glyph');

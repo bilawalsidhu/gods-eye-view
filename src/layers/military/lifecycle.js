@@ -1,13 +1,6 @@
 import { createAircraftSceneBinding } from '../aircraft/sceneBinding.js';
-import { JET_MODEL_URL } from './policy.js';
 
-export function createLifecycle({
-  flightState,
-  services,
-  parts,
-  layer,
-  resolveAsset,
-}) {
+export function createLifecycle({ flightState, services, parts, layer }) {
   const { clearFocusTarget } = services.focus;
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
@@ -19,7 +12,6 @@ export function createLifecycle({
     flightState,
     services,
     parts,
-    resolveModel: () => resolveAsset(JET_MODEL_URL),
     enable: () => methods.enable(),
   });
   const methods = {

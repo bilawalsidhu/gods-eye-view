@@ -201,6 +201,19 @@ test('setTerrain applies provider and terrain results', async () => {
   );
 });
 
+test('terrainRevision counts every terrain the globe takes', async () => {
+  const { viewer, maps, destroy } = setup();
+  assert.equal(maps.terrainRevision(), 0);
+  await maps.setTerrain({ kind: 'ellipsoid' });
+  assert.equal(maps.terrainRevision(), 1);
+  // A fallback applied by other code counts too.
+  viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  assert.equal(maps.terrainRevision(), 2);
+  destroy();
+  viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  assert.equal(maps.terrainRevision(), 2, 'not counted after destroy');
+});
+
 test('setPhotorealTiles shows a given tileset and hides the globe; null reverses it', async () => {
   const { viewer, maps } = setup();
   const google = tileset();

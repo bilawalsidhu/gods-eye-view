@@ -416,7 +416,7 @@ test('on the Navara engine photoreal keys on the browser key and ion imagery is 
   ]) {
     for (const id of ['bing-aerial', 'bing-labels']) {
       assert.equal(byId(registry, id).available, false);
-      assert.match(byId(registry, id).unavailableReason, /Navara/);
+      assert.match(byId(registry, id).unavailableReason(), /Navara/);
     }
     assert.equal(byId(registry, 'esri-imagery').available, true);
     assert.equal(byId(registry, 'osm').available, true);

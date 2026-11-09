@@ -1,4 +1,4 @@
-// Contract: a parked globe is released after ?parkedMs= (3 s here; three
+// Contract: a parked globe is released after ?parkedMs= (8 s here; three
 // minutes by default). A switch back in time is warm (the same engine
 // object); after the delay the parked engine's WebGL context is lost and a
 // switch back builds a new engine on the same session that draws a
@@ -21,7 +21,8 @@ import {
   startSession,
 } from './qa-strict-session.mjs';
 
-const PARKED_MS = 3000;
+// Room for a cold switch on a busy machine (2-3 s) before the switch back.
+const PARKED_MS = 8000;
 const base = localPreview(process.argv[2]);
 const other = (kind) => (kind === 'navara' ? 'cesium' : 'navara');
 const strict = createStrict({ origin: base.origin, layers: [] });
@@ -41,8 +42,9 @@ await strict.run({}, async (b) => {
     console.log('PASS', name);
   };
   const pick = async (kind) => {
-    await strict.pick(p, kind);
+    const { at } = await strict.pick(p, kind);
     await waitForEngine(p, kind);
+    return at;
   };
   // The running engine is the one remembered under its kind (warm), and
   // the context of `kind`'s remembered engine is lost or not.
@@ -77,17 +79,17 @@ await strict.run({}, async (b) => {
       await pick(parked);
       await rememberEngine(p);
     }
-    await pick(running);
+    const parkedAt = await pick(running);
     await rememberEngine(p);
     // A switch back in time is warm.
-    await wait(PARKED_MS / 3);
-    await pick(parked);
+    await wait(1000);
+    const backAt = await pick(parked);
     const early = await engines(parked);
     await assertSession(p, parked, `a quick switch back to ${parked}`);
     contract(
       `a switch back to ${parked} within the delay reuses the parked engine`,
       early.warm && early.lost === false,
-      early,
+      { ...early, parkedMs: Math.round(backAt - parkedAt) },
     );
     // Parked past the delay: released, and the next switch back is cold.
     await pick(running);

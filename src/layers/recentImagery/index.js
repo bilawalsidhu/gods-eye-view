@@ -343,6 +343,7 @@ export function createRecentImageryLayer({
   }
 
   function syncHost() {
+    if (!renderer) return false;
     const next = renderer.resolveHost();
     const changed =
       (next.identity || next.collection) !==

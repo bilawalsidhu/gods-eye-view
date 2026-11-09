@@ -9,7 +9,9 @@
 //   window ratio uses Cesium's maximumMovementRatio cap; a drag
 //   right turns the heading clockwise;
 // - right drag: a dolly by dy / height (down closes in);
-// - wheel: one notch (deltaY 100) is 20 % of the range.
+// - wheel: one notch (deltaY 100) is 20 % of the range;
+// - two-finger pinch: the range scales by the fingers' distance ratio
+//   (pointers are told apart by pointerId).
 
 const WHEEL_STEP = 1.2;
 const ROTATE_RATE = 1.77;
@@ -29,16 +31,32 @@ export function navaraFollowGestures(
 ) {
   return ({ orbit, zoom, dolly }) => {
     const resume = suspendCameraInputs();
-    let last = null;
+    const pointers = new Map();
+    const distance = () => {
+      const [a, b] = pointers.values();
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
     const down = (event) => {
       if (event.button !== 0 && event.button !== 2) return;
-      last = { x: event.clientX, y: event.clientY, button: event.button };
+      pointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+        button: event.button,
+      });
     };
     const move = (event) => {
+      const last = pointers.get(event.pointerId);
       if (!last) return;
+      const before = pointers.size === 2 ? distance() : 0;
       const dx = event.clientX - last.x;
       const dy = event.clientY - last.y;
-      last = { ...last, x: event.clientX, y: event.clientY };
+      last.x = event.clientX;
+      last.y = event.clientY;
+      if (pointers.size > 1) {
+        const after = pointers.size === 2 ? distance() : 0;
+        if (before > 0 && after > 0) zoom(before / after);
+        return;
+      }
       const width = canvas.clientWidth || 1;
       const height = canvas.clientHeight || 1;
       if (last.button === 2) {
@@ -50,8 +68,8 @@ export function navaraFollowGestures(
         ROTATE_RATE * Math.min(-dy / height, MAX_MOVEMENT_RATIO) * Math.PI,
       );
     };
-    const up = () => {
-      last = null;
+    const up = (event) => {
+      pointers.delete(event.pointerId);
     };
     const wheel = (event) => {
       if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
@@ -63,6 +81,7 @@ export function navaraFollowGestures(
     canvas.addEventListener('pointerdown', down);
     windowTarget.addEventListener('pointermove', move);
     windowTarget.addEventListener('pointerup', up);
+    windowTarget.addEventListener('pointercancel', up);
     canvas.addEventListener('wheel', wheel, { passive: false });
     canvas.addEventListener('contextmenu', contextMenu);
     return () => {
@@ -70,6 +89,8 @@ export function navaraFollowGestures(
       canvas.removeEventListener('pointerdown', down);
       windowTarget.removeEventListener('pointermove', move);
       windowTarget.removeEventListener('pointerup', up);
+      windowTarget.removeEventListener('pointercancel', up);
+      pointers.clear();
       canvas.removeEventListener('wheel', wheel, { passive: false });
       resume();
     };

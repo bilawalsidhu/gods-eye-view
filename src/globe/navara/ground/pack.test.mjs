@@ -502,3 +502,22 @@ test('radial discs pack both transitions, alpha and emission without segment dat
   );
   assert.equal(pack.segments.length, 0);
 });
+
+test('screen padding follows the render pixel ratio', () => {
+  const pack = packSet(
+    'disc',
+    items('disc', [
+      {
+        center: [0, 0],
+        radiusM: 100,
+        outline: { color: [1, 1, 1, 1], widthPx: 8 },
+      },
+    ]),
+  );
+  const state = composeGround([pack]);
+  const identity = geo.matrix4.IDENTITY;
+  state.update(identity, identity, 800, 600, 1);
+  const padding = state.frames.data[11];
+  assert.equal(state.update(identity, identity, 800, 600, 2), true);
+  assert.equal(state.frames.data[11], padding * 2);
+});

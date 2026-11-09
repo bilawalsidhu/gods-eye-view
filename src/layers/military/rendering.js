@@ -530,7 +530,6 @@ export function createRendering({
     model.show = false;
     flightState._renderer.models.add(model);
     flightState._models.set(icao24, model);
-    flightState._planeModelLoaded = true; // GLB is cached now — the tracked entity's model can fade in its billboard
   }
 
   /** Remove the 3D model for ONE aircraft (removal / track handoff).
@@ -697,19 +696,24 @@ export function createRendering({
           }
           flightState._trackedModel = m;
           flightState._trackedModelLoading = false;
-          // A good load retires this selection's failure budget — a contact that
-          // recovers after a transient blip is not one attempt from giving up.
-          flightState._trackedModelFailIcao = null;
-          flightState._trackedModelFailCount = 0;
-          flightState._trackedModelRetryAtMs = 0;
           flightState._renderer.models.add(m);
-          flightState._planeModelLoaded = true;
         })
         .catch((err) => {
           if (gen !== flightState._trackedModelGen) return; // superseded load — not this selection's failure
           flightState._trackedModelLoading = false;
           parts.tracking._noteTrackedModelLoadFailure(trackedSpec.url, err);
         });
+      return;
+    }
+    if (flightState._trackedModel?.failed) {
+      // The engine could not load the glTF: the billboard stays the visual
+      // and the load is tried again after the backoff.
+      const { url } = flightState._trackedModel.spec ?? {};
+      _releaseTrackedModel();
+      parts.tracking._noteTrackedModelLoadFailure(
+        url,
+        new Error('model failed to load'),
+      );
       return;
     }
     if (flightState._trackedModel) {
@@ -735,6 +739,13 @@ export function createRendering({
         spec.headingOffsetDeg,
       );
       if (!flightState._trackedModel.ready) return;
+      // A model that loaded retires this selection's failure budget: a contact
+      // that recovers after a transient blip is not one attempt from giving up.
+      if (flightState._trackedModelFailIcao === flightState._trackedIcao) {
+        flightState._trackedModelFailIcao = null;
+        flightState._trackedModelFailCount = 0;
+        flightState._trackedModelRetryAtMs = 0;
+      }
       const view = flightState._renderer.view;
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,

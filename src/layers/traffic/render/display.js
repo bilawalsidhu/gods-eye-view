@@ -101,7 +101,6 @@ export function createTrafficDisplay(engine) {
         // A dot at size 0 (fading in, recycled at a road end) draws nothing,
         // its outline included.
         if (!point?.show || !(point.pixelSize > 0) || !point.position) continue;
-        if (!engine.projector.horizonVisible(point.position)) continue;
         const distance = geo.cartesian3.distance(point.position, camera);
         const alpha = nearFarValue(point.translucencyByDistance, distance);
         if (alpha < MIN_TRANSLUCENCY) continue;

@@ -52,7 +52,11 @@ await strict.run({}, async (b) => {
         window.__qaHidden.shown.push({
           state: document.visibilityState,
           at: performance.now(),
-          busy: !!document.querySelector('#globe-engine')?.disabled,
+          busy: Boolean(
+            document.querySelector(
+              '#globe-engine:is([disabled], [aria-busy="true"])',
+            ),
+          ),
         }),
       );
     }, kind);
@@ -69,7 +73,9 @@ await strict.run({}, async (b) => {
     await p.waitForFunction(
       (kind) =>
         window.__godsEyeView?.engine?.kind === kind &&
-        !document.querySelector('#globe-engine')?.disabled &&
+        !document.querySelector(
+          '#globe-engine:is([disabled], [aria-busy="true"])',
+        ) &&
         !document.querySelector('.engine-switch-frame') &&
         document.querySelector('#loading-screen.hidden'),
       { polling: 250, timeout: 60000 },

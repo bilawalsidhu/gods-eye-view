@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { fromDegrees } from '../src/geo/cartesian3.js';
-import { createStrict, localPreview, openPage, waitForEngine } from './qa-strict-harness.mjs';
+import {
+  clickEmptyGround,
+  createStrict,
+  localPreview,
+  openPage,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 import { installTransitFixture } from './fixtures/layers/transit.mjs';
 import {
   combinedPayloads,
@@ -128,36 +134,14 @@ await strict.run({}, async (b) => {
     );
   // A click on empty ground (nothing picked around it, nothing covering it).
   const clickEmpty = async () => {
-    const handle = await p.waitForFunction(
-      () => {
-        const { engine } = window.__godsEyeView;
-        const canvas = engine.host.canvas;
-        const box = canvas.getBoundingClientRect();
-        for (let y = 230; y < 600; y += 9)
-          for (let x = 440; x < 840; x += 9) {
-            if (
-              !canvas.contains(
-                document.elementFromPoint(box.left + x, box.top + y),
-              )
-            )
-              continue;
-            let free = true;
-            for (const [dx, dy] of [
-              [0, 0],
-              [8, 0],
-              [-8, 0],
-              [0, 8],
-              [0, -8],
-            ])
-              if (engine.picker.pick({ x: x + dx, y: y + dy })) free = false;
-            if (free) return { x: box.left + x, y: box.top + y };
-          }
-        return false;
-      },
-      { timeout: 15000 },
-    );
-    const at = await handle.jsonValue();
-    await p.mouse.click(at.x, at.y);
+    await clickEmptyGround(p, {
+      left: 440,
+      top: 230,
+      right: 840,
+      bottom: 600,
+      step: 9,
+      radius: 8,
+    });
     await p.waitForFunction(
       () =>
         !window.qaUrban

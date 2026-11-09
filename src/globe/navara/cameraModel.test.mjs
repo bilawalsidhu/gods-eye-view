@@ -525,3 +525,26 @@ test('pose carries the view aspect ratio', () => {
   const { width, height } = port.size();
   assert.equal(camera.pose().aspectRatio, width / height);
 });
+
+test('setView cancels a model flight before its promise settles', async () => {
+  const { camera, port } = setup();
+  const outcome = [];
+  camera.flyTo({
+    destination: cartesian3.fromDegrees(0, 0, 50000),
+    duration: 2,
+    cancel: () => outcome.push('cancel'),
+    complete: () => outcome.push('complete'),
+  });
+  const destination = cartesian3.fromDegrees(0, 0, 200000);
+  camera.setView({ destination });
+  assert.equal(camera.flightActive(), false);
+  assert.deepEqual(outcome, ['cancel']);
+  port.flights[0].settle(true);
+  await Promise.resolve();
+  near(
+    cartesian3.distance(camera.pose().position, destination),
+    0,
+    1e-6,
+    'setView stays',
+  );
+});

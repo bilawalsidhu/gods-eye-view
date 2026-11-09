@@ -181,25 +181,32 @@ const surfaceId = (object) => {
 
 /**
  * Name what heights are sampled against: the photoreal tiles shown, or the
- * globe under its base imagery (the contract does not name the terrain; a map
- * stack switch replaces the base imagery with it). A map-provider switch
- * changes it and invalidates every cached height.
+ * globe under its base imagery and terrain (a terrain that loads after a
+ * failure keeps the imagery). A map-provider or terrain switch changes it and
+ * invalidates every cached height.
  */
 const surfaceKeys = new WeakMap();
 export function trafficSurfaceKey(engine) {
   let state = surfaceKeys.get(engine);
   if (!state) {
-    state = { tiles: false, source: null, key: '' };
+    state = { tiles: false, source: null, terrain: 0, key: '' };
     surfaceKeys.set(engine, state);
   }
   const tiles = engine.maps.photorealActive();
   const current = engine.maps.current();
   const source = tiles ? current.photoreal : current.baseImagery;
-  if (state.tiles !== tiles || state.source !== source || !state.key) {
+  const terrain = tiles ? 0 : engine.maps.terrainRevision();
+  if (
+    state.tiles !== tiles ||
+    state.source !== source ||
+    state.terrain !== terrain ||
+    !state.key
+  ) {
     state.tiles = tiles;
     state.source = source;
+    state.terrain = terrain;
     // Allocate only when the actual map surface changes, never per frame.
-    state.key = `${tiles ? 'tiles' : 'globe'}:${surfaceId(source)}`;
+    state.key = `${tiles ? 'tiles' : `globe:${terrain}`}:${surfaceId(source)}`;
   }
   return state.key;
 }

@@ -229,7 +229,9 @@ await strict.run({}, async (b) => {
           window.__qaSlow.at &&
           !window.__qaSlow.coverGone &&
           !document.querySelector('.engine-switch-frame') &&
-          !document.querySelector('#globe-engine')?.disabled
+          !document.querySelector(
+            '#globe-engine:is([disabled], [aria-busy="true"])',
+          )
         ) {
           window.__qaSlow.coverGone = performance.now();
           observer.disconnect();
@@ -245,7 +247,9 @@ await strict.run({}, async (b) => {
     await p.waitForFunction(
       (target) =>
         window.__godsEyeView?.engine?.kind === target &&
-        !document.querySelector('#globe-engine')?.disabled &&
+        !document.querySelector(
+          '#globe-engine:is([disabled], [aria-busy="true"])',
+        ) &&
         !document.querySelector('.engine-switch-frame'),
       { polling: 200, timeout: 60000 },
       target,

@@ -40,3 +40,27 @@ test('no shipped module reads Cesium while it loads', () => {
   );
   assert.deepEqual(found, []);
 });
+
+test('re-exporting imported Cesium bindings reads them while loading', () => {
+  assert.deepEqual(
+    reads("import { Color } from 'cesium'; export { Color as Tint };"),
+    ['1:Color'],
+  );
+  assert.deepEqual(reads("import * as C from 'cesium'; export { C };"), [
+    '1:C',
+  ]);
+});
+
+test('Vue scripts participate in the load-time check with original line numbers', () => {
+  assert.deepEqual(
+    loadTimeReferences(
+      `<template><span>Cesium</span></template>
+<script>
+import { Color } from 'cesium';
+export const tint = Color.RED;
+</script>`,
+      'src/View.vue',
+    ).map(({ line, name }) => `${line}:${name}`),
+    ['4:Color'],
+  );
+});

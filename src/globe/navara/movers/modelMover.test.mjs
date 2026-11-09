@@ -204,6 +204,7 @@ test('a failed model load stays not-ready without an unhandled rejection or leak
   });
   await mover.group.ready;
   assert.equal(mover.ready(), false);
+  assert.equal(mover.failed(), true);
   assert.equal(mover.group.meshes.length, 0);
   assert.deepEqual(warnings, ['[globe] Model asset unavailable']);
   mover.dispose();
@@ -278,11 +279,20 @@ test('display tint shares transforms, preserves fade opacity and leaves no overl
     shader.fragmentShader,
     /mix\(gevLitSrgb, vGevColor.rgb, uGevBlend\)/,
   );
+  assert.match(shader.vertexShader, /vGevSonarFactor = gevSonarFactor/);
+  assert.match(shader.fragmentShader, /gevSonarColor\(vec4\(mix/);
   assert.equal(base.material.colorWrite, false);
   assert.equal(
     mover.group.pickMeshes[0],
     tint,
     'GPU picking keeps its color-writing material',
+  );
+  store.set(0, { color: [1, 1, 1, 1] });
+  mover.commit(store.dirty());
+  assert.equal(
+    tint.material.transparent,
+    true,
+    'sonar can fade an opaque model',
   );
   store.setCount(0);
   mover.commit(store.dirty());

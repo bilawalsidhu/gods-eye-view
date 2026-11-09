@@ -1,3 +1,4 @@
+import { appClock } from '../../time/clock.js';
 import { ISS_NORAD, ISS_OVERLAY_SOURCE_ID } from './policy.js';
 
 export function createLifecycle({
@@ -162,6 +163,7 @@ export function createLifecycle({
         path.primitive.show =
           layerState._enabled && layerState._params.showOrbits;
       }
+      parts.rendering._updateOrbitPathRotations(new Date(appClock.now()));
       // Source work can publish as soon as GPU collections exist. Restoring
       // share-selected camera state may itself wait for that publication.
       layerState._resumeRenderer?.();
@@ -197,10 +199,11 @@ export function createLifecycle({
           );
       // Orbit ring primitives + persistent ISS host label — show them
       for (const path of layerState._orbitPaths.values())
-        path.primitive.show = parts.controls.satelliteVisualsVisible(
-          layerState._enabled,
-          layerState._params.showOrbits,
-        );
+        if (path.primitive)
+          path.primitive.show = parts.controls.satelliteVisualsVisible(
+            layerState._enabled,
+            layerState._params.showOrbits,
+          );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation
       if (layerState._renderer) parts.interaction._installClickHandler();
@@ -229,7 +232,7 @@ export function createLifecycle({
       releaseContinuousRender('satellites', layerState._engine);
       if (layerState._pointCollection) layerState._pointCollection.show = false;
       for (const path of layerState._orbitPaths.values())
-        path.primitive.show = false;
+        if (path.primitive) path.primitive.show = false;
       parts.tracking._clearTracking();
       parts.labels._syncIssOverlay();
       // Remove click handler + keydown listener + preRender propagation while disabled

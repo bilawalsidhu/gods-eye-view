@@ -569,6 +569,7 @@ export function createCctvDisplay(engine, { state, services = {} } = {}) {
     get ready() {
       return initialized && !destroyed && !engine.isDestroyed();
     },
+    cameraPose: () => engine.camera.pose(),
     cameraCartographic: () => engine.camera.pose().cartographic,
     following: () => Boolean(engine.camera.following()),
     globeVisible: () => !engine.maps.photorealActive(),

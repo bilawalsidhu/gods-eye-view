@@ -8,7 +8,6 @@ import * as context from '../../data/contextStore.js';
 import * as render from '../../renderGovernor.js';
 import * as layerState from '../../data/layerState.js';
 
-/** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationSatellites({
   source,
   // Test seam: the renderer factory (default: the engine's, from the

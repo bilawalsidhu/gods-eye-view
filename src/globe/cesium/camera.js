@@ -203,6 +203,12 @@ export function createCesiumCamera(viewer) {
       if (!view?.destination)
         throw new TypeError('setView needs a destination');
       const orientation = cesiumOrientation(view.orientation);
+      // A view replaces a running flight, as on Navara (Cesium's own tween
+      // would otherwise overwrite it on the next frame).
+      if (flight || viewer.scene.tweens?.length > 0) {
+        cesium.cancelFlight();
+        flight = null;
+      }
       cesium.setView({
         destination: cesiumDestination(view.destination),
         orientation,

@@ -179,14 +179,11 @@ export function createStreetLevelDisplay(engine) {
 
     function paint() {
       if (destroyed) return;
-      // The surface settled (or the map stack changed): place every sprite
-      // again on the globe, where terrain is cheap; under tiles only the
-      // ones not on them yet.
+      // Loaded detail can replace the surface under an already placed sprite.
       const loaded = engine.surface.tilesLoaded();
       const nowTiles = tilesShown();
       if ((loaded && settled === false) || nowTiles !== tiles) {
-        for (const row of rows)
-          if (!nowTiles || !row.exact || nowTiles !== tiles) place(row);
+        for (const row of rows) place(row);
         dirty = true;
       }
       settled = loaded;

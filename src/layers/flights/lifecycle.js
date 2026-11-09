@@ -1,13 +1,6 @@
 import { createAircraftSceneBinding } from '../aircraft/sceneBinding.js';
-import { PLANE_MODEL_URL } from './policy.js';
 
-export function createLifecycle({
-  flightState,
-  services,
-  parts,
-  layer,
-  resolveAsset,
-}) {
+export function createLifecycle({ flightState, services, parts, layer }) {
   const { clearFocusTarget } = services.focus;
   const { onMilitaryLayerActiveChange } = services.militaryRegistry;
   const { holdContinuousRender, releaseContinuousRender } = services.render;
@@ -19,7 +12,6 @@ export function createLifecycle({
     flightState,
     services,
     parts,
-    resolveModel: () => resolveAsset(PLANE_MODEL_URL),
     enable: () => methods.enable(),
   });
 

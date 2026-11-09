@@ -1,5 +1,6 @@
 // Cesium owns its render mode and scene effects. Scene services drive this API.
 
+import * as Cesium from 'cesium';
 import { CONTACT_SONAR_INITIAL, mergeContactSonar } from '../contract.js';
 import { createCesiumPostStages } from './postStages.js';
 import { createCesiumSonar } from './sonar.js';
@@ -58,6 +59,7 @@ export function createCesiumRender(
       viewer.scene.requestRenderMode = !enabled;
     },
     isContinuous: () => viewer.scene.requestRenderMode === false,
+    maxTextureSize: () => Cesium.ContextLimits.maximumTextureSize,
     ...effects.render,
     setContactSonar(options) {
       const next = mergeContactSonar(contactSonar, options);

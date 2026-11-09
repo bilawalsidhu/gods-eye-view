@@ -517,6 +517,9 @@ export function createCesiumImagery(
     job.collection = collection;
     const provider = providerFor(job, job.source);
     const requestImage = provider.requestImage.bind(provider);
+    job.restoreRequests = () => {
+      provider.requestImage = requestImage;
+    };
     provider.requestImage = (x, y, level, request) => {
       if (job.closed) return undefined;
       const result = requestImage(x, y, level, request);
@@ -621,6 +624,12 @@ export function createCesiumImagery(
   function swapIn(entry, job) {
     entry.staging = null;
     const layer = job.layer;
+    job.restoreRequests?.();
+    if (layer)
+      Object.defineProperty(layer.imageryProvider, 'credit', {
+        configurable: true,
+        get: () => entry.credit,
+      });
     job.layer = null;
     closeJob(job);
     entry.loading = null;

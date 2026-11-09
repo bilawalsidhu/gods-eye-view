@@ -199,6 +199,20 @@ export function createBrowserViteConfig({
     // A production build must not clean the dependency cache a running dev
     // server is still serving optimized module URLs from.
     ...(command === 'build' ? { cacheDir: 'node_modules/.vite-build' } : {}),
+    resolve: {
+      dedupe: ['three'],
+      alias: [
+        {
+          find: /^three$/,
+          replacement: fileURLToPath(
+            new URL(
+              '../node_modules/three/build/three.module.js',
+              import.meta.url,
+            ),
+          ),
+        },
+      ],
+    },
     optimizeDeps: {
       // First reached through the SDR worker or a dynamic import. Pre-bundle
       // them at startup so first use cannot invalidate already-transformed

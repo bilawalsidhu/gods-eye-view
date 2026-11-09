@@ -65,7 +65,9 @@ await strict.run({}, async (browser) => {
       (kind) =>
         window.__godsEyeView?.engine?.kind === kind &&
         document.querySelector('#globe-engine')?.value === kind &&
-        !document.querySelector('#globe-engine').disabled &&
+        !document.querySelector(
+          '#globe-engine:is([disabled], [aria-busy="true"])',
+        ) &&
         document.getElementById('loading-screen')?.classList.contains('hidden'),
       { timeout: 90000 },
       kind,

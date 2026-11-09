@@ -119,6 +119,9 @@ export class ShareLinkManager {
     // The hash this page last read or wrote. A location change back to it is
     // the app's own state, never an incoming share.
     this._knownHash = null;
+    // The hash last written from the live camera, with that camera's exact
+    // pose: the address rounds it (1e-4°, whole metres and degrees).
+    this._writtenView = null;
     this._unwatchNavigation = null;
     this._onNavigate = null;
     // Held while the page leaves this engine for another (holdNavigation).
@@ -179,6 +182,8 @@ export class ShareLinkManager {
   parseInitialHash() {
     const hash = window.location.hash.slice(1);
     this._knownHash = hash;
+    const written = this._writtenView;
+    this._writtenView = null;
     const code =
       this._initialShareCode ??
       parseSharePath(window.location.pathname)?.code ??
@@ -187,6 +192,9 @@ export class ShareLinkManager {
     const state =
       code === null ? this._parseShareHash(hash) : this._parseShareCode(code);
     if (!state) return null;
+    // Another engine reopening the address this manager wrote (an engine
+    // switch) takes the live view it was written from.
+    if (code === null && written?.hash === hash) state.liveView = written.view;
     this._beginIncomingRestore(state);
     return state;
   }
@@ -398,7 +406,7 @@ export class ShareLinkManager {
       status: applyCamera ? 'superseded' : 'skipped',
     });
     if (applyCamera && instant && this._isNavigationCurrent(navigationToken)) {
-      this.engine.camera.setView(view);
+      this.engine.camera.setView(state.liveView ?? view);
       this.engine.render.request('engine-switch');
       cameraPromise = Promise.resolve({ status: 'applied' });
     } else if (applyCamera && this._isNavigationCurrent(navigationToken)) {
@@ -723,6 +731,17 @@ export class ShareLinkManager {
     if (this._sharpenFollowsEngine) params.set('siAuto', '1');
     url.hash = params.toString();
     this._knownHash = url.hash.slice(1);
+    const pose = this.engine.camera.pose();
+    this._writtenView = {
+      hash: this._knownHash,
+      view: {
+        destination: geo.cartesian3.clone(pose.position),
+        orientation: {
+          direction: geo.cartesian3.clone(pose.direction),
+          up: geo.cartesian3.clone(pose.up),
+        },
+      },
+    };
     history.replaceState(null, '', url.href);
   }
 

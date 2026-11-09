@@ -36,7 +36,9 @@ so an expanding callout can fade its outline without changing its width.
 
 Instances move every frame without a rebuild. `depthTest` decides whether
 the scene hides them. A pick returns the instance's `pickId` when the set is
-`pickable`.
+`pickable`. `ready(index?)` says whether a model's glTF or a sprite atlas has
+loaded and `failed(index?)` whether it failed to: a failed set is not loaded
+again, so a layer that retries makes a new set.
 
 ## Lines: polylines in the air
 
@@ -87,8 +89,10 @@ Item options:
   draws on top. All ground fills draw under movers, lines and models.
 - `pickable: true` makes picks return an item's `pickId`, with `owner` (the
   set) and `instance` (the item's index).
-- `drape` is `'both'` (the default), `'terrain'` or `'tiles'`. Cesium
-  honours it; Navara drapes on whatever surface it draws.
+- `drape` is `'both'` (the default), `'terrain'` or `'tiles'`. Both engines
+  honour it: Navara tells 3D tiles from terrain by its globe depth, and its
+  CPU picks skip a set draped only on the surface not shown (terrain while
+  photoreal tiles show, tiles otherwise).
 
 Discs with a fill may use `radial: { fillAlpha, rimAlpha, rimStart, rimEnd,
 emission }`. Alpha multipliers are in 0..1; the radius fractions satisfy
@@ -313,7 +317,8 @@ provide rectangle bounds, split, alpha, order, or drawing on 3D tiles.
 
 - **Imported KML/KMZ ground images** (`src/data/geoImportDisplay.js`): one
   image layer per rectangle at order 30, with the authored alpha capped at
-  0.99 as on Cesium.
+  0.99 as on Cesium; a tinted or rotated image is drawn on a canvas first,
+  and an absolute one is raised to its altitude.
 - **Sea Marks and Ski Pistes** (`src/data/osmOverlays.js`): tile layers at
   order 10 on engines without `maps.addOverlay`.
 
@@ -324,21 +329,31 @@ provide rectangle bounds, split, alpha, order, or drawing on 3D tiles.
 Cesium's precedence; its tests compare the records with `KmlDataSource`.
 No import loads the Cesium SDK. One `geoImportDisplay.js` draws the records
 on every engine: points on movers, ground paths and polygon fills on ground,
-raised paths and outlines on lines, and packed ground images on imagery.
+raised paths and outlines on lines, raised polygon fills on meshes, and packed
+ground images on imagery.
 Every owned id starts with `geo-import-`; the file controller owns visibility,
 framing, refresh and destruction across engine switches.
 
 Pins use composed square sprites to retain Cesium's pin tip, hot spot,
-subregion, colour, scale and rotation. Ground heights come from the loaded
-surface, refreshed after the camera or map settles. Ground pins ignore scene
-depth and are culled beyond the horizon; absolute pins retain their height.
+subregion, colour, scale and rotation; a KML heading turns with the camera's
+heading, so it stays measured from north. Icon textures share a per-file
+budget of 16 million pixels: many distinct styles get lower-resolution
+textures at the same size. Ground heights come from the loaded surface,
+refreshed after the camera or map settles, in batches of 256; on 3D tiles
+only pins in the window are clamped to the tiles drawn. Ground pins ignore
+scene depth and are culled beyond the horizon; absolute pins retain their
+height.
 
-The shared display has known limits against Cesium: wall fills and extruded
-prisms are omitted (their top geometry remains), and `gx:LatLonQuad` is
-omitted. These are counted as undrawn. Raised polygon fills drape; their
-outlines retain altitude. Ground-overlay rotation, altitude and RGB tint are
-not applied, and ground edges use great circles rather than rhumb lines.
-These appearance limits are not included in the undrawn count.
+Raised polygons (KML absolute or relative) draw their fills as meshes and
+their outlines as lines at the vertices' heights. A ground overlay's colour
+tints its image and its alpha fades it; a rotated overlay's image is turned
+on a canvas over the box around it, as Cesium turns its rectangle in degrees,
+and an absolute overlay is raised to its altitude (Cesium raises only
+absolute ones). The shared display has known limits against Cesium: wall
+fills and extruded prisms are omitted (their top geometry remains), and
+`gx:LatLonQuad`, a rotated overlay whose box passes a pole and a raised
+plain-colour overlay are omitted. These are counted as undrawn. Ground edges
+use great circles rather than rhumb lines.
 
 ## Input ownership
 
@@ -574,10 +589,10 @@ data; displays do not receive native viewers or SDK types.
 
 Implement the required host, camera, picker, projector, frame, render, surface,
 input, credit, clock and map interfaces, plus all five drawing primitives:
-`movers`, `lines`, `ground`, `imagery` and `meshes`. `engineCapabilities(engine)`
-reports these and the optional visualStyles, bloom, cloudCover and contactSonar
-groups. An optional group must be complete or absent. Do not advertise a
-capability with a no-op implementation. Match Cesium's behavior where the
+`movers`, `lines`, `ground`, `imagery` and `meshes`. `assertGlobeEngine(engine)`
+checks these required interfaces. `engineCapabilities(engine)` reports only the
+optional visualStyles, bloom, cloudCover and contactSonar groups. An optional
+group must be complete or absent. Do not advertise a capability with a no-op implementation. Match Cesium's behavior where the
 contract permits both engines to implement it.
 
 Run `createContractSuite(engine, { waitFrames, ... })` from
@@ -594,14 +609,13 @@ folder and passing contract suite are the implementation boundary, not a claim
 that arbitrary engine folders are auto-discovered today. Layers and their
 fixtures should need no new drawing implementation.
 
-The layer manifest (`src/app/layers/renderers.js`) loads shared displays and
-lists their `needs`. Today every valid engine must implement all five
-primitives; availability is checked against the registered kind's primitive
-list. `backends` supplies optional engine-specific display options, currently
-only wind's `flow`. Load a backend dynamically from its engine folder. A new
-engine can omit wind streamlines and still draw the shared raster field. Do not
-copy another engine's extensions into a new engine. The self-drawing map overlay
-entries currently list supported kinds explicitly and need registration too.
+The layer manifest (`src/app/layers/renderers.js`) loads shared factories through
+`display`. Every valid engine implements all five primitives; the manifest has
+no per-kind primitive lists or `needs` declarations. `backends` supplies optional
+engine-specific display options, currently only wind's `flow`, loaded dynamically
+from its engine folder. A missing wind backend leaves the shared raster field
+available. Self-drawing layers and map overlays use the same contract and do not
+register supported engine kinds in the manifest.
 
 Run `src/app/layers/displayRehearsal.test.mjs`: it loads every manifest display
 on the fake engine with an unknown kind and empty extensions. Its small fixtures

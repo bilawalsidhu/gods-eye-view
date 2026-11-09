@@ -1207,9 +1207,8 @@ export class LayerLifecycle extends LayerSceneBinding {
     const entry = this.layers.get(layerId);
     if (!entry) return { intentEpoch: null, promise: Promise.resolve() };
     const desiredState = Boolean(shouldEnable);
-    // A layer leaving ends the camera arrival correction on a globe with a
-    // viewer (Cesium).
-    if (!desiredState && this.viewer) cancelCameraArrival(this.engine);
+    // A layer leaving ends its camera arrival correction.
+    if (!desiredState) cancelCameraArrival(this.engine);
     if (entry.destroying) {
       return {
         intentEpoch: null,

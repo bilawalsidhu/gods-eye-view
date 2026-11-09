@@ -1282,6 +1282,7 @@ export class SceneDirector {
       return { started: false, reason: 'data-packs-unavailable' };
     if (token.cancelled) return;
     if (seekState) {
+      if (this._sceneGate && !(await this._waitForScene(token))) return;
       this._setCameraView(
         seekState.camera || resolveCameraPose(scene, shot.camera),
       );

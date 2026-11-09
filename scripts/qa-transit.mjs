@@ -1657,7 +1657,7 @@ try {
             const t0 = performance.now();
             const tick = () => {
               const entry = state._vehicles.get(key);
-              const rect = overlay.getOverlayPaintRect('transit-selected', key);
+              const rect = overlay.getPaintRect('transit-selected', key);
               if (entry?.marker) {
                 const view = scene.camera.viewMatrix;
                 const proj = scene.camera.frustum.projectionMatrix;

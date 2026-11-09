@@ -152,6 +152,20 @@ export function createTesting({
     await parts.rendering._ensureModel(icao24);
     return flightState._models.get(icao24) || null;
   }
+
+  /** The renderer handles one contact draws with, for QA probes that tamper
+   *  with them: its glyph and fleet model, and the tracked glyph and model
+   *  while it is tracked. */
+
+  function _aircraftHandlesForTest(icao24) {
+    const tracked = icao24 === flightState._trackedIcao;
+    return {
+      sprite: flightState._billboards.get(icao24) ?? null,
+      model: flightState._models.get(icao24) ?? null,
+      trackedSprite: tracked ? flightState._trackedEntity : null,
+      trackedModel: tracked ? flightState._trackedModel : null,
+    };
+  }
   return {
     _setTrackedMilitaryRefreshStateForTest,
     _setMilitaryTrackingRefreshOutcomeForTest,
@@ -164,5 +178,6 @@ export function createTesting({
     _trackedBillboardColorForTest,
     _driveFleetModelHandoffForTest,
     _ensureFleetModelForTest,
+    _aircraftHandlesForTest,
   };
 }

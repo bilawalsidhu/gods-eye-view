@@ -526,6 +526,21 @@ test('image size follows the product maximum', async () => {
   }
 });
 
+test('a GPU with a 2048 px texture limit gets 2048 px images', async () => {
+  const h = harness({
+    maxTextureSize: 2048,
+    decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
+  });
+  assert.deepEqual(h.shell.getDiagnostics().imageSize, {
+    width: 2048,
+    height: 1024,
+  });
+  assert.equal(await show(h, times[0]), true);
+  const url = new URL(h.fetches[0].url, 'https://example.test');
+  assert.equal(url.searchParams.get('size'), '2048x1024');
+  h.shell.clear();
+});
+
 test('a host without imagery hides the shell, keeps the frame and refuses work', async () => {
   const h = harness();
   assert.equal(await show(h, times[0]), true);

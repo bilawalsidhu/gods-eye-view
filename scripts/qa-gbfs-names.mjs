@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import { fromDegrees } from '../src/geo/cartesian3.js';
 import { watchBrowserPage, redact } from './qa-browserEvidence.mjs';
 
 const urlIndex = process.argv.indexOf('--url');
@@ -150,23 +151,25 @@ async function open(mode = 'normal') {
           '0'),
     { timeout: 60000 },
   );
-  await page.evaluate(async () => {
-    const { dataManager, engine } = window.__godsEyeView;
-    await window.__godsEyeView.styleManager.initialRestorePromise;
-    window.__godsEyeView.styleManager.orbitController.stop();
-    for (const [id, layer] of dataManager.layers) {
-      if (layer.enabled)
-        await dataManager.setEnabled(id, false, { origin: 'user' });
-    }
-    const geo = await import('/src/geo/index.js');
-    engine.camera.cancelFlight();
-    engine.camera.setView({
-      destination: geo.cartesian3.fromDegrees(-97.7449, 30.2701, 3000),
-      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-    });
-    await dataManager.setEnabled('bikeshare', true, { origin: 'user' });
-    window.__godsEyeView.requestRender('gbfs-name-qa');
-  });
+  await page.evaluate(
+    async (destination) => {
+      const { dataManager, engine } = window.__godsEyeView;
+      await window.__godsEyeView.styleManager.initialRestorePromise;
+      window.__godsEyeView.styleManager.orbitController.stop();
+      for (const [id, layer] of dataManager.layers) {
+        if (layer.enabled)
+          await dataManager.setEnabled(id, false, { origin: 'user' });
+      }
+      engine.camera.cancelFlight();
+      engine.camera.setView({
+        destination,
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      await dataManager.setEnabled('bikeshare', true, { origin: 'user' });
+      window.__godsEyeView.requestRender('gbfs-name-qa');
+    },
+    fromDegrees(-97.7449, 30.2701, 3000),
+  );
   return { page, errors };
 }
 
@@ -220,15 +223,17 @@ async function w2Checks(page) {
     ['close', 3000],
     ['global', 100000],
   ]) {
-    await page.evaluate(async (height) => {
-      const app = window.__godsEyeView;
-      await app.dataManager.setEnabled('bikeshare', false);
-      const geo = await import('/src/geo/index.js');
-      app.engine.camera.setView({
-        destination: geo.cartesian3.fromDegrees(-97.7449, 30.2701, height),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-    }, height);
+    await page.evaluate(
+      async (destination) => {
+        const app = window.__godsEyeView;
+        await app.dataManager.setEnabled('bikeshare', false);
+        app.engine.camera.setView({
+          destination,
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+      },
+      fromDegrees(-97.7449, 30.2701, height),
+    );
     await settledTiles(page);
     await nextFrame(page);
     const off = await page.screenshot({
@@ -304,15 +309,17 @@ async function w2Checks(page) {
     for (const element of document.querySelectorAll('.gbfs-raster-hidden'))
       element.classList.remove('gbfs-raster-hidden');
   });
-  await page.evaluate(async () => {
-    const app = window.__godsEyeView;
-    const geo = await import('/src/geo/index.js');
-    app.engine.camera.setView({
-      destination: geo.cartesian3.fromDegrees(-97.7449, 30.2701, 3000),
-      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-    });
-    await app.dataManager.setEnabled('bikeshare', false);
-  });
+  await page.evaluate(
+    async (destination) => {
+      const app = window.__godsEyeView;
+      app.engine.camera.setView({
+        destination,
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      await app.dataManager.setEnabled('bikeshare', false);
+    },
+    fromDegrees(-97.7449, 30.2701, 3000),
+  );
   for (let i = 0; i < 10; i++) {
     await page.evaluate(() =>
       window.__godsEyeView.dataManager.setEnabled('bikeshare', true),
@@ -520,22 +527,24 @@ try {
     );
   }
   await page.setViewport({ width: 390, height: 844 });
-  await page.evaluate(async () => {
-    window.__qaPainted = [];
-    const app = window.__godsEyeView;
-    // Use the supported clean view to inspect the mobile card clear of panels.
-    app.styleManager.toggleCleanView(true);
-    const geo = await import('/src/geo/index.js');
-    app.engine.camera.cancelFlight();
-    app.engine.camera.setView({
-      destination: geo.cartesian3.fromDegrees(-97.7449, 30.2701, 3000),
-      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-    });
-    app.dataManager.layers
-      .get('bikeshare')
-      .module._selectBikeshareStationForTest('austin-capmetro:english');
-    app.requestRender('gbfs-name-mobile-qa');
-  });
+  await page.evaluate(
+    async (destination) => {
+      window.__qaPainted = [];
+      const app = window.__godsEyeView;
+      // Use the supported clean view to inspect the mobile card clear of panels.
+      app.styleManager.toggleCleanView(true);
+      app.engine.camera.cancelFlight();
+      app.engine.camera.setView({
+        destination,
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+      app.dataManager.layers
+        .get('bikeshare')
+        .module._selectBikeshareStationForTest('austin-capmetro:english');
+      app.requestRender('gbfs-name-mobile-qa');
+    },
+    fromDegrees(-97.7449, 30.2701, 3000),
+  );
   await page.waitForFunction(
     () => window.__qaPainted.includes('QA English Square'),
     { timeout: 10000 },

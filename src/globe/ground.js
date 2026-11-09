@@ -602,13 +602,28 @@ const GROUND_PICK_PX = 3;
  * @param {{ pickGlobe: (at: object) => (object | undefined),
  *   camera: { livePosition: object, pose: () => { fovy: number } },
  *   size: () => { width: number, height: number },
- *   sets: () => { options: object, items: object[], shown: boolean }[] }} ports
+ *   sets: () => { options: object, items: object[], shown: boolean }[],
+ *   surface?: () => 'terrain' | 'tiles' }} ports `surface`: what the ground
+ *   is now (3D tiles while they show); a set draped only on the other one
+ *   draws nothing there and is not picked.
  * @returns {(at: { x: number, y: number }) => { onTop: number, order: number, depth: number, result: object }[]}
  */
-export function createGroundPicks({ pickGlobe, camera, size, sets }) {
+export function createGroundPicks({
+  pickGlobe,
+  camera,
+  size,
+  sets,
+  surface = () => 'terrain',
+}) {
   return (at) => {
+    const under = surface();
     const candidates = sets().filter(
-      (state) => state.shown && state.options.pickable && state.items.length,
+      (state) =>
+        state.shown &&
+        state.options.pickable &&
+        state.items.length &&
+        (state.options.drape ?? 'both') !==
+          (under === 'tiles' ? 'terrain' : 'tiles'),
     );
     if (!candidates.length) return [];
     const world = pickGlobe(at);

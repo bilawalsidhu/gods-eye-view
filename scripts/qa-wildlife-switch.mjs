@@ -308,7 +308,11 @@ await strict.run({}, async (b) => {
         engine: window.__godsEyeView?.engine?.kind ?? null,
         picker: document.querySelector('#globe-engine')?.value ?? null,
         focus: document.activeElement?.id ?? null,
-        busy: document.querySelector('#globe-engine')?.disabled ?? null,
+        busy: Boolean(
+          document.querySelector(
+            '#globe-engine:is([disabled], [aria-busy="true"])',
+          ),
+        ),
         frame: Boolean(document.querySelector('.engine-switch-frame')),
         loading: document.querySelector('#loading-screen')?.className ?? null,
       }));
@@ -343,6 +347,9 @@ await strict.run({}, async (b) => {
   let selected = null;
   for (const { kind, via, click: id } of LEGS) {
     if (via) {
+      const poseBefore = await p.evaluate(() =>
+        window.__godsEyeView.engine.camera.pose(),
+      );
       const reads = { ...fixture.asked };
       const sighting = byId.get(selected);
       if (via === 'keyboard') {
@@ -387,6 +394,29 @@ await strict.run({}, async (b) => {
         console.log('PASS', kind, 'picker click closed the card');
         selected = null;
       }
+      const poseAfter = await p.evaluate(() =>
+        window.__godsEyeView.engine.camera.pose(),
+      );
+      const positionErrorM = Math.hypot(
+        ...['x', 'y', 'z'].map(
+          (axis) => poseAfter.position[axis] - poseBefore.position[axis],
+        ),
+      );
+      const angleError = (key) =>
+        Math.abs(
+          Math.atan2(
+            Math.sin(poseAfter[key] - poseBefore[key]),
+            Math.cos(poseAfter[key] - poseBefore[key]),
+          ),
+        );
+      await strict.check(
+        p,
+        LAYER,
+        'switch preserves the camera position and orientation',
+        positionErrorM < 1 &&
+          ['heading', 'pitch', 'roll'].every((key) => angleError(key) < 1e-4),
+        { poseBefore, poseAfter, positionErrorM },
+      );
       await frame();
     }
 

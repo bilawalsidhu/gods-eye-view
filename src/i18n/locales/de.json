@@ -3171,5 +3171,12 @@
   "Maximum event age: {days}d; undated markers are kept": "Maximales Ereignisalter: {days} Tage; undatierte Markierungen bleiben",
   "event age filter|All": "Alle",
   "Event age": "Ereignisalter",
-  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben"
+  "Event age: {days}d · undated kept": "Ereignisalter: {days} Tage · undatierte bleiben",
+  "Data layers: {layers}": "Datenebenen: {layers}",
+  "No registered data layers": "Keine registrierten Datenebenen",
+  "DAYLIGHT VIEW": "TAGESLICHTANSICHT",
+  "Globe engine failed to start. Running {engine}: {message}": "Die Globus-Engine konnte nicht starten. Es läuft {engine}: {message}",
+  "Bing imagery is not available on the experimental Navara engine": "Bing-Bildmaterial ist in der experimentellen Navara-Engine nicht verfügbar",
+  "NOT ON THIS ENGINE": "NICHT IN DIESER ENGINE",
+  "Kept in the link: {layers}": "Im Link beibehalten: {layers}"
 }

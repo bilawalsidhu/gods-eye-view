@@ -162,15 +162,12 @@ export function createVoiceAreas({
   findRegion = findNaturalRegion,
   findAdminCandidates = findBundledAdminCandidates,
   aroundOutlineMs = AROUND_OUTLINE_MS,
-} = {}) {
-  // An area an outline on the map still refers to is never evicted: its
-  // counting geometry must outlive the display copy drawn from it.
-  const store = createAreaStore({
+  store = createAreaStore({
     isPinned: (areaId) =>
       typeof annotations?.list === 'function' &&
       annotations.list().some((anno) => anno?.areaId === areaId),
-  });
-
+  }),
+} = {}) {
   /** The ground at the centre of the view, else the camera's position. */
   function viewCenter() {
     const picked = annotationResolver?.pickWorldFromScreen?.(engine, 0.5, 0.5);

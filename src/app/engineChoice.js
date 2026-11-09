@@ -8,6 +8,9 @@ export const ENGINE_STORAGE_KEY = 'gev.engine';
  */
 export const ENGINE_CHOICES = Object.freeze(['cesium', 'navara', 'navara-hd']);
 
+/** The choice without one made, and the one a failed start falls back to. */
+export const DEFAULT_ENGINE_CHOICE = ENGINE_CHOICES[0];
+
 /** The engine a choice runs: both Navara choices are the Navara engine. */
 export const engineOfChoice = (choice) =>
   choice === 'cesium' ? 'cesium' : 'navara';
@@ -21,12 +24,16 @@ const known = (value) => {
 
 /**
  * The globe choice for this page: `?engine=cesium|navara|navara-hd`, else
- * the stored `gev.engine`, else Cesium. Navara is experimental; an unknown or
+ * the stored `gev.engine`, else `fallback` (Cesium). Navara is experimental; an unknown or
  * unreadable value never selects it.
- * @param {{ search?: string, storage?: { getItem(key: string): string | null } | null }} [where]
+ * @param {{ search?: string, storage?: { getItem(key: string): string | null } | null, fallback?: string }} [where]
  * @returns {'cesium' | 'navara' | 'navara-hd'}
  */
-export function resolveEngineKind({ search = '', storage = null } = {}) {
+export function resolveEngineKind({
+  search = '',
+  storage = null,
+  fallback = DEFAULT_ENGINE_CHOICE,
+} = {}) {
   const fromQuery = known(new URLSearchParams(search).get('engine'));
   if (fromQuery) return fromQuery;
   let stored = null;
@@ -35,5 +42,5 @@ export function resolveEngineKind({ search = '', storage = null } = {}) {
   } catch {
     // Storage can be blocked (private mode, sandboxed frames).
   }
-  return known(stored) ?? 'cesium';
+  return known(stored) ?? known(fallback) ?? DEFAULT_ENGINE_CHOICE;
 }

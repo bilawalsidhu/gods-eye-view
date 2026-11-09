@@ -7,8 +7,8 @@
  *
  * Engine-neutral: the camera and frames go through the globe engine and the
  * layers through the QA probe (window.__godsEyeView.layers). On an engine
- * without the flights, military and satellites layers (Navara today) the
- * field checks are SKIPPED and the settings checks still run.
+ * without the flights, military and satellites layers the field checks are
+ * SKIPPED and the settings checks still run.
  *
  * The harness replaces only the three detection read APIs in the loaded page.
  * It does not enable their network pollers or mutate repository data. The field

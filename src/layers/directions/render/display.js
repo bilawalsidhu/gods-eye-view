@@ -206,6 +206,12 @@ export function createDirectionsDisplay(engine) {
   const removeMoveEnd = engine.camera.moveEnd.addEventListener(() => {
     if (ends.a || ends.b) placeMarkers();
   });
+  let tilesLoaded = engine.surface.tilesLoaded();
+  const removeSurface = engine.frames.preRender.addEventListener(() => {
+    const loaded = engine.surface.tilesLoaded();
+    if (loaded && !tilesLoaded && visible && (ends.a || ends.b)) placeMarkers();
+    tilesLoaded = loaded;
+  });
   placeMarkers();
 
   return {
@@ -276,6 +282,7 @@ export function createDirectionsDisplay(engine) {
       if (destroyed) return;
       destroyed = true;
       removeMoveEnd();
+      removeSurface();
       route?.destroy();
       steps?.destroy();
       markers.destroy();

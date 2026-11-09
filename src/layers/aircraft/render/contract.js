@@ -18,7 +18,9 @@
 //     scaleByDistance as the engine's own copy). The logic may keep its own
 //     bookkeeping fields on a handle (prefixed _gev).
 //   ModelHandle (models.load*) — one glTF instance:
-//     show, ready (read-only: placed, and its model loaded), scale,
+//     show, ready (read-only: placed, and its model loaded), failed
+//     (read-only: its model would not load; a tracked one is loaded again
+//     after models.remove), scale,
 //     computedScale (read-only: scale after minimumPixelSize), color, id,
 //     modelMatrix (16 numbers, column-major, the model frame: written by
 //     models.setPose and read for anchors).
@@ -61,7 +63,7 @@
  *   setVisible(bool), add(spec) → SpriteHandle, remove(sprite),
  *   restoreOrder(), restoreOrderOnEnable().
  * @property {object} models live(), setVisible(bool), loadFleet(spec),
- *   loadTracked(spec), preload(url) → Promise<ModelHandle>, add(model),
+ *   loadTracked(spec) → Promise<ModelHandle>, add(model),
  *   remove(model), destroy(model), setPose(model, position, headingDeg,
  *   offsetDeg?) (offsetDeg: the model's nose offset, default the layer's).
  *   spec: { url, minimumPixelSize, scale, radiusM, color, blendAmount,
@@ -71,7 +73,7 @@
  *   billboardSize(handle) → { width, height, scale, scaleByDistance } | null.
  *   spec: { image, width, height, scale, scaleByDistance,
  *   disableDepthTestDistance, position(), color() → colour, rotation() }.
- * @property {object} follow start(handle) → stop, refocus(handle) → stop,
+ * @property {object} follow start(handle), refocus(handle),
  *   release(), isFollowing(handle), current() (the tracked handle, or what
  *   another layer follows), onChanged(listener) → remove.
  * @property {object} trails create({ color, width }) → Trail,

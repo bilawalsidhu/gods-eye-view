@@ -516,3 +516,39 @@ test('commanded leaves a newer hook on the camera in place', () => {
   remove();
   assert.equal(cesium.flyTo, newer);
 });
+
+test('setView cancels a running flight before placing the camera', () => {
+  const { camera, cesium } = setup();
+  camera.flyTo({
+    destination: geo.cartesian3.fromDegrees(0, 0, 50000),
+    duration: 2,
+  });
+  const calls = [];
+  cesium.cancelFlight = () => calls.push('cancel');
+  cesium.setView = () => calls.push('place');
+  camera.setView({ destination: geo.cartesian3.fromDegrees(0, 0, 200000) });
+  assert.deepEqual(calls, ['cancel', 'place']);
+});
+
+test('setView without a flight places the camera only', () => {
+  const { camera, cesium } = setup();
+  const calls = [];
+  cesium.cancelFlight = () => calls.push('cancel');
+  cesium.setView = () => calls.push('place');
+  camera.setView({ destination: geo.cartesian3.fromDegrees(0, 0, 200000) });
+  assert.deepEqual(calls, ['place']);
+});
+
+test('setView ends the engine flight through its cancellation callback', () => {
+  const { camera } = setup();
+  const outcome = [];
+  camera.flyTo({
+    destination: geo.cartesian3.fromDegrees(0, 0, 50000),
+    duration: 2,
+    cancel: () => outcome.push('cancel'),
+    complete: () => outcome.push('complete'),
+  });
+  camera.setView({ destination: geo.cartesian3.fromDegrees(0, 0, 200000) });
+  assert.deepEqual(outcome, ['cancel']);
+  assert.equal(camera.flightActive(), false);
+});

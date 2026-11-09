@@ -92,7 +92,7 @@
  * @property {() => number} height The camera's height above the WGS84
  *   ellipsoid (the pose's cartographic height), without building a pose.
  * @property {(view: { destination: Cartesian3 | Rectangle, orientation?: Orientation }) => void} setView
- *   Missing angles default to heading 0, pitch −π/2, roll 0.
+ *   Cancels a running flight. Missing angles default to heading 0, pitch −π/2, roll 0.
  * @property {(options: FlightOptions) => void} flyTo Cancels a running flight first.
  * @property {(sphere: { center: Cartesian3, radius: number }, options?: SphereFlightOptions) => void} flyToSphere
  *   Ends unlocked (identity transform).
@@ -214,7 +214,13 @@
  * @property {(cartographic: Cartographic) => (number | undefined)} terrainHeight
  *   Height of the terrain/globe surface only (Cesium's globe.getHeight).
  * @property {boolean} terrainHeightSupported
- * @property {(position: Cartesian3, exclude?: any[]) => (Cartesian3 | undefined)} clampToHeight
+ * @property {(positions: Cartographic[]) => Promise<(number | undefined)[]>} sampleTerrainMostDetailed
+ *   Terrain heights (as terrainHeight) at the terrain's finest level,
+ *   fetched where it is not loaded (Cesium's sampleTerrainMostDetailed), one
+ *   per position, in order: undefined where no tile answers, 0 on the
+ *   ellipsoid. Rejects when the terrain cannot be sampled (Cesium: one
+ *   without tile availability). The terrain is the one shown at the call;
+ *   maps.terrainRevision tells when it changed since.
  *   The position moved onto the rendered scene along the geodetic normal.
  * @property {boolean} clampToHeightSupported
  * @property {() => boolean} tilesLoaded
@@ -237,6 +243,9 @@
  *   Owns whatever the engine needs to render every frame or only on request
  *   (Cesium: requestRenderMode and maximumRenderTimeChange = Infinity).
  * @property {() => boolean} isContinuous
+ * @property {() => number} maxTextureSize The longest texture side (px) the
+ *   GPU takes (Cesium's ContextLimits.maximumTextureSize, three's
+ *   capabilities.maxTextureSize): a layer sizes its images under it.
  * @property {(options: { enabled?: boolean, amount?: number }) => void} setSharpen
  *   An unsharp mask on the final image, after tone mapping and before
  *   anti-aliasing: each pixel moves away from its 3×3 box blur by `amount`
@@ -368,6 +377,9 @@
  * @property {() => { baseImagery: object | null, photoreal: object | null }} current
  *   The source objects on screen, as passed: the base imagery layer on the
  *   globe and the photoreal tiles shown (null for none).
+ * @property {() => number} terrainRevision Changes whenever the terrain the
+ *   globe draws is replaced (a setTerrain applied, a fallback to the
+ *   ellipsoid): heights cached against the terrain are stale once it does.
  *
  * @typedef {object} GlobeClock
  *   The app's own time (src/time/clock.js), in milliseconds since the Unix
@@ -457,6 +469,9 @@
  *   sprite set's atlas. With an index, what that instance draws (Cesium: its
  *   own model; the other engines load a set's glTF once).
  *   A layer keeps its fallback visual until then.
+ * @property {(index?: number) => boolean} failed Whether what the set draws
+ *   failed to load (with an index, what that instance draws): it stays not
+ *   ready and is not tried again; a layer that retries makes a new set.
  * @property {() => void} destroy
  *
  * @typedef {object} GlobeMovers
@@ -527,8 +542,7 @@
  *   with a pickId); false by default: picks pass through to what lies under.
  * @property {'both'|'terrain'|'tiles'} [drape] What the fills drape on:
  *   terrain and 3D tiles ('both', the default), or only one of them
- *   (Cesium's classificationType). Navara drapes on whatever surface it
- *   draws.
+ *   (Cesium's classificationType).
  *
  * @typedef {object} GroundRadial
  * @property {number} fillAlpha Interior alpha multiplier, 0..1.
@@ -679,7 +693,7 @@
  *   differs only in its credit keeps its pixels. `staged`: the drawn
  *   source stays until the new one is complete (an image loaded and
  *   uploaded; the tiles in view loaded — Cesium: its requests in and quiet,
- *   at alpha 0 under the drawn one; Navara: its own atlas), then replaces
+ *   at alpha 0 above the drawn one; Navara: its own atlas), then replaces
  *   it; resolves true then, false when it failed (an image or a tile that
  *   would not load), was aborted by `signal`, or was replaced by another
  *   setSource first. A hidden layer takes a staged source at once.
@@ -1001,6 +1015,7 @@ const SHAPE = {
     request: isFunction,
     setContinuous: isFunction,
     isContinuous: isFunction,
+    maxTextureSize: isFunction,
     setSharpen: isFunction,
     sharpen: isFunction,
   },
@@ -1010,6 +1025,7 @@ const SHAPE = {
     supported: isBoolean,
     terrainHeight: isFunction,
     terrainHeightSupported: isBoolean,
+    sampleTerrainMostDetailed: isFunction,
     clampToHeight: isFunction,
     clampToHeightSupported: isBoolean,
     tilesLoaded: isFunction,
@@ -1049,6 +1065,7 @@ const SHAPE = {
     releasePhotorealTiles: isFunction,
     photorealActive: isFunction,
     current: isFunction,
+    terrainRevision: isFunction,
   },
 };
 

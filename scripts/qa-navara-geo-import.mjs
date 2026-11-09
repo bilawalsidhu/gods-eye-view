@@ -2,8 +2,8 @@
 // UTILITIES ▸ Import on Navara under the strict network policy: GeoJSON,
 // KML, KMZ (a packed icon and a ground overlay) and GPX through the real
 // file input, each one row; Navara draws their shapes in the row colour and
-// their pins, counts what it cannot draw (the KMZ ground overlay) and says
-// so in the hint; hide, fly-to and remove work on the engine; the files
+// their pins and packed ground overlay; unsupported content is counted
+// in the hint; hide, fly-to and remove work on the engine; the files
 // survive a switch to Cesium and back and draw on each engine. No file makes
 // the page request anything it names (the strict policy fails any request
 // outside the preview and the free tile cache).
@@ -152,7 +152,9 @@ await strict.run(
         (k) =>
           window.__godsEyeView?.engine?.kind === k &&
           window.__gevGeoImport?.diagnostics().attached &&
-          !document.querySelector('#globe-engine')?.disabled &&
+          !document.querySelector(
+            '#globe-engine:is([disabled], [aria-busy="true"])',
+          ) &&
           !document.querySelector('.engine-switch-frame') &&
           document.querySelector('#loading-screen.hidden'),
         { timeout: 120000 },
@@ -171,7 +173,7 @@ await strict.run(
         rows: document.querySelectorAll('#geo-import-list .geo-import-row')
           .length,
         hint: document.getElementById('geo-import-hint')?.textContent || '',
-        // Navara draws the pins as mover sets; Cesium as entities (none).
+        // Both engines draw imported pins through mover sets.
         pins: window.__godsEyeView.engine.movers
           .list()
           .filter(({ id }) => id.startsWith('geo-import-'))

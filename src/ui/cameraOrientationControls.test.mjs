@@ -64,6 +64,7 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
     lookAtTransform(transform) {
       calls.push({ type: 'lookAtTransform', transform });
     },
+    cancelFlight() {},
     setView(view) {
       calls.push({ type: 'setView', view });
     },

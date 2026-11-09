@@ -70,16 +70,6 @@ export function createMeshFloorSampler({
   // bundle, and the subscription is idempotent for the app's lifetime.
 
   /**
-   * Equirectangular distance (km) — same approximation the flights clamp uses.
-   */
-  function _approxKm(lat1, lon1, lat2, lon2) {
-    const dLat = (lat2 - lat1) * 111.32;
-    const dLon =
-      (lon2 - lon1) * 111.32 * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180);
-    return Math.hypot(dLat, dLon);
-  }
-
-  /**
    * Samples the rendered mesh height for the coarse cells containing `points`,
    * one-shot per cell, budget-capped, viewer-proximity-gated. Call ONCE per
    * layer poll (never per contact, never per frame). Synchronous — Cesium's

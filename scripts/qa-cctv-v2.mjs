@@ -1485,8 +1485,9 @@ async function main() {
       const scene = viewer.scene;
       const canvas = scene.canvas;
       const rect = canvas.getBoundingClientRect();
-      const { hitTestWorldOverlay } =
-        (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
+      const { hitTest } = (
+        await import('/src/overlays/worldOverlay.js')
+      ).worldOverlayFor(window.__godsEyeView.engine);
       const candidates = [
         [0.55, 0.72],
         [0.45, 0.72],
@@ -1508,7 +1509,7 @@ async function main() {
         const x = Math.round(canvas.clientWidth * fx);
         const y = Math.round(canvas.clientHeight * fy);
         const picked = scene.pick({ x, y });
-        const card = hitTestWorldOverlay(x, y, { sourceId: 'cctv' });
+        const card = hitTest(x, y, { sourceId: 'cctv' });
         const top = document.elementFromPoint(rect.left + x, rect.top + y);
         if (
           resolveId(picked) === null &&

@@ -2,8 +2,7 @@
 // engine.surface, engine.camera), the same on every engine: 9 px discs in
 // the place colour with a dark 2 px outline, on top only within 2.5 km of
 // the camera. The contract has no ground clamping, so each point sits on the
-// sampled surface; heights are read again after each camera move, and
-// shortly after a draw that found no surface under a place yet.
+// sampled surface; visible points refine after camera moves and tile loads.
 
 import * as geo from '../../../geo/index.js';
 import { rgbaFromCss } from '../../shared/color.js';
@@ -16,6 +15,8 @@ const INITIAL_CAPACITY = 256;
 // While the surface under a place has not loaded, its height is asked again.
 const RESAMPLE_MS = 500;
 const RESAMPLE_TRIES = 20;
+const SAMPLES_PER_PASS = 16;
+const SAMPLE_BUDGET_MS = 4;
 // Under the moving contacts (src/data/spriteOrder.js), as map data.
 const POINT_ORDER = -1;
 
@@ -34,7 +35,8 @@ export function createOsmPlacesDisplay(engine) {
     records = [],
     destroyed = false,
     retry = null,
-    tries = 0;
+    revision = 0;
+  const heights = new Map();
   function ensure(count) {
     if (set && count <= capacity) return;
     set?.destroy();
@@ -56,21 +58,73 @@ export function createOsmPlacesDisplay(engine) {
     const shown = visible ? records : [];
     ensure(shown.length);
     const sampling = engine.surface.supported;
-    let unsampled = false;
+    let sampleTime = 0;
+    const now = Date.now();
+    const size = engine.host.size();
+    let samples = 0;
+    let delay = Infinity;
     shown.forEach((record, index) => {
-      const sampled = sampling
-        ? engine.surface.sampleHeight(
+      let cached = heights.get(record);
+      if (!cached || cached.revision !== revision) {
+        cached = {
+          height: cached?.height ?? 0,
+          revision,
+          attempts: 0,
+          nextAt: 0,
+          resolved: false,
+        };
+        heights.set(record, cached);
+      }
+      let position = geo.cartesian3.fromDegrees(
+        record.lon,
+        record.lat,
+        cached.height + HEIGHT_OFFSET_M,
+      );
+      const screen = engine.projector.horizonVisible(position)
+        ? engine.projector.worldToWindow(position)
+        : null;
+      const inView =
+        screen &&
+        screen.x >= 0 &&
+        screen.y >= 0 &&
+        screen.x < size.width &&
+        screen.y < size.height;
+      if (
+        sampling &&
+        inView &&
+        !cached.resolved &&
+        cached.attempts < RESAMPLE_TRIES
+      ) {
+        if (
+          now >= cached.nextAt &&
+          samples < SAMPLES_PER_PASS &&
+          sampleTime < SAMPLE_BUDGET_MS
+        ) {
+          const started = performance.now();
+          const sampled = engine.surface.sampleHeight(
             geo.cartographic.fromDegrees(record.lon, record.lat),
             [set],
-          )
-        : undefined;
-      if (!Number.isFinite(sampled)) unsampled = true;
+          );
+          sampleTime += performance.now() - started;
+          samples++;
+          cached.attempts++;
+          cached.nextAt = now + RESAMPLE_MS;
+          // Cesium samples kilometres underground while tiles stream.
+          if (Number.isFinite(sampled) && sampled >= -500 && sampled <= 9000) {
+            cached.height = sampled;
+            cached.resolved = true;
+            position = geo.cartesian3.fromDegrees(
+              record.lon,
+              record.lat,
+              sampled + HEIGHT_OFFSET_M,
+            );
+          }
+        }
+        if (!cached.resolved && cached.attempts < RESAMPLE_TRIES)
+          delay = Math.min(delay, Math.max(0, cached.nextAt - now));
+      }
       set.set(index, {
-        position: geo.cartesian3.fromDegrees(
-          record.lon,
-          record.lat,
-          (Number.isFinite(sampled) ? sampled : 0) + HEIGHT_OFFSET_M,
-        ),
+        position,
         color,
         show: true,
         pickId: osmPlacePickId(record),
@@ -78,12 +132,18 @@ export function createOsmPlacesDisplay(engine) {
     });
     set.setCount(shown.length);
     set.commit();
-    if (unsampled && sampling && tries++ < RESAMPLE_TRIES)
-      retry = setTimeout(draw, RESAMPLE_MS);
+    if (Number.isFinite(delay)) retry = setTimeout(draw, delay);
   }
-  const removeMoveEnd = engine.camera.moveEnd.addEventListener(() => {
-    tries = 0;
+  function refine() {
+    revision++;
     if (visible && records.length) draw();
+  }
+  const removeMoveEnd = engine.camera.moveEnd.addEventListener(refine);
+  let tilesLoaded = engine.surface.tilesLoaded();
+  const removeSurface = engine.frames.preRender.addEventListener(() => {
+    const loaded = engine.surface.tilesLoaded();
+    if (loaded && !tilesLoaded) refine();
+    tilesLoaded = loaded;
   });
   return {
     setVisible(show) {
@@ -93,7 +153,8 @@ export function createOsmPlacesDisplay(engine) {
     },
     replace(next) {
       records = next.slice();
-      tries = 0;
+      heights.clear();
+      revision++;
       draw();
     },
     destroy() {
@@ -101,6 +162,8 @@ export function createOsmPlacesDisplay(engine) {
       destroyed = true;
       clearTimeout(retry);
       removeMoveEnd();
+      removeSurface();
+      heights.clear();
       set?.destroy();
       set = null;
       records = [];

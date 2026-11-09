@@ -578,6 +578,7 @@ export function createWeatherDisplay(
       requestRender: () => engine.render.request('weather'),
       viewRectangle: () => engine.camera.viewRectangle(),
       moveEnd: engine.camera.moveEnd,
+      maxTextureSize: engine.render.maxTextureSize(),
       createSurface: (frame) =>
         createRaisedWeatherSurface(engine, product, frame),
     });

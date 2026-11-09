@@ -380,6 +380,8 @@ function readGroundOverlay(el, records) {
     rectangle,
     color,
     rotation: numberOf(box, 'rotation') ?? 0,
+    altitude: numberOf(el, 'altitude') ?? 0,
+    altitudeMode: altitudeOf(el),
   });
 }
 

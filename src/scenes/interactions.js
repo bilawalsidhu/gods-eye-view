@@ -121,8 +121,8 @@ export function createSceneInteractions({
       handler = null;
       engine = nextEngine;
       if (registered) targets = registered;
+      container = engine?.host?.container ?? container;
       if (!panel || !engine) return;
-      container = engine.host?.container ?? container;
       update({ container });
       bindInput(panel.owner);
     },

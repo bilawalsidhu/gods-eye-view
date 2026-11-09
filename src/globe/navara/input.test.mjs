@@ -33,7 +33,6 @@ const pointer = (type, x, y, extra = {}) =>
 function setup() {
   const canvas = fakeCanvas();
   const cameraOptions = [];
-  const cameraInputs = [];
   const view = {
     canvas,
     camera: {
@@ -42,10 +41,8 @@ function setup() {
       },
     },
   };
-  const { input, destroy } = createNavaraInput(view, {
-    onCameraInput: (type) => cameraInputs.push(type),
-  });
-  return { canvas, input, destroy, cameraOptions, cameraInputs };
+  const { input, destroy } = createNavaraInput(view);
+  return { canvas, input, destroy, cameraOptions };
 }
 
 test('down, up and click carry canvas-relative positions', () => {
@@ -119,14 +116,9 @@ test('on validates its arguments and returns an idempotent remover', () => {
   assert.equal(count, 0);
 });
 
-test('suspending Navara controls preserves user input notifications', () => {
-  const { canvas, input, cameraOptions, cameraInputs } = setup();
-  canvas.dispatchEvent(pointer('pointerdown', 1, 1));
-  canvas.dispatchEvent(new Event('wheel'));
-  assert.deepEqual(cameraInputs, ['pointerdown', 'wheel']);
+test("suspending turns Navara's controls off until the resume", () => {
+  const { input, cameraOptions } = setup();
   const resume = input.suspendCameraInputs();
-  canvas.dispatchEvent(pointer('pointerdown', 1, 1));
-  assert.deepEqual(cameraInputs, ['pointerdown', 'wheel', 'pointerdown']);
   resume();
   assert.deepEqual(cameraOptions, [
     { enableSpin: false, enableZoom: false, enableTilt: false },

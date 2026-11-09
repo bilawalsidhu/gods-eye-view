@@ -673,9 +673,7 @@ export function createQueries({
         // follow): asking to track it again follows it again (as flights).
         const entity = flightState._trackedEntity;
         if (entity && !flightState._renderer?.follow.isFollowing(entity)) {
-          flightState._trackedCameraFrameStop?.();
-          flightState._trackedCameraFrameStop =
-            flightState._renderer.follow.refocus(entity);
+          flightState._renderer.follow.refocus(entity);
         }
         return parts.tracking._publishTrackedSelection(id, origin);
       }
@@ -750,9 +748,7 @@ export function createQueries({
         !flightState._renderer.follow.isFollowing(flightState._trackedEntity)
       )
         return false;
-      flightState._trackedCameraFrameStop?.();
-      flightState._trackedCameraFrameStop =
-        flightState._renderer.follow.refocus(flightState._trackedEntity);
+      flightState._renderer.follow.refocus(flightState._trackedEntity);
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },

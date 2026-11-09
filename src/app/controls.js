@@ -46,8 +46,6 @@ export async function createApplicationControls({
   const styleManager = new Controls(viewer, {
     services: {
       ...sharedServices,
-      // The catalog's layers; the ones this engine cannot show (Navara)
-      // are empty stand-ins.
       ...catalogControlServices(catalog),
     },
     requestServices: operations.requests,

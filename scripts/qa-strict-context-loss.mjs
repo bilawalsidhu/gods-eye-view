@@ -67,7 +67,9 @@ await strict.run({}, async (b) => {
     await p.waitForFunction(
       () =>
         (window.__godsEyeView &&
-          !document.querySelector('#globe-engine')?.disabled &&
+          !document.querySelector(
+            '#globe-engine:is([disabled], [aria-busy="true"])',
+          ) &&
           !document.querySelector('.engine-switch-frame') &&
           document.querySelector('#loading-screen.hidden')) ||
         document.querySelector('.engine-switch-retry'),

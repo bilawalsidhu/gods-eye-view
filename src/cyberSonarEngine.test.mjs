@@ -166,3 +166,36 @@ test("an engine's own contacts keep the sweep drawing, and a lost treatment wake
     dispose();
     assert.equal(root.dataset.cyberSonarGpu, undefined);
   }));
+
+test('contacts held off screen leave the sweep idle', () =>
+  withCyberPage(async ({ root }) => {
+    const engine = createFakeEngine({ kind: 'navara', contactSonar: true });
+    // Navara's report (createNavaraEngine.js): the movers in view.
+    const report = { supported: true, contacts: 0 };
+    engine.contactSonarDiagnostics = () => report;
+    const timers = new Map();
+    let nextTimer = 1;
+    const dispose = createCyberSonarEngineScene(engine, null, {
+      root,
+      setTimer: (callback, ms) => {
+        timers.set(nextTimer, [callback, ms]);
+        return nextTimer++;
+      },
+      clearTimer: (id) => timers.delete(id),
+    });
+    const set = engine.movers.createSet({
+      id: 'qa-contacts',
+      kind: 'point',
+      capacity: 1,
+      point: { sizePx: 8 },
+    });
+    set.set(0, { position: { x: 6378137, y: 0, z: 0 } });
+    set.setCount(1);
+    set.commit();
+    engine.fake.frame();
+    assert.equal(timers.size, 0, 'a contact out of view draws nothing');
+    report.contacts = 1;
+    engine.fake.frame();
+    assert.equal(timers.size, 1, 'one in view keeps the sweep moving');
+    dispose();
+  }));

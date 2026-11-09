@@ -115,3 +115,33 @@ test('annotation outline events reach the session from the attached engine only'
     f.restore();
   }
 });
+
+test('area handles outlive an engine attachment', () => {
+  const f = fixture();
+  try {
+    f.voice.attachScene({ engine: fakeEngine('cesium') });
+    const store = f.built[0].areaOptions?.store;
+    assert.ok(store);
+    const area = store.put({
+      name: 'Area',
+      source: 'drawn',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
+    });
+    f.voice.detachScene();
+    f.voice.attachScene({ engine: fakeEngine('navara') });
+    assert.equal(f.built[1].areaOptions.store.get(area.areaId), area);
+  } finally {
+    f.lifetime.abort();
+    f.restore();
+  }
+});

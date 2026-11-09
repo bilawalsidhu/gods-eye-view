@@ -8,7 +8,7 @@ import { analyzeModule } from './module-analysis.mjs';
 const builtins = new Set(
   builtinModules.flatMap((name) => [name, `node:${name}`]),
 );
-const code = /\.[mc]?js$/;
+const code = /\.(?:[mc]?js|vue)$/;
 const entry = (file) =>
   file === 'src/main.js' || file.startsWith('src/standalone/');
 const tests = (file) =>
@@ -30,12 +30,6 @@ const globeEngine = (file) => /^src\/globe\/(?:cesium|navara)\//.test(file);
 const cesiumPackage = /^(?:cesium(?:\/|$)|@cesium\/)/;
 // Navara renders through three.js and its postprocessing peer.
 const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
-// The modules that load Navara renderers, each through import().
-const NAVARA_RENDERER_LOADERS = new Set([
-  'src/app/navaraMode.js',
-  'src/app/layers/renderers.js',
-]);
-const navaraLayerRenderer = (file) => /\/render\/navara[^/]*\.js$/.test(file);
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(
@@ -125,6 +119,7 @@ export function checkImportDirections(root) {
     try {
       analysis = analyzeModule(readFileSync(resolved, 'utf8'), {
         dynamic: true,
+        filename: file,
       });
     } catch (error) {
       report(file, error.message);
@@ -188,26 +183,11 @@ export function checkImportDirections(root) {
       if (
         to.startsWith('src/globe/navara/') &&
         !file.startsWith('src/globe/navara/') &&
-        !analysis.dynamicImports.includes(specifier)
+        analysis.staticImports.includes(specifier)
       )
         report(
           file,
           `The Navara engine loads only through a dynamic import(): ${to}`,
-        );
-      // Like the engine, a layer's Navara renderer reaches the app only
-      // through an import() of the Navara mode (src/app/navaraMode.js) or
-      // of the layer manifest (src/app/layers/renderers.js).
-      if (
-        navaraLayerRenderer(to) &&
-        !navaraLayerRenderer(file) &&
-        !(
-          NAVARA_RENDERER_LOADERS.has(file) &&
-          analysis.dynamicImports.includes(specifier)
-        )
-      )
-        report(
-          file,
-          `A Navara layer renderer loads only through the Navara mode's dynamic import(): ${to}`,
         );
       if (file.startsWith('src/') && to.startsWith('server/'))
         report(file, `Browser imports server: ${to}`);
@@ -322,8 +302,8 @@ export function checkImportDirections(root) {
   }
   for (const file of files.filter(globeContract)) globe(file);
   // Each engine graph stays on its own engine, through helpers too.
-  for (const start of files.filter(globeEngine)) {
-    const navara = start.startsWith('src/globe/navara/');
+  for (const owner of ['cesium', 'navara']) {
+    const navara = owner === 'navara';
     const label = navara ? 'Navara globe engine' : 'Cesium globe engine';
     const foreignPackage = navara ? cesiumPackage : navaraPackage;
     const foreignEngine = navara ? 'src/globe/cesium/' : 'src/globe/navara/';
@@ -342,7 +322,10 @@ export function checkImportDirections(root) {
         else visit(to);
       }
     };
-    visit(start);
+    for (const start of files.filter((file) =>
+      file.startsWith(`src/globe/${owner}/`),
+    ))
+      visit(start);
   }
   // Common voice controls may use their DOM view, but never a protocol implementation.
   const voiceSeen = new Set();

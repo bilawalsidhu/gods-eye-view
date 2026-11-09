@@ -73,18 +73,6 @@ export function createFlightState({ source, services }) {
 
   flightState._lastModelCapWarnMs = 0;
   // throttle the "more planes in view than the cap" console notice
-  // The tracked entity's billboard goes transparent (rather than hidden) once the model takes
-  // over, so it keeps supplying a bounding sphere for follow-camera framing. We only drop its
-  // alpha after the GLB is preloaded so the model is ready to render the instant the billboard
-  // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
-  // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
-
-  flightState._planeModelLoaded = false;
-
-  /** @type {object|null} retained preload that keeps the glTF cache warm */
-
-  flightState._preloadModel = null;
-
   /** Last limb taper per billboard, retained across class/ground/cockpit repaints. */
 
   flightState._billboardLimbScale = new WeakMap();
@@ -125,10 +113,6 @@ export function createFlightState({ source, services }) {
   /** @type {object|null} The renderer's tracked handle (the follow target) */
 
   flightState._trackedEntity = null;
-
-  /** Disposes the single active tracked-camera framing owner. */
-
-  flightState._trackedCameraFrameStop = null;
 
   /** @type {object|null} Standalone 3D model for the tracked aircraft. Deliberately NOT a
    *  graphic on _trackedEntity: viewer.trackedEntity derives the follow-camera from the entity's

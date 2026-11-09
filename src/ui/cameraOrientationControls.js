@@ -2,10 +2,10 @@ import * as geo from '../geo/index.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { t } from '../i18n/index.js';
 
-// The camera is the globe engine's, and so is the follow: the followed
-// entity is engine.camera.following().native (on Cesium also an entity the
-// app put on viewer.trackedEntity). The viewer, when callers pass one, is
-// read only for its clock.
+// The camera is the globe engine's, and so is the follow. On Cesium the
+// follow is the viewer's tracked entity (an app entity, or the proxy of an
+// engine follow): its EntityView keeps whatever offset the camera takes in
+// the entity's frame. Elsewhere the follow owns its offset.
 
 // Cesium's EasingFunction.CUBIC_IN_OUT (tween.js Cubic.InOut).
 function cubicInOut(amount) {
@@ -13,17 +13,15 @@ function cubicInOut(amount) {
   return 0.5 * ((amount -= 2) * amount * amount + 2);
 }
 
-function followedEntity(engine) {
-  const handle = engine?.camera.following?.();
-  return handle?.native ?? null;
+function followedEntity(engine, viewer) {
+  return engine?.camera.following?.() ? (viewer?.trackedEntity ?? null) : null;
 }
 
-// An engine's own follow (no tracked entity: Navara): its handle, which
-// knows its target and takes a new offset without ending the follow.
+// A follow handle that takes a new offset without ending the follow.
 function engineFollow(engine, viewer) {
   const handle = engine?.camera.following?.();
   return handle &&
-    !followedEntity(engine) &&
+    !followedEntity(engine, viewer) &&
     typeof handle.target === 'function' &&
     typeof handle.retarget === 'function'
     ? handle
@@ -84,12 +82,12 @@ export function pickViewTarget(engine) {
 /**
  * Describe the camera as an orbit around the current viewport center.
  * @param {import('../globe/contract.js').GlobeEngine | null} engine
- * @param {object | null} [viewer] The Cesium viewer whose tracked entity is
- *   the orbit target.
+ * @param {object | null} [viewer] The Cesium viewer: its tracked entity and
+ *   the clock that samples it.
  */
 export function readCameraTargetFrame(engine, viewer = null) {
   if (!engine) return null;
-  const entity = followedEntity(engine);
+  const entity = followedEntity(engine, viewer);
   const follow = engineFollow(engine, viewer);
   const center = entity
     ? trackedTarget(entity, viewer)
@@ -133,8 +131,7 @@ function setCameraTargetFrame(engine, frame, viewer = null) {
   if (!engine || !frame?.target || !Number.isFinite(frame.range)) return false;
   const { camera } = engine;
   // Inside an engine's own follow: the new frame is the follow's offset (a
-  // camera command would end the follow; Cesium's tracked entity keeps its
-  // follow through lookAt below, so both engines keep following).
+  // camera command would end the follow).
   const follow = engineFollow(engine, viewer);
   if (follow) {
     const heading = normalizedHeading(frame.heading);
@@ -150,19 +147,26 @@ function setCameraTargetFrame(engine, frame, viewer = null) {
     return true;
   }
   try {
-    const trackedTransform = followedEntity(engine) ? camera.transform() : null;
-    camera.lookAt(frame.target, {
+    const offset = {
       heading: normalizedHeading(frame.heading),
       pitch: frame.pitch,
       range: frame.range,
-    });
-    if (trackedTransform) {
-      // Preserve EntityView's reference frame (including satellite frames).
-      // Its next update carries this new local offset along with the target.
+    };
+    if (followedEntity(engine, viewer)) {
+      // lookAt is a camera command and would end an engine follow; the same
+      // frame through lookAtTransform does not. Then back to EntityView's
+      // reference frame (including satellite frames): its next update
+      // carries this new local offset along with the target.
+      const trackedTransform = camera.transform();
+      camera.lookAtTransform(
+        geo.transforms.eastNorthUpToFixedFrame(frame.target),
+        offset,
+      );
       camera.lookAtTransform(trackedTransform);
       engine.render.request('camera-orientation');
       return true;
     }
+    camera.lookAt(frame.target, offset);
     const { position: destination, direction, up } = camera.pose();
     camera.release();
     if (destination && direction && up) {
@@ -238,14 +242,14 @@ export function createCameraOrientationAnimator(
     if (!engine) return false;
     if (duration <= 0)
       return setCameraTargetFrame(engine, { ...frame, ...destination }, viewer);
-    const entity = followedEntity(engine);
+    const entity = followedEntity(engine, viewer);
     pending = destination;
     const start = now();
     const headingDelta = geo.math.negativePiToPi(
       destination.heading - frame.heading,
     );
     remove = engine.frames.preUpdate.addEventListener(() => {
-      if (engine.isDestroyed() || followedEntity(engine) !== entity) {
+      if (engine.isDestroyed() || followedEntity(engine, viewer) !== entity) {
         cancel();
         return;
       }
@@ -291,7 +295,7 @@ export function createCameraOrientationAnimator(
  *   runNavigation: Function,
  *   showToast?: Function,
  *   animationMs?: number,
- * }} options The viewer is only read for its clock and tracked entity.
+ * }} options The viewer (Cesium) is read for its tracked entity and clock.
  */
 export function bindCameraOrientationControls({
   viewer = null,

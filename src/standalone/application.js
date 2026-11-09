@@ -116,8 +116,7 @@ export function createStandaloneApplication({
         throw new AggregateError(errors, 'The globe could not be released');
     };
     const signal = AbortSignal.any([controller.signal, lifetime]);
-    // The layers' engine-specific renderers of this engine (the layer
-    // manifest's import()s, none on Cesium) load beside its globe.
+    // Shared layer displays and this engine's backends load beside its globe.
     const layerRenderers = loadLayerRenderers(engineOfChoice(kind));
     layerRenderers.catch(() => {});
     try {

@@ -86,6 +86,11 @@ function fakeRenderer(name, live) {
         id,
         names: [...features.values()].map((feature) => feature.name),
         ready: Promise.resolve(),
+        drop(index) {
+          paint.names = [...features]
+            .filter(([key]) => key !== index)
+            .map(([, feature]) => feature.name);
+        },
         destroy() {
           live.delete(paint);
         },

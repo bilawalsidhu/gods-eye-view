@@ -446,7 +446,79 @@ test("Navara's fov follows Cesium's vertical fov, also after a resize", () => {
   near(engine.camera.pose().fovy, Math.PI / 3, 1e-15, 'pose fovy');
 });
 
-test('cancelFlight stops Navara with an empty setCamera; user input cancels a flight', () => {
+test('contactSonarDiagnostics counts the movers on screen', () => {
+  const view = fakeView();
+  // The camera is 10 000 km over (0°, 0°), looking down.
+  const places = [
+    [0, 0, 1],
+    [1, 1, 1],
+    [0, 0, 0],
+    [180, 0, 1],
+  ];
+  const positions = new Float64Array(places.length * 3);
+  const colors = new Float32Array(places.length * 4).fill(1);
+  const shows = new Uint8Array(places.length).fill(1);
+  places.forEach(([lon, lat, show], index) => {
+    const position = cartesian3.fromDegrees(lon, lat, 0);
+    positions.set([position.x, position.y, position.z], index * 3);
+    shows[index] = show;
+  });
+  colors[1 * 4 + 3] = 0;
+  const store = { positions, colors, shows, count: places.length };
+  const engine = createNavaraEngine(view, {
+    ...ports,
+    movers: { ...ports.movers, pickables: () => [{ store }] },
+    hooks,
+  });
+  // Shown and opaque, in view: the first; the second is transparent, the
+  // third hidden, the fourth behind the Earth.
+  assert.deepEqual(engine.contactSonarDiagnostics(), {
+    supported: true,
+    contacts: 1,
+  });
+  engine.destroy();
+});
+
+test("maxTextureSize reads the canvas's WebGL limit once", () => {
+  const view = fakeView();
+  const asked = [];
+  view.canvas.getContext = (type) => {
+    asked.push(type);
+    return type === 'webgl2'
+      ? { MAX_TEXTURE_SIZE: 0x0d33, getParameter: () => 8192 }
+      : null;
+  };
+  const engine = createNavaraEngine(view, { ...ports, hooks });
+  assert.equal(engine.render.maxTextureSize(), 8192);
+  assert.equal(engine.render.maxTextureSize(), 8192);
+  assert.deepEqual(asked, ['webgl2']);
+  engine.destroy();
+});
+
+test('a render requested while a frame draws asks for the next frame', async () => {
+  const { engine, view } = setup();
+  const requests = () =>
+    view.calls.filter(([name]) => name === 'forceUpdate').length;
+  // The wind's flow asks for its next frame from preRender.
+  const off = engine.frames.preRender.addEventListener(() =>
+    engine.render.request('wind'),
+  );
+  view.emit('preRender', 1);
+  view.emit('postRender', 1);
+  // Navara clears its request flag once the frame is drawn.
+  const drawn = requests();
+  await Promise.resolve();
+  assert.equal(requests(), drawn + 1, 'requested again after the frame');
+  off();
+  view.emit('preRender', 2);
+  view.emit('postRender', 2);
+  const idle = requests();
+  await Promise.resolve();
+  assert.equal(requests(), idle, 'no request, no next frame');
+  engine.destroy();
+});
+
+test('cancelFlight stops Navara with an empty setCamera; user input leaves a flight running', () => {
   const { engine, view } = setup();
   const outcome = [];
   engine.camera.flyTo({
@@ -463,8 +535,9 @@ test('cancelFlight stops Navara with an empty setCamera; user input cancels a fl
     cancel: () => outcome.push('input'),
   });
   view.canvas.dispatchEvent(new Event('wheel'));
-  assert.deepEqual(outcome, ['cancel', 'input']);
-  assert.equal(engine.camera.flightActive(), false);
+  assert.deepEqual(outcome, ['cancel']);
+  assert.equal(engine.camera.flightActive(), true);
+  engine.destroy();
 });
 
 test('pickPosition reads Navara depth at client coordinates; pick finds no tiles', () => {
@@ -536,7 +609,7 @@ test('pickGlobe meets the terrain along the pick ray, or the ellipsoid', () => {
   );
 });
 
-test('a user gesture cancels a flight without raising camera.commanded', () => {
+test('a user gesture leaves a flight running without raising camera.commanded', () => {
   const { engine, view } = setup();
   const outcome = [];
   let commanded = 0;
@@ -548,8 +621,8 @@ test('a user gesture cancels a flight without raising camera.commanded', () => {
   engine.camera.commanded.addEventListener(() => commanded++);
   view.canvas.dispatchEvent(new Event('pointerdown'));
   view.canvas.dispatchEvent(new Event('wheel'));
-  assert.deepEqual(outcome, ['cancel']);
-  assert.equal(engine.camera.flightActive(), false);
+  assert.deepEqual(outcome, []);
+  assert.equal(engine.camera.flightActive(), true);
   assert.equal(commanded, 0, 'a gesture is the user, not a new camera owner');
 });
 
@@ -630,17 +703,39 @@ test('the floor stands aside while the camera inputs are off (the cockpit drives
   engine.destroy();
 });
 
-test('the floor stands aside while the camera inputs are suspended (the cockpit holds them)', () => {
-  const { engine, view } = setup();
-  view.sampleTerrainHeight = () => 100;
-  const resume = engine.input.suspendCameraInputs();
-  engine.camera.setView({
-    destination: cartesian3.fromDegrees(2.35, 48.85, 112),
+test('ground picks use the visible surface and fall back to the globe', async () => {
+  const { normalizeGroundItem } = await import('../ground.js');
+  const view = fakeView();
+  // Right after a click Navara's depth read answers with its near plane.
+  view.pickDepthPosition = () => cartesian3.fromDegrees(10.5, 10, 45900);
+  const options = { id: 'rooftop', kind: 'disc', pickable: true, order: 0 };
+  const item = normalizeGroundItem(
+    'disc',
+    { center: [10, 10], radiusM: 100, fill: [1, 0, 0, 1], pickId: 'roof' },
+    0,
+  );
+  const engine = createNavaraEngine(view, {
+    ...ports,
+    hooks,
+    ground: {
+      ...ports.ground,
+      pickables: () => [{ options, items: [item], shown: true }],
+    },
   });
-  view.emit('preRender', 1);
-  near(heightOf(engine), 112, 1e-6, 'the cockpit eye 12 m up is kept');
-  resume();
-  view.emit('preRender', 2);
-  near(heightOf(engine), 130, 1e-6, 'lifted once the inputs are back');
+  const at = { x: 640, y: 400 };
+  let globe = cartesian3.fromDegrees(10, 10, 0);
+  engine.picker.pickGlobe = () => globe;
+  let tiles = null;
+  engine.surface.raycast = () => (tiles ? { position: tiles } : undefined);
+  assert.equal(engine.picker.pick(at)?.id, 'roof', 'the globe, not the depth');
+  // Under 3D tiles a tilted view meets the roof before the terrain.
+  engine.maps.photorealActive = () => true;
+  globe = cartesian3.fromDegrees(10.01, 10, 0);
+  tiles = cartesian3.fromDegrees(10, 10, 40);
+  assert.equal(engine.picker.pick(at)?.id, 'roof', 'the tiles shown');
+  tiles = null;
+  assert.equal(engine.picker.pick(at), undefined, 'a tile miss: the globe');
+  globe = cartesian3.fromDegrees(10, 10, 0);
+  assert.equal(engine.picker.pick(at)?.id, 'roof');
   engine.destroy();
 });

@@ -31,6 +31,9 @@ import { satelliteFixture } from '../../bench/satelliteFixture.js';
 import { createSatelliteSource } from '../../layers/satellites/source.js';
 import { createLocalReceiverFeeds } from '../../layers/localAdsb/feeds.js';
 
+// The largest synthetic fleet used by the QA scenarios.
+const MAX_QA_COUNT = 10_000;
+
 const KINDS = Object.freeze({
   flights: new Set(['synthetic']),
   military: new Set(['synthetic']),
@@ -49,7 +52,8 @@ export function parseQaFeed(search = '') {
     const count = rawCount === undefined ? null : Number(rawCount);
     if (
       !KINDS[layer]?.has(kind) ||
-      (count !== null && !(Number.isInteger(count) && count > 0))
+      (count !== null &&
+        !(Number.isSafeInteger(count) && count > 0 && count <= MAX_QA_COUNT))
     )
       throw new TypeError(
         `qaFeed: unknown entry "${item}" (flights:synthetic[:count], military:synthetic[:count], vessels:fixture, satellites:fixture, launches:fixture, local-adsb:fixture)`,

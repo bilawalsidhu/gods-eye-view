@@ -209,42 +209,23 @@ export function createGhostMapsLayer({
   }
 
   // Remove expired events, rather than hiding them: horizon culling must
-  // never make an old pin visible again. A drawing that cannot drop one
-  // report is redrawn. Map keys keep surviving picks stable.
+  // never make an old pin visible again. Map keys keep surviving picks stable.
   function expireEvents() {
     const at = now();
     let changed = false;
     for (const [productId, item] of _loaded) {
-      let redraw = false;
       for (const [index, feature] of item.features) {
         if (!isGhostMapsEventExpired(feature.dateMs, at, _ageDays)) continue;
         item.features.delete(index);
-        if (item.paint && !item.paint.drop?.(index)) redraw = true;
+        item.paint?.drop(index);
         if (_selectedKey === `${productId}:${index}`) clearSelection();
         changed = true;
       }
-      if (redraw) repaint(productId, item);
     }
     if (changed) {
       notifyRow();
       render();
     }
-  }
-
-  // The new drawing is on the globe before the old one leaves.
-  function repaint(id, item) {
-    _queue = _queue.then(async () => {
-      if (_loaded.get(id) !== item) return;
-      const old = item.paint;
-      item.paint = null;
-      try {
-        await paint(id, item, _lifetime.signal);
-      } catch (error) {
-        console.warn(`[Data:GhostMaps] ${id}:`, error);
-      } finally {
-        if (item.paint !== old) old?.destroy();
-      }
-    });
   }
 
   /** Decode one product without a scene. */
@@ -302,19 +283,25 @@ export function createGhostMapsLayer({
         PRODUCT_COLORS[id] || ACCENT,
         markerImage,
       );
+      item.paint = next;
+      const abort = () => next.destroy();
+      signal.addEventListener('abort', abort, { once: true });
       try {
         await next.ready;
         if (owner === _display && !signal.aborted && !item.removed) {
-          item.paint = next;
           return;
         }
       } catch (error) {
         next.destroy();
+        if (item.paint === next) item.paint = null;
         if (owner === _display && !signal.aborted && !item.removed) throw error;
         if (_loaded.get(id) === item) return;
         continue;
+      } finally {
+        signal.removeEventListener('abort', abort);
       }
       next.destroy();
+      if (item.paint === next) item.paint = null;
       if (_loaded.get(id) === item) return;
     }
   }

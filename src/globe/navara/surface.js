@@ -234,9 +234,15 @@ const tileSizeOf = (root) => {
  *   isIdle: () => boolean,
  *   retainTileGeometry: () => void,
  * }} hooks Navara internals (internals.js).
+ * @param {(positions: object[]) => Promise<(number | undefined)[]>} [sampleTerrain]
+ *   The maps' sampling of the terrain shown (maps.js).
  * @returns {{ surface: import('../contract.js').GlobeSurface }}
  */
-export function createNavaraSurface(view, hooks) {
+export function createNavaraSurface(
+  view,
+  hooks,
+  sampleTerrain = async (positions) => positions.map(() => 0),
+) {
   let supported = true;
   try {
     hooks.retainTileGeometry();
@@ -342,6 +348,7 @@ export function createNavaraSurface(view, hooks) {
       supported,
       terrainHeight,
       terrainHeightSupported: true,
+      sampleTerrainMostDetailed: (positions) => sampleTerrain(positions),
       clampToHeight(position, exclude) {
         const place = cartographic.fromCartesian(position, WGS84);
         if (!place) return undefined;

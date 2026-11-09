@@ -2,9 +2,11 @@ import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import {
+  clickEmptyGround,
   createStrict,
   localPreview,
   openPage,
+  waitForCameraAtRest,
   waitForEngine,
 } from './qa-strict-harness.mjs';
 
@@ -400,39 +402,19 @@ await strict.run({}, async (b) => {
   // Click-picking on the running engine: clear the selection with a click on
   // empty water, then select the vessel with a click on its chevron.
   const pickVessel = async () => {
+    // The last selection flies the camera to the vessel, and a click does
+    // not cut that flight short: click once it has landed.
+    await waitForCameraAtRest(p);
     // Empty ground: a point in the middle of the view where the engine
     // picks nothing and nothing covers the canvas.
-    const empty = await p
-      .waitForFunction(
-        () => {
-          const { engine } = window.__godsEyeView;
-          const canvas = engine.host.canvas;
-          const box = canvas.getBoundingClientRect();
-          for (let y = 220; y < 560; y += 11)
-            for (let x = 300; x < 720; x += 11) {
-              if (
-                !canvas.contains(
-                  document.elementFromPoint(box.left + x, box.top + y),
-                )
-              )
-                continue;
-              let free = true;
-              for (const [dx, dy] of [
-                [0, 0],
-                [10, 0],
-                [-10, 0],
-                [0, 10],
-                [0, -10],
-              ])
-                if (engine.picker.pick({ x: x + dx, y: y + dy })) free = false;
-              if (free) return { x: box.left + x, y: box.top + y };
-            }
-          return false;
-        },
-        { timeout: 15000 },
-      )
-      .then((handle) => handle.jsonValue());
-    await p.mouse.click(empty.x, empty.y);
+    await clickEmptyGround(p, {
+      left: 300,
+      top: 220,
+      right: 720,
+      bottom: 560,
+      step: 11,
+      radius: 10,
+    });
     await p.waitForFunction(
       () => !window.qaVesselEntry.module.getSelectedInfo(),
     );
@@ -447,6 +429,8 @@ await strict.run({}, async (b) => {
       'ais-live-vessels',
       'a click on the chevron selects the vessel',
     );
+    // The next switch starts from the landed view.
+    await waitForCameraAtRest(p);
   };
   await click(-79.38, 43.65);
   await p.waitForFunction(

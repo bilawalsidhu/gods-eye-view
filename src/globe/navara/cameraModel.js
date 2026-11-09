@@ -12,7 +12,9 @@
 //   wall time (Cesium's cameraEventWaitTime), changed past percentageChanged.
 //
 // The port is the engine's thin layer over the Navara view (apply, read, fly,
-// stop, size, requestFrame); see createNavaraEngine.js.
+// stop, size, requestFrame, suspendCameraInputs); see createNavaraEngine.js.
+// A flight suspends the camera inputs until it ends, as Cesium's
+// CameraFlightPath turns them off: a gesture cannot cut it short.
 
 import * as geo from '../../geo/index.js';
 import { createEngineEvent } from '../contract.js';
@@ -81,6 +83,7 @@ function posesNear(a, b, distance, angle) {
  *     stop: () => void,
  *     size: () => { width: number, height: number },
  *     requestFrame: () => void,
+ *     suspendCameraInputs?: () => () => void,
  *   },
  *   clock?: { now: () => number, setTimeout: Function, clearTimeout: Function },
  * }} options
@@ -124,6 +127,11 @@ export function createCameraModel({
   let lastSeen = initial ? copyPose(initial) : null;
   let lastFramePose = copyPose(state);
   let lastChangedPose = copyPose(state);
+  let changedAngles = headingPitchRoll(
+    state.position,
+    state.direction,
+    state.up,
+  );
   let moving = false;
   let lastMoveAt = 0;
   let moveEndTimer = null;
@@ -175,6 +183,7 @@ export function createCameraModel({
   function endFlight(current, outcome) {
     if (flight !== current) return;
     flight = null;
+    current.resume?.();
     if (outcome === 'cancel') current.options.cancel?.();
   }
 
@@ -197,7 +206,7 @@ export function createCameraModel({
       options.complete?.();
       return;
     }
-    const current = { options };
+    const current = { options, resume: port.suspendCameraInputs?.() };
     flight = current;
     // Navara moves the camera from here on; read it back every frame.
     pushed = null;
@@ -212,7 +221,7 @@ export function createCameraModel({
         (arrived) => {
           if (flight !== current || destroyed) return;
           if (!arrived) return endFlight(current, 'cancel');
-          flight = null;
+          endFlight(current, 'complete');
           land(options, target);
           options.complete?.();
         },
@@ -261,13 +270,28 @@ export function createCameraModel({
     }
     lastFramePose = pose;
     const turn =
-      angleBetween(pose.direction, lastChangedPose.direction) / Math.PI;
+      angleBetween(pose.direction, lastChangedPose.direction) /
+      (view().fovy / 2);
     const altitude = Math.max(
       1,
       cartographic.fromCartesian(pose.position, WGS84).height,
     );
     const shift =
       cartesian3.distance(pose.position, lastChangedPose.position) / altitude;
+    const angles = headingPitchRoll(pose.position, pose.direction, pose.up);
+    const delta = (a, b) => {
+      const angle = Math.abs(a - b) % (2 * Math.PI);
+      return Math.min(angle, 2 * Math.PI - angle) / Math.PI;
+    };
+    // Heading and roll are raised on their own, as Camera._updateCameraChanged
+    // does: a turn about the line of sight (heading at nadir, roll) moves
+    // neither the direction nor the position.
+    for (const angle of ['heading', 'roll']) {
+      const amount = delta(angles[angle], changedAngles[angle]);
+      if (amount <= percentageChanged) continue;
+      changedAngles[angle] = angles[angle];
+      events.changed.raiseEvent(amount);
+    }
     const amount = Math.max(turn, shift);
     if (amount > percentageChanged) {
       lastChangedPose = pose;
@@ -311,6 +335,7 @@ export function createCameraModel({
       if (!options?.destination)
         throw new TypeError('setView needs a destination');
       announce();
+      cancelCurrentFlight();
       place(viewFor(options.destination, options.orientation));
     },
     flyTo(options) {
@@ -395,11 +420,6 @@ export function createCameraModel({
     camera,
     sync,
     afterFrame,
-    /**
-     * Ends a running flight (its `cancel` runs) without camera.commanded:
-     * for the user's own gestures, which are not a new camera owner.
-     */
-    stopFlight: () => cancelCurrentFlight(),
     /**
      * Whether nothing else drives the camera: no flight and no lookAt target
      * (identity transform). The engine's ground floor acts only then.

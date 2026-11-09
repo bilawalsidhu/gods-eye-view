@@ -6,7 +6,7 @@ import { MAX_IMAGERY_SLOTS, createNavaraImagery } from './index.js';
 const BOX = { west: -97.77, south: 30.25, east: -97.71, north: 30.29 };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-function fixture() {
+function fixture(rectangle = null) {
   const canvases = [];
   const draws = [];
   const jobs = [];
@@ -15,7 +15,11 @@ function fixture() {
   const changed = createEngineEvent();
   let photoreal = false;
   let frames = 0;
+  let height = 800;
+  const events = new Map();
   const view = {
+    on: (name, run) => events.set(name, run),
+    off: (name) => events.delete(name),
     forceUpdate: () => frames++,
   };
   const { imagery, destroy } = createNavaraImagery(view, {
@@ -25,9 +29,9 @@ function fixture() {
         cartographic: { height: 12_000, latitude: 0.53 },
         fovy: 0.7,
       }),
-      viewRectangle: () => null,
+      viewRectangle: () => rectangle,
     },
-    size: () => ({ width: 1280, height: 800 }),
+    size: () => ({ width: 1280, height }),
     credits: {
       addStatic(html) {
         credits.set(html, (credits.get(html) ?? 0) + 1);
@@ -52,6 +56,10 @@ function fixture() {
     },
   });
   return {
+    resize: (next) => {
+      height = next;
+      events.get('resize')?.();
+    },
     imagery,
     destroy,
     canvases,
@@ -299,4 +307,44 @@ test('a raised image is lifted with the camera; its detail is a slot over it', a
   await layer.setDetail(null);
   assert.equal(f.last().slots.length, 1);
   assert.equal(f.last().slots[0].look[3], 0);
+});
+
+test('resizing replans a tile atlas without a camera change', async () => {
+  const f = fixture();
+  f.imagery.createLayer({ id: 'resize', source: tiles({ maxLevel: 20 }) });
+  await tick();
+  const before = f.canvases.length;
+  f.resize(1600);
+  await tick();
+  assert.ok(f.canvases.length > before);
+  f.destroy();
+});
+
+test('an atlas crossing the antimeridian requests valid columns on both sides', async () => {
+  const r = Math.PI / 180;
+  const f = fixture({
+    west: 179.5 * r,
+    east: -179.5 * r,
+    south: -17 * r,
+    north: -16 * r,
+  });
+  f.imagery.createLayer({
+    id: 'seam',
+    source: tiles({
+      minLevel: 10,
+      maxLevel: 10,
+      rectangle: { west: -180, east: 180, south: -85, north: 85 },
+    }),
+  });
+  let loaded = 0;
+  for (let i = 0; i < 20; i++) {
+    await tick();
+    while (loaded < f.jobs.length) f.jobs[loaded++].resolve({});
+  }
+  const columns = f.jobs.map(({ url }) =>
+    Number(url.match(/\/(\d+)\.png$/)[1]),
+  );
+  assert.ok(columns.includes(0) && columns.includes(1023));
+  assert.ok(columns.every((x) => x >= 0 && x < 1024));
+  f.destroy();
 });

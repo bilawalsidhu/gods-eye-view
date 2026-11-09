@@ -12,6 +12,7 @@ import {
   createNavaraWorldAnnotationRenderer,
   drapedParts,
 } from './navaraAnnotationRenderer.js';
+import { createSceneServices } from '../data/sceneServices.js';
 import { screenSceneFromEngine } from './screenScene.js';
 
 for (const type of [globalThis.SVGElement, globalThis.SVGGraphicsElement]) {
@@ -264,4 +265,40 @@ test('marks on the Navara board are drawn, horizon-culled and survive an engine 
   annotations.clear();
   engine.fake.frame();
   assert.equal(live().length, 0);
+});
+
+test('screen annotations read the attached engines tracked card footprint', async (t) => {
+  const { store, groups } = board(t);
+  const engine = createFakeEngine({
+    longitude: 0,
+    latitude: 0,
+    altitude: 10000,
+  });
+  const services = createSceneServices(engine);
+  const queries = [];
+  services.overlay.getPaintRect = (...args) => {
+    queries.push(args);
+    return { x: 0, y: 0, w: 4000, h: 4000 };
+  };
+  const { views } = fakeViews();
+  const renderer = createNavaraAnnotationRenderer(engine, views, {
+    screen: { store, activeTrackedReadoutId: () => 'flight:test' },
+  });
+  t.after(() => {
+    renderer.destroy();
+    services.destroy();
+    engine.destroy();
+  });
+  renderer.add({
+    id: 'overlap',
+    type: 'label',
+    color: 'primary',
+    label: 'Overlap',
+    alpha: 1,
+    anchor: { lon: 0, lat: 0, height: 0 },
+  });
+  engine.fake.frame();
+  await settle();
+  assert.deepEqual(queries.at(-1), ['tracked', 'flight:test']);
+  assert.ok(Number(groups()[0].getAttribute('opacity')) < 1);
 });

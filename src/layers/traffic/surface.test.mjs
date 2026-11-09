@@ -343,7 +343,7 @@ test('rendered road depth is geographically checked, bounded, and avoids mesh re
   assert.equal(renderedRoadHeight(engine, -97, 30, 0), undefined);
 });
 
-test('surface keys reuse identity without building arrays or strings on unchanged frames', () => {
+test('surface keys reuse identity without building arrays or strings on unchanged frames', async () => {
   const engine = surfaceEngine();
   const first = trafficSurfaceKey(engine);
   const remove = observeTrafficSurface(engine);
@@ -385,6 +385,13 @@ test('surface keys reuse identity without building arrays or strings on unchange
     trafficSurfaceKey(engine),
     globe,
     'a map stack switch on the globe is a new surface',
+  );
+  const terrainBefore = trafficSurfaceKey(engine);
+  await engine.maps.setTerrain({ kind: 'ellipsoid' });
+  assert.notEqual(
+    trafficSurfaceKey(engine),
+    terrainBefore,
+    'a terrain that loads under the same imagery is a new surface',
   );
   remove();
   remove();

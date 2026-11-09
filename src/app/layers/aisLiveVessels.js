@@ -12,7 +12,6 @@ import * as selection from '../../data/selectionDispatcher.js';
 import { rendererFor } from './renderers.js';
 import * as readouts from '../../hudReadouts.js';
 
-/** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationVessels({
   source,
   options = {},

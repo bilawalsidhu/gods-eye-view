@@ -98,6 +98,23 @@ export function createCesiumSurface(
     get terrainHeightSupported() {
       return Boolean(scene.globe);
     },
+    async sampleTerrainMostDetailed(positions) {
+      const provider = scene.terrainProvider;
+      if (!provider || provider instanceof Cesium.EllipsoidTerrainProvider)
+        return positions.map(() => 0);
+      // Cesium reads the finest level per position from it.
+      if (!provider.availability)
+        throw new Error('The terrain has no tile availability');
+      const sampled = await Cesium.sampleTerrainMostDetailed(
+        provider,
+        positions.map(
+          (place) => new Cesium.Cartographic(place.longitude, place.latitude),
+        ),
+      );
+      return sampled.map(({ height }) =>
+        Number.isFinite(height) ? height : undefined,
+      );
+    },
     clampToHeight(position, exclude) {
       if (!scene.clampToHeightSupported) return undefined;
       try {

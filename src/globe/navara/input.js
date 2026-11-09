@@ -6,15 +6,19 @@ import { createExclusivePointer } from '../exclusivePointer.js';
 // that key is held (shift over ctrl over alt), one without only while none is.
 //
 // Camera inputs map to Navara's controller flags (view.camera.options).
-// Navara 0.2.1 lets a flyTo run on under user input, where Cesium cancels it;
-// `onCameraInput` reports user camera input so the engine can do the same.
+// Flights suspend camera inputs, matching Cesium's flight controller.
 
 import { INPUT_TYPES, normalizeInputOptions } from '../contract.js';
 import { createPickDelivery } from '../pickDelivery.js';
 
 const CLICK_PIXEL_TOLERANCE = 5; // Cesium's _clickPixelTolerance
-const SCREEN_EVENTS = ['pointerdown', 'pointerup', 'pointermove', 'dblclick'];
-const CAMERA_EVENTS = ['pointerdown', 'wheel', 'touchstart'];
+const SCREEN_EVENTS = [
+  'pointerdown',
+  'pointerup',
+  'pointermove',
+  'pointercancel',
+  'dblclick',
+];
 
 function modifierOf(event) {
   if (event.shiftKey) return 'shift';
@@ -25,8 +29,7 @@ function modifierOf(event) {
 
 /**
  * @param {{ canvas: HTMLCanvasElement, camera: { options: object } }} view
- * @param {{ onCameraInput?: (type: string) => void,
- *   picker?: { clickPick: Function, pick: Function, drillPick: Function },
+ * @param {{ picker?: { clickPick: Function, pick: Function, drillPick: Function },
  *   scheduleFrame?: (run: () => void) => void }} [options] `picker`
  *   answers listeners with { pick, drill } (picking.js): clicks from the
  *   GPU pick of the gesture, moves from the CPU pick once a frame.
@@ -34,11 +37,7 @@ function modifierOf(event) {
  */
 export function createNavaraInput(
   view,
-  {
-    onCameraInput = () => {},
-    picker = null,
-    scheduleFrame = (run) => requestAnimationFrame(run),
-  } = {},
+  { picker = null, scheduleFrame = (run) => requestAnimationFrame(run) } = {},
 ) {
   const { canvas } = view;
   const listeners = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
@@ -46,6 +45,7 @@ export function createNavaraInput(
   let destroyed = false;
   let cameraOptions = {};
   let downAt = null;
+  const activePointers = new Set();
   let last = null;
 
   const pointer = createExclusivePointer();
@@ -92,23 +92,37 @@ export function createNavaraInput(
     const position = positionOf(event);
     switch (event.type) {
       case 'pointerdown':
+        // A primary pointer starts a new gesture: pointers released off the
+        // canvas cannot hold its click back.
+        if (event.isPrimary === true) activePointers.clear();
+        activePointers.add(event.pointerId);
+        if (activePointers.size > 1 || event.isPrimary === false) {
+          downAt = null;
+          break;
+        }
         if (event.button !== 0) break;
-        downAt = position;
+        downAt = { ...position, pointerId: event.pointerId };
         emit('down', event, { position });
         break;
       case 'pointerup': {
+        activePointers.delete(event.pointerId);
         if (event.button !== 0) break;
         emit('up', event, { position });
         const start = downAt;
         downAt = null;
         if (
           start &&
+          start.pointerId === event.pointerId &&
           Math.hypot(position.x - start.x, position.y - start.y) <
             CLICK_PIXEL_TOLERANCE
         )
           emit('click', event, { position });
         break;
       }
+      case 'pointercancel':
+        activePointers.delete(event.pointerId);
+        downAt = null;
+        break;
       case 'pointermove':
         emit('move', event, {
           startPosition: last ?? position,
@@ -121,15 +135,6 @@ export function createNavaraInput(
     }
     last = position;
   };
-  const onCameraEvent = (event) => {
-    onCameraInput(event.type);
-  };
-  for (const type of CAMERA_EVENTS)
-    canvas.addEventListener(type, onCameraEvent, {
-      capture: true,
-      passive: true,
-    });
-
   let suspended = 0;
   const sendCameraInputs = () => {
     const enabled = suspended === 0;
@@ -199,8 +204,6 @@ export function createNavaraInput(
       if (destroyed) return;
       pointer.destroy();
       destroyed = true;
-      for (const type of CAMERA_EVENTS)
-        canvas.removeEventListener(type, onCameraEvent, { capture: true });
       if (attached)
         for (const name of SCREEN_EVENTS)
           canvas.removeEventListener(name, onScreenEvent);

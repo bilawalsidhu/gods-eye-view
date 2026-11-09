@@ -169,10 +169,17 @@ for (const makeHarness of [fakeHarness, createCesiumMoversEngine]) {
           height(native.gevDisplayPosition()) < 100,
           'a ready tracked model releases the billboard floor',
         );
+      // While the model owns the visual the card sits on it, not on the
+      // released billboard floor below it.
+      const card = { ...publications.at(-1).position() };
       assert.deepEqual(
-        publications.at(-1).position(),
-        follow.label.position(),
-        'the card uses the follow label cache',
+        card,
+        { ...native.gevVisualPosition() },
+        'the card anchors on the tracked model',
+      );
+      assert.ok(
+        height(card) >= 204.5 && height(card) < 217,
+        'the card stands with the model on the sampled ground',
       );
       const cached = { ...native.gevDisplayPosition() };
       publications.at(-1).position();
@@ -185,6 +192,11 @@ for (const makeHarness of [fakeHarness, createCesiumMoversEngine]) {
       await frames();
       const zoomedOut = layer.qaDrawn().find((row) => row.trackedModel)?.model;
       assert.ok(!zoomedOut?.show, 'zooming out releases the tracked model');
+      assert.deepEqual(
+        { ...publications.at(-1).position() },
+        { ...follow.label.position() },
+        'without a model the card uses the follow label cache',
+      );
       if (layerId === 'flights')
         assert.ok(
           height(native.gevDisplayPosition()) >= 205.5,

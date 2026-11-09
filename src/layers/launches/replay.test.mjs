@@ -45,3 +45,25 @@ test('changing replay speed during the countdown keeps its real-time liftoff', (
   // Mission time already flown is still preserved across the change.
   assert.equal(state._animationStarts.get('flying'), 960_000);
 });
+
+test('resuming a replay restores its retained chase heading', () => {
+  const { state } = replayRig();
+  state._engine = {
+    frames: { preUpdate: { addEventListener: () => () => {} } },
+  };
+  state._launches = [{ id: 'mission' }];
+  state._replayCameraLaunchId = 'mission';
+  state._replayCameraHeading = 1.2;
+  const track = { ascentPath: [], ascentDurationSec: 10 };
+  state._replayTracks.set('mission', track);
+  const replay = createReplay({
+    state,
+    parts: {
+      camera: { replayInitialCameraHeading: () => 2.3 },
+      panel: { publishPanel: noop },
+      overlays: { syncMissionOverlayEntries: noop },
+    },
+  });
+  assert.equal(replay.startMissionReplay('mission', { resuming: true }), true);
+  assert.equal(track.lastCameraHeading, 1.2);
+});

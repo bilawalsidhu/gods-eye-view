@@ -89,6 +89,10 @@ export function createMoverBank(engine, { options, write, onCommit }) {
       bank.touch();
     },
     visible: () => visible,
+    /** The same handles in a new set (one that loads its assets again). */
+    rebuild() {
+      if (set) build(capacity);
+    },
     touch() {
       if (!dirty) {
         dirty = true;

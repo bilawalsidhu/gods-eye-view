@@ -52,7 +52,8 @@ resolved dependency inventory remains in `package-lock.json`.
   are adapted from `@cesium/engine/Source/Core` (`Math.js`, `Ellipsoid.js`,
   `scaleToGeodeticSurface.js`, `Cartographic.js`, `Cartesian2.js`,
   `Cartesian3.js`, `Matrix3.js`, `Matrix4.js`, `Quaternion.js`,
-  `Transforms.js`) and say so in their first
+  `Transforms.js`, `BoundingSphere.js`, `EllipsoidGeodesic.js`, `JulianDate.js`,
+  `Simon1994PlanetaryPositions.js`) and say so in their first
   line. The changes: the classes' static functions became module functions,
   vectors, geodetic positions and quaternions became plain-data instances of
   module-private constructors (own enumerable fields only, no methods),

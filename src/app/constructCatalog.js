@@ -5,7 +5,6 @@ import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { rendererFor } from './layers/renderers.js';
-import { APPLICATION_LAYER_DIRECTORY } from './layers/directory.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -34,7 +33,7 @@ import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
-import { OSM_OVERLAYS, createOsmOverlayLayers } from '../data/osmOverlays.js';
+import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureSessionLayer } from '../layers/infrastructure/index.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -113,351 +112,214 @@ export function createApplicationCatalog({
         });
       }
     }
-    // Shared instances (awareness and launches read others) are made once,
-    // when the first layer that needs them is built.
-    const once = (create) => {
-      let value;
-      return () => (value ??= create());
-    };
     const sessionModel = (id, create) => {
       if (!layerSession) return create();
       const models = (layerSession.models ??= new Map());
       if (!models.has(id)) models.set(id, create());
       return models.get(id);
     };
-    const flights = once(() =>
-      sessionModel('flights', () =>
-        createApplicationFlights({
+    const flights = sessionModel('flights', () =>
+      createApplicationFlights({
+        surface,
+        source: sources.flights,
+        militaryRegistry,
+        resolveAsset,
+      }),
+    );
+    const military = sessionModel('military', () =>
+      createApplicationMilitary({
+        surface,
+        source: sources.military,
+        militaryRegistry,
+        resolveAsset,
+      }),
+    );
+    const vessels = sessionModel('ais-live-vessels', () =>
+      createApplicationVessels({
+        source: sources.vessels,
+        options: vesselOptions,
+      }),
+    );
+    const installations = sessionModel('military-installations', () =>
+      createApplicationInstallations({
+        surface,
+        source: sources.installations,
+      }),
+    );
+    const satellites = sessionModel('satellites', () =>
+      createApplicationSatellites({
+        source: sources.satellites,
+      }),
+    );
+    const layers = [
+      sessionModel('bhote-koshi-2026', () =>
+        createBhoteKoshiEventLayer({
+          createNativeRenderer: (engine) =>
+            rendererFor('bhote-koshi-2026', engine),
+        }),
+      ),
+      sessionModel('bhote-koshi-locator', () =>
+        createBhoteKoshiLocatorLayer({
+          boundaryResolver: nepalBoundaryResolver,
+          createNativeRenderer: (engine, data) =>
+            rendererFor('bhote-koshi-locator', engine, { data }),
+        }),
+      ),
+      flights,
+      military,
+      sessionModel('local-adsb', () =>
+        createApplicationLocalAdsb({
           surface,
-          source: sources.flights,
-          militaryRegistry,
-          resolveAsset,
+          // QA fixture receivers (?qaFeed=local-adsb:fixture, dev only).
+          ...(sources.localAdsbFeeds ? { feeds: sources.localAdsbFeeds } : {}),
+          enrichment: sources.flights,
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
         }),
       ),
-    );
-    const military = once(() =>
-      sessionModel('military', () =>
-        createApplicationMilitary({
+      sessionModel('earthquakes', () =>
+        createApplicationEarthquakes({ source: sources.earthquakes }),
+      ),
+      sessionModel('air-quality', () =>
+        createApplicationAirQuality({ source: sources['air-quality'] }),
+      ),
+      sessionModel('fire-perimeters', () =>
+        createApplicationFirePerimeters({
+          source: sources['fire-perimeters'],
+        }),
+      ),
+      sessionModel('gnss-integrity', () =>
+        createApplicationGnssIntegrity({
+          source: sources['gnss-integrity'],
+          windowMs: sources['gnss-integrity'].windowMs,
+        }),
+      ),
+      sessionModel('s2-ghostmaps', () =>
+        createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
+      ),
+      sessionModel('drone-airspace', () =>
+        createApplicationDroneAirspace({
+          source: sources['drone-airspace'],
+        }),
+      ),
+      sessionModel('wildlife-sightings', () =>
+        createApplicationWildlifeSightings({
+          source: sources['wildlife-sightings'],
+          groundFloor: surface.groundFloor,
+        }),
+      ),
+      sessionModel('alpr-cameras', () =>
+        createApplicationAlpr({ surface, source: sources.alpr }),
+      ),
+      sessionModel('street-level', () =>
+        createApplicationStreetLevel({
           surface,
-          source: sources.military,
-          militaryRegistry,
-          resolveAsset,
+          nativeRenderer: (engine) => rendererFor('street-level', engine),
+          sources: { mapillary: sources.mapillary },
+          providers: streetLevelProviders,
         }),
       ),
-    );
-    const vessels = once(() =>
-      sessionModel('ais-live-vessels', () =>
-        createApplicationVessels({
-          source: sources.vessels,
-          options: vesselOptions,
+      satellites,
+      sessionModel('rocket-launches', () =>
+        createApplicationLaunches({
+          source: sources.launches,
+          satellites: satellites,
         }),
       ),
-    );
-    const installations = once(() =>
-      sessionModel('military-installations', () =>
-        createApplicationInstallations({
+      sessionModel('traffic', () =>
+        createApplicationTraffic({
+          source: sources.traffic,
           surface,
-          source: sources.installations,
         }),
       ),
-    );
-    const satellites = once(() =>
-      sessionModel('satellites', () =>
-        createApplicationSatellites({
-          source: sources.satellites,
+      sessionModel('cctv', () =>
+        createApplicationCctv({ surface, source: sources.cctv }),
+      ),
+      sessionModel('radio', () =>
+        createApplicationRadio({ surface, source: sources.radio }),
+      ),
+      sessionModel('transit', () =>
+        createApplicationTransit({ surface, source: sources.transit }),
+      ),
+      sessionModel('bikeshare', () =>
+        createApplicationBikeshare({ source: sources.bikeshare }),
+      ),
+      sessionModel('directions', () =>
+        createApplicationDirections({
+          source: sources.directions,
+          surface,
         }),
       ),
-    );
-    // Catalog order: [layer id(s), construction]. Only the layers the
-    // engine can show are constructed (renderers.js).
-    const entries = [
-      [
-        'bhote-koshi-2026',
-        () =>
-          sessionModel('bhote-koshi-2026', () =>
-            createBhoteKoshiEventLayer({
-              createNativeRenderer: (engine) =>
-                rendererFor('bhote-koshi-2026', engine),
-            }),
-          ),
-      ],
-      [
-        'bhote-koshi-locator',
-        () =>
-          sessionModel('bhote-koshi-locator', () =>
-            createBhoteKoshiLocatorLayer({
-              boundaryResolver: nepalBoundaryResolver,
-              createNativeRenderer: (engine, data) =>
-                rendererFor('bhote-koshi-locator', engine, { data }),
-            }),
-          ),
-      ],
-      ['flights', flights],
-      ['military', military],
-      [
-        'local-adsb',
-        () =>
-          sessionModel('local-adsb', () =>
-            createApplicationLocalAdsb({
-              surface,
-              // QA fixture receivers (?qaFeed=local-adsb:fixture, dev only).
-              ...(sources.localAdsbFeeds
-                ? { feeds: sources.localAdsbFeeds }
-                : {}),
-              enrichment: sources.flights,
-              displayParams: () => flights().getParams(),
-              ...(resolveAsset ? { resolveAsset } : {}),
-            }),
-          ),
-      ],
-      [
-        'earthquakes',
-        () =>
-          sessionModel('earthquakes', () =>
-            createApplicationEarthquakes({ source: sources.earthquakes }),
-          ),
-      ],
-      [
-        'air-quality',
-        () =>
-          sessionModel('air-quality', () =>
-            createApplicationAirQuality({ source: sources['air-quality'] }),
-          ),
-      ],
-      [
-        'fire-perimeters',
-        () =>
-          sessionModel('fire-perimeters', () =>
-            createApplicationFirePerimeters({
-              source: sources['fire-perimeters'],
-            }),
-          ),
-      ],
-      [
-        'gnss-integrity',
-        () =>
-          sessionModel('gnss-integrity', () =>
-            createApplicationGnssIntegrity({
-              source: sources['gnss-integrity'],
-              windowMs: sources['gnss-integrity'].windowMs,
-            }),
-          ),
-      ],
-      [
-        's2-ghostmaps',
-        () =>
-          sessionModel('s2-ghostmaps', () =>
-            createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
-          ),
-      ],
-      [
-        'drone-airspace',
-        () =>
-          sessionModel('drone-airspace', () =>
-            createApplicationDroneAirspace({
-              source: sources['drone-airspace'],
-            }),
-          ),
-      ],
-      [
-        'wildlife-sightings',
-        () =>
-          sessionModel('wildlife-sightings', () =>
-            createApplicationWildlifeSightings({
-              source: sources['wildlife-sightings'],
-              groundFloor: surface.groundFloor,
-            }),
-          ),
-      ],
-      [
-        'alpr-cameras',
-        () =>
-          sessionModel('alpr-cameras', () =>
-            createApplicationAlpr({ surface, source: sources.alpr }),
-          ),
-      ],
-      [
-        'street-level',
-        () =>
-          sessionModel('street-level', () =>
-            createApplicationStreetLevel({
-              surface,
-              nativeRenderer: (engine) => rendererFor('street-level', engine),
-              sources: { mapillary: sources.mapillary },
-              providers: streetLevelProviders,
-            }),
-          ),
-      ],
-      ['satellites', satellites],
-      [
-        'rocket-launches',
-        () =>
-          sessionModel('rocket-launches', () =>
-            createApplicationLaunches({
-              source: sources.launches,
-              satellites: satellites(),
-            }),
-          ),
-      ],
-      [
-        'traffic',
-        () =>
-          sessionModel('traffic', () =>
-            createApplicationTraffic({
-              source: sources.traffic,
-              surface,
-            }),
-          ),
-      ],
-      [
-        'cctv',
-        () =>
-          sessionModel('cctv', () =>
-            createApplicationCctv({ surface, source: sources.cctv }),
-          ),
-      ],
-      [
-        'radio',
-        () =>
-          sessionModel('radio', () =>
-            createApplicationRadio({ surface, source: sources.radio }),
-          ),
-      ],
-      [
-        'transit',
-        () =>
-          sessionModel('transit', () =>
-            createApplicationTransit({ surface, source: sources.transit }),
-          ),
-      ],
-      [
-        'bikeshare',
-        () =>
-          sessionModel('bikeshare', () =>
-            createApplicationBikeshare({ source: sources.bikeshare }),
-          ),
-      ],
-      [
-        'directions',
-        () =>
-          sessionModel('directions', () =>
-            createApplicationDirections({
-              source: sources.directions,
-              surface,
-            }),
-          ),
-      ],
-      [
-        'recent-imagery',
-        () =>
-          sessionModel('recent-imagery', () =>
-            createApplicationRecentImagery({
-              source: sources['recent-imagery'],
-            }),
-          ),
-      ],
-      [
-        'osm-places',
-        () => sessionModel('osm-places', () => createApplicationOsmPlaces()),
-      ],
-      ['ais-live-vessels', vessels],
-      ['military-installations', installations],
-      [
-        'military-awareness',
-        () =>
-          sessionModel('military-awareness', () =>
-            createApplicationAwareness({
-              flights: flights(),
-              military: military(),
-              vessels: vessels(),
-              installations: installations(),
-            }),
-          ),
-      ],
-      [
-        'wind',
-        () =>
-          sessionModel('wind', () =>
-            createWindLayer({
-              feed: sources.wind,
-              clock: weatherClock,
-              createNativeRendering: (engine, options) =>
-                rendererFor('wind', engine, options),
-            }),
-          ),
-      ],
-      ...['weather-radar', 'weather-satellite', 'weather-lightning'].map(
-        (id) => [
-          id,
-          () =>
-            sessionModel(id, () =>
-              createWeatherLayer({
-                feed: sources.weather,
-                id,
-                clock: weatherClock,
-                createNativeRendering: (engine, options) =>
-                  rendererFor(id, engine, options),
+      sessionModel('recent-imagery', () =>
+        createApplicationRecentImagery({
+          source: sources['recent-imagery'],
+        }),
+      ),
+      sessionModel('osm-places', () => createApplicationOsmPlaces()),
+      vessels,
+      installations,
+      sessionModel('military-awareness', () =>
+        createApplicationAwareness({
+          flights: flights,
+          military: military,
+          vessels: vessels,
+          installations: installations,
+        }),
+      ),
+      sessionModel('wind', () =>
+        createWindLayer({
+          feed: sources.wind,
+          clock: weatherClock,
+          createNativeRendering: (engine, options) =>
+            rendererFor('wind', engine, options),
+        }),
+      ),
+      ...['weather-radar', 'weather-satellite', 'weather-lightning'].map((id) =>
+        sessionModel(id, () =>
+          createWeatherLayer({
+            feed: sources.weather,
+            id,
+            clock: weatherClock,
+            createNativeRendering: (engine, options) =>
+              rendererFor(id, engine, options),
+          }),
+        ),
+      ),
+      sessionModel('weather-cyclones', () =>
+        createApplicationCyclones({
+          feed: sources.cyclones,
+          createNativeRendering: (engine, options) =>
+            rendererFor('weather-cyclones', engine, options),
+        }),
+      ),
+      ...sessionModel('osm-overlays', () => createOsmOverlayLayers()),
+      ...sessionModel('local-infrastructure', () =>
+        createInfrastructureLayers(localGeoJsonServices, (config, services) =>
+          createInfrastructureSessionLayer(
+            config,
+            services,
+            (engine, descriptor, ops) =>
+              rendererFor(config.id, engine, {
+                config: descriptor,
+                services: ops,
               }),
-            ),
-        ],
+          ),
+        ),
       ),
-      [
-        'weather-cyclones',
-        () =>
-          sessionModel('weather-cyclones', () =>
-            createApplicationCyclones({
-              feed: sources.cyclones,
-              createNativeRendering: (engine, options) =>
-                rendererFor('weather-cyclones', engine, options),
-            }),
-          ),
-      ],
-      [
-        OSM_OVERLAYS.map(({ id }) => id),
-        () => sessionModel('osm-overlays', () => createOsmOverlayLayers()),
-      ],
-      [
-        ['local-datacenters', 'local-dams'],
-        () =>
-          sessionModel('local-infrastructure', () =>
-            createInfrastructureLayers(
-              localGeoJsonServices,
-              (config, services) =>
-                createInfrastructureSessionLayer(
-                  config,
-                  services,
-                  (engine, descriptor, ops) =>
-                    rendererFor(config.id, engine, {
-                      config: descriptor,
-                      services: ops,
-                    }),
-                ),
-            ),
-          ),
-      ],
-      [
-        'telegeography-submarine-cables',
-        () =>
-          sessionModel('telegeography-submarine-cables', () =>
-            createApplicationCables({ source: sources.cables, session: true }),
-          ),
-      ],
-      [
-        'local-firms',
-        () =>
-          sessionModel('local-firms', () =>
-            createApplicationFirms({
-              surface,
-              id: 'local-firms',
-              name: 'FIRMS Active Fires',
-              icon: '▲',
-              source: 'NASA FIRMS · LIVE',
-              feed: sources.firms,
-            }),
-          ),
-      ],
+      sessionModel('telegeography-submarine-cables', () =>
+        createApplicationCables({ source: sources.cables, session: true }),
+      ),
+      sessionModel('local-firms', () =>
+        createApplicationFirms({
+          surface,
+          id: 'local-firms',
+          name: 'FIRMS Active Fires',
+          icon: '▲',
+          source: 'NASA FIRMS · LIVE',
+          feed: sources.firms,
+        }),
+      ),
     ];
-    const layers = entries.flatMap(([, create]) => create());
     const catalog = createLayerCatalog(layers, metadata);
     return Object.freeze({
       ...catalog,

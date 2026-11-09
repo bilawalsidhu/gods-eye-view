@@ -99,8 +99,6 @@ export function scaleToGeodeticSurface(
 
     func = x2 * xMultiplier2 + y2 * yMultiplier2 + z2 * zMultiplier2 - 1.0;
 
-    // "denominator" here refers to the use of this expression in the velocity and acceleration
-    // computations in the sections to follow.
     denominator =
       x2 * xMultiplier3 * oneOverRadiiSquaredX +
       y2 * yMultiplier3 * oneOverRadiiSquaredY +

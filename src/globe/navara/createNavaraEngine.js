@@ -34,6 +34,8 @@ import { createNavaraSurface } from './surface.js';
 import { createGroundFloor } from './groundFloor.js';
 
 const { cartesian3, math } = geo;
+// Past the far side of the Earth: a ray from any camera to any tile.
+const TILE_PICK_FAR_M = 2e7;
 
 // Navara's drawn camera (view.camera.raw, a three PerspectiveCamera in
 // Earth-fixed metres): matrixWorld columns are right, up, back, position.
@@ -129,6 +131,7 @@ export function createNavaraEngine(
       stop: () => view.setCamera({}),
       size,
       requestFrame: () => view.forceUpdate(),
+      suspendCameraInputs: () => input.input.suspendCameraInputs(),
     },
     ...(clock ? { clock } : {}),
   });
@@ -162,6 +165,15 @@ export function createNavaraEngine(
   // Between the view's preRender and postRender: a change made then shows
   // in the frame being drawn and asks for no other.
   let drawing = false;
+  // Navara clears its frame request after the frame it draws, so a
+  // render.request made during one (preRender to the end of postRender) is
+  // made again once that frame is done: the next frame follows, as on Cesium.
+  let frameOpen = false;
+  let requestedInFrame = false;
+  const requestRender = () => {
+    view.forceUpdate();
+    if (frameOpen) requestedInFrame = true;
+  };
   const handlers = {
     preUpdate: (time) => {
       // Before the view decides whether it is idle (internals.js).
@@ -171,6 +183,13 @@ export function createNavaraEngine(
     },
     preRender: (time) => {
       drawing = true;
+      frameOpen = true;
+      queueMicrotask(() => {
+        frameOpen = false;
+        if (!requestedInFrame || destroyed) return;
+        requestedInFrame = false;
+        view.forceUpdate();
+      });
       model.sync();
       // After the user's camera is read, before anything draws.
       followStep.raiseEvent();
@@ -202,11 +221,7 @@ export function createNavaraEngine(
     lines: () => linesPort?.pickables?.() ?? [],
     resolveBatch: (batchId) => moversPort?.resolvePick?.(batchId) ?? null,
   });
-  const input = createNavaraInput(view, {
-    // A gesture is the user, not a new camera owner: no camera.commanded.
-    onCameraInput: () => model.stopFlight(),
-    picker: picking,
-  });
+  const input = createNavaraInput(view, { picker: picking });
   const credits = createNavaraCredits(view);
   const maps = createNavaraMaps(view, fetch ? { fetch } : {});
   const imagery =
@@ -216,7 +231,9 @@ export function createNavaraEngine(
       credits: credits.credits,
       photorealActive: () => maps.maps.photorealActive(),
     }) ?? null;
-  const { surface } = createNavaraSurface(view, hooks);
+  const { surface } = createNavaraSurface(view, hooks, (positions) =>
+    maps.sampleTerrain(positions),
+  );
   // Navara's controller zooms through the ground; keep the camera above it.
   // With the camera inputs off or suspended nothing zooms, and the app places
   // the camera itself (the cockpit eye, 12 m up): the floor's 30 m would
@@ -233,14 +250,28 @@ export function createNavaraEngine(
     ...(clock ? { now: () => clock.now() } : {}),
   });
 
-  // Ground items are picked on the CPU at the globe under the pointer
-  // (src/globe/ground.js), under every mover and line.
+  // Ground items are picked on the CPU at the visible surface under the pointer
+  // (src/globe/ground.js), under every mover and line: the 3D tiles while
+  // they show, else the globe. A CPU ray, not the depth read, which answers
+  // with the near plane until a frame after Navara's pick of a click.
+  const tilesUnder = (screen) => {
+    if (!maps.maps.photorealActive()) return undefined;
+    const ray = model.camera.pickRay(screen);
+    return ray
+      ? surface.raycast({
+          origin: ray.origin,
+          direction: ray.direction,
+          far: TILE_PICK_FAR_M,
+        })?.position
+      : undefined;
+  };
   const removeGroundPicks = picking.registerMeshPicker(
     createGroundPicks({
-      pickGlobe: (screen) => picker.pickGlobe(screen),
+      pickGlobe: (screen) => tilesUnder(screen) ?? picker.pickGlobe(screen),
       camera: model.camera,
       size,
       sets: () => groundPort?.pickables?.() ?? [],
+      surface: () => (maps.maps.photorealActive() ? 'tiles' : 'terrain'),
     }),
   );
   const picker = {
@@ -326,6 +357,33 @@ export function createNavaraEngine(
         },
       }
     : {};
+  let maxTextureSize = null;
+  // Movers on screen now: shown, not transparent, their anchor in the view
+  // and over the horizon.
+  const clip = geo.matrix4.create();
+  const at = geo.cartesian3.create();
+  const visibleContacts = () => {
+    model.viewProjection(clip);
+    let shown = 0;
+    for (const { store } of moversPort?.pickables?.() ?? []) {
+      const { positions, shows, colors, count } = store;
+      for (let index = 0; index < count; index++) {
+        if (shows[index] !== 1 || colors[index * 4 + 3] <= 0) continue;
+        at.x = positions[index * 3];
+        at.y = positions[index * 3 + 1];
+        at.z = positions[index * 3 + 2];
+        const w = clip[3] * at.x + clip[7] * at.y + clip[11] * at.z + clip[15];
+        if (w <= 0) continue;
+        const x =
+          (clip[0] * at.x + clip[4] * at.y + clip[8] * at.z + clip[12]) / w;
+        const y =
+          (clip[1] * at.x + clip[5] * at.y + clip[9] * at.z + clip[13]) / w;
+        if (Math.abs(x) > 1 || Math.abs(y) > 1) continue;
+        if (model.horizonVisible(at)) shown++;
+      }
+    }
+    return shown;
+  };
   let bloom = { ...BLOOM_INITIAL };
   const bloomRender = bloomPort
     ? {
@@ -385,11 +443,19 @@ export function createNavaraEngine(
     },
     frames,
     render: {
-      request: () => view.forceUpdate(),
+      request: requestRender,
       setContinuous(enabled) {
         view.animation = Boolean(enabled);
       },
       isContinuous: () => view.animation === true,
+      // The canvas's own context (getContext hands back the one the view
+      // made); Navara has no public renderer to ask.
+      maxTextureSize: () =>
+        (maxTextureSize ??= (() => {
+          const gl =
+            canvas.getContext?.('webgl2') ?? canvas.getContext?.('webgl');
+          return gl?.getParameter(gl.MAX_TEXTURE_SIZE) ?? 0;
+        })()),
       setSharpen(options) {
         const next = mergeSharpen(sharpen, options);
         const changed =
@@ -415,6 +481,13 @@ export function createNavaraEngine(
     ground: groundPort.ground,
     meshes: meshes.meshes,
     imagery: imagery.imagery,
+    // Not in the contract, as Cesium's (src/cyberSonarEngine.js reads it):
+    // the treatment runs in the movers' shaders; `contacts` is how many are
+    // on screen, so an empty view lets the sonar go idle.
+    contactSonarDiagnostics: () => ({
+      supported: true,
+      contacts: visibleContacts(),
+    }),
     destroy() {
       if (destroyed) return;
       destroyed = true;

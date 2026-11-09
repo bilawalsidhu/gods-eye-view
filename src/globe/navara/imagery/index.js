@@ -345,14 +345,13 @@ export function createNavaraImagery(
       current.canvas.width = current.canvas.height = 0;
       queue.prune();
     };
-    // The source's rectangle within the tiling's latitudes; across the
-    // antimeridian the atlas covers every longitude.
+    // The source's rectangle within the tiling's latitudes.
     const limit = scheme === 'geographic' ? 90 : WEB_MERCATOR_LIMIT;
     const box = () => {
       const { west, south, east, north } = source.rectangle;
       return {
-        west: west < east ? west : -180,
-        east: west < east ? east : 180,
+        west,
+        east,
         south: Math.max(south, -limit),
         north: Math.min(north, limit),
       };
@@ -416,7 +415,8 @@ export function createNavaraImagery(
             tasks.push({
               url: imageryTileUrl(
                 source.url,
-                plan.x + x,
+                (plan.x + x) %
+                  2 ** (plan.z + (scheme === 'geographic' ? 1 : 0)),
                 plan.y + y,
                 plan.z,
                 source.subdomains,
@@ -625,7 +625,7 @@ export function createNavaraImagery(
     },
   );
 
-  const offCamera = camera.changed.addEventListener(() => {
+  const viewChanged = () => {
     let changed = false;
     for (const entry of entries.values()) {
       changed = entry.drawing.cameraChanged() || changed;
@@ -633,12 +633,15 @@ export function createNavaraImagery(
     }
     // Raised layers rise with the camera.
     if (changed || liftNow() !== lift) compose();
-  });
+  };
+  const offCamera = camera.changed.addEventListener(viewChanged);
+  view.on?.('resize', viewChanged);
 
   return {
     imagery: registry.imagery,
     destroy() {
       offCamera();
+      view.off?.('resize', viewChanged);
       registry.destroyAll();
       pass.destroy();
     },

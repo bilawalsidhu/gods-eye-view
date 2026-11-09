@@ -111,7 +111,9 @@ await strict.run({}, async (browser) => {
     page.waitForFunction(
       (engine) =>
         window.__godsEyeView?.engine?.kind === engine &&
-        !document.querySelector('#globe-engine')?.disabled &&
+        !document.querySelector(
+          '#globe-engine:is([disabled], [aria-busy="true"])',
+        ) &&
         document.querySelector('#loading-screen.hidden') &&
         !document.querySelector('.engine-switch-frame'),
       { timeout: 90000 },

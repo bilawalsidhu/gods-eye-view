@@ -22,6 +22,7 @@ import {
   aircraftIconCells,
   drawAircraftIconAtlas,
 } from '../../../data/aircraftIcons.js';
+import { cockpitContactDotImage } from '../../../data/cockpitContactDot.js';
 import { createEngineLayerView } from '../../shared/render/engineView.js';
 import { Rgba, rgbaFromCss } from '../../shared/color.js';
 import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
@@ -114,6 +115,10 @@ export function createAircraftDisplay(
   const removers = [];
   const iconCells = aircraftIconCells();
   const defaultIcon = [...iconCells.keys()][0];
+  const cellFor = (image) =>
+    image && image === cockpitContactDotImage._dataUrl
+      ? 'cockpit-dot'
+      : iconCells.get(image);
 
   // --- commits: once per frame listener, or in a microtask -----------------
   const pending = new Set();
@@ -172,7 +177,8 @@ export function createAircraftDisplay(
     if (!atlas) return null;
     const { tracked } = sprite;
     const depth = depthKey(sprite.disableDepthTestDistance);
-    const key = `${tracked ? 'tracked' : 'fleet'}|${scalarKey(sprite.scaleByDistance)}|${JSON.stringify(depth)}`;
+    const dot = sprite.cell === 'cockpit-dot';
+    const key = `${tracked ? 'tracked' : 'fleet'}|${scalarKey(sprite.scaleByDistance)}|${JSON.stringify(depth)}|${dot}`;
     let bank = spriteBanks.get(key);
     if (!bank) {
       const scalar = sprite.scaleByDistance;
@@ -187,7 +193,9 @@ export function createAircraftDisplay(
           depthTest: depth,
           pickable: true,
           sprite: {
-            atlas,
+            atlas: dot
+              ? { url: sprite.image, cells: { 'cockpit-dot': [0, 0, 1, 1] } }
+              : atlas,
             sizePx: BASE_SIZE_PX,
             scaleByDistance: scalar
               ? [scalar.near, scalar.nearValue, scalar.far, scalar.farValue]
@@ -246,7 +254,7 @@ export function createAircraftDisplay(
         spec.color?.alpha ?? 1,
       );
       this._image = spec.image;
-      this.cell = iconCells.get(spec.image) ?? iconCells.get(defaultIcon);
+      this.cell = cellFor(spec.image) ?? iconCells.get(defaultIcon);
       this._scaleByDistance = spec.scaleByDistance
         ? { ...spec.scaleByDistance }
         : undefined;
@@ -369,10 +377,12 @@ export function createAircraftDisplay(
 
     set image(value) {
       this._image = value;
-      const cell = iconCells.get(value);
+      const cell = cellFor(value);
       if (!cell || cell === this.cell) return;
+      const rebank = (cell === 'cockpit-dot') !== (this.cell === 'cockpit-dot');
       this.cell = cell;
-      this.write({ cell });
+      if (rebank) placeSprite(this);
+      else this.write({ cell });
     }
 
     get scaleByDistance() {
@@ -515,6 +525,11 @@ export function createAircraftDisplay(
       return this.placed && Boolean(this.gevBank?.set?.ready(this.gevIndex));
     }
 
+    /** The engine could not load what this instance draws. */
+    get failed() {
+      return Boolean(this.gevBank?.set?.failed(this.gevIndex));
+    }
+
     /** The scale drawn: minimumPixelSize kept on the CPU. */
     get computedScale() {
       const minimum = this.spec.minimumPixelSize ?? 0;
@@ -581,6 +596,15 @@ export function createAircraftDisplay(
     }
   }
 
+  // A set does not load a failed glTF again: the tracked model's retry
+  // loads it in a new one.
+  const dropModel = (model) => {
+    const bank = model?.gevBank;
+    const retry = model?.tracked && model.failed;
+    bank?.remove(model);
+    if (retry) bank.rebuild();
+  };
+
   const models = {
     live: () => attached && !destroyed,
     setVisible(visible) {
@@ -588,18 +612,13 @@ export function createAircraftDisplay(
       for (const bank of modelBanks.values()) bank.setVisible(visible);
     },
     loadFleet: (spec) => Promise.resolve(new ModelHandle(spec)),
-    loadTracked: (spec) => Promise.resolve(new ModelHandle(spec)),
-    // The engine loads each glTF itself; nothing to warm.
-    preload: (url) => Promise.resolve({ url, destroy() {} }),
+    loadTracked: (spec) =>
+      Promise.resolve(Object.assign(new ModelHandle(spec), { tracked: true })),
     add(model) {
       modelBankFor(model).add(model);
     },
-    remove(model) {
-      model?.gevBank?.remove(model);
-    },
-    destroy(model) {
-      model?.gevBank?.remove(model);
-    },
+    remove: dropModel,
+    destroy: dropModel,
     /** The heading-pitch-roll frame (modelMatrix, the model frame); the
      *  instance turned to the glTF's own axes (GLTF_AXIS). `offsetDeg`: this
      *  model's nose offset when the layer's models differ (default: the
@@ -753,12 +772,9 @@ export function createAircraftDisplay(
       }
       handle.gevFollowHandle = followHandle;
       FOLLOWED_TRACKED.set(followHandle, handle);
-      // The engine's follow frames itself (Cesium's one exact tracked frame
-      // included) and ends with it: nothing for the caller to stop.
-      return () => {};
     },
     refocus(handle) {
-      return follow.start(handle);
+      follow.start(handle);
     },
     release() {
       engine.camera.following()?.stop();

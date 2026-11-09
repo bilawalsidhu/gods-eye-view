@@ -9,6 +9,7 @@ import { registerDataCredits } from '../data/dataCredits.js';
 import { APPLICATION_LAYER_DIRECTORY } from './layers/directory.js';
 import { LAYER_MANIFEST } from './layers/renderers.js';
 import { createNavaraAnnotationRenderer } from '../annotations/navaraAnnotationRenderer.js';
+import { localizeLayerName } from '../ui/layerNames.js';
 
 /** The Navara globe module, loaded on demand. */
 const loadNavaraGlobeModule = async () =>
@@ -26,8 +27,10 @@ export function navaraModeNotice(manifest = LAYER_MANIFEST) {
   return Object.freeze({
     label: t('Experimental Navara engine'),
     detail: names.length
-      ? `Data layers: ${names.join(', ')}`
-      : 'No registered data layers',
+      ? t('Data layers: {layers}', {
+          layers: names.map(localizeLayerName).join(', '),
+        })
+      : t('No registered data layers'),
   });
 }
 
@@ -101,7 +104,7 @@ export async function createNavaraScene({
 
 /**
  * The Navara tool backend (src/app/tools.js) of one Navara scene: where the
- * annotation board and Draw draw (on the engine and Navara's view; null
+ * annotation board draws (on the engine and Navara's view; null
  * without the view), the Recent Imagery panel's globe, the render
  * governor on the engine, and this engine's own parts: the daylight of a
  * restored view and the engine notice.
@@ -115,8 +118,6 @@ export function navaraToolBackend({ engine }) {
       drawn
         ? { engine, renderer: createNavaraAnnotationRenderer(engine, views) }
         : null,
-    // The session's tool on the engine's input and preview.
-    draw: () => ({ engine }),
     recentImagery: () => ({ engine }),
     attach({ styleManager }, { signal, defer }) {
       void styleManager.initialRestorePromise?.then(() => {

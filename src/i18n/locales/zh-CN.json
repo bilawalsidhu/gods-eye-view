@@ -3096,5 +3096,12 @@
   "Maximum event age: {days}d; undated markers are kept": "事件最长保留时间：{days}天；保留无日期标记",
   "event age filter|All": "全部",
   "Event age": "事件时间",
-  "Event age: {days}d · undated kept": "事件时间：{days}天内 · 保留无日期标记"
+  "Event age: {days}d · undated kept": "事件时间：{days}天内 · 保留无日期标记",
+  "Data layers: {layers}": "数据图层：{layers}",
+  "No registered data layers": "没有已注册的数据图层",
+  "DAYLIGHT VIEW": "日光视图",
+  "Globe engine failed to start. Running {engine}: {message}": "地球渲染引擎启动失败。当前运行 {engine}：{message}",
+  "Bing imagery is not available on the experimental Navara engine": "实验性 Navara 引擎不支持 Bing 影像",
+  "NOT ON THIS ENGINE": "此引擎不支持",
+  "Kept in the link: {layers}": "已保留在链接中：{layers}"
 }

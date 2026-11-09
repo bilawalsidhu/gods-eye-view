@@ -400,3 +400,15 @@ test('a KML file loads to records with its name, count and outside content remov
   assert.equal(loaded.records.points[0].name, 'QA KML pin');
   loaded.revoke();
 });
+
+test('GroundOverlay retains altitude and altitude mode for drawing diagnostics', () => {
+  const records = readKmlRecords(
+    parseXml(
+      kml(
+        `<GroundOverlay><altitude>1000</altitude><altitudeMode>absolute</altitudeMode><LatLonBox><west>0</west><east>1</east><south>0</south><north>1</north></LatLonBox></GroundOverlay>`,
+      ),
+    ),
+  );
+  assert.equal(records.overlays[0].altitude, 1000);
+  assert.equal(records.overlays[0].altitudeMode, 'absolute');
+});

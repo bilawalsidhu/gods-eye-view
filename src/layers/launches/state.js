@@ -135,6 +135,7 @@ export function createState({ services }) {
   state._replaySpeed = 1;
 
   state._replayTracks = new Map();
+  state._replayCameraHeading = null;
 
   state._missionOverlayRecords = new Map();
 

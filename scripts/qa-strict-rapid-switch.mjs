@@ -89,7 +89,11 @@ await strict.run({}, async (b) => {
         window.__qaSteps.push({
           step,
           engine: window.__godsEyeView?.engine?.kind ?? null,
-          busy: !!document.querySelector('#globe-engine')?.disabled,
+          busy: Boolean(
+            document.querySelector(
+              '#globe-engine:is([disabled], [aria-busy="true"])',
+            ),
+          ),
         });
       window.__qaMark = mark;
     });

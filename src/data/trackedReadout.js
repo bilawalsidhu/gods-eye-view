@@ -191,6 +191,7 @@ export function createTrackedReadout(
           return typeof model === 'function' ? model() : model;
         },
         gevDisplayPosition: () => (handle.label ?? label).position(),
+        gevVisualPosition: () => handle.native?.gevVisualPosition?.(),
       };
       _labelSubjects.set(handle, subject);
     }

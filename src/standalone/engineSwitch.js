@@ -67,7 +67,10 @@ export function createEngineAddress({ location, history, flush = () => {} }) {
  * was where the incoming address agrees (always after a pick) and follows a
  * visited entry where it differs (handoffTargetEnabled).
  */
-export function handOffSession(session, { addressLayerIds = null } = {}) {
+export function handOffSession(
+  session,
+  { addressLayerIds = null, visit = false } = {},
+) {
   const manager = session.manager;
   const listed = addressLayerIds ? new Set(addressLayerIds) : null;
   session.handoffLayers = new Map(
@@ -77,6 +80,7 @@ export function handOffSession(session, { addressLayerIds = null } = {}) {
         entry: entry.module.attachRenderer ? entry : null,
         enabled: manager.isEffectivelyEnabled(id),
         durable: listed ? listed.has(id) : undefined,
+        visit,
       },
     ]),
   );

@@ -12,7 +12,6 @@ import * as context from '../../data/contextStore.js';
 import * as render from '../../renderGovernor.js';
 import * as recession from '../../data/aircraftRecession.js';
 
-/** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationFlights({
   surface,
   source,
