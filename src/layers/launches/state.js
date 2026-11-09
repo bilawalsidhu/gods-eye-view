@@ -169,6 +169,26 @@ export function createState({ services }) {
 
   state.coverageChanged = () => worldClock.coverageChanged();
 
+  /**
+   * Whether a launch has yet to lift off at the world time. While live none
+   * has, so the layer shows every launch in its window as it always did.
+   */
+
+  state.launchPending = (launch) => {
+    if (worldClock.isLive()) return false;
+    const launchMs = Date.parse(launch?.launchTime);
+    return Number.isFinite(launchMs) && launchMs > state.now();
+  };
+
+  /** Whether a launch is hidden for lifting off after the world time. */
+
+  state.launchHidden = (launch) =>
+    launch?.id !== state._selectedLaunchId && state.launchPending(launch);
+
+  /** The launches hidden at the last frame, by id, to spot a change. */
+
+  state._pendingLaunchIds = new Set();
+
   state._missionOrbitPatternRegistered = false;
 
   state._pathDistanceCache = new WeakMap();

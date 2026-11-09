@@ -146,16 +146,18 @@ export function formatCockpitWindDirection(value) {
 }
 
 /**
- * The Cockpit entry for each subject it can ride: an aircraft's cockpit.
- * Both entry buttons (Contacts and the Intel HUD readout) show it.
+ * The Cockpit entry for each subject it can ride: an aircraft's cockpit or a
+ * vessel's bridge. Both entry buttons (Contacts and
+ * the Intel HUD readout) show it.
  */
 const COCKPIT_ENTRY_FACES = Object.freeze({
   aircraft: Object.freeze({ icon: 'flight', label: msg('COCKPIT') }),
+  vessel: Object.freeze({ icon: 'directions_boat', label: msg('BRIDGE') }),
 });
 
 /**
  * The entry's glyph and localized label for the subject it would ride.
- * @param {'aircraft'|null|undefined} kind
+ * @param {'aircraft'|'vessel'|null|undefined} kind
  * @returns {{icon: string, label: string}}
  */
 export function cockpitEntryFace(kind) {

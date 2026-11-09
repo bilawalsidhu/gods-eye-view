@@ -35,6 +35,7 @@
     "hPa",
     "iNaturalist",
     "iNaturalist ↗",
+    "{direction} · {elevation}",
     "{source} HTTP {status}",
     "▲ {frp} MW"
   ],
@@ -203,6 +204,7 @@
     "view band|GLOBAL",
     "{city} CCTV",
     "{county} County",
+    "{direction} · {elevation}",
     "{source} HTTP {status}",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
@@ -216,6 +218,7 @@
     "▲ {frp} MW"
   ],
   "es": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
@@ -336,6 +339,7 @@
     "panel",
     "view band|GLOBAL",
     "voice|ERROR",
+    "{direction} · {elevation}",
     "{rate} msg/s",
     "{speed} kn",
     "{type}  SPD: {speed}  HDG: {heading}",
@@ -355,6 +359,7 @@
     "iNaturalist"
   ],
   "fr": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "ALTITUDE",
@@ -533,9 +538,11 @@
     "standard",
     "station",
     "voice|OFF",
+    "{count} CONTACTS",
     "{count} MSGS",
     "{count} SOURCES",
     "{count} messages",
+    "{direction} · {elevation}",
     "{n} cyclones",
     "{n} satellites",
     "{rate} msg/s",
@@ -549,6 +556,7 @@
     "▲ {frp} MW"
   ],
   "it": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "AFRICA",
@@ -708,6 +716,7 @@
     "{count} MSGS",
     "{count} feeds live",
     "{count} scenes",
+    "{direction} · {elevation}",
     "{rate} msg/s",
     "{scene} / {pack}: {status}. File: {path}. {attribution} · {license}",
     "{source} HTTP {status}",
@@ -774,6 +783,7 @@
     "kt",
     "mph",
     "{city} CCTV",
+    "{direction} · {elevation}",
     "{rate} msg/s",
     "{source} HTTP {status}",
     "{speed} kn",
@@ -784,6 +794,7 @@
     "▲ {frp} MW"
   ],
   "pt": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
@@ -907,6 +918,7 @@
     "mph",
     "nominal",
     "view band|GLOBAL",
+    "{direction} · {elevation}",
     "{rate} msg/s",
     "{type}  SPD: {speed}  HDG: {heading}",
     "{value} KM",
@@ -943,7 +955,8 @@
     "WHOT/BHOT",
     "acartia.io ↗",
     "iNaturalist",
-    "iNaturalist ↗"
+    "iNaturalist ↗",
+    "{direction} · {elevation}"
   ],
   "uk": [
     "AIS: --",
@@ -961,7 +974,8 @@
     "WHOT/BHOT",
     "acartia.io ↗",
     "iNaturalist",
-    "iNaturalist ↗"
+    "iNaturalist ↗",
+    "{direction} · {elevation}"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1010,6 +1024,7 @@
     "kts",
     "mph",
     "{city} CCTV",
+    "{direction} · {elevation}",
     "{rate} msg/s",
     "{source} HTTP {status}",
     "{speed} kn",
@@ -1052,9 +1067,9 @@
     "MM",
     "NVG",
     "REC",
-    "SRC {value}",
     "S2 GhostMaps",
     "S2 · {name}",
+    "SRC {value}",
     "Sentinel-2",
     "Techno",
     "Trance",
@@ -1073,6 +1088,7 @@
     "kts",
     "mph",
     "{city} CCTV",
+    "{direction} · {elevation}",
     "{rate} msg/s",
     "{source} HTTP {status}",
     "{speed} kn",

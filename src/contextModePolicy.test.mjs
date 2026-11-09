@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  bridgeEntryAllowed,
   cockpitEntryAllowed,
   contextAllowedLayerIds,
   contextLayerEnableBlockReason,
@@ -426,6 +427,17 @@ test("cockpit entry needs only the tracked aircraft's own layer", () => {
     subjectLayerEnabled: false,
     contextModeChanging: false,
   }), false, 'there is no aircraft to ride');
+  assert.equal(cockpitEntryAllowed({
+    subjectLayerId: 'ais-live-vessels',
+    subjectLayerEnabled: true,
+    contextModeChanging: false,
+  }), false, "a vessel is the bridge gate's subject, not Cockpit's");
+});
+
+test('bridge entry needs only Live AIS Vessels', () => {
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: true, contextModeChanging: false }), true);
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: false, contextModeChanging: false }), false);
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: true, contextModeChanging: true }), false);
 });
 
 test('context teardown guard restores coordination state after success and failure', async () => {
