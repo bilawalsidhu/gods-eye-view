@@ -61,7 +61,8 @@ let nextLeaseId = 1;
  * @param {{onRevoked?: () => void, renew?: AudioLease|null}} [options]
  *   `onRevoked` is called when a LATER claim takes the audio away; it is not
  *   called when this owner releases voluntarily, nor when it renews.
- *   `renew` is the caller's current lease, if it has one.
+ *   `renew` is the caller's current lease, if it has one. A lease issued to
+ *   a different owner is ignored: that claim is a takeover and revokes it.
  * @returns {AudioLease|null} The lease to release with, or null when `owner`
  *   is not a usable name.
  */
@@ -70,8 +71,11 @@ export function claimAudio(owner, options = {}) {
   if (!name) return null;
   const { onRevoked, renew = null } = options;
   const revoked = currentOnRevoked;
-  // A renewal by the live lease holder is a continuation, not a takeover.
-  const hadOwner = currentLease !== null && !isAudioLeaseCurrent(renew);
+  // A renewal is a continuation only when the live lease is the caller's OWN:
+  // a current lease held by someone else is not a licence to take their audio
+  // without telling them, so `renew` must also name this owner.
+  const continuation = isAudioLeaseCurrent(renew) && renew.owner === name;
+  const hadOwner = currentLease !== null && !continuation;
   // Install the new owner BEFORE telling the old one, so a callback that
   // re-enters this module sees the finished state rather than a half-swapped
   // one — and so its stale lease can no longer release anything.

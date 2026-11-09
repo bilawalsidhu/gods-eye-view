@@ -249,3 +249,20 @@ test('a stale lease cannot be used to renew past a takeover', () => {
   );
   assert.equal(audioOwner(), 'radio');
 });
+
+test("another owner's live lease is not a renewal", () => {
+  // `renew` means "this is my own lease". Passing the radio's live lease while
+  // claiming as 'cctv' must still revoke the radio, or one producer could take
+  // the audio from another without it ever being told to stop.
+  let radioStops = 0;
+  const radio = claimAudio('radio', {
+    onRevoked: () => {
+      radioStops += 1;
+    },
+  });
+  const cctv = claimAudio('cctv', { renew: radio });
+  assert.equal(radioStops, 1, 'the radio must be revoked');
+  assert.equal(audioOwner(), 'cctv');
+  assert.equal(isAudioLeaseCurrent(cctv), true);
+  assert.equal(isAudioLeaseCurrent(radio), false);
+});
