@@ -311,6 +311,23 @@ test('transit vehicles come from nearby feeds and can be limited to a route', as
   assert.equal(rapid.data.rows[0].id, 'v2');
 });
 
+test('a transit bearing that rounds to 360 reads as 0', async () => {
+  const north = [{ ...vehicles[0], bearing: 359.6 }];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      transit: transit({
+        ok: true,
+        status: 200,
+        json: async () => ({ vehicles: north }),
+      }),
+      clock,
+    },
+  });
+  const result = await catalog.call('get_transit_vehicles', { area: downtown });
+  assert.equal(result.data.rows[0].bearing_deg, 0);
+});
+
 test('transit reports uncovered areas and unavailable feeds', async () => {
   const catalog = composeCatalog({
     tools: coreTools,
