@@ -18,6 +18,9 @@ import { cameraOf } from '../render/cesium/camera.js';
 // panel, Import and others): a viewer with no renderer bound gets its globe
 // port from here, as it gets its camera.
 import '../render/cesium/globe.js';
+// The application's data reaches `findEffects` (the cyber contact sweep):
+// such a viewer gets its effects port from here too.
+import '../render/cesium/effects.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
 const EMBED_VIEW_MESSAGE = 'gev:view';

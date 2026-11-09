@@ -388,3 +388,47 @@ test('a destroyed scene is let go of without touching it', () => {
   releaseUnboundEffects(viewer, effects);
   assert.equal(findEffects(viewer), null);
 });
+
+test('screenModulation lists its pass while a sector is set, with change events', () => {
+  const none = fixture();
+  assert.equal(none.effects.screenModulation, undefined, 'not without it');
+  none.dispose();
+  const event = () => ({ addEventListener: () => () => {} });
+  const scene = {
+    postProcessStages: { add() {}, remove() {}, bloom: { uniforms: {} } },
+    primitives: { update() {} },
+    postUpdate: event(),
+    preRender: event(),
+    postRender: event(),
+  };
+  const requests = [];
+  const part = createCesiumEffects(scene, {
+    capabilities: new Set(['screenModulation']),
+    frame: { requestRender: (reason) => requests.push(reason) },
+    report: (error) => {
+      throw error;
+    },
+  });
+  const heard = [];
+  part.port.on('change', (d) => heard.push(d.passes));
+  const sector = {
+    center: { x: 10, y: 10 },
+    angle: 0,
+    width: 0.4,
+    radius: 100,
+    floor: 0.5,
+    strength: 0.5,
+    color: '#fff',
+  };
+  part.port.screenModulation(sector);
+  assert.deepEqual(part.port.diagnostics().passes, ['screenModulation']);
+  part.port.screenModulation({ ...sector, angle: 1 });
+  assert.deepEqual(heard, [['screenModulation']], 'heard once, as it starts');
+  part.port.screenModulation(null);
+  assert.deepEqual(part.port.diagnostics().passes, []);
+  assert.deepEqual(heard, [['screenModulation'], []]);
+  assert.deepEqual(requests, ['effects-modulation', 'effects-modulation']);
+  part.port.screenModulation(sector);
+  part.dispose();
+  assert.equal(scene.primitives.update.name, 'update', 'given back');
+});

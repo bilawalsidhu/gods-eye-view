@@ -18,12 +18,17 @@
  *
  * Building the port changes nothing in the scene; the first `bloom` call
  * takes the scene's bloom stage, and disposal gives it back as it was.
- * There is no `screenModulation`: GEV's sweep shades each icon and label
- * in its own shader, not the frame.
+ * `screenModulation` is no stage: it shades each marker in its own shader
+ * (`screenModulation.js`), so the map, lines and shapes draw as they are.
+ * Like the rest, it changes nothing in the scene until a sector is set.
  */
 import * as Cesium from 'cesium';
 import { provideUnboundEffects } from '../rendererOf.js';
 import { listenerList, uncaught } from './common.js';
+import {
+  createCesiumScreenModulation,
+  screenModulationSupported,
+} from './screenModulation.js';
 
 /** Below this a style, bloom or sharpen draws nothing, so it runs no pass. */
 const OFF = 0.001;
@@ -135,6 +140,20 @@ export function createCesiumEffects(
   let offFrame = null;
   let disposed = false;
   const started = performance.now();
+
+  /** Whether the modulation pass drew when listeners last heard. */
+  let modulationListed = false;
+  const modulation = capabilities.has('screenModulation')
+    ? createCesiumScreenModulation(scene, {
+        frame,
+        // The pass stopped drawing on its own (a shader it cannot take).
+        onChange: () => {
+          if (gone() || modulation.draws() === modulationListed) return;
+          modulationListed = modulation.draws();
+          listeners.fire(port.diagnostics());
+        },
+      })
+    : null;
 
   // Disposed, or the scene went first and took its stages with it.
   const gone = () => disposed || scene.isDestroyed?.() === true;
@@ -332,6 +351,7 @@ export function createCesiumEffects(
           ? ['bloom']
           : []),
         ...(sharpenStage?.enabled ? ['sharpen'] : []),
+        ...(modulation?.draws() ? ['screenModulation'] : []),
       ],
     }),
     on(event, cb) {
@@ -339,6 +359,17 @@ export function createCesiumEffects(
       return listeners.on(cb);
     },
   };
+
+  if (modulation)
+    port.screenModulation = (sector) => {
+      if (gone()) return;
+      modulation.set(sector ?? null);
+      // Its own render demand: a sweep moving where nothing is shaded asks
+      // for no frame. Listeners hear when the pass starts or stops.
+      if (modulation.draws() === modulationListed) return;
+      modulationListed = modulation.draws();
+      listeners.fire(port.diagnostics());
+    };
 
   function assignParams(record, params) {
     for (const [key, value] of Object.entries(params ?? {})) {
@@ -356,6 +387,7 @@ export function createCesiumEffects(
       disposed = true;
       stopClock();
       listeners.clear();
+      modulation?.dispose();
       // A destroyed scene took its stages with it.
       if (scene.isDestroyed?.()) {
         styles.clear();
@@ -419,7 +451,12 @@ provideUnboundEffects((viewer) => {
   )
     return null;
   return createCesiumEffects(scene, {
-    capabilities: new Set(['styles', 'bloom', 'sharpen']),
+    capabilities: new Set([
+      'styles',
+      'bloom',
+      'sharpen',
+      ...(screenModulationSupported() ? ['screenModulation'] : []),
+    ]),
     frame: sceneFrame(scene),
     report: uncaught,
   });
