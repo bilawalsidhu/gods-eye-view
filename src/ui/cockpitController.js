@@ -28,6 +28,18 @@ import {
   updateOrbitalHud,
 } from './cockpitOrbitalView.js';
 import {
+  onOrbitalClick,
+  onOrbitalDoubleClick,
+  routeSceneClick,
+  toggleOrbitalFocus,
+} from './cockpitOrbitalFocus.js';
+import {
+  handleOrbitalSignalClick,
+  refreshOrbitalSignals,
+  updateOrbitalSignals,
+} from './cockpitOrbitalSignals.js';
+import { rideOrbitalSatellite } from './cockpitOrbitalSatellites.js';
+import {
   publishInstrumentsView,
   publishRouteView,
   updateHud,
@@ -292,6 +304,8 @@ export class CockpitViewController {
       true,
     );
     this._listenerRemovers.push(routeSceneDoubleClick.call(this));
+    // In orbit a click on a mapped point keeps the camera on it.
+    this._listenerRemovers.push(routeSceneClick.call(this));
     // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
     // off while the Cockpit holds the camera).
     this._listen(
@@ -423,6 +437,56 @@ export class CockpitViewController {
   }
   onOrbitalWheel(event) {
     return onOrbitalWheel.call(this, event);
+  }
+  /**
+   * A click on the orbital picture: on a mapped point in reach it keeps the
+   * camera on that point; anywhere else it ends such a focus.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when the click focused a point.
+   */
+  onOrbitalClick(position) {
+    return onOrbitalClick.call(this, position);
+  }
+  /**
+   * A double-click on the orbital picture: on a mapped ground point it keeps
+   * or starts the focus there instead of letting Cesium track the point.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when it was taken.
+   */
+  onOrbitalDoubleClick(position) {
+    return onOrbitalDoubleClick.call(this, position);
+  }
+  /**
+   * A site's orbital Live Signals row: focus that site, switch to it, or end
+   * the focus held on it.
+   * @param {string} key The site's id in the Mapped Installations layer.
+   * @returns {boolean} True when the focus changed.
+   */
+  toggleOrbitalFocus(key) {
+    return toggleOrbitalFocus.call(this, key);
+  }
+  /** Rebuild the orbital Live Signals rows now. */
+  refreshOrbitalSignals() {
+    return refreshOrbitalSignals.call(this);
+  }
+  /** Rebuild the orbital Live Signals rows on their clock. */
+  updateOrbitalSignals(nowMs) {
+    return updateOrbitalSignals.call(this, nowMs);
+  }
+  /**
+   * Ride the satellite an orbital Live Signals row names (RETURN goes back).
+   * @param {number|string} noradId
+   * @returns {boolean} True when the ridden satellite changed.
+   */
+  rideOrbitalSatellite(noradId) {
+    return rideOrbitalSatellite.call(this, noradId);
+  }
+  /**
+   * A click on an orbital Live Signals row.
+   * @returns {boolean} True in orbit.
+   */
+  handleOrbitalSignalClick(layerId, id) {
+    return handleOrbitalSignalClick.call(this, layerId, id);
   }
   /**
    * Tilt the orbital view one arrow step off nadir.

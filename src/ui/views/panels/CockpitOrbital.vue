@@ -8,8 +8,8 @@ import {
   tleAgeParts,
 } from '../../cockpitPresentation.js';
 import {
-  loadFlagUrl,
   ownerMark,
+  preloadOwnerFlags,
   regionName,
   shownOwnerMark,
 } from '../../ownerFlag.js';
@@ -189,34 +189,30 @@ const placeText = computed(() => {
 const mark = computed(() =>
   ownerMark(orbital.value?.owner, { locale: getLocale() }),
 );
-const flagUrl = ref(null);
-// A flag that would not load (offline, a stale chunk after a deploy, a
-// missing file) falls back to the code as a badge, never to no owner at all.
-const flagFailed = ref(false);
-let flagRequest = 0;
+// The flag sheet loads at startup; a sheet that would not load (offline, a
+// stale asset after a deploy) is asked again for the next flag, and until it
+// comes the code shows as a badge, never no owner at all.
+const flagsReady = ref(false);
+const flagsFailed = ref(false);
 watch(
-  () => (mark.value?.kind === 'flag' ? mark.value.code : null),
-  async (code) => {
-    const request = ++flagRequest;
-    flagUrl.value = null;
-    flagFailed.value = false;
-    if (!code) return;
-    let url = null;
-    try {
-      url = await loadFlagUrl(code);
-    } catch {
-      url = null;
-    }
-    if (request !== flagRequest) return;
-    flagUrl.value = url;
-    flagFailed.value = !url;
+  // Keyed on the satellite too: after a failed load, the next ride asks
+  // again even when its owner is the same country.
+  () =>
+    mark.value?.kind === 'flag'
+      ? `${mark.value.code}:${orbital.value?.noradId ?? ''}`
+      : null,
+  async (key) => {
+    if (!key || flagsReady.value) return;
+    const ready = await preloadOwnerFlags();
+    flagsReady.value = ready;
+    flagsFailed.value = !ready;
   },
   { immediate: true },
 );
 const shownMark = computed(() =>
   shownOwnerMark(mark.value, {
-    url: flagUrl.value,
-    failed: flagFailed.value,
+    ready: flagsReady.value,
+    failed: flagsFailed.value,
   }),
 );
 
@@ -254,6 +250,12 @@ watch(
 
 // The off-nadir tilt; an untilted view shows no readout or reset.
 const look = computed(() => orbital.value?.look || { offset: false });
+// A ground focus names its target in a polite live region; the angle,
+// which changes every update, is left out of it.
+const focusText = computed(() => {
+  const label = look.value.focus?.label;
+  return label ? t('FOCUS · {name}', { name: label }) : '';
+});
 
 const transition = computed(() => orbital.value?.transition || {});
 const lensStyle = computed(() => {
@@ -287,8 +289,7 @@ const lensStyle = computed(() => {
       <div class="cockpit-orbital-readout">
         <p class="cockpit-orbital-kicker">{{ look.offset ? t('ORBITAL VIEW · OFF-NADIR') : t('ORBITAL VIEW · NADIR') }}</p>
         <div class="cockpit-orbital-title">
-          <!-- i18n-ignore: @error is the image's load-failure event, not a status message. -->
-          <img v-if="shownMark?.kind === 'flag'" class="cockpit-orbital-flag" :src="shownMark.url" :alt="shownMark.label" :title="shownMark.label" width="20" height="15" @error="flagFailed = true" />
+          <span v-if="shownMark?.kind === 'flag'" class="cockpit-orbital-flag" role="img" :aria-label="shownMark.label" :title="shownMark.label" :style="shownMark.style"></span>
           <span v-else-if="shownMark?.kind === 'badge'" class="cockpit-orbital-owner-badge" :title="shownMark.title">{{ shownMark.label }}</span>
           <p class="cockpit-orbital-name">{{ orbital.name }}</p>
         </div>
@@ -317,9 +318,10 @@ const lensStyle = computed(() => {
         <p class="cockpit-orbital-north">{{ trackUp ? t('TRACK UP') : t('NORTH UP') }}</p>
         <!-- Shown only while the view is tilted off nadir: where it looks and the way back. -->
         <div v-if="look.offset" class="cockpit-orbital-look">
-          <span id="cockpit-orbital-look-readout" class="cockpit-orbital-look-readout" aria-live="polite">{{ look.readout }}</span>
+          <span id="cockpit-orbital-look-readout" class="cockpit-orbital-look-readout" :aria-live="look.focus ? 'off' : 'polite'">{{ look.readout }}</span>
           <button id="cockpit-orbital-nadir" ref="nadirButton" type="button" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</button>
         </div>
+        <p id="cockpit-orbital-focus" class="cockpit-orbital-focus" aria-live="polite">{{ focusText }}</p>
       </div>
       <div class="cockpit-orbital-optics">
         <button id="cockpit-orbital-zoom-out" ref="zoomOutButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atWidest" :aria-label="t('Zoom out')" :title="t('Zoom out (−)')" aria-keyshortcuts="- _">−</button>

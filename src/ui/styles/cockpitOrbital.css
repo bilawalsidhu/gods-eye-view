@@ -194,11 +194,15 @@
 }
 .cockpit-orbital-flag {
   flex: none;
+  box-sizing: content-box;
   width: 20px;
   height: 15px;
   border: 1px solid var(--orbital-faint);
   border-radius: 1px;
-  object-fit: cover;
+  background-repeat: no-repeat;
+  /* Only the flag's own cell: the sheet's neighbours stay out from under
+     the border. */
+  background-clip: content-box;
 }
 .cockpit-orbital-owner-badge {
   flex: none;

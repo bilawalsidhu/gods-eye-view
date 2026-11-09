@@ -93,7 +93,8 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
    *    zoom, zoomSteps: number[], maxZoom, footprintKm|null,
    *    sensor: { label|null, swathKm, stripFraction|null, zoom|null }|null,
    *    transition: { active, blurPx, lockTick },
-   *    look: { offset, readout, swathScale, swathKm|null }, trackUp, northDeg,
+   *    look: { offset, readout, swathScale, swathKm|null,
+   *      focus: { key, label }|null }, trackUp, northDeg,
    *    place: { kind: 'country'|'sea'|'ocean', name, countryCode,
    *      division?|null, near?|null }|null|undefined,
    *    noradId|null, cosparId|null, tle: { line1, line2, epochMs }|null,
@@ -117,7 +118,9 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
    * src/cockpitOrbital.js), `look` says whether the view is tilted off
    * nadir and words the tilt (`readout`, '' at nadir), with the approximate
    * ground width at the tilted view's centre (`swathKm`, null at nadir) and
-   * its ratio to the nadir footprint (`swathScale`, 1 at nadir), `trackUp`
+   * its ratio to the nadir footprint (`swathScale`, 1 at nadir) and the
+   * mapped point a ground focus holds the view on (`focus`; the readout
+   * then gives the single off-nadir angle to it), `trackUp`
    * whether the view is turned to the ground track (false for a satellite with none,
    * which stays north-up) and `northDeg` where north sits, in degrees
    * clockwise from the top (0 when north-up).

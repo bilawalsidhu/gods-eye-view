@@ -1647,7 +1647,8 @@ and the saved cloud preference stands for the next aircraft or bridge. The layer
 companions, its own orbit ring and its detection bracket, and draws every
 other orbit ring (the ISS ring included) at 30% of its alpha; other
 satellites' points and labels stay. Scene clicks and the layer's Escape are
-ignored while it is ridden. The optical zoom steps 1×, 2×, 4× and 8× for
+ignored by the satellites layer while it is ridden (a click on a mapped
+site focuses it; see below). The optical zoom steps 1×, 2×, 4× and 8× for
 every satellite with `+` (or `=`) and `-` (or `_`), the panel's buttons and
 the mouse wheel (one step per notch; trackpad scrolling is summed to a step):
 the 1× frame is 60° vertical in low orbit and fits the Earth's disk with
@@ -1662,14 +1663,16 @@ the satellite's live altitude and the window's shape is still at least as
 wide as that swath (`orbitalMaxZoom` in `src/cockpitOrbital.js`); when the
 cap falls below the zoom shown, the view steps back to it. Unconfirmed
 swaths add no steps, but are still drawn, read out and offered to SENSOR.
-The sensor's swath is drawn to scale as a strip along the ground track with
+The sensor's swath is drawn to scale as a strip along the ground track (its
+width follows the view through a zoom step, not ahead of it) with
 a SENSOR SWATH readout, and a SENSOR button zooms to exactly that width when
 it lies between 1× and the cap. No strip is drawn for a geostationary view
 (no ground track; its sensors image areas, not strips) or a SAR (it images
 to one side of nadir, not under it); the readout stays. Tilted off nadir
 the strip stays (view and swath widen alike), the readout scales as the swath
 readout does (`SENSOR SWATH ≈ 191 KM`), and SENSOR, a nadir framing, is
-hidden; tilted past the Earth's limb neither the sensor nor the swath reads. A swath is confirmed only on the operator's, an agency's (ESA's
+hidden; tilted past the Earth's limb neither the sensor nor the swath
+reads. A swath is confirmed only on the operator's, an agency's (ESA's
 eoPortal included) or an academic page for its platform. From
 16×, with flat imagery on the globe (not Google 3D tiles) and the view at
 nadir, every 2 s the view asks the base imagery layer for the tiles it will
@@ -1704,6 +1707,78 @@ imagery under the view has loaded (at most 2.5 s, `zoomSettleHolding`), then
 the reticle locks. The look keys and zoom keys keep the bridge's focus
 guards.
 
+In orbit the briefing's Live Signals page (OBSERVED / MAPPED PINGS) lists
+what is around the satellite, as the aircraft Cockpit lists the contacts
+of its Contacts snapshot (`src/ui/cockpitOrbitalSignals.js`): five rows at
+most, rebuilt once a second with stable keys, so a row keeps its place and
+time. TRACK ACQUIRED stays first. Then:
+
+- **Sites**: the Mapped Installations layer's loaded records around the
+  sub-satellite point (`getNearby`, asked only as far as the reach extends
+  over the ground, and never past 3,000 km, so from a high orbit only the
+  sites within 3,000 km of the point below are listed) that face the
+  satellite and lie within the off-nadir reach, nearest to nadir first, the focused site always among them. A row
+  reads the site's name over its class and off-nadir angle; its button
+  (`Keep the camera on …`) focuses the site, and on the focused site's row,
+  marked as the subject is (`FOCUS · …`, `Release the camera from …`), ends
+  the focus. With Mapped Installations off the layer keeps its records, so
+  nothing is listed then: a SITES STANDBY row says to turn the layer on.
+- **Satellites**: the nearest shown satellites to the ridden one, debris
+  left out (the satellites layer's bounded `getNearestPositions`, measured
+  from the satellite itself), with their bearing from the top of the frame
+  and distance. A row (`Ride …`) rides that satellite. While there is a
+  satellite ridden before this one, a RETURN · *name* row goes back to it; if
+  that satellite has left the catalogue it is dropped and RETURN offers the
+  one before. Riding stays in orbit: the satellites layer tracks the new
+  satellite (`trackById`), the Cockpit takes the camera back at once and
+  marks it as the ridden subject, any ground focus ends with the view easing
+  back to nadir, and the camera hops to the new satellite along the great
+  circle over 1.2 s (cut under reduced motion), keeping the zoom. Until the
+  camera is on the new satellite the page shows only TRACK ACQUIRED and
+  RETURN (and SITES STANDBY with Mapped Installations off), then rebuilds
+  at once. The new satellite's TRACK ACQUIRED carries the time it was
+  ridden. The hop starts from where the camera was, which does not follow
+  the old satellite on.
+
+Sites take two rows while satellites fill the rest, more when there are
+fewer satellites. The Contact card stays hidden in orbit.
+
+The focus (`src/ui/cockpitOrbitalFocus.js`, geometry in
+`src/cockpitOrbitalFocus.js`) aims the look each frame from the satellite's
+position to the site's Earth-fixed position in the same track-up nadir
+frame the arrows tilt, so the site stays at the centre as the satellite
+moves. The turn onto it (and between sites) eases what is left of the swing
+with the arrows' easing on a slower clock (250 ms time constant, about
+0.75 s to 95%), then holds the site exactly, and cuts under
+`prefers-reduced-motion`. A single click on a site's marker focuses it too:
+the pick is resolved through the layer's own pick ids (`findByPick`: a named
+marker's `{ installationId }` or a site entity). A click anywhere else
+(a site beyond the reach included), the
+focused site's row, NADIR, Home or `0` ends the focus and the view eases
+back to nadir on the same clock; an arrow ends it (or the ease back) and
+tilts on from where the view is. The layer reloads its thinned view as the
+camera moves (about once a second in orbit), so a site in view can leave
+its records for a moment: while the layer is on, a site seen in the last
+10 s stays a candidate (sites do not move), so the rows hold still and a
+row's site can be focused, and a focused site keeps its last position. The focus ends by
+itself, easing back, when the site leaves the reach (either tilt axis past
+±45°, or the site below the satellite's horizon), when the layer is turned
+off, when another satellite is ridden, and with the orbital view. A site
+beyond the reach cannot be focused. While focused the readout gives the
+single off-nadir angle to the site, as image metadata does
+(`OFF-NADIR 23.4°`, updated on the HUD's beat and not announced), names it
+in a polite live region (`FOCUS · Camp Alpha`), and the swath reads
+approximate as for a tilt, scaled by the tilt onto the site. Clicks still
+reach Cesium's own handler and never untrack the satellite; a click a tool
+owns (drawing) is ignored, and the draw tool still borrows the click while
+it draws. A double-click on a site keeps or starts the focus on it and
+never reaches Cesium's double-click, which would track the site and end the
+view (the Cockpit's double-click routing in `src/ui/cockpitInput.js`); any
+other double-click goes on as before. `src/ui/cockpitOrbitalFocus.test.mjs`
+covers the rows, the easing in and out, the reach release, switching sites
+and satellites, the hop, the layer turned off, click handling and the
+readout, against the layers' method shapes.
+
 The HUD (`#cockpit-hud[data-subject='satellite']`, body class
 `cockpit-orbit`) mounts `CockpitOrbital` over the picture: name, class,
 altitude, orbital speed, sub-satellite point, TRACK UP (NORTH UP without a
@@ -1716,15 +1791,19 @@ names it and the country in the reader's language through `Intl.DisplayNames`,
 "Sichuan, China", and from 8× the most prominent populated place within half
 the view's smaller side, so it is in the picture, "Sichuan, China · near
 Chengdu", from a bundled pack of Natural Earth populated places loaded on
-first use; else the smallest named sea, gulf, strait, channel, sound or bay;
+first use (each pack loads on the first lookup that needs it, and the
+top-centre loading status lists "Place names" until it arrives); else the
+smallest named sea, gulf, strait, channel, sound or bay;
 else the ocean; nothing in a coastline gap), at most every 2 s and only after
 20 km of ground travel, or at once when a zoom step changes how much ground
 the view shows. A division or populated-places pack that fails to load drops
 only that part (the country still shows); a lookup that fails outright hides
 the band rather than leave the last place up, and the next HUD beat looks
 again. The readout card puts
-the owner country's flag (an SVG from `flag-icons`, fetched only for the shown
-country) or a text badge for an organisation before the name, the operator
+the owner country's flag (drawn from one 15 KB sheet of every owner
+country's flag, built from `flag-icons` by `scripts/build-owner-flags.mjs`
+and loaded at startup, so a ride never waits for a flag; if the sheet will
+not load the country code shows as a badge) or a text badge for an organisation before the name, the operator
 under it, and a NORAD · COSPAR · TLE-epoch line, ending with the element
 set's age (`<1 H OLD`, then whole hours, then whole days: the gap, either
 side, between the epoch and the world-clock time the satellite is shown at), whose TLE button
@@ -1732,7 +1811,7 @@ unfolds the two element lines; each row is left out when the satellites layer do
 know it. The
 aircraft and bridge instruments, tapes, compass, radar, look controls,
 position readout, route card and Contact card are hidden; the vision-style
-switcher, briefing card (Local and Regional for the sub-satellite point; the
+switcher, briefing card (Live Signals as above, Local and Regional for the sub-satellite point; the
 regional brief refreshes at most once a minute) and the reset and EXIT ORBIT
 buttons stay, square-cornered like the bridge. Exit (`Escape`, EXIT
 ORBIT) restores the camera's own field of view exactly and returns to the
@@ -6236,7 +6315,8 @@ request viewbox and continues searching without that geographic preference.
 
 - UTILITIES ▸ **Draw** turns the globe into a whiteboard drawn by hand. Pick a shape (icon buttons for Area, Line and Pin) and a colour swatch for the next shape, click the vertices on the real world, and finish. **Keyboard contract, live only while Draw is on and never while you are typing in another field:** Enter finishes the shape (as does a double-click, and the two cannot both submit it — the session is replaced before the annotate call is awaited); Backspace removes the last vertex; Esc cancels the shape in progress, and a second Esc — Esc on an empty session — leaves draw mode. **Clear** wipes the board (the shape in progress and every placed mark), so removing marks does not require the console or the microphone.
 - **Drawn shapes are listed under Draw like Import's files** (`src/ui/views/panels/DrawMarkList.vue`, rows worded by `presentDrawMarks` in `src/annotations/drawMarks.js`): one row per hand-drawn mark (`manual: true`; voice marks are not listed) with its colour swatch, its name, and show/hide, fly-to and remove. The draw tool publishes the rows with the rest of its controls and answers the row actions (`renameDrawMark`, `recolorDrawMark`, `toggleDrawMark`, `flyToDrawMark`, `removeDrawMark`) through the display store; it republishes on the engine's `onChange`, so a voice clear or an expiry updates the list. Rows are keyed and updated in place: a board change never takes a name being typed (the field keeps its draft while focused) or the button under a click. The name is saved on Enter or on leaving the field, once; Esc restores it, before anything else and with the row's colours open too. Both keep focus in the field, so neither drops it to the page or leaves Draw. The swatch opens the five colours right after it (shown at the end of the row), with the current colour focused; the arrows, Home and End try another, and a click or Esc closes them and returns focus to the swatch. Both colour groups (the next shape's and a row's) are one `DrawSwatches` radio group with a single tab stop, coloured from `DRAW_COLOR_CSS`; on touch screens each dot answers a 24 px target. An unnamed shape shows its kind, and an unnamed line its length; a renamed line keeps its length (`Ridge walk — 950 m`). **Hidden** keeps a mark on the board at alpha 0, and the world renderer takes every one of its entities out (`show = false`), so no material that keeps its own colour (the line's flowing stroke) still paints it; the screen renderer does not project a hidden callout, so it cannot push a visible label aside; `fly_route` skips a hidden route; and with every mark hidden the annotations render hold is released. **Fly to** is an immediate navigation (`runImmediateNavigation('drawing', …)`), like Import's: Cockpit refuses it and a running orbit, follow or track lets go first. A line is framed by its whole path, across the antimeridian too.
-- Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations, navigation, publish, connect })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the Cesium handler, the preview data source, the borrowed click actions and the `window.__gevDrawTool` handle. Its controls are Vue views in the UTILITIES panel (`DrawControls.vue`, `DrawMarkList.vue`) that render what the tool publishes to the display store and call its actions. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `marks`, `setColor`, `diagnostics`) is the no-mouse test seam.
+- Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations, navigation, publish, connect, markActions })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the Cesium handler, the preview data source, the borrowed click actions and the `window.__gevDrawTool` handle. Its controls are Vue views in the UTILITIES panel (`DrawControls.vue`, `DrawMarkList.vue`) that render what the tool publishes to the display store and call its actions. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `marks`, `setColor`, `diagnostics`) is the no-mouse test seam.
+- **Row actions are an application's own.** `createApplicationTools({ drawMarkActions })` hands `initDrawTool` buttons for drawn areas' and lines' rows; the standalone shell passes none, so the open-source build shows no new button and makes no new request. Each action (`drawMarkActions` in `src/annotations/drawMarks.js`) is `{ id, icon, label(name), shapes: ['area', 'line'], accepts?(geometry, shape), run({ id, shape, name, title, geometry }) }`: the icon a Material Symbols name, the label worded by the application, `name` the person's own and `title` the row's (the name, else `Area` or `Line · 950 m`), the geometry `drawMarkGeometry`'s `[lon, lat]` `Polygon` (closed; a `MultiPolygon` for an area handle with several parts) or `LineString`, longitudes wrapped into [-180, 180]. A pin, and a shape that crosses the antimeridian or has a part that cannot be given whole, has no geometry and is offered nothing. Malformed actions and repeated ids are dropped once, at construction. What `run` returns or resolves to is a note under the row (`role=status`; past 200 characters it is cut at a word with an ellipsis); the row is busy (`aria-disabled`, no second press) until it settles, a rejection or a throw clears the note and is logged (so an action words its own refusals and resolves with them), and a shape's note goes with the shape, so a late answer never lands on a removed one.
 - Contract: a finished shape is submitted through the SAME `annotationEngine.annotate()` the voice agent uses, with geometry supplied and `manual: true` (`type: area` + `ring`, `type: route` + `path`, `type: pin` + coordinates). `resolveSpec` short-circuits manual specs (`resolveManualSpec`) so no geocoder, Places or Overpass call is made. A drawn area is a real (not synthesized) outline and drapes solid; a drawn line is a `route` with `mode: 'manual'`, labelled with its length and never a travel time; a pin is a point. Drawn marks therefore render with the whiteboard look, persist, appear in `.list()`, and clear with `clear_annotations` / `.clear()`. A drawn shape is never merged with another as a duplicate: every one is drawn on purpose, and every one is unnamed until its row names it, so two pins dropped close together are two pins.
 - **A vertex is a lon/lat, and the mark is DRAPED.** Clicks are picked through `pickWorldFromScreen` — one of two scene helpers the annotation resolver factory (`src/annotations/resolver.js`) exposes alongside `sampleGroundHeight`, so the app has ONE depth-aware pick cascade rather than a second written beside it — which returns the height the pick landed on as well as the coordinate, so the live preview hangs on the roof or hillside under the pointer instead of sinking to sea level. The world renderer draws areas and routes with `clampToGround`, so the height is dropped at finish in one place (`finishSpec`) rather than being carried downstream and discarded silently: what you get is the outline you drew, lying on the surface beneath it.
 - **Draped marks classify onto `ClassificationType.BOTH`** — terrain AND 3D tiles — not onto 3D tiles alone. With only `CESIUM_3D_TILE`, every area fill, area outline, route and arrow rendered to nothing on a keyless boot, where Cesium's own globe carries Esri/OSM imagery and there are no tiles to classify against; the labels appeared and the geometry did not. That hit spoken annotations exactly as hard as hand-drawn ones. `scripts/qa-draw-tool.mjs` counts the mark's own colour in the rendered frame before and after a shape is finished, on a keyed AND a keyless server, so "the board says there is a mark" can no longer pass for "the mark is on screen".
