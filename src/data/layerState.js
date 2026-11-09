@@ -2,6 +2,7 @@
 // Local, not i18n/marker.js: the token-ledger tests run this file in isolation.
 const msg = (text) => text;
 import { normalizeIdSwitches, patchRequestedIdSwitches } from './idSwitches.js';
+import { normalizeSatelliteClassMask } from './satelliteClassMask.js';
 import reservationRows from './layerStateTokenReservations.json' with { type: 'json' };
 
 const VALID_DISPOSITIONS = new Set([
@@ -312,12 +313,32 @@ const OPTION_GROUPS = Object.freeze({
       high: 'h',
     }),
   ]),
+  'wildlife-sightings': Object.freeze([
+    booleanOption('confirmed', 'c', false),
+    enumOption(
+      'taxa',
+      't',
+      'all',
+      ['all', 'Aves', 'Mammalia', 'whales', 'Insecta', 'Plantae'],
+      {
+        all: 'a',
+        Aves: 'b',
+        Mammalia: 'm',
+        whales: 'w',
+        Insecta: 'i',
+        Plantae: 'p',
+      },
+    ),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
       osm: 'o',
       hybrid: 'h',
     }),
+    // Street Traffic row toggles: flow-colored road lines, moving dots.
+    booleanOption('lines', 'l', false),
+    booleanOption('dots', 'd', true),
   ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
@@ -396,6 +417,16 @@ const OPTION_GROUPS = Object.freeze({
       dense: 'd',
     }),
     integerOption('selectedSatTrackingId', 't', null),
+    // Every class but Starlink shows by default (satellites/classes.js).
+    Object.freeze({
+      key: 'classes',
+      token: 'k',
+      defaultValue: 'sitpd',
+      normalize: normalizeSatelliteClassMask,
+      encode: (value) => value,
+      decode: (value) =>
+        typeof value === 'string' ? normalizeSatelliteClassMask(value) : null,
+    }),
   ]),
   cctv: Object.freeze([
     enumOption('coverageMode', 'c', 'on', ['off', 'on', 'viewshed'], {
@@ -732,6 +763,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'o',
     disposition: 'enabled+options',
     optionOwner: 'weather-satellite',
+  }),
+  Object.freeze({
+    id: 'wildlife-sightings',
+    token: '9',
+    disposition: 'enabled+options',
+    optionOwner: 'wildlife-sightings',
   }),
   Object.freeze({
     id: 'wind',
