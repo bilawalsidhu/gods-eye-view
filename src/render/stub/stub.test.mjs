@@ -19,12 +19,13 @@ test('the stub passes the conformance suite', async () => {
   const skipped = report.results
     .filter((r) => r.status === 'skip')
     .map((r) => r.id);
-  // Its camera takes no user gestures: the drag and wheel scripts are for
-  // a camera that does (a controller over it, say).
-  assert.deepEqual(
-    skipped,
-    CAMERA_SCRIPTS.filter(usesInput).map((s) => `camera.trace.${s.name}`),
-  );
+  // It draws only models into pixels, so the sweep's pixels go unread; its
+  // camera takes no user gestures: the drag and wheel scripts are for a
+  // camera that does (a controller over it, say).
+  assert.deepEqual(skipped, [
+    'effects.screenModulation.pixels',
+    ...CAMERA_SCRIPTS.filter(usesInput).map((s) => `camera.trace.${s.name}`),
+  ]);
 });
 
 test('a frame runs the contract’s steps in order', () => {

@@ -952,6 +952,131 @@ export function portChecks() {
       { capability: 'screenModulation' },
     ),
     check(
+      'effects.screenModulation.pixels',
+      'a marker in the band draws, one outside it dims to the floor, a radius of 0 dims every one',
+      async (h, r) => {
+        await overAustin(h, r);
+        const set = r.draw.icons({ id: 'conf:swept-pixels' });
+        const pos = h.toEcef({
+          lon: AUSTIN.lon + 0.004,
+          lat: AUSTIN.lat,
+          height: 0,
+        });
+        const icon = { id: 'one', pos, image: DOT, size: [24, 24] };
+        let s = null;
+        // The patch of the frame around the icon, once what is set has drawn.
+        const patch = async () => {
+          await drawn(h, r, 3);
+          await settled(r);
+          r.frame.renderNow();
+          return r.readPixels({
+            crop: {
+              x: Math.round(s.x) - 6,
+              y: Math.round(s.y) - 6,
+              width: 13,
+              height: 13,
+            },
+          }).data;
+        };
+        // How many pixels of `a` differ clearly from `b`.
+        const differ = (a, b) => {
+          let n = 0;
+          for (let i = 0; i < a.length; i += 4)
+            if (
+              Math.abs(a[i] - b[i]) +
+                Math.abs(a[i + 1] - b[i + 1]) +
+                Math.abs(a[i + 2] - b[i + 2]) >
+              90
+            )
+              n++;
+          return n;
+        };
+        // The sweep stands 100 px left of the icon. Pointing right, the
+        // band's middle on the icon's bearing, it covers it; pointing left,
+        // not.
+        const sector = (extra) => ({
+          center: { x: s.x - 100, y: s.y },
+          angle: Math.PI / 2 - 0.3,
+          width: 0.6,
+          radius: 400,
+          floor: 0,
+          strength: 0,
+          color: '#ffffff',
+          ...extra,
+        });
+        try {
+          set.set([icon]);
+          await drawn(h, r);
+          await settled(r);
+          s = r.query.project(pos);
+          ok(s, 'the icon projects');
+          const shown = await patch();
+          set.set([]);
+          const empty = await patch();
+          const drawnPixels = differ(shown, empty);
+          if (drawnPixels < 20)
+            return { skip: 'this renderer draws no icon pixels' };
+          set.set([icon]);
+          r.effects.screenModulation(sector());
+          ok(
+            differ(await patch(), empty) >= drawnPixels * 0.8,
+            'in the band the icon draws',
+          );
+          r.effects.screenModulation(sector({ angle: Math.PI * 1.5 }));
+          ok(
+            differ(await patch(), empty) <= drawnPixels * 0.1,
+            'outside the band it dims to a floor of 0',
+          );
+          r.effects.screenModulation(sector({ radius: 0 }));
+          ok(
+            differ(await patch(), empty) <= drawnPixels * 0.1,
+            'a radius of 0 dims it to the floor',
+          );
+          r.effects.screenModulation(sector({ radius: 0, floor: 1 }));
+          ok(
+            differ(await patch(), empty) >= drawnPixels * 0.8,
+            'at a floor of 1 nothing dims',
+          );
+          r.effects.screenModulation(sector({ strength: 1, color: '#ff0000' }));
+          const tinted = await patch();
+          let red = 0;
+          for (let i = 0; i < tinted.length; i += 4)
+            if (tinted[i] > 180 && tinted[i + 1] < 90 && tinted[i + 2] < 90)
+              red++;
+          ok(red >= drawnPixels * 0.5, 'a strength of 1 draws it in `color`');
+          r.effects.screenModulation(null);
+          ok(
+            differ(await patch(), shown) <= drawnPixels * 0.1,
+            'cleared, it draws as before',
+          );
+        } finally {
+          r.effects.screenModulation(null);
+          set.dispose();
+        }
+      },
+      { capability: 'screenModulation' },
+    ),
+    check(
+      'effects.withoutScreenModulation',
+      'without screenModulation the effects port has no such member',
+      async (h) => {
+        const r = await h.create({
+          viewport: SCRIPT_VIEWPORT,
+          capabilities: CAPABILITIES.filter((c) => c !== 'screenModulation'),
+        });
+        if (!r) return { skip: 'this harness cannot drop capabilities' };
+        try {
+          equal(r.effects.screenModulation, undefined, 'no member');
+          ok(
+            !r.effects.diagnostics().passes.includes('screenModulation'),
+            'no pass',
+          );
+        } finally {
+          r.destroy();
+        }
+      },
+    ),
+    check(
       'draw.motion',
       'icons move by their segments on the set\u2019s motion clock',
       async (h, r) => {

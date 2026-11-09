@@ -19,6 +19,7 @@ test('capabilities follow what the scene supports', () => {
     'styles',
     'bloom',
     'sharpen',
+    'screenModulation',
     'photoreal',
     'terrain',
     'imageryOnTiles',

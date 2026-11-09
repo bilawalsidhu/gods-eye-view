@@ -23,6 +23,7 @@ import { willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuery, queryCapabilities } from './query.js';
 import { createCesiumQuality } from './quality.js';
+import { screenModulationSupported } from './screenModulation.js';
 import {
   atEndOfTick,
   billboardLoadError,
@@ -54,7 +55,8 @@ const GLOBE_CAPABILITIES = [
  * to those it lists. Depth picks, height samples and ray casts all need
  * depth textures, which `sampleHeightSupported` and `pickPositionSupported`
  * report. Styles, bloom and sharpen are post-process stages every scene
- * runs.
+ * runs; the screen modulation runs on the Cesium version it was tested
+ * against.
  * @param {object} scene
  * @param {Iterable<string>} [only]
  * @returns {string[]}
@@ -70,6 +72,8 @@ export function cesiumCapabilities(scene, only) {
     'styles',
     'bloom',
     'sharpen',
+    // The marker sweep's command swap is tested against one Cesium version.
+    ...(screenModulationSupported() ? ['screenModulation'] : []),
     ...GLOBE_CAPABILITIES,
     ...queryCapabilities(scene),
   ];
