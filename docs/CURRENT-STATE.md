@@ -1130,6 +1130,24 @@ controller throws naming it. Whether the aircraft it flies still draws comes
 from its `trackedEntityDrawn` service (the application asks the viewer's
 entities); without one, Cockpit takes the aircraft as drawn.
 
+## Rendered-mesh floor cells — November 8, 2026
+
+On the photoreal stack the shared floor (`cachedGroundFloor`) answers from a
+rendered-mesh reading per coarse cell (0.001°, about 110 × 80 m), sampled by
+`src/services/meshFloorSampler.js` and gated against the DEM by
+`reportValidatedMeshFloorCell` in `src/services/groundFloor.js`. The probe goes
+where the caller's point is (a vehicle or contact), not to the cell's centre;
+a cell is read up to eight times, at points about 17 m or more apart, and each
+reading that passes the gate is kept at its point. A read answers from the
+cell's reading nearest the asked point, so a viaduct and the street beside it
+in one cell keep their own heights; two readings within about 5 m of each other
+keep the lower. Before this, one probe at the cell's centre latched for the
+session, so a centre on a roof lifted everything in the cell (a Haymarket bus
+drew 23.5 m above the street, on the garage roof) and a centre in the river put
+Red Line trains on the Longfellow Bridge 6–9 m under the deck. Residual: the
+probe is vertical, so a vehicle directly under a deck or a roof overhang reads
+the structure above it.
+
 ## Vessel components and sources
 
 `src/data/aisLiveVessels.js` assembles `createVesselLayer` from the
@@ -2542,7 +2560,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   `HELD_SNAP_CONTRADICTION_M` (5 m) ABOVE the held value drops the hold and the
 >   contact is COLD again, back to the floored 2D billboard. The rule is
 >   ONE-SIDED on purpose — it targets BURIAL. A cell reading BELOW a real sample
->   is the floor chain's expected under-read (one-shot latch over ~111 m,
+>   is the floor chain's expected under-read (a few point readings over ~111 m,
 >   neighbours lean lowest, `displayFloorHeightM` only ever raises), not evidence
 >   of anything, and a two-sided cut was disproved on the track rig by a planted
 >   cell 66.7 m below a real sample at the same spot. Accepted residual, stated
@@ -4632,12 +4650,27 @@ synchronizes visible playback before its next frame.
 Playback reserves numeric scratch before the first sample, including unknown
 heights, and reuses caller-owned sample and segment storage.
 
-**Scene work.** Stationary and animated billboards use separate, adjacent
-collections above CCTV and Bikeshare. Transit listens to the camera port at its
-own `changed` threshold (0.05); the port measures each listener separately, so no
-layer changes another's camera trigger.
-Visibility checks combine the camera frustum and ellipsoid occlusion at no more
-than 4 Hz; missing map bounds do not admit the globe's far side. Camera arrivals
+**Scene work.** Stationary and animated vehicles are two draw-port icon sets
+(`transit:<n>:still` and `transit:<n>:moving`), registered by set id with the
+sprite order in their old adjacent places above CCTV and Bikeshare. Each marker
+is a plain record (position, show, image, size, colour, rotation); a frame
+writes the changed ones to their set in one batched upsert, markers taken out
+in one task go in one removal, and a marker that starts or stops moving moves
+between the sets. The renderer moves and turns an icon without restyling it.
+Rotation is computed in screen space through the query port's projection
+(`perspectiveCourseRotation`), as before. Clicks read the draw-port hit. The
+layer no longer reaches Cesium, so a caller handing it a Cesium viewer,
+their own, with no renderer bound, loads the `./render/cesium/unbound` export
+once first. Transit listens to the camera port at its own `changed` threshold
+(0.05); the port measures each listener separately, so no layer changes
+another's camera trigger.
+Visibility checks combine the camera port's frustum and the query port's
+ellipsoid occlusion at no more than 4 Hz; missing map bounds do not admit the
+globe's far side. Whether the globe is the bare ellipsoid is asked of the
+height service at the camera's subpoint each time the globe's surface
+changes; the answer comes asynchronously, the last one holds until then, and
+floors are read again when it flips.
+Camera arrivals
 rebuild an unprepared or cold marker corridor during that visibility sweep,
 adopt a loaded surface, and update both heightPending and surfaceReady diagnostics.
 A resolved display sample clears its pending-height gate without waiting for a poll. Frame work
@@ -4668,7 +4701,8 @@ it does not establish Google 3D acceptance.
 The full run samples completed frames at 1920×1080 CSS pixels, records DPR, and
 measures moving fleets of 800 and 3,000 vehicles with 128 fixes each and DETECT
 on. Street/metro targets are respectively: transit frame CPU p95 ≤1/4 ms, frame
-interval p95 ≤20/25 ms, billboard uploads ≤256 KiB/1 MiB per frame, and retained
+interval p95 ≤20/25 ms, billboard uploads ≤256 KiB/1 MiB per frame (counted by
+`src/render/cesium/uploadProbe.js` for the two marker sets), and retained
 heap growth ≤24/48 MiB. The 3,000-vehicle CPU budget is 4 ms (recorded browser
 measurement 3.4 ms); the 800-vehicle budget stays at 1 ms (measured 0.9 ms).
 Transit-authored frame allocation is ≤8 KiB/frame at both fleets, attributed

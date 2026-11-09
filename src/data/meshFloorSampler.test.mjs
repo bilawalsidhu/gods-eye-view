@@ -25,7 +25,7 @@ import { bindRenderer } from '../render/rendererOf.js';
 import { resolveEllipsoidalGround } from './terrainHeights.js';
 import {
   cachedGroundFloor, cachedMeshFloor, setMeshFloorPreferred,
-  _clearMeshFloorCellsForTest,
+  _clearMeshFloorCellsForTest, reportValidatedMeshFloorCell,
 } from './groundFloor.js';
 
 /** Distinct site per test — terrainHeights' cache is module-global and warm
@@ -182,4 +182,73 @@ test('sampler: with `sets` the probe asks the query port, naming those sets', as
   assert.deepEqual(asked[0].options.exclude, ['flights-models:1', 'flights-icons:1']);
   assert.ok(Math.abs(asked[0].point.lat - cell.lat) < 0.05);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), 138.0);
+});
+
+test('sampler: the probe goes where the point is, not to the cell centre', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  const asked = [];
+  const scene = fakeScene((carto) => {
+    asked.push(Cesium.Math.toDegrees(carto.longitude));
+    return 122.0;
+  });
+  const point = { lat: cell.lat + 0.0003, lon: cell.lon + 0.0004 };
+  sampleMeshFloorCells(scene, [point], { viewerLat: cell.lat, viewerLon: cell.lon });
+  assert.equal(asked.length, 1);
+  assert.ok(Math.abs(asked[0] - point.lon) < 1e-9, `probed at ${asked[0]}, not ${point.lon}`);
+});
+
+test('sampler: a viaduct and the street beside it in one cell keep their own heights', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  // A viaduct deck 9 m up along one line of the cell, the street elsewhere.
+  const deckLat = cell.lat + 0.0003;
+  let calls = 0;
+  const scene = fakeScene((carto) => {
+    calls += 1;
+    return Math.abs(Cesium.Math.toDegrees(carto.latitude) - deckLat) < 1e-7 ? 129.0 : 121.0;
+  });
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  const onDeck = { lat: deckLat, lon: cell.lon };
+  const street = { lat: cell.lat - 0.0003, lon: cell.lon };
+  sampleMeshFloorCells(scene, [onDeck], opts);
+  sampleMeshFloorCells(scene, [street], opts);
+  assert.equal(calls, 2);
+  assert.equal(cachedMeshFloor(onDeck.lat, onDeck.lon + 0.0001), 129.0, 'the train stays on the deck');
+  assert.equal(cachedMeshFloor(street.lat, street.lon - 0.0001), 121.0, 'the bus stays on the street');
+  assert.equal(cachedGroundFloor(street.lat, street.lon), 121.0);
+  sampleMeshFloorCells(scene, [{ lat: deckLat, lon: cell.lon + 0.00001 }], opts);
+  assert.equal(calls, 2, 'a point next to one already probed is not probed again');
+});
+
+test('sampler: a second reading at the same spot keeps the lower one', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  assert.equal(reportValidatedMeshFloorCell(cell.lat, cell.lon, 131.0), true);
+  assert.equal(reportValidatedMeshFloorCell(cell.lat + 0.00002, cell.lon, 122.0), true);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 122.0);
+  assert.equal(reportValidatedMeshFloorCell(cell.lat, cell.lon + 0.00002, 140.0), true);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 122.0, 'a higher one never raises it');
+});
+
+test('sampler: a latched cell is read a few times at most', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  let calls = 0;
+  const scene = fakeScene(() => {
+    calls += 1;
+    return 121.0;
+  });
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  for (let i = 0; i < 20; i++)
+    sampleMeshFloorCells(
+      scene,
+      [{ lat: cell.lat - 0.0004 + (i % 5) * 0.0002, lon: cell.lon - 0.00045 + Math.floor(i / 5) * 0.0003 }],
+      opts,
+    );
+  assert.equal(calls, 8);
 });

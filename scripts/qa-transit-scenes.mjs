@@ -146,11 +146,7 @@ export async function runFleetBudgets({
     // The retained delta is conservative: it includes concurrent page growth.
     const retained = await cdp.send('Runtime.getHeapUsage');
     // Timing/upload acceptance runs without the allocation profiler attached.
-    const trace = await page.evaluate(() =>
-      window.__godsEyeView.dataManager.layers
-        .get('transit')
-        .module._measureTransitFramesForTest(8000),
-    );
+    const trace = await page.evaluate(measureTransitFrames, 8000);
     await page.evaluate(() =>
       window.__godsEyeView.dataManager.layers
         .get('transit')
@@ -166,11 +162,7 @@ export async function runFleetBudgets({
       page,
       `${count} budget visibility before allocation trace`,
     );
-    const allocationTrace = await page.evaluate(() =>
-      window.__godsEyeView.dataManager.layers
-        .get('transit')
-        .module._measureTransitFramesForTest(6000),
-    );
+    const allocationTrace = await page.evaluate(measureTransitFrames, 6000);
     const { profile } = await cdp.send('HeapProfiler.stopSampling');
     const allocations = allocationTotals(profile);
     const retainedBytes = retained.usedSize - before.usedSize;
@@ -361,13 +353,23 @@ export async function runBostonMatrix({
       const modes = await page.evaluate(() => {
         const layer =
           window.__godsEyeView.dataManager.layers.get('transit').module;
+        // The billboards the draw port drew for the markers, by key.
+        const scene = window.__godsEyeView.viewer.scene;
+        const setIds = layer._transitSetIdsForTest();
+        const drawn = new Map();
+        for (let i = 0; i < scene.primitives.length; i++) {
+          const host = scene.primitives.get(i);
+          if (!setIds.includes(host?.drawSetId)) continue;
+          for (let j = 0; j < host.length; j++)
+            drawn.set(host.get(j)?.id?.id, host.get(j));
+        }
         return [...layer._transitStateForTest()._vehicles.values()].map(
           (e) => ({
             key: e.key,
             route: e.record.routeId,
             image: e.marker.image,
-            width: e.marker.width,
-            color: e.marker.color.toCssHexString(),
+            width: drawn.get(e.key)?.width ?? null,
+            color: drawn.get(e.key)?.color.toCssHexString() ?? null,
           }),
         );
       });
@@ -418,15 +420,27 @@ export async function runBostonMatrix({
             window.__godsEyeView.dataManager.layers.get('transit').module;
           layer._transitPartsForTest().selection.clearSelection();
           const e = layer._transitStateForTest()._vehicles.get(key);
+          // The billboard the draw port drew for it.
+          const scene = window.__godsEyeView.viewer.scene;
+          const setIds = layer._transitSetIdsForTest();
+          let drawn = null;
+          for (let i = 0; !drawn && i < scene.primitives.length; i++) {
+            const host = scene.primitives.get(i);
+            if (!setIds.includes(host?.drawSetId)) continue;
+            for (let j = 0; j < host.length; j++)
+              if (host.get(j)?.id?.id === key) drawn = host.get(j);
+          }
           return {
+            drawn: Boolean(drawn),
             image: e.marker.image,
-            width: e.marker.width,
-            color: e.marker.color.toCssHexString(),
+            width: drawn?.width ?? null,
+            color: drawn?.color.toCssHexString() ?? null,
           };
         }, target.key);
         check(
           `Boston ${background.name}/${look.name}/${target.route}: deselect restores fleet styling`,
-          restored.image === target.image &&
+          restored.drawn &&
+            restored.image === target.image &&
             restored.width === target.width &&
             restored.color === target.color,
         );
@@ -884,7 +898,18 @@ export async function runTrailVisibility({
     if (points.length < 2)
       return { ...setup, present: 0, reason: 'no completed path' };
     const C = scene.camera.positionCartographic.constructor;
-    const V = entry.marker.position.constructor;
+    // Marker positions are plain records; the camera's eye is a Cartesian3.
+    const V = scene.camera.positionWC.constructor;
+    // The billboard the draw port drew for the marker, seen through.
+    const setIds = layer._transitSetIdsForTest();
+    const markerBillboards = [];
+    for (let i = 0; i < scene.primitives.length; i++) {
+      const host = scene.primitives.get(i);
+      if (!setIds.includes(host?.drawSetId)) continue;
+      for (let j = 0; j < host.length; j++)
+        if (host.get(j)?.id?.id === entry.key)
+          markerBillboards.push(host.get(j));
+    }
     const lengths = [0];
     for (let i = 1; i < points.length; i++)
       lengths.push(lengths.at(-1) + V.distance(points[i - 1], points[i]));
@@ -905,7 +930,7 @@ export async function runTrailVisibility({
       );
       const cart = C.fromCartesian(p);
       const height = scene.sampleHeight(cart, [
-        entry.marker,
+        ...markerBillboards,
         ...partsOf(trail.body),
         ...partsOf(trail.headLines),
       ]);
@@ -1076,4 +1101,25 @@ export async function runTrailVisibility({
       .module._transitPartsForTest()
       .selection.clearSelection(),
   );
+}
+
+/**
+ * The transit frame probe over the bytes the renderer uploads for the
+ * layer's marker sets (the Cesium renderer's upload probe), in the page.
+ * @param {number} durationMs
+ */
+async function measureTransitFrames(durationMs) {
+  const { countDrawSetUploads } =
+    await import('/src/render/cesium/uploadProbe.js');
+  const app = window.__godsEyeView;
+  const layer = app.dataManager.layers.get('transit').module;
+  const uploads = countDrawSetUploads(
+    app.viewer,
+    layer._transitSetIdsForTest(),
+  );
+  try {
+    return await layer._measureTransitFramesForTest(durationMs, uploads);
+  } finally {
+    uploads.stop();
+  }
 }

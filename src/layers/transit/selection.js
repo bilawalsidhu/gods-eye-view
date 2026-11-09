@@ -119,42 +119,21 @@ export function createSelection({ state, services, parts }) {
     // (src/input/sensorPick.js) and skips it while a tool holds the pointer.
     state._clickSubscription = inputFor(viewer).onClick((event) => {
       const position = event.position;
-      const picked = event.pick;
-      // The collection of the marker picked: the one its vehicle's marker is
-      // in, when the pick is one of this layer's markers.
-      const owner = state._vehicles.get(picked?.primitive?.id);
-      const collection =
-        owner && owner.marker === picked.primitive
-          ? owner.markerCollection
-          : null;
+      // A marker is an item of one of this layer's two sets, by its key.
+      const hit = event.drawHit;
+      const set = parts.rendering.setNameOf(hit?.set);
+      const key = set && state._vehicles.has(hit.id) ? hit.id : null;
       state._lastPickForTest = {
-        id: typeof picked?.id === 'string' ? picked.id : null,
-        primitiveId:
-          typeof picked?.primitive?.id === 'string'
-            ? picked.primitive.id
-            : null,
+        id: key,
+        set: hit?.set ?? null,
         x: position.x,
         y: position.y,
         collection:
-          collection && collection === state._animatedMarkers
-            ? 'animated'
-            : collection && collection === state._markers
-              ? 'stationary'
-              : null,
+          set === 'moving' ? 'animated' : set === 'still' ? 'stationary' : null,
       };
-      if (picked) {
-        const primitiveId = picked.primitive?.id;
-        if (
-          typeof primitiveId === 'string' &&
-          state._vehicles.has(primitiveId)
-        ) {
-          selectVehicle(primitiveId);
-          return;
-        }
-        if (typeof picked.id === 'string' && state._vehicles.has(picked.id)) {
-          selectVehicle(picked.id);
-          return;
-        }
+      if (key) {
+        selectVehicle(key);
+        return;
       }
       if (state._selectedKey) clearSelection();
     });

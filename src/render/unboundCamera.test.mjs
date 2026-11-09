@@ -120,6 +120,12 @@ const DRAW_FROM_CALLER = new Set([
   // Its pins, footprints and outlines draw through `drawOf`; its horizon
   // cull reads the camera and frame ports.
   './layers/ghostmaps',
+  // Its moving and still vehicle icons draw through `drawOf`; it projects,
+  // culls, follows and samples floors through the ports.
+  './layers/transit',
+  // Not Cesium-free (its legacy mesh floor sampler is), but its layer draws
+  // and reads the view through the ports alone.
+  './layers/transit/standalone',
 ]);
 
 /**

@@ -40,7 +40,7 @@ import {
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
-import { bindRenderer } from '../../render/rendererOf.js';
+import { bindRenderer, rendererOf } from '../../render/rendererOf.js';
 import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
 import { registerStyleStages } from '../../styles/styleStages.js';
@@ -148,6 +148,60 @@ function groundStub(floorAt) {
   };
 }
 
+/** A number per terrain the fake viewer has had, as `surfaceVersion` is. */
+const surfaceVersions = new WeakMap();
+let surfaceVersionSeq = 0;
+function surfaceVersion(terrain) {
+  if (!terrain) return 0;
+  if (!surfaceVersions.has(terrain))
+    surfaceVersions.set(terrain, (surfaceVersionSeq += 1));
+  return surfaceVersions.get(terrain);
+}
+
+// A marker record's colour (a 0..1 tuple or a CSS string) as a Cesium colour.
+function colourOf(c) {
+  return typeof c === 'string'
+    ? Cesium.Color.fromCssColorString(c)
+    : new Cesium.Color(c[0], c[1], c[2], c[3]);
+}
+
+// A camera `height` metres above a place, looking straight down at it or,
+// with `away`, straight out to space.
+function viewFrom(lon, lat, height, away = false) {
+  const ground = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+  const n = Cesium.Cartesian3.normalize(ground, new Cesium.Cartesian3());
+  const position = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+  const east = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(
+      Cesium.Cartesian3.UNIT_Z,
+      n,
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const north = Cesium.Cartesian3.cross(n, east, new Cesium.Cartesian3());
+  const v = (c) => ({ x: c.x, y: c.y, z: c.z });
+  const down = Cesium.Cartesian3.negate(n, new Cesium.Cartesian3());
+  return {
+    position: v(position),
+    direction: v(away ? n : down),
+    up: v(north),
+    right: v(
+      away ? Cesium.Cartesian3.negate(east, new Cesium.Cartesian3()) : east,
+    ),
+    heading: 0,
+    pitch: away ? Math.PI / 2 : -Math.PI / 2,
+    roll: 0,
+    fovy: Math.PI / 3,
+    aspectRatio: 1,
+    near: 1,
+    far: 5e8,
+  };
+}
+
+// A camera above Boston's antipode looking out to space: Boston is behind it.
+const lookingAway = () => viewFrom(BOSTON.lon + 180, -BOSTON.lat, 1e6, true);
+
 function harness(
   t,
   {
@@ -206,6 +260,11 @@ function harness(
   const cameraChanged = new Cesium.Event();
   const cameraListeners = new Set();
   const preUpdates = new Set();
+  const preRenders = new Set();
+  // The scene's preRender is the frame port's, as the Cesium port's is.
+  preRender.addEventListener(() => {
+    for (const cb of [...preRenders]) cb({ frame: 0 });
+  });
   const viewer = {
     camera: {
       changed: cameraChanged,
@@ -243,6 +302,10 @@ function harness(
           return index >= 0;
         },
         contains: (primitive) => primitives.includes(primitive),
+        get: (index) => primitives[index],
+        get length() {
+          return primitives.length;
+        },
         raiseToTop() {},
       },
     },
@@ -283,6 +346,11 @@ function harness(
       sprites: {
         registerSpriteCollection: (id, collection) =>
           sprites.set(id, collection),
+        registerSpriteSet: (id, setId) => {
+          const entry = { drawSetId: setId };
+          sprites.set(id, entry);
+          return entry;
+        },
         unregisterSpriteCollection: (id) => sprites.delete(id),
         restoreSpriteOrder() {},
       },
@@ -313,13 +381,71 @@ function harness(
   const draw = fakeDrawPort();
   const unbindCamera = bindRenderer(viewer, {
     draw,
-    query: fakeSceneQuery(viewer),
-    // Only the tick the layer's camera listener waits on.
+    query: {
+      ...fakeSceneQuery(viewer),
+      // A 1000 px square pinhole through the test's `view`; none without.
+      project(p) {
+        const view = viewer.camera.view;
+        if (!view) return null;
+        const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+        const v = {
+          x: p.x - view.position.x,
+          y: p.y - view.position.y,
+          z: p.z - view.position.z,
+        };
+        const z = dot(v, view.direction);
+        if (!(z > 0)) return null;
+        const f = 500 / Math.tan(view.fovy / 2);
+        return {
+          x: 500 + (f * dot(v, view.right)) / z,
+          y: 500 - (f * dot(v, view.up)) / z,
+        };
+      },
+      // The horizon from the fake camera's eye, as the Cesium port reads it
+      // from a real camera's.
+      isOccluded(position) {
+        const eye = Cesium.Ellipsoid.WGS84.cartographicToCartesian(
+          viewer.camera.positionCartographic,
+        );
+        return !new Cesium.EllipsoidalOccluder(
+          Cesium.Ellipsoid.WGS84,
+          eye,
+        ).isPointVisible(
+          new Cesium.Cartesian3(position.x, position.y, position.z),
+        );
+      },
+      // Terrain heights as the fake globe has them, told apart from the
+      // bare ellipsoid as the Cesium port tells them.
+      async sampleHeight(points, { against } = {}) {
+        if (against !== 'terrain') return points.map(() => null);
+        const flat =
+          viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider;
+        return points.map(() => ({
+          height: 0,
+          confidence: 1,
+          source: flat ? 'ellipsoid' : 'terrain',
+          lod: 'visible',
+        }));
+      },
+    },
+    // Whether the fake globe is shown, and a version that changes with its
+    // terrain, as the Cesium globe port reads them.
+    globe: {
+      isGlobeVisible: () => viewer.scene.globe.show === true,
+      surfaceVersion: () => surfaceVersion(viewer.terrainProvider),
+    },
+    // The tick the layer's camera listener waits on, and its frames.
     frame: {
       on(phase, cb) {
-        if (phase !== 'preUpdate') return () => {};
-        preUpdates.add(cb);
-        return () => preUpdates.delete(cb);
+        const listeners =
+          phase === 'preUpdate'
+            ? preUpdates
+            : phase === 'preRender'
+              ? preRenders
+              : null;
+        if (!listeners) return () => {};
+        listeners.add(cb);
+        return () => listeners.delete(cb);
       },
       requestRender() {},
     },
@@ -342,6 +468,9 @@ function harness(
           lon: carto ? Cesium.Math.toDegrees(carto.longitude) : NaN,
           lat: carto ? Cesium.Math.toDegrees(carto.latitude) : NaN,
           height: carto ? carto.height : NaN,
+          // A test sets `view` (position, direction, up, right and the
+          // frustum's fovy, aspectRatio and near) to cull by the frustum.
+          ...viewer.camera.view,
         };
       },
       viewRectangle() {
@@ -407,6 +536,27 @@ function harness(
       responders.delete(feedId);
     },
     state: () => layer._transitStateForTest(),
+    /**
+     * The items of the markers' draw set, `still` or `moving`, as the draw
+     * port holds them (none once the set is gone).
+     */
+    markers(name = 'still') {
+      const state = layer._transitStateForTest();
+      const set = name === 'moving' ? state._movingIcons : state._stillIcons;
+      return set ? (draw.set(set.id)?.items ?? new Map()) : new Map();
+    },
+    /**
+     * What a Cesium pick of a vehicle's marker returns: the draw port's pick
+     * id for its item in the set that draws it now.
+     */
+    pickOf(entry) {
+      const state = layer._transitStateForTest();
+      const set = entry.animated ? state._movingIcons : state._stillIcons;
+      return {
+        primitive: {},
+        id: { set: set.id, id: entry.key, meta: { layer: 'transit' } },
+      };
+    },
     vehicles: () => [...layer._transitStateForTest()._vehicles.values()],
     frame() {
       preRender.raiseEvent();
@@ -551,8 +701,7 @@ test('a vehicle the feed stops reporting is removed, and its primitive with it',
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.vehicles().length, 2);
-  const collection = app.sprites.get('transit');
-  assert.equal(collection.length, 2);
+  assert.equal(app.markers('still').size, 2);
 
   app.serve('mbta', () => ({
     status: 200,
@@ -576,7 +725,7 @@ test('a vehicle the feed stops reporting is removed, and its primitive with it',
     ['bus-1'],
   );
   assert.equal(
-    collection.length + app.sprites.get('transit-motion').length,
+    app.markers('still').size + app.markers('moving').size,
     1,
     'the removed vehicle released its point primitive',
   );
@@ -646,7 +795,7 @@ test('a feed that goes silent has its vehicles evicted instead of frozen on the 
   app.advance(FEED_EVICT_AFTER_MS + 1_000);
   await app.layer.update();
   assert.equal(app.vehicles().length, 0, 'the last fleet is not left standing');
-  assert.equal(app.sprites.get('transit').length, 0);
+  assert.equal(app.markers('still').size, 0);
   const stats = app.layer.getStats();
   assert.equal(stats.count, 0);
   assert.equal(stats.stale, true);
@@ -730,7 +879,7 @@ test('a snapshot the proxy replayed from its own cache for six minutes is refuse
     0,
     'the replayed fleet is gone, not frozen',
   );
-  assert.equal(app.sprites.get('transit').length, 0);
+  assert.equal(app.markers('still').size, 0);
   const stats = app.layer.getStats();
   assert.equal(stats.count, 0);
   assert.equal(stats.stale, true);
@@ -961,7 +1110,12 @@ test('destroy releases every shared registration this layer took', async (t) => 
   await app.layer.update();
   assert.ok(app.sprites.has('transit'));
   assert.ok(app.pickOwners.has('transit'));
-  assert.equal(app.primitives.length, 2);
+  const ids = app.layer._transitSetIdsForTest();
+  assert.deepEqual(
+    ids.map((id) => app.draw.set(id)?.spec.id),
+    ids,
+    'two marker sets are live',
+  );
 
   app.layer.destroy(app.viewer);
   assert.deepEqual(app.cameraThresholds(), [], 'the camera listener goes');
@@ -975,10 +1129,10 @@ test('destroy releases every shared registration this layer took', async (t) => 
     false,
     'the pick owner is released',
   );
-  assert.equal(
-    app.primitives.length,
-    0,
-    'the primitive collection leaves the scene',
+  assert.deepEqual(
+    ids.map((id) => app.draw.set(id)),
+    [undefined, undefined],
+    'both marker sets are let go',
   );
   assert.equal(app.holds().includes('transit'), false);
   assert.equal(app.state()._viewer, null);
@@ -2217,12 +2371,12 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
   const bus = byRoute.get('742');
   const plainImage = bus.marker.image;
   const plainWidth = bus.marker.width;
-  const modeColour = bus.marker.color.clone();
+  const modeColour = colourOf(bus.marker.color);
 
   app.style('thermal');
   for (const entry of app.vehicles()) {
     assert.ok(
-      Cesium.Color.equals(entry.marker.color, Cesium.Color.WHITE),
+      Cesium.Color.equals(colourOf(entry.marker.color), Cesium.Color.WHITE),
       `${entry.record.routeId} is white-hot`,
     );
     assert.notEqual(entry.marker.image, plainImage, 'a haloed raster');
@@ -2236,7 +2390,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
   // Selecting under FLIR grows the sprite and keeps it white — cyan would dim it.
   app.layer._transitPartsForTest().selection.selectVehicle(bus.key);
   assert.ok(
-    Cesium.Color.equals(bus.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(bus.marker.color), Cesium.Color.WHITE),
     'still white when selected',
   );
   assert.ok(
@@ -2245,7 +2399,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
   );
   app.layer._transitPartsForTest().selection.clearSelection();
   assert.ok(
-    Cesium.Color.equals(bus.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(bus.marker.color), Cesium.Color.WHITE),
     'and white when deselected',
   );
   assert.equal(bus.marker.width, byRoute.get('Red').marker.width);
@@ -2253,7 +2407,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
   // Back to normal: the shipped look, exactly.
   app.style('normal');
   assert.ok(
-    Cesium.Color.equals(bus.marker.color, modeColour),
+    Cesium.Color.equals(colourOf(bus.marker.color), modeColour),
     'mode colour restored',
   );
   assert.equal(bus.marker.image, plainImage, 'plain raster restored');
@@ -2278,12 +2432,12 @@ test('a cockpit vision override wins over the map style while it lasts, and dest
   const plain = entry.marker.image;
   app.vision('nvg', true);
   assert.ok(
-    Cesium.Color.equals(entry.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(entry.marker.color), Cesium.Color.WHITE),
     'cockpit NVG restyles',
   );
   app.style('normal');
   assert.ok(
-    Cesium.Color.equals(entry.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(entry.marker.color), Cesium.Color.WHITE),
     'the map style cannot undo a live cockpit override',
   );
   app.vision('normal', false);
@@ -2356,16 +2510,16 @@ test('the floor cycle samples the rendered mesh for the cells it warms, with its
     'the sampler was asked after the floor resolved',
   );
   const call = app.meshCalls[0];
-  assert.equal(call.scene, app.viewer.scene);
+  assert.equal(call.scene, app.viewer);
   assert.deepEqual(
     call.points.map((p) => p.lat).sort(),
     [42.36, 42.37],
     'the in-view cells, and not the one off screen',
   );
-  assert.equal(
-    call.options.excludeObjects.length,
-    2,
-    'both in-view billboards excluded',
+  assert.deepEqual(
+    call.options.sets,
+    app.layer._transitPartsForTest().rendering.setIds(),
+    'both marker sets excluded',
   );
   assert.ok(
     Math.abs(call.options.viewerLat - BOSTON.lat) < 1e-6,
@@ -2801,11 +2955,7 @@ test('missing rectangle still rejects the far side, and frustum rejection wins',
     [...app.state()._visible].map((e) => e.record.id),
     ['near'],
   );
-  app.viewer.camera.frustum = {
-    computeCullingVolume: () => ({
-      computeVisibility: () => Cesium.Intersect.OUTSIDE,
-    }),
-  };
+  app.viewer.camera.view = lookingAway();
   app.advance(250);
   app.layer._transitPartsForTest().rendering.refreshVisibility();
   assert.equal(app.state()._visible.size, 0);
@@ -2835,11 +2985,15 @@ test('motion transitions migrate billboards and update cached positions; disable
   latitude += 0.001;
   await app.layer.update();
   app.run(8000, 16);
-  assert.equal(entry.markerCollection, app.state()._animatedMarkers);
-  assert.notEqual(entry.marker, old);
+  assert.equal(entry.animated, true);
+  assert.ok(app.markers('moving').has(entry.key));
+  assert.equal(app.markers('still').has(entry.key), false);
+  assert.equal(entry.marker, old, 'the record stays; only its draw set moves');
   assert.equal(entry.detectContact.position, entry.marker.position);
   app.run(30000, 16);
-  assert.equal(entry.markerCollection, app.state()._markers);
+  assert.equal(entry.animated, false);
+  assert.ok(app.markers('still').has(entry.key));
+  assert.equal(app.markers('moving').has(entry.key), false);
   const parts = app.layer._transitPartsForTest();
   const contacts = app.layer.getDetectableObjects();
   const metric = contacts[0].metric;
@@ -2876,7 +3030,10 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
   const entry = app.vehicles()[0],
     parts = app.layer._transitPartsForTest();
   const check = (hex, display) => {
-    assert.equal(entry.marker.color.toCssHexString().toUpperCase(), hex);
+    assert.equal(
+      colourOf(entry.marker.color).toCssHexString().toUpperCase(),
+      hex,
+    );
     const svg = Buffer.from(
       entry.marker.image.split(',')[1],
       'base64',
@@ -2926,11 +3083,7 @@ test('visible motion is recullable without a camera event and releases its hold 
   await app.layer.update();
   app.layer._loadTransitFleetForTest(1, BOSTON, 1);
   assert.equal(app.state()._moving.size, 1);
-  app.viewer.camera.frustum = {
-    computeCullingVolume: () => ({
-      computeVisibility: () => Cesium.Intersect.OUTSIDE,
-    }),
-  };
+  app.viewer.camera.view = lookingAway();
   app.layer._transitPartsForTest().rendering.maintainPresentation();
   app.advance(250);
   assert.equal(app.state()._moving.size, 0);
@@ -3095,11 +3248,8 @@ test('tab visibility synchronizes playback before the returning frame and remove
 for (const bounds of ['null', 'stale']) {
   test(`browser visibility starts an injected fleet with ${bounds} bounds and an unsampled hidden marker`, async (t) => {
     const app = harness(t);
-    app.viewer.camera.frustum = {
-      computeCullingVolume: () => ({
-        computeVisibility: () => Cesium.Intersect.INSIDE,
-      }),
-    };
+    // A real view over the fleet: the frustum, not the bounds, admits it.
+    app.viewer.camera.view = viewFrom(BOSTON.lon, BOSTON.lat, 4000);
     app.layer.enable(app.viewer);
     const loaded = app.layer._loadTransitFleetForTest(4, BOSTON, 70, [
       'Red',
@@ -3158,7 +3308,7 @@ test('keyless loaded terrain resolves a pending surface without needing a frame 
   assert.equal(entry.marker.show, true);
 });
 
-test('the terrain under a vehicle is asked through the query port, and a flat globe stands at the ellipsoid', (t) => {
+test('the terrain under a vehicle is asked through the query port, and a flat globe stands at the ellipsoid', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   const parts = app.layer._transitPartsForTest();
   const lift = parts.height.requestHeight(0, 0).height;
@@ -3174,10 +3324,63 @@ test('the terrain under a vehicle is asked through the query port, and a flat gl
   assert.equal(parts.rendering.globeSurface(), 'terrain');
   app.viewer.scene.globe.getHeight = () => undefined;
   app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  // The surface is read once in a task, as a terrain swap comes in a task
+  // of its own.
+  await new Promise((resolve) => setImmediate(resolve));
+  // The new surface is asked about through the height service; until the
+  // answer arrives the last one holds.
+  assert.equal(parts.rendering.globeSurface(), 'terrain');
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(parts.rendering.globeSurface(), 'flat');
   const flat = parts.height.requestHeight(42.36, -71.06);
   assert.equal(terrain.height - flat.height, 30, 'flat terrain is height 0');
   assert.equal(flat.prior, null);
+});
+
+test('a flat-globe answer that flips starts one fresh floor cycle, and a failed one is asked again', async (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  app.viewer.scene.globe.show = true;
+  app.layer.enable(app.viewer);
+  const parts = app.layer._transitPartsForTest();
+  const anchored = [];
+  const anchorFloors = parts.height.anchorFloors;
+  parts.height.anchorFloors = () => {
+    anchored.push(app.state()._floorTimer);
+    anchorFloors();
+  };
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  assert.equal(parts.rendering.globeSurface(), 'terrain');
+  await tick();
+  assert.equal(anchored.length, 0, 'the same answer starts nothing');
+  app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  await tick();
+  parts.rendering.globeSurface();
+  await tick();
+  assert.equal(parts.rendering.globeSurface(), 'flat');
+  assert.equal(anchored.length, 1, 'one fresh cycle on the flip');
+  // A probe that fails is asked again at the next read.
+  const query = rendererOf(app.viewer).query;
+  const sampleHeight = query.sampleHeight;
+  let asked = 0;
+  query.sampleHeight = async () => {
+    asked += 1;
+    throw new Error('terrain request failed');
+  };
+  app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  await tick();
+  parts.rendering.globeSurface();
+  await tick();
+  assert.ok(asked > 0);
+  let askedAgain = 0;
+  query.sampleHeight = (...args) => {
+    askedAgain += 1;
+    return sampleHeight(...args);
+  };
+  await tick();
+  assert.equal(parts.rendering.globeSurface(), 'flat', 'the last answer holds');
+  assert.ok(askedAgain > 0, 'and the same surface is asked about again');
+  await tick();
+  assert.equal(anchored.length, 1, 'the same answer starts nothing');
 });
 
 test('scripted keyless fleet keeps its known floor through selection and floor rereads', async (t) => {
@@ -3200,27 +3403,13 @@ for (const count of [800, 3000]) {
   test(`real perspective frustum admits all ${count} moving budget fixtures`, async (t) => {
     const altitude = count === 800 ? 600 : 30000;
     const app = harness(t, { altitude, floorAt: () => undefined });
-    const camera = app.viewer.camera;
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      BOSTON.lon,
-      BOSTON.lat,
-      altitude,
-    );
-    camera.directionWC = Cesium.Cartesian3.negate(
-      Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
-        camera.positionWC,
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
-    );
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(camera.positionWC);
-    camera.upWC = Cesium.Matrix4.getColumn(enu, 1, new Cesium.Cartesian3());
-    camera.frustum = new Cesium.PerspectiveFrustum({
-      fov: Math.PI / 3,
+    // Straight down from the altitude, through the frustum the camera port
+    // describes.
+    app.viewer.camera.view = {
+      ...viewFrom(BOSTON.lon, BOSTON.lat, altitude),
       aspectRatio: 1920 / 1080,
-      near: 1,
       far: 100000,
-    });
+    };
     app.layer.enable(app.viewer);
     const loaded = app.layer._loadTransitFleetForTest(
       count,
@@ -3229,6 +3418,10 @@ for (const count of [800, 3000]) {
     );
     assert.equal(loaded.moving, count);
     assert.equal(app.state()._visible.size, count);
+    assert.ok(
+      app.vehicles().every((e) => e.visibility?.boundsApplied === false),
+      'the frustum, not the view rectangle, admitted them',
+    );
     const entry = app.vehicles()[0],
       before = Cesium.Cartesian3.clone(entry.marker.position);
     app.run(1000, 16);
@@ -3242,8 +3435,8 @@ test('click handler selects a migrated scripted billboard and prepares its drape
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
   const entry = app.vehicles()[0];
-  assert.equal(entry.markerCollection, app.state()._animatedMarkers);
-  app.viewer.scene.pick = () => ({ primitive: entry.marker, id: entry.key });
+  assert.equal(entry.animated, true);
+  app.viewer.scene.pick = () => app.pickOf(entry);
   app.input.click(new Cesium.Cartesian2(500, 400));
   assert.equal(app.state()._selectedKey, entry.key);
   const body = app.layer._transitPartsForTest().trails.diagnostics().body;
@@ -3445,7 +3638,7 @@ test('selected anchor rejects nonfinite marker coordinates before sampling and d
   assert.equal(card.position(), null);
 });
 
-test('preset clicks preserve both pick id paths through moving and stationary collection migration', async (t) => {
+test('preset clicks pick the marker in whichever set draws it, moving or still', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
@@ -3459,17 +3652,17 @@ test('preset clicks preserve both pick id paths through moving and stationary co
       entry.sample.nextWakeMonoMs = Infinity;
       entry.sample.segmentCourseDeg = entry.courseDeg;
       parts.rendering.schedulePlayback(entry);
+      parts.rendering.flushMarkers();
+      assert.equal(entry.animated, animated);
+      assert.ok(app.markers(animated ? 'moving' : 'still').has(entry.key));
+      app.viewer.scene.pick = () => app.pickOf(entry);
+      app.input.click(new Cesium.Cartesian2(500, 400));
+      assert.equal(app.state()._selectedKey, entry.key);
       assert.equal(
-        entry.markerCollection,
-        animated ? app.state()._animatedMarkers : app.state()._markers,
+        app.state()._lastPickForTest.collection,
+        animated ? 'animated' : 'stationary',
       );
-      assert.equal(entry.marker.id, entry.key);
-      for (const pick of [{ id: entry.key }, { primitive: entry.marker }]) {
-        app.viewer.scene.pick = () => pick;
-        app.input.click(new Cesium.Cartesian2(500, 400));
-        assert.equal(app.state()._selectedKey, entry.key);
-        parts.selection.clearSelection();
-      }
+      parts.selection.clearSelection();
     }
 });
 
@@ -3501,7 +3694,7 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
   let actual;
   scene.pick = (p) => {
     actual = { x: p.x, y: p.y };
-    return { id: entry.key };
+    return app.pickOf(entry);
   };
   scene.canvas = {
     width: 1920,
@@ -3765,7 +3958,12 @@ test('moving and stationary transit stay adjacent above CCTV and Bikeshare durin
   const cctv = {},
     bike = {},
     flights = {};
-  app.primitives.push(cctv, bike, flights);
+  // The marker sets' hosts, named by their set ids as the draw port names
+  // them, between the others.
+  const [stillId, movingId] = app.layer._transitSetIdsForTest();
+  const still = { drawSetId: stillId },
+    moving = { drawSetId: movingId };
+  app.primitives.push(cctv, still, bike, moving, flights);
   app.viewer.scene.primitives.raiseToTop = (c) => {
     app.primitives.splice(app.primitives.indexOf(c), 1);
     app.primitives.push(c);
@@ -3783,24 +3981,24 @@ test('moving and stationary transit stay adjacent above CCTV and Bikeshare durin
   });
   const entry = app.vehicles()[0],
     parts = app.layer._transitPartsForTest();
+  const stillHost = still,
+    movingHost = moving;
   for (const moving of [true, false, true]) {
     entry.sample.phase = moving ? 'playing' : 'held';
     entry.sample.segmentSpeedMps = moving ? 1 : 0;
     entry.sample.segmentCourseDeg = NaN;
     parts.rendering.schedulePlayback(entry);
     restoreSpriteOrder(app.viewer);
-    const active = app.primitives.indexOf(entry.markerCollection);
+    parts.rendering.flushMarkers();
+    assert.ok(app.markers(moving ? 'moving' : 'still').has(entry.key));
+    const active = app.primitives.indexOf(moving ? movingHost : stillHost);
     assert.ok(active > app.primitives.indexOf(cctv));
     assert.ok(active > app.primitives.indexOf(bike));
     assert.ok(active < app.primitives.indexOf(flights));
     assert.equal(
-      Math.abs(
-        app.primitives.indexOf(app.state()._markers) -
-          app.primitives.indexOf(app.state()._animatedMarkers),
-      ),
+      app.primitives.indexOf(movingHost) - app.primitives.indexOf(stillHost),
       1,
     );
-    assert.equal(entry.marker.id, entry.key);
   }
 });
 
@@ -4003,6 +4201,50 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     );
   };
   pose(0);
+  // The camera port reads the camera above; the query port projects through
+  // it as a pinhole the size of the canvas.
+  const viewer = { scene };
+  const plainOf = (c) => ({ x: c.x, y: c.y, z: c.z });
+  const direction = { x: -1, y: 0, z: 0 };
+  const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({
+        lon: 0,
+        lat: 0,
+        height: 1000,
+        heading: scene.camera.heading,
+        pitch: scene.camera.pitch,
+        roll: scene.camera.roll,
+        position: plainOf(cameraPosition),
+        direction,
+        up: plainOf(scene.camera.upWC),
+        right: plainOf(scene.camera.rightWC),
+        fovy: scene.camera.frustum.fovy,
+        aspectRatio: 1.6,
+        near: 1,
+        far: 1e7,
+      }),
+    },
+    query: {
+      project(p) {
+        const v = {
+          x: p.x - cameraPosition.x,
+          y: p.y - cameraPosition.y,
+          z: p.z - cameraPosition.z,
+        };
+        const z = dot(v, direction);
+        if (!(z > 0)) return null;
+        const f = 400 / Math.tan(scene.camera.frustum.fovy / 2);
+        return {
+          x: 640 + (f * dot(v, scene.camera.rightWC)) / z,
+          y: 400 - (f * dot(v, scene.camera.upWC)) / z,
+        };
+      },
+      isOccluded: () => false,
+    },
+  });
+  t.after(unbind);
   const make = (key, courseDeg, bearing) => ({
     key,
     courseDeg,
@@ -4015,7 +4257,7 @@ test('parked transit reprojects held and reported courses at the bounded camera 
   const unknown = make('unknown', null, null);
   const hidden = make('hidden', 90, 90);
   const state = {
-    _viewer: { scene },
+    _viewer: viewer,
     _enabled: true,
     _vehicles: new Map(
       [held, reportedOnly, unknown, hidden].map((e) => [e.key, e]),
