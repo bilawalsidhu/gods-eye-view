@@ -25,7 +25,7 @@ import { bindRenderer } from '../render/rendererOf.js';
 import { resolveEllipsoidalGround } from './terrainHeights.js';
 import {
   cachedGroundFloor, cachedMeshFloor, setMeshFloorPreferred,
-  _clearMeshFloorCellsForTest,
+  _clearMeshFloorCellsForTest, reportValidatedMeshFloorCell,
 } from './groundFloor.js';
 
 /** Distinct site per test — terrainHeights' cache is module-global and warm
@@ -199,27 +199,39 @@ test('sampler: the probe goes where the point is, not to the cell centre', async
   assert.ok(Math.abs(asked[0] - point.lon) < 1e-9, `probed at ${asked[0]}, not ${point.lon}`);
 });
 
-test('sampler: a rooftop reading gives way to a lower one from another point in the cell', async () => {
+test('sampler: a viaduct and the street beside it in one cell keep their own heights', async () => {
   reset();
   const cell = nextSite();
   await seedDem(cell, 120.0);
-  // A roof 22 m up at the first point, the street at the others.
-  const roofLon = cell.lon + 0.0004;
+  // A viaduct deck 9 m up along one line of the cell, the street elsewhere.
+  const deckLat = cell.lat + 0.0003;
   let calls = 0;
   const scene = fakeScene((carto) => {
     calls += 1;
-    return Math.abs(Cesium.Math.toDegrees(carto.longitude) - roofLon) < 1e-7 ? 143.0 : 121.0;
+    return Math.abs(Cesium.Math.toDegrees(carto.latitude) - deckLat) < 1e-7 ? 129.0 : 121.0;
   });
   const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
-  sampleMeshFloorCells(scene, [{ lat: cell.lat, lon: roofLon }], opts);
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 143.0, 'the roof passes the +80 m window');
-  sampleMeshFloorCells(scene, [{ lat: cell.lat, lon: roofLon + 0.00001 }], opts);
-  assert.equal(calls, 1, 'a point next to one already probed is not probed again');
-  sampleMeshFloorCells(scene, [{ lat: cell.lat, lon: cell.lon - 0.0003 }], opts);
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 121.0, 'the street reading replaces it');
-  assert.equal(cachedGroundFloor(cell.lat, cell.lon), 121.0);
-  sampleMeshFloorCells(scene, [{ lat: cell.lat + 0.0003, lon: cell.lon + 0.0001 }], opts);
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 121.0, 'a higher reading never raises it');
+  const onDeck = { lat: deckLat, lon: cell.lon };
+  const street = { lat: cell.lat - 0.0003, lon: cell.lon };
+  sampleMeshFloorCells(scene, [onDeck], opts);
+  sampleMeshFloorCells(scene, [street], opts);
+  assert.equal(calls, 2);
+  assert.equal(cachedMeshFloor(onDeck.lat, onDeck.lon + 0.0001), 129.0, 'the train stays on the deck');
+  assert.equal(cachedMeshFloor(street.lat, street.lon - 0.0001), 121.0, 'the bus stays on the street');
+  assert.equal(cachedGroundFloor(street.lat, street.lon), 121.0);
+  sampleMeshFloorCells(scene, [{ lat: deckLat, lon: cell.lon + 0.00001 }], opts);
+  assert.equal(calls, 2, 'a point next to one already probed is not probed again');
+});
+
+test('sampler: a second reading at the same spot keeps the lower one', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  assert.equal(reportValidatedMeshFloorCell(cell.lat, cell.lon, 131.0), true);
+  assert.equal(reportValidatedMeshFloorCell(cell.lat + 0.00002, cell.lon, 122.0), true);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 122.0);
+  assert.equal(reportValidatedMeshFloorCell(cell.lat, cell.lon + 0.00002, 140.0), true);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 122.0, 'a higher one never raises it');
 });
 
 test('sampler: a latched cell is read a few times at most', async () => {
@@ -229,11 +241,14 @@ test('sampler: a latched cell is read a few times at most', async () => {
   let calls = 0;
   const scene = fakeScene(() => {
     calls += 1;
-    return 125.0 - calls;
+    return 121.0;
   });
   const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
-  for (let i = 0; i < 10; i++)
-    sampleMeshFloorCells(scene, [{ lat: cell.lat - 0.0004 + i * 0.0001, lon: cell.lon }], opts);
-  assert.equal(calls, 4);
-  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 121.0);
+  for (let i = 0; i < 20; i++)
+    sampleMeshFloorCells(
+      scene,
+      [{ lat: cell.lat - 0.0004 + (i % 5) * 0.0002, lon: cell.lon - 0.00045 + Math.floor(i / 5) * 0.0003 }],
+      opts,
+    );
+  assert.equal(calls, 8);
 });

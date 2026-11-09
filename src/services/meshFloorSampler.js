@@ -26,8 +26,9 @@ export function createMeshFloorSampler({
   // airport apron) — so DEM-floored sprites/trails still buried themselves in
   // the mesh while 3D models (which groundSnap against the mesh) looked right.
   // This module samples the mesh height at the callers' points, a few probes
-  // per coarse cell, and reports them to groundFloor.js, which keeps the
-  // lowest that passes its gate; cachedGroundFloor() then answers mesh-first.
+  // per coarse cell, and reports them to groundFloor.js, which keeps each
+  // reading that passes its gate at its own point; cachedGroundFloor() then
+  // answers mesh-first, from the reading nearest the asked point.
   //
   // Rationing (the CCTV loading-jitter lesson): scene.sampleHeight forces
   // tile-load prioritization at the probe point, so sampling is (a) gated to
@@ -53,10 +54,10 @@ export function createMeshFloorSampler({
    *  streamed LOD under a high camera is coarse everywhere, so every probe
    *  would latch junk. */
   const MAX_CAMERA_HEIGHT_M = 25_000;
-  /** @constant {number} Readings kept per cell: a cell is probed at most
-   *  this many times, each at a different point, and the lowest reading
-   *  that passes the DEM gate is the cell's floor. */
-  const MAX_PROBES_PER_CELL = 4;
+  /** @constant {number} Readings per cell: a cell is probed at most this
+   *  many times, each at a point apart from the others, and groundFloor keeps
+   *  each reading at its point (a read answers from the nearest one). */
+  const MAX_PROBES_PER_CELL = 8;
   /** @constant {number} How far apart (degrees, about 17 m) a new probe must
    *  be from the cell's earlier ones to be worth taking. */
   const PROBE_APART_DEG = 0.00015;
@@ -149,8 +150,8 @@ export function createMeshFloorSampler({
       const key = `${cell.lat},${cell.lon}`;
       if (attempted.has(key)) continue;
       // A latched cell is probed again only at a point well apart from the
-      // ones already probed, a few times at most: a later, lower reading
-      // replaces a rooftop the first probe may have hit.
+      // ones already probed, a few times at most, so the cell's readings
+      // follow where its vehicles actually are.
       const probes = _probedPoints.get(key);
       if (
         cachedMeshFloor(cell.lat, cell.lon) != null &&
@@ -211,7 +212,7 @@ export function createMeshFloorSampler({
       // feasible and deliberately deferred — see the P2 in
       // the project roadmap, which bundles it with the fly_route probe so
       // one post-launch pass settles rendered-mesh sampling everywhere.
-      reportValidatedMeshFloorCell(cell.lat, cell.lon, height);
+      reportValidatedMeshFloorCell(p.lat, p.lon, height);
     }
   }
 

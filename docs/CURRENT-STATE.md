@@ -1136,15 +1136,17 @@ On the photoreal stack the shared floor (`cachedGroundFloor`) answers from a
 rendered-mesh reading per coarse cell (0.001°, about 110 × 80 m), sampled by
 `src/services/meshFloorSampler.js` and gated against the DEM by
 `reportValidatedMeshFloorCell` in `src/services/groundFloor.js`. The probe goes
-where the caller's point is (a vehicle or contact), not to the cell's centre,
-and a cell is read up to four times at points about 17 m or more apart; the
-lowest reading that passes the gate is kept. Before this, one probe at the
-cell's centre latched for the session, so a centre on a roof lifted everything
-in the cell (a Haymarket bus drew 23.5 m above the street, on the garage roof)
-and a centre in the river put Red Line trains on the Longfellow Bridge 6–9 m
-under the deck. Accepted limit: a cell holds one floor, so a vehicle on a
-bridge or viaduct whose cell also gets a street-level probe beneath it is drawn
-at that lower level.
+where the caller's point is (a vehicle or contact), not to the cell's centre;
+a cell is read up to eight times, at points about 17 m or more apart, and each
+reading that passes the gate is kept at its point. A read answers from the
+cell's reading nearest the asked point, so a viaduct and the street beside it
+in one cell keep their own heights; two readings within about 5 m of each other
+keep the lower. Before this, one probe at the cell's centre latched for the
+session, so a centre on a roof lifted everything in the cell (a Haymarket bus
+drew 23.5 m above the street, on the garage roof) and a centre in the river put
+Red Line trains on the Longfellow Bridge 6–9 m under the deck. Residual: the
+probe is vertical, so a vehicle directly under a deck or a roof overhang reads
+the structure above it.
 
 ## Vessel components and sources
 
@@ -2558,7 +2560,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   `HELD_SNAP_CONTRADICTION_M` (5 m) ABOVE the held value drops the hold and the
 >   contact is COLD again, back to the floored 2D billboard. The rule is
 >   ONE-SIDED on purpose — it targets BURIAL. A cell reading BELOW a real sample
->   is the floor chain's expected under-read (lowest of up to four probes over ~111 m,
+>   is the floor chain's expected under-read (a few point readings over ~111 m,
 >   neighbours lean lowest, `displayFloorHeightM` only ever raises), not evidence
 >   of anything, and a two-sided cut was disproved on the track rig by a planted
 >   cell 66.7 m below a real sample at the same spot. Accepted residual, stated
