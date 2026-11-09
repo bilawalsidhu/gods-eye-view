@@ -34,7 +34,7 @@ function setup({ focusPassIsNeeded = () => false } = {}) {
         clearOverlaySource: noop,
       },
       geoid: {},
-      sprites: { registerSpriteSet: noop },
+      sprites: {},
       focus: {
         focusNowMs: () => clock,
         getFocusTarget: () => null,

@@ -4,7 +4,7 @@ import { createHorizonCull } from './view.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 
-const SPRITE_ID = 'street-level:marker';
+const SET_ID = 'street-level:marker';
 
 /** Draw-set ids of the markers made so far, so every layer instance has its own. */
 let markerSets = 0;
@@ -45,7 +45,7 @@ function markerIcon(position, bearing, look) {
 
 /** On-globe marker for the open image, clamped to the ground. */
 export function createMarker({ state }) {
-  const { render, sprites } = state.services;
+  const { render } = state.services;
 
   function requestRender() {
     render?.governorRequestRender?.('street-level-marker');
@@ -69,13 +69,11 @@ export function createMarker({ state }) {
   function ensure(viewer) {
     if (state.marker.set) return;
     state.marker.set = drawOf(viewer).icons({
-      id: `${SPRITE_ID}:${++markerSets}`,
+      id: `${SET_ID}:${++markerSets}`,
     });
-    // Drawn from now, empty: the marker keeps its place under the cones
-    // (made after it), whichever is first given something to draw.
+    // Drawn from now, empty: the marker keeps its place by when it was made
+    // (before the cones), whichever is first given something to draw.
     state.marker.set.set([]);
-    state.marker.sprite =
-      sprites?.registerSpriteSet?.(SPRITE_ID, state.marker.set.id) ?? null;
   }
 
   /** Move (or create) the marker; null removes it. `style`: the provider's `marker`. */
@@ -112,10 +110,8 @@ export function createMarker({ state }) {
     horizon.stop();
     const markers = state.marker.set;
     if (!markers) return;
-    sprites?.unregisterSpriteCollection?.(SPRITE_ID, state.marker.sprite);
     markers.dispose();
     state.marker.set = null;
-    state.marker.sprite = null;
     state.marker.placed = null;
   }
 

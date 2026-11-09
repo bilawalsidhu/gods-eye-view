@@ -10,7 +10,6 @@ export function createLifecycle({
   options,
 }) {
   const { state } = vesselState;
-  const { restoreSpriteOrder, restoreSpriteOrderOnEnable } = services.sprites;
   const { releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
@@ -157,7 +156,6 @@ export function createLifecycle({
       );
       components.selection.installInteraction(viewer);
       components.rendering.installRuntime(viewer);
-      restoreSpriteOrder(viewer);
     },
 
     enable(viewer) {
@@ -190,7 +188,6 @@ export function createLifecycle({
       registerPickOwner('ais-live-vessels', (pickedId) =>
         state.records.byMmsi.has(pickedId),
       );
-      restoreSpriteOrderOnEnable('ais', activeViewer);
       // Vessels are asked for by view, so ask again when the view moves away.
       removeViewListener();
       const moveEnd = activeViewer?.camera?.moveEnd;

@@ -32,7 +32,7 @@ function services() {
       clearOverlaySource: noop,
     },
     geoid: {},
-    sprites: { registerSpriteSet: noop },
+    sprites: {},
     focus: {
       focusNowMs: (now) => now,
       getFocusTarget: () => null,

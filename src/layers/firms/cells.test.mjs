@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createFirmsHeatmapLayer } from '../../data/firmsHeatmap.js';
-import { unregisterSpriteCollection } from '../../data/spriteOrder.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
@@ -110,7 +109,6 @@ function harness(fires, heightM, { sceneFromViewer = false } = {}) {
     cells,
     cleanup() {
       layer.destroy(viewer);
-      unregisterSpriteCollection('firms');
       input.destroy();
       Cesium.SceneTransforms.worldToWindowCoordinates = saved.project;
       for (const key of ['window', 'document'])

@@ -171,7 +171,6 @@ export function createPanoramaxProvider({
           selectedId: null,
           images: [],
           set: null,
-          sprite: null,
           loading: false,
           error: null,
           abort: null,

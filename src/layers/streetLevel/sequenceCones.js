@@ -54,7 +54,7 @@ export function thinImages(images, spacingM = IMAGE_CONE_MIN_SPACING_M) {
  *   The sequence's images in capture order, thinned (see `thinImages`).
  * @param {{coverage: string}} options.colors
  * @param {string} options.pickPrefix   Pick-id prefix of the cones.
- * @param {string} options.spriteId     Sprite-order id of the cone set (and its draw-set id's stem).
+ * @param {string} options.spriteId     Stem of the cone set's draw-set id.
  * @param {string} options.renderKey    Render-governor reason.
  * @param {(sequenceId: string|null) => void} [options.onHighlight]
  *   Highlight the sequence's coverage line (null: none).
@@ -71,7 +71,7 @@ export function createSequenceCones({
   onHighlight = () => {},
   passes = passesImageryFilter,
 }) {
-  const { render, sprites } = state.services;
+  const { render } = state.services;
 
   function requestRender() {
     render?.governorRequestRender?.(renderKey);
@@ -101,10 +101,9 @@ export function createSequenceCones({
     state.sequence.set = drawOf(viewer).icons({
       id: `${spriteId}:${++coneSets}`,
     });
-    // Drawn from now, empty: the cones keep their place over the marker.
+    // Drawn from now, empty: the cones keep their place by when they were
+    // made (after the marker).
     state.sequence.set.set([]);
-    state.sequence.sprite =
-      sprites?.registerSpriteSet?.(spriteId, state.sequence.set.id) ?? null;
   }
 
   function clearCones() {
@@ -232,10 +231,8 @@ export function createSequenceCones({
     cones = [];
     const set = state.sequence.set;
     if (set) {
-      sprites?.unregisterSpriteCollection?.(spriteId, state.sequence.sprite);
       set.dispose();
       state.sequence.set = null;
-      state.sequence.sprite = null;
     }
     state.sequence.images = [];
     state.sequence.selectedId = null;

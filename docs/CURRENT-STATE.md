@@ -3395,10 +3395,13 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   untracking, so a stationary slow press on a plane still selects it. Escape
 >   still releases tracking in place. The 200 px feel needs close-range field
 >   verification; fleet model sizing remains unchanged.
-> - **Deterministic sprite stacking:** contact collections reassert the stable
->   bottom-to-top order CCTV, FIRMS, bikeshare, AIS, military, then civilian
->   flights after every relevant layer init/enable and immediately after FIRMS
->   lazily registers its detection sprites. Always-visible contact
+> - **Deterministic sprite stacking:** contact sets are made at draw orders
+>   (`SetSpec.drawOrder`, from `spriteDrawOrder`) that stack them bottom to
+>   top as CCTV, FIRMS, bikeshare, transit, directions, AIS, military, then
+>   civilian flights on top, whichever layer was turned on first; picks
+>   name the topmost first. The orders are negative, so every overlay at the
+>   default order (selection highlights, route endpoints, the tracked plane)
+>   still draws over all of them. Always-visible contact
 >   depth settings are unchanged. Cesium OIT weighted blending may soften strict
 >   alpha layering on some GPUs, so the ordering remains a real-browser check.
 > - **Deterministic card stacking:** CCTV, FIRMS, vessel, and tracked-target
@@ -4666,8 +4669,8 @@ Playback reserves numeric scratch before the first sample, including unknown
 heights, and reuses caller-owned sample and segment storage.
 
 **Scene work.** Stationary and animated vehicles are two draw-port icon sets
-(`transit:<n>:still` and `transit:<n>:moving`), registered by set id with the
-sprite order in their old adjacent places above CCTV and Bikeshare. Each marker
+(`transit:<n>:still` and `transit:<n>:moving`), made at adjacent draw orders
+from the sprite order (`spriteDrawOrder`), above CCTV and Bikeshare. Each marker
 is a plain record (position, show, image, size, colour, rotation); a frame
 writes the changed ones to their set in one batched upsert, markers taken out
 in one task go in one removal, and a marker that starts or stops moving moves

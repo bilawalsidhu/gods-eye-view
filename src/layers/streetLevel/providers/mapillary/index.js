@@ -46,7 +46,6 @@ function createProviderState(context) {
       selectedId: null,
       images: [],
       set: null,
-      sprite: null,
       loading: false,
       /** Why the selected sequence's images could not load, until it goes. */
       error: null,

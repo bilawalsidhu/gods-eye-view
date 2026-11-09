@@ -27,23 +27,10 @@ function setup() {
   };
   const draw = fakeDrawPort();
   bindRenderer(viewer, streetPorts(viewer, { camera: true, draw }));
-  /** Sprite-order registrations: setId → the entry handed out. */
-  const sprites = new Map();
   const state = {
-    services: {
-      sprites: {
-        registerSpriteSet(layerId, setId) {
-          const entry = { layerId, setId };
-          sprites.set(setId, entry);
-          return entry;
-        },
-        unregisterSpriteCollection(layerId, entry) {
-          if (sprites.get(entry?.setId) === entry) sprites.delete(entry.setId);
-        },
-      },
-    },
+    services: {},
     viewer,
-    marker: { set: null, sprite: null, placed: null, look: null },
+    marker: { set: null, placed: null, look: null },
   };
   const marker = createMarker({ state });
   marker.ensure(viewer);
@@ -52,7 +39,7 @@ function setup() {
   };
   /** The marker's drawn icon, or undefined. */
   const icon = () => draw.find('street-level:marker:')?.items.get('sl:pos');
-  return { state, viewer, view, preRender, marker, frame, draw, icon, sprites };
+  return { state, viewer, view, preRender, marker, frame, draw, icon };
 }
 
 test('the photo marker is hidden behind the globe, and shows from its side', () => {
@@ -138,16 +125,14 @@ test('each placement is one write, culled before it is sent', () => {
   assert.equal(set.writes, before + 2);
 });
 
-test('a marker destroyed and made again draws in a new set, registered once', () => {
-  const { marker, viewer, draw, sprites, icon } = setup();
+test('a marker destroyed and made again draws in a new set', () => {
+  const { marker, viewer, draw, icon } = setup();
   const first = draw.find('street-level:marker:').spec.id;
-  assert.deepEqual([...sprites.keys()], [first]);
   marker.destroy();
-  assert.equal(sprites.size, 0, 'its sprite order entry goes with it');
+  assert.equal(draw.set(first), undefined, 'its set goes with it');
   marker.ensure(viewer);
   const second = draw.find('street-level:marker:').spec.id;
   assert.notEqual(second, first);
-  assert.deepEqual([...sprites.keys()], [second]);
   marker.set(SPOT, 30);
   assert.equal(icon().course, 30);
 });

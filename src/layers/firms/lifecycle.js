@@ -16,7 +16,6 @@ export function createLifecycle({
   feed,
 }) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
-  const { restoreSpriteOrderOnEnable } = services.sprites;
   const { clearSelectedEntityContextForLayer } = services.context;
   const { id, overlayHost } = config;
 
@@ -49,12 +48,6 @@ export function createLifecycle({
       );
       if (!layerState._fires.length && !layerState._loading)
         await components.ingestion.loadHeatmap();
-      if (
-        layerState._enabled &&
-        !layerState._destroyed &&
-        layerState._viewer === viewer
-      )
-        restoreSpriteOrderOnEnable('firms', viewer);
     },
 
     disable() {

@@ -14,8 +14,7 @@ export function createRendering({
   feed,
 }) {
   const { warmFireAnchorFloors } = services.anchors;
-  const { registerSpriteSet, unregisterSpriteCollection, restoreSpriteOrder } =
-    services.sprites;
+  const { spriteDrawOrder } = services.sprites;
   const { overlayHost } = config;
 
   /**
@@ -340,22 +339,18 @@ export function createRendering({
     };
   }
 
-  /** The sprite order's entry for the glow set. */
-  let spriteEntry = null;
-
   function ensureDetectionCollections() {
     if (!layerState._viewer || layerState._icons) return;
     const set = drawOf(layerState._viewer).icons({
       id: `firms:${++iconSets}:icons`,
       horizonCull: true,
       show: layerState._enabled,
+      drawOrder: spriteDrawOrder?.('firms') ?? 0,
     });
-    // Columns of no rows put the set's host in the scene now, where the
-    // sprite order finds it, rather than with its first fire.
+    // Columns of no rows put the set's host in the scene now, rather than
+    // with its first fire.
     set.setColumns?.({ ids: [] });
     layerState._icons = set;
-    spriteEntry = registerSpriteSet('firms', set.id);
-    restoreSpriteOrder(layerState._viewer);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, layerState._enabled);
   }
 
@@ -364,8 +359,6 @@ export function createRendering({
    * renderer takes it out of the scene it draws in.
    */
   function removeDetectionCollections() {
-    if (spriteEntry) unregisterSpriteCollection('firms', spriteEntry);
-    spriteEntry = null;
     layerState._icons?.dispose();
     layerState._icons = null;
     drawnGlows.clear();

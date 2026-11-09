@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createTransitLayer } from './index.js';
+import { spriteDrawOrder } from '../../data/spriteOrder.js';
 import {
   FEED_EVICT_AFTER_MS,
   FEED_STALE_AFTER_MS,
@@ -240,7 +241,6 @@ function harness(
   const originalFetch = globalThis.fetch;
   const originalDocument = globalThis.document;
   const primitives = [];
-  const sprites = new Map();
   const pickOwners = new Map();
   const overlaySources = new Map();
   const credits = [];
@@ -306,7 +306,6 @@ function harness(
         get length() {
           return primitives.length;
         },
-        raiseToTop() {},
       },
     },
   };
@@ -343,17 +342,7 @@ function harness(
         holdContinuousRender,
         releaseContinuousRender,
       },
-      sprites: {
-        registerSpriteCollection: (id, collection) =>
-          sprites.set(id, collection),
-        registerSpriteSet: (id, setId) => {
-          const entry = { drawSetId: setId };
-          sprites.set(id, entry);
-          return entry;
-        },
-        unregisterSpriteCollection: (id) => sprites.delete(id),
-        restoreSpriteOrder() {},
-      },
+      sprites: { spriteDrawOrder },
       picking: {
         registerPickOwner: (id, predicate) => pickOwners.set(id, predicate),
         unregisterPickOwner: (id) => pickOwners.delete(id),
@@ -524,7 +513,6 @@ function harness(
     cameraThresholds: () => [...cameraListeners].map((l) => l.threshold),
     input,
     primitives,
-    sprites,
     pickOwners,
     overlaySources,
     credits,
@@ -1108,7 +1096,6 @@ test('destroy releases every shared registration this layer took', async (t) => 
   }));
   app.layer.enable(app.viewer);
   await app.layer.update();
-  assert.ok(app.sprites.has('transit'));
   assert.ok(app.pickOwners.has('transit'));
   const ids = app.layer._transitSetIdsForTest();
   assert.deepEqual(
@@ -1119,11 +1106,6 @@ test('destroy releases every shared registration this layer took', async (t) => 
 
   app.layer.destroy(app.viewer);
   assert.deepEqual(app.cameraThresholds(), [], 'the camera listener goes');
-  assert.equal(
-    app.sprites.has('transit'),
-    false,
-    'the sprite collection is unregistered',
-  );
   assert.equal(
     app.pickOwners.has('transit'),
     false,
@@ -1149,11 +1131,7 @@ test('two layers built from the factory share no state', async (t) => {
         holdContinuousRender,
         releaseContinuousRender,
       },
-      sprites: {
-        registerSpriteCollection() {},
-        unregisterSpriteCollection() {},
-        restoreSpriteOrder() {},
-      },
+      sprites: { spriteDrawOrder },
       picking: { registerPickOwner() {}, unregisterPickOwner() {} },
       overlays: {
         setOverlayEntries() {},
@@ -3846,7 +3824,7 @@ test('the actual Transit lifecycle keeps exactly its own camera listener in ever
       _failedCityIds: new Set(),
     },
     services: {
-      sprites: { restoreSpriteOrder: noop },
+      sprites: { spriteDrawOrder },
       picking: { registerPickOwner: noop, unregisterPickOwner: noop },
     },
     source: {},
@@ -3946,60 +3924,19 @@ test('the actual Transit lifecycle keeps exactly its own camera listener in ever
   }
 });
 
-test('moving and stationary transit stay adjacent above CCTV and Bikeshare during migration', async (t) => {
-  const {
-    registerSpriteCollection,
-    unregisterSpriteCollection,
-    restoreSpriteOrder,
-  } = await import('../../data/spriteOrder.js');
+test('moving and stationary transit draw next to each other, above CCTV and Bikeshare and under flights', (t) => {
   const app = harness(t);
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(1, BOSTON, 70);
-  const cctv = {},
-    bike = {},
-    flights = {};
-  // The marker sets' hosts, named by their set ids as the draw port names
-  // them, between the others.
-  const [stillId, movingId] = app.layer._transitSetIdsForTest();
-  const still = { drawSetId: stillId },
-    moving = { drawSetId: movingId };
-  app.primitives.push(cctv, still, bike, moving, flights);
-  app.viewer.scene.primitives.raiseToTop = (c) => {
-    app.primitives.splice(app.primitives.indexOf(c), 1);
-    app.primitives.push(c);
-  };
-  const collections = new Map([
-    ...app.sprites,
-    ['cctv', cctv],
-    ['bikeshare', bike],
-    ['flights', flights],
-  ]);
-  for (const [id, collection] of collections)
-    registerSpriteCollection(id, collection);
-  t.after(() => {
-    for (const [id, c] of collections) unregisterSpriteCollection(id, c);
-  });
-  const entry = app.vehicles()[0],
-    parts = app.layer._transitPartsForTest();
-  const stillHost = still,
-    movingHost = moving;
-  for (const moving of [true, false, true]) {
-    entry.sample.phase = moving ? 'playing' : 'held';
-    entry.sample.segmentSpeedMps = moving ? 1 : 0;
-    entry.sample.segmentCourseDeg = NaN;
-    parts.rendering.schedulePlayback(entry);
-    restoreSpriteOrder(app.viewer);
-    parts.rendering.flushMarkers();
-    assert.ok(app.markers(moving ? 'moving' : 'still').has(entry.key));
-    const active = app.primitives.indexOf(moving ? movingHost : stillHost);
-    assert.ok(active > app.primitives.indexOf(cctv));
-    assert.ok(active > app.primitives.indexOf(bike));
-    assert.ok(active < app.primitives.indexOf(flights));
-    assert.equal(
-      app.primitives.indexOf(movingHost) - app.primitives.indexOf(stillHost),
-      1,
-    );
-  }
+  const [still, moving] = app.layer
+    ._transitSetIdsForTest()
+    .map((id) => app.draw.set(id).spec.drawOrder);
+  assert.equal(still, spriteDrawOrder('transit'));
+  assert.equal(moving, spriteDrawOrder('transit-motion'));
+  assert.equal(moving - still, 1, 'adjacent, the moving ones over the still');
+  for (const under of ['cctv', 'bikeshare'])
+    assert.ok(still > spriteDrawOrder(under), `over ${under}`);
+  assert.ok(moving < spriteDrawOrder('flights'), 'under flights');
 });
 
 test('transit polls the supplied source and cancels it when disabled', async (t) => {

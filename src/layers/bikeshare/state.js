@@ -27,10 +27,6 @@ export function createState({ services }) {
 
   layerState._selectedSet = null;
 
-  /** The station set's sprite-order registration, while it has one. */
-
-  layerState._spriteEntry = null;
-
   /** Whether the bikeshare layer is currently enabled. */
 
   layerState._enabled = false;

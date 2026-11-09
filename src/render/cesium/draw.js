@@ -722,7 +722,8 @@ export function createCesiumDraw({
       slot >= 0 && slot + 1 < scene.primitives.length
         ? scene.primitives.get(slot + 1)
         : null;
-    // Named for code that orders the scene's primitives (`spriteOrder.js`).
+    // Named for code that finds a set's host among the scene's primitives
+    // (`uploadProbe.js`).
     host.drawSetId = record.spec.id;
     // Only old ground primitives wait for the new ones: the rest of the old
     // host goes now, as the new host's own parts draw at once.
@@ -765,9 +766,8 @@ export function createCesiumDraw({
    * higher order goes earlier; of one order, in the order they were made.
    * The hosts trade places among the slots they hold, so nothing else in
    * the scene moves. Nothing moves while every set is at 0 (unless an order
-   * just changed, `changed`), so sets at 0 stack as they were first drawn
-   * (and as the sprite order raises them); nor while the hosts are already
-   * in order.
+   * just changed, `changed`), so sets at 0 stack as they were first drawn;
+   * nor while the hosts are already in order.
    * Translucent ones blend order-independently, whatever their order, and
    * items in different view frustums stack nearer frustum first.
    * @param {boolean} [changed]

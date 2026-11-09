@@ -9,8 +9,6 @@ export function createLifecycle({
   resolveAsset,
 }) {
   const { clearFocusTarget } = services.focus;
-  const { registerSpriteSet, restoreSpriteOrder, restoreSpriteOrderOnEnable } =
-    services.sprites;
   const { onMilitaryLayerActiveChange } = services.militaryRegistry;
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
@@ -45,7 +43,7 @@ export function createLifecycle({
       clearFocusTarget('flights');
       flightState._focusEvidenceIds.clear();
       flightState._viewer = viewer;
-      registerSpriteSet('flights', parts.icons._createIcons(viewer));
+      parts.icons._createIcons(viewer);
       // The models' draw sets; a hidden item keeps the tracked asset loaded so
       // the tracked plane's model draws as soon as it is wanted.
       parts.rendering._createModelSets(viewer, {
@@ -97,8 +95,6 @@ export function createLifecycle({
           parts.tracking._onMilitaryActiveChange,
         );
       }
-
-      restoreSpriteOrder(viewer);
 
       console.log('[Data:Flights] Initialized with GPU icons');
     },
@@ -152,7 +148,6 @@ export function createLifecycle({
           flightState._lastFleetTickMs = 0;
         });
       }
-      restoreSpriteOrderOnEnable('flights', viewer);
     },
 
     /**

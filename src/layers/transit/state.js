@@ -26,9 +26,6 @@ export function createState({ services }) {
   /** The still markers' icon draw set, and the moving ones', or null. */
   state._stillIcons = null;
   state._movingIcons = null;
-  /** Their sprite-order registrations. */
-  state._stillSprite = null;
-  state._movingSprite = null;
   /** Whether the markers are shown (the layer is on). */
   state._markersShown = false;
   state._visible = new Set();
