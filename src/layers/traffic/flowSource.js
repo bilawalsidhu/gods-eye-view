@@ -11,6 +11,26 @@ const FLOW_TILE_PATH = (z, x, y) => `/api/tomtom/flow/${z}/${x}/${y}.pbf`;
  * (STALE-BUDGET once the daily budget is spent, STALE-ERROR when TomTom
  * fails), and when the proxy fetched it.
  */
+/**
+ * The machine-readable reason a failed tile carries: `code` (hosted usage,
+ * e.g. USAGE_LIMIT_REACHED or RATE_LIMITED) or the local proxy's `error`
+ * (`no_key`, `budget`). Only short identifiers are kept; prose is ignored.
+ */
+async function failureCode(response) {
+  if (!/json/i.test(response.headers?.get?.('content-type') || '')) return null;
+  try {
+    const text = await response.text();
+    if (text.length > 4096) return null;
+    const body = JSON.parse(text);
+    const code = body?.code ?? body?.error;
+    return typeof code === 'string' && /^[A-Za-z_]{1,40}$/.test(code)
+      ? code
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function tileFreshness(response) {
   const status = response.headers?.get?.('x-tomtom-cache') || '';
   const fetchedAt = Number(response.headers?.get?.('x-tomtom-fetched-at'));
@@ -60,7 +80,16 @@ export function createFlowTileSource({
     },
     fetchImpl: async (url, init) => {
       const response = await fetchImpl(url, init);
-      if (response.ok && !init.signal.aborted) {
+      if (!response.ok) {
+        const code = await failureCode(response);
+        await response.body?.cancel().catch(() => {});
+        throw Object.assign(
+          // Classified for display by deriveTrafficFlowError.
+          new Error(`TomTom flow unavailable (HTTP ${response.status})`),
+          { status: response.status, code },
+        );
+      }
+      if (!init.signal.aborted) {
         const path = String(url);
         const entry = {
           mark: tileFreshness(response),

@@ -455,7 +455,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   )
   #cesium-credits {
   right: auto;
-  bottom: calc(2vh + 5rem);
+  bottom: calc(2vh + 5rem + var(--world-timeline-lift, 0px));
   left: 1.5rem;
   width: auto !important;
   max-width: calc(100vw - 3rem);
@@ -464,21 +464,21 @@ body:not(.ui-clean-view):not(.recording-mode):has(
 
 #intel-hud[data-variant='tactical'] .hud-bottom-left,
 #intel-hud[data-variant='tactical'] .hud-bottom-right {
-  bottom: calc(2vh + 6.5rem);
+  bottom: calc(2vh + 6.5rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 5.4rem);
+  bottom: calc(2vh + 5.4rem + var(--world-timeline-lift, 0px));
 }
 
 :root[data-scope-mask='off']
   #intel-hud[data-variant='minimal']
   .hud-bottom-left {
-  bottom: calc(2vh + 6.5rem);
+  bottom: calc(2vh + 6.5rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 9rem);
+  bottom: calc(2vh + 9rem + var(--world-timeline-lift, 0px));
 }
 
 @media (max-width: 900px) {
@@ -487,7 +487,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(
       #intel-hud[data-variant='minimal'].active
     )
     #cesium-credits {
-    bottom: calc(2vh + 5rem);
+    bottom: calc(2vh + 5rem + var(--world-timeline-lift, 0px));
     left: 0.75rem;
     max-width: calc(100vw - 1.5rem);
   }
