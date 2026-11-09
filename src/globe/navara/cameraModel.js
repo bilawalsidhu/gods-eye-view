@@ -101,7 +101,13 @@ export function createCameraModel({
   };
   // A camera command takes the camera from whoever held it; say so first.
   const announce = () => events.commanded.raiseEvent();
-  const initial = port.read();
+  // Navara's camera sits at the Earth's centre until it is first placed: no
+  // pose yet (Cesium's camera always has one).
+  const read = () => {
+    const pose = port.read();
+    return pose && cartesian3.magnitude(pose.position) > 1 ? pose : null;
+  };
+  const initial = read();
   let state = initial
     ? copyPose(initial)
     : (() => {
@@ -216,7 +222,7 @@ export function createCameraModel({
 
   /** Reads Navara's drawn camera; called once per frame before preRender. */
   function sync() {
-    const seen = port.read();
+    const seen = read();
     if (!seen) return;
     const moved = !lastSeen || !posesNear(seen, lastSeen, 1e-6, 1e-10);
     lastSeen = copyPose(seen);

@@ -157,6 +157,21 @@ test('a camera Navara moves by itself (user input) becomes the pose', () => {
   near(camera.pose().heading, 0.3, 1e-9, 'heading');
 });
 
+test('a Navara camera not yet placed (at the Earth centre) is not the pose', () => {
+  const port = createFakePort();
+  const unplaced = {
+    position: cartesian3.create(0, 0, 0),
+    direction: cartesian3.create(0, 0, -1),
+    up: cartesian3.create(0, 1, 0),
+  };
+  port.drawn = unplaced;
+  const model = createCameraModel({ port, clock: createClock() });
+  assert.ok(Number.isFinite(model.camera.height()), 'height at start');
+  model.sync();
+  assert.ok(Number.isFinite(model.camera.height()), 'height after a sync');
+  assert.ok(model.camera.pose().cartographic, 'a place on the Earth');
+});
+
 test('missing angles default to heading 0, pitch −π/2 and roll 0', () => {
   const { camera } = setup();
   const destination = cartesian3.fromDegrees(40, 30, 20000);
