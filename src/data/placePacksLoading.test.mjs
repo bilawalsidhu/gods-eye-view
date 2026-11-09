@@ -41,3 +41,17 @@ test('a pack that would not load stays failed until it loads', async () => {
   assert.equal(await retry, 1);
   assert.deepEqual(place.placePacksStatus(), { loading: false, failed: false });
 });
+
+test('one lookup that loads several packs reads as one load', async () => {
+  const place = await import('./placeBelow.js?one-lookup');
+  const heard = [];
+  const stop = place.onPlacePacksLoadingChange(() => {
+    const { loading } = place.placePacksStatus();
+    if (heard.at(-1) !== loading) heard.push(loading);
+  });
+  // On land with a radius: countries and seas, then divisions, then places.
+  const found = await place.placeBelow(48.86, 2.35, { nearKm: 50 });
+  assert.equal(found.near, 'Paris');
+  assert.deepEqual(heard, [true, false], 'no gap between the packs');
+  stop();
+});

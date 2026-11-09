@@ -50,6 +50,11 @@ const PACKS = {
 /** The packs on their way now, and those whose last load failed. */
 const loadingPacks = new Set();
 const failedPacks = new Set();
+// One lookup loads its packs one after another (countries and seas, then
+// divisions, then places): the status holds them as one load until the
+// lookup ends, rather than ending and starting a batch between packs.
+let lookupsInFlight = 0;
+let lookupLoaded = false;
 const loadingListeners = new Set();
 
 function notifyLoading() {
@@ -74,6 +79,7 @@ export function reportedPlacePackLoad(name, load) {
   return async () => {
     // A retry is a fresh try: its batch ends on what this load does.
     failedPacks.delete(name);
+    if (lookupsInFlight > 0) lookupLoaded = true;
     loadingPacks.add(name);
     notifyLoading();
     try {
@@ -97,7 +103,10 @@ export function reportedPlacePackLoad(name, load) {
  * @returns {{loading: boolean, failed: boolean}}
  */
 export function placePacksStatus() {
-  return { loading: loadingPacks.size > 0, failed: failedPacks.size > 0 };
+  return {
+    loading: loadingPacks.size > 0 || (lookupLoaded && lookupsInFlight > 0),
+    failed: failedPacks.size > 0,
+  };
 }
 
 /**
@@ -324,7 +333,20 @@ async function orNull(lookup) {
  *   simplification) or it is invalid. Rejects only when the country and
  *   marine packs fail.
  */
-export async function placeBelow(
+export async function placeBelow(latitude, longitude, options) {
+  lookupsInFlight += 1;
+  try {
+    return await findPlaceBelow(latitude, longitude, options);
+  } finally {
+    lookupsInFlight -= 1;
+    if (lookupsInFlight === 0 && lookupLoaded) {
+      lookupLoaded = false;
+      notifyLoading();
+    }
+  }
+}
+
+async function findPlaceBelow(
   latitude,
   longitude,
   { nearKm = null, detail = DETAIL_LOOKUPS } = {},
