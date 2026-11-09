@@ -102,12 +102,13 @@ const preWildlifeRows = reservationRows.filter(
 );
 
 function writeCodecFixture(cwd, rows, entries) {
-  const providerCodec = path.join(cwd, 'src/data/idSwitches.js');
-  mkdirSync(path.dirname(providerCodec), { recursive: true });
-  writeFileSync(
-    providerCodec,
-    readFileSync(new URL('./idSwitches.js', import.meta.url)),
-  );
+  mkdirSync(path.join(cwd, 'src/data'), { recursive: true });
+  // The codec's own imports, beside it.
+  for (const name of ['idSwitches.js', 'satelliteClassMask.js'])
+    writeFileSync(
+      path.join(cwd, 'src/data', name),
+      readFileSync(new URL(`./${name}`, import.meta.url)),
+    );
   let source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
   if (!rows.some(([id]) => id === 'wildlife-sightings'))
     source = source.replace(

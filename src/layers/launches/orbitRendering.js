@@ -67,6 +67,9 @@ export function createOrbitRendering({
     return Boolean(
       layerState._enabled &&
       layerState._dataSource?.show &&
+      !layerState.launchHidden(
+        layerState._missionOverlayRecords.get(launchId)?.launch,
+      ) &&
       (!layerState._selectedLaunchId ||
         layerState._selectedLaunchId === launchId),
     );
@@ -124,7 +127,7 @@ export function createOrbitRendering({
     collection.show = missionOrbitPrimitiveVisible(launch.id);
     orbitFrameModelMatrix(
       satelliteTrack.gmstAtBake,
-      new Date(),
+      new Date(layerState.orbitNow()),
       collection.modelMatrix,
     );
     layerState._viewer.scene.primitives.add(collection);
