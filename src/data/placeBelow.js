@@ -10,7 +10,8 @@
  *
  * PURE data module: no Cesium, node-testable. Each pack loads lazily on the
  * first lookup that needs it (divisions on the first land hit, places on the
- * first radius) and is indexed once; a country's division rings are decoded
+ * first radius) and is indexed once, and the loading status names them while
+ * one is on its way (`placePacksStatus`); a country's division rings are decoded
  * the first time a point falls inside it. A failed load is retried later
  * (see `createRetryableLoader`). No network.
  */
@@ -45,6 +46,86 @@ const PACKS = {
     import.meta.url,
   ),
 };
+
+/**
+ * The packs on their way now, and those that failed in the current load (or
+ * the last one): a load starts with no failures, so a retry that lands is
+ * not blamed for a pack that failed before. (A load that does not need the
+ * failed pack clears it too; the next lookup that needs it tries it again.)
+ */
+const loadingPacks = new Set();
+const failedPacks = new Set();
+// One lookup loads its packs one after another (countries and seas, then
+// divisions, then places): the status holds them as one load until the
+// lookup ends, rather than ending and starting a batch between packs.
+let lookupsInFlight = 0;
+let lookupLoaded = false;
+const loadingListeners = new Set();
+
+function notifyLoading() {
+  for (const listener of [...loadingListeners]) {
+    try {
+      listener();
+    } catch {
+      /* A status listener never breaks a lookup. */
+    }
+  }
+}
+
+/** Whether the status shows a load on its way. */
+function loadingNow() {
+  return loadingPacks.size > 0 || (lookupLoaded && lookupsInFlight > 0);
+}
+
+/**
+ * A pack load that the loading status follows: on its way while it runs,
+ * and failed, if it fails, until the next load starts.
+ * @template T
+ * @param {string} name
+ * @param {() => Promise<T>} load
+ * @returns {() => Promise<T>}
+ */
+export function reportedPlacePackLoad(name, load) {
+  return async () => {
+    // A fresh load forgets earlier failures: it ends on what it loads.
+    if (!loadingNow()) failedPacks.clear();
+    if (lookupsInFlight > 0) lookupLoaded = true;
+    loadingPacks.add(name);
+    notifyLoading();
+    try {
+      return await load();
+    } catch (error) {
+      failedPacks.add(name);
+      throw error;
+    } finally {
+      loadingPacks.delete(name);
+      notifyLoading();
+    }
+  };
+}
+
+/**
+ * The place packs' state for the loading status. The packs load lazily, on
+ * the first lookup that needs them, so the status says so meanwhile, and
+ * says when one would not load.
+ * @returns {{loading: boolean, failed: boolean}}
+ */
+export function placePacksStatus() {
+  return {
+    loading: loadingNow(),
+    failed: failedPacks.size > 0,
+  };
+}
+
+/**
+ * Hear each start and end of a place pack load.
+ * @param {() => void} listener
+ * @returns {() => void} Stops listening.
+ */
+export function onPlacePacksLoadingChange(listener) {
+  loadingListeners.add(listener);
+  return () => loadingListeners.delete(listener);
+}
 
 /** Test seam: count pack loads (lazy-loading contract). */
 export const placePackLoads = { divisions: 0, places: 0 };
@@ -106,7 +187,7 @@ function ringRank(ring) {
   return (Math.abs(sum) / 2) * Math.cos((meanLat * Math.PI) / 180);
 }
 
-const loadPlaces = createRetryableLoader(async () => {
+async function readPlaces() {
   const [countries, marine] = await Promise.all([
     loadBundledJson(PACKS.countries),
     loadBundledJson(PACKS.marine),
@@ -142,10 +223,13 @@ const loadPlaces = createRetryableLoader(async () => {
     });
   }
   return { land, water };
-});
+}
+const loadPlaces = createRetryableLoader(
+  reportedPlacePackLoad('places', readPlaces),
+);
 
 /** Divisions grouped by country code; rings decoded per country on demand. */
-const loadDivisions = createRetryableLoader(async () => {
+async function readDivisions() {
   placePackLoads.divisions += 1;
   const pack = await loadBundledJson(PACKS.divisions);
   const decimals = pack.meta?.decimals ?? 3;
@@ -157,7 +241,10 @@ const loadDivisions = createRetryableLoader(async () => {
     byCountry.set(feature.iso2, list);
   }
   return { byCountry, decoded: new Map() };
-});
+}
+const loadDivisions = createRetryableLoader(
+  reportedPlacePackLoad('divisions', readDivisions),
+);
 
 /** The first-level division holding a point inside country `code`, or null. */
 async function divisionAt(code, lat, lon) {
@@ -179,7 +266,7 @@ async function divisionAt(code, lat, lon) {
   return null;
 }
 
-const loadPopulatedPlaces = createRetryableLoader(async () => {
+async function readPopulatedPlaces() {
   placePackLoads.places += 1;
   const pack = await loadBundledJson(PACKS.places);
   return (pack.places || []).filter(
@@ -189,7 +276,10 @@ const loadPopulatedPlaces = createRetryableLoader(async () => {
       Number.isFinite(row[1]) &&
       Number.isFinite(row[2]),
   );
-});
+}
+const loadPopulatedPlaces = createRetryableLoader(
+  reportedPlacePackLoad('populated-places', readPopulatedPlaces),
+);
 
 /**
  * The most prominent populated place within `radiusKm` of a point (lowest
@@ -251,7 +341,20 @@ async function orNull(lookup) {
  *   simplification) or it is invalid. Rejects only when the country and
  *   marine packs fail.
  */
-export async function placeBelow(
+export async function placeBelow(latitude, longitude, options) {
+  lookupsInFlight += 1;
+  try {
+    return await findPlaceBelow(latitude, longitude, options);
+  } finally {
+    lookupsInFlight -= 1;
+    if (lookupsInFlight === 0 && lookupLoaded) {
+      lookupLoaded = false;
+      notifyLoading();
+    }
+  }
+}
+
+async function findPlaceBelow(
   latitude,
   longitude,
   { nearKm = null, detail = DETAIL_LOOKUPS } = {},
