@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Applications can ask Draw for one area or line and get its geometry back
+  without placing a mark (`drawShape` from `createApplicationTools`), and their
+  own click handlers can yield while a tool holds the pointer, as the layers'
+  do (`pointerFree`) (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption

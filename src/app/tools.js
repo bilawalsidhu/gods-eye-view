@@ -1,6 +1,7 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import { isPointerFree } from '../data/inputOwnership.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -245,5 +246,17 @@ export function createApplicationTools({
       signal,
     }),
   );
-  return { sceneDirector, annotations, voiceCommands };
+  // Draw one area or line and get its geometry back, without placing a mark
+  // (annotations/drawTool.js `drawShape`); null without the Draw controls.
+  const drawShape = (options) =>
+    drawTool ? drawTool.drawShape(options) : Promise.resolve(null);
+  // An application's own click handlers yield while a tool holds the pointer,
+  // as the layers' do (data/inputOwnership.js).
+  return {
+    sceneDirector,
+    annotations,
+    voiceCommands,
+    drawShape,
+    pointerFree: isPointerFree,
+  };
 }

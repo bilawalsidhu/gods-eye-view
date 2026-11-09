@@ -54,6 +54,7 @@ import {
   DRAW_COLORS,
   DRAW_COLOR_CSS,
   drawMarkActions,
+  drawMarkGeometry,
   drawMarkActionsFor,
   drawMarkFallbackName,
   presentDrawMarks,
@@ -120,6 +121,9 @@ export function initDrawTool({
   let savedDoubleClick = null;
   let savedSingleClick = null;
   let cursor = null; // last mouse position on the canvas, for the rubber band
+  // One shape asked for by `drawShape`: `{ resolve, restoreShape, off }`. Its
+  // finish hands the geometry back instead of placing a mark.
+  let request = null;
   // Bumped by anything that supersedes an in-flight finish: cancelling, clearing
   // the board, leaving draw mode, teardown. An `annotate()` that resolves after
   // one of those must not write its outcome over the newer state.
@@ -280,6 +284,20 @@ export function initDrawTool({
     // Named afterwards, in the shape's row.
     const spec = finishSpec(session, { label: '', color });
     if (!spec) return null;
+    if (request) {
+      // As a row's actions get it: a shape across the antimeridian has none,
+      // and is drawn again rather than handed back wrapped round the world.
+      const geometry = drawMarkGeometry(spec);
+      if (!geometry) {
+        session = createDrawSession(shape);
+        cursor = null;
+        syncPreview();
+        setHint(() => t('That shape could not be placed.'));
+        return null;
+      }
+      endRequest(geometry);
+      return geometry;
+    }
     // Start a fresh session BEFORE awaiting, so a second Enter or the second
     // half of a double-click cannot submit the same shape twice.
     session = createDrawSession(shape);
@@ -407,6 +425,7 @@ export function initDrawTool({
       generation += 1;
       session = null;
       cursor = null;
+      endRequest(null);
       releaseSceneHandler();
       releasePointer(lease);
       lease = null;
@@ -532,6 +551,46 @@ export function initDrawTool({
     return true;
   }
 
+  /**
+   * Close the asked-for shape with `geometry` (null when there is none): the
+   * shape chosen before it comes back, and draw mode ends.
+   */
+  function endRequest(geometry) {
+    const open = request;
+    if (!open) return;
+    request = null;
+    open.off();
+    chooseShape(open.restoreShape);
+    open.resolve(geometry);
+    if (active) setActive(false);
+  }
+
+  /**
+   * Draw one area or line and hand back its geometry (a Polygon or a
+   * LineString) without placing a mark. Escape works as in Draw: the first
+   * clears a shape in progress, and one on an empty shape leaves. Resolves null
+   * when draw mode is left, `signal` aborts, or the pointer is taken.
+   * A second request ends the first with null.
+   * @param {{shape?: 'area'|'line', signal?: AbortSignal}} [options]
+   * @returns {Promise<{type: 'Polygon', coordinates: number[][][]}|{type: 'LineString', coordinates: number[][]}|null>}
+   */
+  function drawShape({ shape: wanted = 'area', signal } = {}) {
+    if (destroyed || signal?.aborted) return Promise.resolve(null);
+    endRequest(null);
+    const restoreShape = shape;
+    return new Promise((resolve) => {
+      const abort = () => endRequest(null);
+      signal?.addEventListener('abort', abort, { once: true });
+      request = {
+        resolve,
+        restoreShape,
+        off: () => signal?.removeEventListener('abort', abort),
+      };
+      chooseShape(normalizeShape(wanted) === 'line' ? 'line' : 'area');
+      if (!active && !setActive(true)) endRequest(null);
+    });
+  }
+
   /** Draw `next` from now on; an open shape starts over in it. */
   function chooseShape(next) {
     shape = normalizeShape(next);
@@ -545,7 +604,10 @@ export function initDrawTool({
   }
   const disconnect = connect({
     toggleDraw: () => setActive(!active),
-    setDrawShape: chooseShape,
+    // An asked-for shape is the one asked for.
+    setDrawShape: (next) => {
+      if (!request) chooseShape(next);
+    },
     setDrawColor: (value) => {
       color = DRAW_COLORS.includes(value) ? value : 'primary';
       present();
@@ -602,6 +664,7 @@ export function initDrawTool({
     finish,
     cancel,
     clearAll,
+    drawShape,
     shapes: DRAW_SHAPES,
     /** What this tool currently holds — for teardown and leak assertions. */
     diagnostics() {
@@ -638,6 +701,7 @@ export function initDrawTool({
       if (destroyed) return attaching;
       // Supersede any finish still in flight before anything is torn down.
       generation += 1;
+      endRequest(null);
       if (active) setActive(false);
       destroyed = true;
       offLocale();
