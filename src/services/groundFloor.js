@@ -418,7 +418,8 @@ export function createGroundFloor({ terrain, signal }) {
   // is the photogrammetric MESH, which sits above it (measured ~17 m at the
   // Austin airport apron). DEM-flooring therefore still buried sprites/trails
   // inside the mesh. These cells hold the RENDERED surface height, sampled
-  // one-shot per coarse cell near the viewer (scene.sampleHeight — the same
+  // a few probes per coarse cell near the viewer, lowest passing reading kept
+  // (a probe can land on a roof) (scene.sampleHeight — the same
   // source groundSnap uses, which is why 3D models always looked right) and
   // reported here by meshFloorSampler.js. Design principle (owner): NEVER
   // below the visible surface; slightly above is always fine. The DEM stays
@@ -444,7 +445,8 @@ export function createGroundFloor({ terrain, signal }) {
 
   /**
    * Records a sampled rendered-surface height for the cell containing the
-   * coordinate (one-shot latch — first accepted sample wins).
+   * coordinate, unchecked; the first record wins. The sampler goes through
+   * `reportValidatedMeshFloorCell`, which keeps the lowest passing reading.
    * @param {number} lat @param {number} lon @param {number} heightM
    */
   function reportMeshFloorCell(lat, lon, heightM) {
@@ -471,9 +473,10 @@ export function createGroundFloor({ terrain, signal }) {
 
   /**
    * Validate and record a rendered-mesh floor through the single shared gate.
-   * Callers must not bypass this with raw `reportMeshFloorCell`: a coarse-LOD,
-   * rooftop, or aircraft hit would otherwise win the session-long first-write
-   * latch and poison every floor consumer in the cell.
+   * Callers must not bypass this with raw `reportMeshFloorCell`: a coarse-LOD
+   * or aircraft hit would otherwise poison every floor consumer in the cell.
+   * The lowest passing reading is kept, so a rooftop hit within the window
+   * gives way to a later probe that reached the street.
    * @returns {boolean} Whether the sample passed and was reported.
    */
   function reportValidatedMeshFloorCell(lat, lon, heightM) {
@@ -481,7 +484,11 @@ export function createGroundFloor({ terrain, signal }) {
     const cell = coarseFloorCoord(lat, lon);
     const prior = cachedRealEllipsoidalGround(cell.lat, cell.lon);
     if (!meshFloorSampleWithinPrior(heightM, prior)) return false;
-    reportMeshFloorCell(cell.lat, cell.lon, heightM);
+    // The lowest passing reading wins: a probe that hit a roof is replaced
+    // by a later one that reached the street.
+    const key = `${cell.lat},${cell.lon}`;
+    const held = _meshCells.get(key);
+    if (held == null || heightM < held) _meshCells.set(key, heightM);
     return true;
   }
 

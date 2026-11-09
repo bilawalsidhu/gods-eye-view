@@ -183,3 +183,57 @@ test('sampler: with `sets` the probe asks the query port, naming those sets', as
   assert.ok(Math.abs(asked[0].point.lat - cell.lat) < 0.05);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), 138.0);
 });
+
+test('sampler: the probe goes where the point is, not to the cell centre', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  const asked = [];
+  const scene = fakeScene((carto) => {
+    asked.push(Cesium.Math.toDegrees(carto.longitude));
+    return 122.0;
+  });
+  const point = { lat: cell.lat + 0.0003, lon: cell.lon + 0.0004 };
+  sampleMeshFloorCells(scene, [point], { viewerLat: cell.lat, viewerLon: cell.lon });
+  assert.equal(asked.length, 1);
+  assert.ok(Math.abs(asked[0] - point.lon) < 1e-9, `probed at ${asked[0]}, not ${point.lon}`);
+});
+
+test('sampler: a rooftop reading gives way to a lower one from another point in the cell', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  // A roof 22 m up at the first point, the street at the others.
+  const roofLon = cell.lon + 0.0004;
+  let calls = 0;
+  const scene = fakeScene((carto) => {
+    calls += 1;
+    return Math.abs(Cesium.Math.toDegrees(carto.longitude) - roofLon) < 1e-7 ? 143.0 : 121.0;
+  });
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  sampleMeshFloorCells(scene, [{ lat: cell.lat, lon: roofLon }], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 143.0, 'the roof passes the +80 m window');
+  sampleMeshFloorCells(scene, [{ lat: cell.lat, lon: roofLon + 0.00001 }], opts);
+  assert.equal(calls, 1, 'a point next to one already probed is not probed again');
+  sampleMeshFloorCells(scene, [{ lat: cell.lat, lon: cell.lon - 0.0003 }], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 121.0, 'the street reading replaces it');
+  assert.equal(cachedGroundFloor(cell.lat, cell.lon), 121.0);
+  sampleMeshFloorCells(scene, [{ lat: cell.lat + 0.0003, lon: cell.lon + 0.0001 }], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 121.0, 'a higher reading never raises it');
+});
+
+test('sampler: a latched cell is read a few times at most', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  let calls = 0;
+  const scene = fakeScene(() => {
+    calls += 1;
+    return 125.0 - calls;
+  });
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  for (let i = 0; i < 10; i++)
+    sampleMeshFloorCells(scene, [{ lat: cell.lat - 0.0004 + i * 0.0001, lon: cell.lon }], opts);
+  assert.equal(calls, 4);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 121.0);
+});
