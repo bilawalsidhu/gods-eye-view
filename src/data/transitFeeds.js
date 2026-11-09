@@ -426,10 +426,13 @@ const actvRouteLabel = routeIdPattern(/^(.+)_[A-Z]{2}$/);
 const bcTransitRouteLabel = routeIdPattern(/^(.+)-VIC$/);
 /** Carris (Lisbon city) appends a variant: `172_1` is route 172. */
 const carrisRouteLabel = routeIdPattern(/^(\w+)_\d+$/);
-/** bus-tracker.fr prefixes the network: `TCAR:93` is Rouen line 93. */
-const busTrackerRouteLabel = routeIdPattern(/^[A-Z]+:(.+)$/);
+/** Astuce prefixes the network: `TCAR:93` is Rouen line 93. */
+const astuceNetworkLabel = routeIdPattern(/^[A-Z]+:(.+)$/);
 /** BAS.MY Johor appends a fixed operator code: `J33CWLMYJB` is route J33. */
 const mybasJohorRouteLabel = routeIdPattern(/^(.+?)CWLMYJB$/);
+
+/** LiA prefixes its network: `8-C3` is Le Havre line C3, `8-09` line 9. */
+const liaRouteLabel = routeIdPattern(/^8-0*(\w.*)$/);
 
 /**
  * Le Havre LiA runs its two tram lines as A and B and the funicular as
@@ -439,15 +442,15 @@ const mybasJohorRouteLabel = routeIdPattern(/^(.+?)CWLMYJB$/);
  */
 function liaRouteMode(routeId) {
   if (!routeId) return 'unknown';
-  if (routeId === 'FUNI') return 'rail';
-  return /^(?:[A-Z]+:)?[AB]$/.test(routeId) ? 'tram' : 'bus';
+  const line = liaRouteLabel(routeId);
+  if (line === 'FUNI') return 'rail';
+  return /^[AB]$/.test(line) ? 'tram' : 'bus';
 }
 
 /**
- * Rouen Astuce lines that are not buses, by bus-tracker.fr route id, from the
- * relay's own `astuce-tcar.zip` routes.txt (checked 2026-11-09): line 90 is
- * the Métro (GTFS type 1, a light rail that runs mostly on the street) and 99
- * the Calypso river boat.
+ * Rouen Astuce lines that are not buses, by route id, from the TCAR
+ * routes.txt (checked 2026-11-09): line 90 is the Métro (GTFS type 1, a light
+ * rail that runs mostly on the street) and 99 the Calypso river boat.
  */
 const ASTUCE_ROUTES = Object.freeze({
   'TCAR:90': Object.freeze({ mode: 'tram', label: 'Métro' }),
@@ -462,7 +465,7 @@ function astuceRouteMode(routeId) {
 
 /** `TCAR:93` is Rouen line 93; the Métro and Calypso keep their names. */
 function astuceRouteLabel(routeId) {
-  return ASTUCE_ROUTES[routeId ?? '']?.label ?? busTrackerRouteLabel(routeId);
+  return ASTUCE_ROUTES[routeId ?? '']?.label ?? astuceNetworkLabel(routeId);
 }
 
 /**
@@ -1504,18 +1507,18 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
   transitFeed({
     id: 'astuce-rouen',
     name: 'Rouen Astuce',
-    operator: 'Métropole Rouen Normandie (Astuce), relayed by bus-tracker.fr',
+    operator: 'Métropole Rouen Normandie (Astuce), réseau TCAR',
     region: 'Rouen, France',
     center: { lat: 49.44, lon: 1.1 },
     loadRadiusKm: 20,
-    url: 'https://gtfs.bus-tracker.fr/gtfs-rt/tcar/?tcar=1&tae=1&tni=1',
+    url: 'https://api.mrn.cityway.fr/dataflow/vehicle-tc-tr/download?provider=TCAR&dataFormat=gtfs-rt',
     license: 'Licence Ouverte 2.0',
     licenseUrl:
       'https://transport.data.gouv.fr/datasets/donnees-statiques-et-temps-reel-du-reseau-astuce-metropole-rouen-normandie',
-    attribution: 'Métropole Rouen Normandie (Astuce) / bus-tracker.fr',
+    attribution: 'Métropole Rouen Normandie (Astuce)',
     terms: {
       quote: 'licence: lov2',
-      note: 'The metropolis publishes its realtime data under the Licence Ouverte (dataset record quoted); this registry reads it through bus-tracker.fr, an unofficial relay that merges the city’s networks into one GTFS-RT file. Route ids carry the network prefix (`TCAR:`); `TCAR:90` is the Métro (a street-running light rail, drawn as a tram) and `TCAR:99` the Calypso boat.',
+      note: 'The metropolis publishes its realtime data under the Licence Ouverte (dataset record quoted), and this is its own TCAR vehicle feed from that record (178 vehicles on 2026-11-09). The suburban TAE and TNI networks are separate feeds in the same record and are not read here. Route ids carry the network prefix (`TCAR:`); `TCAR:90` is the Métro (a street-running light rail, drawn as a tram) and `TCAR:99` the Calypso boat.',
     },
     defaultMode: 'bus',
     routeLabel: astuceRouteLabel,
@@ -1544,21 +1547,21 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
   transitFeed({
     id: 'lia-le-havre',
     name: 'Le Havre LiA',
-    operator: 'Le Havre Seine Métropole (LiA), relayed by bus-tracker.fr',
+    operator: 'Le Havre Seine Métropole (LiA)',
     region: 'Le Havre, France',
     center: { lat: 49.49, lon: 0.11 },
     loadRadiusKm: 18,
-    url: 'https://gtfs.bus-tracker.fr/gtfs-rt/lia/vehicle-positions',
+    url: 'https://opendata.transports-lia.fr/gtfs-rt/VehiclePosition.pb',
     license: 'ODbL',
     licenseUrl:
       'https://transport.data.gouv.fr/datasets/reseau-de-transport-en-commun-lia-gtfs-siri',
-    attribution: 'Le Havre Seine Métropole (LiA) / bus-tracker.fr',
+    attribution: 'Le Havre Seine Métropole (LiA)',
     terms: {
       quote: 'licence: odc-odbl',
-      note: 'The network publishes under ODbL (dataset record quoted); read through the bus-tracker.fr relay, which converts its SIRI feed to GTFS-RT. The layer draws positions and redistributes no database. Lines A and B are the tramway.',
+      note: 'The network publishes under ODbL (dataset record quoted), and this is its own GTFS-RT vehicle feed from that record (105 vehicles on 2026-11-09). The layer draws positions and redistributes no database. Route ids carry the network prefix `8-`; lines A and B are the tramway.',
     },
     defaultMode: 'bus',
-    routeLabel: busTrackerRouteLabel,
+    routeLabel: liaRouteLabel,
     routeMode: liaRouteMode,
   }),
   transitFeed({

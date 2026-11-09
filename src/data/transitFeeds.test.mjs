@@ -702,8 +702,8 @@ test('trams, waterbuses and buses are told apart where the ids allow it', () => 
   assert.equal(mode('pid-praha', 'L22'), 'tram');
   assert.equal(mode('pid-praha', 'L135'), 'bus');
   assert.equal(mode('tbm-bordeaux', '16'), 'bus');
-  assert.equal(mode('lia-le-havre', 'B'), 'tram');
-  assert.equal(mode('lia-le-havre', '3'), 'bus');
+  assert.equal(mode('lia-le-havre', '8-B'), 'tram');
+  assert.equal(mode('lia-le-havre', '8-C3'), 'bus');
   assert.equal(mode('ztp-krakow-tram', null), 'tram');
   assert.equal(mode('actv-venezia-waterbus', '1_UN'), 'ferry');
 });
@@ -759,14 +759,18 @@ test('Bordeaux trams ride numbered route ids and keep their letters', () => {
   assert.equal(transitRouteLabel(feed, '01'), '1');
 });
 
-test('Rouen Métro and Calypso are not buses', () => {
+test('Rouen Métro and Calypso are not buses; Le Havre reads its own ids', () => {
   const feed = getTransitFeed('astuce-rouen');
   assert.equal(transitModeFor(feed, 'TCAR:90'), 'tram');
   assert.equal(transitRouteLabel(feed, 'TCAR:90'), 'Métro');
   assert.equal(transitModeFor(feed, 'TCAR:99'), 'ferry');
   assert.equal(transitModeFor(feed, 'TCAR:93'), 'bus');
   assert.equal(transitRouteLabel(feed, 'TAE:F'), 'F');
-  assert.equal(transitModeFor(getTransitFeed('lia-le-havre'), 'FUNI'), 'rail');
+  const lia = getTransitFeed('lia-le-havre');
+  assert.equal(transitModeFor(lia, '8-FUNI'), 'rail');
+  assert.equal(transitRouteLabel(lia, '8-C3'), 'C3');
+  assert.equal(transitRouteLabel(lia, '8-09'), '9');
+  assert.equal(transitRouteLabel(lia, '8-A'), 'A');
 });
 
 test('data.gov.my feeds ask the proxy for no more than its 4 a minute', () => {
