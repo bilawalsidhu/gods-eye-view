@@ -363,9 +363,10 @@ resources and subscriptions. The globe relief helper is enabled with Wind and
 released when Wind is disabled. It uses terrain vertex normals
 for view-directed shading, falling back to global globe-curvature shading when
 normals are unavailable; the fallback does not show local hillshade. Neither mode
-adds elevation data or represents sunlight. Relief declines to replace an
-existing globe material, restores the prior empty material only while still
-owning it, and leaves later owners intact.
+adds elevation data or represents sunlight. Relief is the globe port's
+`hillshade` surface shading: the renderer never replaces a globe material
+someone else holds (it waits until that one is gone), gives the globe back
+when Wind is disabled, and leaves later owners intact.
 Source acquisition retains deadlines, body budgets, disconnect cancellation,
 per-model/field singleflight caching and one-minute failure backoff. Application
 catalog construction owns each instance.

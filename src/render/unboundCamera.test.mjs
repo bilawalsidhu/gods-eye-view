@@ -133,6 +133,11 @@ const DRAW_FROM_CALLER = new Set([
   // It configures the sources of layers, the traffic layer's among them,
   // that draw and read the surface through the ports alone.
   './application/sources',
+  // The layer catalog and the standalone catalog over it: their layers, the
+  // weather shells and the wind flow and relief among them, draw, read the
+  // eye and shade the globe through the ports alone.
+  './application/layers',
+  './standalone/catalog',
 ]);
 
 /**

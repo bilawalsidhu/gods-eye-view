@@ -5,8 +5,6 @@
   "src/app/scene.js",
   "src/app/viewer.js",
   "src/data/geoImportPins.js",
-  "src/layers/wind/relief.js",
-  "src/layers/wind/rendering.js",
   "src/maps/catalog.js",
   "src/maps/controller.js",
   "src/maps/google3d.js",

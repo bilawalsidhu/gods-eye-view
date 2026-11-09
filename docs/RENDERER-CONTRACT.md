@@ -65,8 +65,12 @@ optional, so a renderer written before it still conforms:
   one, and says how shells stack, blend and update. `FieldHandle.on('drawn')`
   says once per spec or `update` that it is drawn, never while hidden. These
   change `fields` itself rather than add to it, so the renderer follows
-  `fields` before must follow them; only the stub lists it, and the Cesium
-  adapter has no `fields` yet.
+  `fields` before must follow them. The Cesium adapter lists `fields` and
+  draws `rasterShell` and `windStreamlines`; it refuses `scalarRaster`. It
+  draws streamlines only over the whole globe: it reads the grid's samples
+  as points, the first column at `rectangle.west` and the first row at
+  `rectangle.north`, rows running south, and traces paths that wrap east
+  and west, so it refuses a grid short of 360° of longitude.
 - `ModulationSector` gains `radius` and `floor` and says what it modulates:
   icons, points and models dimmed toward `floor` outside the band, the map,
   lines and shapes as they are, picks unchanged. Its pass is named

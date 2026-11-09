@@ -1,7 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
-
 import { createWindRendering } from './rendering.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
@@ -11,6 +9,7 @@ import {
   renderShells,
 } from '../weather/shellFixture.mjs';
 import { createCesiumFields } from '../../render/cesium/drawFields.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
 
 function event() {
   const listeners = new Set();
@@ -179,6 +178,7 @@ function harness({
   const viewer = {
     container,
     imageryLayers,
+    canvas,
     scene: {
       canvas,
       camera: {
@@ -200,40 +200,48 @@ function harness({
     isDestroyed: () => false,
   };
   const shellCesium = shell ? createShellCesium() : null;
-  const cesium = {
-    ...(shellCesium ?? {}),
-    GeographicTilingScheme: Cesium.GeographicTilingScheme,
-    Credit: Cesium.Credit,
-    Event: Cesium.Event,
-    Cartesian3: { fromDegrees: (lon, lat) => ({ lon, lat }) },
-    Ellipsoid: { WGS84: {} },
-    Rectangle: { MAX_VALUE: {} },
-    EllipsoidalOccluder: class {
-      isPointVisible() {
-        return !occluded;
-      }
+  // The camera, frame and query ports over the doubles above, read live.
+  const cameraPort = {
+    pose() {
+      const camera = viewer.scene.camera;
+      return {
+        position: camera.positionWC,
+        heading: camera.heading,
+        pitch: camera.pitch,
+        roll: camera.roll,
+        height: camera.positionCartographic?.height,
+      };
     },
-    SceneTransforms: {
-      worldToWindowCoordinates: projected ?? (() => ({ x: 100, y: 100 })),
-    },
-    SingleTileImageryProvider: class {
-      constructor(options) {
-        this.options = options;
-        this.errorEvent = event();
-      }
-    },
+    viewRectangle: () => viewer.scene.camera.viewRectangle?.() ?? null,
+    on: (name, cb) =>
+      name === 'moveEnd'
+        ? viewer.scene.camera.moveEnd.addEventListener(cb)
+        : () => {},
+  };
+  const framePort = {
+    on: (name, cb) =>
+      name === 'preRender' ? preRender.addEventListener(cb) : () => {},
+    requestRender: () => viewer.scene.requestRender(),
+  };
+  // Projections see the point as degrees, as the doubles above were written.
+  const project = projected ?? (() => ({ x: 100, y: 100 }));
+  const queryPort = {
+    isOccluded: () => occluded,
+    project: (point) => project(viewer.scene, toLonLatH(point)),
   };
   const fields = shellCesium
     ? createCesiumFields({ scene: viewer.scene, cesium: shellCesium })
     : null;
   const draw = fields && { field: (spec) => fields.field(spec) };
   const rendering = createWindRendering({
-    cesium,
     container,
     getViewer: () => viewer,
     globeOf: (given) => (given === viewer ? globe : null),
     // The Cesium draw port's raster shells, over the doubles.
     drawOf: (given) => (given === viewer ? draw : null),
+    cameraOf: (given) => (given === viewer ? cameraPort : null),
+    frameOf: (given) => (given === viewer ? framePort : null),
+    queryOf: (given) => (given === viewer ? queryPort : null),
     createGpuRendering,
     onStatusChange,
     getHost,
@@ -254,7 +262,7 @@ function harness({
     motion,
     preRender,
     viewer,
-    cesium: shellCesium ?? cesium,
+    cesium: shellCesium,
     imagery,
     removed,
     primitives: () => shellScene?.primitives.items ?? [],
@@ -595,11 +603,11 @@ test('a large camera move immediately refills the newly visible region', () => {
       y: 300 + point.lat * 20,
     }),
   });
-  h.viewer.scene.camera.computeViewRectangle = () => ({
-    west: ((center - 10) * Math.PI) / 180,
-    east: ((center + 10) * Math.PI) / 180,
-    south: (-10 * Math.PI) / 180,
-    north: (10 * Math.PI) / 180,
+  h.viewer.scene.camera.viewRectangle = () => ({
+    west: center - 10,
+    east: center + 10,
+    south: -10,
+    north: 10,
   });
   h.rendering.attach();
   h.rendering.setField(FIELD);
@@ -624,11 +632,11 @@ test('world-anchored wind glyphs remain readable at low FPS without accelerating
       y: 300 + point.lat * 20,
     }),
   });
-  h.viewer.scene.camera.computeViewRectangle = () => ({
-    west: (-5 * Math.PI) / 180,
-    east: (5 * Math.PI) / 180,
-    south: (-0.001 * Math.PI) / 180,
-    north: (0.001 * Math.PI) / 180,
+  h.viewer.scene.camera.viewRectangle = () => ({
+    west: -5,
+    east: 5,
+    south: -0.001,
+    north: 0.001,
   });
   h.rendering.attach();
   h.rendering.setField(FIELD);

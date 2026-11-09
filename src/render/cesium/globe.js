@@ -639,6 +639,8 @@ provideUnboundGlobe((viewer) => {
   ]);
   if (typeof viewer.scene.globe?.show === 'boolean')
     capabilities.add('globeVisibility');
+  // The globe's surface shading needs a globe to shade.
+  if (viewer.scene.globe) capabilities.add('surfaceShading');
   const { port, dispose } = createCesiumGlobe(viewer, {
     capabilities,
     requestRender: () => viewer.scene.requestRender?.(),
