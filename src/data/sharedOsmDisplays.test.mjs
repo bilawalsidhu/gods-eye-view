@@ -14,6 +14,9 @@ import { createDirectionsSource } from '../layers/directions/source.js';
 import { createLifecycle as createCctvLifecycle } from '../layers/cctv/lifecycle.js';
 import * as input from './inputOwnership.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
+// The infrastructure layers take clicks through the input port, which their
+// fake renderer leaves to the Cesium adapter's factories.
+import '../render/cesium/camera.js';
 
 const noop = () => {};
 const overlayHost = { setEntries: noop, setVisible: noop, clearSource: noop };
@@ -64,7 +67,7 @@ test('Nepal locator introduces the shared OSM credit', async (t) => {
 });
 
 test('voice route geometry introduces the shared OSM credit', (t) => {
-  const v = viewer(t), renderer = createWorldAnnotationRenderer(v);
+  const v = viewer(t, { draw: fakeDrawPort() }), renderer = createWorldAnnotationRenderer(v);
   renderer.add({ id: 'route', type: 'route', color: 'primary', anchor: { lat: 0, lon: 0 }, path: [{ lat: 0, lon: 0 }, { lat: 0.01, lon: 0.01 }] });
   assertCredit(v); renderer.destroy();
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);

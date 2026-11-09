@@ -710,6 +710,60 @@ export function createStubRenderer(options = {}) {
     );
   }
 
+  /** The eye's height above the ellipsoid, for radii by camera height. */
+  const eyeHeight = () => toCartographicRadians(eye().position)?.height ?? 0;
+
+  /**
+   * Whether `lon`, `lat` (degrees) is in an ellipse geometry, its radii by
+   * camera height at the eye's height, measured in the plane tangent at its
+   * centre.
+   */
+  function inEllipse(g, lon, lat) {
+    const height = eyeHeight();
+    const radius = (r) =>
+      typeof r === 'number'
+        ? r
+        : Math.max(
+            r.byCameraHeight.min,
+            Math.min(r.byCameraHeight.max, height * r.byCameraHeight.factor),
+          );
+    const centre = toCartographicRadians(toEcef(g.center));
+    const metresPerRadian = 6378137;
+    const east =
+      ((lon * Math.PI) / 180 - centre.lon) *
+      metresPerRadian *
+      Math.cos(centre.lat);
+    const north = ((lat * Math.PI) / 180 - centre.lat) * metresPerRadian;
+    // The semi-major axis is turned counter-clockwise from north.
+    const turn = g.rotation ?? 0;
+    const along = north * Math.cos(turn) - east * Math.sin(turn);
+    const across = north * Math.sin(turn) + east * Math.cos(turn);
+    return (
+      (along / radius(g.semiMajor)) ** 2 +
+        (across / radius(g.semiMinor)) ** 2 <=
+      1
+    );
+  }
+
+  /** Whether `lon`, `lat` (degrees) is inside a ring of positions. */
+  function inRing(ring, lon, lat) {
+    const points = ring.map((p) => {
+      const c = toCartographicRadians(toEcef(p));
+      return [toDegrees(c.lon), toDegrees(c.lat)];
+    });
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const [xi, yi] = points[i];
+      const [xj, yj] = points[j];
+      if (
+        yi > lat !== yj > lat &&
+        lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
+      )
+        inside = !inside;
+    }
+    return inside;
+  }
+
   /**
    * The pickable items under a pixel, nearest first. With a `depth`, only
    * the nearest `depth` things drawn there are looked through, unpickable
@@ -745,18 +799,29 @@ export function createStubRenderer(options = {}) {
         continue;
       }
       if (set.kind === 'shapes') {
-        // Draped rectangles are picked where they cover the ellipsoid, turned
-        // as the default renderer turns them; other shapes are not picked.
+        // Draped rectangles and ellipses, and volumes that classify what
+        // they cover, are picked where they cover the ellipsoid (rectangles
+        // turned as the default renderer turns them); other shapes are not
+        // picked.
         const ground = rayEllipsoid(pickRay(x, y));
         const at = ground && toCartographicRadians(ground);
         if (!at) continue;
+        const lon = toDegrees(at.lon);
+        const lat = toDegrees(at.lat);
         for (const item of set.items.values()) {
           if (item.show === false) continue;
           if (!item.fill || item.outlineOnly) continue;
-          if (item.height !== 'clampGround') continue;
-          if (item.geometry?.kind !== 'rectangle') continue;
-          if (!inRectangle(item.geometry, toDegrees(at.lon), toDegrees(at.lat)))
-            continue;
+          const g = item.geometry;
+          const covers =
+            item.height === 'clampGround'
+              ? (g?.kind === 'rectangle' && inRectangle(g, lon, lat)) ||
+                (g?.kind === 'ellipse' && inEllipse(g, lon, lat))
+              : item.classifyVolume === true &&
+                item.extrudeHeight !== undefined &&
+                g?.kind === 'polygon' &&
+                inRing(g.rings[0], lon, lat) &&
+                !g.rings.slice(1).some((hole) => inRing(hole, lon, lat));
+          if (!covers) continue;
           hits.push({
             set: setId,
             id: item.id,

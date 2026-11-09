@@ -141,6 +141,40 @@ test('a draped rectangle across the antimeridian picks on both sides of it, turn
   r.destroy();
 });
 
+test('an extruded volume that classifies picks inside its outer ring and not in its holes', () => {
+  const r = createStubRenderer();
+  r.camera.setView({
+    destination: { lon: 0, lat: 0, height: 20_000 },
+    orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+  });
+  const shapes = r.draw.shapes({ id: 'volume' });
+  const square = (d) =>
+    [
+      [-d, -d],
+      [d, -d],
+      [d, d],
+      [-d, d],
+    ].map(([lon, lat]) => ({ lon, lat, height: -50 }));
+  shapes.set([
+    {
+      id: 'v',
+      geometry: { kind: 'polygon', rings: [square(0.02), square(0.005)] },
+      fill: '#f80',
+      extrudeHeight: 100,
+      height: 'absolute',
+      classifyVolume: true,
+    },
+  ]);
+  const picked = (lon, lat) => {
+    const s = r.query.project(toEcef({ lon, lat, height: 0 }));
+    return r.query.drillPick(s.x, s.y).some((hit) => hit.set === 'volume');
+  };
+  assert.ok(picked(0.012, 0), 'between its rings');
+  assert.ok(!picked(0, 0), 'not in its hole');
+  assert.ok(!picked(0.03, 0), 'not outside');
+  r.destroy();
+});
+
 test('the stub says where it draws an item, for a camera that is not its own', () => {
   const r = createStubRenderer();
   const t0 = r.frame.time();

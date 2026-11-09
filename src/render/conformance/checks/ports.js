@@ -1999,6 +1999,126 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.shapes.radiusByCameraHeight',
+      'a clamped ellipse with radii by camera height draws at the radius the camera height gives, held within its bounds, and follows the camera',
+      async (h, r) => {
+        const shapes = r.draw.shapes({ id: 'conf:rings' });
+        const radius = { byCameraHeight: { factor: 0.1, min: 50, max: 600 } };
+        shapes.set([
+          {
+            id: 'ring',
+            geometry: {
+              kind: 'ellipse',
+              center: { lon: AUSTIN.lon, lat: AUSTIN.lat },
+              semiMajor: radius,
+              semiMinor: radius,
+            },
+            fill: [0.5, 0.9, 1, 0.6],
+            height: 'clampGround',
+          },
+        ]);
+        // Metres east of the centre, at its latitude.
+        const east = (m) =>
+          h.toEcef({
+            lon:
+              AUSTIN.lon +
+              m / (111320 * Math.cos((AUSTIN.lat * Math.PI) / 180)),
+            lat: AUSTIN.lat,
+          });
+        const covers = (m) => {
+          const s = r.query.project(east(m));
+          return Boolean(
+            s &&
+            r.query
+              .drillPick(s.x, s.y)
+              .some((hit) => hit.set === 'conf:rings' && hit.id === 'ring'),
+          );
+        };
+        const until = async (test) => {
+          for (let i = 0; i < 300; i++) {
+            await drawn(h, r, 1);
+            if (test()) return true;
+          }
+          return false;
+        };
+        // 2000 m up: 200 m across its centre.
+        await overAustin(h, r, 2000);
+        ok(await until(() => covers(150)), 'at 2000 m it reaches 150 m');
+        ok(!covers(260), 'and not 260 m');
+        // 4000 m up: 400 m.
+        await overAustin(h, r, 4000);
+        ok(
+          await until(() => covers(300) && !covers(460)),
+          'at 4000 m it reaches 300 m, not 460 m',
+        );
+        // 20 km up: held at 600 m.
+        await overAustin(h, r, 20000);
+        ok(
+          await until(() => covers(550) && !covers(700)),
+          'held at its largest',
+        );
+        shapes.dispose();
+        await drawn(h, r);
+        ok(!covers(0), 'gone with its set');
+      },
+    ),
+    check(
+      'draw.shapes.classifyVolume',
+      'an extruded shape that classifies its volume picks where it tints what it covers, and hides',
+      async (h, r) => {
+        await overAustin(h, r);
+        const shapes = r.draw.shapes({ id: 'conf:volume' });
+        const d = 0.002;
+        const ring = [
+          [-d, -d],
+          [d, -d],
+          [d, d],
+          [-d, d],
+        ].map(([dLon, dLat]) => ({
+          lon: AUSTIN.lon + dLon,
+          lat: AUSTIN.lat + dLat,
+          height: -200,
+        }));
+        const volume = (extra = {}) => ({
+          id: 'volume',
+          geometry: { kind: 'polygon', rings: [ring] },
+          fill: [1, 0.7, 0.3, 0.45],
+          extrudeHeight: 300,
+          height: 'absolute',
+          classifyVolume: true,
+          ...extra,
+        });
+        const mine = (dLon) => {
+          const s = r.query.project(
+            h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat }),
+          );
+          return Boolean(
+            s &&
+            r.query
+              .drillPick(s.x, s.y)
+              .some((hit) => hit.set === 'conf:volume' && hit.id === 'volume'),
+          );
+        };
+        const until = async (test) => {
+          for (let i = 0; i < 300; i++) {
+            await drawn(h, r, 1);
+            if (test()) return true;
+          }
+          return false;
+        };
+        shapes.set([volume()]);
+        ok(await until(() => mine(0)), 'it picks inside');
+        ok(!mine(0.008), 'and not outside');
+        shapes.upsert([volume({ show: false })]);
+        ok(await until(() => !mine(0)), 'hidden');
+        shapes.upsert([volume()]);
+        ok(await until(() => mine(0)), 'shown again');
+        shapes.dispose();
+        await drawn(h, r);
+        ok(!mine(0), 'gone with its set');
+      },
+    ),
+    check(
       'draw.lines.styles',
       'flow lines draw draped and in space, and a line with a depth-fail colour moves every frame, without stopping the frame or picks',
       async (h, r) => {
@@ -2069,7 +2189,7 @@ export function portChecks() {
     ),
     check(
       'draw.lines.drape',
-      'draped glow and dash lines draw and pick; a revealed line draws only its first part; a draped line and a clamped point that move every frame are drawn where they now are in the next frame',
+      'draped glow, dash and arrow lines draw and pick; a revealed line draws only its first part; a draped line and a clamped point that move every frame are drawn where they now are in the next frame',
       async (h, r) => {
         await overAustin(h, r);
         const at = (dLon, dLat = 0) =>
@@ -2112,12 +2232,20 @@ export function portChecks() {
             style: { kind: 'solid', color: '#20e7f2' },
             revealFraction: 0.5,
           },
+          {
+            id: 'arrow',
+            positions: [at(-0.003, -0.004), at(0.003, -0.004)],
+            widthPx: 16,
+            mode: 'draped',
+            style: { kind: 'arrow', color: [0.5, 0.9, 1, 0.95] },
+          },
         ]);
         await drawn(h, r);
         await settled(r);
         await drawn(h, r);
         ok(mine(at(0, 0.002), 'glow'), 'a draped glow line picks');
         ok(mine(at(0, -0.002), 'dash'), 'a draped dash line picks');
+        ok(mine(at(-0.002, -0.004), 'arrow'), 'a draped arrow picks');
         ok(mine(at(-0.0015), 'reveal'), 'revealed: its first half draws');
         ok(!mine(at(0.0015), 'reveal'), 'revealed: its second half does not');
         lines.upsert([
@@ -2191,7 +2319,7 @@ export function portChecks() {
             `moved, frame ${i}: not where it was`,
           );
         }
-        equal(lines.size(), 4, 'every line held');
+        equal(lines.size(), 5, 'every line held');
         points.dispose();
         lines.dispose();
       },
