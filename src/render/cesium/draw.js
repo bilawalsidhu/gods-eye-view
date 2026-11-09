@@ -239,8 +239,26 @@ function radialRimMaterial(fill) {
   return material;
 }
 
+/**
+ * An ellipse radius at a camera `height`: a fixed one as it is, one by
+ * camera height scaled by its factor and held within its bounds.
+ * @param {number|{byCameraHeight: {factor: number, min: number, max: number}}} radius
+ * @param {number} height
+ */
+export function radiusAt(radius, height) {
+  if (typeof radius === 'number') return radius;
+  const { factor, min, max } = radius.byCameraHeight;
+  return Math.max(min, Math.min(max, height * factor));
+}
+
+/** Whether a shape is an ellipse with a radius by camera height. */
+const byCameraHeight = (item) =>
+  item.geometry?.kind === 'ellipse' &&
+  (typeof item.geometry.semiMajor !== 'number' ||
+    typeof item.geometry.semiMinor !== 'number');
+
 /** The line styles the port drapes. */
-const DRAPED_STYLES = new Set(['solid', 'glow', 'dash', 'flow']);
+const DRAPED_STYLES = new Set(['solid', 'glow', 'dash', 'flow', 'arrow']);
 
 // Whether Cesium's approximate terrain heights have been asked for.
 let terrainHeightsAsked = false;
@@ -2110,7 +2128,7 @@ export function createCesiumDraw({
     for (const item of record.items.values())
       if (item.mode === 'draped' && !DRAPED_STYLES.has(item.style.kind))
         throw new Error(
-          'the Cesium renderer drapes solid, glow, dash and flow lines only',
+          'the Cesium renderer drapes solid, glow, dash, flow and arrow lines only',
         );
       else if (
         item.frame === 'inertial' &&
@@ -3115,18 +3133,29 @@ export function createCesiumDraw({
           outer,
           holes.map((h) => new Cesium.PolygonHierarchy(h)),
         );
+        const polygon = {
+          polygonHierarchy: hierarchy,
+          height: g.perPositionHeight ? undefined : heightOf(g.rings[0][0]),
+          extrudedHeight,
+          perPositionHeight: g.perPositionHeight,
+        };
         return {
-          fill: new Cesium.PolygonGeometry({
-            polygonHierarchy: hierarchy,
-            height: g.perPositionHeight ? undefined : heightOf(g.rings[0][0]),
-            extrudedHeight,
-            perPositionHeight: g.perPositionHeight,
-          }),
+          fill: new Cesium.PolygonGeometry(polygon),
+          // Extruded, its outline is the volume's edges (both faces and the
+          // walls' corners), as the entities' extruded polygons draw it.
+          outline:
+            item.outline && extrudedHeight !== undefined
+              ? new Cesium.PolygonOutlineGeometry(polygon)
+              : undefined,
           // Its holes are outlined too, as the entities' polygons outline them.
           rings: [outer, ...holes],
         };
       }
       case 'ellipse': {
+        if (byCameraHeight(item))
+          throw new Error(
+            'the Cesium renderer takes radii by camera height on clamped ellipses only',
+          );
         const ellipse = {
           center: toCartesian(g.center),
           semiMajorAxis: g.semiMajor,
@@ -3176,6 +3205,86 @@ export function createCesiumDraw({
   }
 
   /**
+   * The camera's height for radii by camera height: above the ellipsoid,
+   * as Cesium places it (1000 m while it has none).
+   */
+  const cameraHeight = () => {
+    const height = scene.camera?.positionCartographic?.height;
+    return Number.isFinite(height) ? height : 1000;
+  };
+
+  /** A clamped ellipse's radii by camera height at this frame's height, or null. */
+  function radiiOf(item) {
+    if (!byCameraHeight(item)) return null;
+    const height = cameraHeight();
+    return [
+      radiusAt(item.geometry.semiMajor, height),
+      radiusAt(item.geometry.semiMinor, height),
+    ];
+  }
+
+  /**
+   * Before a frame draws: clamped ellipses with radii by camera height
+   * whose radii have changed with the camera are drawn at the new ones. A
+   * colour fill is drawn alone where it is, built in this frame
+   * (`moveShape`), as Cesium's entities rebuild a ground ellipse whose
+   * radius follows a callback, while no more than `MOVING_SHAPES` of the
+   * set would be drawn alone; past that, and for any other fill once its
+   * radii have changed by more than `REBUILD_RADII`, its set rebuilds (one
+   * rebuild at a time). Hidden ones wait until they show.
+   */
+  function followCameraHeight() {
+    for (const record of sets.values()) {
+      const parts = record.shapeParts;
+      if (record.kind !== 'shapes' || !parts || record.spec.show === false)
+        continue;
+      try {
+        followIn(record, parts);
+      } catch (error) {
+        // The set draws as it did; the next frame tries again.
+        report(error);
+      }
+    }
+  }
+
+  /** Relative change of radii past which a fill drawn in a batch rebuilds. */
+  const REBUILD_RADII = 0.02;
+
+  function followIn(record, parts) {
+    const changed = (radii, part, by) =>
+      Math.abs(radii[0] - part.radii[0]) > by * part.radii[0] ||
+      Math.abs(radii[1] - part.radii[1]) > by * part.radii[1];
+    let alone = 0;
+    for (const part of parts.values()) if (part.solo) alone += 1;
+    // Those the host still retiring draws alone count too, until it goes.
+    if (record.retiring)
+      for (const part of record.retiringShapeParts?.values() ?? [])
+        if (part.solo && part.ground && !part.ground.isDestroyed()) alone += 1;
+    let rebuild = false;
+    for (const [id, part] of parts) {
+      if (!part.radii || !part.ground) continue;
+      const item = record.items.get(id);
+      if (!item || item.show === false || !byCameraHeight(item)) continue;
+      const radii = radiiOf(item);
+      if (!changed(radii, part, 1e-3)) continue;
+      if (part.ground.isDestroyed() || part.batch?.isDestroyed()) continue;
+      const movable =
+        colourFill(item) &&
+        groundSyncs() &&
+        typeof record.host?.add === 'function' &&
+        (part.solo || alone < MOVING_SHAPES);
+      if (movable) {
+        if (!part.solo) alone += 1;
+        moveShape(record, part, item);
+      } else if (changed(radii, part, REBUILD_RADII)) rebuild = true;
+    }
+    if (rebuild && !record.pending) {
+      record.rebuild();
+      requestRender();
+    }
+  }
+
+  /**
    * A clamped shape's fill geometry, on the ellipsoid for draping; an
    * ellipse with a rim fill is cut finely, so its rim runs round.
    */
@@ -3191,14 +3300,19 @@ export function createCesiumDraw({
           ),
         });
       }
-      case 'ellipse':
-        if (typeof g.semiMajor !== 'number' || typeof g.semiMinor !== 'number')
-          throw new Error('the Cesium renderer takes fixed ellipse radii only');
+      case 'ellipse': {
+        // Radii by camera height are the ones it has at this frame's height.
+        const height = cameraHeight();
+        const major = radiusAt(g.semiMajor, height);
+        const minor = radiusAt(g.semiMinor, height);
+        // Radii that follow the camera apart may cross: the longer is then
+        // drawn as Cesium's semi-major axis, a quarter turn on.
+        const crossed = minor > major;
         return new Cesium.EllipseGeometry({
           center: toCartesian(g.center),
-          semiMajorAxis: g.semiMajor,
-          semiMinorAxis: g.semiMinor,
-          rotation: g.rotation ?? 0,
+          semiMajorAxis: crossed ? minor : major,
+          semiMinorAxis: crossed ? major : minor,
+          rotation: (g.rotation ?? 0) + (crossed ? Math.PI / 2 : 0),
           ...(rimFill
             ? {
                 granularity: RIM_GRANULARITY,
@@ -3208,6 +3322,7 @@ export function createCesiumDraw({
               }
             : {}),
         });
+      }
       case 'rectangle':
         return new Cesium.RectangleGeometry({
           rectangle: Cesium.Rectangle.fromDegrees(
@@ -3279,6 +3394,8 @@ export function createCesiumDraw({
         look: lookOf(item),
         id: pickId(record, item),
         ground: null,
+        // Radii by camera height as drawn (`followCameraHeight`).
+        radii: radiiOf(item),
       };
       parts.set(item.id, part);
       const show = new Cesium.ShowGeometryInstanceAttribute(
@@ -3525,13 +3642,7 @@ export function createCesiumDraw({
     if (!was.id || !was.ground || !colourFill(item)) return false;
     if (!colourFill(was.look)) return false;
     if (!sameValues(placedLookOf(was.look), placedLookOf(item))) return false;
-    // Refused geometry (an ellipse radius by camera height) rebuilds, to throw.
     const g = item.geometry;
-    if (
-      g?.kind === 'ellipse' &&
-      (typeof g.semiMajor !== 'number' || typeof g.semiMinor !== 'number')
-    )
-      return false;
     if (!['polygon', 'ellipse', 'rectangle'].includes(g?.kind)) return false;
     return groundSyncs() && typeof record.host?.add === 'function';
   }
@@ -3545,6 +3656,8 @@ export function createCesiumDraw({
    */
   function moveShape(record, part, item) {
     const host = record.host;
+    // Built first: geometry it cannot build leaves the part as it was.
+    const geometry = groundGeometry(item);
     if (part.solo) {
       if (part.ground && !part.ground.isDestroyed()) host.remove(part.ground);
     } else {
@@ -3558,6 +3671,7 @@ export function createCesiumDraw({
     part.solo = true;
     part.pendingShow = undefined;
     part.look = lookOf(item);
+    part.radii = radiiOf(item);
     part.id.meta = item.meta;
     const pickable = record.spec.pickable !== false;
     const Ground = pickable
@@ -3566,7 +3680,7 @@ export function createCesiumDraw({
     part.ground = new Ground({
       geometryInstances: [
         new Cesium.GeometryInstance({
-          geometry: groundGeometry(item),
+          geometry,
           attributes: {
             color: Cesium.ColorGeometryInstanceAttribute.fromColor(
               toColor(item.fill),
@@ -3652,6 +3766,22 @@ export function createCesiumDraw({
     item.extrudeHeight === undefined &&
     (typeof item.fill !== 'object' || Array.isArray(item.fill));
 
+  /**
+   * Whether an unclamped shape classifies what is inside its volume: one
+   * with a volume (extruded, or a box) and a fill, on a scene that can
+   * classify. Where it cannot, it draws as the volume itself.
+   */
+  function classifies(item) {
+    if (!item.classifyVolume || !item.fill) return false;
+    if (item.extrudeHeight === undefined && item.geometry.kind !== 'box')
+      return false;
+    try {
+      return Cesium.ClassificationPrimitive.isSupported(scene);
+    } catch {
+      return false;
+    }
+  }
+
   function buildShapes(record) {
     const host = new Cesium.PrimitiveCollection();
     const outlines = new Cesium.PolylineCollection();
@@ -3694,7 +3824,33 @@ export function createCesiumDraw({
         item.extrudeHeight !== undefined || item.geometry.kind === 'box';
       // `lit`: shaded by Cesium's light, or flat; by default solids are lit.
       const lit = item.lit ?? solid;
-      if (imageFill && !item.outlineOnly) {
+      if (classifies(item) && !item.outlineOnly) {
+        if (imageFill)
+          throw new Error(
+            'the Cesium renderer classifies volumes with colours only',
+          );
+        // What lies inside the volume is tinted: the tiles and terrain it
+        // covers, as `clampTo` names them.
+        host.add(
+          new Cesium.ClassificationPrimitive({
+            geometryInstances: new Cesium.GeometryInstance({
+              geometry: shape.fill,
+              modelMatrix: shape.modelMatrix,
+              attributes: {
+                color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                  toColor(item.fill),
+                ),
+              },
+              id,
+            }),
+            classificationType: classificationOf(
+              item.clampTo ?? record.spec.clampTo ?? 'both',
+            ),
+            allowPicking: record.spec.pickable !== false,
+            asynchronous: false,
+          }),
+        );
+      } else if (imageFill && !item.outlineOnly) {
         const material = ownMaterial(
           Cesium.Material.fromType('Image', {
             image: toImage(imageFill.image),
@@ -3921,6 +4077,7 @@ export function createCesiumDraw({
     building: () => [...sets.values()].some((record) => record.pending),
     /** Each frame, before it draws: the horizon cull. */
     beforeRender() {
+      followCameraHeight();
       cullHorizon();
       runFlows();
       for (const record of sets.values())

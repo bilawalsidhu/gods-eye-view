@@ -503,10 +503,9 @@ test('hidden clamped fills wait for nothing, and the hidden ones it cannot build
       fill('c', 2, false, { fill: { preset: 'radialRim' } }),
       fill('d', 3, false, {
         geometry: {
-          kind: 'ellipse',
+          kind: 'box',
           center: { lon: 3, lat: 0 },
-          semiMajor: { byCameraHeight: { factor: 1, min: 1, max: 2 } },
-          semiMinor: 1000,
+          dimensions: { x: 1, y: 1, z: 1 },
         },
       }),
     ]),
@@ -616,21 +615,203 @@ test('clamped shapes refuse what they cannot draw', () => {
       ]),
     /colours only/,
   );
+  set.dispose();
+  // Radii by camera height are for clamped ellipses alone.
+  const unclamped = draw.shapes({ id: 'refuse-unclamped' });
   assert.throws(
     () =>
-      set.set([
+      unclamped.set([
         {
           ...disc,
+          height: 'absolute',
           geometry: {
             ...disc.geometry,
             semiMajor: { byCameraHeight: { factor: 1, min: 1, max: 2 } },
           },
         },
       ]),
-    /fixed ellipse radii/,
+    /radii by camera height on clamped ellipses only/,
   );
-  set.dispose();
+  unclamped.dispose();
 });
+
+test('a clamped ellipse with radii by camera height draws at the camera height and follows it', () =>
+  withTerrainHeights(() => {
+    const scene = fakeScene();
+    let height = 2000;
+    Object.defineProperty(scene.camera, 'positionCartographic', {
+      get: () => ({ height }),
+    });
+    const { draw, frame } = drawOver(scene);
+    const set = draw.shapes({ id: 'rings' });
+    const radius = { byCameraHeight: { factor: 0.03, min: 14, max: 170 } };
+    const ring = (show = true) => ({
+      id: 'ring',
+      geometry: {
+        kind: 'ellipse',
+        center: { lon: 0, lat: 0 },
+        semiMajor: radius,
+        semiMinor: radius,
+      },
+      fill: [0.5, 0.9, 1, 0.38],
+      height: 'clampGround',
+      show,
+    });
+    set.set([ring()]);
+    const host = scene.added[0];
+    const radiusIn = (ground) =>
+      ground.geometryInstances[0].geometry._semiMajorAxis;
+    const last = () => host.get(host.length - 1);
+    assert.equal(radiusIn(last()), 60, '3% of 2000 m');
+    // The camera has not moved: nothing is built.
+    const built = last();
+    frame();
+    assert.equal(last(), built);
+    // It climbs: the ring is drawn wider in the frame that draws it, alone.
+    height = 4000;
+    frame();
+    const wider = last();
+    assert.notEqual(wider, built);
+    assert.equal(wider.asynchronous, false);
+    assert.equal(radiusIn(wider), 120);
+    assert.equal(wider.geometryInstances[0].id.id, 'ring', 'its own pick id');
+    // Held within its bounds.
+    height = 1e6;
+    frame();
+    assert.equal(radiusIn(last()), 170);
+    height = 10;
+    frame();
+    assert.equal(radiusIn(last()), 14);
+    // Hidden, it waits; shown, it catches up.
+    set.upsert([ring(false)]);
+    const lastShown = last();
+    height = 3000;
+    frame();
+    assert.equal(last(), lastShown, 'hidden: not rebuilt');
+    set.upsert([ring(true)]);
+    frame();
+    assert.equal(radiusIn(last()), 90);
+    assert.equal(scene.added[0], host, 'never a rebuild of the set');
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('radii by camera height that cross draw the longer as the major axis; past the cap of shapes drawn alone, the set rebuilds', () =>
+  withTerrainHeights(() => {
+    const scene = fakeScene();
+    let height = 1000;
+    Object.defineProperty(scene.camera, 'positionCartographic', {
+      get: () => ({ height }),
+    });
+    const { draw, frame } = drawOver(scene);
+    const set = draw.shapes({ id: 'crossing' });
+    const ring = (id, lon) => ({
+      id,
+      geometry: {
+        kind: 'ellipse',
+        center: { lon, lat: 0 },
+        semiMajor: { byCameraHeight: { factor: 0.03, min: 14, max: 170 } },
+        semiMinor: { byCameraHeight: { factor: 0.05, min: 20, max: 100 } },
+        rotation: 0.25,
+      },
+      fill: [0.5, 0.9, 1, 0.38],
+      height: 'clampGround',
+    });
+    const rings = Array.from({ length: MOVING_SHAPES + 4 }, (_, i) =>
+      ring(`r${i}`, i * 0.1),
+    );
+    assert.doesNotThrow(() => set.set(rings));
+    const first = scene.added[0];
+    const ground = (host) => {
+      for (let i = 0; i < host.length; i++)
+        if (host.get(i) instanceof Cesium.GroundPrimitive) return host.get(i);
+      return null;
+    };
+    const geometry = ground(first).geometryInstances[0].geometry;
+    assert.equal(geometry._semiMajorAxis, 50, 'the longer, 5% of 1000 m');
+    assert.equal(geometry._semiMinorAxis, 30);
+    assert.ok(Math.abs(geometry._rotation - (0.25 + Math.PI / 2)) < 1e-12);
+    // Its batches built.
+    for (let i = 0; i < first.length; i++)
+      if (first.get(i) instanceof Cesium.GroundPrimitive) {
+        Object.defineProperty(first.get(i), 'ready', { value: true });
+        first.get(i).getGeometryInstanceAttributes = () => ({
+          show: new Uint8Array([1]),
+        });
+      }
+    frame();
+    // The camera climbs: no more than the cap are drawn alone; the set
+    // rebuilds for the rest, and nothing throws in the frame.
+    height = 1500;
+    assert.doesNotThrow(() => frame());
+    let solo = 0;
+    for (let i = 0; i < first.length; i++) {
+      const p = first.get(i);
+      if (p instanceof Cesium.GroundPrimitive && p.asynchronous === false)
+        solo += 1;
+    }
+    assert.equal(solo, MOVING_SHAPES);
+    assert.notEqual(scene.added.at(-1), first, 'rebuilt for the rest');
+    set.dispose();
+  }));
+
+test('rings drawn alone by a host still retiring count toward the cap when the camera moves again', () =>
+  withTerrainHeights(() => {
+    const scene = fakeScene();
+    let height = 1000;
+    Object.defineProperty(scene.camera, 'positionCartographic', {
+      get: () => ({ height }),
+    });
+    const { draw, frame } = drawOver(scene);
+    const set = draw.shapes({ id: 'climbing' });
+    const radius = { byCameraHeight: { factor: 0.03, min: 14, max: 170 } };
+    const rings = Array.from({ length: MOVING_SHAPES + 4 }, (_, i) => ({
+      id: `r${i}`,
+      geometry: {
+        kind: 'ellipse',
+        center: { lon: i * 0.1, lat: 0 },
+        semiMajor: radius,
+        semiMinor: radius,
+      },
+      fill: [0.5, 0.9, 1, 0.38],
+      height: 'clampGround',
+    }));
+    const ready = (host) => {
+      for (let i = 0; i < host.length; i++)
+        if (host.get(i) instanceof Cesium.GroundPrimitive) {
+          Object.defineProperty(host.get(i), 'ready', { value: true });
+          host.get(i).getGeometryInstanceAttributes = () => ({
+            show: new Uint8Array([1]),
+          });
+        }
+    };
+    const solo = (host) => {
+      let n = 0;
+      for (let i = 0; i < host.length; i++) {
+        const p = host.get(i);
+        if (p instanceof Cesium.GroundPrimitive && p.asynchronous === false)
+          n += 1;
+      }
+      return n;
+    };
+    set.set(rings);
+    const first = scene.added[0];
+    ready(first);
+    frame();
+    // A climb: the cap drawn alone, and a rebuild for the rest.
+    height = 1500;
+    frame();
+    assert.equal(solo(first), MOVING_SHAPES);
+    const second = scene.added.at(-1);
+    assert.notEqual(second, first, 'rebuilding, the old host retiring');
+    ready(second);
+    // Climbing on while the old host retires: its rings drawn alone still
+    // count, so none more are drawn alone.
+    height = 2500;
+    frame();
+    assert.equal(solo(second), 0, 'nothing more drawn alone');
+    set.dispose();
+  }));
 
 test('the earthquakes layer draws its discs as ground fills on a viewer of its own', async () => {
   const { createEarthquakesLayer } =
@@ -3543,6 +3724,66 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     unbind();
   }
 });
+test('an extruded shape that classifies its volume tints what it covers; its outline is the volume edges', () => {
+  const scene = fakeScene();
+  const { draw } = drawOver(scene);
+  const set = draw.shapes({ id: 'volumes' });
+  const ring = [
+    { lon: 0, lat: 0, height: 100 },
+    { lon: 0.001, lat: 0, height: 100 },
+    { lon: 0.001, lat: 0.001, height: 100 },
+  ];
+  const volume = {
+    id: 'volume',
+    geometry: { kind: 'polygon', rings: [ring] },
+    fill: [1, 0.7, 0.3, 0.45],
+    extrudeHeight: 220,
+    height: 'absolute',
+    classifyVolume: true,
+  };
+  const cage = {
+    id: 'cage',
+    geometry: { kind: 'polygon', rings: [ring] },
+    outline: [1, 0.7, 0.3, 0.32],
+    outlineOnly: true,
+    extrudeHeight: 220,
+    height: 'absolute',
+  };
+  // A scene that cannot classify draws the volume itself.
+  set.set([volume]);
+  assert.ok(scene.added[0].get(0) instanceof Cesium.Primitive);
+  assert.ok(!(scene.added[0].get(0) instanceof Cesium.ClassificationPrimitive));
+  scene.context = { stencilBuffer: true };
+  set.set([volume, cage]);
+  const host = scene.added[0];
+  const classified = host.get(0);
+  assert.ok(classified instanceof Cesium.ClassificationPrimitive);
+  assert.equal(classified.classificationType, Cesium.ClassificationType.BOTH);
+  const [instance] = [classified.geometryInstances].flat();
+  assert.ok(instance.geometry instanceof Cesium.PolygonGeometry);
+  assert.deepEqual(
+    [instance.geometry._extrudedHeight, instance.geometry._height].sort(
+      (a, b) => a - b,
+    ),
+    [100, 220],
+    'from its base to its extruded face',
+  );
+  assert.equal(instance.id.id, 'volume');
+  // The cage: the extruded outline, not a ring at its base.
+  const edges = host.get(1);
+  assert.ok(edges instanceof Cesium.Primitive);
+  assert.ok(
+    [edges.geometryInstances].flat()[0].geometry instanceof
+      Cesium.PolygonOutlineGeometry,
+  );
+  // An image cannot classify.
+  assert.throws(
+    () => set.set([{ ...volume, fill: { image: 'a.png' } }]),
+    /classifies volumes with colours only/,
+  );
+  set.dispose();
+});
+
 test('an unclamped shape filled with an image draws a textured primitive and frees its material with its host', () =>
   withImageClasses(() => {
     const scene = fakeScene();
@@ -3927,19 +4168,19 @@ test('flow lines run their dashes toward the end, draped or not, on the frame cl
     asked = 0;
     frame();
     assert.equal(asked, 0, 'an emptied set asks for none');
-    // Arrows and patterns are not draped.
+    // Patterns are not draped.
     assert.throws(
       () =>
         set.set([
           {
-            id: 'arrow',
+            id: 'pattern',
             positions,
             widthPx: 1,
             mode: 'draped',
-            style: { kind: 'arrow', color: '#fff' },
+            style: { kind: 'pattern', image: 'a.png', repeat: 2 },
           },
         ]),
-      /drapes solid, glow, dash and flow lines only/,
+      /drapes solid, glow, dash, flow and arrow lines only/,
     );
     set.dispose();
   }));
@@ -4469,6 +4710,42 @@ test('draped glow and dash lines drape with their materials, each on a ground pr
         Cesium.Color.TRANSPARENT,
       ),
     );
+    set.dispose();
+  }));
+
+test('a draped arrow drapes its arrow material on a ground polyline of its own, recoloured in place', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'arrows' });
+    const arrow = (color) => ({
+      id: 'to',
+      positions: [
+        { lon: 0, lat: 0 },
+        { lon: 0.01, lat: 0.01 },
+      ],
+      widthPx: 16,
+      mode: 'draped',
+      style: { kind: 'arrow', color },
+    });
+    set.set([arrow([0.5, 0.9, 1, 0.95])]);
+    const host = scene.added[0];
+    const ground = host.get(1);
+    assert.ok(ground instanceof Cesium.GroundPolylinePrimitive);
+    assert.equal(ground.classificationType, Cesium.ClassificationType.BOTH);
+    assert.equal(ground.geometryInstances[0].geometry.width, 16);
+    const material = ground.appearance.material;
+    assert.equal(material.type, 'PolylineArrow');
+    assert.ok(
+      Cesium.Color.equals(
+        material.uniforms.color,
+        new Cesium.Color(0.5, 0.9, 1, 0.95),
+      ),
+    );
+    // Faded, it takes its new colour on the material it has.
+    set.upsert([arrow([0.5, 0.9, 1, 0.4])]);
+    assert.equal(scene.added[0], host, 'not rebuilt');
+    assert.equal(ground.appearance.material, material);
+    assert.equal(material.uniforms.color.alpha, 0.4);
     set.dispose();
   }));
 
