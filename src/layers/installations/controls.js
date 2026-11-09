@@ -165,6 +165,41 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * A loaded mapped installation by id, as `getNearby` returns it (with its
+     * drawn `position`), or null while the layer is off or the id is not
+     * loaded. Read-only: nothing is selected.
+     * @param {string} id Source-backed installation id.
+     * @returns {object|null}
+     */
+    getById(id) {
+      if (!layerState.enabled || id === null || id === undefined) return null;
+      const record = layerState.recordById.get(String(id));
+      if (!record || record.kind !== 'installation') return null;
+      return {
+        ...record,
+        position: Cesium.Cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+          parts.rendering.installationSurfaceHeightM(record),
+        ),
+      };
+    },
+
+    /**
+     * The mapped installation a `scene.pick()` result landed on: a named
+     * marker point (`{ installationId }`) or a site entity, as this layer's
+     * own click selection reads them. Null for anything else.
+     * @param {object|null|undefined} picked
+     * @returns {object|null} As {@link getById}.
+     */
+    findByPick(picked) {
+      const id =
+        picked?.id?.installationId ||
+        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
+      return id ? methods.getById(id) : null;
+    },
+
+    /**
      * Select and frame a mapped installation from another contextual UI.
      * @param {string} id Source-backed installation id.
      * @returns {boolean} True when an available installation was focused.

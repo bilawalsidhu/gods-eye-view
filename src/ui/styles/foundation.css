@@ -9,6 +9,9 @@
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
   --accent: #00d4ff;
+  /* Every scrolling surface's scrollbar (the kit's .ui-scroll). */
+  --scroll-thumb: rgba(0, 212, 255, 0.46);
+  --scroll-track: rgba(255, 255, 255, 0.06);
   --accent-dim: rgba(0, 212, 255, 0.15);
   --accent-glow: rgba(0, 212, 255, 0.4);
   --text-primary: #e8eaed;
@@ -21,9 +24,17 @@
   --panel-radius: 16px;
   --btn-radius: 10px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Label type shared by the command dock and the side panel titles. */
+  --dock-label-color: rgba(206, 232, 239, 0.72);
+  --dock-label-font-size: 0.58rem;
+  --dock-label-font-weight: 500;
+  --dock-label-letter-spacing: 0.13rem;
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  --left-stack-x: 52px;
-  --right-rail-x: 52px;
+  /* The side stacks clear the 52px edge gutter that holds the vertical HUD
+     readout, plus the floating panel rail (42px) and its 6px gap. */
+  --panel-rail-clearance: 48px;
+  --left-stack-x: calc(52px + var(--panel-rail-clearance));
+  --right-rail-x: calc(52px + var(--panel-rail-clearance));
   --left-stack-top: 26vh;
   --left-stack-gap: 72px;
   --left-collapsed-width: 176px;
@@ -492,7 +503,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #title-bar {
   position: fixed;
   top: 32px;
-  left: 36px;
+  inset-inline-start: 36px;
   z-index: 100;
   pointer-events: none;
   user-select: none;
@@ -501,7 +512,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #title-bar .title-glow {
   position: absolute;
   top: -20px;
-  left: -20px;
+  inset-inline-start: -20px;
   width: 200px;
   height: 80px;
   background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
@@ -626,11 +637,11 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #style-indicator {
   position: fixed;
   top: 32px;
-  right: 36px;
+  inset-inline-end: 36px;
   z-index: 100;
   pointer-events: none;
   user-select: none;
-  text-align: right;
+  text-align: end;
 }
 
 #style-indicator .indicator-label {

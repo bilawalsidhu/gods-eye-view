@@ -16,7 +16,11 @@ import {
   GEMINI_LIVE_WEBSOCKET_URL,
   createGeminiLiveConfig,
 } from '../server/providers/gemini/config.js';
-import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+import {
+  GEV_REALTIME_TOOLS,
+  offeredTools,
+  realtimeTools,
+} from '../server/providers/openai/tools.js';
 import { PROXY_SIGNALS } from './localRequestGate.mjs';
 
 const API_KEY = 'private-gemini-test-key-never-return';
@@ -103,9 +107,8 @@ test('dev and preview install the same bounded Gemini token endpoint', () => {
     geminiLiveProxy()[hook]({
       middlewares: { use: (...args) => installed.push(args) },
     });
-    assert.equal(installed.length, 1);
-    assert.equal(installed[0][0], '/api/gemini/token');
-    assert.equal(typeof installed[0][1], 'function');
+    assert.deepEqual(installed.map(([route]) => route), ['/api/gemini/chat', '/api/gemini/token']);
+    assert.ok(installed.every(([, handler]) => typeof handler === 'function'));
   }
 });
 
@@ -219,16 +222,15 @@ test('mint locks canonical action schemas and server instructions with no perman
     undefined,
   );
   const functions = data.config.tools[0].functionDeclarations;
+  // Without an operator Overpass, osm_query is left out of the session.
+  const offered = realtimeTools();
   assert.deepEqual(
     functions.map((tool) => tool.name),
-    GEV_REALTIME_TOOLS.map((tool) => tool.name),
+    offered.map((tool) => tool.name),
   );
   for (let i = 0; i < functions.length; i++) {
     assert.equal(functions[i].behavior, 'BLOCKING');
-    assert.deepEqual(
-      functions[i].parametersJsonSchema,
-      GEV_REALTIME_TOOLS[i].parameters,
-    );
+    assert.deepEqual(functions[i].parametersJsonSchema, offered[i].parameters);
     assert.equal(functions[i].parameters, undefined);
   }
   const [url, init] = f.calls[0];
@@ -876,12 +878,14 @@ test(
 
 test('standalone mints lock the full voice query catalog in both credential and browser setup', async (t) => {
   const tools = standaloneVoiceTools();
-  const declarations = tools.map(({ name, description, parameters }) => ({
-    name,
-    description,
-    parametersJsonSchema: parameters,
-    behavior: 'BLOCKING',
-  }));
+  const declarations = offeredTools(tools).map(
+    ({ name, description, parameters }) => ({
+      name,
+      description,
+      parametersJsonSchema: parameters,
+      behavior: 'BLOCKING',
+    }),
+  );
   for (const name of ['search_places', 'get_weather', 'get_wind', 'plan_route'])
     assert.ok(
       tools.some((tool) => tool.name === name),

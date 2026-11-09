@@ -21,9 +21,20 @@ export function createAnimation({
   source,
 }) {
   function syncRenderDemand() {
+    // Hidden dots (`dots` off) need no frames. Lines need them only while
+    // their asynchronous geometry builds (or old lines wait to be retired),
+    // and the heat-line prototype's jam batch while it pulses.
+    const lines = [
+      layerState._heatJamPrim,
+      layerState._heatSlowPrim,
+      layerState._heatFreePrim,
+    ].filter(Boolean);
     const needed = Boolean(
       layerState._enabled &&
-      (layerState._dots.length || layerState._heatJamPrim),
+      ((layerState._showDots !== false && layerState._dots.length) ||
+        (layerState._heatJamPrim && !layerState._showLines) ||
+        layerState._heatRetired?.length ||
+        lines.some((primitive) => !primitive.ready)),
     );
     // Height easing only runs in a held frame. Settle it before releasing, so
     // a population emptied mid-correction cannot report loading forever.
@@ -224,6 +235,7 @@ export function createAnimation({
    */
 
   function animate() {
+    parts.rendering.retireHeatLines?.();
     syncRenderDemand();
     if (!layerState._renderHeld) return;
     const now = Date.now();
@@ -317,8 +329,9 @@ export function createAnimation({
     }
 
     // Jam heat-lines throb (~1.6 s period) — one shared material uniform for
-    // the whole jam batch, no geometry rebuild. Null outside live heatline mode.
-    if (layerState._heatJamPrim?.appearance) {
+    // the whole jam batch, no geometry rebuild. Null outside live heatline
+    // mode; the steady flow lines (`lines` toggle) never pulse.
+    if (layerState._heatJamPrim?.appearance && !layerState._showLines) {
       layerState._heatJamPrim.appearance.material.uniforms.color.alpha =
         HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260);
     }
