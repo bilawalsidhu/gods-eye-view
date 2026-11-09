@@ -3305,5 +3305,13 @@
   "1 wk/s": "1 Wo./s",
   "Play speed": "Wiedergabegeschwindigkeit",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben · Doppelklick zeigt alles",
-  "1 min/s": "1 Min./s"
+  "1 min/s": "1 Min./s",
+  "Tower": "Turm",
+  "Ground": "Boden",
+  "Approach": "Anflug",
+  "Center": "Bezirkskontrolle",
+  "ATIS": "ATIS",
+  "CTAF": "CTAF",
+  "UNICOM": "UNICOM",
+  "AFIS": "AFIS"
 }

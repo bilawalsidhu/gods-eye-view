@@ -5,8 +5,8 @@
 //
 // WHAT THIS MODULE DELIBERATELY DOES NOT DO: map a flight phase onto a
 // frequency class. The source data does not support it. Of the 9,562 airports
-// in the pack only 443 publish all four of TWR/GND/APP/ATIS, and 5,902 publish
-// no controlled position at all — at those fields the honest answer is
+// in the pack only 443 publish all four of TWR/GND/APP/ATIS, and 6,036 publish
+// none of them — at those fields the honest answer is
 // "uncontrolled, CTAF 122.800, pilots self-announce", not a tower that does not
 // exist. Callers get the classes an airport actually publishes and are expected
 // to say what is there, not to promise a rail that isn't.
@@ -16,32 +16,32 @@
 import { loadBundledJson } from './bundledJson.js';
 import { createRetryableLoader } from './retryableLoad.js';
 import { greatCircleKm } from '../geoDistance.js';
+import { msg } from '../i18n/marker.js';
 
 /**
  * Frequency classes carried by the pack, in OurAirports' own vocabulary.
- * CONTROLLED means a human controller with authority; ADVISORY means a shared
- * frequency where pilots announce their own intentions (CTAF/UNICOM) or an
- * information officer without control authority (AFIS).
+ * CONTROLLED means a human controller with authority at THIS airport; ADVISORY
+ * means a shared frequency where pilots announce their own intentions
+ * (CTAF/UNICOM) or an information officer without control authority (AFIS).
+ * CNTR is listed by the pack but sits in neither set: an area-centre frequency
+ * is published against a nearby airport yet answers for a whole region, so it
+ * does not make that airport a controlled field.
  */
-export const CONTROLLED_CLASSES = Object.freeze([
-  'TWR',
-  'GND',
-  'APP',
-  'ATIS',
-  'CNTR',
-]);
+export const CONTROLLED_CLASSES = Object.freeze(['TWR', 'GND', 'APP', 'ATIS']);
 export const ADVISORY_CLASSES = Object.freeze(['CTAF', 'UNIC', 'AFIS']);
+/** Area-centre class: carried and labelled, but neither controlled nor advisory. */
+export const AREA_CLASSES = Object.freeze(['CNTR']);
 
 /** Human-readable expansion for each class the pack can contain. */
 export const CLASS_LABELS = Object.freeze({
-  TWR: 'Tower',
-  GND: 'Ground',
-  APP: 'Approach',
-  ATIS: 'ATIS',
-  CNTR: 'Center',
-  CTAF: 'CTAF',
-  UNIC: 'UNICOM',
-  AFIS: 'AFIS',
+  TWR: msg('Tower'),
+  GND: msg('Ground'),
+  APP: msg('Approach'),
+  ATIS: msg('ATIS'),
+  CNTR: msg('Center'),
+  CTAF: msg('CTAF'),
+  UNIC: msg('UNICOM'),
+  AFIS: msg('AFIS'),
 });
 
 const PACK_URL = new URL(
@@ -98,7 +98,8 @@ export async function loadAtcFrequencies() {
 /**
  * True when the airport publishes at least one controlled position — i.e. there
  * is someone to hear. The inverse is not "no radio": an advisory-only field
- * still has a frequency, it just has no controller on it.
+ * still has a frequency, it just has no controller on it. An area-centre (CNTR)
+ * frequency alone does not count: it is not this airport's controller.
  * @param {{frequencies: Array<{type: string}>}} airport - A pack airport.
  * @returns {boolean} Whether any frequency is a controlled class.
  */
@@ -170,7 +171,8 @@ export async function nearestAirportsWithFrequencies(lat, lon, options = {}) {
 
 /**
  * Look one airport up by its OurAirports ident (ICAO where one exists, else the
- * local code) — the identifier the adsbdb route enrichment already carries.
+ * local code). The route enrichment carries IATA-or-ICAO codes, which are not
+ * always the ident, so resolve a route airport by coordinates rather than here.
  * @param {string} ident - Airport ident, case-insensitive.
  * @returns {Promise<object|null>} The pack airport, or null when absent.
  */

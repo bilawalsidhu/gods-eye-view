@@ -60,6 +60,11 @@ phase→frequency map is not something this data can support everywhere:
 | publish none of those four — advisory only (CTAF/UNIC/AFIS) | **5,902** |
 | publish none of those four and no advisory either — an area Center only | 134 |
 
+The first two rows count TWR/GND/APP/ATIS only. `CNTR` is deliberately outside them: an area-centre
+frequency is filed against a nearby airport but controls a region, so 1,094 airports that list a
+Center frequency and nothing from the four are still reported uncontrolled by `isControlled()`
+(3,526 controlled airports, 6,036 not).
+
 So for the majority of airports in this pack there is no tower to hear, and the
 truthful presentation is "uncontrolled field — CTAF 122.800, pilots
 self-announce". `isControlled()` exists so a caller can say that instead of

@@ -346,8 +346,9 @@ published in the file (14.0 MB source → 0.71 MB pack, budget ≤1 MB enforced 
 `src/data/ourAirportsAtc.test.mjs`).
 
 The class is **not** remapped onto a flight phase, because the data does not support it: only
-443 of the 9,562 airports publish all four of TWR/GND/APP/ATIS, and 5,902 publish none of them
-at all. See the pack README for the full table.
+443 of the 9,562 airports publish all four of TWR/GND/APP/ATIS, and 6,036 publish none of them.
+A `CNTR` (area centre) frequency does not make an airport a controlled field: it answers for a
+region, not for that airport. See the pack README for the full table.
 
 OurAirports is **public domain** — "released into the public domain ... no need to credit us,
 though we appreciate it". We credit anyway: "OurAirports". Registration in the in-app

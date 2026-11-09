@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import {
   ADVISORY_CLASSES,
+  AREA_CLASSES,
   CLASS_LABELS,
   CONTROLLED_CLASSES,
   airportByIdent,
@@ -56,7 +57,11 @@ test('every frequency is inside the VHF air band and carries a known class', asy
   // listener could never tune.
   const { airports } = await loadAtcFrequencies();
   assert.ok(airports.length > 5_000, 'pack looks truncated');
-  const known = new Set([...CONTROLLED_CLASSES, ...ADVISORY_CLASSES]);
+  const known = new Set([
+    ...CONTROLLED_CLASSES,
+    ...ADVISORY_CLASSES,
+    ...AREA_CLASSES,
+  ]);
   for (const airport of airports) {
     assert.ok(
       airport.frequencies.length > 0,
@@ -99,6 +104,37 @@ test('most of the pack has no controller, and the loader says so', async () => {
     (a) => !a.frequencies.some((f) => f.type === 'CNTR'),
   );
   assert.equal(isControlled(uncontrolled), false);
+});
+
+test('an area-centre frequency alone does not make an airport controlled', async () => {
+  // CNTR is published against an airport but answers for a whole region: an
+  // aircraft over a CNTR-listed grass strip has no tower to talk to. Every
+  // airport whose only non-advisory class is CNTR must read as uncontrolled,
+  // and the classes must partition cleanly (no class counted twice).
+  const { airports } = await loadAtcFrequencies();
+  const centerOnly = airports.filter((a) =>
+    a.frequencies.every((f) => f.type === 'CNTR'),
+  );
+  assert.ok(
+    centerOnly.length > 0,
+    'the pack should still carry CNTR-only rows',
+  );
+  assert.ok(centerOnly.every((a) => !isControlled(a)));
+  assert.equal(
+    isControlled({ frequencies: [{ type: 'CNTR', mhz: 125.1 }] }),
+    false,
+  );
+  assert.equal(
+    isControlled({
+      frequencies: [
+        { type: 'CNTR', mhz: 125.1 },
+        { type: 'TWR', mhz: 118.3 },
+      ],
+    }),
+    true,
+  );
+  const sets = [CONTROLLED_CLASSES, ADVISORY_CLASSES, AREA_CLASSES].flat();
+  assert.equal(new Set(sets).size, sets.length);
 });
 
 test('field elevation is carried, and absent means absent rather than sea level', async () => {

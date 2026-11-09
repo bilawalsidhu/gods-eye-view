@@ -3381,5 +3381,13 @@
   "1 wk/s": "1 sem/s",
   "Play speed": "Velocidade de reprodução",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Role ou faça pinça para ampliar, arraste para se mover · clique duplo para ver tudo",
-  "1 min/s": "1 min/s"
+  "1 min/s": "1 min/s",
+  "Tower": "Torre",
+  "Ground": "Solo",
+  "Approach": "Aproximação",
+  "Center": "Centro",
+  "ATIS": "ATIS",
+  "CTAF": "CTAF",
+  "UNICOM": "UNICOM",
+  "AFIS": "AFIS"
 }
