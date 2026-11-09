@@ -1,6 +1,8 @@
 import { createVoiceCommands as bindVoiceCommands } from './sessionCommands.js';
 import { createRealtimeSession } from './realtimeSession.js';
 import { createGeminiSession } from './geminiSession.js';
+import { createAnthropicSession } from './anthropicSession.js';
+import { createVertexSession } from './vertexSession.js';
 import { createProviderCommands } from './providerCommands.js';
 import { createVoicePanelHost } from './panel/host.js';
 
@@ -28,7 +30,8 @@ export function createVoiceCommands(options = {}) {
                 ? 'openai'
                 : settings.createSession === createGeminiSession
                   ? 'gemini'
-                  : null,
+                  : // Claude is chat only: no native voice activity to observe.
+                    null,
           }
         : {}),
     });
@@ -37,7 +40,12 @@ export function createVoiceCommands(options = {}) {
   if (!options.createSession && options.supportedProviders !== undefined)
     commands = createProviderCommands(options, {
       bind,
-      factories: { openai: createRealtimeSession, gemini: createGeminiSession },
+      factories: {
+        openai: createRealtimeSession,
+        gemini: createGeminiSession,
+        anthropic: createAnthropicSession,
+        vertex: createVertexSession,
+      },
     });
   else commands = bind({ createSession: createRealtimeSession, ...options });
   if (panelHost) {

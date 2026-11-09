@@ -181,11 +181,13 @@ export function createTextChatHandler({
           return reply(502, FAILURE, refusal);
         }
         void response.body?.cancel().catch(() => {});
-        if (![429, 503].includes(response.status)) return reply(502, FAILURE);
+        // Anthropic answers overload with 529; it reads as 503 here.
+        const status = response.status === 529 ? 503 : response.status;
+        if (![429, 503].includes(status)) return reply(502, FAILURE);
         const retryAfter = upstreamRetryAfter(response);
         if (retryAfter) res.setHeader('Retry-After', retryAfter);
         return reply(
-          response.status,
+          status,
           FAILURE,
           response.status === 429 ? 'RATE_LIMITED' : undefined,
         );

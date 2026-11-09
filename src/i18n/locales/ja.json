@@ -3234,5 +3234,13 @@
   "1 wk/s": "1週間/秒",
   "Play speed": "再生速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
-  "1 min/s": "1分/秒"
+  "1 min/s": "1分/秒",
+  "Claude answers in chat only; voice is not available for this provider.": "Claudeはチャットでのみ応答します。このプロバイダーでは音声を利用できません。",
+  "Claude has no voice. Open CHAT to type instead.": "Claudeは音声に対応していません。代わりにチャットを開いて入力してください。",
+  "Claude typed chat": "Claudeのテキストチャット",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AIはチャットでのみ応答します。このプロバイダーでは音声を利用できません。",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AIは音声に対応していません。代わりにチャットを開いて入力してください。",
+  "Gemini typed chat through Vertex AI Express Mode": "Vertex AIエクスプレス モード経由のGeminiテキストチャット",
+  "Open chat": "チャットを開く",
+  "This provider answers in chat only": "このプロバイダーはチャットでのみ応答します"
 }

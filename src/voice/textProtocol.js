@@ -1,67 +1,83 @@
+const gemini = {
+  endpoint: '/api/gemini/chat',
+  keyEnv: 'GEMINI_API_KEY',
+  user: (text) => ({ role: 'user', parts: [{ text }] }),
+  note: (text) => ({ role: 'model', parts: [{ text }] }),
+  isUser: (item) =>
+    item.role === 'user' &&
+    item.parts.some((part) => typeof part.text === 'string'),
+  request: (contents) => ({ contents }),
+  decode(data) {
+    const content = data?.content;
+    if (
+      content?.role !== 'model' ||
+      !Array.isArray(content.parts) ||
+      !content.parts.length ||
+      content.parts.length > 32
+    )
+      throw Error('Invalid response');
+    return {
+      content,
+      text: content.parts
+        .filter((part) => typeof part.text === 'string' && !part.thought)
+        .map((part) => part.text)
+        .join(''),
+      calls: content.parts
+        .filter((part) => part.functionCall)
+        .map((part) => part.functionCall),
+      finished: data.finishReason === 'STOP',
+    };
+  },
+  results: (pairs) => [
+    {
+      role: 'user',
+      parts: pairs.map(({ call, result }) => ({
+        functionResponse: {
+          name: call.name,
+          ...(call.id ? { id: call.id } : {}),
+          response: result,
+        },
+      })),
+    },
+  ],
+  compactResult: (item, maxBytes) =>
+    item.role === 'user' && item.parts.some((part) => part.functionResponse)
+      ? {
+          ...item,
+          parts: item.parts.map((part) =>
+            part.functionResponse
+              ? {
+                  ...part,
+                  functionResponse: {
+                    ...part.functionResponse,
+                    response: boundedToolResult(
+                      part.functionResponse.response,
+                      maxBytes,
+                    ),
+                  },
+                }
+              : part,
+          ),
+        }
+      : item,
+};
+
 /** Only the wire format differs; the UI and action lifetime use one text loop. */
 export const textProtocols = {
-  gemini: {
-    endpoint: '/api/gemini/chat',
-    keyEnv: 'GEMINI_API_KEY',
-    user: (text) => ({ role: 'user', parts: [{ text }] }),
-    note: (text) => ({ role: 'model', parts: [{ text }] }),
-    isUser: (item) =>
-      item.role === 'user' &&
-      item.parts.some((part) => typeof part.text === 'string'),
-    request: (contents) => ({ contents }),
+  gemini,
+  // Vertex AI carries Gemini's contents; its reference also prints the proto
+  // name of the stop reason, so both spellings end a turn.
+  vertex: {
+    ...gemini,
+    endpoint: '/api/vertex/chat',
+    keyEnv: 'VERTEX_API_KEY',
     decode(data) {
-      const content = data?.content;
-      if (
-        content?.role !== 'model' ||
-        !Array.isArray(content.parts) ||
-        !content.parts.length ||
-        content.parts.length > 32
-      )
-        throw Error('Invalid response');
+      const decoded = gemini.decode(data);
       return {
-        content,
-        text: content.parts
-          .filter((part) => typeof part.text === 'string' && !part.thought)
-          .map((part) => part.text)
-          .join(''),
-        calls: content.parts
-          .filter((part) => part.functionCall)
-          .map((part) => part.functionCall),
-        finished: data.finishReason === 'STOP',
+        ...decoded,
+        finished: ['STOP', 'FINISH_REASON_STOP'].includes(data.finishReason),
       };
     },
-    results: (pairs) => [
-      {
-        role: 'user',
-        parts: pairs.map(({ call, result }) => ({
-          functionResponse: {
-            name: call.name,
-            ...(call.id ? { id: call.id } : {}),
-            response: result,
-          },
-        })),
-      },
-    ],
-    compactResult: (item, maxBytes) =>
-      item.role === 'user' && item.parts.some((part) => part.functionResponse)
-        ? {
-            ...item,
-            parts: item.parts.map((part) =>
-              part.functionResponse
-                ? {
-                    ...part,
-                    functionResponse: {
-                      ...part.functionResponse,
-                      response: boundedToolResult(
-                        part.functionResponse.response,
-                        maxBytes,
-                      ),
-                    },
-                  }
-                : part,
-            ),
-          }
-        : item,
   },
   openai: {
     endpoint: '/api/openai/chat',
@@ -110,6 +126,72 @@ export const textProtocols = {
       return {
         ...item,
         content: JSON.stringify(boundedToolResult(result, maxBytes)),
+      };
+    },
+  },
+  anthropic: {
+    endpoint: '/api/anthropic/chat',
+    keyEnv: 'ANTHROPIC_API_KEY',
+    user: (text) => ({ role: 'user', content: text }),
+    note: (text) => ({ role: 'assistant', content: [{ type: 'text', text }] }),
+    // A tool_result message is not a user turn boundary.
+    isUser: (item) =>
+      item.role === 'user' &&
+      (typeof item.content === 'string' ||
+        item.content.some((block) => block.type === 'text')),
+    request: (messages) => ({ messages }),
+    decode(data) {
+      const content = data?.content;
+      if (
+        content?.role !== 'assistant' ||
+        !Array.isArray(content.content) ||
+        !content.content.length ||
+        content.content.length > 32
+      )
+        throw Error('Invalid response');
+      return {
+        content,
+        text: content.content
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text)
+          .join(''),
+        calls: content.content
+          .filter((block) => block.type === 'tool_use')
+          .map((block) => ({
+            id: block.id,
+            name: block.name,
+            args: block.input,
+          })),
+        finished: data.finishReason === 'end_turn',
+      };
+    },
+    results: (pairs) => [
+      {
+        role: 'user',
+        content: pairs.map(({ call, result }) => ({
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: JSON.stringify(result),
+        })),
+      },
+    ],
+    compactResult(item, maxBytes) {
+      if (item.role !== 'user' || !Array.isArray(item.content)) return item;
+      return {
+        ...item,
+        content: item.content.map((block) => {
+          if (block.type !== 'tool_result') return block;
+          let result;
+          try {
+            result = JSON.parse(block.content);
+          } catch {
+            result = { ok: false, error: 'Tool result could not be read' };
+          }
+          return {
+            ...block,
+            content: JSON.stringify(boundedToolResult(result, maxBytes)),
+          };
+        }),
       };
     },
   },

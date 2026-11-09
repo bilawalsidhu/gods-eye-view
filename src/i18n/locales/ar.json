@@ -3619,5 +3619,13 @@
   "1 wk/s": "أسبوع/ث",
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
-  "1 min/s": "دقيقة/ث"
+  "1 min/s": "دقيقة/ث",
+  "Claude answers in chat only; voice is not available for this provider.": "يجيب Claude في الدردشة فقط؛ الصوت غير متاح لهذا المزوّد.",
+  "Claude has no voice. Open CHAT to type instead.": "لا يدعم Claude الصوت. افتح «دردشة» للكتابة بدلًا من ذلك.",
+  "Claude typed chat": "الدردشة النصية مع Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "يجيب Vertex AI في الدردشة فقط؛ الصوت غير متاح لهذا المزوّد.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "لا يدعم Vertex AI الصوت. افتح «دردشة» للكتابة بدلًا من ذلك.",
+  "Gemini typed chat through Vertex AI Express Mode": "الدردشة النصية مع Gemini عبر الوضع السريع في Vertex AI",
+  "Open chat": "فتح الدردشة",
+  "This provider answers in chat only": "يجيب هذا المزوّد في الدردشة فقط"
 }

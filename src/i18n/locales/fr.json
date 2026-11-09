@@ -3388,5 +3388,13 @@
   "1 wk/s": "1 sem/s",
   "Play speed": "Vitesse de lecture",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Faites défiler ou pincez pour zoomer, glissez pour vous déplacer · double-clic pour tout voir",
-  "1 min/s": "1 min/s"
+  "1 min/s": "1 min/s",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude ne répond que dans la discussion ; la voix n'est pas disponible pour ce fournisseur.",
+  "Claude has no voice. Open CHAT to type instead.": "Claude n'a pas de voix. Ouvrez CHAT pour écrire à la place.",
+  "Claude typed chat": "Discussion écrite avec Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI ne répond que dans la discussion ; la voix n'est pas disponible pour ce fournisseur.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI n'a pas de voix. Ouvrez CHAT pour écrire à la place.",
+  "Gemini typed chat through Vertex AI Express Mode": "Discussion écrite avec Gemini via Vertex AI en mode express",
+  "Open chat": "Ouvrir la discussion",
+  "This provider answers in chat only": "Ce fournisseur ne répond que dans la discussion"
 }

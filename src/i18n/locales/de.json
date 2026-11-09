@@ -3311,5 +3311,13 @@
   "1 wk/s": "1 Wo./s",
   "Play speed": "Wiedergabegeschwindigkeit",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben · Doppelklick zeigt alles",
-  "1 min/s": "1 Min./s"
+  "1 min/s": "1 Min./s",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude antwortet nur im Chat; Sprachsteuerung ist für diesen Anbieter nicht verfügbar.",
+  "Claude has no voice. Open CHAT to type instead.": "Claude hat keine Sprachsteuerung. CHAT öffnen, um stattdessen zu schreiben.",
+  "Claude typed chat": "Text-Chat mit Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI antwortet nur im Chat; Sprachsteuerung ist für diesen Anbieter nicht verfügbar.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI hat keine Sprachsteuerung. CHAT öffnen, um stattdessen zu schreiben.",
+  "Gemini typed chat through Vertex AI Express Mode": "Text-Chat mit Gemini über Vertex AI im Expressmodus",
+  "Open chat": "Chat öffnen",
+  "This provider answers in chat only": "Dieser Anbieter antwortet nur im Chat"
 }
