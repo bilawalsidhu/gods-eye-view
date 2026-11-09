@@ -1073,7 +1073,7 @@
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
   "src/services/wikipedia.test.mjs",
-  "src/ui/gamepadNavigation.test.mjs"
+  "src/ui/gamepadNavigation.test.mjs",
   "src/data/routeSegment.test.mjs",
   "src/terrainHeightsBounds.test.mjs",
   "scripts/build-bright-stars.mjs",
