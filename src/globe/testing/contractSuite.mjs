@@ -795,23 +795,39 @@ export function createContractSuite(
           const shownStrength = strength(at(20.5, 9));
           line.show(false);
           await until(() => magentaAt(at(20.5, 9)) === 0, 'the line hidden');
-          // 30 km under the ground: only the depth-fail copy shows, dimmed.
-          const deep = (lon) => at(lon, 11, -30_000);
-          hidden.setPositions([deep(19), deep(21)]);
+          // Round the back of the Earth along the great circle west of the
+          // view centre, out to a visible end past the western horizon. The
+          // far side, behind the Earth's centre, shows only by its dimmed
+          // depth-fail copy. Cesium culls a line the globe hides whole, and
+          // draws in full what lies under the horizon but before the centre.
+          const west = (degrees) => {
+            const t = (degrees * Math.PI) / 180;
+            const [lon0, lat0] = [(20 * Math.PI) / 180, (10 * Math.PI) / 180];
+            const [x, y, z] = [
+              Math.cos(lat0) * Math.cos(lon0) * Math.cos(t) +
+                Math.sin(lon0) * Math.sin(t),
+              Math.cos(lat0) * Math.sin(lon0) * Math.cos(t) -
+                Math.cos(lon0) * Math.sin(t),
+              Math.sin(lat0) * Math.cos(t),
+            ];
+            return at(
+              (Math.atan2(y, x) * 180) / Math.PI,
+              (Math.asin(z) * 180) / Math.PI,
+            );
+          };
+          const deep = () => west(150);
+          hidden.setPositions([200, 150, 100, 50, 20].map(west));
           await until(
-            () => magentaAt(deep(20)) > 10,
+            () => magentaAt(deep()) > 10,
             'the hidden line drawn by its depth-fail copy',
           );
-          const hiddenStrength = strength(deep(20));
+          const hiddenStrength = strength(deep());
           ensure(
             hiddenStrength < shownStrength,
             `the depth-fail copy (${hiddenStrength}) is not dimmer than the line (${shownStrength})`,
           );
           hidden.destroy();
-          await until(
-            () => magentaAt(deep(20)) === 0,
-            'the destroyed line gone',
-          );
+          await until(() => magentaAt(deep()) === 0, 'the destroyed line gone');
         } finally {
           line.destroy();
           hidden.destroy();

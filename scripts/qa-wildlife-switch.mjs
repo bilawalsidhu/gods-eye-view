@@ -247,11 +247,21 @@ await strict.run({}, async (b) => {
           box: box ? [box.x, box.y, box.width, box.height] : null,
         };
       });
+    // The picker sits in VISUAL PRESETS, out of the Tab order while that
+    // panel is collapsed: open it from the keyboard too.
+    if ((await picker()).panel !== 'true') {
+      await p.focus('#control-panel-toggle');
+      await p.keyboard.press('Enter');
+    }
     await p
       .waitForFunction(
         () => {
           const el = document.querySelector('#globe-engine');
-          return el && !el.disabled && el.getBoundingClientRect().height > 0;
+          return (
+            el &&
+            !el.disabled &&
+            el.checkVisibility({ visibilityProperty: true })
+          );
         },
         { timeout: 30000 },
       )
@@ -293,7 +303,20 @@ await strict.run({}, async (b) => {
     const tabs = path.length;
     const from = await p.$eval('#globe-engine', (el) => el.value);
     await p.keyboard.type(kind[0]);
-    await waitForEngine(p, kind);
+    await waitForEngine(p, kind).catch(async (error) => {
+      const state = await p.evaluate(() => ({
+        engine: window.__godsEyeView?.engine?.kind ?? null,
+        picker: document.querySelector('#globe-engine')?.value ?? null,
+        focus: document.activeElement?.id ?? null,
+        busy: document.querySelector('#globe-engine')?.disabled ?? null,
+        frame: Boolean(document.querySelector('.engine-switch-frame')),
+        loading: document.querySelector('#loading-screen')?.className ?? null,
+      }));
+      throw Error(
+        `no ${kind} globe after typing ${kind[0]}: ${JSON.stringify({ from, tabs: path.length, ...state })}`,
+        { cause: error },
+      );
+    });
     assert.equal(
       await p.evaluate(() => performance.timeOrigin),
       origin,
