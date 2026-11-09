@@ -19,6 +19,9 @@
  * file. Any name `cesium` counts, so a config field of that name would
  * over-report rather than slip through.
  *
+ * Two files name the adapter by design and are not on the list:
+ * `ADAPTER_ENTRIES` below allows each exactly the adapter modules it needs.
+ *
  * Runtime code is every `.js`, `.mjs`, `.cjs` and `.vue` file under `src/`,
  * `server/` and `dev/`, except tests and test support. */
 import assert from 'node:assert/strict';
@@ -52,6 +55,25 @@ const isTestSupport = (file) =>
   TEST_ONLY.has(file);
 const isAdapter = (file) => file.startsWith('src/render/cesium/');
 
+/**
+ * The two places outside the adapter that name it by design, each limited
+ * to the adapter modules listed here; any other way they reach Cesium
+ * counts as above. Neither is a file still to port, so neither is on the
+ * allow-list; this list is never grown.
+ * - The application scene is the composition root: it picks the Cesium
+ *   renderer as the default and takes the viewer hooks it hands the
+ *   application from the adapter's application module.
+ * - The conformance page runs the suite on the Cesium adapter's harness
+ *   and draws the reference scenes on its scene renderer.
+ */
+const ADAPTER_ENTRIES = {
+  'src/app/scene.js': ['src/render/cesium/application.js'],
+  'dev/conformance/main.js': [
+    'src/render/cesium/harness.js',
+    'src/render/cesium/sceneRenderer.js',
+  ],
+};
+
 const git = (...args) =>
   execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 const tracked = git(
@@ -70,19 +92,27 @@ const runtimeFiles = tracked.filter(
     /\.(?:[cm]?js|vue)$/.test(file) && !isTestSupport(file) && !isAdapter(file),
 );
 
-/** Whether an import specifier from `file` reaches Cesium. */
-function reachesCesium(file, specifier) {
+/**
+ * The repository path a relative or root-relative specifier names. Vite
+ * reads `/x` from the project root, not the filesystem's.
+ */
+function targetOf(file, specifier) {
   const bare = specifier.replace(/[?#].*$/, '');
-  if (/^(?:cesium|@cesium\/[^/]+)(?:\/|$)/.test(bare)) return true;
-  if (!bare.startsWith('.') && !bare.startsWith('/')) return false;
-  // Vite reads `/x` from the project root, not the filesystem's.
+  if (!bare.startsWith('.') && !bare.startsWith('/')) return null;
   const from = bare.startsWith('/')
     ? root
     : path.join(root, path.dirname(file));
-  const target = path
-    .relative(root, path.join(from, bare))
-    .split(path.sep)
-    .join('/');
+  return path.relative(root, path.join(from, bare)).split(path.sep).join('/');
+}
+
+/** Whether an import specifier from `file` reaches Cesium. */
+function reachesCesium(file, specifier) {
+  const allowed = ADAPTER_ENTRIES[file];
+  if (allowed?.includes(targetOf(file, specifier))) return false;
+  const bare = specifier.replace(/[?#].*$/, '');
+  if (/^(?:cesium|@cesium\/[^/]+)(?:\/|$)/.test(bare)) return true;
+  const target = targetOf(file, specifier);
+  if (target === null) return false;
   return (
     isAdapter(target) ||
     /^node_modules\/(?:cesium|@cesium\/[^/]+)(?:\/|$)/.test(target)
@@ -231,6 +261,106 @@ test('every allow-listed file still reaches Cesium', () => {
     (file) => !present.has(file) || !reachesCesiumFile(file),
   );
   assert.deepEqual(stale, [], `Remove these from ${LIST}.`);
+});
+
+test('the files that name the adapter by design import exactly what they are allowed', () => {
+  const present = new Set(runtimeFiles);
+  for (const [file, modules] of Object.entries(ADAPTER_ENTRIES)) {
+    assert.ok(present.has(file), `${file} is gone: drop it from the list`);
+    assert.ok(!allowList.includes(file), `${file} is on ${LIST} too`);
+    const { imports } = scan(readFileSync(path.join(root, file), 'utf8'));
+    const named = new Set(imports.map((s) => targetOf(file, s)));
+    for (const module of modules)
+      assert.ok(named.has(module), `${file} no longer imports ${module}`);
+  }
+});
+
+/** Every node under `node`, with its parent. */
+function* nodesOf(node, parent = null) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const child of node) yield* nodesOf(child, parent);
+    return;
+  }
+  if (typeof node.type === 'string') yield [node, parent];
+  for (const [key, value] of Object.entries(node))
+    if (!['loc', 'comments', 'tokens', 'extra'].includes(key))
+      yield* nodesOf(value, typeof node.type === 'string' ? node : parent);
+}
+
+test('the files that name the adapter by design take named exports, never Cesium itself', () => {
+  for (const [file, modules] of Object.entries(ADAPTER_ENTRIES)) {
+    const parsed = parsers.babel.parse(
+      readFileSync(path.join(root, file), 'utf8'),
+    );
+    // A static import by name only: no namespace or default binding, no
+    // dynamic import, and no forwarding of the module.
+    for (const [node] of nodesOf(parsed.program)) {
+      const source = node.source?.value;
+      if (typeof source !== 'string') continue;
+      if (!modules.includes(targetOf(file, source))) continue;
+      assert.equal(
+        node.type,
+        'ImportDeclaration',
+        `${file} must import ${source} statically and not forward it`,
+      );
+      assert.deepEqual(
+        node.specifiers
+          .filter((s) => s.type !== 'ImportSpecifier')
+          .map((s) => s.local.name),
+        [],
+        `${file} must import ${source} by name`,
+      );
+    }
+    // The allowed modules hand out no Cesium namespace: no export from the
+    // package, and no exported value that is the namespace itself (members
+    // of it, such as `Cesium.Math`, are the adapter's own business).
+    for (const module of modules) {
+      const program = parsers.babel.parse(
+        readFileSync(path.join(root, module), 'utf8'),
+      ).program;
+      const fromCesium = ({ source }) => {
+        if (typeof source?.value !== 'string') return false;
+        const bare = source.value.replace(/[?#].*$/, '');
+        const target = targetOf(module, bare) ?? '';
+        return /^(?:(?:node_modules\/)?(?:cesium|@cesium\/[^/]+))(?:\/|$)/.test(
+          target || bare,
+        );
+      };
+      const namespaces = new Set(
+        program.body
+          .filter((n) => n.type === 'ImportDeclaration' && fromCesium(n))
+          .flatMap((n) => n.specifiers.map((s) => s.local.name)),
+      );
+      for (const node of program.body) {
+        if (!node.type.startsWith('Export')) continue;
+        assert.ok(!fromCesium(node), `${module} must not re-export Cesium`);
+        for (const [inner, parent] of nodesOf(node)) {
+          if (inner.type !== 'Identifier' || !namespaces.has(inner.name))
+            continue;
+          // Handing the namespace to the adapter's own functions is fine;
+          // giving it out as a value is not.
+          const handedOut =
+            [
+              'ExportSpecifier',
+              'ExportDefaultDeclaration',
+              'ReturnStatement',
+              'SpreadElement',
+              'ArrayExpression',
+            ].includes(parent?.type) ||
+            (parent?.type === 'VariableDeclarator' && parent.init === inner) ||
+            (parent?.type === 'ObjectProperty' && parent.value === inner) ||
+            (parent?.type === 'ArrowFunctionExpression' &&
+              parent.body === inner) ||
+            (parent?.type === 'AssignmentExpression' && parent.right === inner);
+          assert.ok(
+            !handedOut,
+            `${module} must not export ${inner.name} itself`,
+          );
+        }
+      }
+    }
+  }
 });
 
 test('the allow-list only shrinks', (t) => {

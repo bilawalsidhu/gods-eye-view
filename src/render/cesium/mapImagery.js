@@ -1,8 +1,11 @@
+/**
+ * @module render/cesium/mapImagery
+ * @description The map stacks' imagery for the Cesium renderer: OSM, Esri
+ * World Imagery and Cesium ion's world imagery (Bing over HTTPS).
+ */
 import * as Cesium from 'cesium';
 
-// Attribution and service rights are documented in DATA_SOURCES.md.
-export const ESRI_ATTRIBUTION_HTML =
-  '<a href="https://www.esri.com" target="_blank" rel="noopener">Powered by Esri</a>';
+export { ESRI_ATTRIBUTION_HTML } from '../../maps/attribution.js';
 
 export function createOsmImagery() {
   return new Cesium.OpenStreetMapImageryProvider({

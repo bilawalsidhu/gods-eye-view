@@ -222,8 +222,9 @@ test('the separate viewer export imports without constructing a browser viewer',
 });
 
 test('the viewer gets the starry sky as an option, which keeps the Sun and Moon', async () => {
-  const { applicationViewerOptions } = await import('./viewer.js');
-  const { StarrySky } = await import('../sky/starrySky.js');
+  const { applicationViewerOptions } =
+    await import('../render/cesium/applicationViewer.js');
+  const { StarrySky } = await import('../render/cesium/starrySky.js');
   const creditContainer = {};
   const options = applicationViewerOptions(creditContainer);
   // CesiumWidget skips scene.sun and scene.moon when skyBox is false.

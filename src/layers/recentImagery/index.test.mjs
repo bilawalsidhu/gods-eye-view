@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
+import '../../render/cesium/mapEngine.js';
 import { createDefaultMapSources } from '../../maps/defaultSources.js';
 import { resetPointerOwnership } from '../../data/inputOwnership.js';
 import { initImageryBoxTool } from '../../ui/imageryBoxTool.js';

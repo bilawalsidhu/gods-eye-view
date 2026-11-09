@@ -10,6 +10,7 @@ import {
   icrfToFixedAxes,
   isSkyRotationCurrent,
 } from './starrySky.js';
+import * as neutral from '../../sky/icrf.js';
 
 const close = (actual, expected, epsilon = 1e-9) =>
   assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} vs ${expected}`);
@@ -220,4 +221,27 @@ test('the precise frame is given as its axes once its tables answer', (t) => {
     () => undefined,
   );
   assert.equal(icrfToFixedAxes(ms), null);
+});
+
+test('loading the sky provides its precise rotation to Cesium-free code', () => {
+  const ms = Date.parse('2026-10-19T00:00:00Z');
+  const original = Cesium.Transforms.computeIcrfToFixedMatrix;
+  Cesium.Transforms.computeIcrfToFixedMatrix = (_time, result) =>
+    Cesium.Matrix3.clone(Cesium.Matrix3.fromRotationZ(0.3), result);
+  try {
+    const axes = neutral.icrfToFixedAxes(ms);
+    assert.notEqual(axes, null);
+    assert.deepEqual(axes, icrfToFixedAxes(ms));
+  } finally {
+    Cesium.Transforms.computeIcrfToFixedMatrix = original;
+  }
+});
+
+test('the neutral rotation answers null with nothing provided', () => {
+  neutral.provideIcrfToFixed(null);
+  try {
+    assert.equal(neutral.icrfToFixedAxes(0), null);
+  } finally {
+    neutral.provideIcrfToFixed(icrfToFixedAxes);
+  }
 });

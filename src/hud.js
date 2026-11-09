@@ -441,7 +441,7 @@ export class IntelHUD {
 
     // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
     // page, except an inline panel, whose host may report it hidden while it
-    // is on screen (see keepPanelRendering in app/embed.js).
+    // is on screen (see keepPanelRendering in render/cesium/panelRendering.js).
     this._updateInterval = setInterval(() => {
       if (!this._visible || (document.hidden && !isEmbeddedInline())) return;
       this._updateCameraData();

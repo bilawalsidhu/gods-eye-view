@@ -558,7 +558,7 @@ Keyless terrain tiles retry when Re:Earth throttles them. The browser fetches
 `terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain` directly; no
 proxy in this repository sees those requests (`/api/terrain/heights` is the
 separate point-height endpoint), and the upstream edge answers zoom-out bursts
-with HTTP 429 under load. `src/maps/terrain.js` hands Cesium a `Resource`
+with HTTP 429 under load. `src/render/cesium/mapTerrain.js` hands Cesium a `Resource`
 whose retry policy (`src/maps/terrainRetry.js`) every derived tile fetch
 inherits: 429, 502, 503 and 504 replies retry up to three times, 750 ms
 doubling to a 15 s cap, with every retry waiting behind one shared cooldown
@@ -881,7 +881,9 @@ unchanged.
 Polled layer refreshes and the HUD's camera readout pause while the page is
 hidden. An app embedded inline in a panel keeps both running, because the
 panel's host can report the page as hidden while it is on screen. This is the
-same rule the render loop follows (`keepPanelRendering` in `app/embed.js`).
+same rule the render loop follows (`keepPanelRendering` in
+`render/cesium/panelRendering.js`, which the application scene hands the embed
+views).
 
 Application scene setup owns request services, terrain/floor caches and annotation
 lookup state. Controls, layers and voice share those owners, and cancellation
@@ -1128,8 +1130,9 @@ port's `preUpdate`, with the shared geo maths, and no longer loads the Cesium
 camera factory: a caller handing it a Cesium viewer, with no
 renderer bound, loads the `./render/cesium/unbound` export once first, or its
 controller throws naming it. Whether the aircraft it flies still draws comes
-from its `trackedEntityDrawn` service (the application asks the viewer's
-entities); without one, Cockpit takes the aircraft as drawn.
+from its `trackedEntityDrawn` service (the shell asks the entity's record,
+and the application scene's `viewerDrawsEntity` for an entity of the viewer's
+own); without one, Cockpit takes the aircraft as drawn.
 
 ## Rendered-mesh floor cells — November 8, 2026
 
@@ -1502,10 +1505,11 @@ The clear control presents busy state while its existing action owns the transac
 
 ## Sky background
 
-`src/sky/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
+`src/render/cesium/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
 Bright Star Catalogue stars and a soft ESO/S. Brunier Milky Way. Both layers
 rotate from ICRF/J2000 into the Earth-fixed frame at the scene clock, with
-a TEME fallback while Cesium's IAU 2006 tables load. Bundled assets and
+a TEME fallback while Cesium's IAU 2006 tables load. The precise rotation reaches
+Cesium-free code (the celestial ring) through `src/sky/icrf.js`. Bundled assets and
 their provenance are documented in `src/data/local_data/sky/README.md`.
 
 Anime fades out the Milky Way with its style intensity to avoid cel-shaded
@@ -6649,6 +6653,17 @@ token, then construct the Bing provider with `tileProtocol: 'https'`. Both style
 request HTTPS tiles even on HTTP localhost, with the existing Content Security
 Policy unchanged. Ion attribution and Bing's per-tile credits are preserved;
 other ion imagery assets continue through the SDK's standard ion factory.
+
+The imagery, terrain and 3D factories are the Cesium renderer's
+(`src/render/cesium/mapImagery.js`, `mapTerrain.js`, `google3d.js`; the
+package exports `./maps/imagery`, `./maps/terrain` and `./maps/3d` point
+there). The catalog, the default registry and the controller are
+Cesium-free: they reach those factories, and the viewer operations a
+switch makes (imagery layers, terrain, the globe's visibility, tilesets),
+through the map engine (`src/maps/engine.js`), which the Cesium renderer
+provides as it loads (`src/render/cesium/mapEngine.js`). A viewer with no
+renderer bound gets it, with the other unbound ports, from the package's
+`./render/cesium/unbound` export.
 
 The controller accepts other source registries without adding provider branches.
 Each instance caches source construction, ignores superseded scene changes and

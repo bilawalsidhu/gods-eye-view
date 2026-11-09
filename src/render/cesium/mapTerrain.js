@@ -1,5 +1,11 @@
+/**
+ * @module render/cesium/mapTerrain
+ * @description The map stacks' terrain for the Cesium renderer: Cesium
+ * World Terrain through ion, or Re:Earth's keyless terrain with its tile
+ * retry policy (`src/maps/terrainRetry.js`).
+ */
 import * as Cesium from 'cesium';
-import { createTerrainRetryPolicy } from './terrainRetry.js';
+import { createTerrainRetryPolicy } from '../../maps/terrainRetry.js';
 
 /** Re:Earth / Mapterhorn ellipsoidal quantized mesh, CC BY 4.0. */
 export const KEYLESS_TERRAIN_URL =

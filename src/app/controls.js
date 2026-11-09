@@ -8,10 +8,10 @@ import { t } from '../i18n/index.js';
  * Construct the existing controls and camera presentation. `initialShareCode`
  * opens a share code (the `<code>` of `/share/<code>`) at start-up, for a host
  * whose address does not carry one. `localePicker: false` removes the language
- * picker, for a host that does not initialize Core's locale.
+ * picker, for a page that does not initialize the app's locale.
  */
 export function createApplicationControls({
-  scene: { viewer, mapStackController, operations },
+  scene: { viewer, mapStackController, operations, viewerDrawsEntity },
   loaderStatus,
   Controls = StyleManager,
   services,
@@ -30,6 +30,8 @@ export function createApplicationControls({
       fetchRegionalBrief: (...args) =>
         operations.requests.regional.getBrief(...args),
       ...catalogControlServices(catalog),
+      // Whether an entity is one of the viewer's own; the scene answers it.
+      viewerDrawsEntity: viewerDrawsEntity ?? services?.viewerDrawsEntity,
     },
     requestServices: operations.requests,
     mapStackController,

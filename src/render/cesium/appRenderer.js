@@ -17,11 +17,13 @@
  * crosses the contract and each call marks code still to port. Ported code
  * that still holds the viewer reaches the renderer through `rendererOf`.
  */
-import { createApplicationViewer } from '../../app/viewer.js';
+import { createApplicationViewer } from './applicationViewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
 import { bindRenderer } from '../rendererOf.js';
 import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
+// The application's map stacks switch through the Cesium map engine.
+import './mapEngine.js';
 
 /** @typedef {import('../contract/renderer').Renderer} TransitionalRenderer */
 

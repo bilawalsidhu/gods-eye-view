@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
+// The controller switches stacks through the Cesium map engine.
+import '../render/cesium/mapEngine.js';
 import { createDefaultMapSources } from './defaultSources.js';
 import { bindRenderer } from '../render/rendererOf.js';
 

@@ -11,16 +11,9 @@
  * embedded or not.
  */
 
-import * as Cesium from 'cesium';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
-import { cameraOf } from '../render/cesium/camera.js';
-// The application's tools reach `findGlobe` callers too (the Recent Imagery
-// panel, Import and others): a viewer with no renderer bound gets its globe
-// port from here, as it gets its camera.
-import '../render/cesium/globe.js';
-// The application's data reaches `findEffects` (the cyber contact sweep):
-// such a viewer gets its effects port from here too.
-import '../render/cesium/effects.js';
+import { toRadians } from '../geo/index.js';
+import { cameraOf } from '../render/rendererOf.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
 const EMBED_VIEW_MESSAGE = 'gev:view';
@@ -55,7 +48,8 @@ export function isEmbeddedInline() {
 
 /**
  * `doc`'s visibility for work that pauses in a hidden page. A panel's host
- * may report it hidden while it is on screen (see keepPanelRendering), so an
+ * may report it hidden while it is on screen (see keepPanelRendering in
+ * render/cesium/panelRendering.js), so an
  * inline panel always reads as visible.
  */
 export function panelAwareVisibility(doc = globalThis.document) {
@@ -72,69 +66,6 @@ export function panelAwareVisibility(doc = globalThis.document) {
     addEventListener: (type, listener) => doc.addEventListener(type, listener),
     removeEventListener: (type, listener) =>
       doc.removeEventListener(type, listener),
-  };
-}
-
-// A panel keeps drawing at about this rate when its host stops animation
-// frames; see keepPanelRendering.
-const PANEL_FRAME_MS = 33;
-const MISSED_FRAMES_MS = 250;
-
-/** A render error's details, including the plain objects workers report. */
-function describeError(error) {
-  if (error instanceof Error)
-    return `${error.name}: ${error.message}\n${error.stack}`;
-  try {
-    return JSON.stringify(error, Object.getOwnPropertyNames(error ?? {}));
-  } catch {
-    return String(error);
-  }
-}
-
-/**
- * Keep the globe drawing in an inline panel. Some hosts report a panel on
- * screen as hidden, which stops the browser's animation frames and with them
- * Cesium's render loop; while frames stop arriving, draw from a timer.
- * Returns a function that stops it.
- */
-export function keepPanelRendering(
-  viewer,
-  { windowRef = globalThis.window, now = () => performance.now() } = {},
-) {
-  let lastFrame = now();
-  let frameRequest = null;
-  const onFrame = () => {
-    lastFrame = now();
-    frameRequest = windowRef.requestAnimationFrame(onFrame);
-  };
-  frameRequest = windowRef.requestAnimationFrame(onFrame);
-  // Cesium stops drawing after a render error, and so does the timer.
-  // Report the error in full: workers report plain objects, which Cesium
-  // prints as [object Object].
-  let failed = false;
-  const removeErrorListener = viewer.scene?.renderError?.addEventListener(
-    (_scene, error) => {
-      failed = true;
-      console.error(
-        "[God's Eye View panel] render error:",
-        describeError(error),
-      );
-    },
-  );
-  const timer = windowRef.setInterval(() => {
-    if (
-      failed ||
-      now() - lastFrame < MISSED_FRAMES_MS ||
-      viewer.isDestroyed?.()
-    )
-      return;
-    viewer.resize();
-    viewer.render();
-  }, PANEL_FRAME_MS);
-  return () => {
-    windowRef.clearInterval(timer);
-    windowRef.cancelAnimationFrame(frameRequest);
-    removeErrorListener?.();
   };
 }
 
@@ -159,8 +90,8 @@ function flyTo(viewer, camera) {
       { lon: camera.lon, lat: camera.lat, height: camera.altitude_m },
       {
         orientation: {
-          heading: Cesium.Math.toRadians(camera.heading_deg),
-          pitch: Cesium.Math.toRadians(camera.pitch_deg),
+          heading: toRadians(camera.heading_deg),
+          pitch: toRadians(camera.pitch_deg),
           roll: 0,
         },
         durationS: FLIGHT_SECONDS,
@@ -249,6 +180,9 @@ export async function applyView(
 /**
  * Install embed mode when the page asks for it, and draw any annotations the
  * opening link carries. Returns a function that removes the message handler.
+ * `keepRendering({windowRef})` keeps the globe drawing in an inline panel
+ * whose host stops animation frames, and returns a function that stops it;
+ * the application scene gives it (`keepPanelRendering`).
  */
 export function installViews({
   shell,
@@ -256,6 +190,7 @@ export function installViews({
   dataManager,
   run,
   signal,
+  keepRendering = null,
   location = globalThis.location,
   windowRef = globalThis.window,
 }) {
@@ -271,9 +206,10 @@ export function installViews({
 
   windowRef.document.body.classList.add('ui-embed');
   shell.setCleanView?.(true);
-  const stopRendering = isEmbeddedInline()
-    ? keepPanelRendering(viewer, { windowRef })
-    : () => {};
+  const stopRendering =
+    isEmbeddedInline() && keepRendering
+      ? keepRendering({ windowRef })
+      : () => {};
   // A framing page talks to the app across frames; an inline panel shares
   // the page with it and talks through the page's own window.
   const peer = isEmbeddedInline() ? windowRef : windowRef.parent;

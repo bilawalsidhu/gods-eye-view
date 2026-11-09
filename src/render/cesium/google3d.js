@@ -1,18 +1,11 @@
-const clean = (value) => String(value || '').trim();
-
 /**
- * Decide which map provider can deliver the best startup experience.
- * @param {{googleApiKey?: string, cesiumToken?: string}} credentials
- * @returns {'google-direct'|'google-ion'|'osm'}
+ * @module render/cesium/google3d
+ * @description Google Photorealistic 3D Tiles for the Cesium renderer, by
+ * the routes `selectMapStartupRoute` (`src/maps/startupRoute.js`) names.
  */
-export function selectMapStartupRoute({
-  googleApiKey = '',
-  cesiumToken = '',
-} = {}) {
-  if (clean(googleApiKey)) return 'google-direct';
-  if (clean(cesiumToken)) return 'google-ion';
-  return 'osm';
-}
+export { selectMapStartupRoute } from '../../maps/startupRoute.js';
+
+const clean = (value) => String(value || '').trim();
 
 /**
  * Load Google Photorealistic 3D Tiles through direct Google access when

@@ -4,7 +4,7 @@ import { VisualEffects } from './visualEffects.js';
 import { createCesiumEffects } from '../render/cesium/effects.js';
 import { styleStagesOf } from '../styles/styleStages.js';
 import { createCesiumGlobe } from '../render/cesium/globe.js';
-import { MILKY_WAY_INTENSITY, StarrySky } from '../sky/starrySky.js';
+import { MILKY_WAY_INTENSITY, StarrySky } from '../render/cesium/starrySky.js';
 import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,

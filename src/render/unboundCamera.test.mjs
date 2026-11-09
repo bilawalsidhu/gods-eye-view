@@ -49,13 +49,11 @@ const UNBOUND = 'src/render/cesium/unbound.js';
 /**
  * Entries that take their Cesium code injected: the module named here is
  * GEV's Cesium side for them, and must load the factories. Given another, the
- * entry's flight finds no camera (`findCamera`) and does nothing. Visual
- * settings are given their viewer by the application shell, which loads
- * both factories; without it, their styles keep records and draw nothing.
+ * entry's flight finds no camera (`findCamera`) and does nothing. None is
+ * left: visual settings, once given their viewer by the application shell,
+ * now leave the factories to their caller as the shell does.
  */
-const INJECTED = {
-  './ui/visual-settings': 'src/ui/applicationShell.js',
-};
+const INJECTED = {};
 
 /**
  * Modules whose use of the bridge holds up without the factory: with no
@@ -141,6 +139,10 @@ const DRAW_FROM_CALLER = new Set([
   // eye and shade the globe through the ports alone.
   './application/layers',
   './standalone/catalog',
+  // The application's tools (scene director, annotations, embed views):
+  // they draw, fly and take clicks through the ports; only Import's pins
+  // (`src/data/geoImportPins.js`, still on the Cesium list) drive Cesium.
+  './application/tools',
 ]);
 
 /**
@@ -171,6 +173,19 @@ const CAMERA_FROM_CALLER = new Set([
   // Its ground snap, mesh floor sampler, annotation resolver and location
   // framing ask the camera, globe and query ports; it loads no factory.
   './application/operations',
+  // It shows its source's credit through `findCredits`, and switches stacks
+  // through the map engine that `./render/cesium/unbound` provides too.
+  './maps/controller',
+  // The application shell and what assembles it: their controls fly, read
+  // the eye, shade the globe and set styles through the ports alone; the
+  // application's renderer is bound to its viewer, and a viewer of the
+  // renderer bound gets its ports from `./render/cesium/unbound`.
+  './ui/shell',
+  './ui/composition',
+  './ui/hud',
+  './ui/visual-settings',
+  './application/controls',
+  './application/data',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -340,8 +355,8 @@ function checkLookupFactory(
   );
 }
 
-test('every public entry that reaches a findEffects caller loads the unbound effects factory', () => {
-  checkLookupFactory('findEffects', EFFECTS_FACTORY);
+test('every public entry that reaches a findEffects caller loads the unbound effects factory, or its caller can', () => {
+  checkLookupFactory('findEffects', EFFECTS_FACTORY, { fromCaller: true });
 });
 
 test('every public entry that reaches a findGlobe caller loads the unbound globe factory', () => {

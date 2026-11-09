@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
-import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
-import { StarrySky } from '../sky/starrySky.js';
+import { applyModelAtmosphereWorkaround } from '../../app/atmosphereCompat.js';
+import { StarrySky } from './starrySky.js';
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
