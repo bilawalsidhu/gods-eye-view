@@ -146,6 +146,19 @@ test('the military feed is used on request and reported when missing', async () 
   );
 });
 
+test('an aircraft course that rounds to 360 reads as 0', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      aircraft: feed([
+        record('ddd444', 37.6, -122.3, { callsign: 'N360', courseDeg: 359.6 }),
+      ]),
+    },
+  });
+  const result = await catalog.call('find_aircraft', { callsign: 'N360' });
+  assert.equal(result.data.rows[0].course_deg, 0);
+});
+
 test('aircraft are found by exactly one identifier across feeds', async () => {
   const catalog = composeCatalog({
     tools: coreTools,
