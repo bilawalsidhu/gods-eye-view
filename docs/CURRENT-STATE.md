@@ -881,7 +881,9 @@ unchanged.
 Polled layer refreshes and the HUD's camera readout pause while the page is
 hidden. An app embedded inline in a panel keeps both running, because the
 panel's host can report the page as hidden while it is on screen. This is the
-same rule the render loop follows (`keepPanelRendering` in `app/embed.js`).
+same rule the render loop follows (`keepPanelRendering` in
+`render/cesium/panelRendering.js`, which the application scene hands the embed
+views).
 
 Application scene setup owns request services, terrain/floor caches and annotation
 lookup state. Controls, layers and voice share those owners, and cancellation
@@ -1128,8 +1130,9 @@ port's `preUpdate`, with the shared geo maths, and no longer loads the Cesium
 camera factory: a caller handing it a Cesium viewer, with no
 renderer bound, loads the `./render/cesium/unbound` export once first, or its
 controller throws naming it. Whether the aircraft it flies still draws comes
-from its `trackedEntityDrawn` service (the application asks the viewer's
-entities); without one, Cockpit takes the aircraft as drawn.
+from its `trackedEntityDrawn` service (the shell asks the entity's record,
+and the application scene's `viewerDrawsEntity` for an entity of the viewer's
+own); without one, Cockpit takes the aircraft as drawn.
 
 ## Rendered-mesh floor cells — November 8, 2026
 

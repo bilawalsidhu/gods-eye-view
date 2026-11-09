@@ -1,7 +1,1 @@
-[
-  "dev/conformance/main.js",
-  "src/app/embed.js",
-  "src/app/scene.js",
-  "src/data/geoImportPins.js",
-  "src/ui/applicationShell.js"
-]
+["dev/conformance/main.js", "src/app/scene.js", "src/data/geoImportPins.js"]

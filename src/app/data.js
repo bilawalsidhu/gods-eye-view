@@ -15,7 +15,7 @@ export function createApplicationData({
   const dataManager = new LayerLifecycle(viewer, {
     allowQaRegistration,
     // A panel's host may report it hidden while it is on screen; its layers
-    // keep polling (see keepPanelRendering in embed.js).
+    // keep polling (see keepPanelRendering in render/cesium/panelRendering.js).
     visibilityTarget: panelAwareVisibility(document),
     getSourceAvailability: catalog?.getSourceAvailability,
   });

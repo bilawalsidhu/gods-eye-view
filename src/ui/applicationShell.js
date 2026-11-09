@@ -32,13 +32,9 @@ import {
 } from './cyberSonarControls.js';
 
 import { toDegrees, toRadians } from '../geo/index.js';
-import { cameraOf, findCamera } from '../render/cesium/camera.js';
-// Loads the effects factory, so visual settings on a viewer with no renderer
-// bound still get an effects port. Loading the camera and effects factories,
-// and asking the viewer's entities whether Cockpit's aircraft still draws,
-// keep this module on the Cesium allow-list.
-import '../render/cesium/effects.js';
-import '../render/cesium/globe.js';
+// A viewer with no renderer bound gets its ports (camera, effects, globe)
+// once its owner has loaded the package's `./render/cesium/unbound` export.
+import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -380,10 +376,11 @@ export class StyleManager extends ShellFacade {
         warmGroundFloor: services.warmGroundFloor,
         sampleMeshFloorCells: services.sampleMeshFloorCells,
         // Whether the aircraft Cockpit flies still draws: an entity of the
-        // viewer's own, or a tracked contact whose layer draws it through
-        // the draw port and says so in its entity record.
+        // viewer's own (the scene's `viewerDrawsEntity` says), or a tracked
+        // contact whose layer draws it through the draw port and says so in
+        // its entity record.
         trackedEntityDrawn: (entity) =>
-          viewer.entities.contains(entity) ||
+          services.viewerDrawsEntity?.(entity) === true ||
           readEntityRecord(entity)?.drawn?.() === true,
         holdContinuousRender: services.holdContinuousRender,
         releaseContinuousRender: services.releaseContinuousRender,
@@ -1030,7 +1027,7 @@ export class StyleManager extends ShellFacade {
         _radioVolumeValue: this._radioVolumeValue,
       },
       radio: radioLayer,
-      canvas: this.viewer?.canvas,
+      canvas: canvasOf(this.viewer) ?? undefined,
       actions: {
         isRegistered: () => this._dataManager?.layers?.has('radio'),
         isEnabled: () => this._dataManager?.isEnabled('radio'),

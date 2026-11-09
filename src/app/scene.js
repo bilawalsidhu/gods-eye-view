@@ -5,6 +5,7 @@ import {
   cesiumViewerOf,
 } from '../render/cesium/appRenderer.js';
 import { trimStaleSceneCommands } from '../render/cesium/sceneCommandRelease.js';
+import { keepPanelRendering } from '../render/cesium/panelRendering.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -169,5 +170,11 @@ export async function createApplicationScene({
     // Drops the draw commands the scene keeps after it stops drawing them;
     // run after a drawn frame (see src/sceneCommandRelease.js).
     trimStaleCommands: () => trimStaleSceneCommands(viewer.scene),
+    // Keeps the globe drawing in an inline panel whose host stops animation
+    // frames (embed mode, src/app/embed.js).
+    keepPanelRendering: (options) => keepPanelRendering(viewer, options),
+    // Whether an entity is one of the viewer's own (Cockpit asks whether
+    // the aircraft it flies still draws).
+    viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
   };
 }

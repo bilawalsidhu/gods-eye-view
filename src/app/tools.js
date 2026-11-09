@@ -165,7 +165,7 @@ export function createApplicationTools({
   // the loop, refresh the one DOM surface we gated, render a frame.
   const syncVisibilitySuspension = () => {
     // A panel's host may report it hidden while it is on screen; the panel
-    // keeps drawing itself (see keepPanelRendering in embed.js).
+    // keeps drawing itself (see keepPanelRendering in render/cesium/panelRendering.js).
     const hidden = document.hidden && !isEmbeddedInline();
     renderer.frame.suspend(hidden);
     cockpitCloudEffects?.setSuspended?.(hidden);
@@ -232,6 +232,7 @@ export function createApplicationTools({
       dataManager,
       run: (name, args) => voiceCommands.runner(name, args, { signal }),
       signal,
+      keepRendering: scene.keepPanelRendering,
     }),
   );
   return { sceneDirector, annotations, voiceCommands };

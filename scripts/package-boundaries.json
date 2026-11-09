@@ -4295,7 +4295,8 @@
       "src/maps/engine.js",
       "src/maps/attribution.js",
       "src/render/cesium/mapEngine.js",
-      "src/sky/icrf.js"
+      "src/sky/icrf.js",
+      "src/render/cesium/panelRendering.js"
     ],
     "external": [
       "hls.js",
