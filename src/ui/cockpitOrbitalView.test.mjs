@@ -1510,7 +1510,7 @@ test('a SAR swath reads but draws no strip under nadir', async (t) => {
   assert.equal(store.orbital.sensor.stripFraction, null);
 });
 
-test('exit cancels pending pre-loads, and a failed one is asked again', async (t) => {
+test('exit cancels pending pre-loads, and a dropped one is asked again', async (t) => {
   const { cockpit, viewer, store, clock } = await orbitAt(t, {
     satellite: WORLDVIEW_ON_TRACK,
   });
@@ -1520,7 +1520,8 @@ test('exit cancels pending pre-loads, and a failed one is asked again', async (t
   imageryGlobe(viewer, {
     requestImage: (x, y, level, request) => {
       asked.push(`${level}/${x}/${y}`);
-      if (fail) return Promise.reject(new Error('dropped'));
+      // Cesium's scheduler drops a request by rejecting with no error.
+      if (fail) return Promise.reject(undefined);
       pending.push(request);
       return new Promise(() => {});
     },
@@ -1554,4 +1555,52 @@ test('the pre-load waits while the world clock is away from now', async (t) => {
   clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
   cockpit.update();
   assert.deepEqual(requests, []);
+});
+
+test('a tile that fails to load is not asked again', async (t) => {
+  const { cockpit, viewer, store, clock } = await orbitAt(t, {
+    satellite: WORLDVIEW_ON_TRACK,
+  });
+  const asked = [];
+  imageryGlobe(viewer, {
+    requestImage: (x, y, level) => {
+      asked.push(`${level}/${x}/${y}`);
+      return Promise.reject(new Error('404'));
+    },
+  });
+  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 16);
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  await settle();
+  const first = asked.length;
+  assert.ok(first > 0);
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.equal(new Set(asked).size, asked.length, 'none asked twice');
+});
+
+test('back to nadir from past the limb, the sensor waits for the view', async (t) => {
+  const { cockpit, store, clock } = await orbitAt(t, {
+    satellite: GEO_IMAGER,
+    reducedMotion: false,
+  });
+  for (let step = 0; step < 3; step += 1) press(cockpit, 'ArrowRight');
+  for (let i = 0; i < 30; i += 1) {
+    clock.advance(100);
+    cockpit.update();
+  }
+  await settle();
+  assert.equal(store.orbital.sensor, null, 'looking into space');
+  press(cockpit, 'Home');
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  assert.equal(store.orbital.sensor, null, 'still easing back');
+  for (let i = 0; i < 30; i += 1) {
+    clock.advance(100);
+    cockpit.update();
+  }
+  await settle();
+  assert.ok(store.orbital.sensor, 'back on the Earth');
 });

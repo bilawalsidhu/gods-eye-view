@@ -596,6 +596,25 @@ export const ORBITAL_PREFETCH_ACROSS = Object.freeze([
   1 / 2,
 ]);
 
+/**
+ * The points ahead, regrouped by their place across the track: every lead's
+ * centre point first, then each lead's next pair out, so the tile cap trims
+ * the frame's edges before it trims the far leads.
+ * @param {Array<{lat: number, lon: number}>} points From `groundTrackAhead`,
+ *   lead by lead.
+ * @param {number} [across] Points per lead.
+ * @returns {Array<{lat: number, lon: number}>}
+ */
+export function centreLinesFirst(
+  points,
+  across = ORBITAL_PREFETCH_ACROSS.length,
+) {
+  const out = [];
+  for (let k = 0; k < across; k += 1)
+    for (let i = k; i < points.length; i += across) out.push(points[i]);
+  return out;
+}
+
 /** At most this many tile requests per look-ahead. */
 export const ORBITAL_PREFETCH_MAX_TILES = 12;
 

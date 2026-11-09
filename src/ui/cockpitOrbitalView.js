@@ -4,6 +4,7 @@ import { formatNumber, msg, t } from '../i18n/index.js';
 import {
   ORBITAL_DEFAULT_ZOOM,
   ORBITAL_PREFETCH_INTERVAL_MS,
+  centreLinesFirst,
   ORBITAL_PREFETCH_MAX_TILES,
   ORBITAL_PREFETCH_MIN_ZOOM,
   ORBITAL_SETTLE_BLUR_PX,
@@ -404,8 +405,12 @@ export function prefetchImageryAhead(info, nowMs) {
     const provider = baseImageryProvider(this.viewer);
     if (!provider) return 0;
     // Another base map: its tiles have not been asked for.
+    // A fresh set, so a late failure from the old map's requests cannot
+    // drop a tile the new one has fetched.
     if (provider !== state.prefetchProvider) {
-      state.prefetched.clear();
+      for (const request of state.prefetchRequests) request.cancel?.();
+      state.prefetchRequests = new Set();
+      state.prefetched = new Set();
       state.prefetchProvider = provider;
     }
     const fov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
@@ -440,7 +445,7 @@ export function prefetchImageryAhead(info, nowMs) {
     const memory = state.prefetched;
     const tiles = tilesForPoints(
       provider.tilingScheme,
-      groundTrackAhead(info, viewKm),
+      centreLinesFirst(groundTrackAhead(info, viewKm)),
       level,
       {
         maxTiles: ORBITAL_PREFETCH_MAX_TILES,
@@ -477,10 +482,12 @@ export function prefetchImageryAhead(info, nowMs) {
       requests.add(request);
       Promise.resolve(pending).then(
         () => requests.delete(request),
-        () => {
+        (error) => {
           requests.delete(request);
-          // Failed or dropped by the scheduler: asked again later.
-          memory.delete(tile.key);
+          // Dropped by the scheduler (rejected with no error): asked again
+          // later. A tile that failed to load stays remembered, so one
+          // missing from the map is not asked for every look-ahead.
+          if (error === undefined) memory.delete(tile.key);
         },
       );
       memory.add(tile.key);
@@ -612,16 +619,18 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   // republishes on its cadence, so the swath appears once the view arrives.
   // Exact angles here, not the whole degrees the readout rounds to.
   const target = clampOrbitalLook(state.lookTarget);
+  // The eased view is tested even with the target at nadir: on the way back
+  // from past the limb it still looks into space.
   const seesEarth =
-    !offset ||
-    (offNadirCentreMeetsEarth(info.altitudeM, {
-      northDeg: target.pitchDeg,
-      eastDeg: target.yawDeg,
-    }) &&
+    (!offset ||
       offNadirCentreMeetsEarth(info.altitudeM, {
-        northDeg: state.lookView?.pitchDeg ?? 0,
-        eastDeg: state.lookView?.yawDeg ?? 0,
-      }));
+        northDeg: target.pitchDeg,
+        eastDeg: target.yawDeg,
+      })) &&
+    offNadirCentreMeetsEarth(info.altitudeM, {
+      northDeg: state.lookView?.pitchDeg ?? 0,
+      eastDeg: state.lookView?.yawDeg ?? 0,
+    });
   this.publishOrbital({
     name: info.name,
     classLabel: info.classLabel || '',

@@ -15,6 +15,7 @@ import {
   nextOrbitalZoom,
   offNadirAngleDeg,
   offNadirCentreMeetsEarth,
+  centreLinesFirst,
   offNadirSwathScale,
   orbitalMaxZoom,
   sensorStripFraction,
@@ -591,4 +592,27 @@ test('a view tilted past the limb no longer meets the Earth', () => {
   );
   assert.equal(offNadirCentreMeetsEarth(420_000, { eastDeg: 80 }), false);
   assert.equal(offNadirCentreMeetsEarth(NaN, {}), false);
+});
+
+test('the centre line of every lead comes before the frame edges', () => {
+  const points = groundTrackAhead(PASS, 20);
+  const across = ORBITAL_PREFETCH_ACROSS.length;
+  const ordered = centreLinesFirst(points);
+  assert.equal(ordered.length, points.length);
+  const leads = ORBITAL_PREFETCH_LEAD_S.length;
+  assert.deepEqual(
+    ordered.slice(0, leads),
+    points.filter((_, i) => i % across === 0),
+  );
+  // The 12-tile cap at a level of small tiles still reaches the far lead.
+  const mercator = new Cesium.WebMercatorTilingScheme();
+  const tiles = tilesForPoints(mercator, ordered, 17);
+  const far = mercator.positionToTileXY(
+    Cesium.Cartographic.fromDegrees(
+      ordered[leads - 1].lon,
+      ordered[leads - 1].lat,
+    ),
+    17,
+  );
+  assert.ok(tiles.some((tile) => tile.x === far.x && tile.y === far.y));
 });

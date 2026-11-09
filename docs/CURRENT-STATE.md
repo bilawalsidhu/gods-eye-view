@@ -1678,9 +1678,9 @@ error, about one to two screen pixels per texel). It asks for at most 12
 tiles at a time through Cesium's request scheduler, throttled per server and
 at the lowest priority, so a request is declined while the imagery server's
 slots are taken by the tiles on screen and is the first dropped when the
-scheduler is full (a declined or failed tile is asked for again later); it remembers the last 512 tiles asked for and does not ask
-for those again, starts over on another base map, and cancels the requests
-still pending on exit. Across the track it samples the centre line, a third
+scheduler is full (a declined or dropped tile is asked for again later, one that failed to load is not); it remembers the last 512 tiles asked for and does not ask
+for those again, starts over on another base map (cancelling the old map's
+pending requests), and cancels the requests still pending on exit. Across the track it samples the centre line, a third
 out and the frame's edges. While tilted off nadir the view looks away from
 the track, and with the world clock more than a minute from now (paused or
 played back) it will not pass where the look-ahead points, so nothing is
