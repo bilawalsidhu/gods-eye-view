@@ -120,6 +120,9 @@ export function createTracking({ state: layerState, services, parts, source }) {
     }
     layerState._trackedNorad = null;
     parts.controls._syncIssOrbit?.();
+    // A held Cockpit subject that stops being tracked gets its marks back.
+    if (layerState._cockpitSubjectNorad !== null)
+      parts.cockpit?._syncCockpitSubjectVisuals();
     parts.labels._syncIssOverlay();
     clearTrackedSubjectContext('satellites');
     layerState._contextRefreshedAtMs = 0;

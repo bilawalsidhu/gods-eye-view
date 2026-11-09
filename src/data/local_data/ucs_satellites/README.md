@@ -1,8 +1,9 @@
 # UCS Satellite Database pack
 
-Offline purpose records for active satellites, keyed by NORAD catalog number.
-The satellites layer joins them to CelesTrak's positions to file each
-satellite under a class (stations, imaging, telecom, probes)
+Offline operator, owner-country and purpose records for active satellites,
+keyed by NORAD catalog number. The satellites layer joins them to CelesTrak's
+positions to file each satellite under a class (stations, imaging, telecom,
+probes) and to name its operator and owner country
 (`src/data/ucsSatellites.js`, `src/layers/satellites/classes.js`).
 
 | File | Source dataset | Records |
@@ -23,7 +24,7 @@ the version of the Database that was used, which is indicated by the name of
 the Excel file, and a link to or URL for the webpage
 www.ucsusa.org/satellite_database."
 
-**Acknowledgement:** "Satellite purposes: UCS Satellite Database
+**Acknowledgement:** "Satellite operators and purposes: UCS Satellite Database
 (UCS-Satellite-Database 5-1-2023), https://www.ucsusa.org/satellite_database".
 It is also listed in the app's Data attribution popover and in
 DATA_SOURCES.md.
@@ -33,13 +34,17 @@ DATA_SOURCES.md.
 
 **Curation:**
 
-- Kept column: Purpose, the one the classes read. Everything else
-  (operators, owners, orbits, masses, contractors, launch data, sources) is
-  left out.
+- Kept columns: Operator/Owner, Country of Operator/Owner and Purpose, the
+  ones the layer reads. Everything else (detailed purpose, users, orbits,
+  masses, contractors, launch data, sources) is left out.
 - Repeated text is stored once in `strings`; each record is
-  `[noradId, purpose]` with a string-table index, `0` meaning empty.
-- The 3,996 Starlink rows are dropped: every Starlink object is classed by
-  name, so they would only add size.
+  `[noradId, operator, operatorCountry, purpose]` with string-table indexes,
+  `0` meaning empty.
+- The 3,996 Starlink rows are dropped: every Starlink object is classed and
+  credited to SpaceX by name, so they would only add size.
 - Rows without a readable, positive NORAD number are dropped and counted apart
   from duplicate NORAD numbers (the first row of a duplicate is kept); both
   counts are 0 in this release.
+- Owner countries stay as UCS writes them ("USA", "USA/Japan", "ESA",
+  "Multinational"); `src/layers/satellites/classes.js` normalises them, together with
+  CelesTrak SATCAT owner codes, in one table.

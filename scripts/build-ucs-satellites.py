@@ -2,9 +2,9 @@
 '''Maintainer-only UCS Satellite Database pack build (openpyxl).
 
 Reads the UCS Excel release and writes the compact pack the satellites layer
-loads: one row per satellite, keyed by NORAD number, with a string-table index
-for its purpose, the one column the layer's classes read. Starlink rows are
-left out: the layer files every STARLINK object under its own class by name.
+loads: one row per satellite, keyed by NORAD number, with string-table indexes
+for the repeated text columns. Starlink rows are left out: the layer files
+every STARLINK object under its own class and operator without them.
 
 Usage: python scripts/build-ucs-satellites.py "<path>/UCS-Satellite-Database 5-1-2023.xlsx"
 '''
@@ -26,6 +26,8 @@ URL = 'https://www.ucsusa.org/satellite_database'
 
 # Output column -> spreadsheet header.
 COLUMNS = {
+    'operator': 'Operator/Owner',
+    'operatorCountry': 'Country of Operator/Owner',
     'purpose': 'Purpose',
 }
 STARLINK = re.compile(r'\bstarlink\b', re.I)

@@ -118,6 +118,8 @@ export function createIngestion({
       const satcat = layerState._satcat.get(noradId) || null;
       if (satcat === sat.satcat) continue;
       sat.satcat = satcat;
+      // The Cockpit identity (owner, COSPAR id) reads SATCAT too.
+      sat.cockpitIdentity = undefined;
       const next = classifySatellite({
         noradId,
         name: sat.name,
@@ -322,6 +324,8 @@ export function createIngestion({
             groups,
             // satellite.js does not keep the designator the year match reads.
             launchYear,
+            line1: entry.line1,
+            line2: entry.line2,
             satelliteClass: classifySatellite({
               noradId,
               name: entry.name,

@@ -146,18 +146,30 @@ export function formatCockpitWindDirection(value) {
 }
 
 /**
- * The Cockpit entry for each subject it can ride: an aircraft's cockpit or a
- * vessel's bridge. Both entry buttons (Contacts and
+ * A TLE epoch as compact UTC, `2026-11-04 08:12Z`, or '' when unknown.
+ * @param {number|null|undefined} epochMs
+ */
+export function formatTleEpochUtc(epochMs) {
+  // Beyond ±8.64e15 ms a Date is invalid and toISOString throws.
+  if (!Number.isFinite(epochMs) || Math.abs(epochMs) > 8.64e15) return '';
+  const iso = new Date(epochMs).toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}Z`;
+}
+
+/**
+ * The Cockpit entry for each subject it can ride: an aircraft's cockpit, a
+ * vessel's bridge or a satellite's orbit. Both entry buttons (Contacts and
  * the Intel HUD readout) show it.
  */
 const COCKPIT_ENTRY_FACES = Object.freeze({
   aircraft: Object.freeze({ icon: 'flight', label: msg('COCKPIT') }),
   vessel: Object.freeze({ icon: 'directions_boat', label: msg('BRIDGE') }),
+  satellite: Object.freeze({ icon: 'satellite_alt', label: msg('ORBIT') }),
 });
 
 /**
  * The entry's glyph and localized label for the subject it would ride.
- * @param {'aircraft'|'vessel'|null|undefined} kind
+ * @param {'aircraft'|'vessel'|'satellite'|null|undefined} kind
  * @returns {{icon: string, label: string}}
  */
 export function cockpitEntryFace(kind) {

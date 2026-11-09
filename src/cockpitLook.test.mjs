@@ -5,12 +5,16 @@ import assert from 'node:assert/strict';
 import {
   LOOK_COARSE_STEP_DEG,
   LOOK_STEP_DEG,
+  ORBITAL_LOOK_LIMIT_DEG,
   clampLookPitch,
+  clampOrbitalLook,
   easeLook,
   lookIsOffset,
   lookKeyStep,
   lookReadoutParts,
+  orbitalLookReadoutParts,
   stepLook,
+  stepOrbitalLook,
   wrapLookYaw,
 } from './cockpitLook.js';
 
@@ -133,5 +137,59 @@ test('the readout names the side, the bearing and the elevation', () => {
   assert.equal(
     lookReadoutParts({ yawDeg: 180, pitchDeg: -2 }, -2).side,
     'astern',
+  );
+});
+
+test('an orbital look steps 5° per arrow and stops at 45° on each axis', () => {
+  let look = { yawDeg: 0, pitchDeg: 0 };
+  for (let index = 0; index < 3; index += 1)
+    look = stepOrbitalLook(look, lookKeyStep('ArrowUp'));
+  assert.deepEqual(look, { yawDeg: 0, pitchDeg: 15 });
+  look = stepOrbitalLook(look, lookKeyStep('ArrowRight'));
+  assert.deepEqual(look, { yawDeg: 5, pitchDeg: 15 });
+  for (let index = 0; index < 20; index += 1) {
+    look = stepOrbitalLook(look, lookKeyStep('ArrowDown'));
+    look = stepOrbitalLook(look, lookKeyStep('ArrowLeft'));
+  }
+  assert.deepEqual(look, {
+    yawDeg: -ORBITAL_LOOK_LIMIT_DEG,
+    pitchDeg: -ORBITAL_LOOK_LIMIT_DEG,
+  });
+  assert.deepEqual(clampOrbitalLook({ yawDeg: 90, pitchDeg: NaN }), {
+    yawDeg: 45,
+    pitchDeg: 0,
+  });
+  assert.deepEqual(clampOrbitalLook({ yawDeg: 180, pitchDeg: -60 }), {
+    yawDeg: 45,
+    pitchDeg: -45,
+  });
+});
+
+test('the orbital readout names north or south and east or west', () => {
+  assert.deepEqual(orbitalLookReadoutParts({ yawDeg: 15, pitchDeg: 10 }), {
+    northSouth: 'N',
+    northSouthDeg: 10,
+    eastWest: 'E',
+    eastWestDeg: 15,
+  });
+  assert.deepEqual(orbitalLookReadoutParts({ yawDeg: -5, pitchDeg: 0 }), {
+    northSouth: null,
+    northSouthDeg: 0,
+    eastWest: 'W',
+    eastWestDeg: 5,
+  });
+  assert.equal(
+    orbitalLookReadoutParts({ yawDeg: 0, pitchDeg: -45 }).northSouth,
+    'S',
+  );
+});
+
+test('the bridge look keeps its own limits beside the orbital clamp', () => {
+  const look = stepLook({ yawDeg: 45, pitchDeg: 45 }, lookKeyStep('ArrowUp'));
+  assert.deepEqual(look, { yawDeg: 45, pitchDeg: 50 });
+  assert.equal(
+    stepLook({ yawDeg: 45, pitchDeg: 0 }, lookKeyStep('ArrowRight', true))
+      .yawDeg,
+    90,
   );
 });
