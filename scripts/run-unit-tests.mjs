@@ -133,12 +133,16 @@ function runTests(args) {
 
 export function runUnitTests() {
   const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  // One spawn per batch, in order, fail-fast — the same semantics as the
-  // single pre-#1631 invocation, just under the Windows command-line limit.
+  // One spawn per batch, in order. Every batch runs even after a failure,
+  // so a red run reports every failing file at once — the same semantics as
+  // the single pre-#1631 invocation, just under the Windows command-line
+  // limit. The first non-zero status is what the runner exits with.
+  let parallelStatus = 0;
   for (const batch of batchUnitTestFiles(plan.parallel)) {
-    const parallelStatus = runTests(['--test', ...batch]);
-    if (parallelStatus !== 0) return parallelStatus;
+    const batchStatus = runTests(['--test', ...batch]);
+    if (parallelStatus === 0 && batchStatus !== 0) parallelStatus = batchStatus;
   }
+  if (parallelStatus !== 0) return parallelStatus;
 
   // The GC-bracketed budgets are calibrated on Node 24 and are meaningless on
   // other allocators. A contributor's suite must stay green on any supported
