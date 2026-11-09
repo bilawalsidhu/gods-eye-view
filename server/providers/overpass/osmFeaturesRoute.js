@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { makeRateLimiter, clientNetworkKey } from '../common/rate-limit.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
+import { allowedMethods } from '../common/methods.js';
 import { createBoundedCache } from '../common/boundedCache.js';
 import {
   compileOsmFeatureQuery,
@@ -153,6 +154,7 @@ function sender(res) {
     res.writeHead(status, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
+      ...(status === 405 ? { Allow: allowedMethods('GET') } : {}),
       ...(cache ? { 'X-OSM-Cache': cache } : {}),
       ...(retryAfter ? { 'Retry-After': retryAfter } : {}),
     });
