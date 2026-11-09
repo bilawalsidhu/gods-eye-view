@@ -9,7 +9,6 @@
   "src/data/geoImportPins.js",
   "src/input/dispatcher.js",
   "src/layers/installations/rendering.js",
-  "src/layers/recentImagery/rendering.js",
   "src/layers/satellites/rendering.js",
   "src/layers/traffic/rendering.js",
   "src/layers/transit/rendering.js",

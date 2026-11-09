@@ -7,9 +7,9 @@
  *
  * Imagery drapes on the globe, or on the drawn base tileset: the photoreal
  * tileset this port loaded, or one the application's map stack marked as
- * its base (`markBaseTileset`) while it still loads its own. Where each
- * layer drapes follows what is drawn, looked at every frame, so a base
- * switched outside the port moves the layers with it.
+ * its base (`markBaseTileset`, `../baseTilesets.js`) while it still loads
+ * its own. Where each layer drapes follows what is drawn, looked at every
+ * frame, so a base switched outside the port moves the layers with it.
  *
  * The sky reads the scene as it was set up and writes through to it; what
  * the scene has no part for (stars without a sky box, say) is kept as set.
@@ -17,21 +17,13 @@
 import * as Cesium from 'cesium';
 import { loadPhotorealisticTileset } from '../../maps/google3d.js';
 import { provideUnboundGlobe } from '../rendererOf.js';
+import { isBaseTileset, markBaseTileset } from '../baseTilesets.js';
 import { listenerList, uncaught } from './common.js';
 import { createCesiumImagery } from './imagery.js';
 
-/** Tilesets the application's map stack draws as its base. */
-const baseTilesets = new WeakSet();
-
-/**
- * Mark a tileset as a base the application draws outside the port, so
- * imagery drapes on it while it is shown. For code that still loads its
- * own base; the port's own photoreal tileset needs no mark.
- * @param {object} tileset Cesium `Cesium3DTileset`.
- */
-export function markBaseTileset(tileset) {
-  if (tileset && typeof tileset === 'object') baseTilesets.add(tileset);
-}
+// The base marks live outside the adapter, so code that is not Cesium's can
+// mark a base; they are re-exported here for the code that still is.
+export { markBaseTileset };
 
 /** Ion's world terrain asset. */
 const WORLD_TERRAIN_ASSET = 1;
@@ -195,7 +187,7 @@ export function createCesiumGlobe(
     if (photoreal && !photoreal.isDestroyed() && photoreal.show)
       return photoreal;
     for (const tileset of tilesets())
-      if (baseTilesets.has(tileset) && tileset.show && !tileset.isDestroyed())
+      if (isBaseTileset(tileset) && tileset.show && !tileset.isDestroyed())
         return tileset;
     return null;
   }

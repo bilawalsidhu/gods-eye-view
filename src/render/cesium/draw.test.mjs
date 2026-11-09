@@ -6256,3 +6256,49 @@ test('clamped fills drawn alone by a host still retiring count toward MOVING_SHA
     );
     set.dispose();
   }));
+
+test('the recent imagery box preview drags its ground fill and dashed edge frame by frame on a viewer of its own', async () => {
+  const { createImageryBoxPreview } =
+    await import('../../layers/recentImagery/rendering.js');
+  const destroyed = withImageClasses(() =>
+    withTerrainHeights(() => {
+      const scene = fakeScene();
+      const viewer = { scene, isDestroyed: () => false };
+      let box = { west: -98, south: 30, east: -97.95, north: 30.05 };
+      const preview = createImageryBoxPreview(viewer, () => box);
+      preview.setVisible(true);
+      const hosts = scene.added.slice();
+      assert.equal(hosts.length, 2, 'a fill set and an edge set');
+      const groundIn = (host) => {
+        for (let i = 0; i < host.length; i++)
+          if (host.get(i) instanceof Cesium.GroundPrimitive) return host.get(i);
+        return null;
+      };
+      const fillHost = hosts.find((h) => groundIn(h));
+      assert.ok(fillHost, 'the fill is a ground primitive');
+      // Each move of the drag is drawn in the frame it is made, in place.
+      for (const east of [-97.9, -97.85, -97.8]) {
+        box = { ...box, east };
+        preview.changed();
+        const solo = fillHost.get(fillHost.length - 1);
+        assert.ok(solo instanceof Cesium.GroundPrimitive);
+        assert.equal(solo.asynchronous, false);
+        assert.ok(
+          Cesium.Rectangle.equalsEpsilon(
+            solo.geometryInstances[0].geometry._rectangle,
+            Cesium.Rectangle.fromDegrees(-98, 30, east, 30.05),
+            1e-12,
+          ),
+        );
+      }
+      assert.deepEqual(scene.added, hosts, 'no set rebuilt');
+      const edgeHost = hosts.find((h) => h !== fillHost);
+      const edge = edgeHost.get(edgeHost.length - 1);
+      assert.ok(edge instanceof Cesium.GroundPolylinePrimitive);
+      assert.equal(edge.asynchronous, false);
+      assert.equal(edge.appearance.material.type, 'PolylineDash');
+      return preview.destroy().then(() => scene.added.length);
+    }),
+  );
+  assert.equal(await destroyed, 0, 'both sets let go');
+});

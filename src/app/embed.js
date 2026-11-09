@@ -14,6 +14,10 @@
 import * as Cesium from 'cesium';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
 import { cameraOf } from '../render/cesium/camera.js';
+// The application's tools reach `findGlobe` callers too (the Recent Imagery
+// panel, Import and others): a viewer with no renderer bound gets its globe
+// port from here, as it gets its camera.
+import '../render/cesium/globe.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
 const EMBED_VIEW_MESSAGE = 'gev:view';

@@ -7,13 +7,14 @@
  * each layer's admission hook; the renderer's own request limits stay
  * untouched.
  */
-// The layer flies through `cameraOf` and drapes through `findGlobe`; this
-// renderer is its Cesium side, so it brings the factories a viewer with no
-// renderer bound gets those ports from, and marks a tileset host as a base
-// the globe port drapes on.
-import * as Cesium from 'cesium';
-import '../../render/cesium/camera.js';
-import { markBaseTileset } from '../../render/cesium/globe.js';
+// The imagery drapes through the globe port and the box preview draws
+// through `drawOf`, both on the renderer's ports: a viewer with no renderer
+// bound gets them once its owner has loaded the package's
+// `./render/cesium/unbound` export. A tileset host is marked as a base the
+// globe port drapes on (`markBaseTileset`).
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { markBaseTileset } from '../../render/baseTilesets.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { PRODUCTS, gibsTemplate } from './model.js';
 
 const SLOT_IDS = ['a', 'b'];
@@ -237,96 +238,127 @@ export function createRecentImageryRenderer({
   };
 }
 
+const PREVIEW_STROKE = Object.freeze([139 / 255, 233 / 255, 1]);
+/** Fill alpha and outline alpha of the box being dragged. */
+const PREVIEW_FILL_ALPHA = 0.12;
+const PREVIEW_LINE_ALPHA = 0.95;
+/** Each preview's draw sets have ids of their own. */
+let previewSeq = 0;
+
+/** A box with no area has no fill: a press, or a drag along one axis. */
+const hasArea = (box) =>
+  Boolean(box) && box.east > box.west && box.north > box.south;
+
+/** A box with no extent draws nothing: a press that has not moved yet. */
+const hasExtent = (box) =>
+  Boolean(box) && (box.east > box.west || box.north > box.south);
+
 /**
  * The box tool's preview: the box being dragged, a translucent fill and a
- * dashed outline on the ground (the draw port draws no dashed draped
- * lines), read from `dragBox()` each frame it draws.
+ * dashed outline on the ground, drawn through the draw port. Each change
+ * moves them where they are (the port draws a moved ground fill and a moved
+ * draped line in the frame they move), so the box shows every frame of a
+ * drag.
  * @param {object} viewer
  * @param {() => ({west: number, south: number, east: number, north: number}|null)} dragBox
  *   Degrees, or null while no drag is live.
- * @param {{cesium?: object}} [options] The Cesium namespace (tests pass a double).
+ * @param {{draw?: import('../../render/contract/draw').DrawPort}} [options]
+ *   The draw port (tests pass a double); the viewer's by default.
  * @returns {{setVisible: (visible: boolean) => void, changed: () => void, destroy: () => Promise<void>}}
  */
 export function createImageryBoxPreview(
   viewer,
   dragBox,
-  { cesium = Cesium } = {},
+  { draw = drawOf(viewer) } = {},
 ) {
-  const dataSource = new cesium.CustomDataSource(
-    'gev-recent-imagery-box-preview',
-  );
-  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
-    () => null,
-  );
+  previewSeq += 1;
+  const fills = draw.shapes({
+    id: `recent-imagery-box:${previewSeq}:fill`,
+    pickable: false,
+  });
+  const outlines = draw.lines({
+    id: `recent-imagery-box:${previewSeq}:outline`,
+    pickable: false,
+  });
+  let visible = false;
   let destroyed = false;
-  const stroke = cesium.Color.fromCssColorString('#8be9ff');
-  const previewRectangle = () => {
-    const box = dragBox();
-    return box
-      ? cesium.Rectangle.fromDegrees(box.west, box.south, box.east, box.north)
-      : undefined;
-  };
-  const previewOutline = () => {
-    const box = dragBox();
-    if (!box) return [];
-    return cesium.Cartesian3.fromDegreesArray([
-      box.west,
-      box.south,
-      box.east,
-      box.south,
-      box.east,
-      box.north,
-      box.west,
-      box.north,
-      box.west,
-      box.south,
+  // The sets go at once; every caller gets the same settled promise.
+  const gone = Promise.resolve();
+  // The last box drawn, and the last with an area: a box without one keeps
+  // it, hidden, so the next one moves it rather than draw it anew.
+  let drawn = null;
+  let filled = null;
+
+  function drawFill(box, show) {
+    const { west, south, east, north } = box;
+    fills.upsert([
+      {
+        id: 'box',
+        geometry: { kind: 'rectangle', rect: { west, south, east, north } },
+        fill: [...PREVIEW_STROKE, PREVIEW_FILL_ALPHA],
+        height: 'clampGround',
+        clampTo: 'both',
+        show,
+      },
     ]);
-  };
-  const fill = dataSource.entities.add({
-    show: false,
-    rectangle: {
-      coordinates: new cesium.CallbackProperty(previewRectangle, false),
-      material: stroke.withAlpha(0.12),
-      classificationType: cesium.ClassificationType.BOTH,
-    },
-  });
-  // A rectangle graphic cannot draw a dashed edge on the ground, so the
-  // outline is its own draped polyline traced round the same corners.
-  const outline = dataSource.entities.add({
-    show: false,
-    polyline: {
-      positions: new cesium.CallbackProperty(previewOutline, false),
-      width: 2,
-      clampToGround: true,
-      classificationType: cesium.ClassificationType.BOTH,
-      material: new cesium.PolylineDashMaterialProperty({
-        color: stroke.withAlpha(0.95),
-        dashLength: 12,
-      }),
-    },
-  });
-  const requestRender = () => viewer.scene.requestRender?.();
+  }
+
+  function drawEdge(box, show) {
+    const { west, south, east, north } = box;
+    // A rectangle has no dashed edge on the ground, so the outline is a
+    // draped line traced round the same corners; a drag along one axis
+    // draws it as a line along the drag, as the fill has no area.
+    outlines.upsert([
+      {
+        id: 'edge',
+        positions: [
+          fromDegrees(west, south),
+          fromDegrees(east, south),
+          fromDegrees(east, north),
+          fromDegrees(west, north),
+          fromDegrees(west, south),
+        ],
+        widthPx: 2,
+        mode: 'draped',
+        clampTo: 'both',
+        style: {
+          kind: 'dash',
+          color: [...PREVIEW_STROKE, PREVIEW_LINE_ALPHA],
+          length: 12,
+        },
+        show,
+      },
+    ]);
+  }
+
+  function update() {
+    if (destroyed) return;
+    const box = visible ? dragBox() : null;
+    if (hasArea(box)) {
+      filled = { ...box };
+      drawFill(filled, true);
+    } else if (filled) drawFill(filled, false);
+    if (hasExtent(box)) {
+      drawn = { ...box };
+      drawEdge(drawn, true);
+    } else if (drawn) drawEdge(drawn, false);
+  }
+
   return {
-    setVisible(visible) {
-      fill.show = visible;
-      outline.show = visible;
-      requestRender();
+    setVisible(on) {
+      visible = Boolean(on);
+      update();
     },
     /** The box moved: draw it again. */
-    changed: requestRender,
-    /** Detach the preview; resolves once it is gone. */
+    changed: update,
+    /** Take the preview away; resolves once it is gone. */
     destroy() {
-      if (destroyed) return attaching;
-      destroyed = true;
-      dataSource.entities.removeAll();
-      attaching = attaching.then(() => {
-        try {
-          viewer.dataSources.remove(dataSource, true);
-        } catch {
-          /* viewer already disposed */
-        }
-      });
-      return attaching;
+      if (!destroyed) {
+        destroyed = true;
+        fills.dispose();
+        outlines.dispose();
+      }
+      return gone;
     },
   };
 }

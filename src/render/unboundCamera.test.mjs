@@ -52,7 +52,6 @@ const UNBOUND = 'src/render/cesium/unbound.js';
  * both factories; without it, their styles keep records and draw nothing.
  */
 const INJECTED = {
-  './layers/recent-imagery': 'src/layers/recentImagery/rendering.js',
   './ui/visual-settings': 'src/ui/applicationShell.js',
 };
 
@@ -135,6 +134,10 @@ const CAMERA_FROM_CALLER = new Set([
   // constant from.
   './voice/actions',
   './voice/realtime-session',
+  // It flies through `findCamera` and drapes through `findGlobe`; the
+  // renderer the application gives it (`rendering.js`, which draws the box
+  // preview through `drawOf`) is Cesium-free too.
+  './layers/recent-imagery',
 ]);
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
