@@ -1,0 +1,449 @@
+/* Ship bridge
+   A vessel's bridge reads as a wheelhouse window rather than an aircraft
+   visor: straight mullions, a straight speed tape and heading tape, square
+   panels, and a radar console in the bottom-right corner. Every rule is
+   scoped to the bridge, so the aircraft cockpit keeps its keyhole. */
+#cockpit-hud[data-subject='vessel'] {
+  --cockpit-radar-size: 240px;
+  --cockpit-radar-label-height: 28px;
+  --cockpit-radar-right: clamp(24px, 4vw, 58px);
+  /* Above the position readout, which sits above the language picker. */
+  --cockpit-radar-bottom: calc(max(clamp(22px, 4vh, 42px), 3.5rem) + 40px);
+  /* From the viewport bottom to clear above the console (border + gap). */
+  --cockpit-radar-clearance: calc(
+    var(--cockpit-radar-bottom) + var(--cockpit-radar-size) +
+      var(--cockpit-radar-label-height) + 14px
+  );
+}
+:root[data-ui-theme='cyber'] #cockpit-hud[data-subject='vessel'] {
+  --cockpit-radar-right: 30px;
+}
+:root[data-ui-theme='cyber'] #cockpit-hud[data-subject='vessel']::before {
+  clip-path: none;
+}
+:root:not([data-ui-theme='cyber']) body.cockpit-bridge {
+  --panel-radius: 2px;
+  --btn-radius: 2px;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-bridge-frame {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: color-mix(in srgb, var(--cockpit-accent) 32%, transparent);
+  stroke-width: 1;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-bridge-frame path {
+  vector-effect: non-scaling-stroke;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-reticle {
+  width: 36px;
+  height: 14px;
+  border: 0;
+  border-radius: 0;
+  color: transparent;
+  background:
+    linear-gradient(var(--cockpit-accent), var(--cockpit-accent)) 50% 0 / 1px
+      100% no-repeat,
+    linear-gradient(90deg, var(--cockpit-accent), var(--cockpit-accent)) 0 50% /
+      100% 1px no-repeat;
+  font-size: 0;
+  box-shadow: none;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-reticle::before,
+#cockpit-hud[data-subject='vessel'] .cockpit-reticle::after {
+  display: none;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-horizon-guide {
+  transform: translate(-50%, -50%);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-horizon-guide span,
+#cockpit-hud[data-subject='vessel'] .cockpit-visor-status {
+  transform: none;
+}
+
+/* Speed over ground: a straight vertical tape beside the left pane post. */
+#cockpit-hud[data-subject='vessel'] .cockpit-speed-rim {
+  top: 22vh;
+  right: auto;
+  left: calc(27vw + 14px);
+  width: 150px;
+  height: 46vh;
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-speed-rim
+  .cockpit-altitude-rim-label {
+  top: 0;
+  right: auto;
+  left: 0;
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-speed-rim
+  :is(.cockpit-altitude-rim-rail, .cockpit-altitude-rim-scale) {
+  inset: 18px 0 0;
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-speed-rim
+  .cockpit-altitude-rim-rail {
+  background: linear-gradient(90deg, rgba(0, 7, 12, 0.3), transparent 70%);
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-speed-rim
+  .cockpit-altitude-rim-rail::before {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: auto;
+  border: 0;
+  border-left: 2px solid
+    color-mix(in srgb, var(--cockpit-accent) 72%, transparent);
+  border-radius: 0;
+  box-shadow: -3px 0 12px
+    color-mix(in srgb, var(--cockpit-accent) 18%, transparent);
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-speed-rim
+  .cockpit-altitude-rim-scale
+  > span {
+  left: 2px;
+  transform: translateY(-50%);
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-speed-rim
+  .cockpit-altitude-rim-pointer {
+  z-index: 1;
+  top: calc(50% + 9px);
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-speed-rim
+  .cockpit-altitude-rim-pointer
+  strong {
+  min-width: 0;
+  padding: 2px 5px;
+  border: 1px solid var(--cockpit-accent);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.78);
+}
+
+/* Heading: a straight horizontal tape under flat readouts. */
+#cockpit-hud[data-subject='vessel'] .cockpit-compass {
+  transform: translateX(-50%);
+}
+#cockpit-hud[data-subject='vessel'] :is(.cockpit-speed, .cockpit-altitude) {
+  transform: none;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-tape {
+  height: 44px;
+  margin-top: 0;
+  overflow: hidden;
+  /* The minor ticks below scroll by a fraction of the tape's width. */
+  container-type: inline-size;
+  transform-style: flat;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 12% 88%,
+    transparent
+  );
+  mask-image: linear-gradient(90deg, transparent, #000 12% 88%, transparent);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-tape::before {
+  inset: 0 0 auto;
+  height: 26px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--cockpit-accent) 78%, transparent);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--cockpit-accent) 22%, transparent);
+  border-radius: 0;
+  /* Minor ticks every 10 degrees, centred on the 30-degree divisions. */
+  background:
+    linear-gradient(
+        90deg,
+        transparent calc(50% - 0.5px),
+        color-mix(in srgb, var(--cockpit-accent) 46%, transparent)
+          calc(50% - 0.5px) calc(50% + 0.5px),
+        transparent calc(50% + 0.5px)
+      )
+      50% 0 / calc(14% / 3) 6px repeat-x,
+    rgba(0, 7, 12, 0.34);
+  /* Scrolled with the divisions (--tape-shift slots of 14% each). */
+  background-position:
+    calc(50% + var(--tape-shift, 0) * 14cqw) 0,
+    0 0;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-tape span {
+  top: 0;
+  left: calc(50% + (var(--slot) * 14%));
+  font-size: 11px;
+  transform: translateX(-50%);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-tape span::before {
+  height: 10px;
+  margin: 0 auto 5px;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-tape span.active {
+  font-size: 15px;
+}
+/* The tape follows the look; the bow (prograde: a ring and centre dot) and
+   stern (retrograde: a ring and cross) marks sit under it at the ship's
+   heading and its reciprocal. */
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-marker {
+  position: absolute;
+  top: 30px;
+  left: calc(50% + (var(--slot) * 14%));
+  box-sizing: border-box;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--cockpit-accent);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-marker::before,
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-retrograde::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: var(--cockpit-accent);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-prograde::before {
+  width: 3px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-retrograde::before,
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-retrograde::after {
+  width: 1.5px;
+  height: 9px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-compass-retrograde::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+/* Square panels and buttons. */
+#cockpit-hud[data-subject='vessel']
+  :is(
+    .cockpit-vision-controls,
+    .cockpit-vision-controls button,
+    .cockpit-card-actions button,
+    .cockpit-utility-glyph,
+    .cockpit-radio-transport button,
+    .cockpit-route-direction small,
+    #cockpit-brief-auto
+  ) {
+  border-radius: 2px;
+}
+body.cockpit-bridge #view-switcher button {
+  border-radius: 2px;
+}
+
+/* The briefing card sits flat and shorter, above the radar console. Its top
+   leaves the utility strip room below the REC readout. */
+#cockpit-hud[data-subject='vessel'] .cockpit-signal-window {
+  bottom: var(--cockpit-radar-clearance);
+  max-height: max(
+    44px,
+    min(30vh, 280px, calc(100vh - var(--cockpit-radar-clearance) - 290px))
+  );
+  border-radius: 2px;
+  transform: none;
+}
+/* Cyber anchors the card's top from the layout pass; bound its height. */
+:root[data-ui-theme='cyber']
+  #cockpit-hud[data-subject='vessel']
+  .cockpit-signal-window {
+  bottom: auto;
+  max-height: max(
+    44px,
+    min(
+      30vh,
+      280px,
+      calc(
+        100vh - var(--cockpit-signal-top, clamp(255px, 28vh, 300px)) -
+          var(--cockpit-radar-clearance)
+      )
+    )
+  );
+  clip-path: none;
+}
+
+/* The radar console: CockpitRadar fills it, label row included. */
+#cockpit-hud[data-subject='vessel'] .cockpit-radar-console {
+  position: absolute;
+  z-index: 4;
+  right: var(--cockpit-radar-right);
+  bottom: var(--cockpit-radar-bottom);
+  display: grid;
+  width: var(--cockpit-radar-size);
+  height: calc(var(--cockpit-radar-size) + var(--cockpit-radar-label-height));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 30%, transparent);
+  border-top-color: color-mix(in srgb, var(--cockpit-accent) 64%, transparent);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 28px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+#cockpit-hud[data-subject='vessel']
+  .cockpit-radar-console:has(> .cockpit-radar[hidden]) {
+  display: none;
+}
+:root[data-ui-theme='cyber']
+  #cockpit-hud[data-subject='vessel']
+  .cockpit-radar-console {
+  border-color: rgba(105, 203, 209, 0.34);
+  border-top-color: rgba(196, 84, 84, 0.82);
+  background:
+    linear-gradient(135deg, rgba(105, 203, 209, 0.07), transparent 38%),
+    rgba(8, 23, 27, 0.78);
+}
+
+@media (min-width: 761px) {
+  /* The heading tape narrows to stay clear of the console. */
+  #cockpit-hud[data-subject='vessel'] .cockpit-compass {
+    width: min(
+      760px,
+      72vw,
+      calc(
+        100vw - 2 *
+          (var(--cockpit-radar-right) + var(--cockpit-radar-size) + 24px)
+      )
+    );
+  }
+  :root[data-ui-theme='cyber']
+    #cockpit-hud[data-subject='vessel']
+    .cockpit-compass {
+    width: min(
+      650px,
+      56vw,
+      calc(
+        100vw - 2 *
+          (var(--cockpit-radar-right) + var(--cockpit-radar-size) + 24px)
+      )
+    );
+  }
+}
+@media (min-width: 761px) and (min-height: 601px) {
+  /* The console takes the intel HUD's bottom-right corner. */
+  body.cockpit-bridge #intel-hud .hud-bottom-right {
+    display: none;
+  }
+}
+@media (max-width: 1280px), (max-height: 820px) {
+  #cockpit-hud[data-subject='vessel'] {
+    --cockpit-radar-size: 192px;
+    --cockpit-radar-label-height: 24px;
+  }
+}
+@media (max-width: 960px) {
+  #cockpit-hud[data-subject='vessel'] {
+    --cockpit-radar-size: 152px;
+    --cockpit-radar-label-height: 22px;
+  }
+}
+/* Too small for a console: the briefing card returns to its usual place. */
+@media (max-width: 760px), (max-height: 600px) {
+  #cockpit-hud[data-subject='vessel'] {
+    --cockpit-radar-clearance: var(--cockpit-bottom-rail-safe);
+  }
+  #cockpit-hud[data-subject='vessel'] .cockpit-radar-console {
+    display: none;
+  }
+}
+
+/* Look around: the readout and LOOK AHEAD control sit beside the radar
+   console, out of the forward view, while the view is turned off the bow;
+   the radar scope draws the matching look line. */
+#cockpit-hud[data-subject='vessel'] .cockpit-look {
+  position: absolute;
+  right: calc(var(--cockpit-radar-right) + var(--cockpit-radar-size) + 14px);
+  bottom: var(--cockpit-radar-bottom);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  opacity: 0.78;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-look:focus-within,
+#cockpit-hud[data-subject='vessel'] .cockpit-look:hover {
+  opacity: 1;
+}
+/* Without the console, the controls take its corner. */
+@media (max-width: 760px), (max-height: 600px) {
+  #cockpit-hud[data-subject='vessel'] .cockpit-look {
+    right: var(--cockpit-radar-right);
+  }
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-look[hidden] {
+  display: none;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-look-readout {
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 46%, transparent);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.62);
+  color: var(--cockpit-accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-look-ahead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 64%, transparent);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.78);
+  color: #f4fbff;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-look-ahead:hover {
+  border-color: var(--cockpit-accent);
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-look-ahead:focus-visible {
+  outline: 2px solid var(--cockpit-accent);
+  outline-offset: 2px;
+}
+/* A narrow wedge from own ship with a line along its centre, eased with the
+   camera's turn. Both point up (ahead) before rotation. */
+#cockpit-hud[data-subject='vessel'] .cockpit-radar-look {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -6deg,
+    color-mix(in srgb, var(--cockpit-accent) 18%, transparent) 0deg 12deg,
+    transparent 12deg
+  );
+  pointer-events: none;
+  transition: transform 180ms ease-out;
+}
+#cockpit-hud[data-subject='vessel'] .cockpit-radar-look::before {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  width: 0;
+  height: 50%;
+  border-left: 1px dashed
+    color-mix(in srgb, var(--cockpit-accent) 80%, transparent);
+  content: '';
+}
+@media (prefers-reduced-motion: reduce) {
+  #cockpit-hud[data-subject='vessel'] .cockpit-radar-look {
+    transition: none;
+  }
+}

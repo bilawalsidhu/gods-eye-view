@@ -10,11 +10,15 @@ import {
   CCTV_MEDIA_MAX_BODY_BYTES,
   HK_IMAGE_ORIGIN,
   KING_COUNTY_IMAGE_ORIGIN,
+  MLIT_RIVER_IMAGE_ORIGIN,
+  TRIPCHECK_IMAGE_ORIGIN,
   NSW_IMAGE_ORIGIN,
   NSW_IMAGE_USER_AGENT,
+  OTTAWA_IMAGE_ORIGIN,
   TALLINN_IMAGE_ORIGIN,
   TARKTEE_IMAGE_ORIGIN,
   ICELAND_IMAGE_ORIGIN,
+  TAIWAN_HIGHWAY_IMAGE_ORIGINS,
   TFL_IMAGE_ORIGIN,
   WARENDORF_IMAGE_ORIGINS,
   WSDOT_IMAGE_ORIGIN,
@@ -527,11 +531,15 @@ for (const prefix of [
   ICELAND_IMAGE_ORIGIN,
   ...WARENDORF_IMAGE_ORIGINS,
   NSW_IMAGE_ORIGIN,
+  OTTAWA_IMAGE_ORIGIN,
   CALGARY_IMAGE_ORIGIN,
   HK_IMAGE_ORIGIN,
   KING_COUNTY_IMAGE_ORIGIN,
   WSDOT_IMAGE_ORIGIN,
   A22_IMAGE_ORIGIN,
+  TRIPCHECK_IMAGE_ORIGIN,
+  MLIT_RIVER_IMAGE_ORIGIN,
+  ...TAIWAN_HIGHWAY_IMAGE_ORIGINS,
 ]) {
   const host = new URL(prefix).hostname;
   CCTV_PINNED_PREFIXES_BY_HOST.set(host, [
@@ -623,6 +631,216 @@ export function cctvUpstreamUserAgent(url) {
   }
 }
 
+/** Largest single JPEG the MJPEG first-frame reader will buffer. */
+export const CCTV_MJPEG_FRAME_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Read one bounded JPEG part from an open MJPEG response, then stop the stream.
+ *
+ * The first part may follow a CRLF preamble, and its delimiter may be written
+ * as `--<boundary>` or, when the declared boundary already starts with `--`,
+ * as the boundary itself. A part with Content-Length is read to that length;
+ * a part without one ends at the next delimiter, so a JPEG end marker inside
+ * the image (an EXIF thumbnail) never truncates it. Bytes are copied once
+ * into a preallocated buffer and every search resumes where it stopped, so a
+ * trickling upstream costs linear time.
+ */
+async function readFirstMjpegFrame(upstream, maxBytes) {
+  const mediaType = cctvLiveMediaType(
+    'mjpeg',
+    upstream.headers.get('content-type'),
+  );
+  const boundary = parseMediaType(mediaType)?.params.get('boundary') || '';
+  const frameMax = Math.min(maxBytes, CCTV_MJPEG_FRAME_MAX_BYTES);
+  if (
+    !boundary ||
+    !upstream.body ||
+    !Number.isSafeInteger(frameMax) ||
+    frameMax < 4
+  ) {
+    try {
+      await upstream.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    return null;
+  }
+
+  const delimiters = [Buffer.from('--' + boundary, 'latin1')];
+  if (boundary.startsWith('--') && boundary.length > 2)
+    delimiters.push(Buffer.from(boundary, 'latin1'));
+  const lineEnd = Buffer.from('\r\n', 'ascii');
+  const headerTerminator = Buffer.from('\r\n\r\n', 'ascii');
+  const jpegStart = Buffer.from([0xff, 0xd8]);
+  const jpegEnd = Buffer.from([0xff, 0xd9]);
+  const maxPreambleBytes = 64;
+  const maxHeaderBytes = 8 * 1024;
+  const maxBufferedBytes =
+    maxPreambleBytes +
+    delimiters[0].length +
+    lineEnd.length +
+    maxHeaderBytes +
+    headerTerminator.length +
+    frameMax +
+    lineEnd.length +
+    delimiters[0].length;
+  const buffer = Buffer.allocUnsafe(maxBufferedBytes);
+  let length = 0;
+  let reader;
+  let headerStart = -1;
+  let delimiter = null;
+  let headerScanFrom = 0;
+  let bodyStart = -1;
+  let declaredLength = null;
+  let boundaryScanFrom = -1;
+
+  /** Match the opening delimiter after an optional CRLF preamble. */
+  function findOpening() {
+    let at = 0;
+    while (at < length && (buffer[at] === 0x0d || buffer[at] === 0x0a)) at++;
+    if (at > maxPreambleBytes) return { failed: true };
+    for (const candidate of delimiters) {
+      const line = Buffer.concat([candidate, lineEnd]);
+      const need = at + line.length;
+      if (length < need) {
+        const seen = buffer.subarray(at, length);
+        if (line.subarray(0, seen.length).equals(seen))
+          return { pending: true };
+        continue;
+      }
+      if (buffer.subarray(at, need).equals(line))
+        return { start: need, delimiter: candidate };
+    }
+    return { failed: true };
+  }
+
+  /** Parse the part headers; false rejects the stream. */
+  function parseHeaders(headerEnd) {
+    const headerText = buffer
+      .subarray(headerStart, headerEnd)
+      .toString('latin1');
+    const headers = new Map();
+    for (const line of headerText.split('\r\n')) {
+      const colon = line.indexOf(':');
+      if (colon <= 0) return false;
+      const name = line.slice(0, colon).trim().toLowerCase();
+      if (!name || headers.has(name)) return false;
+      headers.set(name, line.slice(colon + 1).trim());
+    }
+    if (cctvRasterImageType(headers.get('content-type')) !== 'image/jpeg')
+      return false;
+    const declared = headers.get('content-length');
+    if (declared !== undefined) {
+      if (!/^\d+$/.test(declared)) return false;
+      declaredLength = Number(declared);
+      if (
+        !Number.isSafeInteger(declaredLength) ||
+        declaredLength < jpegStart.length + jpegEnd.length ||
+        declaredLength > frameMax
+      )
+        return false;
+    }
+    return true;
+  }
+
+  /** A complete JPEG body, or null. */
+  function asJpeg(frame) {
+    return frame.length >= jpegStart.length + jpegEnd.length &&
+      frame.subarray(0, jpegStart.length).equals(jpegStart) &&
+      frame.subarray(-jpegEnd.length).equals(jpegEnd)
+      ? Buffer.from(frame)
+      : null;
+  }
+
+  try {
+    reader = upstream.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return null;
+
+      const chunk = Buffer.from(value);
+      const room = maxBufferedBytes - length;
+      const included = Math.min(room, chunk.length);
+      chunk.copy(buffer, length, 0, included);
+      length += included;
+      const overflow = included < chunk.length;
+
+      if (headerStart < 0) {
+        const opening = findOpening();
+        if (opening.failed) return null;
+        if (opening.pending) {
+          if (overflow) return null;
+          continue;
+        }
+        headerStart = opening.start;
+        delimiter = opening.delimiter;
+        headerScanFrom = headerStart;
+      }
+
+      if (bodyStart < 0) {
+        const headerEnd = buffer
+          .subarray(0, length)
+          .indexOf(headerTerminator, headerScanFrom);
+        if (headerEnd < 0) {
+          if (length - headerStart > maxHeaderBytes || overflow) return null;
+          headerScanFrom = Math.max(
+            headerStart,
+            length - headerTerminator.length + 1,
+          );
+          continue;
+        }
+        if (headerEnd - headerStart > maxHeaderBytes) return null;
+        if (!parseHeaders(headerEnd)) return null;
+        bodyStart = headerEnd + headerTerminator.length;
+        boundaryScanFrom = bodyStart;
+      }
+
+      const available = length - bodyStart;
+      if (available >= jpegStart.length) {
+        if (
+          !buffer
+            .subarray(bodyStart, bodyStart + jpegStart.length)
+            .equals(jpegStart)
+        )
+          return null;
+      }
+      const nextDelimiter = Buffer.concat([lineEnd, delimiter]);
+      const nextPart = buffer
+        .subarray(0, length)
+        .indexOf(nextDelimiter, boundaryScanFrom);
+      if (declaredLength !== null) {
+        if (nextPart >= bodyStart && nextPart - bodyStart < declaredLength)
+          return null;
+        if (available >= declaredLength)
+          return asJpeg(buffer.subarray(bodyStart, bodyStart + declaredLength));
+      } else if (nextPart >= bodyStart) {
+        const frame = buffer.subarray(bodyStart, nextPart);
+        return frame.length > frameMax ? null : asJpeg(frame);
+      } else if (available > frameMax) {
+        return null;
+      }
+      if (nextPart < 0)
+        boundaryScanFrom = Math.max(
+          bodyStart,
+          length - nextDelimiter.length + 1,
+        );
+      if (overflow) return null;
+    }
+  } finally {
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* already closed or aborted */
+      }
+      try {
+        reader.releaseLock();
+      } catch {
+        /* already released */
+      }
+    }
+  }
+}
 /**
  * Fetch one upstream CCTV image within the frame-refresh budget.
  *
@@ -635,6 +853,10 @@ export function cctvUpstreamUserAgent(url) {
  * @param {typeof fetch} [options.fetchImpl=fetch] - Fetch implementation.
  * @param {number} [options.timeoutMs=CCTV_FRAME_FETCH_TIMEOUT_MS] - Abort timeout.
  * @param {number} [options.maxBytes=CCTV_FRAME_MAX_BODY_BYTES] - Snapshot byte cap.
+ * @param {boolean} [options.allowMjpeg=false] - Accept a multipart MJPEG
+ *   answer and keep its first JPEG. Only sources registered as MJPEG stills
+ *   (the Taiwan Highway Bureau feeds) set it; any other host answering
+ *   multipart falls through to the next fallback.
  * @returns {Promise<{ok:true,body:Buffer,contentType:string}|null>}
  */
 export async function fetchCctvImageFromUpstream(
@@ -643,6 +865,7 @@ export async function fetchCctvImageFromUpstream(
     fetchImpl = fetch,
     timeoutMs = CCTV_FRAME_FETCH_TIMEOUT_MS,
     maxBytes = CCTV_FRAME_MAX_BODY_BYTES,
+    allowMjpeg = false,
   } = {},
 ) {
   if (!url || !/^https?:\/\//i.test(url)) return null;
@@ -662,10 +885,7 @@ export async function fetchCctvImageFromUpstream(
       fetchImpl,
     );
     if (!upstream) return null;
-    const contentType = cctvRasterImageType(
-      upstream.headers.get('content-type'),
-    );
-    if (!upstream.ok || !contentType) {
+    if (!upstream.ok) {
       try {
         await upstream.body?.cancel();
       } catch {
@@ -673,9 +893,24 @@ export async function fetchCctvImageFromUpstream(
       }
       return null;
     }
-    const body = await readCappedResponseBytes(upstream, maxBytes);
+    const upstreamType = upstream.headers.get('content-type');
+    const contentType = cctvRasterImageType(upstreamType);
+    if (contentType) {
+      const body = await readCappedResponseBytes(upstream, maxBytes);
+      if (!body) return null;
+      return { ok: true, body, contentType };
+    }
+    if (!allowMjpeg || !cctvLiveMediaType('mjpeg', upstreamType)) {
+      try {
+        await upstream.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return null;
+    }
+    const body = await readFirstMjpegFrame(upstream, maxBytes);
     if (!body) return null;
-    return { ok: true, body, contentType };
+    return { ok: true, body, contentType: 'image/jpeg' };
   } catch {
     return null;
   } finally {
