@@ -3,4 +3,4 @@
   test paths (~33.8k characters, over Windows' 32,767-character command-line
   limit). The runner now batches the parallel paths so every spawned command
   line stays under a 24,000-character budget, with the batching contract pinned
-  against the real suite (hakarrr, #1635).
+  against the real suite and a synthetic oversized suite (hakarrr, #1635).
