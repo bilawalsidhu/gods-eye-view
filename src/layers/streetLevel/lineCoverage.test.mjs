@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
+  coverageZoom,
   createLineCoverage,
   freshCoverage,
   ZOOM_IN_HINT,
@@ -28,7 +29,7 @@ const { maxSequences: COVERAGE_MAX_SEQUENCES, maxTiles: COVERAGE_MAX_TILES } =
   COVERAGE_TUNING;
 
 /** Line coverage as the Mapillary provider builds it, over `source`. */
-function createCoverage({ state, source }) {
+function createCoverage({ state, source, zoomFor = coverageZoomForHeight }) {
   return createLineCoverage({
     state,
     fetchTile: async (tile, { signal }) =>
@@ -36,7 +37,7 @@ function createCoverage({ state, source }) {
         await source.getTile('coverage', tile.z, tile.x, tile.y, { signal }),
         tile,
       ),
-    zoomFor: coverageZoomForHeight,
+    zoomFor,
     colors: COLORS,
     pickPrefix: PICK_PREFIX.sequence,
     renderKey: 'mapillary-coverage',
@@ -123,7 +124,7 @@ function deferredSource() {
   };
 }
 
-function setup() {
+function setup({ zoomFor } = {}) {
   const centre = tileCentre(-121.4944, 38.5816);
   const viewer = fakeViewer({ lon: centre.lon, lat: centre.lat, height: 900 });
   const source = deferredSource();
@@ -146,7 +147,7 @@ function setup() {
     },
     sequence: { selectedId: null },
   };
-  const coverage = createCoverage({ state, source });
+  const coverage = createCoverage({ state, source, zoomFor });
   const bytes = encodeCoverageTile(centre.tile, {
     sequences: [
       {
@@ -237,6 +238,37 @@ test('panning off a tile that is still loading stops counting it as loading', as
   await settle();
   assert.equal(state.coverage.pending.size, 0, 'LOADING clears');
   coverage.clear();
+});
+
+test('a zoomFor in the older {zoom, kind} shape still draws its lines', async () => {
+  // Providers written before the core went slim (#1139's Vegbilder) answer
+  // an object: it must not ask for no tiles and say nothing.
+  const { viewer, source, coverage, bytes } = setup({
+    zoomFor: (height) => {
+      const zoom = coverageZoomForHeight(height);
+      return zoom == null ? null : { zoom, kind: 'sequence' };
+    },
+  });
+  coverage.refresh();
+  assert.equal(source.calls.length, 1, 'the tile is asked for');
+  assert.equal(source.calls[0].z, 14);
+  source.calls[0].resolve(bytes);
+  await settle();
+  assert.equal(viewer.scene.groundPrimitives.items.size, 1, 'its line drawn');
+  assert.equal(coverage.stats().hint, '');
+  coverage.clear();
+});
+
+test('a zoom level is read from either shape; an overview or a bad answer draws nothing', () => {
+  assert.equal(coverageZoom(14), 14);
+  assert.equal(coverageZoom({ zoom: 15, kind: 'sequence' }), 15);
+  assert.equal(coverageZoom({ zoom: 12 }), 12);
+  assert.equal(coverageZoom({ zoom: 5, kind: 'overview' }), null, 'orbit');
+  assert.equal(coverageZoom(null), null);
+  assert.equal(coverageZoom(undefined), null);
+  assert.equal(coverageZoom({}), null);
+  assert.equal(coverageZoom(14.5), null);
+  assert.equal(coverageZoom('14'), null);
 });
 
 test('from orbit nothing is requested or drawn, and the hint says to zoom in', async () => {
