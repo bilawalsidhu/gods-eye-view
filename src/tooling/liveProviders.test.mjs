@@ -586,10 +586,7 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
 });
 
 test('the aircraft snapshot routes decline a non-GET before any upstream work', async (t) => {
-  // Both routes answered every verb with the full snapshot, unlike the query
-  // proxies beside them, so nothing said whether a body was read or ignored.
-  // A stubbed fetch that throws proves the refusal happens before the handler
-  // reaches upstream, rather than after paying for the work and discarding it.
+  // A fetch that throws proves the refusal comes before any upstream call.
   t.mock.method(globalThis, 'fetch', async (url) => {
     throw new Error(`upstream must not be reached: ${url}`);
   });
@@ -601,8 +598,7 @@ test('the aircraft snapshot routes decline a non-GET before any upstream work', 
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
       const response = await request(route, '/', method);
       assert.equal(response.statusCode, 405, `${method} ${route}`);
-      // RFC 9110 section 15.5.6 requires a 405 to name the methods it does
-      // accept, which is what `/api/radio/stations` already does in-tree.
+      // RFC 9110 section 15.5.6: a 405 names the methods it accepts.
       assert.equal(response.headers.allow, 'GET', `${method} ${route}`);
       assert.deepEqual(JSON.parse(response.body), {
         error: 'Method Not Allowed',
@@ -612,9 +608,8 @@ test('the aircraft snapshot routes decline a non-GET before any upstream work', 
 });
 
 test('the snapshot method check hands each /track route on to its own handler', async () => {
-  // Each snapshot mount is a prefix of its /track route, so the snapshot
-  // handler sees /track requests first and must hand them on before it
-  // judges the method; otherwise the 405 would answer for the other route.
+  // The snapshot mount also matches /track, so it must hand /track on
+  // before it checks the method.
   for (const [plugin, route] of [
     [providers.openSkyProxy(), '/api/flights'],
     [providers.adsbLolProxy(), '/api/military'],

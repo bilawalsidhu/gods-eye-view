@@ -502,9 +502,7 @@ test('the upstream host is pinned: a redirect is refused, not followed', async (
 });
 
 test('the routing proxy declines a non-GET before rate limiting or upstream', async (t) => {
-  // The documented shape is a GET with query parameters, but every verb was
-  // answered alike. Refuse first: a stubbed fetch that throws shows the
-  // rejection costs neither an upstream call nor a rate-limit slot.
+  // A fetch that throws proves the refusal comes before any upstream call.
   const request = install(installRouteMiddleware);
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('upstream must not be reached');
@@ -516,7 +514,7 @@ test('the routing proxy declines a non-GET before rate limiting or upstream', as
       method,
     );
     assert.equal(response.statusCode, 405, method);
-    // RFC 9110 section 15.5.6 requires a 405 to name the methods it accepts.
+    // RFC 9110 section 15.5.6: a 405 names the methods it accepts.
     assert.equal(response.headers.allow, 'GET', method);
     assert.deepEqual(response.body, { error: 'Method Not Allowed' });
   }

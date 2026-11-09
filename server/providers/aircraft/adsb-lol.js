@@ -83,9 +83,7 @@ export function adsbLolProxy() {
         // This mount also matches its /track route, served by its own handler.
         if (new URL(req.url || '/', 'http://localhost').pathname !== '/')
           return next();
-        // Read-only snapshot endpoint; match the method contract its sibling
-        // query proxies already declare instead of serving every verb alike.
-        // Checked after the /track hand-off, so that route keeps its own.
+        // After the /track hand-off, so /track keeps its own method handling.
         if (req.method !== 'GET') {
           res.writeHead(405, {
             'Content-Type': 'application/json',
