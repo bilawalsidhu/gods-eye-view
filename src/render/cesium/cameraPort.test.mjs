@@ -11,8 +11,14 @@ import {
   CAMERA_SCRIPTS,
   DEFAULT_TOLERANCE,
   runConformance,
+  usesInput,
 } from '../conformance/index.js';
-import { FRAME_MS, headlessCamera, withVirtualClock } from './cameraGoldens.js';
+import {
+  FRAME_MS,
+  dispatchPointer,
+  headlessCamera,
+  withVirtualClock,
+} from './cameraGoldens.js';
 import { createCesiumCamera } from './camera.js';
 import { createCesiumPorts } from './ports.js';
 import { cameraOf } from '../rendererOf.js';
@@ -27,14 +33,20 @@ const QUERY_RECORDS = new Set([
 /** Commands and records the port does not have yet. */
 const MISSING = new Set([]);
 
-const runnable = CAMERA_SCRIPTS.filter((script) =>
-  script.steps.every(
-    (step) =>
-      !MISSING.has(step.do) &&
-      !MISSING.has(step.record) &&
-      !QUERY_RECORDS.has(step.record),
-  ),
+const runnable = CAMERA_SCRIPTS.filter(
+  (script) =>
+    !usesInput(script) &&
+    script.steps.every(
+      (step) =>
+        !MISSING.has(step.do) &&
+        !MISSING.has(step.record) &&
+        !QUERY_RECORDS.has(step.record),
+    ),
 ).map((script) => `camera.trace.${script.name}`);
+/** The scripts that drive the camera by pointer and wheel. */
+const INPUT_CHECKS = new Set(
+  CAMERA_SCRIPTS.filter(usesInput).map((s) => `camera.trace.${s.name}`),
+);
 
 const CHECKS = new Set([
   ...runnable,
@@ -42,11 +54,11 @@ const CHECKS = new Set([
   'camera.controls.settings',
 ]);
 
-function headlessHarness(clock) {
+function headlessHarness(clock, { input = false } = {}) {
   return {
     name: 'cesium (headless camera)',
     async create() {
-      const { scene } = headlessCamera();
+      const { scene } = headlessCamera({ input });
       for (const name of ['preUpdate', 'postUpdate', 'preRender', 'postRender'])
         scene[name] = new Cesium.Event();
       scene.primitives = { add() {}, remove() {} };
@@ -65,10 +77,30 @@ function headlessHarness(clock) {
         frameScene() {
           clock.now += FRAME_MS;
           scene.tweens.update();
+          if (input) scene.screenSpaceCameraController.update();
           scene.postUpdate.raiseEvent(scene);
         },
+        scene,
       };
     },
+    ...(input
+      ? {
+          cameraInput: true,
+          // The contract's event back as the DOM's, a wheel in lines: at 40
+          // px a line, Cesium reads the pixels the script scrolled.
+          pointer: (r, type, x, y, extra) =>
+            dispatchPointer(r.scene, {
+              type,
+              position: { x, y },
+              endPosition: extra.endPosition,
+              button: extra.button ?? 0,
+              modifiers: extra.modifiers,
+              ...(type === 'wheel'
+                ? { wheel: { deltaY: extra.delta, deltaMode: 1 } }
+                : {}),
+            }),
+        }
+      : {}),
     frame: async (r) => r.frameScene(),
     now: () => clock.now,
     toEcef: (p) => {
@@ -94,6 +126,22 @@ test('the camera port retraces the reference flights, views and frames', async (
     [],
   );
   assert.equal(report.passed, CHECKS.size);
+});
+
+test('Cesium’s own controls under the camera port retrace the drags and wheels, each wheel sent back in the input port’s lines', async () => {
+  assert.ok(INPUT_CHECKS.size >= 4, `only ${INPUT_CHECKS.size} input scripts`);
+  const report = await withVirtualClock((clock) =>
+    runConformance(headlessHarness(clock, { input: true }), {
+      only: (id) => INPUT_CHECKS.has(id),
+    }),
+  );
+  assert.deepEqual(
+    report.results
+      .filter((r) => r.status !== 'pass')
+      .map((r) => `${r.id}: ${r.status} ${r.detail}`),
+    [],
+  );
+  assert.equal(report.passed, INPUT_CHECKS.size);
 });
 
 test('a cancelled flight has let go before its callbacks, so they can fly again', async () => {

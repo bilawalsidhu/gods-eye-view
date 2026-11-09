@@ -57,7 +57,12 @@ export interface PointerEv {
   pointerType: 'mouse' | 'touch' | 'pen';
   /** `click`: how far the pointer travelled and how long the press lasted. */
   gesture?: { travelPx: number; durationMs: number };
-  /** `wheel`: lines scrolled; `pinch`: scale since the last event. */
+  /**
+   * `wheel`: lines scrolled, down positive, counted as the reference
+   * renderer counts them: a pixel-mode wheel at 40 px a line, a page at 3
+   * lines (so 40 px a line turns either back into the reference's pixels);
+   * `pinch`: scale since the last event.
+   */
   delta?: number;
   /** `click` and `dblclick`: the hit under the pointer, picked once for every subscriber. */
   pick?(): Hit | null;

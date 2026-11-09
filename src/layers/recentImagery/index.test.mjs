@@ -14,6 +14,7 @@ import {
   createRecentImageryLayer,
 } from './index.js';
 import { createImageryBoxPreview } from './rendering.js';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import {
   BOX,
   CANDIDATES,
@@ -1408,7 +1409,7 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   const tool = initImageryBoxTool({
     viewer: fakes.viewer,
     createPreview: (viewer, dragBox) =>
-      createImageryBoxPreview(viewer, dragBox, { cesium: fakes.cesium }),
+      createImageryBoxPreview(viewer, dragBox, { draw: fakeDrawPort() }),
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => f.layer.setBox(box),

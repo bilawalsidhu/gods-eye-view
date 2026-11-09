@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   TILE_RENDER_REASON,
+  createImageryBoxPreview,
   createRecentImageryRenderer,
 } from './rendering.js';
 import { BOX } from './testDoubles.mjs';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 
 const S30 = { key: 'S30:2026-09-18', product: 'S30', day: '2026-09-18' };
 const L30 = { key: 'L30:2026-09-16', product: 'L30', day: '2026-09-16' };
@@ -202,4 +204,70 @@ test('replacement imagery uses source-owned tile URLs and credit and tears down 
   renderer.destroy();
   assert.equal(globe.layers.length, 0);
   assert.equal(layer.removed, true);
+});
+
+test('the box preview draws a ground fill and a draped dashed edge, hidden rather than dropped between drags', async () => {
+  const draw = fakeDrawPort();
+  let box = null;
+  const preview = createImageryBoxPreview({}, () => box, { draw });
+  const sets = [...draw.sets.values()];
+  assert.deepEqual(
+    sets.map((r) => [r.kind, r.spec.pickable]),
+    [
+      ['shapes', false],
+      ['lines', false],
+    ],
+  );
+  const [fills, lines] = sets;
+  preview.setVisible(true);
+  assert.equal(fills.items.size, 0, 'no box yet');
+  box = { west: -98, south: 30, east: -98, north: 30 };
+  preview.changed();
+  assert.equal(fills.items.size, 0, 'a press draws nothing');
+  assert.equal(lines.items.size, 0);
+  // Dragged along one axis: the edge draws as a line, the fill has no area.
+  box = { west: -98, south: 30, east: -97.9, north: 30 };
+  preview.changed();
+  assert.equal(fills.items.size, 0, 'no fill without an area');
+  assert.equal(lines.items.get('edge').show, true, 'the edge along the drag');
+  box = { west: -98, south: 30, east: -97.9, north: 30.1 };
+  preview.changed();
+  const fill = fills.items.get('box');
+  assert.deepEqual(fill.geometry.rect, box);
+  assert.equal(fill.height, 'clampGround');
+  assert.equal(fill.clampTo, 'both');
+  assert.deepEqual(fill.fill, [139 / 255, 233 / 255, 1, 0.12]);
+  assert.equal(fill.show, true);
+  const edge = lines.items.get('edge');
+  assert.equal(edge.mode, 'draped');
+  assert.equal(edge.clampTo, 'both');
+  assert.equal(edge.widthPx, 2);
+  assert.deepEqual(edge.style, {
+    kind: 'dash',
+    color: [139 / 255, 233 / 255, 1, 0.95],
+    length: 12,
+  });
+  assert.equal(edge.positions.length, 5, 'round the corners and back');
+  assert.deepEqual(edge.positions[0], edge.positions[4]);
+  preview.setVisible(false);
+  assert.equal(fills.items.get('box').show, false, 'hidden, kept to move');
+  assert.equal(lines.items.get('edge').show, false);
+  // The next drag moves it and shows it again.
+  box = { west: -97, south: 31, east: -96.5, north: 31.5 };
+  preview.setVisible(true);
+  assert.deepEqual(fills.items.get('box').geometry.rect, box);
+  assert.equal(fills.items.get('box').show, true);
+  assert.equal(lines.items.get('edge').show, true);
+  // A press with no extent hides the last box.
+  box = { west: -97, south: 31, east: -97, north: 31 };
+  preview.changed();
+  assert.equal(fills.items.get('box').show, false);
+  assert.equal(lines.items.get('edge').show, false);
+  const gone = preview.destroy();
+  assert.equal(preview.destroy(), gone, 'the same promise every time');
+  await gone;
+  assert.ok(fills.disposed && lines.disposed);
+  // Gone: changes after do nothing.
+  box = { west: -96, south: 32, east: -95, north: 33 };
+  assert.doesNotThrow(() => preview.changed());
 });

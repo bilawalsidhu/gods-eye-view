@@ -19,6 +19,16 @@
  *   `{ record: 'pickEllipsoid', screen }`, `{ record: 'pickRay', screen }`,
  *   `{ record: 'occluded', points }`, `{ record: 'changed' }`,
  *   `{ record: 'flying' }`, `{ record: 'matrices' }`, `{ record: 'viewRectangle' }`.
+ * - `{ input: 'down' | 'move' | 'up', x, y, button?, modifiers? }`: the
+ *   pointer, in CSS pixels; a move goes from where the pointer last was.
+ * - `{ input: 'wheel', x, y, deltaY, deltaMode?, modifiers? }`: a wheel as
+ *   the DOM gives it (`deltaMode` 0 pixels, 1 lines, 2 pages); a renderer
+ *   under test gets it as the input port's lines (`render/input/wheel.js`).
+ *
+ * A script with `input` steps moves the camera by user input, so it runs
+ * only where the renderer's camera answers pointer input (a harness with
+ * `pointer` and `cameraInput`). It starts with a frame, as a pointer event
+ * on the reference's clock at 0 would be dropped.
  */
 
 /** Where the scripts, scenes and checks look: downtown Austin, degrees. */
@@ -60,8 +70,51 @@ const SCREEN_GRID = [
   { x: 320, y: 540 },
 ];
 
+/** A drag from `from` to `to` in `moves` moves, a frame after each. */
+const drag = ({
+  from,
+  to,
+  moves = 10,
+  button = 0,
+  modifiers,
+  holdFrames = 0,
+}) => {
+  const mods = modifiers ? { modifiers } : {};
+  const steps = [{ input: 'down', ...from, button, ...mods }];
+  for (let i = 1; i <= moves; i++)
+    steps.push(
+      {
+        input: 'move',
+        x: from.x + ((to.x - from.x) * i) / moves,
+        y: from.y + ((to.y - from.y) * i) / moves,
+        ...mods,
+      },
+      { do: 'frames', count: 1 },
+    );
+  if (holdFrames) steps.push({ do: 'frames', count: holdFrames });
+  steps.push({ input: 'up', ...to, button, ...mods });
+  return steps;
+};
+
+/**
+ * `count` wheel notches at the centre, `frames` frames after each. The
+ * reference zooms towards where the pointer last moved, not where the wheel
+ * says it is, so a script moves the pointer to the centre first (`hover`).
+ */
+const notches = (count, deltaY, deltaMode, frames = 2) =>
+  Array.from({ length: count }, () => [
+    { input: 'wheel', x: 640, y: 360, deltaY, deltaMode },
+    { do: 'frames', count: frames },
+  ]).flat();
+
+/** The pointer moves to the centre with nothing held. */
+const hover = { input: 'move', x: 640, y: 360 };
+
 /** The viewport every script runs in, CSS pixels. */
 export const SCRIPT_VIEWPORT = Object.freeze({ width: 1280, height: 720 });
+
+/** Whether a script moves the camera by user input (`input` steps). */
+export const usesInput = (script) => script.steps.some((step) => step.input);
 
 /** @type {ReadonlyArray<{name: string, steps: object[]}>} */
 export const CAMERA_SCRIPTS = Object.freeze([
@@ -440,6 +493,90 @@ export const CAMERA_SCRIPTS = Object.freeze([
         { do: 'frames', count: 1 },
       ]).flat(),
       { record: 'changed' },
+    ],
+  },
+  {
+    name: 'a left drag turns the globe under the pointer, then coasts',
+    steps: [
+      city(5000, 0.2, -1.2),
+      { do: 'frames', count: 1 },
+      ...drag({ from: { x: 640, y: 360 }, to: { x: 760, y: 420 } }),
+      { record: 'pose' },
+      { do: 'frames', count: 20 },
+      { record: 'pose' },
+      { do: 'frames', count: 60 },
+      { record: 'pose' },
+      START,
+      { do: 'frames', count: 1 },
+      ...drag({ from: { x: 600, y: 300 }, to: { x: 500, y: 360 } }),
+      { do: 'frames', count: 60 },
+      { record: 'pose' },
+    ],
+  },
+  {
+    name: 'thirty pixel-mode wheel notches from 5 km, then out again',
+    steps: [
+      city(5000, 0.2, -1.2),
+      { do: 'frames', count: 1 },
+      hover,
+      ...notches(10, -100, 0),
+      { record: 'pose' },
+      ...notches(10, -100, 0),
+      { record: 'pose' },
+      ...notches(10, -100, 0),
+      { record: 'pose' },
+      { do: 'frames', count: 60 },
+      { record: 'pose' },
+      ...notches(5, 100, 0),
+      { do: 'frames', count: 60 },
+      { record: 'pose' },
+    ],
+  },
+  {
+    name: 'thirty line-mode wheel notches from 5 km',
+    steps: [
+      city(5000, 0.2, -1.2),
+      { do: 'frames', count: 1 },
+      hover,
+      ...notches(10, -3, 1),
+      { record: 'pose' },
+      ...notches(20, -3, 1),
+      { do: 'frames', count: 60 },
+      { record: 'pose' },
+    ],
+  },
+  {
+    name: 'a middle drag tilts about the centre, then coasts',
+    steps: [
+      city(2000, 0.3, -1.0),
+      { do: 'frames', count: 1 },
+      ...drag({ from: { x: 640, y: 360 }, to: { x: 640, y: 300 }, button: 1 }),
+      { record: 'pose' },
+      { do: 'frames', count: 60 },
+      { record: 'pose' },
+    ],
+  },
+  {
+    name: 'modified drags: Shift looks, Ctrl tilts, held too long to coast',
+    steps: [
+      city(2000, 0.3, -0.5),
+      { do: 'frames', count: 1 },
+      ...drag({
+        from: { x: 640, y: 360 },
+        to: { x: 700, y: 330 },
+        modifiers: { shift: true },
+        holdFrames: 30,
+      }),
+      { do: 'frames', count: 10 },
+      { record: 'pose' },
+      ...drag({
+        from: { x: 640, y: 360 },
+        to: { x: 640, y: 320 },
+        modifiers: { ctrl: true },
+        holdFrames: 30,
+      }),
+      { do: 'frames', count: 10 },
+      { record: 'pose' },
     ],
   },
   {

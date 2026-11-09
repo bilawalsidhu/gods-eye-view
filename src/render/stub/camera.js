@@ -47,7 +47,6 @@ import { createCameraEvents } from '../camera/events.js';
 import { geodesicAt } from '../../geo/geodesic.js';
 
 const DEFAULT_FOV = Math.PI / 3;
-const MOVE_END_WAIT_MS = 500;
 const MINIMUM_ZOOM = 100;
 const DEFAULT_SPHERE_OFFSET = Object.freeze({
   heading: 0,
@@ -98,17 +97,23 @@ export function createStubCamera({
   const near = 1;
   const far = 5e8;
 
-  const events = createCameraEvents({ pose, report, thresholds });
-  const { emit, on, stepChanged } = events;
-  const commandHooks = [];
+  const events = createCameraEvents({
+    pose,
+    world: () => ({
+      position: positionWC(),
+      direction: directionWC(),
+      up: upWC(),
+    }),
+    following: () => Boolean(followed),
+    report,
+    thresholds,
+  });
+  const { emit, on, stepChanged, command, onCommand } = events;
   const holds = new Map();
   let holdSeq = 0;
   let flight = null;
   let followed = null;
   let followFramed = false;
-  let lastPose = null;
-  let moving = false;
-  let lastMovedAt = 0;
 
   let coast = Object.freeze({ drag: 0.4, zoom: 0.2 });
   const controls = {
@@ -200,17 +205,6 @@ export function createStubCamera({
       far,
       frameIsIdentity: isIdentity(frame),
     };
-  }
-
-  function command(kind) {
-    for (const hook of commandHooks.slice()) {
-      if (!commandHooks.includes(hook)) continue;
-      try {
-        hook({ kind });
-      } catch (error) {
-        report(error);
-      }
-    }
   }
 
   /** Place the eye at `destination` (world) with `orientation` in its east-north-up frame. */
@@ -727,35 +721,8 @@ export function createStubCamera({
 
   // --- Events ----------------------------------------------------------------
 
-  function sameView(a, b) {
-    return (
-      a &&
-      b &&
-      distance(a.position, b.position) === 0 &&
-      dot(a.direction, b.direction) === dot(a.direction, a.direction) &&
-      dot(a.up, b.up) === dot(a.up, a.up)
-    );
-  }
-
   function stepMoveDetection() {
-    const current = {
-      position: positionWC(),
-      direction: directionWC(),
-      up: upWC(),
-    };
-    const changed = lastPose && !sameView(lastPose, current);
-    lastPose = current;
-    const t = now();
-    if (changed) {
-      lastMovedAt = t;
-      if (!moving) {
-        moving = true;
-        emit('moveStart');
-      }
-    } else if (moving && !followed && t - lastMovedAt >= MOVE_END_WAIT_MS) {
-      moving = false;
-      emit('moveEnd');
-    }
+    events.stepMoveDetection(now());
   }
 
   function matrices() {
@@ -844,13 +811,7 @@ export function createStubCamera({
     followOffset,
     controls,
     on,
-    onCommand(cb) {
-      commandHooks.push(cb);
-      return () => {
-        const i = commandHooks.indexOf(cb);
-        if (i >= 0) commandHooks.splice(i, 1);
-      };
-    },
+    onCommand,
     matrices,
   };
 

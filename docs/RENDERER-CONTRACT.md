@@ -6,13 +6,19 @@ it meets the contract. The contract is version `0`. Today the application
 still drives Cesium directly; later work moves the layers onto the contract
 one family at a time.
 
-The package exports three modules:
+The package exports four modules:
 
-| Export                             | What it is                                                                     |
-| ---------------------------------- | ------------------------------------------------------------------------------ |
-| `gods-eye-view/render/contract`    | The types, one `.d.ts` per port, plus the run-time member list and shape check |
-| `gods-eye-view/render/stub`        | A renderer that draws nothing, for tests                                       |
-| `gods-eye-view/render/conformance` | The conformance suite, reference scenes and visual comparison                  |
+| Export                               | What it is                                                                             |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| `gods-eye-view/render/contract`      | The types, one `.d.ts` per port, plus the run-time member list and shape check         |
+| `gods-eye-view/render/stub`          | A renderer that draws nothing, for tests                                               |
+| `gods-eye-view/render/camera/events` | The camera port's events: `changed` per listener, `moveStart`/`moveEnd`, command hooks |
+| `gods-eye-view/render/conformance`   | The conformance suite, reference scenes and visual comparison                          |
+
+A camera of its own (a camera controller over a renderer without one) can
+take the camera events from `render/camera/events` and the geodesy it needs
+(`geodesicAt`, `horizonFrom` and the rest) from `gods-eye-view/geo`, so it
+measures and fires exactly as the stub does.
 
 ## Ports
 
@@ -179,6 +185,9 @@ in memory and draws nothing. It has:
 
 `renderer.testing` drives it with `tick()`, `advance(ms)`, `pointer(type, x, y)`,
 `scriptPicks`, `setHeights` and `cacheHeight`, and records its calls.
+`testing.drawnPosition({ set, id }, aheadMs)` is where it draws an item now
+(or `aheadMs` from now), so a
+camera that is not the stub's own can follow drawn items there.
 A listener that throws with nothing subscribed to `error` goes to
 `reportError`; Node has none, so the stub rethrows it on a microtask and
 `node:test` fails the running test. A test that expects a throw subscribes
@@ -198,8 +207,9 @@ renderer under test:
 - `tolerance` and `flightPaths`.
 
 Optional members widen what is checked: `pointer` for synthetic input,
-`scriptHeights`, `assets.model`, and `assets.missingModel` (a model url
-that fails to load, for the `loadFailed` check).
+`cameraInput` (the camera answers that input: the drag and wheel traces
+run), `scriptHeights`, `assets.model`, and `assets.missingModel` (a model
+url that fails to load, for the `loadFailed` check).
 
 There are two layers of checks.
 
@@ -222,6 +232,22 @@ match each recorded pose:
 - within 1 mm in position, 1e-9 in unit vectors and angles, and 1e-3 px on
   screen;
 - with every flight ending within one frame of the recording.
+
+Some scripts move the camera by user input: left, middle, Shift and Ctrl
+drags, and wheels in pixel and line mode. The recorder runs those on
+Cesium's own `ScreenSpaceCameraController`, fed the DOM events the script
+describes, with `Date` on the virtual clock too (its coasting reads it). A
+renderer under test gets them through its harness's `pointer`, a wheel as
+the input port's lines. Only a harness with `cameraInput` runs them: the
+stub's camera takes no gestures, so it skips them; a camera controller
+over the stub would run them. `cameraPort.test.mjs` runs them on Cesium's
+controls under the Cesium camera port, each wheel sent back as lines.
+
+A wheel's `delta` is lines as Cesium counts them: a pixel-mode wheel at
+40 px a line and a page at 3 lines (`src/render/input/wheel.js`). Turning
+lines back into pixels at 40 px a line gives Cesium's own wheel in every
+mode, so a controller that does that zooms as Cesium does in Chrome (pixel
+mode) and Firefox (line mode) alike.
 
 `src/render/cesium/cameraGoldens.test.mjs` fails when the installed Cesium
 no longer records the committed traces. After a Cesium upgrade or a script

@@ -1600,6 +1600,13 @@ export function createStubRenderer(options = {}) {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
       },
+      /**
+       * Where a drawn item is drawn now (or `aheadMs` from now), ECEF, or
+       * null: what the stub's own camera follows for a target's `item`, for
+       * a camera of someone else's driving the stub (the `camera.followItem`
+       * conformance check).
+       */
+      drawnPosition: (ref, aheadMs = 0) => drawnPosition(ref, aheadMs),
       /** What a set holds. */
       setRecord: (id) => sets.get(id) ?? null,
       sets: () => [...sets.keys()],
@@ -1624,6 +1631,7 @@ export function createStubRenderer(options = {}) {
  * @property {(point: object, height: number) => void} cacheHeight
  * @property {(kind: string, value: boolean) => void} setSettled
  * @property {(size: {width?: number, height?: number}) => void} setViewport
+ * @property {(ref: {set: string, id: string|number}, aheadMs?: number) => {x: number, y: number, z: number}|null} drawnPosition
  * @property {(id: string) => object|null} setRecord
  * @property {() => string[]} sets
  * @property {Array<{port: string, member: string, args: unknown[]}>} calls

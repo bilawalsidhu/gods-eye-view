@@ -12,17 +12,19 @@ import {
 } from './imageryBoxTool.js';
 import { boxToolFakes } from '../layers/recentImagery/testDoubles.mjs';
 import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 function fixture(options = {}) {
   resetPointerOwnership();
   const fakes = boxToolFakes();
+  const draw = fakeDrawPort();
   const boxes = [];
   const cancels = [];
   const actives = [];
   const tool = initImageryBoxTool({
     viewer: fakes.viewer,
     createPreview: (viewer, dragBox) =>
-      createImageryBoxPreview(viewer, dragBox, { cesium: fakes.cesium }),
+      createImageryBoxPreview(viewer, dragBox, { draw }),
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => boxes.push(box),
@@ -39,10 +41,27 @@ function fixture(options = {}) {
         ? fakes.originalClick
         : fakes.originalDouble
       : undefined;
+  // The preview's fill or outline set, while it is live.
+  const previewSet = (part) =>
+    [...draw.sets.values()].find(
+      (r) =>
+        !r.disposed &&
+        r.spec.id.startsWith('recent-imagery-box:') &&
+        r.spec.id.endsWith(`:${part}`),
+    );
+  // Whether the box shows: its fill and its outline, drawn and shown.
   const preview = () =>
-    fakes.viewer.dataSources.sources[0]?.entities.values.every((e) => e.show);
+    ['fill', 'outline'].every((part) => {
+      const set = previewSet(part);
+      return (
+        Boolean(set?.items.size) &&
+        [...set.items.values()].every((item) => item.show !== false)
+      );
+    });
   return {
     ...fakes,
+    draw,
+    previewSet,
     tool,
     boxes,
     cancels,
@@ -63,8 +82,16 @@ test('a session claims the pointer, borrows the stock clicks, freezes the camera
   assert.equal(f.camera.enableInputs, true, 'not frozen before the press');
   f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
   assert.equal(f.camera.enableInputs, false);
-  assert.equal(f.preview(), true);
+  assert.equal(f.preview(), false, 'a press alone has no box to draw');
   f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 250 } });
+  assert.equal(f.preview(), true, 'the box shows as it is dragged');
+  const rect = () => f.previewSet('fill').items.get('box').geometry.rect;
+  assert.deepEqual(
+    Object.values(rect()).map((v) => Math.round(v * 1e6) / 1e6),
+    [-97.85, 30.3, -97.8, 30.35],
+  );
+  assert.equal(f.previewSet('outline').items.get('edge').style.kind, 'dash');
+  assert.equal(f.previewSet('outline').items.get('edge').mode, 'draped');
   f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 10 } }); // sky: ignored
   f.fire('LEFT_UP', { position: { x: 500, y: 250 } });
   assert.equal(f.boxes.length, 1);
@@ -151,13 +178,14 @@ test('destroy mid-drag restores the camera, releases the claim and detaches the 
   const f = fixture();
   f.tool.start();
   f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
-  assert.equal(f.viewer.dataSources.sources.length, 1);
+  assert.ok(f.previewSet('fill') && f.previewSet('outline'));
   const destroying = f.tool.destroy();
   assert.equal(f.tool.destroy(), destroying);
   await destroying;
   assert.equal(f.camera.enableInputs, true);
   assert.equal(pointerOwner(), null);
-  assert.equal(f.viewer.dataSources.sources.length, 0);
+  assert.equal(f.previewSet('fill'), undefined, 'the preview is gone');
+  assert.equal(f.previewSet('outline'), undefined);
   assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
   assert.equal(f.tool.start(), false);
   assert.equal(initImageryBoxTool({ viewer: null, onBox() {} }), null);
