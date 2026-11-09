@@ -3545,5 +3545,14 @@
   "CelesTrak SATCAT gives each object's type and status. Without a current copy the classes rest on the UCS database, names and CelesTrak groups, so a satellite that has died since may still show as working.": "يعطي SATCAT من CelesTrak نوع كل جسم وحالته. من دون نسخة حديثة تستند الفئات إلى قاعدة بيانات UCS والأسماء ومجموعات CelesTrak، فقد يظهر قمر صناعي توقف عن العمل منذ ذلك الحين وكأنه يعمل.",
   "STARLINK ···": "STARLINK ···",
   "STARLINK ✕": "STARLINK ✕",
-  "COURSE HOLD · AIS": "تثبيت المسار · AIS"
+  "COURSE HOLD · AIS": "تثبيت المسار · AIS",
+  "World time": "وقت العالم",
+  "Back to live": "العودة إلى البث المباشر",
+  "Live": "مباشر",
+  "1 h/s": "ساعة/ث",
+  "1 d/s": "يوم/ث",
+  "1 wk/s": "أسبوع/ث",
+  "Play speed": "سرعة التشغيل",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
+  "1 min/s": "دقيقة/ث"
 }

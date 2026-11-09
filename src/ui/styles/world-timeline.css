@@ -1,0 +1,325 @@
+/* ── World timeline ─────────────────────────── */
+/* Shown while a layer with time to show is on, centred along the bottom of
+   the screen; the command dock and what sits above it rise by its height. */
+:root {
+  --world-timeline-lift: 0px;
+}
+
+/* The bar and the time's bubble over its handle. */
+body:has(#world-timeline) {
+  --world-timeline-lift: 66px;
+}
+
+/* Clean view, recording and the cockpit put the dock away; the bar goes too. */
+body.ui-clean-view,
+body.recording-mode,
+body.cockpit-mode {
+  --world-timeline-lift: 0px !important;
+}
+
+body.ui-clean-view #world-timeline,
+body.recording-mode #world-timeline,
+body.cockpit-mode #world-timeline {
+  display: none;
+}
+
+/* Time runs left to right in every language, so the handle, the fill, the
+   ticks and the bubble agree under a right-to-left page too. */
+#world-timeline {
+  direction: ltr;
+  position: fixed;
+  bottom: 2vh;
+  left: 50%;
+  z-index: 146;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(820px, calc(100vw - 24px));
+  height: 42px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%);
+}
+
+#world-timeline .world-timeline-play,
+#world-timeline .world-timeline-live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(123, 189, 211, 0.28);
+  border-radius: 8px;
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+#world-timeline .world-timeline-play:hover,
+#world-timeline .world-timeline-live:hover {
+  background: rgba(0, 212, 255, 0.18);
+}
+
+#world-timeline .world-timeline-live.is-live {
+  border-color: rgba(0, 212, 255, 0.6);
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--accent);
+  cursor: default;
+}
+
+#world-timeline .world-timeline-live {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#world-timeline .world-timeline-speed {
+  flex: none;
+}
+
+/* The time rides over the handle. It slides across itself as the handle
+   crosses the track (its start at the handle at the track's start, its end at
+   the end), so however wide its date it stays within the track. */
+#world-timeline .world-timeline-time {
+  --inset: 0px;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: calc(var(--inset) + (100% - var(--inset)) * var(--at));
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 6px;
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(calc(var(--at) * -100%));
+  pointer-events: none;
+}
+
+/* Playing, held while a layer loads the time's data: a spinner by the time. */
+#world-timeline .world-timeline-time.is-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#world-timeline .world-timeline-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: world-timeline-spin 0.9s linear infinite;
+}
+
+@keyframes world-timeline-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #world-timeline .world-timeline-spinner {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
+/* The track: ticks for each launch or frame, the elapsed fill, and a native
+   range input on top for dragging and the keyboard. */
+#world-timeline .world-timeline-track {
+  position: relative;
+  /* Two fingers pinch the track, not the page. */
+  touch-action: none;
+  flex: 1 1 auto;
+  cursor: pointer;
+  min-width: 80px;
+  height: 24px;
+}
+
+/* Zoomed, the track's ends fade, as it goes on past them. */
+#world-timeline .world-timeline-track.is-zoomed::before {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(123, 189, 211, 0.22) 12px,
+    rgba(123, 189, 211, 0.22) calc(100% - 12px),
+    transparent
+  );
+}
+
+#world-timeline .world-timeline-track::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(123, 189, 211, 0.22);
+  content: '';
+  transform: translateY(-50%);
+}
+
+#world-timeline .world-timeline-fill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.7;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+#world-timeline .world-timeline-tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: rgba(0, 212, 255, 0.75);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* Zoomed, the track drags along. */
+#world-timeline .world-timeline-track.is-zoomed {
+  cursor: grab;
+}
+
+#world-timeline .world-timeline-track.is-zoomed:active {
+  cursor: grabbing;
+}
+
+/* Only the handle takes the pointer as a slider; the track around it takes
+   taps, drags and pinches itself. */
+#world-timeline .world-timeline-scrub {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  pointer-events: none;
+}
+
+#world-timeline .world-timeline-scrub::-webkit-slider-thumb {
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+#world-timeline .world-timeline-scrub::-moz-range-thumb {
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+/* The time dragged off the track: the handle waits at its edge, unseen. */
+#world-timeline .world-timeline-scrub.is-off-view::-webkit-slider-thumb {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#world-timeline .world-timeline-scrub.is-off-view::-moz-range-thumb {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#world-timeline .world-timeline-scrub::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+
+#world-timeline .world-timeline-scrub::-moz-range-track {
+  background: transparent;
+}
+
+#world-timeline .world-timeline-scrub::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: 5px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: #031018;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+  appearance: none;
+}
+
+#world-timeline .world-timeline-scrub::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: #031018;
+}
+
+/* A finger needs a bigger handle. */
+@media (pointer: coarse) {
+  #world-timeline .world-timeline-scrub::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+  }
+
+  #world-timeline .world-timeline-scrub::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+#world-timeline .world-timeline-scrub:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  #world-timeline {
+    bottom: 8px;
+  }
+}
+
+/* On phones the bar sits just above the tab bar, under the voice dock, with
+   the track and the speed on a row of their own beneath play and live. */
+body.mobile-shell:has(#world-timeline) {
+  --world-timeline-lift: 80px;
+}
+
+body.mobile-shell #world-timeline {
+  bottom: calc(var(--mobile-tab-space) + 6px);
+  flex-wrap: wrap;
+  row-gap: 4px;
+  height: auto;
+}
+
+/* The bubble rises into the first row, clear of play on its left. */
+body.mobile-shell #world-timeline .world-timeline-time {
+  --inset: 48px;
+}
+
+/* The speed sits on the track's row, a full-size target beside it. */
+body.mobile-shell #world-timeline .world-timeline-track {
+  order: 1;
+  flex: 1 1 calc(100% - 96px);
+}
+
+body.mobile-shell #world-timeline .world-timeline-live {
+  margin-inline-start: auto;
+}
+
+body.mobile-shell #world-timeline .world-timeline-speed {
+  order: 2;
+  height: 32px;
+}
+

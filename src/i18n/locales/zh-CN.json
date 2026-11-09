@@ -3165,5 +3165,14 @@
   "CelesTrak SATCAT gives each object's type and status. Without a current copy the classes rest on the UCS database, names and CelesTrak groups, so a satellite that has died since may still show as working.": "CelesTrak SATCAT 给出每个物体的类型和运行状态。没有最新副本时，分类仅依据 UCS 数据库、名称和 CelesTrak 分组，因此此后已失效的卫星可能仍显示为在轨工作。",
   "STARLINK ···": "STARLINK ···",
   "STARLINK ✕": "STARLINK ✕",
-  "COURSE HOLD · AIS": "对地航向保持 · AIS"
+  "COURSE HOLD · AIS": "对地航向保持 · AIS",
+  "World time": "世界时间",
+  "Back to live": "返回实时",
+  "Live": "实时",
+  "1 h/s": "1 小时/秒",
+  "1 d/s": "1 天/秒",
+  "1 wk/s": "1 周/秒",
+  "Play speed": "播放速度",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "滚动或双指缩放，拖动以移动 · 双击查看全部",
+  "1 min/s": "1 分钟/秒"
 }

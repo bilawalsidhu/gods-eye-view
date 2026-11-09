@@ -3165,5 +3165,14 @@
   "CelesTrak SATCAT gives each object's type and status. Without a current copy the classes rest on the UCS database, names and CelesTrak groups, so a satellite that has died since may still show as working.": "CelesTrak SATCAT は各物体の種別と運用状態を示します。最新のコピーがない間、分類は UCS データベース、名称、CelesTrak のグループのみに基づくため、その後機能を失った衛星がまだ稼働中と表示されることがあります。",
   "STARLINK ···": "STARLINK ···",
   "STARLINK ✕": "STARLINK ✕",
-  "COURSE HOLD · AIS": "対地針路保持 · AIS"
+  "COURSE HOLD · AIS": "対地針路保持 · AIS",
+  "World time": "世界時刻",
+  "Back to live": "ライブに戻る",
+  "Live": "ライブ",
+  "1 h/s": "1時間/秒",
+  "1 d/s": "1日/秒",
+  "1 wk/s": "1週間/秒",
+  "Play speed": "再生速度",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
+  "1 min/s": "1分/秒"
 }

@@ -82,7 +82,7 @@ export function createRecords({ state, parts }) {
     const limit = Number.isFinite(maxCount)
       ? Math.max(1, Math.floor(maxCount))
       : 2000;
-    const now = new Date();
+    const now = new Date(state.now());
     const result = [];
     const emit = (noradId, sat) => {
       if (result.length >= limit) return false;

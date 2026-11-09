@@ -310,7 +310,10 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (noradId === null) return null;
 
       const sat = layerState._catalog.get(noradId);
-      const pos = parts.orbits.propagatePosition(sat.satrec, new Date());
+      const pos = parts.orbits.propagatePosition(
+        sat.satrec,
+        new Date(layerState.now()),
+      );
       if (!pos) return null;
 
       return {

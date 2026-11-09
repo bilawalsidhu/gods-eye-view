@@ -3317,5 +3317,14 @@
   "CelesTrak SATCAT gives each object's type and status. Without a current copy the classes rest on the UCS database, names and CelesTrak groups, so a satellite that has died since may still show as working.": "SATCAT de CelesTrak da el tipo y el estado de cada objeto. Sin una copia actual, las clases se basan en la base de datos UCS, los nombres y los grupos de CelesTrak, así que un satélite que haya dejado de funcionar puede seguir apareciendo como operativo.",
   "STARLINK ···": "STARLINK ···",
   "STARLINK ✕": "STARLINK ✕",
-  "COURSE HOLD · AIS": "BLOQUEO DE RUMBO · AIS"
+  "COURSE HOLD · AIS": "BLOQUEO DE RUMBO · AIS",
+  "World time": "Hora mundial",
+  "Back to live": "Volver al directo",
+  "Live": "En directo",
+  "1 h/s": "1 h/s",
+  "1 d/s": "1 d/s",
+  "1 wk/s": "1 sem/s",
+  "Play speed": "Velocidad de reproducción",
+  "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Desplaza o pellizca para ampliar, arrastra para moverte · doble clic para verlo todo",
+  "1 min/s": "1 min/s"
 }

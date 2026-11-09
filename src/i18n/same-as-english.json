@@ -102,6 +102,7 @@
     "Landsat 8/9",
     "Latin",
     "Layout",
+    "Live",
     "London",
     "Los Angeles",
     "MIL",
@@ -223,6 +224,7 @@
     "▲ {frp} MW"
   ],
   "es": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
@@ -367,6 +369,7 @@
     "iNaturalist"
   ],
   "fr": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "ALTITUDE",
@@ -565,6 +568,7 @@
     "▲ {frp} MW"
   ],
   "it": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "AFRICA",
@@ -809,6 +813,7 @@
     "▲ {frp} MW"
   ],
   "pt": [
+    "1 min/s",
     "1090 MHz",
     "978 MHz UAT",
     "AIS: --",
