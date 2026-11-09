@@ -206,6 +206,7 @@
     "modules": [
       "src/sources/adsbFields.js",
       "server/providers/live.js",
+      "server/providers/common/compress.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
       "server/providers/aircraft/opensky.js",

@@ -1126,6 +1126,7 @@
   "src/sky/starrySky.test.mjs",
   "src/tooling/skyAssets.test.mjs",
   "src/tooling/skyAssets.paintOut.test.mjs",
+  "src/tooling/responseCompression.test.mjs",
   "scripts/qa-anime-sky.mjs",
   "scripts/qa-sky-model-lighting.mjs",
   "server/providers/overpass/requestAdmission.test.mjs",
