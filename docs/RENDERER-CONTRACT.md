@@ -6,13 +6,19 @@ it meets the contract. The contract is version `0`. Today the application
 still drives Cesium directly; later work moves the layers onto the contract
 one family at a time.
 
-The package exports three modules:
+The package exports four modules:
 
-| Export                             | What it is                                                                     |
-| ---------------------------------- | ------------------------------------------------------------------------------ |
-| `gods-eye-view/render/contract`    | The types, one `.d.ts` per port, plus the run-time member list and shape check |
-| `gods-eye-view/render/stub`        | A renderer that draws nothing, for tests                                       |
-| `gods-eye-view/render/conformance` | The conformance suite, reference scenes and visual comparison                  |
+| Export                               | What it is                                                                             |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| `gods-eye-view/render/contract`      | The types, one `.d.ts` per port, plus the run-time member list and shape check         |
+| `gods-eye-view/render/stub`          | A renderer that draws nothing, for tests                                               |
+| `gods-eye-view/render/camera/events` | The camera port's events: `changed` per listener, `moveStart`/`moveEnd`, command hooks |
+| `gods-eye-view/render/conformance`   | The conformance suite, reference scenes and visual comparison                          |
+
+A camera of its own (a camera controller over a renderer without one) can
+take the camera events from `render/camera/events` and the geodesy it needs
+(`geodesicAt`, `horizonFrom` and the rest) from `gods-eye-view/geo`, so it
+measures and fires exactly as the stub does.
 
 ## Ports
 
@@ -179,6 +185,9 @@ in memory and draws nothing. It has:
 
 `renderer.testing` drives it with `tick()`, `advance(ms)`, `pointer(type, x, y)`,
 `scriptPicks`, `setHeights` and `cacheHeight`, and records its calls.
+`testing.drawnPosition({ set, id }, aheadMs)` is where it draws an item now
+(or `aheadMs` from now), so a
+camera that is not the stub's own can follow drawn items there.
 A listener that throws with nothing subscribed to `error` goes to
 `reportError`; Node has none, so the stub rethrows it on a microtask and
 `node:test` fails the running test. A test that expects a throw subscribes

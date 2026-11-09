@@ -130,3 +130,56 @@ test('a draped rectangle across the antimeridian picks on both sides of it, turn
   assert.ok(!picked(179.5, 0), 'and narrows it');
   r.destroy();
 });
+
+test('the stub says where it draws an item, for a camera that is not its own', () => {
+  const r = createStubRenderer();
+  const t0 = r.frame.time();
+  const from = toEcef({ lon: -97.74, lat: 30.27, height: 1000 });
+  const to = toEcef({ lon: -97.7, lat: 30.27, height: 1000 });
+  const set = r.draw.icons({ id: 'drawn', motionClock: { kind: 'scene' } });
+  set.set([
+    {
+      id: 'm',
+      pos: from,
+      image: 'data:,',
+      size: [16, 16],
+      motion: { kind: 'lerp', from, to, t0, t1: t0 + 60000 },
+    },
+  ]);
+  const at = (p) => [p.x, p.y, p.z];
+  assert.deepEqual(
+    at(r.testing.drawnPosition({ set: 'drawn', id: 'm' })),
+    at(from),
+  );
+  r.frame.setTime(t0 + 30000);
+  const mid = r.testing.drawnPosition({ set: 'drawn', id: 'm' });
+  for (const k of ['x', 'y', 'z'])
+    assert.ok(Math.abs(mid[k] - (from[k] + to[k]) / 2) < 1e-6, k);
+  const ahead = r.testing.drawnPosition({ set: 'drawn', id: 'm' }, 30000);
+  for (const k of ['x', 'y', 'z'])
+    assert.ok(Math.abs(ahead[k] - to[k]) < 1e-6, k);
+  assert.equal(r.testing.drawnPosition({ set: 'drawn', id: 'gone' }), null);
+  assert.equal(r.testing.drawnPosition({ set: 'nothing', id: 'm' }), null);
+  r.destroy();
+});
+
+test('the stub camera ends no move while it follows', () => {
+  const r = createStubRenderer();
+  const seen = [];
+  r.camera.on('moveStart', () => seen.push('start'));
+  r.camera.on('moveEnd', () => seen.push('end'));
+  r.testing.tick();
+  const target = toEcef({ lon: -97.74, lat: 30.27, height: 0 });
+  r.camera.follow({
+    key: 'still',
+    position: () => target,
+    frame: 'enu',
+    viewFrom: { x: 0, y: -500, z: 300 },
+  });
+  r.testing.advance(2000);
+  assert.deepEqual(seen, ['start'], 'moveEnd waits for the follow to end');
+  r.camera.follow(null);
+  r.testing.advance(1000);
+  assert.deepEqual(seen, ['start', 'end']);
+  r.destroy();
+});

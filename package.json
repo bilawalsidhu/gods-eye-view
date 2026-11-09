@@ -298,6 +298,7 @@
     "./geo": "./src/geo/index.js",
     "./render/contract": "./src/render/contract/index.js",
     "./render/stub": "./src/render/stub/index.js",
+    "./render/camera/events": "./src/render/camera/events.js",
     "./render/cesium/unbound": "./src/render/cesium/unbound.js",
     "./render/conformance": "./src/render/conformance/index.js"
   }
