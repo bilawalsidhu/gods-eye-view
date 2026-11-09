@@ -3236,7 +3236,6 @@
       "src/hudLayouts.js",
       "src/hudLayoutPolicy.js",
       "src/ui/radioPanelPlacement.js",
-      "src/cyberSonarGpu.js",
       "src/render/cesium/iconSetPrimitive.js",
       "src/data/iconSet.js",
       "src/data/iconSegment.js",
