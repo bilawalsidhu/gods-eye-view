@@ -989,6 +989,22 @@ test('vessel interaction wire: trail pick does not deselect', () => {
   }
 });
 
+test('vessel interaction wire: a click on open water keeps the ship the bridge rides', () => {
+  const harness = installWireHarness({ id: 'gev-trailing-contact' });
+  try {
+    aisLiveVesselsLayer.setCockpitSubject(harness.record.mmsi);
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(harness.trail.clearCalls, 0);
+    // Released, the same click deselects as it always has.
+    aisLiveVesselsLayer.setCockpitSubject(null);
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test('vessel interaction wire: only the gev-trail: namespace receives the trail no-op', () => {
   const harness = installWireHarness({ id: 'gev-trailing-contact' });
   try {

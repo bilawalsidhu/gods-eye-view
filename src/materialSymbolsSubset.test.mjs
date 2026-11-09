@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WILDLIFE_BADGE_GLYPHS } from './layers/wildlifeSightings/sprites.js';
 
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = path.resolve(SRC_ROOT, '..');
@@ -11,6 +12,9 @@ const INDEX_HTML = path.join(REPO_ROOT, 'index.html');
 /** The glyph written as element text: `<span class="material-symbols-outlined">radar</span>`. */
 const SPAN_TEXT =
   /class="[^"]*material-symbols-outlined[^"]*"[^>]*>\s*([a-z0-9_]+)\s*</g;
+/** A glyph chosen in a Vue template: `<span class="material-symbols-outlined">{{ a ? 'x' : 'y' }}</span>`. */
+const SPAN_MUSTACHE =
+  /class="[^"]*material-symbols-outlined[^"]*"[^>]*>\s*\{\{([^}]{0,400})\}\}\s*</g;
 /** A whole `textContent =` statement, across lines, so a multi-line ternary is read once. */
 const TEXT_ASSIGNMENT = /(?:textContent|innerText)\s*=\s*([^;]{0,400})/gs;
 const STRING_LITERAL = /['"`]([a-z0-9_]{2,})['"`]/g;
@@ -56,6 +60,8 @@ function sourceFiles(directory = SRC_ROOT) {
  */
 function referencedGlyphs() {
   const found = new Map();
+  for (const glyph of Object.values(WILDLIFE_BADGE_GLYPHS))
+    found.set(glyph, 'src/layers/wildlifeSightings/sprites.js');
   for (const file of sourceFiles()) {
     const source = readFileSync(file, 'utf8');
     const relative = path.relative(REPO_ROOT, file).split(path.sep).join('/');
@@ -64,7 +70,24 @@ function referencedGlyphs() {
     };
     for (const match of source.matchAll(SPAN_TEXT)) add(match[1]);
     for (const match of source.matchAll(ICON_PROPERTY)) add(match[1]);
-    for (const match of source.matchAll(TEXT_ASSIGNMENT)) {
+    // A template glyph bound to a computed (`{{ entryIcon }}`) is whatever
+    // that computed returns.
+    for (const [, expression] of source.matchAll(SPAN_MUSTACHE)) {
+      const name = /^\s*([A-Za-z_$][\w$]*)\s*$/.exec(expression)?.[1];
+      if (!name) continue;
+      const body = new RegExp(
+        `\\b${name}\\s*=\\s*computed\\(\\(\\)\\s*=>\\s*\\{([\\s\\S]{0,600}?)\\n\\}\\);`,
+      ).exec(source)?.[1];
+      for (const literal of body?.matchAll(
+        /\breturn\s+['"`]([a-z0-9_]{2,})['"`]/g,
+      ) ?? [])
+        add(literal[1]);
+    }
+    const expressions = [
+      ...source.matchAll(TEXT_ASSIGNMENT),
+      ...source.matchAll(SPAN_MUSTACHE),
+    ];
+    for (const match of expressions) {
       const statement = match[1].replaceAll('?.', '.');
       const assigned = statement.includes('?')
         ? statement.slice(statement.indexOf('?') + 1)

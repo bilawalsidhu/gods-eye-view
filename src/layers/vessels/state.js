@@ -72,6 +72,8 @@ export function createVesselState({ source, services }) {
     activeFocusCount: 0,
     activeLabelCount: 0,
     selectedRecord: null,
+    /** @type {string|null} MMSI whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
+    cockpitSubjectMmsi: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
     /** @type {Cesium.Cartesian3[]} Chronological trail vertices (oldest first) */
