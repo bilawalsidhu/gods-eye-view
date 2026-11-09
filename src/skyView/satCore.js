@@ -78,9 +78,11 @@ const DAY_MS = 86_400_000;
 export const ISS_NORAD = 25544;
 
 /**
- * Core groups in dedupe-priority order: must equal CATALOG_GROUPS in
+ * Core groups in dedupe-priority order: must equal the first
+ * SKY_CORE_GROUPS.length entries of CATALOG_GROUPS in
  * src/layers/satellites/policy.js (asserted by satCore.test.mjs; policy.js
- * imports Cesium, which a worker cannot load).
+ * imports Cesium, which a worker cannot load). The layer appends further
+ * groups (resources, weather, Planet, SAR, science) that the sky does not load.
  */
 export const SKY_CORE_GROUPS = Object.freeze([
   Object.freeze({ tag: 'stations', path: 'stations' }),
