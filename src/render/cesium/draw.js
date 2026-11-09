@@ -251,6 +251,43 @@ export function radiusAt(radius, height) {
   return Math.max(min, Math.min(max, height * factor));
 }
 
+/**
+ * A shape's `animate`, checked: the Cesium renderer pulses alpha, forever.
+ * Null for a shape that does not pulse.
+ */
+function pulseOf(item) {
+  const pulse = item.animate;
+  if (!pulse) return null;
+  if (pulse.property !== 'alpha' || pulse.repeat !== undefined)
+    throw new Error('the Cesium renderer pulses alpha only, forever');
+  if (
+    !Number.isFinite(pulse.from) ||
+    !Number.isFinite(pulse.to) ||
+    !(pulse.periodMs > 0 && Number.isFinite(pulse.periodMs))
+  )
+    throw new Error(
+      'the Cesium renderer pulses between finite alphas, over a positive period',
+    );
+  const plain = (value) =>
+    value == null || typeof value === 'string' || Array.isArray(value);
+  if (!plain(item.fill) || !plain(item.outline))
+    throw new Error(
+      'the Cesium renderer pulses colour fills and outlines only',
+    );
+  return pulse;
+}
+
+/**
+ * A pulse's alpha now: a sine between `from` and `to` on the wall clock,
+ * `periodMs` a swing and back, at their middle at each whole period.
+ * @param {{from: number, to: number, periodMs: number}} pulse
+ * @param {number} now
+ */
+export function pulseAlpha(pulse, now) {
+  const turn = pulse.periodMs > 0 ? (2 * Math.PI * now) / pulse.periodMs : 0;
+  return pulse.from + (pulse.to - pulse.from) * (0.5 + 0.5 * Math.sin(turn));
+}
+
 /** Whether a shape is an ellipse with a radius by camera height. */
 const byCameraHeight = (item) =>
   item.geometry?.kind === 'ellipse' &&
@@ -442,9 +479,17 @@ export function createCesiumDraw({
       if (synced === ICONS_CHANGED) setsVersion += 1;
       requestRender();
     };
+    // A shape's pulse the renderer cannot run is refused before anything
+    // changes.
+    const checkPulses = (list) => {
+      if (kind !== 'shapes') return;
+      for (const item of list) pulseOf(item);
+      if (list.some((item) => item.animate)) record.mayPulse = true;
+    };
     const handle = {
       id: spec.id,
       set(list) {
+        checkPulses(list);
         if (onGpu(record, list, true)) {
           items.clear();
           for (const item of list) items.set(item.id, item);
@@ -460,6 +505,7 @@ export function createCesiumDraw({
         requestRender();
       },
       upsert(list) {
+        checkPulses(list);
         if (onGpu(record, list)) {
           for (const item of list) items.set(item.id, item);
           record.gpu.write(list);
@@ -3016,6 +3062,14 @@ export function createCesiumDraw({
         showOn(part.ground, part.id, part.pendingShow);
         part.pendingShow = undefined;
       }
+      if (
+        part.pendingColour !== undefined &&
+        part.ground &&
+        !part.ground.isDestroyed()
+      ) {
+        colourOn(part.ground, part.id, part.pendingColour);
+        part.pendingColour = undefined;
+      }
     }
     for (const part of record.lineParts?.values() ?? []) {
       if (part.batchHidden && part.batch && !part.batch.isDestroyed())
@@ -3396,6 +3450,8 @@ export function createCesiumDraw({
         ground: null,
         // Radii by camera height as drawn (`followCameraHeight`).
         radii: radiiOf(item),
+        pulse: pulseOf(item),
+        show: item.show !== false,
       };
       parts.set(item.id, part);
       const show = new Cesium.ShowGeometryInstanceAttribute(
@@ -3575,16 +3631,28 @@ export function createCesiumDraw({
    */
   function patchShapes(record, list) {
     const parts = record.shapeParts;
-    if (record.kind !== 'shapes' || !parts) return false;
-    // Each item's way in: `true` moves it (`moveShape`), else it only
-    // shows, hides or takes its `meta`.
+    const solids = record.solidParts;
+    if (record.kind !== 'shapes' || (!parts && !solids)) return false;
+    // Each item's way in: `true` moves it (`moveShape`), `'solid'` changes
+    // an unclamped one in place, `'recolour'` recolours a clamped one in
+    // place, else it only shows, hides or takes its `meta`.
     const moves = [];
     for (const item of list) {
-      const was = parts.get(item.id);
+      const solid = solids?.get(item.id);
+      if (solid) {
+        if (!solidPatchable(solid, item)) return false;
+        moves.push('solid');
+        continue;
+      }
+      const was = parts?.get(item.id);
       if (!was) return false;
       if (was.ground?.isDestroyed() || was.batch?.isDestroyed()) return false;
       if (sameLook(was, item)) {
         moves.push(false);
+        continue;
+      }
+      if (groundRecolourable(was, item)) {
+        moves.push('recolour');
         continue;
       }
       if (!movable(record, was, item)) return false;
@@ -3592,8 +3660,8 @@ export function createCesiumDraw({
     }
     // Drawn alone after this upsert: a few at most, or the batches rebuild.
     const alone = new Set();
-    for (const [id, part] of parts) if (part.solo) alone.add(id);
-    list.forEach((item, k) => moves[k] && alone.add(item.id));
+    for (const [id, part] of parts ?? []) if (part.solo) alone.add(id);
+    list.forEach((item, k) => moves[k] === true && alone.add(item.id));
     // Those the host still retiring draws alone count too, until it goes.
     let retiringAlone = 0;
     if (record.retiring)
@@ -3602,11 +3670,14 @@ export function createCesiumDraw({
           retiringAlone += 1;
     if (alone.size + retiringAlone > MOVING_SHAPES) return false;
     list.forEach((item, k) => {
+      if (moves[k] === 'solid') return patchSolid(solids.get(item.id), item);
       const was = parts.get(item.id);
-      if (moves[k]) return moveShape(record, was, item);
+      if (moves[k] === true) return moveShape(record, was, item);
+      if (moves[k] === 'recolour') recolourGround(was, item);
       if (!was.ground) return;
       was.id.meta = item.meta;
       const show = item.show !== false;
+      was.show = show;
       if (was.ground.ready) {
         showOn(was.ground, was.id, show);
         was.pendingShow = undefined;
@@ -3616,6 +3687,194 @@ export function createCesiumDraw({
       } else was.pendingShow = show;
     });
     return true;
+  }
+
+  /** Whether a fill or outline is a plain colour (or none). */
+  const plainColour = (value) =>
+    value == null || typeof value === 'string' || Array.isArray(value);
+
+  /**
+   * How a shape draws but for its colours, pulse, show and `meta`, and
+   * whether it has a fill and an outline: shapes alike in it draw alike,
+   * but for their colours.
+   */
+  const colourlessLookOf = (item) => {
+    const { show, meta, fill, outline, animate, ...look } = item;
+    return plainCopy({
+      ...look,
+      filled: fill != null,
+      outlined: outline != null,
+    });
+  };
+
+  /**
+   * Whether an upsert changes a shape's colours, its pulse, its show or its
+   * `meta` and nothing else, its fill and outline staying plain colours:
+   * those it takes in place.
+   */
+  function colourOnly(look, item) {
+    if (!plainColour(item.fill) || !plainColour(item.outline)) return false;
+    if (!plainColour(look.fill) || !plainColour(look.outline)) return false;
+    return sameValues(colourlessLookOf(look), colourlessLookOf(item));
+  }
+
+  /**
+   * Whether a clamped colour fill's upsert recolours it (or changes its
+   * pulse), and changes nothing else but its show and `meta`.
+   */
+  const groundRecolourable = (was, item) =>
+    Boolean(was.id && was.ground) &&
+    colourFill(item) &&
+    colourFill(was.look) &&
+    colourOnly(was.look, item) &&
+    !sameValues(
+      plainCopy({ fill: was.look.fill, animate: was.look.animate ?? null }),
+      { fill: item.fill, animate: item.animate ?? null },
+    );
+
+  /**
+   * Whether an unclamped shape's upsert only recolours, pulses, shows or
+   * hides it: a colour drawn opaque cannot become translucent in place.
+   */
+  function solidPatchable(part, item) {
+    if (!colourOnly(part.look, item)) return false;
+    if (part.fill?.isDestroyed?.() || part.outline?.isDestroyed?.())
+      return false;
+    // Not yet drawn: it has no colours to write, and rebuilds instead.
+    if (
+      (part.fill && !part.fill.ready) ||
+      (part.outline && !part.outline.ready)
+    )
+      return false;
+    const pulses = Boolean(item.animate);
+    const fits = (translucent, colour) =>
+      colour == null || translucent || (!pulses && toColor(colour).alpha >= 1);
+    // Ring outlines are polylines, whose materials take any alpha in place.
+    return (
+      fits(part.translucent.fill, item.fill) &&
+      fits(part.translucent.outline || !part.outline, item.outline)
+    );
+  }
+
+  /** An instance's colour, in a ready primitive. */
+  function colourOn(primitive, id, color) {
+    const attributes = primitive.getGeometryInstanceAttributes(id);
+    attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
+      color,
+      attributes.color,
+    );
+  }
+
+  /** An unclamped shape changed in place: its colours, pulse, show and `meta`. */
+  function patchSolid(part, item) {
+    part.look = lookOf(item);
+    part.pulse = pulseOf(item);
+    part.id.meta = item.meta;
+    part.show = item.show !== false;
+    for (const primitive of [part.fill, part.outline])
+      if (primitive) primitive.show = part.show;
+    for (const polyline of part.rings) polyline.show = part.show;
+    paintSolid(
+      part,
+      part.pulse ? pulseAlpha(part.pulse, performance.now()) : null,
+    );
+  }
+
+  /**
+   * Write an unclamped shape's colours where it draws: its own, or with
+   * `alpha` (a pulse's) in place of theirs. A primitive not yet ready
+   * takes them when it is (`runPulses`, or its next patch).
+   */
+  function paintSolid(part, alpha) {
+    const look = part.look;
+    // Primitives copy the colour they are given; polylines keep theirs.
+    const tint = (colour, result) => {
+      const base = baseColour(part, colour);
+      return alpha === null
+        ? Cesium.Color.clone(base, result)
+        : base.withAlpha(alpha, result);
+    };
+    if (look.fill && part.fill?.ready && !part.fill.isDestroyed())
+      colourOn(part.fill, part.id, tint(look.fill, scratchColour));
+    if (look.outline) {
+      if (part.outline?.ready && !part.outline.isDestroyed())
+        colourOn(part.outline, part.id, tint(look.outline, scratchColour));
+      for (const polyline of part.rings)
+        polyline.material.uniforms.color = tint(look.outline);
+    }
+  }
+
+  /**
+   * A clamped colour fill recoloured in place, on its ground primitive when
+   * it is ready, else once it is (`showPending`).
+   */
+  function recolourGround(part, item) {
+    part.look = lookOf(item);
+    part.pulse = pulseOf(item);
+    const colour = toColor(item.fill);
+    if (part.ground.ready) {
+      colourOn(part.ground, part.id, colour);
+      part.pendingColour = undefined;
+    } else part.pendingColour = colour;
+  }
+
+  /**
+   * Before a frame draws: pulsing shapes take their alpha now, where they
+   * draw (on primitives that are ready). Whether any pulses, so frames go
+   * on being asked for.
+   */
+  function runPulses() {
+    const now = performance.now();
+    let pulsing = false;
+    for (const record of sets.values()) {
+      if (record.kind !== 'shapes' || record.spec.show === false) continue;
+      if (!record.mayPulse && !record.retiring) continue;
+      for (const part of record.solidParts?.values() ?? []) {
+        if (!part.pulse || !part.show) continue;
+        // Only what it draws pulses: a shape with nothing drawn asks for
+        // no frames.
+        const live = (primitive) => primitive && !primitive.isDestroyed();
+        if (!live(part.fill) && !live(part.outline) && !part.rings.length)
+          continue;
+        pulsing = true;
+        paintSolid(part, pulseAlpha(part.pulse, now));
+      }
+      for (const parts of [record.shapeParts, record.retiringShapeParts])
+        for (const part of parts?.values() ?? []) {
+          if (!part.pulse || !part.show || !part.ground) continue;
+          const ground = part.ground;
+          if (ground.isDestroyed()) continue;
+          // One still building asks for frames, to pulse once it is ready.
+          pulsing = true;
+          if (!ground.ready) continue;
+          colourOn(
+            ground,
+            part.id,
+            baseColour(part, part.look.fill).withAlpha(
+              pulseAlpha(part.pulse, now),
+              scratchColour,
+            ),
+          );
+        }
+    }
+    return pulsing;
+  }
+
+  const scratchColour = new Cesium.Color();
+
+  /**
+   * A part's colour as a Cesium colour, parsed once for each colour its
+   * look holds (a patch gives it a new look, and new values).
+   */
+  function baseColour(part, colour) {
+    const cache = part.baseColours ?? (part.baseColours = new Map());
+    let base = cache.get(colour);
+    if (!base) {
+      if (cache.size > 4) cache.clear();
+      base = toColor(colour);
+      cache.set(colour, base);
+    }
+    return base;
   }
 
   /** Whether a clamped item is a plain colour fill, drawn in a batch. */
@@ -3672,6 +3931,9 @@ export function createCesiumDraw({
     part.pendingShow = undefined;
     part.look = lookOf(item);
     part.radii = radiiOf(item);
+    part.pulse = pulseOf(item);
+    part.show = item.show !== false;
+    part.pendingColour = undefined;
     part.id.meta = item.meta;
     const pickable = record.spec.pickable !== false;
     const Ground = pickable
@@ -3783,9 +4045,18 @@ export function createCesiumDraw({
   }
 
   function buildShapes(record) {
+    // Refused before anything is built: a pulse it cannot run.
+    record.mayPulse = false;
+    for (const item of record.items.values())
+      if (pulseOf(item)) record.mayPulse = true;
     const host = new Cesium.PrimitiveCollection();
     const outlines = new Cesium.PolylineCollection();
     const clamped = [];
+    // Each unclamped item as drawn, for upserts that only recolour, show or
+    // hide it (`patchShapes`), and its pulse.
+    // Published once the build has gone through.
+    const solids = new Map();
+    record.solidParts = null;
     // Image fills' materials hold their textures, which primitives leave
     // alone: the host destroys them as it goes.
     const materials = [];
@@ -3820,6 +4091,19 @@ export function createCesiumDraw({
         throw new Error('the Cesium renderer fills shapes with colours only');
       const shape = shapeGeometry(item);
       const id = pickId(record, item);
+      const pulse = pulseOf(item);
+      const part = {
+        look: lookOf(item),
+        id,
+        fill: null,
+        outline: null,
+        rings: [],
+        pulse,
+        // A pulsing colour is drawn translucent whatever its alpha now.
+        translucent: { fill: false, outline: false },
+        show: true,
+      };
+      solids.set(item.id, part);
       const solid =
         item.extrudeHeight !== undefined || item.geometry.kind === 'box';
       // `lit`: shaded by Cesium's light, or flat; by default solids are lit.
@@ -3831,7 +4115,7 @@ export function createCesiumDraw({
           );
         // What lies inside the volume is tinted: the tiles and terrain it
         // covers, as `clampTo` names them.
-        host.add(
+        part.fill = host.add(
           new Cesium.ClassificationPrimitive({
             geometryInstances: new Cesium.GeometryInstance({
               geometry: shape.fill,
@@ -3877,7 +4161,8 @@ export function createCesiumDraw({
         );
       } else if (item.fill && !item.outlineOnly) {
         const color = toColor(item.fill);
-        host.add(
+        part.translucent.fill = color.alpha < 1 || Boolean(pulse);
+        part.fill = host.add(
           new Cesium.Primitive({
             geometryInstances: new Cesium.GeometryInstance({
               geometry: shape.fill,
@@ -3888,7 +4173,7 @@ export function createCesiumDraw({
               id,
             }),
             appearance: new Cesium.PerInstanceColorAppearance({
-              translucent: color.alpha < 1,
+              translucent: part.translucent.fill,
               closed: solid,
               // Flat shapes unlit by default: lit, their faces shade by
               // the light (a lit box's sides differ, an unlit one's match).
@@ -3901,7 +4186,8 @@ export function createCesiumDraw({
       }
       if (item.outline && shape.outline) {
         const color = toColor(item.outline);
-        host.add(
+        part.translucent.outline = color.alpha < 1 || Boolean(pulse);
+        part.outline = host.add(
           new Cesium.Primitive({
             geometryInstances: new Cesium.GeometryInstance({
               geometry: shape.outline,
@@ -3912,7 +4198,7 @@ export function createCesiumDraw({
             }),
             appearance: new Cesium.PerInstanceColorAppearance({
               flat: true,
-              translucent: color.alpha < 1,
+              translucent: part.translucent.outline,
               renderState: {
                 // Clamped to what the context draws, as entities do.
                 lineWidth:
@@ -3929,17 +4215,20 @@ export function createCesiumDraw({
         );
       } else if (item.outline && shape.rings)
         for (const ring of shape.rings)
-          outlines.add({
-            positions: [...ring, ring[0]],
-            width: item.outlineWidth ?? 1,
-            material: Cesium.Material.fromType('Color', {
-              color: toColor(item.outline),
+          part.rings.push(
+            outlines.add({
+              positions: [...ring, ring[0]],
+              width: item.outlineWidth ?? 1,
+              material: Cesium.Material.fromType('Color', {
+                color: toColor(item.outline),
+              }),
+              id,
             }),
-            id,
-          });
+          );
     }
     host.add(outlines);
     const ground = groundFills(record, clamped);
+    record.solidParts = solids;
     if (!ground.length) return replaceHost(record, host);
     replaceHost(
       record,
@@ -3961,6 +4250,8 @@ export function createCesiumDraw({
     requestRender,
   });
   const buildModels = (record) => modelSets.build(record);
+  // Whether shapes pulsed in the last frame, which draws on in the next.
+  let pulsing = false;
   const lineWidth = (px) =>
     typeof scene.clampLineWidth === 'function'
       ? scene.clampLineWidth(px)
@@ -4078,6 +4369,7 @@ export function createCesiumDraw({
     /** Each frame, before it draws: the horizon cull. */
     beforeRender() {
       followCameraHeight();
+      pulsing = runPulses();
       cullHorizon();
       runFlows();
       for (const record of sets.values())
@@ -4110,6 +4402,7 @@ export function createCesiumDraw({
       if (
         [...sets.values()].some((record) => record.gpu?.animating()) ||
         flowing() ||
+        pulsing ||
         playing
       )
         requestRender();
