@@ -140,3 +140,14 @@ for (const locale of ['es', 'ru']) {
     assert.equal(shown.label, t(error).toLocaleUpperCase(locale));
   });
 }
+
+test('the place names loading beside the layers are named in the language', () => {
+  setLocale('de');
+  const localized = localizeLoadingPresentation({
+    state: 'loading',
+    label: 'LOADING LIVE DATA',
+    detail: 'Satellites · Place names',
+  });
+  assert.equal(localized.detail, 'Satelliten · Ortsnamen');
+  setLocale('en');
+});
