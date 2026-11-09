@@ -2751,6 +2751,11 @@
     "one": "Hier noch kein Feed · {n} Region verfügbar",
     "other": "Hier noch kein Feed · {n} Regionen verfügbar"
   },
+  "Fly below {km} km to a covered city": "Unter {km} km Höhe zu einer abgedeckten Stadt fliegen",
+  "No bike share here yet · {n} systems available": {
+    "one": "Hier noch kein Bikesharing · {n} System verfügbar",
+    "other": "Hier noch kein Bikesharing · {n} Systeme verfügbar"
+  },
   "degraded": "eingeschränkt",
   "stale": "veraltet",
   "partial": "teilweise",

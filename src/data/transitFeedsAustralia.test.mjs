@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { transitFeedCredit } from './dataCredits.js';
-import { transitUpstreamHeaders } from './transitProxy.js';
 import {
   getTransitFeed,
   publicTransitCatalog,
@@ -14,41 +13,23 @@ import {
 // Route ids below are as published in the live feeds and the operators'
 // static routes.txt (checked 16 Oct 2026).
 
-test('Australian feeds are keyless, routable and cover their own city only', () => {
+test('TransLink feeds are keyless, routable and cover their own city only', () => {
   const seq = getTransitFeed('translink-seq');
   const cairns = getTransitFeed('translink-cairns');
-  const adelaide = getTransitFeed('adelaide-metro');
   assert.equal(
     cairns.url,
     'https://gtfsrt.api.translink.com.au/api/realtime/CNS/VehiclePositions',
   );
-  assert.equal(
-    adelaide.url,
-    'https://gtfs.adelaidemetro.com.au/v1/realtime/vehicle_positions',
-  );
   for (const feed of [seq, cairns]) {
     assert.equal(feed.headers, undefined, `${feed.id} needs no extra header`);
   }
-  for (const feed of [seq, cairns, adelaide]) {
+  for (const feed of [seq, cairns]) {
     assert.equal(feed.license, 'CC BY 4.0');
   }
   const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
   assert.deepEqual(ids(-27.4698, 153.0251), ['translink-seq']);
   assert.deepEqual(ids(-16.9186, 145.7781), ['translink-cairns']);
-  assert.deepEqual(ids(-34.9285, 138.6007), ['adelaide-metro']);
   assert.deepEqual(ids(-37.8136, 144.9631), [], 'Melbourne has no feed');
-});
-
-test('Adelaide is asked for its own protobuf type, or its gateway answers base64 JSON', () => {
-  // Offered the default Accept list (application/x-protobuf, ..., */*), the
-  // Adelaide Metro gateway replies application/json carrying the protobuf as
-  // base64, which the decoder rejects. Its own media type gets raw protobuf.
-  const adelaide = getTransitFeed('adelaide-metro');
-  assert.deepEqual(Object.keys(adelaide.headers), ['Accept']);
-  const headers = transitUpstreamHeaders(adelaide);
-  assert.equal(headers.Accept, 'application/x-google-protobuf');
-  assert.equal(headers['Accept-Encoding'], 'gzip');
-  assert.match(headers['User-Agent'], /gods-eye-view/);
 });
 
 test('TransLink route ids resolve rail, light rail and ferries; buses stay a default', () => {
@@ -79,6 +60,7 @@ test('TransLink route ids resolve rail, light rail and ferries; buses stay a def
 });
 
 test('Adelaide Metro route ids resolve trains, trams and the SeaLink ferry', () => {
+  // The feed entry is main's; this PR adds only its routeMode.
   const adelaide = getTransitFeed('adelaide-metro');
   const cases = [
     ['BEL', 'rail'],
@@ -106,7 +88,7 @@ test('Adelaide Metro route ids resolve trains, trams and the SeaLink ferry', () 
   }
 });
 
-test('Australian feeds credit the operator and department as text', () => {
+test('TransLink feeds credit the operator and department as text', () => {
   const credit = (id) =>
     transitFeedCredit(publicTransitCatalog().find((feed) => feed.id === id))
       .html;
@@ -116,24 +98,23 @@ test('Australian feeds credit the operator and department as text', () => {
       /^Transit \(Translink, Department of Transport and Main Roads\): <a href="https:\/\/translink\.com\.au\/about-translink\/open-data"[^>]*>CC BY 4\.0<\/a>$/,
     );
   }
-  assert.match(
-    credit('adelaide-metro'),
-    /^Transit \(Adelaide Metro – Department for Infrastructure and Transport, South Australia\): <a href="https:\/\/data\.sa\.gov\.au\/[^"]+"[^>]*>CC BY 4\.0<\/a>$/,
-  );
 });
 
-test('DATA_SOURCES documents the Australian feeds in the transit row style', () => {
+test('DATA_SOURCES documents the TransLink feeds in the transit row style', () => {
   const rows = readFileSync(
     new URL('../../DATA_SOURCES.md', import.meta.url),
     'utf8',
   ).split('\n');
   const translink = rows.find((line) => line.startsWith('| **TransLink**'));
   assert.match(translink, /South East Queensland and Cairns/);
-  const adelaide = rows.find((line) => line.startsWith('| **Adelaide Metro**'));
-  assert.ok(adelaide, 'Adelaide Metro row exists');
-  for (const row of [translink, adelaide]) {
-    assert.match(row, /open realtime vehicle data/);
-    assert.match(row, /published for developer use and not against their use/);
-    assert.doesNotMatch(row, /licen[cs]e|CC BY|terms/i);
-  }
+  assert.match(translink, /open realtime vehicle data/);
+  assert.match(
+    translink,
+    /published for developer use and not against their use/,
+  );
+  assert.doesNotMatch(translink, /licen[cs]e|CC BY|terms/i);
+  const adelaide = rows.filter((line) =>
+    line.startsWith('| **Adelaide Metro**'),
+  );
+  assert.equal(adelaide.length, 1, 'exactly one Adelaide Metro row (main’s)');
 });

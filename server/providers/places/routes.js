@@ -227,6 +227,11 @@ export function installRouteMiddleware(
   // only shape that asks the upstream for them. A response WITHOUT steps is
   // byte for byte what this endpoint has always returned.
   middlewares.use('/api/route', async (req, res) => {
+    if (req.method !== 'GET') {
+      res.writeHead(405, { 'Content-Type': 'application/json', Allow: 'GET' });
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return;
+    }
     const fail = (msg) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: msg }));
