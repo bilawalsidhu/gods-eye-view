@@ -62,6 +62,8 @@
   "src/render/motion/iconBook.test.mjs",
   "src/render/camera/poseSignature.test.mjs",
   "src/render/cesium/internals.test.mjs",
+  "src/render/cesium/uploadProbe.js",
+  "src/render/cesium/uploadProbe.test.mjs",
   "src/render/cesium/tileRequests.js",
   "src/render/cesium/tileRequests.test.mjs",
   "src/queries/heights.test.mjs",

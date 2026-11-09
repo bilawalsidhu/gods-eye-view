@@ -108,6 +108,7 @@ export function createTesting({ state, parts }) {
         updatePlayback(entry, now, mono);
         parts.rendering.placeSample(entry);
       }
+      parts.rendering.flushMarkers();
       clearTimeout(state._floorTimer);
       state._floorTimer = null;
       // Establish the fixture clock without the live re-entry reset.
@@ -147,11 +148,20 @@ export function createTesting({ state, parts }) {
         parts.rendering.placeSample(entry);
         parts.rendering.schedulePlayback(entry);
       }
+      parts.rendering.flushMarkers();
       parts.rendering.syncRenderHold();
     },
-    /** Measure inside the renderer's frames with fixed typed storage. */
-    _measureTransitFramesForTest(durationMs = 12000) {
-      return parts.rendering.measureFrames(durationMs);
+    /**
+     * Measure inside the renderer's frames with fixed typed storage;
+     * `uploads` counts what the renderer uploads for the markers' sets
+     * (`src/render/cesium/uploadProbe.js` on the default renderer).
+     */
+    _measureTransitFramesForTest(durationMs = 12000, uploads = null) {
+      return parts.rendering.measureFrames(durationMs, uploads);
+    },
+    /** The ids of the markers' two draw sets: still, then moving. */
+    _transitSetIdsForTest() {
+      return parts.rendering.setIds();
     },
     _transitVisibilityForTest() {
       return [...state._vehicles.values()].map((entry) => {

@@ -23,9 +23,14 @@ export function createState({ services }) {
 
   /** The viewer the layer draws on, or null. */
   state._viewer = null;
-  /** The stationary markers' billboard collection, or null. */
-  state._markers = null;
-  state._animatedMarkers = null;
+  /** The still markers' icon draw set, and the moving ones', or null. */
+  state._stillIcons = null;
+  state._movingIcons = null;
+  /** Their sprite-order registrations. */
+  state._stillSprite = null;
+  state._movingSprite = null;
+  /** Whether the markers are shown (the layer is on). */
+  state._markersShown = false;
   state._visible = new Set();
   state._visibilityTimer = null;
   state._maintenanceTimer = null;
@@ -119,7 +124,8 @@ export function createState({ services }) {
   state._error = null;
   state._limitWarned = false;
 
-  // Where `samplePosition` writes a marker's position, each frame.
+  // Where `samplePosition` writes a marker's position, each frame, before
+  // it is copied into the marker.
   state._scratchCartesian = { x: 0, y: 0, z: 0 };
 
   return state;

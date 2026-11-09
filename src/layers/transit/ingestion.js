@@ -72,7 +72,7 @@ export function createIngestion({ state, services, parts, source }) {
     const entry = state._vehicles.get(key);
     if (!entry) return;
     if (state._selectedKey === key) parts.selection.clearSelection();
-    if (entry.marker) entry.markerCollection?.remove(entry.marker);
+    parts.rendering.removeMarker(entry);
     entry.marker = null;
     entry.detectContact = null;
     state._visible.delete(entry);
@@ -414,6 +414,8 @@ export function createIngestion({ state, services, parts, source }) {
     // trip and must never sit on the render path.
     parts.height.anchorFloors();
     state._detectRevision++;
+    // New markers are drawn now, hidden until the visibility sweep shows them.
+    parts.rendering.flushMarkers();
     parts.rendering.requestVisibility();
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-poll');

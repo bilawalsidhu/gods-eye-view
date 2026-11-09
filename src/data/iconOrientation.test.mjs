@@ -747,3 +747,93 @@ test('the perspective helper is continuous through the sub-pixel band, not a 23Â
       `exact alone at ${s.separation.toFixed(2)} px`,
     );
 });
+
+test('the port-side perspective rotation matches the Cesium one through the whole band', async () => {
+  // The transit layer turns its icons with `perspectiveCourseRotation`, which
+  // projects through the query port and blends with the camera-port basis;
+  // given the same projection and basis it must answer as the scene helper.
+  const { perspectiveCourseRotation } = await import('./screenRotation.js');
+  let compared = 0;
+  for (let altitude = 500; altitude <= 600_000; altitude *= 1.05) {
+    const scene = obliqueScene(altitude, 45);
+    const project = (p) => {
+      const s = Cesium.SceneTransforms.worldToWindowCoordinates(
+        scene,
+        new Cesium.Cartesian3(p.x, p.y, p.z),
+      );
+      return s ? { x: s.x, y: s.y } : null;
+    };
+    const basis = { right: scene.camera.rightWC, up: scene.camera.upWC };
+    for (const [east, north] of [
+      [0.7, 1.2],
+      [-0.4, 0.9],
+      [0, 0.5],
+      [0, -2],
+    ])
+      for (const course of [0, 37, 90, 181, 300]) {
+        const contact = Cesium.Cartesian3.fromDegrees(
+          (east * altitude) / 111_320,
+          (north * altitude) / 111_320,
+          0,
+        );
+        for (const previous of [null, 0.25]) {
+          const expected = perspectiveProjectedRotation(
+            scene,
+            contact,
+            course,
+            previous,
+          );
+          const actual = perspectiveCourseRotation(
+            project,
+            basis,
+            { x: contact.x, y: contact.y, z: contact.z },
+            course,
+            previous,
+          );
+          if (expected === null || actual === null)
+            assert.equal(actual, expected);
+          else
+            assert.ok(
+              Math.abs(actual - expected) < 1e-9,
+              `${altitude.toFixed(0)} m, course ${course}: ${actual} vs ${expected}`,
+            );
+          compared += 1;
+        }
+      }
+  }
+  assert.ok(compared > 1000);
+  assert.equal(perspectiveCourseRotation(null, null, null, 0, 0.5), 0.5);
+});
+
+test('the port-side perspective rotation probes along the east-north frame, poles included', async () => {
+  const { perspectiveCourseRotation, PERSPECTIVE_PROBE_M: probeM } =
+    await import('./screenRotation.js');
+  const { eastNorthUp, frameVector } = await import('../geo/frames.js');
+  const { fromDegrees } = await import('../geo/ellipsoid.js');
+  for (const position of [
+    fromDegrees(-71.06, 42.36, 12),
+    fromDegrees(150, -60, 0),
+    { x: 0, y: 0, z: 6_356_752.314245 },
+  ])
+    for (const course of [0, 45, 200]) {
+      const seen = [];
+      perspectiveCourseRotation(
+        (p) => (seen.push({ x: p.x, y: p.y, z: p.z }), { x: 0, y: 0 }),
+        null,
+        position,
+        course,
+      );
+      const rad = (course * Math.PI) / 180;
+      const forward = frameVector(eastNorthUp(position), {
+        x: Math.sin(rad) * probeM,
+        y: Math.cos(rad) * probeM,
+        z: 0,
+      });
+      const [, ahead] = seen;
+      for (const axis of ['x', 'y', 'z'])
+        assert.ok(
+          Math.abs(ahead[axis] - (position[axis] + forward[axis])) < 1e-6,
+          `${axis} at course ${course}`,
+        );
+    }
+});

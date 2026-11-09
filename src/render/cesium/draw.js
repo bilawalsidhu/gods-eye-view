@@ -966,21 +966,29 @@ export function createCesiumDraw({
     };
   }
 
-  /** Whether `item` draws as `style` (`iconStyleOf`) says, but its position. */
-  function sameIconStyle(style, record, item) {
-    const sameList = (a, b) => {
-      if (!a || !b) return a === b;
-      if (a.length !== b.length) return false;
-      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-      return true;
-    };
-    const sameCurve = (a, c) =>
-      !a || !c
-        ? !a && !c
-        : a[0] === c.near &&
+  /** Two lists, or two missing ones, alike element by element. */
+  function sameList(a, b) {
+    if (!a || !b) return a === b;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  /** A curve as `iconStyleOf` keeps it, and one as an item gives it. */
+  function sameCurve(a, c) {
+    return !a || !c
+      ? !a && !c
+      : a[0] === c.near &&
           a[1] === c.nearValue &&
           a[2] === c.far &&
           a[3] === c.farValue;
+  }
+
+  /**
+   * Whether `item` draws as `style` (`iconStyleOf`) says, but its position
+   * and, turned on screen, its rotation (`moveIcon` writes both).
+   */
+  function sameIconStyle(style, record, item) {
     const color = item.color;
     return (
       style.width === item.size[0] &&
@@ -1000,7 +1008,7 @@ export function createCesiumDraw({
       sameCurve(style.scaleByDistance, item.scaleByDistance) &&
       sameCurve(style.fadeByDistance, item.fadeByDistance) &&
       style.rotationMode === item.rotationMode &&
-      style.rotation === item.rotation &&
+      (item.rotationMode === 'screen' || style.rotation === item.rotation) &&
       style.course === item.course
     );
   }
@@ -1009,7 +1017,8 @@ export function createCesiumDraw({
   const movedAxis = new Cesium.Cartesian3();
   /**
    * Move a drawn icon whose look is unchanged (`sameIconStyle`): its
-   * position, the course rotation that follows it, and its pick record.
+   * position, the course rotation that follows it or the screen rotation
+   * it is given, and its pick record.
    */
   function moveIcon(record, entry, item) {
     const { billboard, placed } = entry;
@@ -1023,6 +1032,10 @@ export function createCesiumDraw({
         Cesium.Cartesian3.UNIT_Y,
         movedAxis,
       );
+    }
+    if (item.rotationMode === 'screen') {
+      billboard.rotation = item.rotation ?? 0;
+      entry.style.rotation = item.rotation;
     }
     billboard.id.meta = item.meta;
     billboard.id.lodGroup = item.lodGroup;

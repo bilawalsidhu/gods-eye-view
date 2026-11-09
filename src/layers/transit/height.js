@@ -185,7 +185,7 @@ export function createHeight({ state, services, parts }) {
     meshUsed += mesh.length;
     for (let i = 0; i < dem.length; i += 8)
       warmGroundFloor(dem.slice(i, i + 8));
-    parts.rendering.sampleMeshFloors(mesh, entries);
+    parts.rendering.sampleMeshFloors(mesh);
     // Cached completions can be adopted now; asynchronous completions are
     // adopted by the next bounded reread.
     for (const entry of entries) parts.trails.prepareEntry(entry);

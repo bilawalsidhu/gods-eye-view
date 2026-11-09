@@ -2883,6 +2883,13 @@ test('icons that only move are moved on the billboards they have, and still rest
   assert.equal(a.width, 30);
   const moved = Cesium.Cartographic.fromCartesian(a.position);
   assert.ok(Math.abs(Cesium.Math.toDegrees(moved.longitude) - 4) < 1e-9);
+  // Turning on screen as it moves is written with the move, not restyled.
+  set.upsert([icon(5, { color: [0, 1, 0, 1], rotation: 2, size: [30, 30] })]);
+  assert.equal(restyles, 1, 'a screen turn is not a restyle');
+  assert.equal(a.rotation, 2);
+  set.upsert([icon(5, { color: [0, 1, 0, 1], rotation: 2, size: [31, 30] })]);
+  assert.equal(restyles, 2, 'a new size still restyles');
+  assert.equal(a.rotation, 2);
 
   // A course-turned icon's axis follows where it moves.
   const course = (lon) =>
@@ -6160,3 +6167,117 @@ test('a clamped ellipse filled with a radial rim drapes its material, finely cut
     assert.deepEqual([...shows.show], [0]);
     set.dispose();
   }));
+
+test('the transit layer draws its vehicles as two icon sets, moving a marker between them, on a viewer of its own', async () => {
+  const { createRendering } = await import('../../layers/transit/rendering.js');
+  const { createState } = await import('../../layers/transit/state.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const noop = () => {};
+  const registered = [];
+  const services = {
+    overlays: {
+      setOverlayEntries: noop,
+      setOverlaySourceVisible: noop,
+      clearOverlaySource: noop,
+    },
+    render: {
+      governorRequestRender: noop,
+      holdContinuousRender: noop,
+      releaseContinuousRender: noop,
+    },
+    sprites: {
+      registerSpriteSet: (layerId, setId) => {
+        const entry = { drawSetId: setId };
+        registered.push([layerId, setId]);
+        return entry;
+      },
+      unregisterSpriteCollection: noop,
+    },
+  };
+  const state = createState({ services });
+  state._viewer = viewer;
+  const rendering = createRendering({
+    state,
+    services,
+    parts: { height: { nearGround: () => false }, trails: { update: noop } },
+  });
+  rendering.createMarkers(viewer);
+  const [stillId, movingId] = rendering.setIds();
+  assert.deepEqual(registered, [
+    ['transit', stillId],
+    ['transit-motion', movingId],
+  ]);
+  const hostOf = (setId) => scene.added.find((h) => h.drawSetId === setId);
+  assert.ok(hostOf(stillId) instanceof Cesium.BillboardCollection);
+  assert.ok(hostOf(movingId) instanceof Cesium.BillboardCollection);
+  assert.equal(hostOf(stillId).show, false, 'hidden until the layer shows');
+  rendering.showMarkers();
+
+  const at = Cesium.Cartesian3.fromDegrees(-71.06, 42.36, 12);
+  const entry = { key: 'mbta:bus', mode: 'bus', toCart: at };
+  rendering.addMarker(entry.key, entry);
+  entry.marker.show = true;
+  entry.marker.rotation = 0.5;
+  rendering.markDirty(entry);
+  rendering.flushMarkers();
+  const still = hostOf(stillId);
+  assert.equal(still.length, 1);
+  const billboard = still.get(0);
+  assert.equal(billboard.id.set, stillId);
+  assert.equal(billboard.id.id, entry.key);
+  assert.deepEqual(billboard.id.meta, { layer: 'transit', key: entry.key });
+  assert.ok(Cesium.Cartesian3.equalsEpsilon(billboard.position, at, 0, 1e-6));
+  assert.equal(billboard.rotation, 0.5);
+  assert.equal(billboard.show, true);
+  assert.equal(billboard.disableDepthTestDistance, Number.POSITIVE_INFINITY);
+  assert.equal(billboard.width, entry.marker.width);
+  assert.equal(
+    rendering.setNameOf(drawHitOf({ primitive: billboard, id: billboard.id }).set),
+    'still',
+  );
+
+  // Moving it moves the billboard it has.
+  entry.marker.position.z += 10;
+  rendering.markDirty(entry);
+  rendering.flushMarkers();
+  assert.equal(still.get(0), billboard);
+  assert.ok(Math.abs(billboard.position.z - (at.z + 10)) < 1e-6);
+
+  // Starting to move takes it to the moving set and out of the still one.
+  entry.animated = true;
+  rendering.markDirty(entry);
+  rendering.flushMarkers();
+  const moving = hostOf(movingId);
+  assert.equal(moving.length, 1);
+  assert.equal(moving.get(0).id.id, entry.key);
+  assert.equal(moving.get(0).id.set, movingId);
+  const stillNow = hostOf(stillId);
+  const keysInStill = [];
+  for (let i = 0; i < stillNow.length; i += 1)
+    keysInStill.push(stillNow.get(i).id?.id);
+  assert.deepEqual(keysInStill, [], 'no longer drawn in the still set');
+
+  // Markers taken out in one task go in one removal, at its end.
+  const other = { key: 'mbta:tram', mode: 'tram', toCart: at };
+  rendering.addMarker(other.key, other);
+  other.animated = true;
+  rendering.markDirty(other);
+  rendering.flushMarkers();
+  assert.equal(moving.length, 2);
+  const removals = [];
+  const remove = state._movingIcons.remove;
+  state._movingIcons.remove = function (ids) {
+    removals.push([...ids]);
+    return remove.call(this, ids);
+  };
+  rendering.removeMarker(entry);
+  rendering.removeMarker(other);
+  assert.equal(removals.length, 0, 'not yet');
+  await Promise.resolve();
+  assert.deepEqual(removals, [[entry.key, other.key]]);
+  assert.equal(hostOf(movingId).length, 0);
+  rendering.destroyMarkers(viewer);
+  assert.equal(hostOf(stillId), undefined);
+  assert.equal(hostOf(movingId), undefined);
+});

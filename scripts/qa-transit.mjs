@@ -815,25 +815,38 @@ try {
           const layer =
             window.__godsEyeView.dataManager.layers.get('transit').module;
           const state = layer._transitStateForTest();
-          const entry = state._vehicles.get(key);
+          const scene = window.__godsEyeView.viewer.scene;
+          // The billboard the draw port drew for it, and the set drawing it.
+          const setIds = layer._transitSetIdsForTest();
+          let billboard = null,
+            setId = null;
+          for (let i = 0; !billboard && i < scene.primitives.length; i++) {
+            const host = scene.primitives.get(i);
+            if (!setIds.includes(host?.drawSetId)) continue;
+            for (let j = 0; j < host.length; j++)
+              if (host.get(j)?.id?.id === key) {
+                billboard = host.get(j);
+                setId = host.drawSetId;
+              }
+          }
+          const set = layer._transitPartsForTest().rendering.setNameOf(setId);
           return {
             selected: state._selectedKey === key,
-            color: entry?.marker.color.toCssColorString(),
-            width: entry?.marker.width,
+            color: billboard?.color.toCssColorString(),
+            width: billboard?.width,
             pickOwner: (() => {
-              const p = window.__godsEyeView.viewer.scene.pick(
-                entry.marker.computeScreenSpacePosition(
-                  window.__godsEyeView.viewer.scene,
-                ),
-              );
+              const p = billboard
+                ? scene.pick(billboard.computeScreenSpacePosition(scene))
+                : null;
               return {
-                id: typeof p?.id === 'string' ? p.id : null,
-                primitiveId:
-                  typeof p?.primitive?.id === 'string' ? p.primitive.id : null,
+                id: typeof p?.id?.id === 'string' ? p.id.id : null,
+                set: typeof p?.id?.set === 'string' ? p.id.set : null,
                 collection:
-                  entry.markerCollection === state._animatedMarkers
+                  set === 'moving'
                     ? 'animated'
-                    : 'stationary',
+                    : set === 'still'
+                      ? 'stationary'
+                      : null,
               };
             })(),
           };
@@ -1849,19 +1862,33 @@ try {
   await page.$eval(row, (element) =>
     element.scrollIntoView({ block: 'center' }),
   );
+  // The marker sets drawn while on, to look for after disable.
+  const markerSets = await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('transit')
+      .module._transitSetIdsForTest(),
+  );
   await page.click(`${row} .data-toggle-btn`);
   await page.waitForFunction(
     () => !window.__godsEyeView.dataManager.isEnabled('transit'),
     { timeout: 20_000 },
   );
   const afterDisable = transitRequests.length;
-  const teardown = await page.evaluate(() => {
+  const teardown = await page.evaluate((setIds) => {
     const layer = window.__godsEyeView.dataManager.layers.get('transit').module;
     const state = layer._transitStateForTest();
     return {
       vehicles: state._vehicles.size,
-      primitives:
-        (state._markers?.length || 0) + (state._animatedMarkers?.length || 0),
+      // Billboards still drawn in the sets drawn while on.
+      primitives: (() => {
+        const scene = window.__godsEyeView.viewer.scene;
+        let count = 0;
+        for (let i = 0; i < scene.primitives.length; i++) {
+          const host = scene.primitives.get(i);
+          if (setIds.includes(host?.drawSetId)) count += host.length || 0;
+        }
+        return count;
+      })(),
       visible: state._visible.size,
       moving: state._moving.size,
       detect: state._detectCache,
@@ -1873,12 +1900,12 @@ try {
       ],
       trailPending: layer._transitPartsForTest().trails.requestDiagnostics()
         .pending,
-      shown: state._markers ? state._markers.show : null,
+      shown: state._markersShown ?? null,
       inFlight: state._inFlight.size,
       activeFeeds: state._activeFeeds.size,
       holds: window.__godsEyeView.getRenderGovernorDiagnostics().holds,
     };
-  });
+  }, markerSets);
   check(
     'disable leaves no vehicles and no point primitives',
     teardown.vehicles === 0 &&
