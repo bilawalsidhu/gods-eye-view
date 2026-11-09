@@ -3234,5 +3234,16 @@
   "1 wk/s": "1 周/秒",
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "滚动或双指缩放，拖动以移动 · 双击查看全部",
-  "1 min/s": "1 分钟/秒"
+  "1 min/s": "1 分钟/秒",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude 仅在聊天中回复；此服务商不支持语音。",
+  "Claude has no voice. Open CHAT to type instead.": "Claude 不支持语音。请打开聊天改为输入文字。",
+  "Claude typed chat": "Claude 文字聊天",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI 仅在聊天中回复；此服务商不支持语音。",
+  "Vertex AI has no voice. Open CHAT to type instead.": "Vertex AI 不支持语音。请打开聊天改为输入文字。",
+  "Gemini typed chat through Vertex AI Express Mode": "通过 Vertex AI 快速模式进行 Gemini 文字聊天",
+  "Amazon Bedrock answers in chat only; voice is not available for this provider.": "Amazon Bedrock 仅在聊天中回复；此服务商不支持语音。",
+  "Amazon Bedrock has no voice. Open CHAT to type instead.": "Amazon Bedrock 不支持语音。请打开聊天改为输入文字。",
+  "Typed chat with any Converse model on Bedrock (Claude, Nova, Llama, …)": "Bedrock 上任意 Converse 模型的文字聊天（Claude、Nova、Llama、…）",
+  "Open chat": "打开聊天",
+  "This provider answers in chat only": "此服务商仅在聊天中回复"
 }

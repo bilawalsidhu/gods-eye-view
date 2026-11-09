@@ -3465,5 +3465,16 @@
   "1 wk/s": "1 нед/с",
   "Play speed": "Скорость воспроизведения",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутите или сведите пальцы для масштаба, перетащите для перемещения · двойной щелчок — показать всё",
-  "1 min/s": "1 мин/с"
+  "1 min/s": "1 мин/с",
+  "Claude answers in chat only; voice is not available for this provider.": "Claude отвечает только в чате; голосовой режим для этого провайдера недоступен.",
+  "Claude has no voice. Open CHAT to type instead.": "У Claude нет голосового режима. Откройте ЧАТ, чтобы писать текстом.",
+  "Claude typed chat": "Текстовый чат с Claude",
+  "Vertex AI answers in chat only; voice is not available for this provider.": "Vertex AI отвечает только в чате; голосовой режим для этого провайдера недоступен.",
+  "Vertex AI has no voice. Open CHAT to type instead.": "У Vertex AI нет голосового режима. Откройте ЧАТ, чтобы писать текстом.",
+  "Gemini typed chat through Vertex AI Express Mode": "Текстовый чат с Gemini через Vertex AI в экспресс-режиме",
+  "Amazon Bedrock answers in chat only; voice is not available for this provider.": "Amazon Bedrock отвечает только в чате; голосовой режим для этого провайдера недоступен.",
+  "Amazon Bedrock has no voice. Open CHAT to type instead.": "У Amazon Bedrock нет голосового режима. Откройте ЧАТ, чтобы писать текстом.",
+  "Typed chat with any Converse model on Bedrock (Claude, Nova, Llama, …)": "Текстовый чат с любой моделью Converse в Bedrock (Claude, Nova, Llama, …)",
+  "Open chat": "Открыть чат",
+  "This provider answers in chat only": "Этот провайдер отвечает только в чате"
 }
