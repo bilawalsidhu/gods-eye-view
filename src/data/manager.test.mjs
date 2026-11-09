@@ -2677,6 +2677,31 @@ test('refreshLayerStats reaches presentation through the bare lifecycle', async 
   assert.deepEqual(changes, ['status']);
 });
 
+test('refreshLayerStats(layerId) drops a tick failure the layer no longer reports', async () => {
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const lifecycle = new LayerLifecycle({});
+  let stats = { count: 0, error: 'Feed unavailable' };
+  lifecycle.register({
+    id: 'feed',
+    name: 'Feed',
+    getStats: () => stats,
+    async update() {},
+  });
+  const entry = lifecycle.layers.get('feed');
+  entry.enabled = true;
+  entry.initialized = true;
+  entry.managerRefreshError = 'Feed unavailable';
+
+  lifecycle.refreshLayerStats('feed');
+  assert.equal(entry.managerRefreshError, 'Feed unavailable');
+
+  stats = { count: 0 };
+  lifecycle.refreshLayerStats();
+  assert.equal(entry.managerRefreshError, 'Feed unavailable');
+  lifecycle.refreshLayerStats('feed');
+  assert.equal(entry.managerRefreshError, null);
+});
+
 test('periodic polls pause hidden, catch up once when due, and dispose visibility listeners', async (t) => {
   const listeners = new Set();
   const doc = {
