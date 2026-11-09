@@ -56,4 +56,13 @@ test('a load that lands ends complete; one that fails ends failed', () => {
     batch([loading, { loading: false, failed: true }]).terminal,
     'error',
   );
+  // A retry after a failure that lands ends complete.
+  assert.equal(
+    batch([
+      { loading: false, failed: true },
+      loading,
+      { loading: false, failed: false },
+    ]).terminal,
+    'complete',
+  );
 });

@@ -64,7 +64,7 @@ function notifyLoading() {
 
 /**
  * A pack load that the loading status follows: on its way while it runs,
- * failed until a later load of it succeeds.
+ * failed from a failure until it is tried again.
  * @template T
  * @param {string} name
  * @param {() => Promise<T>} load
@@ -72,6 +72,8 @@ function notifyLoading() {
  */
 export function reportedPlacePackLoad(name, load) {
   return async () => {
+    // A retry is a fresh try: its batch ends on what this load does.
+    failedPacks.delete(name);
     loadingPacks.add(name);
     notifyLoading();
     try {

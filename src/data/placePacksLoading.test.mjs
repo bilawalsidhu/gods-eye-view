@@ -32,6 +32,12 @@ test('a pack that would not load stays failed until it loads', async () => {
   await assert.rejects(load(), /offline/);
   assert.deepEqual(place.placePacksStatus(), { loading: false, failed: true });
   fail = false;
-  assert.equal(await load(), 1);
+  const retry = load();
+  assert.deepEqual(
+    place.placePacksStatus(),
+    { loading: true, failed: false },
+    'a retry is not a failure until it fails',
+  );
+  assert.equal(await retry, 1);
   assert.deepEqual(place.placePacksStatus(), { loading: false, failed: false });
 });
