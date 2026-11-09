@@ -186,9 +186,11 @@ test('distinct named bases separated by one seam quantization step retain separa
 });
 
 test('named A+B to B to A+B preserves canonical identity, parent title and selection', async () => {
-  const C = await import('cesium');
   const { createRendering } =
     await import('../layers/installations/rendering.js');
+  const { bindFakeDraw } = await import('../testSupport/fakeDrawPort.mjs');
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const aliases = new Map();
   const named = (n, footprint, areaM2) =>
     record(String(n * 10 + 2), footprint, {
@@ -213,7 +215,7 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
     recordById: new Map(),
     selectedId: selected.id,
     renderedKeys: new Map(),
-    dataSource: new C.CustomDataSource(),
+    viewer,
   };
   const rendering = createRendering({
     state,
@@ -238,6 +240,10 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
       anchors: {},
     },
   });
+  rendering.attach(viewer);
+  /** Whether the selected site's dot is drawn. */
+  const selectedDrawn = () =>
+    draw.set(state.sets.dots.id).items.has(state.selectedId);
   for (const members of [[a, b], [b], [a, b]]) {
     state.records = mergeMilitaryFragments(members, aliases);
     state.recordById = new Map(state.records.map((r) => [r.id, r]));
@@ -246,7 +252,7 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
     assert.deepEqual(state.records[0].memberNames, ['Site 2']);
     rendering.renderRecords();
     assert.equal(state.selectedId, 'osm:military:w1');
-    assert.ok(state.dataSource.entities.getById(state.selectedId));
+    assert.ok(selectedDrawn());
   }
   const [detail] = mergeMilitaryFragments([{ ...b, tileZoom: 12 }], aliases);
   assert.equal(detail.id, 'osm:military:w2');
@@ -258,9 +264,11 @@ test('named A+B to B to A+B preserves canonical identity, parent title and selec
 });
 
 test('cold names reconcile selection through enrichment, identical groups at another zoom and wide-point handoff', async () => {
-  const C = await import('cesium');
   const { createRendering } =
     await import('../layers/installations/rendering.js');
+  const { bindFakeDraw } = await import('../testSupport/fakeDrawPort.mjs');
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const { retainNamedHandoff } =
     await import('../layers/installations/ingestion.js');
   const aliases = new Map();
@@ -292,7 +300,7 @@ test('cold names reconcile selection through enrichment, identical groups at ano
     recordById: new Map(),
     selectedId: null,
     renderedKeys: new Map(),
-    dataSource: new C.CustomDataSource(),
+    viewer,
   };
   const rendering = createRendering({
     state,
@@ -321,13 +329,17 @@ test('cold names reconcile selection through enrichment, identical groups at ano
       anchors: {},
     },
   });
+  rendering.attach(viewer);
+  /** Whether the selected site's dot is drawn. */
+  const selectedDrawn = () =>
+    draw.set(state.sets.dots.id).items.has(state.selectedId);
   const publish = (records, claimSelection = false) => {
     state.records = records;
     state.recordById = new Map(records.map((r) => [r.id, r]));
     rendering.renderRecords({ claimSelection });
     assert.equal(state.selectedId, records[0].id);
     assert.equal(selected.id, records[0].id);
-    assert.ok(state.dataSource.entities.getById(state.selectedId));
+    assert.ok(selectedDrawn());
     assert.ok(contexts.has(selected.id));
   };
   const cold = mergeMilitaryFragments(unnamed, aliases);

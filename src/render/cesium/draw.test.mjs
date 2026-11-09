@@ -1879,6 +1879,164 @@ test('the installations layer draws its named markers as outlined point primitiv
   assert.equal(scene.added.includes(host), false);
 });
 
+test('the installations layer draws its site dots, outlines and selected dot on a viewer of its own', async () => {
+  const { createRendering } =
+    await import('../../layers/installations/rendering.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const record = (id, lon) => ({
+    id,
+    name: `Site ${id}`,
+    class: 'base',
+    latitude: 30,
+    longitude: lon,
+    namedArea: false,
+    outlineLines: [
+      [
+        [lon, 30],
+        [lon + 0.01, 30],
+      ],
+    ],
+  });
+  const records = [record('a', -97), record('b', -98)];
+  const state = {
+    viewer,
+    enabled: true,
+    selectedId: null,
+    records,
+    recordById: new Map(records.map((r) => [r.id, r])),
+    renderedKeys: new Map(),
+  };
+  const noop = () => {};
+  const rendering = createRendering({
+    state,
+    services: {
+      ground: { floorAltitudeM: () => 0, cachedGroundFloor: () => 0 },
+      anchors: {},
+      render: { governorRequestRender: noop },
+      context: {
+        registerEntityContext: noop,
+        removeEntityContextsForLayer: noop,
+        selectEntityContext: noop,
+        getSelectedEntityContext: () =>
+          state.selectedId ? { id: state.selectedId } : null,
+        clearSelectedEntityContextForLayer: noop,
+      },
+    },
+    parts: {
+      model: {
+        colorFor: (r, alpha = 1) => [1, 165 / 255, 0, alpha],
+        installationSourceLabel: () => 'OpenStreetMap',
+      },
+    },
+  });
+  rendering.attach(viewer);
+  rendering.renderRecords();
+  const billboards = (setId) => {
+    const out = [];
+    const visit = (node) => {
+      for (let i = 0; i < (node?.length ?? 0); i += 1) {
+        const child = node.get(i);
+        if (child?.id?.set === setId) out.push(child);
+        else if (typeof child?.get === 'function') visit(child);
+      }
+    };
+    for (const host of scene.added)
+      if (host.id?.set === setId) out.push(host);
+      else visit(host);
+    return out;
+  };
+  const dotsId = state.sets.dots.id;
+  const dots = billboards(dotsId);
+  assert.equal(dots.length, 2);
+  assert.ok(dots.every((dot) => dot instanceof Cesium.Billboard));
+  assert.ok(
+    dots.every(
+      (dot) => dot.heightReference === Cesium.HeightReference.CLAMP_TO_GROUND,
+    ),
+  );
+  assert.ok(dots.every((dot) => dot.id.meta?.installationId));
+  // Selecting a site hides its dot where it is and draws the selected one
+  // in its own set: no other dot is drawn again.
+  state.selectedId = 'b';
+  rendering.renderRecords();
+  const after = billboards(dotsId);
+  assert.equal(after.length, 2);
+  assert.ok(after.every((dot, i) => dot === dots[i]), 'the same billboards');
+  assert.equal(after.find((dot) => dot.id.id === 'b').show, false);
+  assert.equal(after.find((dot) => dot.id.id === 'a').show, true);
+  const [selected] = billboards(state.sets.selected.id);
+  assert.ok(selected instanceof Cesium.Billboard);
+  assert.equal(selected.id.id, 'b');
+  assert.equal(selected.id.meta, dots.find((dot) => dot.id.id === 'b').id.meta);
+  rendering.detach();
+  assert.equal(scene.added.length, 0, 'gone with the layer');
+});
+
+test('the satellites layer draws its dots as one point collection and its rings as depth-fail primitives out of picks', async () => {
+  const { createRendering } =
+    await import('../../layers/satellites/rendering.js');
+  const { POINT_STYLES, TRACKED_ORBIT_COLOR } =
+    await import('../../layers/satellites/policy.js');
+  const scene = fakeScene();
+  const viewer = { scene };
+  const state = {
+    _points: new Map(),
+    _orbitPaths: new Map(),
+    _catalog: new Map([[25544, { satrec: {} }]]),
+    _viewer: viewer,
+    _trackedNorad: null,
+    _enabled: false,
+  };
+  const ring = [
+    { x: 7e6, y: 0, z: 0 },
+    { x: 0, y: 7e6, z: 0 },
+    { x: -7e6, y: 0, z: 0 },
+  ];
+  const rendering = createRendering({
+    state,
+    services: { focus: {} },
+    parts: { orbits: { computeOrbitPath: () => ring } },
+  });
+  rendering._attach(viewer);
+  rendering._addPoint(25544, { x: 7e6, y: 0, z: 0 }, POINT_STYLES.iss);
+  rendering._addPoint(5, { x: 0, y: 7e6, z: 0 }, POINT_STYLES.visual);
+  rendering._preRenderTick({ frame: 1 });
+  const points = scene.added.find(
+    (host) => host instanceof Cesium.PointPrimitiveCollection,
+  );
+  assert.equal(points.length, 2);
+  const iss = points.get(0);
+  assert.equal(iss.id.id, '25544');
+  assert.deepEqual(iss.id.meta, { noradId: 25544 });
+  assert.equal(iss.pixelSize, 12);
+  assert.equal(iss.scaleByDistance.nearValue, 1.5);
+  assert.equal(iss.scaleByDistance.far, 2e7);
+  // Moved in place, both in one write.
+  rendering._movePoint(25544, { x: 6.9e6, y: 0, z: 0 });
+  rendering._movePoint(5, { x: 0, y: 6.9e6, z: 0 });
+  rendering._preRenderTick({ frame: 2 });
+  assert.equal(points.get(0), iss);
+  assert.equal(iss.position.x, 6.9e6);
+
+  withImageClasses(() =>
+    rendering._showOrbitPath(25544, TRACKED_ORBIT_COLOR),
+  );
+  const all = (host) =>
+    host instanceof Cesium.PrimitiveCollection
+      ? Array.from({ length: host.length }, (_, i) => all(host.get(i))).flat()
+      : [host];
+  const primitive = scene.added
+    .flatMap(all)
+    .find(
+      (host) => host instanceof Cesium.Primitive && host.depthFailAppearance,
+    );
+  assert.ok(primitive, 'a ring with a dimmed part behind the globe');
+  assert.equal(primitive.allowPicking, false, 'ring clicks fall through');
+  rendering._detach(viewer);
+  assert.equal(scene.added.length, 0, 'gone with the layer');
+});
+
 test('the ALPR layer draws its badges as icons that follow the ground, restyled in place', async () => {
   const { alprMarkers, createAlprMarkerSet } =
     await import('../../layers/alpr/markerState.js');

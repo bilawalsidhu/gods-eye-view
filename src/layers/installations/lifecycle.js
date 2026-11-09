@@ -20,8 +20,6 @@ export function createLifecycle({
       const camera = cameraOf(viewer);
       layerState.moveEndRemove = camera.on('moveEnd', cameraChanged);
       // Measured for this listener alone; off, a load is never scheduled.
-      // The sensitivity claim in enable() is for raw camera listeners
-      // elsewhere, which this layer has always made finer while on.
       layerState.changedRemove = camera.on('changed', cameraChanged, {
         threshold: CAMERA_CHANGED_THRESHOLD,
       });
@@ -48,9 +46,8 @@ export function createLifecycle({
         });
       parts.namedMarkers?.enable();
       parts.namedMarkers?.sync(layerState.records || []);
-      parts.rendering.claimCameraChanges?.();
       registerPickOwner(LAYER_ID, (id) => layerState.recordById.has(id));
-      layerState.dataSource.show = true;
+      parts.rendering.setShown(true);
       // DataLayerManager invokes update() immediately after enable(), which owns
       // the first fetch. Avoid racing it with a second aborting request here.
     },
@@ -59,7 +56,6 @@ export function createLifecycle({
       layerState.enabled = false;
       services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
       parts.namedMarkers?.hide();
-      parts.rendering.releaseCameraChanges?.();
       layerState.contextAnchor = null;
       layerState.contextPosition = null;
       layerState.coverage = { kind: 'viewport' };
@@ -71,7 +67,7 @@ export function createLifecycle({
       layerState.abort?.abort();
       layerState.abort = null;
       layerState.loading = false;
-      if (layerState.dataSource) layerState.dataSource.show = false;
+      parts.rendering.setShown(false);
       clearSelectedEntityContextForLayer(LAYER_ID);
       layerState.selectedId = null;
       parts.rendering.clearSelectionFill?.();

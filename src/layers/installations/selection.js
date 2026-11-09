@@ -1,6 +1,5 @@
 import { inputFor } from '../../input/dispatcher.js';
 import { LAYER_ID } from './policy.js';
-import { installationMarkers } from './markerState.js';
 
 export function createSelection({
   state: layerState,
@@ -11,6 +10,7 @@ export function createSelection({
   const { clearSelectedEntityContextForLayer } = services.context;
 
   let removeContextListeners = null;
+  let removeDoubleClick = null;
 
   function syncContextSelection(event) {
     if (!layerState.enabled) return;
@@ -30,10 +30,10 @@ export function createSelection({
 
   function selectRecord(id) {
     const record = layerState.recordById.get(id);
-    if (!record || !layerState.dataSource) return false;
+    if (!record || !layerState.sets) return false;
     layerState.selectedId = id;
     parts.rendering.renderRecords({ claimSelection: true });
-    // renderRecords drops selectedId when the record produced no entity.
+    // renderRecords drops selectedId when the record produced no marker.
     return layerState.selectedId === id;
   }
 
@@ -50,17 +50,17 @@ export function createSelection({
       for (const event of events)
         globalThis.window?.removeEventListener?.(event, syncContextSelection);
     };
-    layerState.clickSubscription = inputFor(viewer).onClick((event) => {
+    const input = inputFor(viewer);
+    layerState.clickSubscription = input.onClick((event) => {
       if (!layerState.enabled) return;
-      // A named marker is a draw item; site markers are still entities.
+      // A site's dot, outline or fill, or a named marker: each draw item
+      // names its installation in its `meta`.
       const hit = event.drawHit;
-      const target = event.pick?.id;
       const id =
-        (hit?.set === parts.namedMarkers?.setId
+        hit?.set === parts.namedMarkers?.setId ||
+        parts.rendering.ownsSet(hit?.set)
           ? hit.meta?.installationId
-          : null) ||
-        installationMarkers.read(target)?.recordId ||
-        (typeof target?.id === 'string' ? target.id : null);
+          : null;
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);
       } else if (layerState.selectedId) {
@@ -72,6 +72,15 @@ export function createSelection({
         parts.rendering.renderRecords();
       }
     });
+    // Follow a site on a double-click, as the renderer's own double-click
+    // followed the site's entity.
+    removeDoubleClick =
+      input.onPointer?.('dblclick', (event) => {
+        // The renderer's own double-click follow, off while a tool holds it
+        // or on a renderer without one.
+        if (input.stockEnabled?.('dblclickFollow') !== true) return;
+        parts.rendering.followAt(event.position);
+      }) ?? null;
   }
   return {
     selectRecord,
@@ -79,6 +88,8 @@ export function createSelection({
     destroy() {
       removeContextListeners?.();
       removeContextListeners = null;
+      removeDoubleClick?.();
+      removeDoubleClick = null;
     },
   };
 }

@@ -18,11 +18,11 @@ const L2 =
 function run(locale) {
   setLocale(locale);
   const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: ['? km'] } });
-  const point = { position: new Cesium.Cartesian3() };
+  const point = { pos: new Cesium.Cartesian3() };
   const viewer = { camera: null, scene: { frameState: { frameNumber: 1 } } };
   let nowMs = Date.UTC(2008, 8, 20, 12, 30);
   const near = (metres) => ({
-    get position() {
+    get pos() {
       const tracked = _trackedFrameCartesianForTest();
       return new Cesium.Cartesian3(tracked.x + metres, tracked.y, tracked.z);
     },
@@ -42,7 +42,6 @@ function run(locale) {
   });
   _runSatellitePreRenderForTest();
   nowMs += 2000;
-  viewer.scene.frameState.frameNumber = 2;
   _runSatellitePreRenderForTest();
   const details = readEntityRecord(entity)?.labelModel.details;
   setLocale('en');

@@ -25,9 +25,8 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
   const parts = {
     selection: { installInteraction() {} },
     rendering: {
-      attach() {
-        state.dataSource = { show: false };
-      },
+      attach() {},
+      setShown() {},
       detach() {},
       clearRendered() {},
     },

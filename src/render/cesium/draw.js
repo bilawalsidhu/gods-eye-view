@@ -1700,6 +1700,8 @@ export function createCesiumDraw({
       }),
       show: item.show !== false,
       asynchronous: false,
+      // A set that never picks keeps these out of the pick pass too.
+      allowPicking: record.spec.pickable !== false,
     });
   }
 

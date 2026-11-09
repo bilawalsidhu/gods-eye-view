@@ -90,7 +90,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     const clearedNorad = layerState._trackedNorad;
     clearFocusTarget('satellites', layerState._trackedNorad);
 
-    // Re-show the dot (hidden while the tracked entity rendered it) and
+    // Re-show the dot (hidden while the tracked dot drew it) and
     // restore the original group palette from the shared style table (WS-D3)
     parts.rendering._restorePoint(
       layerState._trackedNorad,
@@ -104,7 +104,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     layerState._trackedFrameNumber = -1;
     layerState._trackedFrameGeo = null;
 
-    // Remove tracked entity and orbit path (unless ISS — keep its path)
+    // Remove the tracked dot and orbit path (unless ISS — keep its path)
     if (layerState._trackedNorad !== ISS_NORAD) {
       parts.rendering._hideOrbitPath(layerState._trackedNorad);
     }
@@ -128,8 +128,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
 
   /**
    * Get the tracked satellite's geodetic position, propagated at most once per
-   * rendered frame (WS-D2). All tracked-satellite consumers (entity position
-   * callback → camera, host model, point primitive, getTrackedInfo) share this
+   * rendered frame (WS-D2). All tracked-satellite consumers (the tracked dot
+   * and follow camera, host model, the hidden dot, getTrackedInfo) share this
    * single `new Date()` epoch per frame, so they can never diverge by the old
    * 200ms throttle. The matching ECEF position is left in
    * `_trackedFrameCartesian`. SGP4 for one satellite per frame is cheap.
@@ -405,16 +405,13 @@ export function createTracking({ state: layerState, services, parts, source }) {
     layerState._trackedFrameGeo = null;
     parts.labels._syncIssOverlay();
 
-    // Hide the dot — the tracked ENTITY renders it below. The entity must
-    // own a point graphic so the tracking camera can resolve a bounding
-    // sphere and engage viewFrom (a label-only entity left the camera
-    // stranded; this mirrors the proven flights pattern).
+    // Hide the dot — the tracked dot draws it, larger and over everything.
     parts.rendering._hidePoint(noradId);
 
     // Show orbital path
     parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
 
-    // Tracked entity position propagates per evaluation through the per-frame
+    // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
     // Falls back to the dot's 1s-throttled position if SGP4 fails.
     const trackedPosition = () => {
@@ -457,8 +454,9 @@ export function createTracking({ state: layerState, services, parts, source }) {
     selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
     layerState._contextRefreshedAtMs = Date.now();
 
-    // The renderer's own frame for a fast mover (autodetect), as the tracked entity
-    // had; no close-range rules at orbital distances.
+    // The renderer's own frame for a fast mover (autodetect), as the tracked
+    // entity had; no close-range rules at orbital distances. The carrier is
+    // what the tracked card reads (its entity record).
     layerState._followTarget = entityFollowTarget(layerState._trackedEntity, {
       position: trackedPosition,
       frame: 'autodetect',

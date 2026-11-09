@@ -36,12 +36,12 @@ export function createState({ services }) {
   state._generation = 0;
 
   state._cameraChangedAttached = false;
+  /** Removes the camera port listener; null when not listening. */
+  state._cameraChangedOff = null;
+  /** Removes the one-shot look after the camera listener's first tick. */
+  state._cameraFirstTickOff = null;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
-  /** Camera sensitivity as we found it, so disable() can hand it back. */
-  state._priorPercentageChanged = null;
-  /** The value this layer actually wrote, for an identity-guarded restore. */
-  state._appliedPercentageChanged = null;
 
   /** @type {(() => void)|null} */
   state._preRenderRemove = null;
