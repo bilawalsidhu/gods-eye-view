@@ -1185,7 +1185,21 @@
     "Salish Sea",
     "Acartia",
     "CC BY 4.0",
-    "iNaturalist"
+    "iNaturalist",
+    "STARLINK",
+    "STARLINK ···",
+    "STARLINK ✕",
+    "{range} NM",
+    "OFF-NADIR {angle}°",
+    "OFF-NADIR {angle}° · {offset}",
+    "HOME NADIR",
+    "ZOOM {zoom}×",
+    "NORAD {id}",
+    "TLE",
+    "NADIR",
+    "SENSOR",
+    "1 min/s",
+    "Live"
   ],
   "uk": [
     "AIS: --",
