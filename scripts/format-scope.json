@@ -328,6 +328,12 @@
   "src/ui/styles/responsive.css",
   "src/ui/styles/voice-cost.css",
   "src/ui/styles/cockpit.css",
+  "src/ui/styles/cockpitBridge.css",
+  "src/ui/styles/cockpitRadar.css",
+  "src/ui/styles/cockpitOrbital.css",
+  "src/layers/satellites/sensors.js",
+  "src/layers/satellites/sensors.test.mjs",
+  "src/data/imagingSensors.js",
   "src/ui/styles/command-dock-compact.css",
   "src/app/stateChannel.js",
   "src/app/stateChannel.test.mjs",
@@ -1357,5 +1363,10 @@
   "src/layers/wildlifeSightings/cache.integration.test.mjs",
   "src/layers/wildlifeSightings/density.test.mjs",
   "src/layers/wildlifeSightings/selection.test.mjs",
-  "server/providers/inaturalist/proxy.fixture.mjs"
+  "server/providers/inaturalist/proxy.fixture.mjs",
+  "scripts/build-owner-flags.mjs",
+  "src/ui/ownerFlagSheet.js",
+  "src/data/placePacksLoading.test.mjs",
+  "src/ui/placePacksLoading.js",
+  "src/ui/placePacksLoading.test.mjs"
 ]
