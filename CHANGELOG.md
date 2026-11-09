@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- `gods-eye-view/annotations` no longer reaches Cesium: the world annotation
+  renderer draws its areas, building columns, routes, arrows, rings and
+  markers through the renderer's draw port (the Cesium renderer now drapes
+  arrows, draws clamped rings by camera height and pulses shape alpha), and
+  samples a building's ground through the height service. A click on a
+  world mark now hits its draw set (`meta: { annotation: id }`) rather than
+  an entity. A viewer with no renderer bound needs
+  `gods-eye-view/render/cesium/unbound` loaded once first (samehkhamis).
 - `gods-eye-view/application/layers` and `gods-eye-view/standalone/catalog`
   no longer reach Cesium: the weather shells and the wind layer's colour
   shell and flow draw through the renderer's `draw.field` (`rasterShell` and

@@ -117,6 +117,9 @@ const DRAW_FROM_CALLER = new Set([
   './infrastructure/geojson',
   // Its missions draw, pick and fly through the ports alone.
   './layers/launches',
+  // Its world marks draw through `drawOf` and probe heights through
+  // `heightsOf`; its screen marks project through the camera and query ports.
+  './annotations',
   // Its pins, footprints and outlines draw through `drawOf`; its horizon
   // cull reads the camera and frame ports.
   './layers/ghostmaps',

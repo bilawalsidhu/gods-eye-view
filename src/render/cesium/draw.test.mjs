@@ -1186,6 +1186,101 @@ test('the earthquakes layer draws its discs as ground fills on a viewer of its o
   assert.equal(scene.added.length, 0);
 });
 
+test('the world annotation renderer draws, fades, hides and lets go of every kind on a viewer of its own', async () => {
+  const { createWorldAnnotationRenderer } =
+    await import('../../annotations/worldAnnotationRenderer.js');
+  await withImageClasses(() =>
+    withTerrainHeights(() => {
+      const scene = fakeScene();
+      const viewer = { scene };
+      const renderer = createWorldAnnotationRenderer(viewer);
+      const box = (lon, d) => [
+        [lon - d, -d],
+        [lon + d, -d],
+        [lon + d, d],
+        [lon - d, d],
+      ];
+      const marks = [
+        {
+          id: 'building',
+          type: 'area',
+          color: 'amber',
+          footprintKind: 'building',
+          buildingHeight: 40,
+          anchor: { lon: 0, lat: 0, height: 200 },
+          ring: box(0, 0.0004),
+        },
+        {
+          id: 'area',
+          type: 'area',
+          color: 'green',
+          footprintKind: 'area',
+          anchor: { lon: 0.01, lat: 0 },
+          ring: box(0.01, 0.002),
+          polygons: [[box(0.01, 0.002), box(0.01, 0.0005)]],
+        },
+        {
+          id: 'synth',
+          type: 'area',
+          color: 'cyan',
+          synthesized: true,
+          anchor: { lon: 0.02, lat: 0 },
+          ring: box(0.02, 0.002),
+        },
+        {
+          id: 'route',
+          type: 'route',
+          color: 'red',
+          anchor: { lon: 0, lat: 0.01 },
+          path: [
+            { lon: 0, lat: 0.01 },
+            { lon: 0.01, lat: 0.012 },
+          ],
+        },
+        {
+          id: 'arrow',
+          type: 'arrow',
+          color: 'primary',
+          anchor: { lon: 0, lat: 0.02 },
+          to: { lon: 0.01, lat: 0.02 },
+        },
+        {
+          id: 'pin',
+          type: 'pin',
+          color: 'primary',
+          anchor: { lon: 0.03, lat: 0 },
+        },
+        {
+          id: 'label',
+          type: 'label',
+          color: 'amber',
+          anchor: { lon: 0.04, lat: 0 },
+        },
+      ];
+      for (const mark of marks) {
+        mark.alpha = 0.25;
+        renderer.add(
+          mark,
+          mark.footprintKind === 'building' ? { sampledGroundHeight: 150 } : {},
+        );
+      }
+      assert.ok(scene.added.length >= marks.length, 'every kind drew');
+      for (const alpha of [0.5, 1]) {
+        for (const mark of marks) mark.alpha = alpha;
+        assert.doesNotThrow(() => renderer.sync());
+        scene.preRender.raiseEvent();
+        scene.postRender.raiseEvent();
+      }
+      for (const mark of marks) mark.hidden = true;
+      renderer.sync();
+      for (const mark of marks) mark.hidden = false;
+      renderer.sync();
+      renderer.destroy();
+      assert.equal(scene.added.length, 0, 'nothing left drawn');
+    }),
+  );
+});
+
 test('the air quality layer draws its stations as ground fills on a viewer of its own', async () => {
   const { createAirQualityLayer } =
     await import('../../layers/airQuality/index.js');

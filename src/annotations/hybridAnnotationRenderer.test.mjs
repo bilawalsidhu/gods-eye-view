@@ -100,14 +100,33 @@ function withScenePorts(viewer) {
   const { unbind, ...ports } = bindFakeCesiumScene(viewer);
   unbind();
   bindRenderer(viewer, { ...ports, credits: fakeCesiumCredits(viewer) });
-  return viewer;
+  return ports.draw;
+}
+
+/** What the world renderer draws, each item of its live sets (of `kind`). */
+function worldItems(draw, kind) {
+  const items = [];
+  for (const record of draw.sets.values())
+    if (
+      !record.disposed &&
+      record.spec.id.startsWith('annotations:') &&
+      (!kind || record.kind === kind)
+    )
+      items.push(...record.items.values());
+  return items;
+}
+
+/** Surface heights the scene samples: `height(lon, lat)` in degrees. */
+function sampleHeights(scene, height) {
+  scene.sampleHeightSupported = true;
+  scene.sampleHeight = (carto) =>
+    height(Cesium.Math.toDegrees(carto.longitude), Cesium.Math.toDegrees(carto.latitude));
 }
 
 /** A viewer whose scene/camera is just enough for both sub-renderers. */
 function fakeViewer(lon, lat) {
   const credits = new Set();
   const camera = cameraLookingAt(lon, lat);
-  const dataSources = [];
   const frames = controlledFrames();
   const scene = {
     camera,
@@ -121,32 +140,19 @@ function fakeViewer(lon, lat) {
       scene.renderRequests += 1;
     },
   };
-  return {
-    dataSources,
-    frames,
-    viewer: withScenePorts({
-      credits,
-      creditDisplay: {
-        addStaticCredit: (credit) => credits.add(credit),
-        removeStaticCredit: (credit) => credits.delete(credit),
-      },
-      scene,
-      camera,
-      canvas: scene.canvas,
-      trackedEntity: null,
-      dataSources: {
-        add(dataSource) {
-          dataSources.push(dataSource);
-          return dataSource;
-        },
-        remove(dataSource) {
-          const index = dataSources.indexOf(dataSource);
-          if (index >= 0) dataSources.splice(index, 1);
-          return index >= 0;
-        },
-      },
-    }),
+  const viewer = {
+    credits,
+    creditDisplay: {
+      addStaticCredit: (credit) => credits.add(credit),
+      removeStaticCredit: (credit) => credits.delete(credit),
+    },
+    scene,
+    camera,
+    canvas: scene.canvas,
+    trackedEntity: null,
   };
+  const draw = withScenePorts(viewer);
+  return { draw, frames, viewer };
 }
 
 function controlledFrames() {
@@ -207,7 +213,6 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
   });
 
   const camera = cameraLookingAt(-99, 31);
-  const dataSources = [];
   const frames = controlledFrames();
   const scene = {
     camera,
@@ -223,20 +228,10 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
     camera,
     canvas: scene.canvas,
     trackedEntity: null,
-    dataSources: {
-      add(dataSource) {
-        dataSources.push(dataSource);
-        return dataSource;
-      },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
-    },
   };
-  // The screen board projects through the renderer's camera and query.
-  bindFakeCesiumScene(viewer);
+  // The screen board projects through the renderer's camera and query; the
+  // world renderer draws through its draw port.
+  const { draw } = bindFakeCesiumScene(viewer);
   const { store, renderer } = hybridWithBoard(viewer);
   const anno = {
     id: 'anno-hybrid-fb3',
@@ -253,8 +248,7 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
   renderer.add(anno);
   const [before] = annotationGroups(store);
   assert.equal(childrenWithClass(before, 'gev-anno-ring').length, 2);
-  assert.equal(dataSources.length, 1);
-  assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal(worldItems(draw).length, 0);
 
   const ring = [
     [-106, 25],
@@ -286,10 +280,10 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
   assert.equal(dot.attrs.cx, expectedWindow.x.toFixed(1));
   assert.equal(dot.attrs.cy, expectedWindow.y.toFixed(1));
   assert.deepEqual(centroid, { lon: -100.8, lat: 29.4, height: 0 }, 'closed-ring vertex mean stays pinned');
-  assert.equal(dataSources[0].entities.values.length, 2, 'world area adds one fill and one outline');
-  assert.equal(dataSources[0].entities.values.filter((entity) => entity.polygon).length, 1);
-  assert.equal(dataSources[0].entities.values.filter((entity) => entity.polyline).length, 1);
-  assert.equal(Object.hasOwn(anno, '_entities'), false, 'world entity state stays on the inherited proxy');
+  assert.equal(worldItems(draw).length, 2, 'world area adds one fill and one outline');
+  assert.equal(worldItems(draw, 'shapes').length, 1);
+  assert.equal(worldItems(draw, 'lines').length, 1);
+  assert.equal(Object.hasOwn(anno, '_draw'), false, 'world draw state stays on the inherited proxy');
   const outer = [
     [-99, 31],
     [-98.999, 31],
@@ -316,33 +310,26 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
     buildingHeight: 20,
   };
   const completion = renderer.add(building);
-  assert.equal(dataSources[0].entities.values.length, 2, 'building geometry waits for all probes');
+  assert.equal(worldItems(draw).length, 2, 'building geometry waits for all probes');
   for (let frame = 0; frame < 8; frame += 1) frames.emit();
   assert.equal((await completion).status, 'installed');
-  const added = dataSources[0].entities.values.slice(2);
-  const fills = added.filter(
-    (entity) => entity.polygon && entity.polygon.fill?.getValue() !== false,
-  );
+  const fills = worldItems(draw, 'shapes').filter((item) => item.id.startsWith('volume:'));
   assert.equal(
     fills.length,
     2,
-    'every building part gets a classification volume',
+    'every building part gets a volume',
   );
-  assert.equal(fills[0].polygon.hierarchy.getValue().holes.length, 1);
-  assert.equal(fills[1].polygon.hierarchy.getValue().holes.length, 0);
+  assert.equal(fills[0].geometry.rings.length, 2, 'the first with its hole');
+  assert.equal(fills[1].geometry.rings.length, 1);
+  assert.deepEqual(fills[0].fill, fills[1].fill, 'parts share the fill colour');
   assert.equal(
-    fills[0].polygon.material,
-    fills[1].polygon.material,
-    'parts share the fill material',
-  );
-  assert.equal(
-    added.filter((entity) => entity.polyline).length,
+    worldItems(draw, 'lines').filter((item) => item.id.startsWith('base:')).length,
     3,
     'all outer and hole outlines are retained',
   );
   renderer.remove(building);
   assert.equal(
-    dataSources[0].entities.values.length,
+    worldItems(draw).length,
     2,
     'multipart removal leaves only the earlier area',
   );
@@ -359,7 +346,7 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
 
 test('a sub-renderer throw mid-add leaves state the rollback can still remove', (t) => {
   installBrowserGlobals(t);
-  const { viewer, dataSources } = fakeViewer(-99, 31);
+  const { viewer, draw } = fakeViewer(-99, 31);
   const { store, renderer } = hybridWithBoard(viewer);
   const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
   const anno = {
@@ -387,26 +374,26 @@ test('a sub-renderer throw mid-add leaves state the rollback can still remove', 
   };
 
   assert.throws(() => renderer.add(anno), /screen insert failed/);
-  assert.equal(dataSources[0].entities.values.length, 2, 'the world drape is already live');
+  assert.equal(worldItems(draw).length, 2, 'the world drape is already live');
   assert.equal(annotationGroups(store).length, 0, 'the half-built screen group detached itself');
 
   // The engine's rollback path — it must reach the partial state by id.
   renderer.remove(anno);
-  assert.equal(dataSources[0].entities.values.length, 0, 'partial world state must be released');
+  assert.equal(worldItems(draw).length, 0, 'partial world state must be released');
 
   // …and the id is free again: a retry draws ONE mark, not a second one over
   // an orphan nothing owns.
   renderer.add(anno);
-  assert.equal(dataSources[0].entities.values.length, 2, 'the retry draws exactly one world drape');
+  assert.equal(worldItems(draw).length, 2, 'the retry draws exactly one world drape');
   assert.equal(annotationGroups(store).length, 1, 'and exactly one screen caption');
   renderer.remove(anno);
-  assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal(worldItems(draw).length, 0);
   renderer.destroy();
 });
 
 test('a release that throws keeps the mark addressable for a retry cleanup', (t) => {
   installBrowserGlobals(t);
-  const { viewer, dataSources } = fakeViewer(-99, 31);
+  const { viewer, draw } = fakeViewer(-99, 31);
   const { store, renderer } = hybridWithBoard(viewer);
   const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
   const anno = {
@@ -422,7 +409,7 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
   };
 
   renderer.add(anno);
-  assert.equal(dataSources[0].entities.values.length, 2);
+  assert.equal(worldItems(draw).length, 2);
   assert.equal(annotationGroups(store).length, 1);
 
   // The world route releases fine, then the screen release fails part-way
@@ -430,7 +417,7 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
   const workingSetTimeout = globalThis.window.setTimeout;
   globalThis.window.setTimeout = () => { throw new Error('teardown scheduling failed'); };
   assert.throws(() => renderer.remove(anno), /teardown scheduling failed/);
-  assert.equal(dataSources[0].entities.values.length, 0, 'the world route did release');
+  assert.equal(worldItems(draw).length, 0, 'the world route did release');
   assert.equal(annotationGroups(store).length, 1, 'the screen route did NOT — that is the orphan');
 
   // Dropping the routing entry here would make that orphan permanently
@@ -438,7 +425,7 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
   globalThis.window.setTimeout = workingSetTimeout;
   renderer.remove(anno);
   assert.equal(annotationGroups(store).length, 0, 'the retry cleanup must reach the orphan');
-  assert.equal(dataSources[0].entities.values.length, 0, 'without double-releasing the world route');
+  assert.equal(worldItems(draw).length, 0, 'without double-releasing the world route');
 
   // Fully released now — a third call is inert.
   renderer.remove(anno);
@@ -448,7 +435,7 @@ test('a release that throws keeps the mark addressable for a retry cleanup', (t)
 
 test('a world add that fails mid-way leaves its landed entities removable', (t) => {
   installBrowserGlobals(t);
-  const { viewer, dataSources } = fakeViewer(-99, 31);
+  const { viewer, draw } = fakeViewer(-99, 31);
   const { store, renderer } = hybridWithBoard(viewer);
   const ring = [[-106, 25], [-93, 25], [-93, 36], [-106, 36], [-106, 25]];
   const anno = {
@@ -464,25 +451,23 @@ test('a world add that fails mid-way leaves its landed entities removable', (t) 
   };
 
   // The draped fill lands; the outline throws (bad geometry / lost context).
-  const entities = dataSources[0].entities;
-  const realAdd = entities.add.bind(entities);
-  let addsLeft = 1;
-  entities.add = (options) => {
-    if (addsLeft <= 0) throw new Error('entity add failed');
-    addsLeft -= 1;
-    return realAdd(options);
+  const realLines = draw.lines;
+  draw.lines = (spec) => {
+    const set = realLines(spec);
+    set.set = () => { throw new Error('draw failed'); };
+    return set;
   };
 
-  assert.throws(() => renderer.add(anno), /entity add failed/);
-  assert.equal(entities.values.length, 1, 'one entity landed before the failure');
+  assert.throws(() => renderer.add(anno), /draw failed/);
+  assert.equal(worldItems(draw).length, 1, 'one item landed before the failure');
 
-  entities.add = realAdd;
+  draw.lines = realLines;
   renderer.remove(anno);
-  assert.equal(entities.values.length, 0,
-    'the rollback must see the entities that landed before the throw');
+  assert.equal(worldItems(draw).length, 0,
+    'the rollback must see the items that landed before the throw');
 
   renderer.add(anno);
-  assert.equal(entities.values.length, 2, 'the retry draws a complete mark');
+  assert.equal(worldItems(draw).length, 2, 'the retry draws a complete mark');
   assert.equal(annotationGroups(store).length, 1);
   renderer.destroy();
 });
@@ -493,7 +478,7 @@ function workTrace() {
 
 test('buildings share one probe per frame and preserve probe geometry, filtering and fallback', async (t) => {
   installBrowserGlobals(t);
-  const { viewer, dataSources, frames } = fakeViewer(-99, 31);
+  const { viewer, draw, frames } = fakeViewer(-99, 31);
   const renderer = createHybridAnnotationRenderer(viewer);
   t.after(() => renderer.destroy());
   const first = buildingAnnotation('sampled-building');
@@ -503,15 +488,12 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
   showOsmCredit(viewer, otherOwner);
   const probes = [];
   const outcomes = [-500, 120, 30, null, new Error('tile unavailable'), 60, 9001, 90];
-  viewer.scene.clampToHeight = (position) => {
-    const cartographic = Cesium.Cartographic.fromCartesian(position);
-    const lon = Cesium.Math.toDegrees(cartographic.longitude);
-    const lat = Cesium.Math.toDegrees(cartographic.latitude);
+  sampleHeights(viewer.scene, (lon, lat) => {
     probes.push([lon, lat]);
     const outcome = outcomes[probes.length - 1];
     if (outcome instanceof Error) throw outcome;
-    return outcome == null ? undefined : Cesium.Cartesian3.fromDegrees(lon, lat, outcome);
-  };
+    return outcome == null ? undefined : outcome;
+  });
   // Suppress screen points: these counts concern the eight outside-building
   // probes, not the screen renderer's separate anchor-height sampling.
   const firstTrace = workTrace();
@@ -528,14 +510,14 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
   const firstCompletion = renderer.add(first, { pendingVisible: false, workTrace: firstTrace });
   const secondCompletion = renderer.add(second, { pendingVisible: false, workTrace: secondTrace });
   assert.equal(probes.length, 0, 'enqueue must not probe synchronously');
-  assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal(worldItems(draw).length, 0);
   assert.equal([...viewer.credits].filter(c => c.showOnScreen).length, 1,
     'pending outlines add no tile credit to the other owner');
   for (let frame = 0; frame < 16; frame += 1) {
     const before = probes.length;
     frames.emit();
     assert.equal(probes.length, before + 1, 'the two buildings share one total probe budget');
-    if (frame < 7) assert.equal(dataSources[0].entities.values.length, 0, 'no partial world parts');
+    if (frame < 7) assert.equal(worldItems(draw).length, 0, 'no partial world parts');
   }
   const [installed, fallback] = await Promise.all([firstCompletion, secondCompletion]);
   assert.equal(installed.status, 'installed');
@@ -590,10 +572,10 @@ test('buildings share one probe per frame and preserve probe geometry, filtering
     assert.ok(Math.abs(probes[index + 8][1] - probes[index][1]) < 1e-10);
   }
   assert.equal(new Set(probes.slice(0, 8).map((point) => point.join(','))).size, 8);
-  const fills = dataSources[0].entities.values.filter((entity) => entity.polygon?.fill?.getValue() !== false && entity.polygon);
+  const fills = worldItems(draw, 'shapes').filter((item) => item.id.startsWith('volume:'));
   assert.equal(fills.length, 2);
-  assert.ok(Math.abs(fills[0].polygon.height.getValue() - 57) < 1e-6, 'four accepted samples select floor(4 * 0.3), height 60 minus 3');
-  assert.ok(Math.abs(fills[1].polygon.height.getValue() - 77) < 1e-6, 'all unavailable probes retain anchor minus building height fallback');
+  assert.ok(Math.abs(fills[0].geometry.rings[0][0].height - 57) < 1e-6, 'four accepted samples select floor(4 * 0.3), height 60 minus 3');
+  assert.ok(Math.abs(fills[1].geometry.rings[0][0].height - 77) < 1e-6, 'all unavailable probes retain anchor minus building height fallback');
   const afterCompletion = probes.length;
   frames.emit();
   assert.equal(probes.length, afterCompletion, 'completion releases the sampler');
@@ -616,7 +598,7 @@ test('a building queued behind others gets its full budget on a slow device', as
   t.mock.method(globalThis.performance, 'now', () => now);
   const { viewer, frames } = fakeViewer(-99, 31);
   const renderer = createHybridAnnotationRenderer(viewer);
-  viewer.scene.clampToHeight = (position) => position;
+  sampleHeights(viewer.scene, () => 0);
   const traces = [workTrace(), workTrace(), workTrace()];
   const completions = [0, 0.01, 0.02].map((offset, index) =>
     renderer.add(buildingAnnotation(`queued-${index}`, offset), {
@@ -645,10 +627,10 @@ test('building cancellation, queued deadline and destroy prevent saved callbacks
   installBrowserGlobals(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => t.mock.timers.reset());
-  const { viewer, dataSources, frames } = fakeViewer(-99, 31);
+  const { viewer, draw, frames } = fakeViewer(-99, 31);
   const renderer = createHybridAnnotationRenderer(viewer);
   let probeCount = 0;
-  viewer.scene.clampToHeight = (position) => { probeCount += 1; return position; };
+  sampleHeights(viewer.scene, () => { probeCount += 1; return 0; });
   const cancelled = buildingAnnotation('cancelled-building');
   const cancelledTrace = workTrace();
   const cancelledCompletion = renderer.add(cancelled, { pendingVisible: false, workTrace: cancelledTrace });
@@ -690,7 +672,7 @@ test('building cancellation, queued deadline and destroy prevent saved callbacks
   assert.equal(viewer.credits.size, 0);
   for (const listener of savedTimeout) listener();
   assert.equal(probeCount, 1, 'saved callbacks cannot revive timed-out tasks');
-  assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal(worldItems(draw).length, 0);
 
   const pending = buildingAnnotation('destroyed-building');
   const destruction = renderer.add(pending, { pendingVisible: false });
@@ -700,7 +682,7 @@ test('building cancellation, queued deadline and destroy prevent saved callbacks
   for (const listener of savedDestroy) listener();
   t.mock.timers.tick(2000);
   assert.equal(probeCount, 1);
-  assert.equal(dataSources.length, 0, 'destroy removes the owned data source');
+  assert.ok([...draw.sets.values()].every((record) => record.disposed), 'destroy lets every set go');
   assert.equal(frames.size, 0, 'destroy removes frame listeners');
   assert.equal(viewer.credits.size, 0);
 });
@@ -709,7 +691,7 @@ test('a timed-out building upgrade keeps its existing pending screen group', asy
   installBrowserGlobals(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => t.mock.timers.reset());
-  const { viewer, dataSources, frames } = fakeViewer(-99, 31);
+  const { viewer, draw, frames } = fakeViewer(-99, 31);
   const { store, renderer } = hybridWithBoard(viewer);
   const anno = { ...buildingAnnotation('pending-upgrade'), ring: null, label: 'Building' };
   renderer.add(anno);
@@ -722,15 +704,15 @@ test('a timed-out building upgrade keeps its existing pending screen group', asy
   assert.equal(after.key, before.key);
   assert.equal(others.length, 0);
   assert.ok(childrenWithClass(after, 'gev-anno-ring').length > 0, 'the honest pending point is not converted');
-  assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal(worldItems(draw).length, 0);
   frames.emit();
-  assert.equal(dataSources[0].entities.values.length, 0);
+  assert.equal(worldItems(draw).length, 0);
   renderer.destroy();
 });
 
 test('an asynchronous caption-conversion throw rolls back multipart world geometry and remains removable', async (t) => {
   installBrowserGlobals(t);
-  const { viewer, dataSources, frames } = fakeViewer(-99, 31);
+  const { viewer, draw, frames } = fakeViewer(-99, 31);
   const { store, renderer } = hybridWithBoard(viewer);
   const anno = { ...buildingAnnotation('caption-failure'), ring: null, label: 'Building' };
   renderer.add(anno);
@@ -743,7 +725,7 @@ test('an asynchronous caption-conversion throw rolls back multipart world geomet
   // Frame projection is still ordinary pending-point work. Arm the failure
   // only after sampling completes, before its promise converts the caption.
   for (let frame = 0; frame < 8; frame += 1) frames.emit();
-  assert.ok(dataSources[0].entities.values.length > 0, 'multipart world geometry landed before caption conversion');
+  assert.ok(worldItems(draw).length > 0, 'multipart world geometry landed before caption conversion');
   assert.equal(viewer.credits.size, 2, 'credit belongs to the committed world proxy');
   // The caption conversion fails when it presents the converted mark.
   const publish = store.publish;
@@ -766,7 +748,7 @@ test('an asynchronous caption-conversion throw rolls back multipart world geomet
   assert.equal(captionTrace.slices.filter(s => s.phase === 'ground-step').length, 8);
   assert.equal(captionTrace.slices.filter(s => s.phase === 'hybrid-complete').length, 1);
   assert.equal(captionTrace.slices.filter(s => s.phase === 'hybrid-rollback').length, 1);
-  assert.equal(dataSources[0].entities.values.length, 0, 'all classification, cage and outline parts roll back');
+  assert.equal(worldItems(draw).length, 0, 'all classification, cage and outline parts roll back');
   assert.equal(viewer.credits.size, 0, 'caption rollback releases that same proxy');
   assert.equal(annotationGroups(store).length, 1, 'failed screen cleanup remains addressable');
   globalThis.window.setTimeout = workingSetTimeout;
