@@ -22,6 +22,25 @@ export function createRendering({
     if (current !== next) graphic.show = next;
   }
 
+  // Away from live, a launch shows from its lift-off on, so scrubbing the
+  // world time forward brings the launches up in the order they flew. The
+  // selected mission stays, whenever it flies.
+  function syncPendingLaunches() {
+    const pending = new Set();
+    for (const { launch } of layerState._missionOverlayRecords.values()) {
+      if (layerState.launchHidden(launch)) pending.add(launch.id);
+    }
+    const previous = layerState._pendingLaunchIds;
+    if (
+      pending.size === previous.size &&
+      [...pending].every((id) => previous.has(id))
+    )
+      return;
+    layerState._pendingLaunchIds = pending;
+    parts.overlays.syncMissionOverlayEntries();
+    parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
+  }
+
   function updateMissionFrame() {
     if (
       !layerState._enabled ||
@@ -31,6 +50,7 @@ export function createRendering({
       parts.overlays.hideReplayVehicleOverlay();
       return;
     }
+    syncPendingLaunches();
     parts.panel.updateMissionTelemetry();
     const time = Cesium.JulianDate.now(layerState._declutterTime);
     layerState._declutterOccluder.cameraPosition =
@@ -39,21 +59,28 @@ export function createRendering({
     parts.overlays.refreshSelectedMissionOverlayText();
     for (const entity of layerState._dataSource.entities.values) {
       if (!entity.show) continue;
-      if (!entity.position) continue;
       const id = parts.selection.entityLaunchId(entity);
       if (!id) continue;
+      const pending = layerState._pendingLaunchIds.has(id);
+      if (entity.polyline)
+        setGraphicVisibility(entity.polyline, !pending, time);
+      if (!entity.position) continue;
       const position = entity.position.getValue(time);
-      let horizonVisible = Boolean(
-        position && layerState._declutterOccluder.isPointVisible(position),
-      );
+      let horizonVisible =
+        !pending &&
+        Boolean(
+          position && layerState._declutterOccluder.isPointVisible(position),
+        );
       const launchAnchor = entity.id.startsWith('rocket-launch:');
       if (launchAnchor) {
-        horizonVisible = parts.overlays.missionAnchorVisible(
-          layerState._viewer.scene.camera.positionWC,
-          position,
-          id,
-          layerState._selectedLaunchId,
-        );
+        horizonVisible =
+          !pending &&
+          parts.overlays.missionAnchorVisible(
+            layerState._viewer.scene.camera.positionWC,
+            position,
+            id,
+            layerState._selectedLaunchId,
+          );
         // Keep entity.show reserved for mission-selection isolation. Horizon
         // state is applied to the individual graphics below so a rear-side
         // anchor remains eligible for reevaluation as the camera moves.
@@ -394,7 +421,7 @@ export function createRendering({
         orbitCurrent.latitude,
         orbitCurrent.altitude,
       );
-      const liveTime = new Date();
+      const liveTime = new Date(layerState.orbitNow());
       const liveTelemetry = { speedMps: null };
       layerState._satelliteTelemetry.set(launch.id, liveTelemetry);
       let liveFrameNumber = -1;
@@ -405,7 +432,7 @@ export function createRendering({
           layerState._viewer?.scene?.frameState?.frameNumber ?? -1;
         if (frameNumber !== -1 && frameNumber === liveFrameNumber) return;
         liveFrameNumber = frameNumber;
-        const nowMs = Date.now();
+        const nowMs = layerState.orbitNow();
         liveTime.setTime(nowMs);
         if (satelliteTrack) {
           const propagated =

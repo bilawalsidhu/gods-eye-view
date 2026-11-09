@@ -25,6 +25,20 @@ const CIVIL = Object.freeze({
   latitude: 30,
   longitude: -97,
 });
+/** A tracked satellite, as the Satellites layer reports it. */
+const SATELLITE = Object.freeze({
+  kind: 'satellite',
+  layerId: 'satellites',
+  id: '25544',
+  noradId: 25544,
+  name: 'ISS (ZARYA)',
+  classLabel: 'STATION · ISS',
+  latitude: 30,
+  longitude: -97,
+  altitudeM: 420_000,
+  velocityMps: 7_660,
+  stale: false,
+});
 const MILITARY = Object.freeze({
   ...CIVIL,
   icao24: 'ae0001',
@@ -36,6 +50,7 @@ function fixture(
   {
     enabled = [],
     tracked = null,
+    satellite = null,
     contextMode = null,
     changing = false,
     dataManager: suppliedManager = null,
@@ -86,6 +101,14 @@ function fixture(
     services: {
       flightsLayer: { getTrackedInfo: trackedFrom('flights') },
       militaryFlightsLayer: { getTrackedInfo: trackedFrom('military') },
+      aisLiveVesselsLayer: { getCockpitSubject: () => null },
+      // Like the layer, no subject while Satellites is off.
+      satellitesLayer: {
+        getCockpitSubject: () =>
+          satellite && layers.has('satellites') ? { ...satellite } : null,
+        getCockpitPosition: () => null,
+        setCockpitSubject: () => true,
+      },
       militaryAwarenessLayer: { getContextSnapshot: () => null },
       isTr3b: () => false,
       holdContinuousRender() {},
@@ -120,7 +143,11 @@ function fixture(
   t.after(() => {
     coordinator.stop();
     app.unmount();
-    document.body.classList.remove('cockpit-mode');
+    document.body.classList.remove(
+      'cockpit-mode',
+      'cockpit-bridge',
+      'cockpit-orbit',
+    );
   });
   /** Turn a layer off and tell the Context owner, as the data manager does. */
   const disable = (layerId) => {
@@ -157,6 +184,7 @@ test('a civilian aircraft enters with Live Flights alone: no Contacts, no Milita
   assert.equal(state.entryAllowed, true);
   assert.equal(state.entryBlockedReason, null);
   assert.equal(cockpit.enter(), true);
+  assert.equal(cockpit.subjectKind, 'aircraft');
 });
 
 test('a military aircraft enters with Military Flights alone', (t) => {
@@ -195,6 +223,47 @@ test('with no aircraft layer on, entry is refused for that reason, never for Con
   assert.doesNotMatch(voice.error, /contacts/i);
   assert.equal(voice.state.entryBlockedReason, 'subject-layer-off');
   assert.equal(cockpit.active, false);
+});
+
+test('voice entry on a vessel bridge refuses before it touches tracking', (t) => {
+  const { coordinator, cockpit } = fixture(t, { enabled: ['flights'] });
+  let navigated = false;
+  coordinator.services.militaryAwarenessLayer.navigateNext = () => {
+    navigated = true;
+    return true;
+  };
+  // Stand in for a bridge ride: the refusal reads only these two.
+  cockpit.active = true;
+  cockpit.subjectKind = 'vessel';
+  t.after(() => {
+    cockpit.active = false;
+    cockpit.subjectKind = null;
+  });
+  const voice = coordinator.controlCockpit('enter', { targetLayer: 'flights' });
+  assert.equal(voice.ok, false);
+  assert.match(voice.error, /vessel bridge/);
+  assert.equal(navigated, false, 'no aircraft was tracked');
+  assert.equal(cockpit.subjectKind, 'vessel');
+});
+
+test('voice entry in an orbital view refuses before it touches tracking', (t) => {
+  const { coordinator, cockpit } = fixture(t, { enabled: ['flights'] });
+  let navigated = false;
+  coordinator.services.militaryAwarenessLayer.navigateNext = () => {
+    navigated = true;
+    return true;
+  };
+  cockpit.active = true;
+  cockpit.subjectKind = 'satellite';
+  t.after(() => {
+    cockpit.active = false;
+    cockpit.subjectKind = null;
+  });
+  const voice = coordinator.controlCockpit('enter', { targetLayer: 'flights' });
+  assert.equal(voice.ok, false);
+  assert.match(voice.error, /orbital view/);
+  assert.equal(navigated, false, 'no aircraft was tracked');
+  assert.equal(cockpit.subjectKind, 'satellite');
 });
 
 test('with an aircraft layer on but nothing tracked, the reason is the missing aircraft', (t) => {
@@ -439,6 +508,22 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   assert.deepEqual(on(manager), ['flights', 'military']);
 });
 
+test('Live AIS Vessels, once adopted as the ridden layer, outlives Contacts', async (t) => {
+  const live = await liveFixture(t, {
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  const { manager, controls, coordinator, settle } = live;
+  assert.equal(await controls._selectContextMode('flights'), true);
+  await settle();
+  assert.equal(manager.isEnabled('ais-live-vessels'), true);
+  // The bridge reports its layer on entry (cockpitBridge.test.mjs).
+  coordinator._adoptRiddenLayer('ais-live-vessels');
+  await controls._selectContextMode(null);
+  await settle();
+  assert.equal(controls.getContextModeState().mode, null);
+  assert.deepEqual(on(manager), ['ais-live-vessels']);
+});
+
 test('the ridden layer still ends the Cockpit while Contacts is on', async (t) => {
   const live = await liveFixture(t, {
     tracked: { layerId: 'flights', info: CIVIL },
@@ -464,4 +549,102 @@ test('without a Cockpit, ending Contacts restores the layers it found', async (t
   await settle();
   assert.equal(controls.getContextModeState().mode, null);
   assert.deepEqual(on(manager), [], 'Live Flights goes back off');
+});
+
+test('the readout entry reads BRIDGE for a selected vessel', async (t) => {
+  const { $, store } = fixture(t);
+  store.publishPresence({
+    active: false,
+    entryAvailable: true,
+    entryKind: 'vessel',
+    subjectKind: null,
+    tr3b: null,
+  });
+  await nextTick();
+  const readoutEntry = $('#cockpit-entry-readout');
+  assert.equal(readoutEntry.hidden, false);
+  assert.match(readoutEntry.textContent, /directions_boat/);
+  assert.match(readoutEntry.textContent, /BRIDGE/);
+});
+
+test('a tracked satellite needs Satellites on for the ORBIT entry', async (t) => {
+  const { $, cockpit } = fixture(t, { satellite: SATELLITE });
+  cockpit.syncEntry();
+  await nextTick();
+  assert.equal($('#cockpit-entry').hidden, true, 'Satellites off: no entry');
+  assert.equal(cockpit.enter(), false);
+});
+
+test('with Satellites on, the tracked satellite offers ORBIT and reports itself', async (t) => {
+  const { $, cockpit, coordinator, pinia } = fixture(t, {
+    enabled: ['satellites'],
+    satellite: SATELLITE,
+  });
+  useHudStore(pinia);
+  cockpit.syncEntry();
+  await nextTick();
+  for (const selector of ['#cockpit-entry', '#cockpit-entry-readout']) {
+    assert.equal($(selector).hidden, false, selector);
+    assert.match($(selector).textContent, /satellite_alt/);
+    assert.match($(selector).textContent, /ORBIT/);
+  }
+  // Voice stays aircraft-only: it neither offers nor takes the satellite.
+  assert.equal(coordinator.getCockpitState().entryAllowed, false);
+  assert.equal(coordinator.controlCockpit('enter').ok, false);
+  assert.equal(cockpit.active, false);
+  $('#cockpit-entry-readout').click();
+  await nextTick();
+  assert.equal(cockpit.active, true);
+  assert.equal(cockpit.subjectKind, 'satellite');
+  const state = coordinator.getCockpitState();
+  assert.equal(state.active, true);
+  assert.deepEqual(state.subject, {
+    kind: 'satellite',
+    id: '25544',
+    layerId: 'satellites',
+    callsign: null,
+    name: 'ISS (ZARYA)',
+  });
+});
+
+test('tracked debris offers no ORBIT entry and refuses to be entered', async (t) => {
+  const { $, cockpit } = fixture(t, {
+    enabled: ['satellites'],
+    satellite: {
+      ...SATELLITE,
+      id: '27386',
+      noradId: 27386,
+      name: 'SL-16 R/B',
+      satelliteClass: 'debris',
+      enterable: false,
+    },
+  });
+  cockpit.syncEntry();
+  await nextTick();
+  for (const selector of ['#cockpit-entry', '#cockpit-entry-readout'])
+    assert.equal($(selector).hidden, true, selector);
+  assert.equal(cockpit.enter(), false);
+  assert.equal(cockpit.enter({ kind: 'satellite' }), false);
+  assert.equal(cockpit.active, false);
+});
+
+test('a Context change in flight blocks the orbital view too', (t) => {
+  const { cockpit } = fixture(t, {
+    enabled: ['satellites'],
+    satellite: SATELLITE,
+    changing: true,
+  });
+  assert.equal(cockpit.enter(), false);
+});
+
+test('turning Satellites off ends the orbital view', (t) => {
+  const { cockpit, disable } = fixture(t, {
+    enabled: ['satellites', 'flights'],
+    satellite: SATELLITE,
+  });
+  assert.equal(cockpit.enter(), true);
+  disable('flights');
+  assert.equal(cockpit.active, true, 'other feeds are free to go off');
+  disable('satellites');
+  assert.equal(cockpit.active, false);
 });

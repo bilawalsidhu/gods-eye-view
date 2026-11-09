@@ -6,6 +6,14 @@ export function celestrakTleUrl(group) {
   return url;
 }
 
+/** CelesTrak SATCAT records (object type, status, owner) for a GP group, as CSV. */
+export function celestrakSatcatUrl(group) {
+  const url = new URL('https://celestrak.org/satcat/records.php');
+  url.searchParams.set('GROUP', group);
+  url.searchParams.set('FORMAT', 'CSV');
+  return url;
+}
+
 export function launchLibraryRecentUrl(end) {
   // Stable minute boundaries let different installations share LL2's cache.
   const roundedEnd = new Date(Math.floor(end.getTime() / 60000) * 60000);
