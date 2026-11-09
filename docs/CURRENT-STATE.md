@@ -1360,13 +1360,16 @@ the same way; a cell keeps at most sixteen). A read answers from the cell's
 reading nearest the asked point, so a viaduct and the street beside it in one
 cell keep their own heights; two readings within about 5 m of each other keep
 the lower. A spot refused only because the cell's DEM prior was cold is tried
-again later. Before this, one probe at the cell's centre latched for the
-session, so a centre on a roof lifted everything in the cell (a Haymarket bus
-drew 23.5 m above the street, on the garage roof) and a centre in the river put
-Red Line trains on the Longfellow Bridge 6–9 m under the deck. Residual: the
-probe is vertical, so a vehicle directly under a deck or a roof overhang reads
-the structure above it, and a vehicle between readings takes the nearest one, so
-its floor steps where the nearest reading changes.
+again later. Transit offers the sampler the latest point of each vehicle's path
+in a cell (its newest fix in its own cell), and the grounded-flight display
+clamp reads at the contact, held inside its sticky cell. Before this, one probe
+at the cell's centre latched for the session, so a centre on a roof lifted
+everything in the cell (a Haymarket bus drew 23.5 m above the street, on the
+garage roof) and a centre in the river put Red Line trains on the Longfellow
+Bridge 6–9 m under the deck. Residual: the probe is vertical, so a vehicle
+directly under a deck or a roof overhang reads the structure above it, and a
+vehicle between readings takes the nearest one, so its floor steps where the
+nearest reading changes.
 
 ## Vessel components and sources
 
