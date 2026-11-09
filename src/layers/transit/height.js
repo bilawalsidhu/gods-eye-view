@@ -124,7 +124,14 @@ export function createHeight({ state, services, parts }) {
       const cells = new Map();
       const collect = (point, answer) => {
         if (!onGround) return;
-        if (!cells.has(answer.cell))
+        // A cell keeps the last point offered in it: the path is walked
+        // oldest first, so that is where the vehicle is now or about to be,
+        // and the mesh sampler reads the surface there.
+        const held = cells.get(answer.cell);
+        if (held) {
+          held.lat = point.lat;
+          held.lon = point.lon;
+        } else
           cells.set(answer.cell, {
             lat: point.lat,
             lon: point.lon,
@@ -136,6 +143,13 @@ export function createHeight({ state, services, parts }) {
       const newest = entry.fixes.at(-1);
       const answer = requestHeight(newest.lat, newest.lon, entry);
       entry.heightCell = answer.cell;
+      // The selected vehicle's path also offers its history, newest segment
+      // first; the vehicle's own cell is read where its newest fix is.
+      const own = cells.get(answer.cell);
+      if (own) {
+        own.lat = newest.lat;
+        own.lon = newest.lon;
+      }
       if (answer.height !== null) {
         entry.heightM = answer.height;
         entry.heightResolved = true;
