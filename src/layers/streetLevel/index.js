@@ -8,6 +8,7 @@ import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
 import { filtersOf, requiresKeyIdFor, validateProviders } from './registry.js';
 import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 import { decodeParams, encodeParams } from './params.js';
 import {
   composeUIState,
@@ -41,6 +42,9 @@ const GROUND_RETRY_MS = 1000;
  * a time.
  * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
  */
+// "Since N days" counts back from the world time.
+const streetLevelTime = worldTimeFor(STREET_LEVEL_LAYER_ID);
+
 export function createStreetLevelLayer({
   providers: definitions,
   services = {},
@@ -93,7 +97,7 @@ export function createStreetLevelLayer({
     return Object.freeze({
       services: state.services,
       /** Resolved against now, so "since N days" keeps up with the clock. */
-      getFilter: () => resolveFilter(state.filter),
+      getFilter: () => resolveFilter(state.filter, streetLevelTime()),
       /** The layer and this provider's switch are both on. */
       isActive: () => state.enabled && entry.on,
       notify,
@@ -126,8 +130,17 @@ export function createStreetLevelLayer({
     });
   }
 
-  // One source at a time: the first provider that defaults on.
-  const startsOn = defs.find((def) => def.defaultOn !== false);
+  /** `def` if its key is ready, else the first keyless provider not refused. */
+  function keylessInstead(def, refused = () => false) {
+    if (def.keyReady?.() !== false) return def;
+    return defs.find((d) => !d.requiresKeyId && !refused(d.id)) || def;
+  }
+
+  // One source at a time: the first provider that defaults on. Without its
+  // key, the first keyless source instead, so a fresh keyless install opens
+  // on coverage rather than KEY REQUIRED.
+  const preferred = defs.find((def) => def.defaultOn !== false);
+  const startsOn = preferred && keylessInstead(preferred);
   for (const def of defs) {
     const entry = {
       def,
@@ -356,7 +369,7 @@ export function createStreetLevelLayer({
     const filter = normalizeFilter(next, state.filter);
     if (sameFilter(filter, state.filter)) return;
     state.filter = filter;
-    const resolved = resolveFilter(filter);
+    const resolved = resolveFilter(filter, streetLevelTime());
     for (const entry of state.providers.values())
       entry.instance.setFilter(resolved);
     notify();
@@ -585,7 +598,17 @@ export function createStreetLevelLayer({
         providerIds: state.providers.keys(),
         filter: state.filter,
       });
-      const lit = litByParams(decoded.providers);
+      // A restored "Mapillary on" (the codec default) would light a source a
+      // keyless install cannot draw. Only redirect a provider the params switch
+      // on: a filter-only update keeps whatever the user chose.
+      const asked = litByParams(decoded.providers);
+      const lit =
+        asked && decoded.providers.get(asked) === true
+          ? keylessInstead(
+              state.providers.get(asked).def,
+              (id) => decoded.providers.get(id) === false,
+            ).id
+          : asked;
       const before = litIds();
       for (const [id, entry] of state.providers)
         if (id !== lit) switchProvider(entry, false);

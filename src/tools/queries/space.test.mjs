@@ -3,6 +3,10 @@ import test from 'node:test';
 import { twoline2satrec } from 'satellite.js';
 import { composeCatalog, coreTools } from '../index.js';
 import {
+  findNextSatellitePass,
+  lookAnglesAt,
+} from '../../data/satellitePass.js';
+import {
   noradIdFromSatnum,
   parseTleText,
   tleCatalogNumber,
@@ -294,6 +298,37 @@ test('satellites overhead are those above the elevation, highest first', async (
     strict.summary,
     /^0 satellites from the stations group are at least 90° above/,
   );
+});
+
+test('satellite azimuths that round to 360 read as 0', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { satellites: satellites(), clock: CLOCK },
+  });
+  // At these points the ISS's raw azimuths fall just below 360°; check that
+  // first so the test cannot pass on a raw value near 0.
+  const [, line1, line2] = TLE.split('\n');
+  const iss = twoline2satrec(line1, line2);
+  const nearNorth = (deg) => deg > 359.5 && deg < 360;
+  const rawPass = findNextSatellitePass({
+    satrec: iss,
+    latDeg: 10,
+    lonDeg: 30,
+    fromMs: CLOCK.now(),
+  });
+  assert.ok(nearNorth(rawPass.riseAzDeg), `rise ${rawPass.riseAzDeg}°`);
+  const rawLook = lookAnglesAt(iss, CLOCK.now(), 39.25, 65.75);
+  assert.ok(nearNorth(rawLook.azDeg), `azimuth ${rawLook.azDeg}°`);
+  const pass = await catalog.call('next_satellite_pass', {
+    location: { lat: 10, lon: 30 },
+  });
+  assert.equal(pass.data.pass.rise_azimuth_deg, 0);
+  assert.equal(pass.data.pass.rise_direction, 'N');
+  const overhead = await catalog.call('satellites_overhead', {
+    location: { lat: 39.25, lon: 65.75 },
+  });
+  assert.equal(overhead.data.rows[0].name, 'ISS (ZARYA)');
+  assert.equal(overhead.data.rows[0].azimuth_deg, 0);
 });
 
 test('stale orbit and launch data are reported', async () => {
