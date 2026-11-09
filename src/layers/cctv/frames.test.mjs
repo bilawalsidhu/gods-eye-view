@@ -275,8 +275,7 @@ test('a nearby plane below the ellipsoid still fetches for a low viewer', () => 
   frames.refreshProjectionImage(record);
   assert.match(record.projection.image.src, /projTs=/);
 
-  // An above-threshold viewer still needs a conservative result when the
-  // entire plane itself is below the reference ellipsoid.
+  // The same below-ellipsoid plane remains visible from a higher viewer.
   const high = point(0.00135, 0, 1200);
   const highDirection = Cesium.Cartesian3.normalize(
     Cesium.Cartesian3.subtract(cap, high, new Cesium.Cartesian3()),
