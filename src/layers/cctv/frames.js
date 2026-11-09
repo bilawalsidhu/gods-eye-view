@@ -252,8 +252,8 @@ export function createFrames({ state: layerState, services, parts, source }) {
   /**
    * Whether a camera's monitor plane can be on screen: the mount, the far cap
    * and its corners are bounded by one sphere that is tested against the view
-   * frustum, and at least one of those points must be above the horizon when
-   * the reference ellipsoid is a reliable occluder for this view.
+   * frustum, and at least one of those points must be above a conservative
+   * horizon computed from a shrunken reference ellipsoid.
    * Anything this cannot judge (no viewer, a 2D or Columbus scene, no geometry
    * yet) counts as visible, so a missing input never blocks a picture.
    * @param {Object} record - Camera record.
