@@ -585,6 +585,63 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
   assert.equal(callCount, 1);
 });
 
+test('the aircraft snapshot routes decline a non-GET before any upstream work', async (t) => {
+  // A fetch that throws proves the refusal comes before any upstream call.
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    throw new Error(`upstream must not be reached: ${url}`);
+  });
+  const cases = [
+    [install(providers.openSkyProxy()), '/api/flights'],
+    [install(providers.adsbLolProxy()), '/api/military'],
+  ];
+  for (const [request, route] of cases) {
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      const response = await request(route, '/', method);
+      assert.equal(response.statusCode, 405, `${method} ${route}`);
+      // RFC 9110 section 15.5.6: a 405 names the methods it accepts.
+      assert.equal(response.headers.allow, 'GET', `${method} ${route}`);
+      assert.deepEqual(JSON.parse(response.body), {
+        error: 'Method Not Allowed',
+      });
+    }
+  }
+});
+
+test('the snapshot method check hands each /track route on to its own handler', async () => {
+  // The snapshot mount also matches /track, so it must hand /track on
+  // before it checks the method.
+  for (const [plugin, route] of [
+    [providers.openSkyProxy(), '/api/flights'],
+    [providers.adsbLolProxy(), '/api/military'],
+  ]) {
+    const routes = new Map();
+    plugin.configureServer({
+      middlewares: { use: (path, handler) => routes.set(path, handler) },
+    });
+    const res = {
+      statusCode: 200,
+      writeHead(s) {
+        this.statusCode = s;
+      },
+      end() {},
+    };
+    let handedOn = false;
+    await routes.get(route)(
+      { url: '/track?icao24=abc123', method: 'POST' },
+      res,
+      () => {
+        handedOn = true;
+      },
+    );
+    assert.ok(handedOn, `${route}/track reaches next()`);
+    assert.equal(
+      res.statusCode,
+      200,
+      `${route}/track is not answered by the snapshot handler`,
+    );
+  }
+});
+
 test('the OpenSky snapshot is compressed for clients that ask, and an error body never inherits the cached frame', async (t) => {
   environment(t, {
     OPENSKY_AUTH_MODE: 'anon',
