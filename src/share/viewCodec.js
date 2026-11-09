@@ -274,7 +274,11 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     selectedFlightsTrackingId: null,
     selectedMilitaryTrackingId: null,
   }),
-  satellites: Object.freeze({ catalog: 'core', selectedSatTrackingId: null }),
+  satellites: Object.freeze({
+    catalog: 'core',
+    selectedSatTrackingId: null,
+    classes: 'sitpd',
+  }),
   cctv: Object.freeze({
     coverageMode: 'on',
     showProjection: true,

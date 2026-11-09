@@ -999,6 +999,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/militaryAwarenessEngine.js",
@@ -1381,6 +1382,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/modelVisualAnchor.js",
       "src/data/aircraftModelLighting.js",
@@ -1446,6 +1448,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/modelVisualAnchor.js",
       "src/data/aircraftModelLighting.js",
@@ -1502,6 +1505,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/modelVisualAnchor.js",
@@ -1643,6 +1647,7 @@
     "exports": ["./layers/satellites"],
     "modules": [
       "src/data/satelliteClass.js",
+      "src/data/satelliteClassMask.js",
       "src/data/satellitePass.js",
       "src/sources/tle.js",
       "src/layers/satellites/catalog.js",
@@ -1675,6 +1680,10 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js",
       "src/time/worldClock.js"
     ],
     "external": ["cesium", "satellite.js"]
@@ -2090,6 +2099,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/radioCountry.js",
       "src/layers/radio/catalogModel.js",
@@ -2482,6 +2492,7 @@
       "src/data/labelArbiter.js",
       "src/data/idSwitches.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/lifecycle.js",
@@ -3368,7 +3379,9 @@
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js"
     ],
     "external": [
       "hls.js",
@@ -3480,6 +3493,7 @@
       "src/data/labelArbiter.js",
       "src/data/idSwitches.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/localGeojsonCore.js",
       "src/data/localGeojsonLod.js",
@@ -4021,7 +4035,9 @@
       "src/layers/wildlifeSightings/sprites.js",
       "src/overlays/worldOverlayChrome.js",
       "src/layers/wildlifeSightings/photoText.js",
-      "src/layers/wildlifeSightings/performance.js"
+      "src/layers/wildlifeSightings/performance.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js"
     ],
     "external": [
       "hls.js",
@@ -4155,6 +4171,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/loadingFeedback.js",
@@ -4524,7 +4541,13 @@
   },
   "satellites-source": {
     "exports": ["./layers/satellites/source"],
-    "modules": ["src/layers/satellites/source.js"],
+    "modules": [
+      "src/layers/satellites/source.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js"
+    ],
     "external": []
   },
   "traffic-source-factory": {
@@ -4895,6 +4918,7 @@
       "src/view/index.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/idSwitches.js",
       "src/data/detectionPolicy.js",
@@ -5021,6 +5045,7 @@
       "src/data/idSwitches.js",
       "src/data/vesselTypes.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/sources/gbfsStations.js",
       "src/sources/tle.js",
@@ -5144,7 +5169,9 @@
       "src/layers/alpr/records.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/infrastructureData.js",
-      "src/sources/eventPacks.js"
+      "src/sources/eventPacks.js",
+      "src/layers/satellites/classes.js",
+      "src/data/ucsSatellites.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -5155,6 +5182,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/visualStylePolicy.js"
     ],
