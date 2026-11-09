@@ -86,6 +86,9 @@ export function beginOrbital() {
     // looked ahead, and the tiles already asked for (oldest first).
     prefetchMs: -Infinity,
     prefetched: new Set(),
+    // The provider those tiles came from, and the requests still in flight.
+    prefetchProvider: null,
+    prefetchRequests: new Set(),
     // A zoom step in flight: the magnification it started from and when.
     transition: null,
     previousUp: null,
@@ -119,6 +122,9 @@ export function endOrbital() {
   if (!state) return;
   this.orbital = null;
   state.placeTracker?.reset();
+  // Pre-loads still queued or in flight are for a view no longer shown.
+  for (const request of state.prefetchRequests) request.cancel?.();
+  state.prefetchRequests.clear();
   const frustum = this.viewer.camera?.frustum;
   if (frustum && state.savedFov !== null) frustum.fov = state.savedFov;
   // Back to the map the operator had, unless they picked another meanwhile.
@@ -356,6 +362,9 @@ export function updateOrbital(nowMs) {
 /** Tiles remembered as asked for in one orbital session. */
 const PREFETCH_MEMORY = 512;
 
+/** How far the shown time may be from now for the look-ahead to run, ms. */
+const PREFETCH_LIVE_TOLERANCE_MS = 60_000;
+
 /**
  * From 16x the view is 10 to 40 km wide while the ground track moves about
  * 7 km/s, so the imagery under it arrives late. Every
@@ -367,9 +376,11 @@ const PREFETCH_MEMORY = 512;
  * imagery server's slots are taken by the tiles on screen or the scheduler
  * is full, and a declined tile is asked again on a later look-ahead. At most
  * ORBITAL_PREFETCH_MAX_TILES a time; the last PREFETCH_MEMORY tiles asked
- * for are not asked again. Nothing below 16x, while the view is tilted off
- * nadir (it no longer looks at the track), after the exit, or with the globe
- * hidden (Google 3D tiles drawn instead).
+ * for are not asked again unless their request failed, and a new base map
+ * starts the memory over. Exit cancels the requests still pending. Nothing
+ * below 16x, while the view is tilted off nadir (it no longer looks at the
+ * track), with the world clock away from now (paused, played back), after
+ * the exit, or with the globe hidden (Google 3D tiles drawn instead).
  * @returns {number} The tiles asked for.
  */
 export function prefetchImageryAhead(info, nowMs) {
@@ -379,12 +390,24 @@ export function prefetchImageryAhead(info, nowMs) {
   if (lookIsOffset(state.lookTarget, 0) || lookIsOffset(state.lookView, 0))
     return 0;
   if (nowMs - state.prefetchMs < ORBITAL_PREFETCH_INTERVAL_MS) return 0;
+  // The look-ahead runs at live speed: with the world clock paused, played
+  // back or moved, the view will not pass where it points.
+  if (
+    Number.isFinite(info.atMs) &&
+    Math.abs(info.atMs - Date.now()) > PREFETCH_LIVE_TOLERANCE_MS
+  )
+    return 0;
   state.prefetchMs = nowMs;
   try {
     const globe = this.viewer.scene?.globe;
     if (!globe || globe.show === false) return 0;
     const provider = baseImageryProvider(this.viewer);
     if (!provider) return 0;
+    // Another base map: its tiles have not been asked for.
+    if (provider !== state.prefetchProvider) {
+      state.prefetched.clear();
+      state.prefetchProvider = provider;
+    }
     const fov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
     const viewKm = footprintWidthKm(
       info.altitudeM,
@@ -427,6 +450,7 @@ export function prefetchImageryAhead(info, nowMs) {
     let asked = 0;
     for (const tile of tiles) {
       let pending;
+      let request;
       try {
         // The tiles on screen keep their slots: Cesium's scheduler declines
         // this request while the imagery server's slots are taken (shared
@@ -437,19 +461,28 @@ export function prefetchImageryAhead(info, nowMs) {
           tile.x,
           tile.y,
           tile.level,
-          new Cesium.Request({
+          (request = new Cesium.Request({
             throttle: true,
             throttleByServer: true,
             priority: Number.MAX_VALUE,
             type: Cesium.RequestType.IMAGERY,
-          }),
+          })),
         );
       } catch {
         continue;
       }
       // A provider that declines now (throttled) is asked again later.
       if (!pending) continue;
-      Promise.resolve(pending).catch(() => {});
+      const requests = state.prefetchRequests;
+      requests.add(request);
+      Promise.resolve(pending).then(
+        () => requests.delete(request),
+        () => {
+          requests.delete(request);
+          // Failed or dropped by the scheduler: asked again later.
+          memory.delete(tile.key);
+        },
+      );
       memory.add(tile.key);
       if (memory.size > PREFETCH_MEMORY)
         memory.delete(memory.values().next().value);
@@ -602,15 +635,21 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     footprintKm: offset ? null : footprintKm,
     // The imaging sensor's swath, drawn to scale; null without one. The
     // SENSOR step's zoom is null when the swath lies outside 1x..maxZoom.
+    // Looking past the limb there is no ground for it to cover: no sensor.
     sensor:
-      swathKm === null
+      swathKm === null || !seesEarth
         ? null
         : {
             label: info.sensor?.label ?? null,
             swathKm,
             // Off nadir the view and the swath widen alike: the strip
-            // keeps its share of the frame.
-            stripFraction: sensorStripFraction(swathKm, footprintKm),
+            // keeps its share of the frame. No strip where it would
+            // mislead: a geostationary view has no ground track to run
+            // along, and a SAR images to one side of nadir, not under it.
+            stripFraction:
+              trackUp && info.sensor?.type !== 'SAR'
+                ? sensorStripFraction(swathKm, footprintKm)
+                : null,
             zoom: sensorSwathZoom(info.altitudeM, swathKm, aspect, maxZoom),
           },
     transition: { ...transition },
@@ -634,8 +673,13 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     cosparId: info.cosparId ?? null,
     tle: info.tle ?? null,
     // Read on the HUD's cadence, so the age stays current without a timer.
+    // The gap between the TLE's epoch and the time the satellite is shown
+    // at (the world clock's), either side: SGP4 drifts both ways.
     tleAgeMs: Number.isFinite(info.tle?.epochMs)
-      ? Date.now() - info.tle.epochMs
+      ? Math.abs(
+          (Number.isFinite(info.atMs) ? info.atMs : Date.now()) -
+            info.tle.epochMs,
+        )
       : null,
     owner: info.owner ?? null,
     operator: info.operator ?? null,

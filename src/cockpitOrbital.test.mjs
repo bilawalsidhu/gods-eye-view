@@ -461,15 +461,17 @@ test('the points ahead run along the ground track at ground speed', () => {
     assert.ok(Math.abs(km - groundKmPerS * seconds) < 0.5, `${seconds} s`);
     // North-east of the start, on a 45° track.
     assert.ok(centre.lat > PASS.latitude && centre.lon > PASS.longitude);
-    // The side points sit a third of the view off the centre line.
-    for (const side of points.slice(i * across + 1, (i + 1) * across))
-      assert.ok(Math.abs(greatCircleKm(centre, side) - 20 / 3) < 0.05);
+    // The side points sit their fraction of the view off the centre line.
+    points.slice(i * across + 1, (i + 1) * across).forEach((side, k) => {
+      const offKm = 20 * Math.abs(ORBITAL_PREFETCH_ACROSS[k + 1]);
+      assert.ok(Math.abs(greatCircleKm(centre, side) - offKm) < 0.05);
+    });
   });
   assert.deepEqual(groundTrackAhead({ ...PASS, groundTrackDeg: null }, 20), []);
   assert.deepEqual(groundTrackAhead(PASS, null), []);
 });
 
-test("the tile level is the one Cesium draws for the view", () => {
+test('the tile level is the one Cesium draws for the view', () => {
   const mercator = new Cesium.WebMercatorTilingScheme();
   // Worked case: 10 m per CSS pixel at the equator. Cesium refines the
   // ellipsoid terrain until a tile's error is at most 2 px, 20 m: level 12,
@@ -566,7 +568,11 @@ test('the tiles ahead are the ones the points fall in, bounded and new', () => {
   assert.ok(tiles.every((tile) => tile.x >= here.x && tile.y <= here.y));
   // Bounded, and a tile already asked for is skipped.
   assert.equal(tilesForPoints(mercator, points, 15, { maxTiles: 3 }).length, 3);
-  const asked = new Set(tiles.map((tile) => tile.key));
+  const asked = new Set(
+    tilesForPoints(mercator, points, 13, { maxTiles: Infinity }).map(
+      (tile) => tile.key,
+    ),
+  );
   assert.deepEqual(
     tilesForPoints(mercator, points, 13, { skip: (key) => asked.has(key) }),
     [],

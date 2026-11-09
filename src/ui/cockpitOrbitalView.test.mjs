@@ -1018,9 +1018,11 @@ const WORLDVIEW = Object.freeze({
   id: '40115',
   noradId: 40115,
   name: 'WORLDVIEW-3 (WV-3)',
-  classKey: 'visual',
+  satelliteClass: 'imaging',
   classLabel: 'IMAGING',
   altitudeM: 617_000,
+  // A sun-synchronous pass: the strip runs along this track.
+  groundTrackDeg: 190,
   sensor: Object.freeze({
     label: 'WorldView-3',
     narrowestSwathKm: 13.1,
@@ -1452,4 +1454,104 @@ test('the pre-load is throttled, at the level Cesium draws, and waits out a tilt
     latitudeDeg: WORLDVIEW.latitude,
   });
   assert.equal(Number(requests[0].split('/')[0]), expected);
+});
+
+test('the TLE age is measured from the time the satellite is shown at', async (t) => {
+  const DAY = 86_400_000;
+  const { store } = await orbitAt(t, {
+    satellite: {
+      ...ISS,
+      // The world clock thirty days back: before the element set's epoch.
+      atMs: START_MS - 30 * DAY,
+      tle: { line1: '1 25544U', line2: '2 25544', epochMs: START_MS - 2 * DAY },
+    },
+  });
+  assert.ok(Math.abs(store.orbital.tleAgeMs / DAY - 28) < 1e-6);
+});
+
+/** A geostationary imager with a 1000 km sensor swath. */
+const GEO_IMAGER = Object.freeze({
+  ...ISS,
+  id: '41866',
+  noradId: 41866,
+  name: 'GEO IMAGER',
+  satelliteClass: 'imaging',
+  classLabel: 'IMAGING',
+  altitudeM: 35_786_000,
+  sensor: Object.freeze({
+    label: 'GEO imager',
+    narrowestSwathKm: 1000,
+    swathConfirmed: true,
+  }),
+});
+
+test('looking past the limb shows no sensor swath; a GEO view draws no strip', async (t) => {
+  const { cockpit, store } = await orbitAt(t, { satellite: GEO_IMAGER });
+  assert.ok(store.orbital.sensor, 'the sensor reads at nadir');
+  assert.equal(
+    store.orbital.sensor.stripFraction,
+    null,
+    'no ground track, no strip',
+  );
+  for (let step = 0; step < 3; step += 1) press(cockpit, 'ArrowRight');
+  await settle();
+  assert.equal(store.orbital.look.swathKm, null);
+  assert.equal(store.orbital.sensor, null, 'nothing below to sense');
+});
+
+test('a SAR swath reads but draws no strip under nadir', async (t) => {
+  const { store } = await orbitAt(t, {
+    satellite: {
+      ...WORLDVIEW,
+      sensor: { ...WORLDVIEW.sensor, type: 'SAR', label: 'SAR' },
+    },
+  });
+  assert.ok(store.orbital.sensor.swathKm > 0);
+  assert.equal(store.orbital.sensor.stripFraction, null);
+});
+
+test('exit cancels pending pre-loads, and a failed one is asked again', async (t) => {
+  const { cockpit, viewer, store, clock } = await orbitAt(t, {
+    satellite: WORLDVIEW_ON_TRACK,
+  });
+  const asked = [];
+  let fail = true;
+  const pending = [];
+  imageryGlobe(viewer, {
+    requestImage: (x, y, level, request) => {
+      asked.push(`${level}/${x}/${y}`);
+      if (fail) return Promise.reject(new Error('dropped'));
+      pending.push(request);
+      return new Promise(() => {});
+    },
+  });
+  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 16);
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  await settle();
+  const firstAsk = asked.slice();
+  assert.ok(firstAsk.length > 0);
+  fail = false;
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.deepEqual(asked.slice(firstAsk.length), firstAsk, 'asked again');
+  assert.ok(pending.length > 0);
+  cockpit.exit();
+  assert.ok(
+    pending.every((request) => request.cancelled === true),
+    'cancelled on exit',
+  );
+});
+
+test('the pre-load waits while the world clock is away from now', async (t) => {
+  const { cockpit, viewer, store, clock } = await orbitAt(t, {
+    satellite: { ...WORLDVIEW_ON_TRACK, atMs: START_MS - 3_600_000 },
+  });
+  const { requests } = imageryGlobe(viewer);
+  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
+  assert.equal(store.orbital.zoom, 16);
+  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
+  cockpit.update();
+  assert.deepEqual(requests, []);
 });

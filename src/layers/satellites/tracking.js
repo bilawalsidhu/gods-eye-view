@@ -155,13 +155,13 @@ export function createTracking({ state: layerState, services, parts, source }) {
       frameNumber !== layerState._trackedFrameNumber ||
       layerState._trackedFrameGeo === null
     ) {
-      const pos = parts.orbits.propagatePosition(
-        sat.satrec,
-        layerState._trackedFrameNowForTest
-          ? new Date(layerState._trackedFrameNowForTest())
-          : new Date(layerState.now()),
-      );
+      const atMs = layerState._trackedFrameNowForTest
+        ? layerState._trackedFrameNowForTest()
+        : layerState.now();
+      const pos = parts.orbits.propagatePosition(sat.satrec, new Date(atMs));
       if (!pos) return layerState._trackedFrameGeo; // propagation hiccup — keep last good sample
+      // The time the sample is at: the world clock's, not the wall clock's.
+      pos.atMs = atMs;
       layerState._trackedFrameGeo = pos;
       Cesium.Cartesian3.fromDegrees(
         pos.longitude,

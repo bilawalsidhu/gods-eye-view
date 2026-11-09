@@ -1656,12 +1656,15 @@ is confirmed also gets 16×, 32×, 64× and 128×, each only while the view at
 the satellite's live altitude and the window's shape is still at least as
 wide as that swath (`orbitalMaxZoom` in `src/cockpitOrbital.js`); when the
 cap falls below the zoom shown, the view steps back to it. Unconfirmed
-swaths add no steps. The sensor's swath is drawn to scale as a strip along
-the ground track with a SENSOR SWATH readout, and a SENSOR button zooms
-to exactly that width when it lies between 1× and the cap. Tilted off nadir
+swaths add no steps, but are still drawn, read out and offered to SENSOR.
+The sensor's swath is drawn to scale as a strip along the ground track with
+a SENSOR SWATH readout, and a SENSOR button zooms to exactly that width when
+it lies between 1× and the cap. No strip is drawn for a geostationary view
+(no ground track; its sensors image areas, not strips) or a SAR (it images
+to one side of nadir, not under it); the readout stays. Tilted off nadir
 the strip stays (view and swath widen alike), the readout scales as the swath
 readout does (`SENSOR SWATH ≈ 191 KM`), and SENSOR, a nadir framing, is
-hidden. A swath is confirmed only on the operator's, an agency's (ESA's
+hidden; tilted past the Earth's limb neither the sensor nor the swath reads. A swath is confirmed only on the operator's, an agency's (ESA's
 eoPortal included) or an academic page for its platform. From
 16×, with flat imagery on the globe (not Google 3D tiles) and the view at
 nadir, every 2 s the view asks the base imagery layer for the tiles it will
@@ -1675,9 +1678,13 @@ error, about one to two screen pixels per texel). It asks for at most 12
 tiles at a time through Cesium's request scheduler, throttled per server and
 at the lowest priority, so a request is declined while the imagery server's
 slots are taken by the tiles on screen and is the first dropped when the
-scheduler is full (a declined tile is asked for again later); it remembers the last 512 tiles asked for and does not ask
-for those again. While tilted off nadir the view looks away from the track,
-so nothing is pre-loaded. The arrows tilt the view off nadir in 5° steps
+scheduler is full (a declined or failed tile is asked for again later); it remembers the last 512 tiles asked for and does not ask
+for those again, starts over on another base map, and cancels the requests
+still pending on exit. Across the track it samples the centre line, a third
+out and the frame's edges. While tilted off nadir the view looks away from
+the track, and with the world clock more than a minute from now (paused or
+played back) it will not pass where the look-ahead points, so nothing is
+pre-loaded. The arrows tilt the view off nadir in 5° steps
 along the frame's axes (Up/Down tilt forward/aft along the ground track,
 Left/Right across it, each axis to ±45°; Shift takes no larger step); Home,
 `0` or NADIR return to nadir. While tilted the panel shows the total angle
@@ -1714,7 +1721,8 @@ again. The readout card puts
 the owner country's flag (an SVG from `flag-icons`, fetched only for the shown
 country) or a text badge for an organisation before the name, the operator
 under it, and a NORAD · COSPAR · TLE-epoch line, ending with the element
-set's age (`<1 H OLD`, then whole hours, then whole days), whose TLE button
+set's age (`<1 H OLD`, then whole hours, then whole days: the gap, either
+side, between the epoch and the world-clock time the satellite is shown at), whose TLE button
 unfolds the two element lines; each row is left out when the satellites layer does not
 know it. The
 aircraft and bridge instruments, tapes, compass, radar, look controls,

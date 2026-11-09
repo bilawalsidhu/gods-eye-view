@@ -585,9 +585,16 @@ export const ORBITAL_PREFETCH_LEAD_S = Object.freeze([5, 10, 15, 20]);
 
 /**
  * Where across the track it looks, as fractions of the view's width: the
- * centre line and a third out each side, so a tile row spans the frame.
+ * centre line, a third out and the frame's edges each side, so a row of
+ * tiles a fifth of the view wide or more spans the frame.
  */
-export const ORBITAL_PREFETCH_ACROSS = Object.freeze([0, -1 / 3, 1 / 3]);
+export const ORBITAL_PREFETCH_ACROSS = Object.freeze([
+  0,
+  -1 / 3,
+  1 / 3,
+  -1 / 2,
+  1 / 2,
+]);
 
 /** At most this many tile requests per look-ahead. */
 export const ORBITAL_PREFETCH_MAX_TILES = 12;
