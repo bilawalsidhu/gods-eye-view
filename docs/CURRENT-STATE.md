@@ -1524,6 +1524,87 @@ retained Cockpit actions cannot restart a disposed controller. Input, subscripti
 and queued panel work stop before asynchronous layer restoration; final camera
 and portal cleanup follows that restoration.
 
+### Ship bridge view
+
+With no aircraft tracked, Cockpit can ride the selected AIS vessel instead.
+Entry needs only the layer of the vessel it rides, Live AIS Vessels, and a
+selected vessel; Contacts and every other layer may be off, before or during
+the bridge (`bridgeEntryAllowed` in `src/contextModePolicy.js`). A Context mode
+change still in flight blocks entry until it settles. `C` enters it (when
+the bridge cannot be entered, `C` stays the CCTV shortcut), and the
+entry button reads BRIDGE with a ship icon both in Contacts (`#cockpit-entry`)
+and under the selected vessel's Intel HUD readout in the bottom-right corner
+(`#cockpit-entry-readout`, shown with the HUD on, in its Tactical and Cyber
+layouts). Turning Live AIS Vessels off ends the bridge: the layer then has no
+subject (`getCockpitSubject` returns null). The bridge picture uses AIS alone,
+so no other feed being off makes it partial.
+Voice (`control_cockpit`) and the selection entry transaction stay aircraft-only;
+voice `enter` on a bridge is refused before it touches tracking, with the
+reason to exit the bridge first.
+The vessel layer supplies the subject (`getCockpitSubject`), hides that ship's
+sprite, card, detection bracket and trail while it is held
+(`setCockpitSubject`), and
+ignores scene clicks so open water cannot deselect it. The eye sits on the AIS
+position at a representative bridge height for the AIS type family
+(`src/layers/vessels/cockpitSubject.js`: cargo and tanker 30 m, passenger 25 m,
+tug 7 m, fishing 6 m, ferry and AIS "Other" (codes 90–99, or a feed's text
+type "Other") 4 m, sailing and pleasure 3 m; 12 m when the type names no
+family, including the reserved and wing-in-ground codes the vessel layer also
+files under OTHER), pitched 2° down with 2 m clearance over the shared ground floor
+(`src/cockpitSubjects.js`). The camera faces true heading (course over ground
+when heading is missing) and moves along course over ground. A ship reporting
+neither has no direction: the camera keeps the heading it had on entry, the
+heading readout shows `---`, the visor reads NO HEADING · AIS, the entry signal
+names the ship without a heading, no bow or stern mark is drawn, and the eye
+stays on the fix rather than moving along a made-up course. The vessel layer
+redraws a ship only on its 60-second refresh, so the camera's target is the last
+fix dead-reckoned along course over ground for up to 180 s, and the existing
+inertial anchor absorbs each new fix. The fix's age is read without comparing
+the two clocks (`vesselFixAgeSec`): the time since this client first received
+the fix, plus how far it trailed that refresh's newest fix, so a client clock
+running fast or slow neither projects the ship nor marks it stale, and a fix
+the feed keeps re-serving from its cache goes on ageing into STALE FEED. A
+stale vessel, or a projection past that limit, holds the camera on the target.
+The vessel layer floats ships on the geoid, which on a river or lake can lie
+well below the water (the Seine through Paris is ~27 m up), so the bridge also
+reads the rendered surface around its ship: the ship's position and a ring of
+eight probes 30 m out, the lowest probe taken as the water when it is 2 m to
+4,000 m above sea level. The first read starts from the tiles already loaded, then
+the full-detail read replaces it; it repeats every 5 s. Only one full-detail
+read runs at a time: while one is still running, a refresh reads the loaded
+tiles instead, and the slow read applies whenever it lands. Once a
+full-detail read has answered, loaded-tile reads no longer change the height;
+before then they may find raised water but never take it back to the sea.
+A read that sampled nothing, or failed, keeps the height it had and is
+tried again on the next refresh.
+
+The HUD keeps its frame, vision styles, briefing, weather and Display/Radio
+utilities. It names the ship, reads `{type} · LIVE AIS · EYE {height}`, shows
+speed over ground in knots, true heading and course over ground in place of
+altitude, hides the altitude tape, and shows the crew-entered AIS destination as
+a Reported Voyage card without an origin or direction arrow. The arrow keys
+look around the bridge in 5° steps (Shift for 45°): Left and Right turn the
+view all the way round, Up and Down pitch it up to ±90°, and the camera eases
+there unless the user prefers reduced motion. Home or `0`, or the LOOK AHEAD
+button shown while the view is turned, bring it back over the bow at the rest
+pitch. The keys stay with a focused text field, slider, tab, radio group, list
+or menu. The heading tape is a straight strip that scrolls continuously with
+the camera, so the caret reads the view's exact heading, while the readout
+above it keeps the ship's true heading; a ring with a centre dot marks the bow
+(prograde) and a ring with a cross the stern (retrograde) at their bearings
+from the caret. The bridge radar
+shows nearby AIS ships heading-up and opens at 3 NM
+(`DEFAULT_RADAR_RANGE_NM` in `src/cockpitRadar.js`); its range button steps
+3, 6, 12 and 24 NM and the chosen range is kept across bridges. Own ship
+sits where the camera rides (its fix dead-reckoned) and contacts at their
+last fixes, where the vessel layer draws them, so the scope matches the view
+out of the window. Contact
+Previous/Next and Live Signals aircraft handoffs are refused on the bridge and
+the Contact card stays hidden. Exit returns the camera to the vessel's map view
+through the layer's own focus. Tracking an aircraft or losing the vessel
+selection ends the bridge without refocusing the ship. `src/ui/cockpitBridge.test.mjs`
+covers entry, readouts, refusal and exit.
+
 ## Context coordination
 
 Context controls own Contacts/Space Missions state, entry and exit transactions,
@@ -6277,14 +6358,16 @@ apply to `public/` assets or built-preview serving.
   `src/contextModePolicy.js`). Contacts is not required, and the other aircraft
   layer, Live AIS Vessels and every other layer may be turned on or off before
   or during a session. A Context mode change still in flight blocks entry until
-  it settles. Turning off the layer the view rides ends it. Riding an aircraft
-  while Contacts is on adopts its layer as the user's own, as a direct selection
-  does (`adoptLayerVisibility`), so Contacts ending, by its own switch or one of
-  its layers going off, restores the pre-Contacts layers but keeps the ridden
-  one and the view; Live Signals then drops the rows Contacts built and shows
-  `CONTEXT STANDBY`. The visible Cockpit actions, the `C` shortcut and voice use
-  the same gate; voice entry still opens Contacts first, as its layer-targeted
-  entry navigates through Contacts.
+  it settles. Turning off the layer the view rides ends it. Riding an aircraft,
+  or a vessel from its bridge, while Contacts is on adopts its layer as the
+  user's own, as a direct selection does (`adoptLayerVisibility`), so Contacts
+  ending, by its own switch or one of its layers going off, restores the
+  pre-Contacts layers but keeps the ridden one and the view; Live Signals then
+  drops the rows Contacts built and shows `CONTEXT STANDBY`. The visible
+  Cockpit actions, the `C` shortcut and voice use the same gate; voice entry
+  still opens Contacts first, as its layer-targeted entry navigates through
+  Contacts. The ship bridge has its own own-layer gate (`bridgeEntryAllowed`;
+  see [Ship bridge view](#ship-bridge-view)).
 - **Aircraft cockpit view:** selecting a commercial or military aircraft reveals a `COCKPIT` action (`C`) once that aircraft's own layer is on; Contacts is not required. The action shows in Contacts (`#cockpit-entry`) and under the Intel HUD's bottom-right readout (`#cockpit-entry-readout`, with the HUD on, in its Tactical and Cyber layouts), so entry needs no Contacts panel. Turning off the ridden aircraft's layer ends the view (the layer clears its tracking). When an air feed the surrounding picture uses is off, the Cockpit says so instead of blocking: Live Signals leads with `MILITARY FEED OFF · PARTIAL PICTURE` or `FLIGHTS FEED OFF · PARTIAL PICTURE`, and the Contact card shows that line in place of its inputs status, so a partial picture is never presented as complete. `control_cockpit` refuses entry with `entryBlockedReason` `contacts-starting` (a Context change in flight), `subject-layer-off` (the aircraft's layer, or with none tracked any aircraft layer, is off) or `no-tracked-aircraft`. Cockpit mode temporarily releases Cesium's orbit-follow transform and drives a first-person camera from the tracked aircraft's existing smoothed display position and course. Its concave helmet-visor HUD shows callsign, UTC time, coordinates, curved roll/pitch guides, and a seven-division heading tape. Ambient commercial and military AIR contacts use a Cockpit near/far band selected by the shared Display 3D mode: Proximity admits at 150 km and retains to 185 km; All admits at 400 km and retains to 450 km. The shared 3D toggle now applies in Cockpit: Off keeps in-range contacts as rotating 2D aircraft silhouettes, while On lets a ready admitted glTF take over without a drawing gap. The Cockpit model cap remains 60 and can only lower the map budget; in-range contacts that are capped or still loading remain 2D silhouettes instead of degrading to out-of-range dots. Contacts outside the selected band use small rotation-free cyan-white pips for civilian aircraft and amber pips for military. The pilot's own airframe is not drawn in first person, and exiting clears the Cockpit band and restores normal map silhouettes/models. The normal left accordion remains available for Layers and Authoring and keeps the same 26vh HUD-aligned anchor used in map mode, independent of whether the bottom-left Contact card is expanded or collapsed; the right-rail CCTV and Context chooser are hidden to avoid duplicating or overlapping the cockpit presentation. When the intelligence HUD is enabled, its classification, scene summary, collection/orbit metadata, coordinates, and imaging-status text remain visible as reduced peripheral cockpit telemetry; the optical center and flight instruments stay clear, and turning the HUD off still hides it. Ground speed, exact heading, and rendered altitude form one compact lower-center instrument cluster, keeping the horizon and peripheral view open. A second live altitude tape hugs the inside-right visor rim: its rail and nine moving ticks are derived from the same responsive keyhole radius, remain 20 px inside the circular edge even on wide displays, fade deeply at both vertical ends, and move continuously behind a fixed current-altitude pointer; its interval tightens automatically near the surface and it is suppressed on narrow screens. Cockpit mode also has a weather-backed transparent volumetric-cloud pass derived from the supplied FBM/domain-warped R&D shader. It renders at no more than 520×320, uses 24 ray steps/three FBM octaves at 12 FPS, is clipped to the visor, fails clear when Open-Meteo is unavailable, and stops its animation completely on cockpit exit. It does not restore the prior CPU weather canvases, precipitation, scene fog, or any map-mode effect. When Contacts is active for the tracked aircraft, the compact `CONTACT` rail adds the 250 km subject window, four cohort counts, nearest observed/mapped example with relative bearing and distance, freshness, explicit uncertainty, and Previous and Next controls plus its own collapse control. The mirrored right rail is a three-page **cockpit briefing carousel**: source-backed live signals, location-matched regional headlines, and physical-region/current-weather context from bundled Natural Earth polygons and Open-Meteo. It is manual-first: Previous, Next, and direct page controls are always available, and the visible `CYCLE OFF` / `CYCLE ON` control starts or stops the nine-second page cycle. The cycle pauses on hover or keyboard focus and stops while collapsed, hidden, or outside cockpit mode; live signal data continues refreshing either way. Empty news matches and unavailable news use compact text states rather than reserving an empty media frame; partial local data remains explicit. Article links open their original publisher, and no headline is treated as verified risk intelligence. On desktop both cockpit rails use the same width and share a bottom-aligned safe baseline in opposite corners above the peripheral MGRS/GSD/time telemetry, leaving both that text and the lower-center instrument cluster readable. They collapse independently to slim tabs without stopping live data updates. Narrow screens use separated top/bottom fallbacks. Empty-space globe clicks are inert while cockpit owns the camera; `C`, `Escape`, or `EXIT COCKPIT` explicitly exits and restores the same tracked entity and standard follow camera. Unknown feeds remain unknown, selection loss still exits safely without inventing a replacement track, and the cockpit never presents the summary as threat scoring or an all-clear. This is a desktop first-person presentation, not a WebXR session.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Authoring keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.

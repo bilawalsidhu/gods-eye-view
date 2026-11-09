@@ -2,6 +2,7 @@ import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
 import {
   COCKPIT_AIRCRAFT_LAYER_IDS,
+  bridgeEntryAllowed,
   cockpitEntryAllowed,
 } from '../contextModePolicy.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
@@ -40,6 +41,7 @@ export class CockpitCoordinator {
     const {
       flightsLayer,
       militaryFlightsLayer,
+      aisLiveVesselsLayer,
       isTr3b,
       toggleTr3b,
       militaryAwarenessLayer,
@@ -60,6 +62,7 @@ export class CockpitCoordinator {
       services: {
         flightsLayer,
         militaryFlightsLayer,
+        aisLiveVesselsLayer,
         isTr3b,
         toggleTr3b,
         militaryAwarenessLayer,
@@ -93,6 +96,11 @@ export class CockpitCoordinator {
           contextModeChanging: this._contextModeChanging,
         });
       },
+      isBridgeEntryAllowed: () =>
+        bridgeEntryAllowed({
+          vesselsEnabled: !!this._dataManager?.isEnabled('ais-live-vessels'),
+          contextModeChanging: this._contextModeChanging,
+        }),
       publish: this.publishCockpit,
       isUtilityDisclosureOpen: () => !!this.readUtilityDisclosureOpen?.(),
       onEntered: () => this.enterPanels(),
@@ -129,15 +137,21 @@ export class CockpitCoordinator {
     return Boolean(layerId) && !!this._dataManager?.isEnabled(layerId);
   }
   /**
-   * Make the ridden aircraft's layer the user's own while Contacts is on.
-   * Contacts may have turned that layer on, and it releases the layers it
-   * owns when it goes off; the Cockpit must outlive Contacts, so riding an
-   * aircraft adopts its layer as a direct selection does. Contacts then stops
-   * owning it and the Context restore keeps it (session `userAdded`).
-   * @param {string|null} layerId The ridden aircraft's layer.
+   * Make the ridden layer the user's own while Contacts is on. Contacts may
+   * have turned that layer on (an aircraft layer, or Live AIS Vessels), and
+   * it releases the layers it owns when it goes off; the Cockpit must outlive
+   * Contacts, so riding an aircraft or a vessel adopts its layer as a direct
+   * selection does. Contacts then stops owning it and the Context restore
+   * keeps it (session `userAdded`).
+   * @param {string|null} layerId The ridden aircraft's layer, or
+   *   'ais-live-vessels' on a bridge.
    */
   _adoptRiddenLayer(layerId) {
-    if (!COCKPIT_AIRCRAFT_LAYER_IDS.includes(layerId)) return;
+    if (
+      !COCKPIT_AIRCRAFT_LAYER_IDS.includes(layerId) &&
+      layerId !== 'ais-live-vessels'
+    )
+      return;
     if (!this._isLayerEnabled('military-awareness')) return;
     this._dataManager?.adoptLayerVisibility?.(layerId, true, {
       origin: 'user',
@@ -158,6 +172,10 @@ export class CockpitCoordinator {
   _cockpitEntryRefusal() {
     if (this._contextModeChanging)
       return 'Context is still changing — try Cockpit again in a moment';
+    // Tracking an aircraft from the bridge ends the bridge and clears the
+    // vessel selection before the entry can run, leaving neither.
+    if (this.cockpitView?.active && this.cockpitView.subjectKind === 'vessel')
+      return 'Cockpit is on a vessel bridge — exit the bridge first, then track an aircraft to enter Cockpit';
     if (!this._aircraftLayerEnabled)
       return 'No aircraft layer is on — turn on Flights or Military Flights and track an aircraft to enter Cockpit';
     return null;
@@ -167,6 +185,11 @@ export class CockpitCoordinator {
     const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
     const info = this.cockpitView?.readAircraftInfo?.();
     const active = Boolean(this.cockpitView?.active);
+    // Voice enters aircraft only; a bridge in use is still reported as it is.
+    const vessel =
+      active && this.cockpitView?.subjectKind === 'vessel'
+        ? this.cockpitView.readVesselInfo?.()
+        : null;
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
     // inside, unconditionally. Cockpit takes the entity off
@@ -195,13 +218,22 @@ export class CockpitCoordinator {
               ? 'subject-layer-off'
               : 'no-tracked-aircraft',
       visionMode: this.cockpitView?.visionMode || null,
-      subject: info
+      subject: vessel
         ? {
-            id: info.icao24 || info.id || null,
-            layerId: info.layerId || null,
-            callsign: info.callsign || null,
+            kind: 'vessel',
+            id: vessel.mmsi,
+            layerId: vessel.layerId,
+            callsign: null,
+            name: vessel.name,
           }
-        : null,
+        : info
+          ? {
+              kind: 'aircraft',
+              id: info.icao24 || info.id || null,
+              layerId: info.layerId || null,
+              callsign: info.callsign || null,
+            }
+          : null,
       navigation: snapshot
         ? {
             canPrevious: Boolean(snapshot.navigation?.canPrevious),
