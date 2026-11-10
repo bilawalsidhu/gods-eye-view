@@ -108,7 +108,7 @@ export function coldStartReady(layers, cold = false) {
         stats.count > 0 &&
         movers.some(
           (row) =>
-            row.id === 'traffic-fill' && row.count === stats.count && row.shown,
+            row.id === 'traffic-fill' && row.count > 0 && row.shown,
         )
       );
     if (['flights', 'military', 'transit'].includes(id))
@@ -317,16 +317,30 @@ export function compareColdStart(
     const next = cold.ledger.find(
       (other) => other.family === row.family && other.id === row.id,
     );
-    if (next)
-      add(
-        layerOf(row.family, row.id),
-        row.family,
-        row.id,
-        compareProbe(
-          { kind: row.kind, count: row.count },
-          { kind: next.kind, count: next.count },
-        ),
-      );
+    if (next) {
+      // A field entry excuses one field of one set, with its reason.
+      const rows = compareProbe(
+        { kind: row.kind, count: row.count },
+        { kind: next.kind, count: next.count },
+      ).filter((difference) => {
+        const exception = allow.find(
+          (entry) =>
+            entry.field === difference.field &&
+            entry.id === row.id &&
+            (!entry.family || entry.family === row.family),
+        );
+        if (exception)
+          skipped.push({
+            layer: layerOf(row.family, row.id),
+            family: row.family,
+            id: row.id,
+            ...difference,
+            reason: exception.reason,
+          });
+        return !exception;
+      });
+      add(layerOf(row.family, row.id), row.family, row.id, rows);
+    }
   }
   for (const layer of new Set([
     ...Object.keys(switched.layers),

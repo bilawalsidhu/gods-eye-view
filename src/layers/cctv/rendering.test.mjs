@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRendering } from './rendering.js';
+import { createGeometry } from './geometry.js';
 import {
   ACTIVE_CAMERA_COLOR,
   IDLE_CAMERA_COLOR,
@@ -76,4 +77,103 @@ test('focus de-emphasis fades each icon from its own color', () => {
     'active video',
   );
   assert.equal(state._activeFocusStyleCount, 3);
+});
+
+test('coverage refresh releases departed geometry and preserves media for reselection', () => {
+  const records = ['opening', 'final', 'neighbor'].map((id) => ({
+    camera: { id, headingConfidence: 'high' },
+    frustumGeometry: {},
+    frustumPositions: {},
+    coverageEntities: [],
+  }));
+  const state = {
+    _enabled: true,
+    _coverageMode: 'on',
+    _showProjection: true,
+    _records: records,
+    _coverageEntities: [],
+  };
+  let active = records[0];
+  let visible = new Set(['opening']);
+  const lines = new Set();
+  const planes = new Set();
+  const services = { ground: {}, focus: {} };
+  const parts = {
+    renderer: {
+      ready: true,
+      createCoverage(id) {
+        const line = { id, show: false };
+        lines.add(line);
+        return [line];
+      },
+      removeCoverageEntity: (line) => lines.delete(line),
+      styleLine: (line, { visible }) => {
+        line.show = visible;
+      },
+      removePlane: (runtime) => planes.delete(runtime.planeEntity),
+      setMarkersVisible() {},
+    },
+    selection: { getActiveRecord: () => active },
+    model: { isBrowserOverlayCamera: () => false },
+    projection: {
+      ensureProjectionRuntime(record) {
+        record.projection ??= { canvas: {} };
+        const runtime = record.projection;
+        if (!runtime.planeEntity) {
+          runtime.planeEntity = {};
+          runtime.needsPlane = false;
+          planes.add(runtime.planeEntity);
+        }
+      },
+      setPlaneVisible: (runtime, value) => {
+        runtime.planeVisible = value;
+      },
+      pauseInactiveProjectionFeeds() {},
+    },
+  };
+  parts.geometry = createGeometry({ state, services, parts });
+  parts.geometry.buildCoverageVisibleSet = () => visible;
+  const rendering = createRendering({ state, services, parts });
+  rendering.refreshCoverageStyles();
+  const openingLine = records[0].coverageEntities[0];
+  const media = records[0].projection.canvas;
+  assert.equal(
+    openingLine.show,
+    true,
+    'startup without a restore draws immediately',
+  );
+  active = records[1];
+  visible = new Set(['final', 'neighbor']);
+  rendering.refreshCoverageStyles();
+  assert.equal(lines.has(openingLine), false);
+  assert.deepEqual(records[0].coverageEntities, []);
+  assert.equal(records[0].projection.planeEntity, null);
+  assert.equal(records[0].projection.needsPlane, true);
+  assert.equal(records[0].projection.canvas, media);
+  assert.deepEqual(
+    [...lines].map((line) => line.id),
+    ['final', 'neighbor'],
+  );
+  assert.ok([...lines].every((line) => line.show));
+  assert.deepEqual(state._coverageEntities, [...lines]);
+  assert.equal(planes.size, 1);
+  const finalLine = records[1].coverageEntities[0];
+  rendering.refreshCoverageStyles();
+  assert.equal(
+    records[1].coverageEntities[0],
+    finalLine,
+    'stationary geometry is reused',
+  );
+  active = records[0];
+  visible = new Set();
+  rendering.refreshCoverageStyles();
+  assert.equal(
+    lines.size,
+    1,
+    'active projection keeps its coverage outside the visible cohort',
+  );
+  assert.equal(records[0].coverageEntities[0].show, true);
+  assert.notEqual(records[0].coverageEntities[0], openingLine);
+  assert.equal(records[0].projection.canvas, media);
+  assert.equal(planes.size, 1);
 });

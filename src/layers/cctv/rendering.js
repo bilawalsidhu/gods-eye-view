@@ -426,6 +426,7 @@ export function createRendering({
       }
     }
 
+    parts.geometry.releaseInactiveGeometry(activeId, coverageVisible);
     parts.renderer?.setMarkersVisible(!!layerState._enabled);
     parts.projection.pauseInactiveProjectionFeeds(activeId);
   }
