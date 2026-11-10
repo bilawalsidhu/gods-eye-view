@@ -230,9 +230,9 @@ test('both present halves are preserved: presentBoxes carries every data half an
     [EAST_HALF, WEST_HALF].find((h) => sameBox(h, half)),
   );
   assert.deepEqual(
-    drapes.length,
-    2,
-    'each present half maps to one probe half',
+    new Set(drapes),
+    new Set([EAST_HALF, WEST_HALF]),
+    'each present half maps to a distinct probe half',
   );
   assert.ok(response.blob, 'the answer stays a readable response');
   const blob = await response.blob();
