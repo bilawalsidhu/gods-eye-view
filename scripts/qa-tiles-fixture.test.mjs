@@ -5,6 +5,7 @@ import { Cesium3DTileset } from 'cesium';
 import { Core, initSync } from '@navaramap/engine';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Group, Raycaster, Vector3 } from 'three';
+import { DepthCopyPass } from 'postprocessing';
 import * as geo from '../src/geo/index.js';
 import { buildTilesFixture } from './build-tiles3d-fixture.mjs';
 import { localTilesetPath, qaTilesetUrl } from '../src/maps/qaTileset.js';
@@ -13,6 +14,7 @@ import { MapSourceController } from '../src/maps/controller.js';
 import { createFakeEngine } from '../src/globe/testing/fakeEngine.js';
 import { createNavaraMaps } from '../src/globe/navara/maps.js';
 import { createNavaraSurface } from '../src/globe/navara/surface.js';
+import { GROUND_SURFACE_GLSL } from '../src/globe/navara/ground/surface.js';
 import {
   assertKeylessPreview,
   TILES_FIXTURE_PATH,
@@ -373,4 +375,228 @@ test('harness exposes exactly the five binary-safe fixture routes on the preview
       url.pathname.endsWith('.glb') ? 'model/gltf-binary' : 'application/json',
     );
   }
+});
+
+// Load only the page callbacks, without launching the command-line scenario.
+const scenario = readFileSync(
+  new URL('./qa-tiles-fixture.mjs', import.meta.url),
+  'utf8',
+);
+const diagnosticSource = scenario.slice(
+  scenario.indexOf('function readNavaraDrape('),
+  scenario.indexOf('async function checkPoints('),
+);
+const readNavaraDrape = new Function(`return (${diagnosticSource})`)();
+const pixelsSource = scenario.slice(
+  scenario.indexOf('async function pixels('),
+  scenario.indexOf('// Runs in the page, after rendering.'),
+);
+const reportPixels = new Function(
+  'geo',
+  'report',
+  'readNavaraDrape',
+  'GROUND_SURFACE_GLSL',
+  `return (${pixelsSource})`,
+)(geo, true, readNavaraDrape, GROUND_SURFACE_GLSL);
+
+function depthDiagnostic(t) {
+  const copies = [];
+  class Copy extends DepthCopyPass {
+    constructor() {
+      super();
+      this.disposed = false;
+      this.renderTarget.addEventListener('dispose', () => {
+        this.disposed = true;
+      });
+      copies.push(this);
+    }
+  }
+  const bytes = new Uint8Array(16);
+  // Exact RGBA depths: 0.25 composed, 0.25 scene, 0.5 globe; tile classification.
+  bytes.set([64, 0, 0, 0, 64, 0, 0, 0, 128, 0, 0, 0, 2, 0, 0, 255]);
+  let error = 0;
+  const gl = { NO_ERROR: 0, getError: () => error };
+  const textures = Array.from({ length: 3 }, (_, id) => ({
+    id,
+    image: { width: 1280, height: 800 },
+  }));
+  const previous = {};
+  const renderer = {
+    getContext: () => gl,
+    getRenderTarget: () => previous,
+    render: t.mock.fn(),
+    readRenderTargetPixels: (_, x, y, width, height, buffer) =>
+      buffer.set(bytes),
+    setRenderTarget: t.mock.fn(),
+  };
+  let effect = {
+    uniforms: new Map(
+      ['tAllDepth', 'tSurfaceDepth', 'tGlobeDepth'].map((name, i) => [
+        name,
+        { value: textures[i] },
+      ]),
+    ),
+    getFragmentShader: () => GROUND_SURFACE_GLSL,
+  };
+  const ctx = {
+    getRenderer: () => renderer,
+    findEffect: (key) =>
+      key === 'gevGround'
+        ? { effect }
+        : {
+            depthBuffer: textures[0],
+            globeDepthBuffer: textures[2],
+            raw: { globeDepthCopyPass: { constructor: Copy } },
+          },
+    getRenderTarget: () => ({ depthTexture: textures[1] }),
+  };
+  let tiles = true;
+  const position = geo.cartesian3.fromDegrees(-97.7, 30.2, 50);
+  let listener;
+  const engine = {
+    kind: 'navara',
+    extensions: {
+      navara: { view: { viewContext: ctx, camera: { raw: { far: 1e8 } } } },
+    },
+    host: {
+      canvas: { width: 2560, height: 1600 },
+      size: () => ({ width: 1280, height: 800 }),
+    },
+    projector: { worldToWindow: () => ({ x: 120, y: 70 }) },
+    camera: {
+      pickRay: t.mock.fn(() => ({
+        origin: { x: 1, y: 2, z: 3 },
+        direction: { x: 0, y: 0, z: -1 },
+      })),
+      pickEllipsoid: () => position,
+    },
+    surface: {
+      raycast: t.mock.fn(() => (tiles ? { position } : undefined)),
+      sampleHeightDetailed: t.mock.fn(() => ({
+        height: tiles ? 50 : 0,
+        source: tiles ? 'tiles' : 'terrain',
+      })),
+    },
+    maps: { photorealActive: () => tiles },
+    frames: {
+      postRender: {
+        addEventListener: (fn) => {
+          listener = fn;
+          return () => {};
+        },
+      },
+    },
+    render: { request: () => queueMicrotask(() => listener()) },
+  };
+  const color = Uint8ClampedArray.from(
+    { length: 100 },
+    (_, i) => [231, 226, 223, 255][i % 4],
+  );
+  globals(t, {
+    window: { __godsEyeView: { engine } },
+    document: {
+      createElement: () => ({
+        getContext: () => ({
+          clearRect() {},
+          drawImage() {},
+          getImageData: () => ({ data: color }),
+        }),
+      }),
+    },
+  });
+  return {
+    engine,
+    copies,
+    renderer,
+    previous,
+    position,
+    textures,
+    page: { evaluate: async (fn, ...args) => fn(...args) },
+    hideGround() {
+      effect = null;
+    },
+    removeTiles() {
+      tiles = false;
+      bytes.set([128, 0, 0, 0, 255, 255, 255, 255, 128, 0, 0, 0, 1, 0, 0, 255]);
+    },
+    fail() {
+      error = 'INVALID_OPERATION';
+    },
+  };
+}
+
+test('drape report distinguishes depths and shown tile rays when colour is identical', async (t) => {
+  const h = depthDiagnostic(t);
+  const shown = await reportPixels(h.page, h.position);
+  assert.deepEqual(shown.rgb, [231, 226, 223]);
+  assert.equal(shown.depths.allDepth, 0.25);
+  assert.equal(shown.depths.sceneDepth, 0.25);
+  assert.equal(shown.depths.globeDepth, 0.5);
+  assert.equal(shown.depths.buffer, 'scene');
+  assert.equal(shown.depths.classification, 'tiles');
+  assert.equal(shown.depths.source, 'tiles');
+  assert.equal(shown.depths.shownTileAtRay, true);
+  assert.equal(shown.depths.bindings, 'ground');
+  assert.deepEqual(shown.depths.pixel, [120, 729]);
+  assert.deepEqual(h.engine.camera.pickRay.mock.calls[0].arguments[0], {
+    x: 120.25,
+    y: 70.25,
+  });
+  assert.equal(h.engine.surface.raycast.mock.calls[0].arguments[0].far, 1e8);
+  const place =
+    h.engine.surface.sampleHeightDetailed.mock.calls[0].arguments[0];
+  assert.ok(Math.abs(place.longitude - geo.math.toRadians(-97.7)) < 1e-10);
+  assert.ok(Math.abs(place.latitude - geo.math.toRadians(30.2)) < 1e-10);
+  h.hideGround();
+  h.removeTiles();
+  const hidden = await reportPixels(h.page, h.position);
+  assert.deepEqual(hidden.rgb, shown.rgb);
+  assert.equal(hidden.depths.allDepth, 0.5);
+  assert.equal(hidden.depths.sceneDepth, 1);
+  assert.equal(hidden.depths.globeDepth, 0.5);
+  assert.equal(hidden.depths.buffer, 'globe');
+  assert.equal(hidden.depths.classification, 'terrain');
+  assert.equal(hidden.depths.source, 'terrain');
+  assert.equal(hidden.depths.shownTileAtRay, false);
+  assert.equal(hidden.depths.photorealActive, false);
+  assert.equal(hidden.depths.bindings, 'mrt');
+  assert.equal(h.copies.length, 4);
+  assert.ok(h.copies.every((copy) => copy.disposed));
+  assert.equal(
+    h.copies[0].fullscreenMaterial.uniforms.tGlobeDepth.value,
+    h.textures[2],
+  );
+  assert.equal(
+    h.renderer.setRenderTarget.mock.calls.at(-1).arguments[0],
+    h.previous,
+  );
+});
+
+test('drape report rejects a failed GPU read and releases temporary resources', async (t) => {
+  const h = depthDiagnostic(t);
+  h.fail();
+  await assert.rejects(
+    reportPixels(h.page, h.position),
+    /WebGL error: INVALID_OPERATION/,
+  );
+  assert.equal(h.copies.length, 1);
+  assert.ok(h.copies[0].disposed);
+  assert.equal(
+    h.renderer.setRenderTarget.mock.calls.at(-1).arguments[0],
+    h.previous,
+  );
+});
+
+test('drape report never reads native Navara state on Cesium', async (t) => {
+  const h = depthDiagnostic(t);
+  h.engine.kind = 'cesium';
+  Object.defineProperty(h.engine, 'extensions', {
+    get() {
+      throw new Error('Native read');
+    },
+  });
+  const sample = await reportPixels(h.page, h.position);
+  assert.deepEqual(sample.rgb, [231, 226, 223]);
+  assert.equal(sample.depths, undefined);
+  assert.equal(h.copies.length, 0);
 });

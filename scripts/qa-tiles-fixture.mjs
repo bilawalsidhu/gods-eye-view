@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as geo from '../src/geo/index.js';
+import { GROUND_SURFACE_GLSL } from '../src/globe/navara/ground/surface.js';
 import {
   assertKeylessPreview,
   createStrict,
@@ -237,13 +238,22 @@ await strict.run({}, async (browser) => {
           // Map imagery and classification shaders may still be arriving before ready.
           await page.evaluate(() => window.qaDrape.show(false));
           await loaded(page);
-          const baseline = await pixels(page, position);
+          const before = await pixels(page, position);
           await page.evaluate(() => window.qaDrape.show(true));
-          const rgb = await pixels(page, position);
+          const shown = await pixels(page, position);
           await page.evaluate(() => window.qaDrape.show(false));
-          const restored = await pixels(page, position);
+          const after = await pixels(page, position);
+          const baseline = before.rgb;
+          const rgb = shown.rgb;
+          const restored = after.rgb;
           const drawn = rgb[0] > 180 && rgb[1] < 80 && rgb[2] > 180;
           const sample = { surface, drape, baseline, rgb, restored, drawn };
+          if (report && kind === 'navara')
+            sample.depths = {
+              baseline: before.depths,
+              shown: shown.depths,
+              restored: after.depths,
+            };
           drapes.push(sample);
           console.log(
             `${report ? 'REPORT' : 'DRAPE'} ${kind} ${JSON.stringify(sample)}`,
@@ -320,13 +330,24 @@ async function loaded(page) {
 
 // Read actual canvas pixels during postRender; Cesium discards them afterwards.
 async function pixels(page, position) {
-  return page.evaluate(async (position) => {
+  const input = {
+    position,
+    diagnostic: report ? readNavaraDrape.toString() : null,
+    classification: GROUND_SURFACE_GLSL,
+  };
+  const sample = await page.evaluate(async (input) => {
+    const { position, diagnostic, classification } = input;
     const { engine } = window.__godsEyeView;
+    const readDepths =
+      diagnostic && engine.kind === 'navara'
+        ? new Function(`return (${diagnostic})`)()
+        : null;
+    let depths;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 5;
     const context = canvas.getContext('2d', { willReadFrequently: true });
     for (let frame = 0; frame < 2; frame++)
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         const off = engine.frames.postRender.addEventListener(() => {
           off();
           const point = engine.projector.worldToWindow(position);
@@ -343,19 +364,147 @@ async function pixels(page, position) {
             5,
             5,
           );
+          try {
+            if (readDepths)
+              depths = readDepths(engine, point, classification);
+          } catch (error) {
+            reject(error);
+            return;
+          }
           resolve();
         });
         engine.render.request('qa-drape-pixels');
       });
     const data = context.getImageData(0, 0, 5, 5).data;
-    return [0, 1, 2].map(
+    const rgb = [0, 1, 2].map(
       (channel) =>
         data.reduce(
           (sum, value, i) => sum + (i % 4 === channel ? value : 0),
           0,
         ) / 25,
     );
-  }, position);
+    return { rgb, depths };
+  }, input);
+  if (sample.depths) {
+    const place =
+      sample.depths.position &&
+      geo.cartographic.fromCartesian(sample.depths.position);
+    const detail =
+      place &&
+      (await page.evaluate(
+        (place) =>
+          window.__godsEyeView.engine.surface.sampleHeightDetailed(place),
+        place,
+      ));
+    sample.depths.source = detail?.source ?? null;
+    sample.depths.height = detail?.height ?? null;
+  }
+  return sample;
+}
+
+// Runs in the page, after rendering. Read the centre of the same 5x5 colour
+// sample, using the ground effect's actual uniforms and shader when shown.
+function readNavaraDrape(engine, point, classification) {
+  const view = engine.extensions.navara.view;
+  const ctx = view.viewContext;
+  const renderer = ctx.getRenderer();
+  const mrt = ctx.findEffect('mrt');
+  const effect = ctx.findEffect('gevGround')?.effect;
+  const names = ['tAllDepth', 'tSurfaceDepth', 'tGlobeDepth'];
+  const textures = effect
+    ? names.map((name) => effect.uniforms.get(name).value)
+    : [
+        mrt.depthBuffer,
+        ctx.getRenderTarget().depthTexture,
+        mrt.globeDepthBuffer,
+      ];
+  if (effect)
+    classification = effect
+      .getFragmentShader()
+      .match(/float groundSurfaceType\([\s\S]*?\n}/)?.[0];
+  if (!classification) throw new Error('Missing ground classification shader');
+  const scale = engine.host.canvas.width / engine.host.size().width;
+  const canvasPixel = [
+    Math.round(point.x * scale),
+    Math.round(point.y * scale),
+  ];
+  const size = textures[0].image;
+  const pixel = [
+    Math.floor(
+      ((canvasPixel[0] + 0.5) * size.width) / engine.host.canvas.width,
+    ),
+    Math.floor(
+      ((engine.host.canvas.height - canvasPixel[1] - 0.5) * size.height) /
+        engine.host.canvas.height,
+    ),
+  ];
+  // Use the installed SDK's depth-copy pass and Three packing. Four RGBA8
+  // pixels preserve the three depths and the shader's classification result.
+  const copy = new mrt.raw.globeDepthCopyPass.constructor();
+  const previous = renderer.getRenderTarget();
+  try {
+    copy.setSize(4, 1);
+    const material = copy.fullscreenMaterial;
+    material.uniforms = Object.fromEntries(
+      names.map((name, i) => [name, { value: textures[i] }]),
+    );
+    material.uniforms.pixel = { value: pixel };
+    material.fragmentShader = `
+      #include <packing>
+      uniform sampler2D tAllDepth;
+      uniform sampler2D tSurfaceDepth;
+      uniform sampler2D tGlobeDepth;
+      uniform ivec2 pixel;
+      ${classification}
+      void main() {
+        float depth = unpackRGBAToDepth(texelFetch(tAllDepth, pixel, 0));
+        float surface = texelFetch(tSurfaceDepth, pixel, 0).r;
+        float globe = unpackRGBAToDepth(texelFetch(tGlobeDepth, pixel, 0));
+        int column = int(gl_FragCoord.x);
+        gl_FragColor = column == 3
+          ? vec4(groundSurfaceType(depth, surface, globe) / 255.0, 0.0, 0.0, 1.0)
+          : packDepthToRGBA(column == 0 ? depth : column == 1 ? surface : globe);
+      }
+    `;
+    copy.render(renderer);
+    const bytes = new Uint8Array(16);
+    renderer.readRenderTargetPixels(copy.renderTarget, 0, 0, 4, 1, bytes);
+    const gl = renderer.getContext();
+    const error = gl.getError();
+    if (error !== gl.NO_ERROR)
+      throw new Error(`Depth diagnostic WebGL error: ${error}`);
+    const unpack = (offset) =>
+      bytes[offset] / 256 +
+      bytes[offset + 1] / 65536 +
+      bytes[offset + 2] / 16777216 +
+      bytes[offset + 3] / (255 * 16777216);
+    const screen = {
+      x: (canvasPixel[0] + 0.5) / scale,
+      y: (canvasPixel[1] + 0.5) / scale,
+    };
+    const ray = engine.camera.pickRay(screen);
+    const hit = engine.surface.raycast({ ...ray, far: view.camera.raw.far });
+    return {
+      pixel,
+      bindings: effect ? 'ground' : 'mrt',
+      allDepth: unpack(0),
+      sceneDepth: unpack(4),
+      globeDepth: unpack(8),
+      classification: ['none', 'terrain', 'tiles'][bytes[12]],
+      buffer: ['none', 'globe', 'scene'][bytes[12]],
+      position: hit?.position ?? engine.camera.pickEllipsoid(screen),
+      shownTileAtRay: Boolean(hit),
+      photorealActive: engine.maps.photorealActive(),
+      textures: textures.map((texture) => ({
+        id: texture.id,
+        width: texture.image.width,
+        height: texture.image.height,
+      })),
+    };
+  } finally {
+    renderer.setRenderTarget(previous);
+    copy.dispose();
+  }
 }
 
 async function checkPoints(page, kind) {
