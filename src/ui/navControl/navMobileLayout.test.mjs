@@ -8,6 +8,12 @@ const shell = readFileSync(
   'utf8',
 );
 
+test('look grid retains physical left and right under RTL locales', () => {
+  assert.match(nav, /\.gev-nav-look\s*\{[^}]*\bdirection:\s*ltr\s*;/);
+  assert.match(nav, /\.gev-nav-look-left\s*\{\s*grid-area:\s*2\s*\/\s*1\s*;/);
+  assert.match(nav, /\.gev-nav-look-right\s*\{\s*grid-area:\s*2\s*\/\s*3\s*;/);
+});
+
 test('phone nav clears the shared safe-area-aware switcher bottom and measured height', () => {
   assert.match(
     shell,

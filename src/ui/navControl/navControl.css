@@ -144,6 +144,7 @@
   position: absolute;
   inset: 22px;
   display: grid;
+  direction: ltr;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   align-items: center;
   justify-items: center;
