@@ -9,6 +9,8 @@ import {
 } from '../render/rendererOf.js';
 import { cssColor } from '../render/color.js';
 import { fromDegrees, fromDegreesInto, toLonLatH } from '../geo/ellipsoid.js';
+import { frustumPlanes } from '../geo/frustum.js';
+import { horizonFrom } from '../geo/horizon.js';
 import { sphereFromPoints } from '../geo/sphere.js';
 import { densifyRhumb } from '../geo/rhumb.js';
 import { heightsOf } from '../queries/heights.js';
@@ -487,6 +489,7 @@ function distanceSquared(a, b) {
   return dx * dx + dy * dy + dz * dz;
 }
 const copy = (p) => ({ x: p.x, y: p.y, z: p.z });
+const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
 
 /**
  * The horizontal field of view the stems are sized by: the wider of the
@@ -1324,14 +1327,16 @@ export function createLocalGeoJsonLayer(
               // governor the retry's preRender never arrives on a parked camera
               // and the stem stays at ellipsoid height (buried/floating) until
               // the user happens to move. Schedule the frame the retry needs.
-              // Gated on a sampleable scene and in-range records only, so a far
-              // camera (or a keyless scene) stays fully idle; the distance is
-              // only computed for still-unsampled stems.
+              // Gated on a sampleable scene and in-range, in-view records only,
+              // so a far camera (or a keyless scene) stays fully idle; the
+              // distance is only computed for still-unsampled stems.
               if (
                 canSampleGround &&
                 !record.groundSampled &&
                 !groundRetryPending &&
-                distance(cameraPos, record.base) < GROUND_SAMPLE_MAX_DISTANCE_M
+                distance(cameraPos, record.base) <
+                  GROUND_SAMPLE_MAX_DISTANCE_M &&
+                groundSampleInView(sizing, record)
               ) {
                 groundRetryPending = true;
               }
@@ -1539,10 +1544,66 @@ function refreshLocalTerrainFloor(sizing, record) {
   return true;
 }
 
+const groundSampleLow = { x: 0, y: 0, z: 0 };
+const groundSampleHigh = { x: 0, y: 0, z: 0 };
+
+/**
+ * Whether the camera can see the ground under the record: inside the view
+ * frustum and above the horizon. A surface height sample reads only surface
+ * rendered for the current view, so a sample of unseen ground passes through
+ * the Earth (about -6,344 km near Ashburn on Esri) and fails on every 2 s
+ * retry, each one a full offscreen render; 110 unseen data centres there held
+ * rest frames at 58-589 ms. Unsampled bases sit on the ellipsoid, so the test
+ * uses loaded globe terrain when there is some. Otherwise (a hidden globe) it
+ * tests the vertical across +/-GROUND_SAMPLE_MAX_ABS_HEIGHT_M, every height a
+ * sample can accept, so high or below-ellipsoid ground in view is never
+ * mistaken for an unseen base. Unseen ground is sampled on the first walk that
+ * sees it.
+ */
+function groundSampleInView(sizing, record) {
+  const { ground, pose } = sizing;
+  const terrain = ground.globeShown
+    ? ground.heights.now(record, { against: 'terrain' })
+    : null;
+  const known =
+    terrain !== null && Math.abs(terrain) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
+  const low = fromDegreesInto(
+    record.lon,
+    record.lat,
+    known ? terrain : -GROUND_SAMPLE_MAX_ABS_HEIGHT_M,
+    groundSampleLow,
+  );
+  const high = known
+    ? low
+    : fromDegreesInto(
+        record.lon,
+        record.lat,
+        GROUND_SAMPLE_MAX_ABS_HEIGHT_M,
+        groundSampleHigh,
+      );
+  // The vertical is unseen only when both ends are outside the same plane.
+  // The planes and the horizon are the walk's: one pose, read once.
+  sizing.planes ??= frustumPlanes(pose);
+  for (const { normal, w } of sizing.planes) {
+    if (dot(normal, low) + w < 0 && dot(normal, high) + w < 0) return false;
+  }
+  // The horizon test hides every point below the ellipsoid from a camera
+  // near it, so ground below 0 m (low-geoid coasts, the Dead Sea) is tested
+  // at 0 m; unknown ground at the top of the vertical.
+  const horizonHeight = known
+    ? Math.max(terrain, 0)
+    : GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
+  sizing.horizon ??= horizonFrom(pose.position);
+  return sizing.horizon.isPointVisible(
+    fromDegreesInto(record.lon, record.lat, horizonHeight, groundSampleHigh),
+  );
+}
+
 function sampleLocalGroundHeight(sizing, record, now) {
   const { ground } = sizing;
   if (record.groundSampled || !ground.canSample) return false;
   if (now - record.lastGroundSampleMs < GROUND_SAMPLE_RETRY_MS) return false;
+  if (!groundSampleInView(sizing, record)) return false;
   record.lastGroundSampleMs = now;
   if (ground.globeShown && !ground.terrainSettled()) return false;
   // A miss is tiles not ready: retry on a later bounded update. The layer's

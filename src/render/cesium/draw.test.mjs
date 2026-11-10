@@ -2355,72 +2355,86 @@ test('the fires layer draws its heat cells as ground fills through the Cesium dr
   assert.equal(grounds().length, 0);
 });
 
-test('the context layer draws its rim as an outlined ellipse on a viewer of its own', async () => {
+test('the context layer draws its static range ring as a haloed line on a viewer of its own', async () => {
   const { createRendering } =
     await import('../../layers/awareness/rendering.js');
   const { createState } = await import('../../layers/awareness/state.js');
-  const { scene } = drawOver();
-  const state = createState({ services: {} });
-  state.viewer = { scene };
-  const rendering = createRendering({
-    state,
-    services: {
-      geometry: {},
-      render: { governorRequestRender() {} },
-    },
-    parts: {},
-  });
-  const subject = (lon) => ({
-    layerId: 'military',
-    id: 'a',
-    position: Cesium.Cartesian3.fromDegrees(lon, 0, 9000),
-  });
-  rendering.renderVisual(subject(0));
-  const outlineOf = () => {
-    const [host] = scene.added;
-    const primitives = [];
-    for (let i = 0; i < host.length; i++) primitives.push(host.get(i));
-    const outline = primitives.find(
-      (p) =>
-        p instanceof Cesium.Primitive &&
-        p.geometryInstances.geometry instanceof Cesium.EllipseOutlineGeometry,
-    );
-    assert.ok(outline, 'an outline geometry, as the entity drew');
+  withImageClasses(() => {
+    // A viewer whose scene keeps no Cesium primitive collection of its own
+    // (this double's `primitives`) gets the ring without its pulses.
+    const { scene } = drawOver();
+    const state = createState({ services: {} });
+    state.viewer = { scene };
+    const rendering = createRendering({
+      state,
+      services: {
+        geometry: {},
+        render: { governorRequestRender() {} },
+      },
+      parts: {},
+    });
+    const subject = (lon) => ({
+      layerId: 'military',
+      id: 'a',
+      position: Cesium.Cartesian3.fromDegrees(lon, 0, 9000),
+    });
+    rendering.renderVisual(subject(0));
+    const linesOf = (from = scene) => {
+      const [host] = from.added;
+      const lines = [];
+      for (let i = 0; i < host.length; i++) {
+        const collection = host.get(i);
+        if (!(collection instanceof Cesium.PolylineCollection)) continue;
+        for (let j = 0; j < collection.length; j++)
+          lines.push(collection.get(j));
+      }
+      return lines.sort((x, y) => y.width - x.width);
+    };
+    const [halo, core] = linesOf();
+    assert.equal(linesOf().length, 2, 'a halo and a core, nothing else');
+    assert.equal(halo.width, 4);
+    assert.equal(core.width, 3);
+    assert.equal(core.material.type, 'Color');
     assert.ok(
-      !primitives.some(
-        (p) =>
-          p instanceof Cesium.Primitive &&
-          p.geometryInstances.geometry instanceof Cesium.EllipseGeometry,
+      core.material.uniforms.color.equalsEpsilon(
+        Cesium.Color.fromCssColorString('rgba(98, 181, 255, 0.95)'),
+        1e-9,
       ),
-      'and no fill',
     );
-    return outline;
-  };
-  const outline = outlineOf();
-  const { geometry, attributes } = outline.geometryInstances;
-  assert.equal(geometry._semiMajorAxis, 250_000);
-  assert.equal(geometry._height, 2_500);
-  const center = Cesium.Cartographic.fromCartesian(geometry._center);
-  assert.ok(Math.abs(center.longitude) < 1e-9);
-  assert.deepEqual(
-    [...attributes.color.value],
-    [0x62, 0xb5, 0xff, Math.round(0.72 * 255)],
-  );
-  // Small moves keep the ring; one past 250 m moves it.
-  rendering.renderVisual(subject(0.001));
-  assert.equal(outlineOf(), outline);
-  rendering.renderVisual(subject(0.01));
-  assert.notEqual(outlineOf(), outline);
-  // Re-initialized on another viewer, the same subject's rim moves there.
-  const other = drawOver().scene;
-  state.viewer = { scene: other };
-  rendering.renderVisual(subject(0.01));
-  assert.equal(scene.added.length, 0, 'gone from the old viewer');
-  assert.equal(other.added.length, 1, 'drawn on the new one');
-  rendering.clearVisual();
-  assert.equal(other.added[0].length, 1, 'only the empty polyline collection');
-  rendering.disposeVisual();
-  assert.equal(other.added.length, 0);
+    assert.ok(
+      halo.material.uniforms.color.equalsEpsilon(
+        Cesium.Color.fromCssColorString('rgba(4, 12, 16, 0.8)'),
+        1e-9,
+      ),
+    );
+    // A closed ring 250 km from the subject's ground point, 2.5 km up.
+    const ground = Cesium.Cartesian3.fromDegrees(0, 0, 2_500);
+    assert.equal(core.positions.length, 129);
+    for (const position of core.positions) {
+      const away = Cesium.Cartesian3.distance(ground, position);
+      assert.ok(Math.abs(away - 250_000) < 2_000, `${away}`);
+      assert.ok(
+        Math.abs(Cesium.Cartographic.fromCartesian(position).height - 2_500) <
+          1,
+      );
+    }
+    // Small moves keep the ring; one past 250 m moves it.
+    const first = core.positions[0];
+    rendering.renderVisual(subject(0.001));
+    assert.ok(Cesium.Cartesian3.equals(linesOf()[1].positions[0], first));
+    rendering.renderVisual(subject(0.01));
+    assert.ok(!Cesium.Cartesian3.equals(linesOf()[1].positions[0], first));
+    // Re-initialized on another viewer, the same subject's ring moves there.
+    const other = drawOver().scene;
+    state.viewer = { scene: other };
+    rendering.renderVisual(subject(0.01));
+    assert.equal(scene.added.length, 0, 'gone from the old viewer');
+    assert.equal(linesOf(other).length, 2, 'drawn on the new one');
+    rendering.clearVisual();
+    assert.equal(linesOf(other).length, 0);
+    rendering.disposeVisual();
+    assert.equal(other.added.length, 0);
+  });
 });
 
 test('the installations layer draws its named markers as outlined point primitives on a viewer of its own', async () => {

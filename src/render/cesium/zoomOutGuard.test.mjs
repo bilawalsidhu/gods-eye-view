@@ -6,6 +6,7 @@ import {
   maxPitchForHeight,
   MAXIMUM_ZOOM_DISTANCE_M,
 } from './zoomOutGuard.js';
+import { applicationViewerHooks } from './application.js';
 
 const deg = Cesium.Math.toDegrees;
 const { WHEEL, PINCH, RIGHT_DRAG, LEFT_DRAG, MIDDLE_DRAG } =
@@ -761,4 +762,42 @@ test('a tracked camera cannot climb past the ceiling from its target', () => {
   } finally {
     s.dispose();
   }
+});
+
+test("the application scene's viewer hooks install the guard on the viewer and hand back its disposer", () => {
+  const controller = { maximumZoomDistance: Infinity };
+  const scene = {
+    mode: Cesium.SceneMode.SCENE3D,
+    screenSpaceCameraController: controller,
+    preRender: new Cesium.Event(),
+    postUpdate: new Cesium.Event(),
+  };
+  const camera = {
+    position: Cesium.Cartesian3.fromDegrees(0, 0, 1_000_000),
+    positionCartographic: { height: 1_000_000 },
+  };
+  const viewer = { scene, camera, canvas: new EventTarget() };
+  const handoffs = new Set();
+  const dispose = applicationViewerHooks(viewer).installZoomOutGuard({
+    subscribeCameraHandoff(listener) {
+      handoffs.add(listener);
+      return () => handoffs.delete(listener);
+    },
+    createAggregator: () => ({
+      isMoving: () => false,
+      reset() {},
+      destroy() {},
+    }),
+  });
+
+  assert.equal(controller.maximumZoomDistance, MAXIMUM_ZOOM_DISTANCE_M);
+  assert.equal(scene.preRender.numberOfListeners, 1);
+  assert.equal(scene.postUpdate.numberOfListeners, 1);
+  assert.equal(handoffs.size, 1);
+
+  dispose();
+  assert.equal(controller.maximumZoomDistance, Infinity);
+  assert.equal(scene.preRender.numberOfListeners, 0);
+  assert.equal(scene.postUpdate.numberOfListeners, 0);
+  assert.equal(handoffs.size, 0);
 });

@@ -165,8 +165,9 @@ export async function createApplicationScene({
     mapStackController,
     operations,
     input,
-    // Trims stale draw commands, keeps an inline panel drawing, and says
-    // whether an entity is the viewer's own (render/cesium/application.js).
+    // Trims stale draw commands, keeps an inline panel drawing, says
+    // whether an entity is the viewer's own, and installs the zoom-out
+    // guard (render/cesium/application.js).
     ...applicationViewerHooks(viewer),
   };
 }

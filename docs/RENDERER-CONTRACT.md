@@ -153,8 +153,14 @@ back to Cesium. Both lists only ever shrink.
 - `src/render/cesiumAllowList.json` lists the files outside the Cesium
   adapter (`src/render/cesium/`) that may still import or be handed Cesium
   (`src/render/noCesiumOutsideRender.test.mjs`). A file leaves the list
-  when it no longer drives Cesium at all; nothing is added. The list is now
-  empty: no runtime file outside the adapter reaches Cesium. Two files name
+  when it no longer drives Cesium at all; nothing is added. The list holds
+  one file, `src/layers/awareness/rangeRingCesium.js`: the Global Context
+  range ring and its sonar pulses, a disc whose fill is computed per pixel
+  from values set each frame and an outlined line whose opacity changes
+  without a rebuild, neither of which the draw port can draw yet. It draws
+  only on a viewer with a Cesium primitive collection; on any other
+  renderer the layer draws the ring without pulses through the draw port.
+  It leaves the list when the draw port can draw both. Two files name
   the adapter by design and are not on it: the application scene
   (`src/app/scene.js`), the composition root that picks the Cesium renderer,
   may import `src/render/cesium/application.js` and nothing else of the

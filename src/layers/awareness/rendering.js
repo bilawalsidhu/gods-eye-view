@@ -9,7 +9,15 @@ import {
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
-import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
+import {
+  AWARENESS_PAGE_SIZE,
+  AWARENESS_RANGE_RING_STYLE,
+  CONTEXT_RIM_HEIGHT_M,
+} from './policy.js';
+import {
+  awarenessRangeRingPositions,
+  createRangeRingCesium,
+} from './rangeRingCesium.js';
 import { formatAwarenessDirection } from './presentation.js';
 import { canvasOf, drawOf, findCamera } from '../../render/rendererOf.js';
 import {
@@ -24,6 +32,18 @@ import {
   toRadians,
 } from '../../geo/index.js';
 
+// The ring's and the pulses' own arithmetic, for their tests.
+export {
+  AWARENESS_PULSE_GRADIENT_MAX,
+  awarenessPulseLevel,
+  awarenessPulseState,
+  awarenessRangeRingPositions,
+  awarenessRingFlash,
+  awarenessRingGeometryOptions,
+  discFollowMatrix,
+  wakeAwarenessPulses,
+} from './rangeRingCesium.js';
+
 /** Each instance's rim set id is its own. */
 let instances = 0;
 
@@ -36,8 +56,18 @@ export function createRendering({
   const { getKeyholeGeometry, celestialScreenAngle } = services.geometry;
   const { governorRequestRender } = services.render;
   const rimSetId = `awareness:${++instances}:rim`;
-  /** The context rim's draw set, and the viewer it draws on. */
+  /** The static range ring's draw set, and the viewer it draws on. */
   let rim = null;
+  /**
+   * The ring with its pulses, where the viewer can draw them
+   * (`rangeRingCesium.js`); elsewhere the static ring goes through the draw
+   * port, below.
+   */
+  const pulsedRing = createRangeRingCesium({
+    state: layerState,
+    governorRequestRender,
+    redraw: (subject) => renderVisual(subject),
+  });
 
   const CARDINALS = [
     ['N', 0],
@@ -276,13 +306,23 @@ export function createRendering({
     presentDirection({ hidden: false, ring, heading, labels, markers });
   }
 
+  /**
+   * Run the range pulses again for `activeMs`, after a camera move. Call it
+   * during a frame (lifecycle's preRender): that frame's postRender arms the
+   * next request, so waking asks for no extra frame of its own.
+   */
+  function wakePulses() {
+    pulsedRing.wakePulses();
+  }
+
   function clearVisual() {
-    if (layerState.visual && rim) {
-      rim.set.clear();
+    if (layerState.visual?.static) {
+      rim?.set.clear();
       // Idle mode renders only on request; a removed ring must not linger.
       governorRequestRender('awareness-visual');
+      layerState.visual = null;
     }
-    layerState.visual = null;
+    pulsedRing.clearVisual();
   }
 
   /** Let the rim's draw set go, as the layer is destroyed. */
@@ -292,48 +332,69 @@ export function createRendering({
     rim = null;
   }
 
-  /** The rim's draw set on the current viewer, made on first use. */
+  /** The static ring's draw set on the current viewer, made on first use. */
   function rimSet() {
     if (rim?.viewer !== layerState.viewer) {
       rim?.set.dispose();
       rim = {
         viewer: layerState.viewer,
-        set: drawOf(layerState.viewer).shapes({ id: rimSetId }),
+        // Unpickable, so a click on the ring's edge reaches the contact
+        // underneath.
+        set: drawOf(layerState.viewer).lines({ id: rimSetId, pickable: false }),
       };
     }
     return rim.set;
   }
 
-  /** The awareness radius as an outlined ellipse around the subject's ground point. */
-  function rimItem(lon, lat) {
-    return {
-      id: 'rim',
-      geometry: {
-        kind: 'ellipse',
-        center: { lon, lat, height: CONTEXT_RIM_HEIGHT_M },
-        semiMajor: AWARENESS_RADIUS_M,
-        semiMinor: AWARENESS_RADIUS_M,
-      },
-      fill: null,
-      outline: [0x62 / 255, 0xb5 / 255, 1, 0.72],
-      outlineOnly: true,
-      height: 'absolute',
-    };
+  /**
+   * The range ring around a ground point as the draw port draws it: a
+   * bright core over a dark halo (`AWARENESS_RANGE_RING_STYLE`), straight
+   * chords between positions that already follow the surface.
+   */
+  function rimItems(groundCenter) {
+    const ring = AWARENESS_RANGE_RING_STYLE;
+    const positions = awarenessRangeRingPositions(
+      groundCenter,
+      AWARENESS_RADIUS_M,
+      CONTEXT_RIM_HEIGHT_M,
+    );
+    const line = (id, widthPx, color) => ({
+      id,
+      positions,
+      widthPx,
+      mode: '3d',
+      style: { kind: 'solid', color },
+    });
+    return [
+      line('halo', ring.width, ring.outlineColor),
+      // The halo is `outlineWidth` of the line's width in all, half on each
+      // side, as the outline material of the pulsed ring draws it.
+      line('core', ring.width - ring.outlineWidth, ring.color),
+    ];
   }
 
   function renderVisual(subject) {
     if (!layerState.viewer || !subject?.position) return;
+    if (pulsedRing.drawsOn(layerState.viewer)) {
+      if (layerState.visual?.static) clearVisual();
+      pulsedRing.renderVisual(subject);
+      return;
+    }
     const location = toLonLatH(subject.position);
     if (!location) return;
     const { lon, lat } = location;
     const groundCenter = fromDegrees(lon, lat, 0);
     const key = `${subject.layerId}:${subject.id}`;
     // A rim drawn on another viewer (the layer re-initialized) is redrawn.
-    if (layerState.visual?.key === key && rim?.viewer === layerState.viewer) {
+    if (
+      layerState.visual?.static &&
+      layerState.visual.key === key &&
+      rim?.viewer === layerState.viewer
+    ) {
       // Move the large ring only after a meaningful displacement so live
       // tracking does not rebuild it for sub-pixel motion every 750 ms.
       if (distance(layerState.visual.center, groundCenter) >= 250) {
-        rimSet().set([rimItem(lon, lat)]);
+        rimSet().set(rimItems(groundCenter));
         layerState.visual.center = groundCenter;
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
@@ -341,8 +402,8 @@ export function createRendering({
       return;
     }
     clearVisual();
-    rimSet().set([rimItem(lon, lat)]);
-    layerState.visual = { key, center: groundCenter };
+    rimSet().set(rimItems(groundCenter));
+    layerState.visual = { key, center: groundCenter, static: true };
     governorRequestRender('awareness-visual');
   }
   return {
@@ -356,5 +417,6 @@ export function createRendering({
     clearVisual,
     disposeVisual,
     renderVisual,
+    wakePulses,
   };
 }

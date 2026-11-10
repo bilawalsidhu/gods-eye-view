@@ -153,7 +153,8 @@ export function harness({
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: {
       moveEnd: { addEventListener() {} },
-      // The view: a box over Kathmandu, in radians.
+      // The view: a box over Kathmandu, in radians, as the fake Cesium
+      // camera gives it; the camera port answers in degrees.
       computeViewRectangle: () => ({
         west: (85.2 * Math.PI) / 180,
         south: (27.6 * Math.PI) / 180,

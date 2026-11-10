@@ -107,9 +107,8 @@ test('dev and preview install the same bounded Gemini token endpoint', () => {
     geminiLiveProxy()[hook]({
       middlewares: { use: (...args) => installed.push(args) },
     });
-    assert.equal(installed.length, 1);
-    assert.equal(installed[0][0], '/api/gemini/token');
-    assert.equal(typeof installed[0][1], 'function');
+    assert.deepEqual(installed.map(([route]) => route), ['/api/gemini/chat', '/api/gemini/token']);
+    assert.ok(installed.every(([, handler]) => typeof handler === 'function'));
   }
 });
 

@@ -65,7 +65,7 @@ function key(element, value) {
   return event;
 }
 
-test('Settings launcher toggles while tab and programmatic selection remain idempotent', async (t) => {
+test('Settings launcher and tab toggle while programmatic selection stays idempotent', async (t) => {
   const f = fixture(t);
   await f.settle();
   assert.equal(f.panel.snapshot().panelOpen, false);
@@ -84,8 +84,10 @@ test('Settings launcher toggles while tab and programmatic selection remain idem
   assert.equal(f.panel.snapshot().settingsOpen, true);
   assert.equal(f.panel.select('settings').changed, false);
   assert.equal(f.panel.snapshot().settingsOpen, true);
+  // Preview has no visible tab, so the Settings tab toggles back to it.
   click(f.$('gev-voice-settings-tab'));
-  assert.equal(f.panel.snapshot().settingsOpen, true);
+  assert.equal(f.panel.snapshot().view, 'preview');
+  assert.equal(f.panel.snapshot().panelOpen, true);
   assert.equal(f.panel.select('unknown').reason, 'unknown-view');
 });
 
@@ -115,7 +117,8 @@ test('tab keyboard navigation and Escape preserve focus and accessibility state'
   assert.equal(key(f.$('gev-voice-panel'), 'Escape').defaultPrevented, true);
   await f.settle();
   assert.equal(f.panel.snapshot().panelOpen, false);
-  assert.equal(f.active(), 'gev-voice-settings-button');
+  // The Settings gear lives in the chat header, so focus returns to Chat.
+  assert.equal(f.active(), 'gev-chat-button');
   assert.equal(key(f.$('gev-voice-panel'), 'Escape').defaultPrevented, false);
 });
 

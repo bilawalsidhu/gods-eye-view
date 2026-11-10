@@ -75,6 +75,7 @@ const DRAW_FROM_CALLER = new Set([
   './layers/bikeshare',
   './layers/gnss',
   './layers/perimeters',
+  './layers/drone-airspace',
   './layers/awareness',
   './layers/submarine-cables',
   './layers/alpr',

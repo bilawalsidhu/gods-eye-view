@@ -2,14 +2,20 @@
  * A renderer double for layers that draw on the ground and size what they
  * draw to the camera: a fake draw port (`fakeDrawPort.mjs`), a frame port
  * whose `preRender` the test raises, a camera whose eye the test moves and
- * whose `moveEnd` it raises, a query port answering the ellipsoid's
+ * whose `moveEnd` it raises and whose look it aims (straight down unless
+ * aimed), a query port answering the ellipsoid's
  * horizon and scripted heights, and a globe whose visibility and terrain
  * loading the test sets. Bound to `viewer`, as the application binds its
  * renderer, so `drawOf`, `cameraOf` and the rest find it.
  */
 import { bindRenderer } from '../render/rendererOf.js';
 import { fakeDrawPort } from './fakeDrawPort.mjs';
-import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import {
+  fromDegrees,
+  geodeticSurfaceNormal,
+  toLonLatH,
+} from '../geo/ellipsoid.js';
+import { cross, normalize, scale, sub } from '../geo/vector.js';
 
 /** An event a test raises: listeners added, removed and counted. */
 export class FakeEvent {
@@ -87,7 +93,15 @@ export function bindFakeGroundRenderer(
   /** What the camera has been told to follow, in order; the last is followed. */
   const follows = [];
   /** The camera's view shape, which a test may change. */
-  const view = { fovy: Math.PI / 3, aspectRatio: 1 };
+  const view = { fovy: Math.PI / 3, aspectRatio: 1, near: 1, far: 1e8 };
+  /** Where the camera looks; null: straight down, north up. */
+  let look = null;
+  const NORTH = { x: 0, y: 0, z: 1 };
+  /** `direction` with an up as near `toward` as a right angle allows. */
+  const lookAlong = (direction, toward) => {
+    const right = normalize(cross(direction, toward));
+    return { direction, up: cross(right, direction) };
+  };
   /** What a pick answers at a window position; default: nothing drawn. */
   let pickAt = () => null;
   const renders = [];
@@ -120,6 +134,8 @@ export function bindFakeGroundRenderer(
         return {
           ...at,
           position: { ...position },
+          ...(look ??
+            lookAlong(scale(geodeticSurfaceNormal(position), -1), NORTH)),
           ...view,
         };
       },
@@ -188,6 +204,22 @@ export function bindFakeGroundRenderer(
       position = { ...next };
     },
     eyePosition: () => ({ ...position }),
+    /**
+     * Aim the camera from where it stands at `target` (or, `away`, directly
+     * away from it), up as near the local vertical as that allows. It stays
+     * aimed along that direction until aimed again; null: straight down.
+     */
+    lookAt(target, { away = false } = {}) {
+      if (!target) {
+        look = null;
+        return;
+      }
+      const toward = normalize(sub(target, position));
+      look = lookAlong(
+        away ? scale(toward, -1) : toward,
+        geodeticSurfaceNormal(position),
+      );
+    },
     /** Change what a pick answers at a window position. */
     setPick(next) {
       pickAt = next;
