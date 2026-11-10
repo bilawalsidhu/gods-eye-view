@@ -15,6 +15,8 @@ const REFRESH_MS = 24 * 60 * 60 * 1000;
 const STALE_MAX_MS = 7 * REFRESH_MS;
 /** After a source fails, it is not asked again for this long. */
 const RETRY_MS = 15 * 60 * 1000;
+/** A refresh with fewer than this share of the last good records is refused. */
+const MIN_KEEP_RATIO = 0.5;
 // Only the columns the card uses; ship_char/obj_desc histories can name people
 // and are not read beyond a short vessel type.
 const EMODNET_PROPERTIES = [
@@ -109,7 +111,13 @@ export function shipwrecksProxy({
     const done = now();
     results.forEach((result, i) => {
       const state = sources[names[i]];
-      if (result.status === 'fulfilled')
+      // A valid answer far smaller than the last good set (a truncated or
+      // half-built upstream) is a failure too, until the old set expires.
+      const shrunk =
+        result.status === 'fulfilled' &&
+        usable(state, done) &&
+        result.value.length < state.good.records.length * MIN_KEEP_RATIO;
+      if (result.status === 'fulfilled' && !shrunk)
         state.good = { records: result.value, fetchedAt: done };
       else state.retryAt = done + RETRY_MS;
     });

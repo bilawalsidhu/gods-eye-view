@@ -292,3 +292,39 @@ test('an upstream body over its cap is a failed source, read only to the cap', a
   assert.ok(cancelled, 'the oversized body is cancelled');
   assert.ok(sent <= 34 * MIB, `read ${sent / MIB} MiB of a 32 MiB cap`);
 });
+
+test('a refresh far smaller than the last good set is refused until it expires', async () => {
+  let clock = 0;
+  const many = {
+    results: {
+      bindings: Array.from({ length: 10 }, (_, i) => ({
+        item: { value: `http://www.wikidata.org/entity/Q${100 + i}` },
+        itemLabel: { value: `Wreck ${i}` },
+        coord: { value: `Point(${i} 40)` },
+      })),
+    },
+  };
+  let wikidata = many;
+  const handler = handlerOf(
+    shipwrecksProxy({
+      fetchImpl: async (url) =>
+        Response.json(
+          String(url).includes('query.wikidata.org') ? wikidata : EMODNET,
+        ),
+      now: () => clock,
+    }),
+  );
+  assert.equal((await request(handler)).body.records.length, 11);
+  wikidata = WIKIDATA;
+  clock = 25 * HOUR;
+  const refused = await request(handler);
+  assert.equal(refused.body.records.length, 11, 'one wreck is not ten');
+  assert.equal(refused.body.stale, true);
+  clock = 8 * 24 * HOUR;
+  const accepted = await request(handler);
+  assert.equal(
+    accepted.body.records.length,
+    2,
+    'taken once the old set expired',
+  );
+});
