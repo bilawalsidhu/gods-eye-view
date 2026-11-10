@@ -2,7 +2,6 @@ import {
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
-  Color,
   DoubleSide,
   Group,
   Mesh,
@@ -14,39 +13,11 @@ import {
 } from 'three';
 import { createMeshRegistry } from '../meshes.js';
 import { cartesian3 } from '../../geo/index.js';
-import { attachSceneDepth, createSceneDepthTest } from './sceneDepth.js';
+import { createSceneDepthTest } from './sceneDepth.js';
 
-const KIND = 'gevWorldMesh';
 const NEAR_SURFACE_M = 2;
-const registered = new WeakSet();
 
-export function createNavaraMeshes(view, { MeshDesc, camera, picker }) {
-  if (!registered.has(view)) {
-    view.registerMesh(
-      KIND,
-      class extends MeshDesc {
-        constructor(owner, ctx, config) {
-          super(owner, ctx, config);
-          this.resource = config[KIND];
-        }
-        // Transparent, drawn after the effects: the colours are the ones
-        // asked for (as Cesium draws them), not tone-mapped with the look.
-        // The scene-depth test hides a mesh behind terrain, tiles and Earth.
-        getPassKey() {
-          return 'transparent';
-        }
-        createMesh() {
-          attachSceneDepth(this.resource.group, this.ctx);
-          return this.resource.group;
-        }
-        onDestroy() {
-          this.resource.dispose();
-          super.onDestroy();
-        }
-      },
-    );
-    registered.add(view);
-  }
+export function createNavaraMeshes(view, { overlay, camera, picker }) {
   const registry = createMeshRegistry(
     (state) => {
       const group = new Group();
@@ -60,18 +31,14 @@ export function createNavaraMeshes(view, { MeshDesc, camera, picker }) {
       const mesh = new Mesh(geometry, material);
       const sceneDepth = createSceneDepthTest();
       sceneDepth.material(material);
-      sceneDepth.object(group);
       sceneDepth.object(mesh);
       let depthFree = false;
-      const pigment = new Color();
       const bindDepth = mesh.onBeforeRender;
       mesh.onBeforeRender = function onBeforeRender(...args) {
+        // The overlay context can arrive after the mesh is created.
+        sceneDepth.attach(overlay.ctx);
         bindDepth.apply(this, args);
         if (depthFree) sceneDepth.uniforms.uGevSceneDepthOn.value = 0;
-        // The pass still scales by the view's exposure: undo it.
-        material.color
-          .copy(pigment)
-          .multiplyScalar(1 / Math.max(1, view.toneMappingExposure ?? 1));
       };
       group.frustumCulled = mesh.frustumCulled = false;
       group.add(mesh);
@@ -116,17 +83,15 @@ export function createNavaraMeshes(view, { MeshDesc, camera, picker }) {
           material.needsUpdate = true;
         } else if (texture && !texture.isVideoTexture && 'image' in patch)
           texture.needsUpdate = true;
-        pigment.setRGB(...next.color.slice(0, 3), SRGBColorSpace);
-        material.color.copy(pigment);
+        material.color.setRGB(...next.color.slice(0, 3), SRGBColorSpace);
         material.opacity = next.color[3];
         depthFree = next.depthTest === 'always';
         material.depthTest = !depthFree;
         group.visible = next.show;
       }
-      let holder;
       try {
         update(state, state);
-        holder = view.addMesh({ [KIND]: { group, dispose } });
+        overlay.add(group);
       } catch (error) {
         dispose();
         throw error;
@@ -137,7 +102,7 @@ export function createNavaraMeshes(view, { MeshDesc, camera, picker }) {
         update,
         destroy() {
           try {
-            holder.delete();
+            overlay.remove(group);
           } finally {
             dispose();
           }

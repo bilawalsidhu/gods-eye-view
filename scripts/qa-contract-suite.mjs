@@ -237,12 +237,6 @@ async function runOn(browser, kind) {
           outcome.push({ name, skipped: owner[1] });
           continue;
         }
-        const knownFailure =
-          engine.kind === 'navara' &&
-          name ===
-            'meshes.createMesh: a single colour draws as asked within 10 per channel'
-            ? 'Meshes are drawn before tone mapping'
-            : null;
         try {
           await run();
           outcome.push({ name, ok: true });
@@ -250,10 +244,6 @@ async function runOn(browser, kind) {
           outcome.push({
             name,
             ok: false,
-            ...(knownFailure &&
-              String(error?.message).startsWith(
-                'mesh colour within 10 per channel',
-              ) && { knownFailure }),
             error: String(error?.message ?? error),
           });
         }

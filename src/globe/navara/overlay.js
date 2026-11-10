@@ -1,5 +1,5 @@
-// gev's screen overlays on Navara: sprites, points and lines (engine.movers
-// and engine.lines) drawn into the frame after Navara's tone mapping,
+// gev's screen overlays on Navara: sprites, points, lines and world meshes
+// (engine.movers, engine.lines and engine.meshes) drawn after tone mapping,
 // anti-aliasing (SMAA/FXAA) and the gev sharpening, so their
 // colours are the colours asked for (as Cesium draws billboards and
 // polylines), not tone-mapped or graded with the look. A public Navara

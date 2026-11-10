@@ -538,9 +538,10 @@ Cesium draws a synchronous Primitive with a flat material, no back-face
 culling and no depth writes. Colour, image and visibility changes retain the
 primitive; geometry, pick-id and depth-test changes replace it. The engine
 requests frames while the primitive or its image is preparing. Navara draws
-local coordinates relative to a double-precision world origin in its
-transparent scene pass after tone mapping, with scene depth and triangle
-picking. Their authored colours are blended in display space.
+local coordinates relative to a double-precision world origin in the shared
+overlay pass after tone mapping and anti-aliasing, the pass that draws sprites
+and lines, with scene depth and triangle picking. Their authored colours are
+blended in display space.
 Both engines own geometry, material and texture disposal. The fake engine
 keeps the same state and tests triangle intersections for picks.
 

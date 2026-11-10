@@ -167,7 +167,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
         ),
       }),
       lines: createNavaraLines(view, { overlay }),
-      meshes: (parts) => createNavaraMeshes(view, { MeshDesc, ...parts }),
+      meshes: (parts) => createNavaraMeshes(view, { overlay, ...parts }),
       ground: createNavaraGround(view, {
         createPass: createGroundPass,
         pulseField: (options) =>
