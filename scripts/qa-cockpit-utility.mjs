@@ -1,9 +1,11 @@
 #!/usr/bin/env node
+// Cesium-only probes: tracked-entity and local-frame coordinates verify the native cockpit handoff.
 /** Focused rendered proof for adaptive Cockpit Display/Radio layout. */
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 
@@ -13,22 +15,9 @@ const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
 const headful = process.argv.includes('--headful');
 fs.mkdirSync(shotsDir, { recursive: true });
 
-const chromeCandidates = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
-const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
-const browser = await puppeteer.launch({
-  headless: headful ? false : 'new',
-  ...(executablePath ? { executablePath } : {}),
-  // Metal is a macOS-only ANGLE backend; anywhere else it fails WebGL init.
-  args: [
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
-    '--no-sandbox',
-  ],
+const browser = await launchBrowser({
+  headless: true,
+  args: [...(process.platform === 'darwin' ? ['--enable-gpu'] : []), '--no-sandbox'],
 });
 const page = await browser.newPage();
 await blockPaidQaMaps(page);
@@ -171,10 +160,7 @@ try {
   page.on('request', routeQaRequest);
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
-  await page.waitForFunction(
-    () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60_000 },
-  );
+  await whenSettled(page);
   await page.waitForFunction(() => (
     typeof window.__gevQaRegisterLayer === 'function'
     && typeof window.__gevQaUnregisterLayer === 'function'
@@ -675,6 +661,7 @@ try {
     () => Boolean(window.__godsEyeView.viewer.trackedEntity?.position),
     { timeout: 10_000 },
   );
+  await whenSettled(page);
   const preselectedContactAdoption = await page.evaluate(async () => {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const flights = dataManager.layers.get('flights')?.module;
@@ -767,7 +754,7 @@ try {
         } : null,
         navigation: snapshot?.navigation || null,
         afterId: trackedInfo?.icao24 || null,
-        viewerTrackedId: viewer.trackedEntity?.gevTrackedId || null,
+        viewerTrackedId: window.__godsEyeView.engine.camera.following()?.label?.id || null,
         contextVisible: !document.getElementById('military-awareness-panel')?.hidden,
         entryAvailableAfterSettlement: Boolean(entry && !entry.hidden),
         blockerStillRegistered: dataManager.layers.has(blockerId),
@@ -854,8 +841,8 @@ try {
     const readinessUrl = new URL(appUrl);
     readinessUrl.searchParams.set('welcome', '0');
     await readinessPage.goto(readinessUrl.href, { waitUntil: 'domcontentloaded' });
-    await readinessPage.waitForFunction(() => window.__godsEyeView?.dataManager
-      && document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 60000 });
+    await readinessPage.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60000 });
+    await whenSettled(readinessPage);
     await readinessPage.evaluate(async () => {
       const manager = window.__godsEyeView.dataManager;
       await manager.setEnabled('flights', true, { origin: 'user' });
@@ -1100,7 +1087,7 @@ try {
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const before = awareness?.getContextSnapshot?.()?.subject || null;
     const entityBefore = viewer.trackedEntity;
-    viewer.camera.zoomOut(1_500_000);
+    window.__godsEyeView.engine.camera.zoomOut(1_500_000);
     const cameraRange = () => Math.hypot(
       viewer.camera.position.x,
       viewer.camera.position.y,
@@ -1465,7 +1452,7 @@ try {
         remove();
         reject(new Error('Cockpit camera ownership check did not render a frame'));
       }, 5000);
-      const remove = viewer.scene.postRender.addEventListener(() => {
+      const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
         remove();
         clearTimeout(timer);
         resolve();
@@ -1473,10 +1460,10 @@ try {
     });
     // Let revoked listeners retire before comparing ownership across exit.
     await nextFrame();
-    const listenersBeforeExit = viewer.scene.preUpdate.numberOfListeners;
+    const listenersBeforeExit = window.__godsEyeView.engine.frames.preUpdate.numberOfListeners;
     const exited = styleManager.cockpitView.exit() === true;
     await nextFrame();
-    const listenersAfterExit = viewer.scene.preUpdate.numberOfListeners;
+    const listenersAfterExit = window.__godsEyeView.engine.frames.preUpdate.numberOfListeners;
     const refocused = awareness?.focusCurrent?.() === true;
     await nextFrame();
     return {
@@ -1485,7 +1472,7 @@ try {
       sameEntity: viewer.trackedEntity === entity,
       listenersBeforeExit,
       listenersAfterExit,
-      listenersAfterFocus: viewer.scene.preUpdate.numberOfListeners,
+      listenersAfterFocus: window.__godsEyeView.engine.frames.preUpdate.numberOfListeners,
     };
   });
   check(
@@ -2088,7 +2075,7 @@ try {
     JSON.stringify(cyberStyleStates));
   for (const height of [987, 720, 640, 900]) {
     await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await whenUiSettled(page);
     const geometry = await page.evaluate(() => {
       const signal = document.getElementById('cockpit-signal-stream');
       const utility = document.getElementById('cockpit-utility-controls');
@@ -2379,7 +2366,7 @@ try {
   await page.waitForFunction(() => {
     const viewer = window.__godsEyeView.viewer;
     if (!viewer) return false;
-    const height = viewer.camera.positionCartographic?.height;
+    const height = window.__godsEyeView.engine.camera.pose().cartographic?.height;
     return Math.abs(height - 18_000_000) < 150_000;
   }, { timeout: 6_000 });
   const resetState = await page.evaluate(() => {
@@ -2387,7 +2374,7 @@ try {
     const qa = window.__qaCockpitReset;
     const awareness = gev.dataManager.layers.get('military-awareness')?.module;
     const subjectId = awareness?.getContextSnapshot?.()?.subject?.id || null;
-    const height = gev.viewer.camera.positionCartographic?.height;
+    const height = window.__godsEyeView.engine.camera.pose().cartographic?.height;
     gev.styleManager._locationNavigation.resetToGlobeView = qa.original;
     delete window.__qaCockpitReset;
     return {
@@ -2440,7 +2427,7 @@ try {
     else hud.style.removeProperty('--cockpit-utility-top');
     if (!prior.cockpit) document.body.classList.remove('cockpit-mode');
   }).catch(() => {});
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 console.log(`RESULT: ${failures.length ? 'NOT_READY' : 'READY'} (${failures.length} failures)`);

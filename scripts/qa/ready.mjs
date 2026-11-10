@@ -120,3 +120,94 @@ export function waitForSettled(createState, { frames, timeoutMs }) {
     engine.render.request('qa-readiness');
   });
 }
+/** Wait for drawn frames when the scenario deliberately keeps a follow or orbit moving. */
+export async function whenFramesDrawn(
+  page,
+  { frames = 3, timeoutMs = 30000 } = {},
+) {
+  return page.evaluate(
+    ({ frames, timeoutMs }) =>
+      new Promise((resolve, reject) => {
+        const { engine } = window.__godsEyeView;
+        let drawn = 0;
+        const timer = setTimeout(() => {
+          remove();
+          reject(new Error('Readiness timeout: drawn frames'));
+        }, timeoutMs);
+        const remove = engine.frames.postRender.addEventListener(() => {
+          if (++drawn >= frames) {
+            clearTimeout(timer);
+            remove();
+            resolve();
+          } else {
+            queueMicrotask(() => engine.render.request('qa-drawn-frames'));
+          }
+        });
+        engine.render.request('qa-drawn-frames');
+      }),
+    { frames, timeoutMs },
+  );
+}
+/** Tile readiness is independent of camera rest, including a keyless globe. */
+export async function whenTilesLoaded(page, { timeoutMs = 30000 } = {}) {
+  const handle = await page.waitForFunction(
+    () => window.__godsEyeView?.engine?.surface.tilesLoaded(),
+    { timeout: timeoutMs, polling: 100 },
+  );
+  await handle.dispose();
+}
+/** Wait for finite panel transitions without waiting on decorative looping animations. */
+export async function whenUiSettled(page) {
+  const handle = await page.waitForFunction(
+    () => {
+      const app = window.__godsEyeView;
+      app?.engine?.render.request('qa-ui-readiness');
+      return (
+        !app?.styleManager?.transitions?.size &&
+        document
+          .getAnimations()
+          .every(
+            (animation) =>
+              animation.playState !== 'running' ||
+              animation.effect.getTiming().iterations === Infinity,
+          )
+      );
+    },
+    { polling: 'raf', timeout: 15000 },
+  );
+  await handle.dispose();
+}
+/** Predicate polling keeps timeout-as-evidence scenarios explicit. */
+export async function pollPage(
+  page,
+  predicate,
+  { timeoutMs, intervalMs = 250, args = [] },
+) {
+  let handle;
+  try {
+    handle = await page.waitForFunction(
+      predicate,
+      { timeout: timeoutMs, polling: intervalMs },
+      ...args,
+    );
+    return true;
+  } catch (error) {
+    if (error.name === 'TimeoutError') return false;
+    throw error;
+  } finally {
+    await handle?.dispose();
+  }
+}
+/** Poll scenario state outside the page without duplicating timeout loops. */
+export async function until(
+  predicate,
+  { timeoutMs = 30000, intervalMs = 100, label = 'scenario state' } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const value = await predicate();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  } while (Date.now() < deadline);
+  throw new Error(`Readiness timeout: ${label}`);
+}

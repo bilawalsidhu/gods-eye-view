@@ -1,15 +1,16 @@
 #!/usr/bin/env node
+// Cesium-only probes: the native bloom stage verifies the Cesium visual-effects adapter.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /** Rendered acceptance for style transitions and effect-state ownership. */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -26,24 +27,21 @@ try {
   url.searchParams.set('welcome', '0');
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.styleManager?._visualEffects &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.styleManager?._visualEffects,
     { timeout: 60_000 },
   );
-  await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.scene.tweens?.removeAll?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+  await whenSettled(page);
+  await evaluateWithGeo(page, async (qaGeo) => {
+    window.__godsEyeView.engine.camera.cancelFlight?.();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: (-97.7431 * Math.PI) / 180,
         latitude: (30.2568 * Math.PI) / 180,
         height: 1200,
       }),
       orientation: { heading: 0, pitch: -0.85, roll: 0 },
     });
-    viewer.scene.requestRender();
+    window.__godsEyeView.engine.render.request();
   });
   await page.evaluate(
     () =>
@@ -51,26 +49,10 @@ try {
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       ),
   );
-  const settled = await page
-    .waitForFunction(
-      () => {
-        const primitives = window.__godsEyeView.viewer.scene.primitives;
-        for (let i = 0; i < primitives.length; i++) {
-          const primitive = primitives.get(i);
-          if (
-            typeof primitive.tilesLoaded === 'boolean' &&
-            !primitive.tilesLoaded
-          )
-            return false;
-        }
-        return true;
-      },
-      { timeout: 60_000 },
-    )
-    .then(
-      () => true,
-      () => false,
-    );
+  const settled = await whenTilesLoaded(page, { timeoutMs: 60_000 }).then(
+    () => true,
+    () => false,
+  );
   check('visible tile content settles before visual captures', settled);
   fs.mkdirSync('qa-shots/visual-effects', { recursive: true });
   for (const style of [
@@ -228,7 +210,7 @@ try {
   );
   if (errors.length) console.log(JSON.stringify(errors));
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`RESULT: ${failures} failures`);
 process.exitCode = failures ? 1 : 0;

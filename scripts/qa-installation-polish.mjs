@@ -1,14 +1,15 @@
+// Cesium-only probes: native ground-primitive inspection verifies the Cesium outline paint.
+import { whenUiSettled } from './qa/ready.mjs';
 /** Shared browser assertions for installation label persistence and selection. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { moveCamera, createScreencast } from './qa-journey-recorder.mjs';
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function checkInstallationPan(page, dir) {
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.setEnabled('local-datacenters', true),
   );
-  await sleep(3000);
+  await whenUiSettled(page);
   await page.evaluate(async () => {
     const { getPaintRect } = (
       await import('/src/overlays/worldOverlay.js')
@@ -25,7 +26,7 @@ export async function checkInstallationPan(page, dir) {
       if (record.layerId === 'local-datacenters' && record.entity?.id != null)
         centerIds.push(record.entity.id);
     window.__polishPanFrames = [];
-    window.__stopPolishPan = g.viewer.scene.postRender.addEventListener(() => {
+    window.__stopPolishPan = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
       const sites = [],
         centers = [];
       installations.visitNamedMarkers((id) => {
@@ -153,7 +154,7 @@ export async function checkInstallationSelection(
         },
         { timeout: 60000 },
       );
-      await sleep(1500);
+      await whenUiSettled(page);
       const picked = await page.evaluate(async (site) => {
         const C = await import('/node_modules/cesium/Build/Cesium/index.js');
         const g = window.__godsEyeView,
@@ -166,10 +167,7 @@ export async function checkInstallationSelection(
         layer.visitNamedMarkers((id, p) => {
           if (id === record.id) point = p.position;
         });
-        const screen = C.SceneTransforms.worldToWindowCoordinates(
-          g.viewer.scene,
-          point,
-        );
+        const screen = window.__godsEyeView.engine.projector.worldToWindow(point);
         window.__polishSelectedId = record.id;
         window.__polishTitlePaints = [];
         const canvas = document.getElementById('world-overlay-canvas'),
@@ -224,7 +222,7 @@ export async function checkInstallationSelection(
           };
         };
         window.__stopPolishSelection =
-          g.viewer.scene.postRender.addEventListener(() => {
+          window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
             window.__polishSelectionFrames.push({
               paints: window.__polishTitlePaints.splice(0).length,
               own: Boolean(getPaintRect('military-installations', record.id)),
@@ -274,7 +272,7 @@ export async function checkInstallationSelection(
           );
           throw error;
         });
-      await sleep(500);
+      await whenUiSettled(page);
       const selected = await page.evaluate(() => window.__polishFillProbe());
       await page.screenshot({ path: `${dir}/after-selection-${site.key}.png` });
       // Close, oblique angles expose surface clipping and floating fills.
@@ -283,13 +281,12 @@ export async function checkInstallationSelection(
           async (site, heading) => {
             const C =
               await import('/node_modules/cesium/Build/Cesium/index.js');
-            const g = window.__godsEyeView;
             const target = C.Cartesian3.fromDegrees(
               site.lon,
               site.lat,
               site.key === 'mabry' ? 180 : 10,
             );
-            g.viewer.camera.lookAt(
+            window.__godsEyeView.engine.camera.lookAt(
               target,
               new C.HeadingPitchRange(
                 C.Math.toRadians(heading),
@@ -297,12 +294,12 @@ export async function checkInstallationSelection(
                 800,
               ),
             );
-            g.viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
+            window.__godsEyeView.engine.camera.lookAtTransform(C.Matrix4.IDENTITY);
           },
           site,
           heading,
         );
-        await sleep(1700);
+        await whenUiSettled(page);
         assert.ok(
           (await page.evaluate(() => window.__polishFillProbe())).selected,
           'orbit must preserve installation selection',
@@ -312,7 +309,7 @@ export async function checkInstallationSelection(
         });
       }
       await moveCamera(page, { ...site, pitch: -80 }, 1);
-      await sleep(900);
+      await whenUiSettled(page);
       const empty = await page.evaluate(() => {
         const g = window.__godsEyeView;
         for (let y = 250; y < 650; y += 75)
@@ -329,7 +326,7 @@ export async function checkInstallationSelection(
           window.__polishFillProbe().selected === null &&
           window.__polishFillProbe().items === 0,
       );
-      await sleep(600);
+      await whenUiSettled(page);
       const deselected = await page.evaluate(() => {
         window.__stopPolishSelection();
         window.__restorePolishPaint();

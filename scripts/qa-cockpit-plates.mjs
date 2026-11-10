@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * Rendered proof for backdrop-selective callout plates at GROUND LEVEL.
  *
@@ -46,13 +47,14 @@
  *   node scripts/qa-cockpit-plates.mjs --url http://localhost:4268 --tag before
  *   node scripts/qa-cockpit-plates.mjs --url http://localhost:4268 --teeth
  *
- * Defaults to ANGLE/Metal on macOS and software GL elsewhere. `--swiftshader` selects software GL,
+ * QA_ANGLE selects the renderer (Metal by default); use swiftshader for software GL,
  * which is deterministic but is NOT real-GPU evidence; the banner says which
  * backend actually ran and the run records it alongside the results.
  */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback) => {
@@ -64,7 +66,7 @@ const APP_ORIGIN = new URL(APP_URL).origin;
 const TAG = getOpt('--tag', 'after');
 const HEADFUL = argv.includes('--headful');
 const TEETH = argv.includes('--teeth');
-const SWIFTSHADER = argv.includes('--swiftshader') || process.platform !== 'darwin';
+const SWIFTSHADER = /swiftshader|software/i.test(process.env.QA_ANGLE || 'metal');
 const SHOT_DIR = path.resolve('qa-shots/cockpitplates');
 
 /** Mirrors `SKY_PLATE_SCALE` in src/overlays/worldOverlayTokens.js. */
@@ -134,14 +136,6 @@ const POSES = [
   },
 ];
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Version-pinned Chrome-for-Testing over the auto-updating system Chrome:
-  // its software-GL behavior shifts across majors and has produced false
-  // negatives in this repo's harnesses before.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
 
 const results = [];
 function record(name, ok, detail) {
@@ -213,25 +207,9 @@ async function main() {
   }
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
-  const executablePath = CHROME_CANDIDATES.find((candidate) => {
-    try { return fs.existsSync(candidate); } catch { return false; }
-  });
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(executablePath ? { executablePath } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      // Metal is a macOS-only ANGLE backend; off-Mac the GPU branch has to fall
-      // back to the software rasterizer or WebGL init fails outright.
-      ...(SWIFTSHADER
-        ? ['--use-gl=angle', '--use-angle=swiftshader']
-        : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']),
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1280,800',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(SWIFTSHADER ? [] : ['--enable-gpu', '--ignore-gpu-blocklist']), '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1280,800'],
   });
 
   const consoleErrors = [];
@@ -276,10 +254,7 @@ async function main() {
 
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
     await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 90_000 });
-    await page.waitForFunction(
-      () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 90_000 },
-    );
+    await whenSettled(page);
 
     renderer = await page.evaluate(() => {
       const gl = document.createElement('canvas').getContext('webgl2')
@@ -302,10 +277,10 @@ async function main() {
 
     // Inject the field. The layers keep their real pipelines; only the source
     // of observations is replaced, exactly as scripts/qa-labels.mjs does.
-    await page.evaluate((payload) => {
-      const { viewer, dataManager, styleManager } = window.__godsEyeView;
-      viewer.camera.cancelFlight();
-      const Cartesian3 = viewer.camera.position.constructor;
+    await evaluateWithGeo(page, async (qaGeo, payload) => {
+      const { dataManager, styleManager } = window.__godsEyeView;
+      window.__godsEyeView.engine.camera.cancelFlight();
+      const Cartesian3 = qaGeo.cartesian3;
       window.__PLATE_QA_FIELD = payload.contacts.map((contact) => ({
         sourceId: contact.id.toLowerCase(),
         id: contact.id,
@@ -330,17 +305,16 @@ async function main() {
 
     for (const pose of POSES) {
       console.log(`\n  — pose "${pose.name}" (${pose.note})`);
-      await page.evaluate((payload) => {
-        const { viewer } = window.__godsEyeView;
-        const Cartesian3 = viewer.camera.position.constructor;
-        viewer.camera.setView({
+      await evaluateWithGeo(page, async (qaGeo, payload) => {
+        const Cartesian3 = qaGeo.cartesian3;
+        window.__godsEyeView.engine.camera.setView({
           destination: Cartesian3.fromDegrees(payload.lon, payload.lat, payload.height),
           orientation: { heading: 0, pitch: payload.pitchDeg * Math.PI / 180, roll: 0 },
         });
       }, { lon: JFK_LON, lat: JFK_LAT, height: pose.height, pitchDeg: pose.pitchDeg });
 
       // Let the tiles settle and the label solve run before the tap window.
-      await new Promise((resolve) => setTimeout(resolve, 6_000));
+      await whenTilesLoaded(page);
       await page.evaluate(() => {
         window.__PLATE_TAP.events = [];
         window.__PLATE_TAP.on = true;
@@ -356,10 +330,9 @@ async function main() {
         // OUTPUT has to ask for its own renders. Production is unaffected: real
         // Cockpit holds, and a parked map keeps showing the last correct frame
         // precisely because nothing changed.
-        const scene = window.__godsEyeView.viewer.scene;
         const pump = () => {
           if (!window.__PLATE_TAP.on) return;
-          scene.requestRender();
+          window.__godsEyeView.engine.render.request();
           requestAnimationFrame(pump);
         };
         pump();
@@ -522,7 +495,7 @@ async function main() {
       consoleErrors.slice(0, 3).join(' | ') || 'clean',
     );
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   fs.writeFileSync(

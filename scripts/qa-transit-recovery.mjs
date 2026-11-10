@@ -1,5 +1,7 @@
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /** Camera-jump regression against an existing server; never starts a server. */
-import puppeteer from 'puppeteer';
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { chromeExecutablePath, captureQaScreenshot } from './qa-chrome.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { reduceTrailPixels } from '../src/layers/transit/qaMetrics.js';
@@ -9,11 +11,10 @@ import { transitQaBase } from './qa-transit-browser.mjs';
 const base = transitQaBase(process.env.QA_BASE_URL);
 const shots = process.env.QA_SHOTS || 'qa-shots/transit-recovery';
 await mkdir(shots, { recursive: true });
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  executablePath: chromeExecutablePath(),
   args: [
-    ...(process.platform === 'darwin' ? ['--use-angle=metal'] : []),
+    ...(process.platform === 'darwin' ? [] : []),
     '--enable-gpu',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -35,28 +36,16 @@ try {
     const app = window.__godsEyeView;
     await app.dataManager.setEnabled('transit', true, { source: 'qa' });
   });
-  await page.waitForFunction(
-    () => {
-      const scene = window.__godsEyeView.viewer.scene;
-      return scene.globe.tilesLoaded && scene.globe.show;
-    },
-    { timeout: 60000 },
-  );
-  await page.waitForFunction(
-    () => {
-      const cover = document.getElementById('loading-screen');
-      return !cover || cover.classList.contains('hidden');
-    },
-    { timeout: 60000 },
-  );
-  await page.evaluate(() => {
-    const app = window.__godsEyeView,
-      camera = app.viewer.camera;
-    const C = camera.positionCartographic.constructor,
+  await whenTilesLoaded(page, { timeoutMs: 60000 });
+  await whenSettled(page);
+  await evaluateWithGeo(page, async (qaGeo) => {
+    const C = qaGeo.cartographic,
       lat = 30.267 + 90 / 111320;
     const floor =
-      app.viewer.scene.globe.getHeight(C.fromDegrees(-97.7431, lat)) || 0;
-    camera.setView({
+      window.__godsEyeView.engine.surface.terrainHeight(
+        C.fromDegrees(-97.7431, lat),
+      ) || 0;
+    window.__godsEyeView.engine.camera.setView({
       destination: C.toCartesian(
         C.fromDegrees(
           -97.7431,
@@ -67,29 +56,24 @@ try {
       orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
     });
   });
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  await page.waitForFunction(
-    () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
-    { timeout: 60000 },
-  );
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const result = await page.evaluate(async () => {
-    const app = window.__godsEyeView,
-      scene = app.viewer.scene,
-      camera = app.viewer.camera;
+  await whenSettled(page);
+  await whenTilesLoaded(page, { timeoutMs: 60000 });
+  await whenSettled(page);
+  const result = await evaluateWithGeo(page, async (qaGeo) => {
+    const app = window.__godsEyeView;
     const layer = app.dataManager.layers.get('transit').module;
     const state = layer._transitStateForTest(),
       parts = layer._transitPartsForTest();
     const { getRegisteredTransitFeed } =
       await import('/src/data/transitFeeds.js');
     const { setRate } = await import('/src/data/contactPlayback.js');
-    const C = camera.positionCartographic.constructor;
+    const C = qaGeo.cartographic;
     const feed = {
       ...getRegisteredTransitFeed('capmetro-austin'),
       id: 'qa-camera-recovery',
     };
     const aim = (lat, height = 600) =>
-      camera.setView({
+      window.__godsEyeView.engine.camera.setView({
         destination: C.toCartesian(
           C.fromDegrees(
             -97.7431,
@@ -161,7 +145,7 @@ try {
     const preparedAtSelection = !!parts.trails.diagnostics()?.body;
     parts.height.requestHeight = requestHeight;
     const floor =
-      scene.globe.getHeight(
+      window.__godsEyeView.engine.surface.terrainHeight(
         C.fromDegrees(entry.sample.lon, entry.sample.lat),
       ) || 0;
     aim(entry.sample.lat, floor + 600);
@@ -170,7 +154,7 @@ try {
     while (performance.now() - started < 1400) {
       trail = parts.trails.diagnostics();
       if (entry.marker.show && trail?.body?.show && trail.body.ready) break;
-      scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await wait(25);
     }
     const status = {
@@ -213,8 +197,8 @@ try {
     const lengths = [0];
     for (let i = 1; i < points.length; i++)
       lengths.push(lengths.at(-1) + V.distance(points[i - 1], points[i]));
-    const canvas = scene.canvas,
-      gl = scene.context._gl,
+    const canvas = window.__godsEyeView.engine.host.canvas,
+      gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2'),
       scale = canvas.width / canvas.clientWidth;
     const mul = (m, v) =>
       [0, 1, 2, 3].map(
@@ -222,10 +206,12 @@ try {
           m[i] * v[0] + m[i + 4] * v[1] + m[i + 8] * v[2] + m[i + 12] * v[3],
       );
     const project = (p) => {
-      const q = mul(
-        camera.frustum.projectionMatrix,
-        mul(camera.viewMatrix, [p.x, p.y, p.z, 1]),
-      );
+      const q = mul(window.__godsEyeView.engine.projector.viewProjection(), [
+        p.x,
+        p.y,
+        p.z,
+        1,
+      ]);
       return {
         x: ((q[0] / q[3]) * 0.5 + 0.5) * canvas.clientWidth,
         y: (0.5 - (q[1] / q[3]) * 0.5) * canvas.clientHeight,
@@ -242,7 +228,8 @@ try {
         (d - lengths[j - 1]) / Math.max(0.001, lengths[j] - lengths[j - 1]),
       );
       const cart = C.fromCartesian(p);
-      cart.height = scene.globe.getHeight(cart) || 0;
+      cart.height =
+        window.__godsEyeView.engine.surface.terrainHeight(cart) || 0;
       return {
         ...project(C.toCartesian(cart)),
         radius: (Math.SQRT2 * Math.ceil(3 * scale)) / scale,
@@ -282,18 +269,20 @@ try {
           remove();
           reject(new Error('No recovery frame'));
         }, 500);
-        const remove = scene.postRender.addEventListener(() => {
-          remove();
-          clearTimeout(timer);
-          resolve(read());
-        });
-        scene.requestRender();
+        const remove =
+          window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
+            remove();
+            clearTimeout(timer);
+            resolve(read());
+          });
+        window.__godsEyeView.engine.render.request();
       });
     let visible = true;
     // Body and head together, as the trail's own visibility switch does.
-    const remove = scene.preRender.addEventListener(() =>
-      trailRenderer.setVisible(visible),
-    );
+    const remove =
+      window.__godsEyeView.engine.frames.preRender.addEventListener(() =>
+        trailRenderer.setVisible(visible),
+      );
     const captures = [];
     try {
       for (const show of [false, true, false, true]) {
@@ -316,7 +305,7 @@ try {
       offAgain,
       onAgain,
       tilesReady:
-        scene.globe.tilesLoaded &&
+        window.__godsEyeView.engine.surface.tilesLoaded() &&
         parts.trails.diagnostics().body === trail.body,
       elapsedMs: performance.now() - started,
       // The trail's ground corridors (age bands and head, each with a backing).
@@ -350,5 +339,5 @@ try {
   console.log(JSON.stringify(result));
   process.exitCode = pass ? 0 : 1;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

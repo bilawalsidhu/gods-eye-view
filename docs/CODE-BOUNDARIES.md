@@ -19,6 +19,17 @@ excluded. The formatter validates every entry before writing any file.
 
 New world text labels must use the world-overlay host; Cesium text labels are forbidden.
 
+## QA scripts
+
+New `scripts/qa-*.mjs` scenarios use `scripts/qa/browser.mjs` for headless launch
+and bounded shutdown, and `scripts/qa/ready.mjs` for application, camera and
+frame readiness. Select the GPU backend with `QA_ANGLE`. Keep timed pauses only
+when elapsed time is part of the assertion, and explain that measurement.
+Read scene state through the globe contract or the QA probe; native reads belong
+only in explicit engine-adapter checks. The counters in
+`node scripts/report-qa-harness.mjs` must not grow; lower the baseline with
+`--write-baseline` after removing duplication.
+
 ## Current component ownership
 
 Package imports use `gods-eye-view`; `package.json` is the authoritative

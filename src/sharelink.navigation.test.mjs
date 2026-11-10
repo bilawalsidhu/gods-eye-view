@@ -1,3 +1,4 @@
+import { installManualTimers } from './testSupport/manualTimers.mjs';
 import { viewerEngine } from './testSupport/viewerEngine.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -70,23 +71,6 @@ function installTab(t, initialHash = '') {
     back: () => go(index - 1),
     forward: () => go(index + 1),
   };
-}
-
-/** Queue timers instead of running them, so delayed work runs only on demand. */
-function installManualTimers(t) {
-  const prior = {
-    setTimeout: globalThis.setTimeout,
-    clearTimeout: globalThis.clearTimeout,
-  };
-  const timers = new Map();
-  let timerId = 0;
-  globalThis.setTimeout = (fn) => {
-    timers.set(++timerId, fn);
-    return timerId;
-  };
-  globalThis.clearTimeout = (id) => timers.delete(id);
-  t.after(() => Object.assign(globalThis, prior));
-  return timers;
 }
 
 function fakeViewer() {
@@ -175,7 +159,7 @@ test('a non-share hash is ignored and Back/Forward restores each entry once', (t
 
 test('a newer navigation supersedes an older restore and its pending write', (t) => {
   const tab = installTab(t, SHARE_A);
-  const timers = installManualTimers(t);
+  const timers = installManualTimers(t).timers;
 
   const manager = new ShareLinkManager(fakeViewer());
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
@@ -237,7 +221,7 @@ function deferred() {
 /** A ShareRestoration over a real ShareLinkManager with a stub restore sink. */
 function restorationHarness(t, initialHash, navigationOverrides = {}) {
   const tab = installTab(t, initialHash);
-  const timers = installManualTimers(t);
+  const timers = installManualTimers(t).timers;
 
   const restores = [];
   let navigationGeneration = 0;
@@ -427,7 +411,7 @@ test('the layer coordinator replaces in-flight share layers with the navigated s
 
 test('a manager held for an engine-changing visit neither stamps nor restores that entry', (t) => {
   const tab = installTab(t, SHARE_A);
-  const timers = installManualTimers(t);
+  const timers = installManualTimers(t).timers;
   const manager = new ShareLinkManager(fakeViewer());
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   // The page's own popstate listener runs first (src/main.js): the visit

@@ -5,10 +5,11 @@
  * --w2 adds raster checks that import source modules: dev server only.
  * GBFS documents are synthetic; no operator feed or provider key is required.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import { watchBrowserPage, redact } from './qa-browserEvidence.mjs';
@@ -67,15 +68,9 @@ const status = {
     })),
   },
 };
-const browser = await puppeteer.launch({
-  headless: 'new',
-  ...(process.env.PUPPETEER_EXECUTABLE_PATH
-    ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
-    : {}),
-  args:
-    process.platform === 'darwin'
-      ? ['--use-angle=metal']
-      : ['--use-gl=angle', '--use-angle=swiftshader'],
+const browser = await launchBrowser({
+  headless: true,
+  args: process.platform === 'darwin' ? [] : [],
 });
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -151,14 +146,7 @@ async function open(mode = 'normal') {
       window.__godsEyeView?.dataManager && window.__godsEyeView?.voiceCommands,
     { timeout: 60000 },
   );
-  await page.waitForFunction(
-    () =>
-      !document.getElementById('loading-screen') ||
-      (document.getElementById('loading-screen').classList.contains('hidden') &&
-        getComputedStyle(document.getElementById('loading-screen')).opacity ===
-          '0'),
-    { timeout: 60000 },
-  );
+  await whenSettled(page);
   await page.evaluate(
     async (destination) => {
       const { dataManager, engine } = window.__godsEyeView;
@@ -619,5 +607,5 @@ try {
 } finally {
   if (reportPath)
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
-  await browser.close();
+  await closeBrowser(browser);
 }

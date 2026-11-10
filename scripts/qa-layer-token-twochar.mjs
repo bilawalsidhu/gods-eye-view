@@ -7,9 +7,9 @@
  *
  * Run against a local Vite server: node scripts/qa-layer-token-twochar.mjs
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import puppeteer from 'puppeteer';
 import {
   LAYER_STATE_TOKEN_RESERVATIONS,
   nextLayerStateToken,
@@ -119,14 +119,12 @@ function injectCatalog(source) {
   return result;
 }
 
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
     '--disable-dev-shm-usage',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 
@@ -333,5 +331,5 @@ try {
   console.log('RESULT: 10 passed, 0 failed, 0 skipped');
 } finally {
   await Promise.all(contexts.map((context) => context.close().catch(() => {})));
-  await browser.close();
+  await closeBrowser(browser);
 }

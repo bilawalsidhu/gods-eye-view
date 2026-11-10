@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /** Mapped installations: isolated camera navigation, cached revisits and Contacts release. */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 import { moveCamera } from './qa-journey-recorder.mjs';
 
 const args = process.argv.slice(2);
@@ -13,10 +14,9 @@ if (args.includes('--help')) {
 }
 const baseline = args.includes('--baseline');
 const result = { views: [], errors: [], forbidden: [], failures: [] };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  args: ['--use-angle=metal', '--disable-background-timer-throttling'],
+  args: ['--disable-background-timer-throttling'],
   protocolTimeout: 120000,
 });
 try {
@@ -58,12 +58,10 @@ try {
     args.find((a) => /^https?:/.test(a)),
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.dataManager &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 120000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 120000,
+  });
+  await whenSettled(page);
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -72,13 +70,12 @@ try {
     const g = window.__godsEyeView;
     for (const [id] of g.dataManager.layers)
       await g.dataManager.setEnabled(id, false);
-    g.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
     window.installationEvents = { changed: 0, end: 0 };
     window.installationEntityRefs = new Map();
-    g.viewer.camera.changed.addEventListener(
+    window.__godsEyeView.engine.camera.changed.addEventListener(
       () => window.installationEvents.changed++,
     );
-    g.viewer.camera.moveEnd.addEventListener(
+    window.__godsEyeView.engine.camera.moveEnd.addEventListener(
       () => window.installationEvents.end++,
     );
   });
@@ -90,7 +87,7 @@ try {
     const fits = await page.evaluate(async () => {
       const { installationTileZoom } =
         await import('/src/layers/installations/source.js');
-      const r = window.__godsEyeView.viewer.camera.computeViewRectangle();
+      const r = window.__godsEyeView.engine.camera.viewRectangle();
       const d = 180 / Math.PI;
       return (
         r &&
@@ -248,7 +245,7 @@ try {
       });
       await page.type('#location-search', '33.33, -117.40');
       await page.keyboard.press('Enter');
-      await sleep(4500);
+      await whenSettled(page);
     } else {
       await moveCamera(
         page,
@@ -274,7 +271,7 @@ try {
         },
         { timeout: 15000 },
       );
-      await sleep(1000);
+      await whenSettled(page);
       await page.evaluate(async () => {
         const g = window.__godsEyeView;
         const id = window.__qaInstallationSites()[0].id;
@@ -298,10 +295,7 @@ try {
         },
         { timeout: 15000 },
       );
-      await page.waitForFunction(
-        () => !window.__godsEyeView.viewer.camera._currentFlight,
-        { timeout: 10000 },
-      );
+      await whenSettled(page);
       await page.waitForFunction(
         () =>
           window.__godsEyeView.dataManager.layers
@@ -361,11 +355,7 @@ try {
           { timeout: 30000 },
         );
       }
-      await page.waitForFunction(
-        () => !window.__godsEyeView.viewer.camera._currentFlight,
-        { timeout: 10000 },
-      );
-      await sleep(500);
+      await whenSettled(page);
       previous = await page.evaluate(
         () =>
           window.__godsEyeView.dataManager.layers
@@ -411,7 +401,7 @@ try {
     `qa-shots/installations-navigation-${baseline ? 'before' : 'after'}.json`,
     JSON.stringify(result, null, 2),
   );
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (
   !baseline &&

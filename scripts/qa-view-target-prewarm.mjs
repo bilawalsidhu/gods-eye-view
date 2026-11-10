@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Cesium-only probes: native pickPosition failure injection exercises the Cesium HUD boundary.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * Regression proof for the view-target prewarm crash.
  *
@@ -18,10 +20,11 @@
  * `QA_LABEL=before` names the evidence files so a before/after pair can sit
  * side by side in qa-shots/prewarm/.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(repoRoot, 'qa-shots', 'prewarm');
@@ -30,22 +33,9 @@ const label = process.env.QA_LABEL || 'after';
 const headful = process.argv.includes('--headful');
 fs.mkdirSync(shotsDir, { recursive: true });
 
-const chromeCandidates = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
-const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
-const browser = await puppeteer.launch({
-  headless: headful ? false : 'new',
-  ...(executablePath ? { executablePath } : {}),
-  // Metal is a macOS-only ANGLE backend; anywhere else it fails WebGL init.
-  args: [
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
-    '--no-sandbox',
-  ],
+const browser = await launchBrowser({
+  headless: true,
+  args: [...(process.platform === 'darwin' ? ['--enable-gpu'] : []), '--no-sandbox'],
 });
 const page = await browser.newPage();
 const failures = [];
@@ -91,26 +81,22 @@ let rejections = [];
 try {
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await page.waitForFunction(() => window.__godsEyeView?.viewer, { timeout: 90_000 });
-  await page.waitForFunction(
-    () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 90_000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.engine, { timeout: 90_000 });
+  await whenSettled(page);
   // Boot noise (tile / network warm-up) is not what this harness is about.
-  await new Promise((resolve) => setTimeout(resolve, 4_000));
+  await whenSettled(page);
   pageErrors.length = 0;
   consoleErrors.length = 0;
   await page.evaluate(() => { window.__qaPrewarmRejections.length = 0; });
 
   const legReports = [];
   for (const leg of FLIGHT_LEGS) {
-    const report = await page.evaluate(async (spec) => {
-      const { viewer } = window.__godsEyeView;
+    const report = await evaluateWithGeo(page, async (qaGeo, spec) => {
       // No window.Cesium global (qa-cctv-v2 / qa-height-datum precedent) —
       // borrow Cartesian3's statics off a live camera-position instance.
-      const Cartesian3 = viewer.camera.position.constructor;
+      const Cartesian3 = qaGeo.cartesian3;
       await new Promise((resolve) => {
-        viewer.camera.flyTo({
+        window.__godsEyeView.engine.camera.flyTo({
           destination: Cartesian3.fromDegrees(spec.lon, spec.lat, spec.height),
           orientation: { heading: 0, pitch: (spec.pitch * Math.PI) / 180, roll: 0 },
           duration: 1.2,
@@ -123,15 +109,14 @@ try {
 
       // Record what the center pick actually yields so the root cause is
       // visible in the evidence dump rather than merely asserted.
-      const scene = viewer.scene;
-      const canvas = scene.canvas;
+      const canvas = window.__godsEyeView.engine.host.canvas;
       const center = {
         x: (canvas.clientWidth || canvas.width) / 2,
         y: (canvas.clientHeight || canvas.height) / 2,
       };
       let picked;
       try {
-        const raw = scene.pickPosition(center);
+        const raw = window.__godsEyeView.engine.picker.pickPosition(center);
         picked = raw ? { x: raw.x, y: raw.y, z: raw.z } : null;
       } catch (error) {
         picked = { threw: String(error?.message || error) };
@@ -151,19 +136,19 @@ try {
   // `scene.pickPosition` with one that returns each degenerate shape in turn.
   // Everything downstream — the moveEnd prewarm inside requestIdleCallback and
   // the HUD summary interval — is the real shipped code.
-  const injection = await page.evaluate(async () => {
+  const injection = await evaluateWithGeo(page, async (qaGeo) => {
     const { viewer, styleManager } = window.__godsEyeView;
-    const Cartesian3 = viewer.camera.position.constructor;
+    const Cartesian3 = qaGeo.cartesian3;
     const shapes = [
       // Throws inside Cesium's normalize.
-      { name: 'nan', value: new Cartesian3(Number.NaN, Number.NaN, Number.NaN) },
-      { name: 'origin', value: new Cartesian3(0, 0, 0) },
-      { name: 'infinite', value: new Cartesian3(Number.POSITIVE_INFINITY, 0, 0) },
+      { name: 'nan', value: Cartesian3.create(Number.NaN, Number.NaN, Number.NaN) },
+      { name: 'origin', value: Cartesian3.create(0, 0, 0) },
+      { name: 'infinite', value: Cartesian3.create(Number.POSITIVE_INFINITY, 0, 0) },
       // Converts SILENTLY to a point 6,378 km underground — the quiet failure a
       // bare non-zero check lets through, which then reverse-geocodes 0°, 0°.
-      { name: 'core-interior', value: new Cartesian3(500, 0, 0) },
+      { name: 'core-interior', value: Cartesian3.create(500, 0, 0) },
       // Finite, but large enough to overflow the geodetic iteration into NaN.
-      { name: 'absurd-magnitude', value: new Cartesian3(1e155, 0, 0) },
+      { name: 'absurd-magnitude', value: Cartesian3.create(1e155, 0, 0) },
     ];
     const scene = viewer.scene;
     const originalPick = Object.getOwnPropertyDescriptor(scene, 'pickPosition');
@@ -175,16 +160,16 @@ try {
 
     const hudErrors = [];
     const nudge = (step) => {
-      const carto = viewer.camera.positionCartographic;
-      viewer.camera.setView({
+      const carto = window.__godsEyeView.engine.camera.pose().cartographic;
+      window.__godsEyeView.engine.camera.setView({
         destination: Cartesian3.fromRadians(
           carto.longitude + 0.0015 * (step + 1),
           carto.latitude,
           carto.height,
         ),
-        orientation: { heading: viewer.camera.heading, pitch: viewer.camera.pitch, roll: 0 },
+        orientation: { heading: window.__godsEyeView.engine.camera.pose().heading, pitch: window.__godsEyeView.engine.camera.pose().pitch, roll: 0 },
       });
-      viewer.camera.moveEnd.raiseEvent();
+      window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
     };
 
     try {
@@ -213,7 +198,7 @@ try {
       }
     } finally {
       if (originalPick) Object.defineProperty(scene, 'pickPosition', originalPick);
-      else delete scene.pickPosition;
+      else delete window.__godsEyeView.engine.picker.pickPosition;
     }
     return { hudErrors, shapes: shapes.length, pickCalls };
   });
@@ -348,7 +333,7 @@ try {
 } catch (error) {
   check('harness ran to completion', false, String(error?.message || error));
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 console.log(`\n${failures.length ? `FAIL (${failures.length})` : 'PASS'} — evidence in ${path.relative(repoRoot, shotsDir)}/`);

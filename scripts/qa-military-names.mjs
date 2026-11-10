@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /** Named military areas: continent performance, close identities and a recorded zoom. */
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import puppeteer from 'puppeteer';
 import {
   checkInstallationPan,
   checkInstallationSelection,
@@ -34,14 +36,10 @@ const result = {
   video: null,
 };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   protocolTimeout: 180000,
-  args: [
-    '--use-angle=metal',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-  ],
+  args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding'],
 });
 let recorder;
 try {
@@ -69,10 +67,10 @@ try {
   });
   await page.waitForFunction(
     () =>
-      window.__godsEyeView?.dataManager &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+      window.__godsEyeView?.dataManager,
     { timeout: 120000 },
   );
+  await whenSettled(page);
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -92,11 +90,10 @@ try {
     for (const [id] of g.dataManager.layers)
       await g.dataManager.setEnabled(id, false);
     g.styleManager.setDetection({ enabled: false });
-    g.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
   });
   assert.equal(result.packs.length, 0, 'names pack stays unloaded at startup');
   result.renderer = await page.evaluate(() => {
-    const gl = window.__godsEyeView.viewer.scene.context._gl;
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2');
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     return ext
       ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
@@ -111,7 +108,7 @@ try {
         .module.getStats(),
     );
   const settle = async () => {
-    await sleep(500);
+    await whenFramesDrawn(page);
     await page.waitForFunction(
       () => {
         const s = window.__godsEyeView.dataManager.layers
@@ -121,7 +118,7 @@ try {
       },
       { timeout: 60000 },
     );
-    await sleep(1200);
+    await whenFramesDrawn(page);
   };
   const us = { lon: -100, lat: 39, height: 6500000, pitch: -90 };
   await moveCamera(page, us, 0);
@@ -213,7 +210,7 @@ try {
   await page.evaluate(() =>
     window.__godsEyeView.styleManager.setCleanView(true),
   );
-  await sleep(300);
+  await whenFramesDrawn(page);
   result.cleanUi = await page.evaluate(async () => {
     const host = (await import('/src/overlays/worldOverlay.js')).worldOverlayFor(window.__godsEyeView.engine);
     const root = document.getElementById('world-overlay-root');
@@ -278,7 +275,7 @@ try {
     const screen = new C.Cartesian2();
     window.__installationFrames = [];
     window.__stopInstallationFrames =
-      g.viewer.scene.postRender.addEventListener(() => {
+      window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
         const stats = layer.getStats();
         const markers = [],
           labels = [],
@@ -286,11 +283,7 @@ try {
         layer.visitNamedMarkers((id, point) => {
           const rect = getPaintRect('military-installations', id);
           if (rect) rects.push(rect);
-          const p = C.SceneTransforms.worldToWindowCoordinates(
-            g.viewer.scene,
-            point.position,
-            screen,
-          );
+          const p = window.__godsEyeView.engine.projector.worldToWindow(point.position, screen);
           if (
             point.show &&
             p &&
@@ -316,7 +309,7 @@ try {
             )
               overlaps++;
           }
-        const altitude = g.viewer.camera.positionCartographic.height;
+        const altitude = window.__godsEyeView.engine.camera.pose().cartographic.height;
         window.__installationFrames.push({
           t: performance.now(),
           altitude,
@@ -331,7 +324,7 @@ try {
       });
   });
   const clipStart = await pageNow(page);
-  await sleep(1200);
+  await whenFramesDrawn(page);
   for (const view of [
     { lon: -116, lat: 35, height: 1500000, pitch: -85 },
     { lon: -117.2, lat: 33, height: 200000, pitch: -80 },
@@ -381,11 +374,11 @@ try {
   for (const [key, expected, lon, lat, height] of sites) {
     await moveCamera(page, { lon, lat, height, pitch: -80 }, 1.5);
     await settle();
-    const snapshot = await page.evaluate(
-      (lat, lon) => {
+    const snapshot = await evaluateWithGeo(page,
+      async (qaGeo, lat, lon) => {
         const g = window.__godsEyeView;
         const layer = g.dataManager.layers.get('military-installations').module;
-        const position = g.viewer.scene.globe.ellipsoid.cartographicToCartesian(
+        const position = qaGeo.cartographic.toCartesian(
           {
             longitude: (lon * Math.PI) / 180,
             latitude: (lat * Math.PI) / 180,
@@ -466,7 +459,7 @@ try {
   );
   assert.match(result.cardText, /Fort Hood/);
   assert.match(result.cardText, /TA-25/);
-  await sleep(1800);
+  await whenFramesDrawn(page);
   await page.$eval(
     '#military-awareness-panel .military-awareness-names',
     (el) => {
@@ -481,5 +474,5 @@ try {
   if (recorder)
     result.video = await recorder.stop().catch((e) => ({ error: e.message }));
   await fs.writeFile(`${dir}/result.json`, JSON.stringify(result, null, 2));
-  await browser.close();
+  await closeBrowser(browser);
 }

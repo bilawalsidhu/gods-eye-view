@@ -1,12 +1,14 @@
 #!/usr/bin/env node
+// Cesium-only probes: KML DataSources, imagery and the Julian clock form the Cesium reference oracle.
 /** Large KML acceptance: style equivalence, 27.6 MB import and optional real file.
  * QA_BASE_URL defaults to http://localhost:4173. Optional --file /path/file.kml.
  * For a USGS fixture with blocked icons, add --expect-local-pins to check paint.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { installImportProbe } from './qa-geo-import-probe.mjs';
 import { hookRenderErrors, readRenderErrors } from './qa-browserEvidence.mjs';
 
@@ -61,12 +63,9 @@ const small = wrap(
       )
       .join(''),
 );
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  args:
-    process.platform === 'darwin'
-      ? ['--use-gl=angle', '--use-angle=metal']
-      : ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader'],
+  args: process.platform === 'darwin' ? [] : ['--no-sandbox'],
 });
 const page = await browser.newPage();
 await hookRenderErrors(page);
@@ -88,12 +87,8 @@ const check = (name, ok, detail) => {
 try {
   await page.setViewport({ width: 1440, height: 900 });
   await page.goto(`${base}/?welcome=0`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () =>
-      window.__gevGeoImport &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__gevGeoImport, { timeout: 60000 });
+  await whenSettled(page);
   await installImportProbe(page);
   await page.evaluate(async () => {
     const { viewer, dataManager } = window.__godsEyeView;
@@ -103,8 +98,8 @@ try {
     viewer.clock.shouldAnimate = false;
     viewer.imageryLayers.removeAll();
     viewer.terrainProvider = new C.EllipsoidTerrainProvider();
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
       destination: C.Cartesian3.fromDegrees(-122.5, 37.72, 50000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
@@ -222,7 +217,7 @@ try {
           el.remove();
       const source = await C.KmlDataSource.load(doc, {
         camera: viewer.scene.camera,
-        canvas: viewer.scene.canvas,
+        canvas: window.__godsEyeView.engine.host.canvas,
         clampToGround: true,
       });
       for (const e of source.importedEntities || source.entities.values)
@@ -231,7 +226,6 @@ try {
     };
   });
   const equivalent = await page.evaluate(async (text) => {
-    const { viewer } = window.__godsEyeView;
     const control = await window.__qaUnsharedKml(text);
     const outcomes = await window.__gevGeoImport.importFiles([
       new File([text], 'style-equivalence.kml'),
@@ -269,9 +263,8 @@ try {
     page.evaluate(async () => {
       const C = window.__CESIUM__,
         { viewer } = window.__godsEyeView;
-      const scene = viewer.scene;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
         destination: C.Cartesian3.fromDegrees(-122.5, 37.72, 50000),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
@@ -279,13 +272,14 @@ try {
         samples = [];
       let last,
         frames = 0;
-      const remove = scene.postRender.addEventListener(() => {
-        const t = performance.now();
-        if (t - started < 2000) return;
-        frames++;
-        if (last !== undefined) samples.push(t - last);
-        last = t;
-      });
+      const remove =
+        window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
+          const t = performance.now();
+          if (t - started < 2000) return;
+          frames++;
+          if (last !== undefined) samples.push(t - last);
+          last = t;
+        });
       await new Promise((resolve) => {
         let previous = performance.now();
         function tick(t) {
@@ -294,7 +288,7 @@ try {
             Math.min(t - previous, 100) * 0.0000002,
           );
           previous = t;
-          scene.requestRender();
+          window.__godsEyeView.engine.render.request();
           if (t - started < 7000) requestAnimationFrame(tick);
           else resolve();
         }
@@ -302,7 +296,7 @@ try {
       });
       remove();
       samples.sort((a, b) => a - b);
-      const gl = scene.context._gl,
+      const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2'),
         debug = gl.getExtension('WEBGL_debug_renderer_info');
       return {
         fps: frames / 5,
@@ -401,8 +395,7 @@ try {
     );
     if (suppliedItem && process.argv.includes('--expect-local-pins')) {
       const markers = await page.evaluate(() => {
-        const { viewer } = window.__godsEyeView,
-          C = window.__CESIUM__;
+        const C = window.__CESIUM__;
         const sets = window.__qaImports
           .records()
           .filter((record) => record.kind === 'movers');
@@ -412,8 +405,8 @@ try {
           .flatMap((record) => record.items);
         if (images.length) {
           const at = C.Cartographic.fromCartesian(images[0].position);
-          viewer.camera.cancelFlight();
-          viewer.camera.setView({
+          window.__godsEyeView.engine.camera.cancelFlight();
+          window.__godsEyeView.engine.camera.setView({
             destination: C.Cartesian3.fromRadians(
               at.longitude,
               at.latitude,
@@ -462,7 +455,7 @@ try {
             { id: suppliedItem.id, visible },
           );
         await setVisible(false);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await whenSettled(page);
         const hidden = await yellowPixels();
         await setVisible(true);
         let shown = hidden;
@@ -510,6 +503,6 @@ try {
   );
   console.log('Fixture retained at', file);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 process.exitCode = failures ? 1 : 0;

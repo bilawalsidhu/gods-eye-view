@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-vessel-datum.mjs — assertion harness for the AIS vessel vertical-datum
  * pass (docs/superpowers/specs/2026-07-27-vessel-datum-design.md).
@@ -25,9 +26,9 @@
  * --engine cesium|navara puts ?engine= on the URL; without it, the app's
  * default engine.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -67,28 +68,7 @@ const NEAR_DEG = 1.0;
 /** Max billboards sampled for the depth-test sweep. */
 const SAMPLE_CAP = 500;
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch { /* fall through to Puppeteer's cache */ }
-  }
-  return null;
-}
 
 /**
  * In-page probe on either engine (the QA probe): the chevrons the layer
@@ -160,20 +140,9 @@ async function main() {
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  const chromeExecutable = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--use-gl=angle',
-      '--use-angle=metal',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1600,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1600,900'],
   });
 
   let failures = 0;
@@ -243,20 +212,16 @@ async function main() {
       // Visual proof — re-assert the framing (the app's intro flight can land
       // mid-probe on slow runs), wait for the photoreal tileset, screenshot.
       await page.evaluate(frameEngine, port, false);
-      await page
-        .waitForFunction(
-          () => window.__godsEyeView?.engine?.surface?.tilesLoaded?.(),
-          { timeout: 60000, polling: 500 },
-        )
+      await whenTilesLoaded(page, { timeoutMs: 60000 })
         .catch(() => console.log('    (tileset settle timeout — screenshotting anyway)'));
-      await new Promise((r) => setTimeout(r, 2500));
+      await whenSettled(page);
       const outPath = path.join(OUT_DIR, `vessel-datum-${ENGINE ? `${ENGINE}-` : ''}${key}.png`);
       await page.screenshot({ path: outPath });
       console.log(`    [SHOT] ${outPath}`);
       await page.close();
     }
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   console.log(failures ? `\n\x1b[31m${failures} failure(s)\x1b[0m` : '\n\x1b[32mAll datum checks passed\x1b[0m');

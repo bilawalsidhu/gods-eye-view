@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenTilesLoaded, whenUiSettled } from './qa/ready.mjs';
 /**
  * qa-traffic-preset-ab.mjs — A/B screenshot capture for preset-aware
  * traffic dot styling (owner field finding 2026-07-23: NVG/FLIR/CRT
@@ -23,7 +25,7 @@
  * param not adopted by the layer).
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,52 +71,20 @@ const STYLES = [
   { id: 'retro', name: 'retro', label: 'CRT', profile: 'crt' },
 ];
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-const findChromeExecutable = () =>
-  CHROME_EXECUTABLE_CANDIDATES.find((c) => { try { return fs.existsSync(c); } catch { return false; } }) || null;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Same pattern as qa-traffic-jamviz-ab: wait for the 3D tileset to settle. */
-function waitForTilesLoaded(page, timeoutMs) {
-  return page.waitForFunction(
-    () => {
-      const prims = window.__godsEyeView.viewer.scene.primitives;
-      for (let i = 0; i < prims.length; i++) {
-        const p = prims.get(i);
-        if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
-          return p.tilesLoaded === true;
-        }
-      }
-      return true;
-    },
-    { timeout: timeoutMs }
-  ).then(() => true).catch(() => false);
-}
 
 /** Enable traffic + teleport, then poll the layer until settled. */
 function settleTraffic(page, view, { minCount = 100, timeoutS = 45 } = {}) {
-  return page.evaluate(async (v, minC, tS) => {
+  return evaluateWithGeo(page, async (qaGeo, v, minC, tS) => {
     const gev = window.__godsEyeView;
     await gev.dataManager.setEnabled('traffic', true);
     const mod = gev.dataManager.layers.get('traffic').module;
-    try { gev.viewer.camera.cancelFlight(); } catch { /* no flight */ }
-    const ell = gev.viewer.scene.globe.ellipsoid;
+    try { window.__godsEyeView.engine.camera.cancelFlight(); } catch { /* no flight */ }
     const d2r = Math.PI / 180;
-    gev.viewer.camera.setView({
-      destination: ell.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: v.lon * d2r, latitude: v.lat * d2r, height: v.height,
       }),
       orientation: {
@@ -161,15 +131,9 @@ async function main() {
   }
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    ...(findChromeExecutable() ? { executablePath: findChromeExecutable() } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
-      '--disable-dev-shm-usage', '--disable-web-security',
-      '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-      '--window-size=1600,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1600,900'],
   });
 
   const manifest = [];
@@ -180,10 +144,10 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
       { timeout: 60000 },
     );
-    await sleep(1500);
+    await whenSettled(page);
 
     let firstView = true;
     for (const view of VIEWS) {
@@ -201,7 +165,7 @@ async function main() {
         exitCode = 1;
         continue;
       }
-      await waitForTilesLoaded(page, firstView ? 30000 : 15000);
+      await whenTilesLoaded(page, { timeoutMs: firstView ? 30000 : 15000 }).then(() => true).catch(() => false);
       firstView = false;
 
       for (const style of STYLES) {
@@ -213,7 +177,7 @@ async function main() {
           sm.setStyle(s.name, { applyPreset: true });
           if (sm.stages.thermal) sm.stages.thermal.uniforms.palette = s.ironbow ? 1.0 : 0.0;
         }, style);
-        await sleep(1800); // 500 ms intensity lerp + settle
+        await whenUiSettled(page); // 500 ms intensity lerp + settle
 
         // Round 2 legs: dots alone (DETECT off) vs dots + bucket-colored
         // brackets (DENSE) — presetDots stays at its default 'on'.
@@ -221,7 +185,7 @@ async function main() {
           await page.evaluate((d) => {
             window.__godsEyeView.styleManager._setDetectionMode(d === 'on' ? 'DENSE' : 'OFF');
           }, detect);
-          await sleep(1200); // label-arbiter solve + a few rendered frames
+          await whenUiSettled(page); // label-arbiter solve + a few rendered frames
 
           const final = await page.evaluate(() => {
             const mod = window.__godsEyeView.dataManager.layers.get('traffic').module;
@@ -272,14 +236,14 @@ async function main() {
         sm._setDetectionMode('OFF');
         if (sm.stages.thermal) sm.stages.thermal.uniforms.palette = 0.0;
       });
-      await sleep(1000);
+      await whenUiSettled(page);
     }
   } catch (e) {
     console.error('Harness error:', e);
     exitCode = 3;
   } finally {
     fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
-    await browser.close();
+    await closeBrowser(browser);
   }
   console.log(`\nShots + manifest.json → ${OUT_DIR}`);
   process.exit(exitCode);

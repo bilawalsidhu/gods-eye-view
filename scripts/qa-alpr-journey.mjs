@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Cesium-only probes: requestRender instrumentation measures Cesium request-mode cost.
 /**
  * qa-alpr-journey.mjs — ALPR cameras on a realistic Austin camera journey.
  *
@@ -36,9 +37,10 @@
  * Writes <out>/result.json, <out>/clip.mp4 (CDP screencast with real frame
  * timing) and per-stop screenshots. Needs ffmpeg on PATH.
  */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import sharp from 'sharp';
 import { installAlprFixture } from './fixtures/layers/alpr.mjs';
@@ -163,14 +165,12 @@ const STOPS = [
   },
 ];
 
-const browser = await puppeteer.launch({
-  headless: !argv.includes('--headful'),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
@@ -233,12 +233,10 @@ try {
   const url = new URL(appUrl);
   url.searchParams.set('welcome', '0');
   await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.dataManager &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 120_000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 120_000,
+  });
+  await whenSettled(page);
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -286,22 +284,7 @@ try {
   await recorder.start();
 
   async function waitTiles(maxMs = 20_000) {
-    await page
-      .waitForFunction(
-        () => {
-          if (window.__godsEyeView.engine.kind === 'navara')
-            return window.__godsEyeView.engine.surface.tilesLoaded();
-          const { scene } = window.__godsEyeView.viewer;
-          if (scene.globe.show) return scene.globe.tilesLoaded;
-          for (let i = 0; i < scene.primitives.length; i++) {
-            const p = scene.primitives.get(i);
-            if (p.show && p.tilesLoaded === false) return false;
-          }
-          return true;
-        },
-        { timeout: maxMs, polling: 250 },
-      )
-      .catch(() => {});
+    await whenTilesLoaded(page, { timeoutMs: maxMs }).catch(() => {});
   }
 
   for (const [passIndex, mode] of passes.entries()) {
@@ -653,7 +636,7 @@ try {
     path.join(outDir, 'result.json'),
     JSON.stringify(result, null, 1),
   );
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(
   `${result.failures.length ? 'FAIL' : 'PASS'} — ${path.join(outDir, 'result.json')}`,

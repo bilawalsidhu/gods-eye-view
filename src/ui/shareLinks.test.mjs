@@ -1,3 +1,4 @@
+import { installManualTimers } from '../testSupport/manualTimers.mjs';
 import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { createCesiumMoversEngine } from '../testSupport/cesiumMoversEngine.mjs';
 import { enuOffset } from '../globe/follow.js';
@@ -75,30 +76,6 @@ function installPage(t, href) {
   };
   t.after(() => Object.assign(globalThis, prior));
   return { location, writes, target };
-}
-
-function installManualTimers(t) {
-  const prior = {
-    setTimeout: globalThis.setTimeout,
-    clearTimeout: globalThis.clearTimeout,
-  };
-  const timers = new Map();
-  let timerId = 0;
-  globalThis.setTimeout = (fn) => {
-    timers.set(++timerId, fn);
-    return timerId;
-  };
-  globalThis.clearTimeout = (id) => timers.delete(id);
-  t.after(() => Object.assign(globalThis, prior));
-  return {
-    timers,
-    runAll() {
-      for (const [id, fn] of [...timers]) {
-        timers.delete(id);
-        fn();
-      }
-    },
-  };
 }
 
 /** A viewer whose camera flights land at once. */

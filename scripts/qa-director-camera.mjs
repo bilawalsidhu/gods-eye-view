@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /** Verify imported camera directions through real rendering and camera authority handoffs. */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 const output = path.resolve('qa-shots/director-camera');
 fs.mkdirSync(output, { recursive: true });
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
@@ -23,12 +24,10 @@ try {
     `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.sceneDirector, {
+    timeout: 60000,
+  });
+  await whenSettled(page);
   const result = await page.evaluate(async () => {
     const { sceneDirector: d, styleManager: style } = window.__godsEyeView;
     const file = {
@@ -137,7 +136,7 @@ try {
     };
   });
   for (const [name, passed] of Object.entries(result)) check(name, passed);
-  await new Promise((r) => setTimeout(r, 6000));
+  await whenSettled(page);
   await page.screenshot({ path: path.join(output, 'austin.png') });
   await page.evaluate(() => {
     const d = window.__godsEyeView.sceneDirector;
@@ -145,7 +144,7 @@ try {
     d._setCameraView({ ...pose, heading: pose.heading + 25, pitch: -60 });
     d.viewer.scene.requestRender();
   });
-  await new Promise((r) => setTimeout(r, 3000));
+  await whenSettled(page);
   await page.screenshot({ path: path.join(output, 'angle.png') });
   const inputStarted = await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
@@ -205,6 +204,6 @@ try {
     );
   check('no uncaught browser errors', errors.length === 0);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (failed) process.exitCode = 1;

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native ground-primitive failure injection tests the Cesium paint path.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-gnss.mjs — headless proof for the GNSS Integrity layer
  * (id `gnss-integrity`): low navigation accuracy reported by ADS-B.
@@ -45,7 +48,7 @@
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,7 +77,6 @@ function record(name, ok, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Boot the app, dismiss the intro and place the camera straight down. */
 async function boot(page, { lon, lat, height }) {
@@ -83,30 +85,30 @@ async function boot(page, { lon, lat, height }) {
     timeout: TIMEOUT_MS,
   });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+    () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
     { timeout: TIMEOUT_MS },
   );
-  await sleep(5000);
+  await whenSettled(page);
   await page.keyboard.press('Escape');
-  await page.evaluate(
-    (lo, la, h) => {
-      const gev = window.__godsEyeView;
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, lo, la, h) => {
       const d2r = Math.PI / 180;
       // The app's intro flyTo animation clobbers a setView issued mid-flight.
       try {
-        gev.viewer.camera.cancelFlight();
+        window.__godsEyeView.engine.camera.cancelFlight();
       } catch {
         /* no flight active */
       }
-      gev.viewer.camera.setView({
-        destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: lo * d2r,
           latitude: la * d2r,
           height: h,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      gev.viewer.scene.requestRender?.();
+      window.__godsEyeView.engine.render.request?.();
     },
     lon,
     lat,
@@ -168,7 +170,7 @@ async function showLayerRow(page) {
       .querySelector(`[data-layer-id="${id}"]`)
       ?.scrollIntoView({ block: 'center' });
   }, LAYER_ID);
-  await sleep(800);
+  await whenSettled(page);
 }
 
 /** Actual card pixels on the shared canvas, available in dev and production. */
@@ -184,12 +186,8 @@ function paintedOverlayPixels() {
 }
 
 async function shoot(page, name) {
-  await page
-    .waitForFunction(
-      () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
-      { timeout: TIMEOUT_MS },
-    )
-    .catch(() => {});
+  await whenTilesLoaded(page, { timeoutMs: TIMEOUT_MS }).catch(() => {});
+  await whenSettled(page);
   await showLayerRow(page);
   await page.screenshot({ path: path.join(SHOTS_DIR, `gnss-${name}.png`) });
 }
@@ -367,18 +365,9 @@ async function main() {
     process.exit(2);
   }
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const executablePath =
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    (await puppeteer.executablePath().catch(() => null)) ||
-    undefined;
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(executablePath && fs.existsSync(executablePath)
-      ? { executablePath }
-      : {}),
+  const browser = await launchBrowser({
+    headless: true,
     args: [
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
@@ -530,7 +519,7 @@ async function main() {
     await shoot(page, 'synthetic-bands');
 
     // GNSS fills must not own map input, including over a real perimeter.
-    await page.evaluate(async () => {
+    await evaluateWithGeo(page, async (qaGeo) => {
       const original = window.fetch.bind(window);
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : input.url;
@@ -562,10 +551,10 @@ async function main() {
           );
         return original(input, init);
       };
-      const { viewer, dataManager } = window.__godsEyeView;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      const { dataManager } = window.__godsEyeView;
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: (18.25 * Math.PI) / 180,
           latitude: (54.25 * Math.PI) / 180,
           height: 2500,
@@ -573,15 +562,15 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
       await dataManager.setEnabled('fire-perimeters', true);
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
     await page.waitForFunction(
       () => {
         // The engine's pick names the perimeter ground item's pickId.
-        const { viewer: v, engine } = window.__godsEyeView,
+        const { engine } = window.__godsEyeView,
           p = engine.picker.pick({
-            x: v.scene.canvas.clientWidth / 2,
-            y: v.scene.canvas.clientHeight / 2,
+            x: window.__godsEyeView.engine.host.canvas.clientWidth / 2,
+            y: window.__godsEyeView.engine.host.canvas.clientHeight / 2,
           });
         return String(p?.id?.id ?? p?.id ?? '').startsWith(
           'fire-perimeter:gnss-pick-qa:',
@@ -590,8 +579,8 @@ async function main() {
       { timeout: TIMEOUT_MS, polling: 250 },
     );
     const pickProbe = await page.evaluate(() => {
-      const { viewer: v, engine } = window.__godsEyeView,
-        c = v.scene.canvas;
+      const { engine } = window.__godsEyeView,
+        c = window.__godsEyeView.engine.host.canvas;
       const centre = { x: c.clientWidth / 2, y: c.clientHeight / 2 };
       const empty = { x: centre.x + 300, y: centre.y };
       const picked = engine.picker.pick(empty),
@@ -600,7 +589,7 @@ async function main() {
         centre: { x: centre.x + box.left, y: centre.y + box.top },
         empty: { x: empty.x + box.left, y: empty.y + box.top },
         surface: !picked || picked.id === undefined,
-        height: v.camera.positionCartographic.height,
+        height: window.__godsEyeView.engine.camera.pose().cartographic.height,
       };
     });
     record('PICK: a perimeter remains selectable under GNSS', true);
@@ -637,13 +626,13 @@ async function main() {
     await page.mouse.click(pickProbe.empty.x, pickProbe.empty.y, {
       clickCount: 2,
     });
-    await sleep(1000);
+    await whenSettled(page);
     record(
       'PICK: empty double-click does not zoom to a GNSS cell',
       await page.evaluate(
         (height) =>
           Math.abs(
-            window.__godsEyeView.viewer.camera.positionCartographic.height -
+            window.__godsEyeView.engine.camera.pose().cartographic.height -
               height,
           ) < 200,
         pickProbe.height,
@@ -659,17 +648,16 @@ async function main() {
     const beforeMove = await page.evaluate(
       () => window.__gnssQaRequests.length,
     );
-    await page.evaluate(() => {
-      const { viewer } = window.__godsEyeView;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: (139.7 * Math.PI) / 180,
           latitude: (35.7 * Math.PI) / 180,
           height: 1_100_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
     await page.waitForFunction(
       () => {
@@ -684,7 +672,7 @@ async function main() {
       },
       { timeout: 15000 },
     );
-    await sleep(3500);
+    await whenSettled(page);
     const moved = await page.evaluate(
       (id) => ({
         requests: window.__gnssQaRequests.length,
@@ -708,17 +696,16 @@ async function main() {
       JSON.stringify(moved),
     );
     await shoot(page, 'camera-refresh');
-    await page.evaluate(() => {
-      const { viewer } = window.__godsEyeView;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: (12.4 * Math.PI) / 180,
           latitude: (41.9 * Math.PI) / 180,
           height: 16_000_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
     await page.waitForFunction(
       () => {
@@ -732,19 +719,23 @@ async function main() {
       },
       { timeout: 15000 },
     );
-    const world = await page.evaluate((id) => {
-      const { viewer, dataManager } = window.__godsEyeView;
-      const bounds = viewer.camera.computeViewRectangle(
-        viewer.scene.globe.ellipsoid,
-      );
-      return {
-        enabled: dataManager.isEnabled(id),
-        height: viewer.camera.positionCartographic.height,
-        boundsMidLongitude:
-          bounds && ((bounds.west + bounds.east) * 90) / Math.PI,
-        coverage: dataManager.layers.get(id).module.getStats().coverage,
-      };
-    }, LAYER_ID);
+    const world = await evaluateWithGeo(
+      page,
+      async (qaGeo, id) => {
+        const { dataManager } = window.__godsEyeView;
+        const bounds = window.__godsEyeView.engine.camera.viewRectangle(
+          qaGeo.ellipsoid.WGS84,
+        );
+        return {
+          enabled: dataManager.isEnabled(id),
+          height: window.__godsEyeView.engine.camera.pose().cartographic.height,
+          boundsMidLongitude:
+            bounds && ((bounds.west + bounds.east) * 90) / Math.PI,
+          coverage: dataManager.layers.get(id).module.getStats().coverage,
+        };
+      },
+      LAYER_ID,
+    );
     record(
       'GLOBE: zoomed-out sampling stays centred on Rome and exposes its regional radius',
       world.enabled &&
@@ -755,17 +746,16 @@ async function main() {
       JSON.stringify(world),
     );
     await shoot(page, 'globe-regional');
-    await page.evaluate(() => {
-      const { viewer } = window.__godsEyeView;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: (18.6 * Math.PI) / 180,
           latitude: (54.6 * Math.PI) / 180,
           height: 450_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
     await page.waitForFunction(
       () => {
@@ -780,7 +770,7 @@ async function main() {
       },
       { timeout: 15000 },
     );
-    await sleep(3500);
+    await whenSettled(page);
 
     // ── (iii) FAILURE ─────────────────────────────────────────────────────
     console.log('\n(iii) FAILURE — /api/gnss-integrity stubbed to 502...');
@@ -990,7 +980,7 @@ async function main() {
     console.error('\x1b[31mHarness error:\x1b[0m', err);
     exitCode = 3;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const pass = results.filter((r) => r.ok).length;

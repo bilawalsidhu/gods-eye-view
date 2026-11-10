@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /** Real pointer/keyboard acceptance using a synthetic, self-authored feature pack. */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 const output = 'qa-shots/director-interactions';
 fs.mkdirSync(output, { recursive: true });
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
@@ -52,12 +53,10 @@ try {
     `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0#v=2&lat=30.2672&lon=-97.742&alt=4000&heading=0&pitch=-90&l=`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.sceneDirector, {
+    timeout: 60000,
+  });
+  await whenSettled(page);
   await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
     const camera = {
@@ -163,11 +162,8 @@ try {
         window.__godsEyeView.sceneDirector.getInteractionState().count === 4,
     ),
   );
-  await page.waitForFunction(
-    () => window.__godsEyeView.sceneDirector.engine.surface.tilesLoaded(),
-    { timeout: 60000 },
-  );
-  await new Promise((r) => setTimeout(r, 2000));
+  await whenTilesLoaded(page, { timeoutMs: 60000 });
+  await whenSettled(page);
   const point = await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
     const { cartesian3 } = await import('/src/geo/index.js');
@@ -366,6 +362,6 @@ try {
   );
   check('no uncaught browser errors', errors.length === 0);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 process.exitCode = failures ? 1 : 0;

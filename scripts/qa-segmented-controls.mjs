@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /** Run against a dev server or built preview with QA_BASE_URL (default :4179). */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 
-const browser = await puppeteer.launch({
-  executablePath:
-    process.env.PUPPETEER_EXECUTABLE_PATH || (await puppeteer.executablePath()),
+const browser = await launchBrowser({
   headless: true,
-  args: ['--use-gl=angle', '--use-angle=swiftshader'],
+  args: [],
 });
 const page = await browser.newPage();
 const errors = [];
@@ -30,11 +29,7 @@ try {
     () => window.__godsEyeView?.styleManager?._applicationShortcuts,
     { timeout: 60000 },
   );
-  await page.waitForFunction(
-    () =>
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await whenSettled(page);
   // DISPLAY holds most segmented controls; Draw's shape group is in UTILITIES.
   await page.evaluate(() => {
     for (const panel of ['pp-toggles', 'utilities-panel'])
@@ -347,7 +342,7 @@ try {
   await page.screenshot({ path: `${shots}/failure.png` }).catch(() => {});
   throw error;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`RESULT: ${failures.length} failures`);
 process.exitCode = failures.length ? 1 : 0;

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Cesium-only probes: DataSource and ground-primitive readiness validate the native outline adapter.
 /**
  * qa-admin-outlines.mjs — bundled state/province/county outlines, driven like a
  * user would drive them.
@@ -23,11 +24,12 @@
  * timings, frame-time p50/p95 and still-camera frame-difference statistics.
  * Exits nonzero on any failed assertion.
  */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 
 const args = process.argv.slice(2);
@@ -63,12 +65,11 @@ const result = {
   video: null,
 };
 
-const browser = await puppeteer.launch({
-  headless: !args.includes('--headful'),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   args: [
     '--no-sandbox',
-    '--use-gl=angle',
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -145,14 +146,10 @@ try {
     timeout: 60_000,
   });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__godsEyeView?.annotations,
+    () => window.__godsEyeView?.engine && window.__godsEyeView?.annotations,
     { timeout: 90_000, polling: 500 },
   );
-  await page.waitForFunction(
-    () =>
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 90_000, polling: 250 },
-  );
+  await whenSettled(page);
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -162,7 +159,7 @@ try {
     { timeout: 10_000 },
   );
   result.renderer = await page.evaluate(() => {
-    const gl = window.__godsEyeView.viewer.scene.context._gl;
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2');
     const debug = gl.getExtension('WEBGL_debug_renderer_info');
     return debug
       ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
@@ -177,7 +174,7 @@ try {
     window.__qaOutlines = {
       fly(view, duration) {
         return new Promise((resolve) => {
-          viewer.camera.cancelFlight();
+          window.__godsEyeView.engine.camera.cancelFlight();
           viewer.camera.flyTo({
             destination: Cesium.Cartesian3.fromDegrees(
               view.lon,
@@ -264,20 +261,7 @@ try {
   });
 
   const settle = () =>
-    page
-      .waitForFunction(
-        () => {
-          const { scene } = window.__godsEyeView.viewer;
-          for (let i = 0; i < scene.primitives.length; i++) {
-            const p = scene.primitives.get(i);
-            if (p?.show && typeof p.tilesLoaded === 'boolean' && !p.tilesLoaded)
-              return false;
-          }
-          return true;
-        },
-        { timeout: 60_000, polling: 500 },
-      )
-      .catch(() => {});
+    whenTilesLoaded(page, { timeoutMs: 60_000 }).catch(() => {});
 
   async function shot(name) {
     await page.evaluate(
@@ -317,11 +301,14 @@ try {
         // built the mark's primitives (each tick updates them before render).
         const { viewer } = window.__godsEyeView;
         await new Promise((resolve) => {
-          const off = viewer.scene.postRender.addEventListener(() => {
-            if (!viewer.dataSourceDisplay.ready) return;
-            off();
-            resolve();
-          });
+          const off =
+            window.__godsEyeView.engine.frames.postRender.addEventListener(
+              () => {
+                if (!viewer.dataSourceDisplay.ready) return;
+                off();
+                resolve();
+              },
+            );
         });
         const drawnMs = performance.now() - started;
         const mark = window.__godsEyeView.annotations
@@ -343,7 +330,7 @@ try {
       target,
       flyTo,
     );
-    if (flyTo) await new Promise((r) => setTimeout(r, 2200));
+    if (flyTo) await whenSettled(page);
     await settle();
     // Hold still: the drawn mark must not rebuild or grow.
     marker = `still:${name}`;
@@ -551,7 +538,7 @@ try {
       .screenshot({ path: path.join(shots, 'admin-outlines-failure.png') })
       .catch(() => {});
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 if (recordVideo && frames.length > 1) {

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-label-readability.mjs — before/after evidence capture for ambient label
  * legibility over bright ground.
@@ -30,9 +31,9 @@
  * not only an eyeball.
  */
 
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback) => {
@@ -54,7 +55,6 @@ const SCENE_FILTER = getOpt('--scenes', '')
   .filter(Boolean);
 const SHOT_DIR = path.resolve(getOpt('--out', 'qa-shots/labels'));
 const SETTLE_MAX_MS = 40_000;
-const SETTLE_MIN_MS = 4_000;
 
 /**
  * Scenes are (camera pose × visual style). `field` describes the synthetic
@@ -162,19 +162,7 @@ const SCENES = [
   },
 ];
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Pin puppeteer's Chrome-for-Testing: system Chrome auto-updates underneath
-  // the harnesses and its software-GL behaviour shifts across majors.
-  await puppeteer.executablePath().catch(() => null),
-].filter(Boolean);
 
-function findChrome() {
-  for (const candidate of CHROME_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* fall through */ }
-  }
-  return null;
-}
 
 /** Decode a base64 PNG inside the page and return luminance statistics. */
 async function measureShot(page, base64) {
@@ -207,21 +195,13 @@ async function measureShot(page, base64) {
   }, base64);
 }
 
-/** Wait until consecutive frames stop changing, so tiles are fully resolved. */
+/** Resolve map tiles before measuring the label background. */
 async function settle(page) {
-  const started = Date.now();
-  let previous = null;
-  while (Date.now() - started < SETTLE_MAX_MS) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    const state = await page.evaluate(() => {
-      const { engine } = window.__godsEyeView;
-      return { tilesLoaded: engine.surface.tilesLoaded(), pending: 0 };
-    });
-    const settled = state.tilesLoaded && state.pending === 0;
-    if (settled && previous && Date.now() - started > SETTLE_MIN_MS) return true;
-    previous = settled;
-  }
-  return false;
+  await whenSettled(page);
+  return whenTilesLoaded(page, { timeoutMs: SETTLE_MAX_MS }).then(
+    () => true,
+    () => false,
+  );
 }
 
 async function main() {
@@ -239,17 +219,9 @@ async function main() {
   }
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
-  const executablePath = findChrome();
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    ...(executablePath ? { executablePath } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox',
-      '--use-gl=angle', `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
-      '--disable-dev-shm-usage', '--disable-web-security',
-      '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-      '--window-size=1280,800',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1280,800'],
   });
 
   const results = [];
@@ -263,9 +235,10 @@ async function main() {
       () => window.__godsEyeView?.layers && window.__godsEyeView?.styleManager,
       { timeout: 60_000, polling: 100 },
     );
+    await whenSettled(page);
     // flyToAustin arrives ~500 ms after init; let it start and land before any
     // scene sets its own pose, or the arrival overwrites the first camera.
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await whenSettled(page);
 
     const selected = SCENE_FILTER.length
       ? SCENES.filter((scene) => SCENE_FILTER.some((prefix) => scene.id.startsWith(prefix)))
@@ -421,7 +394,7 @@ async function main() {
       );
     }
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const summary = path.join(SHOT_DIR, `${TAG}-summary.json`);

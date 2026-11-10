@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 // Composed-app media policy/lifecycle checks. Pinokio UA is a policy fixture,
 // not native-host acceptance; the YouTube SDK clock below is deterministic.
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const output = path.resolve(
   process.env.QA_OUTPUT_DIR || 'qa-shots/nepal-media',
 );
 fs.mkdirSync(output, { recursive: true });
-const browser = await puppeteer.launch({
-  headless: process.env.QA_HEADFUL !== '1',
-  args: process.env.QA_HEADFUL === '1' ? ['--use-angle=metal'] : [],
+const browser = await launchBrowser({
+  headless: true,
+  args: process.env.QA_HEADFUL === '1' ? [] : [],
 });
 let assertions = 0;
 const check = (name, value) => {
@@ -84,12 +85,10 @@ try {
       `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
       { waitUntil: 'domcontentloaded' },
     );
-    await page.waitForFunction(
-      () =>
-        window.__godsEyeView?.sceneDirector &&
-        document.querySelector('#loading-screen')?.classList.contains('hidden'),
-      { timeout: 60000 },
-    );
+    await page.waitForFunction(() => window.__godsEyeView?.sceneDirector, {
+      timeout: 60000,
+    });
+    await whenSettled(page);
     const result = await page.evaluate(async (pinokio) => {
       const d = window.__godsEyeView.sceneDirector;
       const scene = d._project.scenes.find((s) => /Nepal/.test(s.title));
@@ -200,5 +199,5 @@ try {
   }
   console.log(`PASS: ${assertions} assertions`);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
+import { whenSettled } from './qa/ready.mjs';
 /**
  * Real-browser proof for manager-owned periodic work and document visibility.
  * Uses the app's development-only layer registration seam; no provider keys.
  * Run: node scripts/qa-layer-visibility.mjs --url http://localhost:4173
  * Hiding uses a real background tab, never a patched document.hidden getter.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
-import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 const args = process.argv.slice(2);
@@ -17,8 +18,7 @@ const url = new URL(
     'http://localhost:4173',
 );
 url.searchParams.set('welcome', '0');
-const browser = await puppeteer.launch({
-  executablePath: chromeExecutablePath(),
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
@@ -39,6 +39,7 @@ try {
   await page.waitForFunction(
     () => window.__gevQaRegisterLayer && window.__godsEyeView?.dataManager,
   );
+  await whenSettled(page);
   await page.evaluate(async () => {
     const manager = window.__godsEyeView.dataManager;
     window.__qaVisibilityUpdates = 0;
@@ -120,5 +121,5 @@ try {
   );
   console.log('RESULT: 7 passed');
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

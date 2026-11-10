@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * qa-traffic-baseline.mjs — Traffic Phase 0 causal-chain capture.
  *
@@ -35,7 +37,7 @@
  * the latency plan.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 
 const argv = process.argv.slice(2);
@@ -53,20 +55,7 @@ const HEADFUL = argv.includes('--headful');
 const TIMEOUT_MS = Math.max(10_000, getNumberOpt('--timeout-ms', 120_000));
 const DEGRADED_DELAY_MS = Math.max(0, getNumberOpt('--degraded-delay-ms', 2500));
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* ignore */ }
-  }
-  return null;
-}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -95,16 +84,15 @@ function debugUrl(rawUrl) {
 
 /** Position the camera and explicitly raise the boundaries the layer observes. */
 async function moveCamera(page, view) {
-  return page.evaluate((v) => {
+  return evaluateWithGeo(page, async (qaGeo, v) => {
     const gev = window.__godsEyeView;
     const module = gev.dataManager.layers.get('traffic').module;
     const beforeLastUpdate = module.getStats().lastUpdate;
     const boundaryTime = performance.now();
-    const ellipsoid = gev.viewer.scene.globe.ellipsoid;
     const radians = Math.PI / 180;
-    try { gev.viewer.camera.cancelFlight(); } catch { /* no active flight */ }
-    gev.viewer.camera.setView({
-      destination: ellipsoid.cartographicToCartesian({
+    try { window.__godsEyeView.engine.camera.cancelFlight(); } catch { /* no active flight */ }
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: v.lon * radians,
         latitude: v.lat * radians,
         height: v.height,
@@ -119,8 +107,7 @@ async function moveCamera(page, view) {
     // explicitly makes the capture boundary deterministic across GPU speeds.
     // Pairing still flows through camera.changed's schedule-time anchor; the
     // synthetic moveEnd is emitted only as the same diagnostic used naturally.
-    gev.viewer.camera.changed.raiseEvent();
-    gev.viewer.camera.moveEnd.raiseEvent();
+    window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
     return { beforeLastUpdate, boundaryTime };
   }, view);
 }
@@ -144,7 +131,7 @@ async function waitForTrafficCapture(page, beforeLastUpdate, boundaryTime) {
     boundaryTime,
   );
   // Let a final full-pass postRender land after `_fetching` flips false.
-  await sleep(150);
+  await whenFramesDrawn(page);
 }
 
 /** Return serializable Traffic User Timing measures created after a boundary. */
@@ -272,7 +259,7 @@ function rowsForCapture(capture) {
 /** Read the active WebGL renderer for the real-GPU/SwiftShader warning. */
 function readRenderer(page) {
   return page.evaluate(() => {
-    const gl = window.__godsEyeView?.viewer?.scene?.context?._gl;
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2');
     if (!gl) return 'unknown';
     const extension = gl.getExtension('WEBGL_debug_renderer_info');
     return extension
@@ -285,7 +272,7 @@ async function main() {
   const url = debugUrl(APP_URL);
   console.log('\nTraffic Phase 0 — causal-chain baseline capture');
   console.log(`  App URL          : ${url}`);
-  console.log(`  Browser mode     : ${HEADFUL ? 'headful (real GPU expected)' : 'headless SwiftShader (relative-only)'}`);
+  console.log(`  Browser mode     : headless (QA_ANGLE=${process.env.QA_ANGLE || 'metal'})`);
   console.log(`  Degraded delay   : ${DEGRADED_DELAY_MS ? `${DEGRADED_DELAY_MS} ms/request` : 'skipped'}`);
 
   try {
@@ -296,19 +283,9 @@ async function main() {
     process.exit(2);
   }
 
-  const executablePath = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(executablePath ? { executablePath } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1440,900',
-      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1440,900', ...(HEADFUL ? [] : [])],
   });
 
   let activeProxyDelayMs = 0;
@@ -343,19 +320,19 @@ async function main() {
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
       { timeout: 60_000 },
     );
+    await whenSettled(page);
 
     // Disable all persisted overlays, park above traffic's activation ceiling,
     // then enable traffic without accidentally starting an unmeasured load.
-    await page.evaluate(async (highView) => {
+    await evaluateWithGeo(page, async (qaGeo, highView) => {
       const gev = window.__godsEyeView;
       await gev.dataManager.restoreEnabledLayerIds([]);
-      const ellipsoid = gev.viewer.scene.globe.ellipsoid;
       const radians = Math.PI / 180;
-      gev.viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: highView.lon * radians,
           latitude: highView.lat * radians,
           height: 9000,
@@ -363,10 +340,9 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
       await gev.dataManager.setEnabled('traffic', true);
-      gev.viewer.camera.changed.raiseEvent();
-      gev.viewer.camera.moveEnd.raiseEvent();
+      window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
     }, VIEWS.austin);
-    await sleep(500);
+    await whenFramesDrawn(page);
 
     const renderer = await readRenderer(page);
     const softwareRenderer = /swiftshader|software/i.test(renderer);
@@ -386,22 +362,19 @@ async function main() {
 
     // Clear the last-bounds gate without clearing the module's road cache, then
     // revisit the byte-identical camera pose for a true client-cache hit.
-    await page.evaluate((view) => {
-      const gev = window.__godsEyeView;
-      const ellipsoid = gev.viewer.scene.globe.ellipsoid;
+    await evaluateWithGeo(page, async (qaGeo, view) => {
       const radians = Math.PI / 180;
-      gev.viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: view.lon * radians,
           latitude: view.lat * radians,
           height: 9000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      gev.viewer.camera.changed.raiseEvent();
-      gev.viewer.camera.moveEnd.raiseEvent();
+      window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
     }, VIEWS.austin);
-    await sleep(500);
+    await whenFramesDrawn(page);
 
     captures.push(await captureState(page, 'exact-viewport revisit', VIEWS.austin, (msValue) => {
       activeProxyDelayMs = msValue;
@@ -467,7 +440,7 @@ async function main() {
       for (const error of consoleErrors.slice(0, 5)) console.log(`      ${error}`);
     }
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 }
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * qa-traffic.mjs — headless proof for the TomTom live-flow traffic layer.
  *
@@ -30,7 +32,7 @@
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { captureQaScreenshot } from './qa-chrome.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,26 +54,7 @@ const HEADFUL = argv.includes('--headful');
 const FIXTURES = argv.includes('--fixtures');
 const { installTrafficRoutes } = await import('./traffic-fixtures.mjs');
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* ignore */ }
-  }
-  return null;
-}
 
 const results = [];
 function record(name, ok, detail) {
@@ -79,7 +62,6 @@ function record(name, ok, detail) {
   const tag = ok === null ? '\x1b[33mINCONCLUSIVE\x1b[0m' : ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Enable traffic + teleport, then poll the layer until settled. */
 async function settleTraffic(page, view, { minCount = 1, timeoutS = 30 } = {}) {
@@ -87,19 +69,18 @@ async function settleTraffic(page, view, { minCount = 1, timeoutS = 30 } = {}) {
   // changes do not activate a headful window the way a real UI click does.
   await page.bringToFront();
   await page.waitForFunction(() => document.visibilityState === 'visible');
-  return page.evaluate(async (v, minC, tS) => {
+  return evaluateWithGeo(page, async (qaGeo, v, minC, tS) => {
     const gev = window.__godsEyeView;
     const dm = gev.dataManager;
     await dm.setEnabled('traffic', true);
     const mod = dm.layers.get('traffic').module;
     const beforeUpdate = mod.getStats().lastUpdate;
-    const ell = gev.viewer.scene.globe.ellipsoid;
     const d2r = Math.PI / 180;
     // The app's intro flyTo animation clobbers a setView issued mid-flight —
     // cancel any active tween before teleporting.
-    try { gev.viewer.camera.cancelFlight(); } catch { /* no flight active */ }
-    gev.viewer.camera.setView({
-      destination: ell.cartographicToCartesian({ longitude: v.lon * d2r, latitude: v.lat * d2r, height: v.height }),
+    try { window.__godsEyeView.engine.camera.cancelFlight(); } catch { /* no flight active */ }
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({ longitude: v.lon * d2r, latitude: v.lat * d2r, height: v.height }),
       orientation: { heading: (v.heading || 0) * d2r, pitch: (v.pitch ?? -90) * d2r, roll: 0 },
     });
     let s = null;
@@ -139,17 +120,9 @@ async function main() {
   }
 
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(findChromeExecutable() ? { executablePath: findChromeExecutable() } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox',
-      ...(!HEADFUL ? ['--use-gl=angle', '--use-angle=swiftshader'] : []),
-      '--disable-backgrounding-occluded-windows',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-      '--window-size=1440,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(!HEADFUL ? [] : []), '--disable-backgrounding-occluded-windows', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1440,900'],
   });
 
   let exitCode = 0;
@@ -174,10 +147,10 @@ async function main() {
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
       { timeout: 60000 },
     );
-    await sleep(5000);
+    await whenSettled(page);
     await page.keyboard.press('Escape');
 
     // ── (i) LIVE mode: San Antonio — fast Overpass extract, partial TomTom
@@ -201,23 +174,22 @@ async function main() {
         mumbai.flowCoveragePct > 0 && mumbai.tilesFetched > 0,
         `coverage=${mumbai.flowCoveragePct}% tiles=${mumbai.tilesFetched}`);
       if (mumbai.mode !== 'live' || !(mumbai.count > 0) || !(colored > 0)) exitCode = 1;
-      await sleep(1200);
+      await whenSettled(page);
       await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-live-flow.png') }, { headful: HEADFUL });
     }
 
     // ── (iv) uncovered-roads param — hide vs sim ─────────────────────────────
     console.log('\n(iv) uncoveredRoads param — hide vs sim...');
     if ((mumbai.flowBuckets?.sim || 0) > 0) {
-      const hid = await page.evaluate(async () => {
+      const hid = await evaluateWithGeo(page, async (qaGeo) => {
         const gev = window.__godsEyeView;
         const mod = gev.dataManager.layers.get('traffic').module;
         const before = mod.getStats().lastUpdate;
         mod.setParams({ uncoveredRoads: 'hide' });
-        const ell = gev.viewer.scene.globe.ellipsoid;
         const d2r = Math.PI / 180;
         // Shift far enough to defeat the overlap gate and force a re-render.
-        gev.viewer.camera.setView({
-          destination: ell.cartographicToCartesian({ longitude: -98.51 * d2r, latitude: 29.435 * d2r, height: 2800 }),
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({ longitude: -98.51 * d2r, latitude: 29.435 * d2r, height: 2800 }),
           orientation: { heading: 0.4, pitch: -1.25, roll: 0 },
         });
         // Poll for a NEW render (lastUpdate changes) — the pre-shift stats
@@ -289,10 +261,10 @@ async function main() {
     });
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
       { timeout: 60000 },
     );
-    await sleep(5000);
+    await whenSettled(page);
     await page.keyboard.press('Escape');
     let simStats = await settleTraffic(page, { lon: -98.4936, lat: 29.4241, height: 3000 }, { minCount: 100, timeoutS: 45 });
     if (!simStats || simStats.count === 0) {
@@ -316,7 +288,7 @@ async function main() {
       if (simStats.mode !== 'sim' || !allWhite || keylessFlowReqs.length !== 0 || !keylessHonest) {
         exitCode = 1;
       }
-      await sleep(1000);
+      await whenFramesDrawn(page);
       await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-sim-keyless.png') }, { headful: HEADFUL });
     }
     record('BROWSER: no uncaught page exceptions', pageErrors.length === 0, pageErrors.join('; '));
@@ -324,7 +296,7 @@ async function main() {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
     exitCode = 3;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const pass = results.filter((r) => r.ok === true).length;

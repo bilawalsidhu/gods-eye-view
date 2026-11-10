@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive colors independently verify the Cesium aircraft tint.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-emergency-squawk.mjs — headless proof for transponder emergency highlighting.
  *
@@ -26,7 +29,7 @@
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,7 +55,6 @@ function record(name, ok, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** OpenSky state vector: squawk sits at index 14. */
 const civilRow = (icao24, callsign, lon, lat, squawk) => [
@@ -175,13 +177,9 @@ const isAmber = (c) =>
   Boolean(c) && c.r > 180 && c.g > 110 && c.b < 140 && !isRed(c);
 
 async function shoot(page, name) {
-  await page
-    .waitForFunction(
-      () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
-      { timeout: 30000 },
-    )
-    .catch(() => {});
-  await sleep(600);
+  await whenTilesLoaded(page, { timeoutMs: 30000 }).catch(() => {});
+  await whenSettled(page);
+  await whenFramesDrawn(page);
   await page.screenshot({
     path: path.join(SHOTS_DIR, `emergency-${name}.png`),
   });
@@ -200,19 +198,10 @@ async function main() {
     process.exit(2);
   }
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const executablePath =
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    (await puppeteer.executablePath().catch(() => null)) ||
-    undefined;
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
+  const browser = await launchBrowser({
+    headless: true,
     protocolTimeout: 180000,
-    ...(executablePath && fs.existsSync(executablePath)
-      ? { executablePath }
-      : {}),
     args: [
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
       '--disable-dev-shm-usage',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
@@ -252,31 +241,30 @@ async function main() {
       timeout: TIMEOUT_MS,
     });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
       { timeout: TIMEOUT_MS },
     );
-    await sleep(5000);
+    await whenSettled(page);
+    await whenFramesDrawn(page);
     await page.keyboard.press('Escape');
-    await page.evaluate(
-      (lo, la) => {
-        const gev = window.__godsEyeView;
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, lo, la) => {
         const d2r = Math.PI / 180;
         try {
-          gev.viewer.camera.cancelFlight();
+          window.__godsEyeView.engine.camera.cancelFlight();
         } catch {
           /* no flight active */
         }
-        gev.viewer.camera.setView({
-          destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian(
-            {
-              longitude: lo * d2r,
-              latitude: la * d2r,
-              height: 260000,
-            },
-          ),
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
+            longitude: lo * d2r,
+            latitude: la * d2r,
+            height: 260000,
+          }),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
-        gev.viewer.scene.requestRender?.();
+        window.__godsEyeView.engine.render.request?.();
       },
       lon,
       lat,
@@ -297,7 +285,7 @@ async function main() {
         polling: 500,
       })
       .catch(() => {});
-    await sleep(1500);
+    await whenFramesDrawn(page);
     const colors = await page.evaluate(probe);
     const show = (id) => JSON.stringify(colors[id] ?? null);
     record(
@@ -538,7 +526,7 @@ async function main() {
     console.error('\x1b[31mHarness error:\x1b[0m', err);
     exitCode = 3;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const pass = results.filter((r) => r.ok).length;

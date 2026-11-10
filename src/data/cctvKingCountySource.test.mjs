@@ -1,3 +1,4 @@
+import { withEnv } from '../testSupport/environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -14,17 +15,6 @@ import { cctvProxy } from '../../server/providers/cctv.js';
 import { createCatalog } from '../layers/cctv/catalog.js';
 
 /** Set (or, for `undefined`, delete) environment variables for one test. */
-function withEnv(t, env) {
-  for (const [name, value] of Object.entries(env)) {
-    const previous = process.env[name];
-    t.after(() => {
-      if (previous === undefined) delete process.env[name];
-      else process.env[name] = previous;
-    });
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  }
-}
 
 /** Silence the loaders' progress and failure logging. */
 function quiet(t) {

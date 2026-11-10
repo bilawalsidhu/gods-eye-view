@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Cesium-only probes: native flight interception and entity sentinels verify Cesium camera ownership.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * Deterministic browser proof for the Radio companion layer.
  *
@@ -11,10 +13,11 @@
  *
  * Run: node scripts/qa-radio.mjs --url http://localhost:4193
  */
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 import { stations } from './fixtures/layers/radio.mjs';
 import { isExpectedPreviewSetupError } from './qa-browserEvidence.mjs';
 
@@ -36,15 +39,6 @@ const RADIO_URL = new URL(APP_URL);
 RADIO_URL.searchParams.set('welcome', '0');
 const HEADFUL = args.includes('--headful');
 
-const chromeCandidates = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-const chrome = chromeCandidates.find((candidate) => {
-  try { return fs.existsSync(candidate); } catch { return false; }
-});
 
 
 const results = [];
@@ -86,14 +80,13 @@ async function restoreRadioPanels(page, prior) {
 // not on wall-clock sleeps, particularly with software rendering.
 async function settleRadioFrames(page) {
   await page.evaluate(() => new Promise((resolve, reject) => {
-    const scene = window.__godsEyeView.viewer.scene;
     let remaining = 4;
     const timeout = setTimeout(() => { remove(); reject(new Error('Radio rendered-frame deadline exceeded')); }, 10_000);
-    const remove = scene.postRender.addEventListener(() => {
+    const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
       if (--remaining === 0) { remove(); clearTimeout(timeout); resolve(); }
-      else requestAnimationFrame(() => scene.requestRender());
+      else requestAnimationFrame(() => window.__godsEyeView.engine.render.request());
     });
-    scene.requestRender();
+    window.__godsEyeView.engine.render.request();
   }));
 }
 
@@ -105,17 +98,9 @@ async function main() {
     process.exit(2);
   }
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(chrome ? { executablePath: chrome } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox',
-      ...(process.platform === 'darwin'
-        ? ['--use-angle=metal', '--enable-gpu']
-        : ['--use-gl=angle', '--use-angle=swiftshader']),
-      '--disable-dev-shm-usage', '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding', '--window-size=1440,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(process.platform === 'darwin' ? ['--enable-gpu'] : []), '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1440,900'],
   });
 
   try {
@@ -370,17 +355,15 @@ async function main() {
 
     await page.goto(RADIO_URL.href, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 60_000 });
+    await whenSettled(page);
     await page.waitForFunction(() => window.__godsEyeView?.styleManager?._dataManager?.layers?.has('radio'), { timeout: 60_000 });
-    await page.waitForFunction(
-      () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 60_000 },
-    );
+    await whenSettled(page);
     await page.waitForFunction(() => (
       typeof window.__gevQaRegisterLayer === 'function'
       && typeof window.__gevQaUnregisterLayer === 'function'
     ));
     await page.evaluate(() => {
-      window.__godsEyeView.viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       window.__godsEyeView.styleManager.setPanelCollapsed('pp-toggles', true);
       window.__godsEyeView.styleManager.setPanelCollapsed('cctv-panel', true);
       window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', true);
@@ -470,7 +453,7 @@ async function main() {
       const selectedBefore = module.getUIState().selected?.id || null;
       const playsBefore = window.__qaRadioPlayCalls.length;
       const camera = gev.viewer.camera;
-      const originalFlyTo = camera.flyTo;
+      const originalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       const flyToCalls = [];
       camera.flyTo = (options) => flyToCalls.push(options);
       const beganTuning = module.beginTuning();
@@ -643,7 +626,7 @@ async function main() {
       const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
       const radio = document.getElementById('radio-panel');
       scroller.scrollTop = Math.max(0, radio.offsetTop - scroller.clientHeight + 70);
-      const camera = gev.viewer.camera.positionWC;
+      const camera = window.__godsEyeView.engine.camera.pose().position;
       return {
         scrollTop: scroller.scrollTop,
         pageY: window.scrollY,
@@ -716,7 +699,7 @@ async function main() {
       const viewport = scroller.getBoundingClientRect();
       const directory = document.querySelector('#radio-panel .radio-directory-row').getBoundingClientRect();
       const play = document.getElementById('radio-play-btn').getBoundingClientRect();
-      const camera = gev.viewer.camera.positionWC;
+      const camera = window.__godsEyeView.engine.camera.pose().position;
       return {
         scrollTop: scroller.scrollTop,
         pageY: window.scrollY,
@@ -762,23 +745,21 @@ async function main() {
         { name: 'global', height: 24_200_000, limit: 16 },
         { name: 'near', height: 500_000, limit: 32 },
       ]) {
-        await page.evaluate(({ lon, height }) => {
-          const viewer = window.__godsEyeView.viewer;
-          viewer.camera.cancelFlight();
-          viewer.camera.setView({
-            destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        await evaluateWithGeo(page, async (qaGeo, { lon, height }) => {
+          window.__godsEyeView.engine.camera.cancelFlight();
+          window.__godsEyeView.engine.camera.setView({
+            destination: qaGeo.cartographic.toCartesian({
               longitude: lon * Math.PI / 180,
               latitude: 6 * Math.PI / 180,
               height,
             }),
             orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
           });
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         }, { lon: spec.lon, height: view.height });
-        await sleep(700);
+        await whenFramesDrawn(page);
         await settleRadioFrames(page);
         const sample = await page.evaluate(async () => {
-          const viewer = window.__godsEyeView.viewer;
           const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
           const drawn = window.__qaRadioDrawn;
           const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
@@ -806,11 +787,11 @@ async function main() {
               });
             };
             const timeout = setTimeout(finish, 500);
-            removePostRender = viewer.scene.postRender.addEventListener(() => {
+            removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
               clearTimeout(timeout);
               finish();
             });
-            viewer.scene.requestRender();
+            window.__godsEyeView.engine.render.request();
           });
         });
         singletonViews.push({ ...spec, ...view, ...sample });
@@ -1362,17 +1343,15 @@ async function main() {
         && allPalette.music?.[1] > allPalette.music?.[2],
       JSON.stringify(allPalette),
     );
-    const clusterBadge = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const clusterBadge = await evaluateWithGeo(page, async (qaGeo) => {
       const drawn = window.__qaRadioDrawn;
       const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
       // Start from another view, so the clusters at the view below are a new
       // cohort the host must solve (the old check forced one by switching
       // Cesium's clustering off and on).
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: 68 * Math.PI / 180,
           latitude: 7 * Math.PI / 180,
           height: 24_200_000,
@@ -1382,15 +1361,15 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 500));
       await drawn.frames(3);
       const baselineSolveRevision = getWorldOverlayDiagnostics().solveRevision;
-      viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -98 * Math.PI / 180,
           latitude: 38 * Math.PI / 180,
           height: 18_000_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       // The layer clusters on screen itself now (render/display.js,
       // ../screenClusters.js) into the radio-clusters point set; the cluster
@@ -1405,7 +1384,7 @@ async function main() {
             removePostRender?.();
             done({ rect: null, host: getWorldOverlayDiagnostics() });
           }, 150);
-          removePostRender = viewer.scene.postRender.addEventListener(() => {
+          removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
             clearTimeout(timeout);
             removePostRender();
             const host = getWorldOverlayDiagnostics();
@@ -1421,7 +1400,7 @@ async function main() {
               host,
             });
           });
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         });
       }
       const position = typeof painted?.position === 'function' ? painted.position() : painted?.position;
@@ -1451,30 +1430,27 @@ async function main() {
         && clusterBadge?.rect?.h > 0,
       JSON.stringify(clusterBadge),
     );
-    await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: 68 * Math.PI / 180,
           latitude: 7 * Math.PI / 180,
           height: 24_200_000,
         }),
         orientation: { heading: 15 * Math.PI / 180, pitch: -Math.PI / 2, roll: 0 },
       });
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 500));
     });
     await settleRadioFrames(page);
-    const highGlobalClusterLabels = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const highGlobalClusterLabels = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
+      const ellipsoid = qaGeo.ellipsoid.WGS84;
       const { getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const { distanceFade } = await import('/src/overlays/worldOverlayDraw.js');
       const source = radio.getOverlayDiagnostics();
-      const cameraPosition = viewer.camera.positionWC;
+      const cameraPosition = window.__godsEyeView.engine.camera.pose().position;
       const cameraRadius = Math.hypot(cameraPosition.x, cameraPosition.y, cameraPosition.z);
       const horizonDistance = Math.sqrt(Math.max(
         0,
@@ -1486,8 +1462,8 @@ async function main() {
       const drawn = window.__qaRadioDrawn;
       const { getPaintRect: getOverlayPaintRect } = window.__gevWorldOverlay;
       let clusterPoint = null;
-      const width = viewer.canvas.clientWidth;
-      const height = viewer.canvas.clientHeight;
+      const width = window.__godsEyeView.engine.host.canvas.clientWidth;
+      const height = window.__godsEyeView.engine.host.canvas.clientHeight;
       const anchors = source.clusterIds
         .map((entryId) => getOverlayPaintRect('radio', entryId)?.entry?.position)
         .map((position) => drawn.canvasPoint(typeof position === 'function' ? position() : position))
@@ -1503,7 +1479,7 @@ async function main() {
       return {
         source,
         host: getWorldOverlayDiagnostics(),
-        altitude: viewer.camera.positionCartographic.height,
+        altitude: window.__godsEyeView.engine.camera.pose().cartographic.height,
         horizonDistance,
         horizonDistanceAlpha: distanceFade(horizonDistance, { maxDistance: 50_000_000 }),
         clusterPoint,
@@ -1521,10 +1497,8 @@ async function main() {
       JSON.stringify(highGlobalClusterLabels),
     );
     await page.screenshot({ path: path.join(SHOTS_DIR, 'high-global-all-labels.png') });
-    const clusterContinuity = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const clusterContinuity = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
       const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const paintedClusters = () => new Promise((resolve) => {
         let removePostRender = null;
@@ -1532,7 +1506,7 @@ async function main() {
           removePostRender?.();
           resolve({ clusters: [], fadingCount: -1, host: null, source: null });
         }, 500);
-        removePostRender = viewer.scene.postRender.addEventListener(() => {
+        removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
           clearTimeout(timeout);
           removePostRender();
           const source = radio.getOverlayDiagnostics();
@@ -1553,20 +1527,20 @@ async function main() {
             source,
           });
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       });
       const longitudes = [-25, -24, -23, -22, -23, -24, -25];
       const samples = [];
       for (const longitude of longitudes) {
-        viewer.camera.setView({
-          destination: ellipsoid.cartographicToCartesian({
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
             longitude: longitude * Math.PI / 180,
             latitude: 38 * Math.PI / 180,
             height: 10_000_000,
           }),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
         for (const delay of [50, 100, 200, 350]) {
           await new Promise((resolve) => setTimeout(resolve, delay));
           samples.push({ longitude, delay, ...(await paintedClusters()) });
@@ -1621,11 +1595,10 @@ async function main() {
       JSON.stringify(clusterContinuity),
     );
     const directoryRefreshContinuity = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const before = radio.getOverlayDiagnostics().clusterMemberships;
       await radio.update();
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 900));
       const after = radio.getOverlayDiagnostics().clusterMemberships;
       const beforeByMembership = new Map(before.map((entry) => [entry.membershipId, entry.entryId]));
@@ -2451,7 +2424,7 @@ async function main() {
     await page.evaluate(() => {
       const camera = window.__godsEyeView.viewer.camera;
       window.__qaFirstPlayFlyToCalls = [];
-      window.__qaFirstPlayOriginalFlyTo = camera.flyTo;
+      window.__qaFirstPlayOriginalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       camera.flyTo = (options) => window.__qaFirstPlayFlyToCalls.push(options);
     });
     const firstPlayPanels = await revealRadioControls(page, 'radio-play-btn');
@@ -2496,11 +2469,10 @@ async function main() {
     check('first Play never moves the camera', firstPlay.flyToCalls === 0, `${firstPlay.flyToCalls} flyTo calls`);
 
     await page.select('#radio-filter', 'news');
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -98 * Math.PI / 180,
           latitude: 38 * Math.PI / 180,
           height: 18_000_000,
@@ -2508,7 +2480,7 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     });
-    await sleep(700);
+    await whenFramesDrawn(page);
     await settleRadioFrames(page);
     const newsClusterTarget = await page.evaluate(() => {
       // A drawn cluster: a painted cluster entry whose anchor picks a
@@ -2555,7 +2527,7 @@ async function main() {
     );
 
     await page.select('#radio-filter', 'weather');
-    await sleep(700);
+    await whenFramesDrawn(page);
     const weatherCluster = await page.evaluate(() => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       return { texts: radio.getOverlayDiagnostics().clusterTexts };
@@ -2607,19 +2579,18 @@ async function main() {
     );
     const idleHorizonScans = await page.evaluate(async () => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const camera = window.__godsEyeView.viewer.camera;
-      camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       await new Promise((resolve) => setTimeout(resolve, 350));
       const positionBefore = {
-        x: camera.positionWC.x,
-        y: camera.positionWC.y,
-        z: camera.positionWC.z,
+        x: window.__godsEyeView.engine.camera.pose().position.x,
+        y: window.__godsEyeView.engine.camera.pose().position.y,
+        z: window.__godsEyeView.engine.camera.pose().position.z,
       };
       const before = radio.getStats().horizonScans;
       await new Promise((resolve) => setTimeout(resolve, 850));
-      const dx = camera.positionWC.x - positionBefore.x;
-      const dy = camera.positionWC.y - positionBefore.y;
-      const dz = camera.positionWC.z - positionBefore.z;
+      const dx = window.__godsEyeView.engine.camera.pose().position.x - positionBefore.x;
+      const dy = window.__godsEyeView.engine.camera.pose().position.y - positionBefore.y;
+      const dz = window.__godsEyeView.engine.camera.pose().position.z - positionBefore.z;
       return {
         before,
         after: radio.getStats().horizonScans,
@@ -2729,21 +2700,19 @@ async function main() {
         && slider.getBoundingClientRect().width > 0;
     });
 
-    const horizon = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
+    const horizon = await evaluateWithGeo(page, async (qaGeo) => {
       const drawn = window.__qaRadioDrawn;
       // What is drawn, through the engine's picks at every fixture station's
       // canvas point: a station behind the globe projects onto the canvas
       // too (the point sets draw without a depth test), so a pick of one
       // there means it was not culled.
       const setView = (lon, lat = 0) => {
-        viewer.camera.cancelFlight();
-        viewer.camera.setView({
-          destination: ellipsoid.cartographicToCartesian({ longitude: lon * Math.PI / 180, latitude: lat * Math.PI / 180, height: 2_000_000 }),
+        window.__godsEyeView.engine.camera.cancelFlight();
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({ longitude: lon * Math.PI / 180, latitude: lat * Math.PI / 180, height: 2_000_000 }),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       };
       setView(-54);
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2894,7 +2863,7 @@ async function main() {
         buttons: type === 'pointercancel' || type === 'pointerup' ? 0 : 1,
       }));
       const camera = gev.viewer.camera;
-      const originalFlyTo = camera.flyTo;
+      const originalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       const flyToCalls = [];
       camera.flyTo = (options) => flyToCalls.push(options);
       const before = {
@@ -3208,7 +3177,7 @@ async function main() {
     await page.mouse.down();
     await page.mouse.move(tunerCommitTarget.targetX, tunerCommitTarget.y, { steps: 12 });
     await page.mouse.up();
-    await sleep(650);
+    await whenFramesDrawn(page);
     const tunerCommit = await page.evaluate((target) => {
       const gev = window.__godsEyeView;
       const slider = document.getElementById('radio-tuner-slider');
@@ -3317,7 +3286,7 @@ async function main() {
             && sample.ratio >= microDragSamples[index - 1].ratio)),
       JSON.stringify(microDragSamples),
     );
-    const viewportTuner = await page.evaluate(async (selectedId) => {
+    const viewportTuner = await evaluateWithGeo(page, async (qaGeo, selectedId) => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const before = {
@@ -3326,11 +3295,11 @@ async function main() {
         selectedIndex: style._radioControls._radioTunerStations.findIndex((station) => station.id === selectedId),
         needle: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
       };
-      const current = gev.viewer.camera.positionCartographic;
+      const current = window.__godsEyeView.engine.camera.pose().cartographic;
       const oppositeLongitude = ((current.longitude + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
-      gev.viewer.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
-      gev.viewer.camera.setView({
-        destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.host.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: oppositeLongitude,
           latitude: -current.latitude,
           height: 2_000_000,
@@ -3373,7 +3342,7 @@ async function main() {
       };
     });
     await page.$eval('#radio-next-btn', (button) => button.click());
-    await sleep(1500);
+    await whenFramesDrawn(page);
     const nextNeedleAfter = await page.evaluate(() => {
       const style = window.__godsEyeView.styleManager;
       const selectedId = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id;
@@ -3568,10 +3537,9 @@ async function main() {
         && fullPoolNavigation.afterNextWrap === fullPoolNavigation.expectedNextWrap,
       JSON.stringify(fullPoolNavigation),
     );
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: 2_000_000,
@@ -3579,7 +3547,7 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
     });
-    await sleep(500);
+    await whenFramesDrawn(page);
     // Next left the Radio stopped; a release plays only from an active stream.
     await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('radio').module.togglePlayback({ origin: 'user' }));
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
@@ -3630,8 +3598,7 @@ async function main() {
     );
     await page.select('#radio-filter', 'news');
 
-    const markerTarget = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const markerTarget = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const drawn = window.__qaRadioDrawn;
       // Radio clusters on screen in its own display now (no Cesium
@@ -3645,26 +3612,26 @@ async function main() {
           origin: 'programmatic',
         });
       }
-      viewer.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.cancelFlight();
       const markerView = {
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -174 * Math.PI / 180,
           latitude: 6 * Math.PI / 180,
           height: 500_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       };
-      viewer.camera.setView(markerView);
+      window.__godsEyeView.engine.camera.setView(markerView);
       await new Promise((resolve) => {
         let removePostRender = null;
-        removePostRender = viewer.scene.postRender.addEventListener(() => {
+        removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
           removePostRender?.();
           resolve();
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       });
       radio.setFilter('news');
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 500));
       const { getPaintRect: getOverlayPaintRect, getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       return new Promise((resolve) => {
@@ -3677,13 +3644,13 @@ async function main() {
           resolve(result);
         };
         const probe = () => {
-          const camera = viewer.camera.positionCartographic;
+          const camera = window.__godsEyeView.engine.camera.pose().cartographic;
           const longitude = camera.longitude * 180 / Math.PI;
           const latitude = camera.latitude * 180 / Math.PI;
           if (Math.abs(longitude + 174) > 0.5 || Math.abs(latitude - 6) > 0.5) {
-            viewer.camera.cancelFlight();
-            viewer.camera.setView(markerView);
-            viewer.scene.requestRender();
+            window.__godsEyeView.engine.camera.cancelFlight();
+            window.__godsEyeView.engine.camera.setView(markerView);
+            window.__godsEyeView.engine.render.request();
             return;
           }
           const diagnostics = radio.getOverlayDiagnostics();
@@ -3726,16 +3693,16 @@ async function main() {
             overlayEntryCount: diagnostics.entryCount,
             worldOverlay: getWorldOverlayDiagnostics(),
             camera: {
-              longitude: viewer.camera.positionCartographic.longitude * 180 / Math.PI,
-              latitude: viewer.camera.positionCartographic.latitude * 180 / Math.PI,
-              height: viewer.camera.positionCartographic.height,
+              longitude: window.__godsEyeView.engine.camera.pose().cartographic.longitude * 180 / Math.PI,
+              latitude: window.__godsEyeView.engine.camera.pose().cartographic.latitude * 180 / Math.PI,
+              height: window.__godsEyeView.engine.camera.pose().cartographic.height,
             },
           };
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         };
         timeout = setTimeout(() => finish(lastObservation || { found: false, reason: 'no post-render probe' }), 8000);
-        removePostRender = viewer.scene.postRender.addEventListener(probe);
-        viewer.scene.requestRender();
+        removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(probe);
+        window.__godsEyeView.engine.render.request();
       });
     });
     check('Radio exposes a visible marker for click-tolerance QA', markerTarget?.found === true, JSON.stringify(markerTarget));
@@ -3761,14 +3728,13 @@ async function main() {
       check('an offset click within 8px reliably selects the intended Radio dot', offsetSelected === markerTarget.id, offsetSelected);
     }
 
-    await page.evaluate(() => {
+    await evaluateWithGeo(page, async (qaGeo) => {
       const gev = window.__godsEyeView;
-      const camera = gev.viewer.camera;
       const radio = gev.dataManager.layers.get('radio').module;
-      camera.cancelFlight();
-      gev.viewer.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
-      camera.setView({
-        destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.host.canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 1 }));
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: 2_000_000,
@@ -3792,12 +3758,12 @@ async function main() {
       window.__qaRadioFailedNearest = false;
       window.__qaRadioDelayNextFailure = true;
       window.__qaRadioFlyToCalls = [];
-      window.__qaRadioOriginalFlyTo = camera.flyTo;
-      window.__qaRadioCameraHeight = camera.positionCartographic.height;
+      window.__qaRadioOriginalFlyTo = window.__godsEyeView.engine.camera.flyTo;
+      window.__qaRadioCameraHeight = window.__godsEyeView.engine.camera.pose().cartographic.height;
       camera.flyTo = (options) => window.__qaRadioFlyToCalls.push(options);
       gev.dataManager.layers.get('flights').enabled = true;
     });
-    await sleep(500);
+    await whenFramesDrawn(page);
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
       manager.setPanelCollapsed('global-context-panel', false);
@@ -3805,7 +3771,7 @@ async function main() {
     });
     await page.waitForSelector('#radio-next-btn', { visible: true });
     await page.evaluate(() => {
-      window.__qaRadioCameraHeight = window.__godsEyeView.viewer.camera.positionCartographic.height;
+      window.__qaRadioCameraHeight = window.__godsEyeView.engine.camera.pose().cartographic.height;
     });
     const radioOnlyNextDispatched = await page.evaluate(() => {
       const button = document.getElementById('radio-next-btn');
@@ -3815,10 +3781,9 @@ async function main() {
     });
     if (!radioOnlyNextDispatched) throw new Error('Radio next button unavailable');
     await page.waitForFunction(() => typeof window.__qaRejectRadioPlay === 'function');
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: 2_400_000,
@@ -3828,12 +3793,11 @@ async function main() {
       window.__qaRejectRadioPlay();
     });
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
-    const playing = await page.evaluate(async () => {
+    const playing = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const viewer = window.__godsEyeView.viewer;
       const { getDiagnostics: getWorldOverlayDiagnostics } = window.__gevWorldOverlay;
       const flightTargets = window.__qaRadioFlyToCalls.map(({ destination }) => {
-        const position = viewer.scene.globe.ellipsoid.cartesianToCartographic(destination);
+        const position = qaGeo.cartographic.fromCartesian(destination);
         return {
           lat: position.latitude * 180 / Math.PI,
           lon: position.longitude * 180 / Math.PI,
@@ -3887,7 +3851,7 @@ async function main() {
       const run = async (ownerPrefix, buttonId) => {
         const owner = viewer.entities.add({
           id: `qa:${ownerPrefix}:radio-camera-owner`,
-          position: viewer.camera.positionWC.clone(),
+          position: window.__godsEyeView.engine.camera.pose().position,
         });
         owner.gevTrackedId = `${ownerPrefix}:qa-radio-camera-owner`;
         viewer.trackedEntity = owner;
@@ -3903,7 +3867,7 @@ async function main() {
           afterStationId: radio.getUIState().selected?.id || null,
           flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
           trackedIdentityPreserved: viewer.trackedEntity === owner,
-          trackedId: viewer.trackedEntity?.gevTrackedId || null,
+          trackedId: window.__godsEyeView.engine.camera.following()?.label?.id || null,
         };
         viewer.trackedEntity = undefined;
         viewer.entities.remove(owner);
@@ -3937,7 +3901,7 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       const owner = viewer.entities.add({
         id: 'qa:flights:delayed-radio-fallback-owner',
-        position: viewer.camera.positionWC.clone(),
+        position: window.__godsEyeView.engine.camera.pose().position,
       });
       owner.gevTrackedId = 'flights:qa-delayed-radio-fallback-owner';
       viewer.trackedEntity = owner;
@@ -3952,7 +3916,7 @@ async function main() {
       const result = {
         flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
         trackedIdentityPreserved: viewer.trackedEntity === owner,
-        trackedId: viewer.trackedEntity?.gevTrackedId || null,
+        trackedId: window.__godsEyeView.engine.camera.following()?.label?.id || null,
         selectedId: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id || null,
       };
       viewer.trackedEntity = undefined;
@@ -3968,10 +3932,9 @@ async function main() {
         && Boolean(delayedFallbackOwnership.selectedId),
       JSON.stringify(delayedFallbackOwnership),
     );
-    await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: Math.PI,
           latitude: -2 * Math.PI / 180,
           height: window.__qaRadioCameraHeight,
@@ -3992,21 +3955,20 @@ async function main() {
         && playing.host.entriesBySource?.radio === playing.overlay.entryCount,
       JSON.stringify({ overlay: playing.overlay, host: playing.host.entriesBySource }),
     );
-    const closeSelectedText = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const closeSelectedText = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const selected = radio.getUIState().selected;
       window.__qaRadioVisualView = {
-        position: viewer.camera.positionWC.clone(),
-        direction: viewer.camera.directionWC.clone(),
-        up: viewer.camera.upWC.clone(),
+        position: window.__godsEyeView.engine.camera.pose().position,
+        direction: window.__godsEyeView.engine.camera.pose().direction,
+        up: window.__godsEyeView.engine.camera.pose().up,
       };
-      const destination = viewer.scene.globe.ellipsoid.cartographicToCartesian({
+      const destination = qaGeo.cartographic.toCartesian({
         longitude: selected.lon * Math.PI / 180,
         latitude: selected.lat * Math.PI / 180,
         height: 5_000,
       });
-      viewer.camera.setView({
+      window.__godsEyeView.engine.camera.setView({
         destination,
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
@@ -4033,7 +3995,7 @@ async function main() {
             removePostRender?.();
             resolve({ rect: null, host: getWorldOverlayDiagnostics() });
           }, 150);
-          removePostRender = viewer.scene.postRender.addEventListener(() => {
+          removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
             clearTimeout(timeout);
             removePostRender();
             const rect = getOverlayPaintRect('radio', expectedEntryId);
@@ -4042,7 +4004,7 @@ async function main() {
               host: getWorldOverlayDiagnostics(),
             });
           });
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         });
         shown = selectedShown();
       }
@@ -4051,7 +4013,7 @@ async function main() {
         rect: painted?.rect || null,
         host: painted?.host || getWorldOverlayDiagnostics(),
         selectedEntityShow: shown,
-        cameraHeight: viewer.camera.positionCartographic.height,
+        cameraHeight: window.__godsEyeView.engine.camera.pose().cartographic.height,
       };
     });
     check(
@@ -4062,13 +4024,11 @@ async function main() {
       JSON.stringify(closeSelectedText),
     );
     await page.screenshot({ path: path.join(SHOTS_DIR, 'selected-label-desktop.png') });
-    const highGlobalSelectedText = await page.evaluate(async () => {
-      const viewer = window.__godsEyeView.viewer;
+    const highGlobalSelectedText = await evaluateWithGeo(page, async (qaGeo) => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const selected = radio.getUIState().selected;
-      const ellipsoid = viewer.scene.globe.ellipsoid;
-      viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: (selected.lon + 10) * Math.PI / 180,
           latitude: selected.lat * Math.PI / 180,
           height: 5_000_000,
@@ -4086,7 +4046,7 @@ async function main() {
             removePostRender?.();
             resolve(null);
           }, 150);
-          removePostRender = viewer.scene.postRender.addEventListener(() => {
+          removePostRender = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
             clearTimeout(timeout);
             removePostRender();
             const painted = getOverlayPaintRect('radio', expectedEntryId);
@@ -4097,7 +4057,7 @@ async function main() {
               h: painted.h,
             } : null);
           });
-          viewer.scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         });
       }
       // The selected point and its bracket are instances of the
@@ -4129,14 +4089,14 @@ async function main() {
         entityAnchor: entityAnchor ? { x: entityAnchor.x, y: entityAnchor.y } : null,
         entityDistance: entityPosition
           ? Math.hypot(
-            viewer.camera.positionWC.x - entityPosition.x,
-            viewer.camera.positionWC.y - entityPosition.y,
-            viewer.camera.positionWC.z - entityPosition.z,
+            window.__godsEyeView.engine.camera.pose().position.x - entityPosition.x,
+            window.__godsEyeView.engine.camera.pose().position.y - entityPosition.y,
+            window.__godsEyeView.engine.camera.pose().position.z - entityPosition.z,
           )
           : null,
         overlay: radio.getOverlayDiagnostics(),
         host: getWorldOverlayDiagnostics(),
-        cameraHeight: viewer.camera.positionCartographic.height,
+        cameraHeight: window.__godsEyeView.engine.camera.pose().cartographic.height,
       };
     });
     check(
@@ -4164,7 +4124,7 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       window.__godsEyeView.styleManager.toggleCleanView(true);
       viewer.resize();
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     await page.screenshot({ path: path.join(SHOTS_DIR, 'selected-label-mobile.png') });
@@ -4173,19 +4133,18 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       window.__godsEyeView.styleManager.toggleCleanView(false);
       viewer.resize();
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
     await page.evaluate(() => {
-      const viewer = window.__godsEyeView.viewer;
       const view = window.__qaRadioVisualView;
-      viewer.camera.setView({
+      window.__godsEyeView.engine.camera.setView({
         destination: view.position,
         orientation: { direction: view.direction, up: view.up },
       });
       delete window.__qaRadioVisualView;
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await whenFramesDrawn(page);
 
     await page.evaluate(() => {
       window.__qaRadioFlyToCalls = [];
@@ -4202,10 +4161,10 @@ async function main() {
       radioOnlyNextClicked,
       `clicked=${radioOnlyNextClicked}`,
     );
-    const radioOnlyFocusCalls = await page.evaluate(() => {
+    const radioOnlyFocusCalls = await evaluateWithGeo(page, async (qaGeo) => {
       const calls = window.__qaRadioFlyToCalls.length;
       const heights = window.__qaRadioFlyToCalls.map((options) => (
-        window.__godsEyeView.viewer.scene.globe.ellipsoid.cartesianToCartographic(options.destination).height
+        qaGeo.cartographic.fromCartesian(options.destination).height
       ));
       window.__godsEyeView.viewer.camera.flyTo = window.__qaRadioOriginalFlyTo;
       delete window.__qaRadioOriginalFlyTo;
@@ -4218,19 +4177,19 @@ async function main() {
       JSON.stringify(radioOnlyFocusCalls),
     );
 
-    const stagedGlobeNavigation = await page.evaluate(async () => {
+    const stagedGlobeNavigation = await evaluateWithGeo(page, async (qaGeo) => {
       const gev = window.__godsEyeView;
       const viewer = gev.viewer;
       const camera = viewer.camera;
       const radio = gev.dataManager.layers.get('radio').module;
       const stationIds = radio.getTunerStations(3).map((station) => station.id);
       if (stationIds.length < 3) throw new Error('Radio recenter QA requires three visible stations');
-      const originalFlyTo = camera.flyTo;
+      const originalFlyTo = window.__godsEyeView.engine.camera.flyTo;
       const calls = [];
       camera.flyTo = (options) => calls.push(options);
       const setCamera = (height, pitchDegrees, headingDegrees = 38) => {
-        camera.setView({
-          destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
             longitude: -133.9483 * Math.PI / 180,
             latitude: 23.4741 * Math.PI / 180,
             height,
@@ -4241,18 +4200,18 @@ async function main() {
             roll: 0,
           },
         });
-        viewer.scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       };
       const completeFlight = (index) => {
         const flight = calls[index];
-        camera.setView({
+        window.__godsEyeView.engine.camera.setView({
           destination: flight.destination,
           orientation: flight.orientation,
         });
         flight.complete?.();
       };
       const describe = (flight) => {
-        const cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(flight.destination);
+        const cartographic = qaGeo.cartographic.fromCartesian(flight.destination);
         return {
           lat: cartographic.latitude * 180 / Math.PI,
           lon: cartographic.longitude * 180 / Math.PI,
@@ -4279,7 +4238,7 @@ async function main() {
       radio.cycleStation(1, { rotate: true, autoplay: false, stationIds });
       const owner = viewer.entities.add({
         id: 'qa:flights:radio-recenter-stage-owner',
-        position: viewer.camera.positionWC.clone(),
+        position: window.__godsEyeView.engine.camera.pose().position,
       });
       owner.gevTrackedId = 'flights:qa-radio-recenter-stage-owner';
       viewer.trackedEntity = owner;
@@ -4509,7 +4468,7 @@ async function main() {
     );
 
     await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', false));
-    await sleep(350);
+    await whenFramesDrawn(page);
     await page.screenshot({ path: path.join(SHOTS_DIR, 'desktop.png') });
     const desktop = await page.$eval('#radio-panel', (element) => {
       const rect = element.getBoundingClientRect();
@@ -4531,7 +4490,7 @@ async function main() {
     await page.click('#radio-play-btn');
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
-    await sleep(500);
+    await whenFramesDrawn(page);
     await page.$eval('#radio-panel', (element) => element.scrollIntoView({ block: 'nearest' }));
     await page.screenshot({ path: path.join(SHOTS_DIR, 'mobile.png') });
     const mobile = await page.$eval('#radio-panel', (element) => {
@@ -4599,7 +4558,7 @@ async function main() {
       failedResponses.slice(0, 3).join(' | '),
     );
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const failures = results.filter((result) => !result.ok).length;

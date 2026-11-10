@@ -1,4 +1,19 @@
 import { processTree, readProcesses } from './process.mjs';
+import puppeteer from 'puppeteer';
+import { chromeExecutablePath } from '../qa-chrome.mjs';
+/** Keep every scenario on the same headless GPU path. */
+export function launchBrowser({ args = [], ...options } = {}) {
+  return puppeteer.launch({
+    executablePath: chromeExecutablePath(),
+    ...options,
+    headless: true,
+    args: [
+      `--use-angle=${process.env.QA_ANGLE || 'metal'}`,
+      '--enable-gpu',
+      ...args,
+    ],
+  });
+}
 
 /** Bound shutdown even when Chrome leaves descendants holding its pipes. */
 export async function closeBrowser(browser, { deadlineMs = 5000 } = {}) {

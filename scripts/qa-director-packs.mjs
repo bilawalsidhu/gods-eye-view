@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive readiness and entity counts detect Cesium resource leaks.
 /** Synthetic, self-authored assets exercise import, rendering and pack resource lifetime. */
+import { whenSettled, whenTilesLoaded, until } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 const output = path.resolve('qa-shots/director-packs');
 fs.mkdirSync(output, { recursive: true });
@@ -65,7 +67,7 @@ const geojson = {
     },
   ],
 };
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
@@ -105,12 +107,10 @@ try {
     `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.sceneDirector, {
+    timeout: 60000,
+  });
+  await whenSettled(page);
   await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
     const manifest = (id, format, file, placement) => ({
@@ -230,14 +230,11 @@ try {
     () => window.__godsEyeView.mapStackController.getActiveId() === 'photoreal',
     { timeout: 15000 },
   );
-  await new Promise((r) => setTimeout(r, 5000));
-  await page.waitForFunction(
-    () => window.__godsEyeView.tileset?.tilesLoaded === true,
-    { timeout: 60000 },
-  );
+  await whenSettled(page);
+  await whenTilesLoaded(page, { timeoutMs: 60000 });
   const evidence = await page.evaluate(() => ({
     mapStack: window.__godsEyeView.mapStackController.getActiveId(),
-    tilesSettled: window.__godsEyeView.tileset?.tilesLoaded === true,
+    tilesSettled: window.__godsEyeView.engine.surface.tilesLoaded() === true,
   }));
   fs.writeFileSync(
     path.join(output, 'report.json'),
@@ -262,11 +259,8 @@ try {
       pitch: -85,
     });
   });
-  await page.waitForFunction(
-    () => window.__godsEyeView.tileset?.tilesLoaded === true,
-    { timeout: 60000 },
-  );
-  await new Promise((r) => setTimeout(r, 2000));
+  await whenTilesLoaded(page, { timeoutMs: 60000 });
+  await whenSettled(page);
   await page.screenshot({ path: path.join(output, 'angle.png') });
   const life = await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
@@ -306,9 +300,10 @@ try {
       'slow',
     );
   });
-  const deadline = Date.now() + 15000;
-  while (!pending && Date.now() < deadline)
-    await new Promise((r) => setTimeout(r, 50));
+  await until(() => pending, {
+    timeoutMs: 15000,
+    label: 'pending pack transport',
+  });
   check('pending transport reached', !!pending);
   const cancelled = await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
@@ -354,6 +349,6 @@ try {
   if (errors.length)
     console.error(errors.map((e) => e.replace(/https?:\/\/\S+/g, '[URL]')));
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (failures) process.exitCode = 1;
