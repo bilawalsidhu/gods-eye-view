@@ -552,12 +552,21 @@ export function createFlow({ state: layerState, services, parts, source }) {
       paint();
     }
     paint(true);
-    if (current()) layerState._surfacePending = prepared.pending.length;
+    // A completed-mesh pass with no new heights cannot improve this view.
+    // Keep the roads in _surfaceInput for a later view or surface change,
+    // without leaving offscreen or unavailable stations loading forever.
+    const retryPending =
+      prepared.pending.length > 0 &&
+      (!refining ||
+        !trafficSurfaceReady(engine) ||
+        prepared.metrics.resolvedSamples > 0);
+    if (current())
+      layerState._surfacePending = retryPending ? prepared.pending.length : 0;
     if (
       current() &&
       !preview &&
       ((!refining && !trafficSurfaceReady(engine)) ||
-        prepared.pending.length ||
+        retryPending ||
         (!refining && ready.some((road) => road.surfaceSettled === false)))
     ) {
       layerState._surfaceRefineRemove?.();
@@ -579,7 +588,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
         stop();
         // Revalidate only local samples taken at a coarser rendered LOD. This
         // background upgrade never holds road acquisition or first paint;
-        // missing samples keep retrying while refined heights stay cached.
+        // missing samples retry while heights make progress and stay cached.
         layerState._surfaceRefining = true;
         applyFlowThenRender(
           roads,
@@ -600,7 +609,10 @@ export function createFlow({ state: layerState, services, parts, source }) {
               layerState._surfaceRefining = false;
           });
       });
-      const timer = setTimeout(stop, 10000);
+      const timer = setTimeout(() => {
+        stop();
+        if (current()) layerState._surfacePending = 0;
+      }, 10000);
       layerState._surfaceRefineRemove = stop;
       engine.render.request('traffic-surface');
     }

@@ -258,6 +258,7 @@ export async function prepareRoadSurfaces(
   const metrics = {
     sampleCount: 0,
     sampleMs: 0,
+    resolvedSamples: 0,
     cacheHits: 0,
     depthHits: 0,
     roads: roads.length,
@@ -341,6 +342,7 @@ export async function prepareRoadSurfaces(
             height = validHeight(floor) ? floor : 0;
           }
         } else {
+          metrics.resolvedSamples++;
           height = validHeight(floor) ? Math.max(sampled, floor) : sampled;
           cache.heights.delete(key);
           cache.heights.set(key, {

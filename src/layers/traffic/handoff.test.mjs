@@ -241,6 +241,101 @@ test('a still camera drains pending surface samples across bounded passes using 
   assert.equal(engine.fake.renderRequests, finished, 'settled work is idle');
 });
 
+test('a completed surface defers unavailable roads until the next view instead of refining forever', async (t) => {
+  const surface = incomingGlobe(t);
+  surface.ready = true;
+  surface.frame();
+  const { engine } = surface;
+  const { state, flow } = fixture(surface);
+  t.after(() => {
+    state._activeFetchAbort.abort();
+    state._surfaceRefineRemove?.();
+  });
+  const roads = [road(0, GROUND), road(0.008, GROUND)];
+  let missing = true;
+  engine.fake.script('terrainHeight', (point) =>
+    missing && geo.math.toDegrees(point.latitude) > LAT + 0.004
+      ? undefined
+      : GROUND,
+  );
+  await flow.applyFlowThenRender(
+    roads,
+    { ...bounds, coverage },
+    1,
+    1800,
+    'Loaded full',
+  );
+  let rendered = engine.fake.renderRequests;
+  await settle(() => {
+    if (engine.fake.renderRequests > rendered || state._surfaceRefineRemove) {
+      rendered = engine.fake.renderRequests;
+      surface.frame();
+    }
+    return !state._surfacePending && !state._surfaceRefining;
+  });
+  assert.equal(
+    state._surfacePending,
+    0,
+    'unavailable roads are not outstanding work',
+  );
+  assert.equal(state._surfaceRefining, false);
+  assert.equal(state._surfaceRefineRemove, null);
+  assert.equal(roads[1].surfaceReady, false, 'no unmeasured road is displayed');
+  const finished = engine.fake.renderRequests;
+  surface.frame();
+  await nextTask();
+  assert.equal(
+    engine.fake.renderRequests,
+    finished,
+    'the completed view is idle',
+  );
+
+  missing = false;
+  await flow.applyFlowThenRender(
+    roads,
+    { ...bounds, coverage },
+    1,
+    1800,
+    'Loaded full',
+  );
+  assert.equal(
+    roads[1].surfaceReady,
+    true,
+    'another view retries the retained road',
+  );
+});
+
+test('the surface wait deadline defers pending roads when the mesh never settles', async (t) => {
+  const surface = incomingGlobe(t);
+  surface.frame();
+  const { state, flow } = fixture(surface);
+  t.after(() => {
+    state._activeFetchAbort.abort();
+    state._surfaceRefineRemove?.();
+  });
+  const schedule = globalThis.setTimeout;
+  let deadline;
+  t.mock.method(globalThis, 'setTimeout', (callback, delay, ...args) => {
+    if (delay === 10000) deadline = callback;
+    return schedule(callback, delay, ...args);
+  });
+  surface.engine.fake.script('terrainHeight', (point) =>
+    geo.math.toDegrees(point.latitude) > LAT + 0.004 ? undefined : GROUND,
+  );
+  await flow.applyFlowThenRender(
+    [road(0, GROUND), road(0.008, GROUND)],
+    { ...bounds, coverage },
+    1,
+    1800,
+    'Loaded full',
+  );
+  assert.equal(state._surfacePending, 1);
+  assert.equal(typeof deadline, 'function');
+  deadline();
+  assert.equal(state._surfacePending, 0);
+  assert.equal(state._surfaceRefineRemove, null);
+});
+
 test('resuming the viewport republishes the retained roads as a pass that can still refine', () => {
   const labels = [];
   const state = createState({ services: {} });

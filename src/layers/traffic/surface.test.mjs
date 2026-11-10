@@ -89,6 +89,7 @@ test('per-vertex mesh heights follow terrain, reject invalid samples, and leave 
     onMetrics: (value) => (metrics = value),
   });
   assert.equal(metrics.sampleCount, 5);
+  assert.equal(metrics.resolvedSamples, 2);
   assert.equal(prepared.pending.length, 1);
   assert.equal(samples, 5);
   const actual = r.waypoints.map((p) => Math.round(heightOf(p)));
@@ -108,7 +109,12 @@ test('per-vertex mesh heights follow terrain, reject invalid samples, and leave 
     picks++;
     return 75;
   });
-  await prepareRoadSurfaces([r], engine, ground, []);
+  const cached = await prepareRoadSurfaces([r], engine, ground, []);
+  assert.equal(
+    cached.metrics.resolvedSamples,
+    0,
+    'cache hits are not progress',
+  );
   assert.equal(picks, 0, 'validated coordinate heights survive cache hits');
   const abort = new AbortController();
   abort.abort();
