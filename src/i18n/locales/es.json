@@ -3389,5 +3389,13 @@
   "Play speed": "Velocidad de reproducción",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Desplaza o pellizca para ampliar, arrastra para moverte · doble clic para verlo todo",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "Tower": "Torre",
+  "Ground": "Tierra",
+  "Approach": "Aproximación",
+  "Center": "Centro",
+  "ATIS": "ATIS",
+  "CTAF": "CTAF",
+  "UNICOM": "UNICOM",
+  "AFIS": "AFIS"
 }

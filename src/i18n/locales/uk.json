@@ -3466,5 +3466,13 @@
   "Play speed": "Швидкість відтворення",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутіть або зведіть пальці для масштабу, перетягніть для переміщення · подвійне клацання — показати все",
   "1 min/s": "1 хв/с",
-  "Photo © {photographer}": "Фото © {photographer}"
+  "Photo © {photographer}": "Фото © {photographer}",
+  "Tower": "Вишка",
+  "Ground": "Руління",
+  "Approach": "Підхід",
+  "Center": "Центр",
+  "ATIS": "ATIS",
+  "CTAF": "CTAF",
+  "UNICOM": "UNICOM",
+  "AFIS": "AFIS"
 }
