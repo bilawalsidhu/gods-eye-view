@@ -3,8 +3,8 @@
     "ownLaunch": 99,
     "fixedSleeps": 118,
     "loadingScreenReadiness": 9,
-    "cesiumOnlyReads": 75,
+    "cesiumOnlyReads": 76,
     "ownWaitHelpers": 19
   },
-  "measuredAt": "Navara canaries run a bare Navara view outside the app, so they launch Chrome themselves"
+  "measuredAt": "Tiles fixture measures Cesium offscreen pick renders and Navara renderer calls during surface sampling"
 }

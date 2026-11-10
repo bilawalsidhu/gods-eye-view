@@ -408,6 +408,7 @@ export class MapSourceController {
       descriptor: source.descriptor,
       kind: source.descriptor.kind,
       credit: source.credit ?? null,
+      ...(source.tilesetUrl && { tilesetUrl: source.tilesetUrl }),
       ...(source.googleApiKey && { googleApiKey: source.googleApiKey }),
       ...(source.cesiumToken && { cesiumToken: source.cesiumToken }),
       ...(tileset && { tileset }),

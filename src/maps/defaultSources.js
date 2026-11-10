@@ -7,6 +7,7 @@ import {
 } from '../globe/cesium/mapImagery.js';
 import { terrainSourceFor } from '../globe/cesium/terrain.js';
 import { t } from '../i18n/index.js';
+import { localTilesetPath, qaTilesetUrl } from './qaTileset.js';
 
 const navaraIonImageryReason = () =>
   t('Bing imagery is not available on the experimental Navara engine');
@@ -24,10 +25,12 @@ export function createDefaultMapSources({
   cesiumToken = '',
   googleApiKey = '',
   engineKind = 'cesium',
+  tilesetUrl = qaTilesetUrl(),
 } = {}) {
   if (engineKind !== 'cesium' && engineKind !== 'navara')
     throw new TypeError(`Unknown globe engine: ${engineKind}`);
   const navara = engineKind === 'navara';
+  tilesetUrl = localTilesetPath(tilesetUrl);
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
   // Engine-neutral descriptions ride beside the Cesium factories: a terrain
@@ -40,7 +43,8 @@ export function createDefaultMapSources({
   };
   const googleKey = String(googleApiKey || '').trim();
   const hasGoogle = Boolean(googleKey);
-  const photorealAvailable = navara ? hasGoogle : Boolean(googleTileset);
+  const photorealAvailable =
+    Boolean(tilesetUrl) || (navara ? hasGoogle : Boolean(googleTileset));
   return {
     defaultId: photorealAvailable ? 'photoreal' : 'esri-imagery',
     unknownId: 'photoreal',
@@ -69,7 +73,15 @@ export function createDefaultMapSources({
             photorealUnavailableReason(
               navara ? hasGoogle : hasIon || hasGoogle,
             ),
-          tileset: googleTileset,
+          tileset: tilesetUrl ? null : googleTileset,
+          ...(tilesetUrl && {
+            tilesetUrl,
+            createTileset: async (options) => {
+              const { createQaTileset } =
+                await import('../globe/cesium/qaTileset.js');
+              return createQaTileset(tilesetUrl, options);
+            },
+          }),
           ...(googleKey && { googleApiKey: googleKey }),
           ...(hasIon && { cesiumToken: ionToken }),
         };
