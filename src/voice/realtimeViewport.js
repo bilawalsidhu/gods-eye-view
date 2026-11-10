@@ -73,26 +73,23 @@ const POINTER_CROP_MAX_AGE_MS = 20000;
 const POINTER_CROP_SCALES = new Set(['local', 'city']);
 
 /**
- * Reason-coded explanation of the existing visual escalation policy.
+ * Reason-coded explanation of the existing visual escalation policy, for an
+ * entity-context answer on an open channel (the caller checks both).
  * Pointer crops remain a separate path from full-frame screenshots.
  * These reasons are static diagnostics, never model-generated claims.
  */
-export function viewportContextDecision(result, { channelOpen = true } = {}) {
-  if (result?.action !== 'get_entity_context')
-    return { send: false, reason: 'not-entity-context' };
-  if (!channelOpen) return { send: false, reason: 'channel-closed' };
-  const viewScale = result.scene?.basemap?.viewScale ?? null;
-  if (result.scope === 'pointer') {
+export function viewportContextDecision(result) {
+  const viewScale = result?.scene?.basemap?.viewScale ?? null;
+  if (result?.scope === 'pointer') {
     if (result.selected)
       return { send: false, reason: 'pointer-identity-present', viewScale };
     if (!result.pointer)
       return { send: false, reason: 'pointer-missing', viewScale };
-    if (!POINTER_CROP_SCALES.has(viewScale))
-      return { send: false, reason: 'pointer-scale-not-useful', viewScale };
+    // The crop path checks ground, freshness and scale itself, and logs why.
     return {
       send: true,
       kind: 'crop',
-      reason: 'pointer-ground-crop',
+      reason: 'pointer-crop-eligible',
       viewScale,
     };
   }
@@ -390,13 +387,17 @@ export class RealtimeViewport {
    * requests pair up.
    */
   async sendVisualContextIfUseful(result) {
-    // Runs after every tool output. Only entity context can escalate, so
-    // other tools log nothing and leave the shared debug-log budget alone.
-    if (result?.action !== 'get_entity_context') return false;
+    // Runs after every tool output. Only entity context on an open channel
+    // can escalate, so anything else logs nothing and leaves the shared
+    // debug-log budget alone.
+    if (
+      result?.action !== 'get_entity_context' ||
+      !this.dc ||
+      this.dc.readyState !== 'open'
+    )
+      return false;
     const contextId = ++this.contextSeq;
-    const decision = viewportContextDecision(result, {
-      channelOpen: this.dc?.readyState === 'open',
-    });
+    const decision = viewportContextDecision(result);
     this.debugLog?.('viewport_context.decision', { contextId, ...decision });
     if (!decision.send) return false;
     const diag = diagnosticsRecord(contextId);
@@ -481,7 +482,7 @@ export class RealtimeViewport {
     const report = (event, reason) =>
       reportOutcome(this, diag, event, kind, reason);
     if (!this.dc || this.dc.readyState !== 'open') {
-      report('viewport_context.skipped', 'channel-closed');
+      report('viewport_context.skipped', 'channel-lost');
       return false;
     }
     const generation = this.generation;

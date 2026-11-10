@@ -14,17 +14,6 @@ const localContext = (overrides = {}) => ({
 
 test('viewport context reasons preserve the existing escalation gate', () => {
   assert.deepEqual(
-    viewportContextDecision({ action: 'get_current_view_state' }),
-    {
-      send: false,
-      reason: 'not-entity-context',
-    },
-  );
-  assert.deepEqual(
-    viewportContextDecision(localContext(), { channelOpen: false }),
-    { send: false, reason: 'channel-closed' },
-  );
-  assert.deepEqual(
     viewportContextDecision({
       action: 'get_entity_context',
       scene: { basemap: { viewScale: 'regional' } },
@@ -87,7 +76,7 @@ test('pointer ground selects the #837 crop path, not a full viewport', () => {
   assert.deepEqual(viewportContextDecision(pointerContext), {
     send: true,
     kind: 'crop',
-    reason: 'pointer-ground-crop',
+    reason: 'pointer-crop-eligible',
     viewScale: 'city',
   });
   assert.deepEqual(
@@ -96,8 +85,9 @@ test('pointer ground selects the #837 crop path, not a full viewport', () => {
       scene: { basemap: { viewScale: 'global' } },
     }),
     {
-      send: false,
-      reason: 'pointer-scale-not-useful',
+      send: true,
+      kind: 'crop',
+      reason: 'pointer-crop-eligible',
       viewScale: 'global',
     },
   );
@@ -173,7 +163,7 @@ test('runtime dispatch preserves pointer crop and full image separation', async 
     calls.some(
       (call) =>
         call.event === 'viewport_context.decision' &&
-        call.detail.reason === 'pointer-ground-crop',
+        call.detail.reason === 'pointer-crop-eligible',
     ),
   );
 });
@@ -333,7 +323,7 @@ test('a crop decision that cannot send logs why, under the same id', async () =>
     assert.equal(events.length, 2, reason);
     const [decision, outcome] = events;
     assert.equal(decision.event, 'viewport_context.decision');
-    assert.equal(decision.detail.reason, 'pointer-ground-crop');
+    assert.equal(decision.detail.reason, 'pointer-crop-eligible');
     assert.deepEqual(outcome, {
       event: 'viewport_context.skipped',
       detail: { contextId: decision.detail.contextId, kind: 'crop', reason },
@@ -573,8 +563,8 @@ test('direct calls log their defensive skips without a decision id', async () =>
     [...open.events, ...closed.events].map((item) => item.detail),
     [
       { contextId: null, kind: 'crop', reason: 'pointer-scale-not-useful' },
-      { contextId: null, kind: 'crop', reason: 'channel-closed' },
-      { contextId: null, kind: 'viewport', reason: 'channel-closed' },
+      { contextId: null, kind: 'crop', reason: 'channel-lost' },
+      { contextId: null, kind: 'viewport', reason: 'channel-lost' },
     ],
   );
 });
