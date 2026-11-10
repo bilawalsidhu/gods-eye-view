@@ -1,4 +1,4 @@
-import { whenSettled } from './qa/ready.mjs';
+import { whenFramesDrawn, whenSettled, whenTilesLoaded } from './qa/ready.mjs';
 // Recent imagery on a keyless preview, starting on Navara: the NASA catalog
 // and imagery tiles are fixtures, and the image, A/B, swap, divider, opacity,
 // basemap, toggle, failure, box-drag and zoom-to-fit checks read the rendered
@@ -206,7 +206,10 @@ try {
   await whenSettled(page);
   const capture = async (name) => {
     await page.evaluate(() => window.__godsEyeView.requestRender('imagery-qa'));
-    await whenSettled(page);
+    // The box tool holds inputs until mouseup; this capture only needs its drawing.
+    await whenFramesDrawn(page);
+    await whenTilesLoaded(page, { timeoutMs: 90000 });
+    await whenFramesDrawn(page);
     const buffer = await page.screenshot();
     await fs.writeFile(output.replace(/\.json$/, `-${name}.png`), buffer);
     const pixels = await sharp(buffer)

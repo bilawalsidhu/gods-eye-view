@@ -1,4 +1,4 @@
-import { whenSettled } from './qa/ready.mjs';
+import { whenFramesDrawn, whenTilesLoaded } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -183,7 +183,37 @@ await strict.run({}, async (b) => {
       time,
     );
   const sample = async () => {
-    await whenSettled(p);
+    const handle = await p.waitForFunction(
+      (ids) => {
+        const { engine, dataManager } = window.__godsEyeView;
+        engine.render.request('qa-weather-imagery');
+        const active = ids.filter((id) => dataManager.isEnabled(id));
+        return (
+          active.length > 0 &&
+          active.every((id) => {
+            const state = dataManager.layers.get(id).module.getDiagnostics();
+            return (
+              state.time && !state.loading && !state.hidden && !state.error
+            );
+          }) &&
+          engine.imagery
+            .list()
+            .filter(
+              (layer) =>
+                layer.id.startsWith('weather-') &&
+                layer.shown &&
+                layer.alpha > 0,
+            ).length >= active.length
+        );
+      },
+      { polling: 100, timeout: 50000 },
+      ids,
+    );
+    await handle.dispose();
+    // A staged frame can be current before the newly shown layer has painted.
+    await whenFramesDrawn(p);
+    await whenTilesLoaded(p);
+    await whenFramesDrawn(p);
     const crop = await sharp(await p.screenshot())
       .extract({ left: 535, top: 388, width: 12, height: 12 })
       .removeAlpha()

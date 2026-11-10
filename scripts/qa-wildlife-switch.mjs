@@ -1,4 +1,4 @@
-import { whenSettled } from './qa/ready.mjs';
+import { whenFramesDrawn } from './qa/ready.mjs';
 import assert from 'node:assert/strict';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import { fromCartesian } from '../src/geo/cartographic.js';
@@ -162,7 +162,7 @@ await strict.run({}, async (b) => {
           (badge) => badge.picked?.id === `wildlife:${badge.id}`,
         );
       if (ok || Date.now() > deadline) return drawn;
-      await whenSettled(p);
+      await whenFramesDrawn(p);
     }
   };
   const degrees = (position) => {

@@ -1,4 +1,4 @@
-import { clickUntilSelected, whenPickable, whenSettled } from './qa/ready.mjs';
+import { clickUntilSelected, whenFramesDrawn } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -213,7 +213,7 @@ await strict.run({}, async (b) => {
     const deadline = Date.now() + 20000;
     let on = await capture(true, layerId);
     while (orangeOf(on) <= orangeOf(off) + 5 && Date.now() < deadline) {
-      await whenSettled(p);
+      await whenFramesDrawn(p);
       on = await sample();
     }
     return on;
@@ -328,7 +328,7 @@ await strict.run({}, async (b) => {
       { timeout: 15000 },
       visible,
     );
-  const click = async (lon, lat, predicate) => {
+  const click = async (lon, lat) => {
     const { x, y } = await p.evaluate(
       (world) => {
         const { engine } = window.__godsEyeView;
@@ -339,7 +339,6 @@ await strict.run({}, async (b) => {
       },
       fromDegrees(lon, lat),
     );
-    if (predicate) await whenPickable(p, { x, y }, predicate);
     await p.mouse.click(x, y);
   };
   for (const kind of ['navara', 'cesium', 'navara']) {
@@ -400,11 +399,26 @@ await strict.run({}, async (b) => {
   await p.waitForFunction(
     () => window.qaVesselEntry.module.qaDrawn()?.chevrons[0]?.show,
   );
-  const vesselPicked = (picked) => picked?.id === '123456789';
   const selectVessel = () =>
     clickUntilSelected(
       p,
-      () => click(-79.38, 43.65, vesselPicked),
+      async () => {
+        const { x, y } = await p.evaluate(() => {
+          const { engine } = window.__godsEyeView;
+          const vessel = window.qaVesselEntry.module
+            .qaDrawn()
+            .chevrons.find((row) => row.id === '123456789' && row.show);
+          const point =
+            vessel && engine.projector.worldToWindow(vessel.position);
+          if (!point) throw Error('the vessel is not in view');
+          const box = engine.host.canvas.getBoundingClientRect();
+          return { x: box.left + point.x, y: box.top + point.y };
+        });
+        // Vessels also resolve painted-card hits in their click handler;
+        // picker.pick cannot see those. Retry at the live anchor, including
+        // its sea datum, and verify selection through the real click path.
+        await p.mouse.click(x, y);
+      },
       () => window.qaVesselEntry.module.getSelectedInfo()?.mmsi === '123456789',
     );
   // Click-picking on the running engine: clear the selection with a click on
