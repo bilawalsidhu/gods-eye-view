@@ -21,7 +21,6 @@ import {
 import { LOCAL_OVERLAY_COHORT_LIMIT } from '../../../data/localGeojsonCore.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import {
-  GROUND_SAMPLE_MAX_ARMED_RETRIES,
   LOCAL_STEM_TIP_EPSILON_M,
   createInfrastructureDisplay,
 } from './display.js';
@@ -380,15 +379,6 @@ function fixture(t, makeHarness, { config = DAMS, surface = {} } = {}) {
   };
 }
 
-/** Each walk arms a timer, the timer asks for a frame, the frame walks. */
-function runArmedRetryChain(f, t, clock, cycles) {
-  for (let i = 0; i < cycles; i++) {
-    f.preRender();
-    clock.advance(2_100);
-    t.mock.timers.tick(2_100);
-  }
-}
-
 /** The camera `southM` south of the dam at `cameraM`, aimed at `groundM`. */
 function aim(f, { groundM, cameraM, southM, away = false }) {
   const lat = DAM_LAT - geo.math.toDegrees(southM / 6_371_000);
@@ -677,7 +667,8 @@ for (const makeHarness of HARNESSES) {
     // Looking away from the dam.
     aim(f, { groundM: 117, cameraM: 20_000, southM: 5_000, away: true });
     f.display.show(dataset([DAM]));
-    runArmedRetryChain(f, t, clock, 5);
+    clock.advance(10_500);
+    f.preRender();
     assert.equal(f.sampleCalls(), 0, 'an off-screen base is not sampled');
     assert.equal(f.retries(), 0, 'nor keeps a parked camera rendering');
     // In view but over the horizon: 50 m up, about 67 km away.
@@ -687,7 +678,8 @@ for (const makeHarness of HARNESSES) {
       roll: 0,
     });
     f.moveEnd();
-    runArmedRetryChain(f, t, clock, 5);
+    clock.advance(10_500);
+    f.preRender();
     assert.equal(f.sampleCalls(), 0, 'a base over the horizon is not sampled');
     assert.equal(f.retries(), 0);
     f.look(DAM_LON, DAM_LAT, 20_000);
@@ -814,10 +806,10 @@ for (const makeHarness of HARNESSES) {
     clock.advance(500);
     f.preRender();
     assert.ok(
-      Math.abs(f.baseHeight() - 120) < 0.01,
-      'terrain under photoreal tiles is not a floor',
+      Math.abs(f.baseHeight() - 117) < 0.01,
+      'switching surfaces places the base on the mesh',
     );
-    assert.equal(f.sampleCalls(), 1, 'one sample in all');
+    assert.equal(f.sampleCalls(), 3, 'one sample per changed surface');
   });
 
   for (const [terrainHeight, sampledHeight, expectedHeight, photoreal] of [
@@ -845,153 +837,65 @@ for (const makeHarness of HARNESSES) {
       );
     });
 
-  test(`the stem is out of the scene while its ground is sampled (${name})`, (t) => {
-    let fails = true;
-    const f = fixture(t, makeHarness, {
-      surface: {
-        supported: true,
-        sample: () => (fails ? undefined : 50),
-        terrain: () => 0,
-      },
-    });
-    const clock = installFakeClock(t);
-    f.look(DAM_LON, DAM_LAT, 20_000);
-    f.display.show(dataset([DAM]));
-    f.preRender();
-    fails = false;
-    clock.advance(2_100);
-    f.preRender();
-    assert.deepEqual(f.line(f.stemId('real-dam')).shows, [false, true]);
-    assert.ok(Math.abs(f.baseHeight() - 50) < 0.01);
-  });
-
-  test(`a failed ground sample schedules the retry frame the idle governor would not (${name})`, (t) => {
-    const f = fixture(t, makeHarness, {
-      surface: { supported: true, terrain: () => 0 },
-    });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    f.look(DAM_LON, DAM_LAT, 20_000);
-    f.display.show(dataset([DAM]));
-    f.preRender();
-    assert.equal(f.retries(), 0, 'deferred by the retry window');
-    t.mock.timers.tick(2_100);
-    assert.ok(f.requests.includes('local-ground-retry:local-dams'));
-  });
-
-  test(`a far camera arms no retry (${name})`, (t) => {
-    const f = fixture(t, makeHarness, {
-      surface: { supported: true, terrain: () => 0 },
-    });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    f.look(DAM_LON, DAM_LAT, 400_000);
-    f.display.show(dataset([DAM]));
-    f.preRender();
-    t.mock.timers.tick(5_000);
-    assert.equal(f.retries(), 0);
-  });
-
-  test(`hide cancels a pending retry (${name})`, (t) => {
-    const f = fixture(t, makeHarness, {
-      surface: { supported: true, terrain: () => 0 },
-    });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    f.look(DAM_LON, DAM_LAT, 20_000);
-    f.display.show(dataset([DAM]));
-    f.preRender();
-    f.display.hide();
-    t.mock.timers.tick(5_000);
-    assert.equal(f.retries(), 0);
-  });
-
-  test(`a scene that cannot sample never samples and never arms (${name})`, (t) => {
-    const f = fixture(t, makeHarness, {
-      surface: { supported: false, sample: () => 117, terrain: () => 0 },
-    });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const clock = installFakeClock(t);
-    f.look(DAM_LON, DAM_LAT, 20_000);
-    f.display.show(dataset([DAM]));
-    f.preRender();
-    clock.advance(2_100);
-    runArmedRetryChain(f, t, clock, 5);
-    assert.equal(f.retries(), 0);
-    assert.equal(f.sampleCalls(), 0);
-    assert.ok(Math.abs(f.baseHeight()) < 1e-6, 'bases stay on the ellipsoid');
-  });
-
-  test(`a sampleable scene keeps trying (${name})`, (t) => {
-    const f = fixture(t, makeHarness, {
-      surface: { supported: true, terrain: () => 0 },
-    });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const clock = installFakeClock(t);
-    f.look(DAM_LON, DAM_LAT, 20_000);
-    f.display.show(dataset([DAM]));
-    runArmedRetryChain(f, t, clock, 5);
-    assert.equal(f.sampleCalls(), 5);
-  });
-
-  test(`sampling that comes back re-opens a spent budget without camera motion (${name})`, (t) => {
-    let supported = true;
-    const f = fixture(t, makeHarness);
-    const setSurface = () =>
-      f.surface({ supported, terrain: () => 0, tilesLoaded: () => true });
-    setSurface();
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const clock = installFakeClock(t);
-    f.look(DAM_LON, DAM_LAT, 20_000);
-    f.display.show(dataset([DAM]));
-    runArmedRetryChain(f, t, clock, GROUND_SAMPLE_MAX_ARMED_RETRIES + 2);
-    assert.equal(f.retries(), GROUND_SAMPLE_MAX_ARMED_RETRIES, 'budget spent');
-    supported = false;
-    setSurface();
-    runArmedRetryChain(f, t, clock, 2);
-    assert.equal(f.retries(), GROUND_SAMPLE_MAX_ARMED_RETRIES);
-    supported = true;
-    setSurface();
-    runArmedRetryChain(f, t, clock, 3);
-    assert.equal(f.retries(), GROUND_SAMPLE_MAX_ARMED_RETRIES + 3);
-  });
-
-  test(`a scene that keeps failing gives up after a bounded run of arms (${name})`, (t) => {
-    const f = fixture(t, makeHarness, {
-      surface: { supported: true, terrain: () => 0 },
-    });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const clock = installFakeClock(t);
-    f.look(DAM_LON, DAM_LAT, 20_000);
-    f.display.show(dataset([DAM]));
-    runArmedRetryChain(f, t, clock, GROUND_SAMPLE_MAX_ARMED_RETRIES);
-    assert.equal(f.retries(), GROUND_SAMPLE_MAX_ARMED_RETRIES);
-    runArmedRetryChain(f, t, clock, 10);
-    assert.equal(f.retries(), GROUND_SAMPLE_MAX_ARMED_RETRIES, 'stops arming');
-  });
-
-  test(`after the cap a camera move still samples and re-opens the budget (${name})`, (t) => {
-    let height;
+  test(`the stem is excluded when a changed surface is sampled (${name})`, (t) => {
+    let height = 50;
     const f = fixture(t, makeHarness, {
       surface: { supported: true, sample: () => height, terrain: () => 0 },
     });
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const clock = installFakeClock(t);
+    installFakeClock(t);
     f.look(DAM_LON, DAM_LAT, 20_000);
     f.display.show(dataset([DAM]));
-    runArmedRetryChain(f, t, clock, GROUND_SAMPLE_MAX_ARMED_RETRIES + 3);
-    assert.equal(f.retries(), GROUND_SAMPLE_MAX_ARMED_RETRIES);
-    assert.ok(Math.abs(f.baseHeight()) < 1e-6);
-    height = 210;
-    f.look(DAM_LON, DAM_LAT, 19_000);
-    f.moveEnd();
-    clock.advance(2_100);
     f.preRender();
-    assert.ok(Math.abs(f.baseHeight() - 210) < 1e-6, 'the move grounds it');
-    runArmedRetryChain(f, t, clock, 5);
+    height = 70;
+    f.moveEnd();
+    f.preRender();
+    const call = f.engine.fake.callsOf('surface.sampleHeight').at(-1);
     assert.equal(
-      f.retries(),
-      GROUND_SAMPLE_MAX_ARMED_RETRIES,
-      'a grounded record asks for nothing',
+      call.args[1].length,
+      2,
+      'both the tips and the stem batch are excluded',
     );
+    assert.ok(Math.abs(f.baseHeight() - 70) < 0.01);
   });
+
+  for (const trigger of ['moveEnd', 'tilesLoaded', 'terrainRevision']) {
+    test(`infrastructure follows ${trigger} and stops requesting idle frames (${name})`, async (t) => {
+      let height;
+      let loaded = true;
+      const f = fixture(t, makeHarness, {
+        surface: {
+          supported: true,
+          sample: () => height,
+          terrain: () => undefined,
+          tilesLoaded: () => loaded,
+        },
+      });
+      installFakeClock(t);
+      f.look(DAM_LON, DAM_LAT, 20_000);
+      f.display.show(dataset([DAM]));
+      f.preRender();
+      assert.ok(Math.abs(f.baseHeight()) < 0.01);
+      height = 210;
+      if (trigger === 'moveEnd') f.moveEnd();
+      if (trigger === 'tilesLoaded') {
+        loaded = false;
+        f.preRender();
+        loaded = true;
+      }
+      if (trigger === 'terrainRevision')
+        await f.engine.maps.setTerrain({ kind: 'ellipsoid' });
+      f.preRender();
+      assert.ok(Math.abs(f.baseHeight() - 210) < 0.01);
+      const requests = f.requests.length;
+      f.preRender();
+      f.preRender();
+      assert.equal(f.requests.length, requests);
+      f.display.hide();
+      f.moveEnd();
+      f.preRender();
+      assert.equal(f.engine.movers.list().length, 0);
+    });
+  }
 }
 
 // 150 polygons near Austin; the even ones are named (high label priority).

@@ -1,3 +1,4 @@
+import { readSurface } from '../../globe/surfacePlacement.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import * as geo from '../../geo/index.js';
 import { DOT_HEIGHT_OFFSET, MAX_WAYPOINTS_PER_ROAD } from './policy.js';
@@ -303,7 +304,11 @@ export async function prepareRoadSurfaces(
         // locally rendered mesh, not unresolved/offscreen tiles: global
         // tilesLoaded can stay false while this street is usable.
         const photoreal = engine.maps.photorealActive();
-        if (!photoreal) sampled = engine.surface.terrainHeight(carto);
+        if (!photoreal)
+          sampled = readSurface(engine, carto, {
+            prefer: 'terrain',
+            minHeight: -9000,
+          });
         else {
           const estimate = geo.cartographic.fromCartesian(
             road.waypoints[i],
@@ -311,11 +316,15 @@ export async function prepareRoadSurfaces(
           sampled = renderedRoadHeight(engine, lon, lat, estimate);
           if (validHeight(sampled)) metrics.depthHits++;
         }
-        if (photoreal && !validHeight(sampled) && engine.surface.supported) {
+        if (photoreal && !validHeight(sampled)) {
           const sampleStart = performance.now();
           metrics.sampleCount++;
           try {
-            sampled = engine.surface.sampleHeight(carto, excluded);
+            sampled = readSurface(engine, carto, {
+              exclude: excluded,
+              prefer: 'tiles',
+              minHeight: -9000,
+            });
           } catch {
             /* local mesh missing */
           }

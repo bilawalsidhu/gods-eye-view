@@ -13,6 +13,7 @@
 // Placement, routing, anchoring, selection and the route flight stay in the
 // layer.
 
+import { createSurfacePoints } from '../../../globe/surfacePlacement.js';
 import * as geo from '../../../geo/index.js';
 import {
   MARKER_COLORS,
@@ -121,31 +122,37 @@ export function createDirectionsDisplay(engine) {
 
   const own = () => [markers, letters, steps].filter(Boolean);
 
-  // The rendered surface under a marker (tiles, else terrain), without the
-  // display's own markers.
-  function groundPosition({ lon, lat }) {
-    const carto = geo.cartographic.fromDegrees(lon, lat);
-    let height;
-    try {
-      height = engine.surface.sampleHeightDetailed(carto, {
+  const markerPoints = LETTERS.map(() => ({ show: false }));
+  const surface = createSurfacePoints(engine, {
+    groups: () => [
+      {
+        points: markerPoints,
         exclude: own(),
-      })?.height;
-    } catch {
-      height = undefined;
-    }
-    return geo.cartesian3.fromDegrees(
-      lon,
-      lat,
-      Number.isFinite(height) ? height : 0,
-    );
-  }
+        set: {
+          set(index, fields) {
+            markers.set(index, fields);
+            letters?.set(index, fields);
+          },
+          commit() {
+            markers.commit();
+            letters?.commit();
+          },
+        },
+      },
+    ],
+    prefer: 'scene',
+    estimateGround: true,
+    request: () => engine.render.request(ID),
+  });
 
   function placeMarkers() {
     if (destroyed) return;
     LETTERS.forEach((letter, index) => {
       const point = ends[letter];
       const show = visible && Boolean(point);
-      const position = point ? groundPosition(point) : undefined;
+      const row = markerPoints[index];
+      row.show = show;
+      const position = point ? row.position : undefined;
       markers.set(index, {
         ...(position ? { position } : {}),
         color: MARKER_COLORS[letter],
@@ -157,6 +164,7 @@ export function createDirectionsDisplay(engine) {
         show,
       });
     });
+    surface.place();
     markers.setCount(LETTERS.length);
     markers.commit();
     if (letters) {
@@ -203,15 +211,6 @@ export function createDirectionsDisplay(engine) {
     steps.commit();
   }
 
-  const removeMoveEnd = engine.camera.moveEnd.addEventListener(() => {
-    if (ends.a || ends.b) placeMarkers();
-  });
-  let tilesLoaded = engine.surface.tilesLoaded();
-  const removeSurface = engine.frames.preRender.addEventListener(() => {
-    const loaded = engine.surface.tilesLoaded();
-    if (loaded && !tilesLoaded && visible && (ends.a || ends.b)) placeMarkers();
-    tilesLoaded = loaded;
-  });
   placeMarkers();
 
   return {
@@ -219,6 +218,12 @@ export function createDirectionsDisplay(engine) {
     setMarker(letter, point) {
       if (destroyed || !LETTERS.includes(letter)) return;
       ends[letter] = point ? { lon: point.lon, lat: point.lat } : null;
+      markerPoints[LETTERS.indexOf(letter)] = point
+        ? {
+            cartographic: geo.cartographic.fromDegrees(point.lon, point.lat),
+            position: geo.cartesian3.fromDegrees(point.lon, point.lat),
+          }
+        : { show: false };
       placeMarkers();
     },
     /** Draws the route ([lon, lat] pairs), or removes it (null). */
@@ -276,13 +281,13 @@ export function createDirectionsDisplay(engine) {
       visible = Boolean(next);
       route?.show(visible);
       placeMarkers();
+      if (visible) surface.place({ all: true });
       writeSteps();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      removeMoveEnd();
-      removeSurface();
+      surface.destroy();
       route?.destroy();
       steps?.destroy();
       markers.destroy();

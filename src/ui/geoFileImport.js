@@ -469,7 +469,6 @@ export function createGeoFileImport({
       engine,
       controller: new AbortController(),
     });
-    ownEvent(engine.camera.moveEnd, ground);
     const container = engine.host.container;
     const canvas = engine.host.canvas || container;
     listen(canvas, 'pointerdown', gesture, { passive: true });

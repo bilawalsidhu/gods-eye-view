@@ -1,3 +1,4 @@
+import { readSurface } from '../globe/surfacePlacement.js';
 // Camera and aircraft ownership used by the shared first-person controller,
 // on the globe contract: the ridden aircraft is the engine follow's target,
 // the aircraft display's tracked glyph handle.
@@ -26,7 +27,7 @@ export function cockpitHost(engine, { viewer = null } = {}) {
     restore: (target) => target.resumeAircraftFollow(),
     camera: engine.camera,
     cartographic: () => engine.camera.pose().cartographic,
-    terrainHeight: (place) => engine.surface.terrainHeight(place),
+    terrainHeight: (place) => readSurface(engine, place, { prefer: 'terrain' }),
     surface: engine,
     pick: (position) => engine.picker.pick(position),
     // A full mesh read is still Cesium's; the contract's detailed read is

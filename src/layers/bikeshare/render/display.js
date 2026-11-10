@@ -12,6 +12,7 @@ import { writeSelectedMarker } from '../../shared/selectionKeeper.js';
 // - lifecycle: what init, enable, show, disable, detach and destroy own.
 // The layer (index.js) merges these into its parts.
 
+import { createSurfacePoints } from '../../../globe/surfacePlacement.js';
 import * as geo from '../../../geo/index.js';
 import { isPointerFree } from '../../../data/inputOwnership.js';
 import {
@@ -143,6 +144,37 @@ export function createBikeshareDisplay(engine, context) {
     commitStations();
   }
 
+  const surface = createSurfacePoints(engine, {
+    groups: () => [
+      {
+        points: [...state._stationRenderMap.values()].map(
+          (record) => record.point.surface,
+        ),
+        exclude: [stations, highlight].filter(Boolean),
+        set: stations && {
+          set(index, fields) {
+            const record = [...state._stationRenderMap.values()][index];
+            record.point.position = fields.position;
+            stations.set(index, fields);
+          },
+          commit() {
+            stations.commit();
+            commitHighlight();
+            selection.refreshSelectedCard();
+          },
+        },
+      },
+    ],
+    prefer: 'scene',
+    estimateGround: true,
+    heightOffset: POINT_HEIGHT_OFFSET_M,
+    request: () => engine.render.request(LAYER_ID),
+  });
+  function placeStations() {
+    commitStations();
+    surface.place();
+  }
+
   const rendering = createStationPoints(context, {
     // On the rendered surface where it answers, a small height otherwise.
     position(station) {
@@ -150,21 +182,20 @@ export function createBikeshareDisplay(engine, context) {
       const lat = Number(station?.lat);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
       ensureSets();
-      const sampled = engine.surface.supported
-        ? engine.surface.sampleHeight(
-            geo.cartographic.fromDegrees(lon, lat),
-            [stations, highlight].filter(Boolean),
-          )
-        : undefined;
-      const height =
-        (Number.isFinite(sampled) ? sampled : 0) + POINT_HEIGHT_OFFSET_M;
-      return geo.cartesian3.fromDegrees(lon, lat, height);
+      return geo.cartesian3.fromDegrees(lon, lat, POINT_HEIGHT_OFFSET_M);
     },
     create(record, { position, pixelSize }) {
       ensureSets();
       record.index = state._stationRenderMap.size;
       record.point = {
         position,
+        surface: {
+          position,
+          cartographic: geo.cartographic.fromCartesian(position),
+          get show() {
+            return visible;
+          },
+        },
         pixelSize,
         color: COLOR_NEUTRAL,
         show: true,
@@ -172,13 +203,13 @@ export function createBikeshareDisplay(engine, context) {
       writePoint(record);
       return record.point;
     },
-    afterAdd: commitStations,
+    afterAdd: placeStations,
     afterRemove() {
       reindex();
       commitStations();
     },
     update: writePoint,
-    afterUpdate: commitStations,
+    afterUpdate: placeStations,
   });
 
   const selection = {
@@ -335,6 +366,7 @@ export function createBikeshareDisplay(engine, context) {
     /** Shows the points and card, takes clicks and follows the camera. */
     show() {
       setVisible(true);
+      surface.place({ all: true });
       state._overlayHost.setVisible(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.display._installClickHandler();
       // Pick ownership: station point ids are render-map keys.
@@ -374,6 +406,7 @@ export function createBikeshareDisplay(engine, context) {
       parts.display._clearSelection();
       releaseInput();
       detachCamera();
+      surface.destroy();
       destroySets();
       destroyed = true;
     },
@@ -393,6 +426,7 @@ export function createBikeshareDisplay(engine, context) {
       }
       detachCamera();
       parts.ingestion.abortAllInFlight();
+      surface.destroy();
       destroySets();
       destroyed = true;
       state._engine = null;

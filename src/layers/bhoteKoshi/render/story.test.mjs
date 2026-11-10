@@ -166,9 +166,11 @@ for (const make of GROUND_HARNESSES) {
       };
       return set;
     };
+    h.engine.projector.worldToWindow = () => ({ x: 1, y: 1 });
+    let ground = 1200;
     h.engine.surface.sampleHeight = (_place, exclude) => {
       assert.deepEqual(exclude, [pointSet]);
-      return 1200;
+      return ground;
     };
     const display = drawStorySource(h.engine, source);
     const frame = () => h.engine.fake.frame();
@@ -179,11 +181,21 @@ for (const make of GROUND_HARNESSES) {
     assert.equal(options.point.outlinePx, 3);
     assert.ok(
       Math.abs(
-        Cesium.Cartographic.fromCartesian(writes[0].position).height - 1200,
+        Cesium.Cartographic.fromCartesian(writes.at(-1).position).height - 1200,
       ) < 1e-6,
     );
     frame();
-    assert.equal(writes.length, 1);
+    const settled = writes.length;
+    frame();
+    assert.equal(writes.length, settled);
+    ground = 1250;
+    h.engine.fake.maps.terrainRevision++;
+    frame();
+    assert.ok(
+      Math.abs(
+        Cesium.Cartographic.fromCartesian(writes.at(-1).position).height - 1250,
+      ) < 0.01,
+    );
     size = 38;
     outline = 0.12;
     frame();

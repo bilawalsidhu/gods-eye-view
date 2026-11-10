@@ -14,6 +14,7 @@
  * lifts the eye if it sits below a usable clearance. Heading and pitch are
  * held, so the correction reads as the shot settling.
  */
+import { readSurface } from './globe/surfacePlacement.js';
 import * as geo from './geo/index.js';
 import { ownCameraArrival } from './data/cameraArrival.js';
 
@@ -30,17 +31,19 @@ const probeScratch = geo.cartographic.create();
 /**
  * Highest rendered surface across a few cells, with how many cells answered.
  * A cell whose tiles are not streamed yet contributes nothing.
- * @param {import('./globe/contract.js').GlobeSurface} surface Live surface.
+ * @param {import('./globe/contract.js').GlobeEngine} engine Live engine.
  * @param {Array<{lat: number, lon: number}>} cells Cells to probe.
  * @returns {{heightM: number, sampled: number}} Reading.
  */
-function sampleSurfaceM(surface, cells) {
+function sampleSurfaceM(engine, cells) {
   let heightM = Number.NaN;
   let sampled = 0;
   for (const cell of cells) {
     try {
-      const height = surface.sampleHeight(
+      const height = readSurface(
+        engine,
         geo.cartographic.fromDegrees(cell.lon, cell.lat, 0, probeScratch),
+        { prefer: 'scene' },
       );
       if (!Number.isFinite(height)) continue;
       sampled += 1;
@@ -135,7 +138,7 @@ export function guardCameraAboveGround(engine, at, options = {}) {
       lat: geo.math.toDegrees(carto.latitude),
       lon: geo.math.toDegrees(carto.longitude),
     };
-    const { heightM, sampled } = sampleSurfaceM(engine.surface, [
+    const { heightM, sampled } = sampleSurfaceM(engine, [
       { lat: at.lat, lon: at.lon },
       below,
     ]);

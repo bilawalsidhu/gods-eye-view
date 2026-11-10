@@ -1,3 +1,4 @@
+import { readSurface } from '../globe/surfacePlacement.js';
 import { bindOverlayHost } from '../overlays/bindOverlayHost.js';
 import { worldOverlayFor } from '../overlays/worldOverlay.js';
 import { waitForSignal } from '../sources/requestDeadline.js';
@@ -1250,7 +1251,9 @@ export function createBhoteKoshiEventLayer({
       return anchor;
     const { lon, lat } = _evidenceTimeline[index]?.observation ?? {};
     const height = Number.isFinite(lon)
-      ? _engine.surface.terrainHeight(Cesium.Cartographic.fromDegrees(lon, lat))
+      ? readSurface(_engine, Cesium.Cartographic.fromDegrees(lon, lat), {
+          prefer: 'terrain',
+        })
       : undefined;
     if (Number.isFinite(height))
       Cesium.Cartesian3.fromDegrees(lon, lat, height + 18, undefined, anchor);
@@ -1626,7 +1629,7 @@ export function createBhoteKoshiEventLayer({
         // Sample once while preparing the shot, never from an animation frame.
         try {
           height =
-            _engine?.surface?.sampleHeight?.(position) ??
+            readSurface(_engine, position, { prefer: 'scene' }) ??
             _viewer?.scene?.sampleHeight?.(
               position,
               [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
@@ -1634,7 +1637,7 @@ export function createBhoteKoshiEventLayer({
         } catch {}
         if (!Number.isFinite(height))
           height =
-            _engine?.surface?.terrainHeight(position) ??
+            readSurface(_engine, position, { prefer: 'terrain' }) ??
             _viewer?.scene?.globe?.getHeight?.(position);
       }
       if (!Number.isFinite(height)) height = point.fallbackElevationM;

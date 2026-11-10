@@ -41,12 +41,8 @@ export const MAX_RAISED_VERTICES = 32_768;
 export const MAX_RAISED_RINGS = 128;
 // Yield between polygons after half a 60 Hz frame, preserving the 8 ms work slice.
 export const POLYGON_YIELD_MS = 8;
-// Bound synchronous surface queries between yields; the existing batch is 256 pins.
-export const BATCH = 256;
 // Keep below-ellipsoid ground visible at the horizon, matching GhostMaps' 2 km lift.
 export const HORIZON_LIFT_M = 2000;
-// Limit tile clamping to a low camera, matching Cesium's 250 km threshold.
-export const CLAMP_TILES_BELOW_M = 250_000;
 
 // Cesium draws ground lines over fills and ground rectangles over layer rasters.
 export const POLYGON_ORDER = 0;

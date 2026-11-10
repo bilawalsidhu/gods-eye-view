@@ -7,7 +7,6 @@ import {
   MAX_RAISED_RINGS,
   MAX_RAISED_VERTICES,
   OVERLAY_PIXEL_BUDGET,
-  BATCH,
 } from './geoImportLimits.js';
 import { drawImportedFile } from './geoImportDisplay.js';
 import { emptyRecords, geoJsonRecords } from './geoImportRecords.js';
@@ -34,6 +33,7 @@ for (const make of GROUND_HARNESSES) {
         },
       });
       const { engine, viewer } = harness;
+      engine.projector.worldToWindow = () => ({ x: 1, y: 1 });
       if (viewer) {
         viewer.imageryLayers = new Cesium.ImageryLayerCollection();
         viewer.scene.globe.show = true;
@@ -184,7 +184,8 @@ for (const make of GROUND_HARNESSES) {
       );
       assert.ok(pins.every(({ options }) => options.pickable === false));
       ground = 70;
-      await drawing.refreshGround();
+      await engine.maps.setTerrain({ kind: 'ellipsoid' });
+      engine.fake.frame();
       assert.deepEqual(heights(), [70, 80, 500]);
       ground = undefined;
       await drawing.refreshGround();
@@ -200,15 +201,14 @@ for (const make of GROUND_HARNESSES) {
       if (viewer) {
         viewer.scene.globe.show = false;
         viewer.scene.clampToHeightSupported = true;
-      } else engine.imagery.surface = () => 'tiles';
+      } else await engine.maps.setPhotorealTiles({});
       engine.camera.height = () => 1000;
       engine.projector.worldToWindow = () => ({ x: 1, y: 1 });
       engine.projector.horizonVisible = () => true;
       const excluded = [];
-      engine.surface.clampToHeight = (position, exclude) => {
+      engine.surface.sampleHeight = (_position, exclude) => {
         excluded.push(exclude);
-        const at = geo.cartographic.fromCartesian(position);
-        return geo.cartesian3.fromRadians(at.longitude, at.latitude, 2000);
+        return 2000;
       };
       const ground = await drawImportedFile(
         engine,
@@ -248,15 +248,12 @@ for (const make of GROUND_HARNESSES) {
   displayTest(
     'a pin on the tiles keeps its height while out of the window',
     async ({ engine }) => {
-      engine.imagery.surface = () => 'tiles';
+      await engine.maps.setPhotorealTiles({});
       engine.camera.height = () => 1000;
       engine.projector.horizonVisible = () => true;
       let visible = true;
       engine.projector.worldToWindow = () => (visible ? { x: 1, y: 1 } : null);
-      engine.surface.clampToHeight = (position) => {
-        const at = geo.cartographic.fromCartesian(position);
-        return geo.cartesian3.fromRadians(at.longitude, at.latitude, 500);
-      };
+      engine.surface.sampleHeight = () => 500;
       const drawing = await drawImportedFile(
         engine,
         geoJsonRecords({ type: 'Point', coordinates: [1, 2] }, '#39d0ff'),
@@ -272,12 +269,11 @@ for (const make of GROUND_HARNESSES) {
         projected = Math.round(geo.cartographic.fromCartesian(position).height);
         return projected >= 500 ? { x: 1, y: 1 } : null;
       };
-      engine.surface.clampToHeight = () =>
-        geo.cartesian3.fromDegrees(1, 2, 700);
+      engine.surface.sampleHeight = () => 700;
       await drawing.refreshGround();
       assert.equal(projected, 500, 'visibility uses the last measured height');
       assert.equal(height(), 700);
-      engine.surface.clampToHeight = () => undefined;
+      engine.surface.sampleHeight = () => undefined;
       await drawing.refreshGround();
       assert.equal(
         height(),
@@ -1258,17 +1254,17 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
-    'tile clamps only sample visible pins and yield between batches',
+    'tile samples only measure visible pins and yield between passes',
     async ({ engine }) => {
-      engine.imagery.surface = () => 'tiles';
+      await engine.maps.setPhotorealTiles({});
       engine.camera.height = () => 1000;
       engine.projector.horizonVisible = () => true;
       let visible = false;
       engine.projector.worldToWindow = () => (visible ? { x: 1, y: 1 } : null);
       let clamps = 0;
-      engine.surface.clampToHeight = (position) => {
+      engine.surface.sampleHeight = () => {
         clamps++;
-        return position;
+        return 0;
       };
       const records = geoJsonRecords(
         {
@@ -1285,8 +1281,11 @@ for (const make of GROUND_HARNESSES) {
         beforeYield = clamps;
       }, 0);
       await drawing.refreshGround();
+      await new Promise((resolve) => setTimeout(resolve, 0));
       clearTimeout(heartbeat);
-      assert.equal(beforeYield, BATCH);
+      assert.ok(beforeYield > 0 && beforeYield <= 16);
+      while (clamps < 600)
+        await new Promise((resolve) => setTimeout(resolve, 5));
       assert.equal(clamps, 600);
       drawing.destroy();
     },

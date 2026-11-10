@@ -272,6 +272,29 @@ for (const makeHarness of HARNESSES) {
       const point = f.layer.getDetectableObjects()[0].position;
       near(geo.cartographic.fromCartesian(point).height, 177, 'height');
 
+      f.display._selectStation(key);
+      f.surface(210);
+      await f.engine.maps.setTerrain({ kind: 'ellipsoid' });
+      f.engine.fake.frame();
+      near(
+        geo.cartographic.fromCartesian(
+          f.context.state._stationRenderMap.get(key).point.position,
+        ).height,
+        212,
+        'selected height',
+      );
+      const selected =
+        f.engine.fake.moverSet('bikeshare-selected').store.positions;
+      near(
+        geo.cartographic.fromCartesian({
+          x: selected[0],
+          y: selected[1],
+          z: selected[2],
+        }).height,
+        212,
+        'highlight height',
+      );
+
       const call = f.engine.fake.callsOf('surface.sampleHeight')[0];
       assert.deepEqual(
         call.args[1].map((set) => set.id),
