@@ -667,7 +667,7 @@ export function createGateStateStore({
 
 /**
  * Construct a gate. `settings` may be a function so the environment is read
- * after the dev server loads `.env`.
+ * after the dev server loads the dotenv files.
  *
  * @param {object} [options]
  * @param {(() => object)|object} [options.settings]

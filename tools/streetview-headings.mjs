@@ -17,15 +17,15 @@
  *   --pitch      Camera pitch in degrees (default: 0, range: -90 to 90)
  *   --size       Image size WxH (default: 640x640)
  *   --outdir     Output directory (default: output/)
- *   --key        Google Maps API key (default: reads from .env)
+ *   --key        Google Maps API key (default: reads .env.local / .env)
  *   --neighbors  Also fetch 8 images from each first-order neighbor location
  */
 
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectRoot } from '../scripts/project-root.mjs';
-import { parseEnv } from 'node:util';
+import { readDotenvFiles } from '../scripts/read-dotenv-value.mjs';
 import { resolveGoogleServerKey } from '../scripts/google-server-key.mjs';
 
 const PROJECT_ROOT = projectRoot(import.meta.url);
@@ -62,22 +62,18 @@ function parseArgs() {
 /** The explicit CLI key wins; otherwise prefer the server key across both stores. */
 export function loadApiKey(overrideKey, {
   environment = process.env,
-  envPath = join(PROJECT_ROOT, '.env'),
+  rootDir = PROJECT_ROOT,
 } = {}) {
   if (overrideKey) return overrideKey;
   const serverKey = resolveGoogleServerKey({
     GOOGLE_MAPS_SERVER_API_KEY: environment.GOOGLE_MAPS_SERVER_API_KEY,
   });
   if (serverKey) return serverKey;
-  let fromDotenv = {};
-  try {
-    fromDotenv = parseEnv(readFileSync(envPath, 'utf8'));
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw new Error('Could not read the Street View tool environment file');
-  }
+  // Keys live in .env.local (settings in .env); read the whole dotenv ladder.
+  const fromDotenv = readDotenvFiles(rootDir);
   const key = resolveGoogleServerKey(environment, fromDotenv);
   if (key) return key;
-  throw new Error('No API key found. Set GOOGLE_MAPS_SERVER_API_KEY (or GOOGLE_MAPS_API_KEY) in .env or pass --key.');
+  throw new Error('No API key found. Set GOOGLE_MAPS_SERVER_API_KEY (or GOOGLE_MAPS_API_KEY) in .env.local or pass --key.');
 }
 
 // ---------------------------------------------------------------------------

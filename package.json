@@ -33,6 +33,7 @@
   ],
   "scripts": {
     "doctor": "node scripts/setup-doctor.mjs",
+    "env:init": "node scripts/env-init.mjs",
     "format": "node scripts/format.mjs --write",
     "format:check": "node scripts/format.mjs --check",
     "i18n": "node scripts/i18n.mjs",

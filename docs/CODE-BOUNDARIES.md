@@ -118,7 +118,7 @@ use build-only dependency exceptions.
 browser keys, host/port and the ordered local provider plugins to this helper.
 `server/providers/local.js` composes provider factories and re-exports existing
 helpers for compatibility. Provider Settings lives in `server/standalone/key-setup.js`
-and writes to the same root `.env` or Pinokio store as before. `vite.config.js`
+and writes keys to the root `.env.local` (removing them from `.env`) or to the Pinokio store. `vite.config.js`
 preserves the default configuration and named provider exports for tools/tests.
 
 ## Aircraft and vessel providers

@@ -1,6 +1,6 @@
 # Tools
 
-CLI scripts for fetching, rendering, and reprojecting geospatial imagery. All tools read the Google Maps API key from `.env` automatically.
+CLI scripts for fetching, rendering, and reprojecting geospatial imagery. All tools read the Google Maps API key from `.env.local` (or `.env`) automatically.
 
 Output files go to `output/` by default (gitignored).
 
@@ -14,7 +14,7 @@ setup doctor. Without it, paths continue to resolve from this repository.
 
 - Node.js (via `mise`)
 - `sharp` and `puppeteer` (devDependencies — `npm install`)
-- Google Maps API key in `.env` as `GOOGLE_MAPS_API_KEY`
+- Google Maps API key in `.env.local` as `GOOGLE_MAPS_API_KEY` (`npm run env:init` creates the file)
 - APIs enabled on your Google Cloud project: **Map Tiles API**, **Street View Static API**
 
 ---

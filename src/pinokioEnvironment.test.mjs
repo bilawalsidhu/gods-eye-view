@@ -8,6 +8,7 @@ import {
   applyPinokioEnvironment,
   readPinokioEnvironment,
 } from '../scripts/pinokio-environment.mjs';
+import { SECRET_ENV_NAMES } from './secretEnv.mjs';
 
 function encodeUtf16be(source) {
   const buffer = Buffer.from(source, 'utf16le');
@@ -225,4 +226,21 @@ test('server Google key follows app values, blanks and absence instead of inheri
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('the template lists every secret name, commented, inside SECTION 1', () => {
+  // A name missing here is appended at the end of the file when Provider
+  // Settings saves it, which lands a credential under the SETTINGS banner.
+  const source = readFileSync(new URL('../pinokio/_ENVIRONMENT', import.meta.url), 'utf8');
+  const secrets = source.indexOf('SECTION 1: SECRETS');
+  const settings = source.indexOf('SECTION 2: SETTINGS');
+  assert.ok(secrets >= 0 && settings > secrets, 'both section banners, in order');
+  const section1 = source.slice(secrets, settings);
+  const configured = parseEnv(source);
+  for (const name of SECRET_ENV_NAMES) {
+    assert.match(section1, new RegExp(`^# ${name}=$`, 'm'), `${name} belongs in SECTION 1`);
+    assert.equal(name in configured, false, `${name} must not be an active assignment`);
+  }
+  const secretLine = new RegExp(`^#?\\s*(${SECRET_ENV_NAMES.join('|')})=`, 'm');
+  assert.doesNotMatch(source.slice(settings), secretLine, 'no secret name under SETTINGS');
 });

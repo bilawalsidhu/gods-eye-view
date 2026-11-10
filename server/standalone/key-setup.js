@@ -13,13 +13,18 @@ import fs from 'node:fs';
 import { parseEnv as parseDotenvText } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { hardenCredentialFile } from './key-setup-hardening.mjs';
+import {
+  SECRETS_FILE,
+  SETTINGS_FILE,
+  removeEnvAssignments,
+} from '../../src/secretEnv.mjs';
 
 /**
  * Which launcher started this process, captured at MODULE LOAD — before the
  * config factory's loadEnv() copies dotenv files into process.env. Provider
  * Settings uses this to decide which credential store it owns, so it must
  * reflect the real launcher (scripts/pinokio-start.mjs sets it) and never a
- * value a project `.env` could inject.
+ * value a project dotenv file could inject.
  */
 const LAUNCHER_AT_BOOT = process.env.GEV_LAUNCHER;
 
@@ -60,14 +65,16 @@ const DEV_FRESH_EXTERNAL_KEYS_AT_BOOT = new Set(
  *   source classification. Never a value or suffix. The panel renders itself entirely from
  *   this payload, so the key registry stays in one place (src/keySetupCore.mjs).
  * POST /api/setup/keys → validate {ENV_VAR: value} pairs and upsert them into
- *   the repo-root .env (created if absent), set process.env live, then restart
- *   the dev server so the client-exposed defines re-inject and the page
- *   reloads itself. Pasting a key in the app IS the whole setup — no
+ *   the repo-root .env.local (created if absent, owner-only), delete every
+ *   assignment of those names from .env (keys MOVE to .env.local; no copy and
+ *   no `# NAME=value` stays in the settings file), set process.env live, then
+ *   restart the dev server so the client-exposed defines re-inject and the
+ *   page reloads itself. Pasting a key in the app IS the whole setup — no
  *   hand-edited env files.
  *
  * Loopback-only on purpose: with HOST=0.0.0.0 the app can be shared on a LAN,
- * and a guest must be able to neither write the host's .env nor probe which
- * keys exist. Prod builds never register this middleware (apply: 'serve'), so
+ * and a guest must be able to neither write the host's env files nor probe
+ * which keys exist. Prod builds never register this middleware (apply: 'serve'), so
  * the panel's status fetch fails and the client removes the whole surface.
  */
 function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
@@ -85,11 +92,12 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   // Which store this launch owns. A Pinokio-managed launch (marker set by
   // scripts/pinokio-start.mjs) writes the app-scoped pinokio/ENVIRONMENT that
   // applyPinokioEnvironment() treats as authoritative; every other launch
-  // writes the repo-root .env that Vite's loadEnv reads. The panel never
-  // touches a store some other workflow owns.
+  // writes the repo-root .env.local (secrets; src/secretEnv.mjs) that Vite's
+  // loadEnv reads after .env. The panel never touches a store some other
+  // workflow owns.
   // The launcher marker is read from the BOOT environment captured before
   // Vite's loadEnv merges dotenv files into process.env — otherwise a stray
-  // `GEV_LAUNCHER=pinokio` line in someone's .env would silently redirect a
+  // `GEV_LAUNCHER=pinokio` line in someone's dotenv file would silently redirect a
   // plain `npm run dev` to write the Pinokio store it never loaded.
   const pinokioManaged = () => LAUNCHER_AT_BOOT === 'pinokio';
   const storeName = () =>
@@ -97,8 +105,20 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   const storePath = () =>
     path.join(
       sourceRoot,
-      ...(pinokioManaged() ? ['pinokio', 'ENVIRONMENT'] : ['.env']),
+      ...(pinokioManaged() ? ['pinokio', 'ENVIRONMENT'] : [SECRETS_FILE]),
     );
+  // The settings file (.env). Under the plain launcher, keys still found there
+  // from before the secrets split count as panel-managed and are moved out of
+  // it on the next save or removal.
+  const settingsPath = () => path.join(sourceRoot, SETTINGS_FILE);
+  const readSettings = () => {
+    try {
+      return fs.readFileSync(settingsPath(), 'utf8');
+    } catch (error) {
+      if (error?.code === 'ENOENT') return '';
+      throw error;
+    }
+  };
   // Read the store, distinguishing "no store yet" from "cannot read this
   // store". Only ENOENT means empty. Every other failure — a permission error,
   // an I/O fault, an undecodable file — must ABORT the save: upserting into a
@@ -125,11 +145,22 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   // Status must never fail because the store is unreadable — it reports the
   // LIVE environment, and an unreadable store only costs file/external
   // attribution. Persistence uses readStore() directly and refuses instead.
+  // Under the plain launcher this is what the dotenv FILES supply together —
+  // .env, overridden by .env.local, as Vite loads them — so a key left in .env
+  // from before the split is still the panel's to replace (and move) rather
+  // than misread as external.
   const storeValues = () => {
+    let own = {};
     try {
-      return parseDotenvText(readStore());
+      own = parseDotenvText(readStore());
     } catch {
       return {};
+    }
+    if (pinokioManaged()) return own;
+    try {
+      return { ...parseDotenvText(readSettings()), ...own };
+    } catch {
+      return own;
     }
   };
   // The gate itself is pure and unit-tested (admitKeySetupRequest in
@@ -181,8 +212,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   // with the exclusive flag, fsync, rename over the target. Closes the window
   // where writeFileSync leaves a 0644 file holding a real key before any later
   // chmod, and the truncate-in-place data-loss path.
-  const persistStore = (text) => {
-    const filepath = storePath();
+  const persistFile = (filepath, text) => {
     // Never write THROUGH a symlink into a credential path.
     try {
       if (fs.lstatSync(filepath).isSymbolicLink()) {
@@ -235,6 +265,28 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
       // Never strand a staged secret on disk when the swap itself fails.
       fs.rmSync(tmp, { force: true });
       throw error;
+    }
+  };
+  const persistStore = (text) => persistFile(storePath(), text);
+  // After the store write has landed: delete the saved/removed names from
+  // .env so no copy (and no `# NAME=value`) of a key stays in the settings
+  // file. Same atomic, hardened writer. A failure here never undoes the save —
+  // the key is already in .env.local, which wins — it is logged and reported
+  // as `legacyCleanup: 'failed'`; `npm run env:init` and the
+  // setup doctor cover it afterwards.
+  const moveOutOfSettings = (names) => {
+    if (pinokioManaged()) return null;
+    try {
+      const { text, changed } = removeEnvAssignments(readSettings(), names);
+      if (!changed) return null;
+      persistFile(settingsPath(), text);
+      return 'removed';
+    } catch (error) {
+      console.warn(
+        `[KeySetup] Saved to ${SECRETS_FILE}, but could not remove the old copy from ${SETTINGS_FILE}:`,
+        error?.code || error?.message || error,
+      );
+      return 'failed';
     }
   };
   return {
@@ -338,6 +390,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           // Removal sets '' rather than deleting: an empty value stays falsy
           // through loadEnv after restart, matching the Pinokio launcher's own
           // blank-field semantics.
+          const legacyCleanup = moveOutOfSettings(Object.keys(verdict.updates));
           for (const [name, value] of Object.entries(verdict.updates)) {
             process.env[name] = value === null ? '' : value;
           }
@@ -346,9 +399,10 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
             saved: Object.keys(verdict.updates),
             status: providerStatus(),
             restarting: true,
+            ...(legacyCleanup ? { legacyCleanup } : {}),
           });
           // One deliberate restart, after the response has flushed. Vite's own
-          // .env watcher may fire too; a second queued restart is harmless.
+          // dotenv watcher may fire too; a second queued restart is harmless.
           setTimeout(() => {
             server.restart().catch((error) => {
               console.warn(

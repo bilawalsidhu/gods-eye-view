@@ -49,8 +49,9 @@ CCTV_MAX_SOURCES="${CCTV_MAX_SOURCES:-7350}"
 # Capture which provider credentials genuinely came from the parent shell
 # before this launcher resolves dotenv and Keychain fallbacks. Only names are
 # passed to Vite; values never enter the provenance marker. This lets Provider
-# Settings keep an exported credential read-only even when .env happens to hold
-# the same value, without misclassifying values that dev-fresh loaded from .env.
+# Settings keep an exported credential read-only even when a dotenv file holds
+# the same value, without misclassifying values that dev-fresh loaded from
+# .env.local or .env.
 KEY_SETUP_EXTERNAL_KEYS=()
 [[ -n "${GOOGLE_MAPS_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GOOGLE_MAPS_API_KEY)
 [[ -n "${GOOGLE_MAPS_SERVER_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GOOGLE_MAPS_SERVER_API_KEY)
@@ -82,7 +83,8 @@ read_dotenv_value() {
   node "$SOURCE_ROOT/scripts/read-dotenv-value.mjs" "${variable_name}"
 }
 
-# Vite loads .env for browser build-time configuration, but this launcher needs
+# Vite loads the dotenv files (keys in .env.local, settings in .env) for
+# browser build-time configuration, but this launcher needs
 # the Maps key before Vite starts. Preserve a shell-provided value; otherwise
 # read Vite's project-local dotenv ladder without executing it as shell code.
 GOOGLE_MAPS_API_KEY_ENV="${GOOGLE_MAPS_API_KEY:-}"
@@ -159,32 +161,11 @@ resolve_opensky_credentials() {
       ;;
   esac
 
-  # Explicit env wins, then .env, then the credentials file / Keychain below.
+  # Explicit env wins, then the dotenv files (.env.local over .env), then the
+  # credentials file / Keychain below.
   OPENSKY_CLIENT_ID="${OPENSKY_CLIENT_ID:-$(read_dotenv_value "OPENSKY_CLIENT_ID")}"
   OPENSKY_CLIENT_SECRET="${OPENSKY_CLIENT_SECRET:-$(read_dotenv_value "OPENSKY_CLIENT_SECRET")}"
-  OPENSKY_USERNAME="${OPENSKY_USERNAME:-$(read_dotenv_value "OPENSKY_USERNAME")}"
-  OPENSKY_PASSWORD="${OPENSKY_PASSWORD:-$(read_dotenv_value "OPENSKY_PASSWORD")}"
 
-  if [[ "${OPENSKY_AUTH_MODE}" == "basic" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -z "${OPENSKY_USERNAME}" ]]; then
-    for svc in "opensky-network" "opensky"; do
-      for acct in "username" "user" "login" "email" "default"; do
-        OPENSKY_USERNAME="$(read_keychain_secret "${svc}" "${acct}")"
-        if [[ -n "${OPENSKY_USERNAME}" ]]; then
-          break 2
-        fi
-      done
-    done
-  fi
-  if [[ "${OPENSKY_AUTH_MODE}" == "basic" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -z "${OPENSKY_PASSWORD}" ]]; then
-    for svc in "opensky-network" "opensky"; do
-      for acct in "password" "pass" "token" "secret" "default"; do
-        OPENSKY_PASSWORD="$(read_keychain_secret "${svc}" "${acct}")"
-        if [[ -n "${OPENSKY_PASSWORD}" ]]; then
-          break 2
-        fi
-      done
-    done
-  fi
   if [[ "${OPENSKY_AUTH_MODE}" == "oauth" || "${OPENSKY_AUTH_MODE}" == "auto" ]] && [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
     load_opensky_oauth_from_file "${OPENSKY_CREDENTIALS_FILE}"
   fi
@@ -209,27 +190,20 @@ resolve_opensky_credentials() {
     done
   fi
 
+  # OpenSky retired username/password (Basic) sign-in on 2026-03-18 and the
+  # server no longer sends it, so no OPENSKY_USERNAME / OPENSKY_PASSWORD is
+  # looked up or passed on; basic mode loads flights anonymously.
   case "${OPENSKY_AUTH_MODE}" in
-    basic)
+    basic|anon)
       OPENSKY_CLIENT_ID=""
       OPENSKY_CLIENT_SECRET=""
-      ;;
-    oauth)
-      OPENSKY_USERNAME=""
-      OPENSKY_PASSWORD=""
-      ;;
-    anon)
-      OPENSKY_CLIENT_ID=""
-      OPENSKY_CLIENT_SECRET=""
-      OPENSKY_USERNAME=""
-      OPENSKY_PASSWORD=""
       ;;
   esac
 }
 
 resolve_opensky_credentials
 
-# Optional keys: explicit env wins, followed by .env and Keychain fallback.
+# Optional keys: explicit env wins, then .env.local / .env, then Keychain.
 # Add to Keychain with e.g.:
 #   security add-generic-password -U -s "openai-api" -a "api-key" -w
 OPENAI_API_KEY="${OPENAI_API_KEY:-$(read_dotenv_value "OPENAI_API_KEY")}"
@@ -321,11 +295,7 @@ if [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
 fi
 case "${OPENSKY_AUTH_MODE}" in
   basic)
-    if [[ -n "${OPENSKY_USERNAME}" && -n "${OPENSKY_PASSWORD}" ]]; then
-      echo "OpenSky basic auth: configured"
-    else
-      echo "OpenSky basic auth: missing credentials"
-    fi
+    echo "OpenSky basic auth: retired by OpenSky — flights load anonymously (use OAuth)"
     ;;
   oauth)
     if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
@@ -337,8 +307,6 @@ case "${OPENSKY_AUTH_MODE}" in
   auto)
     if [[ -n "${OPENSKY_CLIENT_ID}" && -n "${OPENSKY_CLIENT_SECRET}" ]]; then
       echo "OpenSky auto auth: OAuth configured"
-    elif [[ -n "${OPENSKY_USERNAME}" && -n "${OPENSKY_PASSWORD}" ]]; then
-      echo "OpenSky auto auth: basic configured"
     else
       echo "OpenSky auto auth: no credentials found"
     fi
@@ -363,8 +331,8 @@ fi
 
 # Build the dev server environment explicitly. A value that resolved to
 # nothing is left UNSET instead of being exported empty: Vite backfills its
-# own .env values only for variables it finds undefined, so an empty export
-# would shadow a key the user did configure in .env.
+# own dotenv values only for variables it finds undefined, so an empty export
+# would shadow a key the user did configure in .env.local or .env.
 DEV_ENV=()
 DEV_UNSET=()
 put_env() {
@@ -376,7 +344,8 @@ put_env_if_set() {
   else
     # Leaving it out is not enough: the child inherits this shell's
     # environment, so an empty export made in the PARENT would pass straight
-    # through and shadow .env just the same. Remove it from the child outright.
+    # through and shadow the dotenv files just the same. Remove it from the
+    # child outright.
     DEV_UNSET+=(-u "$1")
   fi
 }
@@ -412,8 +381,6 @@ put_env OPENSKY_AUTH_MODE "${OPENSKY_AUTH_MODE}"
 put_env_if_set OPENSKY_CREDENTIALS_FILE "${OPENSKY_CREDENTIALS_FILE}"
 put_env_if_set OPENSKY_CLIENT_ID "${OPENSKY_CLIENT_ID}"
 put_env_if_set OPENSKY_CLIENT_SECRET "${OPENSKY_CLIENT_SECRET}"
-put_env_if_set OPENSKY_USERNAME "${OPENSKY_USERNAME}"
-put_env_if_set OPENSKY_PASSWORD "${OPENSKY_PASSWORD}"
 put_env_if_set OPENAI_API_KEY "${OPENAI_API_KEY}"
 put_env_if_set AISSTREAM_API_KEY "${AISSTREAM_API_KEY}"
 put_env_if_set CESIUM_ION_TOKEN "${CESIUM_ION_TOKEN}"

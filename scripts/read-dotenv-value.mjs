@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
 import { loadEnv } from 'vite';
 
 /**
@@ -25,6 +27,27 @@ export function readDotenvValue(variableName, rootDir = process.cwd(), mode = 'd
   } finally {
     if (inherited !== undefined) process.env[key] = inherited;
   }
+}
+
+/**
+ * Every value the dotenv FILES supply, merged in Vite's order — .env,
+ * .env.local, .env.<mode>, .env.<mode>.local; a later file wins — and never
+ * process.env. Keys live in .env.local and settings in .env, so callers must
+ * read the whole ladder, not one file. Unreadable or malformed files are
+ * skipped (an operator may deny this account the secrets file).
+ */
+export function readDotenvFiles(rootDir = process.cwd(), mode = 'development') {
+  const values = {};
+  for (const name of ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`]) {
+    const file = path.join(path.resolve(rootDir), name);
+    if (!existsSync(file)) continue;
+    try {
+      Object.assign(values, parseEnv(readFileSync(file, 'utf8')));
+    } catch {
+      // skipped: see above
+    }
+  }
+  return values;
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
