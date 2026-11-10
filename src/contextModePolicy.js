@@ -446,6 +446,42 @@ export function cockpitEntryAllowed({
 }
 
 /**
+ * Whether the selected vessel's bridge view can be entered. Like aircraft
+ * Cockpit it needs only its own layer, Live AIS Vessels, with a vessel
+ * selected. A Context mode change in flight still owns the camera, so entry
+ * waits it out.
+ * @param {{vesselsEnabled: boolean, contextModeChanging: boolean}} state
+ * @returns {boolean}
+ */
+export function bridgeEntryAllowed({ vesselsEnabled, contextModeChanging }) {
+  return Boolean(vesselsEnabled) && !contextModeChanging;
+}
+
+/**
+ * Whether the tracked satellite's orbital view can be entered. Like the
+ * bridge it needs only its own layer, Satellites, with a satellite tracked.
+ * A Context mode change in flight still owns the camera, so entry waits it
+ * out. A subject the satellites layer marks as not enterable (debris:
+ * rocket bodies, fragments, dead satellites; `satelliteClassEnterable` in
+ * src/layers/satellites/classes.js) can be tracked but is never ridden: it is
+ * no mission and has no view to offer.
+ * @param {{satellitesEnabled: boolean, contextModeChanging: boolean,
+ *   subjectEnterable?: boolean}} state
+ * @returns {boolean}
+ */
+export function orbitEntryAllowed({
+  satellitesEnabled,
+  contextModeChanging,
+  subjectEnterable = true,
+}) {
+  return (
+    Boolean(satellitesEnabled) &&
+    !contextModeChanging &&
+    subjectEnterable !== false
+  );
+}
+
+/**
  * Internal context-mode id → the word the voice tools accept for it.
  *
  * `set_context_mode` takes 'contacts'; the mode's internal id is 'flights'.

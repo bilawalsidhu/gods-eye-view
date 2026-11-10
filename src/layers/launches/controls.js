@@ -29,7 +29,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      */
     getAnalystRecords(maxCount = Infinity) {
       if (!layerState._enabled) return [];
-      const now = Date.now();
+      const now = layerState.now();
       const text = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
       const result = [];
       for (const launch of layerState._launches || []) {

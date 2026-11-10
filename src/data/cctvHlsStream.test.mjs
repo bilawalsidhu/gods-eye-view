@@ -10,6 +10,77 @@ const playlist =
   '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n';
 const base = 'https://camera.example/live/list.m3u8';
 
+test('high-resolution HLS segments play while the retained session cache stays bounded', async (t) => {
+  // Giroc publishes roughly ten-second TS segments; one measured 6,437,120
+  // bytes. The former 4 MiB download cap rejected it before playback began.
+  const segmentBytes = 6_437_120;
+  const master =
+    '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4570000\ntracks-v1a1/mono.m3u8\n';
+  const media =
+    '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:100\n' +
+    [0, 1, 2, 3, 4].map((i) => `#EXTINF:10.272,\n${i}.ts\n`).join('');
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, pollMs: 100000 },
+    fetchImpl: async (url) => {
+      if (url === base) return new Response(master);
+      if (url === 'https://camera.example/live/tracks-v1a1/mono.m3u8')
+        return new Response(media);
+      const match =
+        /^https:\/\/camera\.example\/live\/tracks-v1a1\/([0-4])\.ts$/.exec(url);
+      if (!match) throw new Error('Unexpected playlist reference');
+      // No Content-Length: the actual streamed bytes must also be accepted.
+      return new Response(Buffer.alloc(segmentBytes, Number(match[1])));
+    },
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('giroc', base);
+  await entry.polling;
+  const result = await manager.buildPlaylist(entry, 'giroc');
+  assert.ok(result, 'large valid segments should produce a playable playlist');
+  assert.match(result, /#EXT-X-MEDIA-SEQUENCE:2\n/);
+  assert.equal(manager.getSegment('giroc', entry.token, 0), null);
+  const newest = manager.getSegment('giroc', entry.token, 4);
+  assert.equal(newest.length, segmentBytes);
+  assert.equal(newest[0], 4);
+  assert.deepEqual(manager.stats(), { sessions: 1, bytes: 19_311_360 });
+});
+
+test('HLS downloads still reject declared and chunked bodies above 8 MiB', async () => {
+  for (const declared of [true, false]) {
+    let chunks = 0;
+    let cancelled = false;
+    await assert.rejects(
+      fetchHlsBytes(base, {
+        maxBytes: HLS_LIMITS.segmentBytes,
+        fetchImpl: async () =>
+          new Response(
+            declared
+              ? 'small body'
+              : new ReadableStream({
+                  pull(controller) {
+                    // Each chunk fits on its own; only their cumulative size
+                    // crosses the cap. Leave it open to verify cancellation.
+                    controller.enqueue(
+                      Buffer.alloc(4 * 1024 * 1024 + (++chunks === 2 ? 1 : 0)),
+                    );
+                  },
+                  cancel() {
+                    cancelled = true;
+                  },
+                }),
+            {
+              headers: declared
+                ? { 'content-length': String(8 * 1024 * 1024 + 1) }
+                : {},
+            },
+          ),
+      }),
+      /HLS response too large/,
+    );
+    if (!declared) assert.equal(cancelled, true);
+  }
+});
+
 test('playlist parser uses sequence, refuses escaping and unsupported references', () => {
   assert.deepEqual(
     parseHlsMedia(playlist, base).map((s) => s.seq),

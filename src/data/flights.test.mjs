@@ -20,9 +20,11 @@ import { setMilitaryLayerActive } from './militaryRegistry.js';
 import {
   GROUND_FLOOR_LIFT_M,
   reportMeshFloorCell,
+  reportValidatedMeshFloorCell,
   setMeshFloorPreferred,
   _clearMeshFloorCellsForTest,
 } from './groundFloor.js';
+import { resolveEllipsoidalGround } from './terrainHeights.js';
 import {
   _setTrackedOverlayHostForTest,
   destroyTrackedReadout,
@@ -1179,6 +1181,39 @@ test('display floor: a grounded contact that drifted onto a higher cell is lifte
   // Lifted straight up — the drifted lat/lon is preserved exactly.
   assert.ok(Math.abs(Cesium.Math.toDegrees(c.latitude) - 30.2004) < 1e-6);
   assert.ok(Math.abs(Cesium.Math.toDegrees(c.longitude) + 97.6604) < 1e-6);
+});
+
+test('display floor: reads the reading nearest the contact, not the cell centre', async () => {
+  _clearDisplayFloorStateForTest();
+  _clearMeshFloorCellsForTest();
+  setMeshFloorPreferred(true);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ results: [{ ellipsoid: 120 }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  try {
+    await resolveEllipsoidalGround([{ lat: 30.317, lon: -97.717 }]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  // A hangar roof over the cell's centre; the apron where the contact is.
+  assert.equal(reportValidatedMeshFloorCell(30.317, -97.717, 142), true);
+  assert.equal(reportValidatedMeshFloorCell(30.3173, -97.7173, 121), true);
+  const pos = Cesium.Cartesian3.fromDegrees(-97.7173, 30.3173, 100);
+  const out = _floorGroundedDisplayPositionForTest(
+    { onGround: true },
+    pos,
+    false,
+  );
+  const c = _floorCarto(out);
+  assert.ok(
+    Math.abs(c.height - (121 + GROUND_FLOOR_LIFT_M)) < 0.05,
+    `height ${c.height} should be the apron's 121 + lift`,
+  );
+  _clearMeshFloorCellsForTest();
+  _clearDisplayFloorStateForTest();
 });
 
 test('display floor: an AIRBORNE contact over the same cell is never lifted', () => {

@@ -409,6 +409,15 @@ async function main() {
             status: 'ready',
           }));
         }
+        // CelesTrak SATCAT, which the satellite classes read beside the TLEs.
+        // An empty CSV (header only) keeps the run hermetic: the classes fall
+        // back to names and groups, as they do when SATCAT is unavailable.
+        if (isAppRequest && url.pathname.startsWith('/api/celestrak-satcat/')) {
+          return Promise.resolve(new Response(
+            'OBJECT_NAME,OBJECT_ID,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE,LAUNCH_DATE\n',
+            { status: 200, headers: { 'Content-Type': 'text/csv' } },
+          ));
+        }
         // CelesTrak TLE groups. Served from a fixed two-satellite catalog so
         // the satellite assertions are deterministic and the run never depends
         // on an upstream that rate-limits (it was answering 403 the night this

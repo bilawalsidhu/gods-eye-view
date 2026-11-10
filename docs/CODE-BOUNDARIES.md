@@ -163,7 +163,8 @@ local composition mounts them in the same order. Importing the entry performs
 no acquisition; factory calls create independent cache state.
 
 `gods-eye-view/sources/space` owns only fixed upstream URL construction: the
-CelesTrak group/TLE query and Launch Library's recent 30-day detailed feed.
+CelesTrak group/TLE and SATCAT record queries and Launch Library's recent
+30-day detailed feed.
 Callers supply the group or end date and own validation, credentials, transport,
 response limits and cache policy. The boundary gate checks this portable entry
 separately from the Node providers. Satellite rendering and launch replay remain
