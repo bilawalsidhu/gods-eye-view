@@ -5365,6 +5365,7 @@ const ANALYST_CANONICAL_FIELDS = new Set([
   'noradId',
   'registration',
   'callsign',
+  'routeId',
 ]);
 
 /**

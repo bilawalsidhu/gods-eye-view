@@ -6600,6 +6600,32 @@ test('analyst_query keeps canonical IDs raw so numbered references still fly to 
   }
 });
 
+test('analyst_query keeps transit route IDs raw so a follow-up filter still matches', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  for (const routeId of ['Route  17', 'R'.repeat(181)]) {
+    const { viewer, styleManager } = createVoiceNavigationHarness();
+    const vehicles = [{ id: 'bus-1', routeId, lat: 30, lon: -97 }];
+    const transit = { getStats: () => ({ count: 1, lastUpdate: Date.now() }), getAnalystRecords: () => vehicles };
+    const runner = createActionRunner({
+      viewer, styleManager,
+      dataManager: {
+        layers: new Map([['transit', { module: transit }]]),
+        isEnabled: () => true,
+        getAll: () => [{ id: 'transit', name: 'transit', enabled: true, stats: transit.getStats() }],
+      },
+    });
+    const listed = await runner('analyst_query', { layers: ['transit'], scope: { kind: 'anywhere' }, limit: 1 });
+    assert.equal(listed.ok, true);
+    assert.equal(listed.items[0].routeId, routeId);
+    const followUp = await runner('analyst_query', {
+      followUp: true,
+      filters: [{ field: 'routeId', op: 'eq', value: listed.items[0].routeId }],
+    });
+    assert.equal(followUp.ok, true);
+    assert.equal(followUp.count, 1, 'the returned route ID matches the same vehicle');
+  }
+});
+
 test('set_panel_open accepts the Authoring name for the scene panel', async () => {
   const calls = [];
   const runner = createGevActionRunner({
