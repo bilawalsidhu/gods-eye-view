@@ -18,7 +18,10 @@ export async function _selectContextMode(
   this._contextModeChanging = true;
   this._syncContextModeButtons();
   try {
-    if (mode !== 'flights' && this.cockpitView?.active) {
+    // Cockpit does not need Contacts, so leaving it keeps the view; the
+    // restore below ends it only by turning off the layer it rides. Another
+    // mode takes the camera, so switching to one ends it.
+    if (mode && mode !== 'flights' && this.cockpitView?.active) {
       this.cockpitView.exit({ restoreTracking: false });
     }
     if (!mode) {
@@ -220,8 +223,8 @@ export async function _deactivateContextForLayerChange({
   this._contextMode = null;
   this._contextModeEntryIntent = null;
   this._contextModeReplacementIntent = null;
-  if (this.cockpitView?.active)
-    this.cockpitView.exit({ restoreTracking: false });
+  // A layer turned off ends Contacts but not the Cockpit: the view ends only
+  // when the layer it rides goes off (see _handleContextLayerChange).
   this._syncContextModeButtons();
   try {
     await this._restoreContextSession({ notificationToken });

@@ -1,27 +1,33 @@
 /** Session-local file controls, serial loading and application-owned navigation. */
 import {
-  GEO_FILE_ACCEPT,
   GeoImportError,
   MAX_IMPORTED_FILES,
   loadGeoFile,
 } from '../data/geoFileImport.js';
-import {
-  formatNumber,
-  msg,
-  registerUnsavedWork,
-  t,
-  tn,
-  translateKnown,
-} from '../i18n/index.js';
+import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
 import { flyToDataSource } from './flyToDataSource.js';
 
 // One color per file, in import order, from the whiteboard palette.
 const COLORS = ['#39d0ff', '#ffb547', '#5dff9f', '#ff6b6b', '#8be9ff'];
 
+/** An import error's values, with its counts and limits in local numerals. */
+function localizedValues(values) {
+  return Object.fromEntries(
+    Object.entries(values || {}).map(([name, value]) => [
+      name,
+      typeof value === 'number' ? formatNumber(value) : value,
+    ]),
+  );
+}
+
 /**
- * Wire the Import control.
- * @param {{viewer: object, load?: Function, document?: Document}} deps
+ * Run the Import control.
+ * @param {{viewer: object, load?: Function, document?: Document,
+ *   publish?: Function, connect?: Function}} deps
  *   `load(file, {viewer, color})` defaults to `loadGeoFile`; tests pass a double.
+ *   `publish({rows, hint})` hands the file list and hint to the view that
+ *   renders them. `connect(actions)` answers the view's pick and row buttons
+ *   and returns their disconnect.
  * @returns {{destroy: Function, importFiles: Function, list: Function,
  *   setVisible: Function, flyTo: Function, remove: Function,
  *   diagnostics: Function}|null}
@@ -34,12 +40,12 @@ export function initGeoFileImport({
   navigation = null,
   ground = null,
   subscribeMapSource = null,
+  publish = () => {},
+  connect = () => () => {},
 }) {
-  const button = doc?.getElementById('geo-import-button');
-  const input = doc?.getElementById('geo-import-input');
-  const listEl = doc?.getElementById('geo-import-list');
-  const hint = doc?.getElementById('geo-import-hint');
-  if (!viewer || !button || !input || !listEl) return null;
+  // A page without the Import control (the Utilities panel omitted, in
+  // LayerPanelsView) has no file import.
+  if (!viewer || !doc?.getElementById('geo-import-button')) return null;
 
   const imports = [];
   const listeners = [];
@@ -49,13 +55,9 @@ export function initGeoFileImport({
   let destroyed = false;
   let dragDepth = 0;
   let cameraIntent = 0;
+  let hint = '';
   const lifetime = new AbortController();
   let removeMapSource;
-  // Imports live for the page session: switching language (a reload) asks
-  // first while any are on the map.
-  const unregisterUnsavedWork = registerUnsavedWork(() =>
-    !destroyed && imports.length ? msg('imported map files') : null,
-  );
 
   const listen = (target, type, listener, options) => {
     if (!target?.addEventListener) return;
@@ -63,7 +65,8 @@ export function initGeoFileImport({
     listeners.push([target, type, listener, options]);
   };
   const setHint = (text) => {
-    if (hint) hint.textContent = text || '';
+    hint = text || '';
+    present();
   };
   const render = () => viewer.scene?.requestRender?.();
   let groundTimer,
@@ -115,83 +118,45 @@ export function initGeoFileImport({
     if (!pending) scheduleGround();
   });
 
-  /** Which row button has focus, so a re-render can give it back. */
-  function focusedAction() {
-    const active = doc.activeElement;
-    if (!active || !listEl.contains?.(active)) return null;
-    const row = active.closest?.('[data-import-id]');
-    return row
-      ? { id: row.dataset.importId, action: active.dataset?.action }
-      : null;
-  }
-
-  function restoreFocus(was) {
-    if (!was) return;
-    const rows = [...listEl.querySelectorAll('[data-import-id]')];
-    let row = rows.find((r) => r.dataset.importId === was.id);
-    // The row is gone (removed): the next row's same control, else the
-    // previous row's, else the Import button.
-    if (!row && was.index != null)
-      row = rows[Math.min(was.index, rows.length - 1)];
-    const target =
-      row?.querySelector?.(`button[data-action="${was.action}"]`) ||
-      (row ? row.querySelector?.('button') : button);
-    target?.focus?.();
-  }
-
-  function renderList(keep = focusedAction()) {
-    listEl.replaceChildren(
-      ...imports.map((item) => {
-        const row = doc.createElement('li');
-        row.className = 'geo-import-row';
-        row.dataset.importId = item.id;
-        const swatch = doc.createElement('span');
+  /** Publish the file list and hint; the view renders them. */
+  function present() {
+    return publish({
+      rows: imports.map((item) => ({
+        id: item.id,
+        name: item.name,
         // KML and KMZ draw with their own styles; their swatch says so
         // instead of claiming a color the globe does not show.
-        swatch.className = `geo-import-swatch${item.ownStyles ? ' own-styles' : ''}`;
-        if (!item.ownStyles) swatch.style.background = item.color;
-        const name = doc.createElement('span');
-        name.className = 'geo-import-name';
-        // textContent, never markup: the name comes from the file system.
-        name.textContent = item.name;
-        name.title = `${item.name} — ${item.format.toUpperCase()}, ${tn(
+        ownStyles: item.ownStyles,
+        color: item.color,
+        title: `${item.name} — ${item.format.toUpperCase()}, ${tn(
           item.entityCount,
           '{count} map object',
           '{count} map objects',
           { count: formatNumber(item.entityCount) },
-        )}${item.ownStyles ? t(', drawn with its own styles') : ''}`;
-        const actions = [
-          [
-            item.visible ? 'visibility' : 'visibility_off',
-            item.visible
+        )}${item.ownStyles ? t(', drawn with its own styles') : ''}`,
+        actions: [
+          {
+            icon: item.visible ? 'visibility' : 'visibility_off',
+            label: item.visible
               ? t('Hide {name}', { name: item.name })
               : t('Show {name}', { name: item.name }),
-            'toggle',
-          ],
-          ['my_location', t('Fly to {name}', { name: item.name }), 'fly'],
-          ['close', t('Remove {name}', { name: item.name }), 'remove'],
-        ].map(([icon, label, action]) => {
-          const btn = doc.createElement('button');
-          btn.type = 'button';
-          btn.className = 'geo-import-action';
-          btn.dataset.action = action;
-          btn.title = label;
-          btn.setAttribute('aria-label', label);
-          if (action === 'toggle')
-            btn.setAttribute('aria-pressed', String(item.visible));
-          const glyph = doc.createElement('span');
-          glyph.className = 'material-symbols-outlined';
-          glyph.setAttribute('aria-hidden', 'true');
-          glyph.textContent = icon;
-          btn.append(glyph);
-          return btn;
-        });
-        row.append(swatch, name, ...actions);
-        return row;
-      }),
-    );
-    listEl.classList.toggle('visible', imports.length > 0);
-    restoreFocus(keep);
+            action: 'toggle',
+            pressed: String(item.visible),
+          },
+          {
+            icon: 'my_location',
+            label: t('Fly to {name}', { name: item.name }),
+            action: 'fly',
+          },
+          {
+            icon: 'close',
+            label: t('Remove {name}', { name: item.name }),
+            action: 'remove',
+          },
+        ],
+      })),
+      hint,
+    });
   }
 
   const find = (id) => imports.find((item) => item.id === id) || null;
@@ -203,7 +168,7 @@ export function initGeoFileImport({
     item.visible = Boolean(visible);
     item.dataSource.show = item.visible;
     if (item.visible) scheduleGround();
-    renderList();
+    present();
     render();
     return true;
   }
@@ -248,12 +213,10 @@ export function initGeoFileImport({
   function remove(id) {
     const at = imports.findIndex((item) => item.id === id);
     if (at < 0) return false;
-    const keep = focusedAction();
-    if (keep) keep.index = at;
     const [item] = imports.splice(at, 1);
     viewer.dataSources?.remove?.(item.dataSource, true);
     item.revoke?.();
-    renderList(keep);
+    present();
     render();
     return true;
   }
@@ -303,7 +266,10 @@ export function initGeoFileImport({
           ok: false,
           error:
             error instanceof GeoImportError || error?.name === 'GeoImportError'
-              ? t(error.template || error.message, error.values)
+              ? t(
+                  error.template || error.message,
+                  localizedValues(error.values),
+                )
               : t('That file could not be read.'),
         });
         continue;
@@ -335,7 +301,7 @@ export function initGeoFileImport({
       }
       loaded.mount?.();
       imports.push(item);
-      renderList();
+      present();
       render();
       outcomes.push({
         name: fileName,
@@ -357,22 +323,12 @@ export function initGeoFileImport({
   }
 
   // ---- controls ----------------------------------------------------------
-  input.accept = GEO_FILE_ACCEPT;
-  listen(button, 'click', () => input.click());
-  listen(input, 'change', () => {
-    const files = [...(input.files || [])];
-    // Clear the selection so choosing the same file again fires `change`.
-    input.value = '';
-    if (files.length) void importFiles(files);
-  });
-  listen(listEl, 'click', (event) => {
-    const btn = event.target?.closest?.('button[data-action]');
-    const id = btn?.closest?.('[data-import-id]')?.dataset.importId;
-    if (!btn || !id) return;
-    const action = btn.dataset.action;
-    if (action === 'toggle') setVisible(id, !find(id)?.visible);
-    else if (action === 'fly') flyTo(id);
-    else if (action === 'remove') remove(id);
+  // The view opens the picker; its pick and the row buttons call these.
+  const disconnect = connect({
+    importGeoFiles: (files) => void importFiles(files),
+    toggleGeoImport: (id) => setVisible(id, !find(id)?.visible),
+    flyToGeoImport: flyTo,
+    removeGeoImport: remove,
   });
 
   // ---- drop onto the globe ----------------------------------------------
@@ -415,7 +371,7 @@ export function initGeoFileImport({
     if (files.length) void importFiles(files);
   });
 
-  renderList();
+  present();
 
   const handle = {
     importFiles,
@@ -440,7 +396,7 @@ export function initGeoFileImport({
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      unregisterUnsavedWork();
+      disconnect();
       lifetime.abort();
       removeMapSource?.();
       clearTimeout(groundTimer);
@@ -452,8 +408,6 @@ export function initGeoFileImport({
       for (const [target, type, listener, options] of listeners.splice(0))
         target.removeEventListener(type, listener, options);
       setDragging(false);
-      listEl.replaceChildren();
-      listEl.classList.remove('visible');
       setHint('');
       if (globalThis.window?.__gevGeoImport === handle)
         delete globalThis.window.__gevGeoImport;

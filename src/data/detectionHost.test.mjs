@@ -24,6 +24,10 @@ import {
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
+import {
+  clearAwarenessEchoField,
+  setAwarenessEchoField,
+} from '../awarenessEcho.js';
 import { composeLabel, resolveTier } from './detectionDraw.js';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
@@ -50,8 +54,9 @@ class MockEvent {
 }
 
 class MockPath2D {
-  moveTo() {}
-  lineTo() {}
+  constructor() { this.points = []; }
+  moveTo(x, y) { this.points.push([x, y]); }
+  lineTo(x, y) { this.points.push([x, y]); }
   roundRect() {}
   arcTo() {}
   closePath() {}
@@ -98,7 +103,7 @@ function mockContext(target, trace) {
     // set at some point during the frame. globalAlpha rides along for the same
     // reason: the backdrop feather is an alpha, not a colour.
     fill(path) { record('fill', path, this.fillStyle, this.globalAlpha); },
-    stroke(path) { record('stroke', path, this.strokeStyle, this.lineWidth); },
+    stroke(path) { record('stroke', path, this.strokeStyle, this.lineWidth, this.globalAlpha); },
     fillRect(...args) { record('fillRect', ...args); },
     fillText(...args) { record('fillText', ...args); },
     drawImage(...args) { record('drawImage', ...args); },
@@ -623,6 +628,231 @@ test('surveillance military tier reaches the dedicated render target as shipped 
     assert.ok(env.detectionCtx.calls.some(([name, path]) => name === 'stroke'
       && path instanceof MockPath2D));
   } finally {
+    env.cleanup();
+  }
+});
+
+test('Global Context echo brackets reach the canvas in the detection style colour', () => {
+  const env = installEnvironment();
+  // Fronts every millisecond with a long fade, so the contact is lit on
+  // whatever frame paints; a distinctive width picks the echo stroke out.
+  const echo = {
+    layerIds: ['military'],
+    fadeMs: 60_000,
+    color: 'rgb(1, 2, 3)',
+    spreadPx: 8,
+    lineWidth: 3.25,
+  };
+  const echoStrokes = () =>
+    env.detectionCtx.calls
+      .filter(([name, , , width]) => name === 'stroke' && width === echo.lineWidth)
+      .map(([, , style]) => style);
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo,
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [militaryLayer()], () => {});
+    setMode('DENSE');
+    setDetectionStyle('normal');
+    settleFrame(env);
+    assert.ok(echoStrokes().length > 0, 'the echo bracket is painted');
+    assert.ok(echoStrokes().every((style) => style === echo.color));
+
+    // CRT, NVG and FLIR keep their own palettes.
+    for (const style of ['retro', 'surveillance', 'thermal']) {
+      env.detectionCtx.calls.length = 0;
+      setDetectionStyle(style);
+      settleFrame(env);
+      const strokes = echoStrokes();
+      assert.ok(strokes.length > 0, style);
+      assert.ok(
+        strokes.every((stroke) => stroke === DETECTION_THEME_MAP[style].line),
+        `${style} echoes take the style line colour, got ${strokes}`,
+      );
+    }
+
+  } finally {
+    clearAwarenessEchoField();
+    env.cleanup();
+  }
+});
+
+test('a Global Context echo bracket is drawn outside its contact bracket and dimmer than it', () => {
+  const env = installEnvironment();
+  const echo = {
+    layerIds: ['military'],
+    fadeMs: 60_000,
+    color: 'rgb(1, 2, 3)',
+    spreadPx: 8,
+    lineWidth: 3.25,
+  };
+  // Fronts every millisecond keep the echo at full strength; a level of 0.5
+  // halves it, so it sits 4 px out and draws at half the bracket's alpha.
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo,
+      level: () => 0.5,
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [militaryLayer()], () => {});
+    setMode('DENSE');
+    setDetectionStyle('normal');
+    settleFrame(env);
+    env.detectionCtx.calls.length = 0;
+    settleFrame(env);
+    const strokes = env.detectionCtx.calls.filter(([name]) => name === 'stroke');
+    const echoStroke = strokes.find(([, , style, width]) => style === echo.color && width === echo.lineWidth);
+    assert.ok(echoStroke, 'the echo bracket is painted');
+    const bracketStroke = strokes.find(([, path, style, width]) =>
+      path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
+    assert.ok(bracketStroke, 'the contact bracket is painted');
+    const extent = (path) => {
+      const xs = path.points.map(([x]) => x);
+      const ys = path.points.map(([, y]) => y);
+      return { halfW: (Math.max(...xs) - Math.min(...xs)) / 2, halfH: (Math.max(...ys) - Math.min(...ys)) / 2 };
+    };
+    const echoBox = extent(echoStroke[1]);
+    const bracketBox = extent(bracketStroke[1]);
+    assert.ok(Math.abs(echoBox.halfW - bracketBox.halfW - echo.spreadPx / 2) < 1e-3,
+      `echo ${echoBox.halfW} vs bracket ${bracketBox.halfW}`);
+    assert.ok(Math.abs(echoBox.halfH - bracketBox.halfH - echo.spreadPx / 2) < 1e-3);
+    const echoAlpha = echoStroke[4];
+    const bracketAlpha = bracketStroke[4];
+    assert.ok(echoAlpha > 0 && echoAlpha < bracketAlpha, `${echoAlpha} vs ${bracketAlpha}`);
+    assert.ok(Math.abs(echoAlpha - bracketAlpha / 2) < 1e-6, `${echoAlpha} vs ${bracketAlpha}`);
+  } finally {
+    clearAwarenessEchoField();
+    env.cleanup();
+  }
+});
+
+test('under the Cyber sonar sweep an echo is never brighter than its own bracket', () => {
+  const env = installEnvironment();
+  // The cyber theme with its HUD open turns the contact sonar on; its sweep
+  // dims brackets it is not passing over.
+  env.document.documentElement = {
+    // The lowest sweep floor, so dimmed brackets drop a whole alpha band.
+    dataset: { uiTheme: 'cyber', cyberSonarOpacity: '35' },
+    style: { setProperty() {}, removeProperty() {} },
+  };
+  const hud = env.document.createElement('div');
+  hud.id = 'intel-hud';
+  hud.classList = { contains: (name) => name === 'active' };
+  env.document.body.appendChild(hud);
+  const echo = {
+    layerIds: ['military'],
+    fadeMs: 60_000,
+    color: 'rgb(1, 2, 3)',
+    spreadPx: 8,
+    lineWidth: 3.25,
+  };
+  const contact = {
+    id: 'military',
+    getDetectableObjects: () => [{
+      position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
+      sourceId: 'sonar-pin',
+      id: 'SONAR',
+      metric: 'FL300',
+      type: 'AIR',
+      tier: 'military',
+    }],
+  };
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo,
+      level: () => 1,
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [contact], () => {});
+    setMode('DENSE');
+    setDetectionStyle('normal');
+    settleFrame(env);
+    let dimmed = 0;
+    let compared = 0;
+    for (let frame = 0; frame < 40; frame++) {
+      env.detectionCtx.calls.length = 0;
+      settleFrame(env);
+      const strokes = env.detectionCtx.calls.filter(([name]) => name === 'stroke');
+      const echoStroke = strokes.find(([, , style, width]) => style === echo.color && width === echo.lineWidth);
+      const bracketStroke = strokes.find(([, path, style, width]) =>
+        path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
+      if (!bracketStroke) continue;
+      const bracketAlpha = bracketStroke[4];
+      if (bracketAlpha < 0.99) dimmed++;
+      if (!echoStroke) continue;
+      compared++;
+      assert.ok(
+        echoStroke[4] <= bracketAlpha + 1e-9,
+        `echo ${echoStroke[4]} over bracket ${bracketAlpha} on frame ${frame}`,
+      );
+    }
+    assert.ok(dimmed > 0, 'the sweep dimmed the bracket on some frame');
+    assert.ok(compared > 0, 'an echo was painted');
+  } finally {
+    clearAwarenessEchoField();
+    env.cleanup();
+  }
+});
+
+test('resting Global Context pulses skip echo work for the whole frame, not per contact', () => {
+  const env = installEnvironment();
+  // Six echo-eligible flights on screen; the identity camera maps x/y
+  // straight to device coordinates.
+  const flights = Array.from({ length: 6 }, (_, index) => ({
+    position: new Cesium.Cartesian3(-0.5 + index * 0.2, 0, 6_356_752),
+    sourceId: `flight-${index}`,
+    id: `ECHO${index}`,
+    metric: `FL${300 + index}`,
+    type: 'AIR',
+  }));
+  const layer = { id: 'flights', getDetectableObjects: () => flights };
+  let levelCalls = 0;
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo: {
+        layerIds: ['flights'],
+        fadeMs: 60_000,
+        color: 'rgb(1, 2, 3)',
+        spreadPx: 8,
+        lineWidth: 3.25,
+      },
+      level: () => {
+        levelCalls++;
+        return 0;
+      },
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [layer], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    levelCalls = 0;
+    settleFrame(env);
+    const painted = getDetectionDiagnostics().visibleCount;
+    assert.equal(painted, flights.length, 'every flight is on screen');
+    // One check per painted frame, however many contacts are on screen.
+    assert.ok(levelCalls >= 1, 'the frame asks whether echoes are live');
+    assert.ok(levelCalls < painted, `${levelCalls} level checks for ${painted} contacts`);
+    assert.ok(
+      !env.detectionCtx.calls.some(
+        ([name, , style]) => name === 'stroke' && style === 'rgb(1, 2, 3)',
+      ),
+      'no echoes while the pulses rest',
+    );
+  } finally {
+    clearAwarenessEchoField();
     env.cleanup();
   }
 });

@@ -8,7 +8,9 @@ import {
   progressStepLabel,
   spokenLabel,
 } from './speech.js';
+import { presentResult } from './resultDisplay.js';
 import { countWords, findHedges } from './speechLint.js';
+import { setLocale } from '../i18n/index.js';
 
 function envelope(name, result, args) {
   return attachVoiceResult(name, result, args);
@@ -217,6 +219,34 @@ test('nearest-aircraft results name the aircraft, distance and altitude briefly'
   assert.equal(stale.say, 'Selected AAL1, 3.3 km from Austin, stale.');
 });
 
+test('nearest-aircraft results leave out an altitude the feed did not report', () => {
+  // gevActions sends `altitudeM: null` for an airborne military contact
+  // without a barometric altitude; that is unknown, not sea level.
+  const unknown = envelope('select_nearest_aircraft', {
+    ok: true,
+    location: 'Ramstein',
+    layerId: 'military',
+    feed: { state: 'nominal' },
+    aircraft: { callsign: 'RCH123', altitudeM: null, distanceKm: 8.2 },
+  });
+  assert.equal(unknown.say, 'Selected RCH123, 8.2 km from Ramstein.');
+  assert.deepEqual(unknown.display.lines, ['8.2\u00a0km from Ramstein']);
+
+  // A reported sea-level altitude is still spoken.
+  const seaLevel = envelope('select_nearest_aircraft', {
+    ok: true,
+    location: 'Ramstein',
+    layerId: 'military',
+    feed: { state: 'nominal' },
+    aircraft: { callsign: 'RCH123', altitudeM: 0, distanceKm: 8.2 },
+  });
+  assert.equal(seaLevel.say, 'Selected RCH123, 8.2 km from Ramstein, 0 feet.');
+  assert.deepEqual(seaLevel.display.lines, [
+    '8.2\u00a0km from Ramstein',
+    'Altitude 0 feet',
+  ]);
+});
+
 test('frame_overhead keeps the essential scope audible and lists referents', () => {
   const framed = envelope('frame_overhead', {
     ok: true,
@@ -390,6 +420,52 @@ test('analyst speech preserves exact counts, lower bounds and partial status', (
     }).say,
     'At least 250,000 aircraft anywhere in the loaded data. Partial; military not answered.',
   );
+  assert.equal(
+    attachVoiceResult('analyst_query', {
+      ...raw,
+      count: 7,
+      coverage: {
+        layersQueried: [{ layerKey: 'flights' }, { layerKey: 'military' }],
+      },
+    }).say,
+    '7 aircraft anywhere in the loaded data.',
+    'combined Contacts aircraft layers retain their shared semantic noun',
+  );
+  for (const [feedState, spoken] of [
+    ['stale', '3 aircraft anywhere in the loaded data, stale.'],
+    ['degraded', '3 aircraft anywhere in the loaded data, degraded.'],
+    [
+      'unavailable',
+      'Feed unavailable anywhere in the loaded data; no authoritative count.',
+    ],
+  ]) {
+    const result = attachVoiceResult('analyst_query', {
+      ...raw,
+      feedState,
+      feedProvenance: { overall: feedState },
+    });
+    assert.equal(result.say, spoken);
+    assert.equal(
+      presentResult('analyst_query', result).display.chips[0].label,
+      feedState,
+      'speech and card carry the same material feed state',
+    );
+  }
+  const longScope = `within the selected operational corridor ${'north-east '.repeat(8).trim()}`;
+  const longResult = attachVoiceResult('analyst_query', {
+    ...raw,
+    scopeLabel: longScope,
+  });
+  assert.equal(
+    presentResult('analyst_query', longResult).display.title,
+    longResult.say.replace(/[.]$/, ''),
+    'card and speech consume the exact same long headline',
+  );
+  assert.ok(
+    longResult.say.length <= 64,
+    'the shared headline fits the voice card without a second truncation',
+  );
+  assert.match(longResult.say, /…$/);
 });
 
 test('builders never break an action and callers can override analyst speech', () => {
@@ -458,4 +534,16 @@ test('labels are bounded and cleaned before they are spoken', () => {
     null,
     'background steps stay on screen',
   );
+});
+
+test('progress step labels join through the catalog colon', () => {
+  setLocale('fr');
+  try {
+    assert.equal(
+      progressStepLabel('resolve', 'Capitol'),
+      'Recherche de lieux\u202f: Capitol',
+    );
+  } finally {
+    setLocale('en');
+  }
 });

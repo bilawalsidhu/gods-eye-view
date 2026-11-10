@@ -7,6 +7,9 @@
  */
 
 /** Shared visual tokens used by every world-overlay source. */
+// Map-card fonts: JetBrains Mono has no Arabic glyphs and the generic
+// monospace fallback is a fixed-pitch Arabic face that stretches every word;
+// Arabic text falls through to Noto Sans Arabic (loaded with the page fonts).
 export const WORLD_OVERLAY_STYLE = Object.freeze({
   background: 'rgba(4, 12, 16, 0.82)',
   selectedBackground: 'rgba(5, 18, 24, 0.94)',
@@ -16,13 +19,13 @@ export const WORLD_OVERLAY_STYLE = Object.freeze({
   detail: 'rgba(147, 161, 173, 0.92)',
   leader: 'rgba(147, 213, 228, 0.58)',
   accent: '#6be8ff',
-  fontLabel: '500 10px "JetBrains Mono", monospace',
-  fontTrack: '600 10px "JetBrains Mono", monospace',
-  fontTitle: '600 12px "JetBrains Mono", monospace',
-  fontDetail: '500 10.5px "JetBrains Mono", monospace',
-  fontSelected: '600 13px "JetBrains Mono", monospace',
-  fontTrackedTitle: '600 13px "JetBrains Mono", monospace',
-  fontTrackedDetail: '500 11px "JetBrains Mono", monospace',
+  fontLabel: '500 10px "JetBrains Mono", "Noto Sans Arabic", monospace',
+  fontTrack: '600 10px "JetBrains Mono", "Noto Sans Arabic", monospace',
+  fontTitle: '600 12px "JetBrains Mono", "Noto Sans Arabic", monospace',
+  fontDetail: '500 10.5px "JetBrains Mono", "Noto Sans Arabic", monospace',
+  fontSelected: '600 13px "JetBrains Mono", "Noto Sans Arabic", monospace',
+  fontTrackedTitle: '600 13px "JetBrains Mono", "Noto Sans Arabic", monospace',
+  fontTrackedDetail: '500 11px "JetBrains Mono", "Noto Sans Arabic", monospace',
   radius: 4,
   anchorDotRadius: 3.2,
   anchorDotStrokeWidth: 1,

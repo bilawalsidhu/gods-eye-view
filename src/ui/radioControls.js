@@ -1,11 +1,28 @@
-import { t, msg } from '../i18n/index.js';
 import { bindRadioControls } from './radioBindings.js';
-import { renderRadioState } from './radioPresentation.js';
+import {
+  createRadioTunerState,
+  renderRadioState,
+  showRadioTuner,
+} from './radioPresentation.js';
+import { useRadioStore } from './stores/radio.js';
+import { applicationPinia } from './vueRuntime.js';
+import { onLocaleChange } from '../i18n/index.js';
 
-/** Own Radio DOM, tuner interaction and subscription; receive playback and application actions. */
+/**
+ * Own Radio interaction, the tuner and the subscription; receive playback and
+ * application actions. The panel view renders the rest of the Radio panel
+ * from what this publishes (`gev-radio` store).
+ */
 export class RadioControls {
-  constructor({ elements, radio, actions, canvas }) {
+  constructor({
+    elements,
+    radio,
+    actions,
+    canvas,
+    store = useRadioStore(applicationPinia()),
+  }) {
     Object.assign(this, elements);
+    this.store = store;
     this.radio = radio;
     this.actions = actions;
     this.canvas = canvas;
@@ -13,7 +30,12 @@ export class RadioControls {
     this.listeners = new AbortController();
     this._radioUnsubscribe = null;
     this._radioState = null;
+    this._radioView = null;
     this._radioCategorySignature = '';
+    this._radioFilterOptions = null;
+    this._radioVolumeShown = null;
+    this._cockpitDisclosure = { display: false, radio: false };
+    this._radioTunerView = createRadioTunerState();
     this._radioTunerStations = [];
     this._radioTunerPool = [];
     this._radioTunerDragging = false;
@@ -28,7 +50,16 @@ export class RadioControls {
     this._radioTunerSelectedId = null;
     this._radioTunerBandPinnedForNavigation = false;
     this._refreshRadioTunerBand = null;
+    this._refreshRadioTunerText = null;
     bindRadioControls.call(this);
+    // The panel carries translated text; present it again in a new locale,
+    // from a fresh layer state when there is one (its category labels are
+    // worded by the layer).
+    this._offLocale = onLocaleChange(() => {
+      const state = this.radio.getUIState?.() ?? this._radioState;
+      if (state) this._renderRadioState(state);
+      this._refreshRadioTunerText?.();
+    });
   }
 
   listen(target, type, handler, options = {}) {
@@ -109,111 +140,12 @@ export class RadioControls {
     return true;
   }
 
-  /**
-   * Bring the embedded Radio section into the expanded Context scroller.
-   * This never changes Radio power, playback, selection, or Context mode.
-   * @param {{focusTarget?: HTMLElement|null}} [options]
-   * @returns {Promise<boolean>} Whether the internal scroller moved.
-   */
-  async _revealRadioPanelInsideContext({ focusTarget = null } = {}) {
-    const contextPanel = document.getElementById('global-context-panel');
-    const scroller =
-      (document.documentElement?.dataset.uiTheme === 'cyber' &&
-        contextPanel?.querySelector('.cyber-panel-body')) ||
-      contextPanel?.querySelector('.global-context-panel-inner');
-    if (
-      !contextPanel ||
-      contextPanel.classList.contains('collapsed') ||
-      !scroller ||
-      !this._radioPanel ||
-      this._radioPanel.classList.contains('collapsed')
-    )
-      return false;
-
-    await new Promise((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(resolve)),
-    );
-    if (
-      this.destroyed ||
-      contextPanel.classList.contains('collapsed') ||
-      this._radioPanel.classList.contains('collapsed')
-    )
-      return false;
-
-    const viewport = scroller.getBoundingClientRect();
-    const radioRect = this._radioPanel.getBoundingClientRect();
-    const desired = scroller.scrollTop + radioRect.top - viewport.top - 10;
-    const next = Math.min(
-      Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-      Math.max(0, desired),
-    );
-    const moved = Math.abs(next - scroller.scrollTop) >= 1;
-    if (moved) {
-      const reducedMotion = window.matchMedia?.(
-        '(prefers-reduced-motion: reduce)',
-      )?.matches;
-      scroller.scrollTo({
-        top: next,
-        behavior: reducedMotion ? 'auto' : 'smooth',
-      });
-    }
-    focusTarget?.focus?.({ preventScroll: true });
-    return moved;
-  }
-
-  /** Keep the launcher truthful for the active theme and Context route. */
-  _syncContextRadioLauncherState() {
-    if (this.destroyed || !this._contextRadioToggleBtn) return;
-    const contextPanel = globalThis.document?.getElementById(
-      'global-context-panel',
-    );
-    const contextExpanded = Boolean(
-      contextPanel && !contextPanel.classList.contains('collapsed'),
-    );
-    if (contextExpanded) {
-      const radioExpanded = Boolean(
-        this._radioPanel && !this._radioPanel.classList.contains('collapsed'),
-      );
-      this._contextRadioToggleBtn.setAttribute('aria-controls', 'radio-panel');
-      this._contextRadioToggleBtn.setAttribute(
-        'aria-expanded',
-        String(radioExpanded),
-      );
-      const label = t(
-        radioExpanded
-          ? msg('Go to expanded Radio section')
-          : msg('Expand Radio section in Context'),
-      );
-      this._contextRadioToggleBtn.setAttribute('aria-label', label);
-      this._contextRadioToggleBtn.title = label;
-      return;
-    }
-    // This launcher toggles the compact player even when the detailed panel
-    // is open elsewhere. Its ARIA state must describe that same disclosure.
-    const compactOpen = Boolean(
-      this._contextRadioDock?.classList.contains('disclosure-open'),
-    );
-    this._contextRadioToggleBtn.setAttribute(
-      'aria-controls',
-      'context-radio-mini',
-    );
-    this._contextRadioToggleBtn.setAttribute(
-      'aria-expanded',
-      String(compactOpen),
-    );
-    const launcherLabel = t(
-      compactOpen
-        ? msg('Close compact Radio controls')
-        : msg('Open compact Radio controls'),
-    );
-    this._contextRadioToggleBtn.setAttribute('aria-label', launcherLabel);
-    this._contextRadioToggleBtn.title = launcherLabel;
-  }
-
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._offLocale();
     this.listeners.abort();
+    if (this._storeToken) this.store.detach(this._storeToken);
     this._radioUnsubscribe?.();
     this._radioUnsubscribe = null;
     const pointer = this._radioTunerPointerId;
@@ -230,7 +162,7 @@ export class RadioControls {
     } catch {
       /* capture already released */
     }
-    this._radioTuner?.classList.remove('is-dragging', 'is-static');
+    showRadioTuner.call(this, { dragging: false, static: false });
     document
       .getElementById('title-bar')
       ?.classList.remove('radio-broadcasting');

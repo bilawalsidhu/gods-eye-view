@@ -65,7 +65,8 @@ const KML_REMOVED_ELEMENTS = new Set([
 /**
  * An error whose message is meant for the person who chose the file. The
  * message stays English; `template` and `values`, when given, let the UI show
- * it in the active language.
+ * it in the active language. Numbers stay numbers in `values`: the UI formats
+ * them in that language's numerals.
  */
 export class GeoImportError extends Error {
   constructor(message, template = message, values = {}) {
@@ -259,7 +260,7 @@ function overLimitError({ over, features }) {
     return new GeoImportError(
       `That file creates more than ${MAX_IMPORT_ENTITIES.toLocaleString()} map objects (the limit).`,
       msg('That file creates more than {limit} map objects (the limit).'),
-      { limit: MAX_IMPORT_ENTITIES.toLocaleString() },
+      { limit: MAX_IMPORT_ENTITIES },
     );
   if (over === 'links')
     return new GeoImportError(
@@ -267,13 +268,13 @@ function overLimitError({ over, features }) {
       msg(
         'That file has more than {limit} style definitions and image links after cleanup (the limit).',
       ),
-      { limit: MAX_KML_LINKS.toLocaleString() },
+      { limit: MAX_KML_LINKS },
     );
   if (over === 'features')
     return new GeoImportError(
       `That file has more than ${MAX_IMPORT_ENTITIES.toLocaleString()} features (the limit).`,
       msg('That file has more than {limit} features (the limit).'),
-      { limit: MAX_IMPORT_ENTITIES.toLocaleString() },
+      { limit: MAX_IMPORT_ENTITIES },
     );
   const limit = MAX_IMPORT_POSITIONS.toLocaleString();
   if (features)
@@ -282,12 +283,12 @@ function overLimitError({ over, features }) {
       msg(
         'That file has more than {limit} points (the limit) across {features} features.',
       ),
-      { limit, features: features.toLocaleString() },
+      { limit: MAX_IMPORT_POSITIONS, features },
     );
   return new GeoImportError(
     `That file has more than ${limit} points (the limit).`,
     msg('That file has more than {limit} points (the limit).'),
-    { limit },
+    { limit: MAX_IMPORT_POSITIONS },
   );
 }
 
@@ -1134,7 +1135,8 @@ export function repairKmlRootNamespaces(value, what = 'KML') {
   return text.slice(0, start) + root + text.slice(end);
 }
 
-function parseXml(text, what) {
+/** Parse KML or GPX with the shared namespace repairs and XML validation. */
+export function parseXml(text, what) {
   // Match the namespace repairs Cesium applies to ordinary exported KML.
   if (what !== 'GPX') text = repairKmlRootNamespaces(text, what);
   const doc = new DOMParser().parseFromString(
@@ -1150,7 +1152,8 @@ function parseXml(text, what) {
   return doc;
 }
 
-function decodeXml(bytes) {
+/** Decode XML bytes, honouring a UTF-16 byte-order mark. */
+export function decodeXml(bytes) {
   const encoding =
     bytes[0] === 0xff && bytes[1] === 0xfe
       ? 'utf-16le'
@@ -1464,8 +1467,8 @@ export async function loadGeoFile(
       `That file has ${entityCount.toLocaleString()} map objects; the limit is ${MAX_IMPORT_ENTITIES.toLocaleString()}.`,
       msg('That file has {count} map objects; the limit is {limit}.'),
       {
-        count: entityCount.toLocaleString(),
-        limit: MAX_IMPORT_ENTITIES.toLocaleString(),
+        count: entityCount,
+        limit: MAX_IMPORT_ENTITIES,
       },
     );
   }

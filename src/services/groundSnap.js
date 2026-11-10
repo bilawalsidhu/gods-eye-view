@@ -101,7 +101,7 @@ const HELD_SNAP_MAX_DRIFT_M = 250;
  *  alone, and the asymmetry is not tidiness:
  *
  *   - A cell reading LOW against a real sample is the EXPECTED error here, not a
- *     contradiction. Cells are a one-shot first-write latch over ~111 m, the
+ *     contradiction. Cells hold a few point readings over ~111 m, the
  *     borrowed-neighbour path leans to the LOWEST on purpose (`neighborFloorM`),
  *     and `displayFloorHeightM` only ever RAISES — the whole floor chain is
  *     built to under-read rather than to invent. Releasing on that sign would
@@ -307,10 +307,20 @@ export function createGroundSnap({ groundFloor }) {
     }
     const now = Date.now();
     const entry = entries.get(icao);
-    if (entry && now < entry.nextRetryMs) return heldSnapM(entry, surfacePos); // backoff in force
+    // Backoff in force, unless it ends further off than any backoff can:
+    // a retry stamped before the clock stepped back would otherwise wait for
+    // the clock to catch up.
+    if (
+      entry &&
+      now < entry.nextRetryMs &&
+      entry.nextRetryMs - now <= RETRY_MAX_MS
+    )
+      return heldSnapM(entry, surfacePos);
     // Per-window budget: deny WITHOUT a retry stamp so the overflow simply
     // tries again next tick instead of waiting out a backoff it didn't earn.
-    if (now - windowStartMs > SAMPLE_WINDOW_MS) {
+    // A clock that stepped back also opens a new window, or none would open
+    // until it caught up.
+    if (now < windowStartMs || now - windowStartMs > SAMPLE_WINDOW_MS) {
       windowStartMs = now;
       windowCount = 0;
     }

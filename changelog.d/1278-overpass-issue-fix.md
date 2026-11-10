@@ -1,1 +1,0 @@
-- Reserve singleflight before disk cache reads (asturksever, #1278).

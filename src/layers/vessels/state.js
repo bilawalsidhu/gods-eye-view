@@ -64,12 +64,16 @@ export function createVesselState({ source, services }) {
     /** Test-only key target paired with interactionHandlerFactory. */
     interactionKeyTarget: null,
     preRenderRemover: null,
+    /** Pending timer that renders one frame after a cadence-skipped pass. */
+    trailingVisibilityTimer: null,
     lastVisibilityUpdate: 0,
     lastFocusUpdate: 0,
     /** Sprites whose animated emphasis remains outside the 1.0 deadband. */
     activeFocusCount: 0,
     activeLabelCount: 0,
     selectedRecord: null,
+    /** @type {string|null} MMSI whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
+    cockpitSubjectMmsi: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
     /** @type {Cesium.Cartesian3[]} Chronological trail vertices (oldest first) */

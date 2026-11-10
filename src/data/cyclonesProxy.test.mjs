@@ -115,7 +115,8 @@ test('status retains official clocks, knots, source links and finite current pos
   assert.equal(storm.issuedAt, TIME);
   assert.equal(storm.positionAt, TIME);
   assert.deepEqual(storm.position, { longitude: -125.8, latitude: 15.5 });
-  assert.deepEqual(storm.movement, { directionDegrees: 255, speedKt: 12 });
+  // NHC publishes movementSpeed in mph: 12 mph is 10 kt.
+  assert.deepEqual(storm.movement, { directionDegrees: 255, speedKt: 10 });
   assert.equal(storm.windKt, 25);
   assert.equal(storm.pressureHpa, 1006);
   assert.match(storm.advisoryUrl, /^https:\/\/www\.nhc\.noaa\.gov\/text\//);

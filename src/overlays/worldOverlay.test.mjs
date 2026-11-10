@@ -1,5 +1,5 @@
 import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +13,15 @@ import {
 import { createCctvThumbnailOverlayEntry, createFrameSlot } from '../data/cctvCards.js';
 import { combinedOverlayAlpha } from './worldOverlayDraw.js';
 import {
+  buildWildlifeLabelEntry,
+  buildWildlifeThumbnailEntry,
+  buildWildlifeSelectedLabel,
+  WILDLIFE_OVERLAY_SOURCE_ID,
+  WILDLIFE_OVERLAY_SOURCE_OPTIONS,
+  WILDLIFE_LABEL_SOURCE_ID,
+  WILDLIFE_LABEL_SOURCE_OPTIONS,
+} from '../layers/wildlifeSightings/cards.js';
+import {
   AMBIENT_CARD_COLLISION_CAPACITY,
   WORLD_OVERLAY_OCCLUDER_SELECTORS,
   WORLD_OVERLAY_PAINT_LANES,
@@ -21,7 +30,9 @@ import {
   getOverlayPaintRect,
   getWorldOverlayDiagnostics,
   hitTestWorldOverlay,
+  activateWorldOverlayAction,
   initWorldOverlay,
+  subscribeWorldOverlayActions,
   isOverlayPointVisible,
   normalizeOverlayEntry,
   paintLaneForOverlayEntry,
@@ -447,7 +458,7 @@ test('destroying before the first init leaves pre-init buffering intact', () => 
   env.cleanup();
 });
 
-test('lifecycle is idempotent and teardown removes listeners, observers, and DOM', () => {
+test('lifecycle is idempotent and teardown removes listeners, observers, and DOM', async () => {
   const env = installMockEnvironment();
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
   initWorldOverlay(env.viewer);
@@ -465,7 +476,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   assert.deepEqual(root.children, [canvas],
     'the overlay root carries only the shared card canvas');
   assert.doesNotMatch(
-    expandApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
+    await renderApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
     /world-overlay-detection-surface/,
     'the surface is runtime host-owned, not static markup',
   );
@@ -1019,7 +1030,14 @@ test('accessible actions announce only accepted focus and expose selected state'
   const env = installMockEnvironment();
   let acceptedActivations = 0;
   let staleActivations = 0;
+  let actions = null;
+  const unsubscribe = subscribeWorldOverlayActions((view) => {
+    actions = view;
+  });
   initWorldOverlay(env.viewer);
+  assert.deepEqual(actions.items, []);
+  assert.equal(actions.status, '');
+  assert.equal(actions.announced, 0);
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     interactive: true,
     accessibilityLabel: 'Focus vessel TEST, MMSI 123',
@@ -1030,15 +1048,20 @@ test('accessible actions announce only accepted focus and expose selected state'
   })]);
   env.postRender.raise();
 
-  const list = env.document.getElementById('world-overlay-action-list');
-  const status = env.document.getElementById('world-overlay-status');
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'true');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  const [item] = actions.items;
+  assert.equal(item.label, 'Focus vessel TEST, MMSI 123');
+  assert.equal(item.selected, true);
+  const owner = actions.owner;
+  activateWorldOverlayAction({}, item.key);
+  assert.equal(acceptedActivations, 0, 'a list from another host cannot activate');
+  activateWorldOverlayAction(owner, item.key);
   assert.equal(acceptedActivations, 1);
-  assert.equal(status.textContent, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123');
+  assert.equal(actions.announced, 1);
+  activateWorldOverlayAction(owner, item.key);
+  assert.equal(actions.announced, 2, 'a repeated focus is a new announcement');
 
-  status.textContent = 'Focus unchanged';
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     selected: false,
     interactive: true,
@@ -1049,12 +1072,16 @@ test('accessible actions announce only accepted focus and expose selected state'
     },
   })]);
   env.postRender.raise();
-  assert.equal(list.children.length, 1);
-  assert.equal(list.children[0]['aria-pressed'], 'false');
-  list.children[0].click();
+  assert.equal(actions.items.length, 1);
+  assert.equal(actions.items[0].selected, false);
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'the list keeps its last announcement');
+  activateWorldOverlayAction(owner, actions.items[0].key);
   assert.equal(staleActivations, 1);
-  assert.equal(status.textContent, 'Focus unchanged');
+  assert.equal(actions.status, 'Focusing Focus vessel TEST, MMSI 123', 'a refused focus announces nothing');
+  assert.equal(actions.announced, 2);
   env.cleanup();
+  assert.equal(actions, null, 'teardown withdraws the list');
+  unsubscribe();
 });
 
 test('viewport and horizon culling obey explicit policy inputs', () => {
@@ -1576,6 +1603,171 @@ test('bounded per-source cohorts feed the domain arbiter without universal selec
   assert.equal(diagnostics.candidateCount, 3);
   assert.ok(diagnostics.selectedCount <= 2);
   env.cleanup();
+});
+
+test('wildlife common names use the host ambient collision domain and never paint overlapping labels', (t) => {
+  const env = installMockEnvironment({ width: 1000, height: 600, dpr: 1 });
+  t.after(() => env.cleanup());
+  initWorldOverlay(env.viewer);
+  const entries = [
+    ['hawk', 'Red-tailed Hawk', position()],
+    ['maple', 'Red Maple', position()],
+    ['butterfly', 'Monarch', new Cesium.Cartesian3(-0.6, 0.6, 0)],
+    ['unknown', null, position()],
+  ].map(([stableId, commonName, anchor]) => {
+    const entry = buildWildlifeLabelEntry({ stableId, commonName, iconic: 'Aves' });
+    return entry && { ...entry, position: anchor, horizonCull: false, edgeFade: 'none' };
+  }).filter(Boolean);
+  assert.equal(entries.length, 3, 'unidentified icons never enter the overlay host');
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, entries, WILDLIFE_LABEL_SOURCE_OPTIONS);
+  env.postRender.raise();
+  env.advanceTime(200);
+  env.postRender.raise();
+  const rects = entries.map((entry) => getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, entry.id)).filter(Boolean);
+  assert.ok(rects.length >= 2 && rects.length <= 3, 'the host places separated names and relocates or drops coincident names');
+  for (let i = 0; i < rects.length; i++) {
+    assert.equal(rects[i].entry.collisionGroup, 'ambient-label');
+    assert.equal(rects[i].entry.protected, false);
+    for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i], b = rects[j];
+      assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+    }
+  }
+});
+
+const CITY_NOW = Date.parse('2026-11-04T18:00:00Z');
+function citySighting(id, overrides = {}) {
+  return {
+    stableId: id, commonName: `Synthetic city species ${id}`, iconic: 'Aves',
+    observedAt: CITY_NOW - 60_000, quality: 'research', favesCount: 1,
+    photo: {
+      square: 'https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.jpg',
+      licence: 'cc-by', attribution: 'Synthetic Photographer',
+    },
+    ...overrides,
+  };
+}
+function cityLabel(row, x, y, width = 1000, height = 600) {
+  return {
+    ...buildWildlifeLabelEntry(row, { nowMs: CITY_NOW }),
+    position: positionAtScreen(x, y, width, height), horizonCull: false, edgeFade: 'none',
+  };
+}
+function cityCard(row, x, y, width = 1000, height = 600, image = { width: 75, height: 75 }) {
+  return {
+    ...buildWildlifeThumbnailEntry(row, CITY_NOW, { image }),
+    position: positionAtScreen(x, y, width, height), horizonCull: false, edgeFade: 'none',
+    maxDistance: Infinity,
+  };
+}
+function assertDisjointPaint(entries) {
+  const rects = entries.map(([source, entry]) => getOverlayPaintRect(source, entry.id)).filter(Boolean);
+  for (let i = 0; i < rects.length; i++)
+    for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i], b = rects[j];
+      assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y,
+        `${a.entryId} overlaps ${b.entryId}`);
+    }
+  return rects;
+}
+
+test('close-range dense city labels and photo cards never overlap, including frames between camera solves', (t) => {
+  const env = installMockEnvironment({ width: 1000, height: 600, dpr: 1 });
+  t.after(() => env.cleanup());
+  env.viewer.camera.positionCartographic.height = 9000;
+  initWorldOverlay(env.viewer);
+  const labels = Array.from({ length: 150 }, (_, i) =>
+    cityLabel(citySighting(`city:${i}`, { favesCount: 150 - i }), 65 + (i % 30) * 28, 150 + Math.floor(i / 30) * 62));
+  const cards = Array.from({ length: 8 }, (_, i) =>
+    cityCard(citySighting(`photo:${i}`), 140 + (i % 4) * 210, 180 + Math.floor(i / 4) * 240));
+  const all = [...labels.map((e) => [WILDLIFE_LABEL_SOURCE_ID, e]), ...cards.map((e) => [WILDLIFE_OVERLAY_SOURCE_ID, e])];
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, labels, WILDLIFE_LABEL_SOURCE_OPTIONS);
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, cards, WILDLIFE_OVERLAY_SOURCE_OPTIONS);
+  for (const ms of [0, 75, 125]) {
+    env.advanceTime(ms);
+    env.postRender.raise();
+    assertDisjointPaint(all);
+  }
+  assert.equal(cards.filter((e) => getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, e.id)).length, 8);
+  const placedLabels = labels.filter((e) => getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, e.id));
+  assert.ok(placedLabels.length > 5 && placedLabels.length < labels.length, 'label count is capped by the remaining space');
+  // A pan/zoom reprojects sticky placements on every frame before moveEnd.
+  env.viewer.camera.frustum.projectionMatrix[0] = 0.7;
+  env.viewer.camera.frustum.projectionMatrix[5] = 0.8;
+  env.advanceTime(16);
+  env.postRender.raise();
+  assertDisjointPaint(all);
+  env.moveEnd.raise();
+  env.advanceTime(75);
+  env.postRender.raise();
+  assertDisjointPaint(all);
+});
+
+test('labels yield immediately to photo cards, then compete by ambientScore without disturbing the card', (t) => {
+  const env = installMockEnvironment({ width: 400, height: 350, dpr: 1 });
+  t.after(() => env.cleanup());
+  initWorldOverlay(env.viewer);
+  const low = cityLabel(citySighting('low'), 200, 210, 400, 350);
+  const high = cityLabel(citySighting('high', { favesCount: 1000 }), 200, 210, 400, 350);
+  const card = cityCard(citySighting('card', { quality: 'needs_id' }), 200, 210, 400, 350);
+  const all = [[WILDLIFE_LABEL_SOURCE_ID, low], [WILDLIFE_LABEL_SOURCE_ID, high], [WILDLIFE_OVERLAY_SOURCE_ID, card]];
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, [low, high], WILDLIFE_LABEL_SOURCE_OPTIONS);
+  env.postRender.raise();
+  env.advanceTime(200);
+  env.postRender.raise();
+  assert.equal(assertDisjointPaint(all).length, 2, 'both label slots are initially free');
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [card], WILDLIFE_OVERLAY_SOURCE_OPTIONS);
+  env.postRender.raise();
+  for (const ms of [1, 74, 125]) {
+    env.advanceTime(ms);
+    env.postRender.raise();
+    assertDisjointPaint(all);
+    assert.ok(getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, card.id));
+    assert.ok(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, high.id));
+    assert.equal(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, low.id), null);
+  }
+  const before = { ...getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, card.id) };
+  const promoted = cityLabel(citySighting('low', { favesCount: 1_000_000 }), 200, 210, 400, 350);
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, [promoted, high], WILDLIFE_LABEL_SOURCE_OPTIONS);
+  env.postRender.raise();
+  assertDisjointPaint(all);
+  assert.ok(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, low.id));
+  assert.equal(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, high.id), null);
+  const after = getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, card.id);
+  assert.deepEqual([after.x, after.y, after.w, after.h], [before.x, before.y, before.w, before.h], 'the card retains its sticky placement');
+  const selected = { ...buildWildlifeSelectedLabel(citySighting('selected')), position: card.position, horizonCull: false, edgeFade: 'none' };
+  setOverlayEntries('wildlife-sightings-selected', [selected]);
+  env.postRender.raise();
+  assertDisjointPaint([...all, ['wildlife-sightings-selected', selected]]);
+  // Exit fades still occupy space; labels must wait until the card is gone.
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [], WILDLIFE_OVERLAY_SOURCE_OPTIONS);
+  for (const ms of [1, 149, 151]) {
+    env.advanceTime(ms);
+    env.postRender.raise();
+    assertDisjointPaint([...all, ['wildlife-sightings-selected', selected]]);
+  }
+});
+
+test('photo visibility reports only painted membership changes, ignoring loading cards and idle frames', (t) => {
+  const env = installMockEnvironment({ width: 400, height: 350, dpr: 1 });
+  t.after(() => env.cleanup());
+  initWorldOverlay(env.viewer);
+  const changes = [];
+  const options = { ...WILDLIFE_OVERLAY_SOURCE_OPTIONS, onVisibilityChange: (ids) => changes.push([...ids]) };
+  const r = citySighting('anchor');
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [cityCard(r, 200, 210, 400, 350, null)], options);
+  env.postRender.raise();
+  assert.deepEqual(changes, []);
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [cityCard(r, 200, 210, 400, 350)], options);
+  env.postRender.raise();
+  env.advanceTime(200);
+  env.postRender.raise();
+  assert.deepEqual(changes, [['sighting:anchor']]);
+  for (let i = 0; i < 10; i++) env.postRender.raise();
+  assert.equal(changes.length, 1, 'unchanged visibility emits nothing');
+  setOverlaySourceVisible(WILDLIFE_OVERLAY_SOURCE_ID, false);
+  env.postRender.raise();
+  assert.deepEqual(changes, [['sighting:anchor'], []]);
 });
 
 test('FIRMS and vessels enlarge the ambient-card lane under an explicit aggregate budget', () => {

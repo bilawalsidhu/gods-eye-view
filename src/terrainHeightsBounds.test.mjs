@@ -99,6 +99,18 @@ function stubTerrainUpstream(t) {
   return asked;
 }
 
+/**
+ * A cache file of the test's own, removed when the test ends. Without one the
+ * proxy falls back to this checkout's `.gev-cache/terrain-heights.json`, and a
+ * point the app has already cached there would answer a request the test
+ * expects to reach the stubbed upstream (#1242).
+ */
+async function isolatedCachePath(t) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gev-terrain-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  return path.join(dir, 'terrain-heights.json');
+}
+
 test('a coordinate off the globe is not a cache key', () => {
   // Finite but not on Earth — the old guard accepted every one of these.
   for (const raw of [
@@ -122,7 +134,9 @@ test('an out-of-range point is refused before it reaches upstream or the cache',
     upstreamCalls += 1;
     return new Response('[]', { status: 200 });
   });
-  const route = install(terrainHeightsProxy()).get('/api/terrain/heights');
+  const route = install(
+    terrainHeightsProxy({ cachePath: await isolatedCachePath(t) }),
+  ).get('/api/terrain/heights');
 
   const refused = await request(route, { url: '/?points=0,91' });
   assert.equal(refused.statusCode, 400);
@@ -135,7 +149,9 @@ test('an out-of-range point is refused before it reaches upstream or the cache',
 
 test('one out-of-range point rejects the batch it is hidden in', async (t) => {
   stubFetch(t, async () => new Response('[]', { status: 200 }));
-  const route = install(terrainHeightsProxy()).get('/api/terrain/heights');
+  const route = install(
+    terrainHeightsProxy({ cachePath: await isolatedCachePath(t) }),
+  ).get('/api/terrain/heights');
   const mixed = await request(route, {
     url: '/?points=-97.74,30.26;0,999;-97.75,30.27',
   });
@@ -145,9 +161,12 @@ test('one out-of-range point rejects the batch it is hidden in', async (t) => {
 test('the point cache stops growing, and an evicted point is simply refetched', async (t) => {
   const asked = stubTerrainUpstream(t);
   // A ceiling of 3 exercises the same code path 50,000 does, in four requests.
-  const route = install(terrainHeightsProxy({ cacheMaxEntries: 3 })).get(
-    '/api/terrain/heights',
-  );
+  const route = install(
+    terrainHeightsProxy({
+      cachePath: await isolatedCachePath(t),
+      cacheMaxEntries: 3,
+    }),
+  ).get('/api/terrain/heights');
 
   const point = (i) => `-97.7${i}000,30.26000`;
   for (let i = 1; i <= 4; i += 1)
@@ -165,12 +184,48 @@ test('the point cache stops growing, and an evicted point is simply refetched', 
   assert.equal(asked[4], point(1));
 });
 
+test('a refetched point counts as new when the cache evicts', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'terrain-evict-order-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const cachePath = path.join(root, 'cache.json');
+  const day = 24 * 3600_000;
+  const now = Date.now();
+  const point = (i) => `-97.7${i}000,30.26000`;
+  const entry = (at) => ({ at, result: { ellipsoid: 150 } });
+  // Written newest first: the file's order is not the age order. Point 1 is
+  // past the 30-day TTL, so the next request for it refetches.
+  await writeFile(
+    cachePath,
+    JSON.stringify({
+      version: 2,
+      points: {
+        [point(3)]: entry(now - 3600_000),
+        [point(2)]: entry(now - day),
+        [point(1)]: entry(now - 31 * day),
+      },
+    }),
+  );
+  const asked = stubTerrainUpstream(t);
+  const route = install(
+    terrainHeightsProxy({ cacheMaxEntries: 3, cachePath }),
+  ).get('/api/terrain/heights');
+
+  await request(route, { url: `/?points=${point(1)}` });
+  assert.deepEqual(asked, [point(1)], 'the stale point is refetched');
+  await request(route, { url: `/?points=${point(4)}` });
+  assert.equal(asked.length, 2);
+
+  // Point 2 is now the oldest fetch; point 1 was just refreshed.
+  await request(route, { url: `/?points=${point(1)};${point(3)}` });
+  assert.equal(asked.length, 2, 'the refreshed and the recent point stay');
+  await request(route, { url: `/?points=${point(2)}` });
+  assert.deepEqual(asked.slice(2), [point(2)], 'the oldest fetch was evicted');
+});
+
 test('an over-large cache file is not read back into memory', async (t) => {
   const asked = stubTerrainUpstream(t);
   const point = '-97.74000,30.26000';
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-terrain-'));
-  const cachePath = path.join(dir, 'terrain-heights.json');
-  t.after(() => rm(dir, { recursive: true, force: true }));
+  const cachePath = await isolatedCachePath(t);
 
   // A cache file holding the answer, but larger than the ceiling allows.
   const padded = {
@@ -201,7 +256,9 @@ test('an over-large cache file is not read back into memory', async (t) => {
 
 test('the route refuses a flood of requests from one client', async (t) => {
   stubTerrainUpstream(t);
-  const route = install(terrainHeightsProxy()).get('/api/terrain/heights');
+  const route = install(
+    terrainHeightsProxy({ cachePath: await isolatedCachePath(t) }),
+  ).get('/api/terrain/heights');
 
   let refusedAt = 0;
   for (let i = 1; i <= 95; i += 1) {
@@ -218,7 +275,9 @@ test('the route refuses a flood of requests from one client', async (t) => {
 
 test('a cross-site page cannot fill the cache or spend the visitor quota', async (t) => {
   const asked = stubTerrainUpstream(t);
-  const route = install(terrainHeightsProxy()).get('/api/terrain/heights');
+  const route = install(
+    terrainHeightsProxy({ cachePath: await isolatedCachePath(t) }),
+  ).get('/api/terrain/heights');
   const host = 'localhost:5173';
   const refused = [
     { host, 'sec-fetch-site': 'cross-site' }, // <img src> from any web page
@@ -253,7 +312,9 @@ test('a cross-site page cannot fill the cache or spend the visitor quota', async
 
 test('the app served behind a reverse proxy still gets terrain', async (t) => {
   const asked = stubTerrainUpstream(t);
-  const route = install(terrainHeightsProxy()).get('/api/terrain/heights');
+  const route = install(
+    terrainHeightsProxy({ cachePath: await isolatedCachePath(t) }),
+  ).get('/api/terrain/heights');
   const host = 'globe.example.lan';
   // What nginx/Caddy/Cloudflare add in front of a same-origin app fetch. The
   // cost-bearing routes refuse these; terrain is keyless and needed to render,
@@ -347,7 +408,9 @@ test('a second client keeps its own quota', async (t) => {
   stubFetch(t, async () =>
     Response.json([{ lng: -97.74, lat: 30.26, height: 150 }]),
   );
-  const route = install(terrainHeightsProxy()).get('/api/terrain/heights');
+  const route = install(
+    terrainHeightsProxy({ cachePath: await isolatedCachePath(t) }),
+  ).get('/api/terrain/heights');
 
   for (let i = 0; i < 90; i += 1)
     await request(route, {

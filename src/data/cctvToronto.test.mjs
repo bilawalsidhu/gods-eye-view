@@ -10,7 +10,7 @@ import {
   TORONTO_RESCU_LIST_URL,
   TORONTO_RESCU_IMAGE_ORIGIN,
   TORONTO_MAX_CATALOG_BYTES,
-  DEFAULT_CCTV_MAX_SOURCES,
+  CCTV_SHARED_SOURCE_SLOTS,
 } from '../../server/providers/cctv/constants.js';
 import { CAMERA_CODE_MAX_CHARS } from '../../server/providers/cctv/normalize.js';
 import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
@@ -418,6 +418,6 @@ test('CCTV_TORONTO_ENABLED=0 keeps the lane from being loaded at all', async (t)
   }
 });
 
-test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+test('the shared catalog slots are not raised to make room for this pack', () => {
+  assert.equal(CCTV_SHARED_SOURCE_SLOTS, 4000);
 });

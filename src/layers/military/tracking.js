@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
@@ -25,6 +26,7 @@ import {
   AMBER_TRANSPARENT,
   TRACKED_ICON_COLOR,
 } from './policy.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createTracking({
   flightState,
@@ -120,7 +122,7 @@ export function createTracking({
           ? `${Math.round(described.velocityMps * 1.944)} kt`
           : '',
         heading: Number.isFinite(described.track)
-          ? `${Math.round(described.track)}°`
+          ? `${roundHeadingDegrees(described.track)}°`
           : '',
         icao24,
         // Honesty cue: the contact is coasting on dead reckoning, so the
@@ -499,7 +501,7 @@ export function createTracking({
     // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
     // would draw the trail in front of the plane. They join via _appendTrailFix as they age.
     const seedRenderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
+      julianAt(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );

@@ -1,6 +1,6 @@
 /** Camera-jump regression against an existing server; never starts a server. */
 import puppeteer from 'puppeteer';
-import { chromeExecutablePath } from './qa-chrome.mjs';
+import { chromeExecutablePath, captureQaScreenshot } from './qa-chrome.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { reduceTrailPixels } from '../src/layers/transit/qaMetrics.js';
 
@@ -307,7 +307,7 @@ try {
   result.pixelPass = pixels.pass;
   result.pixelDetails = pixels;
   result.errors = errors;
-  await page.screenshot({ path: `${shots}/recovery.png` });
+  await captureQaScreenshot(page, { path: `${shots}/recovery.png` });
   await writeFile(`${shots}/recovery.json`, JSON.stringify(result, null, 2));
   for (const key of ['on', 'off', 'onAgain', 'offAgain']) delete result[key];
   const pass =
