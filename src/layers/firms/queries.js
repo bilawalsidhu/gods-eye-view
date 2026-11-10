@@ -233,8 +233,10 @@ export function createQueries({
         loading: layerState._loading,
         stale: layerState._stale,
         // The end of the 24 hours shown when the snapshot ends at a set time;
-        // null for the trailing 24 hours to now.
+        // null for the trailing 24 hours to now. Such a snapshot is not live,
+        // so the row names the provider without the catalog's "LIVE".
         at: Number.isFinite(layerState._at) ? layerState._at : null,
+        ...(Number.isFinite(layerState._at) ? { source: 'NASA FIRMS' } : {}),
         // The machine-readable half of the keyless state, ahead of the human
         // strings below: without it "no key configured" is indistinguishable
         // from a broken feed, and the row reads as a fault instead of a step
