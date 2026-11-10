@@ -1097,44 +1097,74 @@ export function groundBehaviourChecks(
       },
     ],
   ];
-  if (fixtures?.tiles)
-    checks.push([
-      'ground.createSet: tiles drape ignores terrain and picks only tiles',
-      async () => {
-        await nadirView(10000);
-        const set = engine.ground.createSet({
-          id: 'contract-tiles-drape',
-          kind: 'cell',
-          drape: 'tiles',
-          pickable: true,
-        });
-        try {
-          set.replace([
-            {
-              west: 19.98,
-              south: 9.98,
-              east: 20.02,
-              north: 10.02,
-              fill: [1, 0, 1, 1],
-              pickId: 'tiles-drape',
-            },
-          ]);
-          set.commit();
-          await engine.maps.setPhotorealTiles(null);
-          ensure(
-            engine.picker.pick(centre())?.id !== 'tiles-drape',
-            'tiles drape picked on terrain',
+  checks.push([
+    'ground.createSet: tiles drape ignores terrain and picks only tiles',
+    async () => {
+      await engine.maps.setPhotorealTiles(null);
+      await nadirView(10000);
+      const set = engine.ground.createSet({
+        id: 'contract-tiles-drape',
+        kind: 'cell',
+        drape: 'tiles',
+        pickable: true,
+      });
+      try {
+        set.replace([
+          {
+            west: 19.98,
+            south: 9.98,
+            east: 20.02,
+            north: 10.02,
+            fill: [1, 0, 1, 1],
+            pickId: 'tiles-drape',
+          },
+        ]);
+        set.commit();
+        await until(() => set.ready(), 'tiles drape ready');
+        ensure(
+          engine.picker.pick(centre())?.id !== 'tiles-drape',
+          'tiles drape picked on terrain',
+        );
+        if (readRegion) {
+          set.show(false);
+          await until(
+            () => engine.surface.tilesLoaded?.() !== false,
+            'terrain settles',
           );
+          await settle(5);
+          const sample = () => meanAt(engine, readRegion, 20, 10, 2);
+          const baseline = sample();
+          ensure(
+            !nearColour(baseline, MAGENTA, 30),
+            'terrain is already magenta',
+          );
+          set.show(true);
+          await settle(5);
+          const shown = sample();
+          set.show(false);
+          await settle(3);
+          ensure(
+            nearColour(sample(), baseline, 10),
+            'terrain baseline changed',
+          );
+          ensure(
+            nearColour(shown, baseline, 10),
+            'tiles drape changed terrain pixels',
+          );
+          set.show(true);
+        }
+        if (fixtures?.tiles) {
           await engine.maps.setPhotorealTiles(mapSources.photoreal);
           ensure(
             engine.picker.pick(centre())?.id === 'tiles-drape',
             'tiles drape missed tiles',
           );
-        } finally {
-          set.destroy();
-          await engine.maps.setPhotorealTiles(null);
         }
-      },
-    ]);
+      } finally {
+        set.destroy();
+        await engine.maps.setPhotorealTiles(null);
+      }
+    },
+  ]);
   return checks;
 }

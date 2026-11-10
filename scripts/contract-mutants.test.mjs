@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createFakeEngine } from '../src/globe/testing/fakeEngine.js';
 import { fakeContractOptions } from '../src/globe/testing/contractFixtures.js';
-import { runContractSuite } from '../src/globe/testing/contractSuite/index.mjs';
+import {
+  createContractSuite,
+  runContractSuite,
+} from '../src/globe/testing/contractSuite/index.mjs';
 
 const replace = (object, member, wrap) => {
   object[member] = wrap(object[member].bind(object));
@@ -396,3 +399,35 @@ for (const [name, killedBy, mutate] of mutants) {
     }
   });
 }
+
+test('tiles-only ground pixels on terrain are detected without a tileset fixture or a picking defect', async () => {
+  for (const drawsOnTerrain of [false, true]) {
+    const engine = createFakeEngine();
+    try {
+      const check = createContractSuite(engine, {
+        ...fakeContractOptions(engine),
+        fixtures: null,
+        mapSources: null,
+        readRegion(x, y, width, height) {
+          const shown = engine.ground
+            .list()
+            .some((set) => set.id === 'contract-tiles-drape' && set.shown);
+          const color =
+            drawsOnTerrain && shown
+              ? [255, 0, 255, 255]
+              : [50, 100, 150, 255];
+          return Uint8Array.from(
+            { length: width * height * 4 },
+            (_, i) => color[i % 4],
+          );
+        },
+      }).find(({ name }) => name.startsWith('ground.createSet: tiles drape'));
+      assert.ok(check, 'tiles drape check runs without a tileset fixture');
+      if (drawsOnTerrain)
+        await assert.rejects(check.run(), /tiles drape changed terrain pixels/);
+      else await check.run();
+    } finally {
+      engine.destroy();
+    }
+  }
+});
