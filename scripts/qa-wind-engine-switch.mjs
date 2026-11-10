@@ -1,4 +1,4 @@
-import { whenSettled } from './qa/ready.mjs';
+import { whenFramesDrawn } from './qa/ready.mjs';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import {
@@ -96,7 +96,7 @@ await strict.run({}, async (b) => {
         window.qaWind.getRowControls().summary.reading?.speed === 10,
       { timeout: 90000 },
     );
-    await whenSettled(p);
+    await whenFramesDrawn(p);
     const check = await p.evaluate(() => {
       const { dataManager } = window.__godsEyeView;
       const mod = dataManager.layers.get('wind').module;
@@ -162,7 +162,7 @@ await strict.run({}, async (b) => {
   const frozen = await p.evaluate(
     () => window.qaWind.getDiagnostics().gpu.phaseSeconds,
   );
-  await whenSettled(p);
+  await whenFramesDrawn(p);
   await strict.check(
     p,
     'wind',

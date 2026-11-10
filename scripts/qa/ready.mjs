@@ -1,6 +1,6 @@
 import { createSettledState } from '../../src/app/qaProbe.js';
 
-/** A CPU-ready pick can precede the GPU hit delivered for a real click. */
+/** Verify real click selection, including targets the CPU picker cannot answer. */
 export async function clickUntilSelected(page, click, selected) {
   for (let attempt = 0; attempt < 5; attempt++) {
     await click();
@@ -72,7 +72,7 @@ export async function whenSettled(
     });
   } catch {
     throw new Error(
-      'Readiness timeout: engineStarted, initialViewRestored, frameDrawn, noFlight, cameraInputsEnabled, cameraPoseStable',
+      'Readiness timeout: engineStarted, initialViewRestored, frameDrawn, noFlight, cameraInputsEnabled, cameraPoseStable; observed: inputsEnabled=unknown, following=unknown, cockpitActive=unknown, lastPoseDelta=null',
     );
   }
   return page.evaluate(
@@ -85,6 +85,33 @@ export function waitForSettled(createState, { frames, timeoutMs }) {
   return new Promise((resolve, reject) => {
     const { engine } = window.__godsEyeView;
     const state = createState(engine);
+    let previousPose = null;
+    let lastPoseDelta = null;
+    const statusOf = () => {
+      const status = state.settled({ frames });
+      const started = status.conditions.engineStarted;
+      const following = started && Boolean(engine.camera.following());
+      const cockpitActive = Boolean(
+        window.__godsEyeView?.styleManager?.getCockpitState?.()?.active,
+      );
+      status.observed = {
+        inputsEnabled: status.conditions.cameraInputsEnabled,
+        following,
+        cockpitActive,
+        lastPoseDelta,
+      };
+      // Only a live camera owner excuses motion or held inputs, never a scenario flag.
+      if (following || cockpitActive) {
+        status.conditions.cameraInputsEnabled = true;
+        status.conditions.cameraPoseStable = true;
+      }
+      status.conditions.frameDrawn = status.framesDrawn >= frames;
+      status.unmet = Object.keys(status.conditions).filter(
+        (key) => !status.conditions[key],
+      );
+      status.settled = !status.unmet.length;
+      return status;
+    };
     let finished = false;
     let remove = () => {};
     const finish = (error, result) => {
@@ -97,19 +124,37 @@ export function waitForSettled(createState, { frames, timeoutMs }) {
       else resolve(result);
     };
     const timer = setTimeout(() => {
-      const status = state.settled({ frames });
+      const status = statusOf();
       if (window.__godsEyeView?.engine !== engine)
         status.unmet.push('engineUnchanged');
       finish(
         new Error(
-          `Readiness timeout: ${status.unmet.join(', ')}${status.restoreError ? ': ' + status.restoreError : ''}`,
+          `Readiness timeout: ${status.unmet.join(', ')}${status.restoreError ? ': ' + status.restoreError : ''}; observed: ${JSON.stringify(status.observed)}`,
         ),
       );
     }, timeoutMs);
     remove = engine.frames.postRender.addEventListener(() => {
-      const status = state.settled({ frames });
       if (window.__godsEyeView?.engine !== engine)
         return finish(new Error('Readiness interrupted: engineChanged'));
+      if (!engine.isDestroyed()) {
+        const pose = engine.camera.pose();
+        const values = ['position', 'direction', 'up'].flatMap((key) =>
+          ['x', 'y', 'z'].map((axis) => pose[key][axis]),
+        );
+        values.push(pose.fovy, pose.aspectRatio);
+        if (previousPose) {
+          const delta = values.map((value, i) =>
+            Math.abs(value - previousPose[i]),
+          );
+          lastPoseDelta = {
+            positionM: Math.hypot(...delta.slice(0, 3)),
+            orientation: Math.max(...delta.slice(3, 9)),
+            projection: Math.max(...delta.slice(9)),
+          };
+        }
+        previousPose = values;
+      }
+      const status = statusOf();
       if (status.settled) finish(null, status);
       else
         queueMicrotask(() => {
@@ -120,7 +165,7 @@ export function waitForSettled(createState, { frames, timeoutMs }) {
     engine.render.request('qa-readiness');
   });
 }
-/** Wait for drawn frames when the scenario deliberately keeps a follow or orbit moving. */
+/** Wait for drawing independently of camera rest or input ownership. */
 export async function whenFramesDrawn(
   page,
   { frames = 3, timeoutMs = 30000 } = {},
@@ -151,7 +196,12 @@ export async function whenFramesDrawn(
 /** Tile readiness is independent of camera rest, including a keyless globe. */
 export async function whenTilesLoaded(page, { timeoutMs = 30000 } = {}) {
   const handle = await page.waitForFunction(
-    () => window.__godsEyeView?.engine?.surface.tilesLoaded(),
+    () => {
+      const engine = window.__godsEyeView?.engine;
+      if (!engine || engine.isDestroyed()) return false;
+      engine.render.request('qa-tile-readiness');
+      return engine.surface.tilesLoaded();
+    },
     { timeout: timeoutMs, polling: 100 },
   );
   await handle.dispose();

@@ -110,19 +110,7 @@ await strict.run({}, async (browser) => {
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   await waitForEngine(page, 'navara');
   // Cockpit mode deliberately holds camera inputs throughout these handoffs.
-  const attached = async (kind) => {
-    await page.waitForFunction(
-      (kind) =>
-        window.__godsEyeView?.engine?.kind === kind &&
-        document.querySelector('#globe-engine')?.value === kind &&
-        !document.querySelector('#globe-engine:is([disabled], [aria-busy="true"])'),
-      { timeout: 90000 },
-      kind,
-    );
-    await page.evaluate(
-      () => window.__godsEyeView.styleManager.initialRestorePromise,
-    );
-  };
+  const attached = (kind) => waitForEngine(page, kind, { timeout: 90000 });
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );

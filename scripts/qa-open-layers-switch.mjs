@@ -1,4 +1,4 @@
-import { whenSettled } from './qa/ready.mjs';
+import { whenFramesDrawn } from './qa/ready.mjs';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import {
@@ -152,7 +152,7 @@ await strict.run({}, async (b) => {
     const deadline = Date.now() + 20000;
     let on = await sample();
     while (!test(on, off) && Date.now() < deadline) {
-      await whenSettled(p);
+      await whenFramesDrawn(p);
       on = await sample();
     }
     return on;

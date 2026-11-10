@@ -1,4 +1,4 @@
-import { whenSettled } from './qa/ready.mjs';
+import { whenFramesDrawn, whenTilesLoaded } from './qa/ready.mjs';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import {
@@ -90,7 +90,9 @@ await strict.run({}, async (b) => {
     });
   });
   const sample = async () => {
-    await whenSettled(p);
+    await whenFramesDrawn(p);
+    await whenTilesLoaded(p);
+    await whenFramesDrawn(p);
     return sharp(await p.screenshot())
       .extract({ left: 490, top: 370, width: 25, height: 25 })
       .removeAlpha()
