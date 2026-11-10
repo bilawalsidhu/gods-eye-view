@@ -8,6 +8,7 @@ import {
   DEFAULT_CALTRANS_DISTRICTS,
   DEFAULT_CALTRANS_MAX_SOURCES,
   CALTRANS_ANCHORS,
+  CALTRANS_STREAM_ORIGIN,
   TFL_JAMCAM_URL,
   TFL_IMAGE_ORIGIN,
   DEFAULT_TFL_MAX_SOURCES,
@@ -281,6 +282,35 @@ export async function loadAustinSourcesFromOpenData() {
 }
 
 /**
+ * The live HLS playlist a Caltrans camera publishes, pinned to Caltrans's own
+ * streaming host. Only `https://wzmedia.dot.ca.gov/D<n>/<name>.stream/playlist.m3u8`
+ * is accepted (the feed also writes the default port as `:443`, which URL
+ * parsing drops). The HLS relay fetches this URL server-side, so a catalog value
+ * on any other host, scheme or path is refused rather than relayed.
+ *
+ * @param {unknown} raw - `cctv.imageData.streamingVideoURL` from a district feed.
+ * @returns {string} The normalized playlist URL, or '' when it is not pinned.
+ */
+export function caltransStreamUrl(raw) {
+  let url;
+  try {
+    url = new URL(String(raw ?? '').trim());
+  } catch {
+    return '';
+  }
+  if (
+    url.origin !== CALTRANS_STREAM_ORIGIN ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !/^\/D\d{1,2}\/[A-Za-z0-9_.-]+\.stream\/playlist\.m3u8$/.test(url.pathname)
+  )
+    return '';
+  return url.href;
+}
+
+/**
  * Fetch Caltrans CCTV cameras for the configured districts (CCTV_CALTRANS_DISTRICTS,
  * comma-separated 1..12; empty string disables the pack). One official JSON feed per
  * district, identical schema statewide; keyless. Only inService cameras with finite
@@ -288,6 +318,10 @@ export async function loadAustinSourcesFromOpenData() {
  * is defense-in-depth: the proxy only ever fetches catalog URLs, and this pins the
  * catalog to the official host). Districts fetch in parallel and fail independently
  * (Promise.allSettled) — one district outage never darkens the others.
+ *
+ * With CCTV_CALTRANS_VIDEO=1 (opt-in; any other value keeps stills), a camera
+ * whose feed lists a pinned live stream (see caltransStreamUrl) is registered as
+ * `feedType: 'hls'`, with the pinned still as its snapshot fallback.
  *
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
@@ -313,6 +347,8 @@ export async function loadCaltransSourcesFromOpenData() {
     }),
   );
 
+  const videoEnabled =
+    String(process.env.CCTV_CALTRANS_VIDEO || '').trim() === '1';
   const cameras = [];
   for (const result of settled) {
     if (result.status !== 'fulfilled') {
@@ -352,6 +388,11 @@ export async function loadCaltransSourcesFromOpenData() {
       const label =
         locationName.replace(/^([A-Za-z0-9_-]+)\s*--\s*/, '') ||
         `Caltrans D${district} ${code}`;
+
+      // Opt-in live video; the pinned still stays the snapshot fallback.
+      const videoUrl = videoEnabled
+        ? caltransStreamUrl(cctv.imageData?.streamingVideoURL)
+        : '';
       cameras.push({
         id: cameraId,
         name: loc.nearbyPlace ? `${label} (${loc.nearbyPlace})` : label,
@@ -382,8 +423,8 @@ export async function loadCaltransSourcesFromOpenData() {
             ? Math.max(-100, Math.min(4000, ft * 0.3048))
             : 150;
         })(),
-        feedType: 'image',
-        url: imageUrl,
+        feedType: videoUrl ? 'hls' : 'image',
+        url: videoUrl || imageUrl,
         snapshotUrl: imageUrl,
         sourceKind: 'caltrans-open-data',
         license: 'Public Caltrans highway camera frame',

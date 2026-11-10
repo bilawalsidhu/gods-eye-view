@@ -109,6 +109,8 @@ export const CALTRANS_CCTV_URL = (district) =>
 /** Districts fetched by default: SF Bay (4), LA (7), San Diego (11), Sacramento (3). */
 export const DEFAULT_CALTRANS_DISTRICTS = '4,7,11,3';
 export const DEFAULT_CALTRANS_MAX_SOURCES = 300;
+/** Caltrans's live-video host; CCTV_CALTRANS_VIDEO=1 relays only playlists here. */
+export const CALTRANS_STREAM_ORIGIN = 'https://wzmedia.dot.ca.gov';
 /** Prioritization anchors: downtown cores of the four default metros. */
 export const CALTRANS_ANCHORS = [
   { lat: 37.7793, lon: -122.4193 }, // San Francisco
