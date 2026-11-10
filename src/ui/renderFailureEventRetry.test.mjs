@@ -132,3 +132,73 @@ test('a throwing postRender listener removed before Retry is not called again', 
     restore();
   }
 });
+
+const listenerCount = (event) =>
+  [...event._listeners.values()].reduce((sum, scopes) => sum + scopes.size, 0);
+
+test('a listener turned off and on while the loop is stopped runs after Retry', () => {
+  const { scene, viewer, store, runFrames, restore } = setup();
+  try {
+    let broken = true;
+    scene.postRender.addEventListener(() => {
+      if (broken) throw new TypeError('layer listener failed');
+    });
+    let calls = 0;
+    const frame = () => {
+      calls += 1;
+    };
+    let removeFrame = scene.postRender.addEventListener(frame);
+    scene.requestRender();
+    viewer.useDefaultRenderLoop = true;
+    runFrames(1);
+    assert.equal(store.renderFailure?.reason, 'render-error');
+    removeFrame(); // another layer is turned off
+    removeFrame = scene.postRender.addEventListener(frame); // and on again
+    broken = false;
+    store.renderFailure.retry();
+    calls = 0;
+    scene.requestRender();
+    runFrames(3);
+    assert.ok(calls > 0, 'the re-added listener runs after Retry');
+    assert.ok(scene.postRender._listeners.has(frame));
+    assert.equal(
+      scene.postRender.numberOfListeners,
+      listenerCount(scene.postRender),
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('a listener added, removed and added again while the loop is stopped runs after Retry', () => {
+  const { scene, viewer, store, runFrames, restore } = setup();
+  try {
+    let broken = true;
+    scene.postRender.addEventListener(() => {
+      if (broken) throw new TypeError('layer listener failed');
+    });
+    scene.requestRender();
+    viewer.useDefaultRenderLoop = true;
+    runFrames(1);
+    assert.equal(store.renderFailure?.reason, 'render-error');
+    let calls = 0;
+    const onGroundFrame = () => {
+      calls += 1;
+    };
+    // worldAnnotationRenderer: a ground task starts, times out, the next starts
+    scene.postRender.addEventListener(onGroundFrame);
+    scene.postRender.removeEventListener(onGroundFrame);
+    scene.postRender.addEventListener(onGroundFrame);
+    broken = false;
+    store.renderFailure.retry();
+    scene.requestRender();
+    runFrames(3);
+    assert.ok(calls > 0, 'the re-added listener runs after Retry');
+    assert.equal(
+      scene.postRender.numberOfListeners,
+      listenerCount(scene.postRender),
+    );
+  } finally {
+    restore();
+  }
+});

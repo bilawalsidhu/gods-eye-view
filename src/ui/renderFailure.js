@@ -42,17 +42,6 @@ export function installRenderFailureNotice(
       locationRef.reload();
       return;
     }
-    [
-      scene.preUpdate,
-      scene.postUpdate,
-      scene.preRender,
-      scene.postRender,
-      scene.camera?.changed,
-      scene.camera?.moveStart,
-      scene.camera?.moveEnd,
-      viewer.clock?.onTick,
-      viewer.clock?.onStop,
-    ].forEach(finishRaise);
     viewer.useDefaultRenderLoop = true;
     scene.requestRender?.();
   }
@@ -120,11 +109,25 @@ export function installRenderFailureNotice(
   // postRender listener, the clock's onTick, a resize) also stops Cesium's
   // render loop, but raises no renderError, and Cesium reports it only in the
   // panel the app turns off. Raise it as a render error, so Cesium's handler,
-  // an inline panel's timer and this notice all see it.
+  // an inline panel's timer and this notice all see it. Such an error passes
+  // here before anything else runs, so finish the raises it cut short first:
+  // listeners added or removed while the loop is stopped then apply at once,
+  // in order.
   const unguard = ['resize', 'render'].map((name) =>
-    reportThrown(viewer.cesiumWidget, name, (error) =>
-      scene.renderError.raiseEvent(scene, error),
-    ),
+    reportThrown(viewer.cesiumWidget, name, (error) => {
+      [
+        scene.preUpdate,
+        scene.postUpdate,
+        scene.preRender,
+        scene.postRender,
+        scene.camera?.changed,
+        scene.camera?.moveStart,
+        scene.camera?.moveEnd,
+        viewer.clock?.onTick,
+        viewer.clock?.onStop,
+      ].forEach(finishRaise);
+      scene.renderError.raiseEvent(scene, error);
+    }),
   );
   canvas?.addEventListener?.('webglcontextlost', onContextLost);
   return () => {
@@ -138,9 +141,8 @@ export function installRenderFailureNotice(
 /**
  * Finish the raise a throwing listener cut short. Cesium's `Event.raiseEvent`
  * marks the event as raising until every listener returns, and until then it
- * only queues the listeners added or removed: the frame watchers the notice
- * adds, or the throwing listener of a layer turned off since. Apply the queue
- * as the raise would have.
+ * only queues the listeners added or removed. Apply the queue as the raise
+ * would have, so listeners added or removed from here on take effect at once.
  */
 function finishRaise(event) {
   if (!event?._invokingListeners) return;
