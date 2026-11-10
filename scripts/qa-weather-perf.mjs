@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: resolution scale, MSAA and native camera transforms measure Cesium GPU cost.
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * qa-weather-perf — matched-route throughput and idle-work measurement for the
  * Weather layers (Wind, Rain radar, Satellite clouds, Lightning density).
@@ -33,9 +36,9 @@
  * Requires a running dev server. Screenshots and results.json land in
  * <out>/<label>/.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -82,17 +85,9 @@ mkdirSync(outDir, { recursive: true });
 
 const WEATHER = ['weather-radar', 'weather-satellite', 'weather-lightning'];
 const AUSTIN = { lon: -97.7431, lat: 30.2672 };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const chromePath =
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((p) =>
-    existsSync(p),
-  );
-
-const browser = await puppeteer.launch({
-  headless: flag('--headless') ? 'new' : false,
-  executablePath: chromePath,
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   defaultViewport: null,
   args: [
@@ -152,15 +147,15 @@ try {
     failures.clear();
   };
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, {
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, {
     timeout: 120_000,
   });
-  await sleep(15_000);
+  await whenSettled(page);
 
   if (scale !== 1)
     await page.evaluate((scale) => {
       window.__godsEyeView.viewer.resolutionScale = scale;
-      window.__godsEyeView.viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     }, scale);
   const env = await page.evaluate(() => {
     const gev = window.__godsEyeView;
@@ -168,7 +163,7 @@ try {
     return {
       basemap: gev.tileset ? 'google-3d' : 'keyless-globe',
       globeShown: scene.globe.show,
-      canvas: `${scene.canvas.width}x${scene.canvas.height}`,
+      canvas: `${window.__godsEyeView.engine.host.canvas.width}x${window.__godsEyeView.engine.host.canvas.height}`,
       dpr: devicePixelRatio,
       ua:
         navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || navigator.userAgent,
@@ -182,8 +177,7 @@ try {
   // Park deterministically, disable every layer, and instrument once.
   await page.evaluate(async () => {
     const gev = window.__godsEyeView;
-    const v = gev.viewer;
-    v.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.cancelFlight();
     for (const [id, entry] of gev.dataManager.layers)
       if (entry.enabled) {
         try {
@@ -198,7 +192,7 @@ try {
       longTaskMs: 0,
       mutations: 0,
     });
-    v.scene.postRender.addEventListener(() => {
+    window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
       P.renders += 1;
     });
     try {
@@ -224,18 +218,18 @@ try {
   });
 
   const pose = (which) =>
-    page.evaluate(
-      ({ which, AUSTIN }) => {
+    evaluateWithGeo(
+      page,
+      async (qaGeo, { which, AUSTIN }) => {
         const C = window.Cesium || null;
         const v = window.__godsEyeView.viewer;
-        v.camera.cancelFlight();
-        v.camera.lookAtTransform?.(
+        window.__godsEyeView.engine.camera.cancelFlight();
+        window.__godsEyeView.engine.camera.lookAtTransform?.(
           (C || v.camera.constructor).Matrix4?.IDENTITY ??
             v.scene.camera.transform,
         );
-        const ell = v.scene.ellipsoid || v.scene.globe.ellipsoid;
         const d2r = Math.PI / 180;
-        const destination = ell.cartographicToCartesian({
+        const destination = qaGeo.cartographic.toCartesian({
           longitude: AUSTIN.lon * d2r,
           latitude: AUSTIN.lat * d2r,
           height:
@@ -245,7 +239,7 @@ try {
                 ? 1_200
                 : 17_368_000,
         });
-        v.camera.setView({
+        window.__godsEyeView.engine.camera.setView({
           destination,
           orientation:
             which === 'close'
@@ -258,13 +252,12 @@ try {
 
   /** Start a 3 s flight without awaiting it; the caller measures alongside. */
   const fly = (which) =>
-    page.evaluate(
-      ({ which, AUSTIN }) => {
-        const v = window.__godsEyeView.viewer;
-        const ell = v.scene.ellipsoid || v.scene.globe.ellipsoid;
+    evaluateWithGeo(
+      page,
+      async (qaGeo, { which, AUSTIN }) => {
         const d2r = Math.PI / 180;
-        v.camera.flyTo({
-          destination: ell.cartographicToCartesian({
+        window.__godsEyeView.engine.camera.flyTo({
+          destination: qaGeo.cartographic.toCartesian({
             longitude: AUSTIN.lon * d2r,
             latitude: AUSTIN.lat * d2r,
             height: which === 'close' ? 1_200 : 17_368_000,
@@ -281,13 +274,13 @@ try {
 
   /** Start an 8 s orbit at 1.8 km range around the Austin anchor (not awaited). */
   const orbit = () =>
-    page.evaluate(
-      ({ AUSTIN }) => {
+    evaluateWithGeo(
+      page,
+      async (qaGeo, { AUSTIN }) => {
         const v = window.__godsEyeView.viewer;
         const camera = v.camera;
-        const ell = v.scene.ellipsoid || v.scene.globe.ellipsoid;
         const d2r = Math.PI / 180;
-        const center = ell.cartographicToCartesian({
+        const center = qaGeo.cartographic.toCartesian({
           longitude: AUSTIN.lon * d2r,
           latitude: AUSTIN.lat * d2r,
           height: 0,
@@ -303,9 +296,12 @@ try {
           const hpr = HPR
             ? new HPR(heading, -45 * d2r, 1800)
             : { heading, pitch: -45 * d2r, range: 1800 };
-          camera.lookAt(center, hpr);
+          window.__godsEyeView.engine.camera.lookAt(center, hpr);
           if (elapsed < 8) requestAnimationFrame(step);
-          else camera.lookAtTransform(camera.transform.constructor.IDENTITY);
+          else
+            window.__godsEyeView.engine.camera.lookAtTransform(
+              camera.transform.constructor.IDENTITY,
+            );
         };
         requestAnimationFrame(step);
       },
@@ -317,10 +313,8 @@ try {
     page.evaluate(
       ({ ms, hold }) =>
         new Promise((resolve) => {
-          const gev = window.__godsEyeView;
-          const scene = gev.viewer.scene;
           const P = window.__gevWeatherPerf;
-          const canvas = scene.canvas;
+          const canvas = window.__godsEyeView.engine.host.canvas;
           const w0 = canvas.width;
           const h0 = canvas.height;
           const r0 = P.renders;
@@ -364,7 +358,7 @@ try {
             rafs += 1;
             intervals.push(now - last);
             last = now;
-            if (hold) scene.requestRender();
+            if (hold) window.__godsEyeView.engine.render.request();
             if (summary && !summary.hidden) {
               const h =
                 Math.round(summary.getBoundingClientRect().height * 2) / 2;
@@ -478,7 +472,7 @@ try {
       },
       { wantPlaying, WEATHER },
     );
-    await sleep(2_500);
+    await whenFramesDrawn(page);
     return { ready, readyMs, layers: await diagnostics() };
   };
 
@@ -530,7 +524,7 @@ try {
     for (const state of ['off', 'history-paused', 'history-playing', 'wind']) {
       await pose('close');
       const setup = await applyState(state);
-      await sleep(4_000);
+      await whenFramesDrawn(page);
       for (let run = 1; run <= 2; run++)
         record({
           phase: 'idle',
@@ -564,5 +558,5 @@ try {
   writeFileSync(path.join(outDir, 'summary.md'), lines.join('\n') + '\n');
   console.log(`\nWrote ${path.join(outDir, 'results.json')} and summary.md`);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

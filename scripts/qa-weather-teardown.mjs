@@ -1,3 +1,6 @@
+// Cesium-only probes: native imagery, primitive and listener counts audit Cesium resource ownership.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * Weather teardown and cross-layer regression probe.
  *
@@ -14,9 +17,9 @@
  *
  *   node scripts/qa-weather-teardown.mjs --url http://localhost:4173 --label google
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -42,13 +45,8 @@ const WEATHER = [
   'weather-cyclones',
 ];
 
-const browser = await puppeteer.launch({
-  headless: flag('--headless') ? 'new' : false,
-  executablePath:
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((p) =>
-      existsSync(p),
-    ),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   defaultViewport: null,
   args: [
@@ -75,19 +73,18 @@ const boot = async () => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`.slice(0, 200));
   });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, {
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, {
     timeout: 120_000,
   });
-  await sleep(10_000);
-  await page.evaluate(async () => {
+  await whenSettled(page);
+  await evaluateWithGeo(page, async (qaGeo) => {
     const gev = window.__godsEyeView;
     const dm = gev.dataManager;
     for (const [id, e] of dm.layers)
       if (e.enabled) await dm.setEnabled(id, false, { origin: 'user' });
-    const v = gev.viewer;
     const d = Math.PI / 180;
-    v.camera.setView({
-      destination: v.scene.ellipsoid.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: -95 * d,
         latitude: 32 * d,
         height: 4_500_000,
@@ -95,7 +92,7 @@ const boot = async () => {
       orientation: { heading: 0, pitch: -90 * d, roll: 0 },
     });
   });
-  await sleep(3000);
+  await whenSettled(page);
   return { page, errors };
 };
 
@@ -167,12 +164,15 @@ const snapshot = (page) =>
       dataSources: v.dataSources.length,
       entities: v.entities.values.length,
       listeners: {
-        postRender: s.postRender.numberOfListeners,
-        preRender: s.preRender.numberOfListeners,
+        postRender:
+          window.__godsEyeView.engine.frames.postRender.numberOfListeners,
+        preRender:
+          window.__godsEyeView.engine.frames.preRender.numberOfListeners,
         postUpdate: s.postUpdate.numberOfListeners,
-        moveEnd: v.camera.moveEnd.numberOfListeners,
-        moveStart: v.camera.moveStart.numberOfListeners,
-        changed: v.camera.changed.numberOfListeners,
+        moveEnd: window.__godsEyeView.engine.camera.moveEnd.numberOfListeners,
+        moveStart:
+          window.__godsEyeView.engine.camera.moveStart.numberOfListeners,
+        changed: window.__godsEyeView.engine.camera.changed.numberOfListeners,
         tick: v.clock.onTick.numberOfListeners,
       },
       dom: {
@@ -194,7 +194,10 @@ const sample = async (page, seconds) => {
     window.__qaRenders = 0;
     window.__qaLong = { count: 0, ms: 0 };
     const s = window.__godsEyeView.viewer.scene;
-    window.__qaOff = s.postRender.addEventListener(() => window.__qaRenders++);
+    window.__qaOff =
+      window.__godsEyeView.engine.frames.postRender.addEventListener(
+        () => window.__qaRenders++,
+      );
     window.__qaObs = new PerformanceObserver((list) => {
       for (const e of list.getEntries()) {
         window.__qaLong.count++;
@@ -203,7 +206,7 @@ const sample = async (page, seconds) => {
     });
     window.__qaObs.observe({ entryTypes: ['longtask'] });
     window.__qaRaf = () => {
-      s.requestRender();
+      window.__godsEyeView.engine.render.request();
       window.__qaRafId = requestAnimationFrame(window.__qaRaf);
     };
     window.__qaRaf();
@@ -313,7 +316,7 @@ try {
   console.log('weather on', JSON.stringify(weatherOn));
   results.weatherOnSample = await sample(a.page, 5);
   for (const id of WEATHER) await setLayer(a.page, id, false);
-  await sleep(4000);
+  await whenFramesDrawn(a.page);
   const afterOff = await snapshot(a.page);
   const leak = diff(
     { ...baseline, enabled: undefined, weather: undefined },
@@ -331,7 +334,7 @@ try {
   results.afterWeather = [];
   for (const id of others) {
     const ok = await setLayer(a.page, id, true);
-    await sleep(9000);
+    await whenFramesDrawn(a.page);
     const m = await sample(a.page, 5);
     const snap = await snapshot(a.page);
     results.afterWeather.push({
@@ -354,7 +357,7 @@ try {
   results.control = [];
   for (const id of others) {
     const ok = await setLayer(b.page, id, true);
-    await sleep(9000);
+    await whenFramesDrawn(b.page);
     const m = await sample(b.page, 5);
     const snap = await snapshot(b.page);
     results.control.push({
@@ -400,5 +403,5 @@ try {
     JSON.stringify(results, null, 2),
   );
   console.log(`wrote ${path.join(outDir, 'results.json')}`);
-  await browser.close();
+  await closeBrowser(browser);
 }

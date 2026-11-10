@@ -1,13 +1,12 @@
 #!/usr/bin/env node
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 /** Exercise the real UI disposal path, including unrelated resource owners. */
-import puppeteer from 'puppeteer';
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -24,11 +23,10 @@ try {
     { waitUntil: 'domcontentloaded' },
   );
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.styleManager?._dataManager &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.styleManager?._dataManager,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   const result = await page.evaluate(async () => {
     const ui = window.__godsEyeView.styleManager;
     const counts = {};
@@ -287,6 +285,6 @@ try {
     errors.length === 0,
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (failures) process.exitCode = 1;

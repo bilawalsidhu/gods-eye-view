@@ -1,3 +1,6 @@
+// Cesium-only probes: native globe and ground-primitive coverage are the Cesium visual oracle.
+import { whenTilesLoaded, whenFramesDrawn } from './qa/ready.mjs';
+import { evaluateWithGeo } from './qa/geometry.mjs';
 import { captureQaScreenshot } from './qa-chrome.mjs';
 import { getRegisteredTransitFeed } from '../src/data/transitFeeds.js';
 
@@ -89,24 +92,27 @@ export async function runFleetBudgets({
   const cdp = await page.createCDPSession();
   await cdp.send('HeapProfiler.enable');
   for (const count of [800, 3000]) {
-    await page.evaluate(async (count) => {
-      const app = window.__godsEyeView;
-      await app.dataManager.setEnabled('transit', true, { source: 'qa' });
-      const camera = app.viewer.camera,
-        C = camera.positionCartographic.constructor;
-      camera.setView({
-        destination: C.toCartesian(
-          C.fromDegrees(-71.0605, 42.3554, count === 800 ? 600 : 30000),
-        ),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-      const layer = app.dataManager.layers.get('transit').module;
-      layer._transitPartsForTest().ingestion.abortAllInFlight();
-      layer._transitStateForTest()._activeFeeds.clear();
-      for (const key of layer._transitStateForTest()._vehicles.keys())
-        layer._transitPartsForTest().ingestion.removeVehicle(key);
-    }, count);
-    await wait(8000);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, count) => {
+        const app = window.__godsEyeView;
+        await app.dataManager.setEnabled('transit', true, { source: 'qa' });
+        const C = qaGeo.cartographic;
+        window.__godsEyeView.engine.camera.setView({
+          destination: C.toCartesian(
+            C.fromDegrees(-71.0605, 42.3554, count === 800 ? 600 : 30000),
+          ),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        const layer = app.dataManager.layers.get('transit').module;
+        layer._transitPartsForTest().ingestion.abortAllInFlight();
+        layer._transitStateForTest()._activeFeeds.clear();
+        for (const key of layer._transitStateForTest()._vehicles.keys())
+          layer._transitPartsForTest().ingestion.removeVehicle(key);
+      },
+      count,
+    );
+    await whenTilesLoaded(page);
     // Camera proximity can finish a live poll during tile warm-up. Remove it
     // before the heap baseline, or its memory would discount the fixture fleet.
     await page.evaluate(() => {
@@ -121,9 +127,9 @@ export async function runFleetBudgets({
       for (const key of state._vehicles.keys())
         parts.ingestion.removeVehicle(key);
       parts.rendering.syncRenderHold();
-      window.__godsEyeView.viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
     });
-    await wait(500);
+    await whenFramesDrawn(page);
     await cdp.send('HeapProfiler.collectGarbage');
     const before = await cdp.send('Runtime.getHeapUsage');
     const loaded = await page.evaluate(
@@ -141,7 +147,7 @@ export async function runFleetBudgets({
       page,
       `${count} budget visibility after load`,
     );
-    await wait(2000);
+    await whenFramesDrawn(page);
     await cdp.send('HeapProfiler.collectGarbage');
     // The retained delta is conservative: it includes concurrent page growth.
     const retained = await cdp.send('Runtime.getHeapUsage');
@@ -156,7 +162,7 @@ export async function runFleetBudgets({
         .get('transit')
         .module._resetTransitFixtureClockForTest(),
     );
-    await wait(1500);
+    await whenFramesDrawn(page);
     await cdp.send('HeapProfiler.startSampling', {
       samplingInterval: 128,
       includeObjectsCollectedByMajorGC: true,
@@ -315,15 +321,18 @@ export async function runBostonMatrix({
     await selectStyle(page, 'normal');
     for (const candidate of group.candidates) {
       background = { ...candidate, name: group.name };
-      await page.evaluate((b) => {
-        const camera = window.__godsEyeView.viewer.camera,
-          C = camera.positionCartographic.constructor;
-        camera.setView({
-          destination: C.toCartesian(C.fromDegrees(b.lon, b.lat, 600)),
-          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        });
-      }, background);
-      await wait(8000);
+      await evaluateWithGeo(
+        page,
+        async (qaGeo, b) => {
+          const C = qaGeo.cartographic;
+          window.__godsEyeView.engine.camera.setView({
+            destination: C.toCartesian(C.fromDegrees(b.lon, b.lat, 600)),
+            orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          });
+        },
+        background,
+      );
+      await whenTilesLoaded(page);
       await page.evaluate(
         ({ background, routes }) => {
           const layer =
@@ -336,7 +345,7 @@ export async function runBostonMatrix({
         },
         { background, routes },
       );
-      await wait(1000);
+      await whenFramesDrawn(page);
       backgroundResult = reduceBackground(
         group.name,
         await sampleRendered(page),
@@ -352,7 +361,7 @@ export async function runBostonMatrix({
     );
     for (const look of looks) {
       await selectStyle(page, look.style, look.params);
-      await wait(1200);
+      await whenFramesDrawn(page);
       await reportTransitVisibility(
         page,
         `Boston ${background.name}/${look.name} visibility`,
@@ -407,7 +416,7 @@ export async function runBostonMatrix({
               .selection.selectVehicle(key),
           target.key,
         );
-        await wait(500);
+        await whenFramesDrawn(page);
         await captureQaScreenshot(page, {
           path: `${shots}/${tag}-matrix-${background.name}-${look.name}-${target.route}-selected.jpg`,
           type: 'jpeg',
@@ -431,7 +440,7 @@ export async function runBostonMatrix({
             restored.color === target.color,
         );
       }
-      await wait(300);
+      await whenFramesDrawn(page);
       await captureQaScreenshot(page, {
         path: `${shots}/${tag}-matrix-${background.name}-${look.name}-restored.jpg`,
         type: 'jpeg',
@@ -464,12 +473,11 @@ export async function runBostonLive({
   sampleRendered,
 }) {
   console.log('\n== Boston live oblique streets ==');
-  await page.evaluate(async () => {
+  await evaluateWithGeo(page, async (qaGeo) => {
     const app = window.__godsEyeView;
     await app.dataManager.setEnabled('transit', false, { source: 'qa' });
-    const camera = app.viewer.camera,
-      C = camera.positionCartographic.constructor;
-    camera.setView({
+    const C = qaGeo.cartographic;
+    window.__godsEyeView.engine.camera.setView({
       destination: C.toCartesian(C.fromDegrees(-71.0605, 42.3554, 600)),
       orientation: { heading: 0, pitch: -Math.PI / 4, roll: 0 },
     });
@@ -478,7 +486,7 @@ export async function runBostonLive({
     layer._setTransitFixtureFloorsForTest([], 0);
     await layer.update();
   });
-  await wait(20000);
+  await whenTilesLoaded(page);
   await detectOn(page);
   const evidence = [];
   for (const view of [
@@ -507,27 +515,30 @@ export async function runBostonLive({
       params: {},
     },
   ]) {
-    await page.evaluate((view) => {
-      const app = window.__godsEyeView,
-        camera = app.viewer.camera,
-        C = camera.positionCartographic.constructor;
-      app.dataManager.layers
-        .get('transit')
-        .module._transitPartsForTest()
-        .selection.clearSelection();
-      camera.setView({
-        destination: C.toCartesian(
-          C.fromDegrees(-71.0605, 42.3554, view.altitude),
-        ),
-        orientation: {
-          heading: (view.heading * Math.PI) / 180,
-          pitch: (view.pitch * Math.PI) / 180,
-          roll: 0,
-        },
-      });
-    }, view);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, view) => {
+        const app = window.__godsEyeView,
+          C = qaGeo.cartographic;
+        app.dataManager.layers
+          .get('transit')
+          .module._transitPartsForTest()
+          .selection.clearSelection();
+        window.__godsEyeView.engine.camera.setView({
+          destination: C.toCartesian(
+            C.fromDegrees(-71.0605, 42.3554, view.altitude),
+          ),
+          orientation: {
+            heading: (view.heading * Math.PI) / 180,
+            pitch: (view.pitch * Math.PI) / 180,
+            roll: 0,
+          },
+        });
+      },
+      view,
+    );
     await selectStyle(page, view.style, view.params);
-    await wait(8000);
+    await whenTilesLoaded(page);
     const fleet = await page.evaluate(() => {
       const state = window.__godsEyeView.dataManager.layers
         .get('transit')
@@ -562,7 +573,7 @@ export async function runBostonLive({
     let selection = null;
     if (target) {
       await page.mouse.click(target.x, target.y);
-      await wait(250);
+      await whenFramesDrawn(page);
       selection = await page.evaluate((key) => {
         const state = window.__godsEyeView.dataManager.layers
           .get('transit')
@@ -606,15 +617,15 @@ export async function runTrailVisibility({
 }) {
   const name = 'Google 3D selected trail visible at 6 of 8 projected samples';
   await selectStyle(page, 'normal');
-  await page.evaluate(
-    async ({ altitude, pitch }) => {
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, { altitude, pitch }) => {
       const app = window.__godsEyeView;
       await app.dataManager.setEnabled('transit', true, { source: 'qa' });
       if (app.mapStackController.isStackAvailable('photoreal'))
         await app.mapStackController.setStack('photoreal');
-      const camera = app.viewer.camera,
-        C = camera.positionCartographic.constructor;
-      camera.setView({
+      const C = qaGeo.cartographic;
+      window.__godsEyeView.engine.camera.setView({
         destination: C.toCartesian(
           C.fromDegrees(
             -97.7431,
@@ -627,11 +638,11 @@ export async function runTrailVisibility({
     },
     { altitude, pitch },
   );
-  await wait(8000);
-  const setup = await page.evaluate(
-    async ({ altitude, pitch, feed }) => {
-      const app = window.__godsEyeView,
-        scene = app.viewer.scene;
+  await whenTilesLoaded(page);
+  const setup = await evaluateWithGeo(
+    page,
+    async (qaGeo, { altitude, pitch, feed }) => {
+      const app = window.__godsEyeView;
       const layer = app.dataManager.layers.get('transit').module;
       const state = layer._transitStateForTest(),
         parts = layer._transitPartsForTest();
@@ -641,11 +652,13 @@ export async function runTrailVisibility({
         app.mapStackController.getActiveId() === 'photoreal';
       if (!google)
         return { google: false, reason: 'visible Google 3D tileset required' };
-      const C = scene.camera.positionCartographic.constructor;
+      const C = qaGeo.cartographic;
       const centreLat = 30.267 + 90 / 111320;
-      const floor = scene.sampleHeight(C.fromDegrees(-97.7431, centreLat));
+      const floor = window.__godsEyeView.engine.surface.sampleHeight(
+        C.fromDegrees(-97.7431, centreLat),
+      );
       if (Number.isFinite(floor))
-        scene.camera.setView({
+        window.__godsEyeView.engine.camera.setView({
           destination: C.toCartesian(
             C.fromDegrees(
               -97.7431,
@@ -744,7 +757,7 @@ export async function runTrailVisibility({
     const layer = app.dataManager.layers.get('transit').module;
     const parts = layer._transitPartsForTest(),
       entry = layer._transitStateForTest()._vehicles.get(key);
-    const gl = scene.context._gl,
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2'),
       originals = new Map(),
       wrapped = new Map();
     let owner = null,
@@ -791,29 +804,35 @@ export async function runTrailVisibility({
         return original.apply(this, args);
       };
     }
-    const pre = scene.preRender.addEventListener(() => {
-      headBytes = bodyBytes = 0;
-      const walk = (collection) => {
-        for (let i = 0; i < collection.length; i++) {
-          const primitive = collection.get(i);
-          const kind = window.__qaTransitLineKinds.get(primitive?.gevGroundSet);
-          if (kind) wrap(primitive, kind);
-          else if (typeof primitive?.get === 'function') walk(primitive);
-        }
-      };
-      walk(scene.primitives);
-      walk(scene.groundPrimitives);
-    });
-    const post = scene.postRender.addEventListener(() => {
-      frames++;
-      headUploadMax = Math.max(headUploadMax, headBytes);
-      bodyUploadMax = Math.max(bodyUploadMax, bodyBytes);
-    });
+    const pre = window.__godsEyeView.engine.frames.preRender.addEventListener(
+      () => {
+        headBytes = bodyBytes = 0;
+        const walk = (collection) => {
+          for (let i = 0; i < collection.length; i++) {
+            const primitive = collection.get(i);
+            const kind = window.__qaTransitLineKinds.get(
+              primitive?.gevGroundSet,
+            );
+            if (kind) wrap(primitive, kind);
+            else if (typeof primitive?.get === 'function') walk(primitive);
+          }
+        };
+        walk(scene.primitives);
+        walk(scene.groundPrimitives);
+      },
+    );
+    const post = window.__godsEyeView.engine.frames.postRender.addEventListener(
+      () => {
+        frames++;
+        headUploadMax = Math.max(headUploadMax, headBytes);
+        bodyUploadMax = Math.max(bodyUploadMax, bodyBytes);
+      },
+    );
     try {
       // Include a full history upload, even if the first selection already rendered.
       entry.pathRevision = -1;
       parts.trails.prepareEntry(entry);
-      scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 20000));
       headCpu.sort((a, b) => a - b);
       return {
@@ -832,221 +851,237 @@ export async function runTrailVisibility({
         if (!primitive.isDestroyed()) primitive.update = update;
     }
   }, setup.key);
-  const result = await page.evaluate(async (setup) => {
-    const app = window.__godsEyeView,
-      scene = app.viewer.scene;
-    const layer = app.dataManager.layers.get('transit').module;
-    const state = layer._transitStateForTest(),
-      parts = layer._transitPartsForTest();
-    const entry = state._vehicles.get(setup.key);
-    const trail = parts.trails.diagnostics();
-    if (!entry || !trail)
-      return { ...setup, present: 0, reason: 'selection disappeared' };
-    const { setRate } = await import('/src/data/contactPlayback.js');
-    setRate(entry.track, 0, {
-      wallNowMs: Date.now(),
-      monoNowMs: performance.now(),
-    });
-    parts.rendering.sampleIdle(entry);
-    parts.rendering.schedulePlayback(entry);
-    parts.rendering.syncRenderHold();
-    const ready = () =>
-      app.tileset?.show !== false &&
-      app.tileset?.tilesLoaded === true &&
-      (scene.globe?.show === false || scene.globe?.tilesLoaded === true) &&
-      trail.body?.ready === true &&
-      (!trail.headPrimitive || trail.headPrimitive.ready === true);
-    // Require sustained readiness after freezing playback, before projecting
-    // onto the refined surface. Repeated captures still check pixel stability.
-    const tilesReady = await new Promise((resolve) => {
-      const started = performance.now();
-      let readySince = null;
-      const timer = setInterval(() => {
-        const now = performance.now();
-        readySince = ready() ? (readySince ?? now) : null;
-        scene.requestRender();
-        if (
-          (readySince !== null && now - readySince >= 500) ||
-          now - started >= 30000
-        ) {
-          clearInterval(timer);
-          resolve(readySince !== null && now - readySince >= 500);
+  const result = await evaluateWithGeo(
+    page,
+    async (qaGeo, setup) => {
+      const app = window.__godsEyeView,
+        scene = app.viewer.scene;
+      const layer = app.dataManager.layers.get('transit').module;
+      const state = layer._transitStateForTest(),
+        parts = layer._transitPartsForTest();
+      const entry = state._vehicles.get(setup.key);
+      const trail = parts.trails.diagnostics();
+      if (!entry || !trail)
+        return { ...setup, present: 0, reason: 'selection disappeared' };
+      const { setRate } = await import('/src/data/contactPlayback.js');
+      setRate(entry.track, 0, {
+        wallNowMs: Date.now(),
+        monoNowMs: performance.now(),
+      });
+      parts.rendering.sampleIdle(entry);
+      parts.rendering.schedulePlayback(entry);
+      parts.rendering.syncRenderHold();
+      const ready = () =>
+        app.tileset?.show !== false &&
+        window.__godsEyeView.engine.surface.tilesLoaded() === true &&
+        (scene.globe?.show === false ||
+          window.__godsEyeView.engine.surface.tilesLoaded() === true) &&
+        trail.body?.ready === true &&
+        (!trail.headPrimitive || trail.headPrimitive.ready === true);
+      // Require sustained readiness after freezing playback, before projecting
+      // onto the refined surface. Repeated captures still check pixel stability.
+      const tilesReady = await new Promise((resolve) => {
+        const started = performance.now();
+        let readySince = null;
+        const timer = setInterval(() => {
+          const now = performance.now();
+          readySince = ready() ? (readySince ?? now) : null;
+          window.__godsEyeView.engine.render.request();
+          if (
+            (readySince !== null && now - readySince >= 500) ||
+            now - started >= 30000
+          ) {
+            clearInterval(timer);
+            resolve(readySince !== null && now - readySince >= 500);
+          }
+        }, 80);
+      });
+      if (!tilesReady)
+        return {
+          ...setup,
+          present: 0,
+          reason: 'tiles or trail geometry did not become ready',
+        };
+      const canvas = window.__godsEyeView.engine.host.canvas,
+        gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      const scale = canvas.width / canvas.clientWidth;
+      const points = entry.trailSegments
+        .filter((s) => s.toT <= entry.sample.displayT)
+        .flatMap((s) => s.positions);
+      if (trail.head?.show) points.push(...trail.head.positions);
+      if (points.length < 2)
+        return { ...setup, present: 0, reason: 'no completed path' };
+      const C = qaGeo.cartographic;
+      // Marker positions are plain { x, y, z } now (the display's handles), not
+      // Cesium Cartesian3 instances with static helpers.
+      const V = {
+        distance: (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z),
+        lerp: (a, b, t) => ({
+          x: a.x + (b.x - a.x) * t,
+          y: a.y + (b.y - a.y) * t,
+          z: a.z + (b.z - a.z) * t,
+        }),
+      };
+      // What the floor samples leave out: the Cesium primitives the engine
+      // draws the transit mover sets and trail lines with.
+      const drawnByTransit = [];
+      const walk = (collection) => {
+        for (let i = 0; i < collection.length; i++) {
+          const item = collection.get(i);
+          if (
+            String(item?.gevMoverSet ?? '').startsWith('transit') ||
+            String(item?.gevGroundSet ?? '').startsWith('transit-trail-')
+          )
+            drawnByTransit.push(item);
+          else if (typeof item?.get === 'function' && 'length' in item)
+            walk(item);
         }
-      }, 80);
-    });
-    if (!tilesReady)
+      };
+      walk(scene.primitives);
+      walk(scene.groundPrimitives);
+      const lengths = [0];
+      for (let i = 1; i < points.length; i++)
+        lengths.push(lengths.at(-1) + V.distance(points[i - 1], points[i]));
+      const mul = (m, v) =>
+        [0, 1, 2, 3].map(
+          (i) =>
+            m[i] * v[0] + m[i + 4] * v[1] + m[i + 8] * v[2] + m[i + 12] * v[3],
+        );
+      const samples = Array.from({ length: 8 }, (_, i) => {
+        const d = (lengths.at(-1) * (i + 1)) / 9;
+        let j = 1;
+        while (j < lengths.length - 1 && lengths[j] < d) j++;
+        const p = V.lerp(
+          points[j - 1],
+          points[j],
+          (d - lengths[j - 1]) / Math.max(0.001, lengths[j] - lengths[j - 1]),
+        );
+        const cart = C.fromCartesian(p);
+        const height = window.__godsEyeView.engine.surface.sampleHeight(
+          cart,
+          drawnByTransit,
+        );
+        if (Number.isFinite(height)) cart.height = height;
+        const surface = C.toCartesian(cart);
+        const q = mul(window.__godsEyeView.engine.projector.viewProjection(), [
+          surface.x,
+          surface.y,
+          surface.z,
+          1,
+        ]);
+        return {
+          x: ((q[0] / q[3]) * 0.5 + 0.5) * canvas.clientWidth,
+          y: (0.5 - (q[1] / q[3]) * 0.5) * canvas.clientHeight,
+          inFront: q[3] > 0,
+          radius: (Math.SQRT2 * Math.ceil(3 * scale)) / scale,
+        };
+      });
+      const marker = entry.marker.position;
+      const markerClip = mul(
+        window.__godsEyeView.engine.projector.viewProjection(),
+        [marker.x, marker.y, marker.z, 1],
+      );
+      const sprite = {
+        x: ((markerClip[0] / markerClip[3]) * 0.5 + 0.5) * canvas.clientWidth,
+        y: (0.5 - (markerClip[1] / markerClip[3]) * 0.5) * canvas.clientHeight,
+        // Include the padded, rotated sprite and its selection bracket.
+        radius: Math.hypot(entry.marker.width, entry.marker.height) / 2 + 4,
+      };
+      const read = () =>
+        samples.map(({ x, y, inFront }) => {
+          const r = Math.ceil(3 * scale),
+            px = Math.round(x * scale),
+            py = Math.round(canvas.height - 1 - y * scale);
+          if (
+            !inFront ||
+            px < r ||
+            py < r ||
+            px + r >= canvas.width ||
+            py + r >= canvas.height
+          )
+            return null;
+          const data = new Uint8Array((2 * r + 1) ** 2 * 4);
+          gl.readPixels(
+            px - r,
+            py - r,
+            2 * r + 1,
+            2 * r + 1,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            data,
+          );
+          return data;
+        });
+      const frame = () =>
+        new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            remove();
+            reject(new Error('Trail framebuffer did not render within 5 s'));
+          }, 5000);
+          const remove =
+            window.__godsEyeView.engine.frames.postRender.addEventListener(
+              () => {
+                remove();
+                clearTimeout(timeout);
+                resolve(read());
+              },
+            );
+          window.__godsEyeView.engine.render.request();
+        });
+      const trailRenderer = window.__qaTransitTrail;
+      if (!trailRenderer)
+        return { ...setup, present: 0, reason: 'no trail renderer captured' };
+      let showTrail = false;
+      // Body and head together, as the trail's own visibility switch does.
+      const applyVisibility = () => trailRenderer.setVisible(showTrail);
+      // Override the layer's frame update in both states; selection stays fixed.
+      const removeVisibility =
+        window.__godsEyeView.engine.frames.preRender.addEventListener(
+          applyVisibility,
+        );
+      const captures = [];
+      let captureReady = true;
+      try {
+        for (const visible of [false, true, false, true]) {
+          showTrail = visible;
+          // Let post-processing settle before each measured framebuffer.
+          for (let i = 0; i < 3; i++) await frame();
+          captures.push(await frame());
+          const current = parts.trails.diagnostics();
+          captureReady &&=
+            ready() &&
+            current?.body === trail.body &&
+            current?.headPrimitive === trail.headPrimitive;
+        }
+      } finally {
+        removeVisibility();
+        trailRenderer.setVisible(true);
+        await frame();
+      }
+      const [off, on, offAgain, onAgain] = captures.map((patches) =>
+        patches.map((p) => (p ? Array.from(p) : null)),
+      );
       return {
         ...setup,
-        present: 0,
-        reason: 'tiles or trail geometry did not become ready',
+        fixes: entry.track.count,
+        selected: state._selectedKey === setup.key,
+        pathMetres: lengths.at(-1),
+        samples,
+        on,
+        off,
+        onAgain,
+        offAgain,
+        sprite,
+        tilesReady: captureReady,
+        elapsedDisplayMs: entry.sample.displayT - setup.startDisplayT,
+        movedMetres: Math.abs(entry.sample.lat - setup.startLat) * 111320,
+        lines: trail.body?.lines ?? 0,
+        headStrategy: trail.headStrategy,
+        headRebuilds: trail.headRebuilds ?? null,
       };
-    const canvas = scene.canvas,
-      gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-    const scale = canvas.width / canvas.clientWidth;
-    const points = entry.trailSegments
-      .filter((s) => s.toT <= entry.sample.displayT)
-      .flatMap((s) => s.positions);
-    if (trail.head?.show) points.push(...trail.head.positions);
-    if (points.length < 2)
-      return { ...setup, present: 0, reason: 'no completed path' };
-    const C = scene.camera.positionCartographic.constructor;
-    // Marker positions are plain { x, y, z } now (the display's handles), not
-    // Cesium Cartesian3 instances with static helpers.
-    const V = {
-      distance: (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z),
-      lerp: (a, b, t) => ({
-        x: a.x + (b.x - a.x) * t,
-        y: a.y + (b.y - a.y) * t,
-        z: a.z + (b.z - a.z) * t,
-      }),
-    };
-    // What the floor samples leave out: the Cesium primitives the engine
-    // draws the transit mover sets and trail lines with.
-    const drawnByTransit = [];
-    const walk = (collection) => {
-      for (let i = 0; i < collection.length; i++) {
-        const item = collection.get(i);
-        if (
-          String(item?.gevMoverSet ?? '').startsWith('transit') ||
-          String(item?.gevGroundSet ?? '').startsWith('transit-trail-')
-        )
-          drawnByTransit.push(item);
-        else if (typeof item?.get === 'function' && 'length' in item)
-          walk(item);
-      }
-    };
-    walk(scene.primitives);
-    walk(scene.groundPrimitives);
-    const lengths = [0];
-    for (let i = 1; i < points.length; i++)
-      lengths.push(lengths.at(-1) + V.distance(points[i - 1], points[i]));
-    const mul = (m, v) =>
-      [0, 1, 2, 3].map(
-        (i) =>
-          m[i] * v[0] + m[i + 4] * v[1] + m[i + 8] * v[2] + m[i + 12] * v[3],
-      );
-    const samples = Array.from({ length: 8 }, (_, i) => {
-      const d = (lengths.at(-1) * (i + 1)) / 9;
-      let j = 1;
-      while (j < lengths.length - 1 && lengths[j] < d) j++;
-      const p = V.lerp(
-        points[j - 1],
-        points[j],
-        (d - lengths[j - 1]) / Math.max(0.001, lengths[j] - lengths[j - 1]),
-      );
-      const cart = C.fromCartesian(p);
-      const height = scene.sampleHeight(cart, drawnByTransit);
-      if (Number.isFinite(height)) cart.height = height;
-      const surface = C.toCartesian(cart);
-      const q = mul(
-        scene.camera.frustum.projectionMatrix,
-        mul(scene.camera.viewMatrix, [surface.x, surface.y, surface.z, 1]),
-      );
-      return {
-        x: ((q[0] / q[3]) * 0.5 + 0.5) * canvas.clientWidth,
-        y: (0.5 - (q[1] / q[3]) * 0.5) * canvas.clientHeight,
-        inFront: q[3] > 0,
-        radius: (Math.SQRT2 * Math.ceil(3 * scale)) / scale,
-      };
-    });
-    const marker = entry.marker.position;
-    const markerClip = mul(
-      scene.camera.frustum.projectionMatrix,
-      mul(scene.camera.viewMatrix, [marker.x, marker.y, marker.z, 1]),
-    );
-    const sprite = {
-      x: ((markerClip[0] / markerClip[3]) * 0.5 + 0.5) * canvas.clientWidth,
-      y: (0.5 - (markerClip[1] / markerClip[3]) * 0.5) * canvas.clientHeight,
-      // Include the padded, rotated sprite and its selection bracket.
-      radius: Math.hypot(entry.marker.width, entry.marker.height) / 2 + 4,
-    };
-    const read = () =>
-      samples.map(({ x, y, inFront }) => {
-        const r = Math.ceil(3 * scale),
-          px = Math.round(x * scale),
-          py = Math.round(canvas.height - 1 - y * scale);
-        if (
-          !inFront ||
-          px < r ||
-          py < r ||
-          px + r >= canvas.width ||
-          py + r >= canvas.height
-        )
-          return null;
-        const data = new Uint8Array((2 * r + 1) ** 2 * 4);
-        gl.readPixels(
-          px - r,
-          py - r,
-          2 * r + 1,
-          2 * r + 1,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          data,
-        );
-        return data;
-      });
-    const frame = () =>
-      new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          remove();
-          reject(new Error('Trail framebuffer did not render within 5 s'));
-        }, 5000);
-        const remove = scene.postRender.addEventListener(() => {
-          remove();
-          clearTimeout(timeout);
-          resolve(read());
-        });
-        scene.requestRender();
-      });
-    const trailRenderer = window.__qaTransitTrail;
-    if (!trailRenderer)
-      return { ...setup, present: 0, reason: 'no trail renderer captured' };
-    let showTrail = false;
-    // Body and head together, as the trail's own visibility switch does.
-    const applyVisibility = () => trailRenderer.setVisible(showTrail);
-    // Override the layer's frame update in both states; selection stays fixed.
-    const removeVisibility = scene.preRender.addEventListener(applyVisibility);
-    const captures = [];
-    let captureReady = true;
-    try {
-      for (const visible of [false, true, false, true]) {
-        showTrail = visible;
-        // Let post-processing settle before each measured framebuffer.
-        for (let i = 0; i < 3; i++) await frame();
-        captures.push(await frame());
-        const current = parts.trails.diagnostics();
-        captureReady &&=
-          ready() &&
-          current?.body === trail.body &&
-          current?.headPrimitive === trail.headPrimitive;
-      }
-    } finally {
-      removeVisibility();
-      trailRenderer.setVisible(true);
-      await frame();
-    }
-    const [off, on, offAgain, onAgain] = captures.map((patches) =>
-      patches.map((p) => (p ? Array.from(p) : null)),
-    );
-    return {
-      ...setup,
-      fixes: entry.track.count,
-      selected: state._selectedKey === setup.key,
-      pathMetres: lengths.at(-1),
-      samples,
-      on,
-      off,
-      onAgain,
-      offAgain,
-      sprite,
-      tilesReady: captureReady,
-      elapsedDisplayMs: entry.sample.displayT - setup.startDisplayT,
-      movedMetres: Math.abs(entry.sample.lat - setup.startLat) * 111320,
-      lines: trail.body?.lines ?? 0,
-      headStrategy: trail.headStrategy,
-      headRebuilds: trail.headRebuilds ?? null,
-    };
-  }, setup);
+    },
+    setup,
+  );
   const pixels = reduceTrailPixels(result.on, result.off, result);
   result.cost = cost;
   result.altitude = altitude;

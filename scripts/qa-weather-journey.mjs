@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
 /**
  * qa-weather-journey — drive the Weather layers the way a person would and
  * keep the evidence: numbered screenshots plus per-step layer diagnostics.
@@ -19,9 +21,9 @@
  * Requires a running dev server. Screenshots and steps.json land in
  * <out>/<label>/.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -41,13 +43,8 @@ mkdirSync(outDir, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WEATHER = ['weather-radar', 'weather-satellite', 'weather-lightning'];
 
-const browser = await puppeteer.launch({
-  headless: flag('--headless') ? 'new' : false,
-  executablePath:
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((p) =>
-      existsSync(p),
-    ),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   defaultViewport: null,
   args: [
@@ -95,10 +92,10 @@ try {
     }
   });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, {
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, {
     timeout: 120_000,
   });
-  await sleep(12_000);
+  await whenSettled(page);
 
   const diagnostics = () =>
     page.evaluate(
@@ -106,9 +103,13 @@ try {
         const gev = window.__godsEyeView;
         const dm = gev.dataManager;
         const out = {
-          basemap: gev.tileset ? 'google-3d' : 'keyless-globe',
-          globeShown: gev.viewer.scene.globe.show,
-          heightM: Math.round(gev.viewer.camera.positionCartographic.height),
+          basemap: gev.engine.maps.photorealActive()
+            ? 'google-3d'
+            : 'keyless-globe',
+          imagerySurface: gev.engine.imagery.surface(),
+          heightM: Math.round(
+            window.__godsEyeView.engine.camera.pose().cartographic.height,
+          ),
           summaryHeight: Math.round(
             document.querySelector('.weather-summary')?.getBoundingClientRect()
               .height ?? 0,
@@ -151,11 +152,13 @@ try {
     page.evaluate(
       (ms) =>
         new Promise((resolve) => {
-          const scene = window.__godsEyeView.viewer.scene;
           let n = 0;
-          const off = scene.postRender.addEventListener(() => {
-            n += 1;
-          });
+          const off =
+            window.__godsEyeView.engine.frames.postRender.addEventListener(
+              () => {
+                n += 1;
+              },
+            );
           setTimeout(() => {
             off();
             resolve(n);
@@ -235,13 +238,13 @@ try {
     heading = 0,
     duration = 2,
   ) => {
-    await page.evaluate(
-      ({ lon, lat, height, pitch, heading, duration }) => {
-        const v = window.__godsEyeView.viewer;
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, { lon, lat, height, pitch, heading, duration }) => {
         const d2r = Math.PI / 180;
-        v.camera.cancelFlight();
-        v.camera.flyTo({
-          destination: v.scene.ellipsoid.cartographicToCartesian({
+        window.__godsEyeView.engine.camera.cancelFlight();
+        window.__godsEyeView.engine.camera.flyTo({
+          destination: qaGeo.cartographic.toCartesian({
             longitude: lon * d2r,
             latitude: lat * d2r,
             height,
@@ -252,7 +255,7 @@ try {
       },
       { lon, lat, height, pitch, heading, duration },
     );
-    await sleep(duration * 1000 + 3000);
+    await whenSettled(page);
   };
 
   console.log(`\nqa-weather-journey · ${label} · ${url}`);
@@ -271,40 +274,40 @@ try {
   // 2. Wind from its row, then each field, then ECMWF.
   await clickRow('wind');
   await waitReady(['wind']);
-  await sleep(1500);
+  await whenSettled(page);
   await shot('globe-wind-trails', 'Wind on (trails, no field)');
   await clickChip('wind', 'overlay-speed');
-  await sleep(2500);
+  await whenSettled(page);
   await shot('globe-wind-speed', 'Wind speed field');
   await clickChip('wind', 'overlay-temperature');
-  await sleep(2500);
+  await whenSettled(page);
   await waitReady(['wind']);
   await shot('globe-wind-temperature', 'Wind + 2 m temperature');
   await clickChip('wind', 'overlay-pressure');
-  await sleep(2500);
+  await whenSettled(page);
   await waitReady(['wind']);
   await shot('globe-wind-pressure', 'Wind + MSL pressure');
   await clickChip('wind', 'model-ifs');
   await waitReady(['wind']);
-  await sleep(2500);
+  await whenSettled(page);
   await shot('globe-wind-ecmwf-pressure', 'ECMWF IFS model');
   await clickChip('wind', 'model-gfs');
   await clickChip('wind', 'overlay-speed');
   await waitReady(['wind']);
-  await sleep(1500);
+  await whenSettled(page);
 
   // 3. Observed products.
   for (const id of WEATHER) await clickRow(id);
   await clickRow('weather-cyclones');
   await waitReady([...WEATHER]);
-  await sleep(2500);
+  await whenSettled(page);
   await shot(
     'globe-all-weather',
     'Wind speed + radar + regional IR + lightning + cyclones',
   );
   await clickChip('weather-satellite', 'clouds');
   await waitReady(['weather-satellite']);
-  await sleep(2500);
+  await whenSettled(page);
   await shot('globe-global-infrared', 'Satellite: global infrared mosaic');
   await clickChip('weather-satellite', 'clouds-regional');
   await waitReady(['weather-satellite']);
@@ -328,21 +331,21 @@ try {
     return first.textContent.trim();
   });
   if (storm) {
-    await sleep(1500);
+    await whenSettled(page);
     if (await clickChip('weather-cyclones', 'focus')) {
-      await sleep(6000);
+      await whenSettled(page);
       await shot('storm-view', `View storm: ${storm}`);
       await page.evaluate(() =>
-        window.__godsEyeView.viewer.camera.zoomIn(400_000),
+        window.__godsEyeView.engine.camera.zoomIn(400_000),
       );
-      await sleep(4000);
+      await whenSettled(page);
       await shot('storm-closer', 'Zoomed toward the storm');
     }
   } else console.log('  (no active cyclone advisories to follow)');
 
   // 5. US radar, then regional → city → street over the same spot.
   await clickChip('weather-radar', 'coverage');
-  await sleep(6000);
+  await whenSettled(page);
   await shot('us-radar', 'View US radar');
   await fly(-94.6, 37.5, 600_000);
   await shot('regional-600km', 'Regional 600 km');
@@ -391,7 +394,7 @@ try {
     await page.mouse.wheel({ deltaY: 240 });
     await sleep(120);
   }
-  await sleep(3000);
+  await whenSettled(page);
   await shot('wheel-out', 'Wheel zoom out ×12');
   await page.mouse.move(cx - 200, cy);
   await page.mouse.down();
@@ -400,13 +403,13 @@ try {
     await sleep(30);
   }
   await page.mouse.up();
-  await sleep(2500);
+  await whenSettled(page);
   await shot('drag-pan', 'Drag pan');
   for (let i = 0; i < 10; i++) {
     await page.mouse.wheel({ deltaY: -240 });
     await sleep(120);
   }
-  await sleep(4000);
+  await whenSettled(page);
   await shot('wheel-in', 'Wheel zoom in ×10');
 
   // 8. Back to Earth with everything on.
@@ -419,5 +422,5 @@ try {
   );
   console.log(`\nWrote ${steps.length} steps to ${outDir}`);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

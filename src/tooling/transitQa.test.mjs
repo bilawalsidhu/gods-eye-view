@@ -2,6 +2,8 @@ import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as geo from '../geo/index.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { getTransitFeed } from '../data/transitFeeds.js';
 import {
   chooseLiveCities,
@@ -58,10 +60,19 @@ function pageFixture(t) {
     createElement: () => new Element(),
     getElementById: (id) => elements.get(id),
     querySelector: () => null,
+    getAnimations: () => [],
   };
   globalThis.document = document;
-  globalThis.window = {};
+  const engine = createFakeEngine();
+  engine.render.request = () => setImmediate(() => engine.fake.frame());
+  globalThis.window = {
+    __godsEyeView: {
+      engine,
+      styleManager: { initialRestorePromise: Promise.resolve() },
+    },
+  };
   t.after(() => {
+    engine.destroy();
     for (const [name, value] of Object.entries(prior)) {
       if (value === undefined) delete globalThis[name];
       else globalThis[name] = value;
@@ -77,9 +88,12 @@ function pageFixture(t) {
     return elements.get(selector.slice(1));
   };
   const page = {
-    evaluate: async (fn, ...args) => fn(...args),
-    waitForFunction: async (fn, options, ...args) =>
-      assert.ok(fn(...args), 'UI condition must hold'),
+    evaluate: async (fn, ...args) =>
+      typeof fn === 'string' ? (0, eval)(fn) : fn(...args),
+    waitForFunction: async (fn, options, ...args) => {
+      assert.ok(fn(...args), 'UI condition must hold');
+      return { dispose: async () => {} };
+    },
     waitForSelector: async (selector) =>
       assert.ok(find(selector), `missing ${selector}`),
     $eval: async (selector, fn, ...args) => {
@@ -241,7 +255,7 @@ test('city motion checks load deterministic playback before reading rendered sam
     source.indexOf('const headingA = await sampleScreen(page)', fixture) >
       fixture,
   );
-  assert.match(source, /scene.renderError.addEventListener/);
+  assert.match(source, /hookRenderErrors\(page\)/);
 });
 
 const { boundPageEvaluations, restoreRetainedTransit, sampleTransitPixels } =
@@ -259,7 +273,9 @@ test('page promise deadline rejects a stuck enable or teardown and preserves ord
 
 test('reload picks a surviving primed vehicle and reports unavailable snapshots as unexercised', async (t) => {
   const previous = globalThis.window;
+  const engine = createFakeEngine();
   t.after(() => {
+    engine.destroy();
     globalThis.window = previous;
   });
   let selected;
@@ -267,14 +283,7 @@ test('reload picks a surviving primed vehicle and reports unavailable snapshots 
   const vehicles = new Map([[entry.key, entry]]);
   globalThis.window = {
     __godsEyeView: {
-      viewer: {
-        camera: {
-          positionCartographic: {
-            constructor: { fromDegrees: (...v) => v, toCartesian: (v) => v },
-          },
-          setView() {},
-        },
-      },
+      engine,
       dataManager: {
         setEnabled: async () => {},
         layers: new Map([
@@ -302,7 +311,7 @@ test('reload picks a surviving primed vehicle and reports unavailable snapshots 
     { vehicleId: 'departed', oldestT: 10 },
     { vehicleId: 'survivor', oldestT: 20 },
   ];
-  assert.deepEqual(await restoreRetainedTransit(primed), {
+  assert.deepEqual(await restoreRetainedTransit(geo, primed), {
     key: entry.key,
     oldest: 20,
   });
@@ -318,14 +327,14 @@ test('reload picks a surviving primed vehicle and reports unavailable snapshots 
     setTimeout(() => vehicles.set(entry.key, entry), 5);
   };
   assert.equal(
-    (await restoreRetainedTransit(primed)).key,
+    (await restoreRetainedTransit(geo, primed)).key,
     entry.key,
     'wait for discovery instead of declaring every vehicle departed',
   );
   manager.setEnabled = async () => {};
   assert.equal(
     (
-      await restoreRetainedTransit([
+      await restoreRetainedTransit(geo, [
         { ...primed[1], feedId: 'mbta', primedAt: Date.now() - 60000 },
       ])
     ).unexercised,
@@ -334,8 +343,8 @@ test('reload picks a surviving primed vehicle and reports unavailable snapshots 
   );
   layer._transitStateForTest = () => ({ _vehicles: vehicles });
   vehicles.clear();
-  assert.equal((await restoreRetainedTransit(primed)).unexercised, true);
-  assert.equal((await restoreRetainedTransit([])).unexercised, true);
+  assert.equal((await restoreRetainedTransit(geo, primed)).unexercised, true);
+  assert.equal((await restoreRetainedTransit(geo, [])).unexercised, true);
 });
 
 test('sensor sampler waits for postRender and reads framebuffer pixels; stopped rendering rejects and removes listener', async (t) => {
@@ -382,6 +391,12 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
       if (render) queueMicrotask(() => listener?.());
     },
   };
+  const engine = createFakeEngine({ canvas: scene.canvas });
+  engine.frames.postRender = scene.postRender;
+  engine.projector.viewProjection = () => identity;
+  engine.picker.pick = () => ({ id: 'bus' });
+  engine.render.request = () => scene.requestRender();
+  t.after(() => engine.destroy());
   const raster = new Uint8ClampedArray(16 * 16 * 4).fill(255);
   globalThis.Image = class {
     width = 16;
@@ -399,7 +414,7 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
   };
   globalThis.window = {
     __godsEyeView: {
-      viewer: { scene },
+      engine,
       dataManager: {
         layers: new Map([
           [
@@ -494,19 +509,21 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
     'equal-width tram bands prefer the upper solid body',
   );
   sampledLayer._transitStateForTest = originalState;
-  scene.pick = () => ({ id: 'overlapping-label' });
+  engine.picker.pick = () => ({ id: 'overlapping-label' });
   assert.equal(
     (await sampleTransitPixels(page, {})).length,
     0,
     'a foreign pick across the sampled core disqualifies an obscured sprite',
   );
-  scene.pick = ({ x }) => ({ id: x < 200 ? 'overlapping-sprite' : 'bus' });
+  engine.picker.pick = ({ x }) => ({
+    id: x < 200 ? 'overlapping-sprite' : 'bus',
+  });
   assert.equal(
     (await sampleTransitPixels(page, {})).length,
     0,
     'a clear centre cannot qualify a partially obscured core',
   );
-  delete scene.pick;
+  engine.picker.pick = () => ({ id: 'bus' });
   const module = window.__godsEyeView.dataManager.layers.get('transit').module;
   const getState = module._transitStateForTest;
   module._transitStateForTest = () => {
