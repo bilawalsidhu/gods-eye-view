@@ -230,8 +230,8 @@ export function createTracking({
    * - SIGNAL LOST · <time since its last report>, dimmed: its coast has ended
    *   (or it holds at its last report after a missed update) and no newer
    *   report has come.
-   * - STALE, dimmed: it has missed an update and still coasts.
-   * - STALE, not dimmed: the whole feed is backing off.
+   * - STALE, dimmed: it has missed an update and still coasts, or the whole
+   *   feed is backing off.
    * @param {string} icao24
    * @returns {{text: string, dimmed: boolean}}
    */
@@ -273,8 +273,8 @@ export function createTracking({
           : `${formatNumber(Math.floor(sec / 60), { useGrouping: false })} ${unitLabel('min')}`;
       return { text: t('SIGNAL LOST · {time}', { time }), dimmed: true };
     }
-    if (missed) return { text: t('STALE'), dimmed: true };
-    if (backoff) return { text: t('STALE'), dimmed: false };
+    // A missed update or a stalled feed: no newer position is coming in.
+    if (missed || backoff) return { text: t('STALE'), dimmed: true };
     return { text: '', dimmed: false };
   }
 
