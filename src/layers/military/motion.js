@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import {
   lerpAngleDeg,
   speedRamp,
@@ -67,7 +68,7 @@ export function createMotion({
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
+      julianAt(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchRenderTime,
     );
@@ -213,7 +214,7 @@ export function createMotion({
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     if (!history || history.length === 0) return true;
     const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
+      julianAt(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );

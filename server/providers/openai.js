@@ -1,3 +1,4 @@
+import { createOpenAiChatHandler } from './openai/chat.js';
 import { defaultSourceRoot } from './common/source-root.js';
 import { handleHudSummary } from './openai/hud-summary.js';
 import { createDebugLogHandler } from './openai/debug-log.js';
@@ -22,6 +23,10 @@ function openAiRealtimeProxy({
 } = {}) {
   const oauthLogin = createCodexOAuthLogin(realtime);
   function install(middlewares) {
+    middlewares.use(
+      '/api/openai/chat',
+      createOpenAiChatHandler({ ...realtime, annotationGuidance }),
+    );
     // Cost-bearing and log endpoints refuse cross-site browser requests
     // (see server/providers/common/same-site.js and SECURITY.md).
     middlewares.use('/api/openai/hud-summary', sameSiteGated(handleHudSummary));

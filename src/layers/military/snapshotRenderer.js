@@ -228,8 +228,8 @@ export function createMilitarySnapshotRenderer({
       const bbStale = flightState._billboards.get(icao24);
       if (bbStale) bbStale.position = liftedPos;
     }
-    // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
-    // budget-capped, viewer-proximate, google-3d regime only), excluding
+    // Round 4: sample the RENDERED mesh for those cells (a few probes per
+    // cell, budget-capped, viewer-proximate, google-3d regime only), excluding
     // this layer's own billboards/models from the probe.
     {
       const viewerCarto =

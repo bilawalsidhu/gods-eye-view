@@ -421,6 +421,49 @@ const COUNTRY_TARGET_ALIASES = new Map([
   ['drc', 'democratic republic of the congo'],
 ]);
 
+/**
+ * Country aliases that are another name for the very same unit. "Great
+ * Britain" and "Britain" are islands, "America" is also two continents and
+ * "Korea" two countries, so those find a country without naming it.
+ */
+const COUNTRY_IDENTITY_ALIASES = new Set([
+  'usa',
+  'us',
+  'u s',
+  'u s a',
+  'united states',
+  'uk',
+  'u k',
+  'russian federation',
+  'czechia',
+  'tanzania',
+  'drc',
+]);
+
+/**
+ * The unit an ask names in the matcher's own terms, when its words differ
+ * from the unit's name: "State of Texas" names Texas at admin level 1, and
+ * "USA" or "Country of USA" names United States of America. Null when the
+ * ask is just a name. Names are folded with `normalizeAdminName`.
+ * @param {string} text
+ * @returns {{name: string, level: 'country'|'admin1'}|null}
+ */
+export function adminQueryIdentity(text) {
+  const parsed = parseAdminQuery(text);
+  if (!parsed?.name) return null;
+  if (parsed.kind === 'state' && parsed.form === 'prefix')
+    return { name: parsed.name, level: 'admin1' };
+  if (parsed.kind !== 'country' && parsed.kind !== 'any') return null;
+  if (COUNTRY_IDENTITY_ALIASES.has(parsed.name))
+    return {
+      name: COUNTRY_TARGET_ALIASES.get(parsed.name),
+      level: 'country',
+    };
+  return parsed.kind === 'country'
+    ? { name: parsed.name, level: 'country' }
+    : null;
+}
+
 const COUNTRY_ALIASES = new Map([
   ...COUNTRY_TARGET_ALIASES,
   ['england', 'united kingdom'],
@@ -794,6 +837,35 @@ export async function findAdminArea(query, { near = null } = {}) {
   if (!candidates.length) return null;
   const ranked = rank(candidates, near);
   return toResult(ranked[0], candidates.length);
+}
+
+/**
+ * Every prominent unit an ask's words could mean — countries, and states or
+ * provinces that would answer a bare name (see `stateCandidates`) — for a
+ * caller that asks the user which one ("Georgia", "Punjab") instead of
+ * letting the camera decide. Qualifiers narrow the list as in
+ * `findAdminArea`; minor units ("Kent", "Santa Barbara") are left out.
+ *
+ * @param {string} query
+ * @returns {Promise<AdminArea[]>} Largest first; empty when none.
+ */
+export async function findAdminCandidates(query) {
+  const parsed = parseAdminQuery(query);
+  if (!parsed?.name || parsed.kind === 'county') return [];
+  const prominent = ({ entry }) =>
+    entry.kind === 'country' ||
+    (entry.feature.rank ?? Infinity) <= BARE_NAME_MAX_RANK ||
+    Boolean(entry.feature.cityState);
+  const candidates = [
+    ...(await countryCandidates(parsed)),
+    ...(parsed.kind === 'country'
+      ? []
+      : await stateCandidates(parsed, { allowAmbiguous: true })),
+  ].filter(prominent);
+  const seen = new Set();
+  return rank(candidates, null)
+    .filter(({ entry }) => !seen.has(entry) && seen.add(entry))
+    .map((scored) => toResult(scored, candidates.length));
 }
 
 /**

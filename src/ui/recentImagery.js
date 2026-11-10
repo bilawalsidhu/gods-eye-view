@@ -37,6 +37,7 @@ const ESRI_NOTE = msg('Imagery on Esri · Google 3D returns when cleared');
 const LAYER_NOTICES = new Set([
   ESRI_NOTE,
   msg('Box and images cleared'),
+  msg('Search cancelled'),
   msg('Esri map unavailable · no swipe'),
   msg('Swipe needs a globe map'),
   msg('Imagery stays on Esri · CLEAR to use Google 3D'),

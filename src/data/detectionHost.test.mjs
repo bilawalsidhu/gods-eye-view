@@ -20,10 +20,21 @@ import {
 } from './detection.js';
 import {
   destroyWorldOverlay,
+  getOverlayPaintRect,
   initWorldOverlay,
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
+import { applyVesselOverlayPolicy } from './vesselLabels.js';
+import {
+  getKeyholeFadeTuning,
+  getKeyholeGeometry,
+  keyholeLabelAlphaFromGeometry,
+} from '../celestialRing.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
+import {
+  clearAwarenessEchoField,
+  setAwarenessEchoField,
+} from '../awarenessEcho.js';
 import { composeLabel, resolveTier } from './detectionDraw.js';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
@@ -50,8 +61,9 @@ class MockEvent {
 }
 
 class MockPath2D {
-  moveTo() {}
-  lineTo() {}
+  constructor() { this.points = []; }
+  moveTo(x, y) { this.points.push([x, y]); }
+  lineTo(x, y) { this.points.push([x, y]); }
   roundRect() {}
   arcTo() {}
   closePath() {}
@@ -98,7 +110,7 @@ function mockContext(target, trace) {
     // set at some point during the frame. globalAlpha rides along for the same
     // reason: the backdrop feather is an alpha, not a colour.
     fill(path) { record('fill', path, this.fillStyle, this.globalAlpha); },
-    stroke(path) { record('stroke', path, this.strokeStyle, this.lineWidth); },
+    stroke(path) { record('stroke', path, this.strokeStyle, this.lineWidth, this.globalAlpha); },
     fillRect(...args) { record('fillRect', ...args); },
     fillText(...args) { record('fillText', ...args); },
     drawImage(...args) { record('drawImage', ...args); },
@@ -574,6 +586,178 @@ test('every style paints its OWN plate token through the production callout path
   }
 });
 
+/** A vessel detection contact that names its ambient card, like the AIS layer does. */
+function shipWithCard(mmsi, position) {
+  return {
+    position,
+    sourceId: mmsi,
+    id: `SHIP-${mmsi}`,
+    metric: '6 kn',
+    type: 'SEA',
+    cardSourceId: 'ais-live-vessels',
+    cardEntryId: `vessel:${mmsi}`,
+  };
+}
+
+/** The production ambient vessel card (not protected: it goes through the arbiter). */
+function ambientVesselCard(mmsi, position) {
+  return applyVesselOverlayPolicy({
+    id: `vessel:${mmsi}`,
+    position,
+    title: `CARD-${mmsi}`,
+    details: ['CARGO · 6KT · 80°'],
+    gapPx: 10,
+  });
+}
+
+test('a callout stays readable when its own card is faded out at the keyhole rim', () => {
+  // Default keyhole tuning: 7% feather, 1% outside opacity.
+  assert.deepEqual(getKeyholeFadeTuning(), { fadeRatio: 0.07, outsideOpacity: 0.01 });
+  const width = 1600;
+  const height = 900;
+  const keyhole = getKeyholeGeometry(width, height);
+  const env = installEnvironment({ width, height, dpr: 1 });
+  // Just outside the keyhole's left rim: the card sits above or below the
+  // anchor (outside, 1% alpha), the callout to its right (inside the feather).
+  const position = new Cesium.Cartesian3(270 / (width / 2) - 1, 1 - 460 / (height / 2), 6_356_752);
+  const ship = shipWithCard('200', position);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const [alone] = getDetectionDiagnostics().calloutRects;
+    assert.ok(alone && alone.alpha >= 0.5, 'without a card the callout is clearly visible');
+
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', position)]);
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const rect = getOverlayPaintRect('ais-live-vessels', 'vessel:200');
+    assert.ok(rect, 'the host paints the card (at the outside opacity)');
+    const cardAlpha = keyholeLabelAlphaFromGeometry(rect.x + rect.w / 2, rect.y + rect.h / 2, keyhole);
+    assert.ok(cardAlpha <= 0.05, `the card is invisible at the rim (keyhole alpha ${cardAlpha})`);
+
+    const callouts = getDetectionDiagnostics().calloutRects;
+    assert.equal(callouts.length, 1, 'the callout keeps painting while its card is faded out');
+    assert.ok(callouts[0].alpha >= 0.4, 'and stays readable');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a callout stays hidden while its card fades out after leaving the published cohort', () => {
+  const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
+  const at = (x, y) => new Cesium.Cartesian3(x, y, 6_356_752);
+  const ship = shipWithCard('200', at(0.1, 0.1));
+  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  const frame = (ms) => {
+    env.ctx.calls.length = 0;
+    env.advance(ms);
+    env.postRender.raise();
+  };
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    for (let i = 0; i < 6; i++) frame(250);
+    frame(16);
+    assert.ok(painted('CARD-200') && !painted('SHIP-200'), 'steady state: card only');
+
+    // The vessel layer republishes its screen-grid cohort after a camera move:
+    // this vessel's card is replaced by another one, the vessel stays detectable.
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('300', at(-0.5, -0.4))]);
+    frame(16);
+    assert.ok(getOverlayPaintRect('ais-live-vessels', 'vessel:200'), 'the dropped card is still fading out');
+    assert.ok(painted('CARD-200'), 'and its text still paints');
+    assert.ok(!painted('SHIP-200'), 'no full callout under the fading card');
+
+    for (let i = 0; i < 4; i++) frame(250);
+    assert.ok(!painted('CARD-200'), 'the card has faded out');
+    assert.ok(painted('SHIP-200'), 'and the callout is back');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a vessel whose ambient card loses the collision keeps its callout', () => {
+  const env = installEnvironment({ width: 900, height: 600, dpr: 1 });
+  // Four vessels a few pixels apart: their cards collide (a card goes only
+  // above or below its anchor), so the arbiter paints only some of them.
+  const ships = [0, 1, 2, 3].map((i) =>
+    shipWithCard(String(100 + i), new Cesium.Cartesian3(-0.2 + i * 0.005, i * 0.005, 6_356_752)),
+  );
+  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }], () => {});
+    setOverlayEntries(
+      'ais-live-vessels',
+      ships.map((ship) => ambientVesselCard(ship.sourceId, ship.position)),
+    );
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    env.ctx.calls.length = 0;
+    settleFrame(env);
+
+    const winners = ships.filter((ship) => getOverlayPaintRect('ais-live-vessels', ship.cardEntryId));
+    assert.ok(
+      winners.length >= 1 && winners.length < ships.length,
+      `the colliding cards leave some unpainted (${winners.length} of ${ships.length} painted)`,
+    );
+    for (const ship of ships) {
+      const carded = winners.includes(ship);
+      assert.equal(
+        painted(ship.id),
+        !carded,
+        carded ? `${ship.id} draws no callout under its card` : `${ship.id} keeps its callout`,
+      );
+    }
+    assert.equal(
+      getDetectionDiagnostics().calloutRects.length,
+      ships.length - winners.length,
+      'only the callouts that painted are reported',
+    );
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a callout fades out while its card fades in instead of vanishing at once', () => {
+  const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
+  const ship = shipWithCard('200', new Cesium.Cartesian3(0.1, 0.1, 6_356_752));
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const [alone] = getDetectionDiagnostics().calloutRects;
+    assert.ok(alone.alpha >= 0.9, 'the callout starts fully visible');
+
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    const alphas = [];
+    for (let i = 0; i < 30; i++) {
+      env.advance(16);
+      env.postRender.raise();
+      alphas.push(getDetectionDiagnostics().calloutRects[0]?.alpha ?? 0);
+    }
+    assert.ok(
+      alphas.some((alpha) => alpha > 0.1 && alpha < alone.alpha - 0.1),
+      `the callout passes through partial opacity: ${alphas.map((a) => a.toFixed(2)).join(' ')}`,
+    );
+    assert.equal(alphas.at(-1), 0, 'and is gone once the card is fully in');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
 test('space-tier callouts take the heavier plate while air contacts keep the light one', () => {
   // Satellites sit over the high-albedo lit Earth disc far more often than
   // aircraft do, so the space tier carries the heavier backing. Losing the
@@ -623,6 +807,231 @@ test('surveillance military tier reaches the dedicated render target as shipped 
     assert.ok(env.detectionCtx.calls.some(([name, path]) => name === 'stroke'
       && path instanceof MockPath2D));
   } finally {
+    env.cleanup();
+  }
+});
+
+test('Global Context echo brackets reach the canvas in the detection style colour', () => {
+  const env = installEnvironment();
+  // Fronts every millisecond with a long fade, so the contact is lit on
+  // whatever frame paints; a distinctive width picks the echo stroke out.
+  const echo = {
+    layerIds: ['military'],
+    fadeMs: 60_000,
+    color: 'rgb(1, 2, 3)',
+    spreadPx: 8,
+    lineWidth: 3.25,
+  };
+  const echoStrokes = () =>
+    env.detectionCtx.calls
+      .filter(([name, , , width]) => name === 'stroke' && width === echo.lineWidth)
+      .map(([, , style]) => style);
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo,
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [militaryLayer()], () => {});
+    setMode('DENSE');
+    setDetectionStyle('normal');
+    settleFrame(env);
+    assert.ok(echoStrokes().length > 0, 'the echo bracket is painted');
+    assert.ok(echoStrokes().every((style) => style === echo.color));
+
+    // CRT, NVG and FLIR keep their own palettes.
+    for (const style of ['retro', 'surveillance', 'thermal']) {
+      env.detectionCtx.calls.length = 0;
+      setDetectionStyle(style);
+      settleFrame(env);
+      const strokes = echoStrokes();
+      assert.ok(strokes.length > 0, style);
+      assert.ok(
+        strokes.every((stroke) => stroke === DETECTION_THEME_MAP[style].line),
+        `${style} echoes take the style line colour, got ${strokes}`,
+      );
+    }
+
+  } finally {
+    clearAwarenessEchoField();
+    env.cleanup();
+  }
+});
+
+test('a Global Context echo bracket is drawn outside its contact bracket and dimmer than it', () => {
+  const env = installEnvironment();
+  const echo = {
+    layerIds: ['military'],
+    fadeMs: 60_000,
+    color: 'rgb(1, 2, 3)',
+    spreadPx: 8,
+    lineWidth: 3.25,
+  };
+  // Fronts every millisecond keep the echo at full strength; a level of 0.5
+  // halves it, so it sits 4 px out and draws at half the bracket's alpha.
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo,
+      level: () => 0.5,
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [militaryLayer()], () => {});
+    setMode('DENSE');
+    setDetectionStyle('normal');
+    settleFrame(env);
+    env.detectionCtx.calls.length = 0;
+    settleFrame(env);
+    const strokes = env.detectionCtx.calls.filter(([name]) => name === 'stroke');
+    const echoStroke = strokes.find(([, , style, width]) => style === echo.color && width === echo.lineWidth);
+    assert.ok(echoStroke, 'the echo bracket is painted');
+    const bracketStroke = strokes.find(([, path, style, width]) =>
+      path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
+    assert.ok(bracketStroke, 'the contact bracket is painted');
+    const extent = (path) => {
+      const xs = path.points.map(([x]) => x);
+      const ys = path.points.map(([, y]) => y);
+      return { halfW: (Math.max(...xs) - Math.min(...xs)) / 2, halfH: (Math.max(...ys) - Math.min(...ys)) / 2 };
+    };
+    const echoBox = extent(echoStroke[1]);
+    const bracketBox = extent(bracketStroke[1]);
+    assert.ok(Math.abs(echoBox.halfW - bracketBox.halfW - echo.spreadPx / 2) < 1e-3,
+      `echo ${echoBox.halfW} vs bracket ${bracketBox.halfW}`);
+    assert.ok(Math.abs(echoBox.halfH - bracketBox.halfH - echo.spreadPx / 2) < 1e-3);
+    const echoAlpha = echoStroke[4];
+    const bracketAlpha = bracketStroke[4];
+    assert.ok(echoAlpha > 0 && echoAlpha < bracketAlpha, `${echoAlpha} vs ${bracketAlpha}`);
+    assert.ok(Math.abs(echoAlpha - bracketAlpha / 2) < 1e-6, `${echoAlpha} vs ${bracketAlpha}`);
+  } finally {
+    clearAwarenessEchoField();
+    env.cleanup();
+  }
+});
+
+test('under the Cyber sonar sweep an echo is never brighter than its own bracket', () => {
+  const env = installEnvironment();
+  // The cyber theme with its HUD open turns the contact sonar on; its sweep
+  // dims brackets it is not passing over.
+  env.document.documentElement = {
+    // The lowest sweep floor, so dimmed brackets drop a whole alpha band.
+    dataset: { uiTheme: 'cyber', cyberSonarOpacity: '35' },
+    style: { setProperty() {}, removeProperty() {} },
+  };
+  const hud = env.document.createElement('div');
+  hud.id = 'intel-hud';
+  hud.classList = { contains: (name) => name === 'active' };
+  env.document.body.appendChild(hud);
+  const echo = {
+    layerIds: ['military'],
+    fadeMs: 60_000,
+    color: 'rgb(1, 2, 3)',
+    spreadPx: 8,
+    lineWidth: 3.25,
+  };
+  const contact = {
+    id: 'military',
+    getDetectableObjects: () => [{
+      position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
+      sourceId: 'sonar-pin',
+      id: 'SONAR',
+      metric: 'FL300',
+      type: 'AIR',
+      tier: 'military',
+    }],
+  };
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo,
+      level: () => 1,
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [contact], () => {});
+    setMode('DENSE');
+    setDetectionStyle('normal');
+    settleFrame(env);
+    let dimmed = 0;
+    let compared = 0;
+    for (let frame = 0; frame < 40; frame++) {
+      env.detectionCtx.calls.length = 0;
+      settleFrame(env);
+      const strokes = env.detectionCtx.calls.filter(([name]) => name === 'stroke');
+      const echoStroke = strokes.find(([, , style, width]) => style === echo.color && width === echo.lineWidth);
+      const bracketStroke = strokes.find(([, path, style, width]) =>
+        path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
+      if (!bracketStroke) continue;
+      const bracketAlpha = bracketStroke[4];
+      if (bracketAlpha < 0.99) dimmed++;
+      if (!echoStroke) continue;
+      compared++;
+      assert.ok(
+        echoStroke[4] <= bracketAlpha + 1e-9,
+        `echo ${echoStroke[4]} over bracket ${bracketAlpha} on frame ${frame}`,
+      );
+    }
+    assert.ok(dimmed > 0, 'the sweep dimmed the bracket on some frame');
+    assert.ok(compared > 0, 'an echo was painted');
+  } finally {
+    clearAwarenessEchoField();
+    env.cleanup();
+  }
+});
+
+test('resting Global Context pulses skip echo work for the whole frame, not per contact', () => {
+  const env = installEnvironment();
+  // Six echo-eligible flights on screen; the identity camera maps x/y
+  // straight to device coordinates.
+  const flights = Array.from({ length: 6 }, (_, index) => ({
+    position: new Cesium.Cartesian3(-0.5 + index * 0.2, 0, 6_356_752),
+    sourceId: `flight-${index}`,
+    id: `ECHO${index}`,
+    metric: `FL${300 + index}`,
+    type: 'AIR',
+  }));
+  const layer = { id: 'flights', getDetectableObjects: () => flights };
+  let levelCalls = 0;
+  try {
+    setAwarenessEchoField({
+      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+      radiusM: 250_000,
+      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+      echo: {
+        layerIds: ['flights'],
+        fadeMs: 60_000,
+        color: 'rgb(1, 2, 3)',
+        spreadPx: 8,
+        lineWidth: 3.25,
+      },
+      level: () => {
+        levelCalls++;
+        return 0;
+      },
+    });
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [layer], () => {});
+    setMode('DENSE');
+    settleFrame(env);
+    levelCalls = 0;
+    settleFrame(env);
+    const painted = getDetectionDiagnostics().visibleCount;
+    assert.equal(painted, flights.length, 'every flight is on screen');
+    // One check per painted frame, however many contacts are on screen.
+    assert.ok(levelCalls >= 1, 'the frame asks whether echoes are live');
+    assert.ok(levelCalls < painted, `${levelCalls} level checks for ${painted} contacts`);
+    assert.ok(
+      !env.detectionCtx.calls.some(
+        ([name, , style]) => name === 'stroke' && style === 'rgb(1, 2, 3)',
+      ),
+      'no echoes while the pulses rest',
+    );
+  } finally {
+    clearAwarenessEchoField();
     env.cleanup();
   }
 });

@@ -26,13 +26,21 @@ function fixture() {
       },
     },
   };
+  const selected = [];
+  parts.selection = {
+    setActiveCamera(cameraId) {
+      selected.push(cameraId);
+      state._activeCameraId = cameraId;
+      state._openingCameraProvisional = false;
+    },
+  };
   const navigation = createNavigation({
     state,
     services: {},
     parts,
     source: {},
   });
-  return { state, navigation };
+  return { state, navigation, selected };
 }
 
 test('nearest camera can be resolved from an explicit WGS84 target', () => {
@@ -58,4 +66,32 @@ test('invalid target coordinates fail closed', () => {
   ]) {
     assert.equal(navigation.nearestCameraIdToPoint(lat, lon), null);
   }
+});
+
+test('opening camera keeps viewer-nearest and first-record fallback', () => {
+  const { state, navigation } = fixture();
+  assert.equal(navigation.openingCameraId(), 'east');
+  state._viewer = null;
+  assert.equal(navigation.openingCameraId(), 'west');
+  state._records = [];
+  assert.equal(navigation.openingCameraId(), null);
+});
+
+test('settled move retargets only a provisional opening camera', () => {
+  const { state, navigation, selected } = fixture();
+  state._enabled = true;
+  state._openingCameraProvisional = true;
+  state._activeCameraId = 'west';
+  assert.equal(navigation.reopenNearestCamera(), true);
+  assert.deepEqual(selected, ['east']);
+  assert.equal(state._activeCameraId, 'east');
+  assert.equal(state._openingCameraProvisional, true);
+  assert.equal(navigation.reopenNearestCamera(), false);
+  state._activeCameraId = 'west';
+  state._openingCameraProvisional = false;
+  assert.equal(navigation.reopenNearestCamera(), false);
+  state._openingCameraProvisional = true;
+  state._enabled = false;
+  assert.equal(navigation.reopenNearestCamera(), false);
+  assert.deepEqual(selected, ['east']);
 });

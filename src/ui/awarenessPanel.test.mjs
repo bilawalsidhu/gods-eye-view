@@ -245,3 +245,73 @@ test('a repaint that leaves focus outside the panel does not pull it back', asyn
     'an empty cohort renders no list',
   );
 });
+
+const photo = (extra = {}) => ({
+  src: 'https://t.plnspttrs.net/1/abc123_280.jpg',
+  width: 280,
+  height: 186,
+  link: 'https://www.planespotters.net/photo/1/n123ab',
+  credit: 'Photo © Jane Doe',
+  ...extra,
+});
+
+test('a tracked flight’s photo shows under its name, credited and linked to its page', async (t) => {
+  const { panel, publish } = fixture(t);
+  await publish({ ...results(), photo: photo() });
+  const root = panel();
+  const link = root.querySelector('a.military-awareness-photo');
+  assert.ok(link, 'the photo renders');
+  assert.equal(
+    root.querySelector('.military-awareness-subject').nextElementSibling,
+    link,
+    'directly under the subject line',
+  );
+  assert.equal(link.getAttribute('href'), photo().link);
+  assert.equal(link.getAttribute('target'), '_blank');
+  assert.equal(link.getAttribute('rel'), 'noopener');
+  const img = link.querySelector('img');
+  assert.equal(img.getAttribute('src'), photo().src);
+  assert.equal(img.getAttribute('alt'), '');
+  assert.equal(img.getAttribute('width'), '280');
+  assert.equal(img.getAttribute('height'), '186');
+  assert.equal(link.querySelector('small').textContent, 'Photo © Jane Doe');
+});
+
+test('no photo renders without one', async (t) => {
+  const { panel, publish } = fixture(t);
+  await publish({ ...results(), photo: null });
+  assert.equal(panel().querySelector('.military-awareness-photo'), null);
+});
+
+test('a photo whose image fails to load is hidden until another arrives', async (t) => {
+  const { panel, publish } = fixture(t);
+  await publish({ ...results(), photo: photo() });
+  panel()
+    .querySelector('.military-awareness-photo img')
+    .dispatchEvent(new Event('error'));
+  await nextTick();
+  assert.equal(panel().querySelector('.military-awareness-photo'), null);
+  // A repaint with the same photo keeps it hidden.
+  await publish({ ...results({ previousDisabled: false }), photo: photo() });
+  assert.equal(panel().querySelector('.military-awareness-photo'), null);
+  // Another plane's photo shows.
+  const next = photo({ src: 'https://t.plnspttrs.net/2/def456_280.jpg' });
+  await publish({ ...results(), photo: next });
+  assert.equal(
+    panel().querySelector('.military-awareness-photo img').getAttribute('src'),
+    next.src,
+  );
+});
+
+test('a late error from a previous photo’s image does not hide the current one', async (t) => {
+  const { panel, publish } = fixture(t);
+  const previous = photo();
+  const current = photo({ src: 'https://t.plnspttrs.net/2/def456_280.jpg' });
+  await publish({ ...results(), photo: current });
+  // The error belongs to the image that failed: here, one still on the old src.
+  const img = panel().querySelector('.military-awareness-photo img');
+  img.setAttribute('src', previous.src);
+  img.dispatchEvent(new Event('error'));
+  await nextTick();
+  assert.ok(panel().querySelector('.military-awareness-photo'));
+});

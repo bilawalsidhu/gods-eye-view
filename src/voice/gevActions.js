@@ -1,4 +1,5 @@
 import { interruptGlobeRotation } from '../cameraVerbs.js';
+import { normalizeDisplayText } from '../data/displayText.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -47,6 +48,9 @@ import {
   flyRoute,
   interruptCameraMotion,
   adjustOrbitRange,
+  manualCameraInputCount,
+  moveCameraArgsError,
+  getActiveCameraMotion,
 } from '../cameraVerbs.js';
 import * as defaultFloorServices from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
@@ -60,6 +64,14 @@ import {
   activeContactsWindow,
   TRACKABLE_FAMILIES,
 } from '../agent/worldPacket.js';
+import { createVoiceAreas } from './areaActions.js';
+import { findImagery } from './imageryActions.js';
+import { osmQuery } from './osmActions.js';
+import { createOsmFeatureSource } from '../sources/osmFeatures.js';
+import {
+  OSM_PLACES_CREDIT,
+  registerDynamicCredit,
+} from '../data/dataCredits.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -268,6 +280,8 @@ export function createGevActionRunner({
   speechBuilders = null,
   deixis = null,
   readVoicePanelOperation = null,
+  osmSearch = null,
+  areaOptions = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -276,14 +290,48 @@ export function createGevActionRunner({
     ? { ...SPEECH_BUILDERS, ...speechBuilders }
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
+  // The latest voice flight. A tilt, orbit, pan or rotate in the same reply
+  // as "fly to X" waits for it to land: run at once, its navigation
+  // cancelled the flight, or the flight (still geocoding) then replaced the
+  // motion. The wait follows later fly-tos (voiceFlightTarget).
+  let voiceFlight = null;
+  // Waiters to tell when a newer voice flight begins.
+  const voiceFlightWatchers = new Set();
+  // Camera handoffs (navigation stamps) seen, and how many of them voice
+  // fly-tos made. A search, share link or import that stamps during a flight
+  // leaves it flying; the motion queued behind it then yields to that one.
+  // The voice fly-tos of the latest reply that sent one: whether any moved
+  // the camera, and whether one found nothing. A motion of that reply run
+  // after its fly-to found nothing (Gemini runs a reply's calls one by one)
+  // has no flight to wait on, and must not move the old view instead.
+  let replyFlights = null;
+  let cameraHandoffs = 0;
+  let voiceFlightHandoffs = 0;
+  const otherHandoffs = () => cameraHandoffs - voiceFlightHandoffs;
+  const unsubscribeCameraHandoff =
+    styleManager?.subscribeCameraHandoff?.(() => {
+      cameraHandoffs += 1;
+    }) ?? null;
   let analystEngine;
-  const resolveRegionRing = (name, signal) =>
-    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
+  // Area handles live for this runner (the page): resolve_area, the
+  // analyst's region/area/drawn scopes, find_imagery and osm_query all read
+  // the same store.
+  const voiceAreas = createVoiceAreas({
+    viewer,
+    annotations,
+    placeSearch,
+    annotationResolver,
+    ...(areaOptions || {}),
+  });
+  const searchOsmFeatures = osmSearch || createOsmFeatureSource();
+  const resolveRegionRing = (name, options) =>
+    voiceAreas.resolveRegion(name, options);
   const ensureAnalystEngine = () =>
     (analystEngine ||= createAnalystEngine(
       analystProviders(viewer, dataManager, {
         placeSearch,
         resolveRegionRing,
+        resolveAreaScope: voiceAreas.resolveAreaScope,
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
     ));
@@ -405,13 +453,30 @@ export function createGevActionRunner({
       const zoomOut = String(args.direction || '').toLowerCase() === 'out';
       const amt = String(args.amount || 'medium').toLowerCase();
       const factor = { little: 1.25, medium: 1.6, lot: 2.4 }[amt] || 1.6;
-      if (adjustOrbitRange(zoomOut ? factor : 1 / factor)) {
+      const held = adjustOrbitRange(zoomOut ? factor : 1 / factor);
+      if (held) {
+        const direction = zoomOut ? 'out' : 'in';
+        if (!held.changed) {
+          return {
+            ok: false,
+            action: 'adjust_camera_zoom',
+            direction,
+            amount: amt,
+            error: `Not zoomed: the ${held.kind} is already at its ${zoomOut ? 'farthest' : 'closest'} range.`,
+          };
+        }
         return {
           ok: true,
           action: 'adjust_camera_zoom',
-          direction: zoomOut ? 'out' : 'in',
+          direction,
           amount: amt,
-          orbitRadiusAdjusted: true,
+          [held.kind === 'tilt' ? 'tiltRangeAdjusted' : 'orbitRadiusAdjusted']:
+            true,
+          // A tilt to an angle names the angle the new range now ends it at.
+          ...(held.pitchDeg !== undefined && {
+            pitchDeg: held.pitchDeg,
+            note: held.note,
+          }),
         };
       }
     }
@@ -1103,34 +1168,104 @@ export function createGevActionRunner({
           runOptions,
         );
       }
-      return flyToRequestedLocation(viewer, args, {
+      // Chained fly-tos: a grab during an earlier one still flying counts.
+      // The flight replaced is the last one that moved, past lookups that
+      // found nothing.
+      const prior = voiceFlightTarget(voiceFlight);
+      const flight = trackVoiceFlight(
+        prior && !prior.done ? prior.inputCount : undefined,
+        prior,
+      );
+      // Navigation by anything but a voice fly-to since this one began.
+      flight.handoffs = otherHandoffs();
+      voiceFlight = flight;
+      const reply = voiceReplyOf(runOptions);
+      if (reply !== null && replyFlights?.reply !== reply)
+        replyFlights = { reply, moved: false, foundNothing: false };
+      const replyRecord = reply !== null ? replyFlights : null;
+      for (const notify of [...voiceFlightWatchers]) notify();
+      // A motion already running (one the model sent before this fly-to) is
+      // stopped when the flight takes navigation; the result says so.
+      let stoppedMotion = null;
+      const noteStop =
+        (hook) =>
+        (...hookArgs) => {
+          const before = getActiveCameraMotion();
+          const handoffsBefore = cameraHandoffs;
+          try {
+            return hook(...hookArgs);
+          } finally {
+            // A voice fly-to's own stamps are not another navigation, even
+            // for the flight it replaces (a later lookup may find nothing).
+            voiceFlightHandoffs += cameraHandoffs - handoffsBefore;
+            if (
+              before &&
+              !stoppedMotion &&
+              getActiveCameraMotion()?.motionId !== before.motionId
+            )
+              stoppedMotion = before.kind;
+          }
+        };
+      const flown = flyToRequestedLocation(viewer, args, {
+        onFlightEnd: flight.settle,
         onProgress: reportProgress,
         placeSearch,
         searchNavigation,
         signal: runOptions.signal,
         runImmediate:
           typeof styleManager?.runImmediateLocationNavigation === 'function'
-            ? (navigate) =>
-                styleManager.runImmediateLocationNavigation(navigate)
+            ? noteStop((navigate) =>
+                styleManager.runImmediateLocationNavigation(navigate),
+              )
             : null,
         beginDeferred:
           typeof styleManager?.beginDeferredLocationNavigation === 'function'
-            ? () => styleManager.beginDeferredLocationNavigation()
+            ? noteStop(() => styleManager.beginDeferredLocationNavigation())
             : null,
         reassertDeferred:
           typeof styleManager?.reassertDeferredLocationNavigation === 'function'
-            ? (generation) =>
-                styleManager.reassertDeferredLocationNavigation(generation)
+            ? noteStop((generation) =>
+                styleManager.reassertDeferredLocationNavigation(generation),
+              )
             : null,
-        onStart: () => {
+        onStart: noteStop(() => {
           if (typeof styleManager?.beginLocationNavigation === 'function') {
             styleManager.beginLocationNavigation();
             return;
           }
           interruptCameraMotion('nav:fly_to_location');
           if (viewer.trackedEntity) stopAllTracking(viewer, dataManager);
-        },
+        }),
       });
+      // No flight started: nothing to wait for. A lookup that was not found,
+      // threw, or was cancelled once a newer voice fly-to had begun (which
+      // takes navigation from it) moved nothing, so a queued motion looks
+      // past it to the flight it replaced. One cancelled while still the
+      // latest voice flight lost navigation to something else (a search, a
+      // share link, Cockpit): the motion then refuses. A flight its own hooks
+      // already settled (cancelled mid-air) keeps its status.
+      const notStarted = () => {
+        if (!flight.done) flight.movedNothing = true;
+        flight.settle('failed');
+      };
+      flown.then((result) => {
+        if (result?.ok === true) return;
+        if (result?.cancelled && voiceFlight === flight)
+          flight.settle('failed');
+        else notStarted();
+      }, notStarted);
+      // After the outcome above, which marks a lookup that moved nothing.
+      const noteReply = (result) => {
+        if (!replyRecord) return;
+        if (result?.ok === true) replyRecord.moved = true;
+        else if (flight.movedNothing) replyRecord.foundNothing = true;
+      };
+      flown.then(noteReply, () => noteReply(null));
+      return flown.then((result) =>
+        stoppedMotion && result && typeof result === 'object'
+          ? { ...result, stoppedMotion }
+          : result,
+      );
     }
 
     if (name === 'adjust_camera_zoom') {
@@ -1161,6 +1296,65 @@ export function createGevActionRunner({
       return nextIssPass(viewer, dataManager, args);
     }
 
+    if (name === 'resolve_area') {
+      return voiceAreas.resolveAreaAction(args, {
+        signal: runOptions.signal,
+        isCurrent: current,
+        progress: reportProgress,
+      });
+    }
+
+    if (name === 'find_imagery') {
+      return findImagery(
+        {
+          dataManager,
+          viewer,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'recent-imagery', enabled },
+              runOptions,
+            ),
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
+    if (name === 'osm_query') {
+      return osmQuery(
+        {
+          dataManager,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          viewBox: () => cameraViewBox(viewer),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'osm-places', enabled },
+              runOptions,
+            ),
+          search: searchOsmFeatures,
+          onCredit: () => registerDynamicCredit(viewer, OSM_PLACES_CREDIT),
+          // The listed places become the analyst's "last answer", so
+          // "which of those…" filters them and never an older set.
+          rememberResults: (rows, presentation, { truncated = false } = {}) => {
+            if (!current()) return;
+            if (rows)
+              ensureAnalystEngine().remember('osm-places', rows, {
+                presentation,
+                truncated,
+              });
+            else analystEngine?.reset();
+          },
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
     if (name === 'analyst_query') {
       return runAnalystQuery(
         ensureAnalystEngine(),
@@ -1173,6 +1367,85 @@ export function createGevActionRunner({
     }
 
     if (name === 'move_camera') {
+      const motion = String(args.motion || '').toLowerCase();
+      // A lookup that already found nothing does not hide the last flight
+      // that moved: running now would cancel that flight mid-air.
+      const pending = voiceFlightTarget(voiceFlight);
+      const reply = voiceReplyOf(runOptions);
+      if (
+        VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
+        !(pending && !pending.done) &&
+        reply !== null &&
+        replyFlights?.reply === reply &&
+        replyFlights.foundNothing &&
+        !replyFlights.moved
+      )
+        return {
+          ok: false,
+          action: 'move_camera',
+          motion,
+          error: `Not run: the fly-to in this reply found nothing, so the ${motion} was not run at the old view.`,
+        };
+      if (
+        VOICE_FLIGHT_WAITING_MOTIONS.has(motion) &&
+        pending &&
+        !pending.done
+      ) {
+        // Bad arguments are refused now, not after waiting on the flight.
+        const argsError = moveCameraArgsError(args);
+        if (argsError) return argsError;
+        const deadline = Date.now() + VOICE_FLIGHT_WAIT_MS;
+        const start = pending;
+        // Act on where the camera lands. Whatever a flight reports, a later
+        // fly-to replaces it, and the wait moves to that one as soon as it
+        // begins (a stalled geocode must not hold the motion past a newer
+        // flight that landed). A geocode that loses navigation reports
+        // failed, and a flight left flying while the next place is looked up
+        // can still land; running there would take navigation and cancel the
+        // newer one. A later lookup that found nothing moved nothing, so the
+        // motion looks past it to the last flight that did move the camera.
+        let flight = start;
+        let status;
+        for (;;) {
+          status = await waitForVoiceFlight(
+            flight,
+            runOptions.signal,
+            deadline,
+            voiceFlightWatchers,
+          );
+          if (status === 'aborted' || status === 'timeout' || !current()) break;
+          const target = voiceFlightTarget(voiceFlight, start);
+          if (!target || (target === flight && status !== 'newer')) break;
+          flight = target;
+        }
+        if (!current())
+          return { ok: false, action: 'move_camera', cancelled: true };
+        if (status !== 'arrived' || flight.movedNothing)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: the flight this ${motion} was waiting for did not arrive.`,
+          };
+        // The flight lands even when the user grabs the globe mid-flight;
+        // the queued motion must not take the camera back from them.
+        if (manualCameraInputCount() !== flight.inputCount)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: the user moved the camera during the flight, so the ${motion} was dropped.`,
+          };
+        // A search, share link or import that took navigation during the
+        // flight leaves it flying; running now would cancel that navigation.
+        if (otherHandoffs() !== flight.handoffs)
+          return {
+            ok: false,
+            action: 'move_camera',
+            motion,
+            error: `Not run: another navigation took the camera during the flight, so the ${motion} was dropped.`,
+          };
+      }
       return moveCamera(args, (navigate, releaseOptions) =>
         runManagedVoiceNavigation(
           styleManager,
@@ -1352,10 +1625,31 @@ export function createGevActionRunner({
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
-  // Lifetimes: the runner lives for the page; conversation state — the
+  // Lifetimes: the runner lives for the page (area handles included, so an
+  // outline stays countable across mic sessions); conversation state — the
   // analyst's follow-up memory and any write still in flight — lives for one
   // voice session and is dropped by resetConversation().
   let conversation = 0;
+  // Calls emitted by one assistant response are siblings rather than newer
+  // user intent. The new spatial actions share mutable surfaces (area board,
+  // imagery panel, OSM layer/follow-up memory), so serialize those siblings in
+  // event order just as analyst_query already was. A genuinely newer group or
+  // direct call still invalidates the older attempt.
+  const serializedSiblingActions = new Set([
+    'analyst_query',
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
+  ]);
+  let serializedAttempt = 0;
+  let serializedSiblingGroup = null;
+  let serializedSiblingTail = Promise.resolve();
+  // Direct/programmatic callers do not necessarily arrive through
+  // createVoiceSession, so the runner must own the conversation lifetime of
+  // its serialized spatial workflows as well. Reset/dispose abort the real
+  // provider/catalog work, not just the eventual commit, while area handles
+  // remain owned by voiceAreas for the page lifetime.
+  let conversationAbort = new AbortController();
   let disposed = false;
   async function runVoiceAction(name, rawArgs = {}, callerOptions = {}) {
     if (disposed)
@@ -1366,56 +1660,114 @@ export function createGevActionRunner({
         error: 'Voice ended.',
       };
     const epoch = conversation;
+    let attempt = null;
+    let releaseSerializedSibling = null;
+    if (serializedSiblingActions.has(name)) {
+      const siblingGroup = callerOptions.authorityGroup || null;
+      if (siblingGroup) {
+        if (siblingGroup !== serializedSiblingGroup) {
+          serializedSiblingGroup = siblingGroup;
+          serializedSiblingTail = Promise.resolve();
+          serializedAttempt++;
+        }
+        attempt = serializedAttempt;
+        const predecessor = serializedSiblingTail;
+        const completion = new Promise((resolve) => {
+          releaseSerializedSibling = resolve;
+        });
+        serializedSiblingTail = predecessor.then(() => completion);
+        await predecessor;
+      } else {
+        serializedSiblingGroup = null;
+        serializedSiblingTail = Promise.resolve();
+        attempt = ++serializedAttempt;
+      }
+    }
+    const runnerSignal = serializedSiblingActions.has(name)
+      ? conversationAbort.signal
+      : null;
+    const signal = runnerSignal
+      ? callerOptions.signal
+        ? AbortSignal.any([runnerSignal, callerOptions.signal])
+        : runnerSignal
+      : callerOptions.signal;
     const runOptions = {
       ...callerOptions,
+      ...(signal ? { signal } : {}),
       isCurrent: () =>
+        !signal?.aborted &&
         epoch === conversation &&
+        (attempt === null || attempt === serializedAttempt) &&
         !disposed &&
         (typeof callerOptions.isCurrent !== 'function' ||
           callerOptions.isCurrent()),
     };
-    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
-    // Point-and-ask: 'pointer' and referent:n become real targets here, from
-    // the turn's pointer snapshot and the latest numbered result.
-    const deictic = resolveDeicticArgs(name, input, {
-      pointer: deixis?.pointer?.activeSnapshot?.() || null,
-      referents: deixis?.referents || null,
-      imageFrame: deixis?.imageFrame?.() || null,
-      cameraKey: deixis?.cameraKey?.() || null,
-    });
-    if (deictic.error) {
-      return attachVoiceResult(
-        name,
-        { ok: false, action: name, error: deictic.error },
-        input,
-        builders,
-      );
-    }
-    const referentGeneration = deixis?.referents?.generation?.();
-    let result = await runGevAction(name, deictic.args, runOptions);
-    if (deictic.used && result && typeof result === 'object')
-      result = { ...result, resolvedFrom: deictic.used };
-    const out = attachVoiceResult(name, result, deictic.args, builders);
-    // Only an accepted, still-current result may become "the last list": a
-    // cancelled turn or one finishing after the session ended must not
-    // repopulate a cleared registry.
-    const stillCurrent =
-      !runOptions.signal?.aborted &&
-      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-    if (stillCurrent)
-      deixis?.referents?.recordResult?.(name, out, {
-        since: referentGeneration,
+    try {
+      const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+      if (attempt !== null && !runOptions.isCurrent()) {
+        return attachVoiceResult(
+          name,
+          {
+            ok: false,
+            action: name,
+            code: 'CANCELLED',
+            cancelled: true,
+            error: 'This request was superseded.',
+          },
+          input,
+          builders,
+        );
+      }
+      // Point-and-ask: 'pointer' and referent:n become real targets here, from
+      // the turn's pointer snapshot and the latest numbered result.
+      const deictic = resolveDeicticArgs(name, input, {
+        pointer: deixis?.pointer?.activeSnapshot?.() || null,
+        referents: deixis?.referents || null,
+        imageFrame: deixis?.imageFrame?.() || null,
+        cameraKey: deixis?.cameraKey?.() || null,
       });
-    if (stillCurrent && deictic.used?.source === 'pointer')
-      deixis?.onPointerUsed?.();
-    return out;
+      if (deictic.error) {
+        return attachVoiceResult(
+          name,
+          { ok: false, action: name, error: deictic.error },
+          input,
+          builders,
+        );
+      }
+      const referentGeneration = deixis?.referents?.generation?.();
+      let result = await runGevAction(name, deictic.args, runOptions);
+      if (deictic.used && result && typeof result === 'object')
+        result = { ...result, resolvedFrom: deictic.used };
+      const out = attachVoiceResult(name, result, deictic.args, builders);
+      // Only an accepted, still-current result may become "the last list": a
+      // cancelled turn or one finishing after the session ended must not
+      // repopulate a cleared registry.
+      const stillCurrent =
+        !runOptions.signal?.aborted &&
+        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      if (stillCurrent)
+        deixis?.referents?.recordResult?.(name, out, {
+          since: referentGeneration,
+        });
+      if (stillCurrent && deictic.used?.source === 'pointer')
+        deixis?.onPointerUsed?.();
+      return out;
+    } finally {
+      releaseSerializedSibling?.();
+    }
   }
   /**
    * A voice session ended: invalidate every write still in flight, then
-   * forget the analyst's "last answer".
+   * forget the analyst's "last answer". Area handles stay (page lifetime).
    */
   runVoiceAction.resetConversation = () => {
+    replyFlights = null;
+    conversationAbort.abort();
+    conversationAbort = new AbortController();
     conversation++;
+    serializedAttempt++;
+    serializedSiblingGroup = null;
+    serializedSiblingTail = Promise.resolve();
     analystEngine?.reset();
   };
   /** Voice was removed: nothing may run or write again. */
@@ -1423,6 +1775,8 @@ export function createGevActionRunner({
     if (disposed) return;
     runVoiceAction.resetConversation();
     disposed = true;
+    unsubscribeCameraHandoff?.();
+    voiceAreas.dispose();
   };
   return runVoiceAction;
 }
@@ -2694,6 +3048,116 @@ async function frameOverhead(viewer, dataManager, styleManager, args = {}) {
   );
 }
 
+let voiceFlightCount = 0;
+
+/**
+ * The model reply a voice call belongs to: Gemini's turn (`reply`), or the
+ * OpenAI response its sibling calls share (`authorityGroup`). Null when the
+ * caller names none.
+ */
+function voiceReplyOf(options) {
+  return options?.reply ?? options?.authorityGroup ?? null;
+}
+
+/**
+ * A voice flight's end: 'arrived', 'cancelled' or 'failed', settled once.
+ * `replaced` is the last flight that moved when this one began (past lookups
+ * that found nothing), landed or not. It is kept only while this one may turn
+ * out to have moved nothing (a lookup that found no place), so a queued
+ * motion can look past it to that flight and its outcome.
+ */
+function trackVoiceFlight(
+  inputCount = manualCameraInputCount(),
+  replaced = null,
+) {
+  const flight = {
+    done: false,
+    seq: (voiceFlightCount += 1),
+    replaced,
+    movedNothing: false,
+    // Manual input after this means the user took the camera mid-flight.
+    inputCount,
+    status: null,
+    // Waiters to tell when this flight ends.
+    watchers: new Set(),
+    settle: (status) => {
+      if (flight.done) return;
+      flight.done = true;
+      flight.status = status;
+      // Kept only past a lookup that found nothing, and then straight to the
+      // flight that moved, so a run of such lookups holds no chain.
+      flight.replaced = flight.movedNothing
+        ? voiceFlightTarget(flight.replaced)
+        : null;
+      for (const notify of [...flight.watchers]) notify(status);
+      flight.watchers.clear();
+    },
+  };
+  return flight;
+}
+
+/**
+ * The flight a motion queued since `start` acts on: the latest one that
+ * actually started. A lookup that found nothing moved nothing, so look past
+ * it to the flight it replaced, but never to one older than `start` (a flight
+ * from an earlier reply). Null when every later lookup found nothing. With
+ * no `start`, the latest flight that started, back through lookups that
+ * found nothing.
+ */
+function voiceFlightTarget(latest, start = null) {
+  let flight = latest;
+  while (flight?.movedNothing) flight = flight.replaced;
+  return flight && (!start || flight.seq >= start.seq) ? flight : null;
+}
+
+/**
+ * Longest a motion waits for its flight (geocode plus flight, which is about
+ * 2 s) before giving up. The wait also holds the tool output, and on Gemini
+ * the later tools in the turn.
+ */
+const VOICE_FLIGHT_WAIT_MS = 15_000;
+
+/**
+ * Motions that act on the place the camera ends up at, so one sent beside a
+ * fly-to waits for it. Stop is not one, and rotate_globe turns the
+ * whole Earth from Globe View rather than at a place.
+ */
+const VOICE_FLIGHT_WAITING_MOTIONS = new Set([
+  'tilt',
+  'orbit',
+  'pan',
+  'rotate',
+]);
+
+/**
+ * Wait for a voice flight to end, or for a newer one to begin ('newer'):
+ * 'timeout' or 'aborted' if neither happens. A flight that has ended answers
+ * at once. Every listener is removed when the wait ends, so a flight that
+ * never settles holds nothing.
+ */
+function waitForVoiceFlight(flight, signal, deadline, newerWatchers) {
+  if (signal?.aborted) return Promise.resolve('aborted');
+  if (flight.done) return Promise.resolve(flight.status);
+  return new Promise((resolve) => {
+    const finish = (status) => {
+      clearTimeout(timer);
+      signal?.removeEventListener?.('abort', onAbort);
+      flight.watchers.delete(finish);
+      newerWatchers?.delete(onNewer);
+      resolve(status);
+    };
+    const onAbort = () => finish('aborted');
+    const onNewer = () => finish('newer');
+    const timer = setTimeout(
+      () => finish('timeout'),
+      Math.max(0, deadline - Date.now()),
+    );
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    flight.watchers.add(finish);
+    newerWatchers?.add(onNewer);
+  });
+}
+
 /** Run one validated voice camera mutation through the UI-owned authority seam. */
 function runManagedVoiceNavigation(
   styleManager,
@@ -3257,6 +3721,7 @@ async function flyToRequestedLocation(
     runImmediate = null,
     beginDeferred = null,
     reassertDeferred = null,
+    onFlightEnd = null,
   } = {},
 ) {
   const requestedRangeM = Number(args.rangeM);
@@ -3280,12 +3745,19 @@ async function flyToRequestedLocation(
           settleArrival = resolve;
         })
       : null;
-  const arrivalHooks = arrival
-    ? {
-        onComplete: () => settleArrival?.('arrived'),
-        onCancel: () => settleArrival?.('cancelled'),
-      }
-    : {};
+  const arrivalHooks =
+    arrival || onFlightEnd
+      ? {
+          onComplete: () => {
+            settleArrival?.('arrived');
+            onFlightEnd?.('arrived');
+          },
+          onCancel: () => {
+            settleArrival?.('cancelled');
+            onFlightEnd?.('cancelled');
+          },
+        }
+      : {};
   const afterArrival = async (result, label) => {
     if (!arrival || result?.ok !== true) return result;
     onProgress('fly', label);
@@ -3881,8 +4353,14 @@ async function aircraftProximityWindowForQuery(
       layerKeys: wanted,
       coverage,
       unanswered: [...(result?.unanswered || [])],
-      scopeLabel: answer.scopeLabel,
-      scopeDetail: answer.display.scope,
+      presentation: {
+        scopeLabel: answer.scopeLabel,
+        display: answer.display,
+        coverageScope: coverage.scope,
+        coverageNote: coverage.note,
+        centeredOn: answer.window.centeredOn,
+        window: answer.window,
+      },
     },
   };
 }
@@ -4591,13 +5069,7 @@ function uniqueStrings(values) {
  * @returns {string} Sanitized single-line label (max 120 chars).
  */
 function sanitizeLabel(value) {
-  const text = String(value || '');
-  let out = '';
-  for (const ch of text) {
-    const code = ch.codePointAt(0);
-    out += code < 0x20 || code === 0x7f ? ' ' : ch; // drop control chars incl. newlines
-  }
-  return out.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return normalizeDisplayText(value, 120);
 }
 
 function cachePrecision(service) {
@@ -4714,10 +5186,8 @@ function compactProperties(props) {
 }
 
 function cleanText(value) {
-  if (value == null || typeof value === 'object') return '';
-  const text = String(value).trim();
-  if (!text || text === 'undefined' || text === 'null') return '';
-  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  const text = normalizeDisplayText(value);
+  return text === 'undefined' || text === 'null' ? '' : text;
 }
 
 function layerTitle(layerId) {
@@ -4771,6 +5241,7 @@ function analystProviders(
         placeSearch,
       ),
     isWarming = () => false,
+    resolveAreaScope = null,
   } = {},
 ) {
   // Per-layer truncation seen by the last getRecords call.
@@ -4825,6 +5296,7 @@ function analystProviders(
       return note ? note.trim() : null;
     },
     resolveRegionRing,
+    ...(resolveAreaScope ? { resolveAreaScope } : {}),
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
@@ -4860,6 +5332,15 @@ function analystProviders(
   };
 }
 
+/** The camera's view rectangle as [west, south, east, north] degrees, or null. */
+function cameraViewBox(viewer) {
+  const rect = viewer?.camera?.computeViewRectangle?.();
+  if (!rect) return null;
+  return [rect.west, rect.south, rect.east, rect.north].map((radians) =>
+    Cesium.Math.toDegrees(radians),
+  );
+}
+
 /** Identity fields every compact analyst item keeps when present. */
 const ANALYST_IDENTITY_FIELDS = Object.freeze([
   'icao24',
@@ -4869,6 +5350,22 @@ const ANALYST_IDENTITY_FIELDS = Object.freeze([
   'callsign',
   'name',
   'noradId',
+]);
+
+/**
+ * Keys that identify an analyst record. The referent registry, track_entity,
+ * locateLayerEntity and follow-up filters match on them, so they skip
+ * display-text normalization.
+ */
+const ANALYST_CANONICAL_FIELDS = new Set([
+  'layerKey',
+  'id',
+  'icao24',
+  'mmsi',
+  'noradId',
+  'registration',
+  'callsign',
+  'routeId',
 ]);
 
 /**
@@ -4908,6 +5405,11 @@ function compactAnalystItem(r) {
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;
+  // Canonical keys stay raw: bikeshare's id is the raw station name.
+  for (const key of Object.keys(compact)) {
+    if (typeof compact[key] === 'string' && !ANALYST_CANONICAL_FIELDS.has(key))
+      compact[key] = normalizeDisplayText(compact[key]);
+  }
   return compact;
 }
 
@@ -4919,6 +5421,9 @@ const ANALYST_REFUSAL_FIELDS = Object.freeze([
   'layers',
   'layerStatus',
   'cancelled',
+  'needsClarification',
+  'candidates',
+  'query',
 ]);
 
 const VIEWPORT_COVERAGE_NOTE = 'the flights layer loads by viewport';
@@ -4967,7 +5472,7 @@ async function runAnalystQuery(
   args = {},
   _layerEnabledAt,
   isCurrent = () => true,
-  signal = undefined,
+  signal = null,
 ) {
   let entityWindow = null;
   const result = await analystEngine.query(
@@ -4981,8 +5486,8 @@ async function runAnalystQuery(
       followUp: Boolean(args.followUp),
     },
     {
-      isCurrent,
       signal,
+      isCurrent,
       beforeCommit: async (candidate) => {
         const projected = await aircraftProximityWindowForQuery(
           dataManager,
@@ -5011,8 +5516,8 @@ async function runAnalystQuery(
       code: result.code || null,
       error: result.error,
     };
-    // The engine's semantic fields pass through unchanged: a cancellation
-    // stays a cancellation.
+    // The engine's semantic fields pass through unchanged: a clarification
+    // keeps its candidates, a cancellation stays a cancellation.
     for (const key of ANALYST_REFUSAL_FIELDS)
       if (result[key] !== undefined) refusal[key] = result[key];
     if (result.coverage) refusal.coverage = result.coverage;
@@ -5085,7 +5590,9 @@ async function runAnalystQuery(
     ...(result.partial
       ? { partial: true, unanswered: result.unanswered || [] }
       : {}),
+    ...(result.areaId ? { areaId: result.areaId } : {}),
     ...(result.centeredOn ? { centeredOn: result.centeredOn } : {}),
+    ...(result.window ? { window: result.window } : {}),
     // Every count names its scope in words; a bare number is what made two
     // honest answers look like a contradiction.
     scopeLabel: result.scopeLabel,

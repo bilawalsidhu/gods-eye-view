@@ -29,6 +29,7 @@ import radioLayer from './radio.js';
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { MAX_SINCE_DAYS } from '../layers/streetLevel/policy.js';
 import { SINCE_STOPS } from '../ui/streetLevelPresentation.js';
+import { FIRMS_CONFIDENCE_MODES, MIN_FRP_MW_MAX } from './firmsIntensity.js';
 
 function deferred() {
   let resolve;
@@ -202,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 34);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 34);
+  assert.equal(REGISTERED_LAYER_IDS.length, 36);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 36);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -242,18 +243,18 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '8');
+  assert.equal(nextLayerStateToken(), '00');
   assert.equal(
     nextLayerStateToken({
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      alpha: '8',
-      bravo: '9',
+      alpha: '9',
+      bravo: '00',
     }),
-    '00',
+    '01',
   );
   const digitsExhausted = {
     ...LAYER_STATE_TOKEN_RESERVATIONS,
-    ...Object.fromEntries([...'89'].map((digit) => [`prior-${digit}`, digit])),
+    ...Object.fromEntries([...'9'].map((digit) => [`prior-${digit}`, digit])),
   };
   assert.equal(nextLayerStateToken(digitsExhausted), '00');
   assert.equal(
@@ -305,8 +306,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
       ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '8',
-      next: '9',
+      future: '00',
+      next: '01',
     }),
     true,
   );
@@ -314,12 +315,13 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () =>
       validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
         ...LAYER_STATE_TOKEN_RESERVATIONS,
-        future: '00',
+        future: '01',
       }),
-    /next free token 8/,
+    /next free token 00/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
+  delete beforeLastDigit['wildlife-sightings'];
   assert.equal(
     validateLayerStateAllocations(beforeLastDigit, {
       ...beforeLastDigit,
@@ -339,10 +341,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.throws(
     () =>
       validateLayerStateAllocations(
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8' },
-        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '8', competing: '8' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9' },
+        { ...LAYER_STATE_TOKEN_RESERVATIONS, merged: '9', competing: '9' },
       ),
-    /next free token 9/,
+    /next free token 00/,
   );
   assert.throws(
     () => validateLayerStateAllocations({ future: '00' }, { future: '01' }),
@@ -966,6 +968,41 @@ test('a direct Context selection promotes its owned tracker layer before persist
   );
   assert.equal(encode(durable).includes('context-flight'), true);
   coordinator.destroy();
+});
+
+test('a satellite class choice is saved, shared and restored', async () => {
+  const storage = memoryStorage();
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage,
+  });
+  await coordinator.start();
+  await manager.setEnabled('satellites', true, { origin: 'user' });
+  assert.equal(
+    coordinator.getDurableState().options.satellites.classes,
+    'sitpd',
+    'every class but Starlink by default',
+  );
+  manager.setLayerParams(
+    'satellites',
+    { classes: { debris: false } },
+    { origin: 'user' },
+  );
+  const durable = coordinator.getDurableState();
+  assert.equal(durable.options.satellites.classes, 'sitp');
+  assert.equal(
+    new URLSearchParams(encode(durable)).get('lo')?.includes('s.k.sitp'),
+    true,
+  );
+  coordinator.destroy();
+
+  // A reload hands the layer its letters back (the layer decodes them:
+  // src/data/satelliteClass.test.mjs).
+  const reloaded = productionManager();
+  const next = new LayerStateCoordinator(reloaded, shareSink(), { storage });
+  await next.start();
+  assert.equal(reloaded.getLayerParams('satellites')?.classes, 'sitp');
+  next.destroy();
 });
 
 test('explicit Flight to Satellite replacement keeps the new Satellite ID durable', async () => {
@@ -2694,6 +2731,48 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
   );
 });
 
+test('wildlife confirmed and every taxa preset round-trip through the full share codec', () => {
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'wildlife-sightings').token,
+    '9',
+  );
+  for (const taxa of [
+    'all',
+    'Aves',
+    'Mammalia',
+    'whales',
+    'Insecta',
+    'Plantae',
+  ]) {
+    const state = normalizeLayerState({
+      enabledLayerIds: ['wildlife-sightings'],
+      options: { 'wildlife-sightings': { confirmed: true, taxa } },
+    });
+    const encoded = encode(state);
+    assert.doesNotMatch(encoded, /undefined/);
+    assert.deepEqual(
+      decodeLayerStateParams(new URLSearchParams(encoded)),
+      state,
+    );
+  }
+});
+
+test('drone restrictions uses digit 8 without colliding with fire perimeters', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=8.2'));
+  assert.deepEqual(decoded.enabledLayerIds, [
+    'drone-airspace',
+    'fire-perimeters',
+  ]);
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'drone-airspace').token,
+    '8',
+  );
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
+  );
+});
+
 test('GNSS interference uses digit 3 without colliding with other digit tokens', () => {
   const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=3.2.1'));
   assert.deepEqual(decoded.enabledLayerIds, [
@@ -2991,9 +3070,156 @@ test('Clear All cancels a saved restore still waiting to start', async () => {
   gate.resolve();
   const results = await restore;
   for (const id of ['earthquakes', 'flights']) {
-    assert.equal(results.find((result) => result.layerId === id).succeeded, false);
+    assert.equal(
+      results.find((result) => result.layerId === id).succeeded,
+      false,
+    );
   }
   assert.deepEqual([...manager.getEnabledLayerIds()], []);
   assert.equal(enabledLayerParam(sink), '');
+  coordinator.destroy();
+});
+
+/** Active Fires options decoded from a v2 link with these `lo` assignments. */
+function firmsOptions(lo) {
+  const params = new URLSearchParams([
+    ['v', '2'],
+    ['l', 'w'],
+  ]);
+  if (lo) params.set('lo', lo);
+  return decodeLayerStateParams(params).options['local-firms'];
+}
+
+test('Active Fires: the intensity filter rides share token w and round-trips', () => {
+  const state = createDefaultLayerState();
+  assert.deepEqual(state.options['local-firms'], {
+    minFrp: 0,
+    confidence: 'all',
+  });
+  state.enabledLayerIds = ['local-firms'];
+  state.options['local-firms'] = { minFrp: 20, confidence: 'high' };
+  const encoded = encode(state);
+  assert.equal(new URLSearchParams(encoded).get('l'), 'w');
+  // Other owners write their own explicit defaults into `lo` too (flights 3D,
+  // wind overlay); the fire assignments ride beside them.
+  const assignments = new URLSearchParams(encoded).get('lo').split('_');
+  assert.ok(assignments.includes('w.f.20'), assignments.join(' '));
+  assert.ok(assignments.includes('w.c.h'), assignments.join(' '));
+  const decoded = decodeLayerStateParams(new URLSearchParams(encoded));
+  assert.deepEqual(decoded.options['local-firms'], {
+    minFrp: 20,
+    confidence: 'high',
+  });
+  assert.deepEqual(
+    parseStoredLayerState(serializeStoredLayerState(state)).options[
+      'local-firms'
+    ],
+    state.options['local-firms'],
+  );
+  // Defaults are omitted from the link: a plain `l=w` is "show everything".
+  const plain = createDefaultLayerState();
+  plain.enabledLayerIds = ['local-firms'];
+  assert.equal(
+    new URLSearchParams(encode(plain))
+      .get('lo')
+      .split('_')
+      .filter((assignment) => assignment.startsWith('w.')).length,
+    0,
+  );
+  assert.deepEqual(firmsOptions(''), { minFrp: 0, confidence: 'all' });
+});
+
+test('Active Fires: the codec accepts whole megawatts in bounds and the three confidence codes', () => {
+  // The codec spells its bounds out (it runs in isolation in the ledger
+  // tests); they must stay the layer's.
+  assert.equal(MIN_FRP_MW_MAX, 10000);
+  assert.deepEqual([...FIRMS_CONFIDENCE_MODES], ['all', 'nominal', 'high']);
+  assert.equal(firmsOptions('w.f.300').minFrp, 300);
+  assert.equal(firmsOptions('w.f.10000').minFrp, 10000);
+  assert.equal(firmsOptions('w.f.10001').minFrp, 0, 'out of bounds → default');
+  assert.equal(firmsOptions('w.f.-5').minFrp, 0);
+  assert.equal(
+    firmsOptions('w.f.2.5').minFrp,
+    0,
+    'a third segment is rejected',
+  );
+  assert.equal(firmsOptions('w.c.a').confidence, 'all');
+  assert.equal(firmsOptions('w.c.n').confidence, 'nominal');
+  assert.equal(firmsOptions('w.c.h').confidence, 'high');
+  assert.equal(
+    firmsOptions('w.c.x').confidence,
+    'all',
+    'unknown code → default',
+  );
+  assert.deepEqual(firmsOptions('w.c.n_w.f.5'), {
+    minFrp: 5,
+    confidence: 'nominal',
+  });
+});
+
+// An application built without a layer (a smaller catalog) receives a link or
+// saved state from a build that has it: the layer is neither restored nor
+// stored nor carried into the links this application shares.
+function managerWithout(withheld) {
+  const manager = new DataLayerManager({});
+  for (const id of REGISTERED_LAYER_IDS)
+    if (!withheld.includes(id)) manager.register(fakeLayer(id));
+  manager.finalizeRegistrations(
+    LAYER_STATE_REGISTRY.filter(({ id }) => !withheld.includes(id)),
+  );
+  return manager;
+}
+
+test('layers the application did not register are never restored, stored or shared', async () => {
+  const manager = managerWithout(['earthquakes']);
+  const storage = memoryStorage();
+  const share = shareSink();
+  const coordinator = new LayerStateCoordinator(manager, share, { storage });
+  const incoming = createDefaultLayerState();
+  incoming.enabledLayerIds = ['earthquakes', 'traffic'];
+  await coordinator.start({ shareLayerState: incoming });
+
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['traffic']);
+  assert.deepEqual(share.provider().enabledLayerIds, ['traffic']);
+  assert.equal(manager.layers.has('earthquakes'), false);
+
+  await manager.setEnabled('cctv', true, { origin: 'user' });
+  const [[, written]] = storage.writes;
+  assert.deepEqual(parseStoredLayerState(written).enabledLayerIds, [
+    'cctv',
+    'traffic',
+  ]);
+  assert.deepEqual(share.provider().enabledLayerIds, ['cctv', 'traffic']);
+
+  await coordinator.applyShareLayerState({ shareLayerState: incoming });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['traffic']);
+  coordinator.destroy();
+
+  const saved = createDefaultLayerState();
+  saved.enabledLayerIds = ['earthquakes', 'traffic'];
+  const local = new LayerStateCoordinator(
+    managerWithout(['earthquakes']),
+    shareSink(),
+    { storage: memoryStorage(serializeStoredLayerState(saved)) },
+  );
+  await local.start();
+  assert.equal(local.source, 'local');
+  assert.deepEqual(local.getDurableState().enabledLayerIds, ['traffic']);
+  local.destroy();
+});
+
+test('an application with every layer registered keeps every requested layer', async () => {
+  const coordinator = new LayerStateCoordinator(
+    productionManager(),
+    shareSink(),
+    { storage: memoryStorage() },
+  );
+  const incoming = createDefaultLayerState();
+  incoming.enabledLayerIds = ['earthquakes', 'traffic'];
+  await coordinator.start({ shareLayerState: incoming });
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+    'traffic',
+  ]);
   coordinator.destroy();
 });

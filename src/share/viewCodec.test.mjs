@@ -361,6 +361,7 @@ test('every registered field round-trips at once', () => {
       })),
     },
     sharedAtMs: NOW_MS,
+    worldTime: NOW_MS - 6 * 3_600_000,
   };
   // A thing view derives its camera (roll 0), so the camera fields are
   // checked on the same state as a place view.
@@ -501,6 +502,7 @@ test('the field registry is well formed and permanent', () => {
       [25, 'scopeFeatherPct', 100],
       [26, 'scopeTerminusPct', null],
       [27, 'styleParams', BY_STYLE],
+      [28, 'worldTime', null],
     ],
   );
   assert.deepEqual(
@@ -1337,4 +1339,23 @@ test('a layer option filed under a mirror layer is ignored', () => {
   assert.deepEqual(result.unknownFields, [
     { scope: 'layer-option', code: `${military}.${layerTokenNumber('m')}` },
   ]);
+});
+
+test('the world time is written only away from live, and may lie ahead', () => {
+  const at = (worldTime) =>
+    decodeShareView(encodeShareView({ sharedAtMs: NOW_MS, worldTime }), {
+      nowMs: NOW_MS,
+    }).state.worldTime;
+  assert.equal(at(null), null);
+  assert.equal(at(NOW_MS - 3_600_000), NOW_MS - 3_600_000);
+  // A forecast moment ahead of the link's creation is kept.
+  assert.equal(at(NOW_MS + 86_400_000), NOW_MS + 86_400_000);
+  // Before the 2026 epoch too: the field is zigzag.
+  assert.equal(at(Date.UTC(2024, 0, 1)), Date.UTC(2024, 0, 1));
+  // Past what a Date can hold: dropped, so the link opens live.
+  assert.equal(at(8.8e15), null);
+  assert.ok(
+    encodeShareView({ sharedAtMs: NOW_MS, worldTime: NOW_MS - 1000 }).length >
+      encodeShareView({ sharedAtMs: NOW_MS }).length,
+  );
 });

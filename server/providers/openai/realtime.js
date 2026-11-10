@@ -13,7 +13,9 @@ import {
   OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT,
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
-import { GEV_REALTIME_TOOLS } from './tools.js';
+import { GEV_REALTIME_TOOLS, offeredTools } from './tools.js';
+import { chatSchema } from './chat.js';
+import { resolveOverpassUpstreams } from '../overpass/constants.js';
 import {
   preferCodexOAuth,
   readCodexOAuthAccessToken,
@@ -127,6 +129,19 @@ function createRealtimeOAuthLoginHandler({
   };
 }
 
+/**
+ * The tools one Realtime session is offered, as OpenAI accepts them: it now
+ * refuses a whole session whose tool schema uses `\p{…}` patterns (#1618), as
+ * Chat Completions did (#1616), so voice drops the same pattern hints chat does.
+ */
+function realtimeSessionTools(tools, { overpass = false } = {}) {
+  return offeredTools(tools, { overpass }).map((tool) =>
+    tool.parameters
+      ? { ...tool, parameters: chatSchema(tool.parameters) }
+      : tool,
+  );
+}
+
 function createRealtimeTokenHandler({
   annotationGuidance,
   endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
@@ -136,6 +151,8 @@ function createRealtimeTokenHandler({
   environment = process.env,
   models = {},
   tools = GEV_REALTIME_TOOLS,
+  // osm_query is offered only when an operator configured Overpass.
+  overpassConfigured = () => resolveOverpassUpstreams().length > 0,
 } = {}) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -273,6 +290,7 @@ function createRealtimeTokenHandler({
       transcribeModel.toLowerCase() === 'off'
         ? {}
         : { transcription: { model: transcribeModel } };
+    const overpass = overpassConfigured();
     const sessionConfig = {
       session: {
         type: 'realtime',
@@ -298,8 +316,8 @@ function createRealtimeTokenHandler({
           },
           output: { voice },
         },
-        instructions: realtimeInstructions(annotationGuidance),
-        tools,
+        instructions: realtimeInstructions(annotationGuidance, { overpass }),
+        tools: realtimeSessionTools(tools, { overpass }),
         tool_choice: 'auto',
       },
     };
@@ -366,4 +384,5 @@ export {
   createRealtimeOAuthLoginHandler,
   createRealtimeOAuthStatusHandler,
   createRealtimeTokenHandler,
+  realtimeSessionTools,
 };
