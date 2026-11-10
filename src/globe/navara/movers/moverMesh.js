@@ -31,6 +31,7 @@ import {
   OVERLAY_DEPTH_VERTEX,
 } from '../overlayDepth.js';
 import { DETACHED_SONAR, SONAR_VERTEX } from '../sonar.js';
+import { createMoverRetry } from '../../movers.js';
 
 const VERTEX_HEAD = /* glsl */ `
 attribute vec4 gevStyle;
@@ -317,22 +318,9 @@ export function createMoverMesh(
   };
   // A canvas atlas is there at once; a URL one once its image loads.
   let textureReady = point || Boolean(options.sprite.atlas.canvas);
-  let textureFailed = false;
   const encodedAtlas = !point && options.sharpen === true;
   const material = new MeshBasicMaterial({
-    map: point
-      ? null
-      : atlasTexture(
-          options.sprite.atlas,
-          encodedAtlas,
-          () => {
-            textureReady = true;
-            onTextureLoad();
-          },
-          () => {
-            textureFailed = true;
-          },
-        ),
+    map: null,
     transparent: true,
     alphaTest: point || encodedAtlas ? 0.005 : 0.02,
     // Drawn after tone mapping, with no depth buffer: the shader tests the
@@ -341,6 +329,21 @@ export function createMoverMesh(
     depthWrite: false,
     side: FrontSide,
   });
+  const retry = createMoverRetry(options.retryAfterMs, () => {
+    material.map?.dispose();
+    material.map = atlasTexture(
+      options.sprite.atlas,
+      encodedAtlas,
+      () => {
+        textureReady = true;
+        retry.succeed();
+        onTextureLoad();
+      },
+      () => retry.fail(),
+    );
+    material.needsUpdate = true;
+  });
+  if (!point) retry.start();
   material.onBeforeCompile = (shader) =>
     patchMoverShader(shader, uniforms, {
       point,
@@ -394,7 +397,7 @@ export function createMoverMesh(
     mesh,
     uniforms,
     ready: () => textureReady,
-    failed: () => textureFailed,
+    failed: retry.failed,
     origin: () => origin,
     /** Writes the changed instances; the origin starts at the first one. */
     commit(range) {
@@ -455,6 +458,7 @@ export function createMoverMesh(
       return true;
     },
     dispose() {
+      retry.destroy();
       geometry.dispose();
       material.map?.dispose();
       material.dispose();

@@ -1,4 +1,4 @@
-// The three side of a Navara model set: the glTF loaded once, one
+// The three side of a Navara model set: the glTF shared by the set, one
 // InstancedMesh per mesh in it (all instances share the model's meshes),
 // each instance placed by position, orientation and scale relative to an
 // origin near the camera. Cesium's minimumPixelSize is kept on the CPU once
@@ -17,6 +17,7 @@ import {
   Sphere,
   Vector3,
 } from 'three';
+import { createMoverRetry } from '../../movers.js';
 import { footprintPerDepth, originFor } from './pack.js';
 import { createModelTint } from './modelTint.js';
 
@@ -188,94 +189,133 @@ export function createModelMover(
     for (const { mesh, tint } of parts) {
       if (tint) {
         tint.count = store.count;
-        tint.visible = store.count > 0;
+        tint.visible = loaded && store.count > 0;
       }
       mesh.count = store.count;
-      mesh.visible = store.count > 0;
+      mesh.visible = loaded && store.count > 0;
       mesh.instanceMatrix.needsUpdate = true;
     }
     for (const attribute of colorAttributes) attribute.needsUpdate = true;
     syncTransparency();
   };
 
-  const group = { meshes: [], pickMeshes: [], ready: null };
-  let failed = false;
-  const asset = load(model.url).catch(() => {
-    // A missing asset keeps the layer's glyph fallback. Do not leak the
-    // rejected loader promise (or its URL) through descriptor creation.
-    if (!disposed) {
-      failed = true;
-      console.warn('[globe] Model asset unavailable');
+  const group = { meshes: [], pickMeshes: [], ready: null, onLoad: null };
+  const pickIds = new Map();
+  const current = (index) => pickIds.get(index) === store.pickIds[index];
+  let generation = 0;
+  let finish;
+  group.ready = new Promise((resolve) => (finish = resolve));
+  const releaseParts = () => {
+    for (const { mesh, tint } of parts) {
+      if (tint) {
+        overlay.remove(tint);
+        tint.material.dispose();
+        tint.dispose();
+      }
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+      mesh.dispose?.();
     }
-    return null;
-  });
-  group.ready = asset.then((gltf) => {
-    if (!gltf) return;
-    const root = gltf.scene;
-    root.traverse((child) => {
+    parts.length = materials.length = colorAttributes.length = 0;
+    group.meshes.length = group.pickMeshes.length = 0;
+    disposeTextures();
+  };
+  const releaseAsset = (gltf, releaseTexture) => {
+    gltf.scene.traverse((child) => {
+      child.geometry?.dispose();
       for (const material of Array.isArray(child.material)
         ? child.material
-        : [child.material])
-        if (material)
+        : [child.material]) {
+        if (!material) continue;
+        if (releaseTexture)
           for (const value of Object.values(material))
-            if (value?.isTexture) textures.add(value);
+            if (value?.isTexture) value.dispose();
+        material.dispose();
+      }
     });
-    if (disposed) {
-      disposeTextures();
-      return;
-    }
-    root.updateMatrixWorld(true);
-    const sphere = new Box3()
-      .setFromObject(root)
-      .getBoundingSphere(new Sphere());
-    radius = Math.max(sphere.radius, 1e-3);
-    root.traverse((child) => {
-      if (!child.isMesh) return;
-      let material = child.material;
-      if (model.unlit)
-        material = new MeshBasicMaterial({
-          map: material.map ?? null,
-          color: material.color,
+  };
+  const retry = createMoverRetry(options.retryAfterMs, () => {
+    const version = generation;
+    load(model.url)
+      .then((gltf) => {
+        if (disposed || version !== generation) {
+          releaseAsset(gltf, true);
+          return;
+        }
+        releaseParts();
+        const root = gltf.scene;
+        root.traverse((child) => {
+          for (const material of Array.isArray(child.material)
+            ? child.material
+            : [child.material])
+            if (material)
+              for (const value of Object.values(material))
+                if (value?.isTexture) textures.add(value);
         });
-      else material = material.clone();
-      blendInstanceColor(material, uniforms, Boolean(overlay));
-      const geometry = child.geometry.clone();
-      const color = new InstancedBufferAttribute(
-        new Float32Array(capacity * 4).fill(1),
-        4,
-      );
-      color.setUsage(DynamicDrawUsage);
-      geometry.setAttribute('gevColor', color);
-      colorAttributes.push(color);
-      const mesh = new InstancedMesh(geometry, material, capacity);
-      mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-      mesh.frustumCulled = false;
-      mesh.renderOrder = options.order;
-      mesh.count = 0;
-      mesh.visible = false;
-      const tint = overlay
-        ? createModelTint(mesh, uniforms, overlay.uniforms)
-        : null;
-      if (tint) {
-        // Still present in the scene depth and GPU pick registry. Only colour
-        // moves to the display pass, where it is toned before raster resolve.
-        material.colorWrite = false;
-        overlay.add(tint);
-      }
-      materials.push(material);
-      parts.push({ mesh, tint, local: child.matrixWorld.clone() });
-      group.meshes.push(mesh);
-      group.pickMeshes.push(tint ?? mesh);
-    });
-    loaded = true;
-    if (origin)
-      for (const { mesh, tint } of parts) {
-        mesh.position.set(origin.x, origin.y, origin.z);
-        tint?.position.copy(mesh.position);
-      }
-    write(0, store.count);
-    onLoad(group.meshes);
+        root.updateMatrixWorld(true);
+        const sphere = new Box3()
+          .setFromObject(root)
+          .getBoundingSphere(new Sphere());
+        radius = Math.max(sphere.radius, 1e-3);
+        root.traverse((child) => {
+          if (!child.isMesh) return;
+          let material = child.material;
+          if (model.unlit)
+            material = new MeshBasicMaterial({
+              map: material.map ?? null,
+              color: material.color,
+            });
+          else material = material.clone();
+          blendInstanceColor(material, uniforms, Boolean(overlay));
+          const geometry = child.geometry.clone();
+          const color = new InstancedBufferAttribute(
+            new Float32Array(capacity * 4).fill(1),
+            4,
+          );
+          color.setUsage(DynamicDrawUsage);
+          geometry.setAttribute('gevColor', color);
+          colorAttributes.push(color);
+          const mesh = new InstancedMesh(geometry, material, capacity);
+          mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+          mesh.frustumCulled = false;
+          mesh.renderOrder = options.order;
+          mesh.count = 0;
+          mesh.visible = false;
+          const tint = overlay
+            ? createModelTint(mesh, uniforms, overlay.uniforms)
+            : null;
+          if (tint) {
+            // Still present in the scene depth and GPU pick registry. Only colour
+            // moves to the display pass, where it is toned before raster resolve.
+            material.colorWrite = false;
+            overlay.add(tint);
+          }
+          materials.push(material);
+          parts.push({ mesh, tint, local: child.matrixWorld.clone() });
+          group.meshes.push(mesh);
+          group.pickMeshes.push(tint ?? mesh);
+        });
+        loaded = true;
+        retry.succeed();
+        releaseAsset(gltf, false);
+        if (origin)
+          for (const { mesh, tint } of parts) {
+            mesh.position.set(origin.x, origin.y, origin.z);
+            tint?.position.copy(mesh.position);
+          }
+        write(0, store.count);
+        group.onLoad?.();
+        finish();
+        onLoad(group.meshes);
+      })
+      .catch(() => {
+        if (disposed || version !== generation) return;
+        retry.fail();
+        console.warn('[globe] Model asset unavailable');
+      });
   });
+  retry.start();
 
   const placeAt = (next) => {
     origin = { x: next.x, y: next.y, z: next.z };
@@ -290,8 +330,19 @@ export function createModelMover(
   return {
     group,
     uniforms,
-    ready: () => loaded,
-    failed: () => failed,
+    ready(index) {
+      if (disposed) return false;
+      if (index !== undefined) return loaded && current(index);
+      for (let at = 0; at < store.count; at++)
+        if (!loaded || !current(at)) return false;
+      return true;
+    },
+    failed(index) {
+      if (disposed || !retry.failed()) return false;
+      if (index !== undefined) return current(index);
+      for (let at = 0; at < store.count; at++) if (current(at)) return true;
+      return false;
+    },
     origin: () => origin,
     /**
      * The drawn radius (px) of an instance at its last write, or null when
@@ -303,6 +354,17 @@ export function createModelMover(
         ? drawnPx[index] / 2
         : null,
     commit(range) {
+      let changed = false;
+      for (let index = 0; index < store.count; index++) {
+        if (pickIds.has(index) ? !current(index) : retry.failed())
+          changed = true;
+        pickIds.set(index, store.pickIds[index]);
+      }
+      if (changed) {
+        generation++;
+        loaded = false;
+        retry.start();
+      }
       if (!origin && store.count > 0)
         placeAt({
           x: store.positions[0],
@@ -313,11 +375,11 @@ export function createModelMover(
       for (const { mesh, tint } of parts) {
         if (tint) {
           tint.count = store.count;
-          tint.visible = store.count > 0;
+          tint.visible = loaded && store.count > 0;
         }
         mesh.count = store.count;
         // Retained empty banks must also skip three's material/uniform work.
-        mesh.visible = store.count > 0;
+        mesh.visible = loaded && store.count > 0;
       }
     },
     /** Each drawn frame: pixel limits need every instance rewritten. */
@@ -340,17 +402,9 @@ export function createModelMover(
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const { mesh, tint } of parts) {
-        if (tint) {
-          overlay.remove(tint);
-          tint.material.dispose();
-          tint.dispose();
-        }
-        mesh.geometry.dispose();
-        mesh.material.dispose();
-        mesh.dispose?.();
-      }
-      disposeTextures();
+      retry.destroy();
+      releaseParts();
+      finish();
     },
   };
 }

@@ -51,14 +51,22 @@ class GevMoverSetDesc extends withFrameUpdates(MeshDesc) {
     const group = new Group();
     group.frustumCulled = false;
     // Meshes arrive with the glTF; they join the group (and the pick pass).
-    mover.group.ready.then(() => {
+    mover.group.onLoad = () => {
       if (this.destroyedByGev) return;
+      for (const { key, wrapper } of this.wrappers) {
+        this.ctx.unregisterPickableMesh(key);
+        batchIds.release(wrapper);
+      }
+      this.wrappers.length = 0;
+      this.gev.clearPickable();
+      group.clear();
       mover.group.meshes.forEach((mesh, index) => {
         group.add(mesh);
         register(mover.group.pickMeshes[index], `${this.id}#${index}`);
       });
       this.view.forceUpdate();
-    });
+    };
+    if (mover.group.meshes.length) mover.group.onLoad();
     return group;
   }
 
@@ -68,6 +76,7 @@ class GevMoverSetDesc extends withFrameUpdates(MeshDesc) {
 
   onDestroy() {
     this.destroyedByGev = true;
+    this.gev.mover.group.onLoad = null;
     for (const { key } of this.wrappers) this.ctx.unregisterPickableMesh(key);
     this.gev.mover.dispose();
     for (const { wrapper } of this.wrappers) this.gev.batchIds.release(wrapper);
@@ -163,6 +172,7 @@ export function createNavaraMovers(view, { overlay, aces = false }) {
         kind: options.kind,
         pickable: options.pickable,
         batchIds,
+        clearPickable: () => pickIndex.remove(options.id),
         onPickable: (wrapper) =>
           pickIndex.add(options.id, wrapper, (index) => store.pickIds[index]),
       },

@@ -54,7 +54,7 @@ import { createGroundPicks, createGroundRegistry } from '../ground.js';
 import { createMeshRegistry, meshRayDistance } from '../meshes.js';
 import { createImageryRegistry } from '../imagery.js';
 import { createLineRegistry } from '../lines.js';
-import { createMoverRegistry } from '../movers.js';
+import { createMoverRegistry, createMoverRetry } from '../movers.js';
 import { createCpuPicker } from '../cpuPicks.js';
 import { createFollowController } from '../follow.js';
 import { normalizeSurfaceOptions } from '../surfaceDetail.js';
@@ -257,19 +257,63 @@ export function createFakeEngine(options = {}) {
     };
   });
   // Movers keep their store for tests; commit counts as a render request.
-  const moverRegistry = createMoverRegistry((options) => {
+  const moverRegistry = createMoverRegistry((options, store) => {
+    const loads = new Map();
+    const ensure = (index) => {
+      const pickId = store.pickIds[index];
+      let entry = loads.get(index);
+      if (entry && entry.pickId === pickId) return entry;
+      entry?.retry.destroy();
+      entry = { pickId, ready: false, retry: null };
+      entry.retry = createMoverRetry(options.retryAfterMs, (attempt) => {
+        // A script can fail the first N attempts: (id, index, attempt) => attempt <= N.
+        if (scripted('moverFailed', [options.id, index, attempt], () => false))
+          entry.retry.fail();
+        else {
+          entry.ready = true;
+          entry.retry.succeed();
+        }
+        fake.renderRequests++;
+      });
+      loads.set(index, entry);
+      entry.retry.start();
+      return entry;
+    };
+    if (options.kind === 'sprite') ensure(undefined);
+    const current = (index) => {
+      const entry = loads.get(options.kind === 'sprite' ? undefined : index);
+      return options.kind === 'sprite' || entry?.pickId === store.pickIds[index]
+        ? entry
+        : null;
+    };
     const part = {
       commits: 0,
       commit() {
+        if (options.kind === 'model')
+          for (let index = 0; index < store.count; index++) ensure(index);
         part.commits++;
         fake.renderRequests++;
       },
-      ready: (index) =>
-        !scripted('moverFailed', [options.id, index], () => false),
-      // Scripted as 'moverFailed' (set id, index) for a load that fails.
-      failed: (index) =>
-        scripted('moverFailed', [options.id, index], () => false),
-      destroy() {},
+      ready(index) {
+        if (options.kind === 'point') return true;
+        if (options.kind === 'sprite') return current(index).ready;
+        if (index !== undefined) return current(index)?.ready === true;
+        for (let at = 0; at < store.count; at++)
+          if (!current(at)?.ready) return false;
+        return true;
+      },
+      failed(index) {
+        if (options.kind === 'point') return false;
+        if (options.kind === 'sprite') return current(index).retry.failed();
+        if (index !== undefined) return current(index)?.retry.failed() === true;
+        for (let at = 0; at < store.count; at++)
+          if (current(at)?.retry.failed()) return true;
+        return false;
+      },
+      destroy() {
+        for (const entry of loads.values()) entry.retry.destroy();
+        loads.clear();
+      },
     };
     return part;
   });

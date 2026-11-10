@@ -419,6 +419,8 @@
  * @property {string} id Unique among the engine's live sets.
  * @property {'sprite'|'point'|'model'} kind
  * @property {number} capacity The most instances the set holds.
+ * @property {number} [retryAfterMs=1500] Delay after a model or atlas load
+ *   failure before retrying. At most three attempts, including the first.
  * @property {number} [order] Draw order among sets (higher draws later, on
  *   top); 0 by default.
  * @property {'normal'|'always'|{ disableWithinM: number }} [depthTest]
@@ -474,14 +476,15 @@
  * @property {() => void} commit Uploads what changed (one buffer write) and
  *   requests a render; nothing else draws a frame.
  * @property {(index?: number) => boolean} ready Whether what the set draws
- *   has loaded: a model set's glTF (Cesium: every drawn instance's model), a
- *   sprite set's atlas. With an index, what that instance draws (Cesium: its
- *   own model; the other engines load a set's glTF once).
- *   A layer keeps its fallback visual until then.
+ *   has loaded: every active model or the sprite atlas. With an index, what
+ *   that active instance draws; false outside [0, count). A successful retry
+ *   makes it ready. A layer keeps its fallback visual until then.
  * @property {(index?: number) => boolean} failed Whether what the set draws
- *   failed to load (with an index, what that instance draws): it stays not
- *   ready and is not tried again; a layer that retries makes a new set.
- *   Cesium loads per instance: an index given another pickId loads again.
+ *   failed on its latest attempt (with an index, that active instance;
+ *   false outside [0, count)). It stays true during the retry and clears on
+ *   success; after three failed attempts it stays true. The engine retries
+ *   after retryAfterMs. A model index given another pickId loads again with
+ *   a fresh attempt budget. Destroy cancels retries and both queries return false.
  * @property {() => void} destroy
  *
  * @typedef {object} GlobeMovers

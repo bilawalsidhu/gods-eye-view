@@ -348,3 +348,51 @@ test('native-stage glow atlas filters encoded colors and keeps the native faint-
   glow.dispose();
   ordinary.dispose();
 });
+
+test('a URL atlas retries on fresh images, stops after three failures and cancels on dispose', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const previous = globalThis.Image;
+  const images = [];
+  globalThis.Image = class {
+    constructor() {
+      images.push(this);
+    }
+  };
+  t.after(() => {
+    if (previous) globalThis.Image = previous;
+    else delete globalThis.Image;
+  });
+  const options = normalizeMoverSetOptions({
+    ...spriteOptions,
+    retryAfterMs: 20,
+    sprite: {
+      sizePx: 8,
+      atlas: { url: '/atlas.png', cells: { a: [0, 0, 1, 1] } },
+    },
+  });
+  const mover = createMoverMesh(options, createMoverStore(options));
+  images[0].onerror();
+  assert.equal(mover.failed(), true);
+  t.mock.timers.tick(19);
+  assert.equal(images.length, 1);
+  t.mock.timers.tick(1);
+  assert.equal(mover.failed(), true);
+  images[1].onload();
+  assert.equal(mover.ready(), true);
+  assert.equal(mover.failed(), false);
+  assert.equal(images[0].onload, null);
+  mover.dispose();
+  const permanent = createMoverMesh(options, createMoverStore(options));
+  for (let i = 2; i < 5; i++) {
+    images[i].onerror();
+    t.mock.timers.tick(20);
+  }
+  assert.equal(images.length, 5);
+  assert.equal(permanent.failed(), true);
+  permanent.dispose();
+  const cancelled = createMoverMesh(options, createMoverStore(options));
+  images[5].onerror();
+  cancelled.dispose();
+  t.mock.timers.tick(10000);
+  assert.equal(images.length, 6);
+});

@@ -35,13 +35,11 @@ export function createMoverBank(engine, { options, write, onCommit }) {
   let capacity = 0;
   let visible = true;
   let dirty = false;
-  let rebuildPending = false;
   const build = (wanted) => {
     const next = engine.movers.createSet(options(wanted, ++generation));
     set?.destroy();
     set = next;
     capacity = wanted;
-    rebuildPending = false;
     handles.forEach((handle, index) => write(handle, set, index));
     set.setCount(visible ? handles.length : 0);
   };
@@ -57,7 +55,7 @@ export function createMoverBank(engine, { options, write, onCommit }) {
       handle.gevBank = bank;
       handle.gevIndex = handles.length;
       handles.push(handle);
-      if (!set || rebuildPending || handles.length > capacity)
+      if (!set || handles.length > capacity)
         build(
           Math.max(
             FIRST_CAPACITY,
@@ -83,7 +81,6 @@ export function createMoverBank(engine, { options, write, onCommit }) {
       handle.gevBank = null;
       handle.gevIndex = -1;
       set?.setCount(visible ? handles.length : 0);
-      if (!handles.length && rebuildPending) bank.rebuild();
       bank.touch();
     },
     /** Writes `fields` of one handle (when it is in this bank). */
@@ -98,14 +95,6 @@ export function createMoverBank(engine, { options, write, onCommit }) {
       bank.touch();
     },
     visible: () => visible,
-    /** Reload assets on the next add, after the caller's retry backoff. */
-    rebuild() {
-      rebuildPending = true;
-      if (!handles.length) {
-        set?.destroy();
-        set = null;
-      }
-    },
     touch() {
       if (!dirty) {
         dirty = true;

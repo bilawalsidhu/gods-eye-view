@@ -216,20 +216,32 @@ test('the contract suite movers and lines checks pass on the Cesium engine (no p
 test('the camera, clock and failed model suite checks pass on the Cesium adapter', async (t) => {
   const { createAppClock } = await import('../../time/clock.js');
   let wall = 1_000_000;
+  // The failed-model check turns the model's load failure on and off.
+  let modelFails = false;
   const { viewer, camera, engine, frame } = createCameraViewer({
     engineOptions: {
       createEventHandler: createFakeEventHandlers().create,
       appClock: createAppClock({ now: () => wall }),
       moverFactories: {
         loadModel: async () => {
-          throw new Error('Model unavailable');
+          if (modelFails) throw new Error('Model unavailable');
+          return {
+            ready: true,
+            modelMatrix: new Cesium.Matrix4(),
+            isDestroyed: () => false,
+            destroy() {},
+          };
         },
       },
     },
   });
   viewer.entities = new Cesium.EntityCollection();
   const checks = createContractSuite(engine, {
-    fixtures: { failModel() {} },
+    fixtures: {
+      failModel(id, fails) {
+        modelFails = fails;
+      },
+    },
     waitFrames: async (count) => {
       for (let i = 0; i < count; i++) {
         wall += 16;
@@ -239,7 +251,7 @@ test('the camera, clock and failed model suite checks pass on the Cesium adapter
       }
     },
   }).filter(({ name }) =>
-    /^(camera.changed: a pure|camera.following:|clock.frameTime:|MoverSet.failed:)/.test(
+    /^(camera.changed: a pure|camera.following:|clock.frameTime:|movers.createSet: failed model)/.test(
       name,
     ),
   );
