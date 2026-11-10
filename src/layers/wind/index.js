@@ -82,14 +82,7 @@ export function createWindLayer({
     inspectionMarker?.clear();
   };
   const sample = (position) => {
-    if (!position && engine && !viewer) {
-      const canvas = engine.host.canvas;
-      position = engine.camera.pickEllipsoid({
-        x: canvas.clientWidth / 2,
-        y: canvas.clientHeight / 2,
-      });
-    }
-    reading = inspectWindAtCenter(manifest, viewer, {
+    reading = inspectWindAtCenter(manifest, engine, {
       position,
       units,
       overlay,
@@ -130,7 +123,6 @@ export function createWindLayer({
       rendering?.setOptions?.({ overlay, paused });
       inspectionMarker = createWindInspectionMarker({
         container: engine.host.container,
-        viewer,
         engine,
       });
       if (enabled && manifest && !manifest.unavailable) {
@@ -254,7 +246,7 @@ export function createWindLayer({
         loading = enabled && needsField;
         if (enabled && needsField)
           queueMicrotask(() => {
-            if (enabled && generation === current) void layer.update(viewer);
+            if (enabled && generation === current) void layer.update();
           });
         else if (enabled && manifest && !manifest.unavailable)
           rendering?.start();

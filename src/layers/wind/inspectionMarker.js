@@ -9,9 +9,7 @@ import { applicationPinia } from '../../ui/vueRuntime.js';
  */
 export function createWindInspectionMarker({
   container,
-  viewer,
   engine,
-  cesium,
   store = useWindInspectionStore(applicationPinia()),
 }) {
   const owner = {};
@@ -28,45 +26,31 @@ export function createWindInspectionMarker({
     removeRender = null;
     if (shown()) store.publish(null);
     marker = null;
-    if (engine) engine.render.request('wind-inspection');
-    else viewer?.scene?.requestRender?.();
+    engine.render.request('wind-inspection');
   };
   return {
     show(position) {
       clear();
-      const scene = viewer?.scene;
-      const canvas = scene?.canvas ?? engine?.host.canvas;
-      const frames = scene?.postRender ?? engine?.frames.postRender;
+      const canvas = engine.host.canvas;
+      const frames = engine.frames.postRender;
       if (
         !position ||
         !container?.ownerDocument ||
         !frames?.addEventListener ||
-        (!engine?.projector && !scene?.cartesianToCanvasCoordinates)
+        !engine.projector
       )
         return;
       present({ owner, container, visible: false, left: 0, top: 0 });
-      const occluder =
-        !engine &&
-        new cesium.EllipsoidalOccluder(
-          scene.globe?.ellipsoid || cesium.Ellipsoid.WGS84,
-          viewer.camera.positionWC,
-        );
       const render = () => {
         if (!shown()) return;
-        if (occluder) occluder.cameraPosition = viewer.camera.positionWC;
-        const point = engine
-          ? engine.projector.worldToWindow(position, {})
-          : scene.cartesianToCanvasCoordinates(position);
+        const point = engine.projector.worldToWindow(position, {});
         const visible =
           point &&
           point.x >= 0 &&
           point.y >= 0 &&
           point.x <= canvas.clientWidth &&
           point.y <= canvas.clientHeight &&
-          (engine
-            ? engine.projector.horizonVisible(position)
-            : scene.mode !== cesium.SceneMode.SCENE3D ||
-              occluder.isPointVisible(position));
+          engine.projector.horizonVisible(position);
         if (!visible) {
           // A hidden marker keeps its last place, as the element did.
           if (marker.visible) present({ visible: false });
@@ -82,8 +66,7 @@ export function createWindInspectionMarker({
       };
       removeRender = frames.addEventListener(render);
       render();
-      if (engine) engine.render.request('wind-inspection');
-      else scene.requestRender?.();
+      engine.render.request('wind-inspection');
     },
     clear,
     destroy: clear,

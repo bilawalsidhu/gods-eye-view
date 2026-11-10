@@ -23,13 +23,13 @@ const options = {
   validTime: '2026-09-14 18:00 UTC',
   status: 'Model forecast',
 };
-/** The Cesium path picks the centre itself; Navara hands in the position. */
-const viaViewer = (snapshot, point) =>
+/** Inspect either the current map centre or a captured position. */
+const viaEngine = (snapshot, point) =>
   inspectWindAtCenter(
     snapshot,
     {
       camera: { pickEllipsoid: () => point },
-      scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
+      host: { canvas: { clientWidth: 800, clientHeight: 600 } },
     },
     options,
   );
@@ -42,7 +42,7 @@ test('edge:wind: a fixed grid gives the same direction, speed and legend colour 
   // 5 m/s blowing toward the west: the wind comes FROM the east.
   const snapshot = field(-5, 0);
   for (const point of [at(10, 20), at(180, 0), at(-180, 0), at(-45.5, -60)]) {
-    const cesiumReading = viaViewer(snapshot, point);
+    const cesiumReading = viaEngine(snapshot, point);
     const navaraReading = viaPosition(snapshot, point);
     for (const reading of [cesiumReading, navaraReading]) {
       assert.equal(reading.from, 'E');
@@ -76,7 +76,7 @@ test('edge:wind: an empty or unavailable field is not reported as calm, a real 0
   ];
   for (const snapshot of empty) {
     for (const reading of [
-      viaViewer(snapshot, point),
+      viaEngine(snapshot, point),
       viaPosition(snapshot, point),
     ]) {
       assert.equal(reading.speed, undefined, 'no speed is invented');

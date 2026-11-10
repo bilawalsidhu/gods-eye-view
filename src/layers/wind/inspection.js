@@ -45,20 +45,17 @@ export function formatWindSpeed(speed, units = 'km/h') {
 /** A deliberate snapshot at the map center; does not own pointer input. */
 export function inspectWindAtCenter(
   snapshot,
-  viewer,
+  engine,
   { units, overlay, model, validTime, status, position } = {},
 ) {
-  const scene = viewer?.scene;
-  const canvas = scene?.canvas;
-  // The globe's own ellipsoid, else WGS84 (geo's default).
-  const ellipsoid = scene?.globe?.ellipsoid;
+  const canvas = engine?.host.canvas;
   const point =
     position ||
     (canvas &&
-      viewer.camera?.pickEllipsoid?.(
-        geo.cartesian2.create(canvas.clientWidth / 2, canvas.clientHeight / 2),
-        ellipsoid,
-      ));
+      engine.camera.pickEllipsoid({
+        x: canvas.clientWidth / 2,
+        y: canvas.clientHeight / 2,
+      }));
   const noReading = () => ({
     coordinates: msg('No surface reading'),
     wind: msg('Aim the map center at Earth'),
@@ -70,7 +67,7 @@ export function inspectWindAtCenter(
     ),
   });
   if (!point || !snapshot?.u || !snapshot?.v) return noReading();
-  const location = geo.cartographic.fromCartesian(point, ellipsoid);
+  const location = geo.cartographic.fromCartesian(point);
   const lon = geo.math.toDegrees(location.longitude);
   const lat = geo.math.toDegrees(location.latitude);
   const vector = sampleWind(

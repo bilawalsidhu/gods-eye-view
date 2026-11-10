@@ -10,16 +10,7 @@ import { useWindInspectionStore } from '../../ui/stores/windInspection.js';
 import WindInspectionMarker from '../../ui/views/panels/WindInspectionMarker.vue';
 import { createWindInspectionMarker } from './inspectionMarker.js';
 
-const cesium = {
-  SceneMode: { SCENE3D: 3 },
-  Ellipsoid: { WGS84: {} },
-  EllipsoidalOccluder: class {
-    isPointVisible() {
-      return cesium.visible;
-    }
-  },
-  visible: true,
-};
+const visibility = { visible: true };
 
 function fixture(t) {
   document.body.replaceChildren();
@@ -56,18 +47,26 @@ function fixture(t) {
       requestRender() {},
     },
   };
+  const engine = {
+    host: { canvas: viewer.scene.canvas },
+    frames: { postRender: viewer.scene.postRender },
+    projector: {
+      worldToWindow: viewer.scene.cartesianToCanvasCoordinates,
+      horizonVisible: () => visibility.visible,
+    },
+    render: { request() {} },
+  };
   const store = useWindInspectionStore(pinia);
-  cesium.visible = true;
+  visibility.visible = true;
   const owner = createWindInspectionMarker({
     container,
-    viewer,
-    cesium,
+    engine,
     store,
   });
   const nodes = () => [
     ...container.querySelectorAll('.gev-wind-inspection-marker'),
   ];
-  return { owner, viewer, store, frames, projected, nodes, container, cesium };
+  return { owner, viewer, store, frames, projected, nodes, container, engine };
 }
 
 test('the marker follows only its captured point, hides beyond the limb, and releases its listener', async (t) => {
@@ -85,13 +84,13 @@ test('the marker follows only its captured point, hides beyond the limb, and rel
   assert.equal(marker.style.top, '220px');
   assert.equal(marker.hidden, false);
   viewer.camera.positionWC = { moved: true };
-  cesium.visible = false;
+  visibility.visible = false;
   frames.listener();
   await nextTick();
   assert.equal(marker.hidden, true);
   assert.equal(marker.style.left, '110px', 'a hidden marker keeps its place');
   assert.ok(projected.every((value) => value === point));
-  cesium.visible = true;
+  visibility.visible = true;
   frames.listener();
   await nextTick();
   assert.equal(marker.hidden, false);
@@ -111,7 +110,7 @@ test('the marker follows only its captured point, hides beyond the limb, and rel
 });
 
 test('an unchanged frame publishes nothing, and an older owner leaves a newer marker', (t) => {
-  const { owner, viewer, store, frames, container } = fixture(t);
+  const { owner, engine, store, frames, container } = fixture(t);
   owner.show({ x: 1 });
   let publishes = 0;
   const publish = store.publish;
@@ -124,8 +123,7 @@ test('an unchanged frame publishes nothing, and an older owner leaves a newer ma
   frames.listener = null;
   const newer = createWindInspectionMarker({
     container,
-    viewer,
-    cesium,
+    engine,
     store,
   });
   newer.show({ x: 2 });
