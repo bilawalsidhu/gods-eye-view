@@ -1,3 +1,4 @@
+import { streamingResponse } from '../testSupport/streamingResponse.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -21,24 +22,6 @@ import {
   isLikelyNycCoordinate,
 } from '../../server/providers/cctv/normalize.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
-
-/**
- * A response whose body is a live stream, plus a flag that flips when the
- * stream is cancelled. A rejection path that returns without cancelling holds
- * the transport open, so the flag is what the refusal tests actually assert.
- */
-const streamingResponse = (init = {}) => {
-  const state = { cancelled: false };
-  const body = new ReadableStream({
-    start(controller) {
-      controller.enqueue(new TextEncoder().encode('['));
-    },
-    cancel() {
-      state.cancelled = true;
-    },
-  });
-  return { response: new Response(body, init), state };
-};
 
 const MIDTOWN_ID = '8a6bc417-4877-4ebe-8052-88c1b261baf1';
 const BROOKLYN_ID = '11111111-2222-3333-4444-555555555555';

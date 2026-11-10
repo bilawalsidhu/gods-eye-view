@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as geo from '../../geo/index.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
-import { createSatellitesDisplay } from './render/display.js';
+import { satelliteServices } from '../../testSupport/satelliteServices.mjs';
 import { constantRgba } from '../shared/color.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
@@ -98,31 +98,9 @@ async function fixture(t) {
     readSensors: async () => SENSORS,
   };
   const noop = () => {};
-  const services = {
-    renderer: { create: ({ engine }) => createSatellitesDisplay(engine) },
-    overlays: {
-      setEntries: noop,
-      setVisible: noop,
-      clearSource: noop,
-    },
-    layerState: { isExplicitLayerStateOrigin: () => false },
-    focus: {
-      clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
-      getFocusTarget: () => null,
-      focusNowMs: (now) => now,
-      focusPassIsNeeded: () => false,
-    },
-    context: {
-      clearTrackedSubjectContext: noop,
-      getContextStore: () => ({ entities: new Map() }),
-      refreshTrackedSubjectContext: noop,
-      selectTrackedSubjectContext: noop,
-    },
-    readout: { refreshTrackedReadout: noop },
-    render: { holdContinuousRender: noop, releaseContinuousRender: noop },
-    picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-  };
+  const services = satelliteServices();
+  services.focus.focusNowMs = (now) => now;
+  services.focus.focusPassIsNeeded = () => false;
   const previousDocument = globalThis.document;
   globalThis.document = new EventTarget();
   const state = createState({ services });

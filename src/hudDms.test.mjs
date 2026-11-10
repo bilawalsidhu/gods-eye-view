@@ -1,3 +1,4 @@
+import './testSupport/stubMgrs.mjs';
 import { viewerEngine } from './testSupport/viewerEngine.mjs';
 // The HUD's LAT/LON readout in degrees-minutes-seconds. Seconds are printed to
 // two decimals, so a value within 0.005" of the next whole minute rounds up.
@@ -11,26 +12,6 @@ import { viewerEngine } from './testSupport/viewerEngine.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
-import { registerHooks } from 'node:module';
-
-const MGRS_STUB_URL = 'gev-test-stub:mgrs';
-registerHooks({
-  resolve(specifier, context, next) {
-    if (specifier === 'mgrs') return { url: MGRS_STUB_URL, shortCircuit: true };
-    return next(specifier, context);
-  },
-  load(url, context, next) {
-    if (url === MGRS_STUB_URL) {
-      return {
-        format: 'module',
-        shortCircuit: true,
-        source:
-          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
-      };
-    }
-    return next(url, context);
-  },
-});
 
 const { IntelHUD } = await import('./hud.js');
 

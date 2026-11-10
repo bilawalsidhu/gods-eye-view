@@ -1,3 +1,4 @@
+import { streamingResponse } from '../testSupport/streamingResponse.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -18,24 +19,6 @@ import { CAMERA_CODE_MAX_CHARS } from '../../server/providers/cctv/normalize.js'
 import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 import { directionToHeading } from './directionText.js';
-
-/**
- * A response whose body is a live stream, plus a flag that flips when the
- * stream is cancelled. A rejection path that returns without cancelling holds
- * the transport open, so the flag is what the refusal tests actually assert.
- */
-const streamingResponse = (init = {}) => {
-  const state = { cancelled: false };
-  const body = new ReadableStream({
-    start(controller) {
-      controller.enqueue(new TextEncoder().encode('['));
-    },
-    cancel() {
-      state.cancelled = true;
-    },
-  });
-  return { response: new Response(body, init), state };
-};
 
 /** One Open Calgary row, shaped like the live `k7p9-kppz` payload. */
 const row = (overrides = {}) => ({

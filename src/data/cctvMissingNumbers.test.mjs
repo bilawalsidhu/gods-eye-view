@@ -1,3 +1,4 @@
+import { withEnv } from '../testSupport/environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -22,17 +23,6 @@ import { createModel } from '../layers/cctv/model.js';
 const ABSENT = [null, undefined, '', ' ', false, true];
 
 /** Set env vars for one test and restore them afterwards. */
-function withEnv(t, env) {
-  for (const [name, value] of Object.entries(env)) {
-    const previous = process.env[name];
-    t.after(() => {
-      if (previous === undefined) delete process.env[name];
-      else process.env[name] = previous;
-    });
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  }
-}
 
 /** Silence the loaders' progress and failure logging. */
 function quiet(t) {

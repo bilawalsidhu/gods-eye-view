@@ -1,4 +1,4 @@
-import { createSatellitesDisplay } from './render/display.js';
+import { satelliteServices } from '../../testSupport/satelliteServices.mjs';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter, once } from 'node:events';
@@ -76,32 +76,7 @@ async function fixture(t) {
   // Application host services and native EventTargets; the display on the
   // fake engine, its input, events, SGP4, ingestion and lifecycle run without
   // a WebGL scene.
-  const noop = () => {};
-  const services = {
-    renderer: {
-      create: ({ engine }) => createSatellitesDisplay(engine),
-    },
-    overlays: {
-      setEntries: noop,
-      setVisible: noop,
-      clearSource: noop,
-    },
-    layerState: { isExplicitLayerStateOrigin: () => false },
-    focus: {
-      clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
-      getFocusTarget: () => null,
-    },
-    context: {
-      clearTrackedSubjectContext: noop,
-      getContextStore: () => ({ entities: new Map() }),
-      refreshTrackedSubjectContext: noop,
-      selectTrackedSubjectContext: noop,
-    },
-    readout: { refreshTrackedReadout: noop },
-    render: { holdContinuousRender: noop, releaseContinuousRender: noop },
-    picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-  };
+  const services = satelliteServices();
   const previousDocument = globalThis.document;
   globalThis.document = new EventTarget();
   const state = createState({ services });

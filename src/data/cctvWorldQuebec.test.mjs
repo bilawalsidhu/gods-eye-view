@@ -1,3 +1,4 @@
+import { withEnv } from '../testSupport/environment.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -29,17 +30,6 @@ function quiet(t) {
 }
 
 /** Set (or, for `undefined`, delete) environment variables for one test. */
-function withEnv(t, env) {
-  for (const [name, value] of Object.entries(env)) {
-    const previous = process.env[name];
-    t.after(() => {
-      if (previous === undefined) delete process.env[name];
-      else process.env[name] = previous;
-    });
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  }
-}
 
 /** A temporary source root holding the given World and Québec catalogs. */
 function sourceRoot(t, { world = [], quebec = null } = {}) {
