@@ -316,11 +316,9 @@ export class StreetLevelControls {
   }
 
   /**
-   * Embed mode hides the right rail, panel and viewer with it: an open photo
-   * moves to <body> as an overlay on the globe (`sl-viewer-wrap-embed`, see
-   * embed.css) and returns to its place in the panel when it closes. The
-   * panel view keeps patching the wrap where it is: its siblings are static,
-   * so Vue never inserts next to it.
+   * Embed mode hides the right rail: an open photo moves to <body> as an
+   * overlay on the globe (`sl-viewer-wrap-embed`, embed.css) and goes back
+   * when it closes. Vue keeps patching the wrap there: its siblings are static.
    */
   _syncEmbedOverlay(open) {
     const wrap = this._elements.viewerWrap;
@@ -404,8 +402,6 @@ export class StreetLevelControls {
       if (!isEmbedPage()) this.actions.revealPanel?.();
     }
     this._wasOpen = open;
-    // Embed mode hides the rail the panel sits in: an open photo is shown over
-    // the globe instead, and goes back into the panel when it closes.
     this._syncEmbedOverlay(open);
   }
 

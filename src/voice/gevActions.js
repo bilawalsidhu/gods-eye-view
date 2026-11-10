@@ -3819,9 +3819,8 @@ function streetLevelPanelHidden() {
  * (links) stops short of a billed load: the panel is armed for OPEN.
  */
 export async function showStreetLevel(args, context) {
-  // Every await can hand the request's moment to someone else: a newer turn,
-  // a navigation or gesture that takes the camera, or a mode that hides the
-  // panel. Each stage after the place is settled checks again.
+  // After any await a newer turn, a navigation, a globe gesture or a mode
+  // that hides the panel may have taken over: each later stage checks again.
   const owner = watchCameraOwner(context.viewer, context.styleManager);
   // A photo held up while the request switches its source is let go however
   // the request ends: replaced by then, or closed if its source stayed off.
@@ -3912,8 +3911,7 @@ async function requestStreetLevel(
   const status = layerModule.providerStatus?.(provider) || null;
   providerName = status?.name || provider;
 
-  // The key first, on any map: a chip without a key explains it and switches
-  // nothing, and so does this.
+  // The key first: without one nothing changes, as with a chip.
   if (status && (status.keyRequired === true || status.configured === false))
     return fail('key', status.error || `${providerName} needs its key`, {
       keyRejected: status.keyRejected === true,
@@ -3998,9 +3996,8 @@ async function requestStreetLevel(
     point = { lat: location.latitude, lon: location.longitude };
   }
 
-  // Cockpit, clean view, recording and scene playback hide the panel the
-  // photo opens in, and may have started during the flight.
-  // The camera is the request's from where its own flight landed.
+  // A mode that hides the panel may have started during the flight. The
+  // camera is the request's from where its flight landed.
   if (location) owner.claim();
   const arrived = interrupted('view');
   if (arrived) return arrived;
@@ -4076,13 +4073,11 @@ async function requestStreetLevel(
       location,
     });
 
-  // A billed source never loads from a link without a click: everything is
-  // ready and OPEN is one press away at the view centre.
+  // A link never loads a billed photo by itself: it arms OPEN instead.
   if (args.autoOpen === false && status?.billed === true) {
     // A photo of another place must not stay up beside the armed request.
     if (layerModule.getUIState?.()?.street?.open === true)
       layerModule.closeViewer?.();
-    // The next OPEN press loads exactly what the link asked for.
     layerModule.armNearest?.(point, {
       providerIds: [provider],
       ...(snapshot.groundClick === true
@@ -4101,13 +4096,10 @@ async function requestStreetLevel(
     };
   }
 
-  // A source with no coverage to click (Street View) is searched wider: a
-  // geocoded landmark is rarely within 50 m of a street. A newer turn
-  // retires the lookup: nothing opens after the user moved on. A photo of
-  // another place stays up while it looks (the viewer, EXPAND included, is
-  // replaced, not closed) and closes if this request opens nothing: the
-  // panel shows this request's outcome. Once an image is found it loads
-  // only if the camera and the panel are still the request's.
+  // Street View has no coverage to click, so it searches wider: a geocoded
+  // landmark is rarely within 50 m of a street. An open photo stays up while
+  // this looks and closes if nothing opens; a found photo loads only while
+  // the camera and the panel are still the request's.
   reportProgress('imagery', label);
   const opened = await layerModule.openNearest(point, {
     providerIds: [provider],
@@ -4123,9 +4115,8 @@ async function requestStreetLevel(
       : {}),
   });
   const street = layerModule.getUIState?.()?.street || {};
-  // A cancelled request opens nothing (the lookup and the viewer both honour
-  // the turn's signal). A photo that opened after the camera moved on, or
-  // into a panel hidden meanwhile, is closed again: nobody asked to see it.
+  // A photo that opened after the camera moved on, or into a panel hidden
+  // meanwhile, is closed again.
   const late = interrupted('imagery');
   if (late) {
     if (opened === true) layerModule.closeViewer?.();

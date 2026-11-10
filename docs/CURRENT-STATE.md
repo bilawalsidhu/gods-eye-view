@@ -5073,111 +5073,103 @@ core's lookups alone. The MCP globe panel allows the meta-catalogue and the
 three biggest instances; a picture on another instance shows only in the
 app.
 
-**"Show me X on Street View."** The `show_street_level` assistant action
-(voice and typed; `src/voice/gevActions.js`) is one call: it checks the
-source has its key (a keyless source explains itself and changes nothing, as
-a chip does), flies to the place at street framing and waits for arrival (a
-name, coordinates, a pointed spot, a numbered item, or nothing for the
-ground under the screen centre, as OPEN uses: `aim: 'screen-centre'` with
-`armed: false`, so sky refuses and a link's armed point is not used and is
-kept until a photo opens), switches to the map the source needs (Google Street View: Google 3D),
-lights that source through `setLayerParams` with origin `voice` (one source at
-a time, kept in the share link like a chip click; a link runs the action with
-origin `programmatic`, for the source switch and the layer, so it never writes
-the recipient's saved layer state), turns the layer on and
-calls `openNearest`. `provider` is `google` for "Street View", `mapillary`,
-`kartaview` or `panoramax` by name, else the lit source. Stages fail separately (`location`, `view`, `map`,
-`provider`, `layer`, `key`, `imagery`; `view` when cockpit, clean view,
-recording or scene playback hides the panel, checked after the flight and
-before anything switches or loads; embed mode exempts its own clean-view
-class because the photo is lifted above the globe; an empty `imagery` result names a
-narrowing 360°/flat or SINCE filter the source honours, as `filter`;
-`noImagery` marks an empty result, `imageryError` a source or viewer failure
-and `aim: 'sky'` a sky centre, from the layer's `street.nearestOutcome`) and a
-newer turn retires the lookup
-(`openNearest`'s `signal` option), so nothing opens after the user moved on.
-For a source without a coverage layer the lookup widens to 250 m
-(`NEAREST_RADIUS_MAX_M`; Google honours it, Mapillary's API caps at 50 m);
-clicks keep 50 m. Mapillary's search gives up after 12 s, body included
-(`NEAREST_TIMEOUT_MS`), and asks for 100 photos, the API's most: it
-returns the radius's photos in no particular order and cuts them at the limit
-first, so the distance sort and the imagery filter run over the spot's photos.
-On a phone the panel sits in the Cameras tab sheet: a photo that opens, and a
-link that arms, open that sheet and scroll the panel into view
-(`revealPanel`, which does nothing above 720px, scrolling included); every
-photo the action opens reveals the panel again, also one the user had
-collapsed. The layer exposes `requiredMapStack(id)` and
-`providerStatus(id)` for callers that must decide before the panel lists a
-source, and `coverageLines(id)` (the lines a provider draws now, current and
-stale tiles, as `[lon, lat]` parts) for diagnostics and the browser gate,
-which aims its line clicks at that geometry, waits for the asynchronous
-ground primitives to be ready, and clicks in the same JavaScript turn as the
-pick so a rebuilt frame cannot come between them. Views carry the same request as `street_level` (`src/view/index.js`:
-source and point, defaulting to where the camera looks; a `google` source
-brings `map: photoreal` and refuses another map; not with `follow`), links as
-`sl=<source>,<lat>,<lon>`; `show_in_gods_eye_view` accepts it, the globe panel
-applies it through the action, and a plain link runs the action once restored
-(one shot: the rewritten hash drops `sl`). A link pasted into the open tab
-runs it after its restore settles (`gev:share-navigation-restore-settled`),
-and only when the restore's camera landed (`share.camera === 'applied'`): a
-link whose restore flight the visitor stopped with a drag or a search, or
-whose restore a newer link superseded, never runs and never pulls the camera
-back. In embed mode the rail holding the
-panel is hidden, so an open photo moves to an overlay on the globe
-(`sl-viewer-wrap-embed`) and back when it closes; Esc closes it (in full
-screen, Esc leaves full screen first). EXPAND stays open under embed mode's
-own clean view; cockpit, recording and scene playback hide the overlay. A
-posted view whose photo step fails before the imagery stage closes the
-earlier photo before its camera flies; one the user overtook (a click on the
-map, a newer request) leaves their photo and camera alone, and one that
-found a photo it could not load keeps that error in view. The action's
-lookup replaces an open photo in place (`openNearest` `replace: true`), so
-the viewer and EXPAND stay up, and closes it only when it opens nothing; once
-an image is found, `proceed()` asks whether the camera and the panel are
-still the request's before a billed photo loads. Image-loading failures render inside
-the embedded overlay, since the panel's error region is hidden with the rail.
-A caller's abort is
-honoured through the viewer's mount and load, not just the lookup, and only
-the lookup that still owns the panel may change its spinner or error. Cancelling
-a lookup clears its loading state even when an existing photo stays open;
-internally retired lookups also release the caller's abort listener. A
-passive link's photos stand down if anyone navigated (a gesture, a search,
-the assistant) while the link waited behind its own marks. The action itself
-checks again after every await (flight, map switch, layer on, lookup): a
-newer turn, a shell navigation stamp (`_navigationGeneration`, re-taken where
-its own flight lands) or a press or wheel on the globe stops the remaining
-stages (`superseded: true`), and cockpit, clean view, recording or scene
-playback entered meanwhile ends it at the `view` stage. During the lookup the
-same checks run before a found photo loads (`proceed`), so nothing billed
-loads for a request that was given up, and a lookup given up leaves the
-panel as it was; a photo that opened after either is closed again. The
-hidden-panel check also runs before the flight, so a recording's camera never
-moves for it. A photo already open stays up while the new request looks (the
-viewer is replaced, not closed, so EXPAND stays, also when the request
-switches the source) and closes if the request opens nothing, so a place with
-no imagery shows its own error, not the previous place's photo; a link that
-only arms closes it at once. A plain
-link never loads a photo from a source that bills every load
-(`billedPerImage` on the provider; Google): the action runs with
-`autoOpen: false`, arms the lookup on the layer (`armNearest`: the link's
-point and radius, consumed only by the next OPEN press (`aim:
-'screen-centre'`), and only while the ground under the screen centre is within
-1 km of the point (`ARMED_REACH_M`; a user who moved on opens what the view
-shows) or cannot be picked; a sky centre refuses; any other lookup, open, close, disable, its source
-switched off or its map leaving drops it), opens the panel and a toast
-points at OPEN GOOGLE STREET VIEW. Only the panel page's own link (inline
-embed) for a tool result issued in the last 5 minutes, and posted views, open
-the photo: `show_in_gods_eye_view` stamps a street-level result `issued_at`,
-and a host that mounts the panel again later hands back the old result, which
-only arms. The panel checks every result, not just the first: each `gev:view`
-it posts carries `fresh`, and the inline app applies a view without it with
-`autoOpen: false` (a framing page's posted views still open); `?embed=1` on a published link only
-arms, without the panel nudge or toast (the rail is hidden in a frame). A link that follows an entity ignores `sl`.
-The look-at default applies below 20 km, at a pitch steeper than -5° and
-within 10 km ahead; otherwise the camera's own point is used. A view's
-altitude is above the ellipsoid, so `show_in_gods_eye_view` measures it from
-the terrain under the camera (`services.terrain`) before taking the look-at
-point; without a terrain answer it keeps the view's own estimate.
+**"Show me X on Street View."** `show_street_level` (voice and typed;
+`src/voice/gevActions.js`) is one call whose stages fail separately
+(`location`, `view`, `map`, `provider`, `layer`, `key`, `imagery`):
+
+- **Key first.** A keyless source explains itself and changes nothing, as a
+  chip does.
+- **Place.** A name, coordinates, a pointed spot or a numbered item: it flies
+  there at street framing and waits for arrival. With no place it looks at the
+  ground under the screen centre, as OPEN does (`aim: 'screen-centre'`,
+  `armed: false`: sky refuses, and a link's armed point is not used and is kept
+  until a photo opens). Coordinates off the globe are refused.
+- **Map and source.** It switches to the map the source needs (Google Street
+  View: Google 3D), lights the source through `setLayerParams`, one at a time
+  and kept like a chip click (origin `voice`; a link runs the action with
+  origin `programmatic`, so it never writes the recipient's saved layer state),
+  turns the layer on and calls `openNearest`. `provider` is `google` for
+  "Street View", `mapillary`, `kartaview` or `panoramax` by name, else the lit
+  source.
+- **Hidden panel.** Cockpit, clean view, recording or scene playback end it at
+  `view`, before the flight and after every await; embed mode's own clean view
+  is exempt, since the photo is lifted over the globe.
+- **Superseded.** After every await (flight, map switch, layer on, lookup) a
+  newer turn, a shell navigation stamp (`_navigationGeneration`, re-taken where
+  its own flight lands) or a press or wheel on the globe stops it
+  (`superseded: true`). The same checks run before a found photo loads
+  (`proceed`), so nothing billed loads for a request that was given up, and a
+  lookup given up leaves the panel as it was; a photo that opened after either
+  is closed again.
+- **Replacing a photo.** An open photo stays up while the new request looks
+  (`openNearest` `replace: true`; the viewer is replaced, not closed, so EXPAND
+  stays, also across sources through `holdViewer`) and closes if nothing
+  opens, so a place with no imagery shows its own error; a link that only arms
+  closes it at once. A replacement stops a playing Mapillary sequence.
+- **Outcome.** `noImagery` marks an empty result, `imageryError` a source or
+  viewer failure and `aim: 'sky'` a sky centre (from `street.nearestOutcome`);
+  an empty result names a narrowing 360°/flat or SINCE filter the source
+  honours, as `filter`. Every photo the action opens reveals the panel, also
+  one the user had collapsed.
+- **Search.** A source without a coverage layer searches up to 250 m
+  (`NEAREST_RADIUS_MAX_M`; Google honours it); clicks keep 50 m. Mapillary
+  asks for 100 photos within 50 m, its API's most (the API returns them
+  unordered and cuts at the limit), and gives up after 12 s, body included
+  (`NEAREST_TIMEOUT_MS`).
+- **Phone.** The panel sits in the Cameras tab sheet: a photo that opens, or a
+  link that arms, opens the sheet and scrolls the panel into view
+  (`revealPanel`, which does nothing above 720px).
+
+The layer also exposes `requiredMapStack(id)` and `providerStatus(id)` for
+callers that decide before the panel lists a source, `holdViewer()`, and
+`coverageLines(id)` (the lines a provider draws now, as `[lon, lat]` parts)
+for diagnostics. A caller's abort is honoured through the viewer's mount and
+load, and only the lookup that still owns the panel changes its spinner or
+error.
+
+Views carry the request as `street_level` (`src/view/index.js`): a source and
+a point, which defaults to where the camera looks (below 20 km, at a pitch
+steeper than -5° and within 10 km ahead; else the camera's own point, also
+for half a point). A `google` source brings `map: photoreal` and refuses
+another map; `street_level` does not combine with `follow`.
+`show_in_gods_eye_view` measures a view's altitude from the terrain under the
+camera (`services.terrain`) before taking the look-at point, and keeps the
+view's own estimate without a terrain answer. Links carry
+`sl=<source>,<lat>,<lon>`; the globe panel applies views through the action,
+and a plain link runs it once restored (one shot: the rewritten hash drops
+`sl`). A link that follows an entity ignores `sl`.
+
+- **Billing gate.** A plain link never loads a photo from a source that bills
+  every load (`billedPerImage`; Google): the action runs with
+  `autoOpen: false` and arms the layer (`armNearest`: the link's point and
+  radius, for the next OPEN press only, and only while the ground under the
+  screen centre is within 1 km of it (`ARMED_REACH_M`) or cannot be picked; a
+  sky centre refuses; any other lookup, open, close, disable, the source
+  switched off or its map leaving drops it), opens the panel and shows a toast
+  pointing at OPEN GOOGLE STREET VIEW.
+- **Who may open.** Posted views, and the panel page's own link (inline embed)
+  for a tool result issued in the last 5 minutes, open the photo:
+  `show_in_gods_eye_view` stamps a street-level result `issued_at`, every
+  `gev:view` the panel posts carries `fresh`, and the inline app applies a
+  view without it with `autoOpen: false` (a framing page's posted views still
+  open). `?embed=1` on a published link only arms, without the panel nudge or
+  toast.
+- **Who owns the camera.** A link's photo step is skipped when a newer link
+  superseded its restore, when its restore flight never landed
+  (`share.camera !== 'applied'`: the visitor dragged or searched), or after
+  any navigation since the generation that flight owned (`navigationToken` on
+  the settled result), also while its layers still load. A link pasted into
+  the open tab runs its step after its restore settles
+  (`gev:share-navigation-restore-settled`).
+- **Embed.** The rail is hidden, so an open photo moves to an overlay on the
+  globe (`sl-viewer-wrap-embed`) and back when it closes; Esc closes it (in
+  full screen, Esc leaves full screen first). EXPAND stays under embed mode's
+  clean view; cockpit, recording and scene playback hide the overlay. Loading
+  errors render inside the overlay, and inside the viewer while EXPAND is on.
+  A posted view whose photo step fails before the imagery stage closes the
+  earlier photo before its camera flies; one the user overtook (a click on the
+  map, a newer request) leaves their photo and camera alone; one that found a
+  photo it could not load keeps that error.
 
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run

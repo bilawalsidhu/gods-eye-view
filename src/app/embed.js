@@ -183,8 +183,7 @@ function flyTo(viewer, camera) {
 
 /**
  * The `show_street_level` arguments for a view's street-level photos. A plain
- * link (`autoOpen: false`) never loads a photo from a source that bills every
- * load: the app arms the panel and the OPEN button is one click away. A view
+ * link (`autoOpen: false`) only arms a source that bills every load; a view
  * posted into the embedded app is the client's own request and opens.
  */
 function streetLevelArgs(streetLevel, { autoOpen = true } = {}) {
@@ -260,20 +259,18 @@ export async function applyView(
   if (view.annotations.length)
     await act('annotate_map', { annotations: [...view.annotations] });
   if (view.street_level) {
-    // The photos frame the camera: the action flies to the point at street
-    // level, lights the source and opens the nearest photo. When it fails
-    // before flying, the view's own camera still applies.
+    // The photos frame the camera; when the action fails before flying, the
+    // view's own camera still applies.
     const result = await act(
       'show_street_level',
       streetLevelArgs(view.street_level, { autoOpen }),
     );
     if (result?.ok !== true) {
-      // Overtaken (a click on the map, a newer request): the panel and the
-      // camera are someone else's now.
+      // Overtaken (a click on the map, a newer request): hands off.
       if (result?.cancelled || result?.superseded) return steps;
       // An earlier view's photo must not stay over a place this view left.
-      // From the imagery stage on the action has settled the panel itself:
-      // a photo it found but could not load keeps its error in view.
+      // From the imagery stage on the action has settled the panel itself
+      // (a photo it could not load keeps its error).
       if (result?.stage !== 'imagery')
         dataManager.layers?.get?.(STREET_LEVEL_LAYER)?.module?.closeViewer?.();
       if (!result?.location)
@@ -331,18 +328,13 @@ export function installViews({
   const hashParams = new URLSearchParams(
     String(location?.hash || '').replace(/^#/, ''),
   );
-  // What the link itself asks for runs first, one thing at a time; posted
-  // views queue behind it. One failing step does not take the next with it.
-  // The camera's owner at restore: anyone who navigates while the link's
-  // steps wait (a gesture, a search, the assistant) takes it, and a passive
-  // link must not fly over them.
-  // A start-up restore that a newer link superseded hands the camera to that
-  // link: its own steps never run.
-  // A restore whose camera never landed (the recipient dragged, searched or
-  // opened another place during its flight) leaves the camera with them.
+  // The link's own steps run first, one at a time, and posted views queue
+  // behind them; one failing step does not take the next with it. A passive
+  // link never flies over someone who took the camera: its steps are skipped
+  // when a newer link superseded it, when its flight never landed (the
+  // recipient dragged or searched), or after any navigation since the
+  // generation its restore flight owned.
   const cameraLanded = (outcome) => outcome?.share?.camera === 'applied';
-  // The generation the restore's own flight owned: a navigation after it
-  // landed, while the layers still loaded, has moved on from it.
   const restoreGeneration = (outcome) =>
     Number.isInteger(outcome?.navigationToken)
       ? outcome.navigationToken
@@ -369,11 +361,9 @@ export function installViews({
   const linked = annotationsFromParams(hashParams);
   if (linked.length)
     queue = linkStep(() => run('annotate_map', { annotations: linked }));
-  // A link to street-level photos opens them once the link has restored. A
-  // link anyone can publish stops short of a billed load and leaves it to a
-  // click; only the panel page's own link for a result issued just now is
-  // the client's request (a host remounting the panel hands back old ones).
-  // A link that follows an entity keeps the camera on it.
+  // A link's street-level photos open once it has restored. A billed source
+  // only arms, except for the panel page's own link to a result issued just
+  // now. A link that follows an entity keeps the camera on it.
   const linkedStreetLevel = (params) =>
     followFromParams(params) ? null : streetLevelFromParams(params);
   const openLinkedStreetLevel = async (
@@ -388,9 +378,8 @@ export function installViews({
       streetLevelArgs(streetLevel, { autoOpen }),
       { origin: 'programmatic' },
     );
-    // The restore window keeps the panel collapsed; OPEN must be in view.
-    // Embed mode hides the rail that holds it, so there the link only arms
-    // (a posted view is the way to open a photo in a frame).
+    // OPEN must be in view, but embed mode hides the rail that holds it: in
+    // a frame a posted view is the way to open a photo.
     if (result?.armed === true && !isEmbedded(location)) {
       shell.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
         explicit: true,
@@ -410,9 +399,8 @@ export function installViews({
             autoOpen: isFreshPanelResult(),
           }),
     );
-  // A link pasted into the open tab restores camera and layers on its own;
-  // its photos follow once that restore settles, under the same rule: a plain
-  // link never loads a billed photo by itself.
+  // A link pasted into the open tab: its photos follow once its restore
+  // settles, under the same rules.
   const onNavigatedRestore = (event) => {
     if (event?.detail?.status !== 'settled' || !cameraLanded(event.detail))
       return;

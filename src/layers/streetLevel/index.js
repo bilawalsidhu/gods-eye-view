@@ -697,22 +697,19 @@ export function createStreetLevelLayer({
     /**
      * Open the nearest image of the active providers (or `providerIds`) near
      * a point, else the view centre, or with `aim: 'screen-centre'` the ground
-     * under the screen centre (sky: nothing). `radiusM` widens the search for
-     * providers that can (a geocoded landmark is rarely within 50 m of a
-     * street); clicks keep the default. A caller's `signal` retires the
-     * lookup: nothing opens after it fires. Providers without
-     * `nearestImage` are skipped. `armed: false` (a request of its own, such
-     * as the assistant's) does not use a link's armed point, and keeps it
-     * while it looks; a photo it opens ends it, as any opened photo does. Why
-     * nothing opened is left in `street.nearestOutcome`: 'empty' (no imagery
-     * in reach), 'sky' (the screen centre is not ground), or null (an error).
-     * `replace: true` (a request that takes over the panel) keeps an open
-     * photo up while it looks, so the viewer and EXPAND stay, and closes it
-     * when the lookup opens nothing: the panel shows this request's outcome.
-     * `proceed()` is asked before a found image loads and before an empty
-     * or failed lookup reports; false retires the request and leaves the
-     * panel as it was (a photo that bills every load must not load for a
-     * request its caller has given up).
+     * under the screen centre (sky: nothing). Providers without
+     * `nearestImage` are skipped. Options:
+     * - `radiusM` widens the search where a provider can (a geocoded landmark
+     *   is rarely within 50 m of a street);
+     * - `signal` retires the lookup: nothing opens after it fires;
+     * - `armed: false` (the assistant's own request) ignores a link's armed
+     *   point and keeps it until a photo opens;
+     * - `replace: true` keeps an open photo (and EXPAND) up while it looks and
+     *   closes it if nothing opens;
+     * - `proceed()` is asked before a found photo loads or an empty lookup
+     *   reports; false retires the request and leaves the panel as it was.
+     * Why nothing opened is in `street.nearestOutcome`: 'empty', 'sky' or
+     * null (an error).
      */
     async openNearest(
       point,
@@ -737,9 +734,8 @@ export function createStreetLevelLayer({
         if (replace && state.street.open) closeViewer();
       };
       if (!point && aim === 'screen-centre' && armed) {
-        // The button promises the centre of the view: the link's spot only
-        // while the view still shows it, or when the view cannot be picked.
-        // Sky refuses below, as any OPEN press does.
+        // OPEN promises the view centre: the link's spot only while the view
+        // still shows it, or when the view cannot be picked.
         const centre = armed.point ? screenCentreGround() : null;
         if (!armed.point) radiusM ??= armed.radiusM;
         else if (
@@ -777,11 +773,9 @@ export function createStreetLevelLayer({
       callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
       const retired = () => {
         callerSignal?.removeEventListener('abort', onCallerAbort);
-        // Only the lookup that still owns the panel may touch it: a newer one
-        // has its own spinner and error.
+        // A newer lookup owns the panel, its spinner and its error.
         if (nearestLookup !== lookup) return false;
         nearestLookup = null;
-        // The caller moved on: the panel shows nothing of this lookup.
         if (state.street.loading) {
           state.street.loading = false;
           notify();
@@ -822,8 +816,7 @@ export function createStreetLevelLayer({
         if (proceed && proceed() !== true) return retired();
         nearestLookup = null;
         callerSignal?.removeEventListener('abort', onCallerAbort);
-        // The photo asked for stays on screen: a sequence playing in the
-        // photo it replaces stops.
+        // A sequence playing in the replaced photo would step past this one.
         if (replace && state.street.open) parts.viewerHost.stopPlayback();
         // The caller's signal still counts while the viewer mounts and loads.
         return openImage(entry.def.id, imageId, {
@@ -834,8 +827,7 @@ export function createStreetLevelLayer({
       callerSignal?.removeEventListener('abort', onCallerAbort);
       // Replaced while it looked: the panel is the newer lookup's.
       if (nearestLookup !== lookup) return false;
-      // Given up by its caller while it looked: the open photo stays, and
-      // the panel reports nothing of this lookup.
+      // Given up by its caller: the panel stays as it was.
       if (proceed && proceed() !== true) return retired();
       nearestLookup = null;
       closeReplaced();
@@ -867,8 +859,7 @@ export function createStreetLevelLayer({
     closeViewer,
     /**
      * Keep the open photo up while a request that replaces it switches the
-     * source (the viewer and EXPAND are replaced, not closed). The returned
-     * release closes it if its source is still off by then.
+     * source, so EXPAND stays. Release closes it if its source is still off.
      */
     holdViewer() {
       viewerHolds += 1;
@@ -883,10 +874,9 @@ export function createStreetLevelLayer({
       };
     },
     /**
-     * Prepare a nearest lookup for the next OPEN press without running it: a
-     * link to a source that bills every load stops here. The press opens at
-     * this point with this radius; any other lookup, open or close, the
-     * source switched off, or its map leaving clears it.
+     * Arm a nearest lookup for the next OPEN press without running it (a link
+     * to a source that bills every load). Any other lookup, open or close, the
+     * source switched off or its map leaving clears it.
      */
     armNearest(point, { providerIds = null, radiusM = null } = {}) {
       state.street.armed = {

@@ -75,17 +75,14 @@ export const SEQUENCE_IMAGE_FIELDS =
   'id,captured_at,compass_angle,geometry,is_pano';
 
 /**
- * Images asked for in a nearest-image search (show_street_level and links
- * open the photo nearest a point; the graph API caps the radius at 50 m).
- * The API returns the radius's images in no particular order and cuts them
- * at the limit first, so this asks for its most (100): the distance sort and
- * the imagery filter then choose among the spot's photos, not a few of them.
+ * Images asked for in a nearest-image search: the API cuts at the limit
+ * before any order, so this is its most, and the distance sort and the
+ * imagery filter choose among all of the spot's photos.
  */
 export const NEAREST_LIMIT = 100;
 /**
- * A nearest-image search that has not answered (headers and body) in this
- * long is given up: a link or a posted view waits on it, and so does every
- * view queued behind that one.
+ * A nearest-image search not answered in full (body included) by then is
+ * given up: a link or posted view, and every view queued behind it, waits.
  */
 export const NEAREST_TIMEOUT_MS = 12_000;
 /** Fields a nearest-image search needs: where each is, and the filter's. */
