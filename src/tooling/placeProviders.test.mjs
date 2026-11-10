@@ -501,6 +501,25 @@ test('the upstream host is pinned: a redirect is refused, not followed', async (
   assert.deepEqual(seen, ['error'], 'a redirect would escape the pinned host');
 });
 
+test('the routing proxy declines a non-GET before rate limiting or upstream', async (t) => {
+  // A fetch that throws proves the refusal comes before any upstream call.
+  const request = install(installRouteMiddleware);
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('upstream must not be reached');
+  });
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+    const response = await request(
+      '/api/route',
+      '?profile=car&coords=-97,30;-97.01,30.01',
+      method,
+    );
+    assert.equal(response.statusCode, 405, method);
+    // RFC 9110 section 15.5.6: a 405 names the methods it accepts.
+    assert.equal(response.headers.allow, 'GET', method);
+    assert.deepEqual(response.body, { error: 'Method Not Allowed' });
+  }
+});
+
 test('both paid Google routes refuse cross-site requests before calling Google', async (t) => {
   const plugin = googlePlacesContextProxy({ resolveApiKey: () => 'key' });
   const routes = new Map();

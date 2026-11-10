@@ -77,6 +77,20 @@ test('cameras in an area are listed nearest first', async () => {
   assert.equal(result.data.rows[1].credit, null);
 });
 
+test('a camera heading that rounds to 360 reads as 0', async () => {
+  const source = {
+    async getCatalog() {
+      return { sources: [{ ...cameras[0], headingDeg: 359.6 }] };
+    },
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { cctv: source },
+  });
+  const result = await catalog.call('find_cctv_cameras', { area: downtown });
+  assert.equal(result.data.rows[0].heading_deg, 0);
+});
+
 test('a snapshot returns the frame as an image with its credit', async () => {
   const source = cctv();
   const catalog = composeCatalog({

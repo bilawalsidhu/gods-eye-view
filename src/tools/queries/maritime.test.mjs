@@ -351,6 +351,25 @@ test('find_vessel answers carry normalized types and destinations', async () => 
   );
 });
 
+test('a vessel course or heading that rounds to 360 reads as 0', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: vessels({
+        records: [
+          vessel('366000003', 37.78, -122.4, {
+            courseDeg: 359.7,
+            headingDeg: 359.6,
+          }),
+        ],
+      }),
+    },
+  });
+  const [row] = (await catalog.call('find_vessel', { mmsi: '366000003' })).data
+    .rows;
+  assert.deepEqual([row.course_deg, row.heading_deg], [0, 0]);
+});
+
 test('a destination with no letters counts as unknown', async () => {
   const catalog = composeCatalog({
     tools: coreTools,
