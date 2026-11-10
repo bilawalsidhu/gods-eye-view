@@ -137,16 +137,13 @@ Stale fallback runs per response after the reservation is released, and disk
 writes finish asynchronously. Settled and rejected reservations are removed
 only while they still own their map entry.
 
-External ALPR tags, surveillance-tool display fields, voice context text and
-compact analyst strings collapse controls and whitespace before a final
-180-character cap (scene labels retain their 120-character cap). Empty ALPR
-values remain null and Unicode text is preserved without splitting a surrogate
-pair. Only display fields are normalized: canonical analyst identifiers
-(`id`, `layerKey`, `icao24`, `mmsi`, `noradId`, `registration`, `callsign`)
-pass through unchanged, because bikeshare uses the raw station name as its ID
-and numbered voice references resolve by that key. These fields remain
-untrusted source data in structured tool output; text normalization does not
-establish trust or eliminate prompt injection.
+External ALPR tags, surveillance-tool fields, voice context text and compact
+analyst strings become one line of at most 180 characters (scene labels: 120).
+Empty ALPR values stay null, and the cap never splits a surrogate pair.
+Canonical analyst identifiers such as `id` and `routeId` stay unchanged, because
+voice follow-ups match on them and bikeshare uses the raw station name as its
+ID. The text is still untrusted: normalization does not prevent prompt
+injection.
 
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP

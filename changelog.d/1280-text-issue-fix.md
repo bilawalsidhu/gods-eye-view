@@ -1,1 +1,3 @@
-- Bound untrusted display text at output boundaries (asturksever, #1280).
+- Keep outside text in voice and MCP tool results to one line of 180
+  characters: ALPR tags, station names and other display fields (asturksever,
+  #1280).

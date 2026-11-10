@@ -1,4 +1,4 @@
-/** Bounded, single-line external display text; it remains untrusted source data. */
+/** One-line text capped at `maxLength` without splitting a surrogate pair. Still untrusted. */
 export function normalizeDisplayText(value, maxLength = 180) {
   if (value == null || typeof value === 'object' || typeof value === 'function')
     return '';

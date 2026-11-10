@@ -5353,9 +5353,9 @@ const ANALYST_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 /**
- * Analyst item keys that identify a record rather than describe it: the
- * referent registry, track_entity and locateLayerEntity match on them, so
- * display-text normalization must leave them byte-for-byte unchanged.
+ * Keys that identify an analyst record. The referent registry, track_entity,
+ * locateLayerEntity and follow-up filters match on them, so they skip
+ * display-text normalization.
  */
 const ANALYST_CANONICAL_FIELDS = new Set([
   'layerKey',
@@ -5405,9 +5405,7 @@ function compactAnalystItem(r) {
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;
-  // Display text only: canonical keys are lookup identities (bikeshare uses
-  // the raw station name as its id), so the referent registry and
-  // locateLayerEntity must see them exactly as the layer reports them.
+  // Canonical keys stay raw: bikeshare's id is the raw station name.
   for (const key of Object.keys(compact)) {
     if (typeof compact[key] === 'string' && !ANALYST_CANONICAL_FIELDS.has(key))
       compact[key] = normalizeDisplayText(compact[key]);
