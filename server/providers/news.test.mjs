@@ -14,7 +14,7 @@ function mount(options) {
       },
     },
   });
-  return async (url, method = 'GET') => {
+  return async (url, method = 'GET', headers = {}) => {
     const res = {
       destroyed: false,
       status: 0,
@@ -24,11 +24,15 @@ function mount(options) {
         this.status = status;
         this.headers = headers;
       },
+      setHeader(name, value) {
+        this.headers[name] = value;
+      },
       end(body) {
+        if (this.statusCode) this.status = this.statusCode;
         this.body = body;
       },
     };
-    await handler({ url, method }, res);
+    await handler({ url, method, headers }, res);
     return { ...res, json: res.body ? JSON.parse(res.body) : null };
   };
 }
@@ -217,4 +221,74 @@ test('a host that serves news only from its own server turns the built-in backen
     });
   }
   assert.equal(fetches, 0);
+});
+
+test('a request line that is no URL is a 400, not a crash', async () => {
+  const call = mount({
+    origin: () => null,
+    keyed: { answer: async () => assert.fail('nothing is answered') },
+  });
+  // `GET /api/news//[`: Connect strips the mount prefix and leaves `//[`.
+  const bad = await call('//[');
+  assert.equal(bad.status, 400);
+  assert.deepEqual(bad.json, { error: 'invalid_news_request' });
+});
+
+test('cross-site and proxied requests are refused before anything is read', async () => {
+  let answered = 0;
+  const call = mount({
+    origin: () => null,
+    keyed: {
+      answer: async () => {
+        answered++;
+        return { status: 200, body: { reports: [], nextBefore: null } };
+      },
+    },
+  });
+  const host = 'localhost:5173';
+  for (const headers of [
+    { host, origin: 'https://evil.example' },
+    { host, origin: 'null' },
+    { host, 'sec-fetch-site': 'cross-site' },
+    { host, 'x-forwarded-for': '203.0.113.9' },
+  ]) {
+    const refused = await call('/feed?hotspot=all', 'GET', headers);
+    assert.equal(refused.status, 403, JSON.stringify(headers));
+  }
+  assert.equal(answered, 0);
+  for (const headers of [
+    { host },
+    { host, origin: `http://${host}`, 'sec-fetch-site': 'same-origin' },
+  ]) {
+    const passed = await call('/feed?hotspot=all', 'GET', headers);
+    assert.equal(passed.status, 200, JSON.stringify(headers));
+  }
+  assert.equal(answered, 2);
+});
+
+test("a news server's key and configuration states are relayed as they are", async () => {
+  for (const body of [
+    { error: 'no_key', key: 'worldnewsapi' },
+    { error: 'key_rejected', key: 'worldnewsapi' },
+    { error: 'key_quota', key: 'worldnewsapi' },
+    { error: 'news_not_configured', unavailable: true, retryable: false },
+  ]) {
+    const call = mount({
+      origin: () => 'https://news.example',
+      fetchImpl: async () =>
+        new Response(JSON.stringify(body), { status: 503 }),
+    });
+    const relayed = await call('/feed?hotspot=all&at=31.95,35.93');
+    assert.equal(relayed.status, 503, body.error);
+    assert.deepEqual(relayed.json, body);
+  }
+  // Any other 503 stays a bounded upstream error.
+  const other = mount({
+    origin: () => 'https://news.example',
+    fetchImpl: async () =>
+      new Response('{"error":"maintenance","detail":"x"}', { status: 503 }),
+  });
+  const down = await other('/hotspots');
+  assert.equal(down.status, 502);
+  assert.deepEqual(down.json, { error: 'news_upstream_error', status: 503 });
 });

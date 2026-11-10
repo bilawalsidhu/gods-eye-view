@@ -1,5 +1,6 @@
 import { newsQueryAllowed } from '../../src/layers/news/source.js';
 import { readResponseTextCapped } from './common/http.js';
+import { sameSiteGated } from './common/same-site.js';
 import { createKeyedNews } from './news/keyed.js';
 
 // News (/api/news/*). With GEV_NEWS_ORIGIN set (a news server such as
@@ -62,6 +63,25 @@ function configuredOrigin(env, log) {
   };
 }
 
+/** A 503's known key or configuration state, rebuilt from its fields; else null. */
+async function upstreamState(upstream) {
+  let body = null;
+  try {
+    body = JSON.parse(await readResponseTextCapped(upstream, 16 * 1024));
+  } catch {
+    return null;
+  }
+  if (body?.error === 'news_not_configured')
+    return { error: body.error, unavailable: true, retryable: false };
+  if (
+    ['no_key', 'key_rejected', 'key_quota'].includes(body?.error) &&
+    typeof body.key === 'string' &&
+    /^[a-z][a-z0-9-]{0,31}$/.test(body.key)
+  )
+    return { error: body.error, key: body.key };
+  return null;
+}
+
 /**
  * A thin, validated GET proxy for the news layer's three read routes, or
  * their keyed answers without a news server. A host that serves news only
@@ -91,11 +111,17 @@ export function newsProxy({
   async function handler(req, res) {
     if (req.method !== 'GET')
       return json(res, 405, { error: 'method_not_allowed' });
-    const local = new URL(req.url || '/', 'http://local');
-    const target = new URL(
-      `/api/news${local.pathname}${local.search}`,
-      'http://local',
-    );
+    let local, target;
+    try {
+      // `//[` and the like are no URL: a 400, not an unhandled rejection.
+      local = new URL(req.url || '/', 'http://local');
+      target = new URL(
+        `/api/news${local.pathname}${local.search}`,
+        'http://local',
+      );
+    } catch {
+      return json(res, 400, { error: 'invalid_news_request' });
+    }
     if (!newsQueryAllowed(target))
       return json(res, 400, { error: 'invalid_news_request' });
     const base = origin();
@@ -126,6 +152,12 @@ export function newsProxy({
           signal: AbortSignal.timeout(timeoutMs),
         },
       );
+      if (upstream.status === 503) {
+        // The news server's own key and configuration states reach the
+        // panel as they are, so it can say which key is missing.
+        const state = await upstreamState(upstream);
+        if (state) return json(res, 503, state);
+      }
       if (!upstream.ok) {
         await upstream.body?.cancel().catch(() => {});
         return json(res, 502, {
@@ -144,13 +176,16 @@ export function newsProxy({
     }
   }
 
+  // The routes spend keys and upstream reads: no other site's page, and no
+  // proxied request, may drive them (SECURITY.md, cross-site gate).
+  const gated = sameSiteGated(handler);
   return {
     name: 'news',
     configureServer({ middlewares }) {
-      middlewares.use('/api/news', handler);
+      middlewares.use('/api/news', gated);
     },
     configurePreviewServer({ middlewares }) {
-      middlewares.use('/api/news', handler);
+      middlewares.use('/api/news', gated);
     },
   };
 }
