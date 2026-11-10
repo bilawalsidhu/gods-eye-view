@@ -2,14 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Cesium3DTileset } from 'cesium';
+import { Core, initSync } from '@navaramap/engine';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Raycaster, Vector3 } from 'three';
+import { Group, Raycaster, Vector3 } from 'three';
+import * as geo from '../src/geo/index.js';
 import { buildTilesFixture } from './build-tiles3d-fixture.mjs';
 import { localTilesetPath, qaTilesetUrl } from '../src/maps/qaTileset.js';
 import { createDefaultMapSources } from '../src/maps/defaultSources.js';
 import { MapSourceController } from '../src/maps/controller.js';
 import { createFakeEngine } from '../src/globe/testing/fakeEngine.js';
 import { createNavaraMaps } from '../src/globe/navara/maps.js';
+import { createNavaraSurface } from '../src/globe/navara/surface.js';
 import {
   assertKeylessPreview,
   TILES_FIXTURE_PATH,
@@ -74,6 +77,153 @@ test('independent glTF loader and triangle rays recover the authored heights', a
     assert.ok(
       Math.abs(hits[0].point.y - height) < 1e-5,
       `${name}: ${hits[0].point.y}`,
+    );
+  }
+});
+
+// Exercise the installed WASM tile loader, then the same glTF transforms
+// consumed by Three's renderModel/setTransform path, without WebGL or fetch.
+async function loadedNavaraTiles(t, adapter) {
+  initSync({
+    module: readFileSync(
+      new URL(
+        '../node_modules/@navaramap/engine/navara_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ),
+  });
+  const files = buildTilesFixture();
+  const fixture = JSON.parse(files.get('tileset.json'));
+  const core = new Core('tiles-fixture');
+  t.after(() => core.free());
+  core.resize(1280, 800, 1);
+  core.setFrustum(60, 1, 1e8);
+  core.start();
+  core.changeCamera(
+    new Float64Array([
+      fixture.extras.origin.lon,
+      fixture.extras.origin.lat,
+      1100,
+    ]),
+    -90,
+    0,
+    0,
+  );
+  const view = {
+    addSource: (desc) => {
+      const id = core.addSource(desc);
+      return { id, delete: () => core.deleteSource(id) };
+    },
+    addLayer: (desc) => {
+      const id = core.addLayer({ ...desc, source: desc.source.id });
+      return { id, delete: () => core.deleteLayer(id) };
+    },
+    forceUpdate() {},
+  };
+  if (adapter) {
+    globals(t, { location: new URL('http://localhost:4303') });
+    const owner = createNavaraMaps(view, {
+      setInterval: () => 1,
+      clearInterval() {},
+    });
+    await owner.maps.setPhotorealTiles({ tilesetUrl: TILES_FIXTURE_PATH });
+  } else {
+    const source = view.addSource({
+      type: '3d-tiles',
+      url: 'http://localhost:4303/tileset.json',
+    });
+    view.addLayer({ type: '3d-tiles', source, model: { maxSse: 16 } });
+  }
+  const roots = [];
+  for (let frame = 0; frame < 60 && roots.length < 4; frame++) {
+    core.update(frame * 16);
+    const events = core.readEvents();
+    if (!events) continue;
+    for (const request of events.take_data_requested()) {
+      const bytes = files.get(new URL(request.url).pathname.split('/').at(-1));
+      assert.ok(bytes, `unexpected fixture request: ${request.url}`);
+      core.setBufferU8(request.handle, request.bits, bytes.length, (buffer) =>
+        buffer.set(bytes),
+      );
+    }
+    for (const event of events.take_renderable_feature_added()) {
+      const model = event.feature.model;
+      if (!model) continue;
+      const bytes = core.getBufferU8(model.bin).slice();
+      const gltf = await new GLTFLoader().parseAsync(bytes.buffer, '');
+      const root = new Group();
+      const m = model.transform;
+      root.position.set(m.tx, m.ty, m.tz);
+      root.quaternion.set(m.qx, m.qy, m.qz, m.qw);
+      root.scale.set(m.sx, m.sy, m.sz);
+      root.add(gltf.scene);
+      root.updateMatrixWorld(true);
+      roots.push(root);
+      core.markFeatureIsRendered('model', event.bits);
+    }
+  }
+  assert.equal(roots.length, 4, 'all four real tile contents loaded');
+  const { surface } = createNavaraSurface(
+    { sampleTerrainHeight: () => undefined },
+    { tileRoots: () => roots, isIdle: () => true, retainTileGeometry() {} },
+  );
+  t.after(() => {
+    for (const root of roots)
+      root.traverse((object) => {
+        object.geometry?.dispose();
+        object.material?.dispose();
+      });
+  });
+  return { fixture, roots, surface };
+}
+
+test('Navara default tile height shifts the rendered transform by one ECEF metre', async (t) => {
+  const { fixture, roots, surface } = await loadedNavaraTiles(t, false);
+  for (const root of roots) {
+    assert.equal(root.position.x, fixture.root.transform[12] - 1);
+    assert.equal(root.position.y, fixture.root.transform[13]);
+    assert.equal(root.position.z, fixture.root.transform[14]);
+  }
+  for (const [id, expected] of Object.entries({
+    plate: 0.11864,
+    block50: 50.11837,
+    block200: 200.11864,
+    roof: 83.32621,
+  }))
+    assert.ok(
+      Math.abs(
+        surface.sampleHeight(fixture.extras.probes[id].cartographic) - expected,
+      ) < 0.001,
+      id,
+    );
+});
+
+test('Navara map source preserves authored rendered vertices, sampled heights and clamps', async (t) => {
+  const { fixture, roots, surface } = await loadedNavaraTiles(t, true);
+  for (const root of roots)
+    assert.deepEqual(
+      root.position.toArray(),
+      fixture.root.transform.slice(12, 15),
+    );
+  for (const p of [
+    ...Object.values(fixture.extras.probes),
+    ...fixture.extras.points,
+  ]) {
+    const normal = geo.ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
+      p.cartographic,
+      {},
+    );
+    const origin = geo.cartesian3.fromDegrees(p.lon, p.lat, p.height + 300);
+    const ray = new Raycaster(
+      new Vector3(origin.x, origin.y, origin.z),
+      new Vector3(-normal.x, -normal.y, -normal.z),
+    );
+    const hit = ray.intersectObjects(roots, true)[0];
+    assert.ok(hit, 'rendered mesh is under the authored probe');
+    assert.ok(geo.cartesian3.distance(hit.point, p.position) < 1e-6);
+    assert.ok(Math.abs(surface.sampleHeight(p.cartographic) - p.height) < 1e-6);
+    assert.ok(
+      geo.cartesian3.distance(surface.clampToHeight(origin), p.position) < 1e-6,
     );
   }
 });

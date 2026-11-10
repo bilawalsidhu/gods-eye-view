@@ -2,9 +2,9 @@
 // straight down the ellipsoid normal against the 3D-tile meshes Navara shows.
 // Where the shown tiles do not reach (outside the frustum), the loaded
 // tiles Navara hides answer, the finest first. Tile positions are float32
-// relative to the tile centre, which sits in the
-// float64 matrixWorld with no rotation, so a ray taken into a mesh's local
-// frame gives Earth-fixed metres. Navara frees the CPU arrays after upload;
+// in the mesh's local frame; its float64 matrixWorld maps hits back into
+// Earth-fixed metres, including any tileset rotation or translation.
+// Navara frees the CPU arrays after upload;
 // retainTileGeometry (internals.js) keeps positions and indices. Without a
 // tile hit, the answer is Navara's terrain height, as Cesium's sampleHeight
 // also samples the globe. Navara internals come in through `hooks`, so this
@@ -37,7 +37,10 @@ export function surfaceRay(place) {
     RAY_START_HEIGHT,
     WGS84,
   );
-  const normal = WGS84.geodeticSurfaceNormal(origin, cartesian3.create());
+  const normal = WGS84.geodeticSurfaceNormalCartographic(
+    place,
+    cartesian3.create(),
+  );
   return {
     origin,
     direction: cartesian3.negate(normal, cartesian3.create()),

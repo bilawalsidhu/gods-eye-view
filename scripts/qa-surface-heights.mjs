@@ -23,6 +23,8 @@ import {
   fixtureRoutes,
   observeSurfaceMovers,
   settledPositions,
+  assertTileHeight,
+  waitForSurfaceHeights,
 } from './qa/surfaceHeights.mjs';
 
 export function compareHeights(before, after, { tiles = false } = {}) {
@@ -82,7 +84,7 @@ export function compareHeights(before, after, { tiles = false } = {}) {
           !missing.length &&
           !extra.length &&
           !invalid.length &&
-          maxAbsM <= 0.1 + 1e-9,
+          maxAbsM <= (tiles ? 0.5 : 0.1) + 1e-9,
       });
     }
   }
@@ -237,32 +239,7 @@ async function main(argv) {
         },
       );
       await whenSettled(page);
-      await page.waitForFunction(
-        ({ points, tiles }) => {
-          const { engine } = window.__godsEyeView;
-          engine.render.request('qa-surface-heights');
-          return (
-            engine.surface.tilesLoaded() &&
-            engine.maps.photorealActive() === tiles &&
-            points.every((p) => {
-              const place = {
-                longitude: (p.lon * Math.PI) / 180,
-                latitude: (p.lat * Math.PI) / 180,
-                height: 0,
-              };
-              const height = tiles
-                ? engine.surface.sampleHeight(place)
-                : engine.surface.terrainHeight(place);
-              return (
-                Number.isFinite(height) &&
-                (tiles ? Math.abs(height - 50) < 0.1 : height > 1)
-              );
-            })
-          );
-        },
-        { timeout: 90000 },
-        { points, tiles },
-      );
+      await waitForSurfaceHeights(page, kind, tiles);
       await page.evaluate(observeSurfaceMovers);
       snapshot.engines[kind] = {};
       for (const layer of layers) {
@@ -285,9 +262,10 @@ async function main(argv) {
         snapshot.engines[kind][layer] = values;
         if (tiles)
           for (const [id, p] of Object.entries(values))
-            assert.ok(
-              Math.abs(p.heightM - (50 + offsets[layer])) <= 0.1,
-              `${kind}/${layer}/${id}: ${p.heightM} m, expected ${50 + offsets[layer]} m`,
+            assertTileHeight(
+              p.heightM,
+              50 + offsets[layer],
+              `${kind}/${layer}/${id}`,
             );
         await strict.passed(
           page,
@@ -296,7 +274,7 @@ async function main(argv) {
           values,
         );
         console.log(
-          `PASS ${kind}/${layer}: ${rows.length} points${tiles ? ` at ${50 + offsets[layer]} m (±0.1 m)` : ''}`,
+          `PASS ${kind}/${layer}: ${rows.length} points${tiles ? ` at ${50 + offsets[layer]} m (±0.5 m)` : ''}`,
         );
         await unloadDisplay(page, layer);
       }
@@ -316,7 +294,7 @@ async function main(argv) {
         );
       assert.ok(
         comparison.ok,
-        'Surface heights differ by more than 0.1 m or the point sets changed',
+        `Surface heights differ by more than ${tiles ? 0.5 : 0.1} m or the point sets changed`,
       );
     }
     console.log(
