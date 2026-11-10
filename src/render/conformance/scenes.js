@@ -427,7 +427,8 @@ export const REFERENCE_SCENES = Object.freeze([
       ]);
       return disposeAll(set);
     },
-    views: [{ name: 'oblique', view: over(1500, -0.5, 0, offset(0, -1600)) }],
+    // Looking at the card's middle, 200 m up: (1500 - 200) / tan(0.5) ahead.
+    views: [{ name: 'oblique', view: over(1500, -0.5, 0, offset(0, -2380)) }],
   },
   {
     id: 'meshes',
@@ -453,7 +454,9 @@ export const REFERENCE_SCENES = Object.freeze([
       ]);
       return disposeAll(set);
     },
-    views: [{ name: 'oblique', view: over(1200, -0.5, 0, offset(0, -1400)) }],
+    // Looking at the pyramid's middle, 150 m up: (1200 - 150) / tan(0.5)
+    // ahead.
+    views: [{ name: 'oblique', view: over(1200, -0.5, 0, offset(0, -1920)) }],
   },
   {
     id: 'fields',

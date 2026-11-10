@@ -298,11 +298,11 @@ The scenes load nothing from the network.
 `window.conformance.runScenes()` and `runLogic()` do the same from a script.
 Browser checks use the chrome-devtools MCP against a page in its own window.
 
-The Cesium scene renderer (`src/render/cesium/sceneRenderer.js`) draws the
-icon, point, line, shape, model and city scenes, and the references were
-recorded with it. It has only the members the scenes need. The quad, mesh
-and field scenes have no reference yet. Each family's reference
-is recorded when the Cesium renderer gains that family.
+The Cesium scene renderer (`src/render/cesium/sceneRenderer.js`) draws
+every scene (icons, points, lines, shapes, models, quads, meshes, fields
+and the city), and the references were recorded with it, on a GPU: a
+software rasterizer such as SwiftShader draws the glow line differently.
+It has only the members the scenes need.
 
 Some behaviour is only drawn, so the logic checks cannot see it: course
 easing (`courseGlide`), and a hidden row keeping its eased
