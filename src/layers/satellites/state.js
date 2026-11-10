@@ -1,3 +1,5 @@
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
+
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
     services.overlays;
@@ -149,6 +151,14 @@ export function createState({ services }) {
   /** Optional deterministic clock used only by the production-frame test seam. */
 
   state._trackedFrameNowForTest = null;
+
+  /** The time satellites are propagated to, in epoch ms. */
+
+  state.now = worldTimeFor('satellites');
+
+  /** The catalog changed, so the time satellites can be shown at may have. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
 
   /** Update the explicit model only when the rounded altitude line changes. */
   /** Epoch of the last shared-context refresh for the tracked satellite. */

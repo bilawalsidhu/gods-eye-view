@@ -130,6 +130,8 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
   // The preUpdate FrameTime of the tick under way: its `rendering` reads
   // live until the tick has drawn or not, then holds that answer.
   let liveTick = null;
+  // The time Cesium stamps the frame in `preUpdate` with, while it runs.
+  let stampTime = null;
   const settleTick = (drawn) => {
     if (liveTick)
       Object.defineProperty(liveTick, 'rendering', {
@@ -169,8 +171,13 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
         get: () => willDraw(scene, time),
       });
       liveTick = t;
+      stampTime = time ?? null;
     }
-    frameListeners[phase].fire(t);
+    try {
+      frameListeners[phase].fire(t);
+    } finally {
+      stampTime = null;
+    }
   };
   // Reasons given before a frame starts drawing are answered by it; one
   // given while it draws waits for the next, as Cesium's own request does.
@@ -295,14 +302,24 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
       widget.targetFrameRate = targetFps || undefined;
     },
     /**
-     * Moves the clock to `ms` and draws it. Whether the clock then runs on
+     * Moves the clock to `ms` and draws it; in `preUpdate`, the frame under
+     * way draws at it. Whether the clock then runs on
      * is its owner's: the application's clock keeps running if it was (a
      * clock on Cesium's real-time step moves to its multiplier step, as
      * setting its time does in Cesium).
      */
     setTime(ms) {
-      widget.clock.currentTime = Cesium.JulianDate.fromDate(new Date(ms));
-      frame.requestRender('time');
+      const clock = widget.clock;
+      const time = Cesium.JulianDate.fromDate(new Date(ms));
+      const changed = !Cesium.JulianDate.equals(clock.currentTime, time);
+      clock.currentTime = time;
+      // In `preUpdate` the frame under way draws at it: Cesium stamps the
+      // frame with this object next.
+      if (stampTime) {
+        Cesium.JulianDate.clone(time, stampTime);
+        // Later preUpdate listeners read the frame's time from the tick.
+        if (liveTick) liveTick.time = ms;
+      } else if (changed) frame.requestRender('time');
     },
     time: () => Cesium.JulianDate.toDate(widget.clock.currentTime).getTime(),
   };

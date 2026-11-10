@@ -187,6 +187,7 @@ test('the tracked trail head is drawn each frame while tracked and stops with th
   );
   let headLon = 0.03;
   const flightState = {
+    now: Date.now,
     _viewer: viewer,
     _trackedIcao: 'abc123',
     _trail: null,

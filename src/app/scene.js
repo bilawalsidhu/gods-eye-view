@@ -22,6 +22,8 @@ import {
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
 import { FREE_LOOK_MAX_HEIGHT_METERS } from '../globeInView.js';
+import { worldClock, worldTimeFor } from '../time/worldClock.js';
+import { followWorldTime } from '../time/viewerClock.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 
 /**
@@ -93,6 +95,12 @@ export async function createApplicationScene({
   defer(() => input.destroy());
   // Ctrl+wheel and trackpad pinches zoom the globe, not the page.
   renderer.input.ctrlWheelZoom = true;
+  defer(
+    followWorldTime(viewer, worldTimeFor('sky'), {
+      subscribe: worldClock.subscribe,
+      requestRender: () => governorRequestRender('world-time'),
+    }),
+  );
   // What the adapter hands the application about its viewer; free look is
   // limited to low heights from the start.
   const viewerHooks = applicationViewerHooks(viewer);

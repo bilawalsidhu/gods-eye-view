@@ -460,6 +460,17 @@ export function isLikelyCataloniaCoordinate(lat, lon) {
   );
 }
 
+/** Iceland bounding box (mainland and nearby islands, with a margin). */
+export function isLikelyIcelandCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 63.0 &&
+    lat <= 66.7 &&
+    lon >= -25.0 &&
+    lon <= -13.0
+  );
+}
+
 /**
  * Decode numeric HTML character references, decimal ("&#237;") and hex
  * ("&#xED;") alike, the entity form the Catalonia feed uses for accented
@@ -639,6 +650,10 @@ export function normalizeSourceItem(item) {
     feedType: normalizeFeedType(item.feedType || item.type || ''),
     url: typeof item.url === 'string' ? item.url : '',
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
+    frameRefreshMs: toFiniteNumber(item.frameRefreshMs),
+    sourceUrl: typeof item.sourceUrl === 'string' ? item.sourceUrl : '',
+    accuracyM: toFiniteNumber(item.accuracyM),
+    positionSource: String(item.positionSource || ''),
     license: String(item.license || item.licenseNote || ''),
     // Per-camera attribution for feeds a partner supplies inside a pack
     // (DriveBC: TransLink, city cameras). Shown beside the provider.

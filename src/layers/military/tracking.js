@@ -21,7 +21,7 @@ import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import {
   addSeconds,
   julianLessThanOrEquals,
-  julianNow,
+  julianFromEpochMs,
   julianToEpochMs,
 } from '../../geo/julian.js';
 import { clone, distanceSquared, vec } from '../../geo/vector.js';
@@ -561,7 +561,7 @@ export function createTracking({
     // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
     // would draw the trail in front of the plane. They join via _appendTrailFix as they age.
     const seedRenderTime = addSeconds(
-      julianNow(),
+      julianFromEpochMs(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );

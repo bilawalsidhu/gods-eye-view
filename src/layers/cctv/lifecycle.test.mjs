@@ -32,6 +32,7 @@ function lifecycleFor(state) {
       geometryQueue: { enqueueViewGeometry() {} },
       cards: { refreshAmbientCards() {} },
       presentation: { notifyListeners() {} },
+      navigation: { reopenNearestCamera() {} },
     },
   });
   return { lifecycle, passes };

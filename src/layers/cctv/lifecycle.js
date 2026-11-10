@@ -122,6 +122,7 @@ export function createLifecycle({
       layerState._horizonCullListener = viewCamera.on('moveEnd', () => {
         layerState._cameraMoving = false;
         stopViewMotionTimer();
+        parts.navigation.reopenNearestCamera();
         settleView();
       });
     }
@@ -200,6 +201,7 @@ export function createLifecycle({
       layerState._enabled = false;
       layerState._activeCameraId = null;
       layerState._autoHopSuspended = false;
+      layerState._openingCameraProvisional = false;
       layerState._lastHopAt = 0;
       layerState._lastViewContext = '';
       layerState._calibrationById = parts.calibration.loadCalibrationStore();
@@ -322,11 +324,8 @@ export function createLifecycle({
       }
 
       layerState._count = layerState._records.length;
-      if (layerState._records.length > 0) {
-        // Projection runtime + first frame fetch are deferred to enable() so
-        // initializing the catalog stays render-cheap.
-        layerState._activeCameraId = layerState._records[0].camera.id;
-      }
+      // No camera is picked here: enable() opens on the one nearest the
+      // viewer, unless restored params selected one first.
 
       // Task 5: if the prior batch lost init's bounded race, apply it post-hoc
       // when it lands (pure recomputes — applyLateGroundPriors guards against
@@ -487,8 +486,9 @@ export function createLifecycle({
         return Boolean(coverage && layerState._recordById.has(coverage[1]));
       });
       if (!layerState._activeCameraId && layerState._records.length) {
-        layerState._activeCameraId = layerState._records[0].camera.id;
+        layerState._activeCameraId = parts.navigation.openingCameraId();
         layerState._autoHopSuspended = false;
+        layerState._openingCameraProvisional = true;
       }
       const activeRecord = parts.selection.getActiveRecord();
       if (activeRecord) {
@@ -584,6 +584,7 @@ export function createLifecycle({
       layerState._enabled = false;
       layerState._activeCameraId = null;
       layerState._autoHopSuspended = false;
+      layerState._openingCameraProvisional = false;
       // Clear existing subscribers rather than replacing the Set —
       // replacing would silently orphan any unsubscribe() closures
       layerState._listeners.clear();

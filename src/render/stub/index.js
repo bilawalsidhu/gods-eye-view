@@ -118,6 +118,8 @@ export function createStubRenderer(options = {}) {
   const continuous = new Map();
   let holdSeq = 0;
   const phaseListeners = { preUpdate: [], preRender: [], postRender: [] };
+  // The frame under way while its `preUpdate` listeners run.
+  let updating = null;
   const onceWaiters = [];
   const onceTimers = new Set();
   const stepLog = [];
@@ -212,7 +214,12 @@ export function createStubRenderer(options = {}) {
       rendering,
     };
     step('preUpdate');
-    runPhase('preUpdate', t);
+    updating = t;
+    try {
+      runPhase('preUpdate', t);
+    } finally {
+      updating = null;
+    }
     step('moveDetection');
     camera.steps.stepMoveDetection();
     if (!rendering) return false;
@@ -300,9 +307,12 @@ export function createStubRenderer(options = {}) {
       targetFps = fps;
     },
     setTime(ms) {
+      const changed = ms !== sceneTime;
       sceneTime = ms;
       for (const show of [...sceneFrameLayers.values()]) show(ms);
-      requestRender('time');
+      // In `preUpdate` the frame under way draws at it.
+      if (updating) updating.time = ms;
+      else if (changed) requestRender('time');
     },
     time: () => sceneTime,
   };

@@ -536,6 +536,22 @@ export function portChecks() {
         equal(seen.time, t0, 'FrameTime.time');
         ok(seen.dt > 0, 'dt is positive');
         ok(Number.isInteger(seen.frame), 'frame is a count');
+        // Set in preUpdate, it is the time the frame under way draws at.
+        const t1 = t0 + 3_600_000;
+        let drawnAt = null;
+        const offUpdate = r.frame.on('preUpdate', () => r.frame.setTime(t1));
+        let laterAt = null;
+        const offLater = r.frame.on('preUpdate', (t) => (laterAt = t.time));
+        const offRender = r.frame.on('preRender', (t) => (drawnAt = t.time));
+        const once = r.frame.renderOnce();
+        await h.frame(r);
+        await once;
+        offUpdate();
+        offLater();
+        offRender();
+        equal(laterAt, t1, 'later preUpdate listeners see it');
+        equal(drawnAt, t1, 'a time set in preUpdate is that frame’s time');
+        equal(r.frame.time(), t1, 'and time() reports it');
       },
     ),
     check(

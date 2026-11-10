@@ -12,6 +12,7 @@ function fixture() {
     _scratchArc: {},
     _scratchOffset: { x: 0, y: 0, z: 0 },
     _scratchRenderTime: { dayNumber: 0, secondsOfDay: 0 },
+    now: Date.now,
   };
   const motion = createMotion({
     flightState,
@@ -129,7 +130,7 @@ test('fleet render time is shared without resampling or mutating the supplied in
   assert.ok(Cesium.JulianDate.equals(renderTime, savedTime));
 });
 
-test('tracked callers still sample a fresh delayed time without a fleet epoch', (t) => {
+test('tracked callers still sample a fresh delayed time without a fleet epoch', () => {
   const { flightState, motion } = fixture();
   const start = Cesium.JulianDate.fromIso8601('2026-10-24T12:00:00Z');
   const history = [
@@ -147,8 +148,11 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
   flightState.records.data.set('tracked', { velocity: 100, true_track: 90 });
   flightState._positionHistory.set('tracked', history);
   let elapsed = 60;
-  const startMs = Cesium.JulianDate.toDate(start).getTime();
-  const spy = t.mock.method(Date, 'now', () => startMs + elapsed * 1000);
+  let reads = 0;
+  flightState.now = () => {
+    reads += 1;
+    return Cesium.JulianDate.toDate(start).getTime() + elapsed * 1000;
+  };
   const out = new Cesium.Cartesian3();
   close(
     motion._deadReckon('tracked', out),
@@ -169,7 +173,7 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
       new Cesium.Cartesian3(),
     ),
   );
-  assert.equal(spy.mock.callCount(), 2);
+  assert.equal(reads, 2);
   // Sampled into the layer's scratch, not a new date.
   assert.ok(
     Cesium.JulianDate.equals(

@@ -176,6 +176,7 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
   const { draw, unbind } = bindFakeDraw(viewer);
   try {
     const state = {
+      now: Date.now,
       _points: new Map(),
       _orbitPaths: new Map(),
       _catalog: new Map([[25544, { satrec: {} }]]),
@@ -357,6 +358,7 @@ test('the focus pass projects every dot in one call and dims the dot under the f
       cameraDistance: 1,
     };
     const state = {
+      now: Date.now,
       _points: new Map(),
       _orbitPaths: new Map(),
       _catalog: new Map(),

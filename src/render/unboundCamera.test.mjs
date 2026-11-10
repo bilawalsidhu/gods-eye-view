@@ -163,6 +163,9 @@ const CAMERA_FROM_CALLER = new Set([
   // `frameOf` throws, naming the export, until the caller has loaded it.
   './ui/cockpit',
   './ui/navigation',
+  // Its Quebec camera overlay reads the eye, projects and redraws through
+  // `findCamera`, `findQuery` and `findFrame`, and shows nothing without them.
+  './ui/cctv',
   './voice/commands',
   './voice/controller',
   // It loaded the camera factory only through the CCTV layer it took a

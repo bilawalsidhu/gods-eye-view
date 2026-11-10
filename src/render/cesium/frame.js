@@ -126,6 +126,8 @@ export function createSceneFrame(viewer) {
   const ownLoop = viewer.useDefaultRenderLoop !== false;
   // The preUpdate FrameTime of the tick under way, until it settles.
   let liveTick = null;
+  // The time Cesium stamps the frame in `preUpdate` with, while it runs.
+  let stampTime = null;
   const settleTick = (drawn) => {
     if (liveTick)
       Object.defineProperty(liveTick, 'rendering', {
@@ -174,6 +176,7 @@ export function createSceneFrame(viewer) {
     };
     // Read as it is asked: what earlier listeners asked for counts.
     if (phase === 'preUpdate') {
+      stampTime = time ?? null;
       Object.defineProperty(t, 'rendering', {
         enumerable: true,
         configurable: true,
@@ -181,7 +184,11 @@ export function createSceneFrame(viewer) {
       });
       liveTick = t;
     }
-    listeners[phase].fire(t);
+    try {
+      listeners[phase].fire(t);
+    } finally {
+      stampTime = null;
+    }
   };
   const removers = PHASES.map((phase) =>
     scene[phase].addEventListener(onPhase(phase)),
@@ -259,8 +266,17 @@ export function createSceneFrame(viewer) {
       viewer.targetFrameRate = fps > 0 ? fps : undefined;
     },
     setTime(ms) {
-      viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(ms));
-      port.requestRender('time');
+      const clock = viewer.clock;
+      const time = Cesium.JulianDate.fromDate(new Date(ms));
+      const changed = !Cesium.JulianDate.equals(clock.currentTime, time);
+      clock.currentTime = time;
+      // In `preUpdate` the frame under way draws at it: Cesium stamps the
+      // frame with this object next.
+      if (stampTime) {
+        Cesium.JulianDate.clone(time, stampTime);
+        // Later preUpdate listeners read the frame's time from the tick.
+        if (liveTick) liveTick.time = ms;
+      } else if (changed) port.requestRender('time');
     },
     time: () => sceneTime(),
   };

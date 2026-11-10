@@ -74,7 +74,9 @@ export function createLaunchPad({
     }
     const nowMs = Date.now();
     if (nowMs - layerState._lastMissionRingRotationMs >= 1000) {
-      parts.orbitRendering.updateMissionOrbitPrimitiveFrames(nowMs);
+      parts.orbitRendering.updateMissionOrbitPrimitiveFrames(
+        layerState.orbitNow(),
+      );
       layerState._lastMissionRingRotationMs = nowMs;
     }
     const launch = layerState._launches.find(

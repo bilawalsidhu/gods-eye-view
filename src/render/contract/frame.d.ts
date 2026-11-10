@@ -78,7 +78,10 @@ export interface FramePort {
   renderOnce(options?: { timeoutMs?: number }): Promise<void>;
   /** Cap the loop's rate; 0 is the display's rate. */
   setTargetFps(fps: number): void;
-  /** Set scene time, epoch ms. */
+  /**
+   * Set scene time, epoch ms. Set in `preUpdate`, it is the time that frame
+   * draws at; set between frames to a new time, it asks for a frame.
+   */
   setTime(ms: number): void;
   /** Scene time, epoch ms. */
   time(): number;

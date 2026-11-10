@@ -2,7 +2,12 @@ import { drawOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
 import { gstime } from 'satellite.js';
-import { ISS_NORAD, POSITION_UPDATE_MS, RING_ROTATION_MS } from './policy.js';
+import {
+  ISS_NORAD,
+  ORBIT_REBAKE_MS,
+  POSITION_UPDATE_MS,
+  RING_ROTATION_MS,
+} from './policy.js';
 
 /**
  * The satellites layer's drawing, through the renderer contract's draw port:
@@ -407,12 +412,14 @@ export function createRendering({
     const sat = layerState._catalog.get(noradId);
     if (!sat || !layerState._viewer) return;
 
-    const bakeDate = new Date();
+    const bakeDate = new Date(layerState.now());
     const base = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
     if (base.length < 2) return;
 
     const pathColor = color || DEFAULT_RING_COLOR;
     const path = {
+      color: pathColor,
+      bakeMs: bakeDate.getTime(),
       base,
       // Same Date object as computeOrbitPath's internal fixedGmst → identical
       // GMST value (gstime is pure), so the ring starts unturned.
@@ -461,7 +468,14 @@ export function createRendering({
     if (layerState._orbitPaths.size === 0) return;
     const gmst = gstime(nowDate);
     const changed = [];
-    for (const path of layerState._orbitPaths.values()) {
+    for (const [noradId, path] of [...layerState._orbitPaths]) {
+      // The rotation keeps the ring under the dot for minutes; the plane
+      // itself precesses, so a world time moved far from the bake re-bakes.
+      if (Math.abs(nowDate.getTime() - path.bakeMs) > ORBIT_REBAKE_MS) {
+        _hideOrbitPath(noradId);
+        _showOrbitPath(noradId, path.color);
+        continue;
+      }
       path.item.positions = _ringPositions(path, gmst);
       changed.push(path.item);
     }
@@ -486,7 +500,7 @@ export function createRendering({
    */
 
   function _propagateAll() {
-    const now = new Date();
+    const now = new Date(layerState.now());
     let updated = 0;
 
     for (const [noradId, sat] of layerState._catalog) {
@@ -578,7 +592,7 @@ export function createRendering({
       layerState._params.showOrbits &&
       now - layerState._lastRingRotation >= RING_ROTATION_MS
     ) {
-      _updateOrbitPathRotations(new Date(now));
+      _updateOrbitPathRotations(new Date(layerState.now()));
       layerState._lastRingRotation = now;
     }
   }

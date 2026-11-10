@@ -142,7 +142,9 @@ export function createRendering({
       sites: draw.points({ id: setIds.sites, show: false }),
       markers: draw.points({ id: setIds.markers, show: false }),
       reticles: draw.icons({ id: setIds.reticles, show: false }),
-      orbits: draw.lines({ id: setIds.orbits }),
+      // Their inertial rings turn at the frame's time, the world time the
+      // sky is drawn at, so away from live they sit under the payload.
+      orbits: draw.lines({ id: setIds.orbits, motionClock: { kind: 'scene' } }),
       pad: draw.shapes({ id: setIds.pad }),
     };
     layerState._missionSets = sets;
@@ -265,6 +267,25 @@ export function createRendering({
     return layerState._replayTracks.get(launchId)?.projectedOrbitPath ?? null;
   }
 
+  // Away from live, a launch shows from its lift-off on, so scrubbing the
+  // world time forward brings the launches up in the order they flew. The
+  // selected mission stays, whenever it flies.
+  function syncPendingLaunches() {
+    const pending = new Set();
+    for (const { launch } of layerState._missionOverlayRecords.values()) {
+      if (layerState.launchHidden(launch)) pending.add(launch.id);
+    }
+    const previous = layerState._pendingLaunchIds;
+    if (
+      pending.size === previous.size &&
+      [...pending].every((id) => previous.has(id))
+    )
+      return;
+    layerState._pendingLaunchIds = pending;
+    parts.overlays.syncMissionOverlayEntries();
+    parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
+  }
+
   function updateMissionFrame() {
     if (followSampled) followSampled = false;
     else frameNumber += 1;
@@ -272,25 +293,34 @@ export function createRendering({
       parts.overlays.hideReplayVehicleOverlay();
       return;
     }
+    syncPendingLaunches();
     parts.panel.updateMissionTelemetry();
     const eye = findCamera(layerState._viewer)?.pose().position;
     const occluder = eye ? horizonFrom(eye) : null;
     parts.overlays.updateReplayVehicleOverlay(occluder);
     parts.overlays.refreshSelectedMissionOverlayText();
     for (const record of records.values()) {
-      if (!record.isolated || !record.position) continue;
+      if (!record.isolated) continue;
+      // Away from live, a launch shows from its lift-off on.
+      const pending = layerState._pendingLaunchIds.has(record.launchId);
+      if (!record.position) {
+        record.graphicShow = !pending;
+        refresh(record);
+        continue;
+      }
       const live = typeof record.position === 'function';
       const position = live ? record.position() : record.position;
-      let horizonVisible = Boolean(
-        position && occluder?.isPointVisible(position),
-      );
+      let horizonVisible =
+        !pending && Boolean(position && occluder?.isPointVisible(position));
       if (record.id.startsWith('rocket-launch:')) {
-        horizonVisible = parts.overlays.missionAnchorVisible(
-          eye,
-          position,
-          record.launchId,
-          layerState._selectedLaunchId,
-        );
+        horizonVisible =
+          !pending &&
+          parts.overlays.missionAnchorVisible(
+            eye,
+            position,
+            record.launchId,
+            layerState._selectedLaunchId,
+          );
         // The selection's isolation stays its own; horizon state is kept
         // apart, so a rear-side anchor is judged again as the camera moves.
       }
@@ -643,7 +673,7 @@ export function createRendering({
         orbitCurrent.latitude,
         orbitCurrent.altitude,
       );
-      const liveTime = new Date();
+      const liveTime = new Date(layerState.orbitNow());
       const liveTelemetry = {
         speedMps: null,
         // Where the payload draws now, for the mission panel.
@@ -661,7 +691,7 @@ export function createRendering({
       const updateLiveState = () => {
         if (frameNumber !== 0 && frameNumber === liveFrameNumber) return;
         liveFrameNumber = frameNumber;
-        const nowMs = Date.now();
+        const nowMs = layerState.orbitNow();
         liveTime.setTime(nowMs);
         if (satelliteTrack) {
           const propagated =

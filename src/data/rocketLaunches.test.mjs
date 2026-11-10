@@ -7,6 +7,7 @@ import { fromDegrees } from '../geo/ellipsoid.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { gstime } from 'satellite.js';
+import { worldClock } from '../time/worldClock.js';
 import { createModel } from '../layers/launches/model.js';
 import rocketLaunchesLayer, {
   _setRocketMissionOverlayHostForTest,
@@ -1243,7 +1244,11 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     rocketLaunchesLayer.init(viewer);
     initialized = true;
     await rocketLaunchesLayer.enable();
+    assert.equal(worldClock.coverage(), null, 'nothing loaded, no time to show');
     await rocketLaunchesLayer.update();
+    const at = Date.parse(launchTime);
+    assert.deepEqual(worldClock.coverage(), { start: at, end: at, marks: [at] });
+    assert.equal(worldClock.isSupported(), true, 'loaded launches bring up the timeline');
 
     assert.ok(missionItems().size >= 7, 'runtime guard requires the populated mission build path');
     // Every set is a kind with no world text: labels are the host's.
@@ -1369,6 +1374,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     assert.equal(deselectedPublication[2][0].protected, false);
 
     await rocketLaunchesLayer.disable();
+    assert.equal(worldClock.coverage(), null, 'off, launches show no time');
     assert.deepEqual(hostCalls.slice(-4), [
       ['clear', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false],
@@ -1489,4 +1495,12 @@ test('missing payload details stay unknown without inventing mass or classificat
   }
   const [launch] = normalizeRocketLaunches([{ id: 'missing', pad: { latitude: 1, longitude: 2 }, net: '2026-07-20T10:00:00Z' }], NOW);
   assert.deepEqual(launch.payloads, []);
+});
+
+test('away from live the feed keeps its own window of launches', (t) => {
+  t.after(() => worldClock.goLive());
+  worldClock.seek(Date.now() - 20 * 86_400_000);
+  const net = new Date(Date.now() - 86_400_000).toISOString();
+  const launches = normalizeRocketLaunches([{ id: 'recent', pad: { latitude: 1, longitude: 2 }, net }]);
+  assert.deepEqual(launches.map((launch) => launch.id), ['recent']);
 });

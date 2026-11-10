@@ -204,6 +204,10 @@
       "src/ui/stores/recording.js",
       "src/ui/styleParameters.js",
       "src/ui/i18n.js",
+      "src/time/worldClock.js",
+      "src/ui/kit/UiIcon.vue",
+      "src/ui/stores/worldTime.js",
+      "src/ui/views/panels/WorldTimeline.vue",
       "src/ui/surfaceKeyboard.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
@@ -413,6 +417,9 @@
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/lithuania.js",
       "server/providers/cctv/taiwan.js",
+      "server/providers/cctv/quebec.js",
+      "server/providers/cctv/ottawa.js",
+      "server/providers/cctv/worldCameras.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
       "server/providers/cctv/normalize.js",
@@ -857,6 +864,7 @@
   "cctv-controls": {
     "exports": ["./ui/cctv"],
     "modules": [
+      "src/data/iconOrientation.js",
       "src/data/headingDegrees.js",
       "src/ui/cctv.js",
       "src/ui/cctvBindings.js",
@@ -865,6 +873,7 @@
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
+      "src/ui/quebecCctvOverlay.js",
       "src/i18n/index.js",
       "src/i18n/locale.js",
       "src/i18n/locales/ar.json",
@@ -882,9 +891,13 @@
       "src/ui/vueRuntime.js",
       "src/ui/stores/cctv.js",
       "src/ui/stores/status.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/geo/vector.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/horizon.js",
+      "src/render/rendererOf.js"
     ],
-    "external": ["vue", "pinia", "vue-i18n"]
+    "external": ["vue", "pinia", "vue-i18n", "cesium"]
   },
   "context-controls": {
     "exports": ["./ui/context", "./ui/context/policy"],
@@ -1341,7 +1354,10 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/data/iconOrientation.js",
+      "src/ui/quebecCctvOverlay.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1359,6 +1375,7 @@
       "src/ui/styles/layers.css",
       "src/ui/styles/radio.css",
       "src/ui/styles/cctv.css",
+      "src/ui/styles/quebecCctvOverlay.css",
       "src/ui/styles/scenes.css",
       "src/ui/styles/bhote-koshi.css",
       "src/ui/styles/recording.css",
@@ -1651,7 +1668,8 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/render/cesium/internals.js",
-      "src/data/firmsIntensity.js"
+      "src/data/firmsIntensity.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium"]
   },
@@ -1763,7 +1781,8 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/data/firmsIntensity.js"
+      "src/data/firmsIntensity.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium"]
   },
@@ -2183,7 +2202,8 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -2275,7 +2295,8 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium"]
   },
@@ -2844,7 +2865,8 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
@@ -4440,7 +4462,10 @@
       "src/layers/wildlifeSightings/photoText.js",
       "src/layers/wildlifeSightings/performance.js",
       "src/layers/wildlifeSightings/iconCollection.js",
-      "src/layers/wildlifeSightings/view.js"
+      "src/layers/wildlifeSightings/view.js",
+      "src/ui/quebecCctvOverlay.js",
+      "src/time/viewerClock.js",
+      "src/time/worldClock.js"
     ],
     "external": [
       "hls.js",
@@ -5172,7 +5197,8 @@
       "src/layers/wildlifeSightings/photoText.js",
       "src/layers/wildlifeSightings/performance.js",
       "src/layers/wildlifeSightings/view.js",
-      "src/layers/wildlifeSightings/iconCollection.js"
+      "src/layers/wildlifeSightings/iconCollection.js",
+      "src/time/worldClock.js"
     ],
     "external": [
       "hls.js",
@@ -5435,7 +5461,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/data/entityRecords.js",
       "src/render/rendererOf.js",
-      "src/data/firmsIntensity.js"
+      "src/data/firmsIntensity.js",
+      "src/time/worldClock.js"
     ],
     "external": []
   },
@@ -6051,7 +6078,8 @@
       "src/render/cesium/pickMemo.js",
       "src/render/cesium/nativeClick.js",
       "src/data/rioRouteNames.js",
-      "src/overlays/worldOverlayChrome.js"
+      "src/overlays/worldOverlayChrome.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -6157,7 +6185,8 @@
       "src/render/cesium/internals.js",
       "src/render/cesium/pickMemo.js",
       "src/render/cesium/nativeClick.js",
-      "src/data/rioRouteNames.js"
+      "src/data/rioRouteNames.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -6304,7 +6333,8 @@
       "src/data/detectionPolicy.js",
       "src/scopeMaskPolicy.js",
       "src/i18n/marker.js",
-      "src/visualStylePolicy.js"
+      "src/visualStylePolicy.js",
+      "src/time/worldClock.js"
     ],
     "external": []
   },
@@ -6833,6 +6863,11 @@
       "src/layers/wildlifeSightings/gridViewport.js",
       "src/layers/wildlifeSightings/performance.js"
     ],
+    "external": []
+  },
+  "time": {
+    "exports": ["./time"],
+    "modules": ["src/time/worldClock.js"],
     "external": []
   }
 }

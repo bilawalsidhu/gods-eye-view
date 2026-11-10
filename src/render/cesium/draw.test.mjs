@@ -2563,6 +2563,7 @@ test('the satellites layer draws its dots as one point collection and its rings 
   const scene = fakeScene();
   const viewer = { scene };
   const state = {
+    now: Date.now,
     _points: new Map(),
     _orbitPaths: new Map(),
     _catalog: new Map([[25544, { satrec: {} }]]),

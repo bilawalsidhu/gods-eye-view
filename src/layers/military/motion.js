@@ -5,7 +5,7 @@ import { eastNorthUp, framePoint } from '../../geo/frames.js';
 import {
   addSeconds,
   julianLessThan,
-  julianNow,
+  julianFromEpochMs,
   secondsDifference,
 } from '../../geo/julian.js';
 import {
@@ -125,7 +125,7 @@ export function createMotion({
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime = addSeconds(
-      julianNow(),
+      julianFromEpochMs(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchRenderTime,
     );
@@ -219,7 +219,7 @@ export function createMotion({
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     if (!history || history.length === 0) return true;
     const renderTime = addSeconds(
-      julianNow(),
+      julianFromEpochMs(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );

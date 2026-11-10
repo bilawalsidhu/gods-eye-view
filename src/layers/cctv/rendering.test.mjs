@@ -69,7 +69,13 @@ test('focus de-emphasis fades each icon from its own color', () => {
     createRendering({
       state,
       services: { focus },
-      parts: { model: { isVideoFeedType } },
+      parts: {
+        model: {
+          isVideoFeedType,
+          isVideoFeedCamera: (camera) =>
+            isVideoFeedType(camera.feedType) || Boolean(camera.browserMediaUrl),
+        },
+      },
       source: {},
     });
   try {
@@ -280,7 +286,7 @@ test('a view pass writes only the icons it changes, in one write', () => {
     state,
     services: { focus: {} },
     parts: {
-      model: { isVideoFeedType: () => false },
+      model: { isVideoFeedType: () => false, isVideoFeedCamera: () => false },
       drawSets: { roleOfSet: () => null },
     },
     source: {},
@@ -350,7 +356,9 @@ test('a pose with no perspective field of view is projected by the renderer', ()
   const rendering = createRendering({
     state,
     services: { focus: {} },
-    parts: { model: { isVideoFeedType: () => false } },
+    parts: {
+      model: { isVideoFeedType: () => false, isVideoFeedCamera: () => false },
+    },
     source: {},
   });
   try {

@@ -390,7 +390,7 @@ html:not([lang='en']) #global-loading-detail {
 /* ── Toast Notification ──────────────────────── */
 #toast {
   position: fixed;
-  bottom: 100px;
+  bottom: calc(100px + var(--world-timeline-lift, 0px));
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   z-index: 200;
