@@ -25,7 +25,11 @@ import {
   Uniform,
 } from 'three';
 import { DASH_EDGE, groundSeconds } from '../../ground.js';
-import { groundSurfaceUniforms, updateGroundSurface } from './surface.js';
+import {
+  GROUND_SURFACE_GLSL,
+  groundSurfaceUniforms,
+  updateGroundSurface,
+} from './surface.js';
 import { withFrameUpdates, withPassDisposal } from '../frameDescriptor.js';
 import { REVEAL_OFFSET, ITEM_TEXELS, LOOK, MARGIN_RATIO } from './corridors.js';
 import {
@@ -64,6 +68,7 @@ vec4 atSlot(highp sampler2D image, int slot) {
 }
 ${DISPLAY_COLOR_GLSL}
 ${VIEW_POSITION_GLSL}
+${GROUND_SURFACE_GLSL}
 // A corridor item over the colour, nearest metres from its line and along
 // metres from its start: its width, glow, pulse and dash, in LDR and
 // premultiplied, as Cesium writes ground polylines.
@@ -119,7 +124,9 @@ vec3 blendCorridor(vec3 color, int item, float nearest, vec2 normal, float along
 }
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   outputColor = inputColor;
-  float depth = unpackRGBAToDepth(texture2D(tAllDepth, uv));
+  // All three depths must name one pixel, including at tile boundaries.
+  ivec2 depthPixel = ivec2(uv * vec2(textureSize(tAllDepth, 0)));
+  float depth = unpackRGBAToDepth(texelFetch(tAllDepth, depthPixel, 0));
   float distance = viewDistance(depth, uLogDepthFC);
   vec4 ray = uInverseProjection * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
   vec3 point = viewPosition(ray, distance);
@@ -135,11 +142,10 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   ivec2 tile = clamp(ivec2(floor(uv * vec2(${GRID_COLS}.0, ${GRID_ROWS}.0))), ivec2(0), ivec2(${GRID_COLS - 1}, ${GRID_ROWS - 1}));
   vec2 range = texelFetch(tGrid, tile, 0).xy;
   if (range.y < 0.5) return;
-  float surface = texture2D(tSurfaceDepth, uv).r;
-  // The packed depth also holds forward meshes, which are not ground.
-  if (depth < surface - 2e-7) return;
-  float globeDepth = unpackRGBAToDepth(texture2D(tGlobeDepth, uv));
-  bool onTiles = surface < globeDepth - 2e-7;
+  float surface = texelFetch(tSurfaceDepth, depthPixel, 0).r;
+  float globeDepth = unpackRGBAToDepth(texelFetch(tGlobeDepth, depthPixel, 0));
+  float surfaceType = groundSurfaceType(depth, surface, globeDepth);
+  if (surfaceType == 0.0) return;
   vec3 color = toDisplay(inputColor.rgb);
   // The pixel's ground in world space, once: every corridor tile tests the
   // same value, so exactly one tile of a set holds it.
@@ -154,7 +160,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     vec4 east = atSlot(tFrames, id * ${TEXELS} + 1);
     vec4 north = atSlot(tFrames, id * ${TEXELS} + 2);
     vec4 surfaceFrame = atSlot(tFrames, id * ${TEXELS} + 3);
-    if ((surfaceFrame.w == 1.0 && onTiles) || (surfaceFrame.w == 2.0 && !onTiles)) continue;
+    if (surfaceFrame.w != 0.0 && surfaceFrame.w != surfaceType) continue;
     vec3 up = surfaceFrame.xyz;
     vec4 span = atSlot(tStyles, id * ${STYLE_TEXELS} + 3);
     vec3 delta = point - origin.xyz;
@@ -453,7 +459,6 @@ class GroundEffectDesc extends withPassDisposal(withFrameUpdates(EffectDesc)) {
       textures.candidates.needsUpdate = true;
     }
     const u = this.effect.uniforms;
-    u.get('tGlobeDepth').value = mrt.globeDepthBuffer;
     u.get('uViewToWorld').value.copy(camera.matrixWorld);
     u.get('uTime').value = groundSeconds();
     u.get('uPixelRatio').value = pixelRatio;
