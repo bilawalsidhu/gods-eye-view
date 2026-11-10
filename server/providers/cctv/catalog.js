@@ -35,6 +35,7 @@ import {
   loadVegvesenSourcesFromOpenData,
   loadNycSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
+  loadAucklandSourcesFromOpenData,
   loadFloridaSourcesFromOpenData,
   loadHoustonSourcesFromOpenData,
   loadA22SourcesFromOpenDataHub,
@@ -152,6 +153,13 @@ const LIVE_PACKS = [
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
     load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    // Opt-in until the NZTA terms are confirmed to cover the camera catalog
+    // and stills (see DATA_SOURCES.md).
+    name: 'auckland',
+    enabled: () => envOptIn('CCTV_AUCKLAND_ENABLED'),
+    load: loadAucklandSourcesFromOpenData,
   },
   {
     // NYC DOT requires a data-sharing agreement for this feed, so the pack is

@@ -593,6 +593,7 @@
   "src/data/cctvA22.test.mjs",
   "src/data/cctvIceland.test.mjs",
   "src/data/cctvNyc.test.mjs",
+  "src/data/cctvAuckland.test.mjs",
   "src/data/cctvHouston.test.mjs",
   "src/data/cctvNswSource.test.mjs",
   "src/data/cctvTxdotSource.test.mjs",
