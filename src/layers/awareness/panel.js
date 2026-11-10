@@ -198,9 +198,10 @@ export function createPanel({ state: layerState, parts }) {
       width: photo.width ?? null,
       height: photo.height ?? null,
       link: photo.link,
-      credit: t('Photo © {photographer}', {
-        photographer: photo.photographer,
-      }),
+      // A photo whose answer names no photographer shows no credit line.
+      credit: photo.photographer
+        ? t('Photo © {photographer}', { photographer: photo.photographer })
+        : '',
     };
   }
 

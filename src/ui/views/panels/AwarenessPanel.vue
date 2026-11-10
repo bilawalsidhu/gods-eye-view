@@ -61,7 +61,7 @@ onUpdated(() => {
       <div class="military-awareness-subject">{{ view.subject }}</div>
       <a v-if="view.photo && view.photo.src !== failedPhoto" class="military-awareness-photo" :href="view.photo.link" target="_blank" rel="noopener">
         <img :src="view.photo.src" :width="view.photo.width ?? undefined" :height="view.photo.height ?? undefined" alt="" @error="fail" />
-        <small>{{ view.photo.credit }}</small>
+        <small v-if="view.photo.credit">{{ view.photo.credit }}</small>
       </a>
       <AwarenessNames v-if="view.subjectNames" :names="view.subjectNames" />
       <div class="military-awareness-controls" role="group" :aria-label="view.navigation.label">
