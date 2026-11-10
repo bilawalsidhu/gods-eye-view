@@ -1,6 +1,6 @@
 /**
- * @file The bundled UCS Satellite Database pack: the purpose of each active
- * satellite, keyed by NORAD catalog number.
+ * @file The bundled UCS Satellite Database pack: operator, owner country and
+ * purpose for active satellites, keyed by NORAD catalog number.
  *
  * Data: `local_data/ucs_satellites/ucs_satellites.json`, built by
  * `scripts/build-ucs-satellites.py` from UCS-Satellite-Database 5-1-2023
@@ -20,8 +20,9 @@ const PACK_URL = new URL(
 );
 
 /**
- * One UCS row: what UCS says a satellite is for.
- * @typedef {{noradId: number, purpose: string|null}} UcsSatellite
+ * One UCS row: what UCS says about a satellite's operator and purpose.
+ * @typedef {{noradId: number, operator: string|null,
+ *   operatorCountry: string|null, purpose: string|null}} UcsSatellite
  */
 
 /**

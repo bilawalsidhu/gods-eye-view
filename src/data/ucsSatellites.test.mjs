@@ -22,7 +22,12 @@ test('the bundled UCS pack names its release, licence and curation', () => {
       pack.meta.curation.invalidNoradDropped +
       pack.meta.curation.duplicateNoradDropped,
   );
-  assert.deepEqual(pack.fields, ['noradId', 'purpose']);
+  assert.deepEqual(pack.fields, [
+    'noradId',
+    'operator',
+    'operatorCountry',
+    'purpose',
+  ]);
   // Small enough to load with the layer.
   assert.ok(readFileSync(PACK_URL).length < 200_000);
 });
@@ -33,26 +38,35 @@ test('the pack loads into records keyed by NORAD number', async () => {
   const iss = records.get(25544);
   assert.ok(iss, 'the ISS is in UCS');
   assert.equal(iss.noradId, 25544);
+  assert.ok(iss.operator);
   assert.ok(iss.purpose);
+  for (const record of records.values()) {
+    assert.doesNotMatch(
+      `${record.operator ?? ''} ${record.purpose ?? ''}`,
+      /starlink/i,
+      'Starlink rows are dropped',
+    );
+  }
 });
 
 test('indexing reads the string tables and turns empty strings into null', () => {
   const records = indexUcsPack({
-    fields: ['noradId', 'purpose'],
-    strings: { purpose: ['', 'Earth Observation'] },
+    fields: ['noradId', 'operator', 'purpose'],
+    strings: { operator: ['', 'ESA'], purpose: ['', 'Earth Observation'] },
     records: [
-      [39634, 1],
-      [40000, 0],
-      ['bad', 1],
-      [-5, 1],
+      [39634, 1, 1],
+      [40000, 0, 1],
+      ['bad', 1, 1],
+      [-5, 1, 1],
     ],
   });
   assert.deepEqual([...records.keys()], [39634, 40000]);
   assert.deepEqual(records.get(39634), {
     noradId: 39634,
+    operator: 'ESA',
     purpose: 'Earth Observation',
   });
-  assert.equal(records.get(40000).purpose, null);
+  assert.equal(records.get(40000).operator, null);
 });
 
 test('a pack of the wrong shape throws, so the loader tries again', () => {

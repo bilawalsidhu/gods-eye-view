@@ -231,6 +231,13 @@ export function classifySatellite({
   return 'probes';
 }
 
+/** Whether a class may be ridden in the Cockpit's orbital view. */
+export function satelliteClassEnterable(satelliteClass) {
+  return (
+    SATELLITE_CLASS_IDS.includes(satelliteClass) && satelliteClass !== 'debris'
+  );
+}
+
 /**
  * Merge a partial class-visibility request into the current choice.
  * Unknown keys and non-boolean values are ignored.
@@ -248,6 +255,451 @@ export function mergeClassVisibility(
     next[id] = typeof value === 'boolean' ? value : current[id] === true;
   }
   return next;
+}
+
+// ISO 3166-1 alpha-2 code → short English name, for every owner below.
+const COUNTRY_NAMES = Object.freeze({
+  AE: 'United Arab Emirates',
+  AM: 'Armenia',
+  AO: 'Angola',
+  AR: 'Argentina',
+  AT: 'Austria',
+  AU: 'Australia',
+  AZ: 'Azerbaijan',
+  BD: 'Bangladesh',
+  BE: 'Belgium',
+  BG: 'Bulgaria',
+  BH: 'Bahrain',
+  BM: 'Bermuda',
+  BO: 'Bolivia',
+  BR: 'Brazil',
+  BT: 'Bhutan',
+  BW: 'Botswana',
+  BY: 'Belarus',
+  CA: 'Canada',
+  CH: 'Switzerland',
+  CL: 'Chile',
+  CN: 'China',
+  CO: 'Colombia',
+  CR: 'Costa Rica',
+  CZ: 'Czechia',
+  DE: 'Germany',
+  DJ: 'Djibouti',
+  DK: 'Denmark',
+  DZ: 'Algeria',
+  EC: 'Ecuador',
+  EE: 'Estonia',
+  EG: 'Egypt',
+  ES: 'Spain',
+  ET: 'Ethiopia',
+  FI: 'Finland',
+  FR: 'France',
+  GB: 'United Kingdom',
+  GH: 'Ghana',
+  GR: 'Greece',
+  GT: 'Guatemala',
+  HR: 'Croatia',
+  HU: 'Hungary',
+  ID: 'Indonesia',
+  IE: 'Ireland',
+  IL: 'Israel',
+  IN: 'India',
+  IQ: 'Iraq',
+  IR: 'Iran',
+  IT: 'Italy',
+  JO: 'Jordan',
+  JP: 'Japan',
+  KE: 'Kenya',
+  KP: 'North Korea',
+  KR: 'South Korea',
+  KW: 'Kuwait',
+  KZ: 'Kazakhstan',
+  LA: 'Laos',
+  LK: 'Sri Lanka',
+  LT: 'Lithuania',
+  LU: 'Luxembourg',
+  MA: 'Morocco',
+  MC: 'Monaco',
+  MD: 'Moldova',
+  ME: 'Montenegro',
+  MM: 'Myanmar',
+  MN: 'Mongolia',
+  MU: 'Mauritius',
+  MX: 'Mexico',
+  MY: 'Malaysia',
+  NG: 'Nigeria',
+  NL: 'Netherlands',
+  NO: 'Norway',
+  NP: 'Nepal',
+  NZ: 'New Zealand',
+  PE: 'Peru',
+  PH: 'Philippines',
+  PK: 'Pakistan',
+  PL: 'Poland',
+  PT: 'Portugal',
+  PY: 'Paraguay',
+  QA: 'Qatar',
+  RO: 'Romania',
+  RU: 'Russia',
+  RW: 'Rwanda',
+  SA: 'Saudi Arabia',
+  SB: 'Solomon Islands',
+  SD: 'Sudan',
+  SE: 'Sweden',
+  SG: 'Singapore',
+  SI: 'Slovenia',
+  SN: 'Senegal',
+  TH: 'Thailand',
+  TM: 'Turkmenistan',
+  TN: 'Tunisia',
+  TR: 'Türkiye',
+  TW: 'Taiwan',
+  UA: 'Ukraine',
+  US: 'United States',
+  UY: 'Uruguay',
+  VA: 'Vatican City',
+  VE: 'Venezuela',
+  VN: 'Vietnam',
+  ZA: 'South Africa',
+  ZW: 'Zimbabwe',
+});
+
+/**
+ * Every owner country a satellite can be marked with, sorted: the flags
+ * `scripts/build-owner-flags.mjs` draws into the owner flag sheet.
+ */
+export const OWNER_COUNTRY_CODES = Object.freeze(
+  Object.keys(COUNTRY_NAMES).sort(),
+);
+
+// UCS "Country of Operator/Owner" → ISO code. Joint owners ("USA/Japan") and
+// organisations are not countries and resolve through ORGANISATIONS or as a
+// joint label.
+const UCS_COUNTRIES = Object.freeze({
+  Algeria: 'DZ',
+  Angola: 'AO',
+  Argentina: 'AR',
+  Australia: 'AU',
+  Austria: 'AT',
+  Azerbaijan: 'AZ',
+  Bangladesh: 'BD',
+  Belarus: 'BY',
+  Belgium: 'BE',
+  Bolivia: 'BO',
+  Brazil: 'BR',
+  Bulgaria: 'BG',
+  Canada: 'CA',
+  Chile: 'CL',
+  China: 'CN',
+  Colombia: 'CO',
+  'Czech Republic': 'CZ',
+  Denmark: 'DK',
+  Ecuador: 'EC',
+  Egypt: 'EG',
+  Estonia: 'EE',
+  Ethiopia: 'ET',
+  Finland: 'FI',
+  France: 'FR',
+  Germany: 'DE',
+  Greece: 'GR',
+  Hungary: 'HU',
+  India: 'IN',
+  Indonesia: 'ID',
+  Iran: 'IR',
+  Iraq: 'IQ',
+  Israel: 'IL',
+  Italy: 'IT',
+  Japan: 'JP',
+  Jordan: 'JO',
+  Kazakhstan: 'KZ',
+  Kenya: 'KE',
+  Kuwait: 'KW',
+  Laos: 'LA',
+  Lithuania: 'LT',
+  Luxembourg: 'LU',
+  Malaysia: 'MY',
+  Mexico: 'MX',
+  Monaco: 'MC',
+  Morocco: 'MA',
+  Nepal: 'NP',
+  Netherlands: 'NL',
+  'New Zealand': 'NZ',
+  Nigeria: 'NG',
+  Norway: 'NO',
+  Pakistan: 'PK',
+  Peru: 'PE',
+  Poland: 'PL',
+  Russia: 'RU',
+  'Saudi Arabia': 'SA',
+  Sinapore: 'SG',
+  Singapore: 'SG',
+  Slovenia: 'SI',
+  'South Africa': 'ZA',
+  'South Korea': 'KR',
+  Spain: 'ES',
+  Sudan: 'SD',
+  Sweden: 'SE',
+  Switzerland: 'CH',
+  Taiwan: 'TW',
+  Thailand: 'TH',
+  Tunisia: 'TN',
+  Turkey: 'TR',
+  UK: 'GB',
+  USA: 'US',
+  Ukraine: 'UA',
+  'United Arab Emirates': 'AE',
+  'United Kingdom': 'GB',
+  Venezuela: 'VE',
+  Vietnam: 'VN',
+});
+
+// CelesTrak SATCAT OWNER code → ISO code (https://celestrak.org/satcat/sources.php).
+// CIS (former USSR) is filed under Russia, its continuing state.
+const SATCAT_COUNTRIES = Object.freeze({
+  ALG: 'DZ',
+  ANG: 'AO',
+  ARGN: 'AR',
+  ARM: 'AM',
+  ASRA: 'AT',
+  AUS: 'AU',
+  AZER: 'AZ',
+  BEL: 'BE',
+  BELA: 'BY',
+  BERM: 'BM',
+  BGD: 'BD',
+  BHR: 'BH',
+  BHUT: 'BT',
+  BOL: 'BO',
+  BRAZ: 'BR',
+  BUL: 'BG',
+  BWA: 'BW',
+  CA: 'CA',
+  CHLE: 'CL',
+  CIS: 'RU',
+  COL: 'CO',
+  CRI: 'CR',
+  CZCH: 'CZ',
+  DEN: 'DK',
+  DJI: 'DJ',
+  ECU: 'EC',
+  EGYP: 'EG',
+  EST: 'EE',
+  ETH: 'ET',
+  FIN: 'FI',
+  FR: 'FR',
+  GER: 'DE',
+  GHA: 'GH',
+  GREC: 'GR',
+  GUAT: 'GT',
+  HRV: 'HR',
+  HUN: 'HU',
+  IND: 'IN',
+  INDO: 'ID',
+  IRAN: 'IR',
+  IRAQ: 'IQ',
+  IRL: 'IE',
+  ISRA: 'IL',
+  ISRO: 'IN',
+  IT: 'IT',
+  JPN: 'JP',
+  KAZ: 'KZ',
+  KEN: 'KE',
+  LAOS: 'LA',
+  LKA: 'LK',
+  LTU: 'LT',
+  LUXE: 'LU',
+  MA: 'MA',
+  MALA: 'MY',
+  MCO: 'MC',
+  MDA: 'MD',
+  MEX: 'MX',
+  MMR: 'MM',
+  MNE: 'ME',
+  MNG: 'MN',
+  MUS: 'MU',
+  NETH: 'NL',
+  NIG: 'NG',
+  NKOR: 'KP',
+  NOR: 'NO',
+  NPL: 'NP',
+  NZ: 'NZ',
+  PAKI: 'PK',
+  PERU: 'PE',
+  POL: 'PL',
+  POR: 'PT',
+  PRC: 'CN',
+  PRY: 'PY',
+  QAT: 'QA',
+  ROC: 'TW',
+  ROM: 'RO',
+  RP: 'PH',
+  RWA: 'RW',
+  SAFR: 'ZA',
+  SAUD: 'SA',
+  SDN: 'SD',
+  SEN: 'SN',
+  SING: 'SG',
+  SKOR: 'KR',
+  SLB: 'SB',
+  SPN: 'ES',
+  SVN: 'SI',
+  SWED: 'SE',
+  SWTZ: 'CH',
+  THAI: 'TH',
+  TUN: 'TN',
+  TURK: 'TR',
+  UAE: 'AE',
+  UK: 'GB',
+  UKR: 'UA',
+  URY: 'UY',
+  US: 'US',
+  VAT: 'VA',
+  VENZ: 'VE',
+  VTNM: 'VN',
+  ZWE: 'ZW',
+});
+
+// Organisations, by SATCAT code and by UCS name: no flag, a short label.
+const ORGANISATIONS = Object.freeze({
+  AB: 'Arabsat',
+  ABS: 'ABS',
+  AC: 'AsiaSat',
+  ESA: 'ESA',
+  ESRO: 'ESRO',
+  EUME: 'EUMETSAT',
+  EUTE: 'Eutelsat',
+  GLOB: 'Globalstar',
+  IM: 'Inmarsat',
+  IRID: 'Iridium',
+  ISS: 'ISS partners',
+  ITSO: 'Intelsat',
+  NATO: 'NATO',
+  NICO: 'New ICO',
+  O3B: 'O3b',
+  ORB: 'ORBCOMM',
+  RASC: 'RascomStar-QAF',
+  SEAL: 'Sea Launch',
+  SES: 'SES',
+  Multinational: 'Multinational',
+});
+
+// SATCAT codes for joint ownership, as their parts.
+const SATCAT_JOINT = Object.freeze({
+  CHBZ: ['CN', 'BR'],
+  CHTU: ['CN', 'TR'],
+  FGER: ['FR', 'DE'],
+  FRIT: ['FR', 'IT'],
+  GRSA: ['GR', 'SA'],
+  PRES: ['CN', 'ESA'],
+  SGJP: ['SG', 'JP'],
+  STCT: ['SG', 'TW'],
+  TMMC: ['TM', 'MC'],
+  USBZ: ['US', 'BR'],
+});
+
+function country(code) {
+  return COUNTRY_NAMES[code]
+    ? { countryCode: code, label: COUNTRY_NAMES[code] }
+    : null;
+}
+
+function joint(parts) {
+  const labels = parts.map(
+    (part) => COUNTRY_NAMES[part] || ORGANISATIONS[part] || part,
+  );
+  return { countryCode: null, label: labels.join(' / ') };
+}
+
+/**
+ * Normalise a UCS owner country ("USA", "China/France", "ESA",
+ * "Multinational") to `{ countryCode, label }`.
+ * @param {string|null|undefined} text
+ * @returns {{countryCode: string|null, label: string}|null}
+ */
+export function ownerFromUcs(text) {
+  const value = String(text || '').trim();
+  if (!value) return null;
+  if (UCS_COUNTRIES[value]) return country(UCS_COUNTRIES[value]);
+  if (ORGANISATIONS[value])
+    return { countryCode: null, label: ORGANISATIONS[value] };
+  if (value.includes('/'))
+    return joint(
+      value
+        .split('/')
+        .map((part) => part.trim())
+        .map((part) => UCS_COUNTRIES[part] || part),
+    );
+  return { countryCode: null, label: value };
+}
+
+/**
+ * Normalise a CelesTrak SATCAT OWNER code ("US", "PRC", "CIS", "ITSO") to
+ * `{ countryCode, label }`; null for TBD, UNK and blanks.
+ * @param {string|null|undefined} code
+ * @returns {{countryCode: string|null, label: string}|null}
+ */
+export function ownerFromSatcat(code) {
+  const value = String(code || '')
+    .trim()
+    .toUpperCase();
+  if (!value || value === 'TBD' || value === 'UNK') return null;
+  if (SATCAT_COUNTRIES[value]) return country(SATCAT_COUNTRIES[value]);
+  if (ORGANISATIONS[value])
+    return { countryCode: null, label: ORGANISATIONS[value] };
+  if (SATCAT_JOINT[value]) return joint(SATCAT_JOINT[value]);
+  return null;
+}
+
+/**
+ * Who owns a satellite: UCS names the operator's country, SATCAT the
+ * registering owner; UCS wins where both exist. Starlink without either is
+ * SpaceX's, so United States.
+ * @returns {{countryCode: string|null, label: string}|null}
+ */
+export function satelliteOwner({
+  ucs = null,
+  satcat = null,
+  satelliteClass,
+} = {}) {
+  return (
+    ownerFromUcs(ucs?.operatorCountry) ||
+    ownerFromSatcat(satcat?.owner) ||
+    (satelliteClass === 'starlink' ? country('US') : null)
+  );
+}
+
+/** Who operates a satellite: UCS's operator, or SpaceX for Starlink. */
+export function satelliteOperator({ ucs = null, satelliteClass } = {}) {
+  if (ucs?.operator) return ucs.operator;
+  return satelliteClass === 'starlink' ? 'SpaceX' : null;
+}
+
+/**
+ * The international designator (COSPAR id) from TLE line 1, columns 10–17:
+ * `98067A` → `1998-067A`. Two-digit years below 57 are 20xx.
+ * @param {string|null|undefined} line1
+ * @returns {string|null}
+ */
+export function cosparIdFromTleLine1(line1) {
+  const field = String(line1 || '')
+    .slice(9, 17)
+    .trim();
+  const match = /^(\d{2})(\d{3})([A-Z]{1,3})$/.exec(field);
+  if (!match) return null;
+  const yy = Number(match[1]);
+  return `${yy < 57 ? 2000 + yy : 1900 + yy}-${match[2]}${match[3]}`;
+}
+
+/**
+ * The TLE's epoch as epoch milliseconds, from satellite.js's Julian date.
+ * @param {{jdsatepoch?: number, jdsatepochF?: number}|null|undefined} satrec
+ * @returns {number|null}
+ */
+export function tleEpochMs(satrec) {
+  const jd = Number(satrec?.jdsatepoch) + (Number(satrec?.jdsatepochF) || 0);
+  return Number.isFinite(jd) && jd > 0
+    ? Math.round((jd - 2440587.5) * 86_400_000)
+    : null;
 }
 
 /** Split one RFC 4180 CSV line (quoted fields may hold commas). */
@@ -277,7 +729,7 @@ function csvFields(line) {
  * Parse CelesTrak SATCAT CSV into records keyed by NORAD number.
  * @param {string} text `records.php?…&FORMAT=CSV` body.
  * @returns {Map<number, {objectType: string, opsStatus: string,
- *   launchDate: string|null}>}
+ *   owner: string, cosparId: string|null, launchDate: string|null}>}
  */
 export function parseSatcatCsv(text) {
   const records = new Map();
@@ -291,6 +743,8 @@ export function parseSatcatCsv(text) {
     norad: at('NORAD_CAT_ID'),
     type: at('OBJECT_TYPE'),
     status: at('OPS_STATUS_CODE'),
+    owner: at('OWNER'),
+    id: at('OBJECT_ID'),
     launch: at('LAUNCH_DATE'),
   };
   if (col.norad < 0 || col.type < 0) return records;
@@ -302,6 +756,8 @@ export function parseSatcatCsv(text) {
     records.set(noradId, {
       objectType: text(col.type).toUpperCase(),
       opsStatus: text(col.status),
+      owner: text(col.owner),
+      cosparId: text(col.id) || null,
       launchDate: text(col.launch) || null,
     });
   }

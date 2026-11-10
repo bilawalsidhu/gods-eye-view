@@ -1,6 +1,7 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
 import {
   readAircraftInfo,
+  readSatelliteInfo,
   readVesselInfo,
   readSubjectLayerId,
   resolveEntryKind,
@@ -15,6 +16,29 @@ import {
   exit,
 } from './cockpitTrackingController.js';
 import { update } from './cockpitCamera.js';
+import {
+  beginOrbital,
+  endOrbital,
+  resetOrbitalLook,
+  jumpToSensorSwath,
+  onOrbitalWheel,
+  stepOrbitalZoom,
+  turnOrbitalLook,
+  updateOrbital,
+  updateOrbitalHud,
+} from './cockpitOrbitalView.js';
+import {
+  onOrbitalClick,
+  onOrbitalDoubleClick,
+  routeSceneClick,
+  toggleOrbitalFocus,
+} from './cockpitOrbitalFocus.js';
+import {
+  handleOrbitalSignalClick,
+  refreshOrbitalSignals,
+  updateOrbitalSignals,
+} from './cockpitOrbitalSignals.js';
+import { rideOrbitalSatellite } from './cockpitOrbitalSatellites.js';
 import {
   publishInstrumentsView,
   publishRouteView,
@@ -95,6 +119,7 @@ export class CockpitViewController {
       onCameraTakeover = null,
       isEntryAllowed = null,
       isBridgeEntryAllowed = null,
+      isOrbitEntryAllowed = null,
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
@@ -108,10 +133,21 @@ export class CockpitViewController {
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
-    /** 'aircraft' or 'vessel' while active; which subject the camera rides. */
+    /**
+     * 'aircraft', 'vessel' or 'satellite' while active; which subject the
+     * camera rides.
+     */
     this.subjectKind = null;
-    /** The vessel subject's MMSI; aircraft are identified by trackedEntity. */
+    /**
+     * The vessel subject's MMSI or the satellite's NORAD id; aircraft are
+     * identified by trackedEntity.
+     */
     this.subjectId = null;
+    /**
+     * The orbital view's zoom, look and saved field of view while a
+     * satellite is ridden (src/ui/cockpitOrbitalView.js); null otherwise.
+     */
+    this.orbital = null;
     this.trackedEntity = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
@@ -162,6 +198,11 @@ export class CockpitViewController {
       typeof isBridgeEntryAllowed === 'function'
         ? isBridgeEntryAllowed
         : () => false;
+    // Nor a satellite layer to ride without one.
+    this.isOrbitEntryAllowed =
+      typeof isOrbitEntryAllowed === 'function'
+        ? isOrbitEntryAllowed
+        : () => false;
     this.isUtilityDisclosureOpen =
       typeof isUtilityDisclosureOpen === 'function'
         ? isUtilityDisclosureOpen
@@ -197,6 +238,7 @@ export class CockpitViewController {
     this.publishSignals = publish.signals ?? (() => {});
     this.publishUtilityLayout = publish.utilityLayout ?? (() => {});
     this.publishRadar = publish.radar ?? (() => {});
+    this.publishOrbital = publish.orbital ?? (() => {});
     /** The bridge radar's range in nautical miles; kept across bridges. */
     this.radarRangeNm = DEFAULT_RADAR_RANGE_NM;
     this.presence = {
@@ -262,6 +304,16 @@ export class CockpitViewController {
       true,
     );
     this._listenerRemovers.push(routeSceneDoubleClick.call(this));
+    // In orbit a click on a mapped point keeps the camera on it.
+    this._listenerRemovers.push(routeSceneClick.call(this));
+    // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
+    // off while the Cockpit holds the camera).
+    this._listen(
+      viewer.scene?.canvas,
+      'wheel',
+      (event) => this.onOrbitalWheel(event),
+      { passive: false },
+    );
     // The readout's entry renders inside the Intel HUD, which may mount after
     // this controller; delegated like the radar's range button.
     this._listen(document, 'click', (event) => {
@@ -301,6 +353,17 @@ export class CockpitViewController {
     // The look-ahead button shows only on a turned bridge view; delegated.
     this._listen(document, 'click', (event) => {
       if (event.target?.closest?.('#cockpit-look-ahead')) this.lookAhead();
+    });
+    // The orbital HUD mounts only in orbit, so its controls are delegated.
+    this._listen(document, 'click', (event) => {
+      const target = event.target;
+      if (target?.closest?.('#cockpit-orbital-zoom-in'))
+        this.stepOrbitalZoom(1);
+      else if (target?.closest?.('#cockpit-orbital-zoom-out'))
+        this.stepOrbitalZoom(-1);
+      else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
+      else if (target?.closest?.('#cockpit-orbital-sensor'))
+        this.jumpToSensorSwath();
     });
     this._listen(this.signalToggle, 'click', () =>
       this.setSignalCollapsed(!this.signalCollapsed, { user: true }),
@@ -345,6 +408,105 @@ export class CockpitViewController {
   }
   readVesselInfo() {
     return readVesselInfo.call(this);
+  }
+  readSatelliteInfo() {
+    return readSatelliteInfo.call(this);
+  }
+  beginOrbital() {
+    return beginOrbital.call(this);
+  }
+  endOrbital() {
+    return endOrbital.call(this);
+  }
+  updateOrbital(nowMs) {
+    return updateOrbital.call(this, nowMs);
+  }
+  updateOrbitalHud(info, nowMs) {
+    return updateOrbitalHud.call(this, info, nowMs);
+  }
+  /**
+   * Step the orbital view's optical zoom (the + and − keys and buttons).
+   * @param {number} direction Positive zooms in, negative out.
+   * @returns {boolean} True when the zoom changed.
+   */
+  stepOrbitalZoom(direction) {
+    return stepOrbitalZoom.call(this, direction);
+  }
+  jumpToSensorSwath() {
+    return jumpToSensorSwath.call(this);
+  }
+  onOrbitalWheel(event) {
+    return onOrbitalWheel.call(this, event);
+  }
+  /**
+   * A click on the orbital picture: on a mapped point in reach it keeps the
+   * camera on that point; anywhere else it ends such a focus.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when the click focused a point.
+   */
+  onOrbitalClick(position) {
+    return onOrbitalClick.call(this, position);
+  }
+  /**
+   * A double-click on the orbital picture: on a mapped ground point it keeps
+   * or starts the focus there instead of letting Cesium track the point.
+   * @param {{x: number, y: number}|null|undefined} position
+   * @returns {boolean} True when it was taken.
+   */
+  onOrbitalDoubleClick(position) {
+    return onOrbitalDoubleClick.call(this, position);
+  }
+  /**
+   * A site's orbital Live Signals row: focus that site, switch to it, or end
+   * the focus held on it.
+   * @param {string} key The site's id in the Mapped Installations layer.
+   * @returns {boolean} True when the focus changed.
+   */
+  toggleOrbitalFocus(key) {
+    return toggleOrbitalFocus.call(this, key);
+  }
+  /** Rebuild the orbital Live Signals rows now. */
+  refreshOrbitalSignals() {
+    return refreshOrbitalSignals.call(this);
+  }
+  /** Rebuild the orbital Live Signals rows on their clock. */
+  updateOrbitalSignals(nowMs) {
+    return updateOrbitalSignals.call(this, nowMs);
+  }
+  /**
+   * Ride the satellite an orbital Live Signals row names (RETURN goes back).
+   * @param {number|string} noradId
+   * @returns {boolean} True when the ridden satellite changed.
+   */
+  rideOrbitalSatellite(noradId) {
+    return rideOrbitalSatellite.call(this, noradId);
+  }
+  /**
+   * A click on an orbital Live Signals row.
+   * @returns {boolean} True in orbit.
+   */
+  handleOrbitalSignalClick(layerId, id) {
+    return handleOrbitalSignalClick.call(this, layerId, id);
+  }
+  /**
+   * Tilt the orbital view one arrow step off nadir.
+   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
+   * @returns {boolean} True in an orbital view.
+   */
+  turnOrbitalLook(step) {
+    return turnOrbitalLook.call(this, step);
+  }
+  /**
+   * The NADIR control and the Home and 0 keys in orbit: back to pure nadir.
+   * Focus leaves the button before it hides.
+   * @returns {boolean} True in an orbital view.
+   */
+  orbitalNadir() {
+    const button = document.getElementById('cockpit-orbital-nadir');
+    const hadFocus = !!button && button.contains(document.activeElement);
+    const reset = resetOrbitalLook.call(this);
+    if (reset && hadFocus) this.mapViewButton?.focus({ preventScroll: true });
+    return reset;
   }
   readSubjectLayerId() {
     return readSubjectLayerId.call(this);

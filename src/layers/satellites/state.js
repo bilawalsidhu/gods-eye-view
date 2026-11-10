@@ -15,7 +15,7 @@ export function createState({ services }) {
 
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  // Satellite catalog: { noradId → { name, satrec, group, launchYear,
+  // Satellite catalog: { noradId → { name, satrec, group, line1, line2,
   // satelliteClass, ucs, satcat } } — class, UCS and SATCAT records from
   // src/layers/satellites/classes.js and the sources the update read.
 
@@ -118,6 +118,9 @@ export function createState({ services }) {
   /** The UCS pack by NORAD id, once loaded; null until then or if it failed. */
   state._ucs = null;
 
+  /** The imaging-sensor index, once loaded; null until then or if it failed. */
+  state._sensors = null;
+
   state._denseIds = [];
   // norad ids of dense extras, round-robin order
 
@@ -173,6 +176,17 @@ export function createState({ services }) {
   /** Optional deterministic clock used only by the production-frame test seam. */
 
   state._trackedFrameNowForTest = null;
+
+  // Cockpit orbital-view hold (cockpitSubject.js): the NORAD id the Cockpit
+  // camera rides, and what the hold hid so release restores exactly that.
+
+  state._cockpitSubjectNorad = null;
+
+  state._cockpitHiddenPoints = new Set();
+
+  state._cockpitHiddenPath = null;
+
+  state._cockpitHiddenDot = false;
 
   /** The time satellites are propagated to, in epoch ms. */
 

@@ -27,6 +27,7 @@
  */
 
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -223,6 +224,7 @@ async function main() {
   const errors = [];
   try {
     const page = await browser.newPage();
+    await stubPlanespotters(page);
     await page.setViewport({ width: 1440, height: 900 });
     page.on('pageerror', (e) => errors.push(e.message));
     const { lon, lat } = CENTER;

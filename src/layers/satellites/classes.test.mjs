@@ -1,20 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { twoline2satrec } from 'satellite.js';
 import {
   DEFAULT_SATELLITE_CLASSES,
   PRESUMED_DEAD_AFTER_YEARS,
   SATELLITE_CLASS_DISPLAY,
   SATELLITE_CLASS_IDS,
   classifySatellite,
+  cosparIdFromTleLine1,
   mergeClassVisibility,
+  ownerFromSatcat,
+  ownerFromUcs,
   parseSatcatCsv,
+  satelliteClassEnterable,
+  satelliteOperator,
+  satelliteOwner,
+  tleEpochMs,
 } from './classes.js';
 import { CATALOG_GROUPS } from './policy.js';
 
 const NOW = 2026;
 const classify = (subject) => classifySatellite({ nowYear: NOW, ...subject });
 
-test('six classes, every one but Starlink on by default', () => {
+test('six classes, with stations and imaging on by default and the rest off', () => {
   assert.deepEqual(SATELLITE_CLASS_IDS, [
     'stations',
     'imaging',
@@ -37,28 +45,16 @@ test('six classes, every one but Starlink on by default', () => {
 test('SATCAT object type and status file debris first, overruling UCS', () => {
   const imaging = { purpose: 'Earth Observation' };
   for (const objectType of ['R/B', 'DEB', 'UNK'])
-    assert.equal(
-      classify({ name: 'X', satcat: { objectType, opsStatus: '' } }),
-      'debris',
-      objectType,
-    );
+    assert.equal(classify({ name: 'X', satcat: { objectType, opsStatus: '' } }), 'debris', objectType);
   // A satellite UCS listed in 2023 that SATCAT now calls dead or decayed.
   for (const opsStatus of ['-', 'D'])
     assert.equal(
-      classify({
-        name: 'OLDSAT',
-        ucs: imaging,
-        satcat: { objectType: 'PAY', opsStatus },
-      }),
+      classify({ name: 'OLDSAT', ucs: imaging, satcat: { objectType: 'PAY', opsStatus } }),
       'debris',
       opsStatus,
     );
   assert.equal(
-    classify({
-      name: 'OLDSAT',
-      ucs: imaging,
-      satcat: { objectType: 'PAY', opsStatus: '+' },
-    }),
+    classify({ name: 'OLDSAT', ucs: imaging, satcat: { objectType: 'PAY', opsStatus: '+' } }),
     'imaging',
   );
   // SATCAT calls a new launch's objects UNK until it names them: only an
@@ -86,33 +82,15 @@ test('SATCAT object type and status file debris first, overruling UCS', () => {
 
 test('the ISS is a station whatever else says', () => {
   assert.equal(
-    classify({
-      noradId: 25544,
-      name: 'ISS (ZARYA)',
-      group: 'visual',
-      satcat: { objectType: 'DEB' },
-    }),
+    classify({ noradId: 25544, name: 'ISS (ZARYA)', group: 'visual', satcat: { objectType: 'DEB' } }),
     'stations',
   );
 });
 
 test('stations: crewed stations and visiting vehicles by name', () => {
-  assert.equal(
-    classify({ name: 'CSS (TIANHE)', group: 'stations' }),
-    'stations',
-  );
-  assert.equal(
-    classify({ name: 'ISS (NAUKA)', group: 'stations' }),
-    'stations',
-  );
-  for (const name of [
-    'SHENZHOU-21',
-    'TIANZHOU-9',
-    'SOYUZ-MS 28',
-    'PROGRESS-MS 31',
-    'CREW DRAGON 11',
-    'CYGNUS NG-23',
-  ])
+  assert.equal(classify({ name: 'CSS (TIANHE)', group: 'stations' }), 'stations');
+  assert.equal(classify({ name: 'ISS (NAUKA)', group: 'stations' }), 'stations');
+  for (const name of ['SHENZHOU-21', 'TIANZHOU-9', 'SOYUZ-MS 28', 'PROGRESS-MS 31', 'CREW DRAGON 11', 'CYGNUS NG-23'])
     assert.equal(classify({ name, group: 'visual' }), 'stations', name);
 });
 
@@ -133,11 +111,7 @@ test('UCS purpose decides imaging, telecom and probes', () => {
     ['Unknown', 'probes'],
   ];
   for (const [purpose, expected] of table)
-    assert.equal(
-      classify({ name: 'UNNAMED-1', group: 'visual', ucs: { purpose } }),
-      expected,
-      purpose,
-    );
+    assert.equal(classify({ name: 'UNNAMED-1', group: 'visual', ucs: { purpose } }), expected, purpose);
 });
 
 test('satellites launched after the UCS snapshot are classed by name', () => {
@@ -156,42 +130,20 @@ test('satellites launched after the UCS snapshot are classed by name', () => {
     ['STARLINK-34012', 'starlink'],
   ];
   for (const [name, expected] of table)
-    assert.equal(
-      classify({ name, group: 'visual', launchYear: 2025 }),
-      expected,
-      name,
-    );
+    assert.equal(classify({ name, group: 'visual', launchYear: 2025 }), expected, name);
 });
 
 test('the group the TLE came in is the last resort', () => {
-  assert.equal(
-    classify({ name: 'UNNAMED-1', group: 'resource', launchYear: 2024 }),
-    'imaging',
-  );
-  assert.equal(
-    classify({ name: 'UNNAMED-1', group: 'geo', launchYear: 2024 }),
-    'telecom',
-  );
-  assert.equal(
-    classify({ name: 'UNNAMED-1', group: 'science', launchYear: 2024 }),
-    'probes',
-  );
+  assert.equal(classify({ name: 'UNNAMED-1', group: 'resource', launchYear: 2024 }), 'imaging');
+  assert.equal(classify({ name: 'UNNAMED-1', group: 'geo', launchYear: 2024 }), 'telecom');
+  assert.equal(classify({ name: 'UNNAMED-1', group: 'science', launchYear: 2024 }), 'probes');
   assert.equal(classify({ name: 'STARLINK-1', group: 'dense' }), 'starlink');
-  assert.equal(
-    classify({ name: 'UNNAMED-1', group: 'visual', launchYear: 2024 }),
-    'probes',
-  );
+  assert.equal(classify({ name: 'UNNAMED-1', group: 'visual', launchYear: 2024 }), 'probes');
 });
 
 test('CubeSats deployed from the ISS are not stations', () => {
   // They ride in CelesTrak's stations group under the ISS's 1998 designator.
-  for (const name of [
-    'DUPLEX',
-    'KNACKSAT-2',
-    'GXIBA-1',
-    'LEOPARD',
-    'HMU-SAT2',
-  ]) {
+  for (const name of ['DUPLEX', 'KNACKSAT-2', 'GXIBA-1', 'LEOPARD', 'HMU-SAT2']) {
     assert.equal(
       classify({ name, group: 'stations', launchYear: 1998 }),
       'probes',
@@ -209,11 +161,7 @@ test('CubeSats deployed from the ISS are not stations', () => {
     );
   }
   assert.equal(
-    classify({
-      name: 'UNNAMED-1',
-      group: 'stations',
-      ucs: { purpose: 'Earth Observation' },
-    }),
+    classify({ name: 'UNNAMED-1', group: 'stations', ucs: { purpose: 'Earth Observation' } }),
     'imaging',
   );
 });
@@ -226,51 +174,87 @@ test('an unknown old payload is presumed dead; a recognisable one is not', () =>
     'without a SATCAT record (a failed read) nothing is presumed',
   );
   assert.equal(
-    classify({
-      name: 'ATLAS CENTAUR 2',
-      group: 'visual',
-      launchYear: 1963,
-      satcat: { objectType: 'PAY', opsStatus: '' },
-    }),
+    classify({ name: 'ATLAS CENTAUR 2', group: 'visual', launchYear: 1963, satcat: { objectType: 'PAY', opsStatus: '' } }),
     'debris',
     'a blank SATCAT status is no evidence of life',
   );
+  assert.equal(classify({ name: 'UNNAMED-1', group: 'visual', launchYear: old + 1 }), 'probes');
+  assert.equal(classify({ name: 'NOAA 15', group: 'weather', launchYear: 1998 }), 'imaging');
   assert.equal(
-    classify({ name: 'UNNAMED-1', group: 'visual', launchYear: old + 1 }),
-    'probes',
-  );
-  assert.equal(
-    classify({ name: 'NOAA 15', group: 'weather', launchYear: 1998 }),
-    'imaging',
-  );
-  assert.equal(
-    classify({
-      name: 'UNNAMED-1',
-      group: 'visual',
-      launchYear: 1990,
-      satcat: { objectType: 'PAY', opsStatus: '+' },
-    }),
+    classify({ name: 'UNNAMED-1', group: 'visual', launchYear: 1990, satcat: { objectType: 'PAY', opsStatus: '+' } }),
     'probes',
     'SATCAT says it works',
   );
 });
 
+test('only debris is refused the Cockpit', () => {
+  for (const id of SATELLITE_CLASS_IDS)
+    assert.equal(satelliteClassEnterable(id), id !== 'debris', id);
+  assert.equal(satelliteClassEnterable('nonsense'), false);
+});
+
 test('class visibility merges booleans and ignores everything else', () => {
-  const next = mergeClassVisibility({
-    telecom: true,
-    imaging: false,
-    debris: 'yes',
-    bogus: true,
-  });
-  assert.deepEqual(next, {
-    ...DEFAULT_SATELLITE_CLASSES,
-    telecom: true,
-    imaging: false,
-  });
-  assert.deepEqual(mergeClassVisibility(null), {
-    ...DEFAULT_SATELLITE_CLASSES,
-  });
+  const next = mergeClassVisibility({ telecom: true, imaging: false, debris: 'yes', bogus: true });
+  assert.deepEqual(next, { ...DEFAULT_SATELLITE_CLASSES, telecom: true, imaging: false });
+  assert.deepEqual(mergeClassVisibility(null), { ...DEFAULT_SATELLITE_CLASSES });
   assert.equal(Object.hasOwn(next, 'bogus'), false);
+});
+
+test('UCS owner countries normalise to ISO codes, organisations and joint owners', () => {
+  assert.deepEqual(ownerFromUcs('USA'), { countryCode: 'US', label: 'United States' });
+  assert.deepEqual(ownerFromUcs('United Kingdom'), { countryCode: 'GB', label: 'United Kingdom' });
+  assert.deepEqual(ownerFromUcs('Sinapore'), { countryCode: 'SG', label: 'Singapore' }, 'UCS typo');
+  assert.deepEqual(ownerFromUcs('Turkey'), { countryCode: 'TR', label: 'Türkiye' });
+  assert.deepEqual(ownerFromUcs('ESA'), { countryCode: null, label: 'ESA' });
+  assert.deepEqual(ownerFromUcs('Multinational'), { countryCode: null, label: 'Multinational' });
+  assert.deepEqual(ownerFromUcs('China/France'), { countryCode: null, label: 'China / France' });
+  assert.deepEqual(ownerFromUcs('United Kingdom/ESA'), { countryCode: null, label: 'United Kingdom / ESA' });
+  assert.equal(ownerFromUcs(''), null);
+  assert.equal(ownerFromUcs(null), null);
+});
+
+test('SATCAT owner codes normalise the same way', () => {
+  assert.deepEqual(ownerFromSatcat('US'), { countryCode: 'US', label: 'United States' });
+  assert.deepEqual(ownerFromSatcat('PRC'), { countryCode: 'CN', label: 'China' });
+  assert.deepEqual(ownerFromSatcat('CIS'), { countryCode: 'RU', label: 'Russia' }, 'former USSR');
+  assert.deepEqual(ownerFromSatcat('ISRO'), { countryCode: 'IN', label: 'India' });
+  assert.deepEqual(ownerFromSatcat('itso'), { countryCode: null, label: 'Intelsat' });
+  assert.deepEqual(ownerFromSatcat('EUME'), { countryCode: null, label: 'EUMETSAT' });
+  assert.deepEqual(ownerFromSatcat('PRES'), { countryCode: null, label: 'China / ESA' });
+  assert.deepEqual(ownerFromSatcat('TMMC'), { countryCode: null, label: 'Turkmenistan / Monaco' });
+  for (const code of ['TBD', 'UNK', '', null, 'ZZZZ']) assert.equal(ownerFromSatcat(code), null, String(code));
+});
+
+test('owner prefers UCS, falls back to SATCAT, and Starlink is American', () => {
+  assert.deepEqual(
+    satelliteOwner({ ucs: { operatorCountry: 'ESA' }, satcat: { owner: 'FR' } }),
+    { countryCode: null, label: 'ESA' },
+  );
+  assert.deepEqual(satelliteOwner({ satcat: { owner: 'FR' } }), { countryCode: 'FR', label: 'France' });
+  assert.deepEqual(satelliteOwner({ satelliteClass: 'starlink' }), { countryCode: 'US', label: 'United States' });
+  assert.equal(satelliteOwner({}), null);
+  assert.equal(satelliteOperator({ ucs: { operator: 'Planet Labs, Inc.' } }), 'Planet Labs, Inc.');
+  assert.equal(satelliteOperator({ satelliteClass: 'starlink' }), 'SpaceX');
+  assert.equal(satelliteOperator({ satelliteClass: 'imaging' }), null);
+});
+
+const ISS_LINE1 = '1 25544U 98067A   24001.50000000  .00016717  00000-0  30370-3 0  9993';
+const ISS_LINE2 = '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.50377579432323';
+
+test('COSPAR ids come from TLE line 1, across the 1957 century pivot', () => {
+  assert.equal(cosparIdFromTleLine1(ISS_LINE1), '1998-067A');
+  assert.equal(cosparIdFromTleLine1(ISS_LINE1.replace('98067A  ', '24123BC ')), '2024-123BC');
+  assert.equal(cosparIdFromTleLine1(ISS_LINE1.replace('98067A  ', '57001A  ')), '1957-001A');
+  assert.equal(cosparIdFromTleLine1(ISS_LINE1.replace('98067A  ', '        ')), null);
+  assert.equal(cosparIdFromTleLine1(null), null);
+});
+
+test('the TLE epoch is read as epoch milliseconds', () => {
+  const satrec = twoline2satrec(ISS_LINE1, ISS_LINE2);
+  // Day 001.5 of 2024: 1 January 2024, 12:00 UTC.
+  assert.ok(Math.abs(tleEpochMs(satrec) - Date.UTC(2024, 0, 1, 12)) < 1000);
+  assert.equal(tleEpochMs(null), null);
+  assert.equal(tleEpochMs({}), null);
 });
 
 test('SATCAT CSV parses, quoted commas included, keyed by NORAD id', () => {
@@ -286,6 +270,8 @@ test('SATCAT CSV parses, quoted commas included, keyed by NORAD id', () => {
   assert.deepEqual(records.get(25544), {
     objectType: 'PAY',
     opsStatus: '+',
+    owner: 'ISS',
+    cosparId: '1998-067A',
     launchDate: '1998-11-20',
   });
   assert.equal(records.get(733).objectType, 'R/B');

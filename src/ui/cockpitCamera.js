@@ -57,6 +57,10 @@ export function update() {
     updateVessel.call(this, nowMs);
     return;
   }
+  if (this.subjectKind === 'satellite') {
+    this.updateOrbital(nowMs);
+    return;
+  }
   const info = this.readAircraftInfo();
 
   // Adopt a newly selected track before the camera cadence gate. A context
