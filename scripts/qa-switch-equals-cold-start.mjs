@@ -11,6 +11,7 @@ import { drawLedger } from './qa/ledger.mjs';
 import {
   COLD_START_GROUPS,
   coldStartUrl,
+  coldStartReady,
   compareColdStart,
   probeSnapshot,
   sessionExclusion,
@@ -51,42 +52,26 @@ const evidence = (strict.extra.coldStart = {
 
 async function settle(page, cold = false) {
   await whenSettled(page, { timeoutMs: 30000 });
+  await page.evaluate(() => {
+    window.__coldStartStable = null;
+  });
   await page.waitForFunction(
-    (layers, cold) => {
-      const { dataManager, engine } = window.__godsEyeView;
-      engine.render.request('qa-cold-start-readiness');
-      return layers.every((id) => {
-        const entry = dataManager.layers.get(id),
-          module = entry?.module;
-        if (!entry) return false;
-        if (cold && module.sessionState?.includes('enabled'))
-          return !entry.enabled;
-        if (
-          !entry.enabled ||
-          !entry.initialized ||
-          entry.sceneDetached ||
-          entry.refreshing
-        )
-          return false;
-        const stats = module.getStats?.() ?? {};
-        if (stats.loading || stats.refreshing) return false;
-        // These layers can be enabled with no search, route or selected subject.
-        if (
-          [
-            'directions',
-            'military-awareness',
-            'osm-places',
-            'sea-marks',
-            'ski-pistes',
-          ].includes(id)
-        )
-          return true;
-        return stats.count > 0;
-      });
-    },
+    `(() => {
+      if (!(${coldStartReady})(${JSON.stringify(layers)}, ${cold})) {
+        window.__coldStartStable = null;
+        return false;
+      }
+      const { engine } = window.__godsEyeView;
+      const key = JSON.stringify(['movers', 'lines', 'ground', 'imagery', 'meshes']
+        .flatMap((family) => engine[family].list().map(({ id, kind, count, shown }) =>
+          [family, id, kind, count, shown])).sort());
+      const now = performance.now();
+      const last = window.__coldStartStable;
+      if (!last || last.key !== key) window.__coldStartStable = { key, at: now };
+      // Cover the 450 ms infrastructure walk and deferred feed/geometry publication.
+      return last?.key === key && now - last.at >= 2000;
+    })()`,
     { timeout: 30000, polling: 100 },
-    layers,
-    cold,
   );
   await whenSettled(page, { frames: 5, timeoutMs: 30000 });
 }
@@ -328,6 +313,26 @@ await strict.run({}, async (browser) => {
       sample.failureSnapshot = await probeSnapshot(page, layers).catch(
         () => null,
       );
+      sample.readiness = await page
+        ?.evaluate(
+          (layers) =>
+            Object.fromEntries(
+              layers.map((id) => {
+                const module =
+                  window.__godsEyeView.dataManager.layers.get(id)?.module;
+                return [
+                  id,
+                  {
+                    stats: module?.getStats?.(),
+                    loading: module?.getLoadingDiagnostics?.(),
+                    lod: module?.getLodDiagnostics?.(),
+                  },
+                ];
+              }),
+            ),
+          layers,
+        )
+        .catch(() => null);
       evidence.differences.push({
         layer: layers.join(', '),
         direction,

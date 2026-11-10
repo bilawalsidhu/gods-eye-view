@@ -8,6 +8,55 @@ import {
   selectEntityContext,
 } from '../../data/contextStore.js';
 import { layerFeedState } from '../../data/feedState.js';
+import { createLayerSceneContext } from '../../data/layerSceneBinding.js';
+
+test('reattached infrastructure first computes LOD at the restored camera', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    text: async () =>
+      JSON.stringify({
+        type: 'Feature',
+        id: 'dam',
+        properties: {},
+        geometry: { type: 'Point', coordinates: [10, 20] },
+      }),
+  }));
+  const draws = [];
+  const layer = createInfrastructureSessionLayer(
+    { id: 'local-dams', url: '/dams' },
+    {},
+    (engine) => ({
+      show: () => draws.push(engine.camera.height()),
+      hide() {},
+      destroy() {},
+    }),
+  );
+  const engine = createFakeEngine();
+  t.after(() => {
+    layer.destroy();
+    engine.destroy();
+  });
+  layer.init(null, { engine });
+  await layer.enable();
+  layer.detachRenderer();
+  draws.length = 0;
+  let restore;
+  const context = createLayerSceneContext({
+    engine,
+    viewRestored: new Promise((resolve) => {
+      restore = resolve;
+    }),
+  });
+  await layer.attachRenderer(context);
+  engine.fake.frame();
+  assert.deepEqual(draws, [], 'the incoming default view never seeds LOD');
+  engine.fake.setPose({ height: 20000 });
+  restore();
+  await context.viewRestored;
+  await layer.resumeViewport();
+  assert.equal(draws.length, 1);
+  assert.ok(Math.abs(draws[0] - 20000) < 1e-6);
+});
 
 test('a bundled file delivered between planets keeps multipart IDs and is read only once', async (t) => {
   let deliver,

@@ -1,12 +1,25 @@
 /** The five public drawing registries, with no SDK objects or volatile fields. */
 export function drawLedger(page) {
   return page.evaluate(() => {
-    const { engine } = window.__godsEyeView;
+    const { engine, dataManager } = window.__godsEyeView;
+    const owners = [...(dataManager?.layers.keys() ?? [])].sort(
+      (a, b) => b.length - a.length,
+    );
+    const ownerOf = (id) =>
+      owners.find((owner) => id === owner || id.startsWith(owner + '-')) ??
+      (id.startsWith('wind-field-') ? 'wind' : undefined) ??
+      (id.startsWith('bhote-koshi-imagery-') ||
+      id.startsWith('bhote-koshi-flood-')
+        ? 'bhote-koshi-2026'
+        : undefined);
     return ['movers', 'lines', 'ground', 'imagery', 'meshes']
       .flatMap((family) =>
         engine[family].list().map((row) => ({
           id: String(row.id),
           family,
+          ...(ownerOf(String(row.id))
+            ? { layer: ownerOf(String(row.id)) }
+            : {}),
           ...(row.kind === undefined ? {} : { kind: row.kind }),
           ...(row.count === undefined ? {} : { count: row.count }),
           shown: row.shown ?? true,
