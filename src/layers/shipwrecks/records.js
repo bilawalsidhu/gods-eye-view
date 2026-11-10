@@ -16,16 +16,16 @@ export const SHIPWRECK_SOURCES = Object.freeze(['emodnet', 'wikidata']);
  * Wikidata (CC0): shipwreck items that have at least one Wikipedia article,
  * so the worldwide set stays to notable wrecks and skips bulk register
  * imports, plus sinking events ("sinking of the RMS Titanic"), which are where
- * Wikidata keeps the death toll. Dates come with their precision so a
- * month-precise date is not shown as the 1st. Only ship and event facts are
- * read: no items about people.
+ * Wikidata keeps the death toll. Dates, the end of service (P576) included,
+ * come with their precision so a month-precise date is not shown as the 1st.
+ * Only ship and event facts are read: no items about people.
  */
-export const WIKIDATA_QUERY = `SELECT ?item ?itemLabel ?itemDescription ?coord ?sunk ?sunkPrecision ?end ?deaths ?survivors ?typeLabel ?enwiki ?ptwiki ?event WHERE {
+export const WIKIDATA_QUERY = `SELECT ?item ?itemLabel ?itemDescription ?coord ?sunk ?sunkPrecision ?end ?endPrecision ?deaths ?survivors ?typeLabel ?enwiki ?ptwiki ?event WHERE {
   {
     ?item wdt:P31/wdt:P279* wd:Q852190 ; wdt:P625 ?coord ; wikibase:sitelinks ?links .
     FILTER(?links > 0)
     OPTIONAL { ?item p:P793 ?wreck . ?wreck ps:P793 wd:Q906512 ; pqv:P585 [ wikibase:timeValue ?sunk ; wikibase:timePrecision ?sunkPrecision ] }
-    OPTIONAL { ?item wdt:P576 ?end }
+    OPTIONAL { ?item p:P576 [ a wikibase:BestRank ; psv:P576 [ wikibase:timeValue ?end ; wikibase:timePrecision ?endPrecision ] ] }
     OPTIONAL { ?item wdt:P31 ?type . FILTER(?type != wd:Q852190) }
   } UNION {
     ?item wdt:P31/wdt:P279* wd:Q906512 ; wdt:P625 ?coord .
@@ -203,8 +203,8 @@ function wikidataTime(value, precision) {
   const none = { date: null, year: null, dating: null };
   const match = /^([+-]?)(\d{4,})-(\d{2})-(\d{2})T/.exec(value || '');
   if (!match) return none;
-  // A missing precision (P576 is read without one) counts as a day.
-  const p = precision == null ? 11 : Number(precision);
+  // A value without a precision is only trusted to the year.
+  const p = precision == null ? 9 : Number(precision);
   // 11 = day; 10 = month; 9 = year; below 9 is a decade or coarser.
   if (!Number.isFinite(p) || p < 9) return none;
   const signed = Number(`${match[1] === '-' ? '-' : ''}${match[2]}`);
@@ -253,7 +253,7 @@ export function normalizeWikidataResults(payload) {
     const qid = /\/entity\/(Q\d{1,12})$/.exec(value('item') || '')?.[1];
     if (!qid) continue;
     const sunk = wikidataTime(value('sunk'), value('sunkPrecision'));
-    const ended = wikidataTime(value('end'), null);
+    const ended = wikidataTime(value('end'), value('endPrecision'));
     const known = byItem.get(qid);
     if (known) {
       // Extra rows only add what the first one lacked.

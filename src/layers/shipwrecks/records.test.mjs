@@ -6,6 +6,7 @@ import {
   normalizeShipwreckSnapshot,
   normalizeWikidataResults,
   parseYear,
+  WIKIDATA_QUERY,
 } from './records.js';
 
 function feature(id, properties, coordinates = [-4.35, 54.13]) {
@@ -86,6 +87,7 @@ test('Wikidata rows fold into one record per item', () => {
           itemDescription: { value: '1939 G and H-class destroyer' },
           coord: { value: 'Point(2.26 51.13)' },
           sunk: { value: '1940-06-01T00:00:00Z' },
+          sunkPrecision: { value: '11' },
           enwiki: { value: 'https://en.wikipedia.org/wiki/HMS_Havant_(H32)' },
         },
         {
@@ -261,4 +263,47 @@ test('a date before AD 100 is kept as ancient text, never read as an AD year', (
   assert.equal(earlyAd.ancient, true);
   assert.equal(roman.year, 300);
   assert.equal(roman.dating, null);
+});
+
+test('an end-of-service date keeps its precision: a year-only one is no day', () => {
+  const entity = (q) => ({ value: `http://www.wikidata.org/entity/${q}` });
+  const [yearOnly, dayPrecise, unknown] = normalizeWikidataResults({
+    results: {
+      bindings: [
+        {
+          item: entity('Q11'),
+          itemLabel: { value: 'Year only' },
+          coord: { value: 'Point(1 50)' },
+          end: { value: '1917-01-01T00:00:00Z' },
+          endPrecision: { value: '9' },
+        },
+        {
+          item: entity('Q12'),
+          itemLabel: { value: 'Day precise' },
+          coord: { value: 'Point(2 50)' },
+          end: { value: '1917-03-04T00:00:00Z' },
+          endPrecision: { value: '11' },
+        },
+        {
+          item: entity('Q13'),
+          itemLabel: { value: 'No precision' },
+          coord: { value: 'Point(3 50)' },
+          end: { value: '1917-01-01T00:00:00Z' },
+        },
+      ],
+    },
+  });
+  assert.equal(yearOnly.date, null, 'not shown as 1 Jan 1917');
+  assert.equal(yearOnly.year, 1917);
+  assert.equal(dayPrecise.date, '1917-03-04');
+  assert.equal(unknown.date, null, 'an unknown precision is a year only');
+  assert.equal(unknown.year, 1917);
+});
+
+test('the query reads the end of service with its precision', () => {
+  assert.match(
+    WIKIDATA_QUERY,
+    /psv:P576 \[ wikibase:timeValue \?end ; wikibase:timePrecision \?endPrecision \]/,
+  );
+  assert.doesNotMatch(WIKIDATA_QUERY, /wdt:P576/);
 });
