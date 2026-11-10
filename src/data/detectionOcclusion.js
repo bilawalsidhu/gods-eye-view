@@ -27,22 +27,43 @@
 
 /** Never less than this: covers a dot drawn a little above or into its road. */
 export const SURFACE_OCCLUSION_MIN_MARGIN_M = 3;
-/** Grows with range so depth-buffer precision never reads as an occluder. */
+/** The most the margin grows with range: 2% of it. */
 export const SURFACE_OCCLUSION_MARGIN_FRACTION = 0.02;
+/**
+ * How far above a contact a drawn surface on its line of sight must stand to
+ * count as in front of it, when the camera looks down on the contact.
+ */
+export const SURFACE_OCCLUSION_RISE_M = 2;
 
 /**
  * How much nearer than the contact the drawn surface must be before it counts
  * as standing in front of it.
+ *
+ * The margin absorbs a contact placed a little above or below the drawn
+ * ground: a vehicle's position and the scene's road surface are not the same
+ * height to the metre. Looking down at the contact, a point on its line of
+ * sight `s` metres in front of it stands `s * sinElevation` metres above it,
+ * so a surface there only hides the contact once `s` passes
+ * `SURFACE_OCCLUSION_RISE_M / sinElevation`. That keeps the margin to a few
+ * metres from above, where a fixed share of the range would let a wall,
+ * awning or tree 10 to 20 m in front of a street at 1 km pass as "the road".
+ * At grazing angles, or looking up, the margin is 2% of the range at most
+ * (never under 3 m); depth precision is far finer than that at every range
+ * the overlay labels.
+ *
  * @param {number} contactDistance Camera-to-contact distance in metres.
+ * @param {number} [sinElevation] Sine of the camera's elevation seen from the
+ *   contact (1 straight overhead, 0 level, negative below); unknown when
+ *   omitted.
  * @returns {number} Margin in metres.
  */
-export function surfaceOcclusionMargin(contactDistance) {
+export function surfaceOcclusionMargin(contactDistance, sinElevation = 0) {
   const distance = Number(contactDistance);
   if (!(distance > 0)) return SURFACE_OCCLUSION_MIN_MARGIN_M;
-  return Math.max(
-    SURFACE_OCCLUSION_MIN_MARGIN_M,
-    distance * SURFACE_OCCLUSION_MARGIN_FRACTION,
-  );
+  let margin = distance * SURFACE_OCCLUSION_MARGIN_FRACTION;
+  const rise = Number(sinElevation);
+  if (rise > 0) margin = Math.min(margin, SURFACE_OCCLUSION_RISE_M / rise);
+  return Math.max(SURFACE_OCCLUSION_MIN_MARGIN_M, margin);
 }
 
 /**
@@ -50,13 +71,19 @@ export function surfaceOcclusionMargin(contactDistance) {
  * @param {number} contactDistance Camera-to-contact distance in metres.
  * @param {number|undefined} surfaceDistance Camera-to-drawn-surface distance
  *   along the contact's ray; undefined or non-finite when nothing was drawn.
+ * @param {number} [sinElevation] See `surfaceOcclusionMargin`.
  * @returns {boolean}
  */
-export function surfaceHidesContact(contactDistance, surfaceDistance) {
+export function surfaceHidesContact(
+  contactDistance,
+  surfaceDistance,
+  sinElevation = 0,
+) {
   if (!Number.isFinite(contactDistance) || !Number.isFinite(surfaceDistance))
     return false;
   return (
-    surfaceDistance < contactDistance - surfaceOcclusionMargin(contactDistance)
+    surfaceDistance <
+    contactDistance - surfaceOcclusionMargin(contactDistance, sinElevation)
   );
 }
 
@@ -109,6 +136,12 @@ export function depthToViewDistance(depth, near, far, logDepth) {
  * `viewDistance * (1 - margin / contactDistance)`. That number is `threshold`,
  * and comparing a decoded depth with it is all the GPU has to do.
  *
+ * The margin depends on how steeply the camera looks down on the contact
+ * (see `surfaceOcclusionMargin`). "Up" at the contact is taken as the
+ * direction from the world origin to it, which is the Earth's centre in the
+ * Earth-fixed frame the scene is drawn in; it differs from the true vertical
+ * by a fraction of a degree at most.
+ *
  * @param {ArrayLike<number>} view World-to-camera matrix, column-major, the
  *   camera looking down its own -Z axis.
  * @param {number} tanHalfFovX
@@ -131,11 +164,22 @@ export function projectContact(view, tanHalfFovX, tanHalfFovY, position, out) {
   const contactDistance = Math.sqrt(
     ex * ex + ey * ey + viewDistance * viewDistance,
   );
+  // Up at the contact, turned into camera axes, against the direction from
+  // the contact to the camera (-ex, -ey, viewDistance in camera axes).
+  const radius = Math.sqrt(x * x + y * y + z * z);
+  let sinElevation = 0;
+  if (radius > 0) {
+    const ux = (view[0] * x + view[4] * y + view[8] * z) / radius;
+    const uy = (view[1] * x + view[5] * y + view[9] * z) / radius;
+    const uz = (view[2] * x + view[6] * y + view[10] * z) / radius;
+    sinElevation = (-ux * ex - uy * ey + uz * viewDistance) / contactDistance;
+  }
   out.u = u;
   out.v = v;
   out.threshold =
     viewDistance *
-    (1 - surfaceOcclusionMargin(contactDistance) / contactDistance);
+    (1 -
+      surfaceOcclusionMargin(contactDistance, sinElevation) / contactDistance);
   return true;
 }
 
@@ -303,6 +347,7 @@ export class SurfaceOcclusion {
     this.hiddenCount = 0;
     this.retestMs = SURFACE_RETEST_MS;
     this.reappearMs = SURFACE_REAPPEAR_MS;
+    this.firstAnswerMs = SURFACE_FIRST_ANSWER_MS;
     this._phase = 0;
   }
 
@@ -326,6 +371,9 @@ export class SurfaceOcclusion {
       (this.testedCount / budget) * frameMs * 2,
     );
     this.reappearMs = Math.max(SURFACE_REAPPEAR_MS, this.retestMs * 3);
+    // At a stretched pace a crowd of new contacts takes longer to get its
+    // first answers; the hold-back stretches with it.
+    this.firstAnswerMs = Math.max(SURFACE_FIRST_ANSWER_MS, this.retestMs * 2);
     this.now += frameMs;
     this.testedCount = 0;
     this.hiddenCount = 0;
@@ -347,11 +395,19 @@ export class SurfaceOcclusion {
       this.contacts.set(layerId, layer);
     }
     let contact = layer.get(sourceId);
-    if (!contact) {
+    if (!contact || now - contact.seenAt > this.retestMs) {
+      // New, or back in view after longer than a retest interval. A returning
+      // contact's last answer is older than any contact that stayed in view
+      // runs on, and the view has probably turned since: it is held back
+      // like a new one until a fresh answer comes, or orbiting flashes it
+      // behind the building it went behind while out of view. It gets a new
+      // record, so a test still in flight from before answers the old one
+      // and cannot end the hold-back with what the previous view showed. A
+      // "hidden" it already had keeps running.
       contact = {
-        lastHiddenAt: Number.NEGATIVE_INFINITY,
-        hiddenUntil: Number.NEGATIVE_INFINITY,
-        appliedHiddenAt: Number.NEGATIVE_INFINITY,
+        lastHiddenAt: contact?.lastHiddenAt ?? Number.NEGATIVE_INFINITY,
+        hiddenUntil: contact?.hiddenUntil ?? Number.NEGATIVE_INFINITY,
+        appliedHiddenAt: contact?.appliedHiddenAt ?? Number.NEGATIVE_INFINITY,
         queuedAt: Number.NEGATIVE_INFINITY,
         pending: false,
         answered: false,
@@ -385,7 +441,7 @@ export class SurfaceOcclusion {
       // Not yet answered: held back while a working probe finds out.
       (!contact.answered &&
         this.probe.mode === 'async' &&
-        now - contact.firstSeenAt < SURFACE_FIRST_ANSWER_MS);
+        now - contact.firstSeenAt < this.firstAnswerMs);
     if (hidden) this.hiddenCount++;
     return hidden;
   }

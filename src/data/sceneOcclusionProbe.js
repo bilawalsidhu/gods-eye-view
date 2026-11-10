@@ -79,7 +79,7 @@ export const SYNC_READ_INTERVAL_MS = 125;
  *   plane pulled in by `scene.opaqueFrustumNearOffset` (public), exactly as
  *   `scene.pickPosition` assumes when it decodes the same textures.
  * - `scene.frameState.useLogDepth`: whether depth is logarithmic (see
- *   `depthToViewDistance`).
+ *   `depthToViewDistance`). Anything but a boolean there is "no depth".
  *
  * Any of these missing or shaped differently returns null, which callers treat
  * as "no depth".
@@ -145,6 +145,10 @@ export function readSceneDepthSource(scene, viewScratch) {
       frustums.push({ near, far });
     }
     if (!(width > 0) || !(height > 0)) return null;
+    // Read as standard depth, logarithmic depth puts every surface a few
+    // metres from the camera and would hide every contact: unknown is "no".
+    const logDepth = scene.frameState?.useLogDepth;
+    if (typeof logDepth !== 'boolean') return null;
 
     const tanHalfFovY = Math.tan(fovy / 2);
     return {
@@ -155,7 +159,7 @@ export function readSceneDepthSource(scene, viewScratch) {
       framebuffers,
       textures,
       frustums,
-      logDepth: scene.frameState?.useLogDepth === true,
+      logDepth,
       view: Cesium.Matrix4.toArray(
         camera.viewMatrix,
         viewScratch || new Float64Array(16),
@@ -262,6 +266,8 @@ export class SceneOcclusionProbe {
     this._now = 0;
     this._source = undefined;
     this._gl = null;
+    /** A context the probe's shader failed to build on; never retried. */
+    this._unsupportedGl = null;
     this._resources = null;
     this._queryPool = [];
     this._batches = [];
@@ -409,6 +415,7 @@ export class SceneOcclusionProbe {
     this._queryPool.length = 0;
     this._resources = null;
     this._gl = null;
+    this._unsupportedGl = null;
   }
 
   /** Tests that will never be answered stop counting as in flight. */
@@ -448,6 +455,11 @@ export class SceneOcclusionProbe {
         this._resources = null;
         return;
       }
+      if (source.gl === this._unsupportedGl) {
+        // The shader did not build on this context: nothing is tested here.
+        this.mode = 'off';
+        return;
+      }
       if (source.webgl2 && canQuery(source.gl)) {
         if (!this._resources && !this._createResources(source.gl)) {
           this._fail();
@@ -476,7 +488,13 @@ export class SceneOcclusionProbe {
   _createResources(gl) {
     const vertex = compile(gl, gl.VERTEX_SHADER, PROBE_VERTEX_SHADER);
     const fragment = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
-    if (!vertex || !fragment) return false;
+    if (!vertex || !fragment) {
+      if (vertex) gl.deleteShader(vertex);
+      if (fragment) gl.deleteShader(fragment);
+      // The same source will not compile on this context next time either.
+      this._unsupportedGl = gl;
+      return false;
+    }
     const program = gl.createProgram();
     gl.attachShader(program, vertex);
     gl.attachShader(program, fragment);
@@ -485,6 +503,7 @@ export class SceneOcclusionProbe {
     gl.deleteShader(fragment);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       gl.deleteProgram(program);
+      this._unsupportedGl = gl;
       return false;
     }
     const uniform = (name) => gl.getUniformLocation(program, name);
@@ -691,10 +710,14 @@ export class SceneOcclusionProbe {
           } else {
             const contact = contacts[batch.cursor - 1];
             contact.pending = false;
-            contact.answered = true;
-            // Without the control point's yes, a no means nothing.
-            if (!drew && batch.control && batch.at > contact.lastHiddenAt)
-              contact.lastHiddenAt = batch.at;
+            // Without the control point's yes the batch means nothing: not a
+            // "hidden", and not a first answer that ends a new contact's
+            // hold-back either.
+            if (batch.control) {
+              contact.answered = true;
+              if (!drew && batch.at > contact.lastHiddenAt)
+                contact.lastHiddenAt = batch.at;
+            }
           }
           this._queryPool.push(query);
           batch.cursor++;

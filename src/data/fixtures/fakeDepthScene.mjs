@@ -101,6 +101,7 @@ export function createFakeGl({ webgl2 = true } = {}) {
     lost: false,
     /** Whether a point that should draw does (false: a broken draw path). */
     drawsLand: true,
+    /** Whether shaders compile: a boolean, or a function of the shader type. */
     compiles: true,
   };
   const counts = {
@@ -111,12 +112,14 @@ export function createFakeGl({ webgl2 = true } = {}) {
     deleted: 0,
   };
   const liveQueries = new Set();
+  const liveShaders = new Set();
   let activeQuery = null;
   const gl = {
     ...GL,
     state,
     counts,
     liveQueries,
+    liveShaders,
     isContextLost: () => state.lost,
     getParameter(name) {
       if (name === GL.READ_FRAMEBUFFER_BINDING) return state.read;
@@ -186,11 +189,20 @@ export function createFakeGl({ webgl2 = true } = {}) {
         state.draw.image = texture.image;
       },
       checkFramebufferStatus: () => GL.FRAMEBUFFER_COMPLETE,
-      createShader: () => ({}),
+      createShader(type) {
+        const shader = { type };
+        liveShaders.add(shader);
+        return shader;
+      },
       shaderSource() {},
       compileShader() {},
-      getShaderParameter: () => state.compiles,
-      deleteShader() {},
+      getShaderParameter: (shader) =>
+        typeof state.compiles === 'function'
+          ? state.compiles(shader.type)
+          : state.compiles,
+      deleteShader(shader) {
+        liveShaders.delete(shader);
+      },
       createProgram: () => ({ uniforms: {} }),
       attachShader() {},
       linkProgram() {},

@@ -266,6 +266,11 @@ test('no depth source: nothing is tested and nothing is in flight', () => {
       scene.view.pickDepths[0].framebuffer = undefined; // not drawn yet
       return scene;
     })(),
+    // Whether depth is logarithmic, unknown: decoding it the wrong way would
+    // put every surface in front of every contact.
+    { ...wallScene(), frameState: {} },
+    { ...wallScene(), frameState: { useLogDepth: 1 } },
+    { ...wallScene(), frameState: undefined },
     (() => {
       const scene = wallScene();
       Object.defineProperty(scene, 'view', {
@@ -329,6 +334,7 @@ test('a control point that does not draw voids its batch; a run of them stands t
     frame(probe, scene, now);
     assert.equal(entry.pending, false);
     assert.equal(entry.lastHiddenAt, Number.NEGATIVE_INFINITY, 'not believed');
+    assert.notEqual(entry.answered, true, 'and not a first answer either');
     now += 16;
   }
   assert.equal(probe.mode, 'off');
@@ -351,6 +357,7 @@ test('a control point that does not draw voids its batch; a run of them stands t
   gl.finishGpu();
   frame(probe, scene, retryAt + 16);
   assert.equal(entry.lastHiddenAt, retryAt);
+  assert.equal(entry.answered, true);
 
   // One good batch in between resets the count.
   const healthy = new SceneOcclusionProbe();
@@ -366,16 +373,33 @@ test('a control point that does not draw voids its batch; a run of them stands t
 
 test('a shader that does not compile, or a WebGL call that throws, stands the probe down cleanly', () => {
   let scene = wallScene();
-  scene.context._gl.state.compiles = false;
+  // Only the fragment shader fails: the vertex shader that did compile must
+  // not be left behind.
+  scene.context._gl.state.compiles = (type) =>
+    type !== scene.context._gl.FRAGMENT_SHADER;
   let probe = new SceneOcclusionProbe();
   let entry = contact();
   assert.deepEqual(frame(probe, scene, 0, [[entry, behindWall]]), [false]);
   assert.equal(probe.mode, 'off');
   assert.equal(entry.pending, false);
+  // Nothing half-made is kept, and the same context is never asked again:
+  // compiling is a wait on the GPU process and would fail the same way.
+  let gl = scene.context._gl;
+  assert.equal(gl.liveShaders.size, 0, 'no shader left behind');
+  let shaderCalls = 0;
+  const createShader = gl.createShader;
+  gl.createShader = (...args) => {
+    shaderCalls++;
+    return createShader(...args);
+  };
+  for (const now of [PROBE_RETRY_AFTER_MS + 16, 5 * PROBE_RETRY_AFTER_MS])
+    assert.deepEqual(frame(probe, scene, now, [[entry, behindWall]]), [false]);
+  assert.equal(shaderCalls, 0);
+  assert.equal(probe.mode, 'off');
 
   // A draw that throws part-way: bindings restored, no query left behind.
   scene = wallScene();
-  let gl = scene.context._gl;
+  gl = scene.context._gl;
   const found = {
     draw: { image: null },
     program: { uniforms: {} },

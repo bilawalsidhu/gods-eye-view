@@ -30,6 +30,25 @@ test('the margin is 3 m near the camera and 2% of the range beyond 150 m', () =>
   assert.equal(surfaceOcclusionMargin(Number.NaN), 3);
 });
 
+test('looking down on a contact, the margin is what a 2 m rise on its line of sight takes', () => {
+  // 1 km away, seen from 30 degrees up: 2 m of rise is 4 m along the ray.
+  assert.ok(Math.abs(surfaceOcclusionMargin(1000, 0.5) - 4) < 1e-9);
+  // Straight down: the 3 m floor.
+  assert.equal(surfaceOcclusionMargin(1000, 1), SURFACE_OCCLUSION_MIN_MARGIN_M);
+  // Grazing, level or from below: never more than 2% of the range.
+  assert.equal(surfaceOcclusionMargin(1000, 0.01), 20);
+  assert.equal(surfaceOcclusionMargin(1000, 0), 20);
+  assert.equal(surfaceOcclusionMargin(1000, -0.3), 20);
+  assert.equal(surfaceOcclusionMargin(1000, Number.NaN), 20);
+  assert.equal(surfaceOcclusionMargin(100, 0.05), 3);
+  // A low wall 15 m in front of a street 1 km off, seen from 25 degrees up,
+  // stands about 6 m above the vehicle's line of sight: it hides it.
+  const sin25 = Math.sin((25 * Math.PI) / 180);
+  assert.equal(surfaceHidesContact(1000, 985, sin25), true);
+  assert.equal(surfaceHidesContact(1000, 985), false, 'unknown angle: 2%');
+  assert.equal(surfaceHidesContact(1000, 996, sin25), false, 'its own road');
+});
+
 test('a surface hides a contact only when nearer by more than the margin', () => {
   // 500 m away: margin 10 m.
   assert.equal(surfaceHidesContact(500, 489), true, 'a facade 11 m in front');
@@ -140,6 +159,134 @@ test('the threshold is the margin rule restated as a view distance', () => {
     );
   }
   assert.ok(Math.abs(out.threshold - 400 * 0.98) < 1e-9);
+});
+
+test('the threshold uses how steeply the camera looks down on the contact', () => {
+  // A street on a sphere the size of the Earth, under a camera 1 km up and
+  // 1 km back along the surface, looking straight at it: 45 degrees down.
+  const R = 6_371_000;
+  const street = { x: 0, y: 0, z: R };
+  const camera = { x: 0, y: -1000, z: R + 1000 };
+  // Camera axes: x along world x, looking along (0, 1, -1) / sqrt 2.
+  const s = Math.SQRT1_2;
+  const forward = [0, s, -s];
+  const up = [0, s, s];
+  const right = [1, 0, 0];
+  const t = (axis) =>
+    -(axis[0] * camera.x + axis[1] * camera.y + axis[2] * camera.z);
+  // Rows: right, up, -forward (the camera looks down its -Z).
+  const back = forward.map((c) => -c);
+  const view = [
+    right[0],
+    up[0],
+    back[0],
+    0,
+    right[1],
+    up[1],
+    back[1],
+    0,
+    right[2],
+    up[2],
+    back[2],
+    0,
+    t(right),
+    t(up),
+    t(back),
+    1,
+  ];
+  const out = { u: 0, v: 0, threshold: 0 };
+  assert.equal(projectContact(view, 1, 1, street, out), true);
+  assert.ok(Math.abs(out.u - 0.5) < 1e-9 && Math.abs(out.v - 0.5) < 1e-9);
+  const range = Math.SQRT2 * 1000;
+  // 2 m of rise at 45 degrees is 2.83 m along the ray: the 3 m floor, not
+  // 2% of 1414 m (28 m).
+  assert.ok(Math.abs(out.threshold - (range - 3)) < 1e-6, `${out.threshold}`);
+});
+
+test('off the middle of the frame, with the camera turned, the threshold matches the world-space rule', () => {
+  // Rotations about the three axes, then a camera placed and turned freely;
+  // the threshold must equal the margin rule worked out in world space.
+  const rot = (ax, ay, az) => {
+    const [cx, sx, cy, sy, cz, sz] = [
+      Math.cos(ax),
+      Math.sin(ax),
+      Math.cos(ay),
+      Math.sin(ay),
+      Math.cos(az),
+      Math.sin(az),
+    ];
+    // Rows of Rz * Ry * Rx.
+    return [
+      [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
+      [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
+      [-sy, cy * sx, cy * cx],
+    ];
+  };
+  const R = 6_371_000;
+  let checked = 0;
+  for (let k = 0; k < 200; k++) {
+    // A deterministic spread of poses.
+    const a = (n) => Math.sin(k * 12.9898 + n * 78.233) * 3;
+    const m = rot(a(1), a(2), a(3)); // world-to-camera rotation
+    const lat = a(4) / 3;
+    const lon = a(5);
+    const contact = {
+      x: R * Math.cos(lat) * Math.cos(lon),
+      y: R * Math.cos(lat) * Math.sin(lon),
+      z: R * Math.sin(lat),
+    };
+    // Camera 300 to 2300 m from the contact, in a direction above or below it.
+    const d = [a(6), a(7), a(8)];
+    const dl = Math.hypot(...d) || 1;
+    const dist = 1300 + 1000 * Math.sin(k);
+    const cam = {
+      x: contact.x + (d[0] / dl) * dist,
+      y: contact.y + (d[1] / dl) * dist,
+      z: contact.z + (d[2] / dl) * dist,
+    };
+    const t = m.map(
+      (row) => -(row[0] * cam.x + row[1] * cam.y + row[2] * cam.z),
+    );
+    const view = [
+      m[0][0],
+      m[1][0],
+      m[2][0],
+      0,
+      m[0][1],
+      m[1][1],
+      m[2][1],
+      0,
+      m[0][2],
+      m[1][2],
+      m[2][2],
+      0,
+      t[0],
+      t[1],
+      t[2],
+      1,
+    ];
+    const out = { u: 0, v: 0, threshold: 0 };
+    if (!projectContact(view, 2, 2, contact, out)) continue;
+    checked++;
+    const toCam = [cam.x - contact.x, cam.y - contact.y, cam.z - contact.z];
+    const range = Math.hypot(...toCam);
+    const sinElevation =
+      (toCam[0] * contact.x + toCam[1] * contact.y + toCam[2] * contact.z) /
+      (range * R);
+    const viewDistance = -(
+      m[2][0] * contact.x +
+      m[2][1] * contact.y +
+      m[2][2] * contact.z +
+      t[2]
+    );
+    const expected =
+      viewDistance * (1 - surfaceOcclusionMargin(range, sinElevation) / range);
+    assert.ok(
+      Math.abs(out.threshold - expected) < 1e-6,
+      `pose ${k}: ${out.threshold} vs ${expected}`,
+    );
+  }
+  assert.ok(checked > 20, `${checked} poses in frame`);
 });
 
 test('behind the camera or outside the frame there is nothing to test', () => {
@@ -615,4 +762,90 @@ test('prune forgets contacts that are no longer drawn; clear forgets everything'
   occlusion.clear();
   assert.equal(occlusion.contacts.size, 0);
   assert.equal(occlusion.testedCount, 0);
+});
+
+test('a contact back in view after a while waits for a fresh answer, like a new one', () => {
+  const probe = manualProbe();
+  probe.mode = 'async';
+  const occlusion = new SurfaceOcclusion(probe);
+  let wall = 0;
+  const step = () => occlusion.beginFrame((wall += 16));
+  step();
+  occlusion.isHidden('traffic', 'a', anywhere);
+  probe.answer(false, occlusion.now);
+  step();
+  assert.equal(occlusion.isHidden('traffic', 'a', anywhere), false);
+  // Out of view for a moment shorter than a retest: drawn straight away.
+  for (let i = 0; i < 5; i++) step();
+  assert.equal(occlusion.isHidden('traffic', 'a', anywhere), false);
+  // Out of view for longer (the camera swung away and back): the old
+  // "visible" may now be behind a building. Held back, and tested at once.
+  const started = probe.started;
+  for (let i = 0; i < 30; i++) step();
+  assert.equal(occlusion.isHidden('traffic', 'a', anywhere), true);
+  assert.equal(probe.started, started + 1);
+  probe.answer(true, occlusion.now);
+  step();
+  assert.equal(occlusion.isHidden('traffic', 'a', anywhere), true);
+
+  // It leaves with a test in flight, and comes back. That test's answer was
+  // about the previous view: when it lands, it must not end the hold-back.
+  const other = new SurfaceOcclusion(probe);
+  probe.answer(false, 0);
+  other.beginFrame((wall += 16));
+  other.isHidden('traffic', 'b', anywhere);
+  assert.equal(probe.inFlight.length, 1, 'tested, unanswered');
+  for (let i = 0; i < 30; i++) other.beginFrame((wall += 16));
+  const before = probe.started;
+  assert.equal(other.isHidden('traffic', 'b', anywhere), true);
+  assert.equal(probe.started, before + 1, 'tested afresh at once');
+  const [stale] = probe.inFlight.splice(0, 1);
+  stale.pending = false;
+  stale.answered = true;
+  other.beginFrame((wall += 16));
+  assert.equal(
+    other.isHidden('traffic', 'b', anywhere),
+    true,
+    'the old answer did not end the hold-back',
+  );
+  probe.answer(false, other.now);
+  other.beginFrame((wall += 16));
+  assert.equal(other.isHidden('traffic', 'b', anywhere), false);
+});
+
+test('at a stretched retest pace, new contacts are held back longer for their first answer', () => {
+  const probe = manualProbe();
+  probe.mode = 'async';
+  probe.maxPerFrame = 100;
+  const occlusion = new SurfaceOcclusion(probe);
+  occlusion.beginFrame(0);
+  for (let id = 0; id < 2000; id++) occlusion.isHidden('traffic', id, anywhere);
+  occlusion.beginFrame(33);
+  // 2000 contacts at 100 a frame and 33 ms frames: a retest every 1.3 s.
+  assert.ok(occlusion.retestMs > 1000, `${occlusion.retestMs}`);
+  assert.equal(occlusion.firstAnswerMs, occlusion.retestMs * 2);
+  assert.ok(occlusion.firstAnswerMs > SURFACE_FIRST_ANSWER_MS);
+  // A contact the probe has not reached yet is still held back past the
+  // usual limit, and drawn once the stretched one has run out.
+  probe.accepting = false;
+  let wall = 33;
+  const ages = [];
+  const firstSeen = occlusion.now;
+  occlusion.isHidden('traffic', 'late', anywhere);
+  while (occlusion.now - firstSeen < occlusion.firstAnswerMs + 100) {
+    occlusion.beginFrame((wall += 33));
+    for (let id = 0; id < 2000; id++)
+      occlusion.isHidden('traffic', id, anywhere);
+    ages.push([
+      occlusion.now - firstSeen,
+      occlusion.isHidden('traffic', 'late', anywhere),
+    ]);
+  }
+  const limit = occlusion.firstAnswerMs;
+  assert.ok(
+    ages.some(([age, hidden]) => age > SURFACE_FIRST_ANSWER_MS + 50 && hidden),
+    'held past 400 ms',
+  );
+  for (const [age, hidden] of ages)
+    if (age >= limit) assert.equal(hidden, false, `at ${age} ms`);
 });

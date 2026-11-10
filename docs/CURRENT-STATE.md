@@ -3609,8 +3609,13 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   (2026-11-09):** a contact a layer marks `depthTested: true` (only Street
 >   Traffic does) is tested against the depth the scene drew, and is left out
 >   of the overlay while a building, 3D tile, terrain or any other drawn
->   surface stands in front of it by more than max(3 m, 2% of its range). That
->   includes vehicles the road data routes through tunnels. Every other layer
+>   surface stands in front of it by more than a margin: 3 m, or what a 2 m
+>   rise above the vehicle on its line of sight takes when the camera looks
+>   down on it, and above 3 m never more than 2% of its range (2% applies
+>   outright at grazing angles or when the camera looks up). A flat
+>   2% let walls, awnings and trees 10 to 20 m in front of a street 1 km away
+>   pass as the road. That includes vehicles the road data routes through
+>   tunnels. Every other layer
 >   is untouched: aircraft, vessels and satellites draw their markers over the
 >   scene on purpose and keep their labels over it. The test runs on the GPU
 >   (`src/data/sceneOcclusionProbe.js`): one occlusion query per contact,
@@ -3619,9 +3624,13 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   "hidden" answer arrives and returns 600 ms after its last one, which keeps
 >   a contact on a silhouette edge from blinking; a callout whose contact goes
 >   behind something is dropped at once rather than faded out on the facade.
->   A contact new to the view is held back until its first answer (at most
->   400 ms), so orbiting a city does not flash a bracket for each vehicle that
->   swings into frame behind a building. These times run on painted frames,
+>   A contact new to the view, or back in it after longer than a retest
+>   interval, is held back until its first answer (at most 400 ms, longer
+>   when a crowded view stretches the retest pace), so orbiting a city does
+>   not flash a bracket for each vehicle that swings into frame behind a
+>   building. A callout placed beside a visible vehicle can still overlap a
+>   facade; that is where the callout was placed, not the vehicle being
+>   behind it. These times run on painted frames,
 >   so a hidden tab or an idle scene does not expire them.
 >   Do not swap this for `scene.pickPosition` per contact or for a depth
 >   read-back: both wait on the GPU process (measured 0.2 to 1.4 ms per pick,
