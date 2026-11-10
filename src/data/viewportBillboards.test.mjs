@@ -154,6 +154,9 @@ function harness() {
           rows.splice(i, 1);
           return true;
         },
+        removeAll() {
+          rows.length = 0;
+        },
         update() {},
         isDestroyed() {
           return this.destroyed;
@@ -280,3 +283,96 @@ test('scratch positions are cloned and hidden/destroyed layers release real rend
   assert.equal(h.group.isDestroyed(), true);
   assert.equal(h.collections[1].destroyed, true);
 });
+
+for (const removal of ['viewport exit', 'explicit removal']) {
+  test(`${removal} flushes the final native resident's pending updates without losing other contacts`, () => {
+    const h = harness();
+    const native = new Cesium.BillboardCollection();
+    // Exercise Cesium's real add/remove/update queue without requiring WebGL.
+    native.update = () => {};
+    const nativeLength = Object.getOwnPropertyDescriptor(
+      Cesium.BillboardCollection.prototype,
+      'length',
+    ).get;
+    let compactions = 0;
+    Object.defineProperty(native, 'length', {
+      get() {
+        compactions++;
+        return nativeLength.call(this);
+      },
+    });
+    h.group._createCollection = () => native;
+    const first = h.group.add({
+      id: 'first',
+      position: new Cesium.Cartesian3(),
+    });
+    const last = h.group.add({ id: 'last', position: new Cesium.Cartesian3() });
+    h.group.update({});
+    first.position = new Cesium.Cartesian3(0.1, 0, 0);
+    last.position = new Cesium.Cartesian3(0.2, 0, 0);
+    assert.equal(
+      native._billboardsToUpdate.length,
+      2,
+      'fixture queued both native updates',
+    );
+    if (removal === 'viewport exit') {
+      first.position = new Cesium.Cartesian3(5, 0, 0);
+      h.group.update({});
+    } else h.group.remove(first);
+    assert.equal(h.group.renderedCount, 1);
+    assert.equal(
+      last.position.x,
+      0.2,
+      'partial removal preserves the remaining resident',
+    );
+    assert.equal(
+      native._billboardsToUpdate.length,
+      2,
+      'a nonempty collection keeps its live update queue',
+    );
+    if (removal === 'viewport exit') {
+      last.position = new Cesium.Cartesian3(5, 0, 0);
+      h.group.update({});
+    } else h.group.remove(last);
+    assert.equal(h.group.renderedCount, 0);
+    assert.equal(
+      native._billboardsToUpdate.length,
+      0,
+      'the final removal releases Cesium pending references',
+    );
+    assert.equal(native._billboardsToUpdateIndex, 0);
+    // Only the two explicit renderedCount reads above need Cesium's compaction.
+    assert.equal(
+      compactions,
+      2,
+      'removal does not rescan the native collection',
+    );
+    if (removal === 'viewport exit') {
+      assert.equal(
+        h.group.length,
+        2,
+        'logical contacts remain available outside the viewport',
+      );
+      assert.equal(h.group.contains(last), true);
+      assert.equal(last.id, 'last');
+      assert.equal(last.position.x, 5);
+      h.viewer.camera.viewMatrix[12] = -5;
+      h.group.update({});
+      assert.equal(
+        h.group.renderedCount,
+        2,
+        'returning to the view readmits existing contacts',
+      );
+    } else {
+      assert.equal(h.group.length, 0);
+      const replacement = h.group.add({
+        id: 'replacement',
+        position: new Cesium.Cartesian3(),
+      });
+      h.group.update({});
+      assert.equal(h.group.renderedCount, 1);
+      assert.equal(replacement.id, 'replacement');
+    }
+    h.group.destroy();
+  });
+}

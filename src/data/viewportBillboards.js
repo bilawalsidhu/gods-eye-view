@@ -161,6 +161,7 @@ export class ViewportBillboardCollection {
     this._enterPadding = enterPaddingPx;
     this._keepPadding = keepPaddingPx;
     this._items = [];
+    this._residentCount = 0;
     this._collection = null;
     this._show = true;
     this._dirty = true;
@@ -232,6 +233,9 @@ export class ViewportBillboardCollection {
     if (contact._resident) {
       contact._snapshot();
       this._collection.remove(contact._resident);
+      // Cesium retains pending-update references after remove(). Its length
+      // getter compacts the collection, so count residents without rescanning.
+      if (--this._residentCount === 0) this._collection.removeAll();
     }
     const last = this._items.pop();
     if (last !== contact) {
@@ -261,6 +265,7 @@ export class ViewportBillboardCollection {
     if (this._collection && !this._collection.isDestroyed())
       this._collection.destroy();
     this._collection = null;
+    this._residentCount = 0;
   }
 
   update(frameState) {
@@ -315,6 +320,7 @@ export class ViewportBillboardCollection {
         const keep = pinned || (inViewport && contact.show !== false);
         if (keep && !contact._resident) {
           contact._resident = this._collection.add(contact._values);
+          this._residentCount++;
           this._pickWarm = true;
           this._surfaceRevision++;
           // The resident billboard is the authoritative property store while
@@ -323,6 +329,7 @@ export class ViewportBillboardCollection {
         } else if (!keep && contact._resident) {
           contact._snapshot();
           this._collection.remove(contact._resident);
+          if (--this._residentCount === 0) this._collection.removeAll();
           contact._resident = null;
           this._surfaceRevision++;
         }

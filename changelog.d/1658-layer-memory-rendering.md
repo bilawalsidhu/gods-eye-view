@@ -3,4 +3,7 @@
   Keep normal-mode aircraft crisp on a shared full-resolution surface, and add
   Show, Dim and Hide for grounded aircraft with tracked contacts kept visible.
   Preserve search and tracking, document workload-specific measurements, and
-  offer an optional low-resource mode (Pierson Marks, @piersonmarks, #1658).
+  offer an optional low-resource mode. Flush Cesium's pending billboard references
+  when the final aircraft resident leaves or is removed, keeping offscreen
+  contacts available for search and re-admission (Pierson Marks, @piersonmarks;
+  cleanup review: @kvnloo, #1658).
