@@ -185,6 +185,10 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
   };
 }
 
+// Live, or left in error: stopping either returns the session to idle.
+export const isStoppable = (session) =>
+  session.isActive() || session.state === 'error';
+
 function abortError() {
   return new DOMException('Voice action cancelled', 'AbortError');
 }

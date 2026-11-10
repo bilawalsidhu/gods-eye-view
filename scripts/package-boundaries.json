@@ -88,6 +88,9 @@
       "src/ui/views/panels/CockpitBriefing.vue",
       "src/ui/views/panels/CockpitContext.vue",
       "src/ui/views/panels/CockpitRoute.vue",
+      "src/ui/cockpitPresentation.js",
+      "src/data/headingDegrees.js",
+      "src/data/distanceFormat.js",
       "src/ui/views/panels/CockpitRollingValue.vue",
       "src/ui/views/panels/CockpitSignalList.vue",
       "src/ui/views/panels/CockpitUtilityControls.vue",
@@ -736,6 +739,8 @@
       "src/ui/rail/classToggle.js",
       "src/ui/rail/focusSafeChildren.js",
       "src/ui/layerPanel/RowText.vue",
+      "src/ui/layerPanel/RowSwitch.vue",
+      "src/ui/layerPanel/RowSlider.vue",
       "src/ui/railTimeline.js",
       "src/ui/clearLayersControl.js",
       "src/loadingFeedback.js",
@@ -773,7 +778,8 @@
       "src/ui/kit/UiButton.vue",
       "src/ui/kit/UiBadge.vue",
       "src/ui/rail/fieldValue.js",
-      "src/ui/kit/UiSlider.js"
+      "src/ui/kit/UiSlider.js",
+      "src/ui/kit/UiSegmented.vue"
     ],
     "external": ["vue"]
   },
@@ -986,7 +992,8 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/ui/layerNames.js"
     ],
     "external": ["cesium"]
   },
@@ -1305,7 +1312,11 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/sky/icrf.js"
+      "src/sky/icrf.js",
+      "src/data/firmsIntensity.js",
+      "src/ui/layerPanel/RowSwitch.vue",
+      "src/ui/layerPanel/RowSlider.vue",
+      "src/ui/kit/UiSegmented.vue"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1614,7 +1625,8 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/render/cesium/internals.js"
+      "src/render/cesium/internals.js",
+      "src/data/firmsIntensity.js"
     ],
     "external": ["cesium"]
   },
@@ -1725,7 +1737,8 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/data/firmsIntensity.js"
     ],
     "external": ["cesium"]
   },
@@ -1763,7 +1776,8 @@
       "src/data/trackingClickGesture.js",
       "src/layers/aircraft/classification.js",
       "src/layers/aircraft/index.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/data/firmsIntensity.js"
     ],
     "external": ["cesium"]
   },
@@ -2052,7 +2066,11 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/data/firmsIntensity.js",
+      "src/data/firmsHeatRaster.js",
+      "src/layers/firms/heatImagery.js",
+      "src/render/color.js"
     ],
     "external": ["cesium"]
   },
@@ -2403,7 +2421,11 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/data/entityRecords.js",
-      "src/layers/awareness/rangeRingCesium.js"
+      "src/layers/awareness/rangeRingCesium.js",
+      "src/data/feedState.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js",
+      "src/ui/layerNames.js"
     ],
     "external": ["cesium"]
   },
@@ -2971,7 +2993,8 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/render/cesium/internals.js"
+      "src/render/cesium/internals.js",
+      "src/data/firmsIntensity.js"
     ],
     "external": ["cesium"]
   },
@@ -4355,7 +4378,13 @@
       "src/app/layers/osmPlaces.js",
       "src/voice/areaActions.js",
       "src/render/cesium/zoomOutGuard.js",
-      "src/layers/awareness/rangeRingCesium.js"
+      "src/layers/awareness/rangeRingCesium.js",
+      "src/data/firmsIntensity.js",
+      "src/data/firmsHeatRaster.js",
+      "src/layers/firms/heatImagery.js",
+      "src/ui/layerPanel/RowSwitch.vue",
+      "src/ui/layerPanel/RowSlider.vue",
+      "src/data/rioRouteNames.js"
     ],
     "external": [
       "hls.js",
@@ -5052,7 +5081,13 @@
       "src/layers/osmPlaces/model.js",
       "src/layers/osmPlaces/index.js",
       "src/app/layers/osmPlaces.js",
-      "src/layers/awareness/rangeRingCesium.js"
+      "src/layers/awareness/rangeRingCesium.js",
+      "src/data/feedState.js",
+      "src/loadingFeedback.js",
+      "src/data/firmsIntensity.js",
+      "src/data/firmsHeatRaster.js",
+      "src/layers/firms/heatImagery.js",
+      "src/data/rioRouteNames.js"
     ],
     "external": [
       "hls.js",
@@ -5314,7 +5349,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/data/entityRecords.js",
-      "src/render/rendererOf.js"
+      "src/render/rendererOf.js",
+      "src/data/firmsIntensity.js"
     ],
     "external": []
   },
@@ -5771,6 +5807,7 @@
       "server/providers/transitHistory.js",
       "src/data/gtfsRealtime.js",
       "src/data/transitFeeds.js",
+      "src/data/rioRouteNames.js",
       "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/sources/httpBody.js",
@@ -5787,6 +5824,7 @@
     "modules": [
       "src/data/gtfsRealtime.js",
       "src/data/transitFeeds.js",
+      "src/data/rioRouteNames.js",
       "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/sources/transitHistory.js"
@@ -5918,7 +5956,8 @@
       "src/queries/heights.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/pickMemo.js",
-      "src/render/cesium/nativeClick.js"
+      "src/render/cesium/nativeClick.js",
+      "src/data/rioRouteNames.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -6023,7 +6062,8 @@
       "src/queries/heights.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/pickMemo.js",
-      "src/render/cesium/nativeClick.js"
+      "src/render/cesium/nativeClick.js",
+      "src/data/rioRouteNames.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -6039,6 +6079,7 @@
     "exports": ["./sources/transit-service"],
     "modules": [
       "src/data/transitFeeds.js",
+      "src/data/rioRouteNames.js",
       "src/geoDistance.js",
       "src/data/transitProxy.js",
       "src/data/gtfsRealtime.js",
@@ -6162,6 +6203,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/view/index.js",
+      "src/data/firmsIntensity.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/idSwitches.js",
@@ -6382,7 +6424,10 @@
       "src/tools/queries/panelRequest.js",
       "src/geoDistance.js",
       "src/visualStylePolicy.js",
-      "src/geo/vector.js"
+      "src/geo/vector.js",
+      "src/data/firmsIntensity.js",
+      "src/data/firmsAdapt.js",
+      "src/data/rioRouteNames.js"
     ],
     "external": ["satellite.js"]
   },
@@ -6483,6 +6528,7 @@
     "modules": [
       "src/view/index.js",
       "src/data/idSwitches.js",
+      "src/data/firmsIntensity.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json",
       "src/visualStylePolicy.js"

@@ -144,3 +144,21 @@ export function formatCockpitWindDirection(value) {
   const degrees = roundHeadingDegrees(value);
   return `${compassPointLabel(labels[Math.round(normalized / 45) % labels.length])} · ${degrees}°`;
 }
+
+/**
+ * The Cockpit entry for each subject it can ride: an aircraft's cockpit.
+ * Both entry buttons (Contacts and the Intel HUD readout) show it.
+ */
+const COCKPIT_ENTRY_FACES = Object.freeze({
+  aircraft: Object.freeze({ icon: 'flight', label: msg('COCKPIT') }),
+});
+
+/**
+ * The entry's glyph and localized label for the subject it would ride.
+ * @param {'aircraft'|null|undefined} kind
+ * @returns {{icon: string, label: string}}
+ */
+export function cockpitEntryFace(kind) {
+  const face = COCKPIT_ENTRY_FACES[kind] ?? COCKPIT_ENTRY_FACES.aircraft;
+  return { icon: face.icon, label: t(face.label) };
+}

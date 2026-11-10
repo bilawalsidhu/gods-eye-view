@@ -158,9 +158,12 @@ export function createViewport({
     layerState._preRenderRemover = frame.on('preRender', () => {
       // NOTE: `_loading`/empty-data are deliberately NOT part of this guard.
       // A refresh has no timeout, and sprites from the previous payload stay
-      // on screen throughout it — so the horizon pass below must keep running
+      // on screen throughout it — so the hand-off fade below must keep running
       // while a fetch is in flight. Only the rebuild is gated on fresh data.
       if (!layerState._enabled) return;
+      // Every frame, ahead of the throttle: a fast zoom crosses the whole
+      // hand-off between two band checks.
+      components.rendering.applyHandoffFade();
       const now = performance.now();
       if (now - layerState._lastLodCheck < LOD_CHECK_MS) return;
       layerState._lastLodCheck = now;

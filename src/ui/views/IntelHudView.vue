@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useHudStore } from '../stores/hud.js';
+import { useCockpitStore } from '../stores/cockpit.js';
+import { cockpitEntryFace } from '../cockpitPresentation.js';
 
 // The readouts, visibility, layout variant and colors IntelHUD publishes.
 const { hud } = storeToRefs(useHudStore());
@@ -10,6 +12,12 @@ const { hud } = storeToRefs(useHudStore());
 // right after IntelHUD is built.
 const EMPTY = Object.freeze({ vessel: {}, sensor: [], recShown: null });
 const view = computed(() => hud.value ?? EMPTY);
+// The selected vehicle's readout offers the same entry as the Contacts
+// button, so first person needs no Contacts panel. The Cockpit controller
+// answers its clicks.
+const { presence: cockpit } = storeToRefs(useCockpitStore());
+// The entry rides the tracked aircraft (cockpitEntryFace).
+const entry = computed(() => cockpitEntryFace('aircraft'));
 </script>
 
 <template>
@@ -46,6 +54,10 @@ const view = computed(() => hud.value ?? EMPTY);
         <div class="hud-readout"><div id="hud-gsd">{{ view.gsd }}</div></div>
         <div class="hud-readout"><div id="hud-alt">{{ view.alt }}</div></div>
         <div class="hud-readout"><div id="hud-ais-vessel" :class="['hud-ais-vessel', { active: view.vessel.active }]">{{ view.vessel.text }}</div></div>
+        <button id="cockpit-entry-readout" type="button" :hidden="!cockpit?.entryAvailable">
+          <span class="material-symbols-outlined" aria-hidden="true">{{ entry.icon }}</span>
+          <span>{{ entry.label }}</span>
+        </button>
       </div>
       <div class="hud-bracket">┘</div>
     </div>

@@ -411,6 +411,30 @@ test('a hold a down subscriber takes keeps its press from selecting', () => {
   assert.equal(s.selected.length, 0);
 });
 
+test('a hold a down subscriber takes keeps the double-click its press ends in from following', () => {
+  const s = setup();
+  let release = null;
+  // Held from the second press of a double-click, as a tool that takes the
+  // double-click for itself holds it.
+  s.port.on('down', () => {
+    release?.();
+    release = s.port.behaviours.dblclickFollow.suppress();
+  });
+  const doubled = [];
+  s.port.on('dblclick', (ev) => doubled.push(ev.position));
+  s.press(5, 6);
+  s.handler.fire(T.LEFT_DOWN, { position: s.at(5, 6) });
+  s.handler.fire(T.LEFT_UP, { position: s.at(5, 6) });
+  s.handler.fire(T.LEFT_CLICK, { position: s.at(5, 6) });
+  s.handler.fire(T.LEFT_DOUBLE_CLICK, { position: s.at(5, 6) });
+  assert.equal(doubled.length, 1, 'the subscriber still hears it');
+  assert.equal(s.followed.length, 0, 'the stock follow does not run');
+  // Let go, a double-click follows again.
+  release();
+  s.handler.fire(T.LEFT_DOUBLE_CLICK, { position: s.at(5, 6) });
+  assert.equal(s.followed.length, 1);
+});
+
 test('not taking the stock, they stay on the viewer’s handler but while held', () => {
   const s = setup({ takeStock: false });
   const original = s.stockHandler.getInputAction(T.LEFT_CLICK);

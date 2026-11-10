@@ -1,4 +1,5 @@
 import { greatCircleKm } from '../geoDistance.js';
+import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 
 /**
  * @module transitFeeds
@@ -377,6 +378,18 @@ function burlingtonRouteLabel(routeId) {
 }
 
 /**
+ * Rio route key to the line a rider would say. One SMTR `routes.txt` covers
+ * both feeds (see rioRouteNames.js).
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function rioRouteLabel(routeId) {
+  return Object.hasOwn(RIO_ROUTE_NAMES, routeId)
+    ? RIO_ROUTE_NAMES[routeId]
+    : routeId;
+}
+
+/**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
  * @type {ReadonlyArray<Readonly<{
@@ -728,6 +741,52 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     }),
     defaultMode: 'bus',
     routeLabel: burlingtonRouteLabel,
+  }),
+  Object.freeze({
+    id: 'smtr-rio-onibus',
+    name: 'Rio buses (SPPO)',
+    operator: 'Secretaria Municipal de Transportes (SMTR), Rio de Janeiro',
+    region: 'Rio de Janeiro, RJ',
+    // Every vehicle in a 2026-10-29 snapshot, from Santa Cruz in the west to
+    // the Zona Sul, sat within 31 km of this point.
+    center: Object.freeze({ lat: -22.92, lon: -43.42 }),
+    loadRadiusKm: 45,
+    url: 'https://dados.mobilidade.rio/gtfs/realtime/onibus/vehicle-positions',
+    license: 'CC BY 4.0',
+    licenseUrl:
+      'https://www.data.rio/documents/997bc16cc4344a5cb0e48ab06cbdfd1f',
+    attribution: 'SMTR / Prefeitura da Cidade do Rio de Janeiro — buses (SPPO)',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'This work is licensed under a Creative Commons Attribution 4.0 International License',
+      note: 'The data.rio catalog page labels the feed [beta] and states a gateway limit of 5 requests a second and 60 a minute behind a 10-second cache, which the 15-second proxy TTL stays inside. SMTR relays the concessionaires’ ITS data and repairs trips with its own matching; the page places accuracy with the suppliers. Speeds are m/s, as the spec requires: checked against vehicle movement on 2026-11-05, though a 2026-10-29 snapshot read as km/h. Line names come from SMTR’s GTFS `routes.txt`, under the same CC BY 4.0 terms.',
+    }),
+    defaultMode: 'bus',
+    routeLabel: rioRouteLabel,
+  }),
+  Object.freeze({
+    id: 'smtr-rio-brt',
+    name: 'Mobi-Rio BRT',
+    operator:
+      'Secretaria Municipal de Transportes (SMTR), Rio de Janeiro, for the Mobi-Rio BRT fleet',
+    region: 'Rio de Janeiro, RJ',
+    center: Object.freeze({ lat: -22.92, lon: -43.42 }),
+    loadRadiusKm: 45,
+    url: 'https://dados.mobilidade.rio/gtfs/realtime/brt/vehicle-positions',
+    license: 'CC BY 4.0',
+    licenseUrl:
+      'https://www.data.rio/documents/8bb196cc02174d25b77437bb2f6443d4',
+    attribution:
+      'SMTR / Prefeitura da Cidade do Rio de Janeiro — BRT (Mobi-Rio)',
+    defaultEnabled: true,
+    terms: Object.freeze({
+      quote:
+        'This work is licensed under a Creative Commons Attribution 4.0 International License',
+      note: 'Same catalog terms, [beta] label and gateway limits as the bus feed. The fleet is operated by Mobi-Rio and tracked by SONDA, whose data SMTR relays. Speeds are m/s too. Line names come from the same `routes.txt`.',
+    }),
+    defaultMode: 'bus',
+    routeLabel: rioRouteLabel,
   }),
 ]);
 

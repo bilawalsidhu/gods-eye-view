@@ -147,6 +147,40 @@ const snapshot = (distanceM = 2000) => ({
   ],
 });
 
+test('a feed-off row leads the rebuilt rows and the list stays five long', async (t) => {
+  const f = fixture(t);
+  const crowded = {
+    ...snapshot(),
+    cohorts: [
+      {
+        id: 'flights',
+        count: 6,
+        nearest: [1, 2, 3, 4, 5, 6].map((n) => ({
+          id: `n${n}`,
+          label: `N${n}`,
+          distanceM: n * 1000,
+        })),
+      },
+    ],
+  };
+  updateCockpitSignals.call(f.owner, crowded, 0, {
+    title: 'MILITARY FEED OFF · PARTIAL PICTURE',
+    detail: 'NEARBY AIRCRAFT INCOMPLETE · NOT AN ALL-CLEAR',
+  });
+  await nextTick();
+  assert.equal(f.owner.signalItems.length, 5);
+  assert.equal(f.owner.signalItems[0].key, 'feed-status');
+  assert.equal(f.owner.signalItems[0].tone, 'warning');
+  assert.equal(f.owner.signalItems[0].target, null);
+  assert.match(f.list.textContent, /MILITARY FEED OFF · PARTIAL PICTURE/);
+  updateCockpitSignals.call(f.owner, crowded, 0);
+  assert.equal(
+    f.owner.signalItems.some((item) => item.key === 'feed-status'),
+    false,
+    'with the feed back, the row goes',
+  );
+});
+
 test('rows render the signals the controller presents', async (t) => {
   const f = fixture(t);
   await render(f, [

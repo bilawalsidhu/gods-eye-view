@@ -348,6 +348,7 @@ export function createLifecycle({
       layerState.clearListener = null;
       layerState.subjectClearListener = null;
       layerState.viewer = null;
+      parts.dependencies.watchAdoptions(null);
       layerState.dataManager = null;
     },
   };

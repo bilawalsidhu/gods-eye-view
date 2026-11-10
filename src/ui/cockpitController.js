@@ -3,6 +3,8 @@ import { onFollowChanged } from '../data/followed.js';
 import { frameOf } from '../render/rendererOf.js';
 import {
   readAircraftInfo,
+  readSubjectLayerId,
+  resolveEntryKind,
   dispatchCockpitModeChanged,
   toggleTrackedTr3b,
   syncTr3bToggle,
@@ -50,6 +52,8 @@ import {
   relocalizeBrief,
 } from './cockpitBriefing.js';
 import {
+  dropCockpitSignal,
+  dropContextSnapshotSignals,
   handleSignalClick,
   publishCockpitSignals,
   pushCockpitSignal,
@@ -62,7 +66,11 @@ import {
   syncContextLayout,
   syncSignalLayout,
 } from './cockpitLayout.js';
-import { onKeyDown } from './cockpitInput.js';
+import {
+  onKeyDown,
+  onSceneDoubleClick,
+  routeSceneDoubleClick,
+} from './cockpitInput.js';
 
 export class CockpitViewController {
   constructor(
@@ -76,6 +84,7 @@ export class CockpitViewController {
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
+      onRide = null,
       restoreTrackingFrame = null,
       publish = {},
     } = {},
@@ -121,6 +130,7 @@ export class CockpitViewController {
     this.onCameraTakeover = onCameraTakeover;
     this.onEntered = onEntered;
     this.onExited = onExited;
+    this.onRide = onRide;
     this.restoreTrackingFrame =
       typeof restoreTrackingFrame === 'function'
         ? restoreTrackingFrame
@@ -201,6 +211,13 @@ export class CockpitViewController {
       }),
     );
     this._listen(this.entry, 'click', () => this.enter());
+    // Double-clicking the followed track is a third way in.
+    this._listenerRemovers.push(routeSceneDoubleClick.call(this));
+    // The readout's entry renders inside the Intel HUD, which may mount after
+    // this controller, so its clicks are delegated.
+    this._listen(document, 'click', (event) => {
+      if (event.target?.closest?.('#cockpit-entry-readout')) this.enter();
+    });
     this._listen(this.tr3bToggle, 'click', () => this.toggleTrackedTr3b());
     this._listen(this.mapViewButton, 'click', () => this.exit());
     this._listen(this.visionPrevious, 'click', () => this.cycleVisionMode(-1));
@@ -267,6 +284,12 @@ export class CockpitViewController {
 
   readAircraftInfo() {
     return readAircraftInfo.call(this);
+  }
+  readSubjectLayerId() {
+    return readSubjectLayerId.call(this);
+  }
+  resolveEntryKind() {
+    return resolveEntryKind.call(this);
   }
   dispatchCockpitModeChanged(active, info) {
     return dispatchCockpitModeChanged.call(this, active, info);
@@ -367,8 +390,19 @@ export class CockpitViewController {
   pushCockpitSignal(key, tone, title, detail, target) {
     return pushCockpitSignal.call(this, key, tone, title, detail, target);
   }
-  updateCockpitSignals(snapshot, unknownCount) {
-    return updateCockpitSignals.call(this, snapshot, unknownCount);
+  dropCockpitSignal(key) {
+    return dropCockpitSignal.call(this, key);
+  }
+  dropContextSnapshotSignals() {
+    return dropContextSnapshotSignals.call(this);
+  }
+  updateCockpitSignals(snapshot, unknownCount, partialPicture) {
+    return updateCockpitSignals.call(
+      this,
+      snapshot,
+      unknownCount,
+      partialPicture,
+    );
   }
   scheduleContextLayout() {
     return scheduleContextLayout.call(this);
@@ -387,6 +421,9 @@ export class CockpitViewController {
   }
   onKeyDown(event) {
     return onKeyDown.call(this, event);
+  }
+  onSceneDoubleClick(position) {
+    return onSceneDoubleClick.call(this, position);
   }
 
   handleSignalClick(event) {

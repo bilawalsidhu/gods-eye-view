@@ -42,11 +42,19 @@ import {
  * scene time (what the drawn entity's position reads), or, for a target
  * with none, where it is shown.
  */
-function trackedPositionNow(viewer, followed) {
+export function trackedPositionNow(viewer, followed) {
   if (typeof followed?.position === 'function')
     return followed.position(findFrame(viewer)?.time() ?? Date.now());
   return followedPosition(viewer, followed);
 }
+
+/** The aircraft eye: just ahead of and above the reported position. */
+const AIRCRAFT_CAMERA_PROFILE = Object.freeze({
+  forwardM: COCKPIT_FORWARD_OFFSET_M,
+  upM: COCKPIT_UP_OFFSET_M,
+  pitchDeg: COCKPIT_VIEW_PITCH_DEG,
+  minClearanceM: COCKPIT_MIN_GROUND_CLEARANCE_M,
+});
 
 export function update() {
   if (this.destroyed) return false;
@@ -101,7 +109,20 @@ export function update() {
       COCKPIT_HEADING_SLEW_DPS * dtSec,
     );
   }
+  placeCamera.call(this, target, info, nowMs, dtSec, AIRCRAFT_CAMERA_PROFILE);
+}
 
+/**
+ * Place the camera for one update: advance the inertial anchor, clamp it and
+ * the eye against the rendered surface, and look along the slewed heading.
+ * @param {{x: number, y: number, z: number}} target Authoritative subject position.
+ * @param {object} info Subject info.
+ * @param {number} nowMs Frame time.
+ * @param {number} dtSec Seconds since the previous camera update.
+ * @param {{forwardM: number, upM: number, pitchDeg: number,
+ *   minClearanceM: number}} profile Eye offsets for the subject kind.
+ */
+function placeCamera(target, info, nowMs, dtSec, profile) {
   if (!this.cockpitAnchorValid) {
     this.cockpitAnchor = clone(target);
     this.cockpitAnchorValid = true;
@@ -115,7 +136,7 @@ export function update() {
   // 15/30-second interpolation and per-frame cache without exposing its
   // sample-boundary corrections to the camera.
   const headingRad = toRadians(this.heading ?? 0);
-  const pitchRad = toRadians(COCKPIT_VIEW_PITCH_DEG);
+  const pitchRad = toRadians(profile.pitchDeg);
   const speedMps = Number.isFinite(info.velocityMps)
     ? Math.max(0, info.velocityMps)
     : 0;
@@ -240,7 +261,7 @@ export function update() {
     const minimumAnchorHeightM = cockpitGroundSafeHeight(
       anchorCartographic.height,
       cockpitFloorM,
-      COCKPIT_MIN_GROUND_CLEARANCE_M - COCKPIT_UP_OFFSET_M,
+      profile.minClearanceM - profile.upM,
     );
     if (minimumAnchorHeightM !== anchorCartographic.height) {
       this.cockpitAnchor = fromRadians(
@@ -277,8 +298,8 @@ export function update() {
     ),
   );
   let eye = add(
-    add(this.cockpitAnchor, scale(horizontal, COCKPIT_FORWARD_OFFSET_M)),
-    scale(normalize(enu.origin), COCKPIT_UP_OFFSET_M),
+    add(this.cockpitAnchor, scale(horizontal, profile.forwardM)),
+    scale(normalize(enu.origin), profile.upM),
   );
 
   // Recheck at the final forward-offset camera coordinate because a taxiing
@@ -297,7 +318,7 @@ export function update() {
     const safeHeightM = cockpitGroundSafeHeight(
       cameraCartographic.height,
       cockpitFloorM,
-      COCKPIT_MIN_GROUND_CLEARANCE_M,
+      profile.minClearanceM,
     );
     if (safeHeightM !== cameraCartographic.height) {
       eye = fromRadians(

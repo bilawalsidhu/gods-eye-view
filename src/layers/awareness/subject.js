@@ -3,6 +3,7 @@ import {
   AWARENESS_RADIUS_M,
   AWARENESS_RELATIONSHIP,
 } from '../../data/militaryAwarenessEngine.js';
+import { layerFeedState } from '../../data/feedState.js';
 import { t } from '../../i18n/index.js';
 import { clone, distance, fromDegrees } from '../../geo/index.js';
 import {
@@ -55,6 +56,18 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const vesselsState = sourceStates['ais-live-vessels'];
     const installationsState = sourceStates['military-installations'];
     const evaluatedAt = Date.now();
+    // A poll in flight keeps FALLBACK or STALE: the revision key ignores loading.
+    // Before the first answer there is no snapshot, so loading stays.
+    const sourceStatus = (sourceState) => {
+      const feedState = layerFeedState(
+        sourceState.available
+          ? { ...sourceState.stats, loading: false }
+          : sourceState.stats,
+      );
+      return feedState === 'fallback' || feedState === 'stale'
+        ? feedState
+        : null;
+    };
     const retainedProvenance = (id, label, sourceState, fallbackSource) => {
       const retainedSource = sourceState.stats.source || fallbackSource;
       return {
@@ -97,6 +110,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
           id: 'flights',
           label: t('Flights'),
           source: flightsState.stats.source || SOURCE_LABEL.flights,
+          sourceStatus: sourceStatus(flightsState),
           provenance: retainedProvenance(
             'flights',
             'Flights',
@@ -116,6 +130,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
           id: 'military',
           label: t('Military flights'),
           source: militaryState.stats.source || SOURCE_LABEL.military,
+          sourceStatus: sourceStatus(militaryState),
           provenance: retainedProvenance(
             'military',
             'Military flights',
@@ -135,6 +150,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
           id: 'ais-live-vessels',
           label: t('AIS vessels'),
           source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'],
+          sourceStatus: sourceStatus(vesselsState),
           provenance: retainedProvenance(
             'ais-live-vessels',
             'AIS vessels',
@@ -152,6 +168,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
           source:
             installationsState.stats.source ||
             SOURCE_LABEL['military-installations'],
+          sourceStatus: sourceStatus(installationsState),
           provenance: retainedProvenance(
             'military-installations',
             'Mapped installations',

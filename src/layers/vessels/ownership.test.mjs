@@ -451,3 +451,15 @@ test('cards and detection judge the horizon where the icon shader culls the row'
   );
   layer.testing._setVesselStateForTest({ enabled: false });
 });
+
+test('vessel stats name the provider the last snapshot reported', async () => {
+  const { layer } = setup({
+    label: 'Vessels',
+    async getSnapshot() {
+      return snapshot([observation('111')], { source: 'Datalastic' });
+    },
+  });
+  assert.equal(layer.getStats().source, 'Vessels');
+  await layer.update();
+  assert.equal(layer.getStats().source, 'Datalastic');
+});

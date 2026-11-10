@@ -1,10 +1,30 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { drawOf, findFrame, findQuery } from '../../render/rendererOf.js';
+import {
+  drawOf,
+  findFrame,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
-import { LOD_LEVELS, CONTEXT_TOP_N, GLOW_SPRITE_PX } from './policy.js';
+import { buildHeatRaster } from '../../data/firmsHeatRaster.js';
+import {
+  LOD_LEVELS,
+  CONTEXT_TOP_N,
+  GLOW_SPRITE_PX,
+  HANDOFF_FADE,
+  HEAT_RASTER,
+  HEAT_REBUILD_MS,
+} from './policy.js';
+import { createHeatImagery } from './heatImagery.js';
 
 /** Icon sets made so far, by every fire layer: set ids unique to each. */
 let iconSets = 0;
+
+/** The markers drawn under the far bands' heatmap for the hand-off fade. */
+const HANDOFF_MARKER_LOD = LOD_LEVELS.find((lod) => lod.mode === 'detections');
+
+/** Fade steps: a moving camera rewrites marker opacity at most this often. */
+const FADE_STEPS = 32;
 
 export function createRendering({
   layerState,
@@ -28,6 +48,8 @@ export function createRendering({
   function renderCurrentLod(force = false) {
     if (!layerState._cells || !layerState._viewer) return false;
     if (!layerState._fires.length) {
+      // A filter that leaves nothing shown must not leave the old heat behind.
+      layerState._heatImagery?.setShow(false);
       // A refresh that came back empty takes down what the last one drew, so
       // no sprite or card is left on screen (and clickable) for a fire that is
       // gone.
@@ -52,23 +74,68 @@ export function createRendering({
       ? components.model.paddedDegreeBounds(viewRect)
       : null;
 
-    if (lod.mode === 'detections') {
-      renderDetections(lod, bounds);
-    } else {
-      renderCells(aggregateFires(lod, bounds), lod, bounds);
-    }
+    renderBand(lod, bounds);
     return true;
   }
 
-  /** Take every heat cell down (no write when there are none). */
-  function clearCells() {
-    if (layerState._cells?.size()) layerState._cells.clear();
+  /**
+   * Draw one band. Markers and heatmap stay built in every band; the
+   * hand-off only fades between them.
+   * @param {Object} lod - Band descriptor.
+   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   */
+
+  function renderBand(lod, bounds) {
+    prepareHeat(lod.mode === 'heat');
+    if (lod.mode === 'detections') renderDetections(lod, bounds);
+    else renderHeat(lod, bounds);
+    applyHandoffFade(true);
+  }
+
+  /** The opacity the drawn glows were last written with. */
+  let glowAlpha = 1;
+
+  /**
+   * Cross-fade between markers and heatmap by camera height (HANDOFF_FADE),
+   * on every rendered frame, so a fast zoom never outruns the throttled band
+   * check. Cheap when nothing changed: one height read and a compare.
+   * @param {boolean} [force] Reapply, e.g. to freshly added markers.
+   */
+
+  function applyHandoffFade(force = false) {
+    const height = components.viewport.cameraHeight();
+    const t = Math.min(
+      1,
+      Math.max(
+        0,
+        (height - HANDOFF_FADE.from) / (HANDOFF_FADE.to - HANDOFF_FADE.from),
+      ),
+    );
+    const heat = Math.round(t * t * (3 - 2 * t) * FADE_STEPS) / FADE_STEPS;
+    if (!force && heat === layerState._handoffHeat) return;
+    layerState._handoffHeat = heat;
+    layerState._heatImagery?.setOpacity(heat);
+    // Glows written from here on carry the fade (fireGlow); those already
+    // drawn are rewritten only when it changed.
+    const alpha = 1 - heat;
+    const changed = alpha !== glowAlpha;
+    glowAlpha = alpha;
+    const set = layerState._icons;
+    if (!set) return;
+    set.show = layerState._enabled && heat < 1;
+    if (!changed || !drawnGlows.size) return;
+    const faded = [];
+    for (const drawn of drawnGlows.values()) {
+      drawn.glow = { ...drawn.glow, alpha };
+      faded.push(drawn.glow);
+    }
+    set.upsert(faded);
   }
 
   /**
-   * Each drawn glow's detection and anchor, by its item id: what it was last
-   * written with, so a rebuild writes only the glows that changed.
-   * @type {Map<string, {fire: object, position: object}>}
+   * Each drawn glow's detection, anchor and item, by its item id: what it
+   * was last written with, so a rebuild writes only the glows that changed.
+   * @type {Map<string, {fire: object, position: object, glow: object}>}
    */
   const drawnGlows = new Map();
 
@@ -80,7 +147,6 @@ export function createRendering({
   }
 
   function clearRendered() {
-    clearCells();
     clearIcons();
     layerState._pickIndexById.clear();
     layerState._cellCount = 0;
@@ -148,63 +214,100 @@ export function createRendering({
     return clipped;
   }
 
+  /** The heat imagery adapter, created on first use. */
+
+  function heatImagery() {
+    if (!layerState._heatImagery) {
+      layerState._heatImagery = createHeatImagery({
+        // Draped through the renderer's globe port, on the surface the
+        // active map stack draws (the shell's imagery host names it; without
+        // a shell, the globe).
+        getHost: () => ({
+          globe: findGlobe(layerState._viewer),
+          kind: layerState._imageryHost?.()?.kind ?? 'globe',
+        }),
+      });
+    }
+    return layerState._heatImagery;
+  }
+
+  /** Build the heat raster from the shown set and drape it. */
+
+  function rebuildHeatRaster() {
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = null;
+    if (layerState._destroyed) return;
+    layerState._heatRaster = buildHeatRaster(layerState._fires, HEAT_RASTER);
+    heatImagery().setRaster(layerState._heatRaster);
+  }
+
   /**
-   * Render aggregated heat cells (global/regional bands) as ground-clamped
-   * rectangles, one draw set. Cell labels do NOT live on the cells — they go
-   * through the same unclamped, screen-space-decluttered label pipeline as
-   * detections (see {@link rebuildAmbientLabels}).
-   * @param {Array<Object>} cells - Aggregated cells, heat-sorted descending.
+   * Make sure the draped heatmap matches the shown set. The first paint in a
+   * far band is immediate; other builds (filter drags, refreshes, the
+   * preload under the markers) trail by HEAT_REBUILD_MS and keep the
+   * previous heatmap on screen meanwhile.
+   * @param {boolean} now Build at once when nothing is draped yet.
+   */
+
+  function ensureHeatRaster(now) {
+    if (layerState._heatRaster) return;
+    if (now && !heatImagery().hasRaster()) {
+      rebuildHeatRaster();
+      return;
+    }
+    clearTimeout(layerState._heatRebuildTimer);
+    layerState._heatRebuildTimer = setTimeout(
+      rebuildHeatRaster,
+      HEAT_REBUILD_MS,
+    );
+  }
+
+  /**
+   * Keep the heatmap draped on the current map stack and current with the
+   * shown set in every band; the hand-off fade decides how much of it shows.
+   * @param {boolean} now The camera is in a far band.
+   */
+
+  function prepareHeat(now) {
+    const imagery = heatImagery();
+    // The map stack may have changed since the last render.
+    imagery.rehome();
+    ensureHeatRaster(now);
+    imagery.setShow(layerState._enabled);
+  }
+
+  /**
+   * Far bands (global/regional): a Snap Map–style heatmap draped over the
+   * globe, transparent where nothing burns, plus the decluttered "N FIRES"
+   * cards from the coarse aggregation. The nearest band's markers are kept
+   * built underneath for the hand-off fade and hidden once it completes;
+   * cards go through the same screen-space label pipeline as detections
+   * (see {@link rebuildAmbientLabels}).
    * @param {Object} lod - Active LOD descriptor.
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
    */
 
-  function renderCells(cells, lod, bounds) {
-    ensureDetectionCollections();
-    clearIcons();
-    layerState._pickIndexById.clear();
-    layerState._cellCount = cells.length;
-    const maxScore = Math.max(1, ...cells.map(components.model.heatScore));
+  function renderHeat(lod, bounds) {
+    paintMarkers(HANDOFF_MARKER_LOD, bounds);
 
+    const cells = aggregateFires(lod, bounds);
+    layerState._cellCount = cells.length;
     layerState._labelCandidates = [];
     layerState._labelLodDistance = lod.labelDistance;
 
-    const items = [];
+    // Cells arrive heat-sorted, so candidate order doubles as label priority.
     for (const cell of cells) {
-      const score = components.model.heatScore(cell);
-      const normalized = Math.min(1, Math.sqrt(score / maxScore));
-      const alpha = 0.16 + normalized * 0.5;
-      const color = components.model.heatColor(normalized, alpha);
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
-      const position = fromDegrees(centerLon, centerLat, 0);
-
-      items.push({
-        id: `firms-cell:${lod.gridDegrees}:${cell.latCell}:${cell.lonCell}`,
-        geometry: {
-          kind: 'rectangle',
-          rect: {
-            west: cell.lonCell,
-            south: cell.latCell,
-            east: cell.lonCell + lod.gridDegrees,
-            north: cell.latCell + lod.gridDegrees,
-          },
-        },
-        fill: color,
-        height: 'clampGround',
-      });
-
-      // Cells arrive heat-sorted, so candidate order doubles as label priority.
-      // Accent is resolved here because `normalized` only exists in this walk.
       layerState._labelCandidates.push({
-        position,
+        position: fromDegrees(centerLon, centerLat, 0),
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
-        accent: components.model.cellAccent(normalized),
+        accent: components.model.cellCardAccent(cell),
       });
     }
 
-    layerState._cells.set(items);
     components.cards.rebuildAmbientLabels();
     components.selection.refreshContextRegistrations(
       components.selection.topFiresWithinBounds(bounds),
@@ -227,62 +330,14 @@ export function createRendering({
    */
 
   function renderDetections(lod, bounds) {
-    ensureDetectionCollections();
-    clearCells();
-    const set = layerState._icons;
-    if (!set) return;
-    layerState._pickIndexById.clear();
-
-    let candidates;
-    if (bounds) {
-      // Walk the pre-sorted FRP index and early-exit at the cap — the old
-      // collect-then-sort touched and sorted every in-view detection per
-      // rebuild (tens of thousands mid-zoom; field-test round 1 chug).
-      candidates = [];
-      for (const fire of layerState._firesByFrp) {
-        if (!components.model.boundsContainPoint(bounds, fire.lat, fire.lon))
-          continue;
-        candidates.push(fire);
-        if (candidates.length >= lod.maxDetections) break;
-      }
-    } else {
-      // Sky/horizon view: fall back to the globally strongest detections.
-      candidates = layerState._firesByFrp.slice(0, lod.maxDetections);
-    }
+    const markers = paintMarkers(lod, bounds);
+    if (!markers) return;
+    const candidates = markers.map((marker) => marker.fire);
 
     layerState._cellCount = candidates.length;
-    layerState._labelCandidates = [];
+    // FRP-sorted walk: marker order doubles as label priority.
+    layerState._labelCandidates = markers;
     layerState._labelLodDistance = lod.labelDistance;
-
-    // Fires keep their glows across rebuilds: a pan that keeps a fire in
-    // view rewrites nothing for it, and only glows that left the view go.
-    const keep = new Set();
-    const writes = [];
-    for (const fire of candidates) {
-      const position = components.model.firePosition(fire);
-      const pickId = `firms-${fire.index}`;
-      layerState._pickIndexById.set(pickId, fire);
-      keep.add(pickId);
-      const glow = fireGlow(pickId, fire, position);
-      if (glow) writes.push({ glow, fire, position });
-      // FRP-sorted walk: candidate order doubles as label priority.
-      layerState._labelCandidates.push({
-        position,
-        cullPosition: components.model.fireCullPosition(fire),
-        fire,
-        cell: null,
-      });
-    }
-    const gone = [];
-    for (const pickId of drawnGlows.keys())
-      if (!keep.has(pickId)) gone.push(pickId);
-    for (const pickId of gone) drawnGlows.delete(pickId);
-    if (gone.length) set.remove(gone);
-    if (writes.length) {
-      set.upsert(writes.map((write) => write.glow));
-      for (const { glow, fire, position } of writes)
-        drawnGlows.set(glow.id, { fire, position });
-    }
 
     components.cards.rebuildAmbientLabels();
     components.selection.refreshContextRegistrations(
@@ -305,6 +360,72 @@ export function createRendering({
   }
 
   /**
+   * The glow-sprite markers for a detections band: the strongest fires in
+   * view, capped at the band's maxDetections. The set culls the far side of
+   * the globe itself (`horizonCull`).
+   * @param {Object} lod - Detections band descriptor.
+   * @param {?Object} bounds - Padded view bounds in degrees, or null.
+   * @returns {?Array<Object>} Label candidates for the fires drawn,
+   *   strongest first; null before the icon set exists.
+   */
+
+  function paintMarkers(lod, bounds) {
+    ensureDetectionCollections();
+    const set = layerState._icons;
+    if (!set) return null;
+    layerState._pickIndexById.clear();
+
+    let candidates;
+    if (bounds) {
+      // Walk the pre-sorted FRP index and early-exit at the cap — the old
+      // collect-then-sort touched and sorted every in-view detection per
+      // rebuild (tens of thousands mid-zoom; field-test round 1 chug).
+      candidates = [];
+      for (const fire of layerState._firesByFrp) {
+        if (!components.model.boundsContainPoint(bounds, fire.lat, fire.lon))
+          continue;
+        candidates.push(fire);
+        if (candidates.length >= lod.maxDetections) break;
+      }
+    } else {
+      // Sky/horizon view: fall back to the globally strongest detections.
+      candidates = layerState._firesByFrp.slice(0, lod.maxDetections);
+    }
+
+    const markers = [];
+    // Only the close band warms terrain floors (renderDetections).
+    const anchor =
+      lod.id === 'close'
+        ? components.model.firePosition
+        : components.model.fireBuiltPosition;
+    // Fires keep their glows across rebuilds: a pan that keeps a fire in
+    // view rewrites nothing for it, and only glows that left the view go.
+    const keep = new Set();
+    const writes = [];
+    for (const fire of candidates) {
+      const position = anchor(fire);
+      const cullPosition = components.model.fireCullPosition(fire, position);
+      const pickId = `firms-${fire.index}`;
+      layerState._pickIndexById.set(pickId, fire);
+      keep.add(pickId);
+      const glow = fireGlow(pickId, fire, position);
+      if (glow) writes.push({ glow, fire, position });
+      markers.push({ position, cullPosition, fire, cell: null });
+    }
+    const gone = [];
+    for (const pickId of drawnGlows.keys())
+      if (!keep.has(pickId)) gone.push(pickId);
+    for (const pickId of gone) drawnGlows.delete(pickId);
+    if (gone.length) set.remove(gone);
+    if (writes.length) {
+      set.upsert(writes.map((write) => write.glow));
+      for (const { glow, fire, position } of writes)
+        drawnGlows.set(glow.id, { fire, position, glow });
+    }
+    return markers;
+  }
+
+  /**
    * A fire's glow icon, when it is new or changed since it was last drawn
    * (else null): drawn depth-test-free at its anchor (a detection is never
    * swallowed by terrain it sits on), with the far side of the globe culled
@@ -312,7 +433,8 @@ export function createRendering({
    * (Google 3D Tiles render the planet), so nothing writes far-side depth,
    * and the cull is what keeps fires from shining through the planet. The
    * anchor moves once, when its floor warms. A refresh reuses indices, so a
-   * kept id can hold a different detection, restyled then.
+   * kept id can hold a different detection, restyled then. It is written at
+   * the hand-off fade's current opacity (applyHandoffFade).
    *
    * The glow is rasterised once per colour at GLOW_SPRITE_PX and drawn at
    * the fire's own size by its scale. Its hold motion draws it on the
@@ -333,6 +455,7 @@ export function createRendering({
       ),
       size: [GLOW_SPRITE_PX, GLOW_SPRITE_PX],
       scale: (corePx * 2) / GLOW_SPRITE_PX,
+      alpha: glowAlpha,
       disableDepthTest: Infinity,
       motion: { kind: 'hold' },
       meta: { layer: 'firms', id: pickId },
@@ -344,7 +467,7 @@ export function createRendering({
     const set = drawOf(layerState._viewer).icons({
       id: `firms:${++iconSets}:icons`,
       horizonCull: true,
-      show: layerState._enabled,
+      show: layerState._enabled && !(layerState._handoffHeat >= 1),
       drawOrder: spriteDrawOrder?.('firms') ?? 0,
     });
     // Columns of no rows put the set's host in the scene now, rather than
@@ -381,9 +504,11 @@ export function createRendering({
   return {
     scenePorts,
     renderCurrentLod,
+    renderBand,
     aggregateFires,
-    renderCells,
+    renderHeat,
     renderDetections,
+    applyHandoffFade,
     ensureDetectionCollections,
     removeDetectionCollections,
   };

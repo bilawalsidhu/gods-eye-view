@@ -141,3 +141,17 @@ export function sourceLabel(source) {
     ? source.split(' · ').map(translateKnown).join(' · ')
     : translateKnown(source);
 }
+
+/**
+ * A provider name with the feed state it answered in, so a fallback or stale
+ * snapshot does not read as the live primary feed.
+ * @param {string} source English source name.
+ * @param {'fallback'|'stale'|null} status Feed state from `layerFeedState`.
+ * @returns {string}
+ */
+export function sourceStatusLabel(source, status) {
+  const name = sourceLabel(source);
+  if (status === 'fallback') return `${name} · ${t('FALLBACK')}`;
+  if (status === 'stale') return `${name} · ${t('STALE')}`;
+  return name;
+}

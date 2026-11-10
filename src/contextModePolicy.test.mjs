@@ -400,37 +400,32 @@ test('explicit layer intent finishing during restore overrides the stale queued 
   }
 });
 
-test('cockpit entry requires Contacts context with both aircraft feeds enabled', () => {
+test("cockpit entry needs only the tracked aircraft's own layer", () => {
   assert.equal(cockpitEntryAllowed({
-    contextMode: 'flights',
+    subjectLayerId: 'flights',
+    subjectLayerEnabled: true,
     contextModeChanging: false,
-    flightsEnabled: true,
-    militaryEnabled: true,
-  }), true);
+  }), true, 'a civilian needs Live Flights alone: no Contacts, no Military');
   assert.equal(cockpitEntryAllowed({
-    contextMode: 'flights',
+    subjectLayerId: 'military',
+    subjectLayerEnabled: true,
+    contextModeChanging: false,
+  }), true, 'a military aircraft needs Military Flights alone');
+  assert.equal(cockpitEntryAllowed({
+    subjectLayerId: 'flights',
+    subjectLayerEnabled: true,
     contextModeChanging: true,
-    flightsEnabled: true,
-    militaryEnabled: true,
-  }), false, 'Cockpit remains unavailable until Contacts activation settles');
+  }), false, 'Cockpit remains unavailable until a Context mode change settles');
   assert.equal(cockpitEntryAllowed({
-    contextMode: null,
+    subjectLayerId: 'military',
+    subjectLayerEnabled: false,
     contextModeChanging: false,
-    flightsEnabled: true,
-    militaryEnabled: true,
-  }), false, 'ordinary layer selection is not an operational Contacts context');
+  }), false, "the ridden aircraft's own layer is required");
   assert.equal(cockpitEntryAllowed({
-    contextMode: 'flights',
+    subjectLayerId: null,
+    subjectLayerEnabled: false,
     contextModeChanging: false,
-    flightsEnabled: true,
-    militaryEnabled: false,
-  }), false, 'the military contact feed is required');
-  assert.equal(cockpitEntryAllowed({
-    contextMode: 'flights',
-    contextModeChanging: false,
-    flightsEnabled: false,
-    militaryEnabled: true,
-  }), false, 'the civilian contact feed is required');
+  }), false, 'there is no aircraft to ride');
 });
 
 test('context teardown guard restores coordination state after success and failure', async () => {

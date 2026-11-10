@@ -1306,12 +1306,12 @@ test('voice Cockpit entry honours a requested contact layer before it enters', (
     ui.indexOf("if (normalized === 'exit') {"),
   );
   assert.ok(branch, 'cockpit enter branch is missing');
-  const gateIndex = branch.indexOf('isEntryAllowed?.()');
+  const gateIndex = branch.indexOf('this._cockpitEntryRefusal()');
   const retargetIndex = branch.indexOf('_retargetCockpitEntryLayer(');
   const enterIndex = branch.indexOf('enterCockpitWithTracking({');
   assert.ok(
     gateIndex >= 0,
-    'entry consults the same gate the manual chip uses',
+    'entry refuses on the gate it can check before tracking',
   );
   assert.ok(
     retargetIndex > gateIndex,
@@ -1362,9 +1362,21 @@ test('voice Cockpit entry refuses when the entry gate is shut', () => {
     ui.indexOf("if (normalized === 'enter') {"),
     ui.indexOf("if (normalized === 'exit') {"),
   );
-  assert.match(branch, /if \(!this\.cockpitView\.isEntryAllowed\?\.\(\)\) \{/);
-  assert.match(branch, /Contacts must be active to enter Cockpit/);
-  assert.match(branch, /Contacts is still starting up/);
+  // Contacts is not required: only a Context change in flight or no aircraft
+  // layer to ride shuts the gate before tracking, and the entry itself then
+  // applies the manual chip's gate to the aircraft it rides.
+  assert.match(
+    branch,
+    /const refusal = this\._cockpitEntryRefusal\(\);\s*if \(refusal\) \{/,
+  );
+  assert.doesNotMatch(branch, /Contacts must be active/);
+  const refusal = ui.slice(
+    ui.indexOf('  _cockpitEntryRefusal() {'),
+    ui.indexOf('  getCockpitState() {'),
+  );
+  assert.match(refusal, /Context is still changing/);
+  assert.match(refusal, /No aircraft layer is on/);
+  assert.doesNotMatch(refusal, /[Cc]ontacts/);
 });
 
 test('cockpit state cannot report entryAllowed while already active', () => {
@@ -1382,7 +1394,8 @@ test('cockpit state cannot report entryAllowed while already active', () => {
   );
   assert.match(state, /entryBlockedReason:/, 'and a refusal can be explained');
   assert.match(state, /'contacts-starting'/);
-  assert.match(state, /'contacts-inactive'/);
+  assert.match(state, /'subject-layer-off'/);
+  assert.doesNotMatch(state, /'contacts-inactive'/, 'Contacts is not required');
   assert.match(state, /'no-tracked-aircraft'/);
 });
 

@@ -5,6 +5,7 @@ import { createFirmsHeatmapLayer } from '../../data/firmsHeatmap.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
+import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 // Ports built over a viewer of the test's own, with no renderer bound: the
 // adapter's factories load as `./render/cesium/unbound` loads them.
 import '../../render/cesium/unbound.js';
@@ -22,13 +23,15 @@ const raw = (lat, lon, frp) => ({
   satellite: 'N20',
 });
 
-/** Enough canvas for the glow sprites. */
+/** Enough canvas for the glow sprites and the heat raster. */
 const canvasStub = () => ({
   width: 0,
   height: 0,
   getContext: () => ({
     createRadialGradient: () => ({ addColorStop() {} }),
     fillRect() {},
+    createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+    putImageData() {},
   }),
   toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=',
 });
@@ -73,13 +76,20 @@ function harness(fires, heightM, { sceneFromViewer = false } = {}) {
       },
     },
   };
-  const ports = bindFakeCesiumScene(viewer);
+  let ports = bindFakeCesiumScene(viewer);
   const { draw } = ports;
+  // The heatmap drapes through the globe port.
+  const globe = fakeGlobePort();
+  {
+    const { unbind, ...bound } = ports;
+    unbind();
+    ports = { ...bound, unbind: bindRenderer(viewer, { ...bound, globe }) };
+  }
   // A renderer with no query or frame: the Cesium adapter builds them over
   // the viewer's scene, as it does for a viewer with no renderer.
   if (sceneFromViewer) {
     ports.unbind();
-    bindRenderer(viewer, { draw, camera: ports.camera });
+    bindRenderer(viewer, { draw, camera: ports.camera, globe });
     Object.assign(viewer.scene, {
       preUpdate: new Cesium.Event(),
       postRender: new Cesium.Event(),
@@ -103,10 +113,16 @@ function harness(fires, heightM, { sceneFromViewer = false } = {}) {
     [...draw.sets.values()].find(
       (record) => !record.disposed && record.spec.id.endsWith(':cells'),
     );
+  const icons = () =>
+    [...draw.sets.values()].find(
+      (record) => !record.disposed && record.spec.id.endsWith(':icons'),
+    );
   return {
     layer,
     viewer,
     cells,
+    icons,
+    globe,
     cleanup() {
       layer.destroy(viewer);
       input.destroy();
@@ -118,100 +134,88 @@ function harness(fires, heightM, { sceneFromViewer = false } = {}) {
   };
 }
 
-test('far out, the heat cells are clamped rectangles in one draw set, shown with the layer', async () => {
+/** Put the camera at `heightM` and run a frame past the LOD check's throttle. */
+function moveTo(h, heightM) {
+  h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+    -97.7,
+    30.2,
+    heightM,
+  );
+  h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    -97.7,
+    30.2,
+    heightM,
+  );
+  const now = performance.now;
+  performance.now = () => now.call(performance) + 10_000;
+  try {
+    h.viewer.scene.preRender.raiseEvent();
+  } finally {
+    performance.now = now;
+  }
+}
+
+test('far out, one heatmap is draped through the globe port and the markers under it are hidden', async () => {
   const h = harness(
     [raw(30.5, -98.2, 1500), raw(30.6, -98.3, 20), raw(-12.1, 131.4, 5)],
     12_000_000,
   );
   try {
     h.layer.init(h.viewer);
-    assert.equal(h.cells().show, false, 'hidden until enabled');
     await h.layer.enable(h.viewer);
-    const cells = h.cells();
-    assert.equal(cells.show, true);
-    assert.equal(cells.spec.clampTo, 'both');
-    const items = [...cells.items.values()];
-    // Global band: 2° cells; the two Texas fires share one.
-    assert.equal(items.length, 2);
-    const texas = items.find((item) => item.geometry.rect.west === -100);
-    assert.deepEqual(texas.geometry, {
-      kind: 'rectangle',
-      rect: { west: -100, south: 30, east: -98, north: 32 },
+    assert.equal(h.cells().items.size, 0, 'no heat rectangles any more');
+    const [heat] = h.globe.imagery.list();
+    assert.equal(h.globe.imagery.list().length, 1);
+    assert.equal(heat.spec.kind, 'single-image');
+    assert.deepEqual(heat.spec.rectangle, {
+      west: -180,
+      south: -90,
+      east: 180,
+      north: 90,
     });
-    assert.equal(texas.height, 'clampGround');
-    // The hottest cell: red at the top of the alpha ramp.
-    assert.deepEqual(texas.fill, [1, 0, 0, 0.66]);
-    const other = items.find((item) => item !== texas);
-    assert.equal(other.fill.length, 4);
-    assert.ok(other.fill[3] >= 0.16 && other.fill[3] < 0.66);
+    assert.equal(heat.show, true);
+    assert.equal(heat.alpha, 1, 'past the hand-off: all heat');
+    // The nearest band's markers stay built for the hand-off, hidden.
+    assert.equal(h.icons().items.size, 3);
+    assert.equal(h.icons().show, false);
 
     h.layer.disable();
-    assert.equal(h.cells().show, false, 'hidden with the layer');
+    assert.equal(heat.show, false, 'hidden with the layer');
     h.layer.destroy(h.viewer);
-    assert.equal(h.cells(), undefined, 'destroy disposes the set');
+    assert.equal(h.globe.imagery.list().length, 0, 'destroy takes it down');
+    assert.equal(h.icons(), undefined);
   } finally {
     h.cleanup();
   }
 });
 
-test('close in, detections replace the cells', async () => {
-  const h = harness([raw(30.5, -98.2, 1500)], 12_000_000);
-  try {
-    h.layer.init(h.viewer);
-    await h.layer.enable(h.viewer);
-    assert.equal(h.cells().items.size, 1);
-    h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
-      -97.7,
-      30.2,
-      500_000,
-    );
-    h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      -97.7,
-      30.2,
-      500_000,
-    );
-    // A frame past the LOD check's throttle, however fast the start was.
-    const now = performance.now;
-    performance.now = () => now.call(performance) + 10_000;
+for (const sceneFromViewer of [false, true]) {
+  const title = sceneFromViewer
+    ? "with no query or frame port, the layer still follows the camera through ports built over the viewer's scene"
+    : 'zooming in cross-fades the heatmap out and the markers in';
+  test(title, async () => {
+    const h = harness([raw(30.5, -98.2, 1500)], 12_000_000, {
+      sceneFromViewer,
+    });
     try {
-      h.viewer.scene.preRender.raiseEvent();
+      h.layer.init(h.viewer);
+      await h.layer.enable(h.viewer);
+      const [heat] = h.globe.imagery.list();
+      assert.equal(heat.alpha, 1);
+      assert.equal(h.icons().show, false);
+      // Half way through the hand-off (3,600 to 5,400 km): both show.
+      moveTo(h, 4_500_000);
+      assert.equal(heat.alpha, 0.5);
+      assert.equal(h.icons().show, true);
+      assert.equal([...h.icons().items.values()][0].alpha, 0.5);
+      // Close in: markers alone; the heatmap stays mapped at alpha 0.
+      moveTo(h, 500_000);
+      assert.equal(heat.alpha, 0);
+      assert.equal(heat.show, true);
+      assert.equal(h.icons().show, true);
+      assert.equal([...h.icons().items.values()][0].alpha, 1);
     } finally {
-      performance.now = now;
+      h.cleanup();
     }
-    assert.equal(h.cells().items.size, 0, 'no cells in a detections band');
-  } finally {
-    h.cleanup();
-  }
-});
-
-test("with no query or frame port, the layer still follows the camera through ports built over the viewer's scene", async () => {
-  const h = harness([raw(30.5, -98.2, 1500)], 12_000_000, {
-    sceneFromViewer: true,
   });
-  try {
-    h.layer.init(h.viewer);
-    await h.layer.enable(h.viewer);
-    assert.equal(h.cells().items.size, 1);
-    h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
-      -97.7,
-      30.2,
-      500_000,
-    );
-    h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      -97.7,
-      30.2,
-      500_000,
-    );
-    // A frame past the LOD check's throttle, however fast the start was.
-    const now = performance.now;
-    performance.now = () => now.call(performance) + 10_000;
-    try {
-      h.viewer.scene.preRender.raiseEvent();
-    } finally {
-      performance.now = now;
-    }
-    assert.equal(h.cells().items.size, 0, 'no cells in a detections band');
-  } finally {
-    h.cleanup();
-  }
-});
+}
