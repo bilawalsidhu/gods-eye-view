@@ -17,10 +17,12 @@ export function photorealChecks(engine, { settle }) {
     [
       'surface.sampleHeightDetailed: leaving photoreal no longer reports tiles',
       async () => {
+        // Open ocean, away from anything the other checks draw: on Cesium a
+        // leftover mesh there would answer the sample too.
         const places = [
-          cartographic.fromCartesian(engine.camera.pose().position),
-          cartographic.fromDegrees(20, 10),
-        ].filter(Boolean);
+          cartographic.fromDegrees(-150, -55),
+          cartographic.fromDegrees(-30, -45),
+        ];
         await engine.maps.setPhotorealTiles(null);
         await settle();
         // Cesium labels every scene hit, the globe included, as tiles; what
