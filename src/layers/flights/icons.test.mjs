@@ -137,3 +137,76 @@ test('a contact that comes back dimmed re-arms the idle focus pass', () => {
   assert.deepEqual(advanced, ['was-tracked']);
   assert.equal(set.focus(row), 1);
 });
+
+// Upstream re-reckoned contacts hidden behind the horizon only one fleet tick
+// in 13. Here no contact's motion waits on a tick: a row's position is its
+// motion at the instant drawn, hidden or not, and a hidden row's ended motion
+// is planned again with every other. Shown again, it is where dead reckoning
+// puts it now, not where it was hidden.
+test('a hidden contact shown again is where dead reckoning puts it now', (t) => {
+  const t0 = Date.UTC(2026, 10, 9, 12);
+  t.mock.timers.enable({ apis: ['Date'], now: t0 });
+  const a = at(0);
+  const b = at(0.01);
+  const fix = (position, ms) => ({
+    position,
+    time: Cesium.JulianDate.fromDate(new Date(ms)),
+  });
+  const coastMps = 250;
+  const { flightState, icons, set } = setup({
+    motion: {
+      // Between the two fixes until the newer one, then a coast past it.
+      _motionRegime: (_history, _info, renderTime) => {
+        const ms = Cesium.JulianDate.toDate(renderTime).getTime();
+        return ms < t0 + 10_000
+          ? {
+              kind: 'between',
+              a: fix(a, t0),
+              b: fix(b, t0 + 10_000),
+              span: 10,
+              speed: 100,
+              trackFrom: 90,
+              trackTo: 90,
+              chordCourse: 90,
+              blend: 1,
+            }
+          : {
+              kind: 'fix',
+              fix: fix(b, t0 + 10_000),
+              speed: coastMps,
+              heading: 90,
+              turnRateDps: 0,
+              minDt: -60,
+              maxDt: 120,
+            };
+      },
+    },
+  });
+  const delay = Date.now() - icons._displayMs();
+  t.mock.timers.setTime(t0 + delay + 2_000);
+  hold(set, 'c', a, 90, true);
+  flightState._positionHistory.set('c', [{}, {}]);
+  flightState.records.data.set('c', {});
+  // Planned between the fixes, then hidden at 2 s.
+  icons._planIcon('c');
+  set.setShown('c', false);
+  const hiddenAt = set.position('c', icons._displayMs());
+  // 40 s later: the between motion ended while hidden and is planned again.
+  t.mock.timers.setTime(t0 + delay + 42_000);
+  const now = icons._displayMs();
+  assert.deepEqual([...set.due(now)], ['c'], 'its motion ended while hidden');
+  icons._replanExpired(now);
+  assert.deepEqual([...set.due(now)], [], 'planned again though hidden');
+  set.setShown('c', true);
+  const shown = set.position('c', now);
+  // On the coast: 32 s past the newer fix at 250 m/s.
+  const travelled = Cesium.Cartesian3.distance(b, shown);
+  assert.ok(
+    Math.abs(travelled - 32 * coastMps) < 50,
+    `coasted ${travelled.toFixed(0)} m past the fix`,
+  );
+  assert.ok(
+    Cesium.Cartesian3.distance(hiddenAt, shown) > 8_000,
+    'not where it was hidden',
+  );
+});
