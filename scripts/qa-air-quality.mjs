@@ -1,3 +1,6 @@
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 /**
  * qa-air-quality.mjs — headless proof for the Air quality layer.
  *
@@ -12,7 +15,6 @@
  * Run:  node scripts/qa-air-quality.mjs --url http://localhost:4173
  */
 
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -27,19 +29,13 @@ function record(name, ok, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
   let exitCode = 0;
   const consoleErrors = [];
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: [
-      '--use-gl=swiftshader',
-      '--enable-unsafe-swiftshader',
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--enable-unsafe-swiftshader', '--no-sandbox', '--disable-dev-shm-usage'],
     defaultViewport: { width: 1400, height: 900 },
   });
 
@@ -52,10 +48,10 @@ async function main() {
 
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForFunction(
-      () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+      () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
       { timeout: 90000 },
     );
-    await sleep(1500);
+    await whenSettled(page);
 
     const stats = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
@@ -106,26 +102,24 @@ async function main() {
     // The card's whole point is "highest readings in view", so put the camera
     // over Canada before asserting on it — the default view is over Austin,
     // where an empty in-view list is correct and proves nothing.
-    await page.evaluate(() => {
-      const gev = window.__godsEyeView;
-      const ellipsoid = gev.viewer.scene.globe.ellipsoid;
+    await evaluateWithGeo(page, async (qaGeo) => {
       const d2r = Math.PI / 180;
       try {
-        gev.viewer.camera.cancelFlight();
+        window.__godsEyeView.engine.camera.cancelFlight();
       } catch {
         /* no flight in progress */
       }
-      gev.viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -100 * d2r,
           latitude: 55 * d2r,
           height: 4_000_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      gev.viewer.scene.requestRender?.();
+      window.__godsEyeView.engine.render.request?.();
     });
-    await sleep(2500);
+    await whenSettled(page);
 
     const controls = await page.evaluate(
       () =>
@@ -154,7 +148,7 @@ async function main() {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
     exitCode = 3;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   const pass = results.filter((r) => r.ok === true).length;

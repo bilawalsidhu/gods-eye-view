@@ -1,3 +1,6 @@
+// Cesium-only probes: native raycast fault injection, camera transforms and entity sentinels test the Cesium adapter.
+import { withGeo } from './qa/geometry.mjs';
+import { whenFramesDrawn, whenSettled, pollPage, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-cctv-v2.mjs — CCTV v2 subsystem proof harness
  *
@@ -76,7 +79,7 @@
  * Exit 0 = all asserts passed. Non-zero = a hard failure.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { watchBrowserPage, redact } from './qa-browserEvidence.mjs';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
 import { installCctvFixture } from './fixtures/layers/cctv.mjs';
@@ -126,30 +129,7 @@ const saveEvidence = () => {
   );
 };
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch {
-      /* ignore */
-    }
-  }
-  return null;
-}
 
 const results = evidence.checks;
 function record(name, ok, detail) {
@@ -189,32 +169,6 @@ const PROTOCOL_TIMEOUT_MS = 300_000;
  *   The predicate must return a boolean: its result crosses CDP by value.
  * @returns {Promise<boolean>} True if the predicate held within the budget.
  */
-async function waitForPredicate(
-  page,
-  predicate,
-  { timeoutMs, intervalMs = 250, args = [] },
-) {
-  // performance.now() is monotonic and doesn't advance while the machine
-  // sleeps, so neither a clock change nor a laptop sleep eats the budget.
-  const deadline = performance.now() + timeoutMs;
-  for (;;) {
-    try {
-      if (await page.evaluate(predicate, ...args)) return true;
-    } catch (err) {
-      // A navigation or Vite reload replaces the execution context: poll again.
-      if (
-        !/Execution context was destroyed|Cannot find context/.test(
-          err?.message ?? '',
-        )
-      ) {
-        throw err;
-      }
-    }
-    const remaining = deadline - performance.now();
-    if (remaining <= 0) return false;
-    await sleep(Math.min(intervalMs, remaining));
-  }
-}
 
 // SwiftShader can spend tens of seconds servicing the hover drillPick emitted
 // by page.mouse.move(), before the LEFT_DOWN under test even runs. Position the
@@ -266,22 +220,21 @@ function installRenderFramesHelper(page) {
   return page.evaluate(() => {
     window.__qaRenderFrames = (count, capMs) =>
       new Promise((resolve) => {
-        const scene = window.__godsEyeView.viewer.scene;
         let frames = 0;
         const finish = () => {
           clearTimeout(timer);
           remove();
           resolve(frames);
         };
-        const remove = scene.postRender.addEventListener(() => {
+        const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
           if (++frames >= count) {
             finish();
             return;
           }
-          scene.requestRender();
+          window.__godsEyeView.engine.render.request();
         });
         const timer = setTimeout(finish, capMs);
-        scene.requestRender();
+        window.__godsEyeView.engine.render.request();
       });
   });
 }
@@ -462,23 +415,6 @@ const BEARING_SHIFT_SRC = `
  * @param {number} [timeoutMs=15000]
  * @returns {Promise<boolean>} True if tilesLoaded was observed within the timeout.
  */
-function waitForTilesLoaded(page, timeoutMs = 15000) {
-  return waitForPredicate(
-    page,
-    () => {
-      const scene = window.__godsEyeView.viewer.scene;
-      const prims = scene.primitives;
-      for (let i = 0; i < prims.length; i++) {
-        const p = prims.get(i);
-        if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
-          return p.tilesLoaded === true;
-        }
-      }
-      return true; // no tileset in the scene — nothing to wait for
-    },
-    { timeoutMs },
-  );
-}
 
 /**
  * Searches for a calibration patch (pitchDeg/fovDeg/rangeScale offsets) that
@@ -542,24 +478,13 @@ async function main() {
 
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
 
-  const chromeExecutable = findChromeExecutable();
-  const browser = await puppeteer.launch({
+  const browser = await launchBrowser({
     headless: true,
     protocolTimeout: PROTOCOL_TIMEOUT_MS,
     // Talk CDP over a pipe, so no debugging port stays open on localhost for
     // the length of a headful run.
     pipe: true,
-    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--use-angle=metal',
-      '--enable-gpu',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1280,800',
-    ],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--enable-gpu', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1280,800'],
   });
 
   const consoleErrors = evidence.browserErrors;
@@ -596,7 +521,7 @@ async function main() {
     });
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    const appReady = await waitForPredicate(
+    const appReady = await pollPage(
       page,
       () =>
         Boolean(
@@ -638,7 +563,7 @@ async function main() {
       if (!keyless) throw new Error('Expected a keyless globe before CCTV QA');
     }
     // Let the initial fly-to Austin and first tiles settle.
-    await sleep(4000);
+    await whenSettled(page);
 
     // -----------------------------------------------------------------------
     // Install raycast counters BEFORE the layer is enabled (§9.1-amended: the
@@ -653,7 +578,7 @@ async function main() {
       if (
         !scene ||
         typeof scene.pickFromRay !== 'function' ||
-        typeof scene.sampleHeight !== 'function'
+        typeof window.__godsEyeView.engine.surface.sampleHeight !== 'function'
       ) {
         return false;
       }
@@ -663,7 +588,7 @@ async function main() {
         window.__qaCounters.pickFromRay += 1;
         return origPick(...args);
       };
-      const origSample = scene.sampleHeight.bind(scene);
+      const origSample = window.__godsEyeView.engine.surface.sampleHeight.bind(scene);
       scene.sampleHeight = (...args) => {
         window.__qaCounters.sampleHeight += 1;
         return origSample(...args);
@@ -719,7 +644,7 @@ async function main() {
     console.log(
       `Waiting for geometry-load queue to drain (N=${camCount}, budget ${Math.round(drainBudgetMs / 1000)}s)...`,
     );
-    const drained = await waitForPredicate(
+    const drained = await pollPage(
       page,
       () => {
         const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
@@ -763,7 +688,7 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.focusNearest({ durationSec: 0.1 });
     });
-    await sleep(500); // let the activation's synchronous work (probe + geometry rewrite) land
+    await whenFramesDrawn(page); // let the activation's synchronous work (probe + geometry rewrite) land
     const cAfterActivate = await readCounters();
     const activeId = await page.evaluate(
       () =>
@@ -793,7 +718,7 @@ async function main() {
         .get('cctv')
         .module.setParams({ selectedCameraId: id });
     }, activeId);
-    await sleep(400);
+    await whenFramesDrawn(page);
     const cAfterReselect = await readCounters();
     const geomAfterReselect = await page.evaluate(`(() => {
       ${SERIALIZE_GEOM_SRC}
@@ -816,7 +741,7 @@ async function main() {
     // latency of the completion pass (update interval is 10s).
     // -----------------------------------------------------------------------
     console.log('Waiting for tiles + the one-shot completion pass...');
-    const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
+    const tilesSeenLoaded = await whenTilesLoaded(page, { timeoutMs: 45000 }).then(() => true).catch(() => false);
     let sampleFloorOk = false;
     if (tilesSeenLoaded && !terrainGlobe) {
       sampleFloorOk = await page
@@ -866,10 +791,10 @@ async function main() {
         terrain.ok && heights?.length === 2 && heights.every(Number.isFinite);
       const mountResolved =
         terrainReady &&
-        (await waitForPredicate(
+        (await pollPage(
           page,
-          (expected, base) => {
-            const { viewer, dataManager, engine } = window.__godsEyeView;
+          await withGeo((qaGeo, expected, base) => {
+            const { dataManager, engine } = window.__godsEyeView;
             const module = dataManager.layers.get('cctv').module;
             const camera = module.getUIState().activeCamera;
             // The corner ray is an engine line; its first point (the mount)
@@ -883,7 +808,7 @@ async function main() {
             const mount = drawn ? ray?.polyline?.positions?.[0] : undefined;
             const height =
               mount &&
-              viewer.scene.globe.ellipsoid.cartesianToCartographic(mount)
+              qaGeo.cartographic.fromCartesian(mount)
                 .height;
             return (
               Number.isFinite(camera.groundPriorM) &&
@@ -895,8 +820,8 @@ async function main() {
               ) &&
               window.__qaCounters.sampleHeight === base
             );
-          },
-          { timeoutMs: 30000, args: [heights, c0.sampleHeight] },
+          }, heights, c0.sampleHeight),
+          { timeoutMs: 30000 },
         ));
       record(
         'terrain-globe completion uses a real DEM height at the rendered mount without mesh samples',
@@ -905,10 +830,10 @@ async function main() {
       );
     } else {
       console.log('Waiting for tiles + the one-shot completion pass...');
-      const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
+      const tilesSeenLoaded = await whenTilesLoaded(page, { timeoutMs: 45000 }).then(() => true).catch(() => false);
       let sampleFloorOk = false;
       if (tilesSeenLoaded) {
-        sampleFloorOk = await waitForPredicate(
+        sampleFloorOk = await pollPage(
           page,
           (base) => window.__qaCounters.sampleHeight - base >= 1,
           { timeoutMs: 30000, args: [c0.sampleHeight] },
@@ -993,7 +918,7 @@ async function main() {
         calibration: { cameraId: camId, patch: { headingDeg: 30 } },
       });
     }, activeId);
-    await sleep(500);
+    await whenFramesDrawn(page);
     const cAfterCal = await readCounters();
     const sampleDeltaCal = cAfterCal.sampleHeight - cBeforeCal.sampleHeight;
     const pickDeltaCal = cAfterCal.pickFromRay - cBeforeCal.pickFromRay;
@@ -1016,7 +941,7 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibration: { cameraId: camId, reset: true } });
     }, activeId);
-    await sleep(300);
+    await whenFramesDrawn(page);
 
     // =========================================================================
     // Group 2: geometry contract
@@ -1098,7 +1023,7 @@ async function main() {
         ? JSON.stringify(geomInfo.plane.dimensions)
         : null;
       for (let attempt = 0; attempt < 3 && !patchGeometryApplied; attempt++) {
-        await waitForTilesLoaded(page, 15000);
+        await whenTilesLoaded(page, { timeoutMs: 15000 }).then(() => true).catch(() => false);
         await page.evaluate(
           ({ camId, patch }) => {
             const mod =
@@ -1107,7 +1032,7 @@ async function main() {
           },
           { camId: activeId, patch: safePatch },
         );
-        await sleep(400);
+        await whenFramesDrawn(page);
         geomForCorners = await page.evaluate(
           `(function(camId){ ${SERIALIZE_GEOM_SRC} return serializeGeom(camId); })(${JSON.stringify(activeId)})`,
         );
@@ -1204,7 +1129,7 @@ async function main() {
         const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
         mod.setParams({ calibration: { cameraId: camId, reset: true } });
       }, activeId);
-      await sleep(300);
+      await whenFramesDrawn(page);
     }
 
     // Byte-stable over 30s idle: serialize + compare after 30s. Nothing
@@ -1283,7 +1208,7 @@ async function main() {
         calibration: { cameraId: camId, patch: { headingDeg: 30 } },
       });
     }, activeId);
-    await sleep(300);
+    await whenFramesDrawn(page);
 
     // Save-gated persistence (v3 design §3e): a PATCH edits the live pose
     // only — the store must stay untouched and the camera must read as
@@ -1321,7 +1246,7 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibration: { cameraId: camId, save: true } });
     }, activeId);
-    await sleep(200);
+    await whenFramesDrawn(page);
 
     const storeEntry = await page.evaluate((camId) => {
       const raw = localStorage.getItem('godsEyeView.cctv.calibration.v2');
@@ -1371,7 +1296,7 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibration: { cameraId: camId, reset: true } });
     }, activeId);
-    await sleep(300);
+    await whenFramesDrawn(page);
 
     const storeAfterReset = await page.evaluate((camId) => {
       const raw = localStorage.getItem('godsEyeView.cctv.calibration.v2');
@@ -1483,7 +1408,7 @@ async function main() {
       const gev = window.__godsEyeView;
       const viewer = gev.viewer;
       const scene = viewer.scene;
-      const canvas = scene.canvas;
+      const canvas = window.__godsEyeView.engine.host.canvas;
       const rect = canvas.getBoundingClientRect();
       const { hitTest } = (
         await import('/src/overlays/worldOverlay.js')
@@ -1535,28 +1460,28 @@ async function main() {
       const mod = gev.dataManager.layers.get('cctv').module;
       const snapshotPose = () => ({
         position: [
-          viewer.camera.positionWC.x,
-          viewer.camera.positionWC.y,
-          viewer.camera.positionWC.z,
+          window.__godsEyeView.engine.camera.pose().position.x,
+          window.__godsEyeView.engine.camera.pose().position.y,
+          window.__godsEyeView.engine.camera.pose().position.z,
         ],
         direction: [
-          viewer.camera.directionWC.x,
-          viewer.camera.directionWC.y,
-          viewer.camera.directionWC.z,
+          window.__godsEyeView.engine.camera.pose().direction.x,
+          window.__godsEyeView.engine.camera.pose().direction.y,
+          window.__godsEyeView.engine.camera.pose().direction.z,
         ],
-        up: [viewer.camera.upWC.x, viewer.camera.upWC.y, viewer.camera.upWC.z],
+        up: [window.__godsEyeView.engine.camera.pose().up.x, window.__godsEyeView.engine.camera.pose().up.y, window.__godsEyeView.engine.camera.pose().up.z],
         right: [
-          viewer.camera.rightWC.x,
-          viewer.camera.rightWC.y,
-          viewer.camera.rightWC.z,
+          window.__godsEyeView.engine.camera.pose().right.x,
+          window.__godsEyeView.engine.camera.pose().right.y,
+          window.__godsEyeView.engine.camera.pose().right.z,
         ],
         transform: Array.from(
           { length: 16 },
           (_, i) => viewer.camera.transform[i],
         ),
-        heading: viewer.camera.heading,
-        pitch: viewer.camera.pitch,
-        roll: viewer.camera.roll,
+        heading: window.__godsEyeView.engine.camera.pose().heading,
+        pitch: window.__godsEyeView.engine.camera.pose().pitch,
+        roll: window.__godsEyeView.engine.camera.pose().roll,
         trackedId: viewer.trackedEntity?.id ?? null,
       });
       const cameraPoseMatches = (a, b, epsilon = 1e-5) => {
@@ -1626,7 +1551,7 @@ async function main() {
           .module.setParams({ calibrationMode: true });
       });
       await page.mouse.click(emptyClickPoint.x, emptyClickPoint.y);
-      await sleep(250);
+      await whenFramesDrawn(page);
       const adjustClick = await page.evaluate(() => {
         const evidence = window.__qaCctvClickEvidence;
         const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
@@ -1673,7 +1598,7 @@ async function main() {
           distance,
           new ray.origin.constructor(),
         );
-        const screen = scene.cartesianToCanvasCoordinates(candidate);
+        const screen = window.__godsEyeView.engine.projector.worldToWindow(candidate);
         if (
           screen &&
           Math.hypot(screen.x - canvasPoint.x, screen.y - canvasPoint.y) < 2
@@ -1695,7 +1620,7 @@ async function main() {
       });
       window.__qaCctvSiblingOwner = owner;
       const framesRendered = await window.__qaRenderFrames(3, 10000);
-      const rect = scene.canvas.getBoundingClientRect();
+      const rect = window.__godsEyeView.engine.host.canvas.getBoundingClientRect();
       const picked = scene.pick(canvasPoint);
       const pickedId = picked?.id?.id ?? picked?.id ?? null;
       window.__qaCctvClickEvidence.siblingBaselineTransitions =
@@ -1735,7 +1660,7 @@ async function main() {
     );
     if (siblingOwnsPick) {
       await page.mouse.click(siblingTarget.x, siblingTarget.y);
-      await sleep(250);
+      await whenFramesDrawn(page);
     }
     const siblingClick = await page.evaluate(() => {
       const evidence = window.__qaCctvClickEvidence;
@@ -1769,7 +1694,7 @@ async function main() {
 
     if (emptyClickPoint) {
       await page.mouse.click(emptyClickPoint.x, emptyClickPoint.y);
-      await sleep(250);
+      await whenFramesDrawn(page);
     }
     const firstEmptyClick = await page.evaluate(() => {
       const evidence = window.__qaCctvClickEvidence;
@@ -1810,7 +1735,7 @@ async function main() {
 
     if (emptyClickPoint) {
       await page.mouse.click(emptyClickPoint.x, emptyClickPoint.y);
-      await sleep(250);
+      await whenFramesDrawn(page);
     }
     const repeatEmptyClick = await page.evaluate(() => {
       const evidence = window.__qaCctvClickEvidence;
@@ -1894,7 +1819,7 @@ async function main() {
       mod.setParams({ coverageMode: 'viewshed' });
       return mod.getUIState().coverageMode;
     });
-    await sleep(400);
+    await whenFramesDrawn(page);
     record(
       'coverageMode setParams round-trip (viewshed)',
       modeAfterSet === 'viewshed',
@@ -1918,7 +1843,7 @@ async function main() {
       const on = mod.getUIState().coverageMode;
       return { off, on };
     });
-    await sleep(200);
+    await whenFramesDrawn(page);
     const volumesInOnMode = await countVolumes();
     record(
       'boolean showCoverage compat (false→off, true→on)',
@@ -1938,7 +1863,7 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ coverageMode: 'viewshed' });
     });
-    await sleep(400);
+    await whenFramesDrawn(page);
     // NEXT starts an asynchronous footprint-height lookup. Its completion is
     // allowed to update geometry; the unchanged 8s idle window starts after it.
     const terrainDeadline = Date.now() + 35000;
@@ -1998,7 +1923,7 @@ async function main() {
     // Frame that actual camera before requiring an on-screen physical drag.
     await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('cctv')
       .module.setParams({ focusSelected: true, focusDurationSec: 0.2 }));
-    await sleep(800);
+    await whenFramesDrawn(page);
     const GIZMO_PARTS = [
       'ring-heading',
       'ring-pitch',
@@ -2113,7 +2038,7 @@ async function main() {
             grab.x + eastDrag.ux * i * 12,
             grab.y + eastDrag.uy * i * 12,
           );
-          await sleep(40);
+          await whenFramesDrawn(page);
           transientDragStates.push(
             await page.evaluate(() => {
               const mod =
@@ -2132,7 +2057,7 @@ async function main() {
         }
         const candidateCountersBeforeRelease = await readCounters();
         await page.mouse.up();
-        await sleep(400);
+        await whenFramesDrawn(page);
         const candidateEast = await page.evaluate(() => {
           const mod =
             window.__godsEyeView.dataManager.layers.get('cctv').module;
@@ -2328,7 +2253,7 @@ async function main() {
     // Screenshots supplement this state/geometry oracle. Positive rendered
     // media pixels are a separate mandatory pixel gate.
     // -----------------------------------------------------------------------
-    await sleep(1000);
+    await whenFramesDrawn(page);
     const shot = path.join(SHOTS_DIR, 'cctv-v2-active.png');
     await saveReviewShot(page, shot, 'visual review only, not a gate');
 
@@ -2344,7 +2269,7 @@ async function main() {
     }
   } finally {
     await fixture?.dispose();
-    await browser.close();
+    await closeBrowser(browser);
     evidence.pass =
       results.length > 0 &&
       results.every((r) => r.ok === true) &&

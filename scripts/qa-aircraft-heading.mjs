@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Cesium-only probes: tracked entities and native model axes validate Cesium aircraft heading.
 /**
  * qa-aircraft-heading.mjs — aircraft display-heading checks
  * (path-derived, rate-limited display course; Batch 3 overnight run).
@@ -97,9 +98,10 @@
  * Exits non-zero if any assertion fails. Never commits anything.
  */
 
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { installNavaraHeadingProbe } from './qa-heading-navara.mjs';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 
@@ -124,26 +126,7 @@ const HEADFUL = getFlag('--headful');
 const SHOT_DIR = path.resolve('qa-shots/aircraft-heading');
 const SHOT_DIR_V2 = path.resolve('qa-shots/heading-v2');
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* skip */ }
-  }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // PASS/FAIL reporting
@@ -157,7 +140,7 @@ function record(name, ok, detail) {
 
 async function observeTrackedHostPaint(page, timeoutMs = 5000) {
   return page.evaluate((boundedTimeoutMs) => new Promise((resolve) => {
-    const viewer = (window.__headingView ?? window.__godsEyeView?.viewer);
+    const viewer = (window.__headingView ?? window.__godsEyeView?.engine);
     const scene = viewer?.scene;
     const history = [];
     const startedAt = performance.now();
@@ -455,20 +438,9 @@ async function main() {
   fs.mkdirSync(SHOT_DIR, { recursive: true });
   fs.mkdirSync(SHOT_DIR_V2, { recursive: true });
 
-  const chromeExecutable = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      ...(HEADFUL ? [] : ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`]),
-      '--disable-dev-shm-usage',
-      '--disable-web-security',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1280,800',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', ...(HEADFUL ? [] : []), '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1280,800'],
   });
 
   const consoleErrors = [];
@@ -588,8 +560,9 @@ async function main() {
       () => window.__godsEyeView?.layers && window.__godsEyeView.dataManager,
       { timeout: 60000, polling: 200 }
     );
+    await whenSettled(page);
     await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
-    await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
+    await whenSettled(page);
     await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
@@ -730,7 +703,7 @@ async function main() {
     }, { timeout: 40000, polling: 250 }, TURN.flights[0].icao).then(() => true).catch(() => false);
     record('flights: tracked 3D model rendered (ready+shown)', flModelUp, flModelUp ? 'model up' : 'model never became ready');
     if (!flModelUp) { finish(); return; }
-    await sleep(1500); // let the follow camera + reconciliation settle
+    await whenFramesDrawn(page); // let the follow camera + reconciliation settle
 
     const readoutObservation = await observeTrackedHostPaint(page);
     const readoutHost = await page.evaluate(() => ({
@@ -780,7 +753,7 @@ async function main() {
     await page.evaluate(() => {
       window.__godsEyeView.styleManager._setDetectionMode('DENSE');
     });
-    await sleep(800);
+    await whenFramesDrawn(page);
     const shots = [
       ['flights-far-orbitA.png', async () => { /* default follow framing */ }],
       ['flights-far-orbitB.png', () => page.evaluate(() => { (window.__headingView ?? window.__godsEyeView.viewer).camera.rotateRight(1.9); })],
@@ -794,7 +767,7 @@ async function main() {
     ];
     for (const [name, move] of shots) {
       try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
-      await sleep(1200); // let a few frames render at the new pose
+      await whenFramesDrawn(page); // let a few frames render at the new pose
       await page.screenshot({ path: path.join(SHOT_DIR, name) });
       console.log(`    saved ${name}`);
     }
@@ -819,7 +792,7 @@ async function main() {
     }, { timeout: 40000, polling: 250 }, TURN.military[0].hex).then(() => true).catch(() => false);
     record('military: tracked 3D model rendered (ready+shown)', milModelUp, milModelUp ? 'model up' : 'model never became ready');
     if (milModelUp) {
-      await sleep(1500);
+      await whenFramesDrawn(page);
       const milSamples = await page.evaluate(
         (icao) => window.__sampleModelCourse(icao, 180, 40000),
         TURN.military[0].hex,
@@ -841,7 +814,7 @@ async function main() {
       await page.evaluate(() => {
         window.__godsEyeView.styleManager._setDetectionMode('DENSE');
       });
-      await sleep(800);
+      await whenFramesDrawn(page);
       for (const [name, move] of [
         ['military-orbitA.png', async () => { }],
         ['military-orbitB.png', () => page.evaluate(() => { (window.__headingView ?? window.__godsEyeView.viewer).camera.rotateRight(1.6); })],
@@ -855,7 +828,7 @@ async function main() {
         })],
       ]) {
         try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
-        await sleep(1200);
+        await whenFramesDrawn(page);
         await page.screenshot({ path: path.join(SHOT_DIR, name) });
         console.log(`    saved ${name}`);
       }
@@ -892,7 +865,7 @@ async function main() {
     // ---- Phase 3 — hovering helicopter --------------------------------------
     console.log('\nPhase 3 — hovering helicopter (klass=helicopter, drift ~4 m, track flips ±45°)');
     if (await trackFlightsAndWaitModel(TURN.hover.icao, 'hover-heli')) {
-      await sleep(1500);
+      await whenFramesDrawn(page);
       const heliSamples = await sampleCourse(180, 35000, TURN.hover.icao);
       analyzeHover('hover-heli', heliSamples, {});
       for (const [name, waitMs] of [['hover-heli-T0.png', 0], ['hover-heli-T8s.png', 8000]]) {
@@ -905,7 +878,7 @@ async function main() {
     // ---- Phase 4 — 25 kt plane in a continuous 4°/s right turn --------------
     console.log('\nPhase 4 — slow plane in a tight turn (25 kt, 4°/s, R=184 m)');
     if (await trackFlightsAndWaitModel(TURN.slow.icao, 'slow-turn')) {
-      await sleep(1500);
+      await whenFramesDrawn(page);
       const slowSamples = await sampleCourse(180, 40000, TURN.slow.icao);
       analyzeSlowTurn('slow-turn', slowSamples, { scoreProgress: false });
       // Exercise the production dt clamp with render gaps above
@@ -923,7 +896,7 @@ async function main() {
         ['slowturn-near.png', () => page.evaluate(() => { (window.__headingView ?? window.__godsEyeView.viewer).camera.zoomIn(2500); })],
       ]) {
         try { await move(); } catch (e) { console.log(`    (camera move for ${name} failed: ${e.message})`); }
-        await sleep(1200);
+        await whenFramesDrawn(page);
         await page.screenshot({ path: path.join(SHOT_DIR_V2, name) });
         console.log(`    saved ${name}`);
       }
@@ -1097,7 +1070,7 @@ async function main() {
 
     finish();
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   function finish() {

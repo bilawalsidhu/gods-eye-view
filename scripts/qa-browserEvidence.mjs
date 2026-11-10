@@ -105,6 +105,8 @@ export function hookRenderErrors(page) {
   return page.evaluateOnNewDocument(() => {
     window.__qaRenderErrors = [];
     const hook = () => {
+      // Cesium-only: its render loop catches errors before pageerror sees them.
+      if (window.__godsEyeView?.engine?.kind === 'navara') return true;
       const scene = window.__godsEyeView?.viewer?.scene;
       if (!scene?.renderError) return false;
       scene.renderError.addEventListener((_, error) =>

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /** Sharing/authoring acceptance with local synthetic assets and real installed controls. */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 const output = path.resolve('qa-shots/director-sharing');
 fs.mkdirSync(output, { recursive: true });
 const geometry = {
@@ -66,7 +67,7 @@ const project = {
 };
 const file = path.join(output, 'project.json');
 fs.writeFileSync(file, JSON.stringify(project));
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
@@ -110,12 +111,10 @@ try {
     `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.sceneDirector, {
+    timeout: 60000,
+  });
+  await whenSettled(page);
   await page.click('[data-collapse-target="scene-panel"]');
   const before = await page.evaluate(() =>
     JSON.stringify(window.__godsEyeView.sceneDirector._project),
@@ -304,16 +303,14 @@ try {
           window.__godsEyeView.sceneDirector.getInteractionState().count === 1,
       )),
   );
-  await page.waitForFunction(
-    () => window.__godsEyeView.tileset?.tilesLoaded === true,
-    { timeout: 60000 },
-  );
+  await whenTilesLoaded(page, { timeoutMs: 60000 });
   await page.screenshot({ path: path.join(output, 'rendered.png') });
   fs.writeFileSync(
     path.join(output, 'report.json'),
     JSON.stringify(
       await page.evaluate(() => ({
-        tilesSettled: window.__godsEyeView.tileset?.tilesLoaded === true,
+        tilesSettled:
+          window.__godsEyeView.engine.surface.tilesLoaded() === true,
       })),
     ),
   );
@@ -480,6 +477,6 @@ try {
   );
   check('no uncaught browser errors', errors.length === 0);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 process.exitCode = failures ? 1 : 0;

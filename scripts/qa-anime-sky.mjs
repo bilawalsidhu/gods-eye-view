@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: sky commands, the Julian clock and post-process stages validate the Cesium sky.
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 /**
  * qa-anime-sky — the anime style must leave the sky without bands.
  *
@@ -13,14 +16,13 @@
  * Usage: node scripts/qa-anime-sky.mjs [--url http://localhost:4333/]
  * Exit: 0 pass, 1 fail, 2 the anime style was not reached.
  */
-import puppeteer from 'puppeteer';
 
 const i = process.argv.indexOf('--url');
 const URL_ =
   i > 0 && process.argv[i + 1] ? process.argv[i + 1] : 'http://localhost:4333/';
 
-const browser = await puppeteer.launch({
-  headless: 'new',
+const browser = await launchBrowser({
+  headless: true,
   args: ['--no-sandbox', '--ignore-gpu-blocklist'],
 });
 try {
@@ -41,17 +43,15 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.viewer?.scene, {
     timeout: 120000,
   });
+  await whenSettled(page);
   await page.waitForFunction(
     () => {
       const sky = window.__godsEyeView.viewer.scene.skyBox;
-      return (
-        sky?._milkyWayCubeMap &&
-        sky?._starCommand &&
-        document.getElementById('loading-screen')?.classList.contains('hidden')
-      );
+      return sky?._milkyWayCubeMap && sky?._starCommand;
     },
     { timeout: 60000 },
   );
+  await whenSettled(page);
   const r = await page.evaluate(async () => {
     const entry = performance
       .getEntriesByType('resource')
@@ -94,22 +94,22 @@ try {
       C.Cartesian3.cross(look, north, new C.Cartesian3()),
       new C.Cartesian3(),
     );
-    s.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.cancelFlight();
     s.tweens.removeAll();
-    s.camera.setView({
+    window.__godsEyeView.engine.camera.setView({
       destination: C.Cartesian3.multiplyByScalar(look, 3e7, new C.Cartesian3()),
       orientation: {
         direction: look,
         up: C.Cartesian3.cross(right, look, new C.Cartesian3()),
       },
     });
-    const gl = s.context._gl,
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2'),
       w = gl.drawingBufferWidth,
       h = gl.drawingBufferHeight,
       px = new Uint8Array(w * h * 4);
     const measure = async () => {
       await new Promise((res) => setTimeout(res, 2500));
-      s.requestRender();
+      window.__godsEyeView.engine.render.request();
       s.render();
       gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
       let banded = 0;
@@ -156,5 +156,5 @@ try {
   console.error(`UNREACHED: ${error.message}`);
   process.exitCode = 2;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

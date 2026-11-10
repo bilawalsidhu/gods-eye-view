@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+// Cesium-only probes: the stock input action and DataSource counts verify Cesium input restoration.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /** Rendered acceptance for UTILITIES ▸ Draw: real clicks, real keys, real teardown. */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
@@ -19,21 +22,14 @@ const VIEW = {
   pitch: -85,
 };
 
-const browser = await puppeteer.launch({
-  headless: !HEADFUL,
-  ...(HEADFUL
-    ? {
-        executablePath: chromeExecutablePath(),
-      }
-    : {}),
+const browser = await launchBrowser({
+  headless: true,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     ...(HEADFUL ? ['--window-size=1280,860'] : []),
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -68,7 +64,6 @@ const shot = (name) =>
     type: 'jpeg',
     quality: 82,
   });
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A clip of the globe canvas, clear of the panels on every side. */
 const CANVAS_CLIP = { x: 340, y: 200, width: 560, height: 380 };
@@ -163,7 +158,7 @@ async function pressFinish() {
 /** One click on the globe canvas, the way a person makes one. */
 async function clickWorld(x, y, options = {}) {
   await page.mouse.click(x, y, options);
-  await wait(options.settle ?? 140);
+  await whenSettled(page);
 }
 
 const drawState = () =>
@@ -211,50 +206,34 @@ try {
     { waitUntil: 'domcontentloaded' },
   );
   await page.waitForFunction(
-    () =>
-      window.__gevDrawTool &&
-      window.__gevAnnotations &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__gevDrawTool && window.__gevAnnotations,
     { timeout: 90_000 },
   );
-  await page.evaluate((view) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.scene.tweens?.removeAll?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (view.lon * Math.PI) / 180,
-        latitude: (view.lat * Math.PI) / 180,
-        height: view.height,
-      }),
-      orientation: {
-        heading: (view.heading * Math.PI) / 180,
-        pitch: (view.pitch * Math.PI) / 180,
-        roll: 0,
-      },
-    });
-    viewer.scene.requestRender();
-  }, VIEW);
-  const settled = await page
-    .waitForFunction(
-      () => {
-        const primitives = window.__godsEyeView.viewer.scene.primitives;
-        for (let index = 0; index < primitives.length; index++) {
-          const primitive = primitives.get(index);
-          if (
-            typeof primitive.tilesLoaded === 'boolean' &&
-            !primitive.tilesLoaded
-          )
-            return false;
-        }
-        return true;
-      },
-      { timeout: 90_000 },
-    )
-    .then(
-      () => true,
-      () => false,
-    );
+  await whenSettled(page);
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, view) => {
+      window.__godsEyeView.engine.camera.cancelFlight?.();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
+          longitude: (view.lon * Math.PI) / 180,
+          latitude: (view.lat * Math.PI) / 180,
+          height: view.height,
+        }),
+        orientation: {
+          heading: (view.heading * Math.PI) / 180,
+          pitch: (view.pitch * Math.PI) / 180,
+          roll: 0,
+        },
+      });
+      window.__godsEyeView.engine.render.request();
+    },
+    VIEW,
+  );
+  const settled = await whenTilesLoaded(page, { timeoutMs: 90_000 }).then(
+    () => true,
+    () => false,
+  );
   check('visible tile content settles before drawing', settled);
 
   // UTILITIES starts collapsed on a first run: open it the way a user does.
@@ -321,9 +300,9 @@ try {
   const before = await drawState();
   for (let cycle = 0; cycle < 3; cycle += 1) {
     await page.click('#draw-toggle');
-    await wait(120);
+    await whenSettled(page);
     await page.click('#draw-toggle');
-    await wait(120);
+    await whenSettled(page);
   }
   const after = await drawState();
   check(
@@ -379,7 +358,7 @@ try {
   await clickWorld(600, 470);
   const beforeBackspace = (await drawState()).vertices;
   await page.keyboard.press('Backspace');
-  await wait(120);
+  await whenSettled(page);
   const afterBackspace = (await drawState()).vertices;
   check(
     'Backspace removes the last vertex only',
@@ -415,7 +394,7 @@ try {
   );
   await page.mouse.click(410, 500, { count: 2 });
   const areaLanded = await waitForMarks(3);
-  await wait(900);
+  await whenSettled(page);
   const afterDoubleClick = await page.evaluate(() =>
     window.__gevAnnotations.count(),
   );
@@ -440,7 +419,7 @@ try {
   await page.click(rowControl(areaId, 'name'));
   await page.keyboard.type('Civic Center block');
   await page.keyboard.press('Enter');
-  await wait(300);
+  await whenSettled(page);
   const areaMark = (await marks()).find(
     (mark) => mark.label === 'Civic Center block',
   );
@@ -453,7 +432,7 @@ try {
     'naming a shape keeps Draw on and the shape in progress untouched',
     (await drawState()).active === true,
   );
-  await wait(1200);
+  await whenSettled(page);
   const amberAfter = await amberPixels();
   check(
     'the finished area actually PAINTS — amber pixels appear on this surface',
@@ -512,32 +491,31 @@ try {
   // Fly-to frames the line by its whole path: once the flight settles, the
   // middle of the line sits near the middle of the view.
   await page.click(rowControl(ids[1], 'fly'));
-  await page
-    .waitForFunction(() => !window.__godsEyeView.viewer.camera._currentFlight, {
-      timeout: 15_000,
-    })
-    .catch(() => {});
-  await wait(300);
-  const framed = await page.evaluate((id) => {
-    const { viewer } = window.__godsEyeView;
-    // No Cesium global in the page: borrow Cartesian3 from a live object.
-    const Cartesian3 = viewer.camera.positionWC.constructor;
-    const mark = window.__gevAnnotations.list().find((m) => m.id === id);
-    const lons = mark.path.map((p) => p.lon);
-    const lats = mark.path.map((p) => p.lat);
-    const middle = Cartesian3.fromDegrees(
-      (Math.min(...lons) + Math.max(...lons)) / 2,
-      (Math.min(...lats) + Math.max(...lats)) / 2,
-    );
-    const at = viewer.scene.cartesianToCanvasCoordinates(middle);
-    const canvas = viewer.scene.canvas;
-    return (
-      at && {
-        dx: Math.abs(at.x - canvas.clientWidth / 2) / canvas.clientWidth,
-        dy: Math.abs(at.y - canvas.clientHeight / 2) / canvas.clientHeight,
-      }
-    );
-  }, ids[1]);
+  await whenSettled(page).catch(() => {});
+  await whenSettled(page);
+  const framed = await evaluateWithGeo(
+    page,
+    async (qaGeo, id) => {
+      // No Cesium global in the page: borrow Cartesian3 from a live object.
+      const Cartesian3 = qaGeo.cartesian3;
+      const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+      const lons = mark.path.map((p) => p.lon);
+      const lats = mark.path.map((p) => p.lat);
+      const middle = Cartesian3.fromDegrees(
+        (Math.min(...lons) + Math.max(...lons)) / 2,
+        (Math.min(...lats) + Math.max(...lats)) / 2,
+      );
+      const at = window.__godsEyeView.engine.projector.worldToWindow(middle);
+      const canvas = window.__godsEyeView.engine.host.canvas;
+      return (
+        at && {
+          dx: Math.abs(at.x - canvas.clientWidth / 2) / canvas.clientWidth,
+          dy: Math.abs(at.y - canvas.clientHeight / 2) / canvas.clientHeight,
+        }
+      );
+    },
+    ids[1],
+  );
   check(
     'fly to frames that shape: its middle is near the middle of the view',
     Boolean(framed) && framed.dx < 0.2 && framed.dy < 0.2,
@@ -550,11 +528,11 @@ try {
   await page.click(rowControl(lineId, 'swatch'));
   await page.click(rowControl(lineId, 'color-amber'));
   await markReaches(lineId, { color: 'amber', alpha: 1 });
-  await wait(800);
+  await whenSettled(page);
   const shown = await canvasShot();
   await page.click(rowControl(lineId, 'toggle'));
   await markReaches(lineId, { hidden: true, alpha: 0 });
-  await wait(800);
+  await whenSettled(page);
   const hiddenShot = await canvasShot();
   // Amber the shown line had and the hidden one lost; amber that appears
   // only once it is hidden is noise, and must stay small beside it.
@@ -566,7 +544,7 @@ try {
     `${gone} amber pixels went with the line, ${noise} appeared`,
   );
   await page.click(rowControl(lineId, 'toggle'));
-  await wait(1200);
+  await whenSettled(page);
   const back = await amberOnlyIn(await canvasShot(), hiddenShot);
   check(
     'and paints again when shown',
@@ -581,7 +559,7 @@ try {
   await clickWorld(560, 340);
   check('a new shape is in progress', (await drawState()).vertices === 2);
   await page.keyboard.press('Escape');
-  await wait(150);
+  await whenSettled(page);
   const afterFirstEscape = await drawState();
   check(
     'Escape cancels the shape in progress and stays in draw mode',
@@ -589,7 +567,7 @@ try {
     `vertices ${afterFirstEscape.vertices}, active ${afterFirstEscape.active}`,
   );
   await page.keyboard.press('Escape');
-  await wait(150);
+  await whenSettled(page);
   const afterSecondEscape = await drawState();
   check(
     'a second Escape leaves draw mode and gives the pointer back',
@@ -667,7 +645,7 @@ try {
     );
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
-    await wait(150);
+    await whenSettled(page);
   }
 
   // ── what a reload actually does ─────────────────────────────────────────
@@ -675,12 +653,10 @@ try {
     window.__gevAnnotations.count(),
   );
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(
-    () =>
-      window.__gevAnnotations &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 90_000 },
-  );
+  await page.waitForFunction(() => window.__gevAnnotations, {
+    timeout: 90_000,
+  });
+  await whenSettled(page);
   const afterReload = await page.evaluate(() =>
     window.__gevAnnotations.count(),
   );
@@ -722,25 +698,28 @@ try {
   // flight left a low, near-horizontal view there) with a boot flight that can
   // land after a setView: set the view until it holds.
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    await page.evaluate((view) => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.cancelFlight?.();
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-          longitude: (view.lon * Math.PI) / 180,
-          latitude: (view.lat * Math.PI) / 180,
-          height: view.height,
-        }),
-        orientation: {
-          heading: 0,
-          pitch: (view.pitch * Math.PI) / 180,
-          roll: 0,
-        },
-      });
-    }, VIEW);
-    await wait(2500);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, view) => {
+        window.__godsEyeView.engine.camera.cancelFlight?.();
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
+            longitude: (view.lon * Math.PI) / 180,
+            latitude: (view.lat * Math.PI) / 180,
+            height: view.height,
+          }),
+          orientation: {
+            heading: 0,
+            pitch: (view.pitch * Math.PI) / 180,
+            roll: 0,
+          },
+        });
+      },
+      VIEW,
+    );
+    await whenSettled(page);
     const held = await page.evaluate((view) => {
-      const carto = window.__godsEyeView.viewer.camera.positionCartographic;
+      const carto = window.__godsEyeView.engine.camera.pose().cartographic;
       return (
         Math.abs((carto.latitude * 180) / Math.PI - view.lat) < 0.01 &&
         Math.abs((carto.longitude * 180) / Math.PI - view.lon) < 0.01 &&
@@ -767,7 +746,7 @@ try {
   const beforeButtonEnter = await drawState();
   await page.focus('#draw-clear');
   await page.keyboard.press('Enter');
-  await wait(600);
+  await whenSettled(page);
   const afterButtonEnter = await drawState();
   check(
     'Enter on a keyboard-focused button activates the button, it does not finish the shape',
@@ -790,7 +769,7 @@ try {
     await waitForMarks(1),
   );
   await page.click('#draw-clear');
-  await wait(400);
+  await whenSettled(page);
   const cleared = await drawState();
   check(
     'Clear removes every mark from the board',
@@ -815,7 +794,7 @@ try {
     `${degenerateVertices} vertices`,
   );
   await pressFinish();
-  await wait(600);
+  await whenSettled(page);
   const degenerate = await drawState();
   check(
     'three points in a line are refused with a reason, not placed',
@@ -824,20 +803,19 @@ try {
   );
 
   // ── a shape drawn across the antimeridian lands where it was drawn ──────
-  await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+  await evaluateWithGeo(page, async (qaGeo) => {
+    window.__godsEyeView.engine.camera.cancelFlight?.();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: (179.9995 * Math.PI) / 180,
         latitude: 0,
         height: 3000,
       }),
       orientation: { heading: 0, pitch: (-88 * Math.PI) / 180, roll: 0 },
     });
-    viewer.scene.requestRender();
+    window.__godsEyeView.engine.render.request();
   });
-  await wait(2500);
+  await whenSettled(page);
   await page.evaluate(() => {
     const tool = window.__gevDrawTool;
     tool.cancel();
@@ -865,7 +843,7 @@ try {
   await page.evaluate(() => window.__gevAnnotations.clear());
 
   await page.click('#draw-toggle');
-  await wait(200);
+  await whenSettled(page);
   const finalState = await drawState();
   check(
     'leaving draw mode gives back the pointer, the handler and the double-click',
@@ -880,7 +858,7 @@ try {
     () => window.__godsEyeView.viewer.dataSources.length,
   );
   await page.click('#draw-toggle'); // destroy from an ACTIVE session: the harder case
-  await wait(200);
+  await whenSettled(page);
   const destroyed = await page.evaluate(async () => {
     const tool = window.__gevDrawTool;
     const wasActive = tool.active;
@@ -936,7 +914,7 @@ try {
     errors.join(' | '),
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`RESULT: ${failures} failures`);
 process.exitCode = failures ? 1 : 0;
@@ -975,20 +953,23 @@ async function findClickableTarget() {
     .catch(() => null);
 
   if (camera) {
-    await page.evaluate((spot) => {
-      const viewer = window.__godsEyeView.viewer;
-      viewer.camera.cancelFlight?.();
-      viewer.camera.setView({
-        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-          longitude: (spot.lon * Math.PI) / 180,
-          latitude: (spot.lat * Math.PI) / 180,
-          height: 600,
-        }),
-        orientation: { heading: 0, pitch: (-80 * Math.PI) / 180, roll: 0 },
-      });
-      viewer.scene.requestRender();
-    }, camera);
-    await wait(4000);
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, spot) => {
+        window.__godsEyeView.engine.camera.cancelFlight?.();
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
+            longitude: (spot.lon * Math.PI) / 180,
+            latitude: (spot.lat * Math.PI) / 180,
+            height: 600,
+          }),
+          orientation: { heading: 0, pitch: (-80 * Math.PI) / 180, roll: 0 },
+        });
+        window.__godsEyeView.engine.render.request();
+      },
+      camera,
+    );
+    await whenSettled(page);
     const spot = await onScreen(['cctv']);
     if (spot) return { ...spot, kind: 'cctv', layer: 'CCTV camera' };
   }
@@ -1021,20 +1002,23 @@ async function findClickableTarget() {
     })
     .catch(() => null);
   if (!site) return null;
-  await page.evaluate((spot) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (spot.lon * Math.PI) / 180,
-        latitude: (spot.lat * Math.PI) / 180,
-        height: 2500,
-      }),
-      orientation: { heading: 0, pitch: (-88 * Math.PI) / 180, roll: 0 },
-    });
-    viewer.scene.requestRender();
-  }, site);
-  await wait(4000);
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, spot) => {
+      window.__godsEyeView.engine.camera.cancelFlight?.();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
+          longitude: (spot.lon * Math.PI) / 180,
+          latitude: (spot.lat * Math.PI) / 180,
+          height: 2500,
+        }),
+        orientation: { heading: 0, pitch: (-88 * Math.PI) / 180, roll: 0 },
+      });
+      window.__godsEyeView.engine.render.request();
+    },
+    site,
+  );
+  await whenSettled(page);
   const spot = await onScreen([
     'local-datacenters-tips',
     'local-datacenters-pins',

@@ -1,16 +1,15 @@
 #!/usr/bin/env node
+import { whenSettled } from './qa/ready.mjs';
 /** Prove standalone startup and terminal resource ownership in a real browser. */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
-import puppeteer from 'puppeteer';
 
 const args = process.argv.slice(2);
 const urlIndex = args.indexOf('--url');
 const url = urlIndex >= 0 ? args[urlIndex + 1] : 'http://localhost:4173';
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  executablePath:
-    process.env.PUPPETEER_EXECUTABLE_PATH || (await puppeteer.executablePath()),
-  args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader'],
+  args: ['--no-sandbox'],
 });
 try {
   const page = await browser.newPage();
@@ -28,6 +27,7 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.voiceCommands, {
     timeout: 60_000,
   });
+  await whenSettled(page);
   const before = await page.evaluate(async () => {
     const entry = [...document.scripts].find((script) =>
       /\/src\/main\.js(?:\?|$)/.test(script.src),
@@ -52,7 +52,7 @@ try {
       enabled,
       layers: app.dataManager.layers.size,
       annotationCount: annotation.drawn,
-      viewerAlive: !app.viewer.isDestroyed(),
+      viewerAlive: !window.__godsEyeView.engine.isDestroyed(),
       credits: Boolean(document.querySelector('#cesium-credits')),
     };
   });
@@ -83,7 +83,7 @@ try {
     return {
       status: application.getState().status,
       samePromise,
-      viewerDestroyed: app.viewer.isDestroyed(),
+      viewerDestroyed: app.engine.isDestroyed(),
       layers: app.dataManager.layers.size,
       annotations: app.annotations.count(),
       governor: app.getRenderGovernorDiagnostics(),
@@ -112,5 +112,5 @@ try {
     'PASS: terminal teardown releases runtime owners without late browser errors',
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

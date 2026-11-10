@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * qa-context-arrivals.mjs — search arrivals above the surface, and Contacts
  * listing mapped installations around a moving tracked aircraft.
@@ -25,9 +26,10 @@
  * Writes <out>/result.json, screenshots and <out>/clip.mp4 (CDP screencast
  * with real frame timing; needs ffmpeg).
  */
+import { whenSettled, whenFramesDrawn, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 import { createScreencast, moveCamera } from './qa-journey-recorder.mjs';
 
@@ -62,14 +64,12 @@ const check = (name, ok, detail = '') => {
   if (!ok) result.failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
 };
 
-const browser = await puppeteer.launch({
-  headless: !argv.includes('--headful'),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
@@ -171,12 +171,10 @@ async function openPage({ aircraft = false } = {}) {
   const url = new URL(appUrl);
   url.searchParams.set('welcome', '0');
   await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.dataManager &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 120_000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 120_000,
+  });
+  await whenSettled(page);
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -185,31 +183,16 @@ async function openPage({ aircraft = false } = {}) {
 }
 
 async function waitTiles(page, maxMs = 30_000) {
-  await page
-    .waitForFunction(
-      () => {
-        const { scene } = window.__godsEyeView.viewer;
-        if (scene.globe.show) return scene.globe.tilesLoaded;
-        for (let i = 0; i < scene.primitives.length; i++) {
-          const p = scene.primitives.get(i);
-          if (p.show && p.tilesLoaded === false) return false;
-        }
-        return true;
-      },
-      { timeout: maxMs, polling: 250 },
-    )
-    .catch(() => {});
+  await whenTilesLoaded(page, { timeoutMs: maxMs }).catch(() => {});
 }
 
 /** Camera height above the rendered surface under it and under the view centre. */
 function clearance(page) {
-  return page.evaluate(() => {
-    const { viewer } = window.__godsEyeView;
-    const { scene, camera } = viewer;
-    const carto = camera.positionCartographic.clone();
+  return evaluateWithGeo(page, async (qaGeo) => {
+    const carto = window.__godsEyeView.engine.camera.pose().cartographic;
     const sample = (c) => {
       try {
-        const h = scene.sampleHeight(c);
+        const h = window.__godsEyeView.engine.surface.sampleHeight(c);
         return Number.isFinite(h) ? h : null;
       } catch {
         return null;
@@ -217,12 +200,12 @@ function clearance(page) {
     };
     const under = sample(carto);
     let centre = null;
-    const canvas = scene.canvas;
-    const hit = scene.pickPosition?.({
+    const canvas = window.__godsEyeView.engine.host.canvas;
+    const hit = window.__godsEyeView.engine.picker.pickPosition?.({
       x: canvas.clientWidth / 2,
       y: canvas.clientHeight / 2,
     });
-    if (hit) centre = scene.globe.ellipsoid.cartesianToCartographic(hit);
+    if (hit) centre = qaGeo.cartographic.fromCartesian(hit);
     const centreSurface = centre ? sample(centre) : null;
     const surface = Math.max(under ?? -Infinity, centreSurface ?? -Infinity);
     return {
@@ -234,7 +217,9 @@ function clearance(page) {
       clearanceM: Number.isFinite(surface)
         ? Math.round(carto.height - surface)
         : null,
-      pitchDeg: Math.round((camera.pitch * 180) / Math.PI),
+      pitchDeg: Math.round(
+        (window.__godsEyeView.engine.camera.pose().pitch * 180) / Math.PI,
+      ),
     };
   });
 }
@@ -255,47 +240,32 @@ async function arrivals() {
     });
     await page.type('#location-search', query, { delay: 40 });
     await page.keyboard.press('Enter');
-    // Wait for the flight to land: the camera still for 1.5 s.
-    const landed = Date.now();
-    let last = null;
-    let stillSince = null;
-    while (Date.now() - landed < 30_000) {
-      const now = await page.evaluate(() => {
-        const c = window.__godsEyeView.viewer.camera.positionWC;
-        return [c.x, c.y, c.z];
-      });
-      const moved =
-        !last ||
-        Math.hypot(now[0] - last[0], now[1] - last[1], now[2] - last[2]) > 0.5;
-      last = now;
-      if (moved) stillSince = null;
-      else stillSince ??= Date.now();
-      if (
-        Date.now() - landed > 4000 &&
-        stillSince &&
-        Date.now() - stillSince > 1500
-      )
-        break;
-      await sleep(250);
-    }
+    await whenSettled(page);
     await waitTiles(page);
-    await sleep(2500); // the ground guard measures after tiles stream in
+    await whenSettled(page); // the ground guard measures after tiles stream in
     const arrived = await clearance(page);
     const slug = query.replace(/\W+/g, '-').replace(/^-|-$/g, '').toLowerCase();
     await page.screenshot({ path: path.join(dir, `arrival-${slug}.png`) });
     // Look around: a gentle orbit, then check the eye still clears the ground.
     const view = await page.evaluate(() => {
-      const c = window.__godsEyeView.viewer.camera;
       return {
-        lat: (c.positionCartographic.latitude * 180) / Math.PI,
-        lon: (c.positionCartographic.longitude * 180) / Math.PI,
-        height: c.positionCartographic.height,
-        heading: (c.heading * 180) / Math.PI,
-        pitch: (c.pitch * 180) / Math.PI,
+        lat:
+          (window.__godsEyeView.engine.camera.pose().cartographic.latitude *
+            180) /
+          Math.PI,
+        lon:
+          (window.__godsEyeView.engine.camera.pose().cartographic.longitude *
+            180) /
+          Math.PI,
+        height: window.__godsEyeView.engine.camera.pose().cartographic.height,
+        heading:
+          (window.__godsEyeView.engine.camera.pose().heading * 180) / Math.PI,
+        pitch:
+          (window.__godsEyeView.engine.camera.pose().pitch * 180) / Math.PI,
       };
     });
     await moveCamera(page, { ...view, heading: view.heading + 25 }, 2.5);
-    await sleep(1500);
+    await whenFramesDrawn(page);
     const lookedAround = await clearance(page);
     result.arrivals.push({ query, arrived, lookedAround });
     check(
@@ -323,7 +293,7 @@ async function contacts() {
     { lat: 30.35, lon: -97.76, height: 900_000, pitch: -90 },
     0,
   );
-  await sleep(3000);
+  await whenFramesDrawn(page);
   // In-page probe: row text and installation entity churn every 250 ms.
   await page.evaluate(() => {
     const samples = [];
@@ -368,7 +338,7 @@ async function contacts() {
         entities: sites.length,
         created,
         tracked:
-          window.__godsEyeView.viewer.trackedEntity?.gevTrackedId ?? null,
+          window.__godsEyeView.engine.camera.following()?.label?.id ?? null,
         cockpit: document.body.classList.contains('cockpit-mode'),
       });
       if (samples.length > 5000) samples.splice(0, 1000);
@@ -383,7 +353,7 @@ async function contacts() {
   await page
     .waitForFunction(
       () =>
-        window.__godsEyeView.viewer.trackedEntity?.gevTrackedId ===
+        window.__godsEyeView.engine.camera.following()?.label?.id ===
         'flights:aaa051',
       { timeout: 60_000 },
     )
@@ -478,7 +448,7 @@ async function contacts() {
   await page.evaluate(() =>
     window.__godsEyeView.styleManager.cockpitView.exit?.(),
   );
-  await sleep(2000);
+  await whenFramesDrawn(page);
 
   // SEARCH NEARBY SITES, as the user presses it.
   await page.evaluate(() => {
@@ -504,7 +474,7 @@ async function contacts() {
   const toast = await page.evaluate(() =>
     document.getElementById('toast').textContent.trim(),
   );
-  await sleep(1500);
+  await whenFramesDrawn(page);
   const afterSearch = (
     await readSamples((await page.evaluate(() => performance.now())) - 1000)
   ).at(-1);
@@ -519,13 +489,13 @@ async function contacts() {
   await page.evaluate(() =>
     document.getElementById('global-context-flights-btn').click(),
   );
-  await sleep(2000);
+  await whenFramesDrawn(page);
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers
       .get('flights')
       .module.trackById('aaa052'),
   );
-  await sleep(3000);
+  await whenFramesDrawn(page);
   const t1 = await page.evaluate(() => performance.now());
   await page.evaluate(() =>
     document.getElementById('global-context-flights-btn').click(),
@@ -554,7 +524,7 @@ async function contacts() {
     }
     await sleep(500);
   }
-  await sleep(2000);
+  await whenFramesDrawn(page);
   await page.screenshot({ path: path.join(dir, 'contacts-fort-cavazos.png') });
   result.contacts.cavazos = cavazos;
   check(
@@ -600,7 +570,7 @@ try {
     path.join(outDir, 'result.json'),
     JSON.stringify(result, null, 1),
   );
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(
   `${result.failures.length ? 'FAIL' : 'PASS'} — ${path.join(outDir, 'result.json')}`,

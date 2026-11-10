@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive inspection independently verifies the Cesium route geometry.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenUiSettled, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * Browser proof of the Directions layer: real chip clicks, real globe clicks,
  * a real route from the real proxy, a real camera flight.
@@ -6,10 +9,10 @@
  * Usage: node scripts/qa-directions.mjs [--url http://localhost:4173]
  *        [--shots qa-shots/directions] [--label keyed] [--skip denver]
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 import { chromeExecutablePath } from './qa-chrome.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,9 +37,8 @@ const check = (name, passed, detail = '') => {
   if (!passed) failures += 1;
 };
 
-const browser = await puppeteer.launch({
-  headless: process.env.QA_HEADFUL === '1' ? false : true,
-  executablePath: chromeExecutablePath(),
+const browser = await launchBrowser({
+  headless: true,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
@@ -62,12 +64,12 @@ const shot = async (name) => {
 
 /** Put the camera over a place, instantly, and let the scene settle. */
 async function lookAt(lat, lon, height) {
-  await page.evaluate(
-    (la, lo, h) => {
-      const viewer = window.__godsEyeView.viewer;
-      const Cartesian3 = viewer.camera.positionWC.constructor;
-      viewer.camera.cancelFlight();
-      viewer.camera.setView({
+  await evaluateWithGeo(
+    page,
+    async (qaGeo, la, lo, h) => {
+      const Cartesian3 = qaGeo.cartesian3;
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
         destination: Cartesian3.fromDegrees(lo, la, h),
         orientation: { heading: 0, pitch: -Math.PI / 2.2, roll: 0 },
       });
@@ -80,17 +82,16 @@ async function lookAt(lat, lon, height) {
 
 /** Canvas position of a lon/lat on the rendered surface, or null. */
 const screenAt = (lat, lon) =>
-  page.evaluate(
-    (la, lo) => {
-      const viewer = window.__godsEyeView.viewer;
-      const scene = viewer.scene;
-      const Cartesian3 = viewer.camera.positionWC.constructor;
-      const Cartographic = viewer.camera.positionCartographic.constructor;
+  evaluateWithGeo(
+    page,
+    async (qaGeo, la, lo) => {
+      const Cartesian3 = qaGeo.cartesian3;
+      const Cartographic = qaGeo.cartographic;
       const carto = Cartographic.fromDegrees(lo, la);
-      let ground = scene.globe?.getHeight?.(carto);
+      let ground = window.__godsEyeView.engine.surface.terrainHeight?.(carto);
       if (!Number.isFinite(ground)) ground = 0;
       const world = Cartesian3.fromDegrees(lo, la, ground);
-      const win = scene.cartesianToCanvasCoordinates(world);
+      const win = window.__godsEyeView.engine.projector.worldToWindow(world);
       if (!win || !Number.isFinite(win.x)) return null;
       const x = Math.round(win.x);
       const y = Math.round(win.y);
@@ -150,7 +151,7 @@ const clickChip = async (chipId) => {
     button.click();
     return true;
   }, chipId);
-  await sleep(150);
+  await whenUiSettled(page);
   return clicked;
 };
 
@@ -180,7 +181,7 @@ const waitForMode = (word) =>
 
 const cameraPose = () =>
   page.evaluate(() => {
-    const c = window.__godsEyeView.viewer.camera.positionWC;
+    const c = window.__godsEyeView.engine.camera.pose().position;
     return { x: c.x, y: c.y, z: c.z };
   });
 const poseDelta = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -191,7 +192,7 @@ async function placeEndpoints(a, b) {
   const atA = await screenAt(a.lat, a.lon);
   if (!atA) return false;
   await page.mouse.click(atA.x, atA.y);
-  await sleep(700);
+  await whenUiSettled(page);
   await clickChip('set-b');
   const atB = await screenAt(b.lat, b.lon);
   if (!atB) return false;
@@ -207,6 +208,7 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
     timeout: 90000,
   });
+  await whenSettled(page);
   // Two module reads the assertions need. Both are the app's OWN module
   // instances (Vite serves one copy), so this observes rather than simulates.
   await page.evaluate(async () => {
@@ -311,7 +313,7 @@ try {
       },
     };
   });
-  await sleep(3000);
+  await whenSettled(page);
 
   // ── 1. Open the UTILITIES panel, then toggle the row on. ────────────────
   const opened = await page.evaluate(() => {
@@ -328,7 +330,7 @@ try {
       .getElementById('utilities-panel')
       .classList.contains('collapsed');
   });
-  await sleep(700);
+  await whenUiSettled(page);
   check('the UTILITIES panel opens from its own header control', opened);
   const toggled = await page.evaluate(() => {
     const row = document.querySelector(
@@ -340,7 +342,7 @@ try {
     button.click();
     return true;
   });
-  await sleep(1200);
+  await whenUiSettled(page);
   check(
     'the Directions row is in the Data Layers panel and toggles on',
     toggled,
@@ -388,13 +390,13 @@ try {
     );
     close?.click();
   });
-  await sleep(500);
+  await whenUiSettled(page);
 
   // ── 2. Place A on the Ferry Building, B in Golden Gate Park. ─────────────
   const FERRY = { lat: 37.7955, lon: -122.3937 };
   const GGPARK = { lat: 37.7694, lon: -122.4862 };
   await lookAt(37.782, -122.44, 16000);
-  await sleep(5000);
+  await whenSettled(page);
 
   await clickChip('set-a');
   state = await layerState();
@@ -411,7 +413,7 @@ try {
   let at = await screenAt(FERRY.lat, FERRY.lon);
   check('the Ferry Building is on screen', !!at, JSON.stringify(at));
   await page.mouse.click(at.x, at.y);
-  await sleep(800);
+  await whenUiSettled(page);
   state = await layerState();
   check(
     'placing A releases the pointer claim',
@@ -425,7 +427,7 @@ try {
   // used to place B and deselect whatever was under it in the same gesture.
   await page.evaluate(() => {
     window.__gevQaLateHandler = [];
-    const canvas = window.__godsEyeView.viewer.scene.canvas;
+    const canvas = window.__godsEyeView.engine.host.canvas;
     canvas.addEventListener('pointerup', () => {
       window.__gevQaLateHandler.push(window.__gevQa.pointerOwner());
     });
@@ -443,7 +445,7 @@ try {
     `saw ${JSON.stringify(lateOwners)}`,
   );
   await waitForRoute();
-  await sleep(2000);
+  await whenSettled(page);
   state = await layerState();
   check(
     'once that click is over, the pointer claim is returned',
@@ -488,7 +490,7 @@ try {
     items[2]?.click();
     return { active, tabIndex: items[2]?.tabIndex };
   });
-  await sleep(600);
+  await whenUiSettled(page);
   const afterListClick = await layerState();
   check(
     'a list row takes keyboard focus and selects its maneuver',
@@ -525,7 +527,7 @@ try {
   // ── 4. Swap endpoints. ──────────────────────────────────────────────────
   const beforeSwap = await layerState();
   await clickChip('swap');
-  await sleep(3500);
+  await waitForRoute();
   const afterSwap = await layerState();
   check(
     'SWAP reverses the route',
@@ -534,7 +536,7 @@ try {
     `"${beforeSwap.listText[0]}" -> "${afterSwap.listText[0]}"`,
   );
   await clickChip('swap');
-  await sleep(3500);
+  await waitForRoute();
 
   // ── 5. Three rapid reroutes leave exactly one route. ─────────────────────
   await page.evaluate(() => {
@@ -543,7 +545,7 @@ try {
     manager.setLayerParams('directions', { mode: 'bike' }, { origin: 'user' });
     manager.setLayerParams('directions', { mode: 'car' }, { origin: 'user' });
   });
-  await sleep(6000);
+  await waitForRoute();
   const rapid = await layerState();
   check(
     'three rapid reroutes leave exactly one route',
@@ -656,7 +658,7 @@ try {
       ),
     );
     await waitForRoute();
-    await sleep(1200);
+    await whenUiSettled(page);
   }
   await cdp.send('Fetch.disable').catch(() => {});
 
@@ -686,7 +688,7 @@ try {
   // A reroute replaces the route the dolly is flying; the dolly has to land
   // first rather than keep flying a route that no longer exists.
   await setMode('foot');
-  await sleep(1200);
+  await whenUiSettled(page);
   const afterReroute = await layerState();
   check(
     'changing profile mid-flight lands the flight it replaced',
@@ -696,7 +698,7 @@ try {
   await waitForMode('Walk');
   await setMode('car');
   await waitForMode('Drive');
-  await sleep(800);
+  await whenUiSettled(page);
   check('FLY is offered again after the reroute', await clickChip('fly'));
   await sleep(2000);
 
@@ -768,7 +770,7 @@ try {
   // ── 9. Denver: maneuver dots sit on the ground, not at sea level. ────────
   if (!SKIP.has('denver')) {
     await lookAt(39.744, -104.999, 7000);
-    await sleep(6000);
+    await whenSettled(page);
     const placed = await placeEndpoints(
       { lat: 39.7392, lon: -104.9903 },
       { lat: 39.7487, lon: -105.0077 },
@@ -777,10 +779,9 @@ try {
     if (placed) {
       await waitForRoute();
       // Let the shared ground-floor cells warm and the dots re-anchor.
-      await sleep(9000);
-      const denver = await page.evaluate(() => {
-        const viewer = window.__godsEyeView.viewer;
-        const Cartographic = viewer.camera.positionCartographic.constructor;
+      await whenTilesLoaded(page);
+      const denver = await evaluateWithGeo(page, async (qaGeo) => {
+        const Cartographic = qaGeo.cartographic;
         const { stepCount, stepsShown } = window.__gevQaDirections.drawn();
         const heights = stepsShown.map(
           (position) => Cartographic.fromCartesian(position).height,
@@ -817,7 +818,7 @@ try {
       origin: 'user',
     }),
   );
-  await sleep(1500);
+  await whenSettled(page);
   const off = await page.evaluate(() => {
     const drawn = window.__gevQaDirections.drawn();
     const row = document.querySelector(
@@ -877,7 +878,7 @@ try {
   check('harness completed', false, error?.stack || String(error));
   await shot(`99-${LABEL}-failure.jpg`).catch(() => {});
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
   await fs.writeFile(
     path.join(SHOTS, `qa-directions-${LABEL}.log`),
     `${lines.join('\n')}\n${failures} failure(s)\n`,

@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Cesium-only probes: native DataSource counts and scene-render timing measure the Cesium cable adapter.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 /**
  * qa-cables-overlay — submarine-cable label path measurement + contract gate.
  *
@@ -20,7 +24,6 @@
  * Requires a running dev server. Headless; rAF throttling disabled so the
  * frame clock is honest (hidden-pane gotcha).
  */
-import puppeteer from 'puppeteer';
 
 const argv = process.argv;
 const url = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4214';
@@ -40,35 +43,26 @@ function report(name, detail) {
   console.log(`  [MEAS] ${name} — ${JSON.stringify(detail)}`);
 }
 
-const browser = await puppeteer.launch({
-  headless: 'new',
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--window-size=1440,900',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding',
-    '--disable-background-timer-throttling',
-  ],
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1440,900', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
 });
 
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
-  await new Promise((r) => setTimeout(r, 12_000)); // boot flyTo + deferred init
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, { timeout: 90_000 });
+  await whenSettled(page); // boot flyTo + deferred init
 
   // Park mid-Atlantic (many cables + both coasts' landings in range) and
   // disable every layer so the cables layer is measured in isolation.
-  await page.evaluate(async () => {
+  await evaluateWithGeo(page, async (qaGeo) => {
     const gev = window.__godsEyeView;
-    const v = gev.viewer;
-    v.camera.cancelFlight();
-    const ell = v.scene.globe.ellipsoid;
-    v.camera.setView({
-      destination: ell.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: -40 * Math.PI / 180, latitude: 35 * Math.PI / 180, height: 4_500_000,
       }),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
@@ -77,7 +71,7 @@ try {
       if (entry.enabled) { try { await gev.dataManager.setEnabled(id, false, { origin: 'user' }); } catch { /* measured via counts */ } }
     }
   });
-  await new Promise((r) => setTimeout(r, 6_000)); // tiles + fades settle
+  await whenSettled(page); // tiles + fades settle
 
   // ── b. toggle-ON → labels visible ─────────────────────────────────────
   if (!control) {
@@ -96,14 +90,14 @@ try {
       };
       while (performance.now() < deadline) {
         if (labelsUp()) return { ms: Math.round(performance.now() - t0), timedOut: false };
-        gev.viewer.scene.requestRender?.();
+        window.__godsEyeView.engine.render.request?.();
         await new Promise((r) => setTimeout(r, 100));
       }
       return { ms: 60_000, timedOut: true };
     }, LAYER_ID, legacy);
     report('toggle-ON -> labels visible (ms)', labelLatency);
     check('labels became visible after enable', labelLatency.timedOut === false, labelLatency);
-    await new Promise((r) => setTimeout(r, 3_000)); // let load/labels settle
+    await whenSettled(page); // let load/labels settle
   }
 
   // ── c. drawn-set / label / host counts ────────────────────────────────
@@ -190,11 +184,10 @@ try {
     : 'scene.render cost, cables ON, 10s orbit', frameCost);
 
   // ── d. parked idle honesty (labels must not force continuous render) ──
-  await new Promise((r) => setTimeout(r, 4_000)); // orbit stop + fades settle
+  await whenSettled(page); // orbit stop + fades settle
   const idle = await page.evaluate(() => new Promise((resolve) => {
-    const scene = window.__godsEyeView.viewer.scene;
     let renders = 0;
-    const remove = scene.postRender.addEventListener(() => { renders += 1; });
+    const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => { renders += 1; });
     setTimeout(() => { remove(); resolve({ renders }); }, 5_000);
   }));
   report(control
@@ -224,7 +217,7 @@ try {
     const cycle = await page.evaluate(async (layerId) => {
       const gev = window.__godsEyeView;
       await gev.dataManager.setEnabled(layerId, false, { origin: 'user' });
-      gev.viewer.scene.requestRender?.();
+      window.__godsEyeView.engine.render.request?.();
       await new Promise((r) => setTimeout(r, 1_200));
       const offDiag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
       const offEntries = offDiag.entriesBySource?.[layerId] || 0;
@@ -236,7 +229,7 @@ try {
         const diag = window.__gevWorldOverlay?.getDiagnostics?.() || {};
         onPainted = diag.paintedBySource?.[layerId] || 0;
         if (onPainted > 0) break;
-        gev.viewer.scene.requestRender?.();
+        window.__godsEyeView.engine.render.request?.();
         await new Promise((r) => setTimeout(r, 100));
       }
       return { offEntries, offPainted, onPainted };
@@ -245,7 +238,7 @@ try {
     check('re-enable restores painted labels', cycle.onPainted > 0, cycle);
   }
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 const passed = results.filter((r) => r.pass).length;

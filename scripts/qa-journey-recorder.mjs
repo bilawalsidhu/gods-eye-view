@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { evaluateWithGeo } from './qa/geometry.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -52,8 +53,8 @@ export function frameStats(frames) {
 export async function installFrameProbe(page) {
   await page.evaluate(() => {
     if (window.__gevFrameProbe) return;
-    const { viewer, engine } = window.__godsEyeView;
-    const events = viewer?.scene ?? engine.frames;
+    const { engine } = window.__godsEyeView;
+    const events = engine.frames;
     const probe = { frames: [], started: 0 };
     window.__gevFrameProbe = probe;
     let last = performance.now();
@@ -102,58 +103,25 @@ export function pageNow(page) {
  * @param {number} seconds Flight duration; 0 jumps.
  */
 export async function moveCamera(page, view, seconds) {
-  if (
-    await page.evaluate(() => window.__godsEyeView.engine?.kind === 'navara')
-  ) {
-    await page.evaluate(
-      async (v, duration) => {
-        const geo = await import('/src/geo/index.js');
-        const camera = window.__godsEyeView.engine.camera;
-        camera.cancelFlight();
-        await new Promise((resolve) =>
-          camera.flyTo({
-            destination: geo.cartesian3.fromDegrees(v.lon, v.lat, v.height),
-            orientation: {
-              heading: ((v.heading ?? 0) * Math.PI) / 180,
-              pitch: ((v.pitch ?? -45) * Math.PI) / 180,
-              roll: 0,
-            },
-            duration,
-            maximumHeight: Math.max(v.height, camera.height()),
-            complete: resolve,
-            cancel: resolve,
-          }),
-        );
-      },
-      view,
-      seconds,
-    );
-    return;
-  }
-  await page.evaluate(
-    (v, duration) =>
-      new Promise((resolve) => {
-        const { viewer } = window.__godsEyeView;
-        const C = viewer.camera;
-        C.cancelFlight();
-        C.flyTo({
-          destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-            latitude: (v.lat * Math.PI) / 180,
-            longitude: (v.lon * Math.PI) / 180,
-            height: v.height,
-          }),
+  await evaluateWithGeo(
+    page,
+    async (geo, v, duration) => {
+      const camera = window.__godsEyeView.engine.camera;
+      camera.cancelFlight();
+      await new Promise((resolve) =>
+        camera.flyTo({
+          destination: geo.cartesian3.fromDegrees(v.lon, v.lat, v.height),
           orientation: {
             heading: ((v.heading ?? 0) * Math.PI) / 180,
             pitch: ((v.pitch ?? -45) * Math.PI) / 180,
             roll: 0,
           },
           duration,
-          // Straight, eased motion like a drag or wheel zoom, not an arc.
-          maximumHeight: Math.max(v.height, C.positionCartographic.height),
           complete: resolve,
           cancel: resolve,
-        });
-      }),
+        }),
+      );
+    },
     view,
     seconds,
   );

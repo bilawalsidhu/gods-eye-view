@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /** Exercise scene-clock ownership and authored seek behavior in the composed browser app. */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 const shots = path.resolve('qa-shots/director-timing');
 fs.mkdirSync(shots, { recursive: true });
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
@@ -23,12 +24,10 @@ try {
     `${process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60000 },
-  );
+  await page.waitForFunction(() => window.__godsEyeView?.sceneDirector, {
+    timeout: 60000,
+  });
+  await whenSettled(page);
   const result = await page.evaluate(async () => {
     const director = window.__godsEyeView.sceneDirector;
     const camera = director.styleManager.getCameraState();
@@ -172,7 +171,7 @@ try {
     'existing Nepal scene and authored shots load',
     content.exists && content.shots >= 25 && content.loaded,
   );
-  await new Promise((resolve) => setTimeout(resolve, 2500));
+  await whenSettled(page);
   await page.screenshot({ path: path.join(shots, 'nepal-regional.png') });
   await page.evaluate(() => {
     const g = window.__godsEyeView;
@@ -184,7 +183,7 @@ try {
       pitch: -55,
     });
   });
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await whenSettled(page);
   await page.screenshot({ path: path.join(shots, 'nepal-angle.png') });
   check(
     'no pending clocks after Stop',
@@ -196,6 +195,6 @@ try {
   );
   check('no browser exceptions', errors.length === 0);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (failures) process.exitCode = 1;

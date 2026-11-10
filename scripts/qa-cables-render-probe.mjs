@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Cesium-only probes: manual native renders isolate Cesium cable render cost.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 /**
  * qa-cables-render-probe — replicates the owner-side perf probe methodology
  * for the cables layer (relative numbers; SwiftShader when run headless):
@@ -11,35 +15,29 @@
  *
  * Usage: node scripts/qa-cables-render-probe.mjs [--url http://localhost:4216]
  */
-import puppeteer from 'puppeteer';
 
 const argv = process.argv;
 const url = argv.includes('--url') ? argv[argv.indexOf('--url') + 1] : 'http://localhost:4216';
 const LAYER_ID = 'telegeography-submarine-cables';
 
-const browser = await puppeteer.launch({
-  headless: 'new',
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
-  args: [
-    '--no-sandbox', '--disable-setuid-sandbox', '--window-size=1440,900',
-    '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding',
-    '--disable-background-timer-throttling',
-  ],
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1440,900', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
 });
 
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
-  await new Promise((r) => setTimeout(r, 12_000));
+  await page.waitForFunction(() => !!window.__godsEyeView?.engine, { timeout: 90_000 });
+  await whenSettled(page);
 
-  await page.evaluate(async () => {
+  await evaluateWithGeo(page, async (qaGeo) => {
     const gev = window.__godsEyeView;
-    gev.viewer.camera.cancelFlight();
-    const ell = gev.viewer.scene.globe.ellipsoid;
-    gev.viewer.camera.setView({
-      destination: ell.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: -40 * Math.PI / 180, latitude: 35 * Math.PI / 180, height: 4_500_000,
       }),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
@@ -48,7 +46,7 @@ try {
       if (entry.enabled) { try { await gev.dataManager.setEnabled(id, false, { origin: 'user' }); } catch { /* probe */ } }
     }
   });
-  await new Promise((r) => setTimeout(r, 5_000));
+  await whenSettled(page);
 
   const stats = (values) => ({
     mean: +(values.reduce((s, v) => s + v, 0) / Math.max(1, values.length)).toFixed(2),
@@ -60,7 +58,7 @@ try {
       const gev = window.__godsEyeView;
       await gev.dataManager.setEnabled(id, on, { origin: 'user' });
     }, LAYER_ID, enabled);
-    await new Promise((r) => setTimeout(r, enabled ? 6_000 : 3_000)); // load/teardown + settle
+    await whenSettled(page); // load/teardown + settle
 
     // 1. PARKED timed renders.
     const parked = await page.evaluate(() => {
@@ -77,18 +75,17 @@ try {
     // 2. PAN-STOP cycles: move, raise moveEnd, wait 650 ms, 20 timed renders.
     const cycles = [];
     for (let cycle = 0; cycle < 3; cycle++) {
-      const frames = await page.evaluate(async (step) => {
+      const frames = await evaluateWithGeo(page, async (qaGeo, step) => {
         const v = window.__godsEyeView.viewer;
-        const ell = v.scene.globe.ellipsoid;
-        v.camera.setView({
-          destination: ell.cartographicToCartesian({
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
             longitude: (-40 + step * 3) * Math.PI / 180,
             latitude: 35 * Math.PI / 180,
             height: 4_500_000,
           }),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
-        v.camera.moveEnd.raiseEvent();
+        window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
         await new Promise((resolve) => setTimeout(resolve, 650));
         const durations = [];
         for (let i = 0; i < 20; i++) {
@@ -112,5 +109,5 @@ try {
   console.log(`\nparked delta (ON-OFF mean): ${(on.parked.mean - off.parked.mean).toFixed(2)}ms`);
   console.log(`pan-stop worst: ON ${on.worst}ms vs OFF ${off.worst}ms`);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
