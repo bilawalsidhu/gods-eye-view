@@ -448,7 +448,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     }
 
     // Photoreal regime. Sampling is delegated to the shared coarse-cell
-    // sampler. It remains event-driven, one-shot per cell, and keeps its
+    // sampler. It remains event-driven, a few probes per cell, and keeps its
     // existing acceptance window; CCTV adds no rooftop rejection policy.
     if (sampleGround && parts.model.projectionTilesReady()) {
       record.groundMeshSampleRequestCount =

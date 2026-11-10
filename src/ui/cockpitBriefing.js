@@ -85,12 +85,9 @@ export function relocalizeBrief() {
   Object.assign(this.brief, cycleWords(this.briefAutoRotateEnabled));
   this.showBriefPage(this.briefPageIndex);
   if (this.regionalBrief)
-    this.renderRegionalBrief(this.regionalBrief, this.lastAircraftInfo);
+    this.renderRegionalBrief(this.regionalBrief, this.lastSubjectInfo);
   else if (this.brief.news.state)
-    this.renderRegionalBriefStatus(
-      this.brief.news.state,
-      this.lastAircraftInfo,
-    );
+    this.renderRegionalBriefStatus(this.brief.news.state, this.lastSubjectInfo);
 }
 
 export function setBriefAutoRotate(enabled) {
@@ -156,7 +153,7 @@ export function maybeRefreshRegionalBrief(info) {
     !Number.isFinite(info.longitude)
   )
     return;
-  const subjectId = `${info.layerId || 'aircraft'}:${info.icao24 || info.registration || info.callsign || 'unknown'}`;
+  const subjectId = `${info.layerId || 'aircraft'}:${info.icao24 || info.mmsi || info.noradId || info.registration || info.callsign || 'unknown'}`;
   if (subjectId !== this.regionalBriefSubjectId) {
     this.regionalBriefAbort?.abort();
     this.regionalBriefAbort = null;

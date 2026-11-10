@@ -283,6 +283,10 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed))
   color: var(--cockpit-accent);
   opacity: 0.9;
 }
+/* A bridge has no altitude tape; course over ground replaces the readout. */
+#cockpit-altitude-rim[hidden] {
+  display: none;
+}
 .cockpit-altitude-rim-label {
   position: absolute;
   top: 20%;
@@ -900,7 +904,7 @@ html:not([lang='en']) .cockpit-roll-token.is-separator {
   position: fixed;
   z-index: 146;
   right: 36px;
-  bottom: calc(2vh + 4.5rem);
+  bottom: calc(2vh + 4.5rem + var(--world-timeline-lift, 0px));
   display: grid;
   gap: 6px;
 }
@@ -2079,7 +2083,7 @@ body.cockpit-mode #intel-hud .hud-right-edge {
 @media (max-width: 760px) {
   #view-switcher {
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + var(--world-timeline-lift, 0px));
   }
   body.cockpit-mode #view-switcher {
     right: auto;
