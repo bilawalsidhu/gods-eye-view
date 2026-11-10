@@ -4304,8 +4304,11 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   advances dead reckoning from the host frame.
 > - **Scheduled route plausibility:** Aircraft route labels and selected-route
 >   context reject the distant backwards, forwards and antipodal extensions of
->   an airport pair's great circle. The existing 130 km endpoint admission and
->   200 km cross-track tolerance remain; a projected fix outside the finite
+>   an airport pair's great circle. The existing 130 km endpoint admission
+>   remains; the cross-track tolerance is 200 km or 15% of the route's length,
+>   whichever is larger (JFK–SFO allows 623 km, as airways and winds take a
+>   coast-to-coast flight several hundred kilometres off the great circle); a
+>   projected fix outside the finite
 >   origin-to-destination minor arc also has a generous 200 km extension at
 >   either end. Missing coordinates and coincident or antipodal endpoint pairs
 >   retain their loose, unjudgeable behavior; vertical-trend checks are unchanged.
