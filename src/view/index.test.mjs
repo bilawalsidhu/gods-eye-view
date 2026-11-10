@@ -208,6 +208,16 @@ test('street-level photos travel in the link, light their source and bring their
   assert.equal(streetLevelFromParams(new URLSearchParams('sl=bing,1,2')), null);
   assert.equal(streetLevelFromParams(new URLSearchParams('lat=1')), null);
   assert.equal(createView({ camera: { lat: 1, lon: 2 } }).street_level, null);
+  // Half a point is not mixed with the camera's other half.
+  const half = createView({
+    camera: { lat: 1, lon: 2 },
+    street_level: { provider: 'mapillary', lat: 40 },
+  });
+  assert.deepEqual(half.street_level, {
+    provider: 'mapillary',
+    lat: 1,
+    lon: 2,
+  });
 });
 
 test('street-level photos: a tilted camera opens them where it looks, a link cannot pair them with the wrong map, and follow is refused', async () => {

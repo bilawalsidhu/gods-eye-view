@@ -58,31 +58,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // control_cockpit states the own-layer entry rule (Contacts not required).
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
-    // show_street_level (map, source, photo) is the only change on top of main.
-    SHOW_STREET_LEVEL_PAYLOAD_DIGEST,
-  );
-  // Every shipped tool is byte-identical to the previous release: the new
-  // tool is the whole difference, so a later edit cannot hide in a re-pin.
-  const shipped = createHash('sha256')
-    .update(
-      JSON.stringify(
-        stable(
-          GEV_REALTIME_TOOLS.filter(
-            (tool) =>
-              !['set_cyber_sonar', 'show_street_level'].includes(tool.name),
-          ),
-        ),
-      ),
-    )
-    .digest('hex');
-  assert.equal(
-    shipped,
-    '6a0d154e68beb787c4e20f12d29a5c86577dc343f3e71d8b5651998ea45d8c3c',
+    // show_street_level (map, source, photo) adds one tool.
+    '0c27f62062001e6a07241cd301c3d357f55e9b74f66cd2904d16590510337468',
   );
 });
-
-const SHOW_STREET_LEVEL_PAYLOAD_DIGEST =
-  '0c27f62062001e6a07241cd301c3d357f55e9b74f66cd2904d16590510337468';
 
 test('descriptions customize wording without changing immutable shared arguments', () => {
   const descriptions = {

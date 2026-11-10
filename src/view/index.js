@@ -354,10 +354,11 @@ export function createView({
       );
     if (needs) map = needs;
     // The point defaults to where the camera looks: a view "of X" opens
-    // photos at X, also when the camera sits behind it.
+    // photos at X, also when the camera sits behind it. It is a pair: half
+    // of one is not mixed with the camera's other half.
+    const given = [latitude(streetLevel.lat), longitude(streetLevel.lon)];
     const seen = lookAtPoint(camera);
-    const lat = latitude(streetLevel.lat) ?? seen.lat;
-    const lon = longitude(streetLevel.lon) ?? seen.lon;
+    const [lat, lon] = given.includes(undefined) ? [seen.lat, seen.lon] : given;
     street = Object.freeze({
       ...(provider ? { provider } : {}),
       lat: round(clamp(lat, -90, 90), 5),

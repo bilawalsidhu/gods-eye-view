@@ -266,8 +266,11 @@ export function createStreetLevelLayer({
     if (providerAvailable(entry)) parts.credits.show(state.viewer, entry.def);
   }
 
+  /** Requests replacing the open photo that switch its source keep it up. */
+  let viewerHolds = 0;
+
   function deactivate(entry) {
-    parts.viewerHost.unmount(entry.def.id);
+    if (!viewerHolds) parts.viewerHost.unmount(entry.def.id);
     entry.instance.deactivate();
     parts.credits.hide(state.viewer, entry.def);
   }
@@ -278,6 +281,13 @@ export function createStreetLevelLayer({
   function abortNearest() {
     nearestLookup?.abort();
     nearestLookup = null;
+  }
+
+  /** Close the image and deselect its sequence on the map. */
+  function closeViewer() {
+    abortNearest();
+    parts.viewerHost.close();
+    parts.clearSequences();
   }
 
   /** Ground under the screen centre; null for sky, undefined when it cannot aim. */
@@ -692,15 +702,17 @@ export function createStreetLevelLayer({
      * street); clicks keep the default. A caller's `signal` retires the
      * lookup: nothing opens after it fires. Providers without
      * `nearestImage` are skipped. `armed: false` (a request of its own, such
-     * as the assistant's) neither uses nor drops a link's armed point. Why
+     * as the assistant's) does not use a link's armed point, and keeps it
+     * while it looks; a photo it opens ends it, as any opened photo does. Why
      * nothing opened is left in `street.nearestOutcome`: 'empty' (no imagery
      * in reach), 'sky' (the screen centre is not ground), or null (an error).
      * `replace: true` (a request that takes over the panel) keeps an open
      * photo up while it looks, so the viewer and EXPAND stay, and closes it
      * when the lookup opens nothing: the panel shows this request's outcome.
-     * `proceed()` is asked once the lookup has found an image and before it
-     * loads; false retires the request (a photo that bills every load must
-     * not load for a request its caller has given up).
+     * `proceed()` is asked before a found image loads and before an empty
+     * or failed lookup reports; false retires the request and leaves the
+     * panel as it was (a photo that bills every load must not load for a
+     * request its caller has given up).
      */
     async openNearest(
       point,
@@ -722,9 +734,7 @@ export function createStreetLevelLayer({
       const armed = useArmed ? state.street.armed : null;
       if (useArmed) state.street.armed = null;
       const closeReplaced = () => {
-        if (!replace || !state.street.open) return;
-        parts.viewerHost.close();
-        parts.clearSequences();
+        if (replace && state.street.open) closeViewer();
       };
       if (!point && aim === 'screen-centre' && armed) {
         // The button promises the centre of the view: the link's spot only
@@ -812,6 +822,9 @@ export function createStreetLevelLayer({
         if (proceed && proceed() !== true) return retired();
         nearestLookup = null;
         callerSignal?.removeEventListener('abort', onCallerAbort);
+        // The photo asked for stays on screen: a sequence playing in the
+        // photo it replaces stops.
+        if (replace && state.street.open) parts.viewerHost.stopPlayback();
         // The caller's signal still counts while the viewer mounts and loads.
         return openImage(entry.def.id, imageId, {
           frame,
@@ -821,6 +834,9 @@ export function createStreetLevelLayer({
       callerSignal?.removeEventListener('abort', onCallerAbort);
       // Replaced while it looked: the panel is the newer lookup's.
       if (nearestLookup !== lookup) return false;
+      // Given up by its caller while it looked: the open photo stays, and
+      // the panel reports nothing of this lookup.
+      if (proceed && proceed() !== true) return retired();
       nearestLookup = null;
       closeReplaced();
       // Switched off while it looked: nothing to open, nothing to report.
@@ -848,11 +864,23 @@ export function createStreetLevelLayer({
       notify();
       return false;
     },
-    /** Close the image and deselect its sequence on the map. */
-    closeViewer() {
-      abortNearest();
-      parts.viewerHost.close();
-      parts.clearSequences();
+    closeViewer,
+    /**
+     * Keep the open photo up while a request that replaces it switches the
+     * source (the viewer and EXPAND are replaced, not closed). The returned
+     * release closes it if its source is still off by then.
+     */
+    holdViewer() {
+      viewerHolds += 1;
+      let held = true;
+      return () => {
+        if (!held) return;
+        held = false;
+        viewerHolds -= 1;
+        if (viewerHolds) return;
+        for (const entry of state.providers.values())
+          if (!entry.on) parts.viewerHost.unmount(entry.def.id);
+      };
     },
     /**
      * Prepare a nearest lookup for the next OPEN press without running it: a

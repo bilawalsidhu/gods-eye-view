@@ -366,7 +366,11 @@ function fakeViewer() {
 }
 
 /** A layer over `providers`, initialised and enabled on a stand-in viewer. */
-async function enabledLayer(t, providers = [fakeProvider()]) {
+async function enabledLayer(
+  t,
+  providers = [fakeProvider()],
+  { services, setup } = {},
+) {
   const saved = globalThis.document;
   // A pose moves the position marker, whose glyph is drawn on a canvas.
   const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
@@ -374,7 +378,11 @@ async function enabledLayer(t, providers = [fakeProvider()]) {
     createElement: () => ({ getContext: () => drawing }),
   });
   const viewer = fakeViewer();
-  const layer = createStreetLevelLayer({ providers });
+  setup?.(viewer);
+  const layer = createStreetLevelLayer({
+    providers,
+    ...(services ? { services } : {}),
+  });
   layer.init(viewer);
   layer.enable(viewer);
   t.after(() => {
@@ -1944,7 +1952,6 @@ test('the panel says why a lit Street View draws nothing off Google 3D', async (
 });
 
 test('OPEN aimed at the sky after a link armed opens nothing: never the far link point', async (t) => {
-  const { createStreetLevelLayer: create } = await import('./index.js');
   const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
@@ -1953,26 +1960,18 @@ test('OPEN aimed at the sky after a link armed opens nothing: never the far link
       return null;
     },
   });
-  const saved = globalThis.document;
-  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
-  globalThis.document = Object.assign(new EventTarget(), {
-    createElement: () => ({ getContext: () => drawing }),
-  });
-  const viewer = fakeViewer();
-  // Every pick misses the ground: the screen centre is sky.
-  Object.assign(viewer.scene, {
-    pickPositionSupported: true,
-    pickPosition: () => undefined,
-  });
-  viewer.globe = { pick: () => undefined };
-  viewer.scene.canvas.clientWidth = 1000;
-  viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
-  layer.init(viewer);
-  layer.enable(viewer);
-  t.after(() => {
-    layer.destroy();
-    globalThis.document = saved;
+  const { layer } = await enabledLayer(t, [provider], {
+    services: { scenePick },
+    setup: (viewer) => {
+      // Every pick misses the ground: the screen centre is sky.
+      Object.assign(viewer.scene, {
+        pickPositionSupported: true,
+        pickPosition: () => undefined,
+      });
+      viewer.globe = { pick: () => undefined };
+      viewer.scene.canvas.clientWidth = 1000;
+      viewer.scene.canvas.clientHeight = 600;
+    },
   });
   layer.armNearest({ lat: 48.8584, lon: 2.2945 }, { radiusM: 250 });
   assert.equal(
@@ -1986,7 +1985,6 @@ test('OPEN aimed at the sky after a link armed opens nothing: never the far link
 });
 
 test('a request of its own (armed: false) neither uses nor drops the link’s armed point', async (t) => {
-  const { createStreetLevelLayer: create } = await import('./index.js');
   const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
@@ -1995,25 +1993,18 @@ test('a request of its own (armed: false) neither uses nor drops the link’s ar
       return null;
     },
   });
-  const saved = globalThis.document;
-  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
-  globalThis.document = Object.assign(new EventTarget(), {
-    createElement: () => ({ getContext: () => drawing }),
-  });
-  const viewer = fakeViewer();
   const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
-  Object.assign(viewer.scene, {
-    pickPositionSupported: true,
-    pickPosition: (at) => (at.x === 500 && at.y === 300 ? centre : undefined),
-  });
-  viewer.scene.canvas.clientWidth = 1000;
-  viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
-  layer.init(viewer);
-  layer.enable(viewer);
-  t.after(() => {
-    layer.destroy();
-    globalThis.document = saved;
+  const { layer } = await enabledLayer(t, [provider], {
+    services: { scenePick },
+    setup: (viewer) => {
+      Object.assign(viewer.scene, {
+        pickPositionSupported: true,
+        pickPosition: (at) =>
+          at.x === 500 && at.y === 300 ? centre : undefined,
+      });
+      viewer.scene.canvas.clientWidth = 1000;
+      viewer.scene.canvas.clientHeight = 600;
+    },
   });
   // About 120 m away: an OPEN press would take the link's spot.
   layer.armNearest({ lat: 38.5808, lon: -121.494 }, { radiusM: 250 });
@@ -2030,25 +2021,12 @@ test('a request of its own (armed: false) neither uses nor drops the link’s ar
 });
 
 test('a failing source is not reported as missing imagery', async (t) => {
-  const { createStreetLevelLayer: create } = await import('./index.js');
   const provider = fakeProvider({
     nearestImage: async () => {
       throw new Error('Mapillary graph HTTP 500');
     },
   });
-  const saved = globalThis.document;
-  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
-  globalThis.document = Object.assign(new EventTarget(), {
-    createElement: () => ({ getContext: () => drawing }),
-  });
-  const viewer = fakeViewer();
-  const layer = create({ providers: [provider] });
-  layer.init(viewer);
-  layer.enable(viewer);
-  t.after(() => {
-    layer.destroy();
-    globalThis.document = saved;
-  });
+  const { layer } = await enabledLayer(t, [provider]);
   assert.equal(await layer.openNearest({ lat: 1, lon: 2 }), false);
   const street = layer.getUIState().street;
   assert.equal(street.nearestOutcome, null);

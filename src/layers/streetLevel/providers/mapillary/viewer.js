@@ -174,6 +174,15 @@ export function createMapillaryViewer({ source, render } = {}) {
     current = null;
   }
 
+  /** A playing sequence keeps stepping through (and downloading) images. */
+  function stopPlayback() {
+    try {
+      viewer?.getComponent('sequence')?.stop();
+    } catch {
+      /* sequence component not available */
+    }
+  }
+
   return {
     async mount(host) {
       if (!host) throw new Error('Street Level viewer has no host element');
@@ -195,14 +204,11 @@ export function createMapillaryViewer({ source, render } = {}) {
     close() {
       pendingOpen = null;
       current = null;
-      // A playing sequence would keep stepping through (and downloading)
-      // images in the hidden viewer.
-      try {
-        viewer?.getComponent('sequence')?.stop();
-      } catch {
-        /* sequence component not available */
-      }
+      // Hidden, the viewer must not keep playing.
+      stopPlayback();
     },
+
+    stopPlayback,
 
     unmount() {
       pendingOpen = null;

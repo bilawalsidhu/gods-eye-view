@@ -196,18 +196,15 @@ export function createMapillarySource({
       return Array.isArray(payload?.data) ? payload.data : [];
     },
 
-    /** Images within `radius` metres of a point, in no particular order. */
-    async nearestImages(
-      { lat, lon, radius = NEAREST_RADIUS_M, limit = NEAREST_LIMIT },
-      { signal } = {},
-    ) {
+    /** Images within `NEAREST_RADIUS_M` of a point, in no particular order. */
+    async nearestImages({ lat, lon }, { signal } = {}) {
       const payload = await graph(
         'images',
         {
           lat: String(lat),
           lng: String(lon),
-          radius: String(Math.min(50, Math.max(1, radius))),
-          limit: String(Math.min(100, Math.max(1, limit))),
+          radius: String(NEAREST_RADIUS_M),
+          limit: String(NEAREST_LIMIT),
           fields: NEAREST_IMAGE_FIELDS,
         },
         { signal, timeoutMs: NEAREST_TIMEOUT_MS },

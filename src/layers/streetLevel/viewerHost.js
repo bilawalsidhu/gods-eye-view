@@ -175,6 +175,11 @@ export function createViewerHost({ state, parts }) {
     active?.adapter.resize();
   }
 
+  /** Stop a sequence playing in the open photo (adapters that play). */
+  function stopPlayback() {
+    active?.adapter.stopPlayback?.();
+  }
+
   function setRenderMode(mode) {
     state.street.renderMode = mode === 'fill' ? 'fill' : 'letterbox';
     active?.adapter.setRenderMode?.(state.street.renderMode);
@@ -197,5 +202,5 @@ export function createViewerHost({ state, parts }) {
     active = null;
   }
 
-  return { attach, open, close, resize, setRenderMode, unmount };
+  return { attach, open, close, resize, setRenderMode, stopPlayback, unmount };
 }

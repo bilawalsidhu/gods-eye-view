@@ -142,7 +142,7 @@ const vThumb = {
             <button id="sl-viewer-close" class="sl-viewer-x" type="button" :title="t('Close the image and deselect it on the map')" :aria-label="t('Close the street-level image')">×</button>
           </div>
         </div>
-        <div id="sl-viewer-error" class="sl-error" role="alert" :hidden="!embedOverlay || !view?.error"><span aria-hidden="true">⚠</span> {{ view?.error || '' }}</div>
+        <div id="sl-viewer-error" class="sl-error" role="alert" :hidden="!(embedOverlay || expanded) || !view?.error"><span aria-hidden="true">⚠</span> {{ view?.error || '' }}</div>
         <div class="sl-viewer-stage">
           <div id="sl-viewer-placeholder" class="sl-viewer-placeholder" :hidden="!viewer.loading"></div>
           <div id="sl-viewer" class="sl-viewer" :aria-label="t('Street-level viewer')"></div>
@@ -159,7 +159,7 @@ const vThumb = {
         <span class="cctv-summary-label">{{ t('PROVIDERS') }}</span>
         <div id="sl-provider-chips" class="sl-chips"><RailChips :chips="view ? view.providers : []" /></div>
       </div>
-      <div id="sl-error" class="sl-error" role="alert" :hidden="embedOverlay || !view?.error"><span aria-hidden="true">⚠</span> <span id="sl-error-text">{{ view?.error || '' }}</span></div>
+      <div id="sl-error" class="sl-error" role="alert" :hidden="embedOverlay || expanded || !view?.error"><span aria-hidden="true">⚠</span> <span id="sl-error-text">{{ view?.error || '' }}</span></div>
       <!-- A missing key gates the filters only: the chips above stay
            focusable so their tooltip can say how to add the key. -->
       <fieldset id="sl-controls" class="sl-controls" :disabled="Boolean(view?.controlsDisabled)" :hidden="!shows.pano && !shows.since">

@@ -200,11 +200,7 @@ test('nearestImage opens the closest image that passes the filter, not the first
   );
   assert.equal(await flat.nearestImage({ lat: 1, lon: 2 }, { signal }), 'near');
   assert.equal(requests[0].options.signal, signal, 'the core can abort it');
-  assert.equal(requests[0].query.radius, 50);
-  // The API cuts at the limit before any order: a small one would sort and
-  // filter a handful of arbitrary photos (a 360° filter could find none).
-  assert.equal(requests[0].query.limit, 100, "the API's most");
-  assert.deepEqual([requests[0].query.lat, requests[0].query.lon], [1, 2]);
+  assert.deepEqual(requests[0].query, { lat: 1, lon: 2 });
   const any = createMapillaryProvider({ source }).create(fakeContext());
   assert.equal(await any.nearestImage({ lat: 1, lon: 2 }), 'near-pano');
   const tooOld = createMapillaryProvider({ source }).create(

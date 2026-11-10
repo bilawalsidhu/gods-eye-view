@@ -341,10 +341,16 @@ export function installViews({
   // A restore whose camera never landed (the recipient dragged, searched or
   // opened another place during its flight) leaves the camera with them.
   const cameraLanded = (outcome) => outcome?.share?.camera === 'applied';
+  // The generation the restore's own flight owned: a navigation after it
+  // landed, while the layers still loaded, has moved on from it.
+  const restoreGeneration = (outcome) =>
+    Number.isInteger(outcome?.navigationToken)
+      ? outcome.navigationToken
+      : shell._navigationGeneration;
   let generationAtRestore = null;
   let startSuperseded = false;
   let queue = ready.then((outcome) => {
-    generationAtRestore = shell._navigationGeneration;
+    generationAtRestore = restoreGeneration(outcome);
     startSuperseded =
       outcome?.status === 'superseded' ||
       (Boolean(outcome?.share) && !cameraLanded(outcome));
@@ -414,7 +420,7 @@ export function installViews({
       new URLSearchParams(String(location?.hash || '').replace(/^#/, '')),
     );
     if (!streetLevel) return;
-    const generation = shell._navigationGeneration;
+    const generation = restoreGeneration(event.detail);
     queue = linkStep(() => openLinkedStreetLevel(streetLevel, { generation }));
   };
   windowRef?.addEventListener?.(

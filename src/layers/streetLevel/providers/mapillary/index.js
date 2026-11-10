@@ -6,7 +6,6 @@ import {
 import { createSequenceCones, thinImages } from '../../sequenceCones.js';
 import { coverageZoomForHeight } from '../../tileMath.js';
 import { passesImageryFilter } from '../../filter.js';
-import { NEAREST_RADIUS_M } from '../../policy.js';
 import { metresBetween } from '../../view.js';
 import { decodeCoverageTile } from './decode.js';
 import { createMapillaryViewer } from './viewer.js';
@@ -20,7 +19,6 @@ import {
   MAPILLARY_NAME,
   MAPILLARY_PROVIDER_ID,
   MAPILLARY_SOURCE_METHODS,
-  NEAREST_LIMIT,
   PICK_PREFIX,
   RATE_LIMITED_MESSAGE,
 } from './policy.js';
@@ -206,10 +204,7 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
          * cone). The core aborts `signal` once a newer request overtakes it.
          */
         async nearestImage({ lat, lon }, { signal } = {}) {
-          const images = await source.nearestImages(
-            { lat, lon, radius: NEAREST_RADIUS_M, limit: NEAREST_LIMIT },
-            { signal },
-          );
+          const images = await source.nearestImages({ lat, lon }, { signal });
           // The API returns the images in the radius in no particular order.
           const metres = (record) => {
             const [lon2, lat2] = (record.computed_geometry || record.geometry)

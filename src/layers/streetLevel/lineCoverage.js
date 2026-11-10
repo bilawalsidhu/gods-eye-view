@@ -532,9 +532,8 @@ export function createLineCoverage({
   }
 
   /**
-   * The sequence lines drawn now, as `[lon, lat]` parts per sequence: for
-   * diagnostics and the browser gate, which aims its clicks at them instead
-   * of scanning pixels: what each tile drew (`attachPrimitive` keeps it in
+   * The sequence lines drawn now, as `[lon, lat]` parts per sequence, for
+   * diagnostics: what each tile drew (`attachPrimitive` keeps it in
    * `entry.sequences`). Read-only copies.
    */
   function drawnLines() {

@@ -143,6 +143,8 @@ function resolveFly(args, { pointer, referents }) {
         entity: {
           layerId: target.layerId,
           id: target.id,
+          // The answer names it, not its id ("near cam-9").
+          ...(target.label ? { label: target.label } : {}),
           ...(hasPosition(target) ? { lat: target.lat, lon: target.lon } : {}),
         },
       },

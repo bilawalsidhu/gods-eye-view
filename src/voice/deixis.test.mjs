@@ -104,7 +104,7 @@ test('referents: numbered items resolve for track, fly and context', () => {
   const last = resolveDeicticArgs('track_entity', { query: 'x', referent: -1 }, { referents });
   assert.equal(last.args.query, 'ccc333', '-1 is the last one');
   const fly = resolveDeicticArgs('fly_to_location', { referent: 1 }, { referents });
-  assert.deepEqual(fly.args, { entity: { layerId: 'flights', id: 'aaa111' } }, 'moving contacts are located at run time');
+  assert.deepEqual(fly.args, { entity: { layerId: 'flights', id: 'aaa111', label: 'SWA12' } }, 'moving contacts are located at run time');
   const context = resolveDeicticArgs('get_entity_context', { referent: 3 }, { referents });
   assert.equal(context.args.scope, 'target');
   assert.equal(context.args.target.label, 'AAL9');

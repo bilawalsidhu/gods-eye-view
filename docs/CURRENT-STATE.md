@@ -1094,7 +1094,7 @@ Voice controls bind to a protocol-independent session factory. The default WebRT
 
 The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
-Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 34 tools using separate description-only metadata; a session is offered 33 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
+Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 35 tools using separate description-only metadata; a session is offered 34 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
 Voice areas live in a store owned by the action runner for the page (`src/data/areaStore.js`); the model gets an `areaId`, a rounded bounding box and a summary, never geometry. `resolve_area` (`src/voice/areaActions.js`, `src/data/areaResolver.js`) checks the store, bundled Natural Earth regions, then bundled countries and states by name — a name several prominent units share returns up to four candidates unless the view is inside exactly one — and then the annotation outline ladder (`resolveAnnotationTarget`: bundled counties, Census places and neighborhoods, the guarded `/api/geocode/outline`, and Overpass only when configured). Administrative geometry is stored only when its source identity agrees with the requested unit, by name or by a form the bundled matcher reads as that unit at its level ("State of Texas", "Province of Bagmati", "USA", "UK"; not "Great Britain" or "Korea"); stale, mismatched, synthesized or otherwise unverified administrative boundaries are refused rather than relabelled. Clarification IDs use the bounded `ne:<kind>:<slug>` grammar and are accepted only from the current resolver's candidate memory. A lookup past 8 s answers `AREA_TIMEOUT` and keeps filling the caches. `around=true` asks the same ladder for the grounds enclosing a landmark (Nominatim, then the OpenFreeMap area holding it) and otherwise stores a 250 m buffer marked approximate. `analyst_query` scopes add `area`, `drawn` (newest draw-tool outline) and `annotation` (newest or named outline); region scopes use the same resolver within 3 s. Drawn outlines are a simplified copy (≤1,200 vertices); counting reads the stored geometry (`src/data/areaGeometry.js`). `find_imagery` (`src/voice/imageryActions.js`) sets the Recent Imagery box from an area, the view or the turn's pointer snapshot and pins the best acquisition; any hand change to the panel or explicit layer OFF while it searches ends the request (`DISPLACED`) without pinning or success narration. `osm_query` asks `/api/osm/features` for one curated preset in a bounded box; the route answers `OVERPASS_NOT_CONFIGURED` without an operator Overpass. Results go to the session-only `osm-places` layer and become the analyst's last answer; a list capped at its limit stays incomplete in follow-ups, which keep its "listed the first N" caveat and report counts as floors. An explicit OSM Places OFF while the provider is pending aborts the work and prevents re-enable, result, credit and follow-up-memory commits. The voice answer deadline also aborts the client provider request, so the caller does not leave a timed-out request without a cancellation owner. The server's whole search (22 s across every configured endpoint, with Overpass told 20 s) ends before that 25 s deadline, because a browser that stops waiting cancels the upstream query and leaves nothing cached for a retry.
 
@@ -5079,8 +5079,8 @@ source has its key (a keyless source explains itself and changes nothing, as
 a chip does), flies to the place at street framing and waits for arrival (a
 name, coordinates, a pointed spot, a numbered item, or nothing for the
 ground under the screen centre, as OPEN uses: `aim: 'screen-centre'` with
-`armed: false`, so sky refuses and a link's armed point is neither used nor
-dropped), switches to the map the source needs (Google Street View: Google 3D),
+`armed: false`, so sky refuses and a link's armed point is not used and is
+kept until a photo opens), switches to the map the source needs (Google Street View: Google 3D),
 lights that source through `setLayerParams` with origin `voice` (one source at
 a time, kept in the share link like a chip click; a link runs the action with
 origin `programmatic`, for the source switch and the layer, so it never writes
@@ -5147,11 +5147,16 @@ checks again after every await (flight, map switch, layer on, lookup): a
 newer turn, a shell navigation stamp (`_navigationGeneration`, re-taken where
 its own flight lands) or a press or wheel on the globe stops the remaining
 stages (`superseded: true`), and cockpit, clean view, recording or scene
-playback entered meanwhile ends it at the `view` stage; a photo that opened
-after either is closed again. The hidden-panel check also runs before the
-flight, so a recording's camera never moves for it. A photo already open
-closes before the new request arms or looks up, so a place with no imagery
-shows its own error, not the previous place's photo. A plain
+playback entered meanwhile ends it at the `view` stage. During the lookup the
+same checks run before a found photo loads (`proceed`), so nothing billed
+loads for a request that was given up, and a lookup given up leaves the
+panel as it was; a photo that opened after either is closed again. The
+hidden-panel check also runs before the flight, so a recording's camera never
+moves for it. A photo already open stays up while the new request looks (the
+viewer is replaced, not closed, so EXPAND stays, also when the request
+switches the source) and closes if the request opens nothing, so a place with
+no imagery shows its own error, not the previous place's photo; a link that
+only arms closes it at once. A plain
 link never loads a photo from a source that bills every load
 (`billedPerImage` on the provider; Google): the action runs with
 `autoOpen: false`, arms the lookup on the layer (`armNearest`: the link's

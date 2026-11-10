@@ -3813,24 +3813,26 @@ function streetLevelPanelHidden() {
 }
 
 /**
- * "Show me <place> on Street View / on Mapillary": fly to the place, make sure
- * the imagery source's map is up, light that source in Street Level, turn the
- * layer on and open the nearest image. One source at a time, as the panel
- * does; the choice persists like a chip click. The key is checked before
- * anything changes, and each stage reports its own failure so speech can say
- * which part did not happen. With no place at all, the view centre is used.
- * `autoOpen: false` (links, not the model) stops short of loading a photo
- * from a source that bills every load: the panel is armed and the OPEN
- * button is one click away.
+ * "Show me <place> on Street View / on Mapillary": fly there, light the source
+ * (and its map) and open the nearest image. Each stage reports its own
+ * failure, so speech can say which part did not happen. `autoOpen: false`
+ * (links) stops short of a billed load: the panel is armed for OPEN.
  */
 export async function showStreetLevel(args, context) {
   // Every await can hand the request's moment to someone else: a newer turn,
   // a navigation or gesture that takes the camera, or a mode that hides the
   // panel. Each stage after the place is settled checks again.
   const owner = watchCameraOwner(context.viewer, context.styleManager);
+  // A photo held up while the request switches its source is let go however
+  // the request ends: replaced by then, or closed if its source stayed off.
+  let releaseViewer = null;
+  const holdViewer = (layerModule) => {
+    releaseViewer ??= layerModule.holdViewer?.() ?? null;
+  };
   try {
-    return await requestStreetLevel(args, { ...context, owner });
+    return await requestStreetLevel(args, { ...context, owner, holdViewer });
   } finally {
+    releaseViewer?.();
     owner.stop();
   }
 }
@@ -3840,9 +3842,9 @@ async function requestStreetLevel(
   {
     dataManager,
     styleManager,
-    placeSearch,
     runGevAction,
     owner,
+    holdViewer = () => {},
     runOptions = {},
     current = () => true,
     reportProgress = () => {},
@@ -3868,11 +3870,14 @@ async function requestStreetLevel(
   const query = String(args.query || '').trim();
   const latitude = Number(args.latitude);
   const longitude = Number(args.longitude);
+  const coordinatesGiven = args.latitude != null && args.longitude != null;
   const hasCoordinates =
-    args.latitude != null &&
-    args.longitude != null &&
-    Number.isFinite(latitude) &&
-    Number.isFinite(longitude);
+    coordinatesGiven && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+  if (coordinatesGiven && !hasCoordinates)
+    return fail(
+      'location',
+      'Latitude must be within ±90° and longitude within ±180°',
+    );
   // A referent that is a layer entity (deixis): located when the flight starts.
   const entity =
     args.entity && typeof args.entity === 'object' && args.entity.id
@@ -3952,29 +3957,11 @@ async function requestStreetLevel(
   atViewCentre = !query && !hasCoordinates && !entity;
   let point = null;
   let location = null;
-  if (args.fly === false || atViewCentre) {
+  // No place at all: the layer looks at the ground under the screen centre,
+  // as the OPEN button does. `fly: false` (tests) keeps the camera for a
+  // point given by its coordinates.
+  if (atViewCentre || (args.fly === false && hasCoordinates)) {
     if (hasCoordinates) point = { lat: latitude, lon: longitude };
-    else if (entity) {
-      // Where it is now, as the flying path does: the coordinates a list
-      // saved go stale as soon as the item moves or unloads.
-      const located = locateLayerEntity(dataManager, entity);
-      if (!located) return fail('location', `${label} is no longer loaded`);
-      point = { lat: located.lat, lon: located.lon };
-    } else if (query) {
-      reportProgress('search', query);
-      const outcome = await placeSearch.geocode(query, {
-        signal: runOptions.signal,
-      });
-      const place = outcome?.place;
-      if (!current())
-        return fail('location', 'Street-level request was cancelled');
-      if (!Number.isFinite(place?.lat) || !Number.isFinite(place?.lng))
-        return fail('location', `Could not find ${query}`);
-      point = { lat: place.lat, lon: place.lng };
-      label = place.label || query;
-    }
-    // No place at all: the layer looks at the ground under the screen
-    // centre, as the OPEN button does.
   } else {
     location = await runGevAction(
       'fly_to_location',
@@ -3995,8 +3982,10 @@ async function requestStreetLevel(
         location?.error || `Could not arrive at ${location?.label || label}`,
         { cancelled: !current() || Boolean(location?.cancelled), location },
       );
-    // An item keeps its name: the flight to it reports only coordinates.
-    label = entity ? label : location.label || label;
+    // An item, or a named place flown to by its coordinates, keeps its name:
+    // such a flight reports only coordinates.
+    label =
+      entity || (query && hasCoordinates) ? label : location.label || label;
     if (
       !Number.isFinite(location.latitude) ||
       !Number.isFinite(location.longitude)
@@ -4037,7 +4026,10 @@ async function requestStreetLevel(
     if (stop) return stop;
   }
 
-  // Light the source the way a chip click does, so the choice is kept.
+  // Light the source the way a chip click does, so the choice is kept. An
+  // open photo of another source stays up until this request replaces it.
+  if (layerModule.getUIState?.()?.street?.open === true)
+    holdViewer(layerModule);
   const switches = Object.fromEntries(
     providerIds.map((id) => [id, id === provider]),
   );
