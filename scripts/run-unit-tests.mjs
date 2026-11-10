@@ -8,15 +8,16 @@ export const ALLOCATION_TEST_FILES = Object.freeze([
   'src/overlays/worldOverlayAllocation.test.mjs',
 ]);
 
-/** Whether this runtime matches the one the allocation budgets were calibrated on. */
+/** Whether this runtime matches a supported major the allocation budgets are calibrated on. */
 export function isCalibratedAllocationRuntime(version = process.versions.node) {
-  return Number.parseInt(String(version).split('.')[0], 10) === 24;
+  const major = Number.parseInt(String(version).split('.')[0], 10);
+  return major === 24 || major === 26;
 }
 
-/** Require the runtime on which allocation budgets were calibrated. */
-export function assertNode24AllocationRuntime(version = process.versions.node) {
+/** Require a runtime on which allocation budgets are calibrated. */
+export function assertCalibratedAllocationRuntime(version = process.versions.node) {
   if (!isCalibratedAllocationRuntime(version)) {
-    throw new Error(`Allocation budgets require the calibrated Node 24 runtime; received ${version}`);
+    throw new Error(`Allocation budgets require calibrated Node 24 or 26; received ${version}`);
   }
   return version;
 }
@@ -131,32 +132,36 @@ function runTests(args) {
   return result.status ?? 1;
 }
 
+/** Run all parallel batches and preserve the first non-zero exit status. */
+export function runParallelTestBatches(
+  files,
+  { argvCharBudget = UNIT_TEST_ARGV_CHAR_BUDGET, runBatch = runTests } = {},
+) {
+  let firstFailure = 0;
+  for (const batch of batchUnitTestFiles(files, argvCharBudget)) {
+    const status = runBatch(['--test', ...batch]);
+    if (firstFailure === 0 && status !== 0) firstFailure = status;
+  }
+  return firstFailure;
+}
+
 export function runUnitTests() {
   const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  // One spawn per batch, in order. Every batch runs even after a failure,
-  // so a red run reports every failing file at once — the same semantics as
-  // the single pre-#1631 invocation, just under the Windows command-line
-  // limit. The first non-zero status is what the runner exits with.
-  let parallelStatus = 0;
-  for (const batch of batchUnitTestFiles(plan.parallel)) {
-    const batchStatus = runTests(['--test', ...batch]);
-    if (parallelStatus === 0 && batchStatus !== 0) parallelStatus = batchStatus;
-  }
+  const parallelStatus = runParallelTestBatches(plan.parallel);
   if (parallelStatus !== 0) return parallelStatus;
 
-  // The GC-bracketed budgets are calibrated on Node 24 and are meaningless on
-  // other allocators. A contributor's suite must stay green on any supported
-  // engine (package.json permits >=24), so uncalibrated runtimes skip the
+  // The GC-bracketed budgets are calibrated on every supported Node major.
+  // Unsupported runtimes may still run ordinary tests, so uncalibrated runtimes skip the
   // probes with a warning. Set GEV_REQUIRE_ALLOCATION_GATE=1 (pinned CI /
   // release batteries) to make an uncalibrated runtime a hard failure.
   if (!isCalibratedAllocationRuntime()) {
     if (process.env.GEV_REQUIRE_ALLOCATION_GATE === '1') {
-      assertNode24AllocationRuntime();
+      assertCalibratedAllocationRuntime();
     }
     console.warn(
       `[unit] SKIPPED ${ALLOCATION_TEST_FILES.length} allocation microbenchmarks: `
-      + `budgets are calibrated for Node 24, running ${process.versions.node}. `
-      + 'Run under Node 24 (or set GEV_REQUIRE_ALLOCATION_GATE=1 to fail instead).',
+      + `budgets are calibrated for Node 24 and 26, running ${process.versions.node}. `
+      + 'Run under Node 24 or 26 (or set GEV_REQUIRE_ALLOCATION_GATE=1 to fail instead).',
     );
     return 0;
   }
