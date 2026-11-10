@@ -135,6 +135,13 @@ export const DATA_CREDITS = [
       'explicit permission of David J Taylor, Edinburgh',
   },
   {
+    key: 'planespotters',
+    html:
+      'Aircraft photos: ' +
+      '<a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> ' +
+      '· each photo is © its photographer, credited beside it',
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
@@ -143,9 +150,22 @@ export const DATA_CREDITS = [
   {
     key: 'celestrak',
     html:
-      'Satellites (TLEs): CelesTrak ' +
+      'Satellites (TLEs and SATCAT): CelesTrak ' +
       '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>), ' +
       'Dr. T.S. Kelso',
+  },
+  {
+    key: 'ucs-satellite-database',
+    html:
+      'Satellite operators and purposes: ' +
+      '<a href="https://www.ucsusa.org/satellite_database" target="_blank" rel="noopener">UCS Satellite Database</a> ' +
+      '(UCS-Satellite-Database 5-1-2023), Union of Concerned Scientists',
+  },
+  {
+    key: 'imaging-sensors',
+    html:
+      'Imaging sensor swaths: operator and agency specifications, ' +
+      'cited per platform',
   },
   {
     key: 'launch-library-2',
@@ -660,20 +680,40 @@ export const OSM_PLACES_CREDIT = {
 /**
  * Per-feed transit credit, registered the first time that feed's vehicles
  * render (see `src/data/transitFeeds.js` for the license of each).
- * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ *
+ * Two optional registry fields serve licences that ask for more than a name:
+ * `sourceUrl` links the attribution to the publisher (Warsaw asks for a link
+ * to its API), and `creditDated` adds the UTC date of the data, from the feed
+ * header or else the fetch time (Warsaw and Poznań ask for the download or
+ * update date). A dated credit is keyed by its date, so a new day registers a
+ * new line instead of keeping yesterday's.
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string,
+ *   sourceUrl?: string, creditDated?: boolean }} feed
+ * @param {{ feedTimestamp?: number|null, fetchedAt?: number|null }} [snapshot]
+ *   `feedTimestamp` in epoch seconds, `fetchedAt` in epoch ms.
  * @returns {{ key: string, html: string }}
  */
-export function transitFeedCredit(feed) {
+export function transitFeedCredit(feed, snapshot = null) {
   const escape = (text) =>
     String(text)
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;');
+  const source = feed.sourceUrl
+    ? `<a href="${escape(feed.sourceUrl)}" target="_blank" rel="noopener">${escape(feed.attribution)}</a>`
+    : escape(feed.attribution);
+  const dataMs = Number.isFinite(snapshot?.feedTimestamp)
+    ? snapshot.feedTimestamp * 1000
+    : snapshot?.fetchedAt;
+  const date =
+    feed.creditDated === true && Number.isFinite(dataMs) && dataMs > 0
+      ? new Date(dataMs).toISOString().slice(0, 10)
+      : null;
   return {
-    key: `transit-${feed.id}`,
+    key: date ? `transit-${feed.id}-${date}` : `transit-${feed.id}`,
     html:
-      `Transit (${escape(feed.attribution)}): ` +
+      `Transit (${source}${date ? `, data of ${date}` : ''}): ` +
       `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
   };
 }

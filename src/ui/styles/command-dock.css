@@ -2,7 +2,8 @@
 #command-dock {
   position: fixed;
   right: auto;
-  bottom: 2vh;
+  /* Above the world timeline while it shows (world-timeline.css). */
+  bottom: calc(2vh + var(--world-timeline-lift, 0px));
   left: 50%;
   z-index: 145;
   display: grid;
@@ -216,7 +217,7 @@
 
 /* Keep required map attribution clear of the full-width command surface. */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-  bottom: calc(2vh + 7rem);
+  bottom: calc(2vh + 7rem + var(--world-timeline-lift, 0px));
 }
 
 body:not(.ui-clean-view):not(.recording-mode):has(
@@ -244,11 +245,11 @@ body.recording-mode #cesium-credits {
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 7.5rem);
+  bottom: calc(2vh + 7.5rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 11.5rem);
+  bottom: calc(2vh + 11.5rem + var(--world-timeline-lift, 0px));
 }
 
 @media (max-width: 980px) {
@@ -275,21 +276,21 @@ body.recording-mode #cesium-credits {
   }
 
   body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-    bottom: calc(2vh + 9.5rem);
+    bottom: calc(2vh + 9.5rem + var(--world-timeline-lift, 0px));
   }
 
   #intel-hud[data-variant='minimal'] .hud-bottom-left {
-    bottom: calc(2vh + 12rem);
+    bottom: calc(2vh + 12rem + var(--world-timeline-lift, 0px));
   }
 
   #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-    bottom: calc(2vh + 16rem);
+    bottom: calc(2vh + 16rem + var(--world-timeline-lift, 0px));
   }
 }
 
 @media (max-width: 720px) {
   #command-dock {
-    bottom: 8px;
+    bottom: calc(8px + var(--world-timeline-lift, 0px));
   }
 
   #command-dock .location-search-wrap {

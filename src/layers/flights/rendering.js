@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
 import { civilAircraftModelSpec } from './modelSpec.js';
@@ -871,7 +872,7 @@ export function createRendering({
     flightState._lastFleetTickMs = nowMs;
     // Every contact in this pass shares the same delayed display instant.
     const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(flightState._scratchFleetRenderTime),
+      julianAt(flightState.now(), flightState._scratchFleetRenderTime),
       -RENDER_DELAY_SEC,
       flightState._scratchFleetRenderTime,
     );

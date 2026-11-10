@@ -377,15 +377,15 @@
 
 /* Compact dock clearance keeps the reference-like low profile. */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-  bottom: calc(2vh + 4.7rem);
+  bottom: calc(2vh + 4.7rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 5.4rem);
+  bottom: calc(2vh + 5.4rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 8.9rem);
+  bottom: calc(2vh + 8.9rem + var(--world-timeline-lift, 0px));
 }
 
 @media (max-width: 900px) {
