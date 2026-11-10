@@ -159,6 +159,28 @@ const setMode = async (mode) => {
   await clickChip(`mode-${mode}`);
 };
 
+const waitForFlight = (before) =>
+  pollPage(
+    page,
+    (origin) => {
+      const { engine, dataManager } = window.__godsEyeView;
+      const motion = dataManager.layers
+        .get('directions')
+        .module.getFlightProgress();
+      const position = engine.camera.pose().position;
+      return (
+        motion?.kind === 'route' &&
+        motion.traveledM > 0 &&
+        Math.hypot(
+          position.x - origin.x,
+          position.y - origin.y,
+          position.z - origin.z,
+        ) > 50
+      );
+    },
+    { timeoutMs: 15000, intervalMs: 50, args: [before] },
+  );
+
 const waitForRoute = () =>
   page.waitForFunction(
     () =>
@@ -665,12 +687,12 @@ try {
   // ── 7. FLY, a mid-flight frame, and a cancel that actually stops it. ─────
   const beforeFly = await cameraPose();
   check('the FLY chip is offered once a route exists', await clickChip('fly'));
-  await sleep(3000);
+  const flightStarted = await waitForFlight(beforeFly);
   const flying = await layerState();
   const midFly = await cameraPose();
   check(
     'FLY starts a route flight',
-    flying.cameraMotion?.kind === 'route',
+    flightStarted && flying.cameraMotion?.kind === 'route',
     JSON.stringify(flying.cameraMotion),
   );
   check(
@@ -699,8 +721,9 @@ try {
   await setMode('car');
   await waitForMode('Drive');
   await whenUiSettled(page);
+  const beforeRefly = await cameraPose();
   check('FLY is offered again after the reroute', await clickChip('fly'));
-  await sleep(2000);
+  check('the second FLY starts before CLEAR', await waitForFlight(beforeRefly));
 
   await clickChip('clear');
   await sleep(500);
