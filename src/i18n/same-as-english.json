@@ -586,7 +586,8 @@
     "Ⅱ PAUSE",
     "≥ {value} MW",
     "▲ {frp} MW",
-    "SATELLITE"
+    "SATELLITE",
+    "Photo © {photographer}"
   ],
   "it": [
     "1 min/s",

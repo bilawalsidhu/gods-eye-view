@@ -43,6 +43,13 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
 });
 
+test('Planespotters is credited with a plain followable link', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'planespotters');
+  assert.ok(credit, 'the tracked aircraft photos come from Planespotters');
+  assert.match(credit.html, /href="https:\/\/www\.planespotters\.net"/);
+  assert.doesNotMatch(credit.html, /nofollow/);
+});
+
 test('the UCS Satellite Database is acknowledged with its version and webpage', () => {
   // UCS database manual, section 3: references name the version (the Excel
   // file's name) and link www.ucsusa.org/satellite_database.
