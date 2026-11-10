@@ -163,7 +163,7 @@ export function createDroneAirspaceLayer({
         throw new Error('Drone airspace layer is already initialized');
       initialized = true;
       try {
-        if (engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer({ engine });
       } catch (error) {
         this.destroy();
         throw error;
@@ -172,12 +172,16 @@ export function createDroneAirspaceLayer({
     },
 
     /** Draw on a globe: the rows already fetched, and the selection. */
-    attachRenderer(viewer, { engine = null } = {}) {
+    show(enabled) {
+      renderer?.setVisible(enabled);
+      overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid drone airspace scene attachment');
       sceneEngine = engine;
       renderer = rendererFactory({ engine });
-      renderer.setVisible(_enabled);
+      this.show(_enabled);
       if (_rows.length) renderer.replace(_rows);
       if (_enabled) {
         overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, true);

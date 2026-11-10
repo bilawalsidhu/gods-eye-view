@@ -24,9 +24,13 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
   let initialized = false;
   const lifecycle = {
     init(viewer, options) {
-      return this.attachRenderer(viewer, options);
+      return this.attachRenderer(options);
     },
-    attachRenderer(viewer, options = {}) {
+    picks: {
+      owner: 'bikeshare',
+      predicate: (id) => state._stationRenderMap.has(id),
+    },
+    attachRenderer(options = {}) {
       if (initialized)
         throw new Error('Bikeshare layer is already initialized');
       renderer ??= rendererFactory({
@@ -37,7 +41,7 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
       parts.display = renderer;
       initialized = true;
       try {
-        state._restoringViewport = Boolean(options.waitForCameraRestore);
+        state._sceneContext = options;
         renderer.init();
         if (state._enabled) {
           const selected = state._selectedKey;
@@ -57,13 +61,11 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
       }
     },
     resumeViewport() {
-      if (!state._restoringViewport) return;
-      state._restoringViewport = false;
       if (state._enabled) parts.display?.onCameraChanged();
     },
     detachRenderer() {
       if (!renderer) return;
-      state._restoringViewport = true;
+      state._sceneContext = null;
       clearTimeout(state._cameraDebounceTimer);
       const selected = state._selectedKey;
       renderer.detach();

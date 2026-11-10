@@ -165,7 +165,8 @@ export function createViewport({ state: layerState, services, parts, camera }) {
    */
 
   async function runProximityCheck() {
-    if (!layerState._enabled || layerState._restoringViewport) return;
+    if (!layerState._enabled || layerState._sceneContext?.viewReady === false)
+      return;
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude();
@@ -236,7 +237,8 @@ export function createViewport({ state: layerState, services, parts, camera }) {
   /** Camera change event handler — triggers a debounced proximity check. */
 
   function onCameraChanged() {
-    if (!layerState._enabled || layerState._restoringViewport) return;
+    if (!layerState._enabled || layerState._sceneContext?.viewReady === false)
+      return;
     scheduleProximityCheck();
   }
   return {

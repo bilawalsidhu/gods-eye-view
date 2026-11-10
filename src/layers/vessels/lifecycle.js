@@ -10,7 +10,7 @@ export function createLifecycle({
   options,
 }) {
   const { state } = vesselState;
-  const { restoreSpriteOrder, restoreSpriteOrderOnEnable } = services.sprites;
+  const { restoreSpriteOrderOnEnable } = services.sprites;
   const { releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
@@ -138,6 +138,10 @@ export function createLifecycle({
     state.trailMmsi = null;
     state.trailBackfillToken = 0;
   }
+  const picks = {
+    owner: 'ais-live-vessels',
+    predicate: (pickedId) => state.records.byMmsi.has(pickedId),
+  };
   const methods = {
     /** Configure the source before initialization; an active layer keeps its owner. */
     setSource(source) {
@@ -160,23 +164,26 @@ export function createLifecycle({
     init(viewer, { engine = null } = {}) {
       if (typeof vesselState._source?.getSnapshot !== 'function')
         throw new TypeError('A snapshot source is required');
-      if (viewer || engine) this.attachRenderer(viewer, { engine });
+      if (viewer || engine) this.attachRenderer({ engine });
     },
 
-    attachRenderer(viewer, { engine = null } = {}) {
-      state.viewer = viewer;
-      state.renderer ??= createRenderer(viewer, engine);
-      const scene = viewer || state.renderer?.view || null;
+    show(enabled) {
+      components.rendering.setVisible(enabled);
+    },
+    picks,
+    attachRenderer({ engine = null } = {}) {
+      state.viewer = null;
+      state.renderer ??= createRenderer(null, engine);
+      const scene = state.renderer?.view || null;
       components.rendering.ensureCollections(scene);
       components.selection.installInteraction(scene);
       components.rendering.installRuntime(scene);
-      restoreSpriteOrder(viewer);
-      components.rendering.setVisible(state.feed.enabled);
+      this.show(state.feed.enabled);
       const horizon = components.rendering.makeOccluder();
       for (const record of state.records.all)
         components.rendering.addRecordPrimitives(record, horizon);
       if (!state.feed.enabled) return;
-      bindVisibleScene(viewer, scene);
+      bindVisibleScene(null, scene);
       components.tracking.attachSelectedVesselTrail();
       components.rendering.updateVisibility(true);
       if (state.selectedRecord)
@@ -288,11 +295,7 @@ export function createLifecycle({
 
   function bindVisibleScene(activeViewer, scene) {
     // Only MMSI picks present in the live record map belong to this layer.
-    registerPickOwner(
-      'ais-live-vessels',
-      (pickedId) => state.records.byMmsi.has(pickedId),
-      state.renderer?.engine,
-    );
+    registerPickOwner(picks.owner, picks.predicate, state.renderer?.engine);
     restoreSpriteOrderOnEnable('ais', activeViewer);
     // Vessels are asked for by view, so ask again when the view moves away.
     removeViewListener();

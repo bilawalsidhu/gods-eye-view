@@ -366,7 +366,9 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
     createNativeRendering: () => rendering,
   });
   // A Cesium page: the viewer samples, the engine projects the marker.
-  layer.init(viewer, { engine: createFakeEngine({ container }) });
+  const engine = createFakeEngine({ container });
+  engine.extensions = { cesium: { viewer } };
+  layer.init(viewer, { engine });
   layer.enable();
   await layer.update();
   layer.setParams({ inspect: true });

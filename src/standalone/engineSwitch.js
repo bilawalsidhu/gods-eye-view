@@ -67,39 +67,17 @@ export function createEngineAddress({ location, history, flush = () => {} }) {
  * was where the incoming address agrees (always after a pick) and follows a
  * visited entry where it differs (handoffTargetEnabled).
  * @param {import('../app/layerSession.js').LayerSession} session
- * @param {object} [options]
- * @param {Iterable<string> | null} [options.addressLayerIds] Layers listed by the outgoing address.
- * @param {boolean} [options.visit=false] Restore a history entry's layer options; a picker change keeps the live options.
  */
-export function handOffSession(
-  session,
-  { addressLayerIds = null, visit = false } = {},
-) {
-  const manager = session.manager;
-  const listed = addressLayerIds ? new Set(addressLayerIds) : null;
-  session.handoffLayers = new Map(
-    [...manager.layers].map(([id, entry]) => [
-      id,
-      {
-        entry: entry.module.attachRenderer ? entry : null,
-        enabled: manager.isEffectivelyEnabled(id),
-        durable: listed ? listed.has(id) : undefined,
-        visit,
-      },
-    ]),
-  );
-  manager.layers.get('directions')?.module.suspendCamera?.();
-  manager.layers.get('satellites')?.module.suspendCamera?.();
-  session.director?.suspendScene();
+export function handOffSession(session) {
+  for (const id of session.handoff.cameraOwners)
+    session.manager.layers.get(id)?.module.cameraOwner.suspend();
+  session.handoff.director?.suspendScene();
 }
 
-/** Resume what handOffSession parked, once the incoming view is restored. */
-export function resumeSession(session) {
-  for (const { module } of session.manager.layers.values())
-    module.resumeViewport?.();
-  if (session.handoffLayers)
-    session.manager.layers.get('directions')?.module.resumeCamera?.();
-  session.director?.resumeScene();
+/** Resume the Director once the incoming view and layer cameras are restored. */
+export async function resumeSession(session) {
+  await session.manager.resumeScene?.();
+  (session.handoff?.director ?? session.director)?.resumeScene();
 }
 
 /**

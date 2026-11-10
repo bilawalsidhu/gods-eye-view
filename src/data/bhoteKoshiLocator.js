@@ -1043,22 +1043,27 @@ export function createBhoteKoshiLocatorLayer({
     showOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
   }
 
-  function attachRenderer(viewer, { engine = null } = {}) {
-    _viewer = viewer;
+  function attachRenderer({ engine = null, viewRestored } = {}) {
+    _viewer = null;
     _engine = engine;
     if (!_enabled) return true;
     connectDisplay();
     publishOverlayEntries({ moving: _placeRevealMoving });
+    if (!viewRestored) resumeCamera();
+    return true;
+  }
+
+  function resumeCamera() {
+    if (!_enabled || !_engine) return;
     if (_pausedApproach) {
       const { phase, remaining } = _pausedApproach;
       _pausedApproach = null;
       if (phase === 'armed') armTriggerApproach();
       else flyTriggerStage((_triggerApproachAttempt = {}), phase, remaining);
     }
-    return true;
   }
 
-  function detachRenderer() {
+  function suspendCamera() {
     const phase = _triggerApproachAttempt?.phase;
     if (phase && phase !== 'finished') {
       _pausedApproach = {
@@ -1067,6 +1072,10 @@ export function createBhoteKoshiLocatorLayer({
       };
       clearTriggerApproach({ preserveCallout: true });
     }
+  }
+
+  function detachRenderer() {
+    suspendCamera();
     _native?.destroy();
     _native = null;
     hideOsmCredit(_engine, BHOTE_KOSHI_LOCATOR_LAYER_ID);
@@ -1151,8 +1160,9 @@ export function createBhoteKoshiLocatorLayer({
     icon: '◎',
     source: 'OpenStreetMap + GeoPera',
     updateInterval: 0,
-    init: attachRenderer,
+    init: (_viewer, context) => attachRenderer(context),
     attachRenderer,
+    cameraOwner: { suspend: suspendCamera, resume: resumeCamera },
     detachRenderer,
     enable,
     disable,

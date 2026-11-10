@@ -305,9 +305,10 @@ export function createRadioDisplay(engine, { state, services, parts }) {
     drillPick(position, limit) {
       return engine.picker.drillPick(position, limit);
     },
+    ownsPick: (id) => String(id).startsWith(RADIO_PREFIX),
     installClick(callback) {
       removeClick = selectionDispatcherFor(engine).register('radio', {
-        owns: (id) => String(id).startsWith(RADIO_PREFIX),
+        owns: renderer.ownsPick,
         onClick: ({ position }) => callback(position),
       });
       return removeClick;

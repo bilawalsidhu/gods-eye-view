@@ -69,7 +69,7 @@ export function createAlprCamerasLayer({
   };
   let renderer = null;
   let sceneEngine = null;
-  let restoringView = false;
+  let sceneContext = null;
 
   function setAlprStatus(status, error = null) {
     if (state.status === status && state.error === error) return;
@@ -114,7 +114,8 @@ export function createAlprCamerasLayer({
   }
 
   function scheduleLoad() {
-    if (!state.enabled || !renderer || restoringView) return;
+    if (!state.enabled || !renderer || sceneContext?.viewReady === false)
+      return;
     clearUnavailableRetry({ resetBackoff: false });
     clearTimeout(state.debounceTimer);
     // A view the accepted tiles already cover is a local filter: show it now.
@@ -132,7 +133,8 @@ export function createAlprCamerasLayer({
   }
 
   async function loadCameras() {
-    if (!state.enabled || !renderer?.ready || restoringView) return;
+    if (!state.enabled || !renderer?.ready || sceneContext?.viewReady === false)
+      return;
     clearTimeout(state.debounceTimer);
     state.debounceTimer = null;
     clearUnavailableRetry({ resetBackoff: false });
@@ -199,7 +201,7 @@ export function createAlprCamerasLayer({
         state.lastQueryBox = null;
         state.lastQueryZoom = null;
         clearUnavailableRetry();
-        if (!restoringView) renderer?.renderRecords();
+        if (sceneContext?.viewReady !== false) renderer?.renderRecords();
         setAlprStatus('zoom-in');
         return;
       }
@@ -232,7 +234,7 @@ export function createAlprCamerasLayer({
       clearUnavailableRetry();
       // Stale and saturated are independent facts; a cached response that also
       // hit the cap must still warn about coverage, not just about freshness.
-      if (!restoringView) renderer?.renderRecords();
+      if (sceneContext?.viewReady !== false) renderer?.renderRecords();
       setAlprStatus(
         (renderer?.count() ?? records.length)
           ? stale
@@ -265,6 +267,10 @@ export function createAlprCamerasLayer({
     }
   }
 
+  const picks = {
+    owner: LAYER_ID,
+    predicate: (id) => state.recordById.has(id),
+  };
   const alprCamerasLayer = {
     id: LAYER_ID,
     name: 'ALPR Cameras',
@@ -274,10 +280,14 @@ export function createAlprCamerasLayer({
     updateInterval: 0,
     statsRefreshInterval: 1000,
     init(viewer, options) {
-      this.attachRenderer(viewer, options);
+      this.attachRenderer(options);
     },
-    attachRenderer(viewer, options = {}) {
-      restoringView = Boolean(options.waitForCameraRestore);
+    show(enabled) {
+      renderer?.setVisible(enabled);
+    },
+    picks,
+    attachRenderer(options = {}) {
+      sceneContext = options;
       if (renderer?.ready) throw new Error('ALPR layer is already initialized');
       if (typeof rendererFactory !== 'function')
         throw new TypeError('An ALPR renderer factory is required');
@@ -290,26 +300,20 @@ export function createAlprCamerasLayer({
       });
       renderer.init({ onMove: scheduleLoad });
       if (state.enabled) {
-        registerPickOwner(
-          LAYER_ID,
-          (id) => state.recordById.has(id),
-          sceneEngine,
-        );
+        registerPickOwner(picks.owner, picks.predicate, sceneEngine);
         renderer.setVisible(true);
-        if (!restoringView) renderer.renderRecords();
+        if (sceneContext?.viewReady !== false) renderer.renderRecords();
       }
     },
     detachRenderer() {
       unregisterPickOwner(LAYER_ID, sceneEngine);
-      restoringView = true;
+      sceneContext = null;
       clearTimeout(state.debounceTimer);
       renderer?.destroy({ retainContext: true });
       renderer = null;
       sceneEngine = null;
     },
     resumeViewport() {
-      if (!restoringView) return;
-      restoringView = false;
       if (state.enabled && renderer) {
         renderer.renderRecords();
         if (!state.loading) scheduleLoad();
@@ -318,11 +322,7 @@ export function createAlprCamerasLayer({
     enable() {
       if (state.enabled) return;
       state.enabled = true;
-      registerPickOwner(
-        LAYER_ID,
-        (id) => state.recordById.has(id),
-        sceneEngine,
-      );
+      registerPickOwner(picks.owner, picks.predicate, sceneEngine);
       renderer.setVisible(true);
       // DataLayerManager calls update() right after enable(); it owns the first fetch.
     },

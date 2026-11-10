@@ -128,6 +128,18 @@ function setup({ zoomFor, harness = null } = {}) {
   return { viewer, source, state, coverage, bytes, tileKey, onGlobe, centre };
 }
 
+test('coverage waits for the shared view readiness before requesting tiles', () => {
+  const { state, source, coverage } = setup();
+  let ready = false;
+  state.context.viewReady = () => ready;
+  coverage.refresh();
+  assert.equal(source.calls.length, 0);
+  ready = true;
+  coverage.refresh();
+  assert.ok(source.calls.length > 0);
+  coverage.clear();
+});
+
 test('a superseded tile request cannot strand lines on the globe', async () => {
   const { viewer, source, state, coverage, bytes, tileKey, onGlobe } = setup();
   const forTile = () => source.calls.filter((call) => call.key === tileKey);

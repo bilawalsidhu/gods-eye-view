@@ -256,7 +256,7 @@ const cases = {
         return make(value);
       },
     });
-    layer.attachRenderer(null, { engine });
+    layer.attachRenderer({ engine });
     const renderer = context.parts.renderer;
     const station = {
       id: '00000000-0000-4000-8000-000000000000',

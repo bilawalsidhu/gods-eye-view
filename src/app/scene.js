@@ -87,14 +87,14 @@ export async function createApplicationScene({
   );
   defer(worldClock.subscribe(() => engine.render.request('world-time')));
   const services = createSceneServices(engine, {
-    retainedSelection: layerSession?.selectionContext,
+    retainedSelection: layerSession?.handoff?.selection,
   });
-  if (layerSession) layerSession.selectionContext = null;
+  if (layerSession?.handoff) layerSession.handoff.selection = null;
   defer(() => {
     const retained = services.destroy({
       retainSelection: retainsLayerSession(layerSession),
     });
-    if (layerSession) layerSession.selectionContext = retained;
+    if (layerSession?.handoff) layerSession.handoff.selection = retained;
   });
   if (layerSession) {
     // DEM cells belong to the session. Mesh samples came from the outgoing

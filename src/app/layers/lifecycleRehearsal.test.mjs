@@ -1,3 +1,4 @@
+import { LayerLifecycle } from '../../data/lifecycle.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createApplicationCatalog } from '../constructCatalog.js';
@@ -30,11 +31,6 @@ const retainedCredits = {
 };
 
 const primitives = ['movers', 'lines', 'ground', 'imagery', 'meshes'];
-const expectedReaders = {
-  'bhote-koshi-2026': ['scene'], // The imagery split control still reads the native scene.
-  'ais-live-vessels': ['isDestroyed'], // Sprite ordering still accepts the native viewer.
-};
-
 function sourceFixtures(calls) {
   return Object.fromEntries(
     Object.entries(CATALOG_SOURCE_CONTRACTS).map(([id, { methods }]) => [
@@ -274,7 +270,6 @@ test('every catalog layer releases its scene and attaches to another engine', as
   const discoveryLifetime = new AbortController();
   const discovery = buildCatalog(discoveryLifetime, [], new Map());
   t.after(() => discoveryLifetime.abort());
-  const seenReaders = [];
   const seenCredits = new Set();
   for (const { id } of discovery.layers) {
     await t.test(id, async (t) => {
@@ -284,20 +279,23 @@ test('every catalog layer releases its scene and attaches to another engine', as
       const visibility = new Map();
       const catalog = buildCatalog(lifetime, calls, visibility);
       const layer = catalog.get(id);
+      assert.doesNotMatch(
+        layer.attachRenderer.toString(),
+        /attachRenderer\s*\(\s*(?:viewer|_viewer|nextViewer|_scene|scene)\b/,
+        'attachRenderer accepts one engine context',
+      );
+      const manager = new LayerLifecycle(null);
+      manager.register(layer);
+      const entry = manager.layers.get(id);
+      entry.initialized = true;
+      const attachedCatalog = {
+        layers: [layer],
+        metadata: catalog.metadata.filter((item) => item.id === id),
+      };
       const a = strictEngine();
       const b = strictEngine();
       const beforeA = a.resources();
       const beforeB = b.resources();
-      const reads = new Set();
-      const poisoned = new Proxy(
-        {},
-        {
-          get(_target, property) {
-            reads.add(String(property));
-            throw new Error(`viewer read: ${String(property)}`);
-          },
-        },
-      );
       const drive = async (scene) => {
         scene.engine.fake.emit('camera.moveStart');
         scene.engine.fake.emit('camera.changed');
@@ -320,19 +318,16 @@ test('every catalog layer releases its scene and attaches to another engine', as
           ].includes(layer.id)
         )
           await layer.init(null);
-        const attach = async (engine, options = {}) => {
-          try {
-            await layer.attachRenderer(poisoned, { engine, ...options });
-          } catch (error) {
-            if (
-              !expectedReaders[layer.id]?.includes([...reads].at(-1)) ||
-              !error.message.startsWith('viewer read:')
-            )
-              throw error;
-            await layer.detachRenderer();
-            await layer.attachRenderer(null, { engine, ...options });
-          }
+        const attachRenderer = layer.attachRenderer;
+        layer.attachRenderer = function (context) {
+          return attachRenderer.call(this, new Proxy(context, {
+            get(target, property) {
+              assert.notEqual(property, 'viewer', 'attachment context must not read a viewer');
+              return Reflect.get(target, property);
+            },
+          }));
         };
+        const attach = (engine, options = {}) => manager.bindCatalog(engine, attachedCatalog, { services: sceneServicesFor(engine), ...options });
         await attach(a.engine);
         await flushLifecycleTasks(t);
         if (layer.id === 'cctv')
@@ -342,9 +337,10 @@ test('every catalog layer releases its scene and attaches to another engine', as
             'disabled CCTV markers must be hidden after attach',
           );
         assertHidden(a.engine);
+        entry.enabled = true;
         await layer.enable();
         await drive(a);
-        await layer.detachRenderer();
+        await manager.detachScene();
         if (retainedCredits[id]) {
           beforeA.credits = [
             { html: retainedCredits[id].html, onScreen: false },
@@ -363,7 +359,9 @@ test('every catalog layer releases its scene and attaches to another engine', as
         const destroyed = a.snapshot();
         const sourceCount = calls.length;
         const networkCount = environment.network.length;
-        await attach(b.engine, { waitForCameraRestore: true });
+        let restoreView;
+        const viewRestored = new Promise((resolve) => { restoreView = resolve; });
+        await attach(b.engine, { viewRestored });
         await drive(b);
         if (layer.resumeViewport) {
           assert.deepEqual(
@@ -377,17 +375,19 @@ test('every catalog layer releases its scene and attaches to another engine', as
             'no transport requests before resumeViewport',
           );
         }
-        await layer.resumeViewport?.();
+        restoreView();
+        await manager.resumeScene();
         await drive(b);
         if (id === 'local-firms')
           assert.ok(
             calls.slice(sourceCount).some((call) => call.id === 'firms'),
             'empty FIRMS cache is fetched after camera restoration',
           );
+        entry.enabled = false;
         await layer.disable();
         await drive(b);
         assertHidden(b.engine);
-        await layer.detachRenderer();
+        await manager.detachScene();
         if (retainedCredits[id])
           beforeB.credits = [
             { html: retainedCredits[id].html, onScreen: false },
@@ -404,12 +404,6 @@ test('every catalog layer releases its scene and attaches to another engine', as
         );
         assert.deepEqual(a.violations, []);
         assert.deepEqual(b.violations, []);
-        assert.deepEqual(
-          [...reads].sort(),
-          expectedReaders[layer.id] ?? [],
-          'viewer reader table must only shrink',
-        );
-        if (reads.size) seenReaders.push(id);
       } finally {
         lifetime.abort();
         for (const entry of catalog.layers) await entry.destroy?.();
@@ -420,11 +414,6 @@ test('every catalog layer releases its scene and attaches to another engine', as
       }
     });
   }
-  assert.deepEqual(
-    seenReaders.sort(),
-    Object.keys(expectedReaders).sort(),
-    'remove stale viewer reader entries',
-  );
   assert.deepEqual(
     [...seenCredits].sort(),
     Object.keys(retainedCredits).sort(),

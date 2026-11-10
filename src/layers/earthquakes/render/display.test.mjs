@@ -180,7 +180,7 @@ for (const makeHarness of GROUND_HARNESSES) {
       f.layer.detachRenderer();
       assert.equal(f.sets(), 0);
       const next = makeHarness();
-      f.layer.attachRenderer(null, { engine: next.engine });
+      f.layer.attachRenderer({ engine: next.engine });
       assert.equal(next.set('earthquakes').items.length, 3);
       assert.equal(next.set('earthquakes').shown, true);
       f.layer.destroy();

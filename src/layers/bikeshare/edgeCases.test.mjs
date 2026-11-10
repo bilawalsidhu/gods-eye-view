@@ -81,7 +81,7 @@ function fixture() {
     switchEngine() {
       layer.detachRenderer();
       engine = makeEngine();
-      layer.attachRenderer(null, { engine });
+      layer.attachRenderer({ engine });
     },
     card: () => entries.get('bikeshare-selected')?.[0] ?? null,
     click(key) {

@@ -72,19 +72,23 @@ export function createAirQualityLayer({
         throw new Error('Air quality layer is already initialized');
       initialized = true;
       try {
-        if (engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer({ engine });
       } catch (error) {
         this.destroy();
         throw error;
       }
     },
 
-    attachRenderer(viewer, { engine = null } = {}) {
+    show(enabled) {
+      renderer?.setVisible(enabled);
+      overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid air quality scene attachment');
       sceneEngine = engine;
       renderer = rendererFactory({ engine });
-      renderer.setVisible(_enabled);
+      this.show(_enabled);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, _enabled);
       if (_readings.length) this._render();
     },

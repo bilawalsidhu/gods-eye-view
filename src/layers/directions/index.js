@@ -1504,6 +1504,11 @@ export function createDirectionsLayer({
   // Layer module
   // ---------------------------------------------------------------------------
 
+  const picks = {
+    owner: 'directions',
+    predicate: (pickedId) =>
+      typeof pickedId === 'string' && pickedId.startsWith('directions:'),
+  };
   const directionsLayer = {
     id: 'directions',
     name: 'Directions',
@@ -1517,12 +1522,17 @@ export function createDirectionsLayer({
      * @param {{engine?: object|null}} [options]
      */
     init(_scene, options) {
-      return this.attachRenderer(_scene, options);
+      return this.attachRenderer(options);
     },
-    attachRenderer(_scene, { engine = null } = {}) {
+    show(enabled) {
+      _display?.show(enabled);
+      _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, enabled);
+    },
+    picks,
+    attachRenderer({ engine = null } = {}) {
       _engine = engine;
       _display = engine ? rendererFactory(engine) : null;
-      _display?.show(_enabled);
+      this.show(_enabled);
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, _enabled);
       if (!_enabled) return;
       const step = _selectedStep;
@@ -1531,6 +1541,10 @@ export function createDirectionsLayer({
       if (_b) placeMarker('b', _b);
       if (_route) drawRoute(_route);
       if (step !== null) _selectStep(step);
+    },
+    cameraOwner: {
+      suspend: () => directionsLayer.suspendCamera(),
+      resume: () => directionsLayer.resumeCamera(),
     },
     suspendCamera() {
       if (!_flightId || _suspendedFlight) return;
@@ -1556,12 +1570,7 @@ export function createDirectionsLayer({
       _display?.show(true);
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
       _installClickHandler();
-      services.picking.registerPickOwner(
-        'directions',
-        (pickedId) =>
-          typeof pickedId === 'string' && pickedId.startsWith('directions:'),
-        _engine,
-      );
+      services.picking.registerPickOwner(picks.owner, picks.predicate, _engine);
       syncRenderHold();
     },
 

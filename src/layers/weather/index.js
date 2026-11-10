@@ -302,9 +302,9 @@ export function createWeatherLayer({
       motion = matchMedia?.('(prefers-reduced-motion: reduce)');
       motion?.addEventListener?.('change', onVisibility);
       documentRef?.addEventListener?.('visibilitychange', onVisibility);
-      if (options.engine) layer.attachRenderer(nextViewer, options);
+      if (options.engine) layer.attachRenderer(options);
     },
-    attachRenderer(_viewer, { engine = null } = {}) {
+    attachRenderer({ engine = null } = {}) {
       sceneEngine = engine;
       rendering = engine
         ? (createNativeRendering(engine, { onChange: notify }) ?? null)

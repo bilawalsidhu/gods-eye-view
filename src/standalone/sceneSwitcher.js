@@ -1,3 +1,4 @@
+import { createSessionHandoff } from '../app/sessionHandoff.js';
 import {
   createEngineSwitch,
   handOffSession,
@@ -41,24 +42,25 @@ export function createSceneSwitcher({
       cover ??= keepFrame?.(components.scene.engine);
       const style = components.controls.styleManager;
       cockpit = style.getCockpitState();
-      handOffSession(layerSession, {
+      layerSession.handoff = createSessionHandoff(layerSession, {
         addressLayerIds:
           style.shareLinkManager?.currentLayerState?.()?.enabledLayerIds,
         visit: change?.visit === true,
       });
+      handOffSession(layerSession);
       renderers.retain(from);
       await getApplication().detachScene({ handoff: true }, transaction);
     }
     count('detaches');
   }
 
-  async function resume(style) {
+  async function resume(style, restoreView) {
     signal.throwIfAborted();
     await style.initialRestorePromise;
     signal.throwIfAborted();
-    layerSession.restoringView = false;
+    restoreView();
     count('attachments');
-    resumeSession(layerSession);
+    await resumeSession(layerSession);
     // A visited entry or a stale track may replace the outgoing subject.
     const target = style.getAircraftTrackingTarget();
     if (
@@ -73,13 +75,16 @@ export function createSceneSwitcher({
   }
 
   async function enter(kind, { recovery = false } = {}, transaction) {
-    layerSession.restoringView = true;
+    let restoreView;
+    layerSession.viewRestored = new Promise((resolve) => {
+      restoreView = resolve;
+    });
     let app = getApplication();
     if (!app || app.getState().status !== 'ready') {
       app = startApplication(kind, transaction);
       try {
         const { controls } = await app.start();
-        await resume(controls.styleManager);
+        await resume(controls.styleManager, restoreView);
       } catch (error) {
         if (!signal.aborted)
           await app
@@ -95,7 +100,8 @@ export function createSceneSwitcher({
     } else {
       await app.attachScene(kind, {
         transaction,
-        resume: () => resume(app.getComponents().controls.styleManager),
+        resume: () =>
+          resume(app.getComponents().controls.styleManager, restoreView),
       });
     }
     if (recovery) count('rollbacks');
@@ -110,7 +116,7 @@ export function createSceneSwitcher({
       cover = null;
     }
     if (!components) return;
-    layerSession.handoffLayers = null;
+    layerSession.handoff = null;
     cockpit = null;
     onSettled?.();
     components.controls.styleManager.shareLinkManager?.resumeNavigation?.();

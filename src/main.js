@@ -89,7 +89,6 @@ window.addEventListener('popstate', () => {
 
 function createApplication(kind, engineSwitch, transition) {
   session.count('applications');
-  layerSession.restoringView = engineSwitch;
   application = createStandaloneApplication({
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: import.meta.env.CESIUM_ION_TOKEN,

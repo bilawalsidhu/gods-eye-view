@@ -38,7 +38,7 @@ export class ShellScene extends ShellFacade {
     this._shareRestoration = new ShareRestoration({
       engine,
       canvas: engine?.host.canvas ?? viewer?.canvas,
-      handoffLayers: layerSession?.handoffLayers,
+      handoff: layerSession?.handoff,
       navigation: this._navigation,
       syncShareState: () => this._syncShareState(),
       syncModels3d: (state) => this._syncModels3dFromLayerState(state),
@@ -365,7 +365,7 @@ export class ShellScene extends ShellFacade {
       this._publishActiveStyle();
       this._shareRestoration.start({
         engineSwitch,
-        retainScene: Boolean(this._layerSession?.handoffLayers),
+        retainScene: Boolean(this._layerSession?.handoff),
       });
       this._layerBindings.observeCamera();
       this._layoutRightPanels();

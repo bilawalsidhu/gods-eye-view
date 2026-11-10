@@ -86,7 +86,7 @@ test('edge:satellites: a scene switch at a stopped epoch keeps passes and coordi
   layer.detachRenderer();
   // Wall time passes during the switch; the stopped world clock does not.
   t.mock.timers.tick(15 * 60_000);
-  layer.attachRenderer(null, { engine: second });
+  layer.attachRenderer({ engine: second });
   const after = observe(layer, second);
 
   assert.equal(reads, catalogReads, 'the switch does not refetch elements');

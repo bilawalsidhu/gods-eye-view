@@ -405,7 +405,7 @@ export class StyleManager extends ShellScene {
 
     this._shareRestoration.start({
       engineSwitch,
-      retainScene: Boolean(this._layerSession?.handoffLayers),
+      retainScene: Boolean(this._layerSession?.handoff),
     });
 
     // Keep the parameter panel from overlapping toggle controls.
@@ -771,7 +771,7 @@ export class StyleManager extends ShellScene {
         setClearBusy: (busy) => this._publishClearBusy(busy),
       },
     });
-    if (this._layerSession?.handoffLayers)
+    if (this._layerSession?.handoff)
       this._contextControls.resumeScene(this._layerSession.contextScene);
     // The Contacts layer publishes its panel; the view calls its navigation.
     contextStore.connectAwareness(militaryAwarenessLayer);

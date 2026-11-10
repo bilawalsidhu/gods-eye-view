@@ -13,12 +13,12 @@ function sceneLayer(id, hooks = {}) {
     source: 'test',
     init(viewer, context) {
       calls.push('init');
-      module.attachRenderer(viewer, context);
+      module.attachRenderer(context);
       return true;
     },
-    attachRenderer(viewer, context) {
-      calls.push(['attach', viewer]);
-      return hooks.attach?.(viewer, context);
+    attachRenderer(context) {
+      calls.push(['attach', context.engine]);
+      return hooks.attach?.(context.engine?.name === 'second' ? secondViewer : firstViewer, context);
     },
     detachRenderer(viewer) {
       calls.push(['detach', viewer]);
@@ -50,6 +50,11 @@ const engine = (name) => ({ kind: 'test', name });
 const firstViewer = { name: 'first viewer' };
 const secondViewer = { name: 'second viewer' };
 
+function bindCatalog(manager, engine, catalog, options) {
+  manager.viewer = engine?.name === 'second' ? secondViewer : firstViewer;
+  return manager.bindCatalog(engine, catalog, options);
+}
+
 async function boundManager(...layers) {
   const options = layers.at(-1)?.module ? {} : layers.pop();
   const manager = new LayerLifecycle(firstViewer, {
@@ -57,7 +62,7 @@ async function boundManager(...layers) {
     ...options,
   });
   const modules = layers.map(({ module }) => module);
-  await manager.bindCatalog(firstViewer, engine('first'), catalog(...modules));
+  await bindCatalog(manager, engine('first'), catalog(...modules));
   for (const { module } of layers)
     assert.equal(
       await manager.setEnabled(module.id, true, { origin: 'user' }),
@@ -115,14 +120,14 @@ test('one failing detachRenderer leaves the others released and the manager unbo
   assert.equal(detaches(after.calls).length, 1);
 
   // The next scene binds and both retained layers attach to it.
-  await manager.bindCatalog(
-    secondViewer,
+  await bindCatalog(
+    manager,
     engine('second'),
     catalog(...modules),
   );
   assert.equal(manager.viewer, secondViewer);
-  assert.deepEqual(attaches(broken.calls).at(-1), ['attach', secondViewer]);
-  assert.deepEqual(attaches(after.calls).at(-1), ['attach', secondViewer]);
+  assert.deepEqual(attaches(broken.calls).at(-1), ['attach', engine('second')]);
+  assert.deepEqual(attaches(after.calls).at(-1), ['attach', engine('second')]);
   assert.equal(manager.isEnabled('broken'), true);
 });
 
@@ -139,15 +144,15 @@ test('bindCatalog after a failed detach retries the release before attaching', a
     AggregateError,
   );
 
-  await manager.bindCatalog(
-    secondViewer,
+  await bindCatalog(
+    manager,
     engine('second'),
     catalog(...modules),
   );
   assert.deepEqual(broken.calls.slice(-3), [
     ['detach', firstViewer],
     ['detach', firstViewer],
-    ['attach', secondViewer],
+    ['attach', engine('second')],
   ]);
   // The scene is settled: the next detach releases the second viewer once.
   await manager.detachScene();
@@ -180,8 +185,8 @@ test('an asynchronous attach detached mid-flight stops before the release', asyn
   const { manager, modules } = await boundManager(slow);
   await manager.detachScene();
 
-  const bound = manager.bindCatalog(
-    secondViewer,
+  const bound = bindCatalog(
+    manager,
     engine('second'),
     catalog(...modules),
   );
@@ -218,8 +223,8 @@ test('periodic refreshes due while no scene is bound run after the next bind', a
   assert.equal(updates(), before, 'no refresh against a detached scene');
   assert.equal(entry.refreshDeferred, true);
 
-  await manager.bindCatalog(
-    secondViewer,
+  await bindCatalog(
+    manager,
     engine('second'),
     catalog(...modules),
   );
@@ -245,8 +250,8 @@ test('a legacy layer that cannot be destroyed is dropped so the next catalog bin
   };
   const retained = sceneLayer('retained');
   const manager = new LayerLifecycle(firstViewer, { engine: engine('first') });
-  await manager.bindCatalog(
-    firstViewer,
+  await bindCatalog(
+    manager,
     engine('first'),
     catalog(legacy, retained.module),
   );
@@ -263,8 +268,8 @@ test('a legacy layer that cannot be destroyed is dropped so the next catalog bin
   assert.deepEqual(detaches(retained.calls), [['detach', firstViewer]]);
 
   const fresh = { ...legacy, disable: () => true };
-  await manager.bindCatalog(
-    secondViewer,
+  await bindCatalog(
+    manager,
     engine('second'),
     catalog(fresh, retained.module),
   );
@@ -277,8 +282,8 @@ test('QA layers are reported when a scene switch drops them', async () => {
     engine: engine('first'),
     allowQaRegistration: true,
   });
-  await manager.bindCatalog(
-    firstViewer,
+  await bindCatalog(
+    manager,
     engine('first'),
     catalog(retained.module),
   );
@@ -322,7 +327,7 @@ test('a detach does not wait forever for an attachment that never settles', asyn
   });
   await manager.detachScene();
   const bound = quietly(() =>
-    manager.bindCatalog(secondViewer, engine('second'), catalog(...modules)),
+    bindCatalog(manager, engine('second'), catalog(...modules)),
   );
   await bound;
   assert.equal(manager.viewer, secondViewer, 'the bind went on without it');
@@ -345,8 +350,8 @@ test('a refresh due while attachments run is deferred once, not run twice', asyn
   const entry = manager.layers.get('feed');
   const before = updatesOf(feed.calls).length;
   await manager.detachScene();
-  const bound = manager.bindCatalog(
-    secondViewer,
+  const bound = bindCatalog(
+    manager,
     engine('second'),
     catalog(...modules),
   );
@@ -372,8 +377,8 @@ test('a normal refresh clears a deferred one', async () => {
   assert.equal(entry.refreshDeferred, false);
   manager._sceneDetached = true;
   const before = updatesOf(feed.calls).length;
-  await manager.bindCatalog(
-    secondViewer,
+  await bindCatalog(
+    manager,
     engine('second'),
     catalog(...modules),
   );
@@ -391,8 +396,8 @@ test('an explicit refresh between scenes waits for the next one and runs once', 
   const refreshed = manager.refreshLayer('feed');
   await tick();
   assert.equal(updatesOf(feed.calls).length, before);
-  await manager.bindCatalog(
-    secondViewer,
+  await bindCatalog(
+    manager,
     engine('second'),
     catalog(...modules),
   );
@@ -424,9 +429,9 @@ test('a layer enabled between scenes initializes on the next scene', async () =>
   const enabled = manager.setEnabled('late', true, { origin: 'user' });
   await tick();
   assert.deepEqual(late.calls, [], 'no init against a missing scene');
-  await manager.bindCatalog(secondViewer, engine('second'), catalog(...all));
+  await bindCatalog(manager, engine('second'), catalog(...all));
   assert.equal(await enabled, true);
-  assert.deepEqual(late.calls.slice(0, 2), ['init', ['attach', secondViewer]]);
+  assert.deepEqual(late.calls.slice(0, 2), ['init', ['attach', engine('second')]]);
 });
 
 test('a detach does not deadlock on an enable parked for the next scene', async () => {
@@ -442,10 +447,10 @@ test('a detach does not deadlock on an enable parked for the next scene', async 
   const other = sceneLayer('other');
   const manager = new LayerLifecycle(firstViewer, { engine: engine('first') });
   const modules = [slow.module, other.module];
-  await manager.bindCatalog(firstViewer, engine('first'), catalog(...modules));
+  await bindCatalog(manager, engine('first'), catalog(...modules));
   await manager.setEnabled('slow', true, { origin: 'user' });
   await manager.detachScene();
-  void manager.bindCatalog(secondViewer, engine('second'), catalog(...modules));
+  void bindCatalog(manager, engine('second'), catalog(...modules));
   // Enabled while the second scene is still attaching: parked.
   const enabled = manager.setEnabled('other', true, { origin: 'user' });
   await tick();
@@ -456,4 +461,35 @@ test('a detach does not deadlock on an enable parked for the next scene', async 
   // Destroying the parked layer ends its enable instead of hanging.
   assert.equal(await manager.destroyLayer('other'), true);
   assert.equal(await enabled, false);
+});
+
+test('the binding applies visibility and pick declarations and cancels a detached resume', async () => {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const { sceneServicesFor } = await import('./sceneServices.js');
+  const globe = createFakeEngine();
+  const services = sceneServicesFor(globe);
+  const calls = [];
+  let restore;
+  const viewRestored = new Promise((resolve) => { restore = resolve; });
+  const layer = sceneLayer('declared').module;
+  layer.show = (enabled) => calls.push(['show', enabled]);
+  layer.picks = { owner: 'declared', predicate: (id) => id === 'marker' };
+  layer.cameraOwner = { suspend() {}, resume: () => calls.push('resume') };
+  const manager = new LayerLifecycle(null);
+  manager.register(layer);
+  const entry = manager.layers.get(layer.id);
+  entry.initialized = true;
+  await manager.bindCatalog(globe, catalog(layer), { viewRestored, services });
+  assert.deepEqual(calls, [['show', false]]);
+  assert.equal(services.picking.findPickOwner('marker'), null);
+  entry.enabled = true;
+  assert.equal(services.picking.findPickOwner('marker'), 'declared');
+  await manager.detachScene();
+  restore();
+  await manager.resumeScene();
+  assert.deepEqual(calls, [['show', false]]);
+  assert.equal(services.picking.owners().includes('declared'), false);
+  await manager.destroyAll();
+  services.destroy();
+  globe.destroy();
 });

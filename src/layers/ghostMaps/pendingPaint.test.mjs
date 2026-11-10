@@ -137,7 +137,7 @@ for (const action of ['expire', 'disable']) {
 
     // Engine switch: the new drawing is still decoding its icons.
     layer.detachRenderer();
-    const attached = layer.attachRenderer(null, { engine: { name: 'navara' } });
+    const attached = layer.attachRenderer({ engine: { name: 'navara' } });
     await new Promise(setImmediate);
     assert.equal(gates.length, 1);
     // The event leaves its age window; the expiry pass runs meanwhile.

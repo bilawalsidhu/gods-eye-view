@@ -276,7 +276,7 @@ test('without a display the cones draw nothing and do not throw', async () => {
   });
   state.map = null;
   sequences.ensureCollections(null);
-  state.context.waitingForView = () => true;
+  state.context.viewReady = () => false;
   sequences.select('A');
   source.last('A').resolve(records('A'));
   await settle();

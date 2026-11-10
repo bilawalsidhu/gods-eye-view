@@ -1,3 +1,4 @@
+import { createSessionHandoff } from '../app/sessionHandoff.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DataLayerManager } from './manager.js';
@@ -68,31 +69,16 @@ test('same-engine Back to a gfs entry restores gfs (reference)', async () => {
   assert.equal(m.getLayerParams('wind').model, 'gfs');
 });
 
-const handoffOf = (m) =>
-  new Map(
-    [...m.layers].map(([id, entry]) => [
-      id,
-      { entry, enabled: m.isEffectivelyEnabled(id), durable: id === 'wind' },
-    ]),
-  );
+const handoffOf = (manager, visit = false) =>
+  createSessionHandoff({ manager, director: null }, { addressLayerIds: ['wind'], visit });
 
 test('cross-engine Back to a gfs entry restores gfs', async () => {
   const m = manager();
   await m.setEnabled('wind', true, { origin: 'user' });
   m.setLayerParams('wind', { model: 'ifs' }, { origin: 'user' });
-  const handoffLayers = new Map(
-    [...m.layers].map(([id, entry]) => [
-      id,
-      {
-        entry,
-        enabled: m.isEffectivelyEnabled(id),
-        durable: id === 'wind',
-        visit: true,
-      },
-    ]),
-  );
+  const handoff = handoffOf(m, true);
   const c = new LayerStateCoordinator(m, sink(), { storage: storage() });
-  await c.start({ shareLayerState: cesiumEntry, handoffLayers });
+  await c.start({ shareLayerState: cesiumEntry, handoff });
   assert.equal(c.getDurableState().options.wind.model, 'gfs');
   assert.equal(
     m.getLayerParams('wind').model,
@@ -107,7 +93,7 @@ test('a picked engine keeps the live layer options, not the address', async () =
   m.setLayerParams('wind', { model: 'ifs' }, { origin: 'user' });
   const writes = windParamWrites;
   const c = new LayerStateCoordinator(m, sink(), { storage: storage() });
-  await c.start({ shareLayerState: cesiumEntry, handoffLayers: handoffOf(m) });
+  await c.start({ shareLayerState: cesiumEntry, handoff: handoffOf(m) });
   assert.equal(windParamWrites, writes, 'a pick writes no params');
   assert.equal(m.getLayerParams('wind').model, 'ifs');
 });
@@ -120,7 +106,7 @@ test('an engine switch leaves a retained layer whose options match alone', async
   const c = new LayerStateCoordinator(m, sink(), { storage: storage() });
   const results = await c.start({
     shareLayerState: cesiumEntry,
-    handoffLayers: handoffOf(m),
+    handoff: handoffOf(m),
   });
   assert.equal(windParamWrites, writes, 'no params write for equal options');
   const wind = results.find((result) => result.layerId === 'wind');

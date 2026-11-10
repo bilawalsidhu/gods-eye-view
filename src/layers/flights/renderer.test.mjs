@@ -70,7 +70,11 @@ test('the flights logic draws, selects and follows only through its renderer', a
     militaryRegistry,
     renderer: {
       create: ({ viewer, engine: given }) => {
-        assert.equal(viewer, null, 'no viewer on an engine without one');
+        assert.equal(
+          viewer,
+          undefined,
+          'the renderer receives only the engine',
+        );
         renderer = recordingRenderer(given);
         return renderer;
       },
@@ -270,19 +274,19 @@ test('a failed engine switch, its rollback and the retry re-follow the tracked a
     // The switch: the working engine detaches; the candidate attaches the
     // layer, then fails and releases what it attached.
     layer.detachRenderer(working.viewer);
-    layer.attachRenderer(null, { engine: candidate });
+    layer.attachRenderer({ engine: candidate });
     assert.equal(candidate.camera.following()?.label?.id, 'flights:def456');
     layer.detachRenderer(null);
     // The rollback: the working engine attaches again and follows the same
     // aircraft, announced as a restore.
-    layer.attachRenderer(working.viewer, { engine: working.engine });
+    layer.attachRenderer({ engine: working.engine });
     assert.equal(layer.getTrackedInfo()?.icao24, 'def456');
     assert.equal(working.viewer.trackedEntity?.gevTrackedId, 'flights:def456');
     assert.deepEqual(navigations, [], 'the rollback is not new navigation');
     // The retry onto a new Cesium engine.
     layer.detachRenderer(working.viewer);
     retried = cesium();
-    layer.attachRenderer(retried.viewer, { engine: retried.engine });
+    layer.attachRenderer({ engine: retried.engine });
     assert.equal(layer.getTrackedInfo()?.icao24, 'def456');
     assert.equal(retried.viewer.trackedEntity?.gevTrackedId, 'flights:def456');
     assert.equal(

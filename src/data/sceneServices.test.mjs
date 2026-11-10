@@ -45,7 +45,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(b.picking.findPickOwner('camera'), null);
     layer.detachRenderer();
     assert.equal(a.picking.findPickOwner('camera'), null);
-    layer.attachRenderer(null, { engine: second.engine });
+    layer.attachRenderer({ engine: second.engine });
     assert.equal(b.picking.findPickOwner('camera'), 'alpr-cameras');
     layer.disable();
     assert.equal(b.picking.findPickOwner('camera'), null);
@@ -185,7 +185,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(b.overlay.getDiagnostics().entryCount, 0);
     layer.detachRenderer();
     assert.equal(a.overlay.getDiagnostics().entryCount, 0);
-    layer.attachRenderer(null, { engine: second.engine });
+    layer.attachRenderer({ engine: second.engine });
     assert.equal(requests, 1);
     assert.equal(b.overlay.getDiagnostics().entryCount, 1);
     a.destroy();

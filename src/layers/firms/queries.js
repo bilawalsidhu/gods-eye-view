@@ -332,7 +332,7 @@ export function createQueries({
      * renderer of `engine` (attached here when there is none yet).
      */
     _bindInteractionForTest(engine, fires = []) {
-      if (!layerState._renderer) this.attachRenderer(null, { engine });
+      if (!layerState._renderer) this.attachRenderer({ engine });
       layerState._renderer.setVisible(true);
       layerState._enabled = true;
       layerState._allFires = fires;

@@ -73,7 +73,11 @@ test('the military logic draws, selects and follows only through its renderer', 
     militaryRegistry,
     renderer: {
       create: ({ viewer, engine: given }) => {
-        assert.equal(viewer, null, 'no viewer on an engine without one');
+        assert.equal(
+          viewer,
+          undefined,
+          'the renderer receives only the engine',
+        );
         renderer = recordingAircraftRenderer(given);
         return renderer;
       },
@@ -311,14 +315,14 @@ test('military classification and the selected aircraft survive an update betwee
     await layer.update(null);
     assert.equal(layer.hasContact('AE0001'), true);
     assert.equal(layer.getAnalystRecords().length, 1);
-    layer.attachRenderer(null, { engine: first });
+    layer.attachRenderer({ engine: first });
     assert.equal(layer.trackById('ae0001'), true);
     layer.detachRenderer();
     assert.equal(binding.follow.current(), undefined);
     assert.equal(militaryRegistry.isMilitaryLayerActive(), true);
     assert.equal(layer.getTrackedInfo().icao24, 'ae0001');
     await layer.update(null);
-    layer.attachRenderer(null, { engine: second });
+    layer.attachRenderer({ engine: second });
     assert.ok(binding.follow.current());
     assert.equal(layer.getStats().lastUpdate, 1700000002000);
     assert.equal(polls, 2);

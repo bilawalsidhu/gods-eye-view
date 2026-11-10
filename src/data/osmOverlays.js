@@ -125,10 +125,10 @@ export function createOsmOverlayLayer(overlay) {
     source: overlay.source,
     updateInterval: 0,
     init(viewer, options) {
-      this.attachRenderer(viewer, options);
+      this.attachRenderer(options);
     },
     /** Drape on a globe engine's imagery. */
-    attachRenderer(_viewer, { engine: nextEngine = null } = {}) {
+    attachRenderer({ engine: nextEngine = null } = {}) {
       release();
       engine = nextEngine;
       sync();

@@ -775,10 +775,10 @@ export function createRecentImageryLayer({
     updateInterval: 0,
 
     init(_viewer, options) {
-      return this.attachRenderer(null, options);
+      return this.attachRenderer(options);
     },
 
-    attachRenderer(_viewer, { engine } = {}) {
+    attachRenderer({ engine } = {}) {
       _engine = engine || null;
       if (rendererFactory && !renderer) renderer = rendererFactory({ engine });
       if (!renderer) throw new TypeError('Recent imagery requires a renderer');

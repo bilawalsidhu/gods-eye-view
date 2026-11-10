@@ -96,6 +96,23 @@ export function createLifecycle({
   }
 
   const methods = {
+    picks: {
+      owner: 'rocket-launches',
+      predicate: (id) => getRenderer()?.ownsPick(id) ?? false,
+    },
+    cameraOwner: {
+      suspend() {
+        layerState._replayCameraHeading = layerState._replayTracks.get(
+          layerState._replayCameraLaunchId,
+        )?.lastCameraHeading;
+        layerState._replayCameraToken++;
+        layerState._replayCameraRemover?.();
+        layerState._missionZoomAnchorRemover?.();
+        layerState._replayCameraRemover = layerState._missionZoomAnchorRemover =
+          null;
+      },
+      resume: () => methods.resumeViewport(),
+    },
     // The layer draws through the engine (options.engine) only.
     init(_scene, options) {
       layerState._count = 0;
@@ -103,20 +120,19 @@ export function createLifecycle({
       layerState._stale = false;
       layerState._lastError = null;
       layerState._orbitMatches = 0;
-      this.attachRenderer(null, options);
+      this.attachRenderer(options);
     },
-    attachRenderer(
-      _scene,
-      { engine = null, waitForCameraRestore = false } = {},
-    ) {
+    show(enabled) {
+      getRenderer()?.setVisible(enabled);
+    },
+    attachRenderer(context = {}) {
+      const { engine = null } = context;
+      layerState._sceneContext = context;
       if (engine) attachDisplay(engine);
-      layerState._restoringViewport = true;
-      if (!waitForCameraRestore) this.resumeViewport();
+      if (!context.viewRestored) this.resumeViewport();
     },
 
     resumeViewport() {
-      if (!layerState._restoringViewport) return;
-      layerState._restoringViewport = false;
       if (layerState._enabled && layerState._replayCameraLaunchId) {
         parts.replay.startMissionReplay(layerState._replayCameraLaunchId, {
           resuming: true,
@@ -141,14 +157,7 @@ export function createLifecycle({
       layerState._waitForRenderer ??= new Promise((resolve) => {
         layerState._resumeRenderer = resolve;
       });
-      layerState._replayCameraHeading = layerState._replayTracks.get(
-        layerState._replayCameraLaunchId,
-      )?.lastCameraHeading;
-      layerState._replayCameraToken++;
-      layerState._replayCameraRemover?.();
-      layerState._missionZoomAnchorRemover?.();
-      layerState._replayCameraRemover = layerState._missionZoomAnchorRemover =
-        null;
+      methods.cameraOwner.suspend();
       layerState._clickHandler?.destroy();
       layerState._moveHandler?.destroy();
       layerState._declutterHandler?.();

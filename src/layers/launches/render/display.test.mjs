@@ -269,7 +269,14 @@ test('a click on a mission names its element; a click elsewhere or while off nam
   const engine = createFakeEngine();
   const display = createLaunchesDisplay(engine);
   display.setVisible(true);
-  display.addPoint({ id: 'rocket-launch:a', position: PAD, sizePx: 5 });
+  const point = display.addPoint({
+    id: 'rocket-launch:a',
+    position: PAD,
+    sizePx: 5,
+  });
+  assert.equal(display.ownsPick('rocket-launch:a'), true);
+  assert.equal(display.ownsPick('rocket-launch:missing'), false);
+  assert.equal(display.ownsPick('other'), false);
   let enabled = true;
   const clicks = [];
   const handler = display.onClick((id) => clicks.push(id), {
@@ -292,6 +299,8 @@ test('a click on a mission names its element; a click elsewhere or while off nam
   enabled = true;
   engine.fake.input('click', { position: { x: 1, y: 2 } });
   assert.equal(clicks.length, 3);
+  point.remove();
+  assert.equal(display.ownsPick('rocket-launch:a'), false);
   display.destroy();
   engine.destroy();
 });

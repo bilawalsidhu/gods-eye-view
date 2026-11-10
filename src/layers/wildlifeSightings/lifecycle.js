@@ -522,11 +522,8 @@ export function createLifecycle({ state, services, parts }) {
       services.overlayHost?.setVisible?.(id, true);
     parts.selection.install();
     services.picking?.registerPickOwner?.(
-      'wildlife-sightings',
-      (id) =>
-        typeof id === 'string' &&
-        id.startsWith('wildlife:') &&
-        state.rowById.has(id.slice(9)),
+      picks.owner,
+      picks.predicate,
       state.engine,
     );
     state.removeCamera =
@@ -572,16 +569,24 @@ export function createLifecycle({ state, services, parts }) {
     return true;
   }
 
+  const picks = {
+    owner: 'wildlife-sightings',
+    predicate: (id) =>
+      typeof id === 'string' &&
+      id.startsWith('wildlife:') &&
+      state.rowById.has(id.slice(9)),
+  };
   const methods = {
     /** Attach this layer to the scene's globe engine. */
     init(_viewer, options = {}) {
       if (state.engine)
         throw new Error('Wildlife sightings layer is already initialized');
-      return methods.attachRenderer(_viewer, options);
+      return methods.attachRenderer(options);
     },
     /** Draw on `engine` (a scene switch brings another); observations,
      * filters and selection carry over. */
-    attachRenderer(_viewer, { engine = null, signal = null } = {}) {
+    picks,
+    attachRenderer({ engine = null, signal = null } = {}) {
       if (state.destroyed || signal?.aborted) return false;
       if (state.engine)
         throw new Error('Wildlife sightings display is already attached');

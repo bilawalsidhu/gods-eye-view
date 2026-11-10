@@ -57,9 +57,9 @@ test('a bundled file delivered between planets keeps multipart IDs and is read o
   await enabled;
   assert.equal(layer.getAnalystRecords().length, 2);
   assert.equal(captures.length, 0);
-  await layer.attachRenderer(null, { engine: {} });
+  await layer.attachRenderer({ engine: {} });
   layer.detachRenderer();
-  await layer.attachRenderer(null, { engine: {} });
+  await layer.attachRenderer({ engine: {} });
   assert.equal(captures[0], captures[1]);
   assert.deepEqual(
     captures[0].records.map((r) => r.id),
@@ -94,7 +94,7 @@ test('a released scene stops waiting for a stalled dataset load, which stays in 
   await new Promise(setImmediate);
   layer.detachRenderer();
   const scene = new AbortController();
-  const attaching = layer.attachRenderer(null, {
+  const attaching = layer.attachRenderer({
     engine: {},
     signal: scene.signal,
   });
@@ -385,6 +385,6 @@ test('a scene switch restores the selected feature on the next display', async (
   selectEntityContext(record.entity);
   env.layer.detachRenderer();
   assert.equal(getContextStore().selectedEntityId, null);
-  await env.layer.attachRenderer(null, { engine: env.engine });
+  await env.layer.attachRenderer({ engine: env.engine });
   assert.equal(getContextStore().selectedEntityId, 'local-dams:dam');
 });

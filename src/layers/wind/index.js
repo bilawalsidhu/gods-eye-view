@@ -119,10 +119,11 @@ export function createWindLayer({
     source: 'GFS / ECMWF IFS · FORECAST',
     updateInterval: 3600_000,
     init(nextViewer, options) {
-      layer.attachRenderer(nextViewer, options);
+      layer.attachRenderer(options);
     },
-    attachRenderer(nextViewer, { engine: nextEngine = null } = {}) {
-      viewer = nextViewer;
+    attachRenderer({ engine: nextEngine = null } = {}) {
+      // The wind backend owns its native viewer.
+      viewer = nextEngine?.extensions?.cesium?.viewer ?? null;
       engine = nextEngine;
       if (!engine) return;
       rendering = createNativeRendering(engine, { onStatusChange: notify });

@@ -315,7 +315,7 @@ test('an engine switch redraws the route, dots and markers on the new engine onl
   t.after(() => next.destroy());
   f.layer.suspendCamera();
   f.layer.detachRenderer();
-  f.layer.attachRenderer(null, { engine: next.engine });
+  f.layer.attachRenderer({ engine: next.engine });
   f.layer.resumeCamera();
   assert.equal(f.engine.movers.list().length, 0);
   assert.equal(f.sets(), 0);

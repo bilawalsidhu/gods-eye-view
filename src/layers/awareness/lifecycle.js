@@ -278,10 +278,10 @@ export function createLifecycle({
           parts.subject.clearAwarenessSubject();
         }
       };
-      if (viewer || engine) this.attachRenderer(viewer, { engine });
+      if (viewer || engine) this.attachRenderer({ engine });
     },
 
-    attachRenderer(_scene, { engine = null } = {}) {
+    attachRenderer({ engine = null } = {}) {
       detachRuntimeListeners();
       layerState.display?.destroy?.();
       // The engine's display from the registry (render/display.js).

@@ -91,12 +91,10 @@ export function createApplicationData({
         current = nextCatalog;
         for (const layer of nextCatalog.layers)
           layer.attachMapStackController?.(next.mapStackController);
-        const binding = dataManager.bindCatalog(
-          next.viewer,
-          next.engine,
-          nextCatalog,
-          { waitForCameraRestore: layerSession?.restoringView === true },
-        );
+        dataManager.viewer = next.viewer;
+        const binding = dataManager.bindCatalog(next.engine, nextCatalog, {
+          viewRestored: layerSession?.viewRestored,
+        });
         for (const layer of nextCatalog.layers)
           layer.attachDataManager?.(dataManager);
         presentation.mount(

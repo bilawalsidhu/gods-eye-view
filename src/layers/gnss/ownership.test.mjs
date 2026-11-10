@@ -745,7 +745,7 @@ test('an in-flight regional response supplies the next renderer without a new re
     assert.equal(await pending, true);
     assert.equal(h.ground.sets(), 0);
     assert.equal(h.layer.getStats().levels.low, 1);
-    h.layer.attachRenderer(null, { engine: h.engine });
+    h.layer.attachRenderer({ engine: h.engine });
     assert.equal(h.drawn(), 1);
     assert.equal(calls, 1);
     assert.equal(h.camera.changed.numberOfListeners, 1);

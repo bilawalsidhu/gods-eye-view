@@ -97,16 +97,20 @@ export function createOsmPlacesLayer({
         })
         .catch(() => {});
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
-      if (engine) this.attachRenderer(viewer, { engine });
+      if (engine) this.attachRenderer({ engine });
     },
 
     /** Draw on a globe; the results stay for the next one. */
-    attachRenderer(viewer, { engine = null } = {}) {
+    show(enabled) {
+      renderer?.setVisible(enabled);
+      overlayHost.setVisible(OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid OSM Places scene attachment');
       sceneEngine = engine;
-      renderer = createRenderer({ viewer, engine });
-      renderer.setVisible(enabled);
+      renderer = createRenderer({ engine });
+      this.show(enabled);
       if (enabled) overlayHost.setVisible(OVERLAY_SOURCE_ID, true);
       render();
     },

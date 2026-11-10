@@ -2252,7 +2252,7 @@ test('an engine switch keeps the data and selection and redraws the same badges 
   const other = ENGINE_KINDS.find((kind) => kind !== h.engine.kind);
   const next = h.globe(other);
   const nextCells = watchCells(next);
-  assert.equal(h.layer.attachRenderer(null, { engine: next }), true);
+  assert.equal(h.layer.attachRenderer({ engine: next }), true);
   h.flushIdle();
   assert.deepEqual(drawn(next), before, 'the same badges, drawn the same');
   assert.deepEqual(style(next), beforeStyle);

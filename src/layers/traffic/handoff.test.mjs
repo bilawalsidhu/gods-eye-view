@@ -172,7 +172,6 @@ test('resuming the viewport republishes the retained roads as a pass that can st
   const surfaceInput = { roads: [road(0.004, GROUND)], bounds };
   Object.assign(state, {
     _enabled: true,
-    _restoringViewport: true,
     _fetching: false,
     _surfaceInput: surfaceInput,
     _lastBounds: bounds,

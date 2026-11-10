@@ -28,10 +28,13 @@ export function createInstallationsLayer({
   let renderer = null;
   const lifecycle = {
     init(viewer, options = {}) {
-      if (viewer || options.engine)
-        return lifecycle.attachRenderer(viewer, options);
+      if (viewer || options.engine) return lifecycle.attachRenderer(options);
     },
-    attachRenderer(viewer, options = {}) {
+    picks: {
+      owner: 'military-installations',
+      predicate: (id) => state.recordById.has(id),
+    },
+    attachRenderer(options = {}) {
       if (renderer)
         throw new Error('Installations layer is already initialized');
       const engine = options.engine ?? null;

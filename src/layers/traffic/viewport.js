@@ -175,7 +175,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     if (
       !layerState._enabled ||
       layerState._waitForScene ||
-      layerState._restoringViewport
+      layerState._sceneContext?.viewReady === false
     )
       return;
     clearTimeout(layerState._fetchTimeout);
@@ -203,7 +203,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
         if (
           !layerState._enabled ||
           layerState._waitForScene ||
-          layerState._restoringViewport
+          layerState._sceneContext?.viewReady === false
         )
           return;
         const alt = getCameraAltitude();

@@ -2,6 +2,21 @@
 // A late attachment sees its scene signal aborted and releases its own work.
 export const ATTACH_SETTLE_TIMEOUT_MS = 5000;
 
+/** One readiness gate shared by every layer attached to this scene. */
+export function createLayerSceneContext(options = {}) {
+  let viewReady = !options.viewRestored;
+  const context = {
+    ...options,
+    get viewReady() {
+      return viewReady && options.signal?.aborted !== true;
+    },
+    viewRestored: Promise.resolve(options.viewRestored).then(() => {
+      viewReady = true;
+    }),
+  };
+  return context;
+}
+
 /** Scene attachment and parked work for the layer lifecycle. */
 export class LayerSceneBinding {
   constructor(attachSettleTimeoutMs) {
@@ -12,6 +27,7 @@ export class LayerSceneBinding {
     this._sceneController = null;
     this._sceneDetached = false;
     this._pendingAttachments = new Set();
+    this._viewResumptions = [];
     this._attachSettleTimeoutMs = attachSettleTimeoutMs;
     // Lifecycle work and explicit refreshes that wait for the next scene.
     // detachScene() does not wait for parked work, which waits for it.
@@ -92,16 +108,19 @@ export class LayerSceneBinding {
   }
 
   /** Bind the next catalog only after the preceding scene released its entries. */
-  bindCatalog(viewer, engine, catalog, options = {}) {
+  bindCatalog(engine, catalog, options = {}) {
     if (this._registrationsFinalized) throw new Error('Scene already attached');
-    this.viewer = viewer;
     this.engine = engine ?? null;
     this._catalogSourceAvailability = catalog.getSourceAvailability;
     const scene = new AbortController();
     this._sceneController = scene;
     // An attachment that is still running when the scene detaches sees this
     // signal aborted and must stop touching the scene.
-    const context = { ...this._moduleContext(scene.signal), ...options };
+    const context = createLayerSceneContext({
+      ...this._moduleContext(scene.signal),
+      ...options,
+    });
+    this._viewResumptions = [];
     const attachments = [];
     for (const layer of catalog.layers) {
       const entry = this.layers.get(layer.id);
@@ -110,7 +129,7 @@ export class LayerSceneBinding {
         if (entry.module !== layer)
           throw new Error(`Layer owner changed: ${layer.id}`);
         if (entry.initialized) {
-          attachments.push(this._attachEntryRenderer(entry, viewer, context));
+          attachments.push(this._attachEntryRenderer(entry, context));
         }
       }
     }
@@ -221,7 +240,7 @@ export class LayerSceneBinding {
    * the previous scene is retried first. Asynchronous attachments are tracked
    * so detachScene() releases them only after they stopped.
    */
-  _attachEntryRenderer(entry, viewer, context) {
+  _attachEntryRenderer(entry, context) {
     let ready;
     try {
       const pending = this._failedReleases.get(entry);
@@ -232,18 +251,50 @@ export class LayerSceneBinding {
           .then(() => {
             this._failedReleases.delete(entry);
             if (context.signal.aborted) return undefined;
-            return entry.module.attachRenderer(viewer, context);
+            return entry.module.attachRenderer(context);
           });
-      } else ready = entry.module.attachRenderer(viewer, context);
+      } else ready = entry.module.attachRenderer(context);
     } catch (error) {
       ready = Promise.reject(error);
     }
-    if (!ready?.then) return ready;
+    const attached = () => {
+      if (context.signal.aborted) return;
+      entry.module.show?.(entry.enabled);
+      const picks = entry.module.picks;
+      if (picks) {
+        const picking = context.services?.picking;
+        picking?.registerPickOwner(
+          picks.owner,
+          (id) => entry.enabled && picks.predicate(id),
+        );
+        context.signal.addEventListener(
+          'abort',
+          () => picking?.unregisterPickOwner(picks.owner),
+          { once: true },
+        );
+      }
+      const resumed = context.viewRestored.then(() => {
+        if (context.signal.aborted || entry.sceneDetached) return;
+        if (entry.module.cameraOwner) return entry.module.cameraOwner.resume();
+        return entry.module.resumeViewport?.();
+      });
+      // Resume failures belong to the switch transaction, including when the
+      // camera settles before the switcher starts awaiting its owners.
+      resumed.catch(() => {});
+      this._viewResumptions.push(resumed);
+    };
+    if (!ready?.then) return attached();
+    ready = Promise.resolve(ready).then(attached);
     const tracked = Promise.resolve(ready);
     this._pendingAttachments.add(tracked);
     const untrack = () => this._pendingAttachments.delete(tracked);
     tracked.then(untrack, untrack);
     return tracked;
+  }
+
+  /** Await camera owners after the switcher resolves the incoming view. */
+  resumeScene() {
+    return Promise.all(this._viewResumptions);
   }
 
   /** Run the periodic refreshes that came due while no scene was bound. */

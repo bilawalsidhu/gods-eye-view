@@ -249,12 +249,12 @@ export function createCyclonesLayer({
     owner?.destroy();
   }
   function registerOwnership() {
-    registerPickOwner(
-      'weather-cyclones',
-      (id) => enabled && rendering?.ownsPickId?.(id) === true,
-      engine,
-    );
+    registerPickOwner(picks.owner, picks.predicate, engine);
   }
+  const picks = {
+    owner: 'weather-cyclones',
+    predicate: (id) => enabled && rendering?.ownsPickId?.(id) === true,
+  };
   const layer = {
     id: 'weather-cyclones',
     name: 'Cyclone advisories',
@@ -262,9 +262,10 @@ export function createCyclonesLayer({
     source: 'NOAA NHC / CPHC',
     updateInterval: 300_000,
     init(_viewer, options = {}) {
-      if (options.engine) return layer.attachRenderer(_viewer, options);
+      if (options.engine) return layer.attachRenderer(options);
     },
-    attachRenderer(_viewer, options = {}) {
+    picks,
+    attachRenderer(options = {}) {
       engine = options.engine ?? null;
       rendering =
         engine && createRendering

@@ -583,7 +583,7 @@ test('a selected fire retains its card and changed polygon through a scene hando
     assert.equal(await h.layer.update(), true);
     const record = h.layer.getAnalystRecords()[0];
     assert.equal(record.id, 'incident:one');
-    h.layer.attachRenderer(null, { engine: h.engine });
+    h.layer.attachRenderer({ engine: h.engine });
     assert.equal(h.zones().items.length, 2, 'the fill and its fire line');
     assert.equal(h.zones().items[0].rings[0][0][0], ring[0][0] + 0.1);
     assert.equal(

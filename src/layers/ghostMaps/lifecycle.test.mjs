@@ -242,7 +242,7 @@ test('a KMZ delivered between planets is reused by the new scene and releases it
     ['Test report'],
   );
   assert.equal(h.mounted.size, 0);
-  await layer.attachRenderer(null, { engine: h.engine });
+  await layer.attachRenderer({ engine: h.engine });
   assert.equal(h.mounted.size, 1);
   assert.equal(h.created.length, 1);
   assert.equal(h.revoked.length, 0);

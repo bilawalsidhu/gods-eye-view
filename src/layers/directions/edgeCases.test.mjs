@@ -163,7 +163,7 @@ test('edge:directions: an engine switch mid-FLY continues the same flight on the
     const next = f.makeEngine();
     f.layer.suspendCamera();
     f.layer.detachRenderer();
-    f.layer.attachRenderer(null, { engine: next });
+    f.layer.attachRenderer({ engine: next });
     f.layer.resumeCamera();
 
     // The old engine's camera is not driven any more.
@@ -203,7 +203,7 @@ test('edge:directions: a swap mid-FLY lands the old flight, and the answer arriv
     const next = f.makeEngine();
     f.layer.suspendCamera();
     f.layer.detachRenderer();
-    f.layer.attachRenderer(null, { engine: next });
+    f.layer.attachRenderer({ engine: next });
     f.layer.resumeCamera();
     f.requests[1].resolve(payload(B, A));
     await settle();

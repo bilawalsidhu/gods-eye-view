@@ -65,7 +65,7 @@ function locator(engine) {
     cancelDelay() {},
   });
   const scene = engine === 'cesium' ? viewer : null;
-  layer.attachRenderer(scene, {
+  layer.attachRenderer({
     engine: engine === 'navara' ? navara : null,
   });
   return {
@@ -175,7 +175,7 @@ test('edge:bhote-koshi-locator: an engine swap while the boundary resolves lands
   layer.attachRenderer(viewer);
   const enabling = layer.enable(viewer);
   layer.detachRenderer();
-  layer.attachRenderer(null, {
+  layer.attachRenderer({
     engine: {
       kind: 'navara',
       render: { request() {} },

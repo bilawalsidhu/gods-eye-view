@@ -1010,6 +1010,7 @@ export function createBhoteKoshiEventLayer({
   panelStore = useBhoteKoshiPanelStore(applicationPinia()),
 } = {}) {
   let _viewer = null;
+  let _attachmentContext = null;
   overlayHost = bindOverlayHost(overlayHost, () => _engine);
   let _engine = null;
   let _native = null;
@@ -2690,6 +2691,7 @@ export function createBhoteKoshiEventLayer({
 
   function applyCinematicCamera() {
     if (
+      _attachmentContext?.viewReady === false ||
       !_cinematicActive ||
       !cameraForScene() ||
       _cinematicKeyframes.length === 0
@@ -3538,16 +3540,18 @@ export function createBhoteKoshiEventLayer({
     });
   }
 
-  async function attachRenderer(viewer, { engine = null, signal = null } = {}) {
+  async function attachRenderer(context = {}) {
+    const { engine = null, signal = null } = context;
+    _attachmentContext = context;
     const generation = ++_attachGeneration;
     const current = () =>
       generation === _attachGeneration && signal?.aborted !== true;
     const stack = _mapStackController;
-    _viewer = viewer;
+    _viewer = null;
     _engine = engine;
     // The engine's display (src/layers/bhoteKoshi/render/display.js).
     _native = createNativeRenderer(engine);
-    _embeddedMedia?.attachScene?.(viewer, engine);
+    _embeddedMedia?.attachScene?.(null, engine);
     if (!_enabled) return;
     // Its enable has loaded the SDK; a restored attachment waits for it too.
     if (!cesiumSdkReady()) {
@@ -3622,7 +3626,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function init(viewer, options) {
-    await attachRenderer(viewer, options);
+    await attachRenderer(options);
     _embeddedMedia = embeddedMediaFactory({ viewer, engine: _engine });
     await loadEvent();
     console.log('[Data:BhoteKoshi] Event pack ready');
@@ -4020,6 +4024,12 @@ export function createBhoteKoshiEventLayer({
     updateInterval: 0,
     init,
     attachRenderer,
+    cameraOwner: {
+      suspend() {
+        _lastCinematicProgress = null;
+      },
+      resume: applyCinematicCamera,
+    },
     detachRenderer,
     enable,
     disable,

@@ -26,27 +26,36 @@ export function createLifecycle({
     layerState._handoffHeat = -1;
   }
 
+  const picks = {
+    owner: id,
+    predicate: (pickedId) => layerState._pickIndexById.has(pickedId),
+  };
   const methods = {
     init(viewer, options) {
-      this.attachRenderer(viewer, options);
+      this.attachRenderer(options);
     },
     /** Draws on `engine` (the scene's globe engine); without one, nothing. */
-    attachRenderer(
-      _viewer,
-      { engine = null, waitForCameraRestore = false } = {},
-    ) {
+    show(enabled) {
+      layerState._renderer?.setVisible(enabled);
+      layerState._heatImagery?.setShow(enabled && layerState._fires.length > 0);
+      overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, enabled);
+    },
+    picks,
+    attachRenderer(context = {}) {
+      const { engine = null } = context;
+      layerState._sceneContext = context;
       if (layerState._destroyed) return;
       if (layerState._renderer || !engine) return;
       layerState._renderer = config.renderer.create({ engine, id, services });
       if (!layerState._renderer) return;
       layerState._view = layerState._renderer.view;
       layerState._renderer.setVisible(false);
-      layerState._restoringViewport = waitForCameraRestore;
-      if (layerState._enabled && !waitForCameraRestore) this.showRenderer();
+      if (layerState._enabled && context.viewReady !== false)
+        this.showRenderer();
       // Enabled before a renderer: the load enable() could not start.
       if (
         layerState._enabled &&
-        !waitForCameraRestore &&
+        context.viewReady !== false &&
         !layerState._fires.length &&
         !layerState._loading
       )
@@ -54,8 +63,6 @@ export function createLifecycle({
     },
 
     resumeViewport() {
-      if (!layerState._restoringViewport) return;
-      layerState._restoringViewport = false;
       if (layerState._enabled && layerState._renderer) {
         this.showRenderer();
         if (!layerState._fires.length && !layerState._loading)
@@ -98,8 +105,8 @@ export function createLifecycle({
       components.viewport.installMoveEndWatcher();
       components.selection.installClickHandler();
       registerPickOwner(
-        id,
-        (pickedId) => layerState._pickIndexById.has(pickedId),
+        picks.owner,
+        picks.predicate,
         layerState._renderer?.engine,
       );
       components.rendering.renderCurrentLod(true);
