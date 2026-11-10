@@ -1511,6 +1511,7 @@ export function createDirectionsLayer({
   };
   const directionsLayer = {
     id: 'directions',
+    sessionState: ['route'],
     name: 'Directions',
     icon: '🧭',
     source: 'OSM routing',

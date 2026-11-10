@@ -106,6 +106,7 @@ export function createWindLayer({
   const unsubscribeClock = clock?.subscribe(notify);
   const layer = {
     id: 'wind',
+    sessionState: ['reading'],
     name: 'Wind',
     icon: '🌬',
     source: 'GFS / ECMWF IFS · FORECAST',
