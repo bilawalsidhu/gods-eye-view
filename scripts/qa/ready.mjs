@@ -94,14 +94,20 @@ export function waitForSettled(createState, { frames, timeoutMs }) {
       const cockpitActive = Boolean(
         window.__godsEyeView?.styleManager?.getCockpitState?.()?.active,
       );
+      // A running Space Missions replay flies the camera until it ends.
+      const drawn = window.__godsEyeView?.dataManager?.layers
+        ?.get('rocket-launches')
+        ?.module?.qaDrawn?.();
+      const replaying = Boolean(drawn?.replay?.active && !drawn.paused);
       status.observed = {
         inputsEnabled: status.conditions.cameraInputsEnabled,
         following,
         cockpitActive,
+        replaying,
         lastPoseDelta,
       };
       // Only a live camera owner excuses motion or held inputs, never a scenario flag.
-      if (following || cockpitActive) {
+      if (following || cockpitActive || replaying) {
         status.conditions.cameraInputsEnabled = true;
         status.conditions.cameraPoseStable = true;
       }

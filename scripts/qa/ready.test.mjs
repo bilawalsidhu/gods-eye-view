@@ -14,8 +14,11 @@ import {
 function pageEngine(t) {
   const engine = createFakeEngine();
   const previous = globalThis.window;
+  const launches = { qaDrawn: () => ({ paused: false, replay: null }) };
   const app = {
     engine,
+    launches,
+    dataManager: { layers: new Map([['rocket-launches', { module: launches }]]) },
     styleManager: {
       initialRestorePromise: Promise.resolve(),
       getCockpitState: () => ({ active: false }),
@@ -30,14 +33,16 @@ function pageEngine(t) {
   return app;
 }
 
-test('cockpit and follow readiness allow held inputs and moving poses after drawn frames', async (t) => {
-  for (const owner of ['cockpit', 'follow']) {
+test('cockpit, follow and replay readiness allow held inputs and moving poses after drawn frames', async (t) => {
+  for (const owner of ['cockpit', 'follow', 'replay']) {
     await t.test(owner, async (t) => {
-      const { engine, styleManager } = pageEngine(t);
+      const { engine, styleManager, launches } = pageEngine(t);
       engine.input.suspendCameraInputs();
       let drawn = 0;
       if (owner === 'cockpit')
         styleManager.getCockpitState = () => ({ active: true });
+      else if (owner === 'replay')
+        launches.qaDrawn = () => ({ paused: false, replay: { active: true } });
       else
         engine.camera.follow({
           position: () => ({ x: 6378137, y: drawn * 10, z: 0 }),
@@ -58,6 +63,7 @@ test('cockpit and follow readiness allow held inputs and moving poses after draw
       assert.equal(status.observed.inputsEnabled, false);
       assert.equal(status.observed.cockpitActive, owner === 'cockpit');
       assert.equal(status.observed.following, owner === 'follow');
+      assert.equal(status.observed.replaying, owner === 'replay');
       assert.ok(status.observed.lastPoseDelta.orientation > 0);
       assert.equal(engine.frames.postRender.numberOfListeners, 0);
     });
@@ -128,6 +134,7 @@ test('unowned input locks and moving cameras time out with observed state', asyn
           inputsEnabled: moving,
           following: false,
           cockpitActive: false,
+          replaying: false,
           lastPoseDelta: {
             positionM: moving ? 1 : 0,
             orientation: 0,
