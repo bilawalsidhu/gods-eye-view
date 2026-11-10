@@ -176,7 +176,7 @@ function makeLiveLayer() {
       setOverlaySourceVisible() {},
       clearOverlaySource() {},
     },
-    sprites: { registerSpriteCollection() {}, restoreSpriteOrder() {} },
+    sprites: {},
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
   const state = createState({ services });

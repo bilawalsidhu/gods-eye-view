@@ -48,27 +48,18 @@ export function createRendering({
       id: `${prefix}:stations`,
       blend: 'translucent',
       show: false,
+      drawOrder: services.sprites?.spriteDrawOrder?.('bikeshare') ?? 0,
     });
     layerState._selectedSet = draw.points({ id: `${prefix}:selected` });
     // Drawn from the start, empty, so both take their place in the scene
     // now, as the layer's collections did; the stations' place among the
-    // other sprite layers is the sprite order's (`restoreSpriteOrder`).
+    // other sprite layers is their draw order (`spriteDrawOrder`).
     layerState._stationSet.set([]);
     layerState._selectedSet.set([]);
-    layerState._spriteEntry = services.sprites?.registerSpriteSet?.(
-      'bikeshare',
-      layerState._stationSet.id,
-    );
   }
 
   /** Let the layer's draw sets go. */
   function detachSets() {
-    if (layerState._spriteEntry)
-      services.sprites?.unregisterSpriteCollection?.(
-        'bikeshare',
-        layerState._spriteEntry,
-      );
-    layerState._spriteEntry = null;
     layerState._stationSet?.dispose();
     layerState._selectedSet?.dispose();
     layerState._stationSet = null;

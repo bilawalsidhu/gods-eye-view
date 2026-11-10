@@ -83,7 +83,7 @@ test('a moving item takes its icon set onto the GPU, in its billboards’ place'
   assert.equal(scene.added.length, 1, 'one host');
   const host = scene.added[0];
   assert.ok(host instanceof IconSetPrimitive, 'drawn by the GPU icon set');
-  assert.equal(host.drawSetId, 'gpu:switch', 'named for sprite ordering');
+  assert.equal(host.drawSetId, 'gpu:switch', 'named for finding its host');
   const { set: rowsOf, course } = rows(part, 'gpu:switch');
   assert.equal(rowsOf.count, 2, 'the items it had are rows too');
   assert.equal(set.size(), 2);

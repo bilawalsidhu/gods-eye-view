@@ -11,7 +11,6 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { restoreSpriteOrder } = services.sprites;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
   /** Stop listening to the camera, if the layer is. */
@@ -62,8 +61,6 @@ export function createLifecycle({
 
       parts.selection._installClickHandler(viewer);
 
-      restoreSpriteOrder(viewer);
-
       console.log(
         `[Data:Bikeshare] Initialized with ${GBFS_CITY_REGISTRY.length} cities`,
       );
@@ -98,7 +95,6 @@ export function createLifecycle({
       }
 
       void parts.viewport.runProximityCheck();
-      restoreSpriteOrder(viewer);
     },
 
     /**

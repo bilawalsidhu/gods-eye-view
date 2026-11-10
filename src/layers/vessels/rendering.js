@@ -92,8 +92,7 @@ export function createRendering({
     visualRecords = new WeakMap();
   }
 
-  const { registerSpriteSet } = services.sprites;
-  let warnedNoSpriteOrder = false;
+  const { spriteDrawOrder } = services.sprites;
   const {
     forgetSpriteFocus,
     focusNowMs,
@@ -138,20 +137,13 @@ export function createRendering({
     const set = drawOf(viewer).icons({
       id: `ais-vessels:${++instances}`,
       horizonCull: true,
+      drawOrder: spriteDrawOrder?.('ais') ?? 0,
     });
-    // Columns of no rows put the set's host in the scene now, where the
-    // sprite order finds it, rather than with its first vessel.
+    // Columns of no rows put the set's host in the scene now, rather than
+    // with its first vessel.
     set.setColumns?.({ ids: [] });
     state.icons = createVesselIconBook(set);
     state.icons.show = state.feed.enabled;
-    if (registerSpriteSet) registerSpriteSet('ais', set.id);
-    else if (!warnedNoSpriteOrder) {
-      // Drawn still, but not raised over the other sprite layers.
-      warnedNoSpriteOrder = true;
-      console.warn(
-        '[Data:ais-live-vessels] the host has no registerSpriteSet; ships keep their draw order',
-      );
-    }
   }
 
   /** Let the icon draw set go (the layer is destroyed). */

@@ -100,7 +100,6 @@ export function createKartaViewProvider({
           selectedId: null,
           images: [],
           set: null,
-          sprite: null,
           loading: false,
           error: null,
           abort: null,

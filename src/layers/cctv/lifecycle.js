@@ -22,7 +22,6 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { registerSpriteSet, restoreSpriteOrder } = services.sprites;
   const { activateCctvCameraFromWorldClick } = services.activation;
   const { resolvePickId, registerPickOwner, unregisterPickOwner } =
     services.picking;
@@ -205,10 +204,7 @@ export function createLifecycle({
       layerState._lastViewContext = '';
       layerState._calibrationById = parts.calibration.loadCalibrationStore();
 
-      // A host without the sprite order still draws the icons, in the
-      // order they were added.
-      const iconSetId = parts.rendering.createCameraIcons(layerState._viewer);
-      registerSpriteSet?.('cctv', iconSetId);
+      parts.rendering.createCameraIcons(layerState._viewer);
 
       const sources = await parts.catalog.loadCameraSources();
       const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
@@ -457,7 +453,6 @@ export function createLifecycle({
       }
       parts.rendering.refreshCoverageStyles();
       parts.presentation.notifyListeners();
-      restoreSpriteOrder(layerState._viewer);
       console.log('[Data:CCTV] Initialized with', layerState._count, 'cameras');
     },
 
@@ -519,7 +514,6 @@ export function createLifecycle({
       parts.cards.startCardFrameLoop();
       parts.cards.refreshAmbientCards();
       parts.presentation.notifyListeners();
-      restoreSpriteOrder(layerState._viewer);
     },
 
     /** Disables the layer: hides entities, stops the projection loop and load queue. */

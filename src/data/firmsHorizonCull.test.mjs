@@ -9,7 +9,6 @@ import {
   reportMeshFloorCell,
   setMeshFloorPreferred,
 } from './groundFloor.js';
-import { unregisterSpriteCollection } from './spriteOrder.js';
 import { isOverlayPointVisible, normalizeOverlayEntry } from '../overlays/worldOverlay.js';
 import { createIconSet, ICON_CULL_LIFT } from './iconSet.js';
 import { writeHoldSegment } from './iconSegment.js';
@@ -426,7 +425,6 @@ function createHarness(rawFires) {
     },
     cleanup() {
       layer.destroy(viewer);
-      unregisterSpriteCollection('firms');
       Cesium.SceneTransforms.worldToWindowCoordinates = originalProject;
       globalThis.fetch = originalFetch;
       if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;

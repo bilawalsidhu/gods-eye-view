@@ -139,9 +139,8 @@ const DRAW_FROM_CALLER = new Set([
   // eye and shade the globe through the ports alone.
   './application/layers',
   './standalone/catalog',
-  // The application's tools (scene director, annotations, embed views):
-  // they draw, fly and take clicks through the ports; only Import's pins
-  // (`src/data/geoImportPins.js`, still on the Cesium list) drive Cesium.
+  // The application's tools (scene director, annotations, embed views,
+  // Import): they draw, fly and take clicks through the ports.
   './application/tools',
 ]);
 

@@ -5,10 +5,9 @@ import {
   loadGeoFile,
 } from '../data/geoFileImport.js';
 import {
-  addImportedSource,
-  dataSourcePoints,
-  removeImportedSource,
-  showImportedSource,
+  importedDrawingPoints,
+  removeImportedDrawing,
+  showImportedDrawing,
 } from '../data/geoImportPins.js';
 import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
 import { flyToFootprint } from './flyToDataSource.js';
@@ -19,9 +18,9 @@ import {
   findGlobe,
 } from '../render/rendererOf.js';
 
-/** Fly to the whole footprint of one imported file's data source. */
-const flyToDataSource = (viewer, dataSource, options) =>
-  flyToFootprint(viewer, dataSourcePoints(dataSource), options);
+/** Fly to the whole footprint of one imported file's drawing. */
+const flyToDrawing = (viewer, drawing, options) =>
+  flyToFootprint(viewer, importedDrawingPoints(drawing), options);
 
 // One color per file, in import order, from the whiteboard palette.
 const COLORS = ['#39d0ff', '#ffb547', '#5dff9f', '#ff6b6b', '#8be9ff'];
@@ -45,14 +44,14 @@ function localizedValues(values) {
  *   renders them. `connect(actions)` answers the view's pick and row buttons
  *   and returns their disconnect.
  * @returns {{destroy: Function, importFiles: Function, list: Function,
- *   setVisible: Function, flyTo: Function, remove: Function,
+ *   setVisible: Function, flyTo: Function, remove: Function, drawn: Function,
  *   diagnostics: Function}|null}
  */
 export function initGeoFileImport({
   viewer,
   load = loadGeoFile,
   document: doc = globalThis.document,
-  flyToSource = flyToDataSource,
+  flyToSource = flyToDrawing,
   navigation = null,
   ground = null,
   subscribeMapSource = null,
@@ -188,7 +187,7 @@ export function initGeoFileImport({
     const item = find(id);
     if (!item) return false;
     item.visible = Boolean(visible);
-    showImportedSource(item.dataSource, item.visible);
+    showImportedDrawing(item.drawing, item.visible);
     if (item.visible) scheduleGround();
     present();
     render();
@@ -199,7 +198,7 @@ export function initGeoFileImport({
   // destination's terrain has loaded (see ./flyToDataSource.js).
   const fly = (item) => {
     if (!item.visible) setVisible(item.id, true);
-    flyToSource(viewer, item.dataSource, { ground });
+    flyToSource(viewer, item.drawing, { ground });
     return true;
   };
 
@@ -236,7 +235,7 @@ export function initGeoFileImport({
     const at = imports.findIndex((item) => item.id === id);
     if (at < 0) return false;
     const [item] = imports.splice(at, 1);
-    removeImportedSource(viewer, item.dataSource);
+    removeImportedDrawing(item.drawing);
     item.revoke?.();
     present();
     render();
@@ -300,6 +299,18 @@ export function initGeoFileImport({
         loaded.revoke?.();
         break;
       }
+      try {
+        loaded.mount?.();
+      } catch {
+        // Something in it the renderer would not draw: refused whole.
+        loaded.revoke?.();
+        outcomes.push({
+          name: fileName,
+          ok: false,
+          error: t('That file could not be read.'),
+        });
+        continue;
+      }
       colorAt += 1;
       seq += 1;
       const item = {
@@ -311,17 +322,10 @@ export function initGeoFileImport({
         removed: loaded.removed || 0,
         color,
         visible: true,
-        dataSource: loaded.dataSource,
+        drawing: loaded.drawing,
         revoke: loaded.revoke,
         refreshGround: loaded.refreshGround,
       };
-      await addImportedSource(viewer, item.dataSource);
-      if (destroyed) {
-        removeImportedSource(viewer, item.dataSource);
-        item.revoke?.();
-        break;
-      }
-      loaded.mount?.();
       imports.push(item);
       present();
       render();
@@ -409,6 +413,16 @@ export function initGeoFileImport({
     setVisible,
     flyTo,
     remove,
+    /** What a file drew: its sets' ids, whether shown, and their items. */
+    drawn: (id) => {
+      const item = imports.find((entry) => entry.id === id);
+      if (!item?.drawing) return null;
+      return {
+        sets: { ...item.drawing.ids },
+        show: item.drawing.show,
+        ...item.drawing.items?.(),
+      };
+    },
     diagnostics: () => ({
       files: imports.length,
       entities: imports.reduce((n, item) => n + item.entityCount, 0),
@@ -424,7 +438,7 @@ export function initGeoFileImport({
       clearTimeout(groundTimer);
       for (const remove of groundRemovers) remove();
       for (const item of imports.splice(0)) {
-        removeImportedSource(viewer, item.dataSource);
+        removeImportedDrawing(item.drawing);
         item.revoke?.();
       }
       for (const [target, type, listener, options] of listeners.splice(0))

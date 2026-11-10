@@ -13,6 +13,7 @@ import {
 } from './draw.js';
 import { drawHitOf } from './drawHit.js';
 import { MODEL_RETRY_MS } from './drawModels.js';
+import { spriteDrawOrder } from '../../data/spriteOrder.js';
 
 // Node has no WebGL context to report line-width limits.
 Cesium.ContextLimits._minimumAliasedLineWidth = 1;
@@ -1669,13 +1670,7 @@ test('the traffic layer draws its dots as one point collection moved, added to a
   assert.equal(scene.added.length, 0);
 });
 
-test('a rebuilt set keeps its place among the scene primitives, and names its host', async () => {
-  const {
-    registerSpriteSet,
-    registerSpriteCollection,
-    restoreSpriteOrder,
-    unregisterSpriteCollection,
-  } = await import('../../data/spriteOrder.js');
+test('a rebuilt set keeps its place among the scene primitives, and names its host', () => {
   const scene = fakeScene();
   scene.primitives = new Cesium.PrimitiveCollection();
   const { draw } = drawOver(scene);
@@ -1702,17 +1697,6 @@ test('a rebuilt set keeps its place among the scene primitives, and names its ho
     'not raised by updates',
   );
 
-  // The sprite order finds the set's host by its id, whichever host it is.
-  const cctv = registerSpriteCollection('cctv', below);
-  const flights = registerSpriteCollection('flights', above);
-  const entry = registerSpriteSet('bikeshare', 'kept');
-  scene.primitives.raiseToTop(below);
-  assert.deepEqual(order(), ['kept', 'above', 'below']);
-  restoreSpriteOrder({ scene });
-  assert.deepEqual(order(), ['below', 'kept', 'above']);
-  unregisterSpriteCollection('bikeshare', entry);
-  unregisterSpriteCollection('cctv', cctv);
-  unregisterSpriteCollection('flights', flights);
   set.dispose();
 });
 
@@ -1782,6 +1766,54 @@ test('reordering by drawOrder leaves the other primitives where they are', () =>
   assert.deepEqual(order(), ['A', 'X', 'B', 'Y', 'C']);
   assert.ok(!x.isDestroyed() && !y.isDestroyed());
   for (const set of [a, b, c]) set.dispose();
+});
+
+test('sprite layers stack flights on top, all under a set at the default order', () => {
+  const scene = fakeScene();
+  scene.primitives = new Cesium.PrimitiveCollection();
+  const { draw } = drawOver(scene);
+  const dot = { id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' };
+  // Made before every sprite set, and again after them.
+  const highlight = draw.points({ id: 'highlight' });
+  highlight.set([dot]);
+  const sets = ['flights', 'cctv', 'ais', 'transit'].map((layerId) => {
+    const set = draw.points({
+      id: layerId,
+      drawOrder: spriteDrawOrder(layerId),
+    });
+    set.set([dot]);
+    return set;
+  });
+  const endpoint = draw.points({ id: 'endpoint' });
+  endpoint.set([dot]);
+  const order = [];
+  for (let i = 0; i < scene.primitives.length; i++) {
+    order.push(scene.primitives.get(i).drawSetId);
+  }
+  // Earlier draws on top.
+  assert.deepEqual(order, [
+    'highlight',
+    'endpoint',
+    'flights',
+    'ais',
+    'transit',
+    'cctv',
+  ]);
+  // Raised above flights in place, CCTV keeps every other set's slot.
+  sets[1].setOptions({ drawOrder: spriteDrawOrder('flights') + 0.5 });
+  const after = [];
+  for (let i = 0; i < scene.primitives.length; i++) {
+    after.push(scene.primitives.get(i).drawSetId);
+  }
+  assert.deepEqual(after, [
+    'highlight',
+    'endpoint',
+    'cctv',
+    'flights',
+    'ais',
+    'transit',
+  ]);
+  for (const set of [highlight, endpoint, ...sets]) set.dispose();
 });
 
 test('changing an option rebuilds only the kinds that build it in, in their place', () => {
@@ -2252,17 +2284,12 @@ test('the GNSS layer draws its cells as ground fills that stay out of the pick p
 test('the fires layer draws its heat cells as ground fills through the Cesium draw port', async (t) => {
   const { createFirmsHeatmapLayer } =
     await import('../../data/firmsHeatmap.js');
-  const { unregisterSpriteCollection } =
-    await import('../../data/spriteOrder.js');
   const { fakeInput } = await import('../../input/testDoubles.mjs');
   const { bindFakeCesiumScene } =
     await import('../../testSupport/fakeCesiumScene.mjs');
   const saved = globalThis.window;
   globalThis.window = new EventTarget();
   const scene = fakeScene();
-  // The layer keeps its detection icons over other sprites.
-  scene.primitives.contains = (p) => scene.added.includes(p);
-  scene.primitives.raiseToTop = () => {};
   // Far out, where the layer draws heat cells rather than detections.
   const viewer = {
     scene,
@@ -2302,7 +2329,6 @@ test('the fires layer draws its heat cells as ground fills through the Cesium dr
   t.after(() => {
     input.destroy();
     unbind();
-    unregisterSpriteCollection('firms');
     if (saved === undefined) delete globalThis.window;
     else globalThis.window = saved;
   });
@@ -3330,6 +3356,59 @@ test('a draped line shown after it is ready keeps that show through the swap', (
     set.dispose();
   }));
 
+test('an icon stands off its position by its pixel offset, and back when it has none', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.icons({ id: 'offset-pins' });
+  const icon = (pixelOffset) => ({
+    id: 'a',
+    pos: { lon: 0, lat: 0 },
+    image: 'pin.png',
+    size: [8, 8],
+    ...(pixelOffset ? { pixelOffset } : {}),
+  });
+  set.set([icon({ x: 3, y: -4 })]);
+  const pin = () => scene.added[0].get(0);
+  assert.deepEqual([pin().pixelOffset.x, pin().pixelOffset.y], [3, -4]);
+  set.upsert([icon({ x: 0, y: 6 })]);
+  assert.deepEqual([pin().pixelOffset.x, pin().pixelOffset.y], [0, 6]);
+  set.upsert([icon()]);
+  assert.deepEqual([pin().pixelOffset.x, pin().pixelOffset.y], [0, 0]);
+  set.dispose();
+});
+
+test('a wall stands up from the ellipsoid to its positions, with or without a fill', () => {
+  const { scene, draw } = drawOver();
+  const set = draw.shapes({ id: 'walls' });
+  const wall = (id, fill) => ({
+    id,
+    geometry: {
+      kind: 'wall',
+      positions: [
+        { lon: 0, lat: 0, height: 100 },
+        { lon: 0.01, lat: 0, height: 150 },
+      ],
+    },
+    fill,
+    outline: [1, 1, 0, 1],
+  });
+  set.set([wall('filled', [0, 0, 1, 0.5]), wall('outline', null)]);
+  const geometries = [];
+  const walk = (primitive) => {
+    if (!primitive) return;
+    if (primitive instanceof Cesium.PrimitiveCollection)
+      for (let i = 0; i < primitive.length; i++) walk(primitive.get(i));
+    for (const instance of [primitive.geometryInstances ?? []].flat())
+      geometries.push([instance.id?.id, instance.geometry.constructor.name]);
+  };
+  scene.added.forEach(walk);
+  assert.deepEqual(geometries.sort(), [
+    ['filled', 'WallGeometry'],
+    ['filled', 'WallOutlineGeometry'],
+    ['outline', 'WallOutlineGeometry'],
+  ]);
+  set.dispose();
+});
+
 test('icons blend as their set says', () => {
   const { scene, draw } = drawOver();
   const set = draw.icons({ id: 'pins', blend: 'translucent' });
@@ -3648,14 +3727,10 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
     await import('../../data/iconSet.js');
   const spriteOrder = await import('../../data/spriteOrder.js');
   const scene = fakeScene();
-  const registered = [];
-  const { layer, viewer, part, unbind } = await vesselLayerOver(scene, {
-    registerSpriteSet(layerId, setId) {
-      registered.push([layerId, setId]);
-      return spriteOrder.registerSpriteSet(layerId, setId);
-    },
-  });
-  const military = { name: 'military' };
+  const { layer, viewer, part, unbind } = await vesselLayerOver(
+    scene,
+    spriteOrder,
+  );
   try {
     layer.testing._setVesselStateForTest({ viewer, icons: null });
     layer.testing._reconcileVesselsForTest(viewer, [
@@ -3696,34 +3771,11 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
     assert.equal(set.count, 1);
     assert.equal(set.course(set.row('244000001'), tau), 95);
 
-    // The sprite order finds the host by its set id and stacks it under the
-    // military sprites.
-    assert.deepEqual(registered, [['ais', host.drawSetId]]);
-    spriteOrder.registerSpriteCollection('military', military);
-    const stack = (list) => ({
-      scene: {
-        primitives: {
-          get: (i) => list[i],
-          get length() {
-            return list.length;
-          },
-          contains: (p) => list.includes(p),
-          raiseToTop(p) {
-            list.splice(list.indexOf(p), 1);
-            list.push(p);
-          },
-        },
-      },
-    });
-    const order = [military, host, { name: 'other' }];
-    spriteOrder.restoreSpriteOrder(stack(order));
-    assert.deepEqual(
-      order.map((p) => p.name ?? p.drawSetId),
-      ['other', host.drawSetId, 'military'],
-    );
+    // The set stacks at the vessels' place in the sprite order.
+    assert.equal(record.spec.drawOrder, spriteOrder.spriteDrawOrder('ais'));
 
-    // Torn down and drawn again: a new set, registered in the old one's
-    // place, with the old host gone from the scene.
+    // Torn down and drawn again: a new set at the same draw order, with
+    // the old host gone from the scene.
     layer.destroy(viewer);
     assert.equal(scene.added.length, 0, 'destroyed: the set goes');
     layer.testing._setVesselStateForTest({ viewer, icons: null });
@@ -3735,16 +3787,13 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
     assert.notEqual(again, host);
     assert.notEqual(again.drawSetId, host.drawSetId, 'a new set id');
     assert.equal(part.sets.has(host.drawSetId), false);
-    assert.deepEqual(registered.at(-1), ['ais', again.drawSetId]);
-    const stray = { name: 'stray' };
-    const next = [military, again, stray];
-    spriteOrder.restoreSpriteOrder(stack(next));
-    assert.deepEqual(next, [stray, again, military], 'the new host is raised');
+    assert.equal(
+      part.sets.get(again.drawSetId).spec.drawOrder,
+      spriteOrder.spriteDrawOrder('ais'),
+    );
     layer.destroy(viewer);
     assert.equal(scene.added.length, 0);
   } finally {
-    spriteOrder.unregisterSpriteCollection('military', military);
-    spriteOrder.unregisterSpriteCollection('ais');
     unbind();
   }
 });
@@ -3790,12 +3839,10 @@ test('the FIRMS layer draws its fire glows as one GPU icon set on a viewer of it
       warmFireAnchorFloors: async () => false,
     },
     sprites: {
-      registerSpriteSet: (layerId, setId) => {
-        sprites.push([layerId, setId]);
-        return { drawSetId: setId };
+      spriteDrawOrder: (layerId) => {
+        sprites.push(layerId);
+        return spriteDrawOrder(layerId);
       },
-      unregisterSpriteCollection: noop,
-      restoreSpriteOrder: noop,
     },
   };
   const config = {
@@ -3826,7 +3873,7 @@ test('the FIRMS layer draws its fire glows as one GPU icon set on a viewer of it
 
   const [host] = scene.added;
   assert.ok(host instanceof IconSetPrimitive, 'one GPU icon set');
-  assert.deepEqual(sprites, [['firms', host.drawSetId]]);
+  assert.deepEqual(sprites, ['firms'], 'at the fires’ draw order');
   const set = host.set;
   assert.equal(set.count, 2);
   const strong = set.row('firms-0');
@@ -3980,20 +4027,14 @@ test('the Radio layer draws its stations, clusters and selected marker as point 
   assert.equal(scene.added.length, 0, 'gone with the layer');
 });
 
-test('vessels on a host with no sprite-set registry still draw, and say so once', async (t) => {
-  const warnings = [];
-  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+test('vessels on a host without the sprite order still draw, at the default draw order', async () => {
   const scene = fakeScene();
-  const { layer, viewer, unbind } = await vesselLayerOver(scene, {});
+  const { layer, viewer, part, unbind } = await vesselLayerOver(scene, {});
   const ship = { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90 };
   layer.testing._setVesselStateForTest({ viewer, icons: null });
   layer.testing._reconcileVesselsForTest(viewer, [ship]);
   assert.equal(scene.added.length, 1, 'drawn');
-  layer.destroy(viewer);
-  layer.testing._setVesselStateForTest({ viewer, icons: null });
-  layer.testing._reconcileVesselsForTest(viewer, [ship]);
-  const said = warnings.filter((w) => w.includes('registerSpriteSet'));
-  assert.equal(said.length, 1, 'once, not per set');
+  assert.equal(part.sets.get(scene.added[0].drawSetId).spec.drawOrder, 0);
   layer.destroy(viewer);
   unbind();
 });
@@ -4241,6 +4282,7 @@ test('an unclamped shape filled with an image draws a textured primitive and fre
     assert.ok(appearance instanceof Cesium.MaterialAppearance);
     assert.equal(appearance.material.type, 'Image');
     assert.equal(appearance.material.uniforms.image, 'picture.png');
+    assert.equal(appearance.isTranslucent(), true, 'its own alpha blends');
     assert.deepEqual(
       appearance.material.uniforms.repeat,
       new Cesium.Cartesian2(2, 3),
@@ -4840,12 +4882,10 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
           releaseContinuousRender: noop,
         },
         sprites: {
-          registerSpriteSet: (layerId, setId) => {
-            sprites.push([layerId, setId]);
-            return { drawSetId: setId };
+          spriteDrawOrder: (layerId) => {
+            sprites.push(layerId);
+            return spriteDrawOrder(layerId);
           },
-          unregisterSpriteCollection: noop,
-          restoreSpriteOrder: noop,
         },
         picking: { registerPickOwner: noop, unregisterPickOwner: noop },
         overlays: {
@@ -4902,12 +4942,12 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
       [flow.repeat, flow.duty, flow.speed, flow.color.alpha],
       [64, 0.46, 0.55, 0.95],
     );
-    // One maneuver dot, at its junction on the ground floor, in the sprite
-    // order.
+    // One maneuver dot, at its junction on the ground floor, at the
+    // directions' draw order.
     const steps = hostOf(':steps');
     assert.ok(steps instanceof Cesium.PointPrimitiveCollection);
     assert.equal(steps.blendOption, Cesium.BlendOption.TRANSLUCENT);
-    assert.deepEqual(sprites, [['directions', steps.drawSetId]]);
+    assert.deepEqual(sprites, ['directions']);
     assert.equal(steps.length, 1);
     const dot = steps.get(0);
     assert.equal(dot.id.id, 'directions:step:1');
@@ -7513,12 +7553,10 @@ test('the transit layer draws its vehicles as two icon sets, moving a marker bet
       releaseContinuousRender: noop,
     },
     sprites: {
-      registerSpriteSet: (layerId, setId) => {
-        const entry = { drawSetId: setId };
-        registered.push([layerId, setId]);
-        return entry;
+      spriteDrawOrder: (layerId) => {
+        registered.push(layerId);
+        return spriteDrawOrder(layerId);
       },
-      unregisterSpriteCollection: noop,
     },
   };
   const state = createState({ services });
@@ -7530,10 +7568,7 @@ test('the transit layer draws its vehicles as two icon sets, moving a marker bet
   });
   rendering.createMarkers(viewer);
   const [stillId, movingId] = rendering.setIds();
-  assert.deepEqual(registered, [
-    ['transit', stillId],
-    ['transit-motion', movingId],
-  ]);
+  assert.deepEqual(registered, ['transit', 'transit-motion']);
   const hostOf = (setId) => scene.added.find((h) => h.drawSetId === setId);
   assert.ok(hostOf(stillId) instanceof Cesium.BillboardCollection);
   assert.ok(hostOf(movingId) instanceof Cesium.BillboardCollection);

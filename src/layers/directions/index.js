@@ -957,8 +957,6 @@ export function createDirectionsLayer({ services, source }) {
    * @type {{markers: object, steps: object, route: object}|null}
    */
   let _sets = null;
-  /** The registration of the dots in the shared sprite order. */
-  let _spriteEntry = null;
   /** Whether a route is drawn. */
   let _routeDrawn = false;
   /**
@@ -1002,9 +1000,6 @@ export function createDirectionsLayer({ services, source }) {
 
   /** Let the layer's draw sets go. */
   function detachSets() {
-    if (_spriteEntry)
-      services.sprites.unregisterSpriteCollection?.('directions', _spriteEntry);
-    _spriteEntry = null;
     if (!_sets) return;
     for (const set of Object.values(_sets)) set.dispose();
     _sets = null;
@@ -1275,7 +1270,6 @@ export function createDirectionsLayer({ services, source }) {
     _anchorStartedAt = Date.now();
     anchorStepPoints();
     syncRenderHold();
-    services.sprites.restoreSpriteOrder(_viewer);
     services.render.governorRequestRender('directions-route');
   }
 
@@ -1719,16 +1713,14 @@ export function createDirectionsLayer({ services, source }) {
           id: `${prefix}:steps`,
           blend: 'translucent',
           show: false,
+          drawOrder: services.sprites.spriteDrawOrder?.('directions') ?? 0,
         }),
         route: draw.lines({ id: `${prefix}:route` }),
       };
       // Drawn from the start, empty, so the dots take their place in the
       // scene now, as their collection did; their place among the other
-      // sprite layers is the sprite order's.
+      // sprite layers is their draw order.
       _sets.steps.set([]);
-      _spriteEntry =
-        services.sprites.registerSpriteSet?.('directions', _sets.steps.id) ??
-        null;
       _enabled = false;
       _mode = DEFAULT_DIRECTIONS_MODE;
       disarm();
@@ -1740,7 +1732,6 @@ export function createDirectionsLayer({ services, source }) {
       _flightStep = null;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
       _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
-      services.sprites.restoreSpriteOrder(viewer);
       console.log('[Data:Directions] Initialized');
     },
 
@@ -1761,7 +1752,6 @@ export function createDirectionsLayer({ services, source }) {
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
       );
       syncRenderHold();
-      services.sprites.restoreSpriteOrder(viewer);
     },
 
     /**

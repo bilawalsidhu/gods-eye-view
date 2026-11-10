@@ -111,7 +111,7 @@ test('camera construction is inert and destruction cancels a pending catalog and
       setOverlayEntries: noop,
       setOverlaySourceVisible: noop,
     },
-    sprites: { registerSpriteSet: noop },
+    sprites: {},
     activation: {},
     locations: {},
     picking: { unregisterPickOwner: noop },

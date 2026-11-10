@@ -77,32 +77,30 @@ export function createRendering({ state, services, parts }) {
 
   /**
    * The two icon sets, still and moving, hidden, in the scene now (with no
-   * items) and in the shared sprite order. A viewer of the layer's own
-   * draws through `./render/cesium/unbound`, which its owner loads.
+   * items), each at its place in the shared sprite order. A viewer of the
+   * layer's own draws through `./render/cesium/unbound`, which its owner loads.
    * @param {object} viewer
    */
   function createMarkers(viewer) {
     destroyMarkers(viewer);
     const draw = drawOf(viewer);
+    const drawOrder = (layerId) =>
+      services.sprites?.spriteDrawOrder?.(layerId) ?? 0;
     state._stillIcons = draw.icons({
       id: `transit:${instance}:still`,
       blend: 'translucent',
       show: false,
+      drawOrder: drawOrder('transit'),
     });
     state._movingIcons = draw.icons({
       id: `transit:${instance}:moving`,
       blend: 'translucent',
       show: false,
+      drawOrder: drawOrder('transit-motion'),
     });
-    // Emptied, they are drawn now: the sprite order finds them at once.
+    // Emptied, they are drawn now: in the scene at once.
     state._stillIcons.set([]);
     state._movingIcons.set([]);
-    const { registerSpriteSet } = services.sprites;
-    state._stillSprite = registerSpriteSet?.('transit', state._stillIcons.id);
-    state._movingSprite = registerSpriteSet?.(
-      'transit-motion',
-      state._movingIcons.id,
-    );
     state._markersShown = false;
   }
 
@@ -127,27 +125,20 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
-   * Let both sets go and take them out of the sprite order.
+   * Let both sets go.
    * @param {object|null|undefined} _viewer
    */
   function destroyMarkers(_viewer) {
     dirty.clear();
     stillRemovals.length = 0;
     movingRemovals.length = 0;
-    const { unregisterSpriteCollection } = services.sprites;
     if (state._stillIcons) {
-      if (state._stillSprite)
-        unregisterSpriteCollection?.('transit', state._stillSprite);
       state._stillIcons.dispose();
       state._stillIcons = null;
-      state._stillSprite = null;
     }
     if (state._movingIcons) {
-      if (state._movingSprite)
-        unregisterSpriteCollection?.('transit-motion', state._movingSprite);
       state._movingIcons.dispose();
       state._movingIcons = null;
-      state._movingSprite = null;
     }
     state._markersShown = false;
   }

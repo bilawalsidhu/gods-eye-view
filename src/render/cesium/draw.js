@@ -224,6 +224,23 @@ const DEPTH_BIASED_STATE = Object.freeze({
   blending: Cesium.BlendingState.ALPHA_BLEND,
 });
 
+/**
+ * An image fill's material. The image carries its own alpha, so it draws in
+ * the translucent pass whatever its colour, as the entities' image
+ * materials did.
+ */
+function imageMaterial(image, repeat = [1, 1]) {
+  // Typed first and given its uniforms after, as `Material.fromType` does:
+  // the image loads when first drawn, not here.
+  const material = new Cesium.Material({
+    fabric: { type: 'Image' },
+    translucent: true,
+  });
+  material.uniforms.image = image;
+  material.uniforms.repeat = new Cesium.Cartesian2(...repeat);
+  return material;
+}
+
 /** A `radialRim` fill's material. */
 function radialRimMaterial(fill) {
   const uniforms = {
@@ -722,7 +739,8 @@ export function createCesiumDraw({
       slot >= 0 && slot + 1 < scene.primitives.length
         ? scene.primitives.get(slot + 1)
         : null;
-    // Named for code that orders the scene's primitives (`spriteOrder.js`).
+    // Named for code that finds a set's host among the scene's primitives
+    // (`uploadProbe.js`).
     host.drawSetId = record.spec.id;
     // Only old ground primitives wait for the new ones: the rest of the old
     // host goes now, as the new host's own parts draw at once.
@@ -765,9 +783,8 @@ export function createCesiumDraw({
    * higher order goes earlier; of one order, in the order they were made.
    * The hosts trade places among the slots they hold, so nothing else in
    * the scene moves. Nothing moves while every set is at 0 (unless an order
-   * just changed, `changed`), so sets at 0 stack as they were first drawn
-   * (and as the sprite order raises them); nor while the hosts are already
-   * in order.
+   * just changed, `changed`), so sets at 0 stack as they were first drawn;
+   * nor while the hosts are already in order.
    * Translucent ones blend order-independently, whatever their order, and
    * items in different view frustums stack nearer frustum first.
    * @param {boolean} [changed]
@@ -1024,6 +1041,11 @@ export function createCesiumDraw({
       // The defaults, so a restyle in place puts back what an item dropped.
       rotation: 0,
       alignedAxis: Cesium.Cartesian3.ZERO,
+      // CSS pixels, y down, as the billboard takes them.
+      pixelOffset: new Cesium.Cartesian2(
+        item.pixelOffset?.x ?? 0,
+        item.pixelOffset?.y ?? 0,
+      ),
     };
     if (item.rotationMode === 'screen') look.rotation = item.rotation ?? 0;
     if (item.rotationMode === 'course') {
@@ -1066,6 +1088,9 @@ export function createCesiumDraw({
       rotationMode: item.rotationMode,
       rotation: item.rotation,
       course: item.course,
+      pixelOffset: item.pixelOffset
+        ? [item.pixelOffset.x ?? 0, item.pixelOffset.y ?? 0]
+        : undefined,
     };
   }
 
@@ -1112,7 +1137,11 @@ export function createCesiumDraw({
       sameCurve(style.fadeByDistance, item.fadeByDistance) &&
       style.rotationMode === item.rotationMode &&
       (item.rotationMode === 'screen' || style.rotation === item.rotation) &&
-      style.course === item.course
+      style.course === item.course &&
+      (item.pixelOffset
+        ? style.pixelOffset?.[0] === (item.pixelOffset.x ?? 0) &&
+          style.pixelOffset[1] === (item.pixelOffset.y ?? 0)
+        : style.pixelOffset === undefined)
     );
   }
 
@@ -3255,6 +3284,21 @@ export function createCesiumDraw({
           ),
         };
       }
+      case 'wall': {
+        // Up from `minimumHeights` (the ellipsoid) to `maximumHeights` (the
+        // positions' own), as the entities' walls draw.
+        const wall = {
+          positions: g.positions.map(toCartesian),
+          minimumHeights: g.minimumHeights,
+          maximumHeights: g.maximumHeights,
+        };
+        return {
+          fill: new Cesium.WallGeometry({ ...wall, vertexFormat }),
+          outline: item.outline
+            ? new Cesium.WallOutlineGeometry(wall)
+            : undefined,
+        };
+      }
       default:
         throw new Error(`the Cesium renderer has no ${g.kind} shapes`);
     }
@@ -3523,12 +3567,7 @@ export function createCesiumDraw({
       : UnpickableGroundPrimitive;
     const grounds = batches.map((batch) => {
       const material = batch.imageFill
-        ? Cesium.Material.fromType('Image', {
-            image: batch.image,
-            repeat: new Cesium.Cartesian2(
-              ...(batch.imageFill.repeat ?? [1, 1]),
-            ),
-          })
+        ? imageMaterial(batch.image, batch.imageFill.repeat)
         : batch.rimFill
           ? radialRimMaterial(batch.rimFill)
           : null;
@@ -4147,10 +4186,7 @@ export function createCesiumDraw({
         );
       } else if (imageFill && !item.outlineOnly) {
         const material = ownMaterial(
-          Cesium.Material.fromType('Image', {
-            image: toImage(imageFill.image),
-            repeat: new Cesium.Cartesian2(...(imageFill.repeat ?? [1, 1])),
-          }),
+          imageMaterial(toImage(imageFill.image), imageFill.repeat),
         );
         host.add(
           new Cesium.Primitive({

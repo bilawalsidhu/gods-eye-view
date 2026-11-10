@@ -4,13 +4,12 @@ import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
 
 /**
  * Init / enable / disable / update / destroy for one Transit layer instance.
- * Everything acquired here is released here — primitives, listeners, the sprite
- * registration, the pick owner, the render hold, and the camera listener.
+ * Everything acquired here is released here — primitives, listeners, the
+ * pick owner, the render hold, and the camera listener.
  * @param {object} context
  * @returns {object}
  */
 export function createLifecycle({ state, services, parts }) {
-  const { restoreSpriteOrder } = services.sprites;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const { releaseContinuousRender } = services.render;
 
@@ -112,7 +111,6 @@ export function createLifecycle({ state, services, parts }) {
       state._rotationPose = null;
       state._rotationDirty = false;
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
-      restoreSpriteOrder(viewer);
       bindStyleEvents();
       console.log(
         `[Data:Transit] Initialized with ${TRANSIT_ENABLED_FEEDS.length} GTFS-RT feeds`,
@@ -143,7 +141,6 @@ export function createLifecycle({ state, services, parts }) {
       }
       parts.rendering.startFrames(viewer);
       parts.viewport.runProximityCheck();
-      restoreSpriteOrder(viewer);
     },
 
     /**

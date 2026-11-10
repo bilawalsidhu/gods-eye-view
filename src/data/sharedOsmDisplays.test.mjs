@@ -80,7 +80,7 @@ test('Directions introduces the shared OSM credit when the requested route draws
     credits: { showOsmCredit, hideOsmCredit }, input, camera: {},
     overlays: { setOverlayEntries: noop, setOverlaySourceVisible: noop, clearOverlaySource: noop },
     render: { governorRequestRender: noop, holdContinuousRender: noop, releaseContinuousRender: noop },
-    sprites: { registerSpriteCollection: noop, unregisterSpriteCollection: noop, restoreSpriteOrder: noop },
+    sprites: {},
     picking: { registerPickOwner: noop, unregisterPickOwner: noop },
     ground: { warmGroundFloor: noop, resolveGroundFloorCells: async () => {} },
   } });

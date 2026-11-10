@@ -118,8 +118,9 @@ export function createRendering({
    * far-LOD Google-3D mesh sits above the true ground and swallowed
    * ground-anchored icons); the set culls the far side of the globe and
    * refreshHorizonCulling thins the rest.
+   * The set stacks under the other sprite layers (`spriteDrawOrder`).
    * @param {object} viewer The layer's viewer.
-   * @returns {string} The icon set's id, for the sprite order.
+   * @returns {string} The icon set's id.
    */
   function createCameraIcons(viewer) {
     // A re-init against a new viewer replaces the icons; the old ones go.
@@ -127,9 +128,10 @@ export function createRendering({
     const set = drawOf(viewer).icons({
       id: `cctv:${++iconSets}:icons`,
       horizonCull: true,
+      drawOrder: services.sprites?.spriteDrawOrder?.('cctv') ?? 0,
     });
-    // Columns of no rows put the set's host in the scene now, where the
-    // sprite order finds it, rather than with its first camera.
+    // Columns of no rows put the set's host in the scene now, rather than
+    // with its first camera.
     set.setColumns?.({ ids: [] });
     layerState._icons = createIconBook(set);
     return set.id;

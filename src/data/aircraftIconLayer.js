@@ -259,17 +259,18 @@ export function createAircraftIcons({
 
   /**
    * Create the draw set for one layer lifetime, drawn over depth and culled
-   * at the horizon on the delayed live clock.
-   * @returns {string} The set's id, for the sprite order.
+   * at the horizon on the delayed live clock, stacked by the sprite order.
+   * @returns {string} The set's id.
    */
   function _createIcons(viewer) {
     const set = drawOf(viewer).icons({
       id: `${layerId}-icons:${++instances}`,
       horizonCull: true,
       motionClock: { kind: 'live', delayMs },
+      drawOrder: services.sprites?.spriteDrawOrder?.(layerId) ?? 0,
     });
-    // Columns of no rows put the set's host in the scene now, where the
-    // sprite order finds it, rather than with its first contact.
+    // Columns of no rows put the set's host in the scene now, rather than
+    // with its first contact.
     set.setColumns?.({ ids: [] });
     switchPx = _imageSwitchPx(viewer);
     state._icons = createContactIcons(set, {
