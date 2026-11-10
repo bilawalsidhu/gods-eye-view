@@ -508,3 +508,73 @@ test('the card and its toggle render the collapse the controller presents', asyn
   assert.equal(card.dataset.collapsed, 'false');
   assert.equal(toggle.textContent.trim(), 'right_panel_close');
 });
+
+test("a refresh that fails after a move never shows the last location's brief as current", async (t) => {
+  const { $, text, owner } = fixture(t);
+  const answers = [];
+  Object.assign(owner, {
+    active: true,
+    regionalBriefSubjectId: null,
+    regionalBriefAbort: null,
+    regionalBriefRequestToken: 0,
+    regionalBriefFetchedAt: 0,
+    regionalBrief: null,
+    renderRegionalBrief,
+    renderRegionalBriefStatus,
+  });
+  owner.services = {
+    ...owner.services,
+    // One degree of latitude stands for a move past the refresh distance.
+    regionalDistanceM: (from, to) =>
+      from ? Math.abs(from.latitude - to.latitude) * 111_000 : Infinity,
+    fetchRegionalBrief: () => answers.shift()(),
+  };
+  const refresh = async (answer, latitude) => {
+    answers.push(answer);
+    owner.regionalBriefFetchedAt = 0;
+    maybeRefreshRegionalBrief.call(owner, {
+      ...INFO,
+      icao24: 'abc123',
+      latitude,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+  };
+  const rows = () => document.querySelectorAll('#cockpit-news-list li').length;
+  const here = () =>
+    Promise.resolve({
+      status: 'ready',
+      newsStatus: 'ready',
+      newsSource: 'Google News RSS',
+      newsWindowHours: 24,
+      newsFetchedAt: hoursAgo(1),
+      articles: [story('a'), story('b')],
+    });
+  showBriefPage.call(owner, 1);
+
+  await refresh(here, 40);
+  assert.equal(rows(), 2);
+  // The same place: a failed refresh keeps the rows as cached.
+  await refresh(() => Promise.reject(new TypeError('Failed to fetch')), 40);
+  assert.equal(text('#cockpit-news-status'), 'CACHED · REFRESH FAILED');
+  assert.equal(rows(), 2);
+  // Elsewhere: the brief is unavailable, as it was before there was a cache.
+  await refresh(() => Promise.reject(new TypeError('Failed to fetch')), 45);
+  assert.equal($('#cockpit-news-status').dataset.state, 'unavailable');
+  assert.equal(rows(), 0);
+
+  // Nor does a brief there whose news read failed borrow the last place's rows.
+  await refresh(here, 40);
+  assert.equal(rows(), 2);
+  await refresh(
+    () =>
+      Promise.resolve({
+        status: 'partial',
+        newsStatus: 'unavailable',
+        articles: [],
+      }),
+    45,
+  );
+  assert.equal($('#cockpit-news-status').dataset.state, 'unavailable');
+  assert.equal(rows(), 0);
+});

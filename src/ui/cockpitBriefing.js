@@ -187,6 +187,13 @@ export function maybeRefreshRegionalBrief(info) {
   )
     return;
 
+  // The brief held stands in after a failed refresh only near where its news
+  // was read; past the refresh distance it is another place's.
+  const previous =
+    this.services.regionalDistanceM(this.regionalBriefPoint, point) <
+    COCKPIT_REGIONAL_REFRESH_DISTANCE_M
+      ? this.regionalBrief
+      : null;
   this.regionalBriefAnchor = point;
   this.regionalBriefFetchedAt = Date.now();
   const controller = new AbortController();
@@ -204,7 +211,8 @@ export function maybeRefreshRegionalBrief(info) {
         subjectId !== this.regionalBriefSubjectId
       )
         return;
-      this.regionalBrief = withCachedNews(payload, this.regionalBrief);
+      this.regionalBrief = withCachedNews(payload, previous);
+      if (this.regionalBrief === payload) this.regionalBriefPoint = point;
       this.renderRegionalBrief(this.regionalBrief, info);
     })
     .catch((error) => {
@@ -214,8 +222,7 @@ export function maybeRefreshRegionalBrief(info) {
         requestToken === this.regionalBriefRequestToken &&
         subjectId === this.regionalBriefSubjectId
       ) {
-        if (this.regionalBrief) {
-          const previous = this.regionalBrief;
+        if (previous) {
           this.regionalBrief = cachedNews(previous, previous);
           this.renderRegionalBrief(this.regionalBrief, info);
         } else this.renderRegionalBriefStatus('unavailable', info);
