@@ -422,6 +422,7 @@ export function createMoverRegistry(build) {
         kind: options.kind,
         count: store.count,
         capacity: store.capacity,
+        shown: store.shows.subarray(0, store.count).some(Boolean),
       })),
   };
   return {

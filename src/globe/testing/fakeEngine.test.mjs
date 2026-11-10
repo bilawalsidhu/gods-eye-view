@@ -261,7 +261,7 @@ test('fake movers keep their sets and instances for layer tests', () => {
   set.set(0, { position: { x: 1, y: 2, z: 3 }, color: [1, 0, 0, 1] });
   set.setCount(1);
   assert.deepEqual(engine.movers.list(), [
-    { id: 'flights', kind: 'point', count: 1, capacity: 4 },
+    { id: 'flights', kind: 'point', count: 1, capacity: 4, shown: true },
   ]);
   const before = engine.fake.renderRequests;
   set.commit();

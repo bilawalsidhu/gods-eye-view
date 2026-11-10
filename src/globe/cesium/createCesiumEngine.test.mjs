@@ -53,6 +53,7 @@ test('the engine draws the visual styles, bloom and contact sonar, not the cloud
   const viewer = createFakeViewer();
   const engine = createCesiumEngine(viewer);
   assert.deepEqual(engineCapabilities(engine), {
+    tileErrors: true,
     visualStyles: true,
     bloom: true,
     cloudCover: false,
@@ -199,15 +200,53 @@ test('the contract suite movers and lines checks pass on the Cesium engine (no p
       for (let index = 0; index < count; index++) frame();
     },
   }).filter(({ name }) =>
-    /^(shape|movers|lines|colours|input: picks|surface\.sampleHeightDetailed)\b/.test(
+    /^(kind|movers|lines|input\.on: picks|surface\.sampleHeightDetailed)\b/.test(
       name,
     ),
   );
-  assert.equal(checks.length, 9);
+  assert.equal(checks.length, 10);
   try {
     for (const { name, run } of checks) await t.test(name, run);
   } finally {
     engine.destroy();
   }
   assert.equal(scene.primitives.length, 0, 'no collection left behind');
+});
+
+test('the camera, clock and failed model suite checks pass on the Cesium adapter', async (t) => {
+  const { createAppClock } = await import('../../time/clock.js');
+  let wall = 1_000_000;
+  const { viewer, camera, engine, frame } = createCameraViewer({
+    engineOptions: {
+      createEventHandler: createFakeEventHandlers().create,
+      appClock: createAppClock({ now: () => wall }),
+      moverFactories: {
+        loadModel: async () => {
+          throw new Error('Model unavailable');
+        },
+      },
+    },
+  });
+  viewer.entities = new Cesium.EntityCollection();
+  const checks = createContractSuite(engine, {
+    fixtures: { failModel() {} },
+    waitFrames: async (count) => {
+      for (let i = 0; i < count; i++) {
+        wall += 16;
+        camera.update(Cesium.SceneMode.SCENE3D);
+        camera._updateCameraChanged();
+        frame();
+      }
+    },
+  }).filter(({ name }) =>
+    /^(camera.changed: a pure|camera.following:|clock.frameTime:|MoverSet.failed:)/.test(
+      name,
+    ),
+  );
+  assert.equal(checks.length, 6);
+  try {
+    for (const { name, run } of checks) await t.test(name, run);
+  } finally {
+    engine.destroy();
+  }
 });

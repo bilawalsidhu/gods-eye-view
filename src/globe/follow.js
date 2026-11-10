@@ -388,6 +388,7 @@ export function createFollowController({
           handle.label = updated.label;
           handle.offset = null;
           handle.previous = null;
+          followChanged.raiseEvent(handle);
           requestRender();
         },
       };

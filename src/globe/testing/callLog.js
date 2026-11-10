@@ -82,6 +82,7 @@ const HANDLE_TYPES = {
 export function contractCallMembers() {
   return [
     ...engineContractMembers(),
+    'maps.errors',
     ...Object.entries(HANDLE_TYPES).flatMap(([type, { members }]) =>
       members.map((member) => `${type}.${member}`),
     ),

@@ -12,7 +12,12 @@ not through Cesium or Navara. The contract has five drawing primitives:
 Each engine implements all five. Cesium's are in `src/globe/cesium/`,
 Navara's in `src/globe/navara/`, and the fake engine's in
 `src/globe/testing/fakeEngine.js`. The checks every engine must pass are in
-`src/globe/testing/contractSuite.mjs`.
+`src/globe/testing/contractSuite/index.mjs`.
+
+A new contract member lands in one change with its implementation on Cesium,
+Navara and the fake engine, a behavioral check in the contract suite, and a
+mutant that the check kills. Keep check names prefixed with the member they
+exercise; optional behavior belongs in `engineCapabilities`.
 
 ## Movers: things at a point
 
@@ -603,7 +608,7 @@ Run `createContractSuite(engine, { waitFrames, ... })` from
 pixel reads for browser checks; keep the fake-engine tests as fast contract
 checks. Test ownership and repeated destruction as well as visible output.
 The browser harness is `scripts/qa-contract-suite.mjs`; use
-`--only=ground:,imagery:` for ground and imagery pixel checks.
+`--only=ground.,imagery.` for ground and imagery pixel checks.
 
 Three reports keep migration debt from growing: `scripts/report-engine-coupling.mjs`
 counts application coupling, `scripts/report-qa-harness.mjs` counts browser QA

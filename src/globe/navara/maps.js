@@ -223,6 +223,7 @@ export function createNavaraMaps(
   let tilesSource = null;
   const knownTiles = new Set();
 
+  // The package exposes no provider error event, so tileErrors is absent.
   const maps = {
     get baseKind() {
       return kindOf(currentBase);
