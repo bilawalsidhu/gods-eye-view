@@ -2815,6 +2815,18 @@ test('motion transitions migrate billboards and update cached positions; disable
   assert.equal(entry.wakeTimer, null);
   assert.equal(app.state()._inFlight.size, 0);
   assert.equal(parts.trails.requestDiagnostics().pending, false);
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  assert.equal(app.vehicles().length, 1);
+  parts.ingestion.removeVehicle(app.vehicles()[0].key);
+  for (const collection of [
+    app.state()._markers,
+    app.state()._animatedMarkers,
+  ]) {
+    assert.equal(collection._billboards.length, 0);
+    assert.equal(collection._billboardsToUpdate.length, 0);
+  }
 });
 
 test('every styling path retains the mode palette and exact unpadded size', async (t) => {

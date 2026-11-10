@@ -50,6 +50,7 @@ export function createEvidence({
     for (const bb of flightState._billboards.values())
       flightState._billboardCollection.remove(bb);
     flightState._billboards.clear();
+    flightState._detectionObjects.clear();
     flightState.records.data.clear();
     flightState._positionHistory.clear();
     flightState._displayCourse.clear();

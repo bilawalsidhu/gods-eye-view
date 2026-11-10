@@ -74,18 +74,6 @@ export function createFlightState({ source, services }) {
 
   flightState._lastModelCapWarnMs = 0;
   // throttle the "more planes in view than the cap" console notice
-  // The tracked entity's billboard goes transparent (rather than hidden) once the model takes
-  // over, so it keeps supplying a bounding sphere for follow-camera framing. We only drop its
-  // alpha after the GLB is preloaded so the model is ready to render the instant the billboard
-  // fades — no gap, no double-image. Preloaded once at init; the instance is retained (not
-  // destroyed) purely to keep Cesium's glTF cache warm for fast tracked-model instantiation.
-
-  flightState._planeModelLoaded = false;
-
-  /** @type {Cesium.Model|null} retained preload that keeps the glTF cache warm */
-
-  flightState._preloadModel = null;
-
   flightState._scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
 
   flightState._scratchModelMtx = new Cesium.Matrix4();

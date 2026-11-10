@@ -243,8 +243,7 @@ export function createLifecycle({ state, services, parts }) {
       }
       state._vehicles.clear();
       parts.height.clear();
-      state._markers?.removeAll();
-      state._animatedMarkers?.removeAll();
+      parts.rendering.clearMarkers();
       if (state._animatedMarkers) state._animatedMarkers.show = false;
       if (state._markers) state._markers.show = false;
       state._altitudeGateOpen = false;

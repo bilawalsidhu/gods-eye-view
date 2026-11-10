@@ -207,7 +207,6 @@ export class ViewportBillboardCollection {
     this._dirty = true;
     if (!value) this._releaseResidents();
     if (!value) {
-      this._aircraftSurface?.reset();
       this._trackedSurface?.reset();
     }
   }
@@ -257,6 +256,7 @@ export class ViewportBillboardCollection {
   }
 
   _releaseResidents() {
+    this._aircraftSurface?.reset();
     for (const item of this._items) {
       item._snapshot();
       item._resident = null;

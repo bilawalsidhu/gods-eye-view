@@ -58,6 +58,7 @@ export function createFlightSnapshotRenderer({
         if (dupe) {
           flightState._billboardCollection.remove(dupe);
           flightState._billboards.delete(icao24);
+          flightState._detectionObjects.delete(icao24);
           rendering._releaseModel(icao24); // military-suppression: drop any 3D model too
           records.forget(icao24);
           flightState._cullPositions.delete(icao24);
@@ -293,6 +294,7 @@ export function createFlightSnapshotRenderer({
 
       flightState._billboardCollection.remove(bb);
       flightState._billboards.delete(icao24);
+      flightState._detectionObjects.delete(icao24);
       rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
       records.forget(icao24);
       flightState._cullPositions.delete(icao24);

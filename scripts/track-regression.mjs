@@ -92,6 +92,7 @@
  *   --hardware         Use headless Metal on macOS (default headless uses SwiftShader)
  *   --dpr <number>     Browser device-pixel ratio (default 1)
  *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
+ *   --offline-terrain  Use a flat local heightmap for Re:Earth requests
  *   --keep-open        Leave the browser open after the run (debugging)
  */
 
@@ -119,6 +120,7 @@ const HEADFUL = getFlag('--headful');
 const HARDWARE = getFlag('--hardware');
 const DPR = Number(getOpt('--dpr', '1'));
 const OFFLINE_IMAGERY = getFlag('--offline-imagery');
+const OFFLINE_TERRAIN = getFlag('--offline-terrain');
 const KEEP_OPEN = getFlag('--keep-open');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -217,6 +219,12 @@ async function main() {
     ? fs.readFileSync(new URL('../node_modules/cesium/Build/Cesium/Assets/Textures/NaturalEarthII/0/0/0.jpg', import.meta.url))
     : null;
   let offlineImageryRequests = 0;
+  let offlineTerrainRequests = 0;
+  // heightmap-1.0 uses 65×65 little-endian heights, scale 0.2 and offset -1000.
+  const flatTerrainTile = Buffer.alloc(65 * 65 * 2 + 2);
+  for (let i = 0; i < 65 * 65; i++) flatTerrainTile.writeUInt16LE(5000, i * 2);
+  flatTerrainTile[65 * 65 * 2] = 15; // all four children exist; final byte = land
+  if (OFFLINE_TERRAIN) console.log('  Terrain : local flat heightmap fixture');
   if (OFFLINE_IMAGERY) console.log('  Imagery : bundled NaturalEarthII fixture (tile images only)');
 
   // Verify the dev server is up before launching a browser.
@@ -290,6 +298,20 @@ async function main() {
           contentType: 'image/jpeg',
           headers: { 'Access-Control-Allow-Origin': '*' },
           body: offlineImageryTile,
+        });
+        return;
+      }
+      // Opt-in terrain fixture: preserve the provider API and every tracking
+      // assertion without relying on a live terrain host's quota.
+      if (OFFLINE_TERRAIN && request.method() === 'GET'
+        && url.origin === 'https://terrain.reearth.land'
+        && /^\/cesium-mesh\/ellipsoid\/(layer\.json|\d+\/\d+\/\d+\.terrain)$/.test(url.pathname)) {
+        offlineTerrainRequests++;
+        const metadata = url.pathname.endsWith('/layer.json');
+        request.respond({status: 200,
+          contentType: metadata ? 'application/json' : 'application/octet-stream',
+          headers: {'Access-Control-Allow-Origin': '*'},
+          body: metadata ? JSON.stringify({format: 'heightmap-1.0', version: '1.0.0', scheme: 'tms', tiles: ['{z}/{x}/{y}.terrain']}) : flatTerrainTile,
         });
         return;
       }
@@ -4281,6 +4303,7 @@ async function main() {
     finishAndExit();
   } finally {
     if (OFFLINE_IMAGERY) console.log(`  Bundled imagery tiles served: ${offlineImageryRequests}`);
+    if (OFFLINE_TERRAIN) console.log(`  Local terrain requests served: ${offlineTerrainRequests}`);
     if (!KEEP_OPEN) {
       await browser.close();
     } else {

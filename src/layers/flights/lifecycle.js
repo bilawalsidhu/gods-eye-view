@@ -282,15 +282,6 @@ export function createLifecycle({
       flightState._modelEpoch += 1; // invalidate any in-flight load from this lifecycle (settles post-destroy)
       flightState._modelPending.clear();
       flightState._modelGen.clear();
-      if (flightState._preloadModel) {
-        try {
-          flightState._preloadModel.destroy();
-        } catch {
-          /* gone */
-        }
-        flightState._preloadModel = null;
-      }
-      flightState._planeModelLoaded = false;
       flightState._billboards.clear();
       flightState._cullPositions.clear();
       flightState._detectionObjects.clear();

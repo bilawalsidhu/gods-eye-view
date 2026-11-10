@@ -1406,5 +1406,9 @@
   "src/layers/cctv/materialDisposal.js",
   "src/layers/cctv/materialDisposal.test.mjs",
   "src/layers/cctv/projection.test.mjs",
-  "scripts/qa-bracket-raster.mjs"
+  "scripts/qa-bracket-raster.mjs",
+  "scripts/qa-aircraft-retention.mjs",
+  "scripts/qa-transit-residency.mjs",
+  "src/data/aircraftSurface.test.mjs",
+  "src/layers/transit/residency.test.mjs"
 ]

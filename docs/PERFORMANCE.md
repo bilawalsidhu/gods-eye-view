@@ -877,3 +877,63 @@ frame. All 5,000 brackets remained visible, with 56 selected labels and 60
 solves over 480 measured frames. These are transient JS allocation measurements,
 not retained browser/GPU memory or an app-wide memory reduction. Exact cached
 projection reuse remains available between contact/camera changes.
+
+### Shared aircraft ownership and transit batching — 10 November 2026
+
+The shared aircraft surface used to retain both its last accepted collection and
+its last painted collection after layer teardown. Reset now drops both references;
+public fleet `removeAll()` follows the same teardown path as disabling. Other
+active fleets invalidate the old pixels and continue rendering.
+
+`node --expose-gc scripts/qa-aircraft-retention.mjs [--remove-all]` exercises real
+Cesium objects without WebGL. Three paired runs of each 10,000-contact scenario
+against PR head `2d544996` and this follow-up gave:
+
+| Action | Retained native residents, before → after | Median JS heap after GC, before → after | Logical contacts after action |
+| --- | --- | --- | --- |
+| Hide | 10,000 → 0 | 61,365,704 → 47,837,440 bytes | 10,000 |
+| Remove all | 10,000 → 0 | 54,316,368 → 40,548,096 bytes | 0 |
+
+All three repetitions agreed on native-object retention. Hide preserves contact
+IDs and positions; re-enable readmits them. The roughly 13 MiB reductions measure
+retained native JS graphs in this Node fixture, not GPU memory or total app RAM.
+The browser aircraft gate also verifies GC of a previously painted civil fleet
+while military remains visible, repainting only the remaining fleet, then civil
+re-enable, search, picking and tracking.
+
+`node scripts/qa-transit-residency.mjs` measures native marker ownership work
+without WebGL (medians of five runs):
+
+| Operation | Vehicles | Before | After |
+| --- | ---: | ---: | ---: |
+| Release | 4,096 | 54.205 ms | 1.381 ms |
+| Release | 8,192 | 165.292 ms | 2.543 ms |
+| Migrate | 4,096 | 51.657 ms | 3.303 ms |
+| Migrate | 8,192 | 187.853 ms | 17.289 ms |
+
+For 8,192 removals, native length reads fell from 8,192 to zero and compaction
+traversals from 33,558,528 slots to zero. The last removal still empties pending
+references. Ingestion eviction and disable share that cleanup path, including
+count reset on re-enable. These are CPU operation timings, not browser FPS or
+whole-app CPU reductions.
+
+The simplification removes obsolete model preload bookkeeping, consolidates
+detection geometry-cache cleanup, and deletes cached detection objects when
+their aircraft records are evicted. Queries no longer need a threshold-triggered
+scan to discover already-removed contacts. Search, tracking, playback cadence and
+Standard visual quality remain unchanged.
+
+The 3,000-vehicle browser transit fixture retained all 3,000 analyst records and
+passed offscreen search, selected-contact tracking and viewport re-entry checks.
+Its three city samples measured 56.8/58.1/59.0 FPS; street samples measured
+60.0/60.0/60.0 FPS. These ran alongside local validation work, not as a claim of
+a guaranteed frame rate on other hardware.
+
+Tracking passed all 111 checks with `--offline-imagery --offline-terrain
+--hardware --dpr 2`. The new opt-in terrain fixture serves flat, zero-height
+Cesium heightmap tiles only for Re:Earth's exact terrain paths. Live terrain
+returned HTTP 429 during an earlier run; that run passed every behavioral
+tracking assertion but failed its two no-console-error checks. The fixture keeps
+all tracking/ground-floor assertions enabled; it does not validate live terrain
+availability. The expanded sharp-surface browser gate passes 26 checks, including
+the parked-source deletion repaint regression.

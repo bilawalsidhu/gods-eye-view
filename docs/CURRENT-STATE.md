@@ -1,5 +1,13 @@
 # God's Eye View Current State
 
+Disabled or cleared aircraft fleets release both current and cached native
+collection references from their shared sharp surface. Logical aircraft records
+survive a visibility toggle, and other visible fleets repaint independently.
+Transit adds, migrates and removes markers through one ownership path; native
+resident counts avoid repeated collection compaction during large view changes.
+Model preload flags and instances are no longer maintained: models load on
+demand, with billboard handoff governed by actual model readiness.
+
 Detection reuses projection and bracket work between exact updates. Transit
 retains searchable vehicle records and histories while releasing offscreen
 billboards; selection readmits a vehicle immediately. Street Traffic reuses

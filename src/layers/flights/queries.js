@@ -547,15 +547,6 @@ export function createQueries({
         result.push(object);
         if (result.length >= maxCount) break;
       }
-      if (
-        flightState._detectionObjects.size >
-        flightState._billboards.size + 512
-      ) {
-        for (const icao24 of flightState._detectionObjects.keys()) {
-          if (!flightState._billboards.has(icao24))
-            flightState._detectionObjects.delete(icao24);
-        }
-      }
       return result;
     },
 

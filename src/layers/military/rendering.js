@@ -590,7 +590,6 @@ export function createRendering({
     model.show = false;
     flightState._modelCollection.add(model);
     flightState._models.set(icao24, model);
-    flightState._planeModelLoaded = true; // GLB is cached now — the tracked entity's model can fade in its billboard
   }
 
   /** Remove the 3D model for ONE aircraft (removal / track handoff).
@@ -817,7 +816,6 @@ export function createRendering({
           flightState._trackedModelFailCount = 0;
           flightState._trackedModelRetryAtMs = 0;
           flightState._modelCollection.add(m);
-          flightState._planeModelLoaded = true;
         })
         .catch((err) => {
           if (gen !== flightState._trackedModelGen) return; // superseded load — not this selection's failure

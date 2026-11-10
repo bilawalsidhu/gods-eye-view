@@ -58,7 +58,23 @@ try {
           ]),
         });
       }
-      if (url.pathname === '/api/military') return json({ ac: [] });
+      if (url.pathname === '/api/military')
+        return json({
+          now: Date.now(),
+          ac: [
+            {
+              hex: 'bbb101',
+              flight: 'SHARPMIL',
+              lon: -122,
+              lat: 38.4,
+              alt_baro: 20000,
+              gs: 0,
+              track: 0,
+              t: 'C130',
+              seen_pos: 0,
+            },
+          ],
+        });
       if (/^\/api\/adsbdb\//.test(url.pathname)) return json({});
       return real(input, init);
     };
@@ -344,6 +360,74 @@ try {
   );
   await page.evaluate(async () => {
     const a = window.__godsEyeView;
+    a.dataManager.layers.get('military').module.setParams({ models3d: false });
+    await a.dataManager.setEnabled('military', true, { origin: 'user' });
+    const walk = (collection) => {
+      for (let i = 0; i < collection.length; i++) {
+        const item = collection.get(i);
+        if (
+          item._items?.some((contact) => String(contact.id).includes('c00000'))
+        )
+          return item;
+        if (typeof item.get === 'function' && item.length !== undefined) {
+          const found = walk(item);
+          if (found) return found;
+        }
+      }
+    };
+    const fleet = walk(a.viewer.scene.primitives);
+    if (!fleet?._collection)
+      throw new Error('Civil native collection not found');
+    window.__oldAircraftCollection = new WeakRef(fleet._collection);
+  });
+  await wait(1000);
+  await page.evaluate(async () => {
+    await window.__godsEyeView.dataManager.setEnabled('flights', false, {
+      origin: 'user',
+    });
+  });
+  await wait(700);
+  const cdp = await page.createCDPSession();
+  await cdp.send('HeapProfiler.collectGarbage');
+  await cdp.send('HeapProfiler.collectGarbage');
+  check(
+    'disabling civil aircraft releases its painted native collection while military stays enabled',
+    await page.evaluate(() => !window.__oldAircraftCollection.deref()),
+  );
+  check(
+    'shared surface repaints only the remaining military fleet',
+    await page.evaluate(() => {
+      const a = window.__godsEyeView;
+      return (
+        a.viewer.gevAircraftSurfaceDiagnostics().drawn === 1 &&
+        !!a.dataManager.layers.get('military').module.findByQuery('SHARPMIL')
+      );
+    }),
+  );
+  await page.evaluate(async () => {
+    const a = window.__godsEyeView;
+    await a.dataManager.setEnabled('flights', true, { origin: 'user' });
+  });
+  await wait(1500);
+  check(
+    'civil re-enable restores both fleets and searchable identities',
+    await page.evaluate(() => {
+      const a = window.__godsEyeView;
+      return (
+        a.viewer.gevAircraftSurfaceDiagnostics().drawn > 100 &&
+        !!a.dataManager.layers.get('flights').module.findByQuery('SHARP0')
+      );
+    }),
+  );
+  await page.evaluate(async () => {
+    await window.__godsEyeView.dataManager.setEnabled('military', false, {
+      origin: 'user',
+    });
+    delete window.__oldAircraftCollection;
+  });
+  await cdp.detach();
+  await page.evaluate(async () => {
+    const a = window.__godsEyeView;
     await a.dataManager.setEnabled('flights', false, { origin: 'user' });
   });
   await wait(500);
@@ -380,6 +464,55 @@ try {
         !v.scene.context._gl.isContextLost()
       );
     }),
+  );
+  report.sourceRelease = await page.evaluate(async () => {
+    const { acquireAircraftSurface } =
+      await import('/src/data/aircraftSurface.js');
+    const { aircraftIcon } = await import('/src/data/aircraftIcons.js');
+    const viewer = window.__godsEyeView.viewer;
+    // A parked pair of sources isolates redraw invalidation from live feed
+    // updates, which could otherwise hide stale pixels by repainting later.
+    const host = {
+      gevAircraftSurfaceEnabled: () => true,
+      camera: viewer.camera,
+      scene: {
+        canvas: viewer.scene.canvas,
+        mode: Cesium.SceneMode.SCENE3D,
+        preRender: new Cesium.Event(),
+        postRender: new Cesium.Event(),
+        requestRender() {},
+      },
+    };
+    const handles = [
+      acquireAircraftSurface(host),
+      acquireAircraftSurface(host),
+    ];
+    const collections = handles.map(() => {
+      const collection = new Cesium.BillboardCollection();
+      collection.add({
+        image: aircraftIcon('jet'),
+        position: Cesium.Cartesian3.fromDegrees(-123.5, 38.5, 10000),
+        width: 20,
+        height: 20,
+        disableDepthTestDistance: Infinity,
+      });
+      return collection;
+    });
+    handles.forEach((handle, i) => handle.accept(collections[i], 1));
+    host.scene.postRender.raiseEvent();
+    const before = host.gevAircraftSurfaceDiagnostics().drawn;
+    handles[1].release();
+    host.scene.preRender.raiseEvent();
+    handles[0].accept(collections[0], 1);
+    host.scene.postRender.raiseEvent();
+    const after = host.gevAircraftSurfaceDiagnostics().drawn;
+    handles[0].release();
+    collections.forEach((collection) => collection.destroy());
+    return { before, after };
+  });
+  check(
+    'releasing a painted source repaints an unchanged surviving source',
+    report.sourceRelease.before === 2 && report.sourceRelease.after === 1,
   );
   report.errors.push(...(await readRenderErrors(page)));
   check('no JavaScript or Cesium render errors', report.errors.length === 0);

@@ -47,6 +47,27 @@ export function createRendering({ state, services, parts }) {
     releaseContinuousRender,
   } = services.render;
 
+  // Cesium's length getter compacts after remove(). Counting ownership here
+  // avoids rescanning the remaining fleet after every migration or eviction.
+  let residentCounts = new WeakMap();
+  function addResident(collection, options) {
+    const marker = collection.add(options);
+    residentCounts.set(collection, (residentCounts.get(collection) || 0) + 1);
+    return marker;
+  }
+  function removeResident(collection, marker) {
+    if (!collection?.remove(marker)) return;
+    const remaining = residentCounts.get(collection) - 1;
+    residentCounts.set(collection, remaining);
+    // remove() alone leaves Cesium's pending-update references behind.
+    if (remaining === 0) collection.removeAll();
+  }
+  function clearMarkers() {
+    state._markers?.removeAll();
+    state._animatedMarkers?.removeAll();
+    residentCounts = new WeakMap();
+  }
+
   /**
    * Cartesian position for a lat/lon at a height. Called on POLL, not per
    * frame: `fromDegrees` runs trigonometry, and doing that for every vehicle on
@@ -122,7 +143,7 @@ export function createRendering({ state, services, parts }) {
     const collection = animated ? state._animatedMarkers : state._markers;
     if (!entry.marker || entry.markerCollection === collection) return;
     const old = entry.marker;
-    const marker = collection.add({
+    const marker = addResident(collection, {
       id: entry.key,
       position: old.position,
       image: old.image,
@@ -135,10 +156,7 @@ export function createRendering({ state, services, parts }) {
       show: old.show,
       disableDepthTestDistance: old.disableDepthTestDistance,
     });
-    entry.markerCollection.remove(old);
-    // Public removeAll releases Cesium's pending-update references once this
-    // collection empties; remove alone can retain the old billboard objects.
-    if (entry.markerCollection.length === 0) entry.markerCollection.removeAll();
+    removeResident(entry.markerCollection, old);
     entry.marker = marker;
     entry.markerCollection = collection;
     entry.markerRevision = (entry.markerRevision || 0) + 1;
@@ -270,11 +288,7 @@ export function createRendering({ state, services, parts }) {
   function releaseMarker(entry) {
     cancelWake(entry);
     state._moving.delete(entry);
-    if (entry.marker && entry.markerCollection) {
-      entry.markerCollection.remove(entry.marker);
-      if (entry.markerCollection.length === 0)
-        entry.markerCollection.removeAll();
-    }
+    if (entry.marker) removeResident(entry.markerCollection, entry.marker);
     entry.marker = null;
     entry.markerCollection = null;
     entry.detectContact = null;
@@ -282,7 +296,7 @@ export function createRendering({ state, services, parts }) {
 
   function addMarker(key, entry) {
     if (entry.marker) return entry.marker;
-    const marker = state._markers.add({
+    const marker = addResident(state._markers, {
       id: key,
       position: entry.toCart,
       image: transitIcon(entry.mode),
@@ -642,6 +656,7 @@ export function createRendering({ state, services, parts }) {
     vehicleInView,
     addMarker,
     releaseMarker,
+    clearMarkers,
     paintMode,
     paintSelected,
     applySpriteStyle,

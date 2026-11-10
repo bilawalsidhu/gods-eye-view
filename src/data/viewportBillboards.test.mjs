@@ -10,7 +10,7 @@ test('sharp surface replaces only owned color commands and preserves native pick
   const h = harness();
   h.group.add({ position: new Cesium.Cartesian3(0, 0, 0), image: 'aircraft' });
   h.group.update({});
-  h.group._aircraftSurface = { accept: () => true, release() {} };
+  h.group._aircraftSurface = { accept: () => true, reset() {}, release() {} };
   const own = { owner: 'aircraft' },
     sibling = { owner: 'other' };
   h.collections[0].update = (frame) => frame.commandList.push(own);
@@ -33,7 +33,7 @@ test('sharp rendering defers warmed picking buffers but flushes live positions o
     image: 'first',
   });
   h.group.update({});
-  h.group._aircraftSurface = { accept: () => true, release() {} };
+  h.group._aircraftSurface = { accept: () => true, reset() {}, release() {} };
   let uploads = 0,
     pickedX;
   const native = h.collections[0];
@@ -77,7 +77,7 @@ test('tracked native picks follow fleet picks even when the fleet skips a warmed
   const pick = { passes: { pick: true }, commandList: [] };
   h.group.update(pick);
   assert.deepEqual(pick.commandList, [fleet, tracked]);
-  h.group._aircraftSurface = { accept: () => true, release() {} };
+  h.group._aircraftSurface = { accept: () => true, reset() {}, release() {} };
   h.group._pickWarm = false;
   const color = { passes: { render: true }, commandList: [] };
   h.group.update(color);

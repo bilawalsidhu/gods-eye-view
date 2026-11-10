@@ -303,6 +303,7 @@ class AircraftSurface {
   }
   release(source) {
     this.sources.delete(source);
+    this.needsPaint = true;
     if (this.sources.size) return;
     this.removeBegin();
     this.removeEnd();
@@ -335,7 +336,13 @@ export function acquireAircraftSurface(
     accept: (collection, revision) =>
       surface.accept(source, collection, revision),
     reset: () => {
+      // Drop native object graphs, but retain lastPainting so the next draw
+      // removes old pixels while another fleet keeps the shared surface alive.
       source.painting = false;
+      source.visible = false;
+      source.collection = null;
+      source.lastCollection = null;
+      source.revision = undefined;
     },
     release: () => surface.release(source),
   };

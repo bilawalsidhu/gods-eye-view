@@ -72,16 +72,10 @@ export function createIngestion({ state, services, parts, source }) {
     const entry = state._vehicles.get(key);
     if (!entry) return;
     if (state._selectedKey === key) parts.selection.clearSelection();
-    if (entry.marker) entry.markerCollection?.remove(entry.marker);
-    entry.marker = null;
-    entry.detectContact = null;
+    parts.rendering.releaseMarker(entry);
     state._visible.delete(entry);
     parts.height.releaseVehicle(key, entry.heightCell);
-    // A vehicle removed mid-glide takes its share of the hold with it, so the
-    // set stays true without waiting for a frame that may never be requested.
-    state._moving.delete(entry);
     state._heightDirty.delete(entry);
-    parts.rendering.cancelWake(entry);
     destroyTrack(entry.track);
     state._vehicles.delete(key);
     state._detectRevision += 1;

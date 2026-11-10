@@ -367,14 +367,10 @@ export function destroyDetection() {
   _hostLane = null;
   _calloutLane?.unregister?.();
   _calloutLane = null;
-  _transitBracketPaths.clear();
-  _bracketPathCache.clear();
-  _bracketRasterCache.clear();
-  _projectionCache.clear();
+  _clearGeometryCaches();
   _calloutCount = 0;
   _viewer = null;
   _layers = [];
-  _detectableObjects.length = 0;
   _onModeChange = null;
   _hostCanvas = null;
   _hostSurface = null;
@@ -490,23 +486,22 @@ export function resumeDetection() {
   _setLanesActive(_mode !== MODE_OFF);
 }
 
-/**
- * Detection owns two host lanes that must arm and disarm together: the
- * screen-blended sensor surface and the shared normal-blend callout lane.
- * Letting them diverge would leave callouts painted over a dead sensor field
- * (or brackets with no callsigns).
- * @param {boolean} active
- */
+function _clearGeometryCaches() {
+  _transitBracketPaths.clear();
+  _bracketPathCache.clear();
+  _bracketRasterCache.clear();
+  _projectionCache.clear();
+  _detectableObjects.length = 0;
+}
+
+/** Arm the sensor and callout lanes together; release geometry when inactive. */
 function _setLanesActive(active) {
   const next = active === true;
   _hostLane?.setActive(next);
   _calloutLane?.setActive(next);
   if (!next) {
     _calloutCount = 0;
-    _bracketPathCache.clear();
-    _bracketRasterCache.clear();
-    _projectionCache.clear();
-    _detectableObjects.length = 0;
+    _clearGeometryCaches();
   }
 }
 
@@ -711,11 +706,6 @@ function _normalizeModeLabel(label) {
 function _applyModeState() {
   const label = MODE_LABELS[_mode];
   if (_mode === MODE_OFF) {
-    _projectionCache.clear();
-    _detectableObjects.length = 0;
-    _transitBracketPaths.clear();
-    _bracketPathCache.clear();
-    _bracketRasterCache.clear();
     _syncSurfaceVisibility();
     _setLanesActive(false);
     _labelArbiter.clear();
@@ -1308,10 +1298,7 @@ function _drawOverlay(frame) {
   const objects = _collectDetectableObjects();
   const sampledCount = objects.length;
   if (objects.length === 0) {
-    _bracketPathCache.clear();
-    _bracketRasterCache.clear();
-    _projectionCache.clear();
-    _detectableObjects.length = 0;
+    _clearGeometryCaches();
     // No detectable objects (e.g. DETECT on with no data layers enabled). Still
     // paint so the overlay reads "armed, nothing in view" instead of a dead blank
     // canvas (H3 silent-failure theme). The scanlines and focus ring carry that

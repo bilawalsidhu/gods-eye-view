@@ -5,5 +5,8 @@
   Preserve search and tracking, document workload-specific measurements, and
   offer an optional low-resource mode. Flush Cesium's pending billboard references
   when the final aircraft resident leaves or is removed, keeping offscreen
-  contacts available for search and re-admission (Pierson Marks, @piersonmarks;
+  contacts available for search and re-admission. Shared-surface teardown also
+  releases cached native collections; transit batches ownership changes without
+  repeated compaction, and unused preload bookkeeping is removed
+  (Pierson Marks, @piersonmarks;
   cleanup review: @kvnloo, #1658).
