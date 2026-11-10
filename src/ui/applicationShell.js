@@ -57,6 +57,9 @@ import { useLocationStore } from './stores/location.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
+import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import { withPlacePacks } from './placePacksLoading.js';
+import { preloadOwnerFlags } from './ownerFlag.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -156,11 +159,18 @@ export class StyleManager extends ShellScene {
     // Vue views share this runtime and its stores; dispose unmounts them.
     this._ui = createUiRuntime({ pinia: applicationPinia() });
     this._feedback = new ShellFeedback({
-      readLayers: () => this._dataManager?.getAll?.() || [],
+      readLayers: () => withPlacePacks(this._dataManager?.getAll?.() || []),
     });
     // The attached globe: its viewer (null on Navara), engine and map
     // stack. An engine switch replaces it (attachScene/detachScene).
     this._scene = { viewer, engine, mapStackController };
+    // The satellite owner flags load with the app, not on the first ride.
+    preloadOwnerFlags();
+    // The place names under a Cockpit load on its first lookup: the loading
+    // status names them meanwhile.
+    this._offPlacePacks = onPlacePacksLoadingChange(() =>
+      this._updateGlobalLoadingFeedback(),
+    );
     this.placeSearch = placeSearch;
 
     this._navigation = new NavigationController({
@@ -964,6 +974,7 @@ export class StyleManager extends ShellScene {
         _cctvSummary: this._cctvSummary,
       },
       cctv: cctvLayer,
+      engine: this.engine,
       actions: {
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
@@ -1639,6 +1650,7 @@ export class StyleManager extends ShellScene {
     this._wildlifeSightingCard?.destroy();
     this._ui.destroy();
     this._panelChrome.destroy();
+    this._offPlacePacks();
     this._feedback.destroy();
 
     useDisplayStore(applicationPinia()).connectMapSource(null);

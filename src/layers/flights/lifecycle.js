@@ -217,6 +217,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
       flightState._displayFloorState.clear();
       flightState._enrichQueue.length = 0;
       flightState._enrichSeen.clear();
+      flightState._enrichRetryAfter.clear();
       if (flightState._enrichDripTimer) {
         clearTimeout(flightState._enrichDripTimer);
         flightState._enrichDripTimer = null;

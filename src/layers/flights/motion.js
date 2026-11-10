@@ -1,5 +1,4 @@
 import * as geo from '../../geo/index.js';
-import { appClock } from '../../time/clock.js';
 import {
   COURSE_HOLD_SPEED_MPS,
   lerpAngleDeg,
@@ -36,6 +35,22 @@ import {
   DISPLAY_CORRIDOR_CELL_BUDGET,
   DISPLAY_CORRIDOR_FAIR_SHARE,
 } from './policy.js';
+
+/** Half a coarse floor cell (0.001°), less a margin so rounding keeps a
+ *  clamped coordinate inside the cell. */
+const HALF_CELL_DEG = 0.00049;
+
+/**
+ * A coordinate held within half a cell of the cell's centre (the short way
+ * round for longitude), so a read lands in the given cell.
+ * @param {number} deg @param {number} centreDeg
+ * @returns {number}
+ */
+function clampToCell(deg, centreDeg) {
+  let d = deg - centreDeg;
+  d -= 360 * Math.round(d / 360);
+  return centreDeg + Math.max(-HALF_CELL_DEG, Math.min(HALF_CELL_DEG, d));
+}
 
 export function createMotion({
   flightState,
@@ -157,7 +172,7 @@ export function createMotion({
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTimeMs =
-      sampledRenderTime ?? appClock.now() - RENDER_DELAY_SEC * 1000;
+      sampledRenderTime ?? flightState.now() - RENDER_DELAY_SEC * 1000;
 
     // Bracketing pair: interpolate — no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
@@ -310,7 +325,7 @@ export function createMotion({
     if (!flightState._trackedIcao) return false;
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     if (!history || history.length === 0) return true;
-    return appClock.now() - RENDER_DELAY_SEC * 1000 < history[0].timeMs;
+    return flightState.now() - RENDER_DELAY_SEC * 1000 < history[0].timeMs;
   }
 
   /** Resolve the selected aircraft's actual rendered square extent this frame. */
@@ -839,12 +854,15 @@ export function createMotion({
     );
     // Boundary hysteresis: a position jittering across a cell edge would flip
     // floors at fleet-tick rate (see stickyFloorCell).
-    const cell = stickyFloorCell(
-      geo.math.toDegrees(carto.latitude),
-      geo.math.toDegrees(carto.longitude),
-      state?.cell,
+    const latDeg = geo.math.toDegrees(carto.latitude);
+    const lonDeg = geo.math.toDegrees(carto.longitude);
+    const cell = stickyFloorCell(latDeg, lonDeg, state?.cell);
+    // A cell holds rendered-surface readings at the points they were taken,
+    // so the floor is read where the contact is, held inside its sticky cell.
+    const floor = cachedGroundFloor(
+      clampToCell(latDeg, cell.lat),
+      clampToCell(lonDeg, cell.lon),
     );
-    const floor = cachedGroundFloor(cell.lat, cell.lon);
     const next = state || {
       cell,
       in: geo.cartesian3.create(),

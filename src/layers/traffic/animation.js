@@ -21,7 +21,14 @@ export function createAnimation({
   source,
 }) {
   function syncRenderDemand() {
-    const needed = Boolean(layerState._enabled && layerState._dots.length);
+    // Hidden dots need no frames; line builds hold frames until their old
+    // sets can be retired. The engine animates the heat-line pulse itself.
+    const needed = Boolean(
+      layerState._enabled &&
+      ((layerState._showDots !== false && layerState._dots.length) ||
+        layerState._heatRetired?.length ||
+        parts.rendering.linesBuilding?.()),
+    );
     // Height easing only runs in a held frame. Settle it before releasing, so
     // a population emptied mid-correction cannot report loading forever.
     if (!needed && layerState._heightPending) parts.retention.finishHeights();
@@ -226,6 +233,7 @@ export function createAnimation({
    */
 
   function animate() {
+    parts.rendering.retireHeatLines?.();
     syncRenderDemand();
     if (!layerState._renderHeld) return;
     const now = Date.now();

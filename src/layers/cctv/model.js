@@ -96,6 +96,19 @@ export function createModel({ state: layerState, services, parts, source }) {
     return feedType === 'mp4' || feedType === 'hls' || feedType === 'webm';
   }
 
+  /** A browser-only source still counts as live-capable for map icon/LOD policy. */
+  function isVideoFeedCamera(camera) {
+    return (
+      isVideoFeedType(normalizeFeedType(camera?.feedType)) ||
+      Boolean(camera?.browserMediaUrl)
+    );
+  }
+
+  /** Québec source pages and browser-played MP4s use the DOM overlay path. */
+  function isBrowserOverlayCamera(camera) {
+    return String(camera?.sourceKind || '').startsWith('quebec-');
+  }
+
   /**
    * Coerces a value to a finite number or returns the fallback.
    *
@@ -428,7 +441,12 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   function projectionLoopIsNeeded() {
     if (!layerState._enabled || !parts.renderer?.ready) return false;
-    if (layerState._showProjection && parts.selection.getActiveRecord())
+    const active = parts.selection.getActiveRecord();
+    if (
+      layerState._showProjection &&
+      active &&
+      !isBrowserOverlayCamera(active.camera)
+    )
       return true;
     return focusPassIsNeeded(
       getFocusTarget(),
@@ -534,6 +552,8 @@ export function createModel({ state: layerState, services, parts, source }) {
     angularDeltaAbs,
     normalizeFeedType,
     isVideoFeedType,
+    isVideoFeedCamera,
+    isBrowserOverlayCamera,
     safeNumber,
     headingFromId,
     quantize,

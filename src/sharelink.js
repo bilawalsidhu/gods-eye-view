@@ -6,6 +6,7 @@ import {
   normalizeAllocationStrategy,
 } from './data/detectionPolicy.js';
 import { clampScopeTerminusPct } from './scopeMask.js';
+import { worldClock as pageWorldClock } from './time/worldClock.js';
 import { clampScopeFeatherPct } from './scopeMaskPolicy.js';
 import {
   decodeLayerStateParams,
@@ -73,9 +74,11 @@ export class ShareLinkManager {
       isNavigationCurrent,
       cancelOwnedNavigation,
       initialShareCode = null,
+      worldClock = pageWorldClock,
     } = {},
   ) {
     this.engine = engine ?? null;
+    this._worldClock = worldClock;
     // A host may hand over the share code to open instead of the address.
     this._initialShareCode =
       typeof initialShareCode === 'string' ? initialShareCode : null;
@@ -201,8 +204,9 @@ export class ShareLinkManager {
 
   /**
    * The restore state for a share code, in the long form's parsed shape plus
-   * `shareView` (what the view follows, with its offset and last-known fix),
-   * or null when the code is refused.
+   * `shareView` (what the view follows, with its offset and last-known fix)
+   * and `worldTime` (null when the link was made live), or null when the
+   * code is refused.
    */
   _parseShareCode(code) {
     const result = decodeShareView(code);
@@ -212,6 +216,7 @@ export class ShareLinkManager {
     }
     const state = toLegacyShareState(result.state);
     state.shareView = result.state.view;
+    state.worldTime = result.state.worldTime;
     return state;
   }
 
@@ -667,6 +672,10 @@ export class ShareLinkManager {
     // that state in the share format.
     const state = fromLegacyShareState(this._parseShareHash(params.toString()));
     state.sharedAtMs = Math.floor(nowMs / 1000) * 1000;
+    // Away from live, the link opens at the same world time.
+    state.worldTime = this._worldClock.isLive()
+      ? null
+      : Math.floor(this._worldClock.now() / 1000) * 1000;
     let subject = null;
     try {
       subject = this._followSubjectProvider?.({ nowMs }) ?? null;

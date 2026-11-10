@@ -1,6 +1,9 @@
 import { createRecentImageryLayer } from '../../layers/recentImagery/index.js';
 import { createThumbnailLoader } from '../../layers/recentImagery/thumbnails.js';
 import { rendererFor } from './renderers.js';
+import { worldTimeFor } from '../../time/worldClock.js';
+
+const imageryTime = worldTimeFor('recent-imagery');
 
 /**
  * Construct imagery presentation over one explicitly supplied acquisition
@@ -19,5 +22,6 @@ export function createApplicationRecentImagery({ source }) {
     thumbnails: createThumbnailLoader({
       requestThumbnail: (...args) => source.getThumbnail(...args),
     }),
+    now: () => new Date(imageryTime()),
   });
 }

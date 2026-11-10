@@ -207,7 +207,10 @@ export function createLifecycle({
       parts.trails.rebind();
       parts.selection.refreshSelectedCard(true);
       for (const feed of state._activeFeeds.values())
-        parts.renderer.addCredit(feed);
+        parts.renderer.addCredit(
+          feed,
+          state._feedStatus.get(feed.id)?.creditSnapshot,
+        );
     },
     resumeViewport() {
       if (!state._restoringViewport) return;

@@ -1,13 +1,16 @@
-import { normalizeRoadMode } from './roadModes.js';
+import { normalizeRoadMode, normalizeRoadModes } from './roadModes.js';
 import { FLOW_BUCKET_COLORS } from './policy.js';
 
-export function createState({ services }) {
+export function createState({ services, source }) {
   const layerState = {};
+  /** The host's offered road sources (createTrafficSource `roadModes`). */
+  layerState._roadModes = normalizeRoadModes(source?.roadModes);
   layerState._roadMode =
     typeof location === 'undefined'
       ? null
       : normalizeRoadMode(
           new URLSearchParams(location.search).get('trafficRoads'),
+          layerState._roadModes,
         );
   // The query override is consumed at construction and shields passive restoration.
   layerState._roadModeUrlOverride = layerState._roadMode;
@@ -172,10 +175,22 @@ export function createState({ services }) {
   layerState._jamViz = 'density';
 
   /**
-   * Congestion heat-lines are ground corridors draped onto the rendered 3D
-   * tiles, one display set per bucket (jam, slow).
-   * @type {number} Heat-lines in the current render (stats).
+   * Row toggles (`lines` / `dots` params): flow-colored road lines draped on
+   * the surface, and the moving dots. Live mode only for lines — the keyless
+   * simulation has no flow to color them with.
    */
+  layerState._showLines = false;
+  layerState._showDots = true;
+
+  /** Replaced ground sets kept until successors are ready. */
+
+  layerState._heatRetired = [];
+
+  /** @type {Array|null} Roads of the newest rebuild asked for while the lines were building. */
+
+  layerState._heatPendingRoads = null;
+
+  /** @type {number} Heat-lines in the current render (stats). */
 
   layerState._heatLineCount = 0;
 

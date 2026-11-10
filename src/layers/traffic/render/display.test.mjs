@@ -321,9 +321,9 @@ for (const makeHarness of GROUND_HARNESSES) {
     // NVG and the other mono presets re-encode in luminance.
     state._stylePreset = 'surveillance';
     parts.rendering.rebuildHeatLines(roads);
-    nearAll(h.set(IDS.jam).items[0].color, [1, 1, 1, 1], 'mono jam');
+    nearAll(h.set(`${IDS.jam}-1`).items[0].color, [1, 1, 1, 1], 'mono jam');
     nearAll(
-      h.set(IDS.slow).items[0].color,
+      h.set(`${IDS.slow}-1`).items[0].color,
       [0.7, 0.7, 0.7, HEAT_SLOW_COLOR.alpha],
       'mono slow',
     );
@@ -331,7 +331,60 @@ for (const makeHarness of GROUND_HARNESSES) {
     state._jamViz = 'density';
     parts.rendering.rebuildHeatLines(roads);
     assert.equal(h.set(IDS.jam), undefined);
+    assert.equal(h.set(`${IDS.jam}-1`), undefined);
     assert.equal(state._heatLineCount, 0);
+  });
+
+  test(`flow lines cover all buckets, keep their draw order and never pulse (${name})`, (t) => {
+    const { h, display } = fixture(t, makeHarness);
+    const state = createState({ services: {} });
+    Object.assign(state, {
+      _engine: h.engine,
+      _display: display,
+      _liveMode: true,
+      _showLines: true,
+    });
+    const parts = {};
+    const context = { state, services: {}, parts, source: {} };
+    parts.style = createStyle(context);
+    parts.rendering = createRendering(context);
+    const roads = [0.1, 0.6, 1].map((level, i) => ({
+      flow: { level, closure: false },
+      coords: [
+        [i, 0],
+        [i + 0.001, 0],
+      ],
+      segmentDist: [100],
+    }));
+    parts.rendering.rebuildHeatLines(roads);
+    for (const [order, bucket] of ['free', 'slow', 'jam'].entries()) {
+      const set = h.set(IDS[bucket]);
+      assert.equal(set.options.order, order);
+      assert.equal(set.options.drape, 'both');
+      assert.equal(set.items.length, 1);
+      assert.equal(set.items[0].widthPx, 4);
+      nearAll(
+        set.items[0].color,
+        [...state._activeBucketColors[bucket].rgba().slice(0, 3), 0.8],
+        bucket,
+      );
+      assert.equal(set.items[0].pulse, undefined);
+      assert.equal(set.items[0].glow, undefined);
+    }
+    state._stylePreset = 'surveillance';
+    parts.rendering.rebuildHeatLines(roads);
+    for (const [bucket, level] of [
+      ['jam', 1],
+      ['slow', 0.7],
+      ['free', 0.45],
+    ])
+      nearAll(
+        h.set(`${IDS[bucket]}-1`).items[0].color,
+        [level, level, level, 0.8],
+        bucket,
+      );
+    parts.rendering.removeHeatLines();
+    assert.equal(h.sets(), 0);
   });
 
   test(`heights are sampled through the vehicle sets, and destroy removes every set (${name})`, (t) => {

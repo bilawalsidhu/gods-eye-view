@@ -31,6 +31,7 @@ import {
 } from '../data/detectionPolicy.js';
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { VIEW_STYLES } from '../view/index.js';
+import { isWorldTime } from '../time/worldClock.js';
 import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import {
   GLOBAL_POST_DEFAULTS,
@@ -255,7 +256,7 @@ export const SHARE_VIEW_FLAGS = freezeAll([
  */
 export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
   'local-firms': Object.freeze({ minFrp: 0, confidence: 'all' }),
-  traffic: Object.freeze({ roadMode: null }),
+  traffic: Object.freeze({ roadMode: null, lines: false, dots: true }),
   'weather-lightning': Object.freeze({ opacity: 'strong' }),
   'weather-radar': Object.freeze({ opacity: 'strong' }),
   'weather-satellite': Object.freeze({
@@ -275,7 +276,11 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     selectedFlightsTrackingId: null,
     selectedMilitaryTrackingId: null,
   }),
-  satellites: Object.freeze({ catalog: 'core', selectedSatTrackingId: null }),
+  satellites: Object.freeze({
+    catalog: 'core',
+    selectedSatTrackingId: null,
+    classes: 'sitpd',
+  }),
   cctv: Object.freeze({
     coverageMode: 'on',
     showProjection: true,
@@ -377,6 +382,7 @@ export const SHARE_VIEW_FIELDS = freezeAll([
   { number: 25, key: 'scopeFeatherPct', type: 'uint', default: 100 },
   { number: 26, key: 'scopeTerminusPct', type: 'uint', default: null },
   { number: 27, key: 'styleParams', type: 'bytes', default: BY_STYLE },
+  { number: 28, key: 'worldTime', type: 'epoch', default: null },
 ]);
 const FIELD_BY_KEY = new Map(SHARE_VIEW_FIELDS.map((f) => [f.key, f]));
 const fieldNumber = (key) => FIELD_BY_KEY.get(key).number;
@@ -739,6 +745,9 @@ export function normalizeShareViewState(input = {}) {
     : null;
   state.panelState = normalizePanelState(source.panelState);
   state.sharedAtMs = epochMsOr(source.sharedAtMs);
+  state.worldTime = isWorldTime(source.worldTime)
+    ? Math.floor(source.worldTime / 1000) * 1000
+    : null;
   let view = normalizeView(source.view);
   if (state.layerState) view = liftTrackedEntity(state.layerState, view);
   if (view.kind === 'thing') {
@@ -955,8 +964,9 @@ export function encodeShareView(input) {
           writer.sintField(field.number, signedAngle(state[field.key]));
         break;
       case 'sharedAtMs':
-        if (state.sharedAtMs !== null)
-          writer.sintField(field.number, epochSeconds(state.sharedAtMs));
+      case 'worldTime':
+        if (state[field.key] !== null)
+          writer.sintField(field.number, epochSeconds(state[field.key]));
         break;
       case 'flags': {
         let bits = 0;
@@ -1353,6 +1363,12 @@ export function decodeShareView(code, { nowMs = Date.now() } = {}) {
       const ms = createdAtS * 1000;
       raw.sharedAtMs =
         createdAtS >= 1 && Number.isSafeInteger(ms) && ms <= nowMs ? ms : null;
+    }
+    // The world time the link was made at, when it was away from live. It
+    // may lie ahead of the link's creation (a forecast) or of now.
+    if (get('worldTime')) {
+      const ms = (SHARE_VIEW_EPOCH_S + unz(get('worldTime').varint)) * 1000;
+      raw.worldTime = isWorldTime(ms) ? ms : null;
     }
 
     if (get('layerState'))

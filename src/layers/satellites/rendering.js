@@ -1,8 +1,12 @@
 import * as geo from '../../geo/index.js';
-import { appClock } from '../../time/clock.js';
 import { CYAN } from '../shared/color.js';
 import { gstime } from 'satellite.js';
-import { ISS_NORAD, POSITION_UPDATE_MS, RING_ROTATION_MS } from './policy.js';
+import {
+  ISS_NORAD,
+  ORBIT_REBAKE_MS,
+  POSITION_UPDATE_MS,
+  RING_ROTATION_MS,
+} from './policy.js';
 
 export function createRendering({
   state: layerState,
@@ -36,11 +40,14 @@ export function createRendering({
     const sat = layerState._catalog.get(noradId);
     if (!sat || !getRenderer()) return;
 
-    const bakeDate = new Date(appClock.now());
+    const bakeDate = new Date(layerState.now());
     const basePositions = parts.orbits.computeOrbitPath(sat.satrec, bakeDate);
     if (basePositions.length < 2) return;
 
     const pathColor = color || CYAN;
+
+    // Kept so the Cockpit orbit dim restores exactly.
+    const baseColor = pathColor.withAlpha(0.6);
 
     const primitive = getRenderer().createOrbit({
       positions: basePositions,
@@ -52,10 +59,14 @@ export function createRendering({
       primitive,
       basePositions,
       color: pathColor,
+      bakeMs: bakeDate.getTime(),
       // Same Date object as computeOrbitPath's internal fixedGmst → identical
       // GMST value (gstime is pure), so delta starts at exactly 0 and the
       // initial identity modelMatrix is correct until the first ring tick.
       gmstAtBake: gstime(bakeDate),
+      baseColor,
+      // The alpha multiple last written to the line (1: as built).
+      alphaFactor: 1,
     });
   }
 
@@ -88,8 +99,18 @@ export function createRendering({
   function _updateOrbitPathRotations(nowDate) {
     if (layerState._orbitPaths.size === 0) return;
 
-    for (const path of layerState._orbitPaths.values()) {
+    for (const [noradId, path] of [...layerState._orbitPaths]) {
       if (!path.primitive) continue;
+      // The rotation keeps the ring under the dot for minutes; the plane
+      // itself precesses, so a world time moved far from the bake re-bakes.
+      if (Math.abs(nowDate.getTime() - path.bakeMs) > ORBIT_REBAKE_MS) {
+        _hideOrbitPath(noradId);
+        _showOrbitPath(noradId, path.color);
+        const rebuilt = layerState._orbitPaths.get(noradId);
+        if (rebuilt) rebuilt.primitive.show = path.primitive.show;
+        parts.cockpit?._syncCockpitSubjectVisuals();
+        continue;
+      }
       parts.orbits.orbitFrameModelMatrix(
         path.gmstAtBake,
         nowDate,
@@ -113,12 +134,13 @@ export function createRendering({
 
   /**
    * Propagate all CORE satellite positions and update point primitives.
-   * (~840 sats ≈ 1.6 ms/pass — fine at the 1s/200ms cadence.) Dense extras are
+   * (About 1,300 core satellites: ~840 measured at ≈ 1.6 ms/pass, so ≈ 2.5 ms,
+   * fine at the 1s/200ms cadence.) Dense extras are
    * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
    */
 
   function _propagateAll() {
-    const now = new Date(appClock.now());
+    const now = new Date(layerState.now());
     let updated = 0;
 
     for (const [noradId, sat] of layerState._catalog) {
@@ -178,6 +200,10 @@ export function createRendering({
       }
     }
 
+    // While the Cockpit rides the tracked satellite, keep its marks hidden.
+    if (layerState._cockpitSubjectNorad !== null)
+      parts.cockpit?._syncCockpitSubjectVisuals();
+
     _updatePointFocus(now);
 
     // Hidden standalone orbit primitives do not need GMST matrix writes while
@@ -186,7 +212,7 @@ export function createRendering({
       layerState._params.showOrbits &&
       now - layerState._lastRingRotation >= RING_ROTATION_MS
     ) {
-      _updateOrbitPathRotations(new Date(appClock.now()));
+      _updateOrbitPathRotations(new Date(layerState.now()));
       layerState._lastRingRotation = now;
     }
   }

@@ -5,10 +5,10 @@
 //   sized and faded by its camera distance as a PointPrimitive's
 //   scaleByDistance and translucencyByDistance are (over the squared
 //   distance, eased by ^0.2), and depth-tested against the scene;
-// - congestion heat lines: two engine.ground corridor sets (jam, then slow),
-//   draped on 3D tiles, as the GroundPolylinePrimitives Cesium drew with
-//   ClassificationType.CESIUM_3D_TILE; a bucket's look (the jam's glow and
-//   pulse) goes to the engine, which animates it on the GPU.
+// - flow lines: three ground corridor sets (free, slow, jam), draped on the
+//   visible surface; congestion heat lines use two (jam, slow), on 3D tiles.
+//   A bucket's look (the jam's glow and pulse) goes to the engine, which
+//   animates it on the GPU.
 // The layer keeps each dot's look as plain data on `dot.point` (position,
 // pixelSize, color, outlineColor, outlineWidth, show, scaleByDistance,
 // translucencyByDistance); the display only reads it.
@@ -21,6 +21,7 @@ export const TRAFFIC_SET_IDS = Object.freeze({
   fill: 'traffic-fill',
   jam: 'traffic-heat-jam',
   slow: 'traffic-heat-slow',
+  free: 'traffic-flow-free',
 });
 // Cesium culls a point whose translucency falls under this.
 const MIN_TRANSLUCENCY = 0.004;
@@ -50,7 +51,7 @@ export function nearFarValue(scalar, distance) {
 /**
  * @param {import('../../../globe/contract.js').GlobeEngine} engine
  * @returns {{ drawDots: (dots: object[]) => void, show: (visible: boolean) => void,
- *   setHeat: (bucket: 'jam'|'slow', roads: object[], style: { color: number[], widthPx: number, glow?: object, pulse?: object }) => void,
+ *   setHeat: (bucket: 'jam'|'slow'|'free', roads: object[], style: { color: number[], widthPx: number, glow?: object, pulse?: object }) => void,
  *   clearHeat: () => void, excluded: () => object[], destroy: () => void }}
  */
 export function createTrafficDisplay(engine) {
@@ -67,6 +68,7 @@ export function createTrafficDisplay(engine) {
     }),
   );
   const heat = new Map();
+  let heatGeneration = 0;
   const color = [0, 0, 0, 0];
   const fields = { position: null, scale: 1, color, show: true };
   const counts = [0, 0];
@@ -150,16 +152,29 @@ export function createTrafficDisplay(engine) {
      * One bucket's heat lines: a corridor per road, along its coordinates,
      * with the bucket's glow and pulse (engine.ground corridor looks).
      */
-    setHeat(bucket, roads, { color: rgba, widthPx, glow, pulse }) {
+    setHeat(
+      bucket,
+      roads,
+      {
+        color: rgba,
+        widthPx,
+        glow,
+        pulse,
+        drape = 'tiles',
+        order = HEAT_ORDER[bucket],
+      },
+    ) {
       if (destroyed) return;
       dropHeat(bucket);
       if (!roads.length) return;
       const set = engine.ground.createSet({
-        id: TRAFFIC_SET_IDS[bucket],
+        id: heatGeneration
+          ? `${TRAFFIC_SET_IDS[bucket]}-${heatGeneration}`
+          : TRAFFIC_SET_IDS[bucket],
         kind: 'corridor',
-        order: HEAT_ORDER[bucket],
+        order,
         pickable: false,
-        drape: 'tiles',
+        drape,
       });
       heat.set(bucket, set);
       const look = {
@@ -175,6 +190,14 @@ export function createTrafficDisplay(engine) {
         })),
       );
       set.commit();
+    },
+    heatBuilding: () => [...heat.values()].some((set) => !set.ready()),
+    // Transfer ownership without destroying the lines still on screen.
+    takeHeat() {
+      const taken = [...heat.values()];
+      heat.clear();
+      if (taken.length) heatGeneration++;
+      return taken;
     },
     clearHeat() {
       for (const bucket of [...heat.keys()]) dropHeat(bucket);

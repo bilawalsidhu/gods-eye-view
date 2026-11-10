@@ -250,13 +250,21 @@ test('the draw modules are registered for formatting and boundary checks', () =>
       `${file} must be owned by at least one boundary group`,
     );
   }
-  // Every layer that consults the shared claim has to own the module it reads,
-  // or its bundle fails the boundary check.
-  for (const group of ['alpr-cameras', 'vessel-layer', 'satellites-layer']) {
-    assert.ok(
-      boundaries[group]?.modules.includes('src/data/inputOwnership.js'),
-      `${group} consults the pointer claim and must own the module`,
-    );
+  // Every package drawing these layers must own the shared pointer claim,
+  // including layers whose click handling belongs to a supplied display.
+  for (const file of [
+    'src/layers/alpr/render/display.js',
+    'src/layers/vessels/selection.js',
+    'src/layers/satellites/interaction.js',
+  ]) {
+    const groups = owners(file);
+    assert.ok(groups.length > 0, `${file} must have a package owner`);
+    for (const group of groups) {
+      assert.ok(
+        boundaries[group]?.modules.includes('src/data/inputOwnership.js'),
+        `${group} consults the pointer claim and must own the module`,
+      );
+    }
   }
   const exports = JSON.parse(read('package.json')).exports;
   assert.equal(exports['./annotations'], './src/annotations/index.js');

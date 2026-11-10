@@ -1,8 +1,7 @@
 import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 import { constantRgba } from '../shared/color.js';
-import { appClock } from '../../time/clock.js';
-import { satelliteClassLabel } from '../../data/satelliteClass.js';
+import { satelliteClassText } from '../../data/satelliteClass.js';
 import { t } from '../../i18n/index.js';
 import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
 import {
@@ -112,7 +111,8 @@ export function createTracking({
         layerState._trackedNorad,
         layerState._catalog.get(layerState._trackedNorad)?.group,
       );
-      lastPos.show = true;
+      // Back to its class's visibility: a hidden class stays hidden.
+      lastPos.show = parts.controls._classVisible(layerState._trackedNorad);
       lastPos.pixelSize = style.pixelSize;
       lastPos.color = style.color;
       lastPos.outlineColor = style.outlineColor;
@@ -134,6 +134,10 @@ export function createTracking({
       layerState._trackedEntity = null;
     }
     layerState._trackedNorad = null;
+    parts.controls._syncIssOrbit?.();
+    // A held Cockpit subject that stops being tracked gets its marks back.
+    if (layerState._cockpitSubjectNorad !== null)
+      parts.cockpit?._syncCockpitSubjectVisuals();
     parts.labels._syncIssOverlay();
     clearTrackedSubjectContext('satellites');
     layerState._contextRefreshedAtMs = 0;
@@ -165,15 +169,13 @@ export function createTracking({
       frameNumber !== layerState._trackedFrameNumber ||
       layerState._trackedFrameGeo === null
     ) {
-      const pos = parts.orbits.propagatePosition(
-        sat.satrec,
-        new Date(
-          layerState._trackedFrameNowForTest
-            ? layerState._trackedFrameNowForTest()
-            : appClock.now(),
-        ),
-      );
+      const atMs = layerState._trackedFrameNowForTest
+        ? layerState._trackedFrameNowForTest()
+        : layerState.now();
+      const pos = parts.orbits.propagatePosition(sat.satrec, new Date(atMs));
       if (!pos) return layerState._trackedFrameGeo; // propagation hiccup — keep last good sample
+      // The time the sample is at: the world clock's, not the wall clock's.
+      pos.atMs = atMs;
       layerState._trackedFrameGeo = pos;
       geo.cartesian3.fromDegrees(
         pos.longitude,
@@ -258,7 +260,7 @@ export function createTracking({
         name,
         operator: '',
         noradId: String(noradId),
-        class: satelliteClassLabel(sat.group, {
+        class: satelliteClassText(sat.satelliteClass, sat.group, {
           isIss: noradId === ISS_NORAD,
           localize: false,
         }),
@@ -383,7 +385,7 @@ export function createTracking({
     // looking at, and it stays readable under the IR styles that flatten the
     // dot colors to a single channel (the card is painted above post-FX).
     const details = [
-      satelliteClassLabel(sat?.group, {
+      satelliteClassText(sat?.satelliteClass, sat?.group, {
         isIss: layerState._trackedNorad === ISS_NORAD,
       }),
       detail,
@@ -440,6 +442,7 @@ export function createTracking({
 
     // Show orbital path
     parts.rendering._showOrbitPath(noradId, YELLOW);
+    if (noradId === ISS_NORAD) parts.controls._syncIssOrbit?.();
 
     // Tracked entity position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
@@ -456,7 +459,7 @@ export function createTracking({
     // up for MEO/GEO so the camera doesn't land on top of a high-orbit dot.
     const initialPos = parts.orbits.propagatePosition(
       sat.satrec,
-      new Date(appClock.now()),
+      new Date(layerState.now()),
     );
     const viewScale =
       initialPos && initialPos.altitude > HIGH_ORBIT_ALTITUDE_M

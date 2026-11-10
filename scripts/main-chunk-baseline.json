@@ -1,6 +1,6 @@
 {
-  "gzipBytes": 2066560,
-  "allowanceBytes": 20666,
+  "gzipBytes": 2176199,
+  "allowanceBytes": 21762,
   "measuredAt": "Keyless production build with dynamically loaded layer displays",
   "allowance": "1% of the baseline; growth past it fails npm run check:main-chunk until the baseline is raised on purpose"
 }

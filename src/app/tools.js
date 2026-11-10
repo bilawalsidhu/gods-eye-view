@@ -1,5 +1,10 @@
 import { retainsLayerSession } from './layerSession.js';
 import { SceneDirector } from '../scenes/director.js';
+import {
+  claimPointer,
+  isPointerFree,
+  releasePointer,
+} from '../data/inputOwnership.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { attachSessionVoice } from './sessionVoice.js';
@@ -46,6 +51,7 @@ export async function createApplicationTools({
   onSceneDirector,
   sceneDataPacks,
   layerSession,
+  drawMarkActions = [],
   signal,
   defer,
 }) {
@@ -165,6 +171,7 @@ export async function createApplicationTools({
     voice,
     sceneDirector,
     layerSession,
+    drawMarkActions,
     styleManager,
     dataManager,
   };
@@ -239,6 +246,11 @@ export async function createApplicationTools({
     },
     get voiceCommands() {
       return attached.voiceCommands;
+    },
+    pointer: {
+      claim: claimPointer,
+      release: releasePointer,
+      isFree: isPointerFree,
     },
   };
 }
@@ -337,6 +349,7 @@ async function attachEngineTools(
     voice,
     sceneDirector,
     layerSession,
+    drawMarkActions,
     styleManager,
     dataManager,
   },
@@ -352,7 +365,11 @@ async function attachEngineTools(
     { layerSession, placeSearch, operations },
     defer,
   );
-  attachDraw(engine, { layerSession, annotations, styleManager }, defer);
+  attachDraw(
+    engine,
+    { layerSession, annotations, styleManager, drawMarkActions },
+    defer,
+  );
   // Import draws through the globe contract, the same on every engine.
   attachGeoImport(
     { engine },
@@ -489,7 +506,7 @@ function attachBoard(
  */
 function attachDraw(
   engine,
-  { layerSession, annotations, styleManager },
+  { layerSession, annotations, styleManager, drawMarkActions },
   defer,
 ) {
   if (!annotations) return null;
@@ -497,6 +514,7 @@ function attachDraw(
     layerSession,
     annotations,
     styleManager,
+    markActions: drawMarkActions,
     defer,
   });
   drawTool?.attachScene({ engine, navigation: styleManager });

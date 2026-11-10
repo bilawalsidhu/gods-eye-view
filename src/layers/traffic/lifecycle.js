@@ -1,5 +1,6 @@
 import { observeTrafficSurface } from './surface.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { resolveRoadMode } from './roadModes.js';
 import {
   claimCameraSensitivity,
   releaseCameraSensitivity,
@@ -24,7 +25,7 @@ export function createLifecycle({
     if (!engine) return;
     const camera = engine.camera;
     layerState._surfaceFrameRemover = observeTrafficSurface(engine);
-    layerState._display?.show(true);
+    layerState._display?.show(layerState._showDots);
     layerState._lastAnimTime = 0;
     parts.animation.syncRenderDemand();
     layerState._preRenderRemover = engine.frames.preRender.addEventListener(
@@ -134,7 +135,7 @@ export function createLifecycle({
       layerState._restoringViewport = waitForCameraRestore;
       layerState._engine = engine;
       layerState._display = engine ? services.createRenderer(engine) : null;
-      layerState._display?.show(layerState._enabled);
+      layerState._display?.show(layerState._enabled && layerState._showDots);
       if (!waitForCameraRestore) readyForSurfaceWork();
       if (layerState._enabled) {
         bindScene();
@@ -215,7 +216,12 @@ export function createLifecycle({
     enable() {
       if (layerState._enabled) return;
       layerState._enabled = true;
-      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
+      // OpenFreeMap metadata, unless only TomTom roads can be drawn.
+      if (
+        resolveRoadMode(layerState._roadMode, true, layerState._roadModes) !==
+        'tomtom'
+      )
+        source.prefetch?.();
       bindScene();
       // Enabling is explicit intent, not a camera gesture that needs settling.
       parts.viewport.onCameraChanged({ immediate: true });

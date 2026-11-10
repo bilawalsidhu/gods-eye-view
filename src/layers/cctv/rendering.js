@@ -35,8 +35,7 @@ export function createRendering({
   function cameraColorFor(record) {
     if (record.camera.id === layerState._activeCameraId)
       return ACTIVE_CAMERA_COLOR;
-    if (parts.model.isVideoFeedType(record.camera.feedType))
-      return LIVE_CAMERA_COLOR;
+    if (parts.model.isVideoFeedCamera(record.camera)) return LIVE_CAMERA_COLOR;
     return IDLE_CAMERA_COLOR;
   }
 
@@ -344,8 +343,9 @@ export function createRendering({
       if (
         layerState._enabled &&
         isActive &&
+        !parts.model.isBrowserOverlayCamera(record.camera) &&
         (layerState._showProjection ||
-          parts.model.isVideoFeedType(record.camera.feedType))
+          parts.model.isVideoFeedCamera(record.camera))
       ) {
         parts.projection.ensureProjectionRuntime(record);
       }
@@ -355,7 +355,8 @@ export function createRendering({
       const planeShowing = !!(
         layerState._enabled &&
         layerState._showProjection &&
-        isActive
+        isActive &&
+        !parts.model.isBrowserOverlayCamera(record.camera)
       );
 
       const inVisibleSet = coverageVisible.has(record.camera.id);

@@ -89,6 +89,7 @@ function setup(
     parts: {
       renderer,
       model: {
+        isBrowserOverlayCamera: () => false,
         normalizeFeedType: (value) => value,
         isVideoFeedType: (value) => value === 'mp4',
         planeOrientationFor: () => ({}),

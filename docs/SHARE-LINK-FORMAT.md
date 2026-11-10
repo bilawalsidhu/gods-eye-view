@@ -119,6 +119,7 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 25  | `scopeFeatherPct`            | uint  | 100         | 0–200                                                             |
 | 26  | `scopeTerminusPct`           | uint  | none        | 94–100; absent is the adaptive terminus                           |
 | 27  | `styleParams`                | LEN   | style       | packed `(token, value × 100)` pairs                               |
+| 28  | `worldTime`                  | epoch | none (live) | zigzag seconds since 2026-01-01T00:00:00Z                         |
 
 Field 1 absent means `thing` when field 13 is present and `place` otherwise,
 so v1 never writes it; a later view kind writes its code.
@@ -131,6 +132,10 @@ style also extends the pinned style-defaults table.
 
 `hudVariant` code 1 (`operator`) is retired: the app no longer offers that
 layout and restores it as `tactical`. The code stays reserved.
+
+Field 28 is the world time the link was made at, written only when it was away
+from live. A link without it opens live. Unlike field 8 it may lie ahead of the
+link's creation (a forecast moment), and it opens paused at that time.
 
 Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
 `celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).

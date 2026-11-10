@@ -1,6 +1,7 @@
 // The Navara globe for the app's experimental engine mode: builds the view
 // the product way (viewOptions.js) and the GlobeEngine on it. Load it with a
 // dynamic import() so Navara stays out of the Cesium-mode bundle.
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 import ThreeView, { Color as NavaraColor, MeshDesc } from '@navaramap/three';
 import * as geo from '../../geo/index.js';
@@ -114,8 +115,7 @@ function groundInView(engine) {
  *   hd?: boolean,
  * }} options `search`, the page's query string, picks the look from
  *   `?look=` (cinematic by default); `hd` draws at the device pixel ratio
- *   with MSAA (Navara HD), else at CSS pixels without it. The sun follows the engine clock (the
- *   page's app clock): the look reads its frame time.
+ *   with MSAA (Navara HD), else at CSS pixels without it. The sun follows the world time.
  * @returns {Promise<{ setRenderLoop: (enabled: boolean) => void, engine: import('../contract.js').GlobeEngine, destroy: () => void }>}
  */
 export async function createNavaraGlobe({ container, search, hd = false }) {
@@ -139,9 +139,8 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
     const plan = navaraScenePlan(resolveNavaraLook(search), {
       mobile: Boolean(view.isMobileOptimized?.()),
     });
-    // The sun follows the engine clock (one time source for layers and the
-    // look); the look only runs in preRender, after the engine exists.
-    look = buildNavaraLook(view, plugin, plan, () => engine.clock.frameTime(), {
+    // The sky follows the timeline; live feeds keep the engine's app clock.
+    look = buildNavaraLook(view, plugin, plan, worldTimeFor('sky'), {
       forEachLuminanceUniform,
     });
     // The look's shadowed sun leaked a light per frame (internals.js).
@@ -208,6 +207,7 @@ export async function createNavaraGlobe({ container, search, hd = false }) {
           placed &&
           plan.globeLighting &&
           automaticLandscape &&
+          worldClock.isLive() &&
           (engine.maps.baseKind === 'sentinel2' ||
             engine.maps.baseKind === 'esri-imagery');
         if (container.hasAttribute('data-terrain-daylight') !== landscape)

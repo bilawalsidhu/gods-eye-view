@@ -8,6 +8,15 @@ import {
   slewHeading,
 } from '../cockpitMath.js';
 import {
+  VESSEL_DEAD_RECKON_MAX_S,
+  VESSEL_WATERLINE_REFRESH_MS,
+  deadReckonVesselFix,
+  vesselCameraProfile,
+  vesselWaterlineM,
+  waterlineProbePoints,
+} from '../cockpitSubjects.js';
+import { easeLook } from '../cockpitLook.js';
+import {
   COCKPIT_HEADING_SLEW_DPS,
   COCKPIT_FORWARD_OFFSET_M,
   COCKPIT_UP_OFFSET_M,
@@ -44,6 +53,14 @@ export function update() {
   }
 
   const nowMs = performance.now();
+  if (this.subjectKind === 'vessel') {
+    updateVessel.call(this, nowMs);
+    return;
+  }
+  if (this.subjectKind === 'satellite') {
+    this.updateOrbital(nowMs);
+    return;
+  }
   const info = this.readAircraftInfo();
 
   // Adopt a newly selected track before the camera cadence gate. A context
@@ -80,16 +97,213 @@ export function update() {
 }
 
 /**
+ * The surface the ridden ship floats on: the layer's geoid sea surface, or
+ * the water read off the rendered scene when that sits higher (a river or
+ * lake above sea level). The read runs in the background every
+ * VESSEL_WATERLINE_REFRESH_MS. The full-detail read can take many seconds
+ * from cold tiles, so a new ship's first read starts from the tiles already
+ * on screen; until any read lands the sea surface stands. Only one
+ * full-detail read runs at a time (each is nine picks Cesium traverses
+ * every frame until it settles): while one is still running, a refresh
+ * reads the loaded tiles instead, and the slow read applies whenever it
+ * lands. Once a full-detail read has answered, only full-detail reads
+ * change the height; before then a loaded-tile read may find raised water
+ * but never takes a raised height back to the sea. One coarse probe cannot
+ * drop a river bridge to the sea, and a read that sampled nothing keeps
+ * the height it had.
+ * @param {{latitude: number, longitude: number}} [at] Where to read the
+ *   water: the dead-reckoned position the camera rides.
+ * @returns {number} Ellipsoidal metres.
+ */
+function vesselSurfaceM(info, nowMs, at = info) {
+  const seaM = Number.isFinite(info.seaSurfaceHeightM)
+    ? info.seaSurfaceHeightM
+    : 0;
+  const surface = this.host.surface.surface;
+  let read =
+    this.vesselWaterline?.mmsi === info.mmsi ? this.vesselWaterline : null;
+  if (
+    (surface.supported || surface.terrainHeightSupported) &&
+    (!read || nowMs - read.sampledMs >= VESSEL_WATERLINE_REFRESH_MS)
+  ) {
+    const probes = waterlineProbePoints(at.latitude, at.longitude).map(
+      ({ lat, lon }) => geo.cartographic.fromDegrees(lon, lat),
+    );
+    if (!read) {
+      read = {
+        mmsi: info.mmsi,
+        heightM: loadedWaterlineM(surface, probes, seaM),
+        sampledMs: nowMs,
+        // Whether a full-detail read has answered for this ship.
+        landed: false,
+        inFlight: false,
+      };
+      this.vesselWaterline = read;
+    } else {
+      read.sampledMs = nowMs;
+      if (read.inFlight && !read.landed) {
+        const loadedM = loadedWaterlineM(surface, probes, seaM);
+        // Taking a river back to the sea is the full-detail read's to say.
+        const lowers =
+          Number.isFinite(read.heightM) &&
+          read.heightM > seaM &&
+          !(loadedM > seaM);
+        if (Number.isFinite(loadedM) && !lowers) read.heightM = loadedM;
+      }
+    }
+    if (!read.inFlight) readWaterline.call(this, read, probes, seaM);
+  }
+  return read && Number.isFinite(read.heightM)
+    ? Math.max(seaM, read.heightM)
+    : seaM;
+}
+
+/** Start one full-detail water read for `read`; its answer lands on it. */
+function readWaterline(read, probes, seaM) {
+  read.inFlight = true;
+  Promise.resolve()
+    .then(() => this.host.sampleWaterline(probes))
+    .then(
+      (samples) => {
+        if (this.vesselWaterline !== read) return;
+        read.inFlight = false;
+        // However late it lands, it applies; one that sampled nothing (tiles
+        // not loaded yet) is no answer and keeps the height already read.
+        const heights = (samples || []).map((sample) => sample?.height);
+        if (!heights.some(Number.isFinite)) return;
+        read.landed = true;
+        read.heightM = vesselWaterlineM(seaM, heights);
+      },
+      () => {
+        if (this.vesselWaterline === read) read.inFlight = false;
+      },
+    );
+}
+
+/**
+ * The waterline from the tiles already loaded, read at once: a first answer
+ * while the full-detail read loads. Null when the scene cannot sample or no
+ * probe met loaded geometry: nothing sampled is no answer, not the sea, so it
+ * never undoes a river height a full read set.
+ */
+function loadedWaterlineM(surface, probes, seaM) {
+  if (!surface.supported) return null;
+  try {
+    const heights = probes.map((probe) => surface.sampleHeight(probe));
+    if (!heights.some(Number.isFinite)) return null;
+    return vesselWaterlineM(seaM, heights);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Drive the bridge camera from the selected vessel. The vessel layer redraws
+ * a ship only when its feed refreshes, so the target is the last fix advanced
+ * along course over ground; the shared anchor smoothing then absorbs the
+ * correction each new fix brings.
+ */
+function updateVessel(nowMs) {
+  // A new follow takes the camera away from the bridge.
+  if (this.host.surface.camera.following()) {
+    this.exit({ restoreTracking: false });
+    return;
+  }
+  const info = this.readVesselInfo();
+  if (!info || info.mmsi !== this.subjectId) {
+    this.exit({ restoreTracking: false });
+    return;
+  }
+  if (
+    !cockpitUiUpdateDue(
+      nowMs,
+      this.lastCameraUpdateMs,
+      COCKPIT_CAMERA_UPDATE_MS,
+    )
+  )
+    return;
+  this.lastCameraUpdateMs = nowMs;
+
+  const fix = deadReckonVesselFix(
+    {
+      latitude: info.latitude,
+      longitude: info.longitude,
+      courseDeg: info.motionCourse,
+      speedMps: info.velocityMps,
+      fixEpochMs: info.fixEpochMs,
+      receivedAtMs: info.receivedAtMs,
+      feedEpochMs: info.feedEpochMs,
+    },
+    Date.now(),
+  );
+  // The radar centres here too, so it agrees with the view out the window.
+  this.vesselFix = fix;
+  const target = geo.cartesian3.fromDegrees(
+    fix.longitude,
+    fix.latitude,
+    // Read the water where the ship is now, not at its last report.
+    vesselSurfaceM.call(this, info, nowMs, fix),
+    geo.ellipsoid.WGS84,
+    this.scratchTarget,
+  );
+  // The target advances in wall-clock time, so the anchor must too: the
+  // aircraft path's 0.1 s step cap would leave a slow-frame or hitching bridge
+  // falling ever further behind its own ship.
+  const dtSec = Math.min(
+    VESSEL_DEAD_RECKON_MAX_S,
+    Math.max(0, (nowMs - this.lastFrameMs) / 1000),
+  );
+  this.lastFrameMs = nowMs;
+  if (Number.isFinite(info.track)) {
+    this.heading = slewHeading(
+      this.heading ?? info.track,
+      info.track,
+      COCKPIT_HEADING_SLEW_DPS * dtSec,
+    );
+  }
+  // Past the projection limit the target stops advancing; hold on it rather
+  // than let the inertial anchor sail on alone.
+  const projectionExpired =
+    Number.isFinite(fix.ageSec) && fix.ageSec > VESSEL_DEAD_RECKON_MAX_S;
+  // The look eases on its own clock: the anchor's step is capped differently.
+  this.lookView = easeLook(
+    this.lookView,
+    this.lookTarget,
+    nowMs - (this.lookLastMs || nowMs),
+  );
+  this.lookLastMs = nowMs;
+  // A ship reporting neither course nor heading has no direction to move
+  // in: its anchor stays on the fix, as the dead reckoning does.
+  const ridden = Number.isFinite(info.motionCourse)
+    ? info
+    : { ...info, velocityMps: 0 };
+  placeCamera.call(
+    this,
+    target,
+    projectionExpired ? { ...ridden, stale: true } : ridden,
+    nowMs,
+    dtSec,
+    vesselCameraProfile(info),
+    this.lookView,
+  );
+}
+
+/**
  * Place the camera for one update: advance the inertial anchor, clamp it and
  * the eye against the rendered surface, and look along the slewed heading.
- * @param {Cesium.Cartesian3} target Authoritative subject position.
- * @param {object} info Subject info.
+ * @param {geo.cartesian3} target Authoritative subject position.
+ * @param {object} info Subject info; `motionCourse` (when present) is the
+ *   direction the subject moves, otherwise it moves where it faces.
  * @param {number} nowMs Frame time.
  * @param {number} dtSec Seconds since the previous camera update.
  * @param {{forwardM: number, upM: number, pitchDeg: number,
  *   minClearanceM: number}} profile Eye offsets for the subject kind.
+ * @param {?{yawDeg: number, pitchDeg: number}} [look] A bridge view turned
+ *   off the bow: yaw relative to the heading and absolute pitch. It turns
+ *   only the view; the eye and its motion keep the heading and course.
+ *   Aircraft pass none and look along the heading at the profile pitch.
  */
-function placeCamera(target, info, nowMs, dtSec, profile) {
+function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
   if (!this.cockpitAnchorValid) {
     geo.cartesian3.clone(target, this.cockpitAnchor);
     this.cockpitAnchorValid = true;
@@ -103,7 +317,13 @@ function placeCamera(target, info, nowMs, dtSec, profile) {
   // 15/30-second interpolation and per-frame cache without exposing its
   // sample-boundary corrections to the camera.
   const headingRad = geo.math.toRadians(this.heading ?? 0);
-  const pitchRad = geo.math.toRadians(profile.pitchDeg);
+  const courseRad = Number.isFinite(info.motionCourse)
+    ? geo.math.toRadians(info.motionCourse)
+    : headingRad;
+  const pitchRad = geo.math.toRadians(look ? look.pitchDeg : profile.pitchDeg);
+  const viewHeadingRad = look
+    ? geo.math.toRadians((this.heading ?? 0) + look.yawDeg)
+    : headingRad;
   const speedMps = Number.isFinite(info.velocityMps)
     ? Math.max(0, info.velocityMps)
     : 0;
@@ -119,8 +339,8 @@ function placeCamera(target, info, nowMs, dtSec, profile) {
       geo.ellipsoid.WGS84,
       this.scratchEnu,
     );
-    this.scratchLocal.x = Math.sin(headingRad);
-    this.scratchLocal.y = Math.cos(headingRad);
+    this.scratchLocal.x = Math.sin(courseRad);
+    this.scratchLocal.y = Math.cos(courseRad);
     this.scratchLocal.z = 0;
     geo.matrix4.multiplyByPointAsVector(
       this.scratchEnu,
@@ -176,9 +396,18 @@ function placeCamera(target, info, nowMs, dtSec, profile) {
     geo.ellipsoid.WGS84,
     this.scratchTargetCartographic,
   );
+  // A bridge's target is its fix dead-reckoned up to minutes ahead: read
+  // the floor where the ship is now, as its water is.
+  const floorAt =
+    info.kind === 'vessel'
+      ? {
+          latitude: geo.math.toDegrees(targetCartographic.latitude),
+          longitude: geo.math.toDegrees(targetCartographic.longitude),
+        }
+      : info;
   let cockpitFloorM = this.services.cachedGroundFloor(
-    info.latitude,
-    info.longitude,
+    floorAt.latitude,
+    floorAt.longitude,
   );
   if (info.onGround === true) {
     const groundPoint = [{ lat: info.latitude, lon: info.longitude }];
@@ -285,8 +514,8 @@ function placeCamera(target, info, nowMs, dtSec, profile) {
   );
   geo.cartesian3.normalize(this.scratchHorizontal, this.scratchHorizontal);
 
-  this.scratchLocal.x = Math.sin(headingRad) * Math.cos(pitchRad);
-  this.scratchLocal.y = Math.cos(headingRad) * Math.cos(pitchRad);
+  this.scratchLocal.x = Math.sin(viewHeadingRad) * Math.cos(pitchRad);
+  this.scratchLocal.y = Math.cos(viewHeadingRad) * Math.cos(pitchRad);
   this.scratchLocal.z = Math.sin(pitchRad);
   geo.matrix4.multiplyByPointAsVector(
     this.scratchEnu,
@@ -295,8 +524,8 @@ function placeCamera(target, info, nowMs, dtSec, profile) {
   );
   geo.cartesian3.normalize(this.scratchForward, this.scratchForward);
 
-  this.scratchLocal.x = -Math.sin(headingRad) * Math.sin(pitchRad);
-  this.scratchLocal.y = -Math.cos(headingRad) * Math.sin(pitchRad);
+  this.scratchLocal.x = -Math.sin(viewHeadingRad) * Math.sin(pitchRad);
+  this.scratchLocal.y = -Math.cos(viewHeadingRad) * Math.sin(pitchRad);
   this.scratchLocal.z = Math.cos(pitchRad);
   geo.matrix4.multiplyByPointAsVector(
     this.scratchEnu,

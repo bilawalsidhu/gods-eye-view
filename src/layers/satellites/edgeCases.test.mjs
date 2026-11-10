@@ -7,7 +7,7 @@ import * as geo from '../../geo/index.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createApplicationSatellites } from '../../app/layers/satellites.js';
 import { createSatellitesDisplay } from './render/display.js';
-import { appClock } from '../../time/clock.js';
+import { worldClock } from '../../time/worldClock.js';
 
 // Canonical archived ISS element set (epoch 2008-09-20 ~12:25 UTC).
 const ISS_TLE = `ISS (ZARYA)
@@ -50,7 +50,7 @@ test('edge:satellites: a scene switch at a stopped epoch keeps passes and coordi
     getElementById: () => null,
   });
   t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 0, 1) });
-  appClock.freeze(EPOCH_MS);
+  worldClock.seek(EPOCH_MS);
   let reads = 0;
   const layer = createApplicationSatellites({
     source: {
@@ -71,7 +71,7 @@ test('edge:satellites: a scene switch at a stopped epoch keeps passes and coordi
   const [first, second] = [createFakeEngine(), createFakeEngine()];
   t.after(() => {
     layer.destroy();
-    appClock.reset();
+    worldClock.goLive();
     globalThis.document = previousDocument;
   });
   await layer.init(null, { engine: first });
@@ -84,7 +84,7 @@ test('edge:satellites: a scene switch at a stopped epoch keeps passes and coordi
   assert.ok(before.passes[0].riseMs >= EPOCH_MS, 'passes start at the epoch');
 
   layer.detachRenderer();
-  // Wall time passes during the switch; the stopped app clock does not.
+  // Wall time passes during the switch; the stopped world clock does not.
   t.mock.timers.tick(15 * 60_000);
   layer.attachRenderer(null, { engine: second });
   const after = observe(layer, second);

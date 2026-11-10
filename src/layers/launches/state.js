@@ -1,5 +1,6 @@
 import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
   const { setEntries, setVisible, clearSource } = bindOverlayHost(
@@ -160,6 +161,38 @@ export function createState({ services }) {
   state._engine = null;
 
   state._missionRingDate = new Date(0);
+
+  /** The time the launch window ends at, in epoch ms. */
+
+  state.now = worldTimeFor('rocket-launches');
+
+  /** A launched mission's satellite flies on the satellites layer's time. */
+
+  state.orbitNow = worldTimeFor('satellites');
+
+  /** The launches loaded changed, and with them the time they cover. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
+
+  /**
+   * Whether a launch has yet to lift off at the world time. While live none
+   * has, so the layer shows every launch in its window as it always did.
+   */
+
+  state.launchPending = (launch) => {
+    if (worldClock.isLive()) return false;
+    const launchMs = Date.parse(launch?.launchTime);
+    return Number.isFinite(launchMs) && launchMs > state.now();
+  };
+
+  /** Whether a launch is hidden for lifting off after the world time. */
+
+  state.launchHidden = (launch) =>
+    launch?.id !== state._selectedLaunchId && state.launchPending(launch);
+
+  /** The launches hidden at the last frame, by id, to spot a change. */
+
+  state._pendingLaunchIds = new Set();
 
   state._pathDistanceCache = new WeakMap();
   state._sourceController = new AbortController();

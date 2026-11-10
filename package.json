@@ -83,6 +83,7 @@
     "@happy-dom/global-registrator": "^20.14.6",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/test-utils": "^2.5.1",
+    "flag-icons": "7.5.0",
     "happy-dom": "^20.14.6",
     "prettier": "3.9.6",
     "puppeteer": "^25.16.0",
@@ -97,6 +98,7 @@
     "./infrastructure/lod": "./src/data/localGeojsonLod.js",
     "./application": "./src/app/application.js",
     "./application/viewer": "./src/globe/cesium/viewer.js",
+    "./time": "./src/time/worldClock.js",
     "./build/vite": {
       "node": "./build/vite.js"
     },
@@ -104,6 +106,7 @@
       "node": "./server/providers/live.js"
     },
     "./sources/adsb-lol": "./src/data/adsbLolFallback.js",
+    "./sources/planespotters": "./src/data/planespottersPhoto.js",
     "./server/providers/places": {
       "node": "./server/providers/places.js"
     },

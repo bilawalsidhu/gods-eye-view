@@ -28,6 +28,21 @@ export function cockpitHost(engine, { viewer = null } = {}) {
     cartographic: () => engine.camera.pose().cartographic,
     terrainHeight: (place) => engine.surface.terrainHeight(place),
     surface: engine,
+    pick: (position) => engine.picker.pick(position),
+    // A full mesh read is still Cesium's; the contract's detailed read is
+    // loaded geometry only. Other engines combine it with full terrain.
+    sampleWaterline(probes) {
+      if (viewer?.scene.sampleHeightMostDetailed)
+        return viewer.scene.sampleHeightMostDetailed(probes);
+      return engine.surface.sampleTerrainMostDetailed(probes).then((terrain) =>
+        probes.map((probe, index) => {
+          const sample = engine.surface.sampleHeightDetailed(probe);
+          return {
+            height: sample?.source === 'tiles' ? sample.height : terrain[index],
+          };
+        }),
+      );
+    },
     // The cockpit holds the camera through a suspension of the user's
     // camera inputs: leaving it puts back whatever they were.
     inputs(enabled) {

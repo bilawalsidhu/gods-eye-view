@@ -416,8 +416,11 @@ export function createOverlays({
       false,
     );
     layerState._selectedMissionOverlayTimeText = null;
+    const records = [...layerState._missionOverlayRecords.values()].filter(
+      (record) => !layerState.launchHidden(record.launch),
+    );
     const entries = selectRocketMissionMarkerOverlayCohort(
-      Array.from(layerState._missionOverlayRecords.values(), (record) => {
+      records.map((record) => {
         const entry = createRocketMissionMarkerOverlayEntry(
           record.launch,
           record.anchorPosition,

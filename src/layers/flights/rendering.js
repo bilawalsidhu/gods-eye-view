@@ -1,4 +1,3 @@
-import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import { WHITE, CYAN, nearFarScale } from '../shared/color.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
@@ -806,7 +805,7 @@ export function createRendering({
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
     // Every contact in this pass shares the same delayed display instant.
-    const renderTime = appClock.now() - RENDER_DELAY_SEC * 1000;
+    const renderTime = flightState.now() - RENDER_DELAY_SEC * 1000;
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)

@@ -77,6 +77,7 @@ export function createTracking({
     onTrackStart(icao24) {
       parts.enrichment._requestTypeEnrichment(icao24, true); // tracked plane — front of the enrichment queue
       parts.enrichment._requestRouteEnrichment(icao24);
+      parts.enrichment._requestPhotoEnrichment(icao24);
     },
     // Grounded flights positions are already surface-clamped (the surfaceM
     // chain), so trail seeds/appends drape without a floor of their own.

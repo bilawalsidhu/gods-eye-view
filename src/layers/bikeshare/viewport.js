@@ -72,6 +72,11 @@ export function createViewport({ state: layerState, services, parts, camera }) {
     parts.display?.removeCityPoints(cityId);
   }
 
+  /** Repaint the row now: it follows the camera, the manager tick is 60 s. */
+  function refreshRow() {
+    layerState._dataManager?.refreshLayerStats?.('bikeshare');
+  }
+
   /** Deactivate all currently active cities and clear the active set. */
 
   function deactivateAllCities() {
@@ -81,6 +86,8 @@ export function createViewport({ state: layerState, services, parts, camera }) {
     // A failure belongs to a city in range; none are once everything is off.
     layerState._failedCityIds.clear();
     layerState._count = 0;
+    // Nothing is left on the map to date.
+    layerState._lastUpdate = null;
   }
 
   /**
@@ -162,9 +169,11 @@ export function createViewport({ state: layerState, services, parts, camera }) {
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude();
+    const wasGateEnabled = layerState._altitudeGateEnabled;
     // Altitude gate: disable all cities when camera is too high
     if (!shouldActivateAtAltitude(altitude)) {
       deactivateAllCities();
+      if (wasGateEnabled) refreshRow();
       return;
     }
 
@@ -179,15 +188,25 @@ export function createViewport({ state: layerState, services, parts, camera }) {
       }
     }
     // A failure never outlives its city's range.
+    let failureCleared = false;
     for (const cityId of layerState._failedCityIds) {
-      if (!nextActive.has(cityId)) layerState._failedCityIds.delete(cityId);
+      if (!nextActive.has(cityId)) {
+        layerState._failedCityIds.delete(cityId);
+        failureCleared = true;
+      }
     }
 
+    const changed =
+      !wasGateEnabled ||
+      failureCleared ||
+      nextActive.size !== layerState._activeCityIds.size ||
+      [...nextActive].some((cityId) => !layerState._activeCityIds.has(cityId));
     layerState._activeCityIds = nextActive;
-    if (layerState._activeCityIds.size === 0) {
+    if (nextActive.size === 0) {
       layerState._count = 0;
-      return;
+      layerState._lastUpdate = null;
     }
+    if (changed) refreshRow();
 
     // Only activate cities that don't already have rendered points
     const toActivate = [];
@@ -199,6 +218,9 @@ export function createViewport({ state: layerState, services, parts, camera }) {
     await Promise.all(
       toActivate.map((cityId) => activateCity(cityId, generation)),
     );
+    // Superseded loads repaint too: a newer check may have painted the row
+    // while this one was still loading, or found nothing to load itself.
+    if (layerState._enabled) refreshRow();
   }
 
   /** Schedule a debounced proximity check after camera movement. */

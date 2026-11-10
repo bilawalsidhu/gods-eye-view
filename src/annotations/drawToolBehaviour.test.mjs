@@ -215,7 +215,11 @@ function fakeAnnotations() {
 }
 
 /** Stand up a tool against fresh doubles, with globals restored afterwards. */
-function harness({ navigation = null, session = false } = {}) {
+function harness({
+  navigation = null,
+  session = false,
+  markActions = [],
+} = {}) {
   resetPointerOwnership();
   const { byId, documentDouble } = fakeDom();
   const { viewer, engine, primitive } = drawEngine();
@@ -230,6 +234,7 @@ function harness({ navigation = null, session = false } = {}) {
   const options = {
     annotations,
     navigation,
+    markActions,
     publish: (view) => (shown.view = view),
     connect: (actions) => {
       controls.actions = actions;
@@ -643,6 +648,272 @@ test('each drawn shape is a row whose actions reach the board, and fly-to is a n
   }
 });
 
+test("an application's row actions show on the shapes they are for and run with the shape", async () => {
+  const ran = [];
+  const h = harness({
+    markActions: [
+      {
+        id: 'tag',
+        icon: 'sell',
+        label: (name) => `Tag ${name}`,
+        shapes: ['area', 'line'],
+        run: (shape) => ran.push(['tag', shape]),
+      },
+      {
+        id: 'measure',
+        icon: 'straighten',
+        label: (name) => `Measure ${name}`,
+        shapes: ['area'],
+        accepts: (geometry) => geometry.type === 'Polygon',
+        run: (shape) => ran.push(['measure', shape]),
+      },
+    ],
+  });
+  try {
+    const board = h.annotations;
+    board.marks.push(
+      {
+        id: 'r1',
+        type: 'area',
+        manual: true,
+        name: 'Strait',
+        color: 'primary',
+        hidden: false,
+        ring: [
+          [29, 41],
+          [29.1, 41],
+          [29.1, 41.1],
+        ],
+      },
+      {
+        id: 'l1',
+        type: 'route',
+        manual: true,
+        name: null,
+        label: '9 km',
+        color: 'amber',
+        hidden: false,
+        path: [
+          { lon: 29, lat: 41.05, height: 0 },
+          { lon: 29.1, lat: 41.05, height: 0 },
+        ],
+      },
+      {
+        id: 'p1',
+        type: 'pin',
+        manual: true,
+        name: 'Camp',
+        color: 'red',
+        hidden: false,
+      },
+    );
+    board.changed();
+    assert.deepEqual(
+      h.shown.view.marks.map(({ id, actions }) => [id, actions]),
+      [
+        [
+          'r1',
+          [
+            { id: 'tag', icon: 'sell', label: 'Tag Strait' },
+            { id: 'measure', icon: 'straighten', label: 'Measure Strait' },
+          ],
+        ],
+        ['l1', [{ id: 'tag', icon: 'sell', label: 'Tag Line · 9 km' }]],
+        ['p1', []],
+      ],
+    );
+    assert.equal(h.act('runDrawMarkAction', 'l1', 'tag'), true);
+    assert.equal(
+      h.act('runDrawMarkAction', 'l1', 'measure'),
+      false,
+      'a line is not offered an area action',
+    );
+    assert.equal(h.act('runDrawMarkAction', 'p1', 'tag'), false);
+    assert.equal(h.act('runDrawMarkAction', 'gone', 'tag'), false);
+    assert.equal(h.act('runDrawMarkAction', 'r1', 'measure'), true);
+    assert.deepEqual(ran, [
+      [
+        'tag',
+        {
+          id: 'l1',
+          shape: 'line',
+          name: '',
+          title: 'Line · 9 km',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [29, 41.05],
+              [29.1, 41.05],
+            ],
+          },
+        },
+      ],
+      [
+        'measure',
+        {
+          id: 'r1',
+          shape: 'area',
+          name: 'Strait',
+          title: 'Strait',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [29, 41],
+                [29.1, 41],
+                [29.1, 41.1],
+                [29, 41],
+              ],
+            ],
+          },
+        },
+      ],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
+test('an action that throws is reported and leaves the row alone', async () => {
+  const h = harness({
+    markActions: [
+      {
+        id: 'boom',
+        icon: 'bolt',
+        label: () => {
+          throw new Error('label');
+        },
+        shapes: ['area'],
+        run: () => {
+          throw new Error('run');
+        },
+      },
+    ],
+  });
+  const warn = console.warn;
+  const warned = [];
+  console.warn = (...args) => warned.push(args[0]);
+  try {
+    h.annotations.marks.push({
+      id: 'r1',
+      type: 'area',
+      manual: true,
+      name: null,
+      color: 'primary',
+      hidden: false,
+      ring: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ],
+    });
+    h.annotations.changed();
+    assert.deepEqual(h.shown.view.marks[0].actions, [
+      { id: 'boom', icon: 'bolt', label: 'boom' },
+    ]);
+    assert.equal(h.act('runDrawMarkAction', 'r1', 'boom'), false);
+    assert.deepEqual(warned, ['[draw] boom failed']);
+  } finally {
+    console.warn = warn;
+    h.restore();
+  }
+});
+
+test("what a row action answers is its row's note; the row is busy until then, and a removed shape drops it", async () => {
+  const pending = [];
+  const h = harness({
+    markActions: [
+      {
+        id: 'measure',
+        icon: 'straighten',
+        label: (name) => `Measure ${name}`,
+        shapes: ['area'],
+        run: () =>
+          new Promise((resolve, reject) => pending.push({ resolve, reject })),
+      },
+      {
+        id: 'now',
+        icon: 'bolt',
+        label: () => 'Now',
+        shapes: ['area'],
+        run: () => '  12 km²  ',
+      },
+      {
+        id: 'long',
+        icon: 'notes',
+        label: () => 'Long',
+        shapes: ['area'],
+        run: () => `${'word '.repeat(60)}end`,
+      },
+    ],
+  });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const board = h.annotations;
+    const area = (id) => ({
+      id,
+      type: 'area',
+      manual: true,
+      name: null,
+      color: 'primary',
+      hidden: false,
+      ring: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ],
+    });
+    board.marks.push(area('r1'), area('r2'));
+    board.changed();
+    const row = (id) => h.shown.view.marks.find((entry) => entry.id === id);
+    assert.equal(h.act('runDrawMarkAction', 'r1', 'now'), true);
+    assert.deepEqual([row('r1').busy, row('r1').note], [false, '12 km²']);
+    h.act('runDrawMarkAction', 'r1', 'long');
+    assert.ok(
+      row('r1').note.length <= 200 && row('r1').note.endsWith('word…'),
+      'a long note is cut at a word',
+    );
+    assert.equal(h.act('runDrawMarkAction', 'r1', 'measure'), true);
+    assert.deepEqual([row('r1').busy, row('r1').note], [true, '']);
+    assert.equal(
+      h.act('runDrawMarkAction', 'r1', 'now'),
+      false,
+      'a busy row takes no second press',
+    );
+    pending[0].resolve('412 km², 38 km of edge');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(
+      [row('r1').busy, row('r1').note],
+      [false, '412 km², 38 km of edge'],
+    );
+    h.act('runDrawMarkAction', 'r1', 'measure');
+    pending[1].reject(new Error('refused'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(
+      [row('r1').busy, row('r1').note],
+      [false, ''],
+      'a failure clears the note',
+    );
+    h.act('runDrawMarkAction', 'r2', 'measure');
+    board.marks.splice(1, 1);
+    board.changed();
+    pending[2].resolve('late');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(row('r2'), undefined);
+    board.marks.push(area('r2'));
+    board.changed();
+    assert.deepEqual(
+      [row('r2').busy, row('r2').note],
+      [false, ''],
+      'a late answer never reaches a shape that went',
+    );
+  } finally {
+    console.warn = warn;
+    h.restore();
+  }
+});
+
 test('Backspace on the page removes the last vertex', () => {
   const h = harness();
   try {
@@ -747,6 +1018,43 @@ test('an engine switch ends an open sketch and keeps the chosen shape and colour
     await handle.destroy();
     assert.equal(isPointerFree(), true);
     assert.equal(globalThis.window.__gevDrawTool, undefined);
+  } finally {
+    h.restore();
+  }
+});
+
+test('session row actions survive an engine switch and answer through the kept handle', async () => {
+  const h = harness({
+    session: true,
+    markActions: [
+      {
+        id: 'measure',
+        icon: 'straighten',
+        label: () => 'Measure',
+        shapes: ['area'],
+        run: () => '12 km²',
+      },
+    ],
+  });
+  try {
+    h.annotations.marks.push({
+      id: 'area',
+      type: 'area',
+      manual: true,
+      ring: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ],
+    });
+    h.annotations.changed();
+    assert.equal(h.tool.runMarkAction('area', 'measure'), true);
+    assert.equal(h.tool.marks()[0].note, '12 km²');
+    await h.tool.detachScene();
+    assert.equal(h.tool.runMarkAction('area', 'measure'), false);
+    h.tool.attachScene({ engine: h.engine });
+    assert.equal(h.act('runDrawMarkAction', 'area', 'measure'), true);
+    assert.equal(h.tool.marks()[0].note, '12 km²');
   } finally {
     h.restore();
   }

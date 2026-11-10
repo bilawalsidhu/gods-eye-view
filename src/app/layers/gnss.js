@@ -1,5 +1,6 @@
 import { rendererFor } from './renderers.js';
 import { createGnssIntegrityLayer } from '../../layers/gnss/index.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 
 /**
  * Wire the adsb.lol GNSS navigation-integrity layer into the application
@@ -9,6 +10,7 @@ import { createGnssIntegrityLayer } from '../../layers/gnss/index.js';
 export function createApplicationGnssIntegrity(options) {
   return createGnssIntegrityLayer({
     rendererFactory: ({ engine }) => rendererFor('gnss-integrity', engine),
+    worldNow: worldTimeFor('gnss-integrity'),
     ...options,
   });
 }

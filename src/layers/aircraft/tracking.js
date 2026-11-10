@@ -1,7 +1,6 @@
 import { bindOverlayHost } from '../../overlays/bindOverlayHost.js';
 import * as geo from '../../geo/index.js';
 import { nearFarScale } from '../shared/color.js';
-import { appClock } from '../../time/clock.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
 import {
@@ -520,7 +519,7 @@ export function createAircraftTracking({
     // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
     // would draw the trail in front of the plane. They join the trail via _appendTrailFix
     // as they age past the delay.
-    const seedRenderTimeMs = appClock.now() - RENDER_DELAY_SEC * 1000;
+    const seedRenderTimeMs = flightState.now() - RENDER_DELAY_SEC * 1000;
     for (const fix of history) {
       if (fix.timeMs <= seedRenderTimeMs) {
         const seed = geo.cartesian3.clone(fix.position);

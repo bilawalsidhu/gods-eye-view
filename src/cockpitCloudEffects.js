@@ -283,6 +283,18 @@ export class CockpitWeatherFeed {
 }
 
 /**
+ * Whether the cloud pass runs for a Cockpit subject's layer. Not in orbit:
+ * the pass fades out above 24 km (weatherAltitudeFactors), so a satellite
+ * would pay for it and see nothing. The saved preference is left as it is
+ * for the next aircraft or bridge; cloud cover from orbit is the Weather
+ * layer's.
+ * @param {string|null|undefined} layerId
+ */
+export function cockpitCloudsShowFor(layerId) {
+  return layerId !== 'satellites';
+}
+
+/**
  * Weather-backed volumetric cloud pass that exists only while cockpit mode is
  * active. It owns no Cesium fog/post-process stages and cannot affect map mode.
  */
@@ -315,11 +327,13 @@ class CockpitCloudEffectsController {
     this.enabled = this.readEnabledPreference();
 
     this.onResize = () => this.resize();
+    this.orbit = false;
     this.onCockpitMode = (event) => {
       const active =
         event?.detail?.active ??
         document.body.classList.contains('cockpit-mode');
-      if (active && this.enabled) this.start();
+      this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
+      if (active && this.enabled && !this.orbit) this.start();
       else this.stop();
     };
     this.onEnabledChange = (event) => {
@@ -455,7 +469,8 @@ class CockpitCloudEffectsController {
       this.destroyed ||
       !this.enabled ||
       this.frame !== null ||
-      this.suspended
+      this.suspended ||
+      this.orbit
     )
       return;
     if (!this.gl) {
@@ -699,11 +714,13 @@ class EngineCockpitCloudsController {
     this.suspended = false;
     this.destroyed = false;
     this.enabled = this.readEnabledPreference();
+    this.orbit = false;
     this.onCockpitMode = (event) => {
       const active =
         event?.detail?.active ??
         document.body.classList.contains('cockpit-mode');
-      if (active && this.enabled) this.start();
+      this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
+      if (active && this.enabled && !this.orbit) this.start();
       else this.stop();
     };
     this.onEnabledChange = (event) => {
@@ -784,7 +801,14 @@ class EngineCockpitCloudsController {
   }
 
   start() {
-    if (this.destroyed || !this.enabled || this.suspended || this.timer) return;
+    if (
+      this.destroyed ||
+      !this.enabled ||
+      this.suspended ||
+      this.orbit ||
+      this.timer
+    )
+      return;
     // The first observation at once, then the refresh rule every second
     // (time or movement), as the Cesium pass checks it.
     this.timer = window.setInterval(() => this.check(), 1000);

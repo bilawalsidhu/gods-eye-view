@@ -75,6 +75,16 @@ test('vessel logic draws and selects through a plain renderer on an engine, with
     assert.equal(sprite.scale, 0.6 * 1.2);
     assert.equal(sprite.image, vesselChevronIcon('#ffffff', true));
 
+    layer.setCockpitSubject('111');
+    assert.equal(sprite.show, false, 'the bridge hides its own vessel');
+    assert.equal(layer.getCockpitSubject()?.mmsi, '111');
+    engine.fake.script('pick', () => undefined);
+    engine.fake.input('click', { position: { x: 500, y: 10 } });
+    assert.equal(layer.getSelectedInfo()?.mmsi, '111');
+    engine.fake.script('pick', () => ({ id: sprite.id }));
+    layer.setCockpitSubject(null);
+    assert.equal(sprite.show, true, 'leaving the bridge restores the vessel');
+
     // Another layer takes the camera: the selection goes.
     recording.raiseFollow(true);
     assert.equal(layer.getSelectedInfo(), null);

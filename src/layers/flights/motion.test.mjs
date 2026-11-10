@@ -1,4 +1,3 @@
-import { appClock } from '../../time/clock.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -13,6 +12,7 @@ function fixture() {
     _scratchArc: {},
     _scratchOffset: new Cesium.Cartesian3(),
     _scratchRenderTime: new Cesium.JulianDate(),
+    now: Date.now,
   };
   const motion = createMotion({
     flightState,
@@ -117,7 +117,7 @@ test('fleet render time is shared without resampling or mutating the supplied in
     flightState.records.data.set(id, { velocity: 100, true_track: 90 });
     flightState._positionHistory.set(id, history);
   }
-  t.mock.method(appClock, 'now', () => {
+  t.mock.method(flightState, 'now', () => {
     throw new Error('unexpected per-contact clock read');
   });
   const expected = Cesium.Cartesian3.lerp(
@@ -133,7 +133,7 @@ test('fleet render time is shared without resampling or mutating the supplied in
     );
 });
 
-test('tracked callers still sample a fresh delayed time without a fleet epoch', (t) => {
+test('tracked callers still sample a fresh delayed time without a fleet epoch', () => {
   const { flightState, motion } = fixture();
   const start = Date.parse('2026-10-24T12:00:00Z');
   const history = [
@@ -151,9 +151,11 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
   flightState.records.data.set('tracked', { velocity: 100, true_track: 90 });
   flightState._positionHistory.set('tracked', history);
   let elapsed = 60;
-  const spy = t.mock.method(appClock, 'now', (result) => {
+  let reads = 0;
+  flightState.now = () => {
+    reads += 1;
     return start + elapsed * 1000;
-  });
+  };
   const out = new Cesium.Cartesian3();
   close(
     motion._deadReckon('tracked', out),
@@ -174,5 +176,5 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
       new Cesium.Cartesian3(),
     ),
   );
-  assert.equal(spy.mock.callCount(), 2);
+  assert.equal(reads, 2);
 });

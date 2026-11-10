@@ -161,6 +161,9 @@ export function createProjection({
 
   function createProjectionRuntime(record) {
     if (!parts.renderer?.ready) return null;
+    // Québec 511 denies CORS pixel access; Québec map previews are native DOM
+    // videos positioned over the globe, never video textures.
+    if (parts.model.isBrowserOverlayCamera(record.camera)) return null;
     const canvas = document.createElement('canvas');
     canvas.width = PROJECTION_CANVAS_WIDTH;
     canvas.height = PROJECTION_CANVAS_HEIGHT;

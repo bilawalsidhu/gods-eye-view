@@ -6,8 +6,11 @@ import {
   flyCelestialViewer,
 } from './globe/cesium/celestial.js';
 import { createCelestialEphemeris } from './celestialRing/ephemeris.js';
-import { appClock } from './time/clock.js';
 import { renderGovernorFor } from './renderGovernor.js';
+import { worldClock, worldTimeFor } from './time/worldClock.js';
+
+// The ring shows the sun and moon at the time the sky is drawn.
+const skyTime = worldTimeFor('sky');
 
 /** Outer edge of the existing NVG/FLIR keyhole in normalized shader space. */
 export const KEYHOLE_OUTER_RADIUS = 1.05;
@@ -36,6 +39,9 @@ export const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
  */
 export const KEYHOLE_OUTSIDE_OPACITY_DEFAULT = 0.01;
 
+// How far the world time moves before the sun and moon move with it: a
+// minute moves the sun a quarter of a degree.
+const EPHEMERIS_WORLD_STEP_MS = 60_000;
 const RING_INSET_PX = 11;
 const MARKER_INSET_PX = 36;
 const COLLIDING_MARKER_EXTRA_INSET_PX = 32;
@@ -466,6 +472,18 @@ export class CelestialRing {
       if (typeof document !== 'undefined' && document.hidden) return;
       this._renderGovernor?.governorRequestRender('celestial-ephemeris');
     }, 60_000);
+    // A jump in the world time moves the sun and moon at once.
+    // Played through, the sky moves on each minute of world time it passes.
+    this._ephemerisWorldMs = null;
+    this._unsubscribeWorldTime = worldClock.subscribe(({ timeMs }) => {
+      if (
+        this._ephemerisWorldMs !== null &&
+        Math.abs(timeMs - this._ephemerisWorldMs) < EPHEMERIS_WORLD_STEP_MS
+      )
+        return;
+      this._ephemerisWorldMs = timeMs;
+      this._ephemerisDirty = true;
+    });
     this.setEnabled(this.enabled);
   }
 
@@ -807,9 +825,7 @@ export class CelestialRing {
       return;
     }
 
-    // The sun and moon at the app clock's now (the wall clock unless QA
-    // moves it), as Navara's sun.
-    const time = appClock.now();
+    const time = skyTime();
     if (!this._updateEphemeris(time)) return;
     this._present({ ephemerisUpdates: String(this._ephemerisUpdateCount) });
     const camera = this.viewer.camera;
@@ -898,6 +914,8 @@ export class CelestialRing {
       clearInterval(this._ephemerisTimer);
       this._ephemerisTimer = null;
     }
+    this._unsubscribeWorldTime?.();
+    this._unsubscribeWorldTime = null;
     if (this._removePostRender) this._removePostRender();
     this._removePostRender = null;
     if (this._shown()) {

@@ -239,11 +239,11 @@ function satisfiesEngines(version, range) {
  * re-resolve the interpreter from PATH and hand the gate a different Node than
  * the one the check believes it selected.
  * @param {string} version e.g. "v24.19.0"
- * @returns {boolean} true only for a parseable Node 24.
+ * @returns {boolean} true for a parseable supported Node 24 or 26.
  */
 function isCalibratedAllocationRuntime(version) {
   const [maj] = String(version || '').trim().replace(/^v/, '').split('.').map((n) => Number.parseInt(n, 10));
-  return maj === 24;
+  return maj === 24 || maj === 26;
 }
 
 /**
@@ -546,7 +546,7 @@ const check = (spec) => { CHECKS.push(spec); };
 
 // ─── A · REPO GATES ───────────────────────────────────────────────────────
 check({
-  id: 'A1', group: 'A', desc: 'Node runtime satisfies package.json engines (allocation budgets are pinned to Node 24)',
+  id: 'A1', group: 'A', desc: 'Node runtime satisfies package.json engines (allocation budgets cover supported Node majors)',
   run: async () => {
     const pkg = JSON.parse(readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf8'));
     const range = pkg.engines?.node || '(unset)';
@@ -557,7 +557,7 @@ check({
     if (satisfied) return pass(`node ${process.versions.node} satisfies "${range}"`);
     // An off-range runtime is an environment problem, not a product defect —
     // but it silently disables the allocation gate, so say so loudly. A3 then
-    // runs that gate under a discovered Node 24.
+    // runs that gate under a discovered calibrated Node 24 fallback.
     return env.node24
       ? skip(`node ${process.versions.node} is OUTSIDE "${range}"; A3 runs the allocation gate under ${env.node24.label}, but prefer running the whole L9 pass on Node 24`, 'ENV')
       : fail(`node ${process.versions.node} is OUTSIDE "${range}" and no Node 24 runtime was found — the allocation gate cannot run at all`);
@@ -579,13 +579,13 @@ check({
 });
 
 check({
-  id: 'A3', group: 'A', desc: 'Allocation microbenchmarks actually EXECUTE (they silently skip off Node 24)',
+  id: 'A3', group: 'A', desc: 'Allocation microbenchmarks actually EXECUTE on supported Node majors',
   run: async () => {
     // npm test prints "[unit] SKIPPED n allocation microbenchmarks" and still
-    // exits 0 when the runtime is not Node 24. A green suite is therefore NOT
-    // proof the gate ran. Force it, under Node 24 when one is discoverable.
+    // exits 0 when the runtime is outside the calibrated supported majors. A green
+    // suite is therefore NOT proof the gate ran. Force it under a calibrated runtime.
     //
-    // ALWAYS invoke the Node 24 BINARY directly — never `npm test`. npm
+    // ALWAYS invoke the calibrated Node binary directly — never `npm test`. npm
     // re-resolves the interpreter from PATH and can land back on the system
     // Node even when THIS process is already 24: running the whole matrix under
     // `mise exec node@24.19.0 --`, the npm shell-out still re-execed system
@@ -597,10 +597,10 @@ check({
       const v = await sh(bin, ['--version'], { timeoutMs: 60000 });
       const version = (v.out || '').trim();
       if (!isCalibratedAllocationRuntime(version)) {
-        // run-unit-tests.mjs refuses to measure calibrated budgets off Node 24,
+        // run-unit-tests.mjs refuses to measure calibrated budgets off supported Node majors,
         // so a wrong binary means the gate never ran. That is this check failing
         // to establish its own claim — not evidence about the product.
-        return crash(`the runtime selected for the allocation gate (${label}) reports ${version || 'no parseable version'}, not Node 24 — the gate would refuse or silently skip, so this check verified nothing`);
+        return crash(`the runtime selected for the allocation gate (${label}) reports ${version || 'no parseable version'}, not Node 24 or 26 — the gate would refuse or silently skip, so this check verified nothing`);
       }
       const r = await sh(bin, [resolve(REPO_ROOT, 'scripts/run-unit-tests.mjs')], {
         timeoutMs: 600000, env: { GEV_REQUIRE_ALLOCATION_GATE: '1' },
@@ -611,9 +611,9 @@ check({
     };
 
     const [maj] = process.versions.node.split('.').map(Number);
-    if (maj === 24) return runGate(process.execPath, 'this runtime');
+    if (maj === 24 || maj === 26) return runGate(process.execPath, 'this runtime');
     if (env.node24) return runGate(env.node24.bin, env.node24.label);
-    return skip(`no Node 24 runtime found (running ${process.versions.node}); the gate SKIPS silently — install Node 24 and re-run`, 'OWNER-RUN');
+    return skip(`no calibrated Node 24/26 runtime found (running ${process.versions.node}); the gate SKIPS silently — install a supported Node runtime and re-run`, 'OWNER-RUN');
   },
 });
 

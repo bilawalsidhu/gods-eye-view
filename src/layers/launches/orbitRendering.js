@@ -1,4 +1,3 @@
-import { appClock } from '../../time/clock.js';
 import * as geo from '../../geo/index.js';
 import { rgbaFromCss } from '../shared/color.js';
 export function createOrbitRendering({
@@ -11,6 +10,9 @@ export function createOrbitRendering({
     return Boolean(
       layerState._enabled &&
       getRenderer()?.visible() &&
+      !layerState.launchHidden(
+        layerState._missionOverlayRecords.get(launchId)?.launch,
+      ) &&
       (!layerState._selectedLaunchId ||
         layerState._selectedLaunchId === launchId),
     );
@@ -52,7 +54,7 @@ export function createOrbitRendering({
       return false;
     const modelMatrix = orbitFrameModelMatrix(
       satelliteTrack.gmstAtBake,
-      new Date(appClock.now()),
+      new Date(layerState.orbitNow()),
       geo.matrix4.clone(geo.matrix4.IDENTITY),
     );
     // The live ring is not picked (as Cesium's polyline collection).

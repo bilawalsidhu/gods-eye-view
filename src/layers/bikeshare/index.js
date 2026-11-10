@@ -85,6 +85,7 @@ export function createBikeshareLayer({ services, source, rendererFactory }) {
       try {
         return renderer?.destroy(...args);
       } finally {
+        state._dataManager = null;
         renderer = null;
         initialized = false;
         parts.display = null;

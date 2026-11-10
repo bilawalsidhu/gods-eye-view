@@ -90,6 +90,9 @@ export function createSelection({
     // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
     if (!isPointerFree()) return;
     if (!state.feed.enabled) return;
+    // The bridge view owns the selection: a click on open water must not
+    // deselect the vessel the camera is riding.
+    if (state.cockpitSubjectMmsi) return;
     const picked = click.picked;
     const pickedId = resolvePickId(picked);
     let record = pickedId ? state.records.byMmsi.get(pickedId) : null;

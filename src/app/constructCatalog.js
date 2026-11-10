@@ -1,5 +1,6 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
+import { worldClock } from '../time/worldClock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
@@ -83,7 +84,8 @@ export function createApplicationCatalog({
   sources = sourceComposition.sources;
   const militaryRegistry =
     layerSession?.militaryRegistry ?? createMilitaryRegistry();
-  const weatherClock = layerSession?.weatherClock ?? createWeatherClock();
+  const weatherClock =
+    layerSession?.weatherClock ?? createWeatherClock({ world: worldClock });
   if (layerSession && !layerSession.weatherClock) {
     layerSession.weatherClock = weatherClock;
     layerSession.lifetime.signal.addEventListener(

@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { createTracking as createFlightsTracking } from '../flights/tracking.js';
 import { createTracking as createMilitaryTracking } from '../military/tracking.js';
+import { RENDER_DELAY_SEC as FLIGHT_DELAY_SEC } from '../flights/policy.js';
+import { RENDER_DELAY_SEC as MILITARY_DELAY_SEC } from '../military/policy.js';
 
 // Both observed aircraft layers build their tracking from the shared aircraft
 // tracking; each must still reach it with its own identity and rules.
 const LAYERS = [
   {
     name: 'flights',
+    delaySec: FLIGHT_DELAY_SEC,
     createTracking: createFlightsTracking,
     layerId: 'flights',
     layerName: 'Live Flights',
@@ -19,6 +22,7 @@ const LAYERS = [
   },
   {
     name: 'military',
+    delaySec: MILITARY_DELAY_SEC,
     createTracking: createMilitaryTracking,
     layerId: 'military',
     layerName: 'Military Flights',
@@ -121,6 +125,25 @@ for (const layer of LAYERS) {
       Math.abs(height - (layer.floorsTrail ? GROUND_M : 10)) < 0.01,
       `trail height ${height}`,
     );
+  });
+
+  test(`${layer.name} trail seeds only fixes behind its delayed layer clock`, () => {
+    const { tracking, flightState } = harness(layer);
+    const cutoffMs = Date.parse('2026-10-24T12:00:00Z');
+    const history = [-1000, 0, 1000].map((offset, index) => ({
+      timeMs: cutoffMs + offset,
+      position: geo.cartesian3.fromDegrees(-97 + index * 0.01, 30, 1000),
+    }));
+    flightState.now = () => cutoffMs + layer.delaySec * 1000;
+    flightState._positionHistory = new Map([['abc123', history]]);
+    flightState._renderer = null;
+    tracking._startTrail('abc123');
+    assert.deepEqual(
+      flightState._trailPositions,
+      history.slice(0, 2).map((fix) => fix.position),
+    );
+    assert.notEqual(flightState._trailPositions[0], history[0].position);
+    flightState.lifetime.abort();
   });
 
   test(`${layer.name} backfill places and thins history by its own rules`, async () => {

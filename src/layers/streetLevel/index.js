@@ -8,6 +8,7 @@ import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
 import { filtersOf, requiresKeyIdFor, validateProviders } from './registry.js';
 import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 import { decodeParams, encodeParams } from './params.js';
 import {
   composeUIState,
@@ -44,6 +45,9 @@ const GROUND_RETRY_MS = 1000;
  * registry), else render/display.js; a display of null draws nothing.
  * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
  */
+// "Since N days" counts back from the world time.
+const streetLevelTime = worldTimeFor(STREET_LEVEL_LAYER_ID);
+
 export function createStreetLevelLayer({
   providers: definitions,
   services = {},
@@ -106,7 +110,7 @@ export function createStreetLevelLayer({
         },
       },
       /** Resolved against now, so "since N days" keeps up with the clock. */
-      getFilter: () => resolveFilter(state.filter),
+      getFilter: () => resolveFilter(state.filter, streetLevelTime()),
       /** The layer and this provider's switch are both on. */
       isActive: () => state.enabled && entry.on,
       waitingForView: () => waitingForView,
@@ -384,7 +388,7 @@ export function createStreetLevelLayer({
     const filter = normalizeFilter(next, state.filter);
     if (sameFilter(filter, state.filter)) return;
     state.filter = filter;
-    const resolved = resolveFilter(filter);
+    const resolved = resolveFilter(filter, streetLevelTime());
     for (const entry of state.providers.values())
       entry.instance.setFilter(resolved);
     notify();

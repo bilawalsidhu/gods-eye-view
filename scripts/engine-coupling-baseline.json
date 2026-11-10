@@ -3,14 +3,14 @@
     "cesiumLayerRendererLines": 0,
     "navaraLayerRendererLines": 0,
     "cesiumImportFiles": 3,
-    "viewerLines": 750,
+    "viewerLines": 784,
     "navaraKindChecks": 1,
     "engineSniffCalls": 0,
     "engineExtensionReads": 3,
     "groundEffectPasses": 0,
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 2,
-    "engineNameLines": 27
+    "engineNameLines": 21
   },
-  "measuredAt": "One selection path and test level"
+  "measuredAt": "Orbital cockpit and bridge mesh sampling"
 }

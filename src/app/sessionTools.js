@@ -88,6 +88,7 @@ export function sessionDrawTool({
   layerSession,
   annotations,
   styleManager,
+  markActions = [],
   defer,
 }) {
   const { displayStore, connectDisplay } = displayControls();
@@ -97,6 +98,7 @@ export function sessionDrawTool({
       navigation: styleManager,
       publish: (view) => displayStore.publishDraw(view),
       connect: connectDisplay,
+      markActions,
     }),
   );
 }

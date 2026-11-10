@@ -113,7 +113,8 @@ function setup(
       credits: {
         registerDynamicCredit: (target, credit) =>
           credits.push([target, credit]),
-        transitFeedCredit: (feed) => ({
+        transitFeedCredit: (feed, timestamps) => ({
+          timestamps,
           key: `transit-${feed.id}`,
           html: feed.name,
         }),
@@ -458,6 +459,9 @@ for (const makeHarness of HARNESSES) {
     f.display.addCredit({ id: 'mbta', name: 'MBTA' });
     assert.equal(f.credits[0][0], f.engine);
     assert.equal(f.credits[0][1].key, 'transit-mbta');
+    const timestamps = { feedTimestamp: 123, fetchedAt: 456 };
+    f.display.addCredit({ id: 'mbta', name: 'MBTA' }, timestamps);
+    assert.deepEqual(f.credits[1][1].timestamps, timestamps);
     f.display.destroy();
     assert.equal(f.engine.camera.changed.numberOfListeners, listeners.changed);
     assert.equal(

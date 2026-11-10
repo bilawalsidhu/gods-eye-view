@@ -11,6 +11,13 @@ import AwarenessNames from './AwarenessNames.vue';
 const { awareness: view, awarenessLayer: layer } = storeToRefs(useContextStore());
 const user = { origin: 'user' };
 const root = ref(null);
+// A photo whose image failed to load stays hidden until another one arrives.
+// The failing image's own src is recorded, so a late error from a previous
+// photo never hides the current one.
+const failedPhoto = ref('');
+const fail = (event) => {
+  failedPhoto.value = event.target.getAttribute('src');
+};
 
 // A live repaint keeps focus on the same control by identity: browsers drop
 // focus from a node Vue moves, removes or disables, so the control is found
@@ -52,6 +59,10 @@ onUpdated(() => {
     </div>
     <template v-else-if="view.kind === 'results'">
       <div class="military-awareness-subject">{{ view.subject }}</div>
+      <a v-if="view.photo && view.photo.src !== failedPhoto" class="military-awareness-photo" :href="view.photo.link" target="_blank" rel="noopener">
+        <img :src="view.photo.src" :width="view.photo.width ?? undefined" :height="view.photo.height ?? undefined" alt="" @error="fail" />
+        <small>{{ view.photo.credit }}</small>
+      </a>
       <AwarenessNames v-if="view.subjectNames" :names="view.subjectNames" />
       <div class="military-awareness-controls" role="group" :aria-label="view.navigation.label">
         <button type="button" data-awareness-action="previous" :title="view.navigation.previous.title" :disabled="view.navigation.previous.disabled" @click="layer?.navigatePrevious(user)">{{ view.navigation.previous.text }}</button>

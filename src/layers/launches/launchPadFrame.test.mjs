@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
-import { appClock } from '../../time/clock.js';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 import { createLaunchPad } from './launchPad.js';
 test('selected pad frame uses neutral geometry and the physical orbit epoch', () => {
   const launch = { id: 'qa', lon: -80.6, lat: 28.6 };
@@ -9,6 +9,7 @@ test('selected pad frame uses neutral geometry and the physical orbit epoch', ()
     created = 0,
     epoch;
   const state = {
+    orbitNow: worldTimeFor('satellites'),
     _engine: {
       camera: {
         livePosition: geo.cartesian3.fromDegrees(launch.lon, launch.lat, 500),
@@ -47,7 +48,7 @@ test('selected pad frame uses neutral geometry and the physical orbit epoch', ()
     },
   };
   try {
-    appClock.freeze(123000);
+    worldClock.seek(123000);
     createLaunchPad({
       state,
       services: {},
@@ -60,6 +61,6 @@ test('selected pad frame uses neutral geometry and the physical orbit epoch', ()
     assert.equal(state._launchPadZonePrimitive.show, true);
     assert.equal(epoch, 123000);
   } finally {
-    appClock.reset();
+    worldClock.goLive();
   }
 });

@@ -20,6 +20,16 @@ import { t, msg, formatDate } from '../i18n/index.js';
 import { localizeLayerName } from './layerNames.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
+import { isWorldTime, worldClock } from '../time/worldClock.js';
+
+// A link made away from live opens at its world time, paused. One without a
+// world time leaves the clock as it is: a page opens live, and Back or Forward
+// through long-form hashes (which never carry one) does not stop a replay.
+function applySharedWorldTime(state) {
+  if (!isWorldTime(state?.worldTime)) return;
+  worldClock.pause();
+  worldClock.seek(state.worldTime);
+}
 
 /** How long a shared vessel may take to appear in the vessel feed. */
 export const SHARED_VESSEL_WAIT_MS = 120_000;
@@ -166,6 +176,7 @@ export class ShareRestoration {
       : Promise.resolve({ status: 'not-requested', share: null, layers: [] });
     if (savedState) {
       this._hasShareState = true;
+      applySharedWorldTime(savedState);
       // Reserve camera authority now; the delayed mesh-friendly flight may
       // run only if no newer user, voice, or tracking navigation has won.
       this._initialShareNavigationGeneration =
@@ -339,6 +350,7 @@ export class ShareRestoration {
       layers: [],
     });
     this._initialShareState = state;
+    applySharedWorldTime(state);
     this._initialShareSelectionSuperseded = false;
     this._hasShareState = true;
     this._navigatedShareRestoreActive = true;

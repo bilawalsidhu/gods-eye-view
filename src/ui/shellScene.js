@@ -152,6 +152,9 @@ export class ShellScene extends ShellFacade {
       services: {
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
+        aisLiveVesselsLayer: services.aisLiveVesselsLayer,
+        satellitesLayer: services.satellitesLayer,
+        militaryInstallationsLayer: services.militaryInstallationsLayer,
         isTr3b: services.isTr3b,
         toggleTr3b: services.toggleTr3b,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
@@ -166,6 +169,11 @@ export class ShellScene extends ShellFacade {
         fetchRegionalBrief: services.fetchRegionalBrief,
         regionalDistanceM: services.regionalDistanceM,
         weatherCodeLabel: services.weatherCodeLabel,
+        acquireOrbitImagery: () =>
+          this.mapStackController?.acquireImageryComparison?.({
+            owner: 'cockpit-orbit',
+            switchPolicy: 'esri-if-photoreal',
+          }) ?? null,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -191,6 +199,10 @@ export class ShellScene extends ShellFacade {
             useCockpitStore(applicationPinia()).publishVision(view),
           signals: (rows) =>
             useCockpitStore(applicationPinia()).publishSignals(rows),
+          radar: (view) =>
+            useCockpitStore(applicationPinia()).publishRadar(view),
+          orbital: (view) =>
+            useCockpitStore(applicationPinia()).publishOrbital(view),
           utilityLayout: (layout) =>
             useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
         },
@@ -344,6 +356,7 @@ export class ShellScene extends ShellFacade {
       this._initSceneOverlays();
       this._initMapStackControl();
       this._refreshLayerControls(previousServices);
+      this._cctvControls?.attachEngine(engine);
       this._initCameraOrientationControls();
       this._initHudScene();
       this._initCockpitDisplayPortal();
@@ -414,6 +427,7 @@ export class ShellScene extends ShellFacade {
     this._visualSettings.releaseIrBoost();
     this._cockpitCoordinator.destroy();
     this._layerBindings.disconnect();
+    this._cctvControls?.attachEngine(null);
     destroyTrackedReadout(this._scene.engine);
     destroyDetection();
     worldOverlayFor(this._scene.engine).destroy();

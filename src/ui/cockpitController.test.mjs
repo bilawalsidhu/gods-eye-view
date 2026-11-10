@@ -59,6 +59,32 @@ test('Cockpit subscriptions are released once and retained actions cannot restar
   }
 });
 
+test('without a Cesium viewer orbital entry stays hidden and has no side effects', () => {
+  const env = environment();
+  try {
+    const owner = new CockpitViewController(env.engine, {
+      services: {
+        flightsLayer: { getTrackedInfo: () => null },
+        militaryFlightsLayer: { getTrackedInfo: () => null },
+        satellitesLayer: {
+          getCockpitSubject: () => ({ noradId: 25544, layerId: 'satellites' }),
+          setCockpitSubject: () => assert.fail('no satellite may be hidden'),
+        },
+        isTr3b: () => false,
+      },
+      isOrbitEntryAllowed: () => true,
+    });
+    owner.syncEntry();
+    assert.equal(owner.presence.entryAvailable, false);
+    assert.equal(owner.enter({ kind: 'satellite' }), false);
+    assert.equal(owner.orbital, null);
+    assert.equal(env.engine.input.cameraInputsEnabled(), true);
+    owner.dispose();
+  } finally {
+    env.restore();
+  }
+});
+
 test('disposing an active Cockpit releases the supplied render owner without retracking', () => {
   const env = environment();
   try {

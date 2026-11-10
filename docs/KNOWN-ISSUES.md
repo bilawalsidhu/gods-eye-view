@@ -10,6 +10,24 @@ For the roadmap and open backlog, see the repository issue tracker.
 
 ## Open
 
+### Orbital cockpit is unavailable on Navara
+
+Status: Open (Cesium only)
+
+The Navara engine does not offer the satellite cockpit, including sensor
+zoom, ground focus and satellite switching. Satellites can still be selected
+and tracked on the globe. The orbital entry control stays hidden. Switch to
+Cesium to use the orbital cockpit.
+
+### Ship bridge waterline uses loaded geometry on Navara
+
+Status: Open (terrain fallback)
+
+Navara's ship bridge samples loaded mesh geometry and detailed terrain for
+the waterline. It does not request the finest mesh detail around the ship,
+so the bridge height can differ while nearby tiles load. Cesium retains its
+finest-detail mesh sampling.
+
 ### Wildlife grid relies on the iNaturalist UTFGrid cell schema
 
 Status: Open (guarded fallback)

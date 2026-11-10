@@ -10,6 +10,8 @@ export function createInteraction({
   const { resolvePickId, isOwnedByOtherLayer } = services.picking;
 
   function _onKeyDown(e) {
+    // The Cockpit owns Escape while it rides the tracked satellite.
+    if (parts.cockpit?._cockpitHeld()) return;
     if (layerState._enabled && e.key === 'Escape' && layerState._trackedNorad) {
       parts.tracking._cancelPendingTrackingRestore();
       parts.tracking._clearTracking(false, { origin: 'user' });
@@ -34,7 +36,8 @@ export function createInteraction({
             ((getRenderer().follow.current() &&
               getRenderer().follow.current() !== layerState._trackedEntity) ||
               (!getRenderer().follow.current() &&
-                !getRenderer().follow.releasing()))
+                !getRenderer().follow.releasing() &&
+                !parts.cockpit?._cockpitHeld()))
           ) {
             parts.tracking._clearTracking(true, {
               origin:
@@ -51,6 +54,9 @@ export function createInteraction({
         // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
         if (!isPointerFree()) return;
         if (!layerState._enabled) return;
+        // The Cockpit camera rides the tracked satellite: a click on the
+        // picture below must not untrack it or switch satellites.
+        if (parts.cockpit?._cockpitHeld()) return;
 
         if (picked) {
           // Clicking tracked entity itself — ignore

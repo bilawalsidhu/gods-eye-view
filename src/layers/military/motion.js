@@ -1,5 +1,4 @@
 import * as geo from '../../geo/index.js';
-import { appClock } from '../../time/clock.js';
 import {
   lerpAngleDeg,
   speedRamp,
@@ -67,7 +66,7 @@ export function createMotion({
     const out = result || geo.cartesian3.create();
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
-    const renderTimeMs = appClock.now() - RENDER_DELAY_SEC * 1000;
+    const renderTimeMs = flightState.now() - RENDER_DELAY_SEC * 1000;
 
     // Bracketing pair: interpolate — no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
@@ -197,7 +196,7 @@ export function createMotion({
     if (!flightState._trackedIcao) return false;
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     if (!history || history.length === 0) return true;
-    return appClock.now() - RENDER_DELAY_SEC * 1000 < history[0].timeMs;
+    return flightState.now() - RENDER_DELAY_SEC * 1000 < history[0].timeMs;
   }
 
   /** Resolve the selected aircraft's actual rendered square extent this frame. */

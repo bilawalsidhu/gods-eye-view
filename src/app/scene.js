@@ -14,6 +14,8 @@ import { MapStackController } from '../mapStackController.js';
 import { initLogoGaze } from '../logoGaze.js';
 import { describeError } from './errors.js';
 import { createSceneEngine } from './globeEngine.js';
+import { worldClock, worldTimeFor } from '../time/worldClock.js';
+import { followWorldTime } from '../globe/cesium/worldTime.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 import { loadCesium } from './loadCesium.js';
 
@@ -77,6 +79,13 @@ export async function createApplicationScene({
   const { viewer, engine, tileset, mapStackController } = rendererCache
     ? await rendererCache.acquire(options.engineKind, build, defer)
     : await build({ defer });
+  defer(
+    worldClock.setFrameScheduler(
+      globalThis.requestAnimationFrame?.bind(globalThis),
+      globalThis.cancelAnimationFrame?.bind(globalThis),
+    ),
+  );
+  defer(worldClock.subscribe(() => engine.render.request('world-time')));
   const services = createSceneServices(engine, {
     retainedSelection: layerSession?.selectionContext,
   });
@@ -171,6 +180,7 @@ async function createRenderer({
   // As the Navara scene above: a released engine keeps no camera verb.
   defer(() => releaseCameraVerbs(engine));
   defer(installTrackpadPinchZoom(viewer));
+  defer(followWorldTime(viewer, worldTimeFor('sky')));
   defer(installFreeLookHeightLimit(viewer));
   registerDataCredits(engine, credits);
   configureCreditKeyboardAccess(document);

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createLifecycle } from './lifecycle.js';
 import { createState } from './state.js';
+import { createNavigation } from './navigation.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 
 function setup(t, { failMarkers = false } = {}) {
   const noop = () => {};
@@ -119,4 +121,33 @@ test('destroy releases focus-appearance callbacks even without prior disable', (
   h.layer.destroy();
   h.layer.destroy();
   assert.equal(released, 1);
+});
+
+test('enabling CCTV opens nearest to the engine camera and preserves a restored selection', (t) => {
+  const { state, parts, layer } = setup(t);
+  const engine = createFakeEngine({ latitude: 0, longitude: 1 });
+  t.after(() => engine.destroy());
+  state._records = [
+    { camera: { id: 'far', lat: 0, lon: 0 } },
+    { camera: { id: 'near', lat: 0, lon: 180 / Math.PI } },
+  ];
+  parts.renderer = {
+    cameraCartographic: () => engine.camera.pose().cartographic,
+    destroy() {},
+    hideCredit() {},
+  };
+  parts.model = {
+    haversineKm: (_lat, lon, _otherLat, otherLon) => Math.abs(lon - otherLon),
+  };
+  parts.navigation = createNavigation({ state, parts });
+  layer.showRenderer = () => {};
+  layer.enable();
+  assert.equal(state._activeCameraId, 'near');
+  assert.equal(state._openingCameraProvisional, true);
+  state._activeCameraId = 'far';
+  state._openingCameraProvisional = false;
+  layer.enable();
+  assert.equal(state._activeCameraId, 'far');
+  assert.equal(state._openingCameraProvisional, false);
+  state._enabled = false;
 });

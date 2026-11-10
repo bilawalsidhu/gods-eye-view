@@ -283,7 +283,9 @@ export function createRendering({
         const visual = getVisual(record);
         const visible = isVisible(visual.surfacePosition, occluder);
         if (visual.billboard) {
-          visual.billboard.show = visible;
+          // The bridge camera sits on this sprite; showing it would fill the view.
+          visual.billboard.show =
+            visible && record.mmsi !== state.cockpitSubjectMmsi;
           if (visible && doRotations && scene) {
             const rot = screenProjectedRotation(
               scene,
@@ -410,7 +412,11 @@ export function createRendering({
     const view = state.renderer?.view;
     const scene = view?.scene;
     const selected = state.selectedRecord;
-    const entries = selected
+    // From the bridge, the selected vessel is the viewer; its card would be
+    // pinned to the camera position.
+    const selectedCarded =
+      selected && selected.mmsi !== state.cockpitSubjectMmsi;
+    const entries = selectedCarded
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
     const maxLabels = labelRowLimit();
@@ -443,7 +449,7 @@ export function createRendering({
     // Greedy min-separation pass over the priority-ranked cell winners: the
     // selected card's anchor seeds the accepted set so ambient cards keep clear.
     const accepted = [];
-    if (selected) {
+    if (selectedCarded) {
       const screen = view.worldToWindow(
         getVisual(selected).billboard?.position || getVisual(selected).position,
       );

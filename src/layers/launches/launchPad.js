@@ -1,5 +1,4 @@
 import * as geo from '../../geo/index.js';
-import { appClock } from '../../time/clock.js';
 
 export function createLaunchPad({
   state: layerState,
@@ -34,7 +33,7 @@ export function createLaunchPad({
       }
       const nowMs = Date.now();
       if (nowMs - layerState._lastMissionRingRotationMs >= 1000) {
-        layerState._missionRingDate.setTime(appClock.now());
+        layerState._missionRingDate.setTime(layerState.orbitNow());
         parts.orbitRendering.updateMissionOrbitPrimitiveFrames(
           layerState._missionRingDate,
         );

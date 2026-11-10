@@ -720,10 +720,10 @@ export function createTransitDisplay(
         ...options,
         excludeObjects: markers?.sets() ?? [],
       }),
-    addCredit(feed) {
+    addCredit(feed, timestamps) {
       services.credits.registerDynamicCredit(
         engine,
-        services.credits.transitFeedCredit(feed),
+        services.credits.transitFeedCredit(feed, timestamps),
       );
     },
     createTrailRenderer() {

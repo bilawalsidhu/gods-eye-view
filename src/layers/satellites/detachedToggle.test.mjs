@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createApplicationSatellites } from '../../app/layers/satellites.js';
 import { createSatellitesDisplay } from './render/display.js';
-import { appClock } from '../../time/clock.js';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 import { createLifecycle } from './lifecycle.js';
 
 const ISS_TLE = `ISS (ZARYA)
@@ -18,7 +18,7 @@ async function setup(t) {
   globalThis.document = Object.assign(new EventTarget(), {
     getElementById: () => null,
   });
-  appClock.freeze(EPOCH_MS);
+  worldClock.seek(EPOCH_MS);
   const layer = createApplicationSatellites({
     source: {
       async readGroup(group) {
@@ -36,7 +36,7 @@ async function setup(t) {
     try {
       layer.destroy();
     } catch {}
-    appClock.reset();
+    worldClock.goLive();
     globalThis.document = previousDocument;
   });
   await layer.init(null, { engine: createFakeEngine() });
@@ -61,6 +61,8 @@ test('restored orbit rings receive their current rotation before the first frame
   let rotated = 0;
   const path = { basePositions: [], color: {} };
   const state = {
+    now: worldTimeFor('satellites'),
+    _catalog: new Map(),
     _points: new Map(),
     _orbitPaths: new Map([[25544, path]]),
     _params: { showOrbits: true },
@@ -80,6 +82,7 @@ test('restored orbit rings receive their current rotation before the first frame
       },
     },
     parts: {
+      controls: { _issOrbitVisible: () => true },
       rendering: {
         _updateOrbitPathRotations(date) {
           rotated++;

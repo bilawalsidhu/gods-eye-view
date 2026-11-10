@@ -1,5 +1,9 @@
-import { appClock } from '../../time/clock.js';
-import { ISS_NORAD, ISS_OVERLAY_SOURCE_ID } from './policy.js';
+import {
+  ISS_NORAD,
+  ISS_OVERLAY_SOURCE_ID,
+  SATELLITE_COVERAGE_MS,
+} from './policy.js';
+import { worldClock } from '../../time/worldClock.js';
 
 export function createLifecycle({
   state: layerState,
@@ -9,6 +13,20 @@ export function createLifecycle({
   getRenderer,
 }) {
   const { clearFocusTarget } = services.focus;
+  // While on with a catalog, satellites can be shown at any time in reach of
+  // their element sets. Registered once; off, the layer has no time to show,
+  // and each step tells the clock once it has settled.
+  worldClock.register({
+    id: 'satellites',
+    coverage: () => {
+      if (!layerState._enabled || !layerState._catalog.size) return null;
+      const now = worldClock.wallNow();
+      return {
+        start: now - SATELLITE_COVERAGE_MS,
+        end: now + SATELLITE_COVERAGE_MS,
+      };
+    },
+  });
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -38,6 +56,10 @@ export function createLifecycle({
       layerState._trackedFrameNumber = -1;
       layerState._trackedFrameGeo = null;
       layerState._trackedFrameNowForTest = null;
+      // The new catalog's points and rings carry no hold.
+      layerState._cockpitHiddenPoints = new Set();
+      layerState._cockpitHiddenPath = null;
+      layerState._cockpitHiddenDot = false;
       layerState._lastFocusUpdate = 0;
       layerState._activeFocusCount = 0;
       layerState._enabled = false;
@@ -52,6 +74,7 @@ export function createLifecycle({
       layerState._denseStatus = 'idle';
       layerState._denseError = null;
       layerState._catalogRevision++;
+      layerState.coverageChanged();
 
       const renderer = getRenderer();
       if (renderer) {
@@ -160,10 +183,14 @@ export function createLifecycle({
           width: id === ISS_NORAD ? 2.5 : 2,
           color: path.color,
         });
+        path.alphaFactor = 1;
         path.primitive.show =
-          layerState._enabled && layerState._params.showOrbits;
+          id === ISS_NORAD
+            ? parts.controls._issOrbitVisible()
+            : layerState._enabled && layerState._params.showOrbits;
       }
-      parts.rendering._updateOrbitPathRotations(new Date(appClock.now()));
+      parts.rendering._updateOrbitPathRotations(new Date(layerState.now()));
+      parts.cockpit?._syncCockpitSubjectVisuals();
       // Source work can publish as soon as GPU collections exist. Restoring
       // share-selected camera state may itself wait for that publication.
       layerState._resumeRenderer?.();
@@ -198,12 +225,15 @@ export function createLifecycle({
             layerState._params.showPoints,
           );
       // Orbit ring primitives + persistent ISS host label — show them
-      for (const path of layerState._orbitPaths.values())
+      for (const [noradId, path] of layerState._orbitPaths)
         if (path.primitive)
-          path.primitive.show = parts.controls.satelliteVisualsVisible(
-            layerState._enabled,
-            layerState._params.showOrbits,
-          );
+          path.primitive.show =
+            noradId === ISS_NORAD
+              ? parts.controls._issOrbitVisible()
+              : parts.controls.satelliteVisualsVisible(
+                  layerState._enabled,
+                  layerState._params.showOrbits,
+                );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation
       if (layerState._renderer) parts.interaction._installClickHandler();
@@ -223,6 +253,7 @@ export function createLifecycle({
         );
       }
       parts.tracking._applyPendingTrackingRestore();
+      layerState.coverageChanged();
     },
 
     disable() {
@@ -250,6 +281,7 @@ export function createLifecycle({
         layerState._preRenderListener();
         layerState._preRenderListener = null;
       }
+      layerState.coverageChanged();
     },
 
     destroy() {
@@ -311,6 +343,7 @@ export function createLifecycle({
       layerState._renderer?.destroy();
       layerState._renderer = null;
       layerState._engine = null;
+      layerState.coverageChanged();
     },
   };
 

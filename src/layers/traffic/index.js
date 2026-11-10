@@ -33,7 +33,7 @@ export function createTrafficLayer({ services: given, source }) {
     ...given,
     createRenderer: given?.createRenderer ?? createTrafficDisplay,
   };
-  const state = createState({ services });
+  const state = createState({ services, source });
   const parts = {};
   const context = { state, services, parts, source };
   parts.style = createStyle(context);

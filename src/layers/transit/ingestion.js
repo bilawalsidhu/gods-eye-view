@@ -399,7 +399,11 @@ export function createIngestion({ state, services, parts, source }) {
         `[Data:Transit] ${feed.id}: ${rejectedFixes} fix(es) implied impossible travel and were not animated`,
       );
     }
-    parts.renderer?.addCredit(feed);
+    status.creditSnapshot = {
+      feedTimestamp: snapshot?.feedTimestamp,
+      fetchedAt,
+    };
+    parts.renderer?.addCredit(feed, status.creditSnapshot);
     if (
       state._selectedKey &&
       state._vehicles.get(state._selectedKey)?.feedId === feed.id

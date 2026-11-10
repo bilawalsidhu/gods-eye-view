@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildNavaraLook } from './look.js';
 import { navaraScenePlan } from './viewOptions.js';
+import { createWorldClock } from '../../time/worldClock.js';
 
 function fakeView(dateMs) {
   const added = [];
@@ -35,6 +36,27 @@ const plugin = (calls) => ({
     calls.push(args);
     return { sky: { id: 'sky' }, lensFlare: undefined };
   },
+});
+
+test('the sky follows world time through seek and live without moving live feeds', () => {
+  let wall = Date.UTC(2026, 10, 1, 12);
+  const world = createWorldClock({ now: () => wall, follow: ['sky'] });
+  const view = fakeView(wall);
+  const look = buildNavaraLook(view, plugin([]), navaraScenePlan('cinematic'), world.timeFor('sky'));
+  const place = { lat: 30, lng: -97 };
+  look.frame(900, false, 0, place, world.isLive());
+  const past = wall - 6 * 3600_000;
+  world.seek(past);
+  look.frame(900, false, 0, place, world.isLive());
+  assert.equal(view.atmosphere.date.getTime(), past);
+  assert.equal(world.timeFor('flights')(), wall);
+  wall += 120_000;
+  look.frame(900, false, 0, place, world.isLive());
+  assert.equal(view.atmosphere.date.getTime(), past, 'paused sky holds');
+  assert.equal(world.timeFor('flights')(), wall);
+  world.goLive();
+  look.frame(900, false, 0, place, false);
+  assert.equal(view.atmosphere.date.getTime(), wall);
 });
 
 /** A cinematic look past its two warm-up frames (updates cleared). */

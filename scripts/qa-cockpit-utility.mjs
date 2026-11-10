@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 import { blockPaidQaMaps } from './qa-map-policy.mjs';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(repoRoot, 'qa-shots', 'cockpit-utility');
@@ -31,6 +32,7 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 await blockPaidQaMaps(page);
+await stubPlanespotters(page);
 const failures = [];
 const consoleErrors = [];
 const localHttpErrors = [];
@@ -827,6 +829,7 @@ try {
   // a legitimate retained snapshot cannot satisfy or invalidate a FIRST-fetch
   // assertion when camera motion supersedes the manager's initial update.
   const readinessPage = await browser.newPage();
+  await stubPlanespotters(readinessPage);
   let deferredInstallationReadiness;
   try {
     await blockPaidQaMaps(readinessPage);

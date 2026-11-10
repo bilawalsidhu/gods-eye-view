@@ -231,6 +231,7 @@ export function createIngestion({
       }
       layerState._focusAfterActiveLookup = false;
       parts.panel.renderMissionPanel();
+      layerState.coverageChanged();
       layerState._entryCameraView = null;
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {

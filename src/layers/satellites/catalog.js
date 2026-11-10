@@ -1,5 +1,4 @@
 import * as geo from '../../geo/index.js';
-import { appClock } from '../../time/clock.js';
 import { nearFarScale } from '../shared/color.js';
 import { twoline2satrec } from 'satellite.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
@@ -34,7 +33,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       1,
       Math.ceil(layerState._denseIds.length / DENSE_REFRESH_FRAMES),
     );
-    const now = new Date(appClock.now());
+    const now = new Date(layerState.now());
     for (let i = 0; i < perFrame; i++) {
       if (layerState._denseCursor >= layerState._denseIds.length)
         layerState._denseCursor = 0;
@@ -100,7 +99,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
 
       const entries = parts.orbits.parseTLE(text);
       const style = POINT_STYLES.dense;
-      const now = new Date(appClock.now());
+      const now = new Date(layerState.now());
       let added = 0;
 
       for (let start = 0; start < entries.length; start += DENSE_CREATE_CHUNK) {
@@ -128,6 +127,13 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             satrec,
             group: 'dense',
             launchYear: tleLineLaunchYear(entry.line1),
+            line1: entry.line1,
+            line2: entry.line2,
+            // The dense feed is CelesTrak's Starlink group.
+            satelliteClass: 'starlink',
+            ucs: null,
+            satcat: null,
+            sensor: null,
           });
           const point = layerState._pointCollection.add({
             position: geo.cartesian3.fromDegrees(
@@ -169,6 +175,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
 
       layerState._count = layerState._points.size;
       layerState._catalogRevision++;
+      layerState.coverageChanged();
       layerState._denseStatus = 'ready';
       console.log(
         `[Data:Satellites] Dense catalog: +${added} ${DENSE_GROUP_PATH} (points only)`,
@@ -207,6 +214,14 @@ export function createCatalog({ state: layerState, services, parts, source }) {
     if (token !== layerState._denseLoadToken) return;
     layerState._params.catalog = 'core';
     _removeDenseCatalog();
+    // Back on core, Starlink is off: hide the core catalog's own Starlink
+    // points again, and say so in the class choice.
+    if (layerState._params.classes)
+      layerState._params.classes = {
+        ...layerState._params.classes,
+        starlink: false,
+      };
+    parts.controls._applyClassVisibility?.();
     layerState._denseStatus = 'failed';
     layerState._denseError = reason;
     parts.controls._notifyRowControls();
@@ -236,6 +251,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
     layerState._denseCursor = 0;
     layerState._count = layerState._points.size;
     layerState._catalogRevision++;
+    layerState.coverageChanged();
   }
   return {
     _abortActiveUpdates,

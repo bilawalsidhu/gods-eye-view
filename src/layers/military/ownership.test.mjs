@@ -142,9 +142,9 @@ test('a normalized source can retain its stale reason without changing standalon
   assert.equal(layer.getStats().stale, true);
 });
 
-// A fresh contact's first billboard, with the app clock `appClockLagMs`
-// behind the wall clock (0: the app's default, the wall clock itself).
-async function firstPlacement(appClockLagMs) {
+// A fresh contact's first billboard, with the layer clock `clockLagMs`
+// behind the wall clock (0: the live default).
+async function firstPlacement(clockLagMs) {
   const Cesium = await import('cesium');
   const { RENDER_DELAY_SEC } = await import('./policy.js');
   const supplied = await sceneServices();
@@ -153,8 +153,11 @@ async function firstPlacement(appClockLagMs) {
   const speedMps = 200;
   const fixAgeMs = 2_000;
   const nowMs = Date.now();
-  const { appClock } = await import('../../time/clock.js');
-  if (appClockLagMs) appClock.freeze(nowMs - appClockLagMs);
+  const { worldClock } = await import('../../time/worldClock.js');
+  if (clockLagMs) {
+    worldClock.follow('military');
+    worldClock.seek(nowMs - clockLagMs);
+  }
   const layer = createMilitaryFlightLayer({
     services: supplied,
     source: {
@@ -212,7 +215,8 @@ async function firstPlacement(appClockLagMs) {
   try {
     await layer.update({ camera: { positionCartographic: null }, scene: {} });
   } finally {
-    appClock.reset();
+    worldClock.follow('military', false);
+    worldClock.goLive();
   }
   const billboard = added.find((entry) => entry.id === 'ae0001');
   assert.ok(billboard, 'the new contact gets a billboard');
@@ -245,8 +249,8 @@ test('a newly seen military contact appears at its delayed position, not ahead o
   );
 });
 
-test('the delayed position is read from the app clock', async () => {
-  // With the app clock 10 s behind the wall clock, the render time moves 10 s
+test('the delayed position is read from the layer clock', async () => {
+  // With the layer clock 10 s behind the wall clock, the render time moves 10 s
   // further back from the fix.
   const { behindM, westOfFix, speedMps, fixAgeMs, RENDER_DELAY_SEC } =
     await firstPlacement(10_000);

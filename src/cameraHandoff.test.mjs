@@ -69,7 +69,7 @@ test('Cockpit takeover invalidates deferred work before camera cancellation', ()
   ordered(
     enter,
     [
-      'if (!info || !entity) return false;',
+      'if (!info || (!vessel && !satellite && !entity)) return false;',
       'this.onCameraTakeover?.();',
       'this.host.camera.cancelFlight();',
       'this.host.release();',
@@ -149,7 +149,7 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
     transaction,
     [
       /if \(\s*!selectedLayer\.trackById\?\.\(selectedTarget\.id, \{\s*origin: selectionOrigin,?\s*\}\)\s*\) \{/,
-      'if (!entryError) entered = Boolean(cockpitView.enter());',
+      "if (!entryError) entered = Boolean(cockpitView.enter({ kind: 'aircraft' }));",
     ],
     'Cockpit entry transaction',
   );

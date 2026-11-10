@@ -22,6 +22,10 @@ export function createState({ services }) {
 
   layerState._engine = null;
 
+  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} Manager that repaints the layer's row. */
+
+  layerState._dataManager = null;
+
   /** Whether the bikeshare layer is currently enabled. */
 
   layerState._enabled = false;

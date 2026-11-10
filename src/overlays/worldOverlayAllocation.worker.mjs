@@ -311,6 +311,7 @@ function installMockEnvironment({ width, height, dpr }) {
   const viewer = {
     container,
     canvas: { clientWidth: width, clientHeight: height },
+    clock: { onTick: new MockEvent() },
     camera: {
       positionWC: new Cesium.Cartesian3(0, 0, 10_000_000),
       positionCartographic: { height: 1000 },
@@ -330,6 +331,7 @@ function installMockEnvironment({ width, height, dpr }) {
     postRender,
     advanceTime(ms) {
       currentTime += ms;
+      viewer.clock.onTick.raise();
     },
   };
 }

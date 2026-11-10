@@ -1,4 +1,5 @@
 import * as geo from '../../geo/index.js';
+import { worldClock } from '../../time/worldClock.js';
 
 /** The camera pose to give back, in world coordinates. */
 function captureCameraView(engine) {
@@ -39,6 +40,21 @@ export function createLifecycle({
   getRenderer,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
+  // While on, the launches loaded span the time from the first to the last,
+  // each one a mark. Registered once; off, the layer has no time to show, and
+  // each step tells the clock once it has settled.
+  worldClock.register({
+    id: 'rocket-launches',
+    coverage: () => {
+      if (!layerState._enabled) return null;
+      const marks = layerState._launches
+        .map((launch) => Date.parse(launch.launchTime))
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b);
+      if (!marks.length) return null;
+      return { start: marks[0], end: marks.at(-1), marks };
+    },
+  });
 
   /** The display on `engine`, with its input and frame listeners. */
   function attachDisplay(engine) {
@@ -174,6 +190,7 @@ export function createLifecycle({
         }
         throw error;
       }
+      layerState.coverageChanged();
     },
 
     async _enableBody() {
@@ -244,6 +261,7 @@ export function createLifecycle({
       parts.overlays.clearMissionOverlaySources();
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.renderMissionPanel();
+      layerState.coverageChanged();
     },
 
     async destroy() {

@@ -1,7 +1,6 @@
 // Builds a Navara look (viewOptions.js navaraScenePlan) on an initialised
 // view and keeps it current while the view renders: the sun follows `now`
-// (the engine clock's frame time in the app: the app clock, which is the wall
-// clock the HUD's SUN elevation reads unless QA moves it); the cinematic look
+// (the world time in the app, shared with the HUD's SUN elevation); the cinematic look
 // lights the globe
 // from the atmosphere when seen from space, places its clouds above the terrain while the sun is up, brightens the atmosphere
 // (createLuminanceScaler, uniforms from internals.js), compiles both
@@ -33,8 +32,8 @@ import {
  *   sun's elevation there); it returns true when it changed the scene, so
  *   the caller draws one more frame. It allocates nothing on a frame that
  *   changes nothing.
- * @param {() => number} [now] the sun's time (ms); the app passes the engine
- *   clock's frame time (index.js), the wall clock by default and in tests
+ * @param {() => number} [now] the sun's time (ms); the app passes the world
+ *   time (index.js), the wall clock by default and in tests
  * @param {{ forEachLuminanceUniform?: (handles: object, visit: (key: string, uniform: { value: object }, scaled: boolean) => void) => void }} [internals]
  *   the takram uniforms behind the atmosphere scale (internals.js); without
  *   it the scale does nothing.

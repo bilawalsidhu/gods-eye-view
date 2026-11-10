@@ -37,7 +37,9 @@ export function createRendering({
     if (element.point) element.point.show = element.shown && element.pointShown;
     if (element.reticle)
       element.reticle.show = element.shown && element.reticleShown;
-    if (element.line) element.line.show = element.shown;
+    if (element.line)
+      element.line.show =
+        element.shown && !layerState._pendingLaunchIds.has(element.launchId);
   }
 
   /** Selection isolation: whether the element belongs in the view. */
@@ -115,12 +117,32 @@ export function createRendering({
     layerState._missionElements.clear();
   }
 
+  // Away from live, a launch shows from its lift-off on, so scrubbing the
+  // world time forward brings the launches up in the order they flew. The
+  // selected mission stays, whenever it flies.
+  function syncPendingLaunches() {
+    const pending = new Set();
+    for (const { launch } of layerState._missionOverlayRecords.values()) {
+      if (layerState.launchHidden(launch)) pending.add(launch.id);
+    }
+    const previous = layerState._pendingLaunchIds;
+    if (
+      pending.size === previous.size &&
+      [...pending].every((id) => previous.has(id))
+    )
+      return;
+    layerState._pendingLaunchIds = pending;
+    parts.overlays.syncMissionOverlayEntries();
+    parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
+  }
+
   function updateMissionFrame() {
     const display = getRenderer();
     if (!layerState._enabled || !display?.visible()) {
       parts.overlays.hideReplayVehicleOverlay();
       return;
     }
+    syncPendingLaunches();
     parts.panel.updateMissionTelemetry();
     const { occluder } = display;
     const cameraPosition = layerState._engine.camera.livePosition;
@@ -128,21 +150,24 @@ export function createRendering({
     parts.overlays.refreshSelectedMissionOverlayText();
     for (const element of layerState._missionElements.values()) {
       if (!element.shown) continue;
-      if (!element.position) continue;
       const id = element.launchId;
       if (!id) continue;
+      const pending = layerState._pendingLaunchIds.has(id);
+      if (element.line) element.line.show = !pending;
+      if (!element.position) continue;
       const position = elementPosition(element);
-      let horizonVisible = Boolean(
-        position && occluder.isPointVisible(position),
-      );
+      let horizonVisible =
+        !pending && Boolean(position && occluder.isPointVisible(position));
       const launchAnchor = element.id.startsWith('rocket-launch:');
       if (launchAnchor) {
-        horizonVisible = parts.overlays.missionAnchorVisible(
-          cameraPosition,
-          position,
-          id,
-          layerState._selectedLaunchId,
-        );
+        horizonVisible =
+          !pending &&
+          parts.overlays.missionAnchorVisible(
+            cameraPosition,
+            position,
+            id,
+            layerState._selectedLaunchId,
+          );
         // Keep `shown` reserved for mission-selection isolation. Horizon
         // state is applied to the individual graphics below so a rear-side
         // anchor remains eligible for reevaluation as the camera moves.
@@ -478,7 +503,7 @@ export function createRendering({
         orbitCurrent.latitude,
         orbitCurrent.altitude,
       );
-      const liveTime = new Date(appClock.now());
+      const liveTime = new Date(layerState.orbitNow());
       const liveTelemetry = { speedMps: null };
       layerState._satelliteTelemetry.set(launch.id, liveTelemetry);
       let liveFrameNumber = -1;
@@ -490,7 +515,7 @@ export function createRendering({
         const frameNumber = getRenderer()?.frameNumber() ?? -1;
         if (frameNumber !== -1 && frameNumber === liveFrameNumber) return;
         liveFrameNumber = frameNumber;
-        const nowMs = appClock.now();
+        const nowMs = layerState.orbitNow();
         liveTime.setTime(nowMs);
         if (satelliteTrack) {
           const propagated =
