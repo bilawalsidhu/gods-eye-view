@@ -166,6 +166,81 @@ test('the handoff pass on a loading globe refines once its surface is ready', as
     );
 });
 
+test('a still camera drains pending surface samples across bounded passes using requested frames', async (t) => {
+  const surface = incomingGlobe(t);
+  surface.ready = true;
+  surface.frame();
+  const { engine } = surface;
+  const { state, flow } = fixture(surface);
+  t.after(() => {
+    state._activeFetchAbort.abort();
+    state._surfaceRefineRemove?.();
+  });
+  const roads = Array.from({ length: 20 }, (_, i) => road(i * 0.0001, GROUND));
+  let time = 0;
+  let available = 8;
+  let samples = 0;
+  let samplesAtYield;
+  let frames = 0;
+  const measured = new Set();
+  t.mock.method(performance, 'now', () => time);
+  engine.fake.script('terrainHeight', (point) => {
+    samples++;
+    if (samples === 1) setTimeout(() => (samplesAtYield = samples), 0);
+    time += 3;
+    const key = `${point.longitude},${point.latitude}`;
+    if (!measured.has(key)) {
+      if (!available) return undefined;
+      available--;
+      measured.add(key);
+    }
+    return GROUND;
+  });
+  let cameraChanges = 0;
+  t.after(engine.camera.changed.addEventListener(() => cameraChanges++));
+  t.after(
+    engine.frames.preRender.addEventListener(() => {
+      available = 8;
+      surface.ready = ++frames > 1;
+    }),
+  );
+  const requests = engine.fake.renderRequests;
+  await flow.applyFlowThenRender(
+    roads,
+    { ...bounds, coverage },
+    1,
+    1800,
+    'Loaded full',
+  );
+  assert.ok(samples * 3 > 12, 'the samples exceed one surface slice');
+  assert.equal(samplesAtYield, 4, 'sampling yields at the 12 ms budget');
+  assert.ok(state._surfacePending > 0, 'some streets are not loaded yet');
+  let rendered = requests;
+  await settle(() => {
+    if (engine.fake.renderRequests > rendered) {
+      rendered = engine.fake.renderRequests;
+      surface.frame();
+    }
+    return !state._surfacePending && !state._surfaceRefining;
+  });
+  assert.equal(state._surfacePending, 0);
+  assert.equal(cameraChanges, 0, 'no camera trigger resumes the work');
+  assert.ok(rendered - requests > 1, 'missing heights need further frames');
+  assert.equal(state._surfaceRefineRemove, null);
+  for (const r of roads) {
+    assert.equal(r.surfaceReady, true);
+    assert.ok(
+      r.waypoints.every(
+        (point) => Math.abs(height(point) - GROUND - DOT_HEIGHT_OFFSET) < 0.01,
+      ),
+    );
+  }
+  const finished = engine.fake.renderRequests;
+  surface.frame();
+  await nextTask();
+  assert.equal(engine.fake.renderRequests, finished, 'settled work is idle');
+});
+
 test('resuming the viewport republishes the retained roads as a pass that can still refine', () => {
   const labels = [];
   const state = createState({ services: {} });
