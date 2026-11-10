@@ -299,7 +299,8 @@ export function createNavaraMaps(
         'photoreal',
         url,
         { type: '3d-tiles', url },
-        { type: '3d-tiles', model: { maxSse: PHOTOREAL_MAX_SSE } },
+        // Navara's default height shifts transformed tiles along ECEF X.
+        { type: '3d-tiles', model: { maxSse: PHOTOREAL_MAX_SSE, height: 0 } },
         tilesetUrl
           ? []
           : [

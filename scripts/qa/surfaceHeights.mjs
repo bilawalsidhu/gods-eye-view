@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { cameraTile } from '../fixtures/layers/alpr.mjs';
 import { tilesFixtureRoutes } from '../qa-strict-harness.mjs';
@@ -35,6 +36,64 @@ export const counts = {
   bikeshare: 3,
   story: 1,
 };
+
+export function assertTileHeight(height, expected, label) {
+  assert.ok(
+    Number.isFinite(height) && Math.abs(height - expected) <= 0.5 + 1e-9,
+    `${label}: ${height} m, expected ${expected} m (±0.5 m)`,
+  );
+}
+
+export async function waitForSurfaceHeights(page, kind, tiles) {
+  const handle = await page
+    .waitForFunction(
+      ({ points, tiles }) => {
+        const { engine } = window.__godsEyeView;
+        engine.render.request('qa-surface-heights');
+        const state = {
+          loaded: engine.surface.tilesLoaded(),
+          photoreal: engine.maps.photorealActive(),
+          points: points.map((p) => {
+            const place = {
+              longitude: (p.lon * Math.PI) / 180,
+              latitude: (p.lat * Math.PI) / 180,
+              height: 0,
+            };
+            const height = tiles
+              ? engine.surface.sampleHeight(place)
+              : engine.surface.terrainHeight(place);
+            return { id: p.id, height: height ?? null };
+          }),
+        };
+        window.qaSurfaceHeights = state;
+        // Readiness must not wait for an incorrect height to become correct.
+        return state.loaded &&
+          state.photoreal === tiles &&
+          state.points.every(
+            (p) => Number.isFinite(p.height) && (tiles || p.height > 1),
+          )
+          ? state
+          : false;
+      },
+      { timeout: 90000 },
+      { points, tiles },
+    )
+    .catch(async (cause) => {
+      const state = await page.evaluate(() => window.qaSurfaceHeights);
+      throw new Error(
+        `${kind} surface readiness failed: ${state?.points.map((p) => `${p.id}: ${p.height} m`).join(', ') ?? 'no samples'}; loaded=${state?.loaded}, photoreal=${state?.photoreal}`,
+        { cause },
+      );
+    });
+  try {
+    const state = await handle.jsonValue();
+    if (tiles)
+      for (const p of state.points)
+        assertTileHeight(p.height, 50, `${kind}/${p.id} sampleHeight`);
+  } finally {
+    await handle.dispose();
+  }
+}
 
 export const features = points.map(({ id, lon, lat }) => ({
   type: 'Feature',

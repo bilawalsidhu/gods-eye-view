@@ -84,6 +84,12 @@ test('surfaceRay runs down the ellipsoid normal from 12 km', () => {
     cartesian3.create(),
   );
   near(cartographic.fromCartesian(below, WGS84).height, 0, 1e-6, 'ground');
+  near(
+    cartesian3.distance(below, cartesian3.fromDegrees(20, 10, 0)),
+    0,
+    1e-6,
+    'the ray keeps longitude and latitude at the surface',
+  );
   assert.equal(heightAlongRay(11950), 50);
   assert.equal(heightAlongRay(null), undefined);
 });

@@ -13,10 +13,11 @@ import {
 } from './qa-strict-harness.mjs';
 
 const base = localPreview(process.argv[2]);
+const report = process.argv.includes('--report');
 const { extras: fixture } = JSON.parse(
   readFileSync(new URL('./fixtures/tiles3d/tileset.json', import.meta.url)),
 );
-base.search = `?engine=navara&welcome=0&qaTileset=${encodeURIComponent(TILES_FIXTURE_PATH)}`;
+base.search = `?engine=cesium&welcome=0&qaTileset=${encodeURIComponent(TILES_FIXTURE_PATH)}`;
 base.hash = `v=2&lat=${fixture.origin.lat}&lon=${fixture.origin.lon}&alt=1100&heading=0&pitch=-90&roll=0&map=photoreal&l=`;
 let releaseTiles;
 let pendingTiles;
@@ -51,8 +52,8 @@ await strict.run({}, async (browser) => {
   await page.setCacheEnabled(false);
   let readsBefore = { ...strict.ledger.routes };
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
-  for (const kind of ['navara', 'cesium']) {
-    if (kind === 'cesium') {
+  for (const kind of ['cesium', 'navara']) {
+    if (kind === 'navara') {
       readsBefore = { ...strict.ledger.routes };
       holdTiles();
       await strict.pick(page, kind, { settle: false });
@@ -95,60 +96,93 @@ await strict.run({}, async (browser) => {
     );
     await loaded(page);
     await waitForCameraAtRest(page);
-    for (const route of routes.slice(0, 5))
-      assert.ok(
-        strict.ledger.routes[route.pattern] > (readsBefore[route.pattern] ?? 0),
-        `${kind} intercepted ${new URL(route.pattern).pathname}`,
-      );
+    if (!report)
+      for (const route of routes.slice(0, 5))
+        assert.ok(
+          strict.ledger.routes[route.pattern] >
+            (readsBefore[route.pattern] ?? 0),
+          `${kind} intercepted ${new URL(route.pattern).pathname}`,
+        );
     await strict.passed(
       page,
       'osm-places',
-      'tilesLoaded becomes true; all five files served by same-origin routes',
+      report
+        ? 'fixture tiles ready for measurement'
+        : 'tilesLoaded becomes true; all five files served by same-origin routes',
     );
 
-    const heights = await page.evaluate(
-      ({ probes, clampStart }) => {
+    const readings = await page.evaluate(
+      ({ probes, clampStarts }) => {
         const { surface } = window.__godsEyeView.engine;
-        return {
-          sampled: Object.fromEntries(
-            Object.entries(probes).map(([id, p]) => [
-              id,
-              surface.sampleHeight(p.cartographic),
-            ]),
-          ),
-          clamped: surface.clampToHeight(clampStart),
-        };
+        return Object.fromEntries(
+          Object.entries(probes).map(([id, p]) => [
+            id,
+            {
+              sampled: surface.sampleHeight(p.cartographic),
+              clamped: surface.clampToHeight(clampStarts[id]),
+            },
+          ]),
+        );
       },
       {
         probes: fixture.probes,
-        clampStart: geo.cartesian3.fromDegrees(
-          fixture.probes.roof.lon,
-          fixture.probes.roof.lat,
-          fixture.probes.roof.height + 300,
+        clampStarts: Object.fromEntries(
+          Object.entries(fixture.probes).map(([id, p]) => [
+            id,
+            geo.cartesian3.fromDegrees(p.lon, p.lat, p.height + 300),
+          ]),
         ),
       },
     );
-    for (const [id, p] of Object.entries(fixture.probes))
-      assert.ok(
-        Math.abs(heights.sampled[id] - p.height) <= 0.5,
-        `${kind} ${id}: ${JSON.stringify(heights)}`,
+    const heights = Object.fromEntries(
+      Object.entries(readings).map(([id, reading]) => {
+        const p = fixture.probes[id];
+        return [
+          id,
+          {
+            expectedHeightM: p.height,
+            sampledHeightM: reading.sampled ?? null,
+            clampedHeightM: reading.clamped
+              ? geo.cartographic.fromCartesian(reading.clamped).height
+              : null,
+            clampDistanceM: reading.clamped
+              ? geo.cartesian3.distance(reading.clamped, p.position)
+              : null,
+          },
+        ];
+      }),
+    );
+    console.log(
+      `${report ? 'REPORT' : 'HEIGHTS'} ${kind} ${JSON.stringify(heights)}`,
+    );
+    if (kind === 'navara')
+      console.log(
+        'NOTE navara: the default 3D Tiles height offset is a known package limitation; the adapter sets model.height=0 (height tolerance ±0.5 m).',
       );
-    assert.ok(
-      Math.abs(heights.sampled.block50 - heights.sampled.plate - 50) <= 0.5,
-    );
-    assert.ok(
-      heights.clamped &&
-        geo.cartesian3.distance(
-          heights.clamped,
-          fixture.probes.roof.position,
+    if (!report) {
+      for (const [id, p] of Object.entries(heights)) {
+        assert.ok(
+          Number.isFinite(p.sampledHeightM) &&
+            Math.abs(p.sampledHeightM - p.expectedHeightM) <= 0.5,
+          `${kind} ${id}: ${JSON.stringify(p)}`,
+        );
+        assert.ok(
+          Number.isFinite(p.clampDistanceM) && p.clampDistanceM <= 0.5,
+          `${kind} ${id} clamp: ${JSON.stringify(p)}`,
+        );
+      }
+      assert.ok(
+        Math.abs(
+          heights.block50.sampledHeightM - heights.plate.sampledHeightM - 50,
         ) <= 0.5,
-    );
-    await strict.passed(
-      page,
-      'osm-places',
-      'known plate, 50 m, 200 m and sloping roof heights; clamp lands on roof',
-      heights,
-    );
+      );
+      await strict.passed(
+        page,
+        'osm-places',
+        'known plate, 50 m, 200 m and sloping roof heights; clamps land on each surface',
+        heights,
+      );
+    }
 
     const drapes = [];
     for (const surface of ['tiles', 'terrain']) {
@@ -159,6 +193,7 @@ await strict.run({}, async (browser) => {
           await engine.maps.setTerrain({ kind: 'ellipsoid' });
         });
         await loaded(page);
+        await waitForCameraAtRest(page);
       }
       const p = fixture.probes.block50;
       const position = geo.cartesian3.fromDegrees(
@@ -166,7 +201,6 @@ await strict.run({}, async (browser) => {
         p.lat,
         surface === 'tiles' ? p.height : 0,
       );
-      const baseline = await pixels(page, position);
       for (const drape of ['tiles', 'terrain']) {
         await page.evaluate(
           ({ lon, lat, drape }) => {
@@ -199,19 +233,41 @@ await strict.run({}, async (browser) => {
             },
             { timeout: 30000 },
           );
+          // Build first, then compare the same ready primitive hidden/shown.
+          // Map imagery and classification shaders may still be arriving before ready.
+          await page.evaluate(() => window.qaDrape.show(false));
+          await loaded(page);
+          const baseline = await pixels(page, position);
+          await page.evaluate(() => window.qaDrape.show(true));
           const rgb = await pixels(page, position);
+          await page.evaluate(() => window.qaDrape.show(false));
+          const restored = await pixels(page, position);
           const drawn = rgb[0] > 180 && rgb[1] < 80 && rgb[2] > 180;
-          assert.equal(
-            drawn,
-            surface === drape,
-            `${kind} ${drape} on ${surface}: ${rgb}`,
+          const sample = { surface, drape, baseline, rgb, restored, drawn };
+          drapes.push(sample);
+          console.log(
+            `${report ? 'REPORT' : 'DRAPE'} ${kind} ${JSON.stringify(sample)}`,
           );
-          if (surface !== drape)
+          if (!report) {
             assert.ok(
-              rgb.every((v, i) => Math.abs(v - baseline[i]) < 15),
-              'other surface stays unchanged',
+              !(baseline[0] > 180 && baseline[1] < 80 && baseline[2] > 180),
+              `${kind} hidden drape is already magenta: ${JSON.stringify(sample)}`,
             );
-          drapes.push({ surface, drape, baseline, rgb });
+            assert.ok(
+              baseline.every((v, i) => Math.abs(v - restored[i]) < 15),
+              `${kind} unstable drape baseline: ${JSON.stringify(sample)}`,
+            );
+            assert.equal(
+              drawn,
+              surface === drape,
+              `${kind} ${drape} on ${surface}: ${JSON.stringify(sample)}`,
+            );
+            if (surface !== drape)
+              assert.ok(
+                rgb.every((v, i) => Math.abs(v - baseline[i]) < 15),
+                `${kind} ${drape} on ${surface} changes the other surface: ${JSON.stringify(sample)}`,
+              );
+          }
         } finally {
           await page.evaluate(() => {
             window.qaDrape.destroy();
@@ -223,21 +279,26 @@ await strict.run({}, async (browser) => {
     await strict.passed(
       page,
       'osm-places',
-      'drape tiles and terrain draw only on their respective surface (pixels)',
-      drapes,
+      report
+        ? 'diagnostic height and drape measurements collected; values not asserted'
+        : 'drape tiles and terrain draw only on their respective surface (pixels)',
+      { heights, drapes },
     );
     await page.evaluate(() =>
       window.__godsEyeView.mapStackController.setStack('photoreal'),
     );
     await loaded(page);
     await waitForCameraAtRest(page);
-    await checkPoints(page, kind);
+    if (!report) await checkPoints(page, kind);
     await assertKeylessPreview(page);
     console.log(
-      `PASS ${kind} fixture heights, clamp, drapes, tilesLoaded and surface-points budget`,
+      report
+        ? `REPORT ${kind} complete (measurements only)`
+        : `PASS ${kind} fixture heights, clamp, drapes, tilesLoaded and surface-points budget`,
     );
   }
-  assert.deepEqual(errors, []);
+  if (report) console.log(`REPORT browser errors ${JSON.stringify(errors)}`);
+  else assert.deepEqual(errors, []);
   assert.deepEqual(
     Object.keys(strict.ledger.external).filter((host) =>
       /google|gstatic|cesium\.com/i.test(host),
@@ -270,6 +331,7 @@ async function pixels(page, position) {
           off();
           const point = engine.projector.worldToWindow(position);
           const scale = engine.host.canvas.width / engine.host.size().width;
+          context.clearRect(0, 0, 5, 5);
           context.drawImage(
             engine.host.canvas,
             Math.round(point.x * scale) - 2,
@@ -384,7 +446,7 @@ async function checkPoints(page, kind) {
       engine.movers.createSet = createSet;
       target[method] = render;
     };
-    layer.attachRenderer(viewer, { engine });
+    layer.attachRenderer({ engine });
     layer.setResults(
       points.map((p, i) => ({ id: String(i), lon: p.lon, lat: p.lat })),
       { kind: 'fixture', label: 'Roof points', area: 'Austin' },

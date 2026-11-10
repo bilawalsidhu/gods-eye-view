@@ -6,6 +6,9 @@ import {
   observeSurfaceMovers,
   fixtureRoutes,
   center,
+  points,
+  assertTileHeight,
+  waitForSurfaceHeights,
 } from './qa/surfaceHeights.mjs';
 import { createFakeEngine } from '../src/globe/testing/fakeEngine.js';
 import { decodeAlprTile } from '../src/layers/alpr/tileRecords.js';
@@ -92,6 +95,76 @@ test('tiles require explicit opt-in and cannot be compared with terrain', () => 
   assert.throws(() => compareHeights(tiles, tiles), /tiles require --tiles/);
   assert.throws(() => compareHeights(snapshot(), tiles), /matching surfaces/);
   assert.equal(compareHeights(tiles, tiles, { tiles: true }).ok, true);
+});
+
+test('tile heights and tile comparisons use 0.5 m while terrain keeps 0.1 m', () => {
+  const before = { ...snapshot(), surface: 'tiles' };
+  for (const delta of [0.118, 0.5, -0.5]) {
+    assertTileHeight(50 + delta, 50, 'navara/surface-0');
+    const after = { ...snapshot(50 + delta), surface: 'tiles' };
+    assert.equal(compareHeights(before, after, { tiles: true }).ok, true);
+    assert.equal(compareHeights(snapshot(), snapshot(50 + delta)).ok, false);
+  }
+  for (const height of [50.5001, 49.4999, null, NaN, Infinity])
+    assert.throws(
+      () => assertTileHeight(height, 50, 'navara/surface-1'),
+      /navara\/surface-1: .* m, expected 50 m \(±0.5 m\)/,
+    );
+  const after = { ...snapshot(50.5001), surface: 'tiles' };
+  assert.equal(compareHeights(before, after, { tiles: true }).ok, false);
+});
+
+test('loaded incorrect tile heights fail immediately with the point and measured height', async (t) => {
+  const previous = globalThis.window;
+  t.after(() => {
+    if (previous === undefined) delete globalThis.window;
+    else globalThis.window = previous;
+  });
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  globalThis.window = { __godsEyeView: { engine } };
+  engine.maps.photorealActive = () => true;
+  let height = 50.118;
+  engine.surface.sampleHeight = () => height;
+  const dispose = t.mock.fn();
+  const page = {
+    async waitForFunction(fn, options, args) {
+      const state = fn(args);
+      assert.ok(
+        state,
+        'finite loaded values return without waiting for tolerance',
+      );
+      return { jsonValue: async () => state, dispose };
+    },
+  };
+  await waitForSurfaceHeights(page, 'navara', true);
+  height = 51.25;
+  await assert.rejects(
+    waitForSurfaceHeights(page, 'navara', true),
+    /navara\/surface-0 sampleHeight: 51.25 m, expected 50 m/,
+  );
+  assert.equal(dispose.mock.callCount(), 2);
+});
+
+test('unavailable surface timeout reports all points and readiness state', async () => {
+  const cause = new Error('timeout');
+  const page = {
+    waitForFunction: async () => {
+      throw cause;
+    },
+    evaluate: async () => ({
+      loaded: false,
+      photoreal: true,
+      points: points.map((p) => ({ id: p.id, height: null })),
+    }),
+  };
+  await assert.rejects(waitForSurfaceHeights(page, 'navara', true), (error) => {
+    assert.equal(error.cause, cause);
+    for (const p of points)
+      assert.ok(error.message.includes(`${p.id}: null m`));
+    assert.match(error.message, /loaded=false, photoreal=true/);
+    return true;
+  });
 });
 
 test('the probe reads committed contract positions, snapshots mutable inputs and drops destroyed sets', () => {

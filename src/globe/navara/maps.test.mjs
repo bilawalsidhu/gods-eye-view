@@ -193,7 +193,7 @@ test('setPhotorealTiles shows Google 3D tiles with a browser key and the Google 
     tiles.desc.source.desc.url,
     'https://tile.googleapis.com/v1/3dtiles/root.json?key=browser%20key',
   );
-  assert.deepEqual(tiles.desc.model, { maxSse: 16 });
+  assert.deepEqual(tiles.desc.model, { maxSse: 16, height: 0 });
   // Hidden, not deleted: Navara 0.2.1 stops loading terrain at the current
   // view when the last raster layer is deleted.
   const [base] = layersOf(view, 'raster');
