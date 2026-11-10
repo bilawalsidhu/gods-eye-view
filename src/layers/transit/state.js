@@ -115,7 +115,7 @@ export function createState({ services }) {
   state._cockpitVision = false;
   /** @type {Array<[string, EventListener]>} window listeners to remove on destroy. */
   state._styleListeners = [];
-  /** @type {{ refreshLayerStats?: () => void }|null} */
+  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} */
   state._dataManager = null;
   /** @type {number|null} */
   state._lastUpdate = null;

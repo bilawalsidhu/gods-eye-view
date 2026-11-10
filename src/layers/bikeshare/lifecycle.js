@@ -169,6 +169,7 @@ export function createLifecycle({
         viewer.scene.primitives.remove(layerState._pointCollection);
         layerState._pointCollection = null;
       }
+      layerState._dataManager = null;
       layerState._viewer = null;
     },
   };

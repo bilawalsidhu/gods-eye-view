@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { gunzipSync } from 'node:zlib';
 import { WebSocketServer } from 'ws';
 import { setTimeout as delay } from 'node:timers/promises';
 import * as providers from '../../server/providers/live.js';
@@ -15,7 +16,7 @@ function install(plugin, preview = false) {
       },
     },
   });
-  return async (route, url = '/', method = 'GET') => {
+  return async (route, url = '/', method = 'GET', headers = {}) => {
     assert.ok(routes.has(route), `registered route: ${route}`);
     const response = {
       statusCode: 200,
@@ -32,7 +33,7 @@ function install(plugin, preview = false) {
         this.body = body;
       },
     };
-    await routes.get(route)({ url, method }, response);
+    await routes.get(route)({ url, method, headers }, response);
     return response;
   };
 }
@@ -582,6 +583,168 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
   const res2 = await tracks('/api/flights/track', '?icao24=def456');
   assert.equal(res2.statusCode, 502);
   assert.equal(callCount, 1);
+});
+
+test('the aircraft snapshot routes decline a non-GET before any upstream work', async (t) => {
+  // A fetch that throws proves the refusal comes before any upstream call.
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    throw new Error(`upstream must not be reached: ${url}`);
+  });
+  const cases = [
+    [install(providers.openSkyProxy()), '/api/flights'],
+    [install(providers.adsbLolProxy()), '/api/military'],
+  ];
+  for (const [request, route] of cases) {
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      const response = await request(route, '/', method);
+      assert.equal(response.statusCode, 405, `${method} ${route}`);
+      // RFC 9110 section 15.5.6: a 405 names the methods it accepts.
+      assert.equal(response.headers.allow, 'GET', `${method} ${route}`);
+      assert.deepEqual(JSON.parse(response.body), {
+        error: 'Method Not Allowed',
+      });
+    }
+  }
+});
+
+test('the snapshot method check hands each /track route on to its own handler', async () => {
+  // The snapshot mount also matches /track, so it must hand /track on
+  // before it checks the method.
+  for (const [plugin, route] of [
+    [providers.openSkyProxy(), '/api/flights'],
+    [providers.adsbLolProxy(), '/api/military'],
+  ]) {
+    const routes = new Map();
+    plugin.configureServer({
+      middlewares: { use: (path, handler) => routes.set(path, handler) },
+    });
+    const res = {
+      statusCode: 200,
+      writeHead(s) {
+        this.statusCode = s;
+      },
+      end() {},
+    };
+    let handedOn = false;
+    await routes.get(route)(
+      { url: '/track?icao24=abc123', method: 'POST' },
+      res,
+      () => {
+        handedOn = true;
+      },
+    );
+    assert.ok(handedOn, `${route}/track reaches next()`);
+    assert.equal(
+      res.statusCode,
+      200,
+      `${route}/track is not answered by the snapshot handler`,
+    );
+  }
+});
+
+test('the OpenSky snapshot is compressed for clients that ask, and an error body never inherits the cached frame', async (t) => {
+  environment(t, {
+    OPENSKY_AUTH_MODE: 'anon',
+    OPENSKY_CLIENT_ID: undefined,
+    OPENSKY_CLIENT_SECRET: undefined,
+    OPENSKY_USERNAME: undefined,
+    OPENSKY_PASSWORD: undefined,
+  });
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', () => {});
+
+  let upstreamStatus = 200;
+  let snapshotAgeMs = 0;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.includes('/lat/'))
+      return Response.json({
+        now: now / 1000,
+        ac: Array.from({ length: 200 }, (_, index) => ({
+          hex: `abc${index}`,
+          lat: 30,
+          lon: -97,
+          alt_baro: 10000,
+        })),
+      });
+    assert.ok(url.includes('/states/'), `unexpected upstream call: ${url}`);
+    if (upstreamStatus !== 200)
+      return new Response('{"error":"upstream"}', { status: upstreamStatus });
+    const sourceSeconds = Math.floor((now - snapshotAgeMs) / 1000);
+    // Healthy credits keep the 9 s base TTL, so the clock jumps below clear it.
+    return Response.json(
+      {
+        time: sourceSeconds,
+        states: Array.from({ length: 200 }, (_, index) => [
+          `abc${index}`,
+          'CALLSIGN',
+          'United States',
+          sourceSeconds,
+          -97.7,
+          30.1,
+          10000,
+        ]),
+      },
+      { headers: { 'x-rate-limit-remaining': '4000' } },
+    );
+  });
+
+  // A fresh module: the snapshot cache, its frame and the TTL are module state.
+  const isolated = await import(
+    `../../server/providers/aircraft/opensky.js?compression=${now}`
+  );
+  const states = install(isolated.openSkyProxy());
+  const compressed = await states('/api/flights', '/', 'GET', {
+    'accept-encoding': 'gzip, deflate, br',
+  });
+  assert.equal(compressed.statusCode, 200);
+  assert.equal(compressed.headers['content-encoding'], 'gzip');
+  assert.equal(compressed.headers.vary, 'Accept-Encoding');
+  assert.ok(Buffer.isBuffer(compressed.body));
+
+  // Same cached snapshot, no Accept-Encoding: identity bytes, which the frame
+  // above must decode to.
+  const identity = await states('/api/flights');
+  assert.equal(identity.headers['x-opensky-cache'], 'HIT');
+  assert.equal(identity.headers['content-encoding'], undefined);
+  assert.equal(identity.headers.vary, 'Accept-Encoding');
+  assert.equal(gunzipSync(compressed.body).toString(), identity.body);
+
+  // `gzip;q=0` refuses gzip.
+  const refused = await states('/api/flights', '/', 'GET', {
+    'accept-encoding': 'gzip;q=0',
+  });
+  assert.equal(refused.headers['content-encoding'], undefined);
+  assert.equal(refused.body, identity.body);
+
+  // An upstream rejection is not cached, so it must not carry the previous
+  // snapshot's Content-Encoding.
+  upstreamStatus = 403;
+  now += 60000; // past the 9 s base TTL
+  const rejected = await states('/api/flights', '/', 'GET', {
+    'accept-encoding': 'gzip',
+  });
+  assert.equal(rejected.statusCode, 403);
+  assert.equal(rejected.headers['content-encoding'], undefined);
+  assert.ok(JSON.parse(rejected.body).error, 'a readable error body');
+
+  // A snapshot too old to serve falls back to adsb.lol, which negotiates the
+  // same way.
+  upstreamStatus = 200;
+  snapshotAgeMs = 3600000;
+  now += 60000;
+  const regional = await states('/api/flights', '?lat=30&lon=-97', 'GET', {
+    'accept-encoding': 'gzip',
+  });
+  assert.equal(regional.statusCode, 200);
+  assert.equal(regional.headers['x-flight-source'], 'adsb.lol');
+  assert.equal(regional.headers['content-encoding'], 'gzip');
+  assert.equal(regional.headers.vary, 'Accept-Encoding');
+  assert.equal(
+    JSON.parse(gunzipSync(regional.body).toString()).states.length,
+    200,
+  );
 });
 
 test('OpenSky Basic mode no longer sends username and password: it asks anonymously and warns once', async (t) => {

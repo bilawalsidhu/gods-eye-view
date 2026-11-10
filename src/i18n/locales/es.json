@@ -591,6 +591,7 @@
   "LOADING": "CARGANDO",
   "DEGRADED": "DEGRADADO",
   "STALE": "DESACTUALIZADO",
+  "SIGNAL LOST · {time}": "SEÑAL PERDIDA · {time}",
   "FALLBACK": "RESPALDO",
   "PARTIAL": "PARCIAL",
   "UNCERTAIN": "INCIERTO",
@@ -828,6 +829,7 @@
   "KEY REQUIRED": "CLAVE REQUERIDA",
   "STALE · cached {age}": "DESACTUALIZADO · en caché hace {age}",
   "LIVE · updated {age}": "EN VIVO · actualizado {age}",
+  "24 h to {day} {time} UTC": "24 h hasta {day} {time} UTC",
   "<1m ago": "hace <1 min",
   "FIRE · {frp} MW": "INCENDIO · {frp} MW",
   "▲ {frp} MW": "▲ {frp} MW",
@@ -3006,6 +3008,12 @@
     "many": "Aún no hay fuente aquí · {n} de regiones disponibles",
     "other": "Aún no hay fuente aquí · {n} regiones disponibles"
   },
+  "Fly below {km} km to a covered city": "Desciende por debajo de {km} km sobre una ciudad con cobertura",
+  "No bike share here yet · {n} systems available": {
+    "one": "Aún no hay bicis compartidas aquí · {n} sistema disponible",
+    "many": "Aún no hay bicis compartidas aquí · {n} de sistemas disponibles",
+    "other": "Aún no hay bicis compartidas aquí · {n} sistemas disponibles"
+  },
   "Wind speed field unavailable": "Campo de velocidad del viento no disponible",
   "Decoder feeds": "Fuentes del decodificador",
   "WebUSB + decoder feeds": "WebUSB + fuentes del decodificador",
@@ -3488,5 +3496,6 @@
   "1 wk/s": "1 sem/s",
   "Play speed": "Velocidad de reproducción",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Desplaza o pellizca para ampliar, arrastra para moverte · doble clic para verlo todo",
-  "1 min/s": "1 min/s"
+  "1 min/s": "1 min/s",
+  "Photo © {photographer}": "Foto © {photographer}"
 }

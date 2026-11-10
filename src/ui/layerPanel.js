@@ -12,14 +12,17 @@ import {
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
-import { translateFeedError, translateStatusLine } from './statusText.js';
+import {
+  translateFeedError,
+  translateStatusLine,
+  translateStatusMessage,
+} from './statusText.js';
 import {
   formatNumber,
   getLocale,
   msg,
   onLocaleChange,
   t,
-  translateKnown,
 } from '../i18n/index.js';
 
 // Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
@@ -715,7 +718,7 @@ export class LayerPanel {
       typeof stats.statusMessage === 'string' &&
       stats.statusMessage.trim()
     ) {
-      return `${source} · ${translateKnown(stats.statusMessage.trim())}`;
+      return `${source} · ${translateStatusMessage(stats.statusMessage.trim())}`;
     }
     const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : t('never');
     if (stats.loading) {
