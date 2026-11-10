@@ -108,9 +108,15 @@ function httpUrl(value) {
   }
 }
 
+/** Whether a provenance or link value points at wrecksite.eu, in any form. */
+function fromWrecksite(value) {
+  return typeof value === 'string' && /wrecksite/i.test(value);
+}
+
 /**
  * Normalize EMODnet's shipwreck GeoJSON. Records the portal took from
- * wrecksite.eu are skipped: that site's data is not openly licensed.
+ * wrecksite.eu, named in the provenance or linked as the record's page, are
+ * skipped: that site's data is not openly licensed.
  * @param {object} payload WFS GeoJSON FeatureCollection.
  * @returns {object[]} Shipwreck records.
  */
@@ -126,8 +132,10 @@ export function normalizeEmodnetFeatures(payload) {
     const lon = Number(coords[0]);
     const lat = Number(coords[1]);
     if (!validPoint(lat, lon)) continue;
+    // Checked on the raw values: the shown origin is cut to 80 characters,
+    // and a long provenance list can name wrecksite.eu after the cut.
+    if (fromWrecksite(p.source_inf) || fromWrecksite(p.website1)) continue;
     const origin = clean(p.source_inf, 80);
-    if (origin && /wrecksite/i.test(origin)) continue;
     const key = clean(String(feature.id ?? p.source_id ?? ''), 80);
     if (!key) continue;
     const id = `emodnet:${key}`;

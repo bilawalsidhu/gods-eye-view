@@ -47,6 +47,18 @@ test('EMODnet wrecks keep ship facts and drop text that names people', () => {
       feature('w.4', { name: 'Null island' }, [0, 0]),
     ],
   });
+  const ids = normalizeEmodnetFeatures({
+    features: [
+      feature('w.3', { name: 'Copied', source_inf: 'www.wrecksite.eu' }),
+      feature('w.5', {
+        source_inf: `${'SHOM; '.repeat(20)}wrecksite.eu`,
+      }),
+      feature('w.6', { website1: 'https://www.wrecksite.eu/wreck.aspx?1' }),
+      feature('w.7', { website1: 'wrecksite.eu/wreck/1' }),
+      feature('w.8', { name: 'Kept', source_inf: 'SHOM' }),
+    ],
+  }).map((record) => record.id);
+  assert.deepEqual(ids, ['emodnet:w.8'], 'wrecksite.eu rows are all skipped');
   assert.equal(wreck.id, 'emodnet:w.1');
   assert.equal(wreck.year, 1987);
   assert.equal(wreck.vesselType, 'Pusher or tug');
