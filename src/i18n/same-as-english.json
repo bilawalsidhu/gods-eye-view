@@ -1279,13 +1279,11 @@
     "STARLINK",
     "STARLINK ···",
     "STARLINK ✕",
-    "LOOK {elevation}",
     "{range} NM",
-    "OFF-NADIR {angle}° · {offset}",
     "NORAD {id}",
     "EPOCH {time}",
     "TLE",
-    "OFF-NADIR {angle}°",
+    "{value} KM",
     "{value} KM/S",
     "Ironbow"
   ]

@@ -6,8 +6,7 @@ Catalog: `src/i18n/locales/he.json`. General rules: [TRANSLATORS.md](../TRANSLAT
 
 - Address the user with a masculine imperative, Google style: הסתר, הצג, נסה שוב, התקרב. Menu items and tooltips take the noun form: הסרת {name}, הרחבת {name}, שינוי הצבע של {name}.
 - Sentence case: Hebrew has no case forms, so UPPERCASE English is normal sentence style here; short HUD labels stay short, favor an abbreviation over a wrapped line.
-- Keep the `·`, `—`, `→`, `↗`, `…` separators. Latin codes read inside RTL text because the app isolates interpolated values; leave them alone.
-- Units follow the catalog: ק"מ, מ׳, קמ"ש, שנ', דק', שע'. Instrument readouts and formatted shared-unit labels keep the Latin units (km, NM, FT, KTS, MW, KM/S); catalog prose outside those readouts keeps ק"מ/מ׳. Codes like HDG, FOV, CAL, SRC, REC stay exactly as in English — see `same-as-english.json`.
+- Units follow the catalog: ק"מ, מ׳, קמ"ש, שנ׳, דק׳, שע׳; an abbreviation always ends in the geresh (׳). Instrument readouts and formatted shared-unit labels keep the Latin units (km, NM, FT, KTS, MW, KM/S); catalog prose outside those readouts keeps ק"מ/מ׳. Codes like HDG, FOV, CAL, SRC, REC stay exactly as in English — see `same-as-english.json`.
 
 ## Digits and direction
 
@@ -46,20 +45,20 @@ With {count} shown as a digit, `two` and `other` share the plural noun (2 מצל
 | contact / tracking                             | מגע / עקיבה                                           |
 | installation / site                            | מתקן / אתר                                            |
 | camera / CCTV camera / ALPR camera             | מצלמה / מצלמת CCTV / מצלמת ALPR                       |
-| earthquake / active fire / cyclone             | רעידת אדמה / שרפה פעילה / ציקלון                      |
+| earthquake / active fire / cyclone             | רעידת אדמה / שריפה פעילה / ציקלון                     |
 | scene / shot                                   | סצנה / שוט                                            |
 | briefing / panel / dock                        | תדריך / פאנל / עגינה                                  |
 | visual preset / style                          | ערכת ראייה / סגנון                                   |
 | Scope (circular viewport mask) / keyhole       | סקופ / חור המנעול                                    |
 | heading (compass °) / course                   | כיוון / מהלך                                         |
 | HDG / BRG / CRS / FOV / DEST / SPD / RANGE     | בלי שינוי — קודי מכשיר                               |
-| advisory (NHC/CPHC cyclone)                    | ייעוץ; Advisory center — מרכז הייעוץ                  |
+| advisory (NHC/CPHC cyclone)                    | עדכון; Advisory center — מרכז הסערה לפי העדכון        |
 | Street View (Google)                           | Street View, בלי תרגום                                |
 | Street Level / Street Level layer              | Street Level, בלי תרגום (שם שכבה)                    |
 | WHOT/BHOT, Ironbow, CRT, NVG, FLIR             | בלי שינוי — קודים ושמות מצבים                        |
 | PREV / NEXT                                    | הקודם / הבא                                           |
 | anchor / data pack / asset bundle (scene)      | עוגן / חבילת נתונים / חבילת נכסים                   |
 | forecast (weather)                             | תחזית                                                 |
-| witness / geolocated source                    | עד ראייה / מקור נתון גיאוגרפית                        |
+| witness / geolocated source                    | עד ראייה / מקור מאוכן                                 |
 | contained (wildland fire) / FRP                | הכלה / FRP, בלי שינוי                                 |
 
