@@ -302,3 +302,34 @@ test('partial incident details render only the facts that exist', () => {
     'Catron County · $85K to date',
   ]);
 });
+
+test('a fire under one acre keeps its WFIGS size instead of reading 0 ac', () => {
+  const row = {
+    stableId: 'x',
+    name: 'Grey',
+    acres: 0.25,
+    containedPct: null,
+    state: 'US-WA',
+    category: 'WF',
+    discoveredTime: null,
+    updatedTime: null,
+    cause: null,
+    behavior: null,
+    personnel: null,
+    county: null,
+    costToDate: null,
+    complexity: null,
+  };
+  assert.equal(
+    buildIncidentCard(row, 1758000000000).details[0],
+    '0.25 ac · containment unknown · US-WA',
+  );
+  assert.equal(
+    buildIncidentCard({ ...row, acres: 0.01 }, 1758000000000).details[0],
+    '0.01 ac · containment unknown · US-WA',
+  );
+  assert.equal(
+    buildIncidentCard({ ...row, acres: 1.4 }, 1758000000000).details[0],
+    '1 ac · containment unknown · US-WA',
+  );
+});

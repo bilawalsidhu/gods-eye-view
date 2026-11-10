@@ -101,7 +101,7 @@ const HELD_SNAP_MAX_DRIFT_M = 250;
  *  alone, and the asymmetry is not tidiness:
  *
  *   - A cell reading LOW against a real sample is the EXPECTED error here, not a
- *     contradiction. Cells are a one-shot first-write latch over ~111 m, the
+ *     contradiction. Cells hold a few point readings over ~111 m, the
  *     borrowed-neighbour path leans to the LOWEST on purpose (`neighborFloorM`),
  *     and `displayFloorHeightM` only ever RAISES — the whole floor chain is
  *     built to under-read rather than to invent. Releasing on that sign would
