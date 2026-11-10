@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Cesium-only probes: native primitive inspection independently verifies the Cesium route geometry.
 import { evaluateWithGeo } from './qa/geometry.mjs';
-import { whenSettled, whenUiSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { whenSettled, whenUiSettled, pollPage } from './qa/ready.mjs';
 /**
  * Browser proof of the Directions layer: real chip clicks, real globe clicks,
  * a real route from the real proxy, a real camera flight.
@@ -779,7 +779,14 @@ try {
     if (placed) {
       await waitForRoute();
       // Let the shared ground-floor cells warm and the dots re-anchor.
-      await whenTilesLoaded(page);
+      await pollPage(
+        page,
+        () => {
+          const { stepCount, stepsShown } = window.__gevQaDirections.drawn();
+          return stepCount > 0 && stepsShown.length === stepCount;
+        },
+        { timeoutMs: 60_000 },
+      );
       const denver = await evaluateWithGeo(page, async (qaGeo) => {
         const Cartographic = qaGeo.cartographic;
         const { stepCount, stepsShown } = window.__gevQaDirections.drawn();

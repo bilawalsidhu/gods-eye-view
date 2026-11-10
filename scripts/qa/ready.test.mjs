@@ -4,6 +4,7 @@ import { createFakeEngine } from '../../src/globe/testing/fakeEngine.js';
 import { createSettledState } from '../../src/app/qaProbe.js';
 import {
   waitForSettled,
+  whenSettled,
   whenFramesDrawn,
   whenTilesLoaded,
   whenUiSettled,
@@ -251,4 +252,58 @@ test('scenario polling waits for evidence and identifies an unmet condition', as
     }),
     /broken predicate/,
   );
+});
+
+test('camera readiness also waits for the startup cover to stop intercepting clicks', async (t) => {
+  pageEngine(t);
+  const previous = {
+    document: globalThis.document,
+    getComputedStyle: globalThis.getComputedStyle,
+  };
+  let visibility = 'visible';
+  globalThis.document = { querySelector: () => ({}) };
+  globalThis.getComputedStyle = () => ({ visibility });
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
+  });
+  let disposed = false;
+  await whenSettled({
+    async waitForFunction(predicate) {
+      assert.equal(predicate(), false, 'a started engine still has a cover');
+      visibility = 'hidden';
+      assert.equal(predicate(), true);
+      return {
+        dispose: async () => {
+          disposed = true;
+        },
+      };
+    },
+    async evaluate() {
+      assert.equal(disposed, true);
+    },
+  });
+});
+
+test('tile and UI polling never request globe frames', async (t) => {
+  const { engine } = pageEngine(t);
+  const previous = globalThis.document;
+  globalThis.document = { getAnimations: () => [] };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  t.mock.method(engine.render, 'request', () => {
+    assert.fail('passive readiness requested a frame');
+  });
+  const page = {
+    async waitForFunction(predicate) {
+      assert.equal(predicate(), true);
+      return { dispose: async () => {} };
+    },
+  };
+  await whenTilesLoaded(page);
+  await whenUiSettled(page);
 });
