@@ -1179,12 +1179,21 @@ export function createBhoteKoshiEventLayer({
       _imageryImages = null;
       throw new Error('Bhote Koshi imagery unavailable');
     }
+    // These decoded images replace empty layers. Install them hidden so a
+    // tileset with no imagery requests cannot hold enable behind a drawn frame.
+    _native.setVisible(false);
     await _native.loadImages(
       event.imagery.rectangle,
       images,
       'Vantor WorldView Open Data · CC BY-NC 4.0',
     );
-    if (_enabled && current()) setSplit(_split);
+    if (_enabled && current()) {
+      _native.setVisible(
+        _presentation !== BHOTE_KOSHI_SCENE_PRESENTATION ||
+          _sceneControls.imageryComparison === true,
+      );
+      setSplit(_split);
+    }
   }
 
   async function resolveEvidenceAnchors(event, signal) {

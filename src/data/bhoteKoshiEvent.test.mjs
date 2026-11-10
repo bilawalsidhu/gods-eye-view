@@ -36,6 +36,8 @@ import { SCENE_RECIPES } from '../scenes/recipes.js';
 import { LayerLifecycle } from './lifecycle.js';
 import { createBhoteKoshiEmbeddedMedia } from './bhoteKoshiEmbeddedMedia.js';
 import { SceneDirector } from '../scenes/director.js';
+import { createCesiumImagery } from '../globe/cesium/imagery.js';
+import { createBhoteKoshiDisplay } from '../layers/bhoteKoshi/render/display.js';
 
 const eventUrl = new URL('../../public/events/bhote-koshi-2026/event.json', import.meta.url);
 const eventModuleUrl = new URL('./bhoteKoshiEvent.js', import.meta.url);
@@ -3256,6 +3258,80 @@ async function navaraEvidenceCard({ sample, signal }) {
     first,
     height: () => Cesium.Cartographic.fromCartesian(card.cullPosition).height,
   };
+}
+
+for (const presentation of ['standalone', 'scene-beat']) {
+  test(`Bhote Koshi enables ${presentation} without waiting for tileset imagery requests`, async () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    installEventDom();
+    globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+    const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+    event.evidenceSpine = [];
+    const engine = createFakeEngine({ canvas: eventViewer().scene.canvas });
+    const viewer = {
+      imageryLayers: new Cesium.ImageryLayerCollection(),
+      scene: {
+        globe: { show: false },
+        preRender: new Cesium.Event(),
+        preUpdate: new Cesium.Event(),
+        postRender: new Cesium.Event(),
+      },
+    };
+    const tileset = {
+      show: true,
+      imageryLayers: new Cesium.ImageryLayerCollection(),
+      isDestroyed: () => false,
+    };
+    const imagery = createCesiumImagery(viewer, {
+      requestRender() {},
+      tilesets: () => [tileset],
+      createCanvas: (width, height) => ({
+        width, height,
+        getContext: () => ({
+          createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+          putImageData() {},
+        }),
+      }),
+    });
+    engine.imagery = imagery.imagery;
+    let display;
+    const layer = buildEventLayer({
+      eventLoader: async () => event,
+      imageLoader: async () => ({ width: 1, height: 1, data: new Uint8Array(4) }),
+      createNativeRenderer: (engine) => (display = createBhoteKoshiDisplay(engine)),
+      embeddedMediaFactory: () => ({ hide() {}, pause() {}, destroy() {} }),
+      overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+      renderHost: { request() {}, hold() {}, release() {} },
+    });
+    let enabling;
+    try {
+      await layer.init(null, { engine });
+      layer.setParams({ presentation, sceneSurface: 'evidence-beat', autoPlay: false });
+      let enabled = false;
+      enabling = layer.enable(null).then(() => { enabled = true; });
+      await new Promise(setImmediate);
+      assert.equal(enabled, true, 'decoded images must not wait for an undrawable stage');
+      const images = engine.imagery.list();
+      assert.equal(images.length, 2);
+      assert.equal(tileset.imageryLayers.length, 2, 'no staged layers remain');
+      for (const image of images)
+        assert.equal(image.shown, presentation === 'standalone');
+      await layer.detachRenderer();
+      let attached = false;
+      enabling = layer.attachRenderer({ engine }).then(() => { attached = true; });
+      await new Promise(setImmediate);
+      assert.equal(attached, true, 'reattachment does not wait for imagery requests either');
+    } finally {
+      display?.setVisible(false);
+      await enabling;
+      await layer.destroy();
+      imagery.destroy();
+      engine.destroy();
+      globalThis.document = originalDocument;
+      globalThis.window = originalWindow;
+    }
+  });
 }
 
 test('Navara evidence anchors stand on the most detailed terrain', async () => {
