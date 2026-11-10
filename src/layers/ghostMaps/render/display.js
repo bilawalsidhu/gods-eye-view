@@ -14,7 +14,7 @@ import * as geo from '../../../geo/index.js';
 import { normalizeGroundItem } from '../../../globe/ground.js';
 import { rgbaFromCss } from '../../shared/color.js';
 import { imageAtlasLayout } from '../../shared/render/imageAtlas.js';
-import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
+import { createSurfacePoints } from '../../../globe/surfacePlacement.js';
 
 const LAYER_ID = 's2-ghostmaps';
 const TRANSPARENT = Object.freeze([0, 0, 0, 0]);

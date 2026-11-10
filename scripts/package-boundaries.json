@@ -34,7 +34,9 @@
       "src/layers/infrastructure/render/display.js",
       "src/layers/shared/color.js",
       "src/sources/requestDeadline.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": []
   },
@@ -978,7 +980,9 @@
       "src/ui/unitLabels.js",
       "src/geo/",
       "src/globe/cesium/doubleClick.js",
-      "src/globe/cesium/orbital.js"
+      "src/globe/cesium/orbital.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium"]
   },
@@ -1273,7 +1277,9 @@
       "src/data/trackedReadout.js",
       "src/ui/releaseTrackers.js",
       "src/globe/cesium/orbital.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1944,7 +1950,9 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/geo/",
-      "src/layers/traffic/render/display.js"
+      "src/layers/traffic/render/display.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile"]
   },
@@ -2111,10 +2119,11 @@
       "src/layers/shared/color.js",
       "src/globe/cameraMath.js",
       "src/layers/streetLevel/render/display.js",
-      "src/layers/shared/render/surfacePoints.js",
       "src/globe/contract.js",
       "src/time/worldClock.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
@@ -2228,8 +2237,9 @@
       "src/sources/requestDeadline.js",
       "src/layers/shared/color.js",
       "src/layers/submarineCables/render/display.js",
-      "src/layers/shared/render/surfacePoints.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium"]
   },
@@ -3543,7 +3553,6 @@
       "src/layers/earthquakes/render/display.js",
       "src/layers/airQuality/render/display.js",
       "src/layers/submarineCables/render/display.js",
-      "src/layers/shared/render/surfacePoints.js",
       "src/layers/firms/render/sprites.js",
       "src/layers/cyclones/render/display.js",
       "src/layers/droneAirspace/render/display.js",
@@ -3593,7 +3602,8 @@
       "src/globe/cesium/orbital.js",
       "src/globe/cesium/worldTime.js",
       "src/data/geoImportLimits.js",
-      "src/data/geoImportPlan.js"
+      "src/data/geoImportPlan.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": [
       "hls.js",
@@ -4273,7 +4283,6 @@
       "src/layers/gnss/render/display.js",
       "src/layers/firms/render/sprites.js",
       "src/layers/submarineCables/render/display.js",
-      "src/layers/shared/render/surfacePoints.js",
       "src/layers/perimeters/render/display.js",
       "src/layers/droneAirspace/render/display.js",
       "src/globe/ground.js",
@@ -4306,7 +4315,9 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
-      "src/data/geoImportLimits.js"
+      "src/data/geoImportLimits.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": [
       "hls.js",
@@ -4394,7 +4405,8 @@
       "src/data/placeBoundaries.js",
       "src/data/placeNames.js",
       "src/data/local_data/us_census_places/files.js",
-      "src/data/local_data/wof_neighborhoods/files.js"
+      "src/data/local_data/wof_neighborhoods/files.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": [
       "cesium",
@@ -4661,7 +4673,9 @@
       "src/geo/",
       "src/layers/directions/render/display.js",
       "src/layers/directions/render/style.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": []
   },
@@ -5031,7 +5045,8 @@
       "src/data/trackedReadout.js",
       "src/data/trackingGesture.js",
       "src/time/worldClock.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -5592,7 +5607,9 @@
       "src/layers/wildlifeSightings/display.js",
       "src/data/spriteOrder.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium"]
   },

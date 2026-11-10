@@ -15,11 +15,14 @@
 // The contract has no ground clamping for sprites: a sprite sits on the
 // terrain, or under Google 3D on the rendered tiles, measured on screen a
 // few per pass and again after moves and tile loads
-// (../../shared/render/surfacePoints.js).
+// (../../../globe/surfacePlacement.js).
 
 import * as geo from '../../../geo/index.js';
 import { rgbaFromCss } from '../../shared/color.js';
-import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
+import {
+  createSurfacePoints,
+  readSurface,
+} from '../../../globe/surfacePlacement.js';
 
 /** Lines per ground set: smaller sets build, and show, sooner. */
 export const SEQUENCE_LINE_BATCH = 120;
@@ -127,7 +130,9 @@ export function createStreetLevelDisplay(engine) {
     // its measure, and a camera move can bring it into view first.
     function locate(row) {
       row.cartographic = geo.cartographic.fromDegrees(row.lon, row.lat);
-      const terrain = engine.surface.terrainHeight(row.cartographic);
+      const terrain = readSurface(engine, row.cartographic, {
+        prefer: 'terrain',
+      });
       row.position = geo.cartesian3.fromDegrees(
         row.lon,
         row.lat,

@@ -7,7 +7,8 @@
 // tiles have loaded; a point whose height holds is not written again, so a
 // parked camera asks for no frames.
 
-import * as geo from '../../../geo/index.js';
+import * as geo from '../geo/index.js';
+import { acceptedSurfaceHeight } from './surfaceDetail.js';
 
 const SAMPLES_PER_PASS = 16;
 const SAMPLE_BUDGET_MS = 4;
@@ -21,8 +22,88 @@ const SCREEN_MARGIN = 0.25;
 const plausible = (height) =>
   Number.isFinite(height) && height >= -500 && height <= 9000;
 
+/** Read the visible surface, or an explicitly requested terrain/mesh floor.
+ * `scene` retains callers that include roofs even on a terrain map; `tiles`
+ * requires a mesh hit. `sceneFloor` keeps the terrain below a scene hit.
+ * A finite tile-size limit also rejects coarse mesh LOD. `minHeight` preserves
+ * consumers that intentionally admit coarse below-sea-level terrain.
+ */
+export function readSurface(
+  engine,
+  cartographic,
+  { exclude = [], prefer, maxTileSizeM = Infinity, minHeight = -500 } = {},
+) {
+  const valid = (height) =>
+    Number.isFinite(height) && height >= minHeight && height <= 9000;
+  const surface = engine?.surface;
+  if (!surface || !cartographic) return undefined;
+  const tiles = engine.maps?.photorealActive?.() === true;
+  if (
+    prefer !== 'terrain' &&
+    (tiles ||
+      prefer === 'scene' ||
+      prefer === 'sceneFloor' ||
+      prefer === 'tiles')
+  ) {
+    let height;
+    try {
+      if (Number.isFinite(maxTileSizeM))
+        height = acceptedSurfaceHeight(
+          surface.sampleHeightDetailed(cartographic, { exclude }),
+          { maxTileSizeM },
+        );
+      else if (surface.supported !== false)
+        height = surface.sampleHeight(cartographic, exclude);
+    } catch {
+      // A streaming or retiring surface may not answer yet.
+    }
+    if (valid(height)) {
+      if (prefer === 'sceneFloor' && !tiles) {
+        const terrain = readSurface(engine, cartographic, {
+          prefer: 'terrain',
+        });
+        return terrain === undefined ? height : Math.max(height, terrain);
+      }
+      return height;
+    }
+    if (prefer === 'tiles') return undefined;
+  }
+  try {
+    const height =
+      surface.terrainHeightSupported !== false
+        ? surface.terrainHeight(cartographic)
+        : undefined;
+    return valid(height) ? height : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Subscribe once to camera rest and changes to the rendered ground. */
+export function surfaceTriggers(engine, onChange) {
+  let loaded = engine.surface.tilesLoaded();
+  let tiles = engine.maps?.photorealActive?.() === true;
+  let terrain = engine.maps?.terrainRevision?.();
+  const removeMove = engine.camera.moveEnd.addEventListener(onChange);
+  const removeFrame = engine.frames.preRender.addEventListener(() => {
+    const nextLoaded = engine.surface.tilesLoaded();
+    const nextTiles = engine.maps?.photorealActive?.() === true;
+    const nextTerrain = engine.maps?.terrainRevision?.();
+    const changed =
+      (nextLoaded && !loaded) || nextTiles !== tiles || nextTerrain !== terrain;
+    loaded = nextLoaded;
+    tiles = nextTiles;
+    terrain = nextTerrain;
+    if (changed) onChange();
+  });
+  return () => {
+    removeMove();
+    removeFrame();
+  };
+}
+
 /**
- * @param {import('../../../globe/contract.js').GlobeEngine} engine
+ * @param {import('./contract.js').GlobeEngine} engine
  * @param {object} options
  * @param {() => Iterable<{ set: object | null, points: object[], exclude?: object[] }>} options.groups
  *   Mover sets with the points they draw, point i as instance i, and what
@@ -31,27 +112,35 @@ const plausible = (height) =>
  *   placement replaces (keeping the height in `surfaceHeight`); one with
  *   `show === false` is skipped.
  * @param {() => void} options.request Asks for a frame after a placement.
- * @param {number} [options.heightOffset=0] Metres above the surface.
+ * @param {number | ((point: object) => number)} [options.heightOffset=0] Metres above the surface.
  * @param {boolean} [options.estimateGround=false] Screen-test a point not
  *   measured yet on the loaded terrain (under 3D tiles without it, at the
  *   ground under the camera) rather than where it stands now.
- * @returns {{ place: () => void, destroy: () => void }} `place()` measures
- *   the points not yet placed on this surface (new points, for example).
+ * @param {number} [options.screenMargin=0.25] Extra viewport fraction to measure.
+ * @param {string | ((point: object) => string | undefined)} [options.prefer] Explicit height policy for readSurface.
+ * @returns {{ place: (options?: { all?: boolean }) => void, destroy: () => void }}
+ *   `place()` measures new points; `place({ all: true })` revisits every point.
  */
 export function createSurfacePoints(
   engine,
-  { groups, request, heightOffset = 0, estimateGround = false },
+  {
+    groups,
+    request,
+    heightOffset = 0,
+    estimateGround = false,
+    screenMargin = SCREEN_MARGIN,
+    prefer,
+  },
 ) {
   let revision = 0;
   let timer = null;
   let destroyed = false;
-  let tilesLoaded = engine.surface.tilesLoaded();
-  let photoreal = engine.maps?.photorealActive?.() === true;
 
   function onScreen(position, size) {
+    if (screenMargin === Infinity) return true;
     const screen = engine.projector.worldToWindow(position);
-    const x = size.width * SCREEN_MARGIN;
-    const y = size.height * SCREEN_MARGIN;
+    const x = size.width * screenMargin;
+    const y = size.height * screenMargin;
     return (
       screen &&
       screen.x >= -x &&
@@ -72,7 +161,8 @@ export function createSurfacePoints(
   }
 
   // Points off screen are passed over until the next move or tile load.
-  function place() {
+  function place({ all = false } = {}) {
+    if (all) revision++;
     clearTimeout(timer);
     timer = null;
     if (destroyed) return;
@@ -80,6 +170,7 @@ export function createSurfacePoints(
     const tiles = engine.maps?.photorealActive?.() === true;
     const started = performance.now();
     let samples = 0;
+    let visited = 0;
     let moved = false;
     let cameraGround;
     for (const { set, points, exclude = [set] } of groups()) {
@@ -90,18 +181,23 @@ export function createSurfacePoints(
         if (point.surfaceRevision === revision) continue;
         if (
           samples >= SAMPLES_PER_PASS ||
-          performance.now() - started >= SAMPLE_BUDGET_MS
+          (visited > 0 && performance.now() - started >= SAMPLE_BUDGET_MS)
         ) {
           if (changed) set.commit();
           if (changed || moved) request();
           timer = setTimeout(place, 0);
           return;
         }
+        visited++;
         point.surfaceRevision = revision;
         if (point.show === false) continue;
+        const offset =
+          typeof heightOffset === 'function'
+            ? heightOffset(point)
+            : heightOffset;
         const estimate = estimateGround && point.surfaceHeight === undefined;
         const terrain = estimate
-          ? engine.surface.terrainHeight(point.cartographic)
+          ? readSurface(engine, point.cartographic, { prefer: 'terrain' })
           : undefined;
         let ground = terrain;
         if (estimate && tiles && !plausible(ground)) {
@@ -115,23 +211,22 @@ export function createSurfacePoints(
           ? geo.cartesian3.fromRadians(
               point.cartographic.longitude,
               point.cartographic.latitude,
-              ground + heightOffset,
+              ground + offset,
             )
           : point.position;
         if (!onScreen(position, size)) continue;
         samples++;
-        let height = tiles
-          ? engine.surface.sampleHeight(point.cartographic, exclude)
-          : undefined;
-        if (!plausible(height))
-          height = terrain ?? engine.surface.terrainHeight(point.cartographic);
+        const height = readSurface(engine, point.cartographic, {
+          exclude,
+          prefer: typeof prefer === 'function' ? prefer(point) : prefer,
+        });
         if (!plausible(height)) continue;
         if (Math.abs(height - point.surfaceHeight) < HEIGHT_EPSILON_M) continue;
         point.surfaceHeight = height;
         point.position = geo.cartesian3.fromRadians(
           point.cartographic.longitude,
           point.cartographic.latitude,
-          height + heightOffset,
+          height + offset,
         );
         set.set(index, { position: point.position });
         changed = true;
@@ -142,18 +237,7 @@ export function createSurfacePoints(
     if (moved) request();
   }
 
-  function refine() {
-    revision++;
-    place();
-  }
-  const removeMoveEnd = engine.camera.moveEnd.addEventListener(refine);
-  const removeFrame = engine.frames.preRender.addEventListener(() => {
-    const loaded = engine.surface.tilesLoaded();
-    const tiles = engine.maps?.photorealActive?.() === true;
-    if ((loaded && !tilesLoaded) || tiles !== photoreal) refine();
-    tilesLoaded = loaded;
-    photoreal = tiles;
-  });
+  const removeSurface = surfaceTriggers(engine, () => place({ all: true }));
 
   return {
     place,
@@ -161,8 +245,7 @@ export function createSurfacePoints(
       if (destroyed) return;
       destroyed = true;
       clearTimeout(timer);
-      removeMoveEnd();
-      removeFrame();
+      removeSurface();
     },
   };
 }

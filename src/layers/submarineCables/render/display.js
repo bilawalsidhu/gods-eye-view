@@ -14,7 +14,7 @@ import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 import * as geo from '../../../geo/index.js';
 import { isPointerFree } from '../../../data/inputOwnership.js';
 import { rgbaFromCss } from '../../shared/color.js';
-import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
+import { createSurfacePoints } from '../../../globe/surfacePlacement.js';
 import {
   featureLabel,
   featureReference,
