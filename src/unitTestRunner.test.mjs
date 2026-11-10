@@ -9,11 +9,12 @@ import {
   UNIT_TEST_NODE_FLAGS,
   UNIT_TEST_ROOTS,
   allocationTestArgs,
-  assertNode24AllocationRuntime,
+  assertCalibratedAllocationRuntime,
   batchUnitTestFiles,
   buildUnitTestPlan,
   discoverUnitTestFiles,
   isCalibratedAllocationRuntime,
+  runParallelTestBatches,
 } from '../scripts/run-unit-tests.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -145,6 +146,31 @@ test('batching degenerates safely (#1631)', () => {
   assert.deepEqual(batches, files.map((file) => [file]));
 });
 
+test('failing parallel batches still execute later files (#1631)', () => {
+  const files = ['src/a.test.mjs', 'src/b.test.mjs', 'src/c.test.mjs'];
+  const overhead =
+    process.execPath.length + 1 +
+    UNIT_TEST_NODE_FLAGS.join(' ').length + 1 +
+    '--test'.length;
+  const argvCharBudget = overhead + files[0].length + 3;
+  const calls = [];
+  const statuses = [7, 0, 2];
+  const status = runParallelTestBatches(files, {
+    argvCharBudget,
+    runBatch(args) {
+      calls.push(args);
+      return statuses[calls.length - 1];
+    },
+  });
+
+  assert.equal(status, 7, 'first failed batch determines the exit status');
+  assert.deepEqual(calls, files.map((file) => ['--test', file]));
+  assert.equal(
+    runParallelTestBatches([], { runBatch: () => { throw new Error('unexpected spawn'); } }),
+    0,
+  );
+});
+
 test('the runner discovers every test file in the repository', () => {
   // CI's unit-test job runs `npm test`, which runs exactly what this function
   // returns. A `*.test.mjs` outside the searched roots therefore never runs
@@ -169,30 +195,27 @@ test('the runner discovers every test file in the repository', () => {
   }
 });
 
-test('allocation runtime calibration is explicit and pinned to Node 24', () => {
-  assert.equal(assertNode24AllocationRuntime('24.19.0'), '24.19.0');
+test('allocation runtime calibration covers both supported Node majors', () => {
+  assert.equal(assertCalibratedAllocationRuntime('24.19.0'), '24.19.0');
   assert.throws(
-    () => assertNode24AllocationRuntime('22.23.1'),
-    /calibrated Node 24 runtime/,
+    () => assertCalibratedAllocationRuntime('22.23.1'),
+    /calibrated Node 24 or 26/,
   );
-  assert.throws(
-    () => assertNode24AllocationRuntime('26.0.0'),
-    /calibrated Node 24 runtime/,
-  );
+  assert.equal(assertCalibratedAllocationRuntime('26.0.0'), '26.0.0');
   assert.equal(isCalibratedAllocationRuntime('24.19.0'), true);
   assert.equal(isCalibratedAllocationRuntime('22.23.1'), false);
-  assert.equal(isCalibratedAllocationRuntime('26.3.0'), false);
+  assert.equal(isCalibratedAllocationRuntime('26.3.0'), true);
 });
 
-test('npm test stays green on every supported engine, not only the calibrated one', () => {
+test('npm test calibrates both supported engines while retaining off-range warnings', () => {
   // package.json wiring: `npm test` must invoke this runner, and the engines
   // range it advertises must not be narrower than what the runner tolerates.
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(pkg.scripts.test, 'node scripts/run-unit-tests.mjs');
   const enginesNode = String(pkg.engines?.node || '');
   assert.ok(enginesNode, 'engines.node must be declared');
-  // The runner throws for uncalibrated runtimes ONLY behind the explicit
-  // opt-in env; by default it skips, so a supported non-24 engine cannot fail.
+  // Unsupported runtimes only skip probes without the explicit opt-in hard gate.
+  // Node 26 is calibrated and runs those probes with the same budgets.
   const runner = readFileSync(new URL('../scripts/run-unit-tests.mjs', import.meta.url), 'utf8');
   assert.match(runner, /GEV_REQUIRE_ALLOCATION_GATE/);
   assert.match(runner, /SKIPPED .*allocation microbenchmarks/);
