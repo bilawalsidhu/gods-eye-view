@@ -683,6 +683,23 @@ test('frozen responses retain availability', async () => {
   assert.ok((await response.blob()).size);
 });
 
+test('frozen native Response retains status and text methods', async () => {
+  const source = createRecentImagerySource({
+    thumbnailUrl: () => 'https://example.invalid/',
+    fetchImpl: async () =>
+      Object.freeze(
+        new Response('image', {
+          status: 200,
+          headers: { 'Data-Present': 'true' },
+        }),
+      ),
+  });
+  const response = await source.getThumbnail(FIJI_CANDIDATE, EAST_HALF);
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), 'image');
+  assert.deepEqual(response.presentBoxes, [EAST_HALF]);
+});
+
 test('removes previous drape when evidence changes from unknown to empty', () => {
   const renderer = createRecentImageryRenderer({ cesium: fakeCesium() });
   const globe = fakeCollection();

@@ -137,13 +137,14 @@ function withPresentBoxes(response, presentBoxes) {
     });
     return response;
   } catch {
-    // Preserve the loader's response contract even for a frozen Response.
-    return {
-      ok: response.ok,
-      headers: response.headers,
-      blob: () => response.blob(),
-      presentBoxes,
-    };
+    // Preserve native Response getters and methods on non-extensible objects.
+    return new Proxy(Object.create(Object.getPrototypeOf(response)), {
+      get(_target, property) {
+        if (property === 'presentBoxes') return presentBoxes;
+        const value = Reflect.get(response, property, response);
+        return typeof value === 'function' ? value.bind(response) : value;
+      },
+    });
   }
 }
 
