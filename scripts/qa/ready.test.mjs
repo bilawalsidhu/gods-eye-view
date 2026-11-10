@@ -287,7 +287,7 @@ test('camera readiness also waits for the startup cover to stop intercepting cli
   });
 });
 
-test('tile and UI polling never request globe frames', async (t) => {
+test('tile and UI polling request frames so a request-mode globe progresses', async (t) => {
   const { engine } = pageEngine(t);
   const previous = globalThis.document;
   globalThis.document = { getAnimations: () => [] };
@@ -295,9 +295,8 @@ test('tile and UI polling never request globe frames', async (t) => {
     if (previous === undefined) delete globalThis.document;
     else globalThis.document = previous;
   });
-  t.mock.method(engine.render, 'request', () => {
-    assert.fail('passive readiness requested a frame');
-  });
+  const reasons = [];
+  t.mock.method(engine.render, 'request', (reason) => reasons.push(reason));
   const page = {
     async waitForFunction(predicate) {
       assert.equal(predicate(), true);
@@ -306,4 +305,5 @@ test('tile and UI polling never request globe frames', async (t) => {
   };
   await whenTilesLoaded(page);
   await whenUiSettled(page);
+  assert.deepEqual(reasons, ['qa-tile-readiness', 'qa-ui-readiness']);
 });

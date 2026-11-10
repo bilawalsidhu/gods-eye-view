@@ -210,6 +210,8 @@ export async function whenTilesLoaded(page, { timeoutMs = 30000 } = {}) {
     () => {
       const engine = window.__godsEyeView?.engine;
       if (!engine || engine.isDestroyed()) return false;
+      // A request-mode globe only updates tile state on drawn frames.
+      engine.render.request('qa-tile-readiness');
       return engine.surface.tilesLoaded();
     },
     { timeout: timeoutMs, polling: 100 },
@@ -221,6 +223,7 @@ export async function whenUiSettled(page) {
   const handle = await page.waitForFunction(
     () => {
       const app = window.__godsEyeView;
+      app?.engine?.render.request('qa-ui-readiness');
       return (
         !app?.styleManager?.transitions?.size &&
         document
