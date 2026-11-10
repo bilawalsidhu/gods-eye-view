@@ -604,6 +604,18 @@ checks. Test ownership and repeated destruction as well as visible output.
 The browser harness is `scripts/qa-contract-suite.mjs`; use
 `--only=ground:,imagery:` for ground and imagery pixel checks.
 
+Three reports keep migration debt from growing: `scripts/report-engine-coupling.mjs`
+counts application coupling, `scripts/report-qa-harness.mjs` counts browser QA
+duplication, and `src/globe/testing/contractCoverage.test.mjs` reports contract
+members the fake-engine suite leaves uncalled. After removing coupling or moving
+QA work to `scripts/qa-strict-harness.mjs` helpers, run the matching report with
+`--write-baseline` and keep only decreases in its baseline. After adding behavioral
+contract checks, remove the newly exercised names from
+`src/globe/testing/contract-uncalled-baseline.json`; keep it sorted, and remove
+members that no longer exist too. Run the matching tests with
+`node --import=./build/registerVue.js --test` followed by their paths; the numeric
+baselines reject growth, and the contract baseline also rejects stale entries.
+
 The application currently registers two kinds: adding another still requires
 registration in `ENGINE_KINDS`, scene construction/choice and the corresponding
 QA harnesses. `assertGlobeEngine` currently validates that registration. The

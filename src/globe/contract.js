@@ -1075,6 +1075,15 @@ const SHAPE = {
   },
 };
 
+/** Required capability members checked by assertGlobeEngine. */
+export function engineContractMembers() {
+  return Object.entries(SHAPE)
+    .flatMap(([namespace, members]) =>
+      Object.keys(members).map((member) => `${namespace}.${member}`),
+    )
+    .sort();
+}
+
 const isNameList = (value) =>
   Array.isArray(value) &&
   value.length > 0 &&

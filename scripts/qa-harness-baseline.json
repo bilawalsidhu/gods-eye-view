@@ -1,0 +1,9 @@
+{
+  "metrics": {
+    "ownLaunch": 98,
+    "fixedSleeps": 117,
+    "loadingScreenReadiness": 9,
+    "cesiumOnlyReads": 75,
+    "ownWaitHelpers": 19
+  }
+}

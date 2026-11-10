@@ -1,5 +1,9 @@
 {
   "metrics": {
+    "attachRendererWithViewer": 33,
+    "restoreFlagCopies": 9,
+    "surfaceCallsOutsideGlobe": 41,
+    "engineSwitchLayerIds": 3,
     "cesiumLayerRendererLines": 0,
     "navaraLayerRendererLines": 0,
     "cesiumImportFiles": 3,
@@ -11,6 +15,5 @@
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 2,
     "engineNameLines": 21
-  },
-  "measuredAt": "Orbital cockpit and bridge mesh sampling"
+  }
 }

@@ -16,6 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { APPLICATION_LAYER_DIRECTORY } from '../src/app/layers/directory.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const BASELINE_PATH = path.join(
@@ -37,12 +38,72 @@ const countLines = (text, pattern) =>
   lines(text).filter((line) => pattern.test(line)).length;
 const countMatches = (text, pattern) =>
   (text.match(new RegExp(pattern.source, 'g')) ?? []).length;
+const layerIds = new Set(APPLICATION_LAYER_DIRECTORY.map(({ id }) => id));
 
 /**
  * The metrics, in report order. `measure(files)` gets every production
  * source as `{ file, text }` (file relative to the repository, with `/`).
  */
 export const ENGINE_COUPLING_METRICS = Object.freeze([
+  {
+    id: 'attachRendererWithViewer',
+    label: 'Modules defining attachRenderer with a viewer or scene parameter',
+    measure: (files) =>
+      files.filter(({ text }) =>
+        /\battachRenderer\s*(?:(?:=|:)\s*(?:async\s+)?(?:function\s*)?)?\(\s*(?:viewer|_viewer|nextViewer|_scene|scene)\s*(?:,[^)]*|=[^)]*)?\)\s*(?:\{|=>)/.test(
+          text,
+        ),
+      ).length,
+  },
+  {
+    id: 'restoreFlagCopies',
+    label: 'Layer directories keeping their own view-restore flag',
+    measure: (files) =>
+      new Set(
+        files
+          .filter(
+            ({ file, text }) =>
+              file.startsWith('src/layers/') &&
+              /\b(?:_restoringViewport|restoringView|waitingForView)\b/.test(
+                text,
+              ),
+          )
+          .map(({ file }) => file.split('/')[2]),
+      ).size,
+  },
+  {
+    id: 'surfaceCallsOutsideGlobe',
+    label: 'Surface sampling calls outside src/globe',
+    measure: (files) =>
+      files
+        .filter(({ file }) => !inGlobe(file))
+        .reduce(
+          (sum, { text }) =>
+            sum +
+            countMatches(
+              text,
+              /\bsurface\??\.\s*(?:terrainHeight|sampleHeight|sampleHeightDetailed|sampleTerrainMostDetailed|clampToHeight|raycast)\s*(?:\?\.)?\(/,
+            ),
+          0,
+        ),
+  },
+  {
+    id: 'engineSwitchLayerIds',
+    label: 'Lines naming catalog layer ids in src/standalone/engineSwitch.js',
+    measure: (files) =>
+      files
+        .filter(({ file }) => file === 'src/standalone/engineSwitch.js')
+        .reduce(
+          (sum, { text }) =>
+            sum +
+            lines(text).filter((line) =>
+              [...line.matchAll(/(['"])([^'"\n]+)\1/g)].some((match) =>
+                layerIds.has(match[2]),
+              ),
+            ).length,
+          0,
+        ),
+  },
   {
     id: 'cesiumLayerRendererLines',
     label: 'Lines in src/layers/**/render/cesium*',
@@ -170,7 +231,11 @@ export function readProductionSources(root = ROOT) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) visit(absolute);
-      else if (entry.isFile() && /\.(?:js|vue)$/.test(entry.name))
+      else if (
+        entry.isFile() &&
+        /\.(?:js|vue)$/.test(entry.name) &&
+        !/\.test\./.test(entry.name)
+      )
         files.push({
           file: path.relative(root, absolute).split(path.sep).join('/'),
           text: fs.readFileSync(absolute, 'utf8'),
