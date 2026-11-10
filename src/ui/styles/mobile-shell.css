@@ -156,9 +156,10 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
 
 body.mobile-shell #left-panel-stack > *,
 body.mobile-shell #right-context-rail > *,
-/* Rail rules show expanded Weather and Recent Imagery by id; on phones they
-   belong to the Context sheet only. */
+/* Rail rules show expanded Weather, News and Recent Imagery by id; on phones
+   they belong to the Context sheet only. */
 body.mobile-shell #right-context-rail > #weather-panel,
+body.mobile-shell #right-context-rail > #news-panel,
 body.mobile-shell #right-context-rail > #recent-imagery-panel {
   display: none;
 }
@@ -184,6 +185,9 @@ body.mobile-shell[data-mobile-sheet='context']
   > #weather-panel:not([hidden]),
 body.mobile-shell[data-mobile-sheet='context']
   #right-context-rail
+  > #news-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
   > #recent-imagery-panel:not([hidden]),
 body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
   position: relative;
@@ -193,6 +197,12 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
   max-width: none;
   margin: 0;
   transform: none;
+}
+
+/* The sheet scrolls: News keeps its height instead of shrinking under the
+   panel below it, as the rail makes it do on a desktop. */
+body.mobile-shell #right-context-rail > #news-panel:not(.collapsed) {
+  flex-shrink: 0;
 }
 
 /* ── Dock: voice floats above the tab bar; search and presets are sheets ─ */

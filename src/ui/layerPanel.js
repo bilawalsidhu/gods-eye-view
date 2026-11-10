@@ -11,6 +11,7 @@ import {
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
+import { createNewsPanel } from './newsPanel.js';
 import {
   translateFeedError,
   translateStatusLine,
@@ -81,6 +82,7 @@ const PANEL_GROUPS = [
       'fire-perimeters',
       'gnss-integrity',
       's2-ghostmaps',
+      'news',
     ],
   },
   {
@@ -317,6 +319,11 @@ export class LayerPanel {
         container?.ownerDocument?.getElementById?.('weather-panel-body'),
       setLayerParams: this.setLayerParams,
     });
+    this._newsPanel?.destroy();
+    this._newsPanel = createNewsPanel({
+      container: container?.ownerDocument?.getElementById?.('news-panel-body'),
+      setLayerParams: this.setLayerParams,
+    });
     this._mountRecentImagery();
     this._renderToggles();
   }
@@ -352,6 +359,8 @@ export class LayerPanel {
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
+    this._newsPanel?.destroy();
+    this._newsPanel = null;
     this._recentImageryPanel?.destroy();
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
@@ -416,10 +425,12 @@ export class LayerPanel {
       onLocaleChange(() => {
         this._paint();
         this._refreshWeatherPanel();
+        this._refreshNewsPanel();
       }),
     );
     this._paint();
     this._refreshWeatherPanel();
+    this._refreshNewsPanel();
   }
 
   /** Present every row from the layers' current state and render them. */
@@ -648,6 +659,15 @@ export class LayerPanel {
     }
     this._paint();
     this._refreshWeatherPanel();
+    this._refreshNewsPanel();
+  }
+
+  /** Feed the News rail panel the view the news layer publishes while on. */
+  _refreshNewsPanel() {
+    const layer = this.getAll().find(({ id }) => id === 'news');
+    this._newsPanel?.update(
+      layer?.enabled ? this._rowControlsFor(layer.id)?.feed || null : null,
+    );
   }
 
   _buildMetaText(layer) {
