@@ -300,8 +300,8 @@ export function createFlightSnapshotRenderer({
     // floor cells collected in the loop (fire-and-forget, single-flight;
     // read synchronously by NEXT poll's clamp — the military-layer pattern).
     warmGroundFloor(floorWarmPoints);
-    // Round 4: sample the RENDERED mesh for those same cells (one-shot per
-    // cell, budget-capped, viewer-proximate, google-3d regime only). Own
+    // Round 4: sample the RENDERED mesh for those same cells (a few probes
+    // per cell, budget-capped, viewer-proximate, google-3d regime only). Own
     // billboards/models are excluded so a vertical probe can't land on an
     // aircraft instead of the pavement.
     sampleMeshFloorCells(flightState._viewer?.scene, floorWarmPoints, {

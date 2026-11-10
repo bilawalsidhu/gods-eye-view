@@ -1,0 +1,11 @@
+/* The site a ground focus holds, named under the off-nadir readout
+   (src/ui/views/panels/CockpitOrbital.vue). Empty, it takes no room. */
+.cockpit-orbital-focus:not(:empty) {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #f4fbff;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

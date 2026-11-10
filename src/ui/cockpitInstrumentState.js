@@ -52,15 +52,28 @@ function createRimState(value) {
  */
 export function createInstrumentState() {
   return {
+    // 'aircraft' or 'vessel': which readouts the HUD labels and shows.
+    kind: 'aircraft',
     layer: null,
     callsign: t('AIRCRAFT'),
     meta: { text: t('LIVE TRACK · COURSE ALIGNED'), emergency: false },
     speed: null,
     altitude: null,
+    // A vessel's course over ground, shown where an aircraft shows altitude.
+    course: null,
     heading: null,
+    // A vessel's `heading` readout is its true heading, or its course over
+    // ground when it reports none: 'heading' | 'course' | null.
+    trackSource: null,
     speedRim: createRimState('---'),
     altitudeRim: createRimState('-----'),
     compass: [],
+    // A bridge tape's bow (prograde) and stern (retrograde) marks, in
+    // division slots off its centre; null when off the tape or not a bridge.
+    compassMarkers: { prograde: null, retrograde: null },
+    // A bridge view turned off the bow: whether it is, the target yaw off
+    // the bow (degrees, -180..180, starboard positive) and its worded readout.
+    look: { offset: false, yawDeg: 0, readout: '' },
     clock: '--:--:--Z',
     position: '--° · --°',
   };
@@ -73,6 +86,8 @@ export function createInstrumentState() {
  */
 export function createRouteState() {
   return {
+    // A vessel's card shows only the free-text AIS destination.
+    kind: 'aircraft',
     visible: false,
     from: t('UNKNOWN'),
     to: t('UNKNOWN'),
