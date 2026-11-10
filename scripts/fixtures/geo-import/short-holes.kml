@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2"><Document>
+<Placemark><name>two-point-hole</name><Polygon><altitudeMode>absolute</altitudeMode><outerBoundaryIs><LinearRing><coordinates>0,0,100 2,0,100 2,2,100 0,2,100 0,0,100</coordinates></LinearRing></outerBoundaryIs><innerBoundaryIs><LinearRing><coordinates>0.4,0.4,100 0.8,0.4,100</coordinates></LinearRing></innerBoundaryIs></Polygon></Placemark>
+<Placemark><name>repeated-hole</name><Polygon><altitudeMode>absolute</altitudeMode><outerBoundaryIs><LinearRing><coordinates>0,0,100 2,0,100 2,2,100 0,2,100 0,0,100</coordinates></LinearRing></outerBoundaryIs><innerBoundaryIs><LinearRing><coordinates>0.4,0.4,100 0.8,0.4,100 0.4,0.4,100</coordinates></LinearRing></innerBoundaryIs></Polygon></Placemark>
+
+</Document></kml>

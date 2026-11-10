@@ -3590,7 +3590,9 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/globe/cesium/orbital.js",
-      "src/globe/cesium/worldTime.js"
+      "src/globe/cesium/worldTime.js",
+      "src/data/geoImportLimits.js",
+      "src/data/geoImportPlan.js"
     ],
     "external": [
       "hls.js",
@@ -4302,7 +4304,8 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/geoImportLimits.js"
     ],
     "external": [
       "hls.js",
@@ -5254,7 +5257,8 @@
       "src/data/geoImportImages.js",
       "src/data/geoImportRecords.js",
       "src/data/geoImportKml.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/data/geoImportLimits.js"
     ],
     "external": ["cesium"]
   },

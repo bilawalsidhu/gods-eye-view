@@ -1,6 +1,8 @@
 // Inspect encoded headers before allowing the browser to decode local images.
-const MAX_IMPORT_IMAGE_PIXELS = 16 * 1024 * 1024;
-const MAX_SIDE = 8192;
+import {
+  MAX_IMPORT_IMAGE_PIXELS,
+  MAX_IMPORT_IMAGE_SIDE,
+} from './geoImportLimits.js';
 
 /** Width and height from a supported raster header; no image is decoded. */
 export function importImageSize(bytes) {
@@ -62,7 +64,9 @@ export function createImportImageBudget() {
     const size = importImageSize(bytes);
     if (
       !size ||
-      size.some((n) => !Number.isInteger(n) || n <= 0 || n > MAX_SIDE) ||
+      size.some(
+        (n) => !Number.isInteger(n) || n <= 0 || n > MAX_IMPORT_IMAGE_SIDE,
+      ) ||
       pixels + size[0] * size[1] > MAX_IMPORT_IMAGE_PIXELS
     )
       throw new Error(

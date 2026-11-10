@@ -4,6 +4,8 @@
 // whose centre is the point (src/data/geoImportDisplay.js), so the pin's
 // tip, a KML hot spot or an icon's sub-region lands where Cesium put it.
 
+import { MAX_ICON_SIDE } from './geoImportLimits.js';
+
 /** Cesium.Color's CSS form of rgba in 0..1 (its float-to-byte conversion). */
 export function cssOf([red, green, blue, alpha = 1]) {
   const byte = (v) => (v === 1 ? 255 : (v * 256) | 0);
@@ -89,7 +91,7 @@ export function iconBox(icon, natural) {
  */
 export function composeIcon(
   icon,
-  { image, createCanvas, ratio = 1, maxSide = 512 } = {},
+  { image, createCanvas, ratio = 1, maxSide = MAX_ICON_SIDE } = {},
 ) {
   const natural = image
     ? {

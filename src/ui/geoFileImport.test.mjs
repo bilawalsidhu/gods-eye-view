@@ -9,7 +9,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createGeoFileImport, summarize } from './geoFileImport.js';
-import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
+import { GeoImportError } from '../data/geoFileImport.js';
+import { MAX_IMPORTED_FILES } from '../data/geoImportLimits.js';
 import { emptyRecords, recordFootprint } from '../data/geoImportRecords.js';
 
 class FakeClassList {

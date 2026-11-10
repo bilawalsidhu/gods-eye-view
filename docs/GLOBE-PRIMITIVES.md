@@ -350,12 +350,13 @@ Raised polygons (KML absolute or relative) draw their fills as meshes and
 their outlines as lines at the vertices' heights. A ground overlay's colour
 tints its image and its alpha fades it; a rotated overlay's image is turned
 on a canvas over the box around it, as Cesium turns its rectangle in degrees,
-and an absolute overlay is raised to its altitude (Cesium raises only
-absolute ones). The shared display has known limits against Cesium: wall
-fills and extruded prisms are omitted (their top geometry remains), and
-`gx:LatLonQuad`, a rotated overlay whose box passes a pole and a raised
-plain-colour overlay are omitted. These are counted as undrawn. Ground edges
-use great circles rather than rhumb lines.
+and an absolute image or plain-colour overlay is a mesh at its altitude,
+including negative heights (Cesium raises only absolute ones).
+The shared display has known limits against Cesium: wall fills and extruded
+prisms are omitted (their top geometry remains), and
+`gx:LatLonQuad` and a rotated overlay whose box passes a pole are omitted.
+These are counted as undrawn. Ground edges use great circles rather than
+rhumb lines.
 
 ## Input ownership
 

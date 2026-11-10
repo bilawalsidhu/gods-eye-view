@@ -1,9 +1,6 @@
 /** Session-local file controls, serial loading and application-owned navigation. */
-import {
-  GeoImportError,
-  MAX_IMPORTED_FILES,
-  loadGeoFile,
-} from '../data/geoFileImport.js';
+import { GeoImportError, loadGeoFile } from '../data/geoFileImport.js';
+import { MAX_IMPORTED_FILES } from '../data/geoImportLimits.js';
 import { drawImportedFile } from '../data/geoImportDisplay.js';
 import { formatNumber, t, tn, translateKnown } from '../i18n/index.js';
 import { flyToFootprint } from './flyToDataSource.js';

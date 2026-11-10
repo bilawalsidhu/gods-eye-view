@@ -11,7 +11,7 @@
 //   ignored the depth test;
 // - ground overlays: image layers, or textured meshes at absolute altitudes,
 //   tinted and turned on a canvas when the KML says so; a plain colour is
-//   a ground fill.
+//   a ground fill or a mesh at an absolute altitude.
 // Nothing is pickable: an imported file has no card. Ground heights under
 // the points come from engine.surface, sampled again by refreshGround():
 // the terrain where the globe is drawn, else (3D tiles) the scene drawn
@@ -19,35 +19,17 @@
 // pins out of height queries).
 
 import * as geo from '../geo/index.js';
-import { normalizeGroundItem } from '../globe/ground.js';
-import { polygonShape, rectangleShape } from '../scenes/dataPacks/shapes.js';
+import { planImport } from './geoImportPlan.js';
+import {
+  BATCH,
+  HORIZON_LIFT_M,
+  CLAMP_TILES_BELOW_M,
+  MAX_ICON_PIXEL_RATIO,
+  POLYGON_YIELD_MS,
+} from './geoImportLimits.js';
 import { composeIcon } from './geoImportPins.js';
-import { recordFootprint } from './geoImportRecords.js';
+import { emptyRecords, recordFootprint } from './geoImportRecords.js';
 
-const POLYGON_ORDER = 0;
-const LINE_ORDER = 1;
-// Over the layers' rasters, as Cesium's ground rectangle drew over imagery.
-const OVERLAY_ORDER = 30;
-// The horizon test lifts each point by this much (as GhostMaps does):
-// ground can lie below the ellipsoid.
-const HORIZON_LIFT_M = 2000;
-// Under this camera height, points on 3D tiles are clamped to the tiles
-// drawn now; higher up the terrain answers (Cesium's 250 km).
-const CLAMP_TILES_BELOW_M = 250_000;
-const BATCH = 256;
-// Canvas pixels every imported icon look shares (64 MiB of RGBA).
-const ICON_PIXEL_BUDGET = 16 * 1024 * 1024;
-// Canvas pixels every tinted or turned ground overlay of a file shares.
-const OVERLAY_PIXEL_BUDGET = 16 * 1024 * 1024;
-// The longest side of a tinted or turned ground overlay's canvas.
-const MAX_OVERLAY_SIDE = 4096;
-// Bound main-thread triangulation stalls and the number of raised outlines.
-// Median polygonShape times (three runs on a fast laptop): 32,768 vertices
-// took 58 ms (37 ms in 128 rings), versus 198 ms for 65,536 vertices.
-// Holes make earcut quadratic: 1,000 took 110 ms and 10,000 took 4.8 s.
-// Past the vertex limit only outlines draw; past the ring limit nothing draws.
-const MAX_RAISED_RINGS = 128;
-const MAX_RAISED_VERTICES = 32_768;
 let serial = 0;
 // Each engine's imported point sets, left out of each other's ground.
 const pointSets = new WeakMap();
@@ -64,129 +46,33 @@ const imageFromUrl = async (url) => {
   return image;
 };
 
-// A ground item the contract accepts, or null (a degenerate ring or line).
-function checked(kind, item) {
-  try {
-    normalizeGroundItem(kind, item);
-    return item;
-  } catch {
-    return null;
-  }
-}
-
-// A ground overlay's box with east past west across 180°, and how a corner
-// turns by its rotation: KML's degrees counter-clockwise about the centre,
-// in longitude and latitude (Cesium's rectangle rotation).
-function overlayBox({ rectangle, rotation = 0 }) {
-  const { west, south, north } = rectangle;
-  const east = rectangle.east < west ? rectangle.east + 360 : rectangle.east;
-  const box = { west, south, east, north };
-  const center = [(west + east) / 2, (south + north) / 2];
-  const angle = (rotation * Math.PI) / 180;
-  const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
-  const turn = ([lon, lat]) => {
-    const [x, y] = [lon - center[0], lat - center[1]];
-    return [center[0] + x * cos - y * sin, center[1] + x * sin + y * cos];
-  };
-  return { box, center, angle, turn };
-}
-
-// What a ground overlay's image layer draws: its image tinted by the
-// overlay's colour and turned by its rotation onto the box around the
-// turned image (transparent outside it). Null when that box passes a pole.
-async function overlayImage(overlay, loadImage, createCanvas, maxSide, cache) {
-  const tint = overlay.color.slice(0, 3);
-  const { box, center, angle } = overlayBox(overlay);
-  if (tint.every((value) => value === 1) && !angle)
-    return { url: overlay.url, rectangle: overlay.rectangle };
-  const [width, height] = [box.east - box.west, box.north - box.south];
-  const [cos, sin] = [Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle))];
-  const [spanX, spanY] = [
-    width * cos + height * sin,
-    width * sin + height * cos,
-  ];
-  const rectangle = {
-    west: center[0] - spanX / 2,
-    south: center[1] - spanY / 2,
-    east: center[0] + spanX / 2,
-    north: center[1] + spanY / 2,
-  };
-  if (angle && (rectangle.south < -90 || rectangle.north > 90 || spanX >= 360))
-    return null;
-  const wrap = (lon) => (lon > 180 ? lon - 360 : lon < -180 ? lon + 360 : lon);
-  const bounds = angle
-    ? { ...rectangle, west: wrap(rectangle.west), east: wrap(rectangle.east) }
-    : overlay.rectangle;
-  const key = JSON.stringify([overlay.url, tint, angle, width / height]);
-  if (cache.has(key)) return { image: cache.get(key), rectangle: bounds };
-  let image;
-  try {
-    image = await loadImage(overlay.url);
-  } catch {
-    // An image that does not decode draws nothing, as on the plain path.
-    return { url: overlay.url, rectangle: overlay.rectangle };
-  }
-  const natural = [
-    image.naturalWidth || image.width,
-    image.naturalHeight || image.height,
-  ];
-  // Pixels per degree: one scale on both axes when turned, so the image
-  // turns in degrees as Cesium's does (the canvas budget bounds its size).
-  let [scaleX, scaleY] = [natural[0] / width, natural[1] / height];
-  if (angle) scaleX = scaleY = Math.max(scaleX, scaleY);
-  const fit = Math.min(
-    1,
-    maxSide / (spanX * scaleX),
-    maxSide / (spanY * scaleY),
-  );
-  [scaleX, scaleY] = [scaleX * fit, scaleY * fit];
+// Execute the canvas recipe; geometry and pixel budgets are decided by the plan.
+function overlayImage(entry, images, createCanvas, cache) {
+  const recipe = entry.canvas;
+  if (!recipe) return images.get(entry.url);
+  if (cache.has(recipe.key)) return cache.get(recipe.key);
   const canvas = createCanvas();
-  canvas.width = Math.max(1, Math.round(spanX * scaleX));
-  canvas.height = Math.max(1, Math.round(spanY * scaleY));
+  canvas.width = recipe.width;
+  canvas.height = recipe.height;
   const context = canvas.getContext('2d');
   context.translate(canvas.width / 2, canvas.height / 2);
-  // The canvas's y runs south: a counter-clockwise turn is a negative one.
-  context.rotate(-angle);
-  context.drawImage(
-    image,
-    (-width * scaleX) / 2,
-    (-height * scaleY) / 2,
-    width * scaleX,
-    height * scaleY,
-  );
-  if (tint.some((value) => value !== 1)) {
+  context.rotate(-recipe.angle);
+  context.drawImage(images.get(entry.url), ...recipe.draw);
+  if (recipe.tint.some((value) => value !== 1)) {
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < pixels.data.length; i += 4)
       for (let channel = 0; channel < 3; channel++)
-        pixels.data[i + channel] *= tint[channel];
+        pixels.data[i + channel] *= recipe.tint[channel];
     context.putImageData(pixels, 0, 0);
   }
-  cache.set(key, canvas);
-  return { image: canvas, rectangle: bounds };
+  cache.set(recipe.key, canvas);
+  return canvas;
 }
 
 // KML headings are from north (Cesium's billboard on the Earth's axis):
 // the sprite turns on screen with the camera's heading.
 const turnsWithCamera = (look) => look.pins.some((pin) => pin.rotation);
 const onScreen = (pin, heading) => (pin.rotation ? pin.rotation + heading : 0);
-
-const flat = (positions) => positions.map(([lon, lat]) => [lon, lat]);
-const cartesian = ([lon, lat, height = 0]) =>
-  geo.cartesian3.fromDegrees(lon, lat, height);
-
-/** One key per drawn look of an icon, so equal pins share a sprite set. */
-const lookKey = (icon, depth) =>
-  JSON.stringify([
-    icon.image,
-    icon.widthPx,
-    icon.heightPx,
-    icon.scale,
-    icon.origin,
-    icon.offsetPx,
-    icon.subRegion,
-    icon.scaleByDistance,
-    depth,
-  ]);
 
 /**
  * Draw one imported file's records on `engine`. Resolves once its icons
@@ -212,7 +98,10 @@ export async function drawImportedFile(
     visible = true,
     loadImage = imageFromUrl,
     createCanvas = () => document.createElement('canvas'),
-    pixelRatio = Math.max(1, Math.min(2, globalThis.devicePixelRatio || 1)),
+    pixelRatio = Math.max(
+      1,
+      Math.min(MAX_ICON_PIXEL_RATIO, globalThis.devicePixelRatio || 1),
+    ),
     now = () => performance.now(),
     signal,
     isCurrent = () => true,
@@ -227,7 +116,7 @@ export async function drawImportedFile(
   const lines = [];
   const meshes = [];
   const pins = [];
-  const kinds = { ...records.undrawn };
+  const kinds = {};
   const layers = [];
   const looks = new Map();
   let drawn = 0;
@@ -256,275 +145,136 @@ export async function drawImportedFile(
 
   try {
     checkActive();
-    // Fills under ground lines; a plain-colour overlay is a fill too.
-    const fills = [];
+    const ground = [];
+    const images = new Map();
+    const metadata = new Map();
+    const overlayCache = new Map();
+    function drawPlan(plan) {
+      drawn += plan.report.drawn;
+      for (const [kind, count] of Object.entries(plan.report.kinds))
+        kinds[kind] = (kinds[kind] ?? 0) + count;
+      ground.push(...plan.ground);
+      for (const entry of plan.meshes) {
+        const { positions, indices, color, uv } = entry;
+        meshes.push(
+          engine.meshes.createMesh({
+            id: `${prefix}-mesh-${meshes.length}`,
+            positions,
+            indices,
+            color,
+            show: shown,
+            ...(uv
+              ? {
+                  uv,
+                  image: overlayImage(
+                    entry,
+                    images,
+                    createCanvas,
+                    overlayCache,
+                  ),
+                }
+              : {}),
+          }),
+        );
+      }
+      for (const entry of plan.lines) {
+        const line = engine.lines.createLine({
+          id: `${prefix}-line-${lines.length}`,
+          widthPx: entry.widthPx,
+          color: entry.color,
+        });
+        line.setPositions(entry.positions);
+        line.show(shown);
+        lines.push(line);
+      }
+      for (const entry of plan.overlays) {
+        const image =
+          entry.canvas &&
+          overlayImage(entry, images, createCanvas, overlayCache);
+        layers.push(
+          engine.imagery.createLayer({
+            id: `${prefix}-overlay-${layers.length}`,
+            source: {
+              kind: 'image',
+              rectangle: entry.rectangle,
+              ...(image ? { image } : { url: entry.url }),
+            },
+            alpha: entry.alpha,
+            show: shown,
+            order: entry.order,
+          }),
+        );
+      }
+    }
     let lastYield = now();
     for (const polygon of records.polygons) {
-      if (now() - lastYield > 8) {
+      if (now() - lastYield > POLYGON_YIELD_MS) {
         await new Promise((resolve) => setTimeout(resolve, 0));
         checkActive();
         lastYield = now();
       }
-      let any = false;
-      if (polygon.raised && polygon.rings.length > MAX_RAISED_RINGS) {
-        kinds.complexPolygon = (kinds.complexPolygon ?? 0) + 1;
-        continue;
-      }
-      if (polygon.fill && polygon.raised) {
-        const vertices = polygon.rings.reduce((n, ring) => n + ring.length, 0);
-        const shape =
-          vertices <= MAX_RAISED_VERTICES && polygonShape(polygon.rings);
-        if (vertices > MAX_RAISED_VERTICES)
-          kinds.complexPolygon = (kinds.complexPolygon ?? 0) + 1;
-        if (shape) {
-          meshes.push(
-            engine.meshes.createMesh({
-              id: `${prefix}-fill-${meshes.length}`,
-              positions: shape.attributes.position.values,
-              indices: shape.indices,
-              color: polygon.fill,
-              show: shown,
-            }),
-          );
-          any = true;
-        }
-      } else if (polygon.fill) {
-        const item = checked('polygon', {
-          rings: polygon.rings.map(flat),
-          fill: polygon.fill,
-        });
-        if (item) {
-          fills.push(item);
-          any = true;
-        } else kinds.polygon = (kinds.polygon ?? 0) + 1;
-      }
-      if (polygon.raised && polygon.outline)
-        for (const ring of polygon.rings) {
-          if (ring.length < 2) continue;
-          const closed = [...ring, ring[0]].map(cartesian);
-          const line = engine.lines.createLine({
-            id: `${prefix}-outline-${lines.length}`,
-            widthPx: 1,
-            color: polygon.outline.color,
-          });
-          line.setPositions(closed);
-          line.show(shown);
-          lines.push(line);
-          any = true;
-        }
-      if (any) drawn++;
+      drawPlan(planImport({ ...emptyRecords(), polygons: [polygon] }));
     }
-    const overlayCache = new Map();
-    const overlayImages = new Map();
-    const overlaySide = Math.min(
-      MAX_OVERLAY_SIDE,
-      Math.floor(
-        Math.sqrt(OVERLAY_PIXEL_BUDGET / Math.max(1, records.overlays.length)),
-      ),
-    );
-    // KML drawOrder, then the document's: equal layer orders draw in
-    // creation order, and a file imported later over this one.
-    const overlays = [...records.overlays].sort(
-      (a, b) => (a.drawOrder ?? 0) - (b.drawOrder ?? 0),
-    );
-    for (const overlay of overlays) {
-      // Cesium raises only an absolute overlay, to its altitude.
-      const raise =
-        overlay.altitudeMode === 'absolute' && overlay.altitude > 0
-          ? overlay.altitude
-          : undefined;
-      if (overlay.url) {
-        const prepared = await overlayImage(
-          overlay,
-          loadImage,
-          createCanvas,
-          overlaySide,
-          overlayCache,
-        );
-        checkActive();
-        if (!prepared) {
-          kinds.rotatedOverlay = (kinds.rotatedOverlay ?? 0) + 1;
-          continue;
-        }
-        if (raise) {
-          let image = prepared.image ?? overlayImages.get(overlay.url);
-          if (!image) {
-            try {
-              image = await loadImage(overlay.url);
-              overlayImages.set(overlay.url, image);
-            } catch {
-              checkActive();
-              kinds.raisedOverlay = (kinds.raisedOverlay ?? 0) + 1;
-              continue;
-            }
-            checkActive();
-          }
-          const { west, south, east, north } = prepared.rectangle;
-          const shape = rectangleShape([west, south, east, north], raise);
-          meshes.push(
-            engine.meshes.createMesh({
-              id: `${prefix}-overlay-${meshes.length}`,
-              positions: shape.attributes.position.values,
-              indices: shape.indices,
-              uv: shape.attributes.st.values,
-              image,
-              color: [1, 1, 1, Math.min(0.99, overlay.color[3])],
-              show: shown,
-            }),
-          );
-          drawn++;
-          continue;
-        }
-        layers.push(
-          engine.imagery.createLayer({
-            id: `${prefix}-overlay-${layers.length}`,
-            source: { kind: 'image', ...prepared },
-            // Cesium's transparent image material: at most 0.99.
-            alpha: Math.min(0.99, overlay.color[3]),
-            show: shown,
-            order: OVERLAY_ORDER,
-          }),
-        );
-        drawn++;
-        continue;
-      }
-      // A plain colour draws as a ground fill.
-      if (raise) {
-        kinds.raisedOverlay = (kinds.raisedOverlay ?? 0) + 1;
-        continue;
-      }
-      const { west, south, east, north } = overlay.rectangle;
-      const item = checked('cell', { west, south, east, north });
-      if (!item) continue;
-      const { box, turn } = overlayBox(overlay);
-      const rings = [
-        [
-          [box.west, box.south],
-          [box.east, box.south],
-          [box.east, box.north],
-          [box.west, box.north],
-        ].map(turn),
-      ];
-      const fill = checked('polygon', { rings, fill: overlay.color });
-      if (!fill) {
-        kinds.rotatedOverlay = (kinds.rotatedOverlay ?? 0) + 1;
-        continue;
-      }
-      fills.push(fill);
-      drawn++;
-    }
-    if (fills.length) {
-      const set = engine.ground.createSet({
-        id: `${prefix}-polygons`,
-        kind: 'polygon',
-        order: POLYGON_ORDER,
-      });
-      groundSets.push(set);
-      set.replace(fills);
-      set.commit();
-      set.show(shown);
-    }
-
-    const corridors = [];
-    for (const record of records.lines) {
-      if (record.ground) {
-        const item = checked('corridor', {
-          positions: flat(record.positions),
-          color: record.color,
-          widthPx: record.widthPx,
-        });
-        if (!item) continue;
-        corridors.push(item);
-      } else {
-        const line = engine.lines.createLine({
-          id: `${prefix}-line-${lines.length}`,
-          widthPx: record.widthPx,
-          color: record.color,
-        });
-        line.setPositions(record.positions.map(cartesian));
-        line.show(shown);
-        lines.push(line);
-      }
-      drawn++;
-    }
-    if (corridors.length) {
-      const set = engine.ground.createSet({
-        id: `${prefix}-lines`,
-        kind: 'corridor',
-        order: LINE_ORDER,
-      });
-      groundSets.push(set);
-      set.replace(corridors);
-      set.commit();
-      set.show(shown);
-    }
-
-    for (const point of records.points) {
-      const depth = point.altitude === 'absolute' ? 'normal' : 'always';
-      const key = lookKey(point.icon, depth);
-      let look = looks.get(key);
-      if (!look)
-        looks.set(
-          key,
-          (look = { icon: point.icon, depth, pins: [], set: null, count: 0 }),
-        );
-      const [lon, lat, height = 0] = point.position;
-      look.pins.push({
-        lon,
-        lat,
-        offset: point.altitude === 'relative' ? height : 0,
-        height: point.altitude === 'absolute' ? height : null,
-        ground: undefined,
-        position: null,
-        horizon: null,
-        show: true,
-        color: point.icon.color ?? [1, 1, 1, 1],
-        rotation: point.icon.rotation ?? 0,
-      });
-    }
-    pins.push(...[...looks.values()].flatMap((look) => look.pins));
-    const maxSide = Math.min(
-      512,
-      Math.floor(Math.sqrt(ICON_PIXEL_BUDGET / Math.max(1, looks.size))),
-    );
+    const remaining = { ...records, polygons: [] };
+    const pending = planImport(remaining);
     await Promise.all(
-      [...looks.values()].map(async (look) => {
-        const url = look.icon.image?.url;
-        let image;
-        if (url) {
-          try {
-            image = await loadImage(url);
-          } catch {
-            // An icon that does not decode draws nothing, as a billboard
-            // without an image.
-            return;
-          }
+      pending.images.map(async (url) => {
+        try {
+          const image = await loadImage(url);
+          images.set(url, image);
+          metadata.set(url, {
+            width: image.naturalWidth || image.width,
+            height: image.naturalHeight || image.height,
+          });
+        } catch {
+          metadata.set(url, null);
         }
         checkActive();
-        const { canvas, side } = composeIcon(look.icon, {
-          image,
-          createCanvas,
-          ratio: pixelRatio,
-          maxSide,
-        });
-        look.set = engine.movers.createSet({
-          id: `${prefix}-pins-${look.depth}-${looks.size}-${++serial}`,
-          kind: 'sprite',
-          capacity: look.pins.length,
-          depthTest: look.depth,
-          pickable: false,
-          sprite: {
-            sizePx: side,
-            atlas: { canvas, cells: { icon: [0, 0, 1, 1] } },
-            ...(look.icon.scaleByDistance
-              ? { scaleByDistance: [...look.icon.scaleByDistance] }
-              : {}),
-          },
-        });
-        pointSetsOf(engine).add(look.set);
-        drawn += look.pins.length;
       }),
     );
+    checkActive();
+    const plan = planImport(remaining, undefined, { images: metadata });
+    drawPlan(plan);
+    for (const kind of ['polygon', 'corridor']) {
+      const entries = ground.filter((entry) => entry.kind === kind);
+      if (!entries.length) continue;
+      const set = engine.ground.createSet({
+        id: `${prefix}-${kind}`,
+        kind,
+        order: entries[0].order,
+      });
+      groundSets.push(set);
+      set.replace(entries.map((entry) => entry.item));
+      set.commit();
+      set.show(shown);
+    }
+    for (const planned of plan.pins) {
+      const look = { ...planned, set: null, count: 0 };
+      looks.set(looks.size, look);
+      pins.push(...look.pins);
+      if (!look.draw) continue;
+      const { canvas, side } = composeIcon(look.icon, {
+        image: images.get(look.icon.image?.url),
+        createCanvas,
+        ratio: pixelRatio,
+        maxSide: look.maxSide,
+      });
+      look.set = engine.movers.createSet({
+        id: `${prefix}-pins-${look.depth}-${looks.size}-${++serial}`,
+        kind: 'sprite',
+        capacity: look.pins.length,
+        depthTest: look.depth,
+        pickable: false,
+        sprite: {
+          sizePx: side,
+          atlas: { canvas, cells: { icon: [0, 0, 1, 1] } },
+          ...(look.icon.scaleByDistance
+            ? { scaleByDistance: [...look.icon.scaleByDistance] }
+            : {}),
+        },
+      });
+      pointSetsOf(engine).add(look.set);
+    }
     checkActive();
     for (let from = 0; from < pins.length; from += BATCH) {
       settle(heightContext(), from, from + BATCH);

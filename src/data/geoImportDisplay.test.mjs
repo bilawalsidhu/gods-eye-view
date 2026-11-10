@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
 import { GROUND_HARNESSES } from '../testSupport/groundDisplayEngines.mjs';
+import {
+  MAX_RAISED_RINGS,
+  MAX_RAISED_VERTICES,
+  OVERLAY_PIXEL_BUDGET,
+  BATCH,
+} from './geoImportLimits.js';
 import { drawImportedFile } from './geoImportDisplay.js';
 import { emptyRecords, geoJsonRecords } from './geoImportRecords.js';
 
@@ -434,7 +440,7 @@ for (const make of GROUND_HARNESSES) {
     },
   );
 
-  for (const rings of [128, 200])
+  for (const rings of [MAX_RAISED_RINGS, MAX_RAISED_RINGS + 1])
     displayTest(
       `a raised polygon with ${rings} rings respects the ring bound`,
       async ({ engine }) => {
@@ -469,12 +475,18 @@ for (const make of GROUND_HARNESSES) {
         });
         assert.deepEqual(
           drawing.report,
-          rings === 128
+          rings === MAX_RAISED_RINGS
             ? { drawn: 1, undrawn: 0, kinds: {} }
             : { drawn: 0, undrawn: 1, kinds: { complexPolygon: 1 } },
         );
-        assert.equal(engine.meshes.list().length, rings === 128 ? 1 : 0);
-        assert.equal(engine.lines.list().length, rings === 128 ? rings : 0);
+        assert.equal(
+          engine.meshes.list().length,
+          rings === MAX_RAISED_RINGS ? 1 : 0,
+        );
+        assert.equal(
+          engine.lines.list().length,
+          rings === MAX_RAISED_RINGS ? rings : 0,
+        );
         drawing.destroy();
       },
     );
@@ -519,11 +531,11 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
-    'a raised fill with 40 000 vertices is counted, its outline drawn',
+    'a raised fill past the vertex limit is counted, its outline drawn',
     async ({ engine }) => {
       const records = emptyRecords();
-      const outer = Array.from({ length: 40_000 }, (_, i) => {
-        const angle = (i * 2 * Math.PI) / 40_000;
+      const outer = Array.from({ length: MAX_RAISED_VERTICES + 1 }, (_, i) => {
+        const angle = (i * 2 * Math.PI) / (MAX_RAISED_VERTICES + 1);
         return [10 * Math.cos(angle), 10 * Math.sin(angle), 1000];
       });
       records.polygons.push({
@@ -684,7 +696,7 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
-    'a polygon the ground contract rejects is counted undrawn',
+    'a ground polygon skips a short hole as Cesium does',
     async ({ engine }) => {
       const records = geoJsonRecords(
         {
@@ -706,9 +718,9 @@ for (const make of GROUND_HARNESSES) {
       ]);
       const drawing = await drawImportedFile(engine, records, { createCanvas });
       assert.deepEqual(drawing.report, {
-        drawn: 0,
-        undrawn: 1,
-        kinds: { polygon: 1 },
+        drawn: 1,
+        undrawn: 0,
+        kinds: {},
       });
       drawing.destroy();
     },
@@ -1054,7 +1066,6 @@ for (const make of GROUND_HARNESSES) {
       },
     };
   };
-  const OVERLAY_PIXELS = 16 * 1024 * 1024;
 
   displayTest(
     'turned overlays sharing one small image share one bounded canvas',
@@ -1075,7 +1086,7 @@ for (const make of GROUND_HARNESSES) {
       assert.equal(drawing.report.drawn, 20);
       assert.equal(counted.canvases.length, 1, 'equal looks share a canvas');
       // Each of 20 overlays may hold a twentieth of the budget.
-      const side = Math.floor(Math.sqrt(OVERLAY_PIXELS / 20));
+      const side = Math.floor(Math.sqrt(OVERLAY_PIXEL_BUDGET / 20));
       const [canvas] = counted.canvases;
       assert.ok(
         canvas.width <= side && canvas.height <= side,
@@ -1104,7 +1115,7 @@ for (const make of GROUND_HARNESSES) {
       assert.equal(drawing.report.drawn, 100);
       assert.equal(counted.canvases.length, 100);
       assert.ok(
-        counted.pixels() <= OVERLAY_PIXELS,
+        counted.pixels() <= OVERLAY_PIXEL_BUDGET,
         `${Math.round((counted.pixels() * 4) / 2 ** 20)} MiB of canvas RGBA`,
       );
       drawing.destroy();
@@ -1275,7 +1286,7 @@ for (const make of GROUND_HARNESSES) {
       }, 0);
       await drawing.refreshGround();
       clearTimeout(heartbeat);
-      assert.equal(beforeYield, 256);
+      assert.equal(beforeYield, BATCH);
       assert.equal(clamps, 600);
       drawing.destroy();
     },
