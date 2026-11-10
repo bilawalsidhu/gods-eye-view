@@ -59,6 +59,12 @@ See [application construction](APPLICATION.md) and the
    file under that directory. Unused imports still count. Node exports have only a `node`
    condition; browser groups cannot use build-only dependency exceptions.
 
+   Run `node scripts/check-package-boundaries.mjs --write` to regenerate each
+   group's `modules` list in `scripts/package-boundaries.json`, retaining useful
+   entries in order and appending newly reached paths in sorted order. The check
+   without `--write` is unchanged and does not reject stale entries. Review the
+   manifest diff like a lockfile diff before accepting changes to ownership.
+
 Portable source graphs cannot reach application/rendering, Node, Cesium or
 browser globals. This includes `sources/*`, dedicated `layers/*/source` exports,
 flight/military/vessel record and ingestion exports, action schemas, the session
