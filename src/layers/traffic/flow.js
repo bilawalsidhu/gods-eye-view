@@ -538,6 +538,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       current() &&
       performance.now() < deadline
     ) {
+      engine.render.request('traffic-surface');
       await new Promise((resolve) => setTimeout(resolve, 100));
       if (!current()) return false;
       prepared = await prepareRoadSurfaces(
@@ -555,10 +556,9 @@ export function createFlow({ state: layerState, services, parts, source }) {
     if (
       current() &&
       !preview &&
-      !label.includes('refined') &&
-      (!trafficSurfaceReady(engine) ||
+      ((!refining && !trafficSurfaceReady(engine)) ||
         prepared.pending.length ||
-        ready.some((road) => road.surfaceSettled === false))
+        (!refining && ready.some((road) => road.surfaceSettled === false)))
     ) {
       layerState._surfaceRefineRemove?.();
       const stop = () => {
@@ -572,17 +572,21 @@ export function createFlow({ state: layerState, services, parts, source }) {
           stop();
           return;
         }
-        if (!trafficSurfaceReady(engine)) return;
+        if (!trafficSurfaceReady(engine)) {
+          engine.render.request('traffic-surface');
+          return;
+        }
         stop();
         // Revalidate only local samples taken at a coarser rendered LOD. This
-        // background upgrade never holds road acquisition or first paint.
+        // background upgrade never holds road acquisition or first paint;
+        // missing samples keep retrying while refined heights stay cached.
         layerState._surfaceRefining = true;
         applyFlowThenRender(
           roads,
           clamped,
           generation,
           altitude,
-          `${label} refined`,
+          refining ? label : `${label} refined`,
           trace,
           false,
           signal,
@@ -598,6 +602,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       });
       const timer = setTimeout(stop, 10000);
       layerState._surfaceRefineRemove = stop;
+      engine.render.request('traffic-surface');
     }
     return current() && ready.length > 0;
   }
