@@ -82,7 +82,7 @@ test('edge:earthquakes: an expired record is dropped and a duplicate never forks
     FIXED_SAMPLE,
     WITH_DUPLICATE,
   ]);
-  layer.init(null, { engine: {} });
+  layer.init(null, { engine: createFakeEngine() });
   layer.enable();
   assert.equal(await layer.update(), true);
   assert.equal(await layer.update(), false);

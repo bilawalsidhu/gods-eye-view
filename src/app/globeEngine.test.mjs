@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,7 +24,9 @@ test('the scene engine is built on the viewer and destroyed by the scene lifetim
     defer: (dispose) => cleanups.push(dispose),
     createEngine(target, options) {
       calls.push([target, options]);
-      return { kind: 'cesium', destroy: () => calls.push('destroy') };
+      const engine = createFakeEngine();
+      engine.destroy = () => calls.push('destroy');
+      return engine;
     },
   });
   assert.equal(engine.kind, 'cesium');

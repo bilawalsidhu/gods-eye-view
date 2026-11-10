@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // src/data/trackedModelRegime.test.mjs
 //
@@ -172,16 +173,12 @@ function viewerAtHeight(height, { tilesLoaded = true, sampleHeight = () => undef
     trackedEntity: undefined,
     entities: { remove() {} },
   };
-  viewer.engine = {
-    isDestroyed: () => false,
-    surface: {
-      tilesLoaded: () => viewer.tileset.tilesLoaded === true,
-      sampleHeightDetailed(place, { exclude } = {}) {
-        const h = viewer.scene.sampleHeight(place, exclude);
-        return Number.isFinite(h) ? { height: h, source: 'tiles' } : undefined;
-      },
-    },
-  };
+  viewer.engine = createFakeEngine();
+  viewer.engine.fake.script('tilesLoaded', () => viewer.tileset.tilesLoaded === true);
+  viewer.engine.fake.script('sampleHeightDetailed', (place, { exclude } = {}) => {
+    const h = viewer.scene.sampleHeight(place, exclude);
+    return Number.isFinite(h) ? { height: h, source: 'tiles' } : undefined;
+  });
   return viewer;
 }
 

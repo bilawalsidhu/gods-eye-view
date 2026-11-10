@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 // Edge cases for wind: on a fixed
 // grid direction, speed and legend agree whichever way the centre is picked,
 // and an empty field is never presented as calm.
@@ -24,15 +25,13 @@ const options = {
   status: 'Model forecast',
 };
 /** Inspect either the current map centre or a captured position. */
-const viaEngine = (snapshot, point) =>
-  inspectWindAtCenter(
-    snapshot,
-    {
-      camera: { pickEllipsoid: () => point },
-      host: { canvas: { clientWidth: 800, clientHeight: 600 } },
-    },
-    options,
-  );
+const viaEngine = (snapshot, point) => {
+  const engine = createFakeEngine({
+    canvas: { clientWidth: 800, clientHeight: 600 },
+  });
+  engine.fake.script('pickEllipsoid', point);
+  return inspectWindAtCenter(snapshot, engine, options);
+};
 const viaPosition = (snapshot, point) =>
   inspectWindAtCenter(snapshot, null, { ...options, position: point });
 const windLine = (reading) =>

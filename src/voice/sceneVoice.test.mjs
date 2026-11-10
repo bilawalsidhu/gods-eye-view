@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSceneVoice } from './gevRealtime.js';
@@ -6,11 +7,7 @@ import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 function fakeEngine(kind) {
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
-  return {
-    kind,
-    host: { canvas, size: () => ({ width: 0, height: 0 }) },
-    camera: { pose: () => ({}) },
-  };
+  return createFakeEngine({ kind, canvas, width: 0, height: 0 });
 }
 
 function fixture() {

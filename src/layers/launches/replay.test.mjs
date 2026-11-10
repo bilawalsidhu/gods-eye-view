@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createState } from './state.js';
@@ -48,9 +49,7 @@ test('changing replay speed during the countdown keeps its real-time liftoff', (
 
 test('resuming a replay restores its retained chase heading', () => {
   const { state } = replayRig();
-  state._engine = {
-    frames: { preUpdate: { addEventListener: () => () => {} } },
-  };
+  state._engine = createFakeEngine();
   state._launches = [{ id: 'mission' }];
   state._replayCameraLaunchId = 'mission';
   state._replayCameraHeading = 1.2;

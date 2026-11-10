@@ -728,14 +728,12 @@ function failingMapController() {
   const controller = new MapSourceController({
     registry,
     initialStack: 'photoreal',
-    engine: {
-      kind: 'cesium',
-      render: { request() {} },
+    engine: Object.assign(createFakeEngine(), {
       maps: createCesiumMaps(viewer, {
         credits: createCesiumCredits(viewer).credits,
         createImageryLayer: (provider) => ({ provider }),
       }).maps,
-    },
+    }),
     onError: () => {},
   });
   const calls = [];

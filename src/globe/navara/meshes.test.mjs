@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -42,16 +43,13 @@ function harness() {
     },
   };
   const pickers = new Set();
-  const engine = {
-    render: { request: () => requests++ },
-    camera: { livePosition: { x: 0, y: 0, z: 0 }, pickRay: () => null },
-    picker: {
-      pickPosition: () => undefined,
-      registerMeshPicker(pick) {
-        pickers.add(pick);
-        return () => pickers.delete(pick);
-      },
-    },
+  const engine = createFakeEngine({ kind: 'navara' });
+  engine.render.request = () => requests++;
+  engine.camera.pickRay = () => null;
+  engine.fake.script('pickPosition', undefined);
+  engine.picker.registerMeshPicker = (pick) => {
+    pickers.add(pick);
+    return () => pickers.delete(pick);
   };
   const port = createNavaraMeshes(view, {
     overlay,

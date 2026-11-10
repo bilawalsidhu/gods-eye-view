@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSceneSwitcher } from './sceneSwitcher.js';
@@ -193,7 +194,7 @@ test('the restored camera precedes retained follow and replay', async () => {
   const app = {
     getState: () => ({ status: 'ready' }),
     getComponents: () => ({
-      scene: { engine: { kind: current } },
+      scene: { engine: createFakeEngine({ kind: current }) },
       controls: { styleManager: style },
     }),
     async detachScene() {

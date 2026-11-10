@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
@@ -27,10 +28,10 @@ test('center inspection uses a fixed forecast reading without double-converting 
       values: Float32Array.from([20, 20, 20, 20]),
     },
   };
-  const engine = {
-    camera: { pickEllipsoid: () => geo.cartesian3.fromDegrees(0, 0) },
-    host: { canvas: { clientWidth: 800, clientHeight: 600 } },
-  };
+  const engine = createFakeEngine({
+    canvas: { clientWidth: 800, clientHeight: 600 },
+  });
+  engine.fake.script('pickEllipsoid', () => geo.cartesian3.fromDegrees(0, 0));
   const result = inspectWindAtCenter(snapshot, engine, {
     overlay: 'temperature',
     units: 'km/h',

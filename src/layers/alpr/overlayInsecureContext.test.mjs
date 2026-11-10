@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 // The ALPR paint lane must initialize in an insecure context (plain HTTP over
 // the HOST=0.0.0.0 LAN opt-in), where crypto.randomUUID does not exist.
 import { test } from 'node:test';
@@ -34,7 +35,7 @@ test('ALPR overlay init works without crypto.randomUUID', (t) => {
         },
       },
     },
-    engine: {},
+    engine: createFakeEngine(),
     markers: new Map(),
     syncMarker() {},
     sampleHeight() {},

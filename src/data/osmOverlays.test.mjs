@@ -12,11 +12,8 @@ import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 /** A layer on the fake engine, whose imagery drapes where `surface()` says. */
 function setup(overlay = OSM_OVERLAYS[0]) {
   let surface = 'globe';
-  const fake = createFakeEngine({ kind: 'cesium' });
-  const engine = {
-    ...fake,
-    imagery: { ...fake.imagery, surface: () => surface },
-  };
+  const engine = createFakeEngine({ kind: 'cesium' });
+  engine.imagery.surface = () => surface;
   const layer = createOsmOverlayLayer(overlay);
   layer.init(null, { engine });
   return {
@@ -120,15 +117,15 @@ test('destroy and a renderer detach remove the owned imagery', () => {
 
 test('on Navara an overlay drapes through engine.maps and follows the globe', () => {
   const added = [];
-  const engineWith = () => ({
-    maps: {
-      addOverlay(options) {
-        const entry = { options, removed: false };
-        added.push(entry);
-        return () => (entry.removed = true);
-      },
-    },
-  });
+  const engineWith = () => {
+    const engine = createFakeEngine({ kind: 'navara' });
+    engine.maps.addOverlay = (options) => {
+      const entry = { options, removed: false };
+      added.push(entry);
+      return () => (entry.removed = true);
+    };
+    return engine;
+  };
   const [seaMarks] = createOsmOverlayLayers();
   seaMarks.init(null, { engine: engineWith() });
   assert.equal(added.length, 0, 'nothing until enabled');

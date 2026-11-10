@@ -33,7 +33,7 @@ test('a bundled file delivered between planets keeps multipart IDs and is read o
       lod() {},
     }),
   );
-  layer.init(null, { engine: {} });
+  layer.init(null, { engine: createFakeEngine() });
   const enabled = layer.enable();
   await new Promise(setImmediate);
   layer.detachRenderer();
@@ -57,9 +57,9 @@ test('a bundled file delivered between planets keeps multipart IDs and is read o
   await enabled;
   assert.equal(layer.getAnalystRecords().length, 2);
   assert.equal(captures.length, 0);
-  await layer.attachRenderer({ engine: {} });
+  await layer.attachRenderer({ engine: createFakeEngine() });
   layer.detachRenderer();
-  await layer.attachRenderer({ engine: {} });
+  await layer.attachRenderer({ engine: createFakeEngine() });
   assert.equal(captures[0], captures[1]);
   assert.deepEqual(
     captures[0].records.map((r) => r.id),
@@ -89,13 +89,13 @@ test('a released scene stops waiting for a stalled dataset load, which stays in 
       lod() {},
     }),
   );
-  layer.init(null, { engine: {} });
+  layer.init(null, { engine: createFakeEngine() });
   const enabled = layer.enable();
   await new Promise(setImmediate);
   layer.detachRenderer();
   const scene = new AbortController();
   const attaching = layer.attachRenderer({
-    engine: {},
+    engine: createFakeEngine(),
     signal: scene.signal,
   });
   scene.abort();

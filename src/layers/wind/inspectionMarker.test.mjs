@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 // src/layers/wind/inspectionMarker.test.mjs — the wind inspection marker
 // follows only its captured point, renders in its container, and releases
 // its frame listener.
@@ -47,15 +48,13 @@ function fixture(t) {
       requestRender() {},
     },
   };
-  const engine = {
-    host: { canvas: viewer.scene.canvas },
-    frames: { postRender: viewer.scene.postRender },
-    projector: {
-      worldToWindow: viewer.scene.cartesianToCanvasCoordinates,
-      horizonVisible: () => visibility.visible,
-    },
-    render: { request() {} },
-  };
+  const engine = createFakeEngine({ canvas: viewer.scene.canvas });
+  engine.frames.postRender = viewer.scene.postRender;
+  engine.fake.script(
+    'worldToWindow',
+    viewer.scene.cartesianToCanvasCoordinates,
+  );
+  engine.projector.horizonVisible = () => visibility.visible;
   const store = useWindInspectionStore(pinia);
   visibility.visible = true;
   const owner = createWindInspectionMarker({

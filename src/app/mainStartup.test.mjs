@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -73,6 +74,8 @@ function boot(
       };
     },
     createStandaloneApplication: ({ engineKind }) => {
+      const engine = createFakeEngine({ kind: engineKind });
+      engine.camera.completeFlight = () => flushes.push('flight');
       const styleManager = {
         initialRestorePromise,
         shareLinkManager: { flush: () => flushes.push('share link') },
@@ -92,9 +95,7 @@ function boot(
         }),
         getComponents: () => ({
           scene: {
-            engine: {
-              camera: { completeFlight: () => flushes.push('flight') },
-            },
+            engine: engine,
           },
           controls: { styleManager },
         }),

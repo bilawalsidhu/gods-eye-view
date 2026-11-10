@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
@@ -35,32 +36,35 @@ test('oblique horizon bearings are bounded and tile caps hold at city latitudes'
   ]) {
     // An engine-shaped stub: the camera's pose and its ellipsoid and ray
     // picks (the sky above the 300 px line), and the canvas.
-    const engine = {
-      camera: {
-        pose: () => ({
-          cartographic: geo.cartographic.fromDegrees(lon, lat, 300),
-          heading: 0,
-          pitch: -Math.PI / 12,
-        }),
-        pickEllipsoid(p) {
-          if (p.y < 300) return undefined;
-          return geo.cartesian3.fromDegrees(
-            lon + (p.x - 640) / 100000,
-            lat + (800 - p.y) / 50000,
-            0,
-          );
-        },
-        pickRay: () => ({
-          origin: geo.cartesian3.create(),
-          direction: geo.cartesian3.create(
-            -Math.sin((lat * Math.PI) / 180) * Math.cos((lon * Math.PI) / 180),
-            -Math.sin((lat * Math.PI) / 180) * Math.sin((lon * Math.PI) / 180),
-            Math.cos((lat * Math.PI) / 180),
-          ),
-        }),
-      },
-      host: { canvas: { width: 1280, height: 800 } },
-    };
+    const engine = createFakeEngine({
+      longitude: geo.math.toRadians(lon),
+      latitude: geo.math.toRadians(lat),
+      altitude: 300,
+      canvas: { width: 1280, height: 800 },
+    });
+    engine.fake.setPose({
+      longitude: geo.math.toRadians(lon),
+      latitude: geo.math.toRadians(lat),
+      height: 300,
+      heading: 0,
+      pitch: -Math.PI / 12,
+    });
+    engine.fake.script('pickEllipsoid', (p) => {
+      if (p.y < 300) return undefined;
+      return geo.cartesian3.fromDegrees(
+        lon + (p.x - 640) / 100000,
+        lat + (800 - p.y) / 50000,
+        0,
+      );
+    });
+    engine.camera.pickRay = () => ({
+      origin: geo.cartesian3.create(),
+      direction: geo.cartesian3.create(
+        -Math.sin((lat * Math.PI) / 180) * Math.cos((lon * Math.PI) / 180),
+        -Math.sin((lat * Math.PI) / 180) * Math.sin((lon * Math.PI) / 180),
+        Math.cos((lat * Math.PI) / 180),
+      ),
+    });
     const result = createReticleFootprint()(engine, 300);
     assert.ok(result.coverage.coarse.length <= 16);
     assert.ok(result.coverage.detail.length <= 16);

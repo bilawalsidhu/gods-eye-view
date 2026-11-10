@@ -111,10 +111,8 @@ function viewerAt(height) {
     trackedEntity: undefined,
     entities: { remove() {} },
   };
-  viewer.engine = {
-    isDestroyed: () => false,
-    surface: { tilesLoaded: () => true, sampleHeightDetailed: () => undefined },
-  };
+  viewer.engine = createFakeEngine();
+  viewer.engine.fake.script('sampleHeightDetailed', undefined);
   return viewer;
 }
 

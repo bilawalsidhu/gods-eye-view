@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // Edge cases for bhote-koshi-locator: a boundary that resolves late, after its
 // request was cancelled, does not change the live scene; both engines show the
 // same area and the same target.
@@ -42,11 +43,8 @@ function locator(engine) {
       remove: (source) => shown.delete(source),
     },
   };
-  const navara = {
-    kind: 'navara',
-    render: { request: (reason) => renders.push(reason) },
-    credits: { add() {}, remove() {} },
-  };
+  const navara = createFakeEngine({ kind: 'navara' });
+  navara.render.request = (reason) => renders.push(reason);
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: (signal) => {
       const lookup = deferred();
@@ -176,11 +174,7 @@ test('edge:bhote-koshi-locator: an engine swap while the boundary resolves lands
   const enabling = layer.enable(viewer);
   layer.detachRenderer();
   layer.attachRenderer({
-    engine: {
-      kind: 'navara',
-      render: { request() {} },
-      credits: { add() {}, remove() {} },
-    },
+    engine: createFakeEngine({ kind: 'navara' }),
   });
   lookup.resolve({ ring: LIVE_RING });
   assert.equal(await enabling, true);

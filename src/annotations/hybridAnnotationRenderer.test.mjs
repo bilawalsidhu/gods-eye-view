@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { installDomClasses } from '../testSupport/domClasses.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -127,10 +128,9 @@ function fakeViewer(lon, lat) {
       },
     };
   // The Cesium engine's credits over the viewer's credit display.
-  const engine = {
-    credits: createCesiumCredits(viewer).credits,
-    render: { request: () => scene.requestRender() },
-  };
+  const engine = createFakeEngine();
+  engine.credits = createCesiumCredits(viewer).credits;
+  engine.render.request = () => scene.requestRender();
   enginesOf.set(viewer, engine);
   return { dataSources, frames, viewer, engine };
 }

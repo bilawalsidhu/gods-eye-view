@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // Cross-feature voice contracts, driven through the real action runner:
 // one result contract (engine fields → model payload → voice card), shared
 // pointing for imagery, result-set ownership between OSM and the analyst,
@@ -687,7 +688,7 @@ test('an engine switch keeps the last answer for a follow-up on the next engine'
     build: () =>
       harness({ runnerOptions: { analystMemory, layerEnabledAt } }).runner,
   });
-  run.attach({ engine: { kind: 'cesium' } });
+  run.attach({ engine: createFakeEngine({ kind: 'cesium' }) });
   const first = await run('analyst_query', {
     layers: ['flights'],
     scope: { kind: 'anywhere' },
@@ -695,7 +696,7 @@ test('an engine switch keeps the last answer for a follow-up on the next engine'
   assert.equal(first.ok, true);
   // The real runner of the outgoing engine is disposed by the switch.
   run.detach();
-  run.attach({ engine: { kind: 'navara' } });
+  run.attach({ engine: createFakeEngine({ kind: 'navara' }) });
   const followUp = await run('analyst_query', {
     layers: ['flights'],
     followUp: true,

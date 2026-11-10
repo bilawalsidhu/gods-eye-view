@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -162,10 +163,12 @@ test('an aborting real ingestion cannot clear the next scheduled view key', asyn
 test('Navara installation ingestion loads from its engine camera without a viewer', async () => {
   const { createIngestion } = await import('./ingestion.js');
   const rectangle = Cesium.Rectangle.fromDegrees(-123, 37, -122, 38);
+  const engine = createFakeEngine({ kind: 'navara' });
+  engine.fake.script('viewRectangle', () => rectangle);
   const state = {
     enabled: true,
     viewer: null,
-    engine: { camera: { viewRectangle: () => rectangle } },
+    engine: engine,
     records: [],
     recordById: new Map(),
     coverage: { kind: 'viewport' },
@@ -242,18 +245,16 @@ test('the engine camera drives installation viewport requests without a viewer',
     east: Cesium.Math.toRadians(-178),
     north: Cesium.Math.toRadians(16),
   };
+  const engine = createFakeEngine();
+  engine.fake.script('viewRectangle', () => rectangle);
+  engine.camera.pose = () => ({
+    position: { x: 1, y: 2, z: 3 },
+    direction: { x: -1, y: 0, z: 0 },
+  });
   const state = {
     enabled: true,
     viewer: null,
-    engine: {
-      camera: {
-        viewRectangle: () => rectangle,
-        pose: () => ({
-          position: { x: 1, y: 2, z: 3 },
-          direction: { x: -1, y: 0, z: 0 },
-        }),
-      },
-    },
+    engine: engine,
   };
   const loads = [];
   const parts = {

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LayerLifecycle } from './lifecycle.js';
@@ -46,7 +47,7 @@ function catalog(...modules) {
   };
 }
 
-const engine = (name) => ({ kind: 'test', name });
+const engine = (name) => Object.assign(createFakeEngine({ kind: 'test' }), { name });
 const firstViewer = { name: 'first viewer' };
 const secondViewer = { name: 'second viewer' };
 
@@ -86,6 +87,7 @@ const detaches = (calls) => calls.filter((call) => call[0] === 'detach');
 const attaches = (calls) => calls.filter((call) => call[0] === 'attach');
 
 test('one failing detachRenderer leaves the others released and the manager unbound', async () => {
+  const second = engine('second');
   let failures = 1;
   const broken = sceneLayer('broken', {
     detach() {
@@ -122,16 +124,17 @@ test('one failing detachRenderer leaves the others released and the manager unbo
   // The next scene binds and both retained layers attach to it.
   await bindCatalog(
     manager,
-    engine('second'),
+    second,
     catalog(...modules),
   );
   assert.equal(manager.viewer, secondViewer);
-  assert.deepEqual(attaches(broken.calls).at(-1), ['attach', engine('second')]);
-  assert.deepEqual(attaches(after.calls).at(-1), ['attach', engine('second')]);
+  assert.deepEqual(attaches(broken.calls).at(-1), ['attach', second]);
+  assert.deepEqual(attaches(after.calls).at(-1), ['attach', second]);
   assert.equal(manager.isEnabled('broken'), true);
 });
 
 test('bindCatalog after a failed detach retries the release before attaching', async () => {
+  const second = engine('second');
   let failures = 1;
   const broken = sceneLayer('broken', {
     detach() {
@@ -146,13 +149,13 @@ test('bindCatalog after a failed detach retries the release before attaching', a
 
   await bindCatalog(
     manager,
-    engine('second'),
+    second,
     catalog(...modules),
   );
   assert.deepEqual(broken.calls.slice(-3), [
     ['detach', firstViewer],
     ['detach', firstViewer],
-    ['attach', engine('second')],
+    ['attach', second],
   ]);
   // The scene is settled: the next detach releases the second viewer once.
   await manager.detachScene();
@@ -419,6 +422,7 @@ test('an explicit refresh between scenes ends false when its caller aborts', asy
 });
 
 test('a layer enabled between scenes initializes on the next scene', async () => {
+  const second = engine('second');
   const late = sceneLayer('late');
   const present = sceneLayer('present');
   const { manager, modules } = await boundManager(present);
@@ -429,9 +433,9 @@ test('a layer enabled between scenes initializes on the next scene', async () =>
   const enabled = manager.setEnabled('late', true, { origin: 'user' });
   await tick();
   assert.deepEqual(late.calls, [], 'no init against a missing scene');
-  await bindCatalog(manager, engine('second'), catalog(...all));
+  await bindCatalog(manager, second, catalog(...all));
   assert.equal(await enabled, true);
-  assert.deepEqual(late.calls.slice(0, 2), ['init', ['attach', engine('second')]]);
+  assert.deepEqual(late.calls.slice(0, 2), ['init', ['attach', second]]);
 });
 
 test('a detach does not deadlock on an enable parked for the next scene', async () => {

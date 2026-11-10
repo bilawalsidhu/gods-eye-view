@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import { createGnssDisplay } from './render/display.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -82,18 +83,15 @@ const threeHealthy = () => [
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test('a globe-wide rectangle uses the visible screen centre as the query anchor', () => {
-  const anchor = defaultGnssViewAnchor({
-    host: { size: () => ({ width: 1000, height: 800 }) },
-    camera: {
-      pickEllipsoid(pixel) {
-        assert.deepEqual(pixel, { x: 500, y: 400 });
-        return geo.cartesian3.fromDegrees(-97, 30);
-      },
-      viewRectangle: () => {
-        throw new Error('centre hit must not compute a rectangle');
-      },
-    },
+  const engine = createFakeEngine({ width: 1000, height: 800 });
+  engine.fake.script('pickEllipsoid', (pixel) => {
+    assert.deepEqual(pixel, { x: 500, y: 400 });
+    return geo.cartesian3.fromDegrees(-97, 30);
   });
+  engine.fake.script('viewRectangle', () => {
+    throw new Error('centre hit must not compute a rectangle');
+  });
+  const anchor = defaultGnssViewAnchor(engine);
   assert.ok(Math.abs(anchor.latitude - 30) < 1e-8);
   assert.ok(Math.abs(anchor.longitude + 97) < 1e-8);
 });
@@ -189,7 +187,10 @@ test('movement during a pending refresh follows up at the newest view; disable c
 test('the layer requires a snapshot source and cannot be initialized twice', () => {
   assert.throws(() => createGnssIntegrityLayer({}), TypeError);
   const { layer } = harness(async () => ({ rows: [] }));
-  assert.throws(() => layer.init(null, { engine: {} }), /already/);
+  assert.throws(
+    () => layer.init(null, { engine: createFakeEngine() }),
+    /already/,
+  );
 });
 
 test('an enabled refresh bins the snapshot into coloured ground cells', async () => {
@@ -694,19 +695,15 @@ test('the cells stay out of picks', async () => {
 test('view anchor falls back to rectangle, then nadir, then no camera', () => {
   assert.equal(defaultGnssViewAnchor({}), null);
   const radians = geo.math.toRadians;
-  const engine = {
-    host: { size: () => ({ width: 1000, height: 800 }) },
-    camera: {
-      pickEllipsoid: () => undefined,
-      viewRectangle: () => ({
-        west: radians(20),
-        south: radians(40),
-        east: radians(22),
-        north: radians(42),
-      }),
-      pose: () => assert.fail('a rectangle must not read the pose'),
-    },
-  };
+  const engine = createFakeEngine({ width: 1000, height: 800 });
+  engine.fake.script('pickEllipsoid', undefined);
+  engine.fake.script('viewRectangle', {
+    west: radians(20),
+    south: radians(40),
+    east: radians(22),
+    north: radians(42),
+  });
+  engine.camera.pose = () => assert.fail('a rectangle must not read the pose');
   const rectangleAnchor = defaultGnssViewAnchor(engine);
   assert.ok(Math.abs(rectangleAnchor.latitude - 41) < 1e-10);
   assert.ok(Math.abs(rectangleAnchor.longitude - 21) < 1e-10);

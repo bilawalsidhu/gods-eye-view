@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -96,23 +97,16 @@ test('crop: a slow render gets one bounded fresh-frame recovery request', async 
   let listener = null;
   try {
     globalThis.document = { hidden: false };
-    const engine = {
-      frames: {
-        postRender: {
-          addEventListener(next) {
-            listener = next;
-            return () => {
-              if (listener === next) listener = null;
-            };
-          },
-        },
-      },
-      render: {
-        request() {
-          requests += 1;
-          if (requests === 2) queueMicrotask(() => listener?.());
-        },
-      },
+    const engine = createFakeEngine();
+    engine.frames.postRender.addEventListener = (next) => {
+      listener = next;
+      return () => {
+        if (listener === next) listener = null;
+      };
+    };
+    engine.render.request = () => {
+      requests += 1;
+      if (requests === 2) queueMicrotask(() => listener?.());
     };
     assert.equal(await renderFreshPointerFrame(engine), true);
     assert.equal(requests, 2, 'only the pointer path retries once');
@@ -127,13 +121,9 @@ test('crop: a hidden document never starts the recovery request', async () => {
   let requests = 0;
   try {
     globalThis.document = { hidden: true };
-    const engine = {
-      frames: { postRender: { addEventListener: () => () => {} } },
-      render: {
-        request() {
-          requests += 1;
-        },
-      },
+    const engine = createFakeEngine();
+    engine.render.request = () => {
+      requests += 1;
     };
     assert.equal(await renderFreshPointerFrame(engine), false);
     assert.equal(requests, 0);

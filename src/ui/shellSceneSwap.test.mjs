@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // The shell lives for the page: an engine switch detaches only its
 // globe-bound parts and attaches them to the next globe, keeping the shell's
 // session objects (navigation, location search, HUD, share link, display
@@ -37,7 +38,7 @@ function fakeShell() {
     },
   };
   Object.assign(shell, {
-    _scene: { viewer: {}, engine: { kind: 'cesium' }, mapStackController: {} },
+    _scene: { viewer: {}, engine: createFakeEngine({ kind: 'cesium' }), mapStackController: {} },
     _disposed: false,
     _layerSession: null,
     services: {
@@ -143,7 +144,7 @@ test('the next globe gets new globe-bound parts and the restore runs on it', asy
   const { shell, session, log } = fakeShell();
   await shell.detachScene({ handoff: true });
   log.length = 0;
-  const engine = { kind: 'navara' };
+  const engine = createFakeEngine({ kind: 'navara' });
   await shell.attachScene({
     viewer: null,
     engine,
@@ -176,7 +177,7 @@ test('the next globe gets new globe-bound parts and the restore runs on it', asy
   assert.equal(shell._navigation, session.navigation);
   await shell.attachScene({ engine });
   await assert.rejects(
-    shell.attachScene({ engine: { kind: 'cesium' } }),
+    shell.attachScene({ engine: createFakeEngine({ kind: 'cesium' }) }),
     /attached to a globe/,
   );
 });
@@ -186,7 +187,7 @@ test('a panel whose layer is another instance in the new catalog is rebuilt', as
   await shell.detachScene({ handoff: true });
   log.length = 0;
   await shell.attachScene({
-    engine: { kind: 'cesium' },
+    engine: createFakeEngine({ kind: 'cesium' }),
     services: { cctvLayer: 'other' },
   });
   assert.ok(log.includes('_initCctvPanel'));
@@ -209,7 +210,7 @@ test('an attachment that throws part-way leaves the shell detached and attachabl
     throw new Error('overlay host failed');
   };
   await assert.rejects(
-    shell.attachScene({ engine: { kind: 'navara' } }),
+    shell.attachScene({ engine: createFakeEngine({ kind: 'navara' }) }),
     /overlay host failed/,
   );
   // The shell releases what it built and is detached when that settles.
@@ -217,7 +218,7 @@ test('an attachment that throws part-way leaves the shell detached and attachabl
   assert.equal(shell.engine, null);
   log.length = 0;
   shell._initSceneOverlays = () => log.push('_initSceneOverlays');
-  const engine = { kind: 'cesium' };
+  const engine = createFakeEngine({ kind: 'cesium' });
   await shell.attachScene({ engine });
   assert.equal(shell.engine, engine);
   assert.ok(log.includes('shareRestoration.start'));
@@ -244,7 +245,7 @@ test('between engines a style key waits for the next engine instead of the relea
     shell._layerBindings = { observeCamera() {}, stop() {}, disconnect() {} };
     shell._visualSettings = { setStyle: (name) => applied.push(name) };
   };
-  await shell.attachScene({ engine: { kind: 'cesium' } });
+  await shell.attachScene({ engine: createFakeEngine({ kind: 'cesium' }) });
   await Promise.resolve();
   await Promise.resolve();
   assert.deepEqual(applied, ['crt']);
@@ -262,13 +263,13 @@ test('shell recovery waits for failed attachment cleanup and serializes repeated
   shell._initSceneOverlays = () => {
     throw new Error('overlay failed');
   };
-  const failed = shell.attachScene({ engine: { kind: 'navara' } });
+  const failed = shell.attachScene({ engine: createFakeEngine({ kind: 'navara' }) });
   const rejected = assert.rejects(failed, /overlay failed/);
   await Promise.resolve();
   const detach = shell.detachScene();
   const again = shell.detachScene();
   shell._initSceneOverlays = () => {};
-  const engine = { kind: 'cesium' };
+  const engine = createFakeEngine({ kind: 'cesium' });
   const recovered = shell.attachScene({ engine });
   await Promise.resolve();
   assert.notEqual(shell.engine, engine, 'recovery waits for cleanup');
@@ -288,7 +289,7 @@ test('shell attach waits for a deferred outgoing detach', async () => {
       release = resolve;
     });
   const leaving = shell.detachScene({ handoff: true });
-  const engine = { kind: 'navara' };
+  const engine = createFakeEngine({ kind: 'navara' });
   const entering = shell.attachScene({ engine });
   await Promise.resolve();
   assert.notEqual(shell.engine, engine);
@@ -302,7 +303,7 @@ test('an engine without Wildlife Sightings gets no card instead of a failed star
   // The stand-in a catalog gives for a layer the engine leaves out.
   Object.assign(shell, {
     services: { wildlifeSightingsLayer: {} },
-    _scene: { viewer: null, engine: { kind: 'navara' } },
+    _scene: { viewer: null, engine: createFakeEngine({ kind: 'navara' }) },
   });
   assert.doesNotThrow(() => shell._initWildlifeSightingCard());
   assert.equal(shell._wildlifeSightingCard, null);
@@ -324,7 +325,7 @@ test('a hosted shell uses the enclosing transition while direct calls wait outsi
     entered();
     return new Promise((resolve) => { release = resolve; });
   };
-  const next = { engine: { kind: 'navara' }, catalog };
+  const next = { engine: createFakeEngine({ kind: 'navara' }), catalog };
   const switching = host.run(async (transaction) => {
     await host.detach({ handoff: true }, transaction);
     await host.attach(next, transaction);

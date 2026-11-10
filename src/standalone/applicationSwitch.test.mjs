@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // The standalone application is created once; an engine switch detaches and
 // attaches only its engine-bound parts. A candidate that fails releases its
 // renderer, and the working engine attaches again on the same parts.
@@ -48,7 +49,8 @@ function standalone({ failOpen = null, beforeOpen, beforeRelease, lifecycle = fa
     createStandaloneScene: async ({ engineKind, defer }) => {
       await beforeOpen?.(engineKind);
       if (failOpen === engineKind) throw new Error(`${engineKind} refused`);
-      const engine = { kind: engineKind, id: opened.length };
+      const engine = createFakeEngine({ kind: engineKind });
+      engine.id = opened.length;
       opened.push(engine);
       defer(async () => {
         await beforeRelease?.(engine);

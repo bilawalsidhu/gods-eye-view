@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // A candidate engine that fails after the shell attached to it (a later
 // part: data, Cockpit clouds) must leave the shell detached, so the working
 // engine attaches again.
@@ -29,7 +30,7 @@ test('a candidate failing in a later part leaves the shell ready for the working
   const cesium = {
     kind: 'cesium',
     viewer: null,
-    engine: { kind: 'cesium' },
+    engine: createFakeEngine({ kind: 'cesium' }),
     catalog,
   };
   await sceneHost.attach(cesium);
@@ -49,7 +50,7 @@ test('a candidate failing in a later part leaves the shell ready for the working
   const navara = {
     kind: 'navara',
     viewer: null,
-    engine: { kind: 'navara' },
+    engine: createFakeEngine({ kind: 'navara' }),
     catalog,
   };
   await assert.rejects(sceneHost.attach(navara), /layer attachment failed/);

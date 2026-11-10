@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { createSessionHandoff } from '../app/sessionHandoff.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -479,10 +480,7 @@ test('pagehide while the outgoing engine is released starts nothing', async () =
 
 test('a slow first frame never rolls back a started engine', async () => {
   const timers = [];
-  const engine = {
-    frames: { postRender: { addEventListener: () => () => {} } },
-    render: { request() {} },
-  };
+  const engine = createFakeEngine();
   const h = harness();
   let frame;
   const machine = createEngineSwitch({
@@ -525,21 +523,12 @@ test('the first-frame wait resolves on a frame, on a hidden tab and on timeout',
   };
   let draw;
   let requests = 0;
-  const engine = {
-    frames: {
-      postRender: {
-        addEventListener(fn) {
-          draw = fn;
-          return () => {
-            draw = null;
-          };
-        },
-      },
-    },
-    render: {
-      request: () => requests++,
-    },
+  const engine = createFakeEngine();
+  engine.frames.postRender.addEventListener = (fn) => {
+    draw = fn;
+    return () => { draw = null; };
   };
+  engine.render.request = () => requests++;
   const timers = new Map();
   const options = {
     document: doc,

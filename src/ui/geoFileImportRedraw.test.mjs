@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // A file removed while its drawing on the next engine is still pending
 // (icon decode) must not leave that drawing on the globe.
 import test from 'node:test';
@@ -10,12 +11,7 @@ const el = () => ({
   addEventListener() {},
   removeEventListener() {},
 });
-const engine = () => ({
-  host: { container: el(), canvas: el() },
-  camera: { moveEnd: { addEventListener: () => () => {} } },
-  surface: { tilesLoaded: () => true },
-  render: { request() {} },
-});
+const engine = () => createFakeEngine({ container: el(), canvas: el() });
 
 test('removing a file during its redraw destroys the late drawing', async () => {
   const document = {

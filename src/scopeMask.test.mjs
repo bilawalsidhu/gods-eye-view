@@ -1,3 +1,4 @@
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -242,7 +243,9 @@ test('scope appearance follows direct state changes and install/destroy lifecycl
     setScopeMaskEnabled(false);
     assert.equal(dom.documentElement.dataset.scopeMask, 'off');
     delete dom.documentElement.dataset.scopeMask;
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     assert.equal(
       dom.documentElement.dataset.scopeMask,
       'off',
@@ -254,7 +257,9 @@ test('scope appearance follows direct state changes and install/destroy lifecycl
       undefined,
       'destroy clears the document marker',
     );
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     assert.equal(
       dom.documentElement.dataset.scopeMask,
       'off',
@@ -282,7 +287,9 @@ test('scope appearance follows direct state changes and install/destroy lifecycl
 test('a DPR change with no resize still repaints the backing store', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
   try {
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     // 1x monitor: backing store matches CSS pixels.
     assert.equal(dom.canvas.width, 1000);
     assert.equal(dom.canvas.height, 800);
@@ -314,7 +321,9 @@ test('a DPR change with no resize still repaints the backing store', () => {
 test('destroy tears the DPR watch down (no redraw after teardown)', () => {
   const dom = stubScopeMaskDom({ width: 640, height: 480, dpr: 1 });
   try {
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     assert.equal(dom.canvas.width, 640);
     destroyScopeMask();
     dom.setDpr(2);
@@ -439,7 +448,9 @@ test('quantization snaps to the repaint grid', () => {
 test('repaint gate: only a QUANTIZED step repaints; hovering costs nothing', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
   try {
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     const base = getScopeTerminusRepaintCount();
 
     // Parked at true full-globe altitude: the seeded alpha already matches, so
@@ -477,7 +488,9 @@ test('repaint gate: only a QUANTIZED step repaints; hovering costs nothing', () 
 test('a full zoom-in gesture costs only a handful of repaints', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
   try {
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     const base = getScopeTerminusRepaintCount();
 
     // 20 Mm → ground in 10 km steps: ~2000 samples across the whole descent,
@@ -510,7 +523,9 @@ test('a full zoom-in gesture costs only a handful of repaints', () => {
 test('an override pins the terminus and null restores the ramp', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
   try {
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     setScopeTerminusOverride(0.97);
     assert.equal(getScopeTerminusOverride(), 0.97);
     assert.equal(getScopeTerminusAlpha(), 0.97);
@@ -536,7 +551,9 @@ test('an override pins the terminus and null restores the ramp', () => {
 test('the hard-crop (feather 0) path honors the same terminus alpha', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
   try {
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     updateScopeTerminusForHeight(SCOPE_TERMINUS_FAR_M + 5_000_000); // true full-globe view
     setScopeMaskFeather(0); // hard crop — the evenodd rect-minus-circle path
     // The globe-scale seed paint is legitimately in the history, so assert on
@@ -583,15 +600,12 @@ function stubScopeEngine(container, heightM) {
     set.add(listener);
     return () => set.delete(listener);
   };
+  const engine = createFakeEngine({ container, altitude: height });
+  engine.frames.preRender.addEventListener = addTo(preRenderListeners);
+  engine.camera.moveEnd.addEventListener = addTo(moveEndListeners);
+  engine.camera.height = () => height;
   return {
-    engine: {
-      host: { container },
-      frames: { preRender: { addEventListener: addTo(preRenderListeners) } },
-      camera: {
-        height: () => height,
-        moveEnd: { addEventListener: addTo(moveEndListeners) },
-      },
-    },
+    engine,
     setHeight(next) {
       height = next;
     },
@@ -748,7 +762,9 @@ test('terminus percents clamp into the supported band; junk is absent, not zero'
 test('a pinned override is floored to the band at every entry point', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
   try {
-    installScopeMask({ host: { container: dom.container } });
+    installScopeMask(
+      createFakeEngine({ container: dom.container, altitude: 14_000_000 }),
+    );
     setScopeTerminusOverride(0); // an sce=0 link, or any stale caller
     assert.equal(
       getScopeTerminusOverride(),
