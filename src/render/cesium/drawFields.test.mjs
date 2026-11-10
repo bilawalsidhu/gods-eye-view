@@ -186,6 +186,54 @@ test('a surface applies a new detail window only once its image has drawn; the s
   assert.equal(scene.postRender.size, 0);
 });
 
+test('a surface draws a one pixel wide image as a copy two pixels wide', (t) => {
+  // The material reads a width of 1 as the 1×1 default, nothing arrived.
+  const drawn = [];
+  class FakeCanvas {
+    constructor(width, height) {
+      this.width = width;
+      this.height = height;
+    }
+    getContext() {
+      return { drawImage: (...args) => drawn.push(args) };
+    }
+  }
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'OffscreenCanvas');
+  globalThis.OffscreenCanvas = FakeCanvas;
+  t.after(() => {
+    if (had) Object.defineProperty(globalThis, 'OffscreenCanvas', had);
+    else delete globalThis.OffscreenCanvas;
+  });
+  const cesium = createShellCesium();
+  const scene = createShellScene();
+  const surface = createShellSurface({
+    scene,
+    cesium,
+    rectangle: Cesium.Rectangle.fromDegrees(-100, 28, -95, 32),
+    height: 10_000,
+  });
+  const [primitive] = scene.primitives.items;
+  const { uniforms } = primitive.appearance.material;
+  const pixel = { width: 1, height: 1 };
+  surface.setImage(pixel);
+  assert.ok(uniforms.image instanceof FakeCanvas);
+  assert.deepEqual([uniforms.image.width, uniforms.image.height], [2, 1]);
+  assert.deepEqual(drawn, [[pixel, 0, 0, 2, 1]]);
+  const copy = uniforms.image;
+  surface.setImage(pixel);
+  assert.equal(uniforms.image, copy, 'the same image is not copied again');
+  renderShells(cesium, scene, 3);
+  assert.equal(surface.isDrawn(), true, 'drawn once the copy has uploaded');
+  const wide = { width: 4, height: 1 };
+  surface.setImage(wide);
+  assert.equal(uniforms.image, wide, 'a wider image is drawn as it is');
+  surface.setDetail(
+    { width: 1, height: 8 },
+    { west: 0, south: 0, east: 1, north: 1 },
+  );
+  assert.deepEqual([uniforms.detail.width, uniforms.detail.height], [2, 8]);
+});
+
 test("a surface rises by a uniform scale about the Earth's centre", () => {
   const scene = {
     primitives: new Cesium.PrimitiveCollection(),

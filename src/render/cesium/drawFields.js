@@ -151,9 +151,12 @@ export function createShellSurface({
   primitives.add(primitive);
   orderShells(primitives, primitive, height);
   let lift = 0;
+  // What it was given, and what the material draws (`widened`).
+  let imageSource = null;
   let image = null;
   let frames = 0;
   // The detail image, its own upload count and a window waiting for it to draw.
+  let detailSource = null;
   let detail = null;
   let detailFrames = 0;
   let pendingWindow = null;
@@ -229,9 +232,10 @@ export function createShellSurface({
 
   return {
     setImage(next) {
-      if (destroyed || next === image) return;
-      image = next;
-      material.uniforms.image = next;
+      if (destroyed || next === imageSource) return;
+      imageSource = next;
+      image = widened(next);
+      material.uniforms.image = image;
       frames = UPLOAD_FRAMES;
       wake();
     },
@@ -259,6 +263,7 @@ export function createShellSurface({
       if (destroyed) return;
       if (!next) {
         if (detail === null) return;
+        detailSource = null;
         detail = null;
         detailFrames = 0;
         pendingWindow = null;
@@ -267,9 +272,10 @@ export function createShellSurface({
         ask();
         return;
       }
-      if (next !== detail) {
-        detail = next;
-        material.uniforms.detail = next;
+      if (next !== detailSource) {
+        detailSource = next;
+        detail = widened(next);
+        material.uniforms.detail = detail;
         detailFrames = UPLOAD_FRAMES;
       }
       const applied = appliedWindow();
@@ -319,7 +325,9 @@ export function createShellSurface({
       if (!primitive.isDestroyed()) primitive.destroy();
       // Primitive.destroy leaves the material and its texture alive.
       if (!material.isDestroyed()) material.destroy();
+      imageSource = null;
       image = null;
+      detailSource = null;
       detail = null;
       pendingWindow = null;
       ask();
@@ -337,6 +345,25 @@ function placeIn(outer, inner) {
     east: (inner.east - outer.west) / x,
     north: (inner.north - outer.south) / y,
   };
+}
+
+/**
+ * `source`, or a copy two pixels wide when it is one. The material reads a
+ * width of 1 as Cesium's 1×1 default (nothing has arrived yet), so a one
+ * pixel wide image would never draw. Doubling the column samples the same.
+ */
+function widened(source) {
+  if (!(source?.width < 2)) return source;
+  const canvas =
+    typeof document !== 'undefined'
+      ? document.createElement('canvas')
+      : new OffscreenCanvas(2, source.height);
+  canvas.width = 2;
+  canvas.height = source.height;
+  const context = canvas.getContext('2d');
+  context.imageSmoothingEnabled = false;
+  context.drawImage(source, 0, 0, 2, source.height);
+  return canvas;
 }
 
 /** Whether `ref` is drawn as it is, with no decode first. */
