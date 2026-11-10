@@ -47,6 +47,9 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // Autobrennero (A22) refreshes its stills about once a minute (Last-Modified
   // tracks the minute); 3 min matches the other highway packs.
   'autostrada del brennero': 3 * 60 * 1000,
+  // DriveNC serves a new still about once a minute (its own map polls at 60 s
+  // and frames carry max-age=60); 3 min matches the other highway packs.
+  'ncdot drivenc': 3 * 60 * 1000,
 });
 
 /**

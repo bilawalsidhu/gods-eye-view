@@ -30,6 +30,7 @@ import {
   loadIcelandSourcesFromOpenData,
   loadHkSourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadDriveNcSourcesFromOpenData,
   loadKingCountySourcesFromOpenData,
   loadWsdotSourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
@@ -137,6 +138,15 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    // DriveNC publishes no reuse terms for its camera stills, and the keyless
+    // path reads the map's own catalog and tooltip pages (NCDOT's documented
+    // API needs a developer key and is throttled), so the pack is off unless
+    // the operator opts in (see DATA_SOURCES.md).
+    name: 'drivenc',
+    enabled: () => envOptIn('CCTV_DRIVENC_ENABLED'),
+    load: loadDriveNcSourcesFromOpenData,
   },
   {
     name: 'kingcounty',

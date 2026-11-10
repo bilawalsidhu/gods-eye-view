@@ -444,6 +444,17 @@ export function isLikelyA22Coordinate(lat, lon) {
   );
 }
 
+/** North Carolina statewide, the mountains to the Outer Banks, with slack at each edge. */
+export function isLikelyNorthCarolinaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 33.7 &&
+    lat <= 36.7 &&
+    lon >= -84.5 &&
+    lon <= -75.3
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

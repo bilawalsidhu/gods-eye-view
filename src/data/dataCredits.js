@@ -275,6 +275,13 @@ export const DATA_CREDITS = [
     html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
   },
   {
+    key: 'drivenc-cctv',
+    html:
+      'CCTV cameras &amp; frames (North Carolina): ' +
+      '<a href="https://www.drivenc.gov/" target="_blank" rel="noopener">NCDOT DriveNC</a> ' +
+      '(public NCDOT camera frames, fetched at request time; images are neither stored nor recorded)',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +

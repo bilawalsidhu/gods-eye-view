@@ -128,6 +128,7 @@
   "server/providers/cctv/constants.js",
   "server/providers/cctv/media.js",
   "server/providers/cctv/normalize.js",
+  "server/providers/cctv/drivenc.test.mjs",
   "src/data/cctvMissingNumbers.test.mjs",
   "server/providers/cctv/sources.js",
   "src/data/cctvSourcePins.test.mjs",
