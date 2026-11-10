@@ -1802,3 +1802,42 @@ test('vessel focus wire skips hidden sprites at rest while a target is tracked',
   assert.equal(result.activeCount, 1);
   for (const billboard of hidden) assert.equal(billboard.color.alpha, 1);
 });
+
+test('detection objects name the vessel card their callout gives way to', () => {
+  const vessel = (mmsi, name) => ({
+    name,
+    mmsi,
+    type: 'Cargo',
+    destination: '',
+    speed: 9.5,
+    course: 80,
+    heading: 80,
+    lastPositionUtc: '',
+    missedRefreshes: 0,
+    position: POS,
+    billboard: null,
+  });
+  const keyed = vessel('200', 'GOLDEN BEAR');
+  const unkeyed = { ...vessel('', 'NO MMSI'), lat: 37.8, lon: -122.4 };
+  _setVesselStateForTest({
+    viewer: {},
+    records: [keyed, unkeyed],
+    billboardCollection: { show: true, remove() {} },
+  });
+  try {
+    const objects = Object.fromEntries(
+      aisLiveVesselsLayer
+        .getDetectableObjects()
+        .map((object) => [object.id, object]),
+    );
+    assert.equal(objects['GOLDEN BEAR'].cardSourceId, 'ais-live-vessels');
+    assert.equal(objects['GOLDEN BEAR'].cardEntryId, 'vessel:200');
+    assert.equal(
+      objects['NO MMSI'].cardEntryId,
+      'vessel:unkeyed:NO MMSI:37.80000:-122.40000',
+      'the same identity the vessel card is published under',
+    );
+  } finally {
+    _setVesselStateForTest({ enabled: false });
+  }
+});

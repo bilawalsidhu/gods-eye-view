@@ -182,6 +182,7 @@ test('a flight that never reported an altitude reads as unknown, not FL328', () 
         _describeFlight: () => ({ altitudeM: null, onGround: false }),
         _contactLabel: () => 'AAL1',
       },
+      motion: { _signalLost: () => null },
     },
     layer: {},
   });

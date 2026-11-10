@@ -140,7 +140,10 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
     ].map((name) => [name, {}]),
   );
   services.aircraftPresentation = { isTr3b: () => false };
-  const parts = { queries: { _contactLabel: (_, info) => info.callsign } };
+  const parts = {
+    queries: { _contactLabel: (_, info) => info.callsign },
+    motion: { _signalLost: () => null },
+  };
   const tracking = createTracking({ flightState, services, parts });
   for (const [position, expected] of [
     [beyond, false],
