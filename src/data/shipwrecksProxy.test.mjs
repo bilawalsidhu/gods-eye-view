@@ -262,3 +262,33 @@ test('a source older than seven days is no longer served', async () => {
   clock = 7 * 24 * HOUR + 16 * 60 * 1000;
   assert.equal((await request(handler)).status, 502, 'older is dropped');
 });
+
+test('an upstream body over its cap is a failed source, read only to the cap', async () => {
+  const MIB = 1024 * 1024;
+  const chunk = new Uint8Array(MIB).fill(0x20);
+  let sent = 0;
+  let cancelled = false;
+  const endless = () =>
+    new ReadableStream({
+      pull(controller) {
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+  const handler = handlerOf(
+    shipwrecksProxy({
+      fetchImpl: async (url) =>
+        String(url).includes('query.wikidata.org')
+          ? Response.json(WIKIDATA)
+          : new Response(endless()),
+    }),
+  );
+  const res = await request(handler);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.sources, { emodnet: false, wikidata: true });
+  assert.ok(cancelled, 'the oversized body is cancelled');
+  assert.ok(sent <= 34 * MIB, `read ${sent / MIB} MiB of a 32 MiB cap`);
+});
