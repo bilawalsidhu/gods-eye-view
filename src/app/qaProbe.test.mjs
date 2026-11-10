@@ -84,7 +84,7 @@ test('the probe lists, toggles and reads layers through the engine', async () =>
     point: { sizePx: 4 },
   });
   assert.deepEqual(probe.movers(), [
-    { id: 'fleet', kind: 'point', count: 0, capacity: 4 },
+    { id: 'fleet', kind: 'point', count: 0, capacity: 4, shown: false },
   ]);
   const before = probe.framesDrawn();
   engine.fake.frame();

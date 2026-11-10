@@ -1,3 +1,4 @@
+import { fakeContractOptions } from './testing/contractFixtures.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -198,9 +199,10 @@ test('assertGlobeEngine accepts a complete engine and names every missing capabi
 test('the fake engine passes the engine contract suite', async (t) => {
   const engine = createFakeEngine();
   const checks = createContractSuite(engine, {
-    waitFrames: async (count) => engine.fake.frames(count),
+    ...fakeContractOptions(engine),
     // The fake's input, as a real pointer would drive it.
     pointer: {
+      ...fakeContractOptions(engine).pointer,
       click: async (x, y) => engine.fake.input('click', { position: { x, y } }),
       move: async (x, y) =>
         engine.fake.input('move', {
@@ -214,8 +216,9 @@ test('the fake engine passes the engine contract suite', async (t) => {
     },
   });
   assert.ok(checks.length >= 15);
-  assert.ok(checks.some(({ name }) => name.startsWith('maps:')));
+  assert.ok(checks.some(({ name }) => name.startsWith('maps.')));
   assert.equal(new Set(checks.map((check) => check.name)).size, checks.length);
+  for (const { name } of checks) assert.match(name, /^\w+(?:\.\w+)?: /);
   for (const check of checks) await t.test(check.name, () => check.run());
 });
 
@@ -305,7 +308,7 @@ test('movers and lines are required', () => {
   const names = createContractSuite(engine, {
     waitFrames: async () => {},
   }).map(({ name }) => name);
-  for (const prefix of ['movers:', 'lines:', 'colours:', 'ground:'])
+  for (const prefix of ['movers.', 'lines.', 'ground.'])
     assert.ok(
       names.some((name) => name.startsWith(prefix)),
       prefix,
@@ -334,7 +337,7 @@ test('imagery is required', () => {
   const names = createContractSuite(engine, {
     waitFrames: async () => {},
   }).map(({ name }) => name);
-  assert.ok(names.some((name) => name.startsWith('imagery:')));
+  assert.ok(names.some((name) => name.startsWith('imagery.')));
 });
 
 test('meshes are required', () => {

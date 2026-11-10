@@ -1,3 +1,4 @@
+import { engineCapabilities } from '../globe/contract.js';
 import { indexMapSources } from './registry.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
@@ -32,9 +33,9 @@ const resolved = (provider, effectiveStackId) => ({
  * and watching them as before (supplied tilesets must be ones the engine
  * knows, i.e. its startup tileset, or has shown). Any other engine builds
  * its own sources from the descriptions; the controller constructs nothing
- * for it, falls back by description when a setter rejects, and has no tile
- * failure watch. On destroy the engine keeps what it shows; owned tilesets
- * are released and disposed.
+ * for it and falls back by description when a setter rejects. Tile failure
+ * fallback runs only with the tileErrors capability. On destroy the engine
+ * keeps what it shows; owned tilesets are released and disposed.
  */
 export class MapSourceController {
   constructor({
@@ -340,6 +341,8 @@ export class MapSourceController {
   async _activateDescribedGlobeStack(stack, gen, visited = new Set()) {
     const { maps } = this._engine;
     const source = this._sources.get(stack.id);
+    this._removeImageryErrorListener?.();
+    this._removeImageryErrorListener = null;
     try {
       await maps.setBaseImagery(this._describeImagery(source));
     } catch (error) {
@@ -367,7 +370,9 @@ export class MapSourceController {
       if (gen !== this._switchGen) return;
       this._terrainMode = source.terrain.id;
     }
-    return { effectiveStackId: stack.id, fallbackMessage: null };
+    const resolution = { effectiveStackId: stack.id, fallbackMessage: null };
+    this._watchProvider(resolution, gen);
+    return resolution;
   }
 
   /** Engine description of an imagery source (+ a prebuilt Cesium provider). */
@@ -603,24 +608,24 @@ export class MapSourceController {
   }
 
   _watchProvider(resolution, gen) {
+    if (!engineCapabilities(this._engine).tileErrors) return;
     const fallback = this._sources.get(
       resolution.effectiveStackId,
     )?.tileFailureFallback;
-    const errorEvent = resolution.provider?.errorEvent;
+    const errorEvent = this._engine.maps.errors;
+    const source = this._engine.maps.current().baseImagery;
     if (!fallback || !errorEvent?.addEventListener) return;
     let failures = 0;
     let pending = false;
     this._removeImageryErrorListener = errorEvent.addEventListener((error) => {
       if (
         gen !== this._switchGen ||
-        this._liveBaseProvider() !== resolution.provider
+        error.kind !== 'tile' ||
+        error.source !== source ||
+        this._engine.maps.current().baseImagery !== source
       )
         return;
-      const retryCount = Number(error?.timesRetried);
-      failures =
-        Number.isInteger(retryCount) && retryCount >= 0
-          ? Math.max(failures + 1, retryCount + 1)
-          : failures + 1;
+      failures++;
       if (failures < fallback.threshold || pending) return;
       pending = true;
       this._onError?.(

@@ -411,3 +411,27 @@ test('current names the sources on screen as passed', async () => {
   maps.releasePhotorealTiles(tiles);
   assert.equal(maps.current().photoreal, null, 'a released source is gone');
 });
+
+test('maps.errors bridges terrain failures, follows fallback providers and detaches on destroy', async () => {
+  const { viewer, maps, destroy } = setup();
+  const failures = [];
+  maps.errors.addEventListener((error) => failures.push(error));
+  const first = { errorEvent: new Cesium.Event() };
+  const source = { kind: 'keyless', create: () => ({ provider: first }) };
+  await maps.setTerrain(source);
+  const revision = maps.terrainRevision();
+  first.errorEvent.raiseEvent({ error: { statusCode: 503 } });
+  assert.deepEqual(failures, [{ source, kind: 'terrain', status: 503 }]);
+  const fallback = { errorEvent: new Cesium.Event() };
+  viewer.terrainProvider = fallback;
+  assert.ok(maps.terrainRevision() > revision);
+  first.errorEvent.raiseEvent({ statusCode: 401 });
+  fallback.errorEvent.raiseEvent({ statusCode: 429 });
+  assert.deepEqual(failures, [
+    { source, kind: 'terrain', status: 503 },
+    { source, kind: 'terrain', status: 429 },
+  ]);
+  destroy();
+  assert.equal(first.errorEvent.numberOfListeners, 0);
+  assert.equal(fallback.errorEvent.numberOfListeners, 0);
+});

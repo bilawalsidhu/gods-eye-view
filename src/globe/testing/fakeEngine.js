@@ -202,6 +202,7 @@ export function createFakeEngine(options = {}) {
     up: cartesian3.create(),
   };
   const events = {
+    'maps.errors': createEngineEvent(),
     'camera.changed': createEngineEvent(),
     'camera.moveStart': createEngineEvent(),
     'camera.moveEnd': createEngineEvent(),
@@ -263,6 +264,8 @@ export function createFakeEngine(options = {}) {
         part.commits++;
         fake.renderRequests++;
       },
+      ready: (index) =>
+        !scripted('moverFailed', [options.id, index], () => false),
       // Scripted as 'moverFailed' (set id, index) for a load that fails.
       failed: (index) =>
         scripted('moverFailed', [options.id, index], () => false),
@@ -327,6 +330,20 @@ export function createFakeEngine(options = {}) {
   const inputs = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   const livePosition = cartesian3.create();
   let lastBaseImagery = null;
+  const removeMapErrors = { tile: null, terrain: null };
+  function watchMapErrors(source, kind) {
+    removeMapErrors[kind]?.();
+    removeMapErrors[kind] = source?.provider?.errorEvent?.addEventListener(
+      (error) => {
+        events['maps.errors'].raiseEvent({
+          source,
+          kind,
+          status:
+            error?.error?.statusCode ?? error?.statusCode ?? error?.status,
+        });
+      },
+    );
+  }
   const scripts = new Map();
   let transform = [...matrix4.IDENTITY];
   let percentageChanged = 0.5;
@@ -465,11 +482,13 @@ export function createFakeEngine(options = {}) {
     const pose = {
       position: copy3(state.position),
       direction: copy3(state.direction),
+      up: copy3(state.up),
     };
     const differs = (a, b) =>
       !b ||
       !cartesian3.equalsEpsilon(a.position, b.position, 0, 1e-9) ||
-      !cartesian3.equalsEpsilon(a.direction, b.direction, 0, 1e-12);
+      !cartesian3.equalsEpsilon(a.direction, b.direction, 0, 1e-12) ||
+      !cartesian3.equalsEpsilon(a.up, b.up, 0, 1e-12);
     if (differs(pose, lastFramePose)) {
       if (!moving) {
         moving = true;
@@ -498,7 +517,11 @@ export function createFakeEngine(options = {}) {
     );
     const shift =
       cartesian3.distance(pose.position, lastChangedPose.position) / altitude;
-    const amount = Math.max(turn, shift);
+    const roll =
+      Math.acos(
+        math.clamp(cartesian3.dot(pose.up, lastChangedPose.up), -1, 1),
+      ) / Math.PI;
+    const amount = Math.max(turn, roll, shift);
     if (amount > percentageChanged) {
       lastChangedPose = pose;
       events['camera.changed'].raiseEvent(amount);
@@ -708,6 +731,7 @@ export function createFakeEngine(options = {}) {
     },
   });
   const groundPicks = createGroundPicks({
+    surface: () => (fake.maps.photoreal != null ? 'tiles' : 'terrain'),
     pickGlobe: (screen) => engine.picker.pickGlobe(screen),
     camera: {
       get livePosition() {
@@ -909,10 +933,12 @@ export function createFakeEngine(options = {}) {
     // The contract's switch order: a call shows its source when made (the
     // fake builds nothing), so the call made last decides what shows.
     maps: {
+      errors: events['maps.errors'],
       async setBaseImagery(source) {
         record('maps.setBaseImagery', [source]);
         fake.maps.imagery = source;
         lastBaseImagery = source;
+        watchMapErrors(source, 'tile');
       },
       async setTerrain(source) {
         record('maps.setTerrain', [source]);
@@ -925,16 +951,19 @@ export function createFakeEngine(options = {}) {
           throw new TypeError(`Unknown terrain source: ${kind}`);
         fake.maps.terrain = source;
         fake.maps.terrainRevision++;
+        watchMapErrors(source, 'terrain');
       },
       async setPhotorealTiles(source) {
         record('maps.setPhotorealTiles', [source]);
         if (source == null) {
           fake.maps.photoreal = null;
           fake.maps.imagery = lastBaseImagery;
+          watchMapErrors(lastBaseImagery, 'tile');
           return;
         }
         fake.maps.photoreal = source;
         fake.maps.imagery = null;
+        watchMapErrors(null, 'tile');
       },
       releasePhotorealTiles(source) {
         record('maps.releasePhotorealTiles', [source]);
@@ -949,6 +978,7 @@ export function createFakeEngine(options = {}) {
     },
     destroy() {
       record('destroy', []);
+      for (const remove of Object.values(removeMapErrors)) remove?.();
       follow.destroy();
       cancelCurrentFlight();
       moverRegistry.destroyAll();
@@ -1123,6 +1153,7 @@ export function createFakeEngine(options = {}) {
   lastFramePose = {
     position: copy3(state.position),
     direction: copy3(state.direction),
+    up: copy3(state.up),
   };
   return engine;
 }

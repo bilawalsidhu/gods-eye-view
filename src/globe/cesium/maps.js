@@ -4,6 +4,7 @@
 // shared factories in src/maps, as MapSourceController builds them.
 
 import * as Cesium from 'cesium';
+import { createEngineEvent } from '../contract.js';
 import { loadPhotorealisticTileset } from '../../maps/google3d.js';
 import { createMapScene } from './mapScene.js';
 import { ESRI_ATTRIBUTION_HTML, imageryFactoryFor } from './mapImagery.js';
@@ -99,10 +100,29 @@ export function createCesiumMaps(
   let destroyed = false;
   // Every terrain the globe takes counts, a fallback to the ellipsoid too.
   let terrainRevision = 0;
+  let terrainSource = null;
+  const errors = createEngineEvent();
+  const errorRemovers = { tile: null, terrain: null };
+  function watchErrors(provider, source, kind) {
+    errorRemovers[kind]?.();
+    errorRemovers[kind] = provider?.errorEvent?.addEventListener((error) => {
+      if (destroyed) return;
+      errors.raiseEvent({
+        source,
+        kind,
+        status: error?.error?.statusCode ?? error?.statusCode ?? error?.status,
+      });
+    });
+  }
   const offTerrain =
-    viewer.scene.globe?.terrainProviderChanged?.addEventListener(
-      () => terrainRevision++,
-    );
+    viewer.scene.globe?.terrainProviderChanged?.addEventListener((provider) => {
+      terrainRevision++;
+      watchErrors(
+        provider ?? viewer.scene.terrainProvider,
+        terrainSource,
+        'terrain',
+      );
+    });
 
   const startupTileset = () =>
     (typeof tilesetRef === 'function' ? tilesetRef() : tilesetRef?.current) ??
@@ -137,11 +157,13 @@ export function createCesiumMaps(
 
   function showBase(source, provider) {
     currentBase = source;
+    watchErrors(provider, source, 'tile');
     mapScene.showBaseImagery(provider);
     showCredit('imagery', imageryCredit(source));
   }
 
   const maps = {
+    errors,
     async setBaseImagery(source) {
       const generation = ++generations.display;
       const provider = await providerFor(source);
@@ -154,7 +176,9 @@ export function createCesiumMaps(
       const generation = ++generations.terrain;
       const result = await terrainCreator(source)({ signal: abort.signal });
       if (destroyed || generation !== generations.terrain) return;
+      terrainSource = source;
       applyTerrain(viewer, result);
+      if (result.provider) watchErrors(result.provider, source, 'terrain');
       requestRender('map-terrain');
     },
     async setPhotorealTiles(source) {
@@ -203,6 +227,7 @@ export function createCesiumMaps(
       // As MapSourceController activates a 3D stack: no base layer, the
       // source's credit, one tileset shown and the globe hidden.
       mapScene.removeBaseImagery();
+      watchErrors(null, null, 'tile');
       currentBase = null;
       currentTiles = source;
       showCredit('photoreal', source.credit);
@@ -232,6 +257,7 @@ export function createCesiumMaps(
       destroyed = true;
       abort.abort();
       offTerrain?.();
+      for (const remove of Object.values(errorRemovers)) remove?.();
       mapScene.destroy();
       for (const promise of providers.values())
         void promise.then(dispose, () => {});

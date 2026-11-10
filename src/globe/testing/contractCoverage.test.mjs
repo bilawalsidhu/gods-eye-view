@@ -1,3 +1,4 @@
+import { fakeContractOptions } from './contractFixtures.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -10,8 +11,9 @@ test('the contract suite does not leave new members uncalled', async (t) => {
   const fake = createFakeEngine();
   const { engine, called } = withCallLog(fake);
   const checks = createContractSuite(engine, {
-    waitFrames: async (count) => fake.fake.frames(count),
+    ...fakeContractOptions(engine),
     pointer: {
+      ...fakeContractOptions(engine).pointer,
       click: async (x, y) => fake.fake.input('click', { position: { x, y } }),
       move: async (x, y) =>
         fake.fake.input('move', {

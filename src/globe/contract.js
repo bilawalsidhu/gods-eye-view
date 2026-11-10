@@ -166,7 +166,7 @@
  * @property {any} [native]
  * @property {object} [label] FollowOptions.label.
  * @property {string} [name] Cesium only: the followed Entity's name, else its
- *   id (a follow without an Entity has none).
+ *   id (a follow without an Entity has none). @deprecated Compatibility field.
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType
  * @typedef {'ctrl'|'shift'|'alt'} InputModifier
@@ -346,7 +346,7 @@
  *   pickId); undefined for map tiles.
  * @property {string} [owner] The mover set or line the pick belongs to.
  * @property {number} [instance] The mover instance index.
- * @property {any} [primitive] Cesium only, for compatibility.
+ * @property {any} [primitive] Cesium only, for compatibility. @deprecated Compatibility field.
  * @property {any} [content] 3D tile content when map tiles were picked (what
  *   a surface-pick check reads), else undefined.
  * @property {any} [object] The engine's own pick result, for engine-specific code.
@@ -368,6 +368,11 @@
  *   cannot be built (the current source then stays). Base imagery and
  *   photoreal tiles share one switch order: the call made last decides what
  *   shows, and a superseded call settles without showing anything.
+ * @property {EngineEvent} [errors] With the tileErrors capability, reports
+ *   provider failures as { source, kind: 'tile' | 'terrain', status }, where
+ *   source is the description passed to the setter and status is the HTTP
+ *   status code when known (undefined otherwise). Replaced sources stop
+ *   reporting; engines without provider error events omit this capability.
  * @property {(source: object) => Promise<void>} setBaseImagery
  * @property {(source: object) => Promise<void>} setTerrain
  * @property {(source: object | null) => Promise<void>} setPhotorealTiles
@@ -481,7 +486,7 @@
  *
  * @typedef {object} GlobeMovers
  * @property {(options: MoverSetOptions) => MoverSet} createSet
- * @property {() => { id: string, kind: string, count: number, capacity: number }[]} list
+ * @property {() => { id: string, kind: string, count: number, capacity: number, shown: boolean }[]} list
  *
  * @typedef {object} LineOptions
  *   A dynamic polyline (src/globe/lines.js checks and defaults these).
@@ -1093,6 +1098,7 @@ const isNameList = (value) =>
 // group whole or not at all (assertGlobeEngine); engineCapabilities says
 // which it has.
 const OPTIONAL_SHAPE = {
+  tileErrors: { 'maps.errors': isEngineEvent },
   visualStyles: {
     'render.visualStyles': isNameList,
     'render.setStyle': isFunction,
