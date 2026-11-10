@@ -49,7 +49,9 @@ export function trafficReadiness() {
     pose.heading,
     pose.pitch,
   ];
-  const stats = dataManager.layers.get('traffic').module.getStats();
+  const layer = dataManager.layers.get('traffic').module;
+  const stats = layer.getStats();
+  const work = layer.getLoadingDiagnostics();
   const coverageViewKey = stats.roadBounds?.coverage?.viewKey ?? null;
   const coverage = coverageViewKey?.split(',').map(Number);
   // Allow rounding and sub-metre settling, not another altitude or camera view.
@@ -71,11 +73,17 @@ export function trafficReadiness() {
   return {
     viewKey: view.map((value) => Number(value).toFixed(7)).join(','),
     coverageViewKey,
+    viewMatches,
     count: stats.count,
     loading: stats.loading,
     surfacePending: stats.surfacePending,
+    ...work,
+    error: stats.error,
+    detailError: stats.detailError,
+    // Missing local heights can outlive the last pass in an oblique view.
+    // Wait for acquisition, publication and scheduled refinement to finish.
     settled:
-      viewMatches && stats.count > 0 && !stats.loading && !stats.surfacePending,
+      viewMatches && stats.count > 0 && !stats.loading && !work.surfaceWaiting,
   };
 }
 

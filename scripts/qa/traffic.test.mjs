@@ -67,8 +67,19 @@ test('traffic readiness rejects old coverage, pending debounce and partial popul
     surfacePending: 0,
     roadBounds: null,
   };
+  const work = { surfaceWaiting: false };
   app.dataManager = {
-    layers: new Map([['traffic', { module: { getStats: () => stats } }]]),
+    layers: new Map([
+      [
+        'traffic',
+        {
+          module: {
+            getStats: () => stats,
+            getLoadingDiagnostics: () => work,
+          },
+        },
+      ],
+    ]),
   };
   let calls = 0;
   let disposed = 0;
@@ -93,7 +104,17 @@ test('traffic readiness rejects old coverage, pending debounce and partial popul
         assert.equal(predicate(), false, 'partial road population');
         stats.loading = false;
         stats.surfacePending = 1;
-        assert.equal(predicate(), false, 'unresolved surface');
+        work.surfaceWaiting = true;
+        assert.equal(predicate(), false, 'scheduled surface work');
+        work.surfaceWaiting = false;
+        assert.equal(
+          predicate(),
+          true,
+          'unavailable heights with no more work',
+        );
+        stats.loading = true;
+        assert.equal(predicate(), false, 'active refinement still blocks');
+        stats.loading = false;
         stats.surfacePending = 0;
         assert.equal(predicate(), true);
       }
@@ -123,7 +144,17 @@ test('traffic readiness accepts the layer footprint after rounding and tiny pose
     roadBounds: createReticleFootprint()(app.engine, 300),
   };
   app.dataManager = {
-    layers: new Map([['traffic', { module: { getStats: () => stats } }]]),
+    layers: new Map([
+      [
+        'traffic',
+        {
+          module: {
+            getStats: () => stats,
+            getLoadingDiagnostics: () => ({ surfaceWaiting: false }),
+          },
+        },
+      ],
+    ]),
   };
   assert.equal(trafficReadiness().settled, true);
   app.engine.fake.setPose({
@@ -147,7 +178,17 @@ test('traffic readiness rejects changed views and malformed coverage keys', (t) 
     roadBounds: { coverage: {} },
   };
   app.dataManager = {
-    layers: new Map([['traffic', { module: { getStats: () => stats } }]]),
+    layers: new Map([
+      [
+        'traffic',
+        {
+          module: {
+            getStats: () => stats,
+            getLoadingDiagnostics: () => ({ surfaceWaiting: false }),
+          },
+        },
+      ],
+    ]),
   };
   for (const key of [
     null,
@@ -179,7 +220,22 @@ test('traffic loading timeouts include both keys and pending work', async (t) =>
               count: 12,
               loading: true,
               surfacePending: 2,
+              error: null,
+              detailError: null,
               roadBounds: { coverage: { viewKey: coverageViewKey } },
+            }),
+            getLoadingDiagnostics: () => ({
+              fetching: false,
+              flowPending: 0,
+              surfaceRefining: true,
+              surfaceWaiting: false,
+              populationPending: false,
+              heightPending: true,
+              generation: 3,
+              surfaceRevision: 7,
+              lastPaintStage: 'Loaded full refined',
+              movingWaypoints: 2,
+              maxResidualM: 12,
             }),
           },
         },
@@ -209,6 +265,19 @@ test('traffic loading timeouts include both keys and pending work', async (t) =>
         ),
       );
       assert.match(error.message, /"loading":true,"surfacePending":2/);
+      const observed = JSON.parse(error.message.split('; ')[1]);
+      assert.equal(observed.viewMatches, false);
+      assert.equal(observed.fetching, false);
+      assert.equal(observed.flowPending, 0);
+      assert.equal(observed.surfaceRefining, true);
+      assert.equal(observed.surfaceWaiting, false);
+      assert.equal(observed.populationPending, false);
+      assert.equal(observed.heightPending, true);
+      assert.equal(observed.generation, 3);
+      assert.equal(observed.surfaceRevision, 7);
+      assert.equal(observed.lastPaintStage, 'Loaded full refined');
+      assert.equal(observed.movingWaypoints, 2);
+      assert.equal(observed.maxResidualM, 12);
       return true;
     },
   );
