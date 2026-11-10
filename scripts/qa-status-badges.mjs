@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /** Badge acceptance on dev/preview. Camera state is a disposable controller fixture. */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  args: ['--use-gl=angle', '--use-angle=swiftshader'],
+  args: [],
 });
 const page = await browser.newPage();
 page.setDefaultNavigationTimeout(60000);
@@ -31,11 +32,10 @@ try {
       { waitUntil: 'domcontentloaded' },
     );
     await page.waitForFunction(
-      () =>
-        window.__godsEyeView?.styleManager?._cctvControls &&
-        document.getElementById('loading-screen')?.classList.contains('hidden'),
+      () => window.__godsEyeView?.styleManager?._cctvControls,
       { timeout: 60000 },
     );
+    await whenSettled(page);
     await page.evaluate(async () => {
       const { dataManager, styleManager: manager } = window.__godsEyeView;
       await dataManager.setEnabled('wind', true);
@@ -272,7 +272,7 @@ try {
   }
   check('no uncaught browser errors', errors.length === 0, errors);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 console.log(`${checks} checks; ${failures} failures`);
 process.exitCode = failures ? 1 : 0;

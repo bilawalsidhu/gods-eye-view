@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native terrain-tree counters verify Cesium retry behavior.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, until } from './qa/ready.mjs';
 /**
  * Keyless terrain throttling probe.
  *
@@ -21,8 +24,8 @@
  * Exits 1 when a throttled tile never recovered or a terrain tile is left in
  * Cesium's FAILED state.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 
 const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
 const argv = process.argv.slice(2);
@@ -46,20 +49,10 @@ const headful = argv.includes('--headful');
 const TERRAIN_HOST = 'terrain.reearth.land';
 const TILE_PATTERN = /\/cesium-mesh\/ellipsoid\/\d+\/\d+\/\d+\.terrain/;
 
-const executablePath =
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  (await puppeteer.executablePath().catch(() => null));
-if (!executablePath || !fs.existsSync(executablePath)) {
-  throw new Error('Puppeteer Chrome for Testing is unavailable');
-}
-
-const browser = await puppeteer.launch({
-  headless: headful ? false : 'new',
-  executablePath,
+const browser = await launchBrowser({
+  headless: true,
   args: [
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
     '--no-sandbox',
   ],
 });
@@ -149,31 +142,17 @@ page.on('console', (message) => {
 });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const waitFor = async (predicate, timeoutMs, label) => {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) return;
-    await sleep(250);
-  }
-  throw new Error(`timed out waiting for ${label}`);
-};
 
 const setCamera = (lon, lat, height) =>
-  page.evaluate(
-    ({ lon, lat, height }) => {
-      const viewer = window.__godsEyeView.viewer;
+  evaluateWithGeo(
+    page,
+    async (qaGeo, { lon, lat, height }) => {
       // The app's own startup flight would otherwise keep steering the camera
       // through the burst and turn the zoom-out into a zoom-in.
-      viewer.camera.cancelFlight();
-      const cartographic =
-        viewer.camera.positionCartographic.constructor.fromDegrees(
-          lon,
-          lat,
-          height,
-        );
-      viewer.camera.setView({
-        destination:
-          viewer.scene.globe.ellipsoid.cartographicToCartesian(cartographic),
+      window.__godsEyeView.engine.camera.cancelFlight();
+      const cartographic = qaGeo.cartographic.fromDegrees(lon, lat, height);
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian(cartographic),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
       window.__godsEyeView.requestRender?.();
@@ -183,7 +162,7 @@ const setCamera = (lon, lat, height) =>
 
 const cameraHeight = () =>
   page.evaluate(
-    () => window.__godsEyeView.viewer.camera.positionCartographic.height,
+    () => window.__godsEyeView.engine.camera.pose().cartographic.height,
   );
 
 const globeState = () =>
@@ -203,7 +182,7 @@ const globeState = () =>
     return {
       failed,
       loaded,
-      tilesLoaded: viewer.scene.globe.tilesLoaded,
+      tilesLoaded: window.__godsEyeView.engine.surface.tilesLoaded(),
       provider: viewer.terrainProvider?.constructor?.name,
     };
   });
@@ -212,8 +191,9 @@ const burst = async () => {
   if (mode === 'zoomOut') {
     for (let i = 0; i < notches; i += 1) {
       await page.evaluate(() => {
-        const viewer = window.__godsEyeView.viewer;
-        viewer.camera.zoomOut(viewer.camera.positionCartographic.height * 0.6);
+        window.__godsEyeView.engine.camera.zoomOut(
+          window.__godsEyeView.engine.camera.pose().cartographic.height * 0.6,
+        );
         window.__godsEyeView.requestRender?.();
       });
       await sleep(40);
@@ -230,14 +210,22 @@ const burst = async () => {
 
 try {
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForFunction(() => Boolean(window.__godsEyeView?.viewer), {
+  await page.waitForFunction(() => Boolean(window.__godsEyeView?.engine), {
     timeout: 60000,
   });
-  await waitFor(() => layerJsonSeen, 60000, 'the Re:Earth layer.json fetch');
-  await waitFor(
+  await whenSettled(page);
+  await until(() => layerJsonSeen, {
+    timeoutMs: 60000,
+    intervalMs: 250,
+    label: 'the Re:Earth layer.json fetch',
+  });
+  await until(
     async () => (await globeState()).provider === 'CesiumTerrainProvider',
-    30000,
-    'the keyless terrain provider',
+    {
+      timeoutMs: 30000,
+      intervalMs: 250,
+      label: 'the keyless terrain provider',
+    },
   );
 
   const summaries = [];
@@ -246,16 +234,16 @@ try {
     // overwrite the first setView on the very next frame.
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await setCamera(-97.7431, 30.2672, 40000);
-      await sleep(1500);
+      await whenSettled(page);
       const height = await cameraHeight();
       if (Math.abs(height - 40000) < 1000) break;
     }
-    await waitFor(
-      async () => (await globeState()).tilesLoaded,
-      30000,
-      'the 40 km view to settle',
-    ).catch(() => {});
-    await sleep(2000);
+    await until(async () => (await globeState()).tilesLoaded, {
+      timeoutMs: 30000,
+      intervalMs: 250,
+      label: 'the 40 km view to settle',
+    }).catch(() => {});
+    await whenSettled(page);
     const settledHeight = await cameraHeight();
     if (Math.abs(settledHeight - 40000) > 1000) {
       throw new Error(
@@ -358,5 +346,5 @@ try {
   );
   process.exitCode = failures.length ? 1 : 0;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }

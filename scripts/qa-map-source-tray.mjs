@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /** Focused browser proof for the responsive, accessible Map Source tray. */
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = process.env.QA_SHOTS_DIR || path.join(repoRoot, 'qa-shots', 'map-source-tray');
@@ -18,26 +19,12 @@ const headful = process.argv.includes('--headful');
 // branch.
 const forceKeyless = process.argv.includes('--keyless')
   || process.env.QA_MAP_SOURCE_TRAY_KEYLESS === '1';
-const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
-  || await puppeteer.executablePath().catch(() => null);
 
-if (!executablePath || !fs.existsSync(executablePath)) {
-  throw new Error('Puppeteer Chrome for Testing is unavailable');
-}
 fs.mkdirSync(shotsDir, { recursive: true });
 
-const browser = await puppeteer.launch({
-  headless: headful ? false : 'new',
-  executablePath,
-  // Metal is a macOS-only ANGLE backend: passing it on Windows or Linux makes
-  // WebGL initialization fail outright, so Cesium never constructs and this
-  // harness dies at the boot wait before a single assertion runs.
-  args: [
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
-    '--no-sandbox',
-  ],
+const browser = await launchBrowser({
+  headless: true,
+  args: [...(process.platform === 'darwin' ? ['--enable-gpu'] : []), '--no-sandbox'],
 });
 const page = await browser.newPage();
 const failures = [];
@@ -154,7 +141,7 @@ const pressTabs = async (count, backwards = false) => {
     if (backwards) await page.keyboard.up('Shift');
   }
   // The row scrolls smoothly when native Tab brings an edge button into view.
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  await whenUiSettled(page);
 };
 // Phones (≤720px) present the dock's Presets inline in the More tab's sheet.
 // It opens from the keyboard, as a keyboard user would, so the focus it moves
@@ -218,7 +205,7 @@ const tabTo = async (selector, { backwards = false, limit = 160 } = {}) => {
     for (let step = 1; step <= limit; step += 1) {
       await page.keyboard.press('Tab');
       if (await page.evaluate((match) => document.activeElement?.matches(match), selector)) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await whenUiSettled(page);
         return { reached: true, steps: step };
       }
     }
@@ -304,10 +291,7 @@ try {
   // tray assertion into a mission or voice action in a pristine browser.
   await page.goto(`${appUrl}/?welcome=0`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
-  await page.waitForFunction(
-    () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60_000 },
-  );
+  await whenSettled(page);
 
   const presentation = await page.evaluate(() => ({
     ids: [...document.querySelectorAll('.map-stack-chip')].map((chip) => chip.dataset.stackId),
@@ -1103,9 +1087,9 @@ try {
   const clickTileThenLeave = async (stackId) => {
     await page.evaluate(() => window.__godsEyeView.styleManager
       .setPanelCollapsed('control-panel', false, { explicit: true }));
-    await new Promise((resolve) => setTimeout(resolve, 240));
+    await whenUiSettled(page);
     await page.click(`[data-stack-id="${stackId}"]`);
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await whenUiSettled(page);
     const afterClick = await readTrayState();
     await page.mouse.move(20, 20); // leave the dock entirely → pointerleave
     // Past the 420 ms unpinned close delay with room for a slow frame.
@@ -1121,7 +1105,7 @@ try {
   await setControlPanelPinned(false);
   await page.evaluate(() => window.__godsEyeView.styleManager
     .setPanelCollapsed('control-panel', true, { explicit: true }));
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await whenUiSettled(page);
   await page.focus('#control-panel-toggle');
   await page.keyboard.press('Enter'); // opens and hands focus to the active tile
   const selectedForHold = await page.evaluate(() => window.__godsEyeView.styleManager.mapStackController.getActiveId());
@@ -1136,7 +1120,7 @@ try {
   await page.keyboard.press('Tab');
   if (activeIsLastTile) await page.keyboard.up('Shift');
   await page.keyboard.press('Enter'); // activate it from the keyboard
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await whenUiSettled(page);
   const keyboardAfterActivate = await page.evaluate(() => ({
     focusedStack: document.activeElement?.dataset?.stackId || null,
     isChip: !!document.activeElement?.classList?.contains('map-stack-chip'),
@@ -1148,7 +1132,7 @@ try {
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   });
   await page.mouse.move(chipPoint.x, chipPoint.y);
-  await new Promise((resolve) => setTimeout(resolve, 120));
+  await whenUiSettled(page);
   await page.mouse.move(20, 20);
   await new Promise((resolve) => setTimeout(resolve, 1000));
   const keyboardHold = await readTrayState();
@@ -1179,7 +1163,7 @@ try {
   await page.mouse.move(pinApproach.x, pinApproach.y);
   await page.evaluate(() => window.__godsEyeView.styleManager
     .setPanelCollapsed('control-panel', false, { explicit: true }));
-  await new Promise((resolve) => setTimeout(resolve, 240));
+  await whenUiSettled(page);
   check(
     'a tile click does not exempt the unpinned tray from mouse-away auto-dismiss',
     dismissAfterTileClick.afterClick.collapsed === false
@@ -1205,7 +1189,7 @@ try {
   await checkResponsiveStyleFocus(1000);
 
   await page.setViewport({ width: 620, height: 900, deviceScaleFactor: 1 });
-  await new Promise((resolve) => setTimeout(resolve, 180));
+  await whenUiSettled(page);
   await waitForShellSettled();
   await openPhoneMoreSheet();
   const at620 = await trayMetrics();
@@ -1222,7 +1206,7 @@ try {
   await checkResponsiveStyleFocus(620);
 
   await page.setViewport({ width: 480, height: 900, deviceScaleFactor: 1 });
-  await new Promise((resolve) => setTimeout(resolve, 180));
+  await whenUiSettled(page);
   const at480 = await trayMetrics();
   const allRectsInside = at480.chips.every((chip) => (
     chip.left >= 0 && chip.right <= at480.viewport.width
@@ -1294,10 +1278,7 @@ try {
         timeout: 60_000,
       });
       await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
-      await page.waitForFunction(
-        () => document.getElementById('loading-screen')?.classList.contains('hidden'),
-        { timeout: 60_000 },
-      );
+      await whenSettled(page);
     }
     await page.waitForFunction(
       () => window.__godsEyeView.styleManager.mapStackController.getState()?.status !== 'switching',
@@ -1429,7 +1410,7 @@ try {
     await page.keyboard.press('Enter');
     await page.focus('#control-panel-toggle');
     await page.keyboard.press('Enter');
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await whenUiSettled(page);
     const pinnedSibling = await locationState();
     check('Location: pinned tray survives sibling opening',
       pinnedSibling.pinned && pinnedSibling.locationExpanded === 'true'
@@ -1449,14 +1430,14 @@ try {
         const searchTab = '#mobile-tab-bar [data-mobile-sheet="search"]';
         await page.focus(searchTab);
         await page.keyboard.press('Enter');
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await whenUiSettled(page);
         const field = await focusMetrics('#location-search');
         check(`Search: ${width} px keyboard opens the sheet on the location field`,
           field.focusedId === 'location-search' && field.visible && field.insideViewport,
           JSON.stringify(field));
         await page.screenshot({ path: path.join(shotsDir, `${width}-search-open.png`) });
         await page.keyboard.press('Escape');
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await whenUiSettled(page);
         const tab = await focusMetrics(searchTab);
         const closedSheet = await page.evaluate(() => !document.body.dataset.mobileSheet);
         check(`Search: ${width} px Escape closes the sheet with a visible ring on its tab`,
@@ -1747,7 +1728,7 @@ try {
 
   check('no new page or console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 if (failures.length) {

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive inspection independently measures the Cesium road paint.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * Traffic motion acceptance: real-GPU Puppeteer, stable identities, stationary
  * camera holds and timestamped CDP JPEGs encoded with ffmpeg. No tile mocks.
@@ -9,10 +11,11 @@
  * --journey follows a neighborhood-to-city route with layer toggles, then
  * checks Capitol/greenbelt/parking/corridor views against a 1.5 s limit.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import puppeteer from 'puppeteer';
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
   console.log(
@@ -37,11 +40,10 @@ fs.mkdirSync(root, { recursive: true });
 const revision = execFileSync('git', ['rev-parse', 'HEAD'], {
   encoding: 'utf8',
 }).trim();
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   protocolTimeout: 300000,
   args: [
-    '--use-angle=metal',
     '--window-size=1280,800',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -84,12 +86,10 @@ try {
     u.searchParams.set('trafficRoads', mode);
     u.searchParams.set('trafficDebug', '1');
     await page.goto(u.href, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForFunction(
-      () =>
-        window.__godsEyeView?.dataManager &&
-        document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 120000 },
-    );
+    await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+      timeout: 120000,
+    });
+    await whenSettled(page);
     await page.evaluate(
       () => window.__godsEyeView.styleManager.initialRestorePromise,
     );
@@ -99,7 +99,6 @@ try {
       g.styleManager.setDetection({ enabled: false });
       for (const [id] of g.dataManager.layers)
         g.dataManager.setEnabled(id, false);
-      g.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
     });
     const identity = await page.evaluate(() => ({
       title: document.title,
@@ -159,10 +158,10 @@ try {
       clock.style.cssText =
         'position:fixed;bottom:4px;left:38%;padding:3px 8px;background:#000c;color:#fff;font:12px monospace;z-index:999999;pointer-events:none';
       document.body.append(clock);
-      viewer.camera.moveEnd.addEventListener(() =>
+      window.__godsEyeView.engine.camera.moveEnd.addEventListener(() =>
         window.__motion.moveEnds.push(performance.now()),
       );
-      scene.postRender.addEventListener(() => {
+      window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
         if (!window.__motion.active) return;
         discoverCollections();
         const now = performance.now(),
@@ -174,7 +173,9 @@ try {
             : ` | camera stopped +${((now - window.__motion.holdStart) / 1000).toFixed(1)}s`);
         const visit = (id, roadId, point) => {
           if (!point.show) return;
-          const s = scene.cartesianToCanvasCoordinates(point.position);
+          const s = window.__godsEyeView.engine.projector.worldToWindow(
+            point.position,
+          );
           if (s && s.x >= 0 && s.y >= 0 && s.x <= 1280 && s.y <= 800)
             points.set(id, { x: s.x, y: s.y, roadId });
         };
@@ -268,21 +269,19 @@ try {
       });
     }, baseline);
     const fly = (lat, lon, height, pitch, duration, heading = 20) =>
-      page.evaluate(
-        async (v) => {
-          const { viewer } = window.__godsEyeView;
+      evaluateWithGeo(
+        page,
+        async (qaGeo, v) => {
           window.__motion.label = 'camera moving';
           window.__motion.holdStart = null;
-          viewer.camera.cancelFlight();
+          window.__godsEyeView.engine.camera.cancelFlight();
           await new Promise((resolve) =>
-            viewer.camera.flyTo({
-              destination: viewer.scene.globe.ellipsoid.cartographicToCartesian(
-                {
-                  latitude: (v.lat * Math.PI) / 180,
-                  longitude: (v.lon * Math.PI) / 180,
-                  height: v.height,
-                },
-              ),
+            window.__godsEyeView.engine.camera.flyTo({
+              destination: qaGeo.cartographic.toCartesian({
+                latitude: (v.lat * Math.PI) / 180,
+                longitude: (v.lon * Math.PI) / 180,
+                height: v.height,
+              }),
               orientation: {
                 heading: (v.heading * Math.PI) / 180,
                 pitch: (v.pitch * Math.PI) / 180,
@@ -534,7 +533,7 @@ try {
     await page.close();
   }
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
   fs.writeFileSync(
     path.join(root, 'results.json'),
     JSON.stringify(

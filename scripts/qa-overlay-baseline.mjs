@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { chromeExecutablePath } from './qa-chrome.mjs';
+// Cesium-only probes: native entity, DataSource and primitive counts independently audit Cesium ownership.
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * Phase 0 world-overlay baseline harness.
  *
@@ -25,13 +28,13 @@
  * and primitives (none of them a layer's own any more).
  */
 
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 
-const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME_EXECUTABLE = chromeExecutablePath();
 const DEFAULT_URL = 'http://localhost:4176';
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const SAMPLE_MS = 5_000;
@@ -366,20 +369,19 @@ async function waitForApp(page) {
     () => Boolean(window.__godsEyeView?.engine && window.__godsEyeView?.dataManager),
     { timeout: 60_000 },
   );
+  await whenSettled(page);
   await page.evaluate(() => {
-    const { engine, viewer } = window.__godsEyeView;
+    const { engine } = window.__godsEyeView;
     try { engine.camera.cancelFlight(); } catch { /* no flight */ }
-    try { viewer?.scene.tweens?.removeAll?.(); } catch { /* no tween collection */ }
   });
-  await sleep(1_250);
+  await whenFramesDrawn(page);
 }
 
 async function setCamera(page, camera) {
   if (!camera) return;
   await page.evaluate(([destination, heading, pitch]) => {
-    const { engine, viewer } = window.__godsEyeView;
+    const { engine } = window.__godsEyeView;
     engine.camera.cancelFlight();
-    viewer?.scene.tweens?.removeAll?.();
     engine.camera.setView({
       destination,
       orientation: { heading, pitch, roll: 0 },
@@ -587,7 +589,7 @@ async function prepareCctv(page, heightM) {
   }, heightM);
   if (!camera) return 'CCTV catalog did not expose a geolocated camera';
   await setCamera(page, camera);
-  await sleep(7_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -600,14 +602,14 @@ async function prepareFirms(page) {
   });
   if (!result.fire) return `FIRMS unavailable (${result.stats.error || 'no detections'})`;
   await setCamera(page, [result.fire.longitude, result.fire.latitude, 60_000, 0, -1.45]);
-  await sleep(4_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
 async function prepareVessels(page) {
   const state = await readLayerState(page, 'ais-live-vessels');
   if (!(state?.stats?.count > 0)) return `AIS unavailable (${state?.stats?.error || 'no live vessels'})`;
-  await sleep(2_500);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -621,7 +623,7 @@ async function prepareDetection(page, densityPct) {
     densityPct: density,
   }), densityPct);
   if (!control?.ok) return `Detection control failed (${control?.error || 'unknown error'})`;
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -650,7 +652,7 @@ async function prepareTrackedFlight(page, cockpit) {
   } catch {
     return 'Civil tracking did not create a tracked entity';
   }
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   if (!cockpit) return null;
   const entryAvailable = await page.evaluate(() => {
     const button = document.getElementById('cockpit-entry');
@@ -664,7 +666,7 @@ async function prepareTrackedFlight(page, cockpit) {
   } catch {
     return 'Cockpit entry control did not enter cockpit mode';
   }
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -683,7 +685,7 @@ async function prepareMission(page) {
   } catch {
     return 'Mission selection did not reach the layer probe';
   }
-  await sleep(2_000);
+  await whenFramesDrawn(page);
   return null;
 }
 
@@ -703,7 +705,7 @@ async function prepareScene(page, scene) {
   if (!skipReason && scene.detectionDensity) skipReason = await prepareDetection(page, scene.detectionDensity);
   if (!skipReason && scene.trackedFlight) skipReason = await prepareTrackedFlight(page, scene.cockpit);
   if (!skipReason && scene.missionSelected) skipReason = await prepareMission(page);
-  await sleep(DEFAULT_SETTLE_MS);
+  await whenFramesDrawn(page);
   return { layerActivations, skipReason };
 }
 
@@ -868,7 +870,7 @@ async function runScene(browser, scene, shotsDir) {
     const motion = await samplePhase(page, true);
     const afterMotionShot = await captureShot(page, shotsDir, scene.id, 'after-motion');
     if (afterMotionShot) result.screenshots.push(afterMotionShot);
-    await sleep(BETWEEN_PHASE_SETTLE_MS);
+    await whenFramesDrawn(page);
     const rest = await samplePhase(page, false);
     result.samples = { motion, rest };
     result.entityInventoryAfter = await readEntityInventory(page);
@@ -904,9 +906,6 @@ function unavailableRenderer(renderer) {
 }
 
 async function main() {
-  if (!fs.existsSync(CHROME_EXECUTABLE)) {
-    throw new Error(`Required Chrome executable not found: ${CHROME_EXECUTABLE}`);
-  }
   if (!Number.isFinite(DPR) || DPR <= 0) throw new Error(`Invalid --dpr value: ${DPR}`);
   const scenes = selectedScenes();
   if (DIST_DIR && (!fs.existsSync(DIST_DIR) || !fs.statSync(DIST_DIR).isDirectory())) {
@@ -917,18 +916,9 @@ async function main() {
     if (!response.ok) throw new Error(`Dev server unavailable at ${APP_URL}: ${response.status || response.statusText}`);
   }
 
-  const browser = await puppeteer.launch({
-    executablePath: CHROME_EXECUTABLE,
-    headless: HEADFUL ? false : 'new',
-    args: [
-      ...(process.env.QA_ANGLE ? ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE}`] : HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      `--window-size=${VIEWPORT.width},${VIEWPORT.height}`,
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: [...(process.env.QA_ANGLE ? [] : HARDWARE_GPU ? [] : ['--enable-unsafe-swiftshader']), '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', `--window-size=${VIEWPORT.width},${VIEWPORT.height}`],
   });
 
   const run = { generatedAt: new Date().toISOString(), context: null, scenes: [] };
@@ -974,13 +964,9 @@ async function main() {
         webglRenderer: browserContext.webglRenderer,
       },
       viewport: { ...VIEWPORT, dpr: browserContext.dpr },
-      gpuMode: process.env.QA_ANGLE || (HARDWARE_GPU ? 'hardware' : 'swiftshader'),
+      gpuMode: process.env.QA_ANGLE || 'metal',
       chromeExecutable: CHROME_EXECUTABLE,
-      chromeArgs: process.env.QA_ANGLE
-        ? ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE}`, '--no-sandbox']
-        : HARDWARE_GPU
-        ? ['--no-sandbox']
-        : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader', '--no-sandbox'],
+      chromeArgs: browser.process()?.spawnargs.slice(1),
       sampleMs: SAMPLE_MS,
       captureMode: DIST_DIR ? `static-dist:${path.resolve(DIST_DIR)}` : 'dev-server',
     };
@@ -992,7 +978,7 @@ async function main() {
       printScene(result);
     }
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   run.summary = {

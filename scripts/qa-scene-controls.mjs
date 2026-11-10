@@ -1,18 +1,17 @@
 #!/usr/bin/env node
 /** Exercise installed Scene controls and real project/playback operations. */
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const shots = path.resolve('qa-shots/scene-controls');
 fs.mkdirSync(shots, { recursive: true });
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: [
     '--no-sandbox',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -34,11 +33,10 @@ try {
     { waitUntil: 'domcontentloaded' },
   );
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector?._controls &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.sceneDirector?._controls,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   await page.evaluate(() => {
     window.__qaSceneState = [];
     window.__godsEyeView.sceneDirector.subscribe((notification) =>
@@ -294,6 +292,7 @@ try {
   );
   await page.click('#scene-start-btn');
   await page.waitForFunction(() => window.__godsEyeView.sceneDirector.running);
+  await whenSettled(page);
   await page.$eval('#scene-stop-btn', (button) => button.click());
   await page.waitForFunction(() => !window.__godsEyeView.sceneDirector.running);
   check(
@@ -364,7 +363,7 @@ try {
   await page.setViewport({ width: 390, height: 844 });
   // Phones present Scenes in the Layers tab's sheet.
   await page.click('#mobile-tab-bar [data-mobile-sheet="layers"]');
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await whenUiSettled(page);
   await page.screenshot({ path: path.join(shots, 'narrow.png') });
   check(
     'Scene controls stay inside the narrow viewport',
@@ -483,6 +482,6 @@ try {
     errors.length === 0,
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 if (failures) process.exitCode = 1;

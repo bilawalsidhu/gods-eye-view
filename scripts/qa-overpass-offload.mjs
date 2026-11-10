@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitives and globe instrumentation isolate Cesium paint and offload cost.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * qa-overpass-offload.mjs — keyless/keyed source replacement acceptance gate.
  *
@@ -25,10 +27,11 @@
  * Screenshots and a JSON result go to qa-shots/ (gitignored). Exits nonzero on
  * a failed assertion. Works against keyed or keyless dev servers.
  */
+import { whenSettled, whenTilesLoaded } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { tilesForBounds } from '../src/data/tomtomTiles.js';
 import { trafficDetailBounds } from '../src/layers/traffic/source.js';
 
@@ -55,19 +58,13 @@ const profile = args.includes('--profile');
 const coverage = args.includes('--coverage');
 const shots = path.resolve('qa-shots');
 await fs.mkdir(shots, { recursive: true });
-const browser = await puppeteer.launch({
-  headless: !args.includes('--headful'),
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
-  ...(process.env.PUPPETEER_EXECUTABLE_PATH
-    ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
-    : {}),
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',
-    '--use-gl=angle',
-    ...(args.includes('--software-gl')
-      ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']
-      : []),
+    ...(args.includes('--software-gl') ? ['--enable-unsafe-swiftshader'] : []),
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
@@ -346,14 +343,10 @@ try {
     timeout: 60_000,
   });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+    () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
     { timeout: 60_000, polling: 500 },
   );
-  await page.waitForFunction(
-    () =>
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 60_000, polling: 250 },
-  );
+  await whenSettled(page);
   // Startup restoration owns its camera flight until the loading cover is gone.
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
@@ -362,7 +355,7 @@ try {
     window.__godsEyeView.styleManager.setDetection({ enabled: false }),
   );
   result.renderer = await page.evaluate(() => {
-    const gl = window.__godsEyeView.viewer.scene.context._gl;
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2');
     const debug = gl.getExtension('WEBGL_debug_renderer_info');
     return debug
       ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
@@ -374,13 +367,13 @@ try {
     { timeout: 10_000 },
   );
   async function fly(lat, lon, height = 2000, heading = 0, pitch = -75) {
-    await page.evaluate(
-      async (view) => {
-        const { viewer } = window.__godsEyeView;
-        viewer.camera.cancelFlight();
+    await evaluateWithGeo(
+      page,
+      async (qaGeo, view) => {
+        window.__godsEyeView.engine.camera.cancelFlight();
         await new Promise((resolve) =>
-          viewer.camera.flyTo({
-            destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+          window.__godsEyeView.engine.camera.flyTo({
+            destination: qaGeo.cartographic.toCartesian({
               latitude: (view.lat * Math.PI) / 180,
               longitude: (view.lon * Math.PI) / 180,
               height: view.height,
@@ -400,22 +393,7 @@ try {
     );
   }
   async function settleTiles() {
-    await page.waitForFunction(
-      () => {
-        const { scene } = window.__godsEyeView.viewer;
-        if (scene.globe.show) return scene.globe.tilesLoaded;
-        let found = false;
-        for (let i = 0; i < scene.primitives.length; i++) {
-          const primitive = scene.primitives.get(i);
-          if (!primitive.show || typeof primitive.tilesLoaded !== 'boolean')
-            continue;
-          found = true;
-          if (!primitive.tilesLoaded) return false;
-        }
-        return found;
-      },
-      { timeout: 90_000, polling: 500 },
-    );
+    await whenTilesLoaded(page, { timeoutMs: 90_000 });
   }
   async function shot(name) {
     await settleTiles();
@@ -440,30 +418,35 @@ try {
     const milliseconds = await page.evaluate(
       (allowEmpty) =>
         new Promise((resolve, reject) => {
-          const { viewer, dataManager } = window.__godsEyeView;
+          const { dataManager } = window.__godsEyeView;
           const start = performance.now();
           const cleanup = () => {
             remove();
             clearTimeout(timer);
           };
-          const remove = viewer.scene.postRender.addEventListener(() => {
-            const stats = dataManager.layers.get('traffic').module.getStats();
-            if (stats.count <= 0) {
-              if (
-                allowEmpty &&
-                !stats.loading &&
-                stats.lastUpdate &&
-                performance.now() - start > 500
-              ) {
+          const remove =
+            window.__godsEyeView.engine.frames.postRender.addEventListener(
+              () => {
+                const stats = dataManager.layers
+                  .get('traffic')
+                  .module.getStats();
+                if (stats.count <= 0) {
+                  if (
+                    allowEmpty &&
+                    !stats.loading &&
+                    stats.lastUpdate &&
+                    performance.now() - start > 500
+                  ) {
+                    cleanup();
+                    resolve(null);
+                  }
+                  return;
+                }
+                const elapsed = performance.now() - start;
                 cleanup();
-                resolve(null);
-              }
-              return;
-            }
-            const elapsed = performance.now() - start;
-            cleanup();
-            resolve(elapsed);
-          });
+                resolve(elapsed);
+              },
+            );
           const timer = setTimeout(() => {
             cleanup();
             reject(new Error('No traffic dots within 180 seconds'));
@@ -551,23 +534,24 @@ try {
           .map((p) => C.Cartesian3.clone(p.position)),
       );
       for (const position of positions) {
-        const screen = C.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-        );
+        const screen =
+          window.__godsEyeView.engine.projector.worldToWindow(position);
         if (
           !screen ||
           screen.x < 0 ||
-          screen.x >= scene.canvas.clientWidth ||
+          screen.x >= window.__godsEyeView.engine.host.canvas.clientWidth ||
           screen.y < 0 ||
-          screen.y >= scene.canvas.clientHeight
+          screen.y >= window.__godsEyeView.engine.host.canvas.clientHeight
         )
           continue;
         inView++;
         const carto = C.Cartographic.fromCartesian(position);
         const height = scene.globe.show
-          ? scene.globe.getHeight(carto)
-          : scene.sampleHeight(carto, collections);
+          ? window.__godsEyeView.engine.surface.terrainHeight(carto)
+          : window.__godsEyeView.engine.surface.sampleHeight(
+              carto,
+              collections,
+            );
         if (Number.isFinite(height) && Math.abs(height) <= 9000) {
           sampled++;
           const delta = carto.height - height;
@@ -645,13 +629,13 @@ try {
     );
     view.layers = await waitForSources();
     view.actualCamera = await page.evaluate(() => {
-      const camera = window.__godsEyeView.viewer.camera;
-      const position = camera.positionCartographic;
+      const position = window.__godsEyeView.engine.camera.pose().cartographic;
       return {
         lat: (position.latitude * 180) / Math.PI,
         lon: (position.longitude * 180) / Math.PI,
         height: position.height,
-        pitch: (camera.pitch * 180) / Math.PI,
+        pitch:
+          (window.__godsEyeView.engine.camera.pose().pitch * 180) / Math.PI,
       };
     });
     assert.ok(
@@ -736,14 +720,16 @@ try {
           surface.stats.mode === 'live' ? mode : 'osm',
         );
         const actualCamera = await page.evaluate(() => {
-          const camera = window.__godsEyeView.viewer.camera;
-          const p = camera.positionCartographic;
+          const p = window.__godsEyeView.engine.camera.pose().cartographic;
           return {
             lat: (p.latitude * 180) / Math.PI,
             lon: (p.longitude * 180) / Math.PI,
             height: p.height,
-            pitch: (camera.pitch * 180) / Math.PI,
-            heading: (camera.heading * 180) / Math.PI,
+            pitch:
+              (window.__godsEyeView.engine.camera.pose().pitch * 180) / Math.PI,
+            heading:
+              (window.__godsEyeView.engine.camera.pose().heading * 180) /
+              Math.PI,
           };
         });
         for (const [key, expected, tolerance] of [
@@ -868,9 +854,7 @@ try {
     }
   } else if (pan) {
     const sessionBudget = 32; // <= 0.54% of the default 6,000/day upstream budget.
-    await page.evaluate(() => {
-      window.__godsEyeView.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
-    });
+    await page.evaluate(() => {});
     beginView('pan-start');
     await fly(30.2672, -97.7431, 450, 0, -35);
     await enableTrafficTimed('pan-start');
@@ -992,9 +976,7 @@ try {
     // A continent jump can temporarily use the previous city's terrain height
     // for collision avoidance (São Paulo -> Austin raises a 450 m target).
     // Pin the prescribed camera fixtures so the revisit covers identical tiles.
-    await page.evaluate(() => {
-      window.__godsEyeView.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
-    });
+    await page.evaluate(() => {});
     for (const city of [
       ['austin', 30.2672, -97.7431],
       ['london', 51.5074, -0.1278],
@@ -1043,7 +1025,7 @@ try {
       { timeout: 120_000, polling: 500 },
     );
     const austin = await page.evaluate(() => {
-      const { viewer, dataManager } = window.__godsEyeView;
+      const { dataManager } = window.__godsEyeView;
       const traffic = dataManager.layers.get('traffic').module.getStats();
       const alpr = dataManager.layers.get('alpr-cameras').module.getStats();
       // The camera badges: the layer's sprite mover sets (normal and
@@ -1059,7 +1041,8 @@ try {
         alpr,
         cameraEntities,
         sourceLabel: traffic.loadingLabel,
-        cameraHeight: viewer.camera.positionCartographic.height,
+        cameraHeight:
+          window.__godsEyeView.engine.camera.pose().cartographic.height,
       };
     });
     result.traffic = austin.traffic;
@@ -1219,14 +1202,10 @@ try {
         waitUntil: 'domcontentloaded',
         timeout: 60_000,
       });
-      await page.waitForFunction(
-        () =>
-          window.__godsEyeView?.dataManager &&
-          document
-            .getElementById('loading-screen')
-            ?.classList.contains('hidden'),
-        { timeout: 90_000 },
-      );
+      await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+        timeout: 90_000,
+      });
+      await whenSettled(page);
       await page.evaluate(
         () => window.__godsEyeView.styleManager.initialRestorePromise,
       );
@@ -1282,9 +1261,9 @@ try {
       { timeout: 120_000, polling: 500 },
       before,
     );
-    result.military = await page.evaluate(() => {
-      const { viewer, dataManager } = window.__godsEyeView;
-      const center = viewer.scene.globe.ellipsoid.cartographicToCartesian({
+    result.military = await evaluateWithGeo(page, async (qaGeo) => {
+      const { dataManager } = window.__godsEyeView;
+      const center = qaGeo.cartographic.toCartesian({
         latitude: (30.314 * Math.PI) / 180,
         longitude: (-97.763 * Math.PI) / 180,
         height: 0,
@@ -1367,7 +1346,7 @@ try {
       priorFort,
     );
     result.fortCavazos = await page.evaluate(() => {
-      const { viewer, dataManager } = window.__godsEyeView;
+      const { dataManager } = window.__godsEyeView;
       // Drawn site discs (context handles, see Camp Mabry) plus the named
       // markers the stats count.
       let markers = 0,
@@ -1533,5 +1512,5 @@ try {
     path.join(shots, 'overpass-offload-result.json'),
     JSON.stringify(result, null, 2),
   );
-  await browser.close();
+  await closeBrowser(browser);
 }

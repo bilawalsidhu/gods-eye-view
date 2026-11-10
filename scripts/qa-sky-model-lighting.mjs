@@ -1,17 +1,18 @@
 #!/usr/bin/env node
+// Cesium-only probes: standalone native scenes validate Cesium model lighting.
 /**
  * Lit airplane regression: StarrySky must match a black environment baseline.
  * A white environment is a positive control: it must visibly brighten the
  * same model. Each case uses a fresh scene and dynamic environment map.
  * Usage: node scripts/qa-sky-model-lighting.mjs [--url http://localhost:4333/]
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
-import puppeteer from 'puppeteer';
 
 const i = process.argv.indexOf('--url');
 const base = i > 0 ? process.argv[i + 1] : 'http://localhost:4333/';
 const url = new URL('/__qa_sky_model__', base);
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
   args: ['--no-sandbox', '--ignore-gpu-blocklist'],
 });
@@ -145,5 +146,5 @@ try {
     'PASS: lit airplane matches black sky; white control is brighter',
   );
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
