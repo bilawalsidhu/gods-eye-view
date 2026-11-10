@@ -136,6 +136,9 @@ socket/watchdog on server close and re-reads configuration after restart.
 The portable `gods-eye-view/sources/adsb-lol` export normalizes existing aircraft
 records without importing Node middleware or a renderer. Browser layer/controller
 separation is outside this server extraction.
+The portable `gods-eye-view/sources/planespotters` export reads a Planespotters
+photo answer (upstream or a server's cached shape) into one host-checked,
+credited thumbnail; it has no fetch, DOM or Node dependency.
 
 ## Place-search and routing providers
 
