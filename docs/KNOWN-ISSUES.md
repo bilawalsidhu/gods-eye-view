@@ -170,8 +170,9 @@ Status: Open (limits)
   and is tried again with the first ask a minute or more later.
 - Local needs a World News API key. Its free plan allows 50 points a day; Core
   stops at `WORLDNEWSAPI_DAILY_READS` reads (default 30) and Local then says the
-  daily limit is reached. A request that never reached World News API (offline,
-  timed out) is not counted; any answer from it is, a failing one too.
+  daily limit is reached. A request that never reached World News API (offline)
+  is not counted; any answer from it is, a failing one too, and so is a
+  request that timed out.
 - A country's news is kept for at most 1 hour (World News API's terms, which
   also ask the operator for its written permission to cache at all). While
   World News API cannot be read, Local in that country therefore reads

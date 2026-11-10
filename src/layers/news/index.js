@@ -1083,6 +1083,7 @@ export function createNewsLayer({
         minor: page.reports.filter((r) =>
           withinNewsWindow(r, now(), maxWindowMs),
         ),
+        readAt: now(),
         loading: false,
         error: null,
       };
@@ -1094,7 +1095,8 @@ export function createNewsLayer({
         ...inView,
         // A missing key is read again with the next refresh, not each pan.
         readKey: need ? readKey : inView.readKey,
-        minor: need ? [] : inView.minor,
+        // World News API's news is kept an hour at most, as the server does.
+        minor: need || now() - inView.readAt >= 3_600_000 ? [] : inView.minor,
         loading: false,
         error: need ? null : cause?.message || FEED_UNAVAILABLE,
       };

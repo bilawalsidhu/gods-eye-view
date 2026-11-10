@@ -45,6 +45,7 @@ function fixture(
     reduced = false,
     centre = () => ({ lat: 49, lon: 36 }),
     credits = [],
+    now = () => NOW,
   } = {},
 ) {
   const calls = { feed: [], hotspots: 0, outline: 0 };
@@ -110,7 +111,7 @@ function fixture(
   const layer = createNewsLayer({
     source,
     overlayHost,
-    now: () => NOW,
+    now,
     matchMedia: () => ({ matches: reduced }),
     getViewCentre: () => centre(),
     registerCredit: (_viewer, credit) => {
@@ -838,6 +839,43 @@ test('a failed Conflicts read leaves Local reading with each refresh', async (t)
     ['inside'],
   );
   assert.equal(view.error, 'News feed unavailable');
+});
+
+test('Local reports are listed an hour at most while they cannot be read again', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let at = NOW;
+  let failing = false;
+  const { layer } = fixture(t, {
+    height: 1_000_000,
+    now: () => at,
+    source: {
+      getFeed: async (query) => {
+        if (query.at && failing) throw new Error('News feed unavailable');
+        return {
+          reports: [report('inside', { relevance: 'minor' })],
+          nextBefore: null,
+        };
+      },
+      getAreaOutline: async () => ukraine,
+    },
+  });
+  const listed = () =>
+    layer.getRowControls().feed.inView.items.map((item) => item.id);
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { section: 'local' } });
+  await flush();
+  assert.deepEqual(listed(), ['inside']);
+  // World News API's terms: its news is kept an hour at most, here too.
+  failing = true;
+  at += 59 * 60_000;
+  await layer.update();
+  await flush();
+  assert.deepEqual(listed(), ['inside']);
+  at += 2 * 60_000;
+  await layer.update();
+  await flush();
+  assert.deepEqual(listed(), []);
 });
 
 test('a failed read keeps the layer on with an error; disable clears the overlay', async (t) => {

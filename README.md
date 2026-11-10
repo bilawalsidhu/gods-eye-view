@@ -212,7 +212,7 @@ Keep the `env`: bash treats `UID` as read-only, so a plain `UID=1026` in front o
 
 On SELinux hosts (Fedora, RHEL), compose mounts the checkout with `:z` so the container may read it; Docker may relabel the checkout for container access, which can take a moment on a large checkout. Without that, the start fails with `Cannot find module '/app/scripts/docker-start.mjs'`.
 
-Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings refuses proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)). The map routes compare the browser's `Origin` with the `Host` the server sees, so the proxy must pass the original `Host` and, when it terminates TLS, `X-Forwarded-Proto`. Caddy does both by default; for nginx add `proxy_set_header Host $http_host;`, `proxy_set_header X-Forwarded-Proto $scheme;` and `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. On an install outside Docker, that forwarding header also rate-limits the proxy's users apart from your own browser. Under the default Docker bridge network every client on the host, your browser included, reaches the container from its gateway address and shares one Overpass bucket.
+Behind a reverse proxy, put your keys in `.env` or pass them as environment variables - Provider Settings and the News layer refuse proxied requests on purpose - and add the hostname you serve it on, for example `GEV_ALLOWED_HOSTS=globe.example.lan` (see [Sharing an instance](#-sharing-an-instance)). The map routes compare the browser's `Origin` with the `Host` the server sees, so the proxy must pass the original `Host` and, when it terminates TLS, `X-Forwarded-Proto`. Caddy does both by default; for nginx add `proxy_set_header Host $http_host;`, `proxy_set_header X-Forwarded-Proto $scheme;` and `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. On an install outside Docker, that forwarding header also rate-limits the proxy's users apart from your own browser. Under the default Docker bridge network every client on the host, your browser included, reaches the container from its gateway address and shares one Overpass bucket.
 
 </details>
 
@@ -236,8 +236,8 @@ the container.
 
 ### Path 4 — GitHub Codespaces (cloud, no local install)
 
-Codespaces requires a GitHub account. Overpass queries and OpenAI voice token
-requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
+Codespaces requires a GitHub account. Overpass queries, the News layer and OpenAI
+voice token requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
 in `.env` and `GEV_ALLOWED_HOSTS` configured. Use a local setup for these features.
 
 The codespace runs the dev server in a cloud workspace, so Node and the dependencies
