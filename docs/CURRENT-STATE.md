@@ -159,32 +159,35 @@ off by default. `/api/shipwrecks` downloads EMODnet Human Activities'
 compiled from SHOM, Ireland's National Monuments Service, Historic England and
 the Oxford Roman Economy Project; CC BY 4.0) and a Wikidata SPARQL query for
 shipwreck items with a coordinate and at least one Wikipedia article (about
-1,450 worldwide; CC0), each at most once a day. Each source keeps its own last
-good records: a source that fails, or answers with nothing usable, keeps serving
-its earlier records as stale for up to seven days and is not asked again for
-15 minutes, and never removes the other source's wrecks. EMODnet rows the portal took from wrecksite.eu are skipped (that site
-is not openly licensed). A Wikidata wreck with the same name within 3 km of an
-EMODnet wreck is merged into one record that keeps the article link and takes
-EMODnet's year, sinking text, depth and position accuracy. Only ship columns are
-read: EMODnet's long histories (`ship_char`, `obj_desc`) are not. Sinking,
-cargo and description text that refers to a person by a title or role (Mr,
-captain, master, owner, crew, "reported by", …) is dropped whole by a keyword
-filter; a bare name with no such word can still pass. Deaths appear only as a
-Wikidata count.
+1,450 worldwide; CC0). A source that answered well is asked again after 24 hours;
+one that failed is asked again after 15 minutes. Each source keeps its own last
+good records: a source that fails, answers with nothing usable, or answers with
+less than half of its last good set keeps serving its earlier records as stale
+for up to seven days, and never removes the other source's wrecks. When the
+page cannot refresh, the wrecks it shows are marked stale, and it clears them
+once they are more than seven days old. EMODnet rows the portal took from
+wrecksite.eu are skipped (that site is not openly licensed). A Wikidata wreck
+with the same name within 3 km of an EMODnet wreck is merged into one record
+that keeps the article link and takes EMODnet's year, sinking text, depth and
+position accuracy. Only ship columns are read: EMODnet's long histories
+(`ship_char`, `obj_desc`) are not. Sinking, cargo and description text that
+refers to a person by a title or role (Mr, captain, master, owner, crew,
+"reported by", …) is dropped whole by a keyword filter; a bare name with no
+such word can still pass. Deaths appear only as a Wikidata count.
 
 The globe draws a round marker with a hull and mast per wreck, all in one
 billboard collection, ground-clamped with the depth test off and the horizon
 cull GhostMaps uses, sized by deaths (a bigger toll draws on top) and coloured
-by era (a legend under the row): before 1900
-(ancient wrecks dated only by period count here), 1900–1945, after 1945, and
-date unknown. A period filter under the row picks a start year and an end year
-side by side (two pickers over the years that have a wreck; a reversed pair is
-stored swapped); undated wrecks show only when every year
-is selected. The filter is session-only (not in the share link). Clicking a marker opens a `stateless` card: deaths and
-survivors first, then the sinking date or year (or the archaeological dating) and
-waters, vessel type, what happened,
-least depth and its quality, how well the position is known, period notes or
-the Wikidata description, cargo or finds, protected status and source.
+by era (a legend under the row): before 1900 (ancient wrecks dated only by
+period count here), 1900–1945, after 1945, and date unknown. A period filter
+under the row picks a start year and an end year side by side (two pickers
+over the years that have a wreck; a reversed pair is stored swapped); undated
+wrecks show only when every year is selected. The filter is session-only (not
+in the share link). Clicking a marker opens a `stateless` card: deaths and
+survivors first, then the sinking date or year (or the archaeological dating)
+and waters, vessel type, what happened, least depth and its quality, how well
+the position is known, period notes or the Wikidata description, cargo or
+finds, protected status and source.
 Clicking the card opens the Wikipedia article (else the Wikidata item), the
 wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
 not toggle this layer yet (prompt budget, as for the airspace layer).

@@ -54,9 +54,10 @@ export function cardLink(record) {
 }
 
 /**
- * Title and detail lines for one wreck card: deaths first, then when and where, then the ship facts. Only facts
- * about the ship: the records carry no names of people, and victims appear as
- * a count only.
+ * Title and detail lines for one wreck card: deaths first, then when and
+ * where, then the ship facts. Victims appear as a count only; free text that
+ * refers to a person by a title or role is dropped by a keyword filter (see
+ * records.js), which a bare name can still pass.
  * @param {object} record A normalized shipwreck record.
  * @returns {{title: string, details: string[], link: string}}
  */
