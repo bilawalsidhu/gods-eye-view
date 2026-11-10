@@ -20,6 +20,8 @@ export function createStubHarness(name = 'stub') {
     toEcef,
     tolerance: DEFAULT_TOLERANCE,
     flightPaths: 'trace',
+    // It draws only models into pixels.
+    pixels: false,
     pointer: (r, type, x, y, extra) => r.testing.pointer(type, x, y, extra),
     scriptHeights: (r, fn) => r.testing.setHeights(fn),
     wallTime: (r) => r.testing.wallTime(),

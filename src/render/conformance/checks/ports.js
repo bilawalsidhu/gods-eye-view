@@ -727,15 +727,17 @@ export function portChecks() {
       "a shell draws its image, and its 'drawn' comes once per change, never while hidden",
       async (h, r) => {
         await overAustin(h, r, 20000);
-        // The middle of the frame, which the shell below covers whole.
+        // Around Austin, below the eye, which the shell covers whole; where
+        // it projects is in the units `readPixels` crops in.
+        const below = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+        ok(below, 'the ground below projects');
         const middle = async () => {
           await settled(r);
           r.frame.renderNow();
-          const { width, height } = r.canvas;
           return r.readPixels({
             crop: {
-              x: Math.round(width / 2) - 6,
-              y: Math.round(height / 2) - 6,
+              x: Math.round(below.x) - 6,
+              y: Math.round(below.y) - 6,
               width: 13,
               height: 13,
             },
@@ -748,25 +750,8 @@ export function portChecks() {
             if (now[i + 2] - was[i + 2] > 40 && now[i] - was[i] < 20) n++;
           return n;
         };
-        const empty = await middle();
-        // A renderer that draws lines into pixels must draw the shell too;
-        // one that draws neither (the stub) leaves the pixels unread.
-        const probe = r.draw.lines({ id: 'conf:shell-probe' });
-        const at = (dLon) =>
-          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat, height: 0 });
-        probe.set([
-          {
-            id: 'l',
-            positions: [at(-0.02), at(0.02)],
-            widthPx: 20,
-            mode: '3d',
-            style: { kind: 'solid', color: '#0000ff' },
-          },
-        ]);
-        await drawn(h, r);
-        const drawsPixels = bluer(await middle(), empty) >= 20;
-        probe.dispose();
-        await drawn(h, r);
+        const readsPixels = h.pixels !== false;
+        const empty = readsPixels ? await middle() : null;
         const svg = (fill) => ({
           svg: `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${fill}"/></svg>`,
         });
@@ -791,7 +776,7 @@ export function portChecks() {
         try {
           await until(1);
           equal(drawnCount, 1, 'drawn once made');
-          if (drawsPixels)
+          if (readsPixels)
             ok(
               bluer(await middle(), empty) >= 150,
               'the shell draws its image over the frame',
@@ -1118,8 +1103,9 @@ export function portChecks() {
           set.set([]);
           const empty = await patch();
           const drawnPixels = differ(shown, empty);
-          if (drawnPixels < 20)
-            return { skip: 'this renderer draws no icon pixels' };
+          if (h.pixels === false)
+            return { skip: 'this harness reads no drawn pixels' };
+          ok(drawnPixels >= 20, 'the icon draws into pixels');
           set.set([icon]);
           r.effects.screenModulation(sector());
           ok(
@@ -2099,8 +2085,8 @@ export function portChecks() {
                 : '-';
         }
         lines.dispose();
-        if (!column.includes('g') && !column.includes('r'))
-          return { skip: 'this renderer draws no line pixels' };
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
         const runs = column.match(/r+|g+/g) ?? [];
         const sides = runs.filter((run) => run[0] === 'r');
         const core = runs.find((run) => run[0] === 'g') ?? '';

@@ -37,6 +37,14 @@ exposes nine ports, each typed in its own file in `src/render/contract/`:
 | `credits` | `credits.d.ts` | Data credits owed                                                       |
 | `quality` | `quality.d.ts` | Quality knobs, device facts, frame signals                              |
 
+Version `0` is still being shaped, and not only by additions. Members
+were removed or replaced (among them `camera.move`, `look`,
+`rotateAround` and `zoom`, now step views placed with `setView`;
+`query.sampleHeightNowMany`; `input.ctrlWheelZoom`, now the `ctrlWheel`
+zoom input), `depthFailColor` and `depthFailDash` became one `depthFail`
+style, and quality settings became detail only. A renderer written against
+an earlier `0` follows those changes.
+
 Some members and options were added to version `0` later. Each is
 optional, so a renderer written before it still conforms:
 
@@ -66,10 +74,11 @@ optional, so a renderer written before it still conforms:
   says once per spec or `update` that it is drawn, never while hidden. These
   change `fields` itself rather than add to it, so the renderer follows
   `fields` before must follow them. The Cesium adapter lists `fields` and
-  draws `rasterShell` and `windStreamlines`. It draws streamlines only over the whole globe: it reads the grid's samples
-  as points, the first column at `rectangle.west` and the first row at
-  `rectangle.north`, rows running south, and traces paths that wrap east
-  and west, so it refuses a grid short of 360° of longitude.
+  draws `rasterShell` and `windStreamlines`. It draws streamlines only over
+  the whole globe: it reads the grid's samples as points, the first column
+  at `rectangle.west` and the first row at `rectangle.north`, rows running
+  south, and traces paths that wrap east and west, so it refuses a grid
+  short of 360° of longitude.
 - `ModulationSector` gains `radius` and `floor` and says what it modulates:
   icons, points and models dimmed toward `floor` outside the band, the map,
   lines and shapes as they are, picks unchanged. Its pass is named
@@ -86,8 +95,8 @@ optional, so a renderer written before it still conforms:
   is 2 px of outline, 4 px of colour and 2 px of outline, as Cesium draws
   it. The check `draw.lines.outline` pins it.
 - A shape's `lit` chooses shading by the renderer's fixed light (true) or a
-  flat colour (false); omitted, extruded shapes and boxes are lit and the
-  rest flat, as before. The Cesium port lights unclamped shapes only
+  flat colour (false); omitted, extruded shapes are lit and the rest flat,
+  as before. The Cesium port lights unclamped shapes only
   (clamped ones drape unlit). The `shapes-lit` scene draws both.
 - `SetSpec.drawOrder` stacks sets drawn over depth: a higher one draws over
   a lower one and is picked first; equal ones keep the order they were
@@ -225,7 +234,10 @@ renderer under test:
 Optional members widen what is checked: `pointer` for synthetic input,
 `cameraInput` (the camera answers that input: the drag and wheel traces
 run), `scriptHeights`, `assets.model`, and `assets.missingModel` (a model
-url that fails to load, for the `loadFailed` check).
+url that fails to load, for the `loadFailed` check). `pixels: false` says
+the renderer draws nothing but models into its pixels, as the stub: the
+checks that read drawn icons, lines and fields then skip. Without it they
+run, and the renderer fails them if it draws nothing there.
 
 There are two layers of checks.
 
