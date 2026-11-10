@@ -369,36 +369,108 @@ export function createCesiumCamera({
       };
     },
     pose() {
-      const v = (c) => ({ x: c.x, y: c.y, z: c.z });
-      // Cesium has no cartographic position for an eye at the earth's
-      // centre; the pose then says so with NaN.
-      const carto = camera.positionCartographic ?? {
-        longitude: NaN,
-        latitude: NaN,
-        height: NaN,
-      };
-      return {
-        lon: Cesium.Math.toDegrees(carto.longitude),
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        position: v(camera.positionWC),
-        direction: v(camera.directionWC),
-        up: v(camera.upWC),
-        right: v(camera.rightWC),
-        heading: camera.heading,
-        pitch: camera.pitch,
-        roll: camera.roll,
-        height: carto.height,
-        fovy: camera.frustum.fovy,
-        aspectRatio: camera.frustum.aspectRatio,
-        near: camera.frustum.near,
-        far: camera.frustum.far,
-        frameIsIdentity: Cesium.Matrix4.equals(
-          camera.transform,
-          Cesium.Matrix4.IDENTITY,
-        ),
-      };
+      // An unmoved camera answers from the pose last read: Cesium measures
+      // each of heading, pitch and roll by moving the camera into the
+      // eye's east-north-up frame and back, and a frame reads the pose
+      // many times over. Each caller gets objects of its own.
+      if (!poseKeyHolds() || !poseMemo) {
+        poseMemo = readPose();
+        // Measuring heading, pitch and roll moves the camera there and
+        // back, which can change its last bits: keyed as it is left.
+        poseKeyHolds();
+      }
+      return copyPose(poseMemo);
     },
   };
+  // The camera as the memoised pose was read: eye, axes, transform,
+  // frustum and mode, compared value for value.
+  const poseKey = new Float64Array(37);
+  let poseMemo = null;
+  /**
+   * Whether the camera is as `poseKey` holds, writing it as the camera now
+   * is: everything a pose is read from.
+   */
+  function poseKeyHolds() {
+    const p = camera.positionWC;
+    const d = camera.directionWC;
+    const u = camera.upWC;
+    const r = camera.rightWC;
+    const f = camera.frustum;
+    const t = camera.transform;
+    let same = true;
+    let at = 0;
+    const put = (value) => {
+      if (!Object.is(poseKey[at], value)) {
+        same = false;
+        poseKey[at] = value;
+      }
+      at += 1;
+    };
+    put(p.x);
+    put(p.y);
+    put(p.z);
+    put(d.x);
+    put(d.y);
+    put(d.z);
+    put(u.x);
+    put(u.y);
+    put(u.z);
+    // Cesium lets right drift a little from direction × up.
+    put(r.x);
+    put(r.y);
+    put(r.z);
+    put(f.fovy ?? NaN);
+    put(f.aspectRatio ?? NaN);
+    put(f.near ?? NaN);
+    put(f.far ?? NaN);
+    // A 2D camera's height is its off-centre frustum's width.
+    put(f.left ?? NaN);
+    put(f.right ?? NaN);
+    put(f.top ?? NaN);
+    put(f.bottom ?? NaN);
+    put(scene.mode ?? NaN);
+    for (let i = 0; i < 16; i++) put(t[i]);
+    return same;
+  }
+  /** A pose read from Cesium's camera (after `poseKeyHolds` keyed it). */
+  function readPose() {
+    const v = (c) => ({ x: c.x, y: c.y, z: c.z });
+    // Cesium has no cartographic position for an eye at the earth's
+    // centre; the pose then says so with NaN.
+    const carto = camera.positionCartographic ?? {
+      longitude: NaN,
+      latitude: NaN,
+      height: NaN,
+    };
+    return {
+      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: Cesium.Math.toDegrees(carto.latitude),
+      position: v(camera.positionWC),
+      direction: v(camera.directionWC),
+      up: v(camera.upWC),
+      right: v(camera.rightWC),
+      heading: camera.heading,
+      pitch: camera.pitch,
+      roll: camera.roll,
+      height: carto.height,
+      fovy: camera.frustum.fovy,
+      aspectRatio: camera.frustum.aspectRatio,
+      near: camera.frustum.near,
+      far: camera.frustum.far,
+      frameIsIdentity: Cesium.Matrix4.equals(
+        camera.transform,
+        Cesium.Matrix4.IDENTITY,
+      ),
+    };
+  }
+  /** A pose of the caller's own, its vectors too. */
+  const copyPose = (pose) => ({
+    ...pose,
+    position: { ...pose.position },
+    direction: { ...pose.direction },
+    up: { ...pose.up },
+    right: { ...pose.right },
+  });
   // Cesium keeps the eye in `camera.transform`: a tracked entity's frame, a
   // `lookAt` target's, or the identity.
   if (!capabilities || capabilities.has('followFrame'))

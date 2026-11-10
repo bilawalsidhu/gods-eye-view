@@ -305,6 +305,89 @@ test('setFov holds the vertical angle across resizes, and waits for a first one'
   assert.throws(() => port.setFov({ vertical: NaN }), RangeError);
 });
 
+test('an unmoved camera answers its pose from the last read; any change reads it anew', () => {
+  const { camera, port } = headlessPort();
+  port.setView({
+    destination: { lon: 10, lat: 20, height: 5e5 },
+    orientation: { heading: 0.3, pitch: -0.7, roll: 0 },
+  });
+  // Read as Cesium answers now, without the memo. (Cesium measures heading,
+  // pitch and roll by moving the camera there and back, which can change
+  // its last bits, so the two are compared to within a whisker.)
+  const fresh = () => {
+    const carto = camera.positionCartographic;
+    return {
+      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: Cesium.Math.toDegrees(carto.latitude),
+      height: carto.height,
+      heading: camera.heading,
+      pitch: camera.pitch,
+      roll: camera.roll,
+      fovy: camera.frustum.fovy,
+      x: camera.positionWC.x,
+    };
+  };
+  const near = (pose) => {
+    const want = fresh();
+    const got = { ...pose, x: pose.position.x };
+    for (const [name, value] of Object.entries(want))
+      assert.ok(
+        Math.abs(got[name] - value) < 1e-6,
+        `${name}: ${got[name]} vs ${value}`,
+      );
+  };
+  // Counts Cesium's heading reads: an answer from the memo makes none.
+  let reads = 0;
+  const heading = Object.getOwnPropertyDescriptor(
+    Cesium.Camera.prototype,
+    'heading',
+  );
+  Object.defineProperty(camera, 'heading', {
+    get() {
+      reads += 1;
+      return heading.get.call(this);
+    },
+  });
+  const a = port.pose();
+  reads = 0;
+  // A caller's own objects: changing them changes no later pose.
+  a.position.x = 0;
+  a.heading = 99;
+  const b = port.pose();
+  assert.equal(reads, 0, 'answered from the memo');
+  assert.notEqual(b, a);
+  assert.notEqual(b.position, a.position);
+  assert.notEqual(b.heading, 99);
+  near(b);
+  camera.moveRight(1000);
+  near(port.pose());
+  camera.twistRight(0.2);
+  near(port.pose());
+  // Cesium lets right drift a little from direction × up.
+  const right = port.pose().right;
+  camera.right = Cesium.Cartesian3.add(
+    camera.right,
+    Cesium.Cartesian3.multiplyByScalar(
+      camera.up,
+      0.05,
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const drifted = camera.rightWC.x;
+  const after = port.pose().right.x;
+  assert.notEqual(after, right.x);
+  assert.equal(after, drifted);
+  camera.frustum.fov = 0.4;
+  assert.ok(Math.abs(port.pose().fovy - camera.frustum.fovy) < 1e-12);
+  assert.notEqual(port.pose().fovy, b.fovy);
+  camera.lookAtTransform(
+    Cesium.Transforms.eastNorthUpToFixedFrame(camera.positionWC),
+  );
+  assert.equal(port.pose().frameIsIdentity, false);
+  near(port.pose());
+});
+
 test('followFrame is there only with its capability', () => {
   const { scene, camera } = headlessCamera();
   scene.postUpdate = new Cesium.Event();
