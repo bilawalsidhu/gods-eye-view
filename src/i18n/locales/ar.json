@@ -3620,5 +3620,13 @@
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
   "1 min/s": "دقيقة/ث",
-  "Photo © {photographer}": "صورة © {photographer}"
+  "Photo © {photographer}": "صورة © {photographer}",
+  "Tower": "البرج",
+  "Ground": "الأرضية",
+  "Approach": "الاقتراب",
+  "Center": "المركز",
+  "ATIS": "ATIS",
+  "CTAF": "CTAF",
+  "UNICOM": "UNICOM",
+  "AFIS": "AFIS"
 }
