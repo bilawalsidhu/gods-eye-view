@@ -146,6 +146,7 @@ export function createLifecycle({
       detachCamera();
       parts.ingestion.abortAllInFlight();
       parts.rendering.detachSets();
+      layerState._dataManager = null;
       layerState._viewer = null;
     },
   };

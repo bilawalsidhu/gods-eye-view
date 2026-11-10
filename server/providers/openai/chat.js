@@ -69,7 +69,7 @@ function validMessages(messages) {
  * 400 for a whole request whose tool uses Unicode property classes (`\p{L}`),
  * as `resolve_area`'s area ids do. Every argument is still checked against
  * the action's own contract before the tool runs, so the model loses a hint,
- * not a rule. Realtime voice accepts these patterns and keeps them.
+ * not a rule. Realtime voice refuses them too now (#1618) and uses this as well.
  */
 export function chatSchema(schema) {
   if (Array.isArray(schema)) return schema.map(chatSchema);

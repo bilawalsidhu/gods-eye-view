@@ -12,6 +12,7 @@ export function createMeshFloorSampler({
     coarseFloorCoord,
     cachedMeshFloor,
     reportValidatedMeshFloorCell,
+    meshFloorPriorReady,
     setMeshFloorPreferred,
     meshFloorPreferred,
     cachedGroundFloor,
@@ -144,9 +145,9 @@ export function createMeshFloorSampler({
       const cell = coarseFloorCoord(p.lat, p.lon);
       const key = `${cell.lat},${cell.lon}`;
       if (attempted.has(key)) continue;
-      // A latched cell is probed again only at a point well apart from the
-      // ones already probed, a few times at most, so the cell's readings
-      // follow where its vehicles actually are.
+      // A cell with a reading is probed again only at a point well apart
+      // from the ones already probed, a few times at most, so the cell's
+      // readings follow where its vehicles actually are.
       const probes = _probedPoints.get(key);
       if (
         cachedMeshFloor(cell.lat, cell.lon) != null &&
@@ -176,8 +177,6 @@ export function createMeshFloorSampler({
       // gate a probe only throws mid-teardown, when every later cell would too.
       sampled += 1;
       if (height === null) continue; // tiles not loaded yet — no negative latch
-      if (probes) probes.push({ lat: p.lat, lon: p.lon });
-      else _probedPoints.set(key, [{ lat: p.lat, lon: p.lon }]);
       // Round 5: a REAL Re:Earth prior is REQUIRED before any sample latches.
       //  - A geoid-fallback prior (cached while the proxy was failing) is a
       //    sea-level poison that rejected legitimate samples at elevated
@@ -206,7 +205,23 @@ export function createMeshFloorSampler({
       // feasible and deliberately deferred — see the P2 in
       // the project roadmap, which bundles it with the fly_route probe so
       // one post-launch pass settles rendered-mesh sampling everywhere.
-      reportValidatedMeshFloorCell(p.lat, p.lon, height);
+      const accepted = reportValidatedMeshFloorCell(p.lat, p.lon, height);
+      // A spot counts as probed once the gate has judged it against a real
+      // prior: accepted, or refused with the cell's DEM warm. A spot refused
+      // only because the DEM was still cold is tried again later. Each spot is
+      // recorded once, so a cell retried while it has no reading does not fill
+      // its probe allowance with the same spot.
+      if (!accepted && !meshFloorPriorReady(cell.lat, cell.lon)) continue;
+      if (!probes) _probedPoints.set(key, [{ lat: p.lat, lon: p.lon }]);
+      else if (
+        probes.length < MAX_PROBES_PER_CELL &&
+        !probes.some(
+          (q) =>
+            Math.abs(q.lat - p.lat) < PROBE_APART_DEG &&
+            Math.abs(q.lon - p.lon) < PROBE_APART_DEG,
+        )
+      )
+        probes.push({ lat: p.lat, lon: p.lon });
     }
   }
 

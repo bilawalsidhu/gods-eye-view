@@ -19,6 +19,10 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
+  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} Manager that repaints the layer's row. */
+
+  layerState._dataManager = null;
+
   /** Draw set of the station dots (`drawOf(viewer).points`), or null. */
 
   layerState._stationSet = null;

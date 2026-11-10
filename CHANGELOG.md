@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- An application's own tool can take the pointer as Draw does, and its click
+  handlers can yield while a tool holds it, as the layers' do (`pointer` from
+  `createApplicationTools`) (samehkhamis, #1641).
 - `gods-eye-view/annotations` no longer reaches Cesium: the world annotation
   renderer draws its areas, building columns, routes, arrows, rings and
   markers through the renderer's draw port (the Cesium renderer now drapes

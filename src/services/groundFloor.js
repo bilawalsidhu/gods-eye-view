@@ -433,6 +433,11 @@ export function createGroundFloor({ terrain, signal }) {
   /** @constant {number} Readings closer than this (degrees, about 5 m) are
    *  one spot: the lower one is kept there. */
   const MESH_READING_SAME_SPOT_DEG = 0.00005;
+  /** @constant {number} Readings kept per cell. The sampler probes a cell at
+   *  most eight times, but ground snaps report at each aircraft's position;
+   *  past this many, a reading away from the others is not kept, so a busy
+   *  apron cell stays a short list to scan. */
+  const MESH_READINGS_PER_CELL = 16;
   /** @type {boolean} Whether mesh cells apply — true only in the google-3d
    *  regime (photoreal stack). On globe stacks the rendered surface IS the
    *  terrain provider (Re:Earth on keyless), so the DEM is already correct
@@ -483,7 +488,8 @@ export function createGroundFloor({ terrain, signal }) {
    * Callers must not bypass this with raw `reportMeshFloorCell`: a coarse-LOD
    * or aircraft hit would otherwise poison every floor consumer in the cell.
    * The reading is kept at the point it was taken; a second reading at the
-   * same spot (within about 5 m) keeps the lower of the two.
+   * same spot (within about 5 m) keeps the lower of the two. A cell keeps at
+   * most MESH_READINGS_PER_CELL readings.
    * @returns {boolean} Whether the sample passed and was reported.
    */
   function reportValidatedMeshFloorCell(lat, lon, heightM) {
@@ -502,9 +508,24 @@ export function createGroundFloor({ terrain, signal }) {
         Math.abs(r.lat - lat) < MESH_READING_SAME_SPOT_DEG &&
         Math.abs(r.lon - lon) < MESH_READING_SAME_SPOT_DEG,
     );
-    if (!same) readings.push({ lat, lon, h: heightM });
-    else if (heightM < same.h) same.h = heightM;
+    if (same) {
+      if (heightM < same.h) same.h = heightM;
+    } else if (readings.length < MESH_READINGS_PER_CELL) {
+      readings.push({ lat, lon, h: heightM });
+    }
     return true;
+  }
+
+  /**
+   * Whether the cell holding the point has the real DEM prior that
+   * `reportValidatedMeshFloorCell` judges a reading against.
+   * @param {number} lat @param {number} lon
+   * @returns {boolean}
+   */
+  function meshFloorPriorReady(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+    const c = coarseFloorCoord(lat, lon);
+    return cachedRealEllipsoidalGround(c.lat, c.lon) != null;
   }
 
   /**
@@ -697,6 +718,7 @@ export function createGroundFloor({ terrain, signal }) {
     reportMeshFloorCell,
     meshFloorSampleWithinPrior,
     reportValidatedMeshFloorCell,
+    meshFloorPriorReady,
     cachedMeshFloor,
     _clearMeshFloorCellsForTest,
     cachedGroundFloor,

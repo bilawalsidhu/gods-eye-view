@@ -147,8 +147,8 @@ export function createMilitarySnapshotRenderer({
     // Round 6: re-floor STALE grounded contacts (mirror of flights.js); the
     // motion part owns the positions it rewrites.
     motion._refloorStaleGroundedContacts(currentIcaos);
-    // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
-    // budget-capped, viewer-proximate, google-3d regime only), excluding
+    // Round 4: sample the RENDERED mesh for those cells (a few probes per
+    // cell, budget-capped, viewer-proximate, google-3d regime only), excluding
     // this layer's own icons/models from the probe.
     {
       const pose = findCamera(flightState._viewer)?.pose() ?? null;

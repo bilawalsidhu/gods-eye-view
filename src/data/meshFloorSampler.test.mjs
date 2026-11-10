@@ -230,6 +230,18 @@ test('sampler: a viaduct and the street beside it in one cell keep their own hei
   assert.equal(calls, 2, 'a point next to one already probed is not probed again');
 });
 
+test('sampler: a roof over the cell centre does not lift a bus on the street', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  // A roof 22 m up covering the cell's centre; the street 30 m west of it.
+  const scene = fakeScene((carto) =>
+    Math.abs(Cesium.Math.toDegrees(carto.longitude) - cell.lon) < 0.0001 ? 142.0 : 121.0);
+  const bus = { lat: cell.lat, lon: cell.lon - 0.0003 };
+  sampleMeshFloorCells(scene, [bus], { viewerLat: cell.lat, viewerLon: cell.lon });
+  assert.equal(cachedGroundFloor(bus.lat, bus.lon), 121.0);
+});
+
 test('sampler: a second reading at the same spot keeps the lower one', async () => {
   reset();
   const cell = nextSite();
@@ -241,7 +253,7 @@ test('sampler: a second reading at the same spot keeps the lower one', async () 
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), 122.0, 'a higher one never raises it');
 });
 
-test('sampler: a latched cell is read a few times at most', async () => {
+test('sampler: a cell with a reading is probed a few times at most', async () => {
   reset();
   const cell = nextSite();
   await seedDem(cell, 120.0);
@@ -258,4 +270,100 @@ test('sampler: a latched cell is read a few times at most', async () => {
       opts,
     );
   assert.equal(calls, 8);
+});
+
+test('sampler: a cell with no accepted reading is probed again on every call', async () => {
+  reset();
+  const cell = nextSite();
+  let calls = 0;
+  const scene = fakeScene(() => {
+    calls += 1;
+    return 138.0;
+  });
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  for (let i = 0; i < 3; i++) sampleMeshFloorCells(scene, [cell], opts);
+  assert.equal(calls, 3, 'no DEM prior yet, so nothing is kept and the cell is retried');
+  await seedDem(cell, 120.0);
+  sampleMeshFloorCells(scene, [cell], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 138.0, 'and lands once the prior is warm');
+});
+
+test('sampler: a spot whose reading is refused does not use up the cell', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  // A tower 260 m up where the first vehicle waits; the street elsewhere and
+  // a deck 9 m up along one line of the cell.
+  const towerLon = cell.lon + 0.0004;
+  const deckLat = cell.lat + 0.0003;
+  const scene = fakeScene((carto) => {
+    if (Math.abs(Cesium.Math.toDegrees(carto.longitude) - towerLon) < 1e-7) return 380.0;
+    return Math.abs(Cesium.Math.toDegrees(carto.latitude) - deckLat) < 1e-7 ? 129.0 : 121.0;
+  });
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  for (let i = 0; i < 10; i++) sampleMeshFloorCells(scene, [{ lat: cell.lat, lon: towerLon }], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'the tower is refused every time');
+  sampleMeshFloorCells(scene, [{ lat: cell.lat - 0.0003, lon: cell.lon }], opts);
+  sampleMeshFloorCells(scene, [{ lat: deckLat, lon: cell.lon - 0.0003 }], opts);
+  assert.equal(cachedMeshFloor(deckLat, cell.lon - 0.0003), 129.0, 'the deck is still probed');
+});
+
+test('ground floor: a cell keeps at most sixteen readings', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  for (let i = 0; i < 40; i++) {
+    const lat = cell.lat - 0.00045 + (i % 8) * 0.0001;
+    const lon = cell.lon - 0.00045 + Math.floor(i / 8) * 0.0002;
+    reportValidatedMeshFloorCell(lat, lon, 121.0 + i);
+  }
+  // Readings 0..15 are kept; reading 39 (at the far corner) is not, so that
+  // spot answers from the nearest kept one.
+  assert.equal(cachedMeshFloor(cell.lat - 0.00045, cell.lon - 0.00045), 121.0);
+  assert.equal(cachedMeshFloor(cell.lat + 0.00025, cell.lon + 0.00035), 121.0 + 15);
+});
+
+test('sampler: a spot refused while the DEM was cold is probed again once it is warm', async () => {
+  reset();
+  const cell = nextSite();
+  const deckLat = cell.lat + 0.0003;
+  let calls = 0;
+  const scene = fakeScene((carto) => {
+    calls += 1;
+    return Math.abs(Cesium.Math.toDegrees(carto.latitude) - deckLat) < 1e-7 ? 129.0 : 121.0;
+  });
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  const onDeck = { lat: deckLat, lon: cell.lon };
+  sampleMeshFloorCells(scene, [onDeck], opts);
+  assert.equal(cachedMeshFloor(onDeck.lat, onDeck.lon), null, 'no prior, nothing kept');
+  await seedDem(cell, 120.0);
+  sampleMeshFloorCells(scene, [{ lat: cell.lat - 0.0003, lon: cell.lon }], opts);
+  sampleMeshFloorCells(scene, [onDeck], opts);
+  assert.equal(calls, 3);
+  assert.equal(cachedMeshFloor(onDeck.lat, onDeck.lon), 129.0);
+});
+
+test('sampler: a spot refused while the DEM prior was evicted is probed again', async () => {
+  const { createGroundFloor } = await import('../services/groundFloor.js');
+  const { createMeshFloorSampler } = await import('../services/meshFloorSampler.js');
+  let prior = 120.0;
+  const terrain = {
+    cachedRealEllipsoidalGround: () => prior,
+    resolveEllipsoidalGround: async () => {},
+  };
+  const groundFloor = createGroundFloor({ terrain });
+  const sampler = createMeshFloorSampler({ groundFloor });
+  const cell = { lat: 41.5, lon: -97.66 };
+  const deckLat = cell.lat + 0.0003;
+  const scene = fakeScene((carto) =>
+    Math.abs(Cesium.Math.toDegrees(carto.latitude) - deckLat) < 1e-7 ? 129.0 : 121.0);
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  const onDeck = { lat: deckLat, lon: cell.lon };
+  sampler.sampleMeshFloorCells(scene, [{ lat: cell.lat - 0.0003, lon: cell.lon }], opts);
+  prior = null; // the cell's DEM entry is evicted; the street reading stays
+  sampler.sampleMeshFloorCells(scene, [onDeck], opts);
+  assert.equal(groundFloor.cachedMeshFloor(onDeck.lat, onDeck.lon), 121.0);
+  prior = 120.0;
+  sampler.sampleMeshFloorCells(scene, [onDeck], opts);
+  assert.equal(groundFloor.cachedMeshFloor(onDeck.lat, onDeck.lon), 129.0);
 });

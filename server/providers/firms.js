@@ -131,15 +131,17 @@ export async function fetchFirms(
  * NASA FIRMS live active-fire proxy with a memory + disk cache.
  * Upstream: https://firms.modaps.eosdis.nasa.gov/api/area/csv/{KEY}/{SOURCE}/world/2
  *
- * Merges three VIIRS NRT sources (NOAA-20, NOAA-21, Suomi-NPP — independent
- * satellites, no cross-source dedup) plus MODIS_NRT (combined Terra+Aqua,
- * ~1 km, numeric 0-100 confidence), fetched sequentially (quota courtesy)
+ * Merges two VIIRS NRT sources (NOAA-20, NOAA-21 — independent satellites, no
+ * cross-source dedup) plus MODIS_NRT (combined Terra+Aqua, ~1 km, numeric
+ * 0-100 confidence), fetched sequentially (quota courtesy)
  * with `days=2` (`days=1` means "current UTC day", nearly empty just after
  * 00:00Z) and clamps to the trailing 24 h via src/data/firmsCsv.js. FIRMS
  * quota is 5,000 transactions / 10 min per MAP_KEY, so the cache is the point:
  * TTL 30 min, single-flight refresh, serve-stale-on-failure, and a
  * fresh-enough disk cache (.gev-cache/firms.json) prevents ANY upstream
  * fetch across dev-server restarts. Pattern mirrors celestrakProxy.
+ *
+ * VIIRS_SNPP_NRT is left out: NASA stopped delivering Suomi NPP on 2026-11-02.
  *
  * Routes:
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}
@@ -153,12 +155,7 @@ export async function fetchFirms(
 export function firmsProxy() {
   const TTL_MS = 30 * 60_000;
   const STATUS_TTL_MS = 5 * 60_000;
-  const SOURCES = [
-    'VIIRS_NOAA20_NRT',
-    'VIIRS_NOAA21_NRT',
-    'VIIRS_SNPP_NRT',
-    'MODIS_NRT',
-  ];
+  const SOURCES = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'MODIS_NRT'];
   /**
    * Per-source body cap. A VIIRS world/2 pull is ~130k rows x ~100 B, about
    * 13 MB per satellite in heavy fire season (MODIS runs smaller), so this is a
