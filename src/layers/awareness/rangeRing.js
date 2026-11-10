@@ -338,13 +338,18 @@ export function createRangeRing({
   /**
    * Run the range pulses again for `activeMs`, after a camera move. Call it
    * during a frame (lifecycle's preRender): that frame's postRender arms the
-   * next request, so waking asks for no extra frame of its own.
+   * next request, so waking asks for no extra frame of its own. Pulses at
+   * rest start in this frame; running ones keep their Cyber sonar interval,
+   * however many frames a drag draws.
    */
   function wakePulses() {
     const visual = layerState.visual;
     if (!visual?.wake) return;
-    wakeAwarenessPulses(visual.wake, performance.now());
-    visual.step(performance.now());
+    const nowMs = performance.now();
+    wakeAwarenessPulses(visual.wake, nowMs);
+    if (nowMs - visual.lastStepMs < CYBER_SONAR_RENDER_INTERVAL_MS) return;
+    visual.lastStepMs = nowMs;
+    visual.step(nowMs);
   }
 
   function clearVisual() {
@@ -399,7 +404,8 @@ export function createRangeRing({
           AWARENESS_RADIUS_M,
           CONTEXT_RIM_HEIGHT_M,
         );
-        visual.step(performance.now());
+        visual.lastStepMs = performance.now();
+        visual.step(visual.lastStepMs);
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
       }

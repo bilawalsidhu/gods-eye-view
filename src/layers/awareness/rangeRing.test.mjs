@@ -541,6 +541,12 @@ test('a pulse frame draws the step made before it was asked for; a moving camera
   }
   assert.equal(steps, 0);
   assert.equal(drawn(ring).band.fill.image.key, bandKey);
+  // Nor do frames a user's drag draws, each waking the running pulses.
+  for (let i = 0; i < 3; i++) {
+    rendering.wakePulses();
+    loop.draw();
+  }
+  assert.equal(steps, 0, 'a drag keeps the interval');
   // Crossing below the rim height hides them at once, interval or not.
   state.viewer.camera.positionCartographic = { height: 1_000 };
   loop.draw();
