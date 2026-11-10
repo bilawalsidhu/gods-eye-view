@@ -2,10 +2,9 @@
 
 ## [Unreleased]
 
-- Applications can ask Draw for one area or line and get its geometry back
-  without placing a mark (`drawShape` from `createApplicationTools`), and their
-  own click handlers can yield while a tool holds the pointer, as the layers'
-  do (`pointerFree`) (samehkhamis, #1641).
+- An application's own tool can take the pointer as Draw does, and its click
+  handlers can yield while a tool holds it, as the layers' do (`pointer` from
+  `createApplicationTools`) (samehkhamis, #1641).
 
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
