@@ -23,6 +23,28 @@ async function until(condition, tries = 200, gapMs = 5) {
  * alpha, so a draped confirmed-empty half is a black rectangle on the map.
  */
 
+test('synchronous abort inside an abort-ignoring fetch settles immediately', async () => {
+  const controller = new AbortController();
+  const source = createRecentImagerySource({
+    thumbnailUrl: () => 'https://example.invalid/',
+    halfDeadlineMs: 10000,
+    fetchImpl: () => {
+      controller.abort();
+      return new Promise(() => {});
+    },
+  });
+  const outcome = await Promise.race([
+    source
+      .getThumbnail(FIJI_CANDIDATE, FIJI_BOX, { signal: controller.signal })
+      .then(
+        () => 'resolved',
+        (error) => error.name,
+      ),
+    new Promise((resolve) => setTimeout(() => resolve('stalled'), 50)),
+  ]);
+  assert.equal(outcome, 'AbortError');
+});
+
 // Fiji across the antimeridian: east side (-180 … -177) is the wider half.
 const FIJI_BOX = { west: 179, south: -18, east: -177, north: -17 };
 const FIJI_DAY = '2026-11-04';

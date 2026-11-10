@@ -81,21 +81,26 @@ function probeHalf(
     signal?.addEventListener('abort', () => stop(signal.reason), {
       once: true,
     });
-  let promise;
-  try {
-    promise = fetchImpl(url, { signal: controller.signal });
-  } catch (error) {
-    finishTimeout();
-    throw error;
-  }
   const response = new Promise((resolve, reject) => {
     settle = { resolve, reject };
+    if (controller.signal.aborted) {
+      reject(controller.signal.reason);
+      return;
+    }
     if (deadlineMs > 0)
       timer = setTimeoutImpl(
         () =>
           stop(new DOMException('Thumbnail half timed out', 'TimeoutError')),
         deadlineMs,
       );
+    let promise;
+    try {
+      promise = Promise.resolve(fetchImpl(url, { signal: controller.signal }));
+    } catch (error) {
+      finishTimeout();
+      reject(error);
+      return;
+    }
     promise.then(
       (value) => {
         transportSettled = true;
