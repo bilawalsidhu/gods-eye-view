@@ -879,6 +879,7 @@
   "KEY REQUIRED": "المفتاح مطلوب",
   "STALE · cached {age}": "متقادم · مخزّن {age}",
   "LIVE · updated {age}": "مباشر · حُدّث {age}",
+  "24 h to {day} {time} UTC": "24 ساعة حتى {day} {time} UTC",
   "<1m ago": "قبل أقل من دقيقة",
   "FIRE · {frp} MW": "حريق · {frp} MW",
   "▲ {frp} MW": "▲ {frp} MW",

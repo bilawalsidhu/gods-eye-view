@@ -164,6 +164,7 @@
   "loading...": "lädt...",
   "KEY REQUIRED": "SCHLÜSSEL ERFORDERLICH",
   "LIVE · updated {age}": "LIVE · aktualisiert {age}",
+  "24 h to {day} {time} UTC": "24 Std. bis {day} {time} UTC",
   "loading mapped installation context": "Kontext der kartierten Anlage wird geladen",
   "MAPPED INSTALLATION": "KARTIERTE ANLAGE",
   "LAUNCH SITE · {site}": "STARTPLATZ · {site}",

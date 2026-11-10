@@ -716,6 +716,7 @@
   "loading...": "読込中…",
   "KEY REQUIRED": "キーが必要",
   "LIVE · updated {age}": "ライブ · 更新 {age}",
+  "24 h to {day} {time} UTC": "{day} {time} UTC までの24時間",
   "Source snapshot time unavailable": "ソースのスナップショット時刻を取得できません",
   "Live data unavailable": "ライブデータを利用できません",
   "Intel Picture": "情勢図",

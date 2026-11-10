@@ -39,6 +39,9 @@ export function createIngestion({
       layerState._keyRequired = false;
       layerState._error = null;
       layerState._stale = Boolean(payload?.stale);
+      // A snapshot of the 24 hours to a set time names it; one of the
+      // trailing 24 hours to now does not.
+      layerState._at = Number.isFinite(payload?.at) ? payload.at : null;
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;
       layerState._allFires = adaptFirmsRecords(payload?.fires);

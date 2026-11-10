@@ -734,6 +734,7 @@
   "loading...": "caricamento...",
   "KEY REQUIRED": "CHIAVE RICHIESTA",
   "LIVE · updated {age}": "LIVE · aggiornato {age}",
+  "24 h to {day} {time} UTC": "24 h fino al {day} {time} UTC",
   "Source snapshot time unavailable": "Ora dello snapshot della fonte non disponibile",
   "Live data unavailable": "Dati live non disponibili",
   "Intel Picture": "Quadro intelligence",

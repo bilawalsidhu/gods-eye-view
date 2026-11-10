@@ -716,6 +716,7 @@
   "loading...": "加载中…",
   "KEY REQUIRED": "需要密钥",
   "LIVE · updated {age}": "实时 · 更新于 {age}",
+  "24 h to {day} {time} UTC": "截至 {day} {time} UTC 的 24 小时",
   "Source snapshot time unavailable": "来源快照时间不可用",
   "Live data unavailable": "实时数据不可用",
   "Low-accuracy score < 2%": "低精度评分 < 2%",

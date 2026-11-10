@@ -145,6 +145,10 @@ export async function fetchFirms(
  *
  * Routes:
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}
+ *
+ * The trailing 24 hours to now. A source may instead answer the 24 hours to
+ * a set time, naming its end as `at` (epoch ms); the layer's row then shows
+ * that time rather than LIVE. This proxy never sets `at`.
  *   GET /api/firms/status → {hasKey, lastFetch, count, stale, ttlMs, transactions}
  *
  * Keyless (no FIRMS_MAP_KEY): /api/firms → 503 {error:'no_key'}; status →
