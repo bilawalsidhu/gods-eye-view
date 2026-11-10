@@ -309,9 +309,13 @@ await strict.run({}, async (browser) => {
   }
   if (report) console.log(`REPORT browser errors ${JSON.stringify(errors)}`);
   else assert.deepEqual(errors, []);
+  // No Google tiles, credits or Cesium ion; the page's web fonts (allowed by
+  // the map policy) come from Google's font hosts on every run.
   assert.deepEqual(
-    Object.keys(strict.ledger.external).filter((host) =>
-      /google|gstatic|cesium\.com/i.test(host),
+    Object.keys(strict.ledger.external).filter(
+      (host) =>
+        /google|gstatic|cesium\.com/i.test(host) &&
+        !/^fonts\.(googleapis|gstatic)\.com$/i.test(host),
     ),
     [],
   );
