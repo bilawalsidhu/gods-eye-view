@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // src/ui/displayPanel.test.mjs — the Display panel renders bloom and sharpen
 // from what VisualSettings publishes, and shows its initial markup before.
 import '../testSupport/registerDom.mjs';
@@ -145,6 +146,7 @@ test('a publish never rewrites a slider the user is dragging', async (t) => {
 /** VisualSettings with a stand-in detection engine. */
 function detectionSettings(store) {
   const { owner } = settings(store);
+  // This is detection state, not a globe engine.
   const engine = {
     mode: 'OFF',
     tuning: { densityPct: 50, allocationStrategy: 'ELASTIC' },
@@ -425,12 +427,7 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal($('geo-import-hint').textContent, '');
 
   // A globe engine double the files draw on.
-  const engine = {
-    host: { container: document.createElement('div'), canvas: null },
-    camera: { moveEnd: { addEventListener: () => () => {} } },
-    surface: { tilesLoaded: () => true },
-    render: { request() {} },
-  };
+  const engine = createFakeEngine({ container: document.createElement('div') });
   const tool = createGeoFileImport({
     drawFile: async () => ({
       report: { undrawn: 0 },

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // Behavioral tests for DISPLAY ▸ Import: the controller is driven against
 // fake DOM and engine doubles with an injected loader and drawing, and its
 // observable effects are asserted — drawings made and destroyed, the rows
@@ -65,22 +66,18 @@ class FakeElement {
 /** A globe engine double: its host, camera moves and render requests. */
 function fakeEngine() {
   const moveEnd = new Set();
-  const engine = {
+  const engine = createFakeEngine({
     kind: 'fake',
-    host: {
-      container: new FakeElement('div', 'cesiumContainer'),
-      canvas: new FakeElement('canvas'),
-    },
-    camera: {
-      moveEnd: {
-        addEventListener: (fn) => (moveEnd.add(fn), () => moveEnd.delete(fn)),
-      },
-    },
-    surface: { tilesLoaded: () => true },
-    renders: 0,
-    render: { request: () => (engine.renders += 1) },
-    moveEnd,
-  };
+    container: new FakeElement('div', 'cesiumContainer'),
+    canvas: new FakeElement('canvas'),
+  });
+  engine.camera.moveEnd.addEventListener = (fn) => (
+    moveEnd.add(fn),
+    () => moveEnd.delete(fn)
+  );
+  engine.renders = 0;
+  engine.render.request = () => (engine.renders += 1);
+  engine.moveEnd = moveEnd;
   return engine;
 }
 

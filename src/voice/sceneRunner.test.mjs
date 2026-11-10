@@ -1,8 +1,9 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSceneRunner, engineSwitchingRefusal } from './sceneRunner.js';
 
-const engine = (kind) => ({ kind });
+const engine = (kind) => createFakeEngine({ kind });
 
 function runnerFor(log) {
   return (scene) => {

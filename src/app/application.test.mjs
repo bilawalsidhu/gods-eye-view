@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -111,7 +112,7 @@ test('startup shares one promise and teardown keeps data alive for controls', as
 
 test('later components receive the scene engine beside its viewer', async () => {
   const viewer = { name: 'viewer' };
-  const engine = { kind: 'cesium' };
+  const engine = createFakeEngine({ kind: 'cesium' });
   const seen = [];
   const receive =
     (phase) =>

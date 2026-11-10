@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // src/ui/frameRateView.test.mjs — the title bar's FPS readout renders what
 // createFrameRateMonitor() publishes and toggles with the backquote key.
 import '../testSupport/registerDom.mjs';
@@ -19,7 +20,7 @@ test('the FPS readout sits in the title bar, hidden until the backquote key', as
     document.querySelector('#title-bar .frame-rate-readout');
   assert.equal(readout(), null, 'no readout without a monitor');
   const monitor = createFrameRateMonitor({
-    engine: { frames: { postRender: { addEventListener: () => () => {} } } },
+    engine: createFakeEngine(),
     store: useStatusStore(pinia),
   });
   t.after(() => monitor.destroy());

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -3142,11 +3143,8 @@ test('Bhote Koshi republishes its evidence cards to the incoming engine overlay'
   globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
   const first = eventViewer();
   const second = eventViewer();
-  const engineB = {
-    id: 'B',
-    host: { canvas: second.scene.canvas },
-    camera: second.camera,
-  };
+  const engineB = createFakeEngine({ canvas: second.scene.canvas });
+  engineB.id = 'B';
   const hosts = new Map();
   const hostFor = (engine) => {
     const key = engine ?? 'A';
@@ -3216,16 +3214,11 @@ async function navaraEvidenceCard({ sample, signal }) {
   installEventDom();
   globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
   const entries = [];
-  const engine = {
-    terrain: 3500,
-    host: { canvas: eventViewer().scene.canvas },
-    surface: {
-      terrainHeight: () => engine.terrain,
-      sampleTerrainMostDetailed: sample,
-    },
-    maps: { terrainRevision: () => 1 },
-    camera: { livePosition: Cesium.Cartesian3.fromDegrees(0, 0, 1e7) },
-  };
+  const engine = createFakeEngine({ canvas: eventViewer().scene.canvas });
+  engine.terrain = 3500;
+  engine.fake.script('terrainHeight', () => engine.terrain);
+  engine.fake.script('sampleTerrainMostDetailed', sample);
+  engine.maps.terrainRevision = () => 1;
   const layer = buildEventLayer({
     eventLoader: async () => event,
     imageLoader: async (url) => ({ url }),
@@ -3330,11 +3323,9 @@ test('Navara evidence anchors without a terrain sample follow the terrain near t
     assert.ok(Math.abs(height() - pack) < 0.01, 'the pack elevation');
     card.position();
     assert.ok(Math.abs(height() - pack) < 0.01, 'a far camera keeps it');
-    engine.camera.livePosition = Cesium.Cartesian3.fromDegrees(
-      first.lon,
-      first.lat,
-      6000,
-    );
+    engine.fake.setPose({
+      position: Cesium.Cartesian3.fromDegrees(first.lon, first.lat, 6000),
+    });
     engine.terrain = 2000;
     assert.ok(card.position(), 'the first card is shown');
     assert.ok(

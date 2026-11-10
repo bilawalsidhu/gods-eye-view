@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Browser QA still doing work owned by scripts/qa-strict-harness.mjs.
- * Each metric counts scripts, so repeated uses in one script count once.
+ * Browser QA and tests still duplicating the shared harness or fake engine.
+ * Each metric counts files, so repeated uses in one file count once.
  *
  *   node scripts/report-qa-harness.mjs
  *   node scripts/report-qa-harness.mjs --json
@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parsers } from 'prettier/plugins/babel.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const BASELINE_PATH = path.join(
@@ -17,6 +18,80 @@ export const BASELINE_PATH = path.join(
   'scripts',
   'qa-harness-baseline.json',
 );
+
+/** Engine assignments, inline options and engine factory returns, not strings or comments. */
+export function engineLiteralLines(text) {
+  const lines = [];
+  const engineName = (name) =>
+    !/Options$/.test(name ?? '') &&
+    /^(?:_?engine(?:[A-Z0-9]\w*)?|\w+Engine(?:[A-Z0-9]\w*)?)$/.test(name ?? '');
+  function walk(node, parent, factory) {
+    if (!node || typeof node !== 'object') return;
+    if (/Function|ObjectMethod/.test(node.type))
+      factory = node.id?.name ?? parent?.id?.name ?? node.key?.name;
+    if (node.type === 'ObjectExpression') {
+      const name =
+        parent?.type === 'VariableDeclarator'
+          ? parent.id?.name
+          : parent?.type === 'AssignmentExpression'
+            ? parent.left?.computed
+              ? parent.left.property?.value
+              : (parent.left?.property?.name ?? parent.left?.name)
+            : parent?.type === 'ObjectProperty'
+              ? (parent.key?.name ?? parent.key?.value)
+              : null;
+      const keys = node.properties.map((property) => property.key?.name);
+      const host = node.properties.find(
+        (property) => property.key?.name === 'host',
+      )?.value;
+      const globeHost =
+        host?.type === 'ObjectExpression' &&
+        host.properties.some((property) =>
+          ['canvas', 'container', 'size'].includes(property.key?.name),
+        );
+      const adapterKind = node.properties.some(
+        (property) =>
+          property.key?.name === 'kind' &&
+          ['cesium', 'navara'].includes(property.value?.value),
+      );
+      const returned =
+        parent?.type === 'ReturnStatement' ||
+        parent?.type === 'ArrowFunctionExpression';
+      // A factory's { engine, ...observations } is a harness, not its engine.
+      if (
+        engineName(name) ||
+        globeHost ||
+        (adapterKind &&
+          keys.some((key) =>
+            ['camera', 'render', 'credits', 'maps'].includes(key),
+          )) ||
+        (returned &&
+          engineName(factory) &&
+          !keys.includes('engine') &&
+          keys.some((key) =>
+            [
+              'kind',
+              'host',
+              'camera',
+              'frames',
+              'render',
+              'credits',
+              'maps',
+            ].includes(key),
+          ))
+      )
+        lines.push(node.loc.start.line);
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (['loc', 'comments', 'tokens'].includes(key)) continue;
+      if (Array.isArray(value))
+        for (const child of value) walk(child, node, factory);
+      else if (value && typeof value === 'object') walk(value, node, factory);
+    }
+  }
+  walk(parsers.babel.parse(text));
+  return lines;
+}
 
 const readsCesiumState = (text) => {
   const names = [
@@ -78,6 +153,15 @@ export const QA_HARNESS_METRICS = Object.freeze([
         ),
       ).length,
   },
+  {
+    id: 'testEngineLiterals',
+    label: 'Test files with their own engine literal',
+    measure: (files) =>
+      files.filter(
+        ({ file, text }) =>
+          file.endsWith('.test.mjs') && engineLiteralLines(text).length,
+      ).length,
+  },
 ]);
 
 /** QA scripts, including the shared harness itself, but excluding tests. */
@@ -92,10 +176,29 @@ export function readQaSources(root = ROOT) {
     }));
 }
 
+export function readTestSources(root = ROOT) {
+  return ['build', 'scripts', 'server', 'src'].flatMap((directory) => {
+    const base = path.join(root, directory);
+    if (!fs.existsSync(base)) return [];
+    return fs
+      .readdirSync(base, { recursive: true })
+      .sort()
+      .filter((name) => name.endsWith('.test.mjs'))
+      .map((name) => ({
+        file: `${directory}/${name.split(path.sep).join('/')}`,
+        text: fs.readFileSync(path.join(base, name), 'utf8'),
+      }));
+  });
+}
+
 export function measureQaHarness(root = ROOT) {
   const files = readQaSources(root);
+  const tests = readTestSources(root);
   return Object.fromEntries(
-    QA_HARNESS_METRICS.map(({ id, measure }) => [id, measure(files)]),
+    QA_HARNESS_METRICS.map(({ id, measure }) => [
+      id,
+      measure(id === 'testEngineLiterals' ? tests : files),
+    ]),
   );
 }
 

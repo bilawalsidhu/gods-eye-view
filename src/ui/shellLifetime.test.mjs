@@ -127,12 +127,11 @@ test('camera-entry listeners are removed before any asynchronous layer cleanup',
   const { owner } = bindings(t);
   let changes = 0;
   let trackedCallback;
-  owner.engine = { camera: { followChanged: {
-    addEventListener(callback) {
-      trackedCallback = callback;
-      return () => { changes += 1; };
-    },
-  } } };
+  owner.engine = createFakeEngine();
+  owner.engine.camera.followChanged.addEventListener = (callback) => {
+    trackedCallback = callback;
+    return () => { changes += 1; };
+  };
   owner._stampNavigation = () => { changes += 100; };
   owner.observeCamera();
   owner.stop();

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import {
   element,
   kmz,
@@ -74,7 +75,7 @@ function harness(t) {
   let listener = null;
   const layer = createGhostMapsLayer({
     storage: null,
-    createRenderer: (engine) => fakeRenderer(engine.name, live),
+    createRenderer: (engine) => fakeRenderer(engine.kind, live),
     source: {
       getCatalog: async () => catalog('v1'),
       getFile: (_id, version) => files.get(version).promise,
@@ -84,7 +85,7 @@ function harness(t) {
       },
     },
   });
-  layer.init(null, { engine: { name: 'cesium' } });
+  layer.init(null, { engine: createFakeEngine({ kind: 'cesium' }) });
   layer.enable();
   t.after(() => layer.destroy());
   const file = (version) => {
@@ -113,7 +114,7 @@ test('edge:s2-ghostmaps: an edition and engine change mid-parse shows only the s
   await new Promise(setImmediate);
   push(catalog('v3'));
   layer.detachRenderer();
-  await layer.attachRenderer({ engine: { name: 'navara' } });
+  await layer.attachRenderer({ engine: createFakeEngine({ kind: 'navara' }) });
   v2.resolve(kmz('edition two'));
   v3.resolve(kmz('edition three'));
   // Let the queued syncs settle.
@@ -135,7 +136,7 @@ test('edge:s2-ghostmaps: a bad archive keeps the working edition on the globe', 
   push(catalog('v2'));
   // The engine changes while the broken file is still on its way.
   layer.detachRenderer();
-  await layer.attachRenderer({ engine: { name: 'navara' } });
+  await layer.attachRenderer({ engine: createFakeEngine({ kind: 'navara' }) });
   broken.resolve(new Uint8Array([1, 2, 3, 4]));
   for (let i = 0; i < 20; i += 1) await new Promise(setImmediate);
 

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -11,7 +12,7 @@ globalThis.CustomEvent ||= class CustomEvent {
 globalThis.dispatchEvent ||= () => true;
 
 const { registerEntityContext } = await import('./contextStore.js');
-const engine = {};
+const engine = createFakeEngine();
 const { pickRegistryFor } = await import('./pickRegistry.js');
 const { registerPickOwner, unregisterPickOwner, findPickOwner } = pickRegistryFor(engine);
 const { resolvePickedContext, pickedKindForLayer } = await import('./pickedContext.js');

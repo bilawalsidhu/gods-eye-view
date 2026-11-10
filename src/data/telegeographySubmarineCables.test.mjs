@@ -221,9 +221,11 @@ test('cable paths drape on exactly the active surface on every stack', () => {
 
   // Boot fires no stack event; the first drape comes from the engine:
   // photoreal tiles shown ⇔ the globe hidden.
-  const engine = (photoreal) => ({
-    maps: { photorealActive: () => photoreal },
-  });
+  const engine = (photoreal) => {
+    const globe = createFakeEngine();
+    globe.maps.photorealActive = () => photoreal;
+    return globe;
+  };
   assert.equal(cableDrapeForEngine(engine(true)), 'tiles');
   assert.equal(cableDrapeForEngine(engine(false)), 'terrain');
   assert.equal(cableDrapeForEngine(null), 'both');

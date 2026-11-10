@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // Behavioural tests for the draw tool: the module is driven against fake DOM
 // and viewer doubles and its OBSERVABLE effects are asserted — which lease it
 // holds, which viewer input actions it borrowed and gave back, what it leaves
@@ -975,7 +976,7 @@ test('a page without the Draw controls gets no draw tool', () => {
   try {
     let connected = false;
     const tool = initDrawTool({
-      engine: {},
+      engine: createFakeEngine(),
       annotations: fakeAnnotations(),
       connect: () => {
         connected = true;

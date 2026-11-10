@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTrackedReadout } from './trackedReadout.js';
@@ -19,18 +20,8 @@ test('followed aircraft card anchors to the model the person sees (gevVisualPosi
       position: () => native.gevDisplayPosition(),
     },
   };
-  const listeners = [];
-  const engine = {
-    camera: {
-      following: () => handle,
-      followChanged: {
-        addEventListener: (f) => {
-          listeners.push(f);
-          return () => {};
-        },
-      },
-    },
-  };
+  const engine = createFakeEngine();
+  engine.camera.following = () => handle;
   let entries = null;
   const overlay = {
     setEntries(_id, e) {

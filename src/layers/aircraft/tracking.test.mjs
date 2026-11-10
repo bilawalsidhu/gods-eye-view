@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
@@ -50,7 +51,7 @@ function harness(layer, { groundM = null, track = [] } = {}) {
     _trailPositions: [],
     _trailBackfillToken: 0,
     _renderer: {
-      engine: {},
+      engine: createFakeEngine(),
       follow: { onChanged: () => () => {} },
     },
   };

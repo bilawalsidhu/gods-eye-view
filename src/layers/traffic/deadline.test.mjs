@@ -13,21 +13,16 @@ import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 // the near plane, as the engines answer).
 function cameraEngine(scene) {
   const eye = new C.Cartesian3();
-  return {
-    host: {
-      size: () => ({
-        width: scene.canvas.clientWidth,
-        height: scene.canvas.clientHeight,
-      }),
-    },
-    projector: {
-      worldToWindow(point, result) {
-        C.Matrix4.multiplyByPoint(scene.camera.viewMatrix, point, eye);
-        if (eye.z >= -scene.camera.frustum.near) return undefined;
-        return C.SceneTransforms.worldToWindowCoordinates(scene, point, result);
-      },
-    },
-  };
+  const engine = createFakeEngine({
+    width: scene.canvas.clientWidth,
+    height: scene.canvas.clientHeight,
+  });
+  engine.fake.script('worldToWindow', (point, result) => {
+    C.Matrix4.multiplyByPoint(scene.camera.viewMatrix, point, eye);
+    if (eye.z >= -scene.camera.frustum.near) return undefined;
+    return C.SceneTransforms.worldToWindowCoordinates(scene, point, result);
+  });
+  return engine;
 }
 
 const bounds = { west: 0, east: 0.01, south: 0, north: 0.01 };

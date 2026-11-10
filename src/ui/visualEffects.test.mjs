@@ -57,7 +57,7 @@ function fixture() {
       createStage: (options) => ({ ...options, enabled: true }),
     },
   );
-  const engine = { render: cesium.render, isDestroyed: () => false };
+  const engine = Object.assign(createFakeEngine(), { render: cesium.render });
   const effects = new VisualEffects({
     engine,
     requestRender: (reason) => requests.push(reason),
@@ -351,9 +351,8 @@ test('existing baseline and military presets keep one detection default', () => 
 test('an engine sharpens with the same amount scale, only while on and above 0', () => {
   const sharpen = [];
   const requests = [];
-  const engine = {
-    render: { setSharpen: (options) => sharpen.push(options) },
-  };
+  const engine = createFakeEngine();
+  engine.render.setSharpen = (options) => sharpen.push(options);
   const effects = new VisualEffects({
     engine,
     requestRender: (reason) => requests.push(reason),

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createViewport } from './viewport.js';
@@ -22,11 +23,14 @@ function harness() {
   const moveEnd = signal(),
     preRender = signal(),
     requests = [];
+  const engine = createFakeEngine();
+  engine.camera.moveEnd = moveEnd;
+  engine.frames.preRender = preRender;
   const layerState = {
     _enabled: true,
     _destroyed: false,
     _view: { camera: {} },
-    _renderer: { engine: { camera: { moveEnd }, frames: { preRender } } },
+    _renderer: { engine: engine },
   };
   const viewport = createViewport({
     layerState,

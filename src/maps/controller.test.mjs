@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { createCesiumMaps } from '../globe/cesium/maps.js';
 import { createCesiumCredits } from '../globe/cesium/credits.js';
 import test from 'node:test';
@@ -72,7 +73,7 @@ function fixture(registry, options = {}) {
   });
   const controller = new MapSourceController({
     registry,
-    engine: { kind: 'cesium', render: { request() {} }, maps: mapsOwner.maps },
+    engine: Object.assign(createFakeEngine(), { maps: mapsOwner.maps }),
     onChange: (state) => changes.push(state),
     ...options,
   });

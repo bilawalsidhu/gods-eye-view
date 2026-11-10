@@ -445,16 +445,13 @@ test('the followed entity is read in the share format, and its offset round-trip
       gevDisplayPosition: () => target,
     },
   };
-  const engine = {
-    camera: {
-      pose: () => ({ position: cameraPosition }),
-      following: () =>
-        viewer.trackedEntity && {
-          native: viewer.trackedEntity,
-          target: () => target,
-        },
-    },
-  };
+  const engine = createFakeEngine();
+  engine.fake.setPose({ position: cameraPosition });
+  engine.camera.following = () =>
+    viewer.trackedEntity && {
+      native: viewer.trackedEntity,
+      target: () => target,
+    };
   const subject = readShareFollowSubject({ engine, nowMs: NOW_MS });
   assert.equal(subject.kind, 'military_aircraft');
   assert.equal(subject.id, 'ae1234');

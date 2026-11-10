@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
@@ -26,14 +27,12 @@ test('orbital ground focus reads the drawn height and the engine pick id', () =>
 test('focus frames a selected installation through the globe engine camera', () => {
   const record = { id: 'osm:node:12', latitude: 70, longitude: 179.8 };
   let flight = null;
+  const engine = createFakeEngine();
+  engine.camera.flyToSphere = (sphere, options) => {
+    flight = { sphere, options };
+  };
   const state = {
-    engine: {
-      camera: {
-        flyToSphere: (sphere, options) => {
-          flight = { sphere, options };
-        },
-      },
-    },
+    engine: engine,
     recordById: new Map([[record.id, record]]),
   };
   const controls = createControls({

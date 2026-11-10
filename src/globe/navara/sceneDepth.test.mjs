@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -140,7 +141,7 @@ test('pack meshes draw in the overlay and test the scene depth', () => {
     camera: {},
     picker: { registerMeshPicker: () => () => {} },
   });
-  const engine = { meshes: port.meshes, render: { request() {} } };
+  const engine = Object.assign(createFakeEngine(), { meshes: port.meshes });
   createPackRenderer(engine).image(
     { id: 'p', placement: { bounds: [0, 0, 0.01, 0.01], height: 300 } },
     {},

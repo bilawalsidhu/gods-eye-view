@@ -1,8 +1,8 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAircraftSceneBinding } from './sceneBinding.js';
 import { LayerBindings } from '../../ui/layerBindings.js';
-import { createEngineEvent } from '../../globe/contract.js';
 import { readLayerSource } from '../../testSupport/readLayerSource.mjs';
 
 function observedShell(t) {
@@ -11,13 +11,14 @@ function observedShell(t) {
   t.after(() => {
     globalThis.window = previous;
   });
-  const followChanged = createEngineEvent();
+  const engine = createFakeEngine();
+  const followChanged = engine.camera.followChanged;
   const shell = {
     generation: 1,
     followChanged,
   };
   const bindings = new LayerBindings({
-    engine: { camera: { followChanged } },
+    engine: engine,
     services: {},
     operations: {
       _stampNavigation() {

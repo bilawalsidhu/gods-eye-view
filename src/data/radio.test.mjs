@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -1638,7 +1639,8 @@ test('Radio recovery preserves closer altitude and caps extreme full-globe zoom'
 
 test('Radio camera navigation yields to every live tracked-entity owner', () => {
   let following = null;
-  const engine = { camera: { following: () => following } };
+  const engine = createFakeEngine();
+  engine.camera.following = () => following;
   assert.equal(radioCameraNavigationAllowed(engine), true);
   for (const gevTrackedId of ['flights:abc123', 'military:def456']) {
     const trackedEntity = { gevTrackedId };

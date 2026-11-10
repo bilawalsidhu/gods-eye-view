@@ -2070,7 +2070,7 @@ test('a caught run failure resolves as run-failed, not success (#971)', async ()
 test('a failed scene-pack rebind releases the partial renderer and a stopped shot unblocks', async () => {
   const director = Object.create(SceneDirector.prototype);
   const drawn = new Set();
-  director.engine = { host: { container: {} } };
+  director.engine = createFakeEngine();
   director._dataPacks = {
     setScene(viewer) {
       if (!viewer) drawn.clear();
@@ -2088,7 +2088,7 @@ test('a failed scene-pack rebind releases the partial renderer and a stopped sho
   assert.throws(
     () =>
       director.attachScene(
-        { engine: { host: { container: {} } } },
+        { engine: createFakeEngine() },
         {},
         () => true,
       ),
@@ -2100,7 +2100,7 @@ test('a failed scene-pack rebind releases the partial renderer and a stopped sho
   abort.abort();
   assert.equal(await stopped, false);
   const waiting = director._waitForScene();
-  director.engine = { host: {} };
+  director.engine = createFakeEngine();
   director.styleManager = {};
   director.resumeScene();
   assert.equal(await waiting, true);

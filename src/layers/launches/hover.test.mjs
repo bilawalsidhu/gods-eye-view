@@ -1,15 +1,13 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createEngineEvent } from '../../globe/contract.js';
 import { createLaunchHover } from './render/display.js';
 
 // What the hover reads of an engine: its canvas, drillPick and camera motion.
 function hoverEngine(drillPick, style = { cursor: '' }) {
-  return {
-    host: { canvas: { style } },
-    picker: { drillPick },
-    camera: { moveStart: createEngineEvent(), moveEnd: createEngineEvent() },
-  };
+  const engine = createFakeEngine({ canvas: { style } });
+  engine.fake.script('drillPick', drillPick);
+  return engine;
 }
 
 function fakeTimers() {

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -12,15 +13,13 @@ import { createView } from '../view/index.js';
 
 const fakeEngine = () => {
   const flights = [];
-  return {
-    flights,
-    camera: {
-      flyTo(options) {
-        flights.push(options);
-        options.complete();
-      },
-    },
+  const engine = createFakeEngine();
+  engine.flights = flights;
+  engine.camera.flyTo = (options) => {
+    flights.push(options);
+    options.complete();
   };
+  return engine;
 };
 const fakeLayers = (enabled) => ({
   getAll: () =>

@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 // CCTV icon thinning must use the camera's real vertical FOV. In a 16:9
 // window with Cesium's default fov 60deg the vertical FOV is about 36deg;
 // main read it from viewer.camera.frustum.fovy. Two cameras 17 m apart seen
@@ -33,7 +34,7 @@ test('icon thinning uses the camera vertical FOV, not a pi/3 fallback', () => {
     distance: () => 2000,
     cameraPose: () => pose,
     fovy: () => pose.fovy,
-    engine: { camera: { pose: () => pose } },
+    engine: createFakeEngine({ fovy: FOVY_16_9 }),
   };
   const { refreshHorizonCulling } = createRendering({
     state,

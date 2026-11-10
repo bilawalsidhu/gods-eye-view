@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import {
   element,
   kmz,
@@ -58,10 +59,10 @@ for (const action of ['expire', 'disable']) {
         onClick: () => () => {},
         draw(id, features) {
           const gate = deferred();
-          if (engine.name === 'navara') gates.push(gate);
+          if (engine.kind === 'navara') gates.push(gate);
           else gate.resolve();
           const paint = {
-            engine: engine.name,
+            engine: engine.kind,
             names: [...features.values()].map((feature) => feature.name),
             dropped: [],
             ready: gate.promise,
@@ -84,7 +85,7 @@ for (const action of ['expire', 'disable']) {
         getFile: async () => kmz('old event'),
       },
     });
-    layer.init(null, { engine: { name: 'cesium' } });
+    layer.init(null, { engine: createFakeEngine({ kind: 'cesium' }) });
     layer.enable();
     t.after(() => layer.destroy());
     await layer.update();
@@ -92,7 +93,9 @@ for (const action of ['expire', 'disable']) {
 
     // Engine switch: the new drawing is still decoding its icons.
     layer.detachRenderer();
-    const attached = layer.attachRenderer({ engine: { name: 'navara' } });
+    const attached = layer.attachRenderer({
+      engine: createFakeEngine({ kind: 'navara' }),
+    });
     await new Promise(setImmediate);
     assert.equal(gates.length, 1);
     // The event leaves its age window; the expiry pass runs meanwhile.

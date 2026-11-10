@@ -42,10 +42,8 @@ test('Navara draws the page session board and its switch takes only the drawing'
   const lifetime = new AbortController();
   const layerSession = { lifetime };
   const { views, meshes } = fakeViews();
-  const engine = {
-    ...createFakeEngine({ kind: 'navara' }),
-    extensions: { navara: views },
-  };
+  const engine = createFakeEngine({ kind: 'navara' });
+  engine.extensions = { navara: views };
   // As src/app/tools.js attaches the board on the backend's scene.
   const attach = () => {
     const cleanups = [];

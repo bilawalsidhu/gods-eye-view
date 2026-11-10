@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLifecycle } from './lifecycle.js';
@@ -8,7 +9,7 @@ test('missions preserve the satellite target before their focus flight releases 
     let target = 25544,
       snapshot = null;
     const lifecycle = createLifecycle({
-      state: { _engine: {} },
+      state: { _engine: createFakeEngine() },
       services: { render: {} },
       getRenderer: () => ({ setVisible() {} }),
       parts: {
@@ -46,7 +47,7 @@ test('missions begin their entry flight while the satellite catalog loads', asyn
   });
   let flew = false;
   const lifecycle = createLifecycle({
-    state: { _engine: {} },
+    state: { _engine: createFakeEngine() },
     services: { render: {} },
     getRenderer: () => ({ setVisible() {} }),
     parts: {

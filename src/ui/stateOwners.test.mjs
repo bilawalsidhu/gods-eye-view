@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NavigationController } from './navigationController.js';
@@ -69,7 +70,7 @@ test('share teardown settles its promise, removes gestures and rejects a retaine
   let stamps = 0;
   let applies = 0;
   const owner = new ShareRestoration({
-    engine: { host: { canvas } },
+    engine: createFakeEngine({ canvas }),
     navigation: {
       _beginDeferredNavigation: () => 1,
       _reassertNavigationHandoff: () => true,
@@ -164,12 +165,11 @@ test('on Navara, presets set the Sharpen slider to 80 % and the engine draws it'
     _sharpenSliderRow: element(),
     _sharpenSliderValue: element(),
   };
+  const engine = createFakeEngine({ kind: 'navara' });
+  engine.render.setSharpen = (options) => sharpen.push(options);
   const owner = new VisualSettings({
     viewer: null,
-    engine: {
-      kind: 'navara',
-      render: { setSharpen: (options) => sharpen.push(options) },
-    },
+    engine: engine,
     elements,
     operations: {
       _syncShareState() {},

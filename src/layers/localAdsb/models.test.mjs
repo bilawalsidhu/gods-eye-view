@@ -26,7 +26,7 @@ test('ground snapping excludes the aircraft by its engine pick id', async () => 
       },
       frustumTester: () => () => true,
       horizon: () => ({ isPointVisible: () => true }),
-      engine: {},
+      engine: createFakeEngine(),
     },
   };
   const exclusions = [];

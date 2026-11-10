@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -94,10 +95,9 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
 // A Cesium engine's credits over a viewer double's credit display.
 async function cesiumCreditsEngine(viewer) {
   const { createCesiumCredits } = await import('../globe/cesium/credits.js');
-  return {
+  return Object.assign(createFakeEngine(), {
     credits: createCesiumCredits(viewer).credits,
-    render: { request() {} },
-  };
+  });
 }
 
 test('inline OSM attribution persists until its last display owner leaves', async (t) => {

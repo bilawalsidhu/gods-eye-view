@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAnnotationEngine } from './annotationEngine.js';
@@ -69,7 +70,7 @@ test('the marks survive a globe leaving and are drawn again on the next one', as
 
   log.length = 0;
   engine.attachRenderer({
-    engine: {},
+    engine: createFakeEngine(),
     renderer: recordingRenderer(log, 'next'),
   });
   assert.deepEqual(log, ['next add Capitol']);
@@ -88,8 +89,14 @@ test('detaching twice and attaching over an attached globe release each drawing 
   });
   engine.detachRenderer();
   engine.detachRenderer();
-  engine.attachRenderer({ engine: {}, renderer: recordingRenderer(log, 'b') });
-  engine.attachRenderer({ engine: {}, renderer: recordingRenderer(log, 'c') });
+  engine.attachRenderer({
+    engine: createFakeEngine(),
+    renderer: recordingRenderer(log, 'b'),
+  });
+  engine.attachRenderer({
+    engine: createFakeEngine(),
+    renderer: recordingRenderer(log, 'c'),
+  });
   assert.deepEqual(log, ['a destroy', 'b destroy']);
   engine.destroy();
 });

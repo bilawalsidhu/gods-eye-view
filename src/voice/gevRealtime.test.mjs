@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 // Pure-logic unit tests for the voice-lifecycle size guards (Batch 11, M13).
 // These helpers are DOM/WebRTC-free so they pin the screenshot down-scaling and
 // payload-byte estimation that keep an oversized dc.send from stranding a turn.
@@ -2859,10 +2860,8 @@ test('isBenignViewportDeleteError is false for non-error payloads and junk', () 
 test('hidden document yields no fresh frame — capture must not label a stale canvas Current', async () => {
   const originalDocument = globalThis.document;
   let requested = 0;
-  const engine = {
-    frames: { postRender: { addEventListener() { return () => {}; } } },
-    render: { request() { requested += 1; } },
-  };
+  const engine = createFakeEngine();
+  engine.render.request = () => { requested += 1; };
   try {
     globalThis.document = { hidden: true };
     const fresh = await renderFreshCesiumFrame(engine);
@@ -2878,10 +2877,9 @@ test('visible document with a rendering scene reports a fresh frame', async () =
   try {
     globalThis.document = { hidden: false };
     let fire = null;
-    const engine = {
-      frames: { postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } } },
-      render: { request() { queueMicrotask(() => fire?.()); } },
-    };
+    const engine = createFakeEngine();
+    engine.frames.postRender.addEventListener = (listener) => { fire = listener; return () => { fire = null; }; };
+    engine.render.request = () => { queueMicrotask(() => fire?.()); };
     const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, true);
   } finally {
@@ -2895,10 +2893,9 @@ test('a tab switch during the bounded render wait invalidates freshness', async 
     const doc = { hidden: false };
     globalThis.document = doc;
     let fire = null;
-    const engine = {
-      frames: { postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } } },
-      render: { request() { doc.hidden = true; queueMicrotask(() => fire?.()); } },
-    };
+    const engine = createFakeEngine();
+    engine.frames.postRender.addEventListener = (listener) => { fire = listener; return () => { fire = null; }; };
+    engine.render.request = () => { doc.hidden = true; queueMicrotask(() => fire?.()); };
     const fresh = await renderFreshCesiumFrame(engine);
     assert.equal(fresh, false, 'freshness rechecked after the await');
   } finally {

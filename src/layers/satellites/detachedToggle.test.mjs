@@ -93,7 +93,7 @@ test('restored orbit rings receive their current rotation before the first frame
     },
   });
   lifecycle.methods.attachRenderer({
-    engine: {},
+    engine: createFakeEngine(),
     viewRestored: new Promise(() => {}),
   });
   assert.equal(rotated, 1);

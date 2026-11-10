@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
@@ -10,12 +11,11 @@ test('selected pad frame uses neutral geometry and the physical orbit epoch', ()
     epoch;
   const state = {
     orbitNow: worldTimeFor('satellites'),
-    _engine: {
-      camera: {
-        livePosition: geo.cartesian3.fromDegrees(launch.lon, launch.lat, 500),
-        height: () => 500,
-      },
-    },
+    _engine: createFakeEngine({
+      longitude: geo.math.toRadians(launch.lon),
+      latitude: geo.math.toRadians(launch.lat),
+      altitude: 500,
+    }),
     _enabled: true,
     _selectedLaunchId: 'qa',
     _launches: [launch],

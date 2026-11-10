@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRendererCache } from './rendererCache.js';
@@ -51,10 +52,7 @@ function fakeBuild(released) {
       resume() {
         this.running = true;
       },
-      engine: {
-        host: { container, canvas },
-        render: { request() {} },
-      },
+      engine: createFakeEngine({ container, canvas }),
     };
   };
 }

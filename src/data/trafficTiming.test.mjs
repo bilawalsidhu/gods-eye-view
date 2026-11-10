@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import assert from 'node:assert/strict';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -214,68 +215,38 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     const changed = eventChannel();
     let longitude = -97.74;
     const cartographic = { latitude: Math.PI / 6, longitude: 0, height: 5000 };
-    const camera = {
-      moveEnd,
-      changed,
-      percentageChanged: 0.5,
-      livePosition: { x: 0, y: 0, z: 0 },
-      pose: () => ({ cartographic: { ...cartographic }, heading: 0, pitch: -Math.PI / 2 }),
-      viewRectangle() {
-        const west = longitude * Math.PI / 180;
-        return {
-          south: 30 * Math.PI / 180,
-          west,
-          north: 30.02 * Math.PI / 180,
-          east: west + 0.02 * Math.PI / 180,
-        };
-      },
-      pickEllipsoid: () => undefined,
-    };
+    // A zero-size canvas has no reticle footprint; the view rectangle bounds the fetch.
+    const engine = createFakeEngine({
+      width: 0,
+      height: 0,
+      canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
+    });
+    engine.camera.moveEnd = moveEnd;
+    engine.camera.changed = changed;
+    engine.camera.pose = () => ({ cartographic: { ...cartographic }, heading: 0, pitch: -Math.PI / 2 });
+    engine.fake.script('viewRectangle', () => {
+      const west = longitude * Math.PI / 180;
+      return {
+        south: 30 * Math.PI / 180,
+        west,
+        north: 30.02 * Math.PI / 180,
+        east: west + 0.02 * Math.PI / 180,
+      };
+    });
+    engine.fake.script('pickEllipsoid', undefined);
+    engine.fake.script('worldToWindow', undefined);
+    engine.frames.preUpdate = preUpdate;
+    engine.frames.preRender = preRender;
+    engine.frames.postRender = postRender;
+    engine.projector.viewProjection = (result = new Array(16).fill(0)) => result;
+    engine.projector.horizonVisible = () => true;
+    engine.picker.pickPositionSupported = false;
+    engine.surface.supported = false;
     const setLongitude = (next) => {
       longitude = next;
       cartographic.longitude = next * Math.PI / 180;
     };
     setLongitude(longitude);
-    const noSet = () => ({
-      set() {},
-      setCount() {},
-      commit() {},
-      replace() {},
-      show() {},
-      destroy() {},
-    });
-    // An engine on a zero-size canvas: no pick ray (no reticle footprint),
-    // so the fetch is bounded by the view rectangle.
-    const engine = {
-      kind: 'cesium',
-      host: {
-        canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
-        size: () => ({ width: 0, height: 0 }),
-      },
-      camera,
-      frames: { preUpdate, preRender, postRender },
-      projector: {
-        worldToWindow: () => undefined,
-        viewProjection: (result = new Array(16).fill(0)) => result,
-        horizonVisible: () => true,
-      },
-      picker: { pickPositionSupported: false },
-      surface: {
-        supported: false,
-        terrainHeight: () => 0,
-        sampleHeight: () => undefined,
-        tilesLoaded: () => true,
-      },
-      maps: {
-        photorealActive: () => false,
-        current: () => ({ baseImagery: null, photoreal: null }),
-      },
-      render: { request() {} },
-      credits: { addStatic: () => () => {} },
-      movers: { createSet: noSet },
-      ground: { createSet: noSet },
-      destroy() {},
-    };
 
     performance.clearMarks();
     performance.clearMeasures();

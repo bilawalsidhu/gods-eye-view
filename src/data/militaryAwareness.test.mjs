@@ -1,3 +1,4 @@
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { readFileSync } from 'node:fs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
@@ -77,14 +78,14 @@ const {
 } = militaryAwarenessLayer;
 const viewerEngines = new WeakMap();
 const viewerEngine = (viewer) => {
-  if (!viewerEngines.has(viewer)) viewerEngines.set(viewer, {
-    kind: 'cesium', viewer,
-    render: {
-      request: () => viewer.scene.requestRender?.(),
-      setContinuous: (enabled) => { viewer.scene.requestRenderMode = !enabled; },
-      isContinuous: () => viewer.scene.requestRenderMode === false,
-    },
-  });
+  if (!viewerEngines.has(viewer)) {
+    const engine = createFakeEngine();
+    engine.viewer = viewer;
+    engine.render.request = () => viewer.scene.requestRender?.();
+    engine.render.setContinuous = (enabled) => { viewer.scene.requestRenderMode = !enabled; };
+    engine.render.isContinuous = () => viewer.scene.requestRenderMode === false;
+    viewerEngines.set(viewer, engine);
+  }
   return viewerEngines.get(viewer);
 };
 
