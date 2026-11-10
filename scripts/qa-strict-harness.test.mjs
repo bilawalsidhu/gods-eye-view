@@ -645,12 +645,16 @@ test('selection readiness does not retry click or page errors', async (t) => {
 
 test('draw ledgers normalize all five families and compare absences and visibility', async (t) => {
   const engine = createFakeEngine();
-  engine.movers.createSet({
+  // A mover set counts as shown once one of its drawn instances is.
+  const points = engine.movers.createSet({
     id: 'point',
     kind: 'point',
     capacity: 1,
     point: { sizePx: 4, color: [1, 1, 1, 1] },
   });
+  points.set(0, { position: { x: 1, y: 0, z: 0 } });
+  points.setCount(1);
+  points.commit();
   engine.lines.createLine({ id: 'line', color: [1, 1, 1, 1], widthPx: 1 });
   engine.ground.createSet({ id: 'ground', kind: 'disc' });
   engine.imagery.list = () => [{ id: 'tiles', kind: 'xyz', shown: true }];
