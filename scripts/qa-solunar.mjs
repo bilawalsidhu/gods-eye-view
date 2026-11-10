@@ -208,6 +208,41 @@ async function run(label, viewport, { touch = false } = {}) {
   check(`${label}: a dot marks the spot on the map`, opened.dot);
   check(`${label}: no horizontal overflow`, !opened.overflow);
   await page.screenshot({ path: path.join(outDir, `${label}-open.png`) });
+  if (mobile) {
+    const layout = await page.evaluate(() => {
+      const panel = document.getElementById('solunar-panel');
+      const inner = panel.querySelector('.solunar-panel-inner');
+      const rect = panel.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.bottom + 8,
+      );
+      inner.scrollTop = inner.scrollHeight;
+      const last = [...inner.querySelectorAll('.gev-sl-day')].at(-1);
+      const lastRect = last?.getBoundingClientRect();
+      const innerRect = inner.getBoundingClientRect();
+      return {
+        contained: panel.scrollHeight <= panel.clientHeight + 1,
+        hitOutside: Boolean(hit && !panel.contains(hit)),
+        scrollable: inner.scrollTop > 0,
+        lastVisible: Boolean(
+          lastRect &&
+          lastRect.bottom <= innerRect.bottom + 1 &&
+          lastRect.bottom > innerRect.top,
+        ),
+      };
+    });
+    check(
+      `${label}: content stays inside SOLUNAR`,
+      layout.contained && layout.hitOutside,
+      JSON.stringify(layout),
+    );
+    check(
+      `${label}: final day reachable by scrolling`,
+      layout.scrollable && layout.lastVisible,
+      JSON.stringify(layout),
+    );
+  }
 
   // click the map (desktop: away from the right rail) and the spot follows
   if (!mobile) {
