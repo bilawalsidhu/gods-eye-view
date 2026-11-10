@@ -218,8 +218,12 @@ export function createRecentImagerySource({
         );
       // A rejected half is an error, never an empty day, unless another half
       // proved data on its own.
-      if (results.length > responses.length)
-        throw results.find((result) => result.status === 'rejected').reason;
+      if (results.length > responses.length) {
+        const failure = results.find((result) => result.status === 'rejected');
+        if (failure.reason?.name === 'TimeoutError')
+          throw new DOMException('Thumbnail request timed out', 'TimeoutError');
+        throw new Error('Thumbnail request failed');
+      }
       return withPresentBoxes(combineHalves(responses), []);
     },
     getTileTemplate: (product, day) => tileTemplate(product, day),

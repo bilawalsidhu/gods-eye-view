@@ -187,6 +187,6 @@ test('a rejected half does not hide data on the other half, and never reads as e
   });
   await assert.rejects(
     failing.source.getThumbnail(candidate, NARROW_WEST),
-    /network/,
+    /Thumbnail request failed/,
   );
 });

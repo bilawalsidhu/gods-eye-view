@@ -351,7 +351,7 @@ test('a half that fails or stalls after the other half proved data does not unse
   const strict = createRecentImagerySource({ fetchImpl: failing.fetchImpl });
   await assert.rejects(
     strict.getThumbnail(FIJI_CANDIDATE, FIJI_BOX),
-    /snapshot failed/,
+    /Thumbnail request failed/,
     'a failed half is an error, never an empty day',
   );
 });
@@ -681,6 +681,29 @@ test('frozen responses retain availability', async () => {
   const response = await source.getThumbnail(FIJI_CANDIDATE, FIJI_BOX);
   assert.deepEqual(response.presentBoxes, [EAST_HALF]);
   assert.ok((await response.blob()).size);
+});
+
+test('transport rejection does not expose untrusted error details', async () => {
+  const marker = 'synthetic-secret-do-not-expose-ABC123';
+  const source = createRecentImagerySource({
+    thumbnailUrl: () => 'https://example.invalid/',
+    fetchImpl: () => {
+      throw new Error(marker);
+    },
+  });
+  await assert.rejects(
+    source.getThumbnail(FIJI_CANDIDATE, FIJI_BOX),
+    (error) => {
+      assert.equal(error.message, 'Thumbnail request failed');
+      assert.equal(
+        `${error.stack} ${JSON.stringify(error)} ${error.cause}`.includes(
+          marker,
+        ),
+        false,
+      );
+      return true;
+    },
+  );
 });
 
 test('frozen native Response retains status and text methods', async () => {
