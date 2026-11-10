@@ -45,7 +45,9 @@ const MAX_NOTE = 260;
 const SAME_WRECK_KM = 3;
 
 // Free text sometimes names people (owners, masters, divers who reported a
-// wreck). The layer shows ships, never people, so such text is dropped whole.
+// wreck). The layer is about ships, so text that refers to a person by a title
+// or role is dropped whole. This is a keyword filter: a bare name with none of
+// these words still passes.
 const PERSON_TEXT =
   /\b(mr|mrs|ms|dr|capt|captain|master|skipper|owner|owned|crew|body|bodies|drowned|reported by|according to)\b/i;
 
@@ -60,7 +62,7 @@ function clean(value, max = MAX_TEXT) {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
-/** Free text with no personal names in it, or null. */
+/** Free text with none of the person keywords in it, or null. */
 function impersonalText(value, max) {
   const text = clean(value, max);
   return text && !PERSON_TEXT.test(text) ? text : null;

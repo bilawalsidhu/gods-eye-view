@@ -166,9 +166,11 @@ its earlier records as stale for up to seven days and is not asked again for
 is not openly licensed). A Wikidata wreck with the same name within 3 km of an
 EMODnet wreck is merged into one record that keeps the article link and takes
 EMODnet's year, sinking text, depth and position accuracy. Only ship columns are
-read: EMODnet's long histories (`ship_char`, `obj_desc`) are not, and any
-sinking or cargo text that names a person (owner, master, a diver who reported
-it) is dropped whole; deaths appear only as a Wikidata count.
+read: EMODnet's long histories (`ship_char`, `obj_desc`) are not. Sinking,
+cargo and description text that refers to a person by a title or role (Mr,
+captain, master, owner, crew, "reported by", …) is dropped whole by a keyword
+filter; a bare name with no such word can still pass. Deaths appear only as a
+Wikidata count.
 
 The globe draws a round marker with a hull and mast per wreck, all in one
 billboard collection, ground-clamped with the depth test off and the horizon
