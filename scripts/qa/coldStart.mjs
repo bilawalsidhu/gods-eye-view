@@ -68,6 +68,71 @@ export function coldStartUrl(href, engine) {
   return url.href;
 }
 
+/** Feed completion alone does not mean its deferred display has been drawn. */
+export function coldStartReady(layers, cold = false) {
+  const { dataManager, engine } = window.__godsEyeView;
+  engine.render.request('qa-cold-start-readiness');
+  const movers = engine.movers.list();
+  return layers.every((id) => {
+    const entry = dataManager.layers.get(id),
+      module = entry?.module;
+    if (!entry) return false;
+    if (cold && module.sessionState?.includes('enabled')) return !entry.enabled;
+    if (
+      !entry.enabled ||
+      !entry.initialized ||
+      entry.sceneDetached ||
+      entry.refreshing
+    )
+      return false;
+    const stats = module.getStats?.() ?? {};
+    if (stats.loading || stats.refreshing) return false;
+    if (id === 'local-dams' || id === 'local-datacenters')
+      return (
+        module.getLodDiagnostics().computed && engine.surface.tilesLoaded()
+      );
+    if (id === 'wildlife-sightings')
+      return (
+        movers.some((row) => row.id === id && row.count === 4) &&
+        movers.some((row) => row.id === `${id}-density` && row.count === 3)
+      );
+    if (id === 'bhote-koshi-locator')
+      return movers.some(
+        (row) =>
+          row.id === `${id}-bhote-koshi-incident-halo` &&
+          row.count === 1 &&
+          row.shown,
+      );
+    if (id === 'traffic')
+      return (
+        stats.count > 0 &&
+        movers.some(
+          (row) =>
+            row.id === 'traffic-fill' && row.count === stats.count && row.shown,
+        )
+      );
+    if (['flights', 'military', 'transit'].includes(id))
+      return (
+        stats.count > 0 &&
+        movers.some(
+          (row) => row.id.startsWith(id + '-') && row.count > 0 && row.shown,
+        )
+      );
+    // These layers can be enabled with no search, route or selected subject.
+    if (
+      [
+        'directions',
+        'military-awareness',
+        'osm-places',
+        'sea-marks',
+        'ski-pistes',
+      ].includes(id)
+    )
+      return true;
+    return stats.count > 0;
+  });
+}
+
 // Share addresses round the camera to 0.0001 degrees and whole metres/degrees.
 // World positions must still match within a metre; projected positions allow
 // two CSS pixels for that camera quantization. Counts and identities are exact.
@@ -168,19 +233,69 @@ export async function probeSnapshot(page, layers) {
   return { ...probe, ledger: await drawLedger(page) };
 }
 
+// Display allocations are not content identities. Keep every slot and its
+// generation, but number these allocator-local sequences within each family.
+// Raw evidence retains the original IDs. A lost or extra slot still differs.
+export function normalizeAllocations(snapshot) {
+  const patterns = [
+    ['imagery', /^(weather-)(\d+)$/],
+    ['imagery', /^(wind-field-)(\d+)$/],
+    ['imagery', /^(bhote-koshi-imagery-)(\d+)(-(?:left|right))$/],
+    ['lines', /^(satellites-orbit-)(\d+)$/],
+    ['movers', /^(satellites-points-)(\d+)(-\d+)$/],
+  ];
+  const ids = new Map();
+  for (const [family, pattern] of patterns) {
+    const rows = snapshot.ledger.filter(
+      (row) => row.family === family && pattern.test(row.id),
+    );
+    const sequence = [
+      ...new Set(rows.map((row) => Number(row.id.match(pattern)[2]))),
+    ].sort((a, b) => a - b);
+    for (const row of rows) {
+      const [, prefix, number, suffix = ''] = row.id.match(pattern);
+      ids.set(
+        `${family}:${row.id}`,
+        `${prefix}${sequence.indexOf(Number(number)) + 1}${suffix}`,
+      );
+    }
+  }
+  const rename = (row, family) => ({
+    ...row,
+    id: ids.get(`${family}:${row.id}`) ?? row.id,
+  });
+  return {
+    ...snapshot,
+    ledger: snapshot.ledger.map((row) => rename(row, row.family)),
+    movers: snapshot.movers.map((row) => rename(row, 'movers')),
+  };
+}
+
 /** Keep raw samples and declared exclusions beside the complete difference list. */
 export function compareColdStart(
   switched,
   cold,
   { direction, owners = {}, allow = [], sessionState = true },
 ) {
+  const ownership = normalizeAllocations({
+    ledger: Object.entries(owners).map(([key, layer]) => {
+      const colon = key.indexOf(':');
+      return { family: key.slice(0, colon), id: key.slice(colon + 1), layer };
+    }),
+    movers: [],
+  });
+  switched = normalizeAllocations(switched);
+  cold = normalizeAllocations(cold);
   const differences = [],
     skipped = [];
   const add = (layer, family, id, rows) =>
     differences.push(
       ...rows.map((row) => ({ layer, direction, family, id, ...row })),
     );
-  const layerOf = (family, id) => owners[`${family}:${id}`] ?? '[page]';
+  const layerOf = (family, id) =>
+    [...switched.ledger, ...cold.ledger, ...ownership.ledger].find(
+      (row) => row.family === family && row.id === id && row.layer,
+    )?.layer ?? '[page]';
   const ledger = compareLedgers(switched.ledger, cold.ledger, allow);
   for (const [side, rows] of [
     ['switch', ledger.onlyBefore],

@@ -11,6 +11,8 @@ import {
   compareColdStart,
   sessionExclusion,
   probeSnapshot,
+  normalizeAllocations,
+  coldStartReady,
 } from './coldStart.mjs';
 
 const snapshot = () => ({
@@ -254,5 +256,155 @@ test('the production probe captures all requested fields and releases its frame 
   assert.equal(snapshot.movers.length, 0);
   assert.equal(snapshot.ledger.length, 0);
   assert.equal(engine.frames.postRender.numberOfListeners, listeners);
+  engine.destroy();
+});
+
+test('display allocation counters do not become content identities or hide lost slots', () => {
+  const a = snapshot(),
+    b = snapshot();
+  for (const [family, left, right, layer] of [
+    ['imagery', 'weather-4', 'weather-1', 'weather-radar'],
+    ['imagery', 'wind-field-2', 'wind-field-1', 'wind'],
+    [
+      'imagery',
+      'bhote-koshi-imagery-2-left',
+      'bhote-koshi-imagery-1-left',
+      'bhote-koshi-2026',
+    ],
+    [
+      'imagery',
+      'bhote-koshi-imagery-2-right',
+      'bhote-koshi-imagery-1-right',
+      'bhote-koshi-2026',
+    ],
+    ['lines', 'satellites-orbit-5', 'satellites-orbit-4', 'satellites'],
+    ['movers', 'satellites-points-4-4', 'satellites-points-5-4', 'satellites'],
+  ]) {
+    a.ledger.push({ family, id: left, layer, shown: true });
+    b.ledger.push({ family, id: right, layer, shown: true });
+    if (family === 'movers') {
+      a.movers.push({ id: left, count: 10, capacity: 8192 });
+      b.movers.push({ id: right, count: 10, capacity: 8192 });
+    }
+  }
+  assert.deepEqual(compareColdStart(a, b, options).differences, []);
+  assert.equal(
+    a.ledger[1].id,
+    'weather-4',
+    'raw samples retain allocation IDs',
+  );
+  b.ledger.find((row) => row.id === 'weather-1').shown = false;
+  b.ledger = b.ledger.filter((row) => row.id !== 'bhote-koshi-imagery-1-right');
+  b.movers.at(-1).count--;
+  const differences = compareColdStart(a, b, options).differences;
+  assert.deepEqual(differences.map(({ field }) => field).sort(), [
+    'count',
+    'present',
+    'shown',
+  ]);
+  assert.ok(differences.every(({ layer }) => layer !== '[page]'));
+  a.ledger.push({
+    family: 'lines',
+    id: 'satellites-orbit-7',
+    layer: 'satellites',
+    shown: false,
+  });
+  assert.equal(
+    compareColdStart(a, b, options).differences.filter(
+      ({ family }) => family === 'lines',
+    ).length,
+    1,
+  );
+  assert.equal(
+    normalizeAllocations(a).ledger.filter(({ family }) => family === 'lines')
+      .length,
+    2,
+  );
+});
+
+test('asynchronously created CCTV lines are attributed even when absent at enable', async () => {
+  const engine = createFakeEngine();
+  engine.lines.createLine({
+    id: 'cctv-camera-ray-tl',
+    widthPx: 1,
+    color: [1, 1, 1, 1],
+  });
+  const context = vm.createContext({
+    window: {
+      __godsEyeView: {
+        engine,
+        dataManager: { layers: new Map([['cctv', { module: {} }]]) },
+      },
+    },
+  });
+  const page = {
+    evaluate: async (code) =>
+      vm.runInContext(typeof code === 'string' ? code : `(${code})()`, context),
+  };
+  const capture = await probeSnapshot(page, ['cctv']);
+  assert.equal(capture.ledger[0].layer, 'cctv');
+  engine.destroy();
+});
+
+test('readiness waits for fixture publications, LOD and the locator reveal', () => {
+  const engine = createFakeEngine();
+  const dataManager = { layers: new Map() };
+  const context = vm.createContext({
+    window: { __godsEyeView: { engine, dataManager } },
+  });
+  const ready = (id) =>
+    vm.runInContext(`(${coldStartReady})([${JSON.stringify(id)}])`, context);
+  const entry = (id, extra = {}) =>
+    dataManager.layers.set(id, {
+      enabled: true,
+      initialized: true,
+      module: { getStats: () => ({ count: 10 }), ...extra },
+    });
+  entry('local-dams', { getLodDiagnostics: () => ({ computed: false }) });
+  assert.equal(ready('local-dams'), false);
+  dataManager.layers.get('local-dams').module.getLodDiagnostics = () => ({
+    computed: true,
+  });
+  assert.equal(ready('local-dams'), true);
+  entry('wildlife-sightings');
+  const animals = engine.movers.createSet({
+    id: 'wildlife-sightings',
+    kind: 'point',
+    capacity: 4,
+    point: { sizePx: 4 },
+  });
+  animals.setCount(3);
+  assert.equal(ready('wildlife-sightings'), false);
+  animals.setCount(4);
+  const density = engine.movers.createSet({
+    id: 'wildlife-sightings-density',
+    kind: 'point',
+    capacity: 3,
+    point: { sizePx: 4 },
+  });
+  density.setCount(3);
+  assert.equal(ready('wildlife-sightings'), true);
+  entry('bhote-koshi-locator');
+  const halo = engine.movers.createSet({
+    id: 'bhote-koshi-locator-bhote-koshi-incident-halo',
+    kind: 'point',
+    capacity: 1,
+    point: { sizePx: 4 },
+  });
+  assert.equal(ready('bhote-koshi-locator'), false);
+  halo.setCount(1);
+  assert.equal(ready('bhote-koshi-locator'), true);
+  entry('transit');
+  const bus = engine.movers.createSet({
+    id: 'transit-1',
+    kind: 'point',
+    capacity: 1,
+    point: { sizePx: 4 },
+  });
+  bus.set(0, { show: false });
+  bus.setCount(1);
+  assert.equal(ready('transit'), false);
+  bus.set(0, { show: true });
+  assert.equal(ready('transit'), true);
   engine.destroy();
 });

@@ -19,8 +19,8 @@ import {
 } from '../../src/bench/satelliteFixture.js';
 import { launchFixture } from '../../src/bench/launchFixture.js';
 
-// These are the feeds used by the strict switching scenarios, with motion and
-// timestamps held fixed so page startup duration cannot change the sample.
+// These are the feeds used by the strict switching scenarios. Feed timestamps
+// stay fixed; wall time must advance for visibility throttles and fade-in.
 export async function coldStartFixtures(origin, group) {
   const epoch =
     group === 'space'
@@ -41,7 +41,8 @@ export async function coldStartFixtures(origin, group) {
   const routes = [];
   const fixtures = [];
   const route = (pattern, respond) => routes.push({ pattern, respond });
-  if (group === 'wildlife') routes.push(...wildlifeRoutes(origin).routes);
+  if (group === 'wildlife')
+    routes.push(...wildlifeRoutes(origin, { now: () => epoch }).routes);
   if (group === 'open') {
     route('https://tiles.openseamap.org/*', image);
     route('https://www.opensnowmap.org/*', image);
@@ -286,12 +287,15 @@ export async function coldStartFixtures(origin, group) {
 
 function installFeeds({ group, epoch, groups, ghost, launches, firms }) {
   const RealDate = Date;
+  const started = performance.now();
+  const now = () =>
+    group === 'space' ? epoch : epoch + performance.now() - started;
   globalThis.Date = class extends RealDate {
     constructor(...args) {
-      super(...(args.length ? args : [epoch]));
+      super(...(args.length ? args : [now()]));
     }
     static now() {
-      return epoch;
+      return Math.floor(now());
     }
   };
   localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
@@ -558,6 +562,18 @@ function installFeeds({ group, epoch, groups, ghost, launches, firms }) {
       return Promise.resolve(
         new Response(groups[path.split('/').pop()] ?? groups.stations),
       );
+    if (path.startsWith('/api/celestrak-satcat/')) {
+      const tle = groups[path.split('/').pop()];
+      if (tle) {
+        const lines = tle.trim().split('\n');
+        const rows = [
+          'OBJECT_NAME,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE,OWNER',
+        ];
+        for (let i = 0; i < lines.length; i += 3)
+          rows.push(`${lines[i]},${Number(lines[i + 1].slice(2, 7))},PAY,+,US`);
+        return Promise.resolve(new Response(rows.join('\n')));
+      }
+    }
     if (path === '/api/launches') return json(launches);
     if (path === '/api/firms') return json(firms);
     if (path === '/api/route') {
@@ -588,7 +604,7 @@ function installFeeds({ group, epoch, groups, ghost, launches, firms }) {
       });
     // Same-origin proxies must not silently turn this into a live-feed test.
     // Delegate only routes answered by the fixtures above or the strict harness.
-    if (path.startsWith('/api/')) {
+    if (url.origin === location.origin && path.startsWith('/api/')) {
       if (path === '/api/google/nearby-places') return json({ places: [] });
       if (path === '/api/setup/status') return json({ ready: true });
       if (/^\/api\/(firms|mapillary)\/status$/.test(path) && group !== 'street')

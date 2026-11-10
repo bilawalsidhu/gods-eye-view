@@ -78,6 +78,7 @@ export function createInfrastructureSessionLayer(
     request = null,
     abort = null,
     display = null,
+    sceneContext = null,
     enabled = false,
     destroyed = false;
   let updated = null,
@@ -110,6 +111,8 @@ export function createInfrastructureSessionLayer(
     try {
       const next = await read();
       if (!enabled || destroyed) return;
+      if (sceneContext?.viewReady === false || sceneContext?.signal?.aborted)
+        return;
       const active = display;
       if (active) {
         error = null;
@@ -138,8 +141,10 @@ export function createInfrastructureSessionLayer(
     init(_viewer, options = {}) {
       if (options.engine) return this.attachRenderer(options);
     },
-    attachRenderer({ engine = null, signal = null } = {}) {
+    attachRenderer(options = {}) {
+      const { engine = null, signal = null } = options;
       if (display) throw Error('Infrastructure display already attached');
+      sceneContext = options;
       display = engine ? createDisplay(engine, config, services) : null;
       // The dataset load belongs to the session and keeps running; only this
       // scene's wait for it ends when the scene is released. A released
@@ -148,6 +153,10 @@ export function createInfrastructureSessionLayer(
         return waitForSignal(show(), signal).catch((error) => {
           if (!signal?.aborted) throw error;
         });
+    },
+    resumeViewport() {
+      // LOD keeps incumbents, so its first walk must use the restored camera.
+      if (enabled && display) return show();
     },
     detachRenderer() {
       if (!display) return;
@@ -158,6 +167,7 @@ export function createInfrastructureSessionLayer(
           : null;
       display.destroy();
       display = null;
+      sceneContext = null;
     },
     enable() {
       enabled = true;
@@ -196,6 +206,7 @@ export function createInfrastructureSessionLayer(
       abort?.abort();
       display?.destroy();
       display = data = null;
+      sceneContext = null;
     },
   };
 }
