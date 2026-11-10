@@ -3488,9 +3488,29 @@ async function main() {
         // after d0 was read; a lower seed makes the negative model-ownership
         // assertion impossible even when the clamp correctly stands aside.
         const seeded = Math.max(d0.h, 400) + 40;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            gf.reportMeshFloorCell(cell(d0.lat) + dy * 0.001, cell(d0.lon) + dx * 0.001, seeded);
+        // The contact keeps taxiing while the regimes below are driven (the
+        // model wait alone can run to 20 s), so the planted floor reaches
+        // along its heading as well: the 3×3 cells around it, and the same
+        // three cells across the track every ~100 m for 600 m ahead. A
+        // contact that left a 3×3 patch was read over an unplanted cell,
+        // where a DEM floor that had already landed under its raw height
+        // decided the assertion instead of the regime.
+        const headingDeg = window.__SYNTH.flights.find((f) => f.icao === 'aaa097')?.track ?? 0;
+        const headingRad = headingDeg * Math.PI / 180;
+        const metresPerDegLat = 111320;
+        const metresPerDegLon = metresPerDegLat * Math.cos(d0.lat * Math.PI / 180);
+        const plantedCells = new Set();
+        for (let aheadM = 0; aheadM <= 600; aheadM += 100) {
+          const lat = d0.lat + (aheadM * Math.cos(headingRad)) / metresPerDegLat;
+          const lon = d0.lon + (aheadM * Math.sin(headingRad)) / metresPerDegLon;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const c = [cell(lat) + dy * 0.001, cell(lon) + dx * 0.001];
+              const key = `${c[0].toFixed(3)},${c[1].toFixed(3)}`;
+              if (plantedCells.has(key)) continue;
+              plantedCells.add(key);
+              gf.reportMeshFloorCell(c[0], c[1], seeded);
+            }
           }
         }
         const fleetClampDeadline = Date.now() + 5000;
