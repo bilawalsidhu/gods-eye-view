@@ -1076,6 +1076,52 @@ test('the band fades inward from each front, in the ring blue, about the subject
   assert.equal(alphaEast(0.5), 0);
 });
 
+test('a band painted with a kept memo is the band painted afresh, step after step', () => {
+  const size = 48;
+  const fresh = () => ({
+    width: size,
+    data: new Uint8ClampedArray(size * size * 4),
+  });
+  const kept = [fresh(), fresh()];
+  const memo = {};
+  const steps = [
+    { radii: [0.2, 0.5, 0.9], offset: { east: 0, north: 0 } },
+    { radii: [0.25, 0.55, 0.95], offset: { east: 0, north: 0 } },
+    { radii: [0.3, 0.6, 1], offset: { east: 7, north: -3 } },
+    { radii: [0.05, 0.65, 0.4], offset: { east: 7, north: -3 } },
+    { radii: [1.2, 0.1, 0], offset: { east: 7, north: -3 } },
+  ];
+  steps.forEach(({ radii, offset }, k) => {
+    const band = {
+      radii,
+      alphas: radii.map((r, i) => 0.2 + 0.1 * i),
+      rgb: k < 3 ? [0.25, 0.5, 1] : [1, 0.5, 0],
+      spanM: 120,
+      rangeM: 100,
+      offset,
+    };
+    const image = kept[k % 2];
+    paintAwarenessBand(image, band, memo);
+    const expected = fresh();
+    paintAwarenessBand(expected, band);
+    assert.equal(firstMismatch(image.data, expected.data), -1, `step ${k}`);
+  });
+  // An image painted over by someone else is painted whole again.
+  const image = kept[0];
+  const band = {
+    ...steps[0],
+    alphas: [0.3, 0.3, 0.3],
+    spanM: 120,
+    rangeM: 100,
+  };
+  paintAwarenessBand(image, { ...band, rgb: [1, 0, 0] }, memo);
+  paintAwarenessBand(image, { ...band, rgb: [0, 0, 1] });
+  paintAwarenessBand(image, { ...band, rgb: [1, 0, 0] }, memo);
+  const expected = fresh();
+  paintAwarenessBand(expected, { ...band, rgb: [1, 0, 0] });
+  assert.equal(firstMismatch(image.data, expected.data), -1, 'repainted');
+});
+
 test('the band is one flat unpickable ellipse at the rim, drawn anew each step about the subject', (t) => {
   const ring = ringRendering(t);
   const { state, rendering } = ring;

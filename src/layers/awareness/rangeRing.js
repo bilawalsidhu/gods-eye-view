@@ -46,6 +46,43 @@ export function awarenessRangeRingPositions(
   heightM,
   segments = AWARENESS_RANGE_RING_STYLE.segments,
 ) {
+  const { up, bearings } = ringFrame(groundCenter, segments);
+  const positions = new Array(bearings.length);
+  for (let i = 0; i < bearings.length; i++) {
+    const { per, along } = bearings[i];
+    const angular = radiusM * per;
+    const cosA = Math.cos(angular);
+    const sinA = Math.sin(angular);
+    const x = up[0] * cosA + along[0] * sinA;
+    const y = up[1] * cosA + along[1] * sinA;
+    const z = up[2] * cosA + along[2] * sinA;
+    positions[i] = fromRadians(
+      Math.atan2(y, x),
+      Math.atan2(z, Math.hypot(x, y)),
+      heightM,
+    );
+  }
+  return positions;
+}
+
+/** The last ring frame made: fronts at one centre share it. */
+let lastRingFrame = null;
+
+/**
+ * What a ring about `groundCenter` needs but its radius: the centre's up
+ * unit vector and, per bearing, the angle a metre of surface turns
+ * (Euler's formula) and the unit vector along the great circle. Kept for
+ * the last centre asked for.
+ */
+function ringFrame(groundCenter, segments) {
+  const last = lastRingFrame;
+  if (
+    last?.segments === segments &&
+    last.x === groundCenter.x &&
+    last.y === groundCenter.y &&
+    last.z === groundCenter.z
+  )
+    return last;
   const { lon, lat } = toLonLatH(groundCenter);
   const latitude = (lat * Math.PI) / 180;
   const longitude = (lon * Math.PI) / 180;
@@ -64,23 +101,25 @@ export function awarenessRangeRingPositions(
   const up = [cosLat * cosLon, cosLat * sinLon, sinLat];
   const north = [-sinLat * cosLon, -sinLat * sinLon, cosLat];
   const east = [-sinLon, cosLon, 0];
-  const positions = [];
+  const bearings = [];
   for (let i = 0; i <= segments; i++) {
     const bearing = ((i % segments) / segments) * 2 * Math.PI;
     const cosB = Math.cos(bearing);
     const sinB = Math.sin(bearing);
-    const angular =
-      radiusM * ((cosB * cosB) / meridional + (sinB * sinB) / primeVertical);
-    const cosA = Math.cos(angular);
-    const sinA = Math.sin(angular);
-    const [x, y, z] = up.map(
-      (u, k) => u * cosA + (north[k] * cosB + east[k] * sinB) * sinA,
-    );
-    positions.push(
-      fromRadians(Math.atan2(y, x), Math.atan2(z, Math.hypot(x, y)), heightM),
-    );
+    bearings.push({
+      per: (cosB * cosB) / meridional + (sinB * sinB) / primeVertical,
+      along: north.map((n, k) => n * cosB + east[k] * sinB),
+    });
   }
-  return positions;
+  lastRingFrame = {
+    x: groundCenter.x,
+    y: groundCenter.y,
+    z: groundCenter.z,
+    segments,
+    up,
+    bearings,
+  };
+  return lastRingFrame;
 }
 
 /**
@@ -218,31 +257,34 @@ export const AWARENESS_BAND_PIXELS = 256;
  * front, 0 that far inward), times `gradientOpacity`, in `rgb`. The canvas
  * spans `spanM` either side of its centre; the subject is `offset` metres
  * east and north of that centre.
+ *
+ * The band depends on the distance from the subject alone: its alpha byte
+ * is tabulated along the radius, out to the range or the outermost front
+ * if that is further, finer than a pixel, and each pixel looks it up. Which
+ * entry each pixel reads changes only with the canvas, its span and the
+ * subject's offset; `memo`, kept between calls, holds it, so a step that
+ * only moves the fronts takes no square roots.
  * @param {{data: Uint8ClampedArray, width: number}} image
  * @param {{radii: number[], alphas: number[], rgb: number[], spanM: number,
  *   rangeM: number, offset: {east: number, north: number}, pulse?: object}} band
+ * @param {object} [memo] An object of the caller's, empty at first.
  */
-export function paintAwarenessBand(image, band) {
+export function paintAwarenessBand(image, band, memo = {}) {
   const { radii, alphas, rgb, spanM, rangeM, offset } = band;
   const pulse = band.pulse ?? AWARENESS_RANGE_PULSE;
   const size = image.width;
   const data = image.data;
   const depth = pulse.gradientDepthFraction;
-  const [r, g, b] = rgb.map((c) => Math.round(c * 255));
-  const perPixel = (2 * spanM) / size / rangeM;
-  const cx = size / 2 + offset.east / ((2 * spanM) / size);
-  // Canvas rows run north to south.
-  const cy = size / 2 - offset.north / ((2 * spanM) / size);
-  // The band depends on the distance from the subject alone: its alpha
-  // byte is tabulated once along the radius, finer than a pixel, and each
-  // pixel looks it up.
   const opacity = pulse.gradientOpacity;
   let outer = 0;
   for (const radius of radii) outer = Math.max(outer, radius);
+  const reach = Math.max(1, outer);
   const bins = 4 * size;
-  const table = new Uint8Array(bins + 1);
+  // Past `reach` a pixel reads the last entry, which stays 0.
+  if (memo.table?.length !== bins + 2) memo.table = new Uint8Array(bins + 2);
+  const table = memo.table;
   for (let bin = 0; bin <= bins; bin++) {
-    const at = (bin / bins) * outer;
+    const at = (bin / bins) * reach;
     let sum = 0;
     for (let i = 0; i < radii.length; i++) {
       const inside = radii[i] - at;
@@ -254,19 +296,36 @@ export function paintAwarenessBand(image, band) {
     // `Math.round` of a non-negative value.
     table[bin] = (Math.min(1, sum * opacity) * 255 + 0.5) | 0;
   }
-  const toBin = outer > 0 ? bins / outer : 0;
-  for (let y = 0; y < size; y++) {
-    const dy = (y + 0.5 - cy) * perPixel;
-    const dy2 = dy * dy;
-    for (let x = 0; x < size; x++) {
-      const dx = (x + 0.5 - cx) * perPixel;
-      const at = Math.sqrt(dx * dx + dy2);
-      const k = (y * size + x) * 4;
-      data[k] = r;
-      data[k + 1] = g;
-      data[k + 2] = b;
-      data[k + 3] = at > outer ? 0 : table[(at * toBin + 0.5) | 0];
+  table[bins + 1] = 0;
+  const key = `${size} ${spanM} ${rangeM} ${reach} ${offset.east} ${offset.north}`;
+  if (memo.key !== key) {
+    memo.key = key;
+    const bin = (memo.bin =
+      memo.bin?.length === size * size
+        ? memo.bin
+        : new Uint16Array(size * size));
+    const perPixel = (2 * spanM) / size / rangeM;
+    const cx = size / 2 + offset.east / ((2 * spanM) / size);
+    // Canvas rows run north to south.
+    const cy = size / 2 - offset.north / ((2 * spanM) / size);
+    const toBin = bins / reach;
+    for (let y = 0; y < size; y++) {
+      const dy = (y + 0.5 - cy) * perPixel;
+      const dy2 = dy * dy;
+      for (let x = 0; x < size; x++) {
+        const dx = (x + 0.5 - cx) * perPixel;
+        const at = Math.sqrt(dx * dx + dy2);
+        bin[y * size + x] = at > reach ? bins + 1 : (at * toBin + 0.5) | 0;
+      }
     }
+  }
+  const bin = memo.bin;
+  const [r, g, b] = rgb.map((c) => Math.round(c * 255));
+  for (let p = 0, k = 0; p < bin.length; p++, k += 4) {
+    data[k] = r;
+    data[k + 1] = g;
+    data[k + 2] = b;
+    data[k + 3] = table[bin[p]];
   }
 }
 
@@ -522,6 +581,8 @@ export function createRangeRing({
       const paints = canvases.every(Boolean);
       let painted = 0;
       let paintedMs = Number.NEGATIVE_INFINITY;
+      // What each pixel reads, kept while the subject stays put.
+      const bandMemo = {};
 
       // The image last drawn: a resting band keeps it, hidden, so showing
       // it again changes it in place.
@@ -598,14 +659,18 @@ export function createRangeRing({
           return;
         paintedMs = nowMs;
         const target = canvases[painted % 2];
-        paintAwarenessBand(target.image, {
-          radii,
-          alphas,
-          rgb: core,
-          spanM,
-          rangeM: AWARENESS_RADIUS_M,
-          offset: eastNorth(bandCenter, center),
-        });
+        paintAwarenessBand(
+          target.image,
+          {
+            radii,
+            alphas,
+            rgb: core,
+            spanM,
+            rangeM: AWARENESS_RADIUS_M,
+            offset: eastNorth(bandCenter, center),
+          },
+          bandMemo,
+        );
         target.context.putImageData(target.image, 0, 0);
         painted += 1;
         image = {
