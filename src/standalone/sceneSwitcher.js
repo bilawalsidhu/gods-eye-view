@@ -62,12 +62,17 @@ export function createSceneSwitcher({
     count('attachments');
     await resumeSession(layerSession);
     // A visited entry or a stale track may replace the outgoing subject.
+    // Cockpit released Follow; reacquire its rebuilt target after camera owners
+    // resume, since share restoration may have run before that target existed.
     const target = style.getAircraftTrackingTarget();
     if (
       cockpit?.active &&
       target &&
       target.id === cockpit.subject?.id &&
       target.layerId === cockpit.subject?.layerId &&
+      layerSession.manager.layers
+        .get(target.layerId)
+        ?.module.trackById(target.id, { origin: 'share-restore' }) &&
       style.controlCockpit('enter').ok
     ) {
       style.cockpitView.setVisionMode(cockpit.visionMode);

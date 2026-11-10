@@ -446,10 +446,11 @@ export class LayerStateCoordinator {
           // The share still owns durable preferences and later history visits:
           // on a visit, the entry's options that differ from the live layer
           // apply; a pick keeps the live layer as it is.
+          // Disabled models are retained before their first initialization too:
+          // replaying their params would notify and dismantle an active Context.
           if (
             live &&
             retained?.module.attachRenderer &&
-            retained.initialized &&
             !retained.lifecycleUncertain &&
             retained.enabled === targetEnabled
           ) {
