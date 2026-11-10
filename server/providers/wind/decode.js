@@ -40,6 +40,11 @@ export async function decodeWindGribMessage(buffer, { eccodesModule } = {}) {
       di: handle.getDouble('iDirectionIncrementInDegrees'),
       dj: handle.getDouble('jDirectionIncrementInDegrees'),
       values: handle.getDoubleArray('values'),
+      // A bitmap marks points with no value (land, for ocean fields); ecCodes
+      // fills them with this number. Atmospheric fields carry no bitmap.
+      missingValue: handle.getLong('bitmapPresent')
+        ? handle.getDouble('missingValue')
+        : null,
       shortName: handle.getString('shortName'),
       level: handle.getLong('level'),
       units: handle.getString('units'),

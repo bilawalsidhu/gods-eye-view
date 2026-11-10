@@ -96,6 +96,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'sea-state',
     ],
   },
   // Directions renders in the Utilities panel, beside Draw and Import, and

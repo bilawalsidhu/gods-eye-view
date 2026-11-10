@@ -3235,5 +3235,22 @@
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "捲動或雙指縮放，拖曳以移動 · 按兩下查看全部",
   "1 min/s": "1 分鐘/秒",
-  "Photo © {photographer}": "照片 © {photographer}"
+  "Photo © {photographer}": "照片 © {photographer}",
+  "sea state|Calm": "微浪",
+  "sea state|Smooth": "小浪",
+  "sea state|Slight": "輕浪",
+  "sea state|Moderate": "中浪",
+  "sea state|Rough": "大浪",
+  "sea state|Very rough": "巨浪",
+  "sea state|High": "狂浪",
+  "sea state|Very high": "狂濤",
+  "sea state|Phenomenal": "怒濤",
+  "Sea state unavailable": "海況無法使用",
+  "Max {height} m": "最大 {height} m",
+  "Forecast valid {time}": "預報有效時間 {time}",
+  "Significant wave height, the mean of the highest third of waves, from the ECMWF IFS wave model at 0.25°, shown at 0.5°. A model forecast, not an observation. Bands follow the WMO sea-state scale. Land and calm water are left clear.": "有效波高，即最高三分之一波浪的平均高度，取自 ECMWF IFS 海浪模式（0.25°），以 0.5° 顯示。這是模式預報，不是觀測。分級採用 WMO 海況等級。陸地和平靜水面保持透明。",
+  "Above {height} m": "超過 {height} m",
+  "Sea state network error": "海況網路錯誤",
+  "Malformed sea state response": "海況回應格式錯誤",
+  "Sea state": "海況"
 }

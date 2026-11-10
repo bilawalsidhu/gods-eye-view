@@ -24,6 +24,7 @@
   ["s2-ghostmaps", "5"],
   ["satellites", "s"],
   ["sea-marks", "6"],
+  ["sea-state", "00"],
   ["ski-pistes", "7"],
   ["street-level", "0"],
   ["telegeography-submarine-cables", "u"],

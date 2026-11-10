@@ -3235,5 +3235,22 @@
   "Play speed": "再生速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
   "1 min/s": "1分/秒",
-  "Photo © {photographer}": "写真 © {photographer}"
+  "Photo © {photographer}": "写真 © {photographer}",
+  "sea state|Calm": "静穏",
+  "sea state|Smooth": "穏やか",
+  "sea state|Slight": "軽い波",
+  "sea state|Moderate": "中程度の波",
+  "sea state|Rough": "荒れ",
+  "sea state|Very rough": "非常に荒れ",
+  "sea state|High": "高波",
+  "sea state|Very high": "非常に高い波",
+  "sea state|Phenomenal": "異常な高波",
+  "Sea state unavailable": "海況を利用できません",
+  "Max {height} m": "最大 {height} m",
+  "Forecast valid {time}": "予報の有効時刻 {time}",
+  "Significant wave height, the mean of the highest third of waves, from the ECMWF IFS wave model at 0.25°, shown at 0.5°. A model forecast, not an observation. Bands follow the WMO sea-state scale. Land and calm water are left clear.": "有義波高（波の高い方から3分の1の平均）。ECMWF IFS 波浪モデル（0.25°）を 0.5° で表示しています。観測ではなくモデルの予報です。階級は WMO の海況階級に従います。陸地と穏やかな海面は透明のままです。",
+  "Above {height} m": "{height} m 超",
+  "Sea state network error": "海況のネットワークエラー",
+  "Malformed sea state response": "海況の応答が不正です",
+  "Sea state": "海況"
 }

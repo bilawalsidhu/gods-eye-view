@@ -3389,5 +3389,22 @@
   "Play speed": "Velocidade de reprodução",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Role ou faça pinça para ampliar, arraste para se mover · clique duplo para ver tudo",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "sea state|Calm": "Calmo",
+  "sea state|Smooth": "Liso",
+  "sea state|Slight": "Pouco agitado",
+  "sea state|Moderate": "Moderado",
+  "sea state|Rough": "Agitado",
+  "sea state|Very rough": "Muito agitado",
+  "sea state|High": "Alto",
+  "sea state|Very high": "Muito alto",
+  "sea state|Phenomenal": "Excepcional",
+  "Sea state unavailable": "Estado do mar indisponível",
+  "Max {height} m": "Máx. {height} m",
+  "Forecast valid {time}": "Previsão válida {time}",
+  "Significant wave height, the mean of the highest third of waves, from the ECMWF IFS wave model at 0.25°, shown at 0.5°. A model forecast, not an observation. Bands follow the WMO sea-state scale. Land and calm water are left clear.": "Altura significativa das ondas, a média do terço mais alto das ondas, do modelo de ondas ECMWF IFS a 0,25°, mostrada a 0,5°. É uma previsão de modelo, não uma observação. As faixas seguem a escala de estado do mar da OMM. A terra e a água calma ficam livres.",
+  "Above {height} m": "Acima de {height} m",
+  "Sea state network error": "Erro de rede do estado do mar",
+  "Malformed sea state response": "Resposta do estado do mar malformada",
+  "Sea state": "Estado do mar"
 }

@@ -3466,5 +3466,22 @@
   "Play speed": "Швидкість відтворення",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутіть або зведіть пальці для масштабу, перетягніть для переміщення · подвійне клацання — показати все",
   "1 min/s": "1 хв/с",
-  "Photo © {photographer}": "Фото © {photographer}"
+  "Photo © {photographer}": "Фото © {photographer}",
+  "sea state|Calm": "Штиль",
+  "sea state|Smooth": "Гладке",
+  "sea state|Slight": "Слабке",
+  "sea state|Moderate": "Помірне",
+  "sea state|Rough": "Бурхливе",
+  "sea state|Very rough": "Дуже бурхливе",
+  "sea state|High": "Високе",
+  "sea state|Very high": "Дуже високе",
+  "sea state|Phenomenal": "Виняткове",
+  "Sea state unavailable": "Дані про хвилювання недоступні",
+  "Max {height} m": "Макс. {height} м",
+  "Forecast valid {time}": "Прогноз на {time}",
+  "Significant wave height, the mean of the highest third of waves, from the ECMWF IFS wave model at 0.25°, shown at 0.5°. A model forecast, not an observation. Bands follow the WMO sea-state scale. Land and calm water are left clear.": "Значна висота хвиль — середня висота третини найвищих хвиль — за хвильовою моделлю ECMWF IFS із кроком 0,25°, показана з кроком 0,5°. Це модельний прогноз, а не спостереження. Градації відповідають шкалі стану моря ВМО. Суходіл і спокійна вода залишаються прозорими.",
+  "Above {height} m": "Вище {height} м",
+  "Sea state network error": "Мережева помилка даних про хвилювання",
+  "Malformed sea state response": "Некоректна відповідь даних про хвилювання",
+  "Sea state": "Хвилювання моря"
 }

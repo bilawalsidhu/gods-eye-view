@@ -3312,5 +3312,22 @@
   "Play speed": "Wiedergabegeschwindigkeit",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben · Doppelklick zeigt alles",
   "1 min/s": "1 Min./s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "sea state|Calm": "Ruhig",
+  "sea state|Smooth": "Leicht bewegt",
+  "sea state|Slight": "Schwach bewegt",
+  "sea state|Moderate": "Mäßig bewegt",
+  "sea state|Rough": "Grob",
+  "sea state|Very rough": "Sehr grob",
+  "sea state|High": "Hoch",
+  "sea state|Very high": "Sehr hoch",
+  "sea state|Phenomenal": "Außergewöhnlich",
+  "Sea state unavailable": "Seegang nicht verfügbar",
+  "Max {height} m": "Max. {height} m",
+  "Forecast valid {time}": "Vorhersage gültig {time}",
+  "Significant wave height, the mean of the highest third of waves, from the ECMWF IFS wave model at 0.25°, shown at 0.5°. A model forecast, not an observation. Bands follow the WMO sea-state scale. Land and calm water are left clear.": "Signifikante Wellenhöhe, der Mittelwert des höchsten Drittels der Wellen, aus dem ECMWF-IFS-Wellenmodell mit 0,25°, dargestellt mit 0,5°. Eine Modellvorhersage, keine Beobachtung. Die Stufen folgen der WMO-Seegangsskala. Land und ruhiges Wasser bleiben frei.",
+  "Above {height} m": "Über {height} m",
+  "Sea state network error": "Netzwerkfehler beim Seegang",
+  "Malformed sea state response": "Fehlerhafte Seegang-Antwort",
+  "Sea state": "Seegang"
 }

@@ -3620,5 +3620,22 @@
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
   "1 min/s": "دقيقة/ث",
-  "Photo © {photographer}": "صورة © {photographer}"
+  "Photo © {photographer}": "صورة © {photographer}",
+  "sea state|Calm": "هادئ",
+  "sea state|Smooth": "أملس",
+  "sea state|Slight": "خفيف",
+  "sea state|Moderate": "معتدل",
+  "sea state|Rough": "مضطرب",
+  "sea state|Very rough": "شديد الاضطراب",
+  "sea state|High": "مرتفع",
+  "sea state|Very high": "مرتفع جدًا",
+  "sea state|Phenomenal": "استثنائي",
+  "Sea state unavailable": "حالة البحر غير متاحة",
+  "Max {height} m": "الحد الأقصى {height} م",
+  "Forecast valid {time}": "التنبؤ صالح {time}",
+  "Significant wave height, the mean of the highest third of waves, from the ECMWF IFS wave model at 0.25°, shown at 0.5°. A model forecast, not an observation. Bands follow the WMO sea-state scale. Land and calm water are left clear.": "الارتفاع المؤثر للموج، وهو متوسط أعلى ثلث من الأمواج، من نموذج الأمواج ECMWF IFS بدقة 0.25° ويُعرض بدقة 0.5°. هذا تنبؤ نموذجي وليس رصدًا. تتبع الفئات مقياس حالة البحر الصادر عن المنظمة العالمية للأرصاد الجوية. تبقى اليابسة والمياه الهادئة شفافة.",
+  "Above {height} m": "أكثر من {height} م",
+  "Sea state network error": "خطأ في شبكة حالة البحر",
+  "Malformed sea state response": "استجابة حالة البحر غير صالحة",
+  "Sea state": "حالة البحر"
 }
