@@ -47,20 +47,32 @@ export function awarenessRangeRingPositions(
   segments = AWARENESS_RANGE_RING_STYLE.segments,
 ) {
   const { up, bearings } = ringFrame(groundCenter, segments);
+  const r2 = WGS84.radiiSquared;
   const positions = new Array(bearings.length);
   for (let i = 0; i < bearings.length; i++) {
     const { per, along } = bearings[i];
     const angular = radiusM * per;
     const cosA = Math.cos(angular);
     const sinA = Math.sin(angular);
-    const x = up[0] * cosA + along[0] * sinA;
-    const y = up[1] * cosA + along[1] * sinA;
-    const z = up[2] * cosA + along[2] * sinA;
-    positions[i] = fromRadians(
-      Math.atan2(y, x),
-      Math.atan2(z, Math.hypot(x, y)),
-      heightM,
-    );
+    // The unit vector there on the sphere, taken as the ellipsoid's
+    // surface normal (its latitude read as geodetic) and raised to
+    // `heightM` along it, as `fromRadians` places a longitude and latitude.
+    let nx = up[0] * cosA + along[0] * sinA;
+    let ny = up[1] * cosA + along[1] * sinA;
+    let nz = up[2] * cosA + along[2] * sinA;
+    const length = Math.hypot(nx, ny, nz);
+    nx /= length;
+    ny /= length;
+    nz /= length;
+    const kx = r2.x * nx;
+    const ky = r2.y * ny;
+    const kz = r2.z * nz;
+    const gamma = Math.sqrt(nx * kx + ny * ky + nz * kz);
+    positions[i] = {
+      x: kx / gamma + nx * heightM,
+      y: ky / gamma + ny * heightM,
+      z: kz / gamma + nz * heightM,
+    };
   }
   return positions;
 }
@@ -320,7 +332,24 @@ export function paintAwarenessBand(image, band, memo = {}) {
     }
   }
   const bin = memo.bin;
-  const [r, g, b] = rgb.map((c) => Math.round(c * 255));
+  // Clamped as the image's bytes would clamp them.
+  const [r, g, b] = rgb.map((c) =>
+    Math.min(255, Math.max(0, Math.round(c * 255))),
+  );
+  // Whole pixels at a time where the bytes line up: each table entry as
+  // the four bytes it writes, in the platform's byte order.
+  if (data.byteOffset % 4 === 0 && data.length === bin.length * 4) {
+    if (memo.pixels?.length !== table.length)
+      memo.pixels = new Uint32Array(table.length);
+    const pixels = memo.pixels;
+    for (let i = 0; i < table.length; i++)
+      pixels[i] = LITTLE_ENDIAN
+        ? (r | (g << 8) | (b << 16) | (table[i] << 24)) >>> 0
+        : ((r << 24) | (g << 16) | (b << 8) | table[i]) >>> 0;
+    const words = new Uint32Array(data.buffer, data.byteOffset, bin.length);
+    for (let p = 0; p < bin.length; p++) words[p] = pixels[bin[p]];
+    return;
+  }
   for (let p = 0, k = 0; p < bin.length; p++, k += 4) {
     data[k] = r;
     data[k + 1] = g;
@@ -328,6 +357,9 @@ export function paintAwarenessBand(image, band, memo = {}) {
     data[k + 3] = table[bin[p]];
   }
 }
+
+/** Whether this platform stores the low byte of a word first. */
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 
 /** `p` in metres east and north of `origin`, in `origin`'s surface frame. */
 function eastNorth(origin, p) {

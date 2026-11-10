@@ -1120,6 +1120,14 @@ test('a band painted with a kept memo is the band painted afresh, step after ste
   const expected = fresh();
   paintAwarenessBand(expected, { ...band, rgb: [1, 0, 0] });
   assert.equal(firstMismatch(image.data, expected.data), -1, 'repainted');
+  // Bytes that do not line up with whole words are painted a byte at a
+  // time, the same.
+  const odd = {
+    width: size,
+    data: new Uint8ClampedArray(new ArrayBuffer(size * size * 4 + 1), 1),
+  };
+  paintAwarenessBand(odd, { ...band, rgb: [1, 0, 0] }, memo);
+  assert.equal(firstMismatch(odd.data, expected.data), -1, 'unaligned');
 });
 
 test('the band is one flat unpickable ellipse at the rim, drawn anew each step about the subject', (t) => {
