@@ -238,7 +238,12 @@ test('the draw modules are registered for formatting and boundary checks', () =>
   const boundaries = JSON.parse(read('scripts/package-boundaries.json'));
   const owners = (file) =>
     Object.entries(boundaries)
-      .filter(([, group]) => group.modules?.includes(file))
+      .filter(([, group]) =>
+        // An entry ending in '/' owns every module in that directory.
+        group.modules?.some((entry) =>
+          entry.endsWith('/') ? file.startsWith(entry) : entry === file,
+        ),
+      )
       .map(([name]) => name);
   for (const file of [
     'src/annotations/drawMode.js',

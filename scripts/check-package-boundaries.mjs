@@ -6,7 +6,7 @@ import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import { build, normalizePath } from 'vite';
 import * as prettier from 'prettier';
 
-/** Build each browser or Node export group and reject imports outside its declared ownership. */
+/** Build each browser or Node export group and check its module snapshot. */
 export async function checkPackageBoundaries(root) {
   return buildPackageBoundaries(root, false);
 }
@@ -36,6 +36,7 @@ async function buildPackageBoundaries(root, write) {
     );
   }
   const reports = [];
+  const differences = [];
   for (const [name, group] of Object.entries(groups)) {
     const node = group.runtime === 'node';
     if (group.runtime && !['browser', 'node'].includes(group.runtime)) {
@@ -48,12 +49,18 @@ async function buildPackageBoundaries(root, write) {
     ) {
       throw new Error(`Invalid package boundary: ${name}`);
     }
-    // A module entry ending in "/" owns every file under that directory.
+    // The shared globe directory excludes engines and their test support.
     const allowed = new Set();
     const allowedDirectories = [];
     const modulePaths = new Map();
+    const globeDirectory = `${normalizePath(path.join(root, 'src/globe'))}/`;
+    const ownsDirectory = (id, directory) =>
+      id.startsWith(directory) &&
+      (directory !== globeDirectory ||
+        !/^(?:cesium|navara|testing)\//.test(id.slice(directory.length)));
     const owns = (id) =>
-      allowed.has(id) || allowedDirectories.some((dir) => id.startsWith(dir));
+      allowed.has(id) ||
+      allowedDirectories.some((directory) => ownsDirectory(id, directory));
     for (const module of group.modules) {
       if (
         typeof module !== 'string' ||
@@ -67,7 +74,7 @@ async function buildPackageBoundaries(root, write) {
       try {
         resolved = await realpath(path.join(root, module));
       } catch (error) {
-        if (write && error.code === 'ENOENT') continue;
+        if (error.code === 'ENOENT') continue;
         throw error;
       }
       const relative = path.relative(root, resolved);
@@ -106,11 +113,7 @@ async function buildPackageBoundaries(root, write) {
       ) {
         throw new Error(`Node export must have only a node condition: ${key}`);
       }
-      if (
-        typeof target !== 'string' ||
-        !target.startsWith('./') ||
-        (!write && !owns(normalizePath(path.resolve(root, target))))
-      ) {
+      if (typeof target !== 'string' || !target.startsWith('./')) {
         throw new Error(`Export must point to an owned module: ${key}`);
       }
       return path.resolve(root, target);
@@ -136,11 +139,6 @@ async function buildPackageBoundaries(root, write) {
             // template blocks belong to the component file itself.
             if (info.id.startsWith('\0')) return;
             const id = info.id.split('?')[0];
-            if (!write && !owns(id)) {
-              throw new Error(
-                `Package boundary ${name} imports an unowned module: ${path.relative(root, id)}`,
-              );
-            }
             seen.add(id);
           },
         },
@@ -165,38 +163,50 @@ async function buildPackageBoundaries(root, write) {
         },
       },
     });
+    const reached = [...seen];
+    const kept = group.modules.filter((module) => {
+      const resolved = modulePaths.get(module);
+      return module.endsWith('/')
+        ? reached.some((id) => ownsDirectory(id, `${resolved}/`))
+        : seen.has(resolved);
+    });
+    const removed = group.modules.filter((module) => !kept.includes(module));
+    const added = reached
+      .filter((id) => !owns(id))
+      .map((id) => {
+        const relative = path.relative(root, id);
+        if (
+          !path.isAbsolute(id) ||
+          relative === '..' ||
+          relative.startsWith(`..${path.sep}`) ||
+          path.isAbsolute(relative)
+        ) {
+          throw new Error(`Boundary module escapes repository: ${name}`);
+        }
+        return normalizePath(relative);
+      })
+      .sort();
+    if (added.length || removed.length)
+      differences.push({ name, added, removed });
     if (write) {
-      const reached = [...seen];
-      const kept = group.modules.filter((module) => {
-        const resolved = modulePaths.get(module);
-        return module.endsWith('/')
-          ? reached.some((id) => id.startsWith(`${resolved}/`))
-          : seen.has(resolved);
-      });
-      const removed = group.modules.filter((module) => !kept.includes(module));
-      const added = reached
-        .filter((id) => !owns(id))
-        .map((id) => {
-          const relative = path.relative(root, id);
-          if (
-            !path.isAbsolute(id) ||
-            relative === '..' ||
-            relative.startsWith(`..${path.sep}`) ||
-            path.isAbsolute(relative)
-          ) {
-            throw new Error(`Boundary module escapes repository: ${name}`);
-          }
-          return normalizePath(relative);
-        })
-        .sort();
       group.modules = [...kept, ...added];
-      if (added.length || removed.length)
-        reports.push({ name, added, removed });
     } else {
       reports.push({ name, exports: input.length, modules: seen.size });
     }
   }
-  if (write && reports.length) {
+  if (!write && differences.length) {
+    throw new Error(
+      [
+        'Package boundary snapshots differ. Run node scripts/check-package-boundaries.mjs --write and review the diff.',
+        ...differences.flatMap(({ name, added, removed }) => [
+          `${name}: ${added.length} added, ${removed.length} removed.`,
+          ...added.map((module) => `  + ${module}`),
+          ...removed.map((module) => `  - ${module}`),
+        ]),
+      ].join('\n'),
+    );
+  }
+  if (write && differences.length) {
     const file = path.join(root, 'scripts/package-boundaries.json');
     const formatted = await prettier.format(JSON.stringify(manifest), {
       ...(await prettier.resolveConfig(file)),
@@ -204,7 +214,7 @@ async function buildPackageBoundaries(root, write) {
     });
     await writeFile(file, formatted);
   }
-  return reports;
+  return write ? differences : reports;
 }
 
 const invoked = process.argv[1]

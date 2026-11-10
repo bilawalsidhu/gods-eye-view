@@ -55,15 +55,24 @@ See [application construction](APPLICATION.md) and the
 2. `scripts/check-package-boundaries.mjs` builds every declared export without
    app Vite configuration or environment files. `scripts/package-boundaries.json`
    assigns each export exactly once and lists its owned modules and external
-   dependencies; a module entry ending in `/` (such as `src/geo/`) owns every
-   file under that directory. Unused imports still count. Node exports have only a `node`
+   dependencies. Shared foundations use directory entries: `src/i18n/`,
+   `src/geo/` and `src/globe/`. An entry ending in `/` owns the files below it;
+   `src/globe/` excludes `cesium/`, `navara/` and `testing/`, which need separate
+   ownership. The import-direction gate still enforces engine rules.
+   Aggregate groups use directories where their module lists cover the directory;
+   small groups retain explicit snapshots outside the shared foundations.
+   Unused imports still count. Node exports have only a `node`
    condition; browser groups cannot use build-only dependency exceptions.
 
    Run `node scripts/check-package-boundaries.mjs --write` to regenerate each
    group's `modules` list in `scripts/package-boundaries.json`, retaining useful
-   entries in order and appending newly reached paths in sorted order. The check
-   without `--write` is unchanged and does not reject stale entries. Review the
-   manifest diff like a lockfile diff before accepting changes to ownership.
+   entries in order and appending newly reached paths in sorted order. Directory
+   entries stay directories while they own reached modules; they never expand
+   into file lists. Without `--write`, the check rejects both undeclared reached
+   modules and declarations no longer reached, printing additions and removals
+   for each changed group. A directory becomes stale only when no reached module
+   belongs to it. Review the manifest diff like a lockfile diff before accepting
+   changes to ownership.
 
 Portable source graphs cannot reach application/rendering, Node, Cesium or
 browser globals. This includes `sources/*`, dedicated `layers/*/source` exports,
