@@ -14,7 +14,7 @@ import { createWeatherPanel } from './weatherPanel.js';
 import {
   translateFeedError,
   translateStatusLine,
-  translateStatusPiece,
+  translateStatusMessage,
 } from './statusText.js';
 import {
   formatNumber,
@@ -22,7 +22,6 @@ import {
   msg,
   onLocaleChange,
   t,
-  translateKnown,
 } from '../i18n/index.js';
 
 // Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
@@ -699,7 +698,7 @@ export class LayerPanel {
       typeof stats.statusMessage === 'string' &&
       stats.statusMessage.trim()
     ) {
-      return `${source} · ${translateStatusPiece(stats.statusMessage.trim())}`;
+      return `${source} · ${translateStatusMessage(stats.statusMessage.trim())}`;
     }
     const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : t('never');
     if (stats.loading) {
