@@ -1,5 +1,5 @@
 <script setup>
-// A row's start and end pickers on one line (e.g. the Air Accidents period).
+// A row's start and end pickers on one line (e.g. the Shipwrecks period).
 // Both ends share one option list; `onSelect` reports which end moved
 // ('from' or 'to') and the chosen option value.
 defineProps({

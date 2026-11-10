@@ -30,8 +30,7 @@ const CARD_HOST_OPTIONS = Object.freeze({
 });
 const MAX_CARD_LINES = 14;
 /**
- * Marker size in pixels: grows with the death toll, as on the air-accidents
- * layer, from 16 px (no deaths known) to 36 px (about a thousand or more).
+ * Marker size in pixels: grows with the death toll, from 16 px (no deaths known) to 36 px (about a thousand or more).
  */
 export function markerPixelSize(casualties) {
   const n = Number.isFinite(casualties) && casualties > 0 ? casualties : 0;
@@ -285,7 +284,7 @@ export function createShipwrecksLayer({
     return count;
   }
 
-  /** The start and end year pickers, side by side, as on Air accidents. */
+  /** The start and end year pickers, side by side. */
   function periodControls() {
     if (!_extent || _extent.min === _extent.max) return {};
     const range = periodRange(_period, _extent);

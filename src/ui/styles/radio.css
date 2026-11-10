@@ -1067,7 +1067,7 @@ html:not([lang='en']) .data-row-list-text {
   letter-spacing: 0.8px;
 }
 
-/* Optional start and end pickers on one line (Air Accidents period). The
+/* Optional start and end pickers on one line (e.g. a layer's period). The
    shared field style paints each select. */
 .data-toggle-range {
   flex-basis: 100%;

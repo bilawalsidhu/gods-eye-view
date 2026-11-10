@@ -54,8 +54,7 @@ export function cardLink(record) {
 }
 
 /**
- * Title and detail lines for one wreck card, laid out like the air-accident
- * card: deaths first, then when and where, then the ship facts. Only facts
+ * Title and detail lines for one wreck card: deaths first, then when and where, then the ship facts. Only facts
  * about the ship: the records carry no names of people, and victims appear as
  * a count only.
  * @param {object} record A normalized shipwreck record.

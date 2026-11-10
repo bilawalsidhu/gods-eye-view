@@ -166,8 +166,8 @@ test('a row range renders start and end pickers and reports which end moved', ()
   const picks = [];
   const item = {
     ...row(false),
-    key: 'air-accidents',
-    id: 'air-accidents',
+    key: 'shipwrecks',
+    id: 'shipwrecks',
     controls: {
       hidden: false,
       chips: [],
@@ -215,6 +215,6 @@ test('a row range renders start and end pickers and reports which end moved', ()
   );
   to.value = '2007';
   to.dispatchEvent(new Event('change', { bubbles: true }));
-  assert.deepEqual(picks, [['air-accidents', 'period', 'to', '2007']]);
+  assert.deepEqual(picks, [['shipwrecks', 'period', 'to', '2007']]);
   render(null, container);
 });
