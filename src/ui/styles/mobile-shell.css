@@ -199,6 +199,12 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
   transform: none;
 }
 
+/* The sheet scrolls: News keeps its height instead of shrinking under the
+   panel below it, as the rail makes it do on a desktop. */
+body.mobile-shell #right-context-rail > #news-panel:not(.collapsed) {
+  flex-shrink: 0;
+}
+
 /* ── Dock: voice floats above the tab bar; search and presets are sheets ─ */
 body.mobile-shell #command-dock {
   /* The dock's tray rules size voice by this basis; a column makes it a height. */
