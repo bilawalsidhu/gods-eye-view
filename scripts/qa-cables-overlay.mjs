@@ -2,6 +2,7 @@
 // Cesium-only probes: native DataSource counts and scene-render timing measure the Cesium cable adapter.
 import { evaluateWithGeo } from './qa/geometry.mjs';
 import { whenSettled } from './qa/ready.mjs';
+import { measureIdleRender } from './qa/idle.mjs';
 import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 /**
  * qa-cables-overlay — submarine-cable label path measurement + contract gate.
@@ -184,12 +185,8 @@ try {
     : 'scene.render cost, cables ON, 10s orbit', frameCost);
 
   // ── d. parked idle honesty (labels must not force continuous render) ──
-  await whenSettled(page); // orbit stop + fades settle
-  const idle = await page.evaluate(() => new Promise((resolve) => {
-    let renders = 0;
-    const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => { renders += 1; });
-    setTimeout(() => { remove(); resolve({ renders }); }, 5_000);
-  }));
+  await whenSettled(page);
+  const idle = await measureIdleRender(page);
   report(control
     ? 'parked idle, control (postRender fires / 5s)'
     : 'parked idle with cables ON (postRender fires / 5s)', idle);

@@ -66,13 +66,18 @@ export async function whenSettled(
 ) {
   const started = Date.now();
   try {
-    await page.waitForFunction(() => window.__godsEyeView?.engine, {
-      timeout: timeoutMs,
-      polling: 50,
-    });
+    const handle = await page.waitForFunction(
+      () => {
+        if (!window.__godsEyeView?.engine) return false;
+        const cover = globalThis.document?.querySelector('#loading-screen');
+        return !cover || getComputedStyle(cover).visibility === 'hidden';
+      },
+      { timeout: timeoutMs, polling: 50 },
+    );
+    await handle?.dispose();
   } catch {
     throw new Error(
-      'Readiness timeout: engineStarted, initialViewRestored, frameDrawn, noFlight, cameraInputsEnabled, cameraPoseStable; observed: inputsEnabled=unknown, following=unknown, cockpitActive=unknown, lastPoseDelta=null',
+      'Readiness timeout: engineStarted, initialViewRestored, startupUiReady, frameDrawn, noFlight, cameraInputsEnabled, cameraPoseStable; observed: inputsEnabled=unknown, following=unknown, cockpitActive=unknown, lastPoseDelta=null',
     );
   }
   return page.evaluate(
@@ -205,7 +210,6 @@ export async function whenTilesLoaded(page, { timeoutMs = 30000 } = {}) {
     () => {
       const engine = window.__godsEyeView?.engine;
       if (!engine || engine.isDestroyed()) return false;
-      engine.render.request('qa-tile-readiness');
       return engine.surface.tilesLoaded();
     },
     { timeout: timeoutMs, polling: 100 },
@@ -217,7 +221,6 @@ export async function whenUiSettled(page) {
   const handle = await page.waitForFunction(
     () => {
       const app = window.__godsEyeView;
-      app?.engine?.render.request('qa-ui-readiness');
       return (
         !app?.styleManager?.transitions?.size &&
         document

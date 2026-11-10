@@ -27,6 +27,7 @@ import { evaluateWithGeo } from './qa/geometry.mjs';
  * FAIL. Commits nothing.
  */
 import { whenSettled } from './qa/ready.mjs';
+import { measureIdleRender } from './qa/idle.mjs';
 import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -297,27 +298,7 @@ try {
 
   // ── parked-idle honesty: the LOD walk must not force continuous render ─
   await whenSettled(page);
-  const idle = await page.evaluate(async () => {
-    // The debug handle's own governor read (no /src import: runs on a build).
-    const { getRenderGovernorDiagnostics } = window.__godsEyeView;
-    return new Promise((resolve) => {
-      const startedAt = Date.now();
-      const tilesLoadedBefore = window.__godsEyeView.engine.surface.tilesLoaded();
-      let renders = 0;
-      let framesWithPendingTiles = 0;
-      const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
-        renders += 1;
-        if (!window.__godsEyeView.engine.surface.tilesLoaded()) framesWithPendingTiles += 1;
-      });
-      setTimeout(() => {
-        remove();
-        const governor = getRenderGovernorDiagnostics();
-        resolve({ renders, tilesLoadedBefore, tilesLoadedAfter: window.__godsEyeView.engine.surface.tilesLoaded(),
-          framesWithPendingTiles, mode: governor.mode, holds: governor.holds,
-          requests: governor.recentRequests.filter(request => request.at >= startedAt) });
-      }, 5_000);
-    });
-  });
+  const idle = await measureIdleRender(page);
   report(CONTROL
     ? 'parked idle, control (postRender fires / 5s)'
     : 'parked idle with infra ON (postRender fires / 5s)', idle);

@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /** Reticle coverage on oblique arrivals: source requests, toggle oracle and zoom revisits. */
 import { whenSettled } from './qa/ready.mjs';
+import {
+  moveTrafficCamera as moveCamera,
+  whenTrafficSettled,
+} from './qa/traffic.mjs';
 import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import {
-  moveCamera,
   createScreencast,
   installFrameProbe,
 } from './qa-journey-recorder.mjs';
@@ -96,19 +99,7 @@ try {
         };
       });
     const settle = async () => {
-      await whenSettled(page);
-      await page
-        .waitForFunction(
-          () => {
-            const s = window.__godsEyeView.dataManager.layers
-              .get('traffic')
-              .module.getStats();
-            return !s.loading;
-          },
-          { timeout: 15000 },
-        )
-        .catch(() => {});
-      await whenSettled(page);
+      await whenTrafficSettled(page);
       return snap();
     };
     for (const [name, lat, lon, height] of [
@@ -306,6 +297,11 @@ try {
   fs.writeFileSync(`${out}/result.json`, JSON.stringify(result, null, 2));
   await closeBrowser(browser);
 }
+console.log(JSON.stringify({
+  failures: result.failures,
+  errors: result.errors,
+  forbidden: result.forbidden,
+}));
 if (
   !baseline &&
   (result.failures.length || result.errors.length || result.forbidden.length)

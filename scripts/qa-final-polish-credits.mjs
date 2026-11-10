@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Persistent inline attribution through actual OSM layer display lifetimes. */
-import { whenSettled } from './qa/ready.mjs';
+import { whenSettled, whenUiSettled } from './qa/ready.mjs';
 import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -53,6 +53,7 @@ try {
     );
   const shot = async (name, osm, tiles) => {
     await whenSettled(page);
+    await whenUiSettled(page);
     const state = await page.$eval('#cesium-credits', (e) => {
       const nodes = [
         ...e.querySelectorAll('a,img,.cesium-credit-expand-link'),
