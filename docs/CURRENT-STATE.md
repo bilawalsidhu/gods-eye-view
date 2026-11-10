@@ -5121,9 +5121,8 @@ app.
   (`revealPanel`, which does nothing above 720px).
 
 The layer also exposes `requiredMapStack(id)` and `providerStatus(id)` for
-callers that decide before the panel lists a source, `holdViewer()`, and
-`coverageLines(id)` (the lines a provider draws now, as `[lon, lat]` parts)
-for diagnostics. A caller's abort is honoured through the viewer's mount and
+callers that decide before the panel lists a source, and `holdViewer()`. A
+caller's abort is honoured through the viewer's mount and
 load, and only the lookup that still owns the panel changes its spinner or
 error.
 

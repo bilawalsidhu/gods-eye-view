@@ -1604,43 +1604,6 @@ test('the action over the real layer: a billed link arms without a lookup, and o
   assert.equal(fake.lookups.length, before + 2);
 });
 
-test('coverageLines hands back what a provider draws, and nothing for providers without lines', async (t) => {
-  const drawing = fakeProvider();
-  const create = drawing.create;
-  drawing.create = (context) => ({
-    ...create(context),
-    coverageLines: () => [
-      {
-        id: 's1',
-        parts: [
-          [
-            [1, 2],
-            [1, 2.001],
-          ],
-        ],
-      },
-    ],
-  });
-  const { layer } = await enabledLayer(t, [drawing]);
-  assert.deepEqual(layer.coverageLines(drawing.id), [
-    {
-      id: 's1',
-      parts: [
-        [
-          [1, 2],
-          [1, 2.001],
-        ],
-      ],
-    },
-  ]);
-  assert.deepEqual(layer.coverageLines('nope'), []);
-});
-
-test('coverageLines is empty for a provider that draws no coverage', async (t) => {
-  const { layer } = await enabledLayer(t, [fakeProvider()]);
-  assert.deepEqual(layer.coverageLines(fakeProvider().id), []);
-});
-
 test('openNearest keeps honouring the caller after the lookup: an abort while the viewer loads opens nothing', async (t) => {
   let releaseMount = null;
   const provider = fakeProvider({ nearestImage: async () => 'img-1' });

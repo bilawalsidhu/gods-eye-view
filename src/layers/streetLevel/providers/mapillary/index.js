@@ -196,7 +196,6 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
           loading: state.sequence.loading,
           error: state.sequence.error,
         }),
-        coverageLines: () => parts.coverage.drawnLines(),
 
         /**
          * The nearest image that passes the imagery filter, or null: what
