@@ -1,6 +1,6 @@
 # Translating God's Eye View
 
-Shipped languages: **English** (source and fallback), **Arabic** (`ar`), **German** (`de`), **Spanish** (`es`), **French** (`fr`), **Italian** (`it`), **Japanese** (`ja`), **Brazilian Portuguese** (`pt`), **Russian** (`ru`), **Ukrainian** (`uk`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
+Shipped languages: **English** (source and fallback), **Arabic** (`ar`), **German** (`de`), **Spanish** (`es`), **French** (`fr`), **Hebrew** (`he`), **Italian** (`it`), **Japanese** (`ja`), **Brazilian Portuguese** (`pt`), **Russian** (`ru`), **Ukrainian** (`uk`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
 
 ## How it works
 
@@ -45,9 +45,10 @@ Edit `src/i18n/locales/<code>.json` and run `npm run i18n`. To see your change, 
 1. Create `src/i18n/locales/<code>.json`, fill it from `npm run i18n -- --missing <code>` (start from `{}`), and translate every entry.
 2. Import it in `src/i18n/index.js` and add it to `CATALOGS`.
 3. Add the code to `LOCALES` and its own-language name to `LOCALE_NAMES` in `src/i18n/locale.js`. Right-to-left languages also go in `RTL_LOCALES`; the chrome mirrors through logical CSS properties (`inset-inline-*`, `margin-inline-*`), and `src/ui/styles/rtl.css` holds what those cannot express (see the Arabic notes). If the language should keep Western digits, map it in `INTL_TAGS` in `locale.js`.
-4. Add `src/i18n/locales/<code>.json` next to `ru.json` in `scripts/package-boundaries.json`.
+4. Add `src/i18n/locales/<code>.json` next to `ru.json` in `scripts/package-boundaries.json` and in `scripts/format-scope.json`.
 5. Write `docs/translations/<code>.md`: glossary, plural forms, units and style (copy the structure of `ru.md`).
-6. Run `npm run i18n` and `npm test`, then check the panels in the app at narrow widths.
+6. If the language is not written in Latin letters, also add it to `NON_LATIN_LOCALES` in `src/hudSummaryResponse.js` — that guard falls back to the translated text when a summary provider answers in English.
+7. Run `npm run i18n` and `npm test`, then check the panels in the app at narrow widths.
 
 ## Rules
 
@@ -63,4 +64,4 @@ These are contracts, not copy: layer ids and registry keys, status enums and oth
 
 ## Language notes
 
-Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Arabic](./translations/ar.md), [German](./translations/de.md), [Spanish](./translations/es.md), [French](./translations/fr.md), [Italian](./translations/it.md), [Japanese](./translations/ja.md), [Brazilian Portuguese](./translations/pt.md), [Russian](./translations/ru.md), [Ukrainian](./translations/uk.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.
+Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Arabic](./translations/ar.md), [German](./translations/de.md), [Spanish](./translations/es.md), [French](./translations/fr.md), [Hebrew](./translations/he.md), [Italian](./translations/it.md), [Japanese](./translations/ja.md), [Brazilian Portuguese](./translations/pt.md), [Russian](./translations/ru.md), [Ukrainian](./translations/uk.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.
