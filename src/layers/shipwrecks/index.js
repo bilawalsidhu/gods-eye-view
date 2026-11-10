@@ -29,6 +29,8 @@ const CARD_HOST_OPTIONS = Object.freeze({
   moving: false,
 });
 const MAX_CARD_LINES = 14;
+/** Wrecks not refreshed for this long leave the map (the proxy's own limit). */
+const MAX_SHOWN_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Marker size in pixels: grows with the death toll, from 16 px (no deaths known) to 36 px (about a thousand or more).
  */
@@ -67,6 +69,7 @@ export function createShipwrecksLayer({
   openExternal = null,
   // One collection for every wreck marker (thousands of them): far cheaper to
   // draw and rebuild than an entity each. Tests pass a fake.
+  now = () => Date.now(),
   createMarkers = (scene) =>
     new Cesium.BillboardCollection({
       scene,
@@ -378,7 +381,7 @@ export function createShipwrecksLayer({
         // The page checks every 6 h; the proxy refreshes once a day. Only a
         // new snapshot rebuilds the markers.
         const unchanged =
-          snapshot.version !== null &&
+          typeof snapshot.version === 'string' &&
           snapshot.version === _snapshot?.version &&
           _pins.length > 0;
         _snapshot = snapshot;
@@ -396,6 +399,15 @@ export function createShipwrecksLayer({
           return false;
         console.warn('[Data:Shipwrecks] Fetch error:', error);
         _lastError = error?.message || msg('Shipwrecks unavailable');
+        // What is on the map was not refreshed: say so, and drop it once it
+        // is older than the proxy itself would serve.
+        if (_snapshot) {
+          const age = now() - (_snapshot.fetchedAt ?? now());
+          if (age > MAX_SHOWN_AGE_MS) {
+            _snapshot = null;
+            rebuild([]);
+          } else _snapshot = { ..._snapshot, stale: true };
+        }
         notifyRow();
         return false;
       } finally {

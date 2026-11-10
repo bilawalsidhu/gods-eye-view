@@ -51,7 +51,7 @@ function fakeMarkers() {
   return collection;
 }
 
-function harness({ snapshots } = {}) {
+function harness({ snapshots, now = () => 1 } = {}) {
   const markers = fakeMarkers();
   const primitives = [];
   const cards = [];
@@ -81,6 +81,7 @@ function harness({ snapshots } = {}) {
       getSnapshot({ signal }) {
         requests.push(signal);
         const next = queue.shift();
+        if (next instanceof Error) return Promise.reject(next);
         return next instanceof Promise ? next : Promise.resolve(next);
       },
     },
@@ -105,6 +106,7 @@ function harness({ snapshots } = {}) {
     picking,
     pointer: { isPointerFree: () => true },
     openExternal: (url) => opened.push(url),
+    now: () => now(),
   });
   layer.init(viewer);
   return {
@@ -243,4 +245,49 @@ test('the year pickers list only years with a wreck, and each era is counted', a
     controls.legend.map((era) => era.count),
     [0, 2, 0, 0],
   );
+});
+
+test('a source without a version rebuilds on every new snapshot', async () => {
+  const bare = (records) => {
+    const value = snapshot(records);
+    delete value.version;
+    return value;
+  };
+  const h = harness({
+    snapshots: [
+      bare([wreck('a')]),
+      bare([wreck('a'), wreck('b')]),
+      { ...snapshot([wreck('a')]), version: null },
+      { ...snapshot([wreck('a'), wreck('b'), wreck('c')]), version: null },
+    ],
+  });
+  h.layer.enable();
+  for (const expected of [1, 2, 1, 3]) {
+    await h.layer.update();
+    assert.equal(h.markers.billboards.length, expected);
+  }
+});
+
+test('a failed refresh marks the shown wrecks stale, and clears them after seven days', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  let clock = 1;
+  const h = harness({
+    now: () => clock,
+    snapshots: [
+      snapshot([wreck('a')]),
+      new Error('Shipwrecks unavailable (HTTP 502)'),
+      new Error('Shipwrecks unavailable (HTTP 502)'),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  assert.equal(h.layer.getStats().stale, false);
+  clock = 1 + 2 * DAY;
+  assert.equal(await h.layer.update(), false);
+  assert.equal(h.layer.getStats().stale, true);
+  assert.equal(h.layer.getStats().count, 1, 'still shown, as stale');
+  clock = 1 + 8 * DAY;
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 0, 'expired wrecks leave the map');
+  assert.equal(h.markers.billboards.length, 0);
 });
