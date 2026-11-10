@@ -1,5 +1,8 @@
 import { _initGlobalContextPanel } from './contextBindings.js';
-import { _syncContextModeButtons } from './contextPresentation.js';
+import {
+  _syncContextModeButtons,
+  _presentContext,
+} from './contextPresentation.js';
 import {
   _trackContextLayerReaction,
   _waitForContextLayerSettlement,
@@ -22,12 +25,18 @@ import {
 } from './contextActions.js';
 import { connectContextManager } from './contextSubscriptions.js';
 
-/** Own Context transactions and controls through explicit layer and presentation ports. */
+/**
+ * Own Context transactions and controls through explicit layer and
+ * presentation ports. The mode switch is presented through `publish`
+ * (the app hands it the `gev-context` store) and rendered by the view.
+ */
 export class ContextControls {
-  constructor({ elements, installations, actions }) {
+  constructor({ elements, installations, actions, publish = () => {} }) {
     Object.assign(this, elements);
     this.installations = installations;
     this.actions = actions;
+    this.publish = publish;
+    this._installationsSearchBusy = false;
     this.listeners = new AbortController();
     this.destroyed = false;
     this._dataManager = null;
@@ -92,6 +101,9 @@ export class ContextControls {
   }
   _syncContextModeButtons(...args) {
     return _syncContextModeButtons.call(this, ...args);
+  }
+  _presentContext(...args) {
+    return _presentContext.call(this, ...args);
   }
   _trackContextLayerReaction(...args) {
     return _trackContextLayerReaction.call(this, ...args);

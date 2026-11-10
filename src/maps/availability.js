@@ -1,7 +1,4 @@
-import {
-  keySetupRequirement,
-  keySetupRequirementEnvVars,
-} from '../keySetupCore.mjs';
+import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
 import { t } from '../i18n/index.js';
 /**
  * Why Google 3D is unavailable, phrased so the tooltip and toast recommend the

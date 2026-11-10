@@ -24,7 +24,8 @@ export function createQueries({
   layer,
   resolveAsset,
 }) {
-  const { tr3bTypeLabel, tr3bAircraftClass } = services.aircraftPresentation;
+  const { isTr3b, tr3bTypeLabel, tr3bAircraftClass } =
+    services.aircraftPresentation;
   const { formatFlightLevel } = services.labels;
   const { isMilitaryIcao } = services.militaryRegistry;
   const { applyTrackedCameraFrame } = services.camera;
@@ -207,6 +208,12 @@ export function createQueries({
               origin: { ...info.route.origin },
               destination: { ...info.route.destination },
             }
+          : null,
+      // The airframe's Planespotters photo for the Context panel; a military
+      // aircraft or a converted TR-3B (it would name the real one) shows none.
+      photo:
+        info?.photo && !isTr3b(icao24) && !isMilitaryIcao(icao24)
+          ? { ...info.photo }
           : null,
     };
   }
@@ -452,8 +459,8 @@ export function createQueries({
         const isTracked = icao24 === flightState._trackedIcao;
         // Keep planes rendered as a 3D model (billboard hidden) so the detection box
         // doesn't vanish on the 2D→3D handoff; bb.position stays current while hidden.
-        const model = flightState._models.get(icao24);
-        const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
+        const model = flightState._models.get(icao24) ?? null;
+        const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24, model);
         if (!isTracked && !bb.show && !modelOwnsVisual) continue;
         const info = flightState.records.data.get(icao24);
         let object = flightState._detectionObjects.get(icao24);
@@ -491,8 +498,19 @@ export function createQueries({
         object.position = pos;
         object.skipLabel = isTracked;
         // Card text only — declutter/cohort identity is `object.sourceId` (icao24).
-        const id = _contactLabel(icao24, info);
-        if (object.id !== id) object.id = id;
+        const callsign = info?.callsign;
+        const registration = info?.registration;
+        // Records and enrichment may change in place. Cache by field values,
+        // while keeping the live visual anchor above independent of text.
+        if (
+          object.id === undefined ||
+          object._labelCallsign !== callsign ||
+          object._labelRegistration !== registration
+        ) {
+          object.id = _contactLabel(icao24, info);
+          object._labelCallsign = callsign;
+          object._labelRegistration = registration;
+        }
         const altitude = info?.altitude;
         if (object._altitude !== altitude) {
           object._altitude = altitude;
@@ -580,7 +598,6 @@ export function createQueries({
       const maxRange =
         Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
-      const now = Cesium.JulianDate.now();
       const nearby = [];
 
       for (const [icao24, bb] of flightState._billboards) {
@@ -865,8 +882,9 @@ export function createQueries({
 
     /**
      * Describe the currently tracked aircraft at its dead-reckoned position.
-     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
-     *   Tracked aircraft info, or null when nothing is tracked.
+     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null, photo: {src: string, width: number|null, height: number|null, photographer: string, link: string}|null}|null}
+     *   Tracked aircraft info, or null when nothing is tracked. `photo` is the
+     *   airframe's credited Planespotters photo, or null.
      */
     getTrackedInfo() {
       if (!flightState._trackedIcao) return null;
@@ -896,6 +914,8 @@ export function createQueries({
           _toCleanText(described.registration) ||
           described.icao24,
         position: Cesium.Cartesian3.clone(described.position),
+        // The airframe's photo for the Context panel, or null.
+        photo: described.photo,
       };
     },
 

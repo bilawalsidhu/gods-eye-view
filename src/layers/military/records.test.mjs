@@ -99,6 +99,30 @@ test('military records keep bounded partial retention and release metadata only 
   );
 });
 
+test('complete military snapshots age out vanished aircraft and retain position-less ones unless landed', () => {
+  const records = store();
+  for (const id of ['aaa001', 'aaa002', 'aaa003'])
+    records.receive(observation({ id, reference: id }), context());
+  // aaa001 and aaa003 are still listed without a position; aaa002 vanished.
+  const absent = (id, likelyLanded = false) =>
+    records.absence(id, {
+      complete: true,
+      retainIds: new Set(['aaa001', 'aaa003']),
+      likelyLanded,
+    });
+  assert.deepEqual(
+    [absent('aaa002'), absent('aaa002'), absent('aaa002')],
+    ['stale', 'stale', 'remove'],
+  );
+  assert.equal(absent('aaa001'), 'retain');
+  assert.equal(records.missingPolls.has('aaa001'), false);
+  // A landed contact that lost its position takes the landed fast-cull.
+  assert.equal(absent('aaa003', true), 'remove');
+  // Position-less retention stays bounded like partial admission.
+  records.data.get('aaa001').observedReceiptMs = Date.now() - 300001;
+  assert.equal(absent('aaa001'), 'stale');
+});
+
 test('military emergency status follows the latest poll instead of sticking', () => {
   const records = store();
   const first = records.receive(

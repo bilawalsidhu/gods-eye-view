@@ -1,5 +1,6 @@
 import { adaptFirmsRecords } from '../../data/firmsAdapt.js';
 import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { filterFires } from '../../data/firmsIntensity.js';
 import { msg } from '../../i18n/index.js';
 
 export function createIngestion({
@@ -40,12 +41,13 @@ export function createIngestion({
       layerState._stale = Boolean(payload?.stale);
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;
-      layerState._fires = adaptFirmsRecords(payload?.fires);
-      layerState._cellCacheByGrid.clear(); // aggregation is per-dataset — new fires, new cells
-      layerState._firesByFrp = [...layerState._fires].sort(
+      layerState._allFires = adaptFirmsRecords(payload?.fires);
+      // Sorted once per payload; applyFilter only filters, so a slider drag
+      // over 200k detections never re-sorts.
+      layerState._allFiresByFrp = [...layerState._allFires].sort(
         (a, b) => b.frp - a.frp,
       );
-      layerState._count = layerState._fires.length;
+      applyFilter();
       // Data age, not response age: a stale proxy payload truthfully reads old.
       layerState._lastUpdate = Number.isFinite(payload?.fetchedAt)
         ? payload.fetchedAt
@@ -65,6 +67,7 @@ export function createIngestion({
       }
       components.rendering.renderCurrentLod(true);
       if (reselected) components.selection.selectFire(reselected, false);
+      layerState._rowControlsListener?.();
     } catch (error) {
       if (
         request.signal.aborted ||
@@ -81,6 +84,26 @@ export function createIngestion({
         layerState._loading = false;
       }
     }
+  }
+
+  /**
+   * Run the intensity filter over the loaded payload. This is the ONE place
+   * the shown set is derived: `_fires` / `_firesByFrp` feed markers, cards,
+   * the heatmap, the context store, the top-fires query and the analyst
+   * records, so none of them can disagree about which fires exist. Cells and
+   * the heat raster are built per shown set, so their caches go with it.
+   */
+
+  function applyFilter() {
+    layerState._fires = filterFires(layerState._allFires, layerState._filter);
+    layerState._cellCacheByGrid.clear();
+    layerState._heatRaster = null;
+    layerState._firesByFrp = filterFires(
+      layerState._allFiresByFrp,
+      layerState._filter,
+    );
+    layerState._count = layerState._fires.length;
+    layerState._totalCount = layerState._allFires.length;
   }
 
   /**
@@ -109,5 +132,5 @@ export function createIngestion({
     },
   };
 
-  return { loadHeatmap, findMatchingFire, methods };
+  return { loadHeatmap, applyFilter, findMatchingFire, methods };
 }

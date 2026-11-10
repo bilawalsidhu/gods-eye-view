@@ -1,9 +1,9 @@
 import * as Cesium from 'cesium';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 
-export const RETICLE_RANGE_KM = 10;
-export const RETICLE_TILE_CAP = 16;
-export const tileKey = (tile) => `${tile.z}/${tile.x}/${tile.y}`;
+const RETICLE_RANGE_KM = 10;
+const RETICLE_TILE_CAP = 16;
+const tileKey = (tile) => `${tile.z}/${tile.x}/${tile.y}`;
 const cross = (a, b, c) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 

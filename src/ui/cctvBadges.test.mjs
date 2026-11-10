@@ -1,63 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CctvControls } from './cctvControls.js';
-import { railFixture } from './railTestFixture.mjs';
+import { presentCctvSourceBadge } from './cctvFrames.js';
+import { presentCctvPanel } from './cctvPresentation.js';
 import { setLocale, t } from '../i18n/index.js';
 
-function fixture(t) {
-  const { document } = railFixture();
-  const controls = new CctvControls({
-    elements: {
-      _cctvQualityChip: document.createElement('span'),
-      _cctvSourceBadge: document.createElement('div'),
-    },
-    cctv: {},
-    actions: { isEnabled: () => true, setPanelCollapsed() {} },
-  });
-  t.after(() => controls.destroy());
-  return { controls, document };
-}
+const IDLE = Object.freeze({ loading: false, error: false, hasFrame: false });
 
-test('source and frame states retain their distinct meanings, including retained pixels', (testContext) => {
-  const { controls, document } = fixture(testContext);
+test('source and frame states retain their distinct meanings, including retained pixels', () => {
   const camera = { sourceKind: 'snapshot', sourceStatus: 'degraded' };
-  controls._cctvFrame = document.createElement('img');
-  controls._cctvFrameWrap = document.createElement('div');
-  controls._cctvFrame.removeAttribute = () => {};
-  for (const node of [controls._cctvFrame, controls._cctvFrameWrap]) {
-    node.classList.remove = (...names) =>
-      names.forEach((name) => node.classList.toggle(name, false));
-  }
-  const expect = (label, state, active = camera, enabled = true) => {
-    controls._syncCctvSourceBadge(active, enabled);
-    assert.equal(controls._cctvSourceBadge.textContent, label);
-    assert.equal(controls._cctvSourceBadge.dataset.frameState, state);
-  };
-  expect('SOURCE · UNKNOWN', 'idle', camera, false);
-  expect('SOURCE · UNKNOWN', 'idle', null);
-  controls._cctvFrame.dataset.loading = 'true';
-  expect('FRAME · LOADING', 'loading');
-  controls._cctvFrame.dataset.loading = '';
-  controls._cctvFrame.dataset.error = 'true';
-  expect('FRAME · UNAVAILABLE', 'error');
+  const expect = (label, state, frame, active = camera, enabled = true) =>
+    assert.deepEqual(presentCctvSourceBadge(active, enabled, frame), {
+      label,
+      state,
+    });
+  expect('SOURCE · UNKNOWN', 'idle', IDLE, camera, false);
+  expect('SOURCE · UNKNOWN', 'idle', IDLE, null);
+  expect('FRAME · LOADING', 'loading', { ...IDLE, loading: true });
+  expect('FRAME · UNAVAILABLE', 'error', { ...IDLE, error: true });
   // A refresh failure keeps the settled pixels and the provider's source status.
-  controls._cctvFrameWrap.classList.toggle('has-frame', true);
-  expect('SNAPSHOT · DEGRADED', 'ready');
-  controls._cctvFrame.dataset.loading = 'true';
-  expect('SNAPSHOT · DEGRADED', 'ready');
-  controls._cctvFrame.dataset.loading = '';
-  controls._cctvFrame.dataset.error = '';
+  const retained = { ...IDLE, error: true, hasFrame: true };
+  expect('SNAPSHOT · DEGRADED', 'ready', retained);
+  expect('SNAPSHOT · DEGRADED', 'ready', { ...retained, loading: true });
   for (const status of ['ok', 'error', 'unknown', 'vendor-specific']) {
-    expect(`SNAPSHOT · ${status.toUpperCase()}`, 'ready', {
+    expect(`SNAPSHOT · ${status.toUpperCase()}`, 'ready', IDLE, {
       ...camera,
       sourceStatus: status,
     });
   }
-  expect('LIVE · OK', 'ready', { feedType: 'live', sourceStatus: 'ok' });
+  expect('LIVE · OK', 'ready', IDLE, { feedType: 'live', sourceStatus: 'ok' });
 });
 
-test('calibration labels follow supplied provenance and dirty/save/reset transitions without writes to the camera', (testContext) => {
-  const { controls } = fixture(testContext);
+test('calibration labels follow supplied provenance and dirty/save/reset transitions without writes to the camera', () => {
   const cases = [
     ['raw-prior', false, 'CAL · RAW PRIOR'],
     ['curated', false, 'CAL · CURATED'],
@@ -69,44 +42,42 @@ test('calibration labels follow supplied provenance and dirty/save/reset transit
   ];
   for (const [calBadge, calDirty, label] of cases) {
     const activeCamera = Object.freeze({ id: 'a', calBadge, calDirty });
-    controls._renderCctvState({
-      enabled: true,
-      activeCameraId: 'a',
-      activeCamera,
-    });
-    assert.equal(controls._cctvQualityChip.textContent, label);
-    assert.equal(
-      controls._cctvQualityChip.dataset.calBadge,
-      calDirty ? 'edited' : calBadge || '',
+    const { quality } = presentCctvPanel(
+      { enabled: true, activeCameraId: 'a', activeCamera },
+      true,
     );
+    assert.deepEqual(quality, {
+      label,
+      calBadge: calDirty ? 'edited' : calBadge || '',
+    });
   }
-  controls._renderCctvState(null);
-  assert.equal(controls._cctvQualityChip.textContent, 'CAL · --');
-  assert.equal(controls._cctvQualityChip.dataset.calBadge, '');
+  assert.deepEqual(presentCctvPanel(null, false).quality, {
+    label: 'CAL · --',
+    calBadge: '',
+  });
 });
 
 test('localization changes badge copy while preserving machine state ids', (testContext) => {
-  const { controls } = fixture(testContext);
   testContext.after(() => setLocale('en'));
   setLocale('ru');
-  controls._syncCctvSourceBadge(
+  const badge = presentCctvSourceBadge(
     { sourceKind: 'snapshot', sourceStatus: 'degraded' },
     true,
+    IDLE,
   );
-  assert.equal(
-    controls._cctvSourceBadge.textContent,
-    `${t('SNAPSHOT')} · ${t('DEGRADED')}`,
+  assert.equal(badge.label, `${t('SNAPSHOT')} · ${t('DEGRADED')}`);
+  assert.notEqual(badge.label, 'SNAPSHOT · DEGRADED');
+  assert.equal(badge.state, 'ready');
+  const { quality } = presentCctvPanel(
+    {
+      enabled: true,
+      activeCameraId: 'a',
+      activeCamera: { id: 'a', calBadge: 'curated', calDirty: true },
+    },
+    true,
   );
-  assert.notEqual(controls._cctvSourceBadge.textContent, 'SNAPSHOT · DEGRADED');
-  assert.equal(controls._cctvSourceBadge.dataset.frameState, 'ready');
-  controls._renderCctvState({
-    enabled: true,
-    activeCameraId: 'a',
-    activeCamera: { id: 'a', calBadge: 'curated', calDirty: true },
+  assert.deepEqual(quality, {
+    label: t('CAL · EDITED (UNSAVED)'),
+    calBadge: 'edited',
   });
-  assert.equal(
-    controls._cctvQualityChip.textContent,
-    t('CAL · EDITED (UNSAVED)'),
-  );
-  assert.equal(controls._cctvQualityChip.dataset.calBadge, 'edited');
 });

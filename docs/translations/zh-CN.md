@@ -43,7 +43,7 @@ Translation sources: abiyeenzo (#914) and EDIT-Aeterna (#979).
 | briefing / panel / dock               | 简报 / 面板 / 停靠栏        |
 | preset / visual preset                | 预设 / 视觉预设             |
 | Display / HUD layout                  | 显示 / HUD 布局             |
-| Tactical / Operator / Minimal / Cyber | 战术 / 操作员 / 精简 / 赛博 |
+| Tactical / Minimal / Cyber            | 战术 / 精简 / 赛博          |
 | Scope (circular viewport mask) / keyhole | 视域                      |
 | Clean UI                              | 纯净界面                    |
 | cockpit                               | 座舱                        |

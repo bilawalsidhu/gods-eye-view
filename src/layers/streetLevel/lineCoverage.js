@@ -106,6 +106,25 @@ function pointsOf(sequence) {
  */
 
 /**
+ * The tile zoom a provider's `zoomFor` answered, or null. Providers written
+ * before the core went slim return `{zoom, kind}`: its zoom is read, and an
+ * `'overview'` level draws nothing, since nothing is drawn from orbit. Any
+ * other answer that is not a whole zoom draws nothing too, rather than
+ * asking for no tiles without a hint.
+ * @param {unknown} level
+ * @returns {number|null}
+ */
+export function coverageZoom(level) {
+  const zoom =
+    level && typeof level === 'object'
+      ? level.kind === 'overview'
+        ? null
+        : level.zoom
+      : level;
+  return Number.isInteger(zoom) && zoom >= 0 ? zoom : null;
+}
+
+/**
  * Camera-driven sequence lines from any XYZ line-tile source, near the
  * ground only, draped on terrain and 3D tiles alike. Nothing is drawn from
  * orbit.
@@ -115,8 +134,9 @@ function pointsOf(sequence) {
  * @param {(tile: {x: number, y: number, z: number}, init: {signal: AbortSignal}) => Promise<{sequences: Array<object>}>} options.fetchTile
  *   A decoded tile; sequences are `{id, parts, capturedAt, isPano}`. A
  *   rejection may carry `keyRequired`, `keyRejected` or `retryAfterSec`.
- * @param {(heightM: number|null) => number|null} options.zoomFor
- *   Tile zoom for a camera height above ground; null draws nothing.
+ * @param {(heightM: number|null) => number|{zoom: number, kind?: string}|null} options.zoomFor
+ *   Tile zoom for a camera height above ground; null draws nothing. The
+ *   older `{zoom, kind}` shape is still read (see `coverageZoom`).
  * @param {{coverage: string, selected: string}} options.colors
  * @param {string} options.pickPrefix   Pick-id prefix of the lines.
  * @param {string} options.renderKey    Render-governor reason.
@@ -380,7 +400,7 @@ export function createLineCoverage({
     const height = Number.isFinite(cameraHeight)
       ? cameraHeight - (ground ?? 0)
       : null;
-    const zoom = zoomFor(height);
+    const zoom = coverageZoom(zoomFor(height));
     if (zoom == null) return { hint: messages.tooHigh || ZOOM_IN_HINT };
     // Rays meet the ground where it really is (1,600 m up in Denver) and stop
     // short of the horizon, which would stretch the box to the world.

@@ -22,5 +22,8 @@ services:
       # UI land in the .env on your host instead of vanishing with the
       # container. node_modules stays in the image: sharp and friends are
       # compiled for Linux and must not be shadowed by a host install.
-      - .:/app
+      # `:z` relabels the checkout for containers on SELinux hosts (Fedora,
+      # RHEL); without it the container cannot read /app at all and Node
+      # reports the launcher as "Cannot find module". Elsewhere it is ignored.
+      - .:/app:z
       - /app/node_modules

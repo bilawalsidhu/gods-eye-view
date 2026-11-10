@@ -125,3 +125,35 @@ test('a rejected key and a rate limit are told apart from other tile errors', as
     'the Retry-After header wins over the body',
   );
 });
+
+test('with a Graph endpoint, sequence lookups go there without a token', async () => {
+  const { calls, fetchImpl } = fakeFetch(() =>
+    jsonResponse({ data: [{ id: '1', geometry: { coordinates: [1, 2] } }] }),
+  );
+  const source = createMapillarySource({
+    graphEndpoint: '/api/mapillary/graph',
+    fetchImpl,
+  });
+  assert.equal(source.graphEndpoint, '/api/mapillary/graph/');
+  assert.equal(source.hasToken(), false);
+  const images = await source.getSequenceImages('seq-1');
+  assert.equal(images.length, 1);
+  const url = new URL(calls[0].url, 'http://localhost');
+  assert.equal(url.pathname, '/api/mapillary/graph/images');
+  assert.equal(url.searchParams.get('sequence_ids'), 'seq-1');
+  assert.equal(url.searchParams.has('access_token'), false);
+});
+
+test('Graph endpoint errors keep their status', async () => {
+  const { fetchImpl } = fakeFetch(() =>
+    jsonResponse({ error: 'no_key', keyRequired: true }, 503),
+  );
+  const source = createMapillarySource({
+    graphEndpoint: '/api/mapillary/graph/',
+    fetchImpl,
+  });
+  await assert.rejects(
+    () => source.getSequenceImages('1'),
+    (error) => error.status === 503 && error.keyRequired === true,
+  );
+});

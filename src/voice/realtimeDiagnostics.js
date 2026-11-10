@@ -1,10 +1,10 @@
-export const ERROR_LOG_LIMIT = 30;
+const ERROR_LOG_LIMIT = 30;
 
-export const ERROR_STORAGE_KEY = 'gev-realtime-errors';
+const ERROR_STORAGE_KEY = 'gev-realtime-errors';
 
-export const DEBUG_LOG_URL = '/api/realtime/debug-log';
+const DEBUG_LOG_URL = '/api/realtime/debug-log';
 
-export function createDebugSessionId() {
+function createDebugSessionId() {
   const randomPart = Math.random().toString(36).slice(2, 10);
   return `gev-${Date.now().toString(36)}-${randomPart}`;
 }
@@ -47,7 +47,7 @@ export function sanitizeDebugValue(value, depth = 0) {
   return output;
 }
 
-export function sanitizeDebugString(value) {
+function sanitizeDebugString(value) {
   if (value.startsWith('data:image/')) {
     return `[Redacted image data URL, ${value.length} chars]`;
   }
@@ -65,13 +65,13 @@ export function sanitizeDebugString(value) {
     : redacted;
 }
 
-export function isSecretLikeKey(key) {
+function isSecretLikeKey(key) {
   return /(?:api[_-]?key|authorization|bearer|client[_-]?secret|token|secret|password)/i.test(
     key,
   );
 }
 
-export function createErrorRecord(source, error, extra = {}) {
+function createErrorRecord(source, error, extra = {}) {
   const rtcError = error?.error || error;
   return {
     timestamp: new Date().toISOString(),
@@ -90,7 +90,7 @@ export function createErrorRecord(source, error, extra = {}) {
   };
 }
 
-export function formatErrorForDisplay(record) {
+function formatErrorForDisplay(record) {
   const primary = [record.source, record.message].filter(Boolean).join(': ');
   const state = [
     record.errorDetail && `detail=${record.errorDetail}`,
@@ -105,7 +105,7 @@ export function formatErrorForDisplay(record) {
   return state ? `${primary}\n${state}` : primary;
 }
 
-export function removeEmptyValues(value) {
+function removeEmptyValues(value) {
   return Object.fromEntries(
     Object.entries(value || {}).filter(
       ([, item]) => item !== null && item !== undefined && item !== '',
@@ -113,14 +113,7 @@ export function removeEmptyValues(value) {
   );
 }
 
-export function compactText(value, maxLength) {
-  const text = String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
-}
-
-export function loadStoredErrors() {
+function loadStoredErrors() {
   try {
     const value = JSON.parse(localStorage.getItem(ERROR_STORAGE_KEY) || '[]');
     return Array.isArray(value) ? value.slice(0, ERROR_LOG_LIMIT) : [];
@@ -129,7 +122,7 @@ export function loadStoredErrors() {
   }
 }
 
-export function storeErrors(errors) {
+function storeErrors(errors) {
   try {
     localStorage.setItem(
       ERROR_STORAGE_KEY,

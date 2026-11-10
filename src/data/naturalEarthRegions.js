@@ -189,7 +189,58 @@ const loadIndex = createRetryableLoader(async () => {
   return index;
 });
 
-function toResult(entry, candidates = 1) {
+/** Same-name parts this close are one feature split by the pack. */
+const SAME_PLACE_GAP_KM = 100;
+
+/** Gap between two bboxes in km, measured the short way across 180°. */
+function bboxGapKm(a, b) {
+  const midLat = (a[1] + a[3] + b[1] + b[3]) / 4;
+  const kmPerLon = 111.32 * Math.cos((midLat * Math.PI) / 180);
+  let dLon = Infinity;
+  for (const shift of [-360, 0, 360]) {
+    dLon = Math.min(
+      dLon,
+      Math.max(0, Math.max(a[0], b[0] + shift) - Math.min(a[2], b[2] + shift)),
+    );
+  }
+  const dLat = Math.max(0, Math.max(a[1], b[1]) - Math.min(a[3], b[3]));
+  return Math.hypot(dLon * kmPerLon, dLat * 111.32);
+}
+
+/**
+ * Distinct places among same-name entries: parts that touch or nearly touch
+ * (the Great Rift Valley's two halves, the Lau Group across 180°) merge into
+ * one place with every part; distant namesakes (Flores in the Azores and in
+ * Indonesia) stay separate. Largest place first.
+ */
+function groupPlaces(list) {
+  const groups = [];
+  for (const entry of list) {
+    const near = groups.filter((group) =>
+      group.some(
+        (other) => bboxGapKm(other.bbox, entry.bbox) <= SAME_PLACE_GAP_KM,
+      ),
+    );
+    const merged = [entry, ...near.flat()];
+    for (const group of near) groups.splice(groups.indexOf(group), 1);
+    groups.push(merged);
+  }
+  return groups
+    .map((group) => {
+      const largest = group.reduce((a, b) => (b.areaKm2 > a.areaKm2 ? b : a));
+      const [w, s, e, n] = largest.bbox;
+      return {
+        name: largest.name,
+        featurecla: largest.featurecla,
+        polygons: group.flatMap((entry) => entry.polygons),
+        areaKm2: group.reduce((sum, entry) => sum + entry.areaKm2, 0),
+        center: { lat: (s + n) / 2, lon: (w + e) / 2 },
+      };
+    })
+    .sort((a, b) => b.areaKm2 - a.areaKm2);
+}
+
+function toResult(entry, candidates = 1, list = [entry]) {
   return {
     name: entry.name,
     featurecla: entry.featurecla,
@@ -198,6 +249,7 @@ function toResult(entry, candidates = 1) {
     bboxDiagonalKm: entry.bboxDiagonalKm,
     areaKm2: entry.areaKm2,
     candidates,
+    places: groupPlaces(list),
   };
 }
 
@@ -210,9 +262,12 @@ function toResult(entry, candidates = 1) {
  * @param {string} query e.g. "the Alps", "Rockies", "Gulf of Mexico"
  * @returns {Promise<{name:string, featurecla:string, kind:'natural'|'marine',
  *   polygons:Array<Array<[number,number]>>, bboxDiagonalKm:number,
- *   areaKm2:number, candidates:number}|null>} largest-area match plus the
- *   number of same-name entries, or null when nothing matches. Uniqueness in
- *   this pack alone does not establish the user's intended place.
+ *   areaKm2:number, candidates:number, places:Array<{name:string,
+ *   featurecla:string, polygons:Array, areaKm2:number,
+ *   center:{lat:number, lon:number}}>}|null>} largest-area match plus the
+ *   number of same-name entries, or null when nothing matches. `places`
+ *   groups those entries into distinct places, each with all its parts.
+ *   Uniqueness in this pack alone does not establish the user's intended place.
  */
 export async function findNaturalRegion(query) {
   const norm = normalizeName(query);
@@ -226,7 +281,7 @@ export async function findNaturalRegion(query) {
   for (const key of candidates) {
     if (!key) continue;
     const list = index.get(key);
-    if (list && list.length) return toResult(list[0], list.length);
+    if (list && list.length) return toResult(list[0], list.length, list);
   }
   return null;
 }

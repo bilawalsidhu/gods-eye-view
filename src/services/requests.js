@@ -73,6 +73,7 @@ export function createApplicationRequestServices({
   // Discovery is bounded; failed, malformed or timed-out probes are forgotten and not
   // retried for a short backoff, during which queries go to the server as
   // they would against an older server without the probe.
+  let summaryCapability = null;
   let boundaryCapability = null;
   let boundaryProbeRetryAt = 0;
   function boundariesConfigured() {
@@ -154,14 +155,27 @@ export function createApplicationRequestServices({
           .join(';');
         return terrainSingleflight.run(
           query,
-          async ({ signal: sharedSignal }) =>
-            requireOk(
-              await request(
-                `${urls.terrain}?points=${encodeURIComponent(query)}`,
-                { signal: sharedSignal },
-              ),
-              'Terrain heights',
-            )?.results,
+          async ({ signal: sharedSignal }) => {
+            const response = await request(
+              `${urls.terrain}?points=${encodeURIComponent(query)}`,
+              { signal: sharedSignal },
+            );
+            // A failed request still carries the real heights the server had, so
+            // the caller can keep them; null marks a point without one.
+            const partial = response.data?.partial;
+            if (
+              !response.ok &&
+              Array.isArray(partial) &&
+              partial.length === points.length
+            ) {
+              const error = new Error(
+                `Terrain heights unavailable (${response.status})`,
+              );
+              error.partial = partial;
+              throw error;
+            }
+            return requireOk(response, 'Terrain heights')?.results;
+          },
           { signal },
         );
       },
@@ -183,6 +197,23 @@ export function createApplicationRequestServices({
       },
     },
     summary: {
+      // The capability probe, asked once per page: true or false from a
+      // server that answers it, null (unknown) from one that does not.
+      configured() {
+        summaryCapability ??= request(`${urls.summary}/status`, {
+          signal: AbortSignal.timeout(3000),
+        }).then(
+          (response) =>
+            response.ok && typeof response.data?.configured === 'boolean'
+              ? response.data.configured
+              : null,
+          (error) => {
+            if (lifetime?.aborted) throw error;
+            return null;
+          },
+        );
+        return summaryCapability;
+      },
       async summarize(context, { signal } = {}) {
         return request(urls.summary, {
           method: 'POST',

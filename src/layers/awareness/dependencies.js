@@ -79,6 +79,25 @@ export function createDependencies({
     });
   }
 
+  /**
+   * Give up a dependency the user adopts. A direct selection, or the Cockpit
+   * riding one of its aircraft, promotes a layer Contacts turned on into the
+   * user's own (`DataLayerManager.adoptLayerVisibility`). Releasing it when
+   * Contacts goes off would tear down that track or Cockpit before the
+   * Context restore could put the layer back.
+   */
+  function relinquishAdoptedDependency(change) {
+    if (change?.type === 'visibility' && change.adopted && change.enabled)
+      layerState.ownedDependencies.delete(change.layerId);
+  }
+
+  /** Follow one manager's adoptions; null stops following. */
+  function watchAdoptions(dataManager) {
+    layerState.unwatchAdoptions?.();
+    layerState.unwatchAdoptions =
+      dataManager?.subscribe?.(relinquishAdoptedDependency) || null;
+  }
+
   function activateOperationalContext() {
     const activationId = ++layerState.activationId;
     layerState.autoFocusRetryPending = false;
@@ -113,6 +132,7 @@ export function createDependencies({
     refreshAfterDeferredDependency,
     enableDependencies,
     releaseOwnedDependencies,
+    watchAdoptions,
     activateOperationalContext,
   };
 }

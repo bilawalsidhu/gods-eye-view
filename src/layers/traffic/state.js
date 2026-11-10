@@ -1,14 +1,17 @@
-import { normalizeRoadMode } from './roadModes.js';
+import { normalizeRoadMode, normalizeRoadModes } from './roadModes.js';
 import * as Cesium from 'cesium';
-import { FLOW_BUCKET_COLORS, TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { FLOW_BUCKET_COLORS } from './policy.js';
 
-export function createState({ services }) {
+export function createState({ services, source }) {
   const layerState = {};
+  /** The host's offered road sources (createTrafficSource `roadModes`). */
+  layerState._roadModes = normalizeRoadModes(source?.roadModes);
   layerState._roadMode =
     typeof location === 'undefined'
       ? null
       : normalizeRoadMode(
           new URLSearchParams(location.search).get('trafficRoads'),
+          layerState._roadModes,
         );
   // The query override is consumed at construction and shields passive restoration.
   layerState._roadModeUrlOverride = layerState._roadMode;
@@ -109,6 +112,16 @@ export function createState({ services }) {
   layerState._flowError = null;
 
   /**
+   * True while the drawn flow came from cached proxy tiles (TomTom budget
+   * spent or upstream failing); `_flowOldestTileAt` is the oldest tile's
+   * fetch time in ms, or null.
+   * @type {boolean}
+   */
+
+  layerState._flowStale = false;
+  layerState._flowOldestTileAt = null;
+
+  /**
    * True when `/api/tomtom/status` itself could not be reached, so the layer is
    * simulating because it could not ask — not because the server said "no key".
    * @type {boolean}
@@ -158,6 +171,14 @@ export function createState({ services }) {
   layerState._jamViz = 'density';
 
   /**
+   * Row toggles (`lines` / `dots` params): flow-colored road lines draped on
+   * the surface, and the moving dots. Live mode only for lines — the keyless
+   * simulation has no flow to color them with.
+   */
+  layerState._showLines = false;
+  layerState._showDots = true;
+
+  /**
    * Congestion heat-lines are GroundPolylinePrimitive batches draped onto the
    * rendered 3D tiles (ClassificationType.CESIUM_3D_TILE). One
    * primitive per bucket so the jam batch can pulse via a single shared
@@ -170,6 +191,18 @@ export function createState({ services }) {
   /** @type {Cesium.GroundPolylinePrimitive|null} Slow-bucket heat-line batch. */
 
   layerState._heatSlowPrim = null;
+
+  /** @type {Cesium.GroundPolylinePrimitive|null} Free-flow road-line batch (`lines` only). */
+
+  layerState._heatFreePrim = null;
+
+  /** @type {Cesium.GroundPolylinePrimitive[]} Replaced lines kept until successors are ready. */
+
+  layerState._heatRetired = [];
+
+  /** @type {Array|null} Roads of the newest rebuild asked for while the lines were building. */
+
+  layerState._heatPendingRoads = null;
 
   /** @type {number} Heat-lines in the current render (stats). */
 

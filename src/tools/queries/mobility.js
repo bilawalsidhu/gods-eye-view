@@ -19,6 +19,7 @@ import {
   resolveArea,
 } from '../area.js';
 import { LIMIT_SCHEMA, capRows, countNoun, isoTime } from '../results.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const MAX_SYSTEMS = 3;
 
@@ -244,7 +245,7 @@ export const getTransitVehicles = defineTool({
         trip_id: vehicle.tripId ?? null,
         lat: vehicle.lat,
         lon: vehicle.lon,
-        bearing_deg: round(vehicle.bearing, 0),
+        bearing_deg: roundHeadingDegrees(vehicle.bearing),
         speed_mps: round(vehicle.speedMps, 1),
         status: vehicle.status ?? null,
         occupancy: vehicle.occupancy ?? null,
@@ -473,11 +474,22 @@ export const getTrafficFlow = defineTool({
           : `No live traffic is reported in ${area.label}.`) +
         (flow.partial
           ? ' Some map tiles did not load, so these figures are partial.'
+          : '') +
+        // Past the daily TomTom budget, or while TomTom fails, the proxy
+        // serves its last copy of a tile however old it is.
+        (flow.stale
+          ? ' Some tiles are cached copies' +
+            (isoTime(flow.oldestTileAt)
+              ? `, the oldest from ${isoTime(flow.oldestTileAt)}`
+              : '') +
+            ', so traffic may be out of date.'
           : ''),
       data: {
         view: suggestView(services, { area, layers: ['traffic'] }),
         area: area.label,
         partial: flow.partial,
+        stale: flow.stale === true,
+        oldest_tile_at: isoTime(flow.oldestTileAt),
         speed_pct_of_free_flow: speedPct,
         measured_km: round(measuredKm, 1),
         congested_km: round(congestedKm, 1),

@@ -15,9 +15,9 @@ import * as Cesium from 'cesium';
 import { announceNavigationAuthority } from '../navigationPolicy.js';
 import { annotationsFromParams, createView } from '../view/index.js';
 
-export const EMBED_VIEW_MESSAGE = 'gev:view';
-export const EMBED_APPLIED_MESSAGE = 'gev:view-applied';
-export const EMBED_READY_MESSAGE = 'gev:ready';
+const EMBED_VIEW_MESSAGE = 'gev:view';
+const EMBED_APPLIED_MESSAGE = 'gev:view-applied';
+const EMBED_READY_MESSAGE = 'gev:ready';
 
 const FOLLOW_LAYERS = {
   aircraft: 'flights',
@@ -43,6 +43,28 @@ export function isEmbedded(location = globalThis.location) {
 /** Whether a panel page loaded the app into itself. */
 export function isEmbeddedInline() {
   return globalThis.GEV_EMBED_INLINE === true;
+}
+
+/**
+ * `doc`'s visibility for work that pauses in a hidden page. A panel's host
+ * may report it hidden while it is on screen (see keepPanelRendering), so an
+ * inline panel always reads as visible.
+ */
+export function panelAwareVisibility(doc = globalThis.document) {
+  const hidden = () =>
+    (doc.hidden === true || doc.visibilityState === 'hidden') &&
+    !isEmbeddedInline();
+  return {
+    get hidden() {
+      return hidden();
+    },
+    get visibilityState() {
+      return hidden() ? 'hidden' : 'visible';
+    },
+    addEventListener: (type, listener) => doc.addEventListener(type, listener),
+    removeEventListener: (type, listener) =>
+      doc.removeEventListener(type, listener),
+  };
 }
 
 // A panel keeps drawing at about this rate when its host stops animation

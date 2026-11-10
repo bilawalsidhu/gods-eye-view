@@ -21,7 +21,10 @@ import {
   getKeyholeFadeTuning,
   keyholeLabelAlphaFromGeometry,
 } from '../celestialRing.js';
-import { registerWorldOverlayPaintLane } from '../overlays/worldOverlay.js';
+import {
+  getQueuedOverlayEntryAlpha,
+  registerWorldOverlayPaintLane,
+} from '../overlays/worldOverlay.js';
 import {
   DETECTION_STYLE,
   DETECTION_THEME_MAP,
@@ -43,7 +46,6 @@ import {
   detectionHorizontalSector,
   labelBudgetFor,
   normalizeAllocationStrategy,
-  normalizeProfile,
   profileForDensity,
   viewScaleForAltitude,
 } from './detectionPolicy.js';
@@ -54,6 +56,12 @@ import {
   isCyberContactSonarActive as isCyberSonarActive,
   isCyberContactThemeActive as isCyberMapThemeActive,
 } from '../cyberSonar.js';
+import {
+  awarenessEchoActive,
+  awarenessEchoBracket,
+  awarenessEchoColor,
+  getAwarenessEchoField,
+} from '../awarenessEcho.js';
 
 /**
  * @module detection
@@ -102,8 +110,12 @@ const THEME_MAP = DETECTION_THEME_MAP;
 const SPARSE_ZONE_FRACTION = 0.5;
 /** Solve cadence for membership/collision; accepted identities still reproject every frame. */
 const LABEL_SOLVE_INTERVAL_MS = 125;
+/** Own-card opacity that fully hides a callout; below it the callout fades in. */
+const CARD_ALPHA_HIDING_CALLOUT = 0.5;
 /** Alpha bands retain bracket batching while approximating a continuous radial fade. */
 const BRACKET_ALPHA_STEPS = 4;
+/** Finer bands for Global Context echo brackets, whose fade is animated. */
+const ECHO_ALPHA_STEPS = 8;
 /** Stable per-layer candidate safety cap; independent of density and camera bearing. */
 const LAYER_CANDIDATE_CAP = 2600;
 const LAYER_WEIGHTS = Object.freeze({
@@ -569,7 +581,8 @@ export function getDetectionDiagnostics() {
   // sprites/strokes. Nothing is copied on the production paint path.
   result.calloutRects = _calloutPool
     .slice(0, _calloutCount)
-    .map(({ x, y, w, h, alpha }) => ({ x, y, w, h, alpha }));
+    .filter((row) => row.paintAlpha > 0.001)
+    .map(({ x, y, w, h, paintAlpha }) => ({ x, y, w, h, alpha: paintAlpha }));
   return result;
 }
 
@@ -1070,6 +1083,9 @@ function _stashCallout(entry, acquireFade, keyhole) {
       font: FONT,
       microFont: MICRO_FONT,
       alpha: 1,
+      cardSourceId: '',
+      cardEntryId: '',
+      paintAlpha: 1,
     };
     _calloutPool[_calloutCount] = row;
   }
@@ -1096,6 +1112,8 @@ function _stashCallout(entry, acquireFade, keyhole) {
   row.font = FONT;
   row.microFont = MICRO_FONT;
   row.alpha = alpha;
+  row.cardSourceId = candidate.cardSourceId;
+  row.cardEntryId = candidate.cardEntryId;
   _calloutCount++;
 }
 
@@ -1127,7 +1145,15 @@ function _paintCalloutLane(frame) {
   ctx.textBaseline = 'alphabetic';
   for (let i = 0; i < _calloutCount; i++) {
     const row = _calloutPool[i];
-    paintDetectionCallout(ctx, row, row.alpha);
+    // The callout would show through its contact's own card: fade it by the
+    // opacity that card paints with this frame.
+    const cardAlpha =
+      row.cardEntryId === ''
+        ? 0
+        : getQueuedOverlayEntryAlpha(row.cardSourceId, row.cardEntryId);
+    row.paintAlpha =
+      row.alpha * Math.max(0, 1 - cardAlpha / CARD_ALPHA_HIDING_CALLOUT);
+    if (row.paintAlpha > 0.001) paintDetectionCallout(ctx, row, row.paintAlpha);
   }
   ctx.globalAlpha = 1;
 }
@@ -1204,6 +1230,8 @@ function _materializeCandidate(
     primary,
     micro,
     hasMicro: card.hasMicro,
+    cardSourceId: obj.cardSourceId ? String(obj.cardSourceId) : '',
+    cardEntryId: obj.cardEntryId ? String(obj.cardEntryId) : '',
   };
 }
 
@@ -1336,6 +1364,11 @@ function _drawOverlay(frame) {
   const tiers = _theme.tiers || null;
   const colorFor = (key) => (tiers && tiers[key]) || _theme.line;
   const bracketPaths = new Map();
+  // Global Context sonar echoes: a second bracket, banded by strength, around
+  // each flight or vessel a pulse front has just crossed.
+  // Resting pulses light nothing, so the per-contact echo work is skipped.
+  const echoField = awarenessEchoActive(now) ? getAwarenessEchoField() : null;
+  const echoPaths = echoField ? new Array(ECHO_ALPHA_STEPS + 1) : null;
   const pathFor = (map, color, alpha) => {
     const band = Math.max(
       1,
@@ -1438,6 +1471,24 @@ function _drawOverlay(frame) {
         halfH,
       );
       visibleCount++;
+      if (echoPaths) {
+        // Starts on the contact's bracket and spreads outward as it fades.
+        const echo = awarenessEchoBracket(
+          obj._layerId,
+          obj.position,
+          now,
+          bracketAlpha,
+          ECHO_ALPHA_STEPS,
+        );
+        if (echo)
+          appendCornerBracket(
+            (echoPaths[echo.band] ??= new Path2D()),
+            sx,
+            sy,
+            halfW + echo.spreadPx,
+            halfH + echo.spreadPx,
+          );
+      }
       if (obj.type === 'AIR')
         aircraftBracketSectors[detectionHorizontalSector(sx, width)]++;
       if (bracketAlpha >= 1) bracketOpacityCounts.full++;
@@ -1576,6 +1627,20 @@ function _drawOverlay(frame) {
       _ctx.strokeStyle = entry.color;
       _ctx.stroke(entry.path);
     }
+  }
+  if (echoPaths) {
+    _ctx.lineWidth = echoField.echo.lineWidth;
+    _ctx.strokeStyle = awarenessEchoColor(
+      _theme.line,
+      _theme === THEME_MAP._default,
+    );
+    for (let band = 1; band <= ECHO_ALPHA_STEPS; band++) {
+      if (!echoPaths[band]) continue;
+      _ctx.globalAlpha =
+        fade * (band / ECHO_ALPHA_STEPS) * bracketPresentationOpacity;
+      _ctx.stroke(echoPaths[band]);
+    }
+    _ctx.lineWidth = bracketWidth;
   }
 
   const renderEntries = _labelArbiter.renderEntries(candidateMap, now);

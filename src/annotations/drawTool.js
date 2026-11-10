@@ -1,9 +1,10 @@
 /**
  * Manual whiteboard drawing: the Cesium + DOM half.
  *
- * DISPLAY ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
- * shape (area, line or pin), click the vertices on the real world, double-click
- * or press Enter to finish, type a label. Each finished shape goes through the
+ * UTILITIES ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
+ * shape (area, line or pin) and a colour, click the vertices on the real world,
+ * double-click or press Enter to finish, then name, recolour, hide, fly to or
+ * remove the shape from its row (drawMarks.js). Each finished shape goes through the
  * SAME `annotationEngine.annotate()` the voice agent uses, with its geometry
  * supplied and `manual: true`, so it renders with the whiteboard look,
  * persists, de-dups, shows up in `.list()`, and clears with the board.
@@ -30,7 +31,6 @@
  * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
  */
 import * as Cesium from 'cesium';
-import { createSegmentedControl } from '../ui/segmentedControl.js';
 import { pickWorldFromScreen } from './annotationResolver.js';
 import {
   claimPointer,
@@ -50,41 +50,71 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
-import { msg, registerUnsavedWork, t, translateKnown } from '../i18n/index.js';
+import {
+  DRAW_COLORS,
+  DRAW_COLOR_CSS,
+  drawMarkActions,
+  drawMarkActionsFor,
+  drawMarkFallbackName,
+  presentDrawMarks,
+} from './drawMarks.js';
+
+import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
+/** The longest note a row action leaves under its row, in characters. */
+const NOTE_MAX = 200;
+/** An action's answer as a row note: trimmed, and cut at a word with an ellipsis. */
+function noteText(text) {
+  if (typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (trimmed.length <= NOTE_MAX) return trimmed;
+  const cut = trimmed.slice(0, NOTE_MAX - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > NOTE_MAX / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /** The id this tool claims the pointer under. */
-export const DRAW_POINTER_OWNER = 'draw';
+const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
 
-const COLORS = ['primary', 'amber', 'cyan', 'green', 'red'];
-const PREVIEW = {
-  primary: '#8be9ff',
-  amber: '#ffb547',
-  cyan: '#39d0ff',
-  green: '#5dff9f',
-  red: '#ff6b6b',
-};
+const PREVIEW = DRAW_COLOR_CSS;
 
 /**
- * Wire the Draw control. Returns a handle with a `destroy()` the application
+ * Run the Draw control. Returns a handle with a `destroy()` the application
  * lifetime owns, plus the console/test seam (`window.__gevDrawTool`).
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}}} deps
+ * The tool hands what the controls show (`{ active, shape, color, hint,
+ * marks }`) to `publish`, which the view renders, and answers the controls
+ * through the actions it gives `connect`, which returns their disconnect.
+ * A row's fly-to is an immediate navigation through `navigation`, like
+ * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
+ * `markActions` are the application's own buttons on an area's or a line's
+ * row (drawMarks.js `drawMarkActions`); a press runs the action with the
+ * shape's id, kind, name and geometry (drawMarks.js `drawMarkGeometry`).
+ * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function, markActions?: object[]}} deps
  * @returns {{destroy: Function}|null}
  */
-export function initDrawTool({ viewer, annotations }) {
-  const toggle = document.getElementById('draw-toggle');
-  const modeRow = document.getElementById('draw-mode-row');
-  const labelRow = document.getElementById('draw-label-row');
-  const labelInput = document.getElementById('draw-label-input');
-  const colorSelect = document.getElementById('draw-color-select');
-  const clearButton = document.getElementById('draw-clear');
-  const hint = document.getElementById('draw-hint');
-  if (!viewer || !annotations || !toggle) return null;
+export function initDrawTool({
+  viewer,
+  annotations,
+  navigation = null,
+  publish = () => {},
+  connect = () => () => {},
+  markActions = [],
+}) {
+  const rowActions = drawMarkActions(markActions);
+  // What a row action said last on each drawn shape: `{ run, busy, text }`.
+  const notes = new Map();
+  let noteRun = 0;
+  // A page without the Draw controls (the Display controls view omitted) has
+  // no draw tool.
+  if (!viewer || !annotations || !document.getElementById('draw-toggle'))
+    return null;
 
   let active = false;
   let destroyed = false;
   let session = null;
   let shape = 'area';
   let color = 'primary';
+  let hint = '';
   let handler = null;
   let lease = null;
   let savedDoubleClick = null;
@@ -95,25 +125,13 @@ export function initDrawTool({ viewer, annotations }) {
   // one of those must not write its outcome over the newer state.
   let generation = 0;
   const previewEntities = [];
-  // Every DOM listener this tool adds, so teardown is one loop rather than a
-  // list that can fall out of step with the bindings below.
+  // Every DOM listener this tool adds (the session's keydown), so teardown is
+  // one loop rather than a list that can fall out of step with the bindings.
   const domListeners = [];
   const listen = (target, type, listener, options) => {
-    if (!target) return;
     target.addEventListener(type, listener, options);
     domListeners.push([target, type, listener, options]);
   };
-  // The board lives only in memory: switching language (a reload) asks first
-  // while it holds a lasting mark or a shape is half drawn.
-  const unregisterUnsavedWork = registerUnsavedWork(() => {
-    if (destroyed) return null;
-    const lasting = (annotations.list?.() || []).some(
-      (mark) => mark && mark.ttlMs == null && !mark.expiring,
-    );
-    return lasting || session?.vertices?.length > 0
-      ? msg('drawings on the map')
-      : null;
-  });
 
   const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
   // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
@@ -124,9 +142,30 @@ export function initDrawTool({ viewer, annotations }) {
     () => null,
   );
 
-  const setHint = (text) => {
-    if (hint) hint.textContent = text;
+  const present = () => {
+    const marks = annotations.list?.() || [];
+    // A note goes with its shape.
+    for (const id of notes.keys())
+      if (!marks.some((mark) => mark.id === id)) notes.delete(id);
+    publish({
+      active,
+      shape,
+      color,
+      hint,
+      marks: presentDrawMarks(marks, rowActions, notes),
+    });
   };
+  // The hint is kept as the call that words it, so a language switch can
+  // word it again.
+  let hintText = () => '';
+  const setHint = (text) => {
+    hintText = text;
+    hint = text();
+    present();
+  };
+  const offLocale = onLocaleChange(() => {
+    if (!destroyed) setHint(hintText);
+  });
 
   // ---- preview ---------------------------------------------------------
   const vertexPositions = () =>
@@ -161,7 +200,7 @@ export function initDrawTool({ viewer, annotations }) {
     previewEntities.length = 0;
     if (!session) {
       previewLine.show = false;
-      setHint(drawHint(null));
+      setHint(() => drawHint(null));
       viewer.scene.requestRender();
       return;
     }
@@ -187,7 +226,7 @@ export function initDrawTool({ viewer, annotations }) {
         }),
       );
     }
-    setHint(drawHint(session));
+    setHint(() => drawHint(session));
     viewer.scene.requestRender();
   };
 
@@ -210,14 +249,14 @@ export function initDrawTool({ viewer, annotations }) {
     // A click that changed nothing still deserves an answer when the reason is
     // a limit rather than the harmless tail of a double-click.
     if (reason === 'full')
-      setHint(
+      setHint(() =>
         t(
           'That shape already has {count} points — finish it or press Backspace.',
           { count: MAX_VERTICES },
         ),
       );
     else if (reason === 'invalid')
-      setHint(t('That point is off the globe — click on the world.'));
+      setHint(() => t('That point is off the globe — click on the world.'));
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
@@ -235,17 +274,17 @@ export function initDrawTool({ viewer, annotations }) {
     if (reason !== 'ok') {
       // 'too-few' is just "keep clicking" and the hint already says so;
       // a degenerate or off-globe shape needs to be told why it was refused.
-      if (reason !== 'too-few') setHint(drawHint(session));
+      if (reason !== 'too-few') setHint(() => drawHint(session));
       return null;
     }
-    const spec = finishSpec(session, { label: labelInput?.value || '', color });
+    // Named afterwards, in the shape's row.
+    const spec = finishSpec(session, { label: '', color });
     if (!spec) return null;
     // Start a fresh session BEFORE awaiting, so a second Enter or the second
     // half of a double-click cannot submit the same shape twice.
     session = createDrawSession(shape);
     cursor = null;
     syncPreview();
-    if (labelInput) labelInput.value = '';
     const attempt = generation;
     try {
       const result = await annotations.annotate([spec], {
@@ -253,11 +292,12 @@ export function initDrawTool({ viewer, annotations }) {
         flyTo: false,
       });
       if (destroyed || attempt !== generation) return result;
-      if (result?.drawn === 0) setHint(t('That shape could not be placed.'));
+      if (result?.drawn === 0)
+        setHint(() => t('That shape could not be placed.'));
       return result;
     } catch (error) {
       if (destroyed || attempt !== generation) return null;
-      setHint(
+      setHint(() =>
         t('Could not place the shape: {error}', {
           error: error?.message || error,
         }),
@@ -279,13 +319,13 @@ export function initDrawTool({ viewer, annotations }) {
     if (session) session = createDrawSession(shape);
     annotations.clear();
     syncPreview();
-    if (!destroyed && !active) setHint(t('Board cleared.'));
+    if (!destroyed && !active) setHint(() => t('Board cleared.'));
   };
 
   // ---- keys: only while drawing, never while typing in another field ----
   const typingElsewhere = (event) => {
     const t = event.target;
-    if (!t || t === labelInput) return false;
+    if (!t) return false;
     return (
       t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable
     );
@@ -293,12 +333,12 @@ export function initDrawTool({ viewer, annotations }) {
   /**
    * Enter is the finish key, but on a focused control Enter means "press this
    * control". Keyboard-focusing Clear and pressing Enter must clear the board,
-   * not finish the shape — so the finish key is only taken from the canvas,
-   * the page body, or the label field this tool owns.
+   * not finish the shape — so the finish key is only taken from the canvas or
+   * the page body.
    */
   const enterBelongsToDrawing = (event) => {
     const t = event.target;
-    if (!t || t === labelInput) return true;
+    if (!t) return true;
     if (
       typeof t.closest === 'function' &&
       t.closest('button, a, select, [role="button"], [role="radio"]')
@@ -310,6 +350,9 @@ export function initDrawTool({ viewer, annotations }) {
   };
   const onKey = (event) => {
     if (!active || destroyed || typingElsewhere(event)) return;
+    // Keys on the shape list's own controls are the list's (Esc closes a
+    // colour picker there), not the drawing's.
+    if (event.target?.closest?.('#draw-mark-list')) return;
     // Enter goes to finish() once a shape has been started; finish() owns the
     // decision and says WHY it refused. Swallowing the key on a degenerate
     // shape left the person pressing Enter at a silent panel. A focused button
@@ -328,7 +371,7 @@ export function initDrawTool({ viewer, annotations }) {
       else setActive(false);
       return;
     }
-    if (event.key === 'Backspace' && event.target !== labelInput) {
+    if (event.key === 'Backspace') {
       if (removeLastVertex(session)) {
         event.preventDefault();
         syncPreview();
@@ -345,7 +388,7 @@ export function initDrawTool({ viewer, annotations }) {
         // Somebody else is using the pointer — possibly an older instance of
         // this same tool that has not finished tearing down. Say so instead of
         // half-starting.
-        setHint(
+        setHint(() =>
           t('{owner} is using the pointer — close it first.', {
             owner: translateKnown(pointerOwnerName(pointerOwner())),
           }),
@@ -354,10 +397,7 @@ export function initDrawTool({ viewer, annotations }) {
       }
     }
     active = next;
-    toggle.classList.toggle('active', active);
-    toggle.setAttribute('aria-pressed', String(active));
-    modeRow?.classList.toggle('visible', active);
-    labelRow?.classList.toggle('visible', active);
+    present();
     document.body.classList.toggle('gev-drawing', active);
     if (active) {
       session = createDrawSession(shape);
@@ -419,8 +459,7 @@ export function initDrawTool({ viewer, annotations }) {
       );
       savedDoubleClick = null;
     }
-    // Drop just the keydown listener bound alongside this handler; the control
-    // listeners below outlive a session and come off in destroy().
+    // Drop the keydown listener bound alongside this handler.
     for (let i = domListeners.length - 1; i >= 0; i -= 1) {
       const [target, type, listener, options] = domListeners[i];
       if (listener !== onKey) continue;
@@ -429,37 +468,107 @@ export function initDrawTool({ viewer, annotations }) {
     }
   }
 
-  listen(toggle, 'click', () => setActive(!active));
-  const shapeButtons = [
-    ...(modeRow?.querySelectorAll('.pp-mode-btn[data-shape]') || []),
-  ];
-  const shapeControl = createSegmentedControl({
-    buttons: shapeButtons,
-    valueOf: (button) => button.dataset.shape,
-    listen,
-    onChange: (value) => {
-      shape = normalizeShape(value);
-      shapeControl.update(shape);
-      if (active) {
-        generation += 1;
-        session = createDrawSession(shape);
-        cursor = null;
-        syncPreview();
-      }
-    },
-  });
-  listen(colorSelect, 'change', () => {
-    color = COLORS.includes(colorSelect.value) ? colorSelect.value : 'primary';
-    syncPreview();
-  });
-  listen(clearButton, 'click', clearAll);
-  listen(labelInput, 'keydown', (event) => {
-    if (event.key === 'Enter' && session?.vertices?.length) {
-      event.preventDefault();
-      void finish();
+  /**
+   * Frame one drawn shape: an immediate navigation, so Cockpit can refuse it
+   * and the current orbit, follow or track lets go first.
+   */
+  function flyToMark(id) {
+    if (typeof navigation?.runImmediateNavigation === 'function')
+      return (
+        navigation.runImmediateNavigation('drawing', () =>
+          annotations.frame?.(id),
+        ) !== false
+      );
+    return annotations.frame?.(id) ?? false;
+  }
+
+  /**
+   * Run the application's row action `actionId` on drawn shape `id`, if the
+   * shape is still on the board and still offered it. Returns whether it ran.
+   * What the action returns, or resolves to, is the row's note (a measurement,
+   * "saved"): the row is busy until it settles, a newer press or the shape's
+   * removal makes a late answer moot, and a failure clears the note, so an
+   * action words its own refusals and resolves with them.
+   */
+  function runMarkAction(id, actionId) {
+    const mark = (annotations.list?.() || []).find(
+      (entry) => entry.id === id && entry.manual === true,
+    );
+    const offer = drawMarkActionsFor(mark, rowActions);
+    const action = offer.actions.find((entry) => entry.id === actionId);
+    if (!action || notes.get(mark.id)?.busy) return false;
+    const run = ++noteRun;
+    const settle = (text) => {
+      if (destroyed || notes.get(mark.id)?.run !== run) return;
+      notes.set(mark.id, {
+        run,
+        busy: false,
+        text: noteText(text),
+      });
+      present();
+    };
+    const fail = (error) => {
+      console.warn(`[draw] ${actionId} failed`, error);
+      settle('');
+    };
+    notes.set(mark.id, { run, busy: true, text: '' });
+    let answer;
+    try {
+      answer = action.run({
+        id: mark.id,
+        shape: offer.shape,
+        name: mark.name || '',
+        title: mark.name || drawMarkFallbackName(mark),
+        geometry: offer.geometry,
+      });
+    } catch (error) {
+      fail(error);
+      return false;
     }
+    if (typeof answer?.then === 'function') {
+      present();
+      Promise.resolve(answer).then(settle, fail);
+    } else settle(answer);
+    return true;
+  }
+
+  /** Draw `next` from now on; an open shape starts over in it. */
+  function chooseShape(next) {
+    shape = normalizeShape(next);
+    present();
+    if (active) {
+      generation += 1;
+      session = createDrawSession(shape);
+      cursor = null;
+      syncPreview();
+    }
+  }
+  const disconnect = connect({
+    toggleDraw: () => setActive(!active),
+    setDrawShape: chooseShape,
+    setDrawColor: (value) => {
+      color = DRAW_COLORS.includes(value) ? value : 'primary';
+      present();
+      syncPreview();
+    },
+    clearDraw: clearAll,
+    renameDrawMark: (id, name) => annotations.restyle?.(id, { name }),
+    recolorDrawMark: (id, next) => annotations.restyle?.(id, { color: next }),
+    toggleDrawMark: (id) => {
+      const mark = annotations.list?.().find((entry) => entry.id === id);
+      if (mark) annotations.setHidden?.(id, !mark.hidden);
+    },
+    flyToDrawMark: flyToMark,
+    removeDrawMark: (id) => annotations.remove?.(id),
+    runDrawMarkAction: runMarkAction,
   });
-  setHint(drawHint(null));
+  // The rows follow the board: a shape drawn, renamed, hidden or removed
+  // here, by voice or by a clear.
+  const offBoard =
+    annotations.onChange?.(() => {
+      if (!destroyed) present();
+    }) || (() => {});
+  setHint(() => drawHint(null));
 
   const api = {
     get active() {
@@ -472,12 +581,17 @@ export function initDrawTool({ viewer, annotations }) {
       return session;
     },
     setActive,
-    setShape(next) {
-      const btn = modeRow?.querySelector(
-        `.pp-mode-btn[data-shape="${normalizeShape(next)}"]`,
-      );
-      btn?.click();
+    setShape: chooseShape,
+    /** The hand-drawn marks the list shows, as its rows. */
+    marks: () =>
+      presentDrawMarks(annotations.list?.() || [], rowActions, notes),
+    setColor(next) {
+      color = DRAW_COLORS.includes(next) ? next : 'primary';
+      present();
+      syncPreview();
     },
+    flyToMark,
+    runMarkAction,
     /** Test seam: add a vertex from lon/lat as if it had been clicked. */
     addVertex(lon, lat, height = 0) {
       if (!session) return false;
@@ -526,7 +640,9 @@ export function initDrawTool({ viewer, annotations }) {
       generation += 1;
       if (active) setActive(false);
       destroyed = true;
-      unregisterUnsavedWork();
+      offLocale();
+      offBoard();
+      disconnect();
       releaseSceneHandler();
       releasePointer(lease);
       lease = null;
@@ -546,11 +662,8 @@ export function initDrawTool({ viewer, annotations }) {
         }
       });
       document.body.classList.remove('gev-drawing');
-      toggle.classList.remove('active');
-      toggle.setAttribute('aria-pressed', 'false');
-      modeRow?.classList.remove('visible');
-      labelRow?.classList.remove('visible');
-      if (hint) hint.textContent = '';
+      hint = '';
+      present();
       if (window.__gevDrawTool === api) delete window.__gevDrawTool;
       return attaching;
     },

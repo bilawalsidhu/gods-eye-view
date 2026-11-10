@@ -187,7 +187,6 @@ export function createMilitarySnapshotRenderer({
       // If this is the tracked aircraft, update label text
       // (position updates automatically via dead-reckoning CallbackProperty)
       if (isTracked && flightState._trackedEntity) {
-        const info = flightState.records.data.get(icao24);
         tracking._updateTrackedLabelModel(icao24);
       }
     }
@@ -229,8 +228,8 @@ export function createMilitarySnapshotRenderer({
       const bbStale = flightState._billboards.get(icao24);
       if (bbStale) bbStale.position = liftedPos;
     }
-    // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
-    // budget-capped, viewer-proximate, google-3d regime only), excluding
+    // Round 4: sample the RENDERED mesh for those cells (a few probes per
+    // cell, budget-capped, viewer-proximate, google-3d regime only), excluding
     // this layer's own billboards/models from the probe.
     {
       const viewerCarto =
@@ -260,6 +259,7 @@ export function createMilitarySnapshotRenderer({
       if (currentIcaos.has(icao24)) continue;
       const absence = records.absence(icao24, {
         complete: snapshot.complete,
+        retainIds: snapshot.retainIds,
         likelyLanded: queries._likelyLanded(icao24),
       });
       if (absence === 'retain') continue;

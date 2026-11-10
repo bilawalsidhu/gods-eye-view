@@ -13,7 +13,7 @@ import {
   MARKER_SCALE_BY_DISTANCE,
 } from './policy.js';
 import { boxContains } from './model.js';
-import { t } from '../../i18n/index.js';
+import { msg } from '../../i18n/index.js';
 import { createAlprFloorResolver } from './floors.js';
 import { createAlprOverlay } from './overlay.js';
 import {
@@ -452,7 +452,7 @@ export function createAlprPresentation({ state, services, source }) {
         layerName: 'ALPR Cameras',
         source:
           source.attribution?.description || source.label || 'Camera source',
-        label: t('ALPR camera'),
+        label: msg('ALPR camera'),
         latitude: record.latitude,
         longitude: record.longitude,
         properties: {

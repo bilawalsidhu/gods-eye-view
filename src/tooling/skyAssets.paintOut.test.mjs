@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import {
   CUBE_FACES,
@@ -24,7 +25,7 @@ test('painted-out planets leave no disc brighter than the sky around them', asyn
   }));
   for (const face of CUBE_FACES) {
     const { data, info } = await sharp(
-      new URL(`milkyway_${FACE_FILE_SUFFIX[face]}.webp`, SKY).pathname,
+      fileURLToPath(new URL(`milkyway_${FACE_FILE_SUFFIX[face]}.webp`, SKY)),
     )
       .raw()
       .toBuffer({ resolveWithObject: true });

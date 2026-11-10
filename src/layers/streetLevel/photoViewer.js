@@ -17,18 +17,18 @@ const EXPANDED_SELECTORS = [
 ];
 
 /** A photo download (tens of kilobytes to a few megabytes). */
-export const IMAGE_TIMEOUT_MS = 15_000;
+const IMAGE_TIMEOUT_MS = 15_000;
 
 /** A picture file or decoded side past these is refused (a photo is a few MB). */
 export const MAX_IMAGE_BYTES = 48 * 1024 * 1024;
 export const MAX_IMAGE_SIDE = 16_384;
 /** 64 MP: 256 MB once decoded to RGBA. A 16,384 px square is four times that. */
-export const MAX_IMAGE_PIXELS = 8_192 * 8_192;
+const MAX_IMAGE_PIXELS = 8_192 * 8_192;
 /** Where in a file to look for its dimensions (a JPEG's EXIF comes first). */
 const HEADER_BYTES = 256 * 1024;
 
 /** Whether a picture this size is past what the viewer decodes. */
-export function tooManyPixels(width, height) {
+function tooManyPixels(width, height) {
   return (
     width > MAX_IMAGE_SIDE ||
     height > MAX_IMAGE_SIDE ||
@@ -37,7 +37,7 @@ export function tooManyPixels(width, height) {
 }
 
 /** Panorama texture widths: enough for a docked viewer, and for an expanded one. */
-export const PANO_MID_SIZE = Object.freeze([2048, 1024]);
+const PANO_MID_SIZE = Object.freeze([2048, 1024]);
 export const PANO_FULL_SIZE = Object.freeze([4096, 2048]);
 
 /**
@@ -155,7 +155,7 @@ async function loadBitmap(url, timeoutMs, resize, failure, signal) {
  * A picture refused for its size (`tooLarge`): the viewer will not load
  * that file another way, an <img> having no size limit at all.
  */
-export function oversized(failure) {
+function oversized(failure) {
   return Object.assign(new Error(failure), { tooLarge: true });
 }
 

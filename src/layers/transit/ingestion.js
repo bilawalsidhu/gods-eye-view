@@ -9,7 +9,6 @@ import {
   FEED_STALE_AFTER_MS,
   MAX_VEHICLES_TOTAL,
   MISSED_POLLS_TO_DROP,
-  TRANSIT_POLL_MS,
   isStaleVehicleFix,
   transitVehicleKey,
   vehicleReportTimeMs,
@@ -402,7 +401,13 @@ export function createIngestion({ state, services, parts, source }) {
       );
     }
     if (state._viewer)
-      registerDynamicCredit(state._viewer, transitFeedCredit(feed));
+      registerDynamicCredit(
+        state._viewer,
+        transitFeedCredit(feed, {
+          feedTimestamp: snapshot?.feedTimestamp,
+          fetchedAt,
+        }),
+      );
     if (
       state._selectedKey &&
       state._vehicles.get(state._selectedKey)?.feedId === feed.id

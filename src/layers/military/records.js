@@ -187,9 +187,12 @@ export class MilitaryFlightRecords {
       fixEpochMs: aircraft.positionTimeMs ?? observedAtMs,
     };
   }
-  absence(id, { complete, likelyLanded }) {
+  absence(id, { complete, retainIds, likelyLanded }) {
+    // Partial admissions and position-less rows do not prove absence, but
+    // retention remains bounded; a likely-landed position-less contact
+    // still takes the landed limit.
     if (
-      !complete &&
+      (!complete || (retainIds?.has(id) && !likelyLanded)) &&
       Date.now() - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
     )
       return 'retain';

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import test from 'node:test';
 import { GevRealtimeController } from './realtimeController.js';
 import { PROGRESS_MAX_OUTPUT_TOKENS } from './realtimeTurns.js';
@@ -8,12 +9,7 @@ function controllerFixture({ runner = async () => ({ ok: true }) } = {}) {
   const statuses = [];
   const usage = [];
   const controller = new GevRealtimeController({
-    ui: {
-      root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
-      status: { textContent: '' },
-      detail: { textContent: '', title: '' },
-      errorDetail: { textContent: '' },
-    },
+    ui: createTestVoiceUi(),
     runner,
     debugSink: null,
   });
@@ -135,7 +131,7 @@ test('an old progress completion leaves the active in-band response alone', asyn
 });
 
 test('user speech stops an audible progress line: cancel and clear its audio', async () => {
-  const { controller, sent, event, progressLine } = controllerFixture();
+  const { sent, event, progressLine } = controllerFixture();
   await progressLine('resp_p');
   await event({ type: 'output_audio_buffer.started', response_id: 'resp_p' });
   sent.length = 0;

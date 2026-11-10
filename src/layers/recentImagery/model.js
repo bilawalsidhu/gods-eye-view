@@ -300,7 +300,7 @@ export function hhmm(iso) {
 }
 
 /** Candidate key: `PRODUCT:YYYY-MM-DD`. */
-export function candidateKey(product, day) {
+function candidateKey(product, day) {
   return `${product}:${day}`;
 }
 

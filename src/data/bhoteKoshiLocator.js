@@ -12,9 +12,9 @@ import {
 } from './dataCredits.js';
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import { INCIDENT_OVERVIEW_PLACES } from './bhoteKoshiIncidentPlaces.js';
-import { t, msg, getLocale } from '../i18n/index.js';
+import { t, msg, getLocale, isolate } from '../i18n/index.js';
 
-export const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
+const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
 export const BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID =
   'bhote-koshi-locator-callout';
 export const NEPAL_CONTEXT_PRESENTATION = 'nepal-context';
@@ -35,7 +35,6 @@ const BORDER_START_DELAY_MS = 700;
 const INCIDENT_CALLOUT_GAP_MS = 200;
 const CALLOUT_REVEAL_DURATION_MS = 1200;
 const CALLOUT_PULSE_DURATION_MS = 1800;
-const CALLOUT_DOT_SIZE_PX = 7;
 const CALLOUT_RING_MIN_SIZE_PX = 16;
 const CALLOUT_RING_SIZE_RANGE_PX = 14;
 const CITY_CALLOUT_START_DELAY_MS = 350;
@@ -68,7 +67,10 @@ const PLACE_TITLE_TEXT = new Map(
 
 function placeTitle(title) {
   const text = PLACE_TITLE_TEXT.get(title);
-  return text ? t(text).toLocaleUpperCase(getLocale()) : title;
+  // Isolated: the card draws left to right after its "11 · " counter, so in
+  // Arabic a translated title with a Latin place name («نقطة الإطلالة في
+  // DANDAGAUN») must keep its own right-to-left order.
+  return text ? isolate(t(text).toLocaleUpperCase(getLocale())) : title;
 }
 
 const INCIDENT = Object.freeze({
@@ -1248,6 +1250,3 @@ export function createBhoteKoshiLocatorLayer({
     },
   };
 }
-
-const bhoteKoshiLocatorLayer = createBhoteKoshiLocatorLayer();
-export default bhoteKoshiLocatorLayer;

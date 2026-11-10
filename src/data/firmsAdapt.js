@@ -81,21 +81,44 @@ export function parseAcquisitionMs(date, time, cache = new Map()) {
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
+  // Same calendar as the CSV gate. Date.UTC would otherwise roll 30 February
+  // into March, and the fire's age would describe a detection that never happened.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    cache.set(key, 0);
+    return 0;
+  }
+  const timeText = String(time ?? '').trim();
+  if (!/^\d{1,4}$/.test(timeText)) {
+    cache.set(key, 0);
+    return 0;
+  }
+  const hhmm = timeText.padStart(4, '0');
   const year = Number(date.slice(0, 4));
   const month = Number(date.slice(5, 7));
   const day = Number(date.slice(8, 10));
-  const hhmm = String(time ?? '0000').padStart(4, '0');
   const hours = Number(hhmm.slice(0, 2));
   const minutes = Number(hhmm.slice(2, 4));
-  const valid =
-    Number.isFinite(year) &&
-    Number.isFinite(month) &&
-    Number.isFinite(day) &&
-    Number.isFinite(hours) &&
-    Number.isFinite(minutes);
-  const ms = valid ? Date.UTC(year, month - 1, day, hours, minutes) : 0;
-  cache.set(key, ms);
-  return ms;
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hours > 23 ||
+    minutes > 59
+  ) {
+    cache.set(key, 0);
+    return 0;
+  }
+  const ms = Date.UTC(year, month - 1, day, hours, minutes);
+  const parsed = new Date(ms);
+  const result =
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+      ? ms
+      : 0;
+  cache.set(key, result);
+  return result;
 }
 
 /**

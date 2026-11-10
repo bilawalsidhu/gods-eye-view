@@ -80,9 +80,7 @@ try {
       page.evaluate(() => {
         const { viewer, dataManager } = window.__godsEyeView;
         let upper = 0,
-          lower = 0,
-          near = 0;
-        const camera = viewer.camera.positionWC;
+          lower = 0;
         dataManager.layers
           .get('traffic')
           .module.visitMotionDots((id, key, p) => {

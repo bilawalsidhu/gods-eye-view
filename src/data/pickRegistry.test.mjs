@@ -16,6 +16,7 @@ import {
   unregisterPickOwner,
   isOwnedByOtherLayer,
   resolvePickId,
+  pickContact,
 } from './pickRegistry.js';
 
 // ---------------------------------------------------------------------------
@@ -96,4 +97,123 @@ test('ownership: unregister removes the predicate', () => {
   assert.equal(isOwnedByOtherLayer('flights', 'station:1'), true);
   unregisterPickOwner('bikeshare');
   assert.equal(isOwnedByOtherLayer('flights', 'station:1'), false);
+});
+
+function primaryPointer(t, coarse) {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia');
+  Object.defineProperty(globalThis, 'matchMedia', {
+    configurable: true,
+    value: (query) => ({ matches: query === '(pointer: coarse)' && coarse }),
+  });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'matchMedia', previous);
+    else delete globalThis.matchMedia;
+  });
+}
+
+function contactOwners(t) {
+  registerPickOwner('flights', (id) => id === 'civil');
+  registerPickOwner('military', (id) => id === 'military');
+  registerPickOwner('ais-live-vessels', (id) => id === '123456789');
+  t.after(() => {
+    for (const id of ['flights', 'military', 'ais-live-vessels'])
+      unregisterPickOwner(id);
+  });
+}
+
+const mapTile = { primitive: { isCesium3DTileset: true } };
+
+test('touch contact pick expands only a surface miss, bounded to 8 hits in 14 CSS pixels', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  const position = { x: 30, y: 50 };
+  const contact = { primitive: { id: 'civil' } };
+  let drills = 0;
+  const scene = {
+    pick(point) {
+      assert.equal(point, position);
+      return mapTile;
+    },
+    drillPick(...args) {
+      drills++;
+      assert.deepEqual(args, [position, 8, 14, 14]);
+      return [mapTile, contact];
+    },
+  };
+  assert.equal(pickContact(scene, position), contact);
+  assert.equal(drills, 1);
+});
+
+test('touch contact pick returns the first registered sibling, never a caller-specific preference', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const first of [{ id: 'military' }, { id: { mmsi: '123456789' } }]) {
+    const scene = {
+      pick: () => mapTile,
+      drillPick: () => [mapTile, first, { id: 'civil' }],
+    };
+    assert.equal(pickContact(scene, { x: 1, y: 1 }), first);
+  }
+});
+
+test('touch contact pick does not drill through exact registered or unregistered interactive picks', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const exact of [
+    { id: 'military' },
+    { id: 'custom-annotation' },
+    { primitive: { id: 'custom-gizmo' } },
+    { primitive: { id: 'civil', isCesium3DTileset: true } },
+  ]) {
+    const scene = {
+      pick: () => exact,
+      drillPick: () => assert.fail('must keep exact interactive hit'),
+    };
+    assert.equal(pickContact(scene, { x: 1, y: 1 }), exact);
+  }
+});
+
+test('touch expansion stops at a non-surface object and respects the drill bound', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const hits of [
+    [mapTile, { id: 'custom-annotation' }, { id: 'civil' }],
+    [...Array(8).fill(mapTile), { id: 'civil' }],
+    [mapTile],
+  ]) {
+    assert.equal(
+      pickContact(
+        { pick: () => mapTile, drillPick: () => hits },
+        { x: 1, y: 1 },
+      ),
+      mapTile,
+    );
+  }
+});
+
+test('fine primary pointers keep the existing exact mouse pick without a drill', (t) => {
+  primaryPointer(t, false);
+  contactOwners(t);
+  const scene = {
+    pick: () => mapTile,
+    drillPick: () => assert.fail('mouse must not expand'),
+  };
+  assert.equal(pickContact(scene, { x: 1, y: 1 }), mapTile);
+});
+
+test('touch picking tolerates unavailable or failing drill support and preserves empty sky', (t) => {
+  primaryPointer(t, true);
+  contactOwners(t);
+  for (const drillPick of [
+    undefined,
+    () => {
+      throw new Error('context lost');
+    },
+    () => [],
+  ]) {
+    assert.equal(
+      pickContact({ pick: () => undefined, drillPick }, { x: 1, y: 1 }),
+      undefined,
+    );
+  }
 });

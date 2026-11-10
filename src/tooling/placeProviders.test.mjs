@@ -81,6 +81,24 @@ test('nearby labels rank landmarks, deduplicate names/addresses and bound the pr
   assert.deepEqual(projectNearbyPlaces({}, 0, 0), []);
 });
 
+test('nearby place distances take the short way round 180°', () => {
+  const at = (name, longitude) => ({
+    id: name,
+    displayName: { text: name },
+    location: { latitude: -16.8, longitude },
+    types: ['point_of_interest'],
+  });
+  // From Taveuni at 179.98: 2 km east across 180°, 4 km west on this side.
+  const result = projectNearbyPlaces(
+    { places: [at('West', 179.942), at('East', -179.999)] },
+    -16.8,
+    179.98,
+  );
+  const byName = Object.fromEntries(result.map((p) => [p.name, p.distanceM]));
+  assert.ok(byName.East > 1500 && byName.East < 2500, String(byName.East));
+  assert.ok(byName.West > 3500 && byName.West < 4500, String(byName.West));
+});
+
 test('text search preserves bounds, rejects malformed bounds and tolerates absent locations', () => {
   const viewport = {
     low: { latitude: 1, longitude: 2 },
@@ -481,6 +499,25 @@ test('the upstream host is pinned: a redirect is refused, not followed', async (
   });
   await request('/api/route', '?profile=car&coords=-97,30;-97.01,30.01');
   assert.deepEqual(seen, ['error'], 'a redirect would escape the pinned host');
+});
+
+test('the routing proxy declines a non-GET before rate limiting or upstream', async (t) => {
+  // A fetch that throws proves the refusal comes before any upstream call.
+  const request = install(installRouteMiddleware);
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('upstream must not be reached');
+  });
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+    const response = await request(
+      '/api/route',
+      '?profile=car&coords=-97,30;-97.01,30.01',
+      method,
+    );
+    assert.equal(response.statusCode, 405, method);
+    // RFC 9110 section 15.5.6: a 405 names the methods it accepts.
+    assert.equal(response.headers.allow, 'GET', method);
+    assert.deepEqual(response.body, { error: 'Method Not Allowed' });
+  }
 });
 
 test('both paid Google routes refuse cross-site requests before calling Google', async (t) => {

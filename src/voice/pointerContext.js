@@ -20,15 +20,15 @@
  */
 
 /** Movement below this many CSS pixels is still the same dwell. */
-export const POINTER_DWELL_PX = 12;
+const POINTER_DWELL_PX = 12;
 /** Stillness that makes a dwell point. */
 export const POINTER_DWELL_MS = 250;
 /** A resting pointer stays a referent this long after it last moved. */
 export const POINTER_FRESH_MS = 30000;
 /** Pixels from the canvas edge that count as "parked", never a referent. */
-export const POINTER_EDGE_PX = 8;
+const POINTER_EDGE_PX = 8;
 /** A dwell pick is reused by a snapshot only while this recent (contacts move). */
-export const POINTER_DWELL_REUSE_MS = 1000;
+const POINTER_DWELL_REUSE_MS = 1000;
 /**
  * Open mic has no gesture, so the pointer only counts when it moved or
  * settled on the map this recently: a cursor resting there for minutes is
@@ -76,7 +76,7 @@ export function cameraPoseKey(viewer) {
 }
 
 /** Bound and de-control a label before it goes to the model or the card. */
-export function pointerLabel(value, max = LABEL_MAX) {
+function pointerLabel(value, max = LABEL_MAX) {
   const clean = String(value ?? '')
     .replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
     .replace(/\s+/g, ' ')

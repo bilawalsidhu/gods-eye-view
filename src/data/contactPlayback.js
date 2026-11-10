@@ -181,7 +181,7 @@ export function trimTrack(track, nowMs, keep = track.capacity) {
   for (const id of track.epochs.keys())
     if (!used.has(id)) track.epochs.delete(id);
 }
-export function validFix(fix) {
+function validFix(fix) {
   return (
     Number.isFinite(fix?.t) &&
     fix.t >= 0 &&

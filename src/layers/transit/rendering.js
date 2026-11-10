@@ -22,7 +22,6 @@ import {
 import {
   MARKER_PIXEL_SIZE,
   ROTATION_REFRESH_MS,
-  SELECTED_CARD_REFRESH_MS,
   VISIBILITY_REFRESH_MS,
   SELECTED_PIXEL_SIZE,
   TRANSIT_MODE_COLORS,
@@ -109,7 +108,7 @@ export function createRendering({ state, services, parts }) {
   }
   function sampleIdle(entry) {
     if (!state._moving.has(entry)) {
-      updatePlayback(entry, Date.now(), performance.now());
+      updatePlayback(entry, state.now(), performance.now());
       placeSample(entry);
     }
   }
@@ -173,7 +172,7 @@ export function createRendering({ state, services, parts }) {
           () => {
             entry.wakeTimer = null;
             if (!state._enabled || !state._vehicles.has(entry.key)) return;
-            updatePlayback(entry, Date.now(), performance.now());
+            updatePlayback(entry, state.now(), performance.now());
             placeSample(entry);
             schedulePlayback(entry);
             syncRenderHold();
@@ -389,7 +388,7 @@ export function createRendering({ state, services, parts }) {
     )
       return;
     if (!state._enabled) return;
-    const now = Date.now();
+    const now = state.now();
     if (state._vehicles.size === 0) {
       state._moving.clear();
       syncRenderHold();
@@ -425,7 +424,7 @@ export function createRendering({ state, services, parts }) {
     }
 
     parts.trails.update();
-    refreshRotations(now);
+    refreshRotations(Date.now());
     const selected = state._vehicles.get(state._selectedKey);
     if (selected && state._visible.has(selected)) {
       selected.marker.rotation = Number.isFinite(selected.courseDeg)
@@ -490,7 +489,7 @@ export function createRendering({ state, services, parts }) {
       const noSample = !entry.sample || !Number.isFinite(entry.sample.lat);
       if (entry.track?.count && (!state._visible.has(entry) || noSample)) {
         entry.sample ||= {};
-        updatePlayback(entry, now, performance.now());
+        updatePlayback(entry, state.now(), performance.now());
       }
       sphere.center =
         state._visible.has(entry) || !entry.sample
@@ -558,7 +557,7 @@ export function createRendering({ state, services, parts }) {
   }
   function resumePlayback() {
     if (!state._enabled) return;
-    const now = Date.now(),
+    const now = state.now(),
       mono = performance.now();
     const entries = new Set(state._visible);
     const selected = state._vehicles.get(state._selectedKey);

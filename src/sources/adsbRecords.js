@@ -30,6 +30,8 @@
  * This module is portable: no Cesium, DOM, network or storage access.
  */
 
+import { readAdsbVerticalRateFpm } from './adsbFields.js';
+
 /** A marker is dropped once its newest position is this old. */
 export const LOCAL_ADSB_POSITION_STALE_MS = 60_000;
 /** An aircraft is forgotten once no message has arrived for this long. */
@@ -41,12 +43,12 @@ const CATEGORY_PATTERN = /^[A-D][0-7]$/;
 /** A previous accepted fix older than this is no reference for a new one. */
 export const LOCAL_ADSB_REFERENCE_MAX_AGE_MS = 10 * 60_000;
 /** Speed limit (kt) for an aircraft that has not reported a ground speed. */
-export const LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT = 1_000;
+const LOCAL_ADSB_UNKNOWN_SPEED_LIMIT_KT = 1_000;
 /** Tighter limit (kt) for light aircraft and rotorcraft without a speed. */
-export const LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT = 350;
+const LOCAL_ADSB_SLOW_CATEGORY_LIMIT_KT = 350;
 /** Reported ground speed is multiplied by this, plus the margin below. */
-export const LOCAL_ADSB_SPEED_FACTOR = 1.5;
-export const LOCAL_ADSB_SPEED_MARGIN_KT = 50;
+const LOCAL_ADSB_SPEED_FACTOR = 1.5;
+const LOCAL_ADSB_SPEED_MARGIN_KT = 50;
 /** Distance always allowed between two fixes (CPR and reception error). */
 export const LOCAL_ADSB_POSITION_MARGIN_M = 500;
 /**
@@ -247,7 +249,7 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
       altitudeFt: altitude,
       groundSpeedKt: finiteOrNull(entry.gs),
       trackDeg: normalizeTrack(entry.track),
-      verticalRateFpm: finiteOrNull(entry.baro_rate),
+      verticalRateFpm: readAdsbVerticalRateFpm(entry),
       lastPositionAt: hasPosition
         ? receivedAt - Math.max(0, seenPosS) * 1000
         : null,

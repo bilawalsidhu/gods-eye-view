@@ -77,13 +77,15 @@ test('the documented outcomes hold: default, stored open, stored shut, and a sha
   // against the code that decides them.
   const { PanelPositionControls } =
     await import('../ui/panelPositionControls.js');
+  const { presentPanelLocally } = await import('../testSupport/panelState.mjs');
+  const { readPanelState } = await import('../ui/rail/panelState.js');
   const html = await readFile(
-    path.join(root, 'src/ui/templates/layer-panels.html'),
+    path.join(root, 'src/ui/views/panels/CctvPanel.vue'),
     'utf8',
   );
   assert.match(
     html,
-    /<div id="cctv-panel" class="panel-collapsible collapsed"/,
+    /<RailPanel id="cctv-panel"[^>]*\bstart-collapsed\b/,
     'the CCTV panel starts collapsed in the markup',
   );
 
@@ -110,7 +112,8 @@ test('the documented outcomes hold: default, stored open, stored shut, and a sha
   };
   try {
     const controls = new PanelPositionControls({
-      syncPanelCollapseButton: () => {},
+      presentPanel: presentPanelLocally,
+      shownPanel: readPanelState,
       layoutRightPanels: () => {},
       syncCctvPanelViewport: () => {},
       showToast: () => {},
