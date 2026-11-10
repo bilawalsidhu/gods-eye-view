@@ -29,7 +29,7 @@ function yearParam(value) {
 /**
  * Merge a (partial) period request into the current one. `from: null` means
  * the first year in the data and `to: null` the latest; an invalid year keeps
- * the current one.
+ * the current one, and a start after the end is stored as the reverse.
  * @param {{from?: number|string|null, to?: number|string|null}} params
  * @param {{from: number|null, to: number|null}} current
  * @returns {{from: number|null, to: number|null}}
@@ -44,6 +44,10 @@ export function normalizePeriod(
     const year = yearParam(params[end]);
     if (year !== undefined) next[end] = year;
   }
+  // Stored in the order it is shown, so a later edit to one end (the picker
+  // sends only that end) changes the end the reader picked, not the other.
+  if (Number.isInteger(next.from) && Number.isInteger(next.to))
+    if (next.from > next.to) [next.from, next.to] = [next.to, next.from];
   return next;
 }
 

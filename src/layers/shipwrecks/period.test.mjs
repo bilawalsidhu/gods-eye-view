@@ -36,3 +36,23 @@ test('all years show every wreck; a narrower period hides undated ones', () => {
   assert.deepEqual(reversed, { from: 1900, to: 1950, all: false });
   assert.equal(inPeriod(RECORDS[1], reversed), true);
 });
+
+test('a reversed period is stored as shown, so editing one end keeps the other', () => {
+  const reversed = normalizePeriod({ from: 1950, to: 1900 });
+  assert.deepEqual(reversed, { from: 1900, to: 1950 });
+  // The picker shows 1900–1950; the reader changes "From" to 1920.
+  assert.deepEqual(normalizePeriod({ from: 1920 }, reversed), {
+    from: 1920,
+    to: 1950,
+  });
+  // Moving "From" past "To" reads as the reverse, never an empty range.
+  assert.deepEqual(normalizePeriod({ from: 1960 }, { from: 1900, to: 1950 }), {
+    from: 1950,
+    to: 1960,
+  });
+  // One open end stays open.
+  assert.deepEqual(normalizePeriod({ from: 1960 }, { from: null, to: null }), {
+    from: 1960,
+    to: null,
+  });
+});
