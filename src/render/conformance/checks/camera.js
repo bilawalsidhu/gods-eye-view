@@ -698,6 +698,54 @@ export function cameraChecks() {
       },
     },
     {
+      id: 'camera.setView.exact',
+      port: 'camera',
+      title:
+        'a view given as direction and up is placed exactly: a thousand small turns straight down add up to one',
+      async run(h) {
+        const r = await fresh(h);
+        r.camera.setView({
+          destination: { lon: -97.74, lat: 30.27, height: 5000 },
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        await h.frame(r);
+        const start = r.camera.pose();
+        // Turn about the eye's own up, as a step turn left does.
+        const turn = (v, axis, angle) => {
+          const c = Math.cos(angle);
+          const s = Math.sin(angle);
+          const k = axis;
+          const d = k.x * v.x + k.y * v.y + k.z * v.z;
+          return {
+            x: v.x * c + (k.y * v.z - k.z * v.y) * s + k.x * d * (1 - c),
+            y: v.y * c + (k.z * v.x - k.x * v.z) * s + k.y * d * (1 - c),
+            z: v.z * c + (k.x * v.y - k.y * v.x) * s + k.z * d * (1 - c),
+          };
+        };
+        const step = 1e-5;
+        for (let i = 0; i < 1000; i++) {
+          const { position, direction, up } = r.camera.pose();
+          r.camera.setView({
+            destination: position,
+            orientation: { direction: turn(direction, up, step), up },
+          });
+        }
+        await h.frame(r);
+        const end = r.camera.pose();
+        const want = turn(start.direction, start.up, 1000 * step);
+        for (const axis of ['x', 'y', 'z'])
+          near(end.direction[axis], want[axis], 1e-6, `direction.${axis}`);
+        for (const axis of ['x', 'y', 'z'])
+          near(
+            end.position[axis],
+            start.position[axis],
+            1e-3,
+            `position.${axis}`,
+          );
+        r.destroy();
+      },
+    },
+    {
       id: 'camera.fov',
       port: 'camera',
       title: 'setFov sets the vertical field of view',

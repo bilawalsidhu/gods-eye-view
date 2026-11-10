@@ -302,10 +302,32 @@ export function createStubCamera({
     };
   }
 
+  /**
+   * The eye at `destination` (world), looking along `orientation.direction`
+   * with `up` made square to it: exactly, not through heading, pitch and
+   * roll, so step moves sent many times over do not drift.
+   */
+  function placeExactly(destination, orientation) {
+    const d = normalize(inverseFrameVector(frame, orientation.direction));
+    const u0 = inverseFrameVector(frame, orientation.up);
+    position = inverseFramePoint(frame, destination);
+    direction = d;
+    up = normalize(sub(u0, scale(d, dot(u0, d))));
+    right = cross(direction, up);
+  }
+
   function setView({ destination, orientation } = {}) {
     command('setView');
-    const resolved = resolveDestination(destination, orientation);
-    placeAt(resolved.destination, resolved.angles);
+    if (orientation && 'direction' in orientation) {
+      const target =
+        destination && !('rect' in destination)
+          ? toEcef(destination)
+          : resolveDestination(destination, orientation).destination;
+      placeExactly(target, orientation);
+    } else {
+      const resolved = resolveDestination(destination, orientation);
+      placeAt(resolved.destination, resolved.angles);
+    }
     requestRender('camera');
   }
 
