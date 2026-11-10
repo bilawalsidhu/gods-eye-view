@@ -26,7 +26,8 @@ function localizedValues(values) {
  * @param {{load?: Function, drawFile?: Function, document?: Document,
  *   publish?: Function, connect?: Function}} deps
  *   `load(file, {color, signal})` defaults to `loadGeoFile` (the file's
- *   plain records) and `drawFile(engine, records, {visible})` to
+ *   plain records) and `drawFile(engine, records, {visible, signal,
+ *   isCurrent})` to
  *   `drawImportedFile` (their drawing: { report, setShow, refreshGround,
  *   footprint, destroy }); tests pass doubles. `publish({rows, hint})` hands the file
  *   list and hint to the view that renders them. `connect(actions)` answers
@@ -252,9 +253,13 @@ export function createGeoFileImport({
     try {
       item.drawing = await drawFile(attached.engine, loaded.records, {
         visible: item.visible,
+        signal: attached.controller.signal,
+        isCurrent: () => !destroyed && scene === attached,
       });
     } catch (error) {
       undraw(item);
+      // A draw cut short by a scene change is not a file error.
+      if (destroyed || scene !== attached) return false;
       throw error;
     }
     if (destroyed || scene !== attached) {

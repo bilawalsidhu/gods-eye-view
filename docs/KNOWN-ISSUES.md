@@ -1,6 +1,6 @@
 # KNOWN ISSUES
 
-Updated: September 22, 2026
+Updated: November 10, 2026
 
 This file tracks active runtime issues only.
 
@@ -9,6 +9,29 @@ For the roadmap and open backlog, see the repository issue tracker.
 ---
 
 ## Open
+
+### Large raised KML polygons omit their fill
+
+Status: Open (bounded triangulation)
+
+On both engines, raised polygons with more than 32,768 vertices draw only
+their outlines. Those with more than 128 rings draw neither fill nor
+outlines. These limits bound main-thread triangulation and outline work;
+the omitted geometry is counted as undrawn in the import result.
+
+### Navara terrain tokens are not refreshed while the page stays open
+
+Status: Open (reload required)
+
+An expired terrain token is not refreshed during an open Navara session.
+Reload the page to request a new terrain token.
+
+### Navara does not fall back when a map source fails
+
+Status: Open (manual map selection)
+
+Navara does not report tile errors, so a failing map source does not trigger
+fallback to another map. Select another map manually when tiles fail to load.
 
 ### Orbital cockpit is unavailable on Navara
 

@@ -41,11 +41,13 @@ const ICON_PIXEL_BUDGET = 16 * 1024 * 1024;
 const OVERLAY_PIXEL_BUDGET = 16 * 1024 * 1024;
 // The longest side of a tinted or turned ground overlay's canvas.
 const MAX_OVERLAY_SIDE = 4096;
-// earcut runs on the main thread and grows quadratically with holes and
-// vertices: a raised polygon past these draws no fill (past the rings, not
-// even its outlines, one line each).
+// Bound main-thread triangulation stalls and the number of raised outlines.
+// Median polygonShape times (three runs on a fast laptop): 32,768 vertices
+// took 58 ms (37 ms in 128 rings), versus 198 ms for 65,536 vertices.
+// Holes make earcut quadratic: 1,000 took 110 ms and 10,000 took 4.8 s.
+// Past the vertex limit only outlines draw; past the ring limit nothing draws.
 const MAX_RAISED_RINGS = 128;
-const MAX_RAISED_VERTICES = 4096;
+const MAX_RAISED_VERTICES = 32_768;
 let serial = 0;
 // Each engine's imported point sets, left out of each other's ground.
 const pointSets = new WeakMap();
@@ -192,9 +194,11 @@ const lookKey = (icon, depth) =>
  * @param {import('../globe/contract.js').GlobeEngine} engine
  * @param {import('./geoImportRecords.js').ImportedRecords} records
  * @param {{ visible?: boolean, loadImage?: (url: string) => Promise<object>,
- *   createCanvas?: () => object, pixelRatio?: number }} [options]
+ *   createCanvas?: () => object, pixelRatio?: number, now?: () => number,
+ *   signal?: AbortSignal, isCurrent?: () => boolean }} [options]
  *   `loadImage` and `createCanvas` are test seams (icon decoding and the
- *   sprite canvases).
+ *   sprite canvases). `now` measures polygon work in milliseconds;
+ *   `signal` and `isCurrent` cancel work when the draw loses its owner.
  * @returns {Promise<{ report: { drawn: number, undrawn: number,
  *   kinds: Object<string, number> }, setShow: (visible: boolean) => void,
  *   refreshGround: (signal?: AbortSignal) => Promise<void>,
@@ -209,6 +213,9 @@ export async function drawImportedFile(
     loadImage = imageFromUrl,
     createCanvas = () => document.createElement('canvas'),
     pixelRatio = Math.max(1, Math.min(2, globalThis.devicePixelRatio || 1)),
+    now = () => performance.now(),
+    signal,
+    isCurrent = () => true,
   } = {},
 ) {
   const prefix = `geo-import-${++serial}`;
@@ -224,6 +231,12 @@ export async function drawImportedFile(
   const layers = [];
   const looks = new Map();
   let drawn = 0;
+
+  function checkActive() {
+    signal?.throwIfAborted();
+    if (destroyed || !isCurrent())
+      throw new Error('The imported file was removed');
+  }
 
   function release() {
     destroyed = true;
@@ -242,9 +255,16 @@ export async function drawImportedFile(
   }
 
   try {
+    checkActive();
     // Fills under ground lines; a plain-colour overlay is a fill too.
     const fills = [];
+    let lastYield = now();
     for (const polygon of records.polygons) {
+      if (now() - lastYield > 8) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        checkActive();
+        lastYield = now();
+      }
       let any = false;
       if (polygon.raised && polygon.rings.length > MAX_RAISED_RINGS) {
         kinds.complexPolygon = (kinds.complexPolygon ?? 0) + 1;
@@ -321,6 +341,7 @@ export async function drawImportedFile(
           overlaySide,
           overlayCache,
         );
+        checkActive();
         if (!prepared) {
           kinds.rotatedOverlay = (kinds.rotatedOverlay ?? 0) + 1;
           continue;
@@ -332,9 +353,11 @@ export async function drawImportedFile(
               image = await loadImage(overlay.url);
               overlayImages.set(overlay.url, image);
             } catch {
+              checkActive();
               kinds.raisedOverlay = (kinds.raisedOverlay ?? 0) + 1;
               continue;
             }
+            checkActive();
           }
           const { west, south, east, north } = prepared.rectangle;
           const shape = rectangleShape([west, south, east, north], raise);
@@ -477,7 +500,7 @@ export async function drawImportedFile(
             return;
           }
         }
-        if (destroyed) return;
+        checkActive();
         const { canvas, side } = composeIcon(look.icon, {
           image,
           createCanvas,
@@ -502,11 +525,13 @@ export async function drawImportedFile(
         drawn += look.pins.length;
       }),
     );
-    if (destroyed) throw new Error('The imported file was removed');
+    checkActive();
     for (let from = 0; from < pins.length; from += BATCH) {
       settle(heightContext(), from, from + BATCH);
-      if (from + BATCH < pins.length)
+      if (from + BATCH < pins.length) {
         await new Promise((resolve) => setTimeout(resolve, 0));
+        checkActive();
+      }
     }
     for (const look of looks.values()) writePins(look);
     syncCull();

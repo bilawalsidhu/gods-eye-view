@@ -413,6 +413,73 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
+    'a raised polygon with 20 000 vertices keeps its fill',
+    async ({ engine }) => {
+      const records = emptyRecords();
+      const outer = Array.from({ length: 20_000 }, (_, i) => {
+        const angle = (i * 2 * Math.PI) / 20_000;
+        return [10 * Math.cos(angle), 10 * Math.sin(angle), 1000];
+      });
+      records.polygons.push({
+        rings: [outer],
+        raised: true,
+        fill: [1, 0, 0, 1],
+        outline: { color: [1, 1, 1, 1], widthPx: 1 },
+      });
+      const drawing = await drawImportedFile(engine, records, { createCanvas });
+      assert.deepEqual(drawing.report, { drawn: 1, undrawn: 0, kinds: {} });
+      assert.equal(engine.meshes.list().length, 1);
+      assert.equal(engine.lines.list().length, 1);
+      drawing.destroy();
+    },
+  );
+
+  for (const rings of [128, 200])
+    displayTest(
+      `a raised polygon with ${rings} rings respects the ring bound`,
+      async ({ engine }) => {
+        const records = emptyRecords();
+        const outer = [
+          [0, 0, 1000],
+          [10, 0, 1000],
+          [10, 10, 1000],
+          [0, 10, 1000],
+        ];
+        const holes = Array.from({ length: rings - 1 }, (_, i) => {
+          const [x, y, d] = [
+            0.1 + (i % 20) * 0.4,
+            0.1 + Math.floor(i / 20) * 0.4,
+            0.1,
+          ];
+          return [
+            [x, y, 1000],
+            [x + d, y, 1000],
+            [x + d, y + d, 1000],
+            [x, y + d, 1000],
+          ];
+        });
+        records.polygons.push({
+          rings: [outer, ...holes],
+          raised: true,
+          fill: [1, 0, 0, 1],
+          outline: { color: [1, 1, 1, 1], widthPx: 1 },
+        });
+        const drawing = await drawImportedFile(engine, records, {
+          createCanvas,
+        });
+        assert.deepEqual(
+          drawing.report,
+          rings === 128
+            ? { drawn: 1, undrawn: 0, kinds: {} }
+            : { drawn: 0, undrawn: 1, kinds: { complexPolygon: 1 } },
+        );
+        assert.equal(engine.meshes.list().length, rings === 128 ? 1 : 0);
+        assert.equal(engine.lines.list().length, rings === 128 ? rings : 0);
+        drawing.destroy();
+      },
+    );
+
+  displayTest(
     'a raised polygon with 10 000 holes does not block the import',
     async ({ engine }) => {
       const records = emptyRecords();
@@ -452,11 +519,11 @@ for (const make of GROUND_HARNESSES) {
   );
 
   displayTest(
-    'a raised fill past the vertex bound is counted, its outline drawn',
+    'a raised fill with 40 000 vertices is counted, its outline drawn',
     async ({ engine }) => {
       const records = emptyRecords();
-      const outer = Array.from({ length: 5000 }, (_, i) => {
-        const angle = (i * 2 * Math.PI) / 5000;
+      const outer = Array.from({ length: 40_000 }, (_, i) => {
+        const angle = (i * 2 * Math.PI) / 40_000;
         return [10 * Math.cos(angle), 10 * Math.sin(angle), 1000];
       });
       records.polygons.push({
@@ -476,6 +543,115 @@ for (const make of GROUND_HARNESSES) {
       drawing.destroy();
     },
   );
+
+  displayTest(
+    'polygon work yields after more than 8 ms and resets the clock after yielding',
+    async ({ engine }) => {
+      const records = emptyRecords();
+      records.polygons = Array.from({ length: 7 }, () => ({
+        rings: [
+          [
+            [0, 0, 1000],
+            [1, 0, 1000],
+            [1, 1, 1000],
+          ],
+        ],
+        raised: true,
+        fill: [1, 0, 0, 1],
+        outline: null,
+      }));
+      let elapsed = 0;
+      let created = 0;
+      const create = engine.meshes.createMesh;
+      engine.meshes.createMesh = (options) => {
+        elapsed += 4;
+        created++;
+        return create(options);
+      };
+      const snapshots = [];
+      const observe = (async () => {
+        for (let i = 0; i < 2; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          snapshots.push(created);
+          elapsed += 100;
+        }
+      })();
+      const drawing = await drawImportedFile(engine, records, {
+        createCanvas,
+        now: () => elapsed,
+      });
+      await observe;
+      assert.deepEqual(snapshots, [3, 6]);
+      assert.equal(created, 7);
+      assert.equal(drawing.report.drawn, 7);
+      drawing.destroy();
+    },
+  );
+
+  for (const cancellation of ['aborted', 'superseded', 'removed'])
+    displayTest(
+      `a draw ${cancellation} during a polygon yield stops and releases its geometry`,
+      async ({ engine }) => {
+        const records = geoJsonRecords(
+          { type: 'Point', coordinates: [1, 2] },
+          '#39d0ff',
+        );
+        records.polygons = Array.from({ length: 3 }, () => ({
+          rings: [
+            [
+              [0, 0, 1000],
+              [1, 0, 1000],
+              [1, 1, 1000],
+            ],
+          ],
+          raised: true,
+          fill: [1, 0, 0, 1],
+          outline: { color: [1, 1, 1, 1], widthPx: 1 },
+        }));
+        const controller = new AbortController();
+        let current = records;
+        const files = new Set([records]);
+        let elapsed = 0;
+        let created = 0;
+        const create = engine.meshes.createMesh;
+        engine.meshes.createMesh = (options) => {
+          elapsed += 9;
+          created++;
+          return create(options);
+        };
+        let beforeCancel;
+        const cancel = new Promise((resolve) =>
+          setTimeout(() => {
+            beforeCancel = [
+              engine.meshes.list().length,
+              engine.lines.list().length,
+            ];
+            if (cancellation === 'aborted') controller.abort();
+            else if (cancellation === 'superseded') current = emptyRecords();
+            else files.delete(records);
+            resolve();
+          }, 0),
+        );
+        await assert.rejects(
+          drawImportedFile(engine, records, {
+            createCanvas,
+            now: () => elapsed,
+            signal: controller.signal,
+            isCurrent: () => current === records && files.has(records),
+          }),
+          cancellation === 'aborted'
+            ? { name: 'AbortError' }
+            : /The imported file was removed/,
+        );
+        await cancel;
+        assert.deepEqual(beforeCancel, [1, 1]);
+        assert.equal(created, 1);
+        assert.equal(engine.meshes.list().length, 0);
+        assert.equal(engine.lines.list().length, 0);
+        assert.equal(engine.ground.list().length, 0);
+        assert.equal(engine.movers.list().length, 0);
+      },
+    );
 
   displayTest(
     'a polygon with a degenerate hole draws its outer ring',
