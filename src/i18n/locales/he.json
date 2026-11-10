@@ -3517,23 +3517,23 @@
   "Cargo or finds: {value}": "מטען או ממצאים: {value}",
   "Protected wreck": "ספינה טרופה מוגנת",
   "Source: {value}": "מקור: {value}",
-  "Click the card to open EMODnet ↗": "לחצו על הכרטיס כדי לפתוח את EMODnet ↗",
-  "Click the card to open the article ↗": "לחצו על הכרטיס כדי לפתוח את הערך ↗",
-  "Click the card to open the source ↗": "לחצו על הכרטיס כדי לפתוח את המקור ↗",
+  "Click the card to open EMODnet ↗": "לחץ על הכרטיס כדי לפתוח את EMODnet ↗",
+  "Click the card to open the article ↗": "לחץ על הכרטיס כדי לפתוח את הערך ↗",
+  "Click the card to open the source ↗": "לחץ על הכרטיס כדי לפתוח את המקור ↗",
   "All years": "כל השנים",
   "Period": "תקופה",
   "From": "מ־",
   "First year of the shipwreck period": "השנה הראשונה בתקופת הטביעות",
   "To": "עד",
   "Last year of the shipwreck period": "השנה האחרונה בתקופת הטביעות",
-  "Wikidata unavailable; showing EMODnet only": "ויקינתונים לא זמין; מוצג EMODnet בלבד",
-  "EMODnet unavailable; showing Wikidata only": "EMODnet לא זמין; מוצגים ויקינתונים בלבד",
+  "Wikidata unavailable; showing EMODnet only": "ויקינתונים אינו זמין; מוצג EMODnet בלבד",
+  "EMODnet unavailable; showing Wikidata only": "EMODnet אינו זמין; מוצג ויקינתונים בלבד",
   "Shipwrecks unavailable": "ספינות טרופות לא זמינות",
   "{count} wrecks": {
-    "one": "ספינה טרופה אחת ({count})",
+    "one": "{count} ספינה טרופה",
     "two": "{count} ספינות טרופות",
     "other": "{count} ספינות טרופות"
   },
-  "EMODnet (European waters) · Wikidata (worldwide)": "EMODnet (מים אירופיים) · ויקינתונים (כל העולם)",
-  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "ספינות טרופות מורשת אירופיות מגיעות מ־EMODnet Human Activities; ספינות טרופות בולטות מכל העולם מגיעות מוויקינתונים. הצבע מראה מתי הספינה טבעה; גודל הסמן גדל עם מספר ההרוגים. לחצו על סמן כדי לפתוח את הכרטיס שלו."
+  "EMODnet (European waters) · Wikidata (worldwide)": "EMODnet (מימי אירופה) · ויקינתונים (כל העולם)",
+  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "ספינות טרופות אירופיות בעלות ערך מורשת מגיעות מ־EMODnet Human Activities; ספינות טרופות בולטות מכל העולם מגיעות מוויקינתונים. הצבע מראה מתי הספינה טבעה; הסמן גדל ככל שמספר ההרוגים עולה. לחץ על סמן כדי לפתוח את הכרטיס שלו."
 }

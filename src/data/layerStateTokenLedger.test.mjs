@@ -435,7 +435,7 @@ test('checker reads a complete future base ledger and rejects retired-token reus
         () =>
           validateLayerStateAllocations(published, {
             ...LAYER_STATE_TOKEN_RESERVATIONS,
-            newcomer: '00',
+            newcomer: '02',
           }),
         /changed or removed/,
       );
