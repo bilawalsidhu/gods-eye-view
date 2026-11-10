@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 // Contract: rapid switches. Back-to-back picks with real input, a second
 // pointer click on the picker while it is busy, a history visit superseded
 // by the opposite visit before its engine is ready, and a pick superseded by
@@ -115,7 +116,7 @@ await strict.run({}, async (b) => {
     history.back();
   });
   await waitForEngine(p, 'navara');
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await whenSettled(p);
   await assertSession(p, 'navara', 'Forward supersedes Back');
   const visited = await sessionState(p);
   const shown = await engines();
@@ -145,7 +146,7 @@ await strict.run({}, async (b) => {
   });
   await strict.pick(p, 'cesium', { settle: false });
   await waitForEngine(p, 'cesium', { timeout: 30000 });
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await whenSettled(p);
   await assertSession(p, 'cesium', 'Back supersedes the pick');
   const after = await sessionState(p);
   const backShown = await engines();

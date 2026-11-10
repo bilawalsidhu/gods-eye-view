@@ -1,3 +1,4 @@
+import { waitForEngine } from './qa-strict-harness.mjs';
 import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { promisify } from 'node:util';
@@ -51,11 +52,7 @@ await strict.run({}, async (b) => {
     if (new URL(req.url()).pathname === '/api/cctv/sources') catalogs++;
   });
   await p.goto(url.href);
-  await p.waitForFunction(
-    () =>
-      window.__godsEyeView?.engine?.kind === 'navara' &&
-      document.querySelector('#loading-screen.hidden'),
-  );
+  await waitForEngine(p, 'navara');
   await assertKeylessPreview(p);
   await p.evaluate(async () => {
     const { dataManager, styleManager } = window.__godsEyeView;

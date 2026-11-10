@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 import { trafficFixtureResponse } from './traffic-fixtures.mjs';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -156,14 +157,14 @@ await strict.run({}, async (b) => {
           'traffic did not settle with 12 vehicles in view: ' +
             JSON.stringify({ loading, inView: rows.length }),
         );
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await whenSettled(p);
     }
   };
   // The population once roads, heights and dots have settled. Source counts
   // can be ready before the renderer has drawn terrain, so the camera and the
-  // attached road heights get the same delay before and after the switches.
+  // attached road heights are sampled after drawn frames on either engine.
   const settledPopulation = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 2200));
+    await whenSettled(p);
     await settled();
     return p.evaluate(() => window.qaTraffic.getStats().count);
   };
@@ -251,7 +252,7 @@ await strict.run({}, async (b) => {
       origin: 'user',
     }),
   );
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  await whenSettled(p);
   const hidden = await raw();
   const { width, height } = shown.info;
   const scale = width / 1024;

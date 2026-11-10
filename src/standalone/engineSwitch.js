@@ -121,21 +121,33 @@ export function waitForFirstFrame(
     clearTimer = clearTimeout,
   } = {},
 ) {
-  if (document?.hidden) return Promise.resolve(false);
+  const outcome = (path) => {
+    if (engine.host?.canvas?.dataset)
+      engine.host.canvas.dataset.firstFrameOutcome = path;
+  };
+  if (document?.hidden) {
+    outcome('hidden');
+    return Promise.resolve(false);
+  }
+  outcome('pending');
   return new Promise((resolve) => {
+    let finished = false;
     let timer = null;
     let remove = () => {};
-    const finish = (drawn) => {
+    const finish = (path) => {
+      if (finished) return;
+      finished = true;
+      outcome(path);
       remove();
       clearTimer(timer);
       document?.removeEventListener?.('visibilitychange', hidden);
-      resolve(drawn);
+      resolve(path === 'frame');
     };
     function hidden() {
-      if (document.hidden) finish(false);
+      if (document.hidden) finish('hidden');
     }
-    remove = engine.frames.postRender.addEventListener(() => finish(true));
-    timer = setTimer(() => finish(false), timeoutMs);
+    remove = engine.frames.postRender.addEventListener(() => finish('frame'));
+    timer = setTimer(() => finish('timeout'), timeoutMs);
     document?.addEventListener?.('visibilitychange', hidden);
     engine.render.request('engine-switch');
   });

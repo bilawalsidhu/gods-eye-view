@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 // The Cyber HUD sonar on Navara: with the Cyber HUD on, the
 // sweep lights the contacts it passes and dims the rest to the opacity
 // floor, by each contact's place on screen exactly as the CPU sampler of
@@ -85,15 +86,23 @@ const read = (page, places) =>
   }, places);
 
 // Frames the engine draws in `ms` without being asked.
-const framesIn = (page, ms) =>
-  page.evaluate(async (ms) => {
-    const { engine } = window.__godsEyeView;
-    let frames = 0;
-    const off = engine.frames.postRender.addEventListener(() => frames++);
-    await new Promise((resolve) => setTimeout(resolve, ms));
-    off();
-    return frames;
-  }, ms);
+const framesIn = async (page, ms) => {
+  await page.evaluate(() => {
+    const sample = (window.__qaSonarFrames = { frames: 0, at: performance.now() });
+    sample.off = window.__godsEyeView.engine.frames.postRender.addEventListener(
+      () => sample.frames++,
+    );
+  });
+  await page.waitForFunction(
+    (ms) => performance.now() - window.__qaSonarFrames.at >= ms,
+    {},
+    ms,
+  );
+  return page.evaluate(() => {
+    window.__qaSonarFrames.off();
+    return window.__qaSonarFrames.frames;
+  });
+};
 
 const mean = (values) =>
   values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
@@ -165,8 +174,16 @@ await strict.run({}, async (browser) => {
   );
 
   const sweeps = [];
-  for (const wait of [0, 1300, 1300]) {
-    await new Promise((resolve) => setTimeout(resolve, wait));
+  for (let sample = 0; sample < 3; sample++) {
+    if (sample)
+      await page.waitForFunction(
+        (previous) => {
+          const angle = window.__godsEyeView.engine.render.contactSonar().angleDeg;
+          return (angle - previous + 360) % 360 > 30;
+        },
+        {},
+        sweeps.at(-1).angle,
+      );
     const { luma, sonar } = await read(page, places);
     const expected = places.map(({ x, y }) =>
       sonarFactorAt(x, y, WIDTH, HEIGHT, sonar),
@@ -219,7 +236,7 @@ await strict.run({}, async (browser) => {
   const spread =
     Math.max(...neutral.luma.slice(0, 32)) -
     Math.min(...neutral.luma.slice(0, 32));
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await whenSettled(page);
   const idle = await framesIn(page, 1500);
   check(
     'with the sweep off every contact takes the neutral factor and the scene rests',

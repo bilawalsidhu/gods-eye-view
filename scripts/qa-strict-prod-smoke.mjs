@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 // Contract: the production build starts cold on each engine without a page
 // error. A fresh page per engine opens the keyless preview of `vite build`
 // (its hashed entry chunk, not the dev server), waits until the engine runs
@@ -47,11 +48,13 @@ await strict.run({}, async (b) => {
       );
     }
     // Late work after the start: idle prefetch, layer timers, workers.
-    await new Promise((resolve) => setTimeout(resolve, 4000));
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 30000 });
+    await whenSettled(page);
     const other = start === 'cesium' ? 'navara' : 'cesium';
     await strict.pick(page, other);
     await waitForEngine(page, other, { timeout: 90000 });
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 30000 });
+    await whenSettled(page);
     const row = { start, switchedTo: other, entry: entry.scripts, errors };
     results.push(row);
     console.log(errors.length ? 'FAIL' : 'PASS', JSON.stringify(row));

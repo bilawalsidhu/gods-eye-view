@@ -1,3 +1,4 @@
+import { clickUntilSelected, whenPickable, whenSettled } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -212,7 +213,7 @@ await strict.run({}, async (b) => {
     const deadline = Date.now() + 20000;
     let on = await capture(true, layerId);
     while (orangeOf(on) <= orangeOf(off) + 5 && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await whenSettled(p);
       on = await sample();
     }
     return on;
@@ -327,7 +328,7 @@ await strict.run({}, async (b) => {
       { timeout: 15000 },
       visible,
     );
-  const click = async (lon, lat) => {
+  const click = async (lon, lat, predicate) => {
     const { x, y } = await p.evaluate(
       (world) => {
         const { engine } = window.__godsEyeView;
@@ -338,6 +339,7 @@ await strict.run({}, async (b) => {
       },
       fromDegrees(lon, lat),
     );
+    if (predicate) await whenPickable(p, { x, y }, predicate);
     await p.mouse.click(x, y);
   };
   for (const kind of ['navara', 'cesium', 'navara']) {
@@ -398,7 +400,13 @@ await strict.run({}, async (b) => {
   await p.waitForFunction(
     () => window.qaVesselEntry.module.qaDrawn()?.chevrons[0]?.show,
   );
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  const vesselPicked = (picked) => picked?.id === '123456789';
+  const selectVessel = () =>
+    clickUntilSelected(
+      p,
+      () => click(-79.38, 43.65, vesselPicked),
+      () => window.qaVesselEntry.module.getSelectedInfo()?.mmsi === '123456789',
+    );
   // Click-picking on the running engine: clear the selection with a click on
   // empty water, then select the vessel with a click on its chevron.
   const pickVessel = async () => {
@@ -418,12 +426,7 @@ await strict.run({}, async (b) => {
     await p.waitForFunction(
       () => !window.qaVesselEntry.module.getSelectedInfo(),
     );
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    await click(-79.38, 43.65);
-    await p.waitForFunction(
-      () => window.qaVesselEntry.module.getSelectedInfo()?.mmsi === '123456789',
-      { timeout: 15000 },
-    );
+    await selectVessel();
     await strict.passed(
       p,
       'ais-live-vessels',
@@ -432,10 +435,7 @@ await strict.run({}, async (b) => {
     // The next switch starts from the landed view.
     await waitForCameraAtRest(p);
   };
-  await click(-79.38, 43.65);
-  await p.waitForFunction(
-    () => window.qaVesselEntry.module.getSelectedInfo()?.mmsi === '123456789',
-  );
+  await selectVessel();
   await strict.passed(
     p,
     'ais-live-vessels',

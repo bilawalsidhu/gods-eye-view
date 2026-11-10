@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 import assert from 'node:assert/strict';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import {
@@ -50,7 +51,7 @@ await strict.run({}, async (b) => {
       .length;
   if (bus) {
     // Outside every feed region the layer waits and reads no feed.
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await whenSettled(p);
     const outside = await p.evaluate(() => window.qaUrban.getStats());
     await strict.check(
       p,

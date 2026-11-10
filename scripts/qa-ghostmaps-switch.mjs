@@ -1,3 +1,4 @@
+import { whenPickable, whenSettled } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
@@ -68,7 +69,7 @@ await strict.run({}, async (b) => {
     await dataManager.setEnabled('s2-ghostmaps', true, { origin: 'user' });
     window.qaGhost = dataManager.layers.get('s2-ghostmaps').module;
   });
-  const click = async (lon, lat) => {
+  const click = async (lon, lat, pickId) => {
     const { x, y } = await p.evaluate(
       (pos) => {
         const { engine } = window.__godsEyeView;
@@ -79,6 +80,12 @@ await strict.run({}, async (b) => {
       },
       fromDegrees(lon, lat),
     );
+    if (pickId)
+      await whenPickable(
+        p,
+        { x, y, id: pickId },
+        (picked, position) => picked?.id === position.id,
+      );
     await p.mouse.click(x, y);
   };
   const overlay = () =>
@@ -120,13 +127,13 @@ await strict.run({}, async (b) => {
       's2-ghostmaps',
       'same model, three features, one event stream, one KMZ read',
     );
-    await new Promise((resolve) => setTimeout(resolve, 2200));
-    for (const [name, lon, lat] of [
-      ['QA pin', -79.38, 43.65],
-      ['QA route', -79.375, 43.71],
-      ['QA zone', -79.28, 43.61],
+    await whenSettled(p);
+    for (const [name, lon, lat, pickId] of [
+      ['QA pin', -79.38, 43.65, 'ghostmaps:cip:0:0'],
+      ['QA route', -79.375, 43.71, 'ghostmaps:cip:1:0'],
+      ['QA zone', -79.28, 43.61, 'ghostmaps:cip:2:0'],
     ]) {
-      await click(lon, lat);
+      await click(lon, lat, pickId);
       await p.waitForFunction(
         (name) =>
           window.ghostStats.titles.some((v) =>
@@ -163,7 +170,7 @@ await strict.run({}, async (b) => {
     );
     const hole = await overlay();
     await click(-79.45, 43.55);
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await whenSettled(p);
     const empty = await overlay();
     console.log(
       kind,

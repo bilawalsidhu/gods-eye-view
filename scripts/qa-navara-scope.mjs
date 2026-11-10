@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenSettled } from './qa/ready.mjs';
 // The DISPLAY scope mask and the celestial ring on Navara, under the strict
 // network policy: at city altitude the mask canvas sits in the engine's
 // container with an opaque outside, the screen's edge goes dark with the
@@ -26,7 +27,7 @@ const strict = createStrict({
 });
 const SHOTS = process.env.QA_SHOT_DIR || 'qa-shots/navara-scope';
 fs.mkdirSync(SHOTS, { recursive: true });
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // The screen's right edge below the rail: outside the keyhole, clear of UI.
 const GLOBE = fromDegrees(-122.4194, 37.7749, 20_000_000);
 const CITY = fromDegrees(-122.4194, 37.7749, 3000);
@@ -47,7 +48,7 @@ await strict.run(
     await page.goto(base.href);
     await waitForEngine(page, 'navara');
     const edgeLuminance = async () => {
-      await wait(900);
+      await whenSettled(page);
       const { data, info } = await sharp(await page.screenshot({ clip: EDGE }))
         .removeAlpha()
         .raw()
@@ -75,7 +76,7 @@ await strict.run(
       ) {
         await strict.switchTo(page, kind);
       }
-      await wait(2500);
+      await whenSettled(page);
       const mask = await page.evaluate(() => {
         const canvas = document.getElementById('scope-mask');
         const { engine } = window.__godsEyeView;
@@ -133,7 +134,7 @@ await strict.run(
         engine.camera.setView({ destination });
         styleManager.setCelestialRingEnabled(true);
       }, GLOBE);
-      await wait(2500);
+      await whenSettled(page);
       const ring = await page.evaluate(() => {
         const overlay = document.getElementById('celestial-ring-overlay');
         const canvases = [...(overlay?.querySelectorAll('canvas') ?? [])];
@@ -165,7 +166,7 @@ await strict.run(
         styleManager.setCelestialRingEnabled(false);
         engine.camera.setView({ destination });
       }, CITY);
-      await wait(1000);
+      await whenSettled(page);
     }
     assert.deepEqual(errors, []);
     console.log('PASS scope mask and celestial ring on both engines');

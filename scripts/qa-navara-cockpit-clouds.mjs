@@ -71,13 +71,28 @@ const save = (name, pixels) => saveCapture(outDir, name, pixels);
 // Clouds grey the frame: the blue sky and the map's coloured lines go.
 const saturation = (pixels) => stats(pixels).saturation;
 
-// A few seconds of continuous frames: the clouds converge over frames.
+// The temporal cloud pass converges over drawn frames.
 async function converged(page, name) {
   await page.evaluate(async () => {
     const { engine } = window.__godsEyeView;
     engine.render.setContinuous(true);
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    engine.render.setContinuous(false);
+    try {
+      await new Promise((resolve, reject) => {
+        let frames = 0;
+        const timer = setTimeout(() => {
+          remove();
+          reject(new Error('Cloud convergence frames did not arrive'));
+        }, 30000);
+        const remove = engine.frames.postRender.addEventListener(() => {
+          if (++frames < 120) return;
+          remove();
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    } finally {
+      engine.render.setContinuous(false);
+    }
   });
   const pixels = await capture(page);
   save(name, pixels);

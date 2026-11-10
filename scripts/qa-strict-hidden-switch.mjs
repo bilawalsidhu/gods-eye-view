@@ -7,7 +7,11 @@
 //   node scripts/qa-strict-hidden-switch.mjs http://127.0.0.1:4208
 
 import assert from 'node:assert/strict';
-import { createStrict, localPreview } from './qa-strict-harness.mjs';
+import {
+  createStrict,
+  localPreview,
+  waitForEngine,
+} from './qa-strict-harness.mjs';
 import {
   assertSession,
   installFirstFrameProbe,
@@ -76,8 +80,7 @@ await strict.run({}, async (b) => {
         !document.querySelector(
           '#globe-engine:is([disabled], [aria-busy="true"])',
         ) &&
-        !document.querySelector('.engine-switch-frame') &&
-        document.querySelector('#loading-screen.hidden'),
+        !document.querySelector('.engine-switch-frame'),
       { polling: 250, timeout: 60000 },
       kind,
     );
@@ -86,6 +89,8 @@ await strict.run({}, async (b) => {
       hide: window.__qaHidden.shown.find((e) => e.state === 'hidden') ?? null,
       pick: { at: window.__qaPick.at, idleAt: window.__qaPick.idleAt },
       drawn: window.__qaHidden.drawn ?? null,
+      coverPath:
+        window.__godsEyeView.engine.host.canvas.dataset.firstFrameOutcome,
     }));
     await assertSession(
       p,
@@ -111,10 +116,12 @@ await strict.run({}, async (b) => {
       { polling: 250, timeout: 30000 },
       reads,
     );
+    await waitForEngine(p, kind);
     await rememberEngine(p);
     const row = {
       kind,
       temperature,
+      coverPath: hidden.coverPath,
       hiddenWhileBusy: Boolean(hidden.hide?.busy),
       settledWhileHidden: hidden.state === 'hidden',
       // From the tab being hidden to the picker being idle again.
@@ -131,9 +138,9 @@ await strict.run({}, async (b) => {
     results.push(row);
     assert.ok(row.hiddenWhileBusy, 'the tab is hidden while the switch runs');
     assert.ok(row.settledWhileHidden, 'the switch settles in the hidden tab');
-    // A hidden tab draws nothing: no first-frame wait (10 s) there.
+    // The cover must leave by a frame or visibility change, never its timeout.
     assert.ok(
-      row.settleAfterHideMs !== null && row.settleAfterHideMs < 9000,
+      ['frame', 'hidden'].includes(row.coverPath),
       JSON.stringify(row),
     );
     assert.equal(row.history, 1, 'one history entry');

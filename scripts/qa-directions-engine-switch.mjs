@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 import assert from 'node:assert/strict';
 import {
   createStrict,
@@ -67,7 +68,7 @@ await strict.run({}, async (b) => {
   ]) {
     await p.evaluate((l) => window.qaRoute.setParams({ arm: l }), letter);
     await p.mouse.click(x, 440);
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    await whenSettled(p);
   }
   assert.equal(routeReads, 1);
   await strict.passed(
@@ -88,7 +89,21 @@ await strict.run({}, async (b) => {
     'the route asked for on Navara arrives on Cesium; a step is selectable',
   );
   const transfer = async (kind) => {
-    await strict.switchTo(p, kind);
+    const flying = await p.evaluate(() =>
+      Boolean(window.qaRoute.getFlightProgress()),
+    );
+    if (flying) {
+      // A running dolly owns the camera; verify its handoff before asking for rest.
+      await strict.pick(p, kind, { settle: false });
+      await p.waitForFunction(
+        (kind) =>
+          window.__godsEyeView?.engine?.kind === kind &&
+          !document.querySelector('#globe-engine[aria-busy="true"]') &&
+          window.qaRoute.getFlightProgress()?.traveledM > 0,
+        {},
+        kind,
+      );
+    } else await strict.switchTo(p, kind);
     assert.equal(
       await p.evaluate(
         () =>
@@ -119,7 +134,7 @@ await strict.run({}, async (b) => {
   const pos = () =>
     p.evaluate(() => window.__godsEyeView.engine.camera.pose().position);
   const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-  await new Promise((resolve) => setTimeout(resolve, 1800));
+  await p.waitForFunction(() => window.qaRoute.getFlightProgress()?.traveledM > 0);
   let progress = await p.evaluate(() => window.qaRoute.getFlightProgress());
   for (const kind of ['cesium', 'navara']) {
     const before = await pos();
@@ -130,7 +145,17 @@ await strict.run({}, async (b) => {
           ?.active,
     );
     const at = await pos();
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await p.waitForFunction(
+      ({ at, traveledM }) => {
+        const next = window.__godsEyeView.engine.camera.pose().position;
+        return (
+          window.qaRoute.getFlightProgress()?.traveledM > traveledM &&
+          Math.hypot(next.x - at.x, next.y - at.y, next.z - at.z) > 1
+        );
+      },
+      {},
+      { at, traveledM: progress.traveledM },
+    );
     const next = await pos();
     const resumed = await p.evaluate(() => window.qaRoute.getFlightProgress());
     assert.equal(resumed.motionId, progress.motionId);
@@ -149,14 +174,14 @@ await strict.run({}, async (b) => {
   assert.equal(await p.evaluate(() => window.qaRoute.getStats().count), 0);
   // CLEAR releases the camera: the route's motion ends, the camera stays
   // where it is, and a wheel zoom by the person moves it and is kept.
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await waitForEngine(p, 'navara');
   const released = await p.evaluate(() => ({
     motion: window.qaRoute.getFlightProgress(),
     fly: window.qaRoute.getRowControls().chips.find((c) => c.id === 'fly')
       ?.active,
   }));
   const still = await pos();
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await whenSettled(p);
   const later = await pos();
   const height = () =>
     p.evaluate(() => window.__godsEyeView.engine.camera.height());
@@ -164,11 +189,11 @@ await strict.run({}, async (b) => {
   await p.mouse.move(512, 300);
   for (let i = 0; i < 4; i++) {
     await p.mouse.wheel({ deltaY: -240 });
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await whenSettled(p);
   }
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await whenSettled(p);
   const zoomed = await height();
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await whenSettled(p);
   const kept = await height();
   await strict.check(
     p,

@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 // Recent imagery on a keyless preview, starting on Navara: the NASA catalog
 // and imagery tiles are fixtures, and the image, A/B, swap, divider, opacity,
 // basemap, toggle, failure, box-drag and zoom-to-fit checks read the rendered
@@ -46,7 +47,6 @@ const check = (name, value) => {
   if (value && engine) strict.record('recent-imagery', engine, name);
   console.log(`${value ? 'PASS' : 'FAIL'} ${name}`);
 };
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const colors = await Promise.all(
   ['#ed3838', '#35c969'].map((background) =>
     sharp({ create: { width: 256, height: 256, channels: 4, background } })
@@ -203,10 +203,10 @@ try {
     () => window.__godsEyeView.engine.surface.tilesLoaded(),
     { timeout: 90000 },
   );
-  await sleep(4000);
+  await whenSettled(page);
   const capture = async (name) => {
     await page.evaluate(() => window.__godsEyeView.requestRender('imagery-qa'));
-    await sleep(350);
+    await whenSettled(page);
     const buffer = await page.screenshot();
     await fs.writeFile(output.replace(/\.json$/, `-${name}.png`), buffer);
     const pixels = await sharp(buffer)
@@ -236,7 +236,7 @@ try {
   );
   check('geographic clip outside box', !red(image.outside));
   await page.evaluate(() => window.__gevRecentImagery.layer.setMode('ab'));
-  await sleep(2500);
+  await whenSettled(page);
   image = await capture('ab');
   check('A/B dates on opposite sides', red(image.left) && green(image.right));
   const first = await page.evaluate(() => {
@@ -261,7 +261,7 @@ try {
         state.pins.a === first.a &&
         state.pins.b === first.b,
     );
-    await sleep(1800);
+    await whenSettled(page);
     const pixels = await capture('switch-' + kind);
     check(
       kind + ' renders both pinned dates',
@@ -326,7 +326,7 @@ try {
     () => window.__gevRecentImagery.layer.diagnostics().ownedCount === 1,
     { timeout: 30000 },
   );
-  await sleep(2000);
+  await whenSettled(page);
   image = await capture('toggles');
   check('ten toggles restore visible image', red(image.left));
   report.afterToggle = await page.evaluate(() =>
@@ -352,7 +352,7 @@ try {
         .key,
     );
   });
-  await sleep(2000);
+  await whenSettled(page);
   image = await capture('source-failure');
   check(
     'failed replacement does not leave stale image pixels',
@@ -369,14 +369,14 @@ try {
       .map((c) => c.key);
     for (let i = 0; i < 10; i++) l.setAssignment('a', keys[i % 2]);
   });
-  await sleep(2000);
+  await whenSettled(page);
   image = await capture('replaced');
   check(
     'rapid replacement leaves final date only',
     green(image.left) && green(image.right),
   );
   await page.evaluate(() => window.__gevRecentImagery.layer.clear());
-  await sleep(1000);
+  await whenSettled(page);
   check(
     'clear removes both slots',
     await page.evaluate(
@@ -430,7 +430,7 @@ try {
       window.__godsEyeView.engine.camera.pose().cartographic.height > 1000000,
     { timeout: 10000 },
   );
-  await sleep(350);
+  await whenSettled(page);
   const fit = (report.fit = await page.evaluate(() => {
     const l = window.__gevRecentImagery.layer;
     const used = l.useCurrentView();
@@ -440,7 +440,7 @@ try {
     'oversized view refuses and offers bounded zoom',
     !fit.used && fit.offered && fit.height >= 5000 && fit.height <= 400000,
   );
-  await sleep(2200);
+  await whenSettled(page);
   check(
     'ZOOM IN lands at requested height',
     await page.evaluate(
@@ -455,7 +455,7 @@ try {
     window.__gevRecentImagery.layer.clear();
     await window.__godsEyeView.dataManager.setEnabled('recent-imagery', false);
   });
-  await sleep(1000);
+  await whenSettled(page);
   report.disabled = await page.evaluate(() =>
     window.__gevRecentImagery.layer.diagnostics(),
   );

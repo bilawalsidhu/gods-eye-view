@@ -1,3 +1,4 @@
+import { whenPickable, whenSettled } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -90,7 +91,7 @@ await strict.run({}, async (b) => {
         },
         fromDegrees(10.7995, 55.3241, 25000),
       );
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+      await whenSettled(p);
       const screen = await p.evaluate(
         (world) => {
           const { engine } = window.__godsEyeView;
@@ -99,6 +100,9 @@ await strict.run({}, async (b) => {
           return { x: rect.left + at.x, y: rect.top + at.y };
         },
         fromDegrees(10.799480647390464, 55.324102015186114),
+      );
+      await whenPickable(p, screen, (picked) =>
+        picked?.id?.startsWith('landing-point-reference-'),
       );
       await p.mouse.click(screen.x, screen.y);
       await p.waitForFunction(

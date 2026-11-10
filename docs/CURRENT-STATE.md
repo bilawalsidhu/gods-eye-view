@@ -417,6 +417,15 @@ one application, and only the globe-bound parts move to the next engine.
   and switch scenario under a deny-by-default network policy, with free map
   tiles from a disk cache and a trap that fails any read of Cesium before it
   has loaded. Every catalog layer must be asserted on both engines.
+  Readiness uses the restored view, enabled camera inputs and an unchanged
+  camera pose over three drawn frames (`scripts/qa/ready.mjs`); timeouts name
+  the unmet conditions. The dev probe exposes the same state through
+  `layers.settled()`. Production checks inject their observers through the
+  existing debug handle, without shipping the probe. Evidence also records
+  the five drawing registries before and after picker switches and contract
+  violations for each observed engine; both remain diagnostic-only. Engine-only
+  registry ids need a reason in `scripts/qa-ledger-allow.json`. Hidden switches
+  report the actual first-frame, hidden-tab or timeout uncover path.
   Page clocks start at the 18:30 UTC nearest to the real time, so the sun is
   up over the test cities whenever the run happens, unless a scenario supplies
   `time` (an ISO instant or `'real'`); `QA_EXIT_DIAGNOSTICS=1` preserves

@@ -1,3 +1,4 @@
+import { whenPickable, whenSettled } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -94,6 +95,11 @@ await strict.run({}, async (b) => {
       },
       fromDegrees(record.lon, record.lat),
     );
+    await whenPickable(
+      p,
+      screen,
+      (picked) => picked?.id === 'local-datacenters:342664739',
+    );
     await p.mouse.click(screen.x, screen.y);
     await p.waitForFunction(
       () => window.qaSelections.at(-1) === 'local-datacenters:342664739',
@@ -118,6 +124,11 @@ await strict.run({}, async (b) => {
         return { x: box.left + at.x, y: box.top + at.y };
       },
       fromDegrees(dam.lon, dam.lat),
+    );
+    await whenPickable(
+      p,
+      screen,
+      (picked) => picked?.id === 'local-dams:-12841971',
     );
     await p.mouse.click(screen.x, screen.y);
     await p
@@ -160,7 +171,7 @@ await strict.run({}, async (b) => {
       });
       render.request('qa-home');
     }, start);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await whenSettled(p);
   };
   const counts = { ...reads };
   for (const kind of ['navara', 'cesium', 'navara']) {
@@ -174,7 +185,7 @@ await strict.run({}, async (b) => {
         { timeout: 15000 },
       );
     }
-    await new Promise((r) => setTimeout(r, 1500));
+    await whenSettled(p);
     const result = await p.evaluate(
       (ids) =>
         ids.map((id, i) => {

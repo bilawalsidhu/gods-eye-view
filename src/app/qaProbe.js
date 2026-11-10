@@ -16,9 +16,88 @@
 //   following()            { label, native } of engine.camera.following()
 //   movers()               engine.movers.list()
 //   framesDrawn()          frames drawn since the probe started
+//   settled({ frames? })   readiness conditions over drawn frames
 
 const plain = (position) =>
   position ? { x: position.x, y: position.y, z: position.z } : null;
+
+/** Frame-based readiness, also serialized by the production QA harness. */
+export function createSettledState(
+  engine,
+  getRestore = () =>
+    globalThis.window?.__godsEyeView?.styleManager?.initialRestorePromise,
+) {
+  let drawn = 0;
+  let stable = 0;
+  let previous = null;
+  let restore;
+  let restored = false;
+  let restoreError = null;
+  const observeRestore = () => {
+    const next = getRestore();
+    if (!next || next === restore) return;
+    restore = next;
+    restored = false;
+    restoreError = null;
+    Promise.resolve(next).then(
+      () => {
+        if (restore === next) restored = true;
+      },
+      (error) => {
+        if (restore === next) restoreError = String(error);
+      },
+    );
+  };
+  const pose = () => {
+    const value = engine.camera.pose();
+    return [
+      ...['position', 'direction', 'up'].flatMap((key) =>
+        ['x', 'y', 'z'].map((axis) => value[key][axis]),
+      ),
+      value.fovy,
+      value.aspectRatio,
+    ];
+  };
+  const same = (a, b) =>
+    a && a.every((n, i) => Math.abs(n - b[i]) <= (i < 3 ? 1e-6 : 1e-10));
+  const remove = engine.frames.postRender.addEventListener(() => {
+    observeRestore();
+    drawn++;
+    const current = pose();
+    stable =
+      same(previous, current) &&
+      !engine.camera.flightActive() &&
+      engine.input.cameraInputsEnabled()
+        ? stable + 1
+        : 0;
+    previous = current;
+  });
+  observeRestore();
+  return {
+    settled({ frames = 3 } = {}) {
+      observeRestore();
+      const started = !engine.isDestroyed();
+      const conditions = {
+        engineStarted: started,
+        initialViewRestored: restored,
+        frameDrawn: drawn > 0,
+        noFlight: started && !engine.camera.flightActive(),
+        cameraInputsEnabled: started && engine.input.cameraInputsEnabled(),
+        cameraPoseStable: started && stable >= frames && same(previous, pose()),
+      };
+      const unmet = Object.keys(conditions).filter((key) => !conditions[key]);
+      return {
+        settled: !unmet.length,
+        conditions,
+        unmet,
+        framesDrawn: drawn,
+        stableFrames: stable,
+        restoreError,
+      };
+    },
+    destroy: remove,
+  };
+}
 
 /**
  * @param {{
@@ -27,6 +106,7 @@ const plain = (position) =>
  * }} options
  */
 export function createQaProbe({ engine, dataManager }) {
+  const readiness = createSettledState(engine);
   let frames = 0;
   const removeFrames = engine.frames.postRender.addEventListener(() => {
     frames++;
@@ -84,6 +164,10 @@ export function createQaProbe({ engine, dataManager }) {
     },
     movers: () => engine.movers.list(),
     framesDrawn: () => frames,
-    destroy: () => removeFrames(),
+    settled: (options) => readiness.settled(options),
+    destroy() {
+      removeFrames();
+      readiness.destroy();
+    },
   };
 }

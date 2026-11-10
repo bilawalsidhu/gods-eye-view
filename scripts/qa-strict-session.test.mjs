@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInThisContext } from 'node:vm';
+import { createFakeEngine } from '../src/globe/testing/fakeEngine.js';
 import { quantile, slope } from './qa-strict-session.mjs';
 import { strictArguments, waitForCameraAtRest } from './qa-strict-harness.mjs';
 
@@ -47,26 +49,37 @@ test('the runner hands each scenario its layers and its manifest path', () => {
   });
 });
 
-// A page whose camera answers one sampled position (x, metres) and input
-// state per waitForFunction poll; `polls()` counts the polls taken.
+// Each render request draws the next scripted camera sample through the fake engine.
 function cameraPage(t, positions, inputs, globals = {}) {
-  let frame = 0;
-  const engine = {
-    camera: {
-      pose: () => ({ position: { x: positions[frame], y: 0, z: 6.4e6 } }),
-    },
-    input: { cameraInputsEnabled: () => inputs[frame] },
-  };
+  let frame = -1;
+  const engine = createFakeEngine();
+  engine.input.cameraInputsEnabled = () => inputs[Math.max(0, frame)];
+  engine.camera.flightActive = () => !inputs[Math.max(0, frame)];
+  engine.render.request = () =>
+    setImmediate(() => {
+      if (frame + 1 >= positions.length) return;
+      frame++;
+      engine.fake.setPose({
+        position: { x: positions[frame], y: 0, z: 6.4e6 },
+      });
+      engine.fake.frame();
+    });
   const previous = globalThis.window;
-  globalThis.window = { __godsEyeView: { engine }, ...globals };
+  globalThis.window = {
+    __godsEyeView: {
+      engine,
+      styleManager: { initialRestorePromise: Promise.resolve() },
+    },
+    ...globals,
+  };
   t.after(() => {
     globalThis.window = previous;
   });
   const page = {
-    evaluate: async (fn) => fn(),
+    evaluate: async (fn) =>
+      typeof fn === 'string' ? runInThisContext(fn) : fn(),
     async waitForFunction(fn) {
-      for (; frame < positions.length; frame++) if (fn()) return;
-      throw new Error('timed out');
+      assert.ok(fn());
     },
   };
   return { page, polls: () => frame };
@@ -77,21 +90,21 @@ test('the camera is at rest once a flight has landed and it stays still', async 
   // still moves one more sample before it stays put.
   const { page, polls } = cameraPage(
     t,
-    [0, 400, 900, 900, 1250, 1250, 1250],
-    [false, false, false, false, true, true, true],
+    [0, 400, 900, 900, 1250, 1250, 1250, 1250],
+    [false, false, false, false, true, true, true, true],
   );
   await waitForCameraAtRest(page);
   // Not while the flight holds the inputs (sample 3 repeats a pose), nor
   // while the camera moves (sample 4).
-  assert.equal(polls(), 5);
+  assert.equal(polls(), 7);
 });
 
 test('qa-wildlife-switch waits for the focus flight even when the camera was already still', async (t) => {
   // A rest the scenario recorded before the click is no rest of the flight.
   const { page, polls } = cameraPage(
     t,
-    [0, 0, 100, 500, 500],
-    [false, false, false, true, true],
+    [0, 0, 100, 500, 500, 500, 500],
+    [false, false, false, true, true, true, true],
     {
       __qaWildPose: { key: '0.0,0.0,6400000.0', at: performance.now() - 5000 },
     },
@@ -109,5 +122,5 @@ test('qa-wildlife-switch waits for the focus flight even when the camera was alr
     )}\nreturn still;`,
   )(page, waitForCameraAtRest);
   await still();
-  assert.equal(polls(), 4);
+  assert.equal(polls(), 6);
 });

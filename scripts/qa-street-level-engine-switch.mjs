@@ -1,3 +1,4 @@
+import { whenPickable } from './qa/ready.mjs';
 import assert from 'node:assert/strict';
 import {
   createStrict,
@@ -74,8 +75,9 @@ await strict.run({}, async (browser) => {
   await until(() => window.qaStreet.getUIState().coverage.count > 0);
   // The fixture drive passes under the middle of the canvas. Click its actual picked line.
   const pickLine = async () => {
-    const xy = await p.evaluate(
-      (prefix) => {
+    const xy = await whenPickable(
+      p,
+      () => {
         const { engine } = window.__godsEyeView,
           canvas = engine.host.canvas,
           rect = canvas.getBoundingClientRect();
@@ -84,14 +86,17 @@ await strict.run({}, async (browser) => {
             const at = { x: rect.width / 2 + dx, y: rect.height / 2 + dy },
               pick = engine.picker.pick(at),
               id = pick?.id?.id ?? pick?.id;
-            if (typeof id === 'string' && id.startsWith(prefix))
+            if (typeof id === 'string' && /^(pnx:seq:|kv:line:)/.test(id))
               return { x: at.x + rect.x, y: at.y + rect.y, id };
           }
         return null;
       },
-      panorama ? 'pnx:seq:' : 'kv:line:',
+      (picked, position) => (picked?.id?.id ?? picked?.id) === position.id,
     );
-    assert.ok(xy, 'native ground line was pickable');
+    assert.ok(
+      xy.id.startsWith(panorama ? 'pnx:seq:' : 'kv:line:'),
+      'native ground line was pickable',
+    );
     console.log('pick', xy);
     await p.mouse.click(xy.x, xy.y);
     await until(
@@ -186,7 +191,6 @@ await strict.run({}, async (browser) => {
       !window.qaStreet.getUIState().coverage.loading &&
       window.qaStreet.getUIState().coverage.count > 0,
   );
-  await new Promise((resolve) => setTimeout(resolve, 1000));
   await pickLine();
   assert.deepEqual(errors, []);
   assert.deepEqual(fixture.unknown, []);

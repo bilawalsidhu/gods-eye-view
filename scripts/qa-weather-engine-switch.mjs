@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -182,7 +183,7 @@ await strict.run({}, async (b) => {
       time,
     );
   const sample = async () => {
-    await new Promise((r) => setTimeout(r, 500));
+    await whenSettled(p);
     const crop = await sharp(await p.screenshot())
       .extract({ left: 535, top: 388, width: 12, height: 12 })
       .removeAlpha()

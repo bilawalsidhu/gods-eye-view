@@ -1,3 +1,5 @@
+import { waitForEngine } from './qa-strict-harness.mjs';
+import { whenPickable, whenSettled } from './qa/ready.mjs';
 import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { installAlprFixture, cameras } from './fixtures/layers/alpr.mjs';
@@ -47,11 +49,7 @@ await strict.run({}, async (b) => {
     };
   }, firmsFixture());
   await p.goto(url.href);
-  await p.waitForFunction(
-    () =>
-      window.__godsEyeView?.engine?.kind === 'navara' &&
-      document.querySelector('#loading-screen.hidden'),
-  );
+  await waitForEngine(p, 'navara');
   await assertKeylessPreview(p);
   await p.evaluate(async (id) => {
     const { dataManager, styleManager } = window.__godsEyeView;
@@ -105,7 +103,15 @@ await strict.run({}, async (b) => {
         { timeout: 30000 },
         fire,
       )
-      .then((handle) => handle.jsonValue());
+      .then((handle) => handle.jsonValue())
+      .then((xy) =>
+        whenPickable(p, xy, (picked, position) => {
+          const id = position.id.startsWith('FIRE-')
+            ? `firms-${Number(position.id.slice(5))}`
+            : position.id;
+          return (picked?.id?.id ?? picked?.id) === id;
+        }),
+      );
   const selected = (id) =>
     p.waitForFunction(
       (id, fire) =>
@@ -135,8 +141,8 @@ await strict.run({}, async (b) => {
       fire,
     );
   };
+  await whenSettled(p);
   const xy = await findTarget();
-  await new Promise((r) => setTimeout(r, 1000));
   await p.mouse.click(xy.x, xy.y);
   await selected(xy.id);
   await strict.passed(
@@ -147,7 +153,6 @@ await strict.run({}, async (b) => {
       : 'a click on a camera selects it',
     xy,
   );
-  await new Promise((r) => setTimeout(r, 1600));
   // The selection flies the camera to the record (1.9 s, longer on a busy
   // machine); a switch before it lands opens the other engine on a view
   // between the two, where the record can be off screen.
@@ -161,6 +166,7 @@ await strict.run({}, async (b) => {
     reads: window.qaFirmsReads,
   }));
   for (const kind of ['cesium', 'navara']) {
+    await whenSettled(p);
     await strict.switchTo(p, kind);
     const result = await p.evaluate(
       (id) => ({

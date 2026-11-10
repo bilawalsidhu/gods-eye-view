@@ -1,3 +1,4 @@
+import { whenPickable, whenSettled } from './qa/ready.mjs';
 import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
@@ -177,11 +178,7 @@ await strict.run({}, async (b) => {
     return req.continue();
   });
   await p.goto(url.href);
-  await p.waitForFunction(
-    () =>
-      window.__godsEyeView?.sceneDirector &&
-      document.querySelector('#loading-screen.hidden'),
-  );
+  await whenSettled(p);
   await assertKeylessPreview(p);
   await p.evaluate(async (project) => {
     const a = window.__godsEyeView;
@@ -218,7 +215,7 @@ await strict.run({}, async (b) => {
   for (const kind of ['navara', 'cesium', 'navara']) {
     if ((await p.evaluate(() => window.__godsEyeView.engine.kind)) !== kind)
       await strict.switchTo(p, kind);
-    await new Promise((r) => setTimeout(r, 500));
+    await whenSettled(p);
     const st = await p.evaluate(() => ({
       same: window.director === window.__godsEyeView.sceneDirector,
       media:
@@ -231,6 +228,7 @@ await strict.run({}, async (b) => {
       st.same && st.media && st.packs.count === 3 && st.actions.count === 3,
     );
     const xy = await at(fromDegrees(-97.742, 30.27, 450));
+    await whenPickable(p, xy, (picked) => picked?.id === '["data","point"]');
     await p.mouse.click(xy.x, xy.y);
     await p.waitForFunction(
       () => document.activeElement?.dataset.directorAction === 'point',

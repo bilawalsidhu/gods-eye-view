@@ -1,3 +1,4 @@
+import { waitForEngine } from './qa-strict-harness.mjs';
 import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { createStrict, localPreview } from './qa-strict-harness.mjs';
@@ -107,19 +108,21 @@ await strict.run({}, async (browser) => {
     aircraftId,
   );
   await page.goto(url.href, { waitUntil: 'domcontentloaded' });
-  const ready = (kind) =>
-    page.waitForFunction(
-      (engine) =>
-        window.__godsEyeView?.engine?.kind === engine &&
-        !document.querySelector(
-          '#globe-engine:is([disabled], [aria-busy="true"])',
-        ) &&
-        document.querySelector('#loading-screen.hidden') &&
-        !document.querySelector('.engine-switch-frame'),
+  await waitForEngine(page, 'navara');
+  // Cockpit mode deliberately holds camera inputs throughout these handoffs.
+  const attached = async (kind) => {
+    await page.waitForFunction(
+      (kind) =>
+        window.__godsEyeView?.engine?.kind === kind &&
+        document.querySelector('#globe-engine')?.value === kind &&
+        !document.querySelector('#globe-engine:is([disabled], [aria-busy="true"])'),
       { timeout: 90000 },
       kind,
     );
-  await ready('navara');
+    await page.evaluate(
+      () => window.__godsEyeView.styleManager.initialRestorePromise,
+    );
+  };
   await page.evaluate(
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
@@ -165,7 +168,7 @@ await strict.run({}, async (browser) => {
   const historyLength = await page.evaluate(() => history.length);
   await strict.selectEngine(page, 'cesium', HIDDEN_PICKER);
   await page.waitForFunction(() => window.__refusedContext === true);
-  await ready('navara');
+  await attached('navara');
   // A failed switch leaves the session usable on the engine that worked and
   // adds no history entry.
   const survived = (kind) =>
@@ -201,7 +204,7 @@ await strict.run({}, async (browser) => {
 
   for (const kind of ['cesium', 'navara']) {
     await strict.selectEngine(page, kind, HIDDEN_PICKER);
-    await ready(kind);
+    await attached(kind);
     const result = await page.evaluate(() => {
       const { dataManager, engine, styleManager } = window.__godsEyeView;
       const before = window.__handoff;
@@ -260,29 +263,41 @@ await strict.run({}, async (browser) => {
     );
     // Polling goes on after the switch: the same timer ticks and each tick
     // reads the source once (no tick may be skipped, none added).
-    const polls = await page.evaluate(async (layerId) => {
+    const pollStart = await page.evaluate((layerId) => {
       const entry = window.__godsEyeView.dataManager.layers.get(layerId);
-      const every =
-        Number(entry.module.refreshInterval) ||
-        Number(entry.module.updateInterval);
-      const start = {
+      return {
+        layerId,
+        every:
+          Number(entry.module.refreshInterval) ||
+          Number(entry.module.updateInterval),
         polls: window.__flightPolls,
         ticks: window.__handoff.ticks,
         stamp: entry.module.getStats().lastUpdate,
       };
-      const deadline = Date.now() + 2.5 * every + 5000;
-      while (window.__handoff.ticks - start.ticks < 2 && Date.now() < deadline)
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      // Let the last tick's request land.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }, layerId);
+    await page.waitForFunction(
+      (start) => {
+        const entry = window.__godsEyeView.dataManager.layers.get(start.layerId);
+        const ticks = window.__handoff.ticks - start.ticks;
+        return (
+          ticks >= 2 &&
+          window.__flightPolls - start.polls === ticks &&
+          entry.module.getStats().lastUpdate !== start.stamp
+        );
+      },
+      { timeout: 2.5 * pollStart.every + 5000 },
+      pollStart,
+    );
+    const polls = await page.evaluate((start) => {
+      const entry = window.__godsEyeView.dataManager.layers.get(start.layerId);
       return {
-        every,
+        every: start.every,
         ticks: window.__handoff.ticks - start.ticks,
         polls: window.__flightPolls - start.polls,
         updated: entry.module.getStats().lastUpdate !== start.stamp,
         sameTimer: entry.intervalId === window.__handoff.timer,
       };
-    }, layerId);
+    }, pollStart);
     await strict.check(
       page,
       layerId,
@@ -308,7 +323,7 @@ await strict.run({}, async (browser) => {
     window.__parkedNavara = window.__godsEyeView.engine;
   });
   await strict.selectEngine(page, 'cesium', HIDDEN_PICKER);
-  await ready('cesium');
+  await attached('cesium');
   const lengthOnCesium = await page.evaluate(() => {
     const request = window.__parkedNavara.render.request;
     window.__parkedNavara.render.request = function (...args) {
@@ -320,7 +335,7 @@ await strict.run({}, async (browser) => {
   });
   await strict.selectEngine(page, 'navara', HIDDEN_PICKER);
   await page.waitForFunction(() => window.__refusedResume === true);
-  await ready('cesium');
+  await attached('cesium');
   assert.ok(
     (await page.evaluate(
       (length) => history.length === length,
@@ -349,7 +364,7 @@ await strict.run({}, async (browser) => {
     window.__parkedCesium = window.__godsEyeView.engine;
   });
   await strict.selectEngine(page, 'navara', HIDDEN_PICKER);
-  await ready('navara');
+  await attached('navara');
   assert.ok(
     await page.evaluate(() => {
       const { engine, styleManager } = window.__godsEyeView;
@@ -439,7 +454,7 @@ await strict.run({}, async (browser) => {
   await page.click(
     '#loading-screen .engine-switch-retry [data-engine="cesium"]',
   );
-  await ready('cesium');
+  await attached('cesium');
   assert.ok(
     await page.evaluate(() => {
       const { dataManager, styleManager } = window.__godsEyeView;
@@ -482,17 +497,25 @@ await strict.run({}, async (browser) => {
     ).intervalId;
   });
   await strict.pick(page, 'navara');
-  await ready('navara');
-  const after = await page.evaluate(async () => {
+  await waitForEngine(page, 'navara');
+  const every = await page.evaluate(() => {
+    const entry = window.__godsEyeView.dataManager.layers.get(
+      window.__qaAircraft.layerId,
+    );
+    return (
+      Number(entry.module.refreshInterval) ||
+      Number(entry.module.updateInterval)
+    );
+  });
+  await page.waitForFunction(
+    () =>
+      window.__handoff.ticks >= 1 &&
+      window.__flightPolls - window.__handoff.pollCount === window.__handoff.ticks,
+    { timeout: 2.5 * every + 5000 },
+  );
+  const after = await page.evaluate(() => {
     const { dataManager } = window.__godsEyeView;
     const entry = dataManager.layers.get(window.__qaAircraft.layerId);
-    const every =
-      Number(entry.module.refreshInterval) ||
-      Number(entry.module.updateInterval);
-    const deadline = Date.now() + 2.5 * every + 5000;
-    while (window.__handoff.ticks < 1 && Date.now() < deadline)
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    await new Promise((resolve) => setTimeout(resolve, 1500));
     return {
       same:
         dataManager === window.__handoff.dataManager &&

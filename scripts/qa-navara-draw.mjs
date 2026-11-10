@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { waitForEngine } from './qa-strict-harness.mjs';
+import { whenSettled } from './qa/ready.mjs';
 // UTILITIES ▸ Draw on Navara under the strict network policy, with real
 // clicks and keys: Draw takes the pointer, clicks on the globe are vertices
 // with a live rubber band, a double click finishes an area that paints on
@@ -21,7 +23,6 @@ base.hash = `v=2&lat=${VIEW.lat}&lon=${VIEW.lon}&alt=${VIEW.alt}&heading=0&pitch
 const strict = createStrict({ origin: base.origin, layers: ['draw'] });
 const SHOTS = process.env.QA_SHOT_DIR || 'qa-shots/navara-draw';
 fs.mkdirSync(SHOTS, { recursive: true });
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // An area's corners, clear of the open UTILITIES panel and the rails.
 const AREA = [
   [560, 330],
@@ -44,18 +45,8 @@ await strict.run(
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(base.href);
     const ready = async (kind) => {
-      await page.waitForFunction(
-        (k) =>
-          window.__godsEyeView?.engine?.kind === k &&
-          window.__gevDrawTool?.attached &&
-          !document.querySelector(
-            '#globe-engine:is([disabled], [aria-busy="true"])',
-          ) &&
-          !document.querySelector('.engine-switch-frame') &&
-          document.querySelector('#loading-screen.hidden'),
-        { timeout: 120000 },
-        kind,
-      );
+      await waitForEngine(page, kind);
+      await page.waitForFunction(() => window.__gevDrawTool?.attached);
       await page.evaluate(
         () => window.__godsEyeView.styleManager.initialRestorePromise,
       );
@@ -84,7 +75,7 @@ await strict.run(
       await page.addStyleTag({
         content: '.gev-screen-whiteboard{visibility:hidden!important}',
       });
-      await wait(800);
+      await whenSettled(page);
       const { data, info } = await sharp(
         await page.screenshot({
           clip: { x: 520, y: 300, width: 280, height: 230 },
@@ -124,10 +115,10 @@ await strict.run(
       }, shape);
       for (const [x, y] of points) {
         await page.mouse.click(x, y);
-        await wait(120);
+        await whenSettled(page);
       }
       await finish();
-      await wait(800);
+      await whenSettled(page);
     };
 
     await openUtilities();
@@ -152,10 +143,10 @@ await strict.run(
         { timeout: 3000 },
         index + 1,
       );
-      await wait(150);
+      await whenSettled(page);
     }
     await page.mouse.move(...AREA[3]);
-    await wait(300);
+    await whenSettled(page);
     const sketch = await tool();
     await page.screenshot({ path: `${SHOTS}/navara-sketch.png` });
     await strict.check(
@@ -173,7 +164,7 @@ await strict.run(
     await page.waitForFunction(() => window.__gevAnnotations.count() === 1, {
       timeout: 10000,
     });
-    await wait(800);
+    await whenSettled(page);
     const drawn = await amber();
     await page.screenshot({ path: `${SHOTS}/navara-area.png` });
     const area = await page.evaluate(() =>
@@ -241,7 +232,7 @@ await strict.run(
     assert.equal((await tool()).vertices, 2);
     await strict.pick(page, 'cesium');
     await ready('cesium');
-    await wait(1500);
+    await whenSettled(page);
     const switched = await tool();
     await page.screenshot({ path: `${SHOTS}/cesium-after-switch.png` });
     await strict.check(
@@ -280,7 +271,7 @@ await strict.run(
     );
     await strict.pick(page, 'navara');
     await ready('navara');
-    await wait(2000);
+    await whenSettled(page);
     const back = await tool();
     const backAmber = await amber();
     await page.screenshot({ path: `${SHOTS}/navara-back.png` });

@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 import { fromDegrees } from '../src/geo/cartesian3.js';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
@@ -52,7 +53,7 @@ await strict.run({}, async (b) => {
     assert.equal(stats.count, 1);
     assert.equal(params.presentation, 'bhote-koshi-path-overview');
     // Look for the cyan river in a scene crop away from the UI rails.
-    await new Promise((r) => setTimeout(r, 1000));
+    await whenSettled(p);
     const crop = async () =>
       sharp(await p.screenshot())
         .extract({ left: 400, top: 320, width: 230, height: 180 })
@@ -63,7 +64,7 @@ await strict.run({}, async (b) => {
     await p.evaluate(() =>
       window.qaLocator.setParams({ presentation: 'nepal-context' }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await whenSettled(p);
     const baseline = await crop();
     let added = 0;
     for (let i = 0; i < rendered.length; i += 3) {
@@ -103,7 +104,7 @@ await strict.run({}, async (b) => {
       preview: true,
     });
   });
-  await new Promise((resolve) => setTimeout(resolve, 2500));
+  await whenSettled(p);
   // The last of three quick presentation changes is the one that stays.
   const last = await p.evaluate(() => ({
     params: window.qaLocator.getParams(),
