@@ -38,6 +38,7 @@ import { provideUnboundDraw } from '../rendererOf.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 import { createModelSets } from './drawModels.js';
+import { materialTexture } from './internals.js';
 import { createMeshSets } from './drawMeshes.js';
 import { createQuadSets } from './drawQuads.js';
 import { createCesiumFields } from './drawFields.js';
@@ -3727,7 +3728,7 @@ export function createCesiumDraw({
   function dropPendingTexture(image) {
     const texture = image.texture;
     if (!texture || texture.isDestroyed()) return;
-    if (image.material._textures?.image === texture) return;
+    if (materialTexture(image.material, 'image') === texture) return;
     texture.destroy();
     image.texture = null;
   }

@@ -15,6 +15,7 @@ import {
   defaultView,
   lastRenderTime,
   lastSeenCamera,
+  materialTexture,
   onEngineWorkCompleted,
   pickOffscreenView,
   renderPending,
@@ -59,6 +60,7 @@ test('every private field the app reaches is still declared by the installed Ces
     [ENGINE, 'Scene/CreditDisplay.js', '_staticCredits'],
     [ENGINE, 'Scene/CreditDisplay.js', '_currentFrameCredits'],
     [ENGINE, 'Scene/CreditDisplay.js', '_currentCesiumCredit'],
+    [ENGINE, 'Scene/Material.js', '_textures'],
   ];
   const missing = fields.filter(
     ([root, file, field]) =>
@@ -84,6 +86,14 @@ test('every private field the app reaches is still declared by the installed Ces
     /\nTaskProcessor\.taskCompletedEvent = /,
   );
   assert.match(read('Scene/FrameState.js'), /this\.afterRender = \[\]/);
+  // A material takes a texture handed to a uniform only as it updates,
+  // destroying the one it held: one handed over and replaced first is
+  // no one's (`materialTexture`, draw.js's `dropPendingTexture`).
+  assert.match(
+    read('Scene/Material.js'),
+    /uniformValue instanceof Texture && uniformValue !== texture\) \{[\s\S]{0,200}?tmp\.destroy\(\);[\s\S]{0,40}?material\._textures\[uniformId\] = uniformValue;/,
+    'Material takes a uniform texture on update',
+  );
   // What makes them matter: each completion redraws the scene.
   const scene = read('Scene/Scene.js');
   // Every tick empties the after-render queue, outside its draw.
@@ -136,6 +146,12 @@ test('the helpers read and write exactly those fields', () => {
   const clone = {};
   assert.equal(lastSeenCamera({ _view: { _cameraClone: clone } }), clone);
   assert.equal(lastSeenCamera({}), undefined);
+  const texture = {};
+  assert.equal(
+    materialTexture({ _textures: { image: texture } }, 'image'),
+    texture,
+  );
+  assert.equal(materialTexture({}, 'image'), undefined);
   const error = new Error('404');
   assert.equal(billboardLoadError({ loadError: error }), error);
   const gl = {};

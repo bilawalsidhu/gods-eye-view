@@ -205,3 +205,16 @@ export function creditDisplayContents(display) {
     logo: display?._currentCesiumCredit,
   };
 }
+
+/**
+ * The texture a material holds for an image uniform. A material takes a
+ * texture handed to a uniform (and destroys it when it takes the next one,
+ * or is destroyed) only when it next updates; `draw.js` destroys one handed
+ * over but never taken, so it does not leak.
+ * @param {object} material Cesium Material.
+ * @param {string} uniform The uniform's name.
+ * @returns {object|undefined} Cesium Texture.
+ */
+export function materialTexture(material, uniform) {
+  return material?._textures?.[uniform];
+}
