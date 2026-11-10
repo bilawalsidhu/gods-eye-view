@@ -86,11 +86,16 @@ async function run(label, viewport, { touch = false } = {}) {
   );
   if (!mobile) {
     const ids = closed.dock;
+    const required = ['cctv-panel', 'solunar-panel', 'street-level-panel'];
+    const missing = required.filter((id) => ids.indexOf(id) < 0);
     check(
-      `${label}: dock button sits after CCTV and before STREET LEVEL`,
-      ids.indexOf('cctv-panel') < ids.indexOf('solunar-panel') &&
-        ids.indexOf('solunar-panel') < ids.indexOf('street-level-panel'),
-      ids.join(),
+      `${label}: rail button sits between CCTV and STREET LEVEL`,
+      missing.length === 0 &&
+        ids.indexOf('cctv-panel') + 1 === ids.indexOf('solunar-panel') &&
+        ids.indexOf('solunar-panel') + 1 === ids.indexOf('street-level-panel'),
+      missing.length
+        ? `missing: ${missing.join(', ')}`
+        : required.map((id) => `${id}: ${ids.indexOf(id)}`).join(', '),
     );
   }
   // Lake Bob Sandlin from 15 km up, looking straight down
