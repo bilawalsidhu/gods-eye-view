@@ -4,10 +4,16 @@ import { createRecentImagerySource } from './source.js';
 
 test('imagery source routes catalog, thumbnails and tiles through supplied adapters', async () => {
   const controller = new AbortController();
-  const query = { box: { west: 0, east: 1, south: 0, north: 1 }, signal: controller.signal };
+  const query = {
+    box: { west: 0, east: 1, south: 0, north: 1 },
+    signal: controller.signal,
+  };
   const candidate = { product: 'S30', day: '2026-10-01' };
   const calls = [];
-  const fetchImpl = async (...args) => { calls.push(args); return new Response('image'); };
+  const fetchImpl = async (...args) => {
+    calls.push(args);
+    return new Response('image');
+  };
   const source = createRecentImagerySource({
     fetchImpl,
     search: async (request) => {
@@ -16,16 +22,34 @@ test('imagery source routes catalog, thumbnails and tiles through supplied adapt
       assert.equal(request.box, query.box);
       return [candidate];
     },
-    thumbnailUrl: ({ product, day, width }) => `https://imagery.example/${product}/${day}/${width}`,
-    tileTemplate: (product, day) => `https://tiles.example/${product}/${day}/{z}/{x}/{y}`,
+    thumbnailUrl: ({ product, day, width }) =>
+      `https://imagery.example/${product}/${day}/${width}`,
+    tileTemplate: (product, day) =>
+      `https://tiles.example/${product}/${day}/{z}/{x}/{y}`,
     credit: 'Example imagery',
   });
   assert.deepEqual(await source.searchHls(query), [candidate]);
-  assert.equal(await (await source.getThumbnail(candidate, query.box, { signal: controller.signal })).text(), 'image');
+  assert.equal(
+    await (
+      await source.getThumbnail(candidate, query.box, {
+        signal: controller.signal,
+      })
+    ).text(),
+    'image',
+  );
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], 'https://imagery.example/S30/2026-10-01/256');
-  assert.equal(calls[0][1].signal, controller.signal);
-  assert.equal(source.getTileTemplate(candidate.product, candidate.day), 'https://tiles.example/S30/2026-10-01/{z}/{x}/{y}');
+  // Each half is bounded by a controller of its own (a deadline can cancel
+  // one half without the other), but it is chained to the caller's signal.
+  const halfSignal = calls[0][1].signal;
+  assert.notEqual(halfSignal, controller.signal);
+  assert.equal(halfSignal.aborted, false);
+  controller.abort();
+  assert.equal(halfSignal.aborted, true);
+  assert.equal(
+    source.getTileTemplate(candidate.product, candidate.day),
+    'https://tiles.example/S30/2026-10-01/{z}/{x}/{y}',
+  );
   assert.equal(source.credit, 'Example imagery');
 });
 
@@ -34,10 +58,20 @@ test('cancelled thumbnail acquisition does not return stale responses or retry',
   let calls = 0;
   const source = createRecentImagerySource({
     thumbnailUrl: () => 'https://imagery.example/thumbnail',
-    fetchImpl: async () => { calls++; controller.abort(); return new Response('image'); },
+    fetchImpl: async () => {
+      calls++;
+      controller.abort();
+      return new Response('image');
+    },
   });
-  await assert.rejects(source.getThumbnail({}, {}, { signal: controller.signal }), { name: 'AbortError' });
-  await assert.rejects(source.getThumbnail({}, {}, { signal: controller.signal }), { name: 'AbortError' });
+  await assert.rejects(
+    source.getThumbnail({}, {}, { signal: controller.signal }),
+    { name: 'AbortError' },
+  );
+  await assert.rejects(
+    source.getThumbnail({}, {}, { signal: controller.signal }),
+    { name: 'AbortError' },
+  );
   assert.equal(calls, 1);
 });
 
@@ -79,7 +113,8 @@ const dated = (present, body = 'image') =>
 function halvesSource(answers) {
   const requested = [];
   const source = createRecentImagerySource({
-    thumbnailUrl: ({ box }) => `https://imagery.example/${box.west}/${box.east}`,
+    thumbnailUrl: ({ box }) =>
+      `https://imagery.example/${box.west}/${box.east}`,
     fetchImpl: async (url) => {
       requested.push(url);
       const answer = answers[url.split('imagery.example/')[1]];
@@ -129,13 +164,14 @@ test('a crossing box is not called empty when the other half failed', async () =
   assert.equal(response.ok, false);
 });
 
-test('a crossing box with both halves present shows the wider half', async () => {
+test('a crossing box with both halves present shows the wider half and keeps both presentBoxes', async () => {
   const { source } = halvesSource({
     '-180/-179': dated('true', 'wide'),
     '179.9/180': dated('true', 'narrow'),
   });
   const response = await source.getThumbnail(candidate, NARROW_WEST);
   assert.equal(await response.text(), 'wide');
+  assert.equal(response.presentBoxes.length, 2, 'every present half survives');
 });
 
 test('a rejected half does not hide data on the other half, and never reads as empty', async () => {

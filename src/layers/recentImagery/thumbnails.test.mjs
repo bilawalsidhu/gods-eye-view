@@ -68,6 +68,7 @@ test('Data-Present decides the day: present with an object URL and sensing time,
     status: 'present',
     objectUrl: 'blob:1',
     acquisitionTime: '2026-09-18T17:12:00Z',
+    availableBoxes: [BOX],
     loading: false,
   });
   assert.equal(loader.get('L30:2026-09-16').status, 'empty');

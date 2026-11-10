@@ -29,6 +29,15 @@ function clampAlpha(value) {
 const boxKey = (box) =>
   [box.west, box.south, box.east, box.north].map(Number).join(',');
 
+/** Comparable per-half availability signature; '' with no evidence. */
+const boxesKey = (list) =>
+  Array.isArray(list)
+    ? list
+        .map((box) => boxKey(box))
+        .sort()
+        .join(';')
+    : 'unknown';
+
 /**
  * Gate a provider's `requestImage` through the semaphore. Returning
  * `undefined` tells Cesium to retry on a later frame, but under
@@ -147,13 +156,23 @@ export function createRecentImageryRenderer({
     }
   }
 
-  function mount(slotId, { candidate, box, alpha, split }) {
+  function mount(slotId, { candidate, box, alpha, split, availableBoxes }) {
     // [] means "not a box": add no layer rather than drape the raw box.
     const parts = nonCrossingBoxes(box);
     if (!parts.length) return false;
+    // A dateline day drapes only the halves its probe proved present (VIIRS
+    // is a JPEG product; a draped confirmed-empty half is a black rectangle).
+    // No evidence drapes the whole box, as before. Proven halves that do not
+    // match this box (a stale entry) leave the slot empty, never draped.
+    const allowed = Array.isArray(availableBoxes)
+      ? parts.filter((part) =>
+          availableBoxes.some((half) => half && boxKey(half) === boxKey(part)),
+        )
+      : parts;
+    if (!allowed.length) return false;
     // Build every provider before adding any layer, so a throw on the second
     // half of a dateline box cannot leave the first layer untracked.
-    const providers = parts.map((part) => createProvider(candidate, part));
+    const providers = allowed.map((part) => createProvider(candidate, part));
     const layers = [];
     try {
       for (const provider of providers)
@@ -175,6 +194,7 @@ export function createRecentImageryRenderer({
       box,
       alpha,
       split,
+      availableBoxes,
     };
     applyLook(owned[slotId]);
     return true;
@@ -194,7 +214,7 @@ export function createRecentImageryRenderer({
       slotId,
       candidate,
       box,
-      { alpha = 1, splitDirection = 'none' } = {},
+      { alpha = 1, splitDirection = 'none', availableBoxes = null } = {},
     ) {
       if (destroyed || !candidate?.key || !box) return false;
       if (!host.collection) {
@@ -207,7 +227,8 @@ export function createRecentImageryRenderer({
         current &&
         current.collection === host.collection &&
         current.candidate.key === candidate.key &&
-        boxKey(current.box) === boxKey(box)
+        boxKey(current.box) === boxKey(box) &&
+        boxesKey(current.availableBoxes) === boxesKey(availableBoxes)
       ) {
         if (current.alpha !== look.alpha || current.split !== look.split) {
           Object.assign(current, look);
@@ -217,7 +238,8 @@ export function createRecentImageryRenderer({
         return true;
       }
       removeOwned(slotId);
-      if (!mount(slotId, { candidate, box, ...look })) return false;
+      if (!mount(slotId, { candidate, box, ...look, availableBoxes }))
+        return false;
       requestRender('recent-imagery-show');
       return true;
     },
