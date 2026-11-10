@@ -1,6 +1,11 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import {
+  claimPointer,
+  isPointerFree,
+  releasePointer,
+} from '../data/inputOwnership.js';
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -245,5 +250,17 @@ export function createApplicationTools({
       signal,
     }),
   );
-  return { sceneDirector, annotations, voiceCommands };
+  // An application's own tool takes the pointer as Draw does, and its own
+  // click handlers yield while a tool holds it, as the layers' do
+  // (data/inputOwnership.js).
+  return {
+    sceneDirector,
+    annotations,
+    voiceCommands,
+    pointer: {
+      claim: claimPointer,
+      release: releasePointer,
+      isFree: isPointerFree,
+    },
+  };
 }

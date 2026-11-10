@@ -11,9 +11,36 @@ import {
   readsbIdentities,
 } from './aircraft.js';
 import { normalizeVesselTrack, vesselSnapshot } from './vessels.js';
+import { parsePlanespottersPhoto } from '../../data/planespottersPhoto.js';
 
 const defaultFetch = (...args) => globalThis.fetch(...args);
 const header = (response, name) => response.headers?.get?.(name);
+
+/** Planespotters' public photo lookup, called straight from the browser (it
+ *  answers with `access-control-allow-origin: *`). */
+const PLANESPOTTERS_PHOTOS = 'https://api.planespotters.net/pub/photos/hex/';
+/** A photo is decoration: a slow answer gives up rather than hold an
+ *  enrichment slot. */
+const PHOTO_TIMEOUT_MS = 8000;
+
+/** The tracked plane's Planespotters photo, read and host-checked. */
+async function planespottersPhoto(fetchImpl, hex, signal) {
+  const id = String(hex || '').toLowerCase();
+  if (!/^[0-9a-f]{6}$/.test(id))
+    throw new LiveSourceError('unsupported', 'Enrichment unavailable');
+  const timeout = AbortSignal.timeout(PHOTO_TIMEOUT_MS);
+  const { response, payload } = await readResponse(
+    fetchImpl,
+    PLANESPOTTERS_PHOTOS + id,
+    {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      credentials: 'omit',
+    },
+    'Planespotters',
+  );
+  if (!response.ok) throw httpError(response, 'Planespotters');
+  return parsePlanespottersPhoto(payload);
+}
 
 function openSkyError(response) {
   const error = httpError(response, 'Flights');
@@ -106,6 +133,8 @@ export function createFlightSource({
       };
     },
     async getEnrichment(query, { signal } = {}) {
+      if (query.kind === 'photo')
+        return planespottersPhoto(fetchImpl, query.id, signal);
       if (!['type', 'route'].includes(query.kind))
         throw new LiveSourceError('unsupported', 'Enrichment unavailable');
       const { response, payload } = await readResponse(

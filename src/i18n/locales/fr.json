@@ -2584,6 +2584,12 @@
     "many": "Pas encore de flux ici · {n} de régions disponibles",
     "other": "Pas encore de flux ici · {n} régions disponibles"
   },
+  "Fly below {km} km to a covered city": "Descendez sous {km} km au-dessus d'une ville couverte",
+  "No bike share here yet · {n} systems available": {
+    "one": "Pas encore de vélos partagés ici · {n} système disponible",
+    "many": "Pas encore de vélos partagés ici · {n} de systèmes disponibles",
+    "other": "Pas encore de vélos partagés ici · {n} systèmes disponibles"
+  },
   "degraded": "dégradé",
   "stale": "obsolète",
   "partial": "partiel",
@@ -3392,5 +3398,6 @@
   "1 wk/s": "1 sem/s",
   "Play speed": "Vitesse de lecture",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Faites défiler ou pincez pour zoomer, glissez pour vous déplacer · double-clic pour tout voir",
-  "1 min/s": "1 min/s"
+  "1 min/s": "1 min/s",
+  "Photo © {photographer}": "Photo © {photographer}"
 }
