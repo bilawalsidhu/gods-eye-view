@@ -642,6 +642,26 @@ test('military: a repeated old fix counts as a missed update for the tracked pla
   }
 });
 
+test('military: a stalled feed dims the tracked plane as STALE', () => {
+  const { fixes, info } = outOfCoverage();
+  const h = harness({ fixes, info, nowMs: pastReport(-5) });
+  try {
+    h.tracking._startTrail(ICAO);
+    h.run(pastReport(-2));
+    // The whole feed is backing off: no poll counts a miss, and no newer
+    // position is coming in.
+    h.flightState.feed._backoff = true;
+    assert.deepEqual(h.tracking._trackedStaleCue(ICAO), {
+      text: 'STALE',
+      dimmed: true,
+    });
+    assert.equal(h.tracking._trackedIconColor().alpha, STALE_ALPHA);
+    assert.equal(h.flightState.records.missingPolls.has(ICAO), false);
+  } finally {
+    h.restore();
+  }
+});
+
 test('military: a report arriving after the plane has stopped: it eases in with no spur, and the trail keeps everything up to the stop', () => {
   const { fixes, info } = outOfCoverage();
   info.lastContactEpochMs = fixes.at(-1).epochMs;
