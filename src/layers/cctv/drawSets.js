@@ -13,6 +13,9 @@
  * (a record's `coverageEntities`, a projection runtime's `plane`): plain
  * objects the layer changes and then writes, only what changed reaching
  * the set.
+ *
+ * Meshes and quads are capabilities: on a renderer without them there are
+ * no viewshed volumes or monitor plane, and the lines still draw.
  */
 import { drawOf } from '../../render/rendererOf.js';
 
@@ -83,8 +86,9 @@ export function createDrawSets({ state: layerState }) {
     current = {
       viewer,
       coverage: draw.lines({ id: `cctv:${n}:coverage` }),
-      viewshed: draw.meshes({ id: `cctv:${n}:viewshed`, pickable: false }),
-      plane: draw.quads({ id: `cctv:${n}:plane` }),
+      viewshed:
+        draw.meshes?.({ id: `cctv:${n}:viewshed`, pickable: false }) ?? null,
+      plane: draw.quads?.({ id: `cctv:${n}:plane` }) ?? null,
       // What each line item was last written as, by id.
       lineKeys: new Map(),
     };
@@ -100,7 +104,7 @@ export function createDrawSets({ state: layerState }) {
     if (!current) return;
     for (const set of [current.coverage, current.viewshed, current.plane])
       try {
-        set.dispose();
+        set?.dispose();
       } catch {
         // Its viewer went first.
       }
@@ -110,7 +114,8 @@ export function createDrawSets({ state: layerState }) {
   /** The ids of the sets that draw the layer's lines and plane. */
   function pickableSetIds() {
     const s = live();
-    return s ? [s.coverage.id, s.plane.id] : [];
+    if (!s) return [];
+    return s.plane ? [s.coverage.id, s.plane.id] : [s.coverage.id];
   }
 
   /** Which of the layer's sets a set id is: 'coverage', 'plane' or null. */
@@ -118,7 +123,7 @@ export function createDrawSets({ state: layerState }) {
     const s = live();
     if (!s) return null;
     if (setId === s.coverage.id) return 'coverage';
-    if (setId === s.plane.id) return 'plane';
+    if (setId === s.plane?.id) return 'plane';
     return null;
   }
 
@@ -150,25 +155,25 @@ export function createDrawSets({ state: layerState }) {
   /** Write the plane handle as it is now. */
   function writePlane(plane) {
     if (!plane?.id) return;
-    sets()?.plane.upsert([quadItemOf(plane)]);
+    sets()?.plane?.upsert([quadItemOf(plane)]);
   }
 
   /** Take a plane out. */
   function removePlane(plane) {
-    if (plane?.id) live()?.plane.remove([plane.id]);
+    if (plane?.id) live()?.plane?.remove([plane.id]);
   }
 
   /** Write a viewshed volume. */
   function writeVolume(item) {
     const s = sets();
-    if (!s) return;
+    if (!s?.viewshed) return;
     s.viewshed.upsert([item]);
     volumeWrites += 1;
   }
 
   /** Take a viewshed volume out. */
   function removeVolume(id) {
-    if (id) live()?.viewshed.remove([id]);
+    if (id) live()?.viewshed?.remove([id]);
   }
 
   /** How many viewshed volumes were written, for the QA harness. */

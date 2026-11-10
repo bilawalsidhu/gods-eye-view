@@ -108,3 +108,28 @@ test('another viewer gets sets of its own; dispose lets them go', () => {
     two.unbind();
   }
 });
+
+test('a renderer without meshes or quads still draws the lines', () => {
+  const viewer = {};
+  const { draw, unbind } = bindFakeDraw(viewer);
+  delete draw.meshes;
+  delete draw.quads;
+  const drawSets = createDrawSets({ state: { _viewer: viewer } });
+  try {
+    drawSets.writeLines([line('cctv-cam-ray-tl')]);
+    const coverage = draw.find('cctv:');
+    assert.equal(coverage.items.size, 1);
+    // No viewshed volumes and no monitor plane: their writes do nothing.
+    drawSets.writeVolume({ id: 'cctv-cam-viewshed' });
+    drawSets.removeVolume('cctv-cam-viewshed');
+    const plane = { id: 'cctv-cam-plane', cameraId: 'cam', show: true };
+    drawSets.writePlane(plane);
+    drawSets.removePlane(plane);
+    assert.equal(drawSets.volumeWritesForTest(), 0);
+    assert.deepEqual(drawSets.pickableSetIds(), [coverage.spec.id]);
+    assert.equal(drawSets.roleOfSet(coverage.spec.id), 'coverage');
+    drawSets.dispose();
+  } finally {
+    unbind();
+  }
+});
