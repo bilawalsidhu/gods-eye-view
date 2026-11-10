@@ -222,3 +222,43 @@ test('a sinking event folds into its ship; month-precise dates keep the year onl
   assert.equal(concordia.date, '2012-01-13');
   assert.equal('event' in concordia, false);
 });
+
+test('a date before AD 100 is kept as ancient text, never read as an AD year', () => {
+  const entity = (q) => ({ value: `http://www.wikidata.org/entity/${q}` });
+  const [bc, earlyAd, roman] = normalizeWikidataResults({
+    results: {
+      bindings: [
+        {
+          item: entity('Q1'),
+          itemLabel: { value: 'Antikythera wreck' },
+          coord: { value: 'Point(23.3 35.9)' },
+          sunk: { value: '-0299-01-01T00:00:00Z' },
+          sunkPrecision: { value: '11' },
+        },
+        {
+          item: entity('Q2'),
+          itemLabel: { value: 'Early wreck' },
+          coord: { value: 'Point(12 40)' },
+          sunk: { value: '0050-01-01T00:00:00Z' },
+          sunkPrecision: { value: '9' },
+        },
+        {
+          item: entity('Q3'),
+          itemLabel: { value: 'Roman wreck' },
+          coord: { value: 'Point(13 41)' },
+          sunk: { value: '0300-01-01T00:00:00Z' },
+          sunkPrecision: { value: '9' },
+        },
+      ],
+    },
+  });
+  assert.equal(bc.year, null, '300 BC is not the year 300');
+  assert.equal(bc.date, null, 'no day for a BC date');
+  assert.equal(bc.dating, '300 BC');
+  assert.equal(bc.ancient, true);
+  assert.equal(earlyAd.year, null);
+  assert.equal(earlyAd.dating, 'AD 50');
+  assert.equal(earlyAd.ancient, true);
+  assert.equal(roman.year, 300);
+  assert.equal(roman.dating, null);
+});

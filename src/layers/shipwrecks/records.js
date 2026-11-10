@@ -194,18 +194,43 @@ function wikiUrl(value) {
 
 /**
  * A Wikidata time as a day ("1912-04-15") when it is day-precise, else as a
- * year only: a month- or year-precise value reads back as the 1st.
- * @returns {{date: string|null, year: number|null}}
+ * year only: a month- or year-precise value reads back as the 1st. A year
+ * before AD 100 ("-0299", 300 BC) has no place on the year picker, so it is
+ * kept as ancient with its year as text, like EMODnet's period-dated wrecks.
+ * @returns {{date: string|null, year: number|null, dating: string|null}}
  */
 function wikidataTime(value, precision) {
-  const match = /^(-?\d{4})-(\d{2})-(\d{2})T/.exec(value || '');
-  if (!match) return { date: null, year: null };
-  const year = parseYear(match[1]);
-  const p = Number(precision);
-  // 11 = day; 9 = year; 10 = month. A missing precision (P576) counts as a day.
-  if (!Number.isFinite(p) || p >= 11)
-    return { date: `${match[1]}-${match[2]}-${match[3]}`, year };
-  return { date: null, year: p >= 9 ? year : null };
+  const none = { date: null, year: null, dating: null };
+  const match = /^([+-]?)(\d{4,})-(\d{2})-(\d{2})T/.exec(value || '');
+  if (!match) return none;
+  // A missing precision (P576 is read without one) counts as a day.
+  const p = precision == null ? 11 : Number(precision);
+  // 11 = day; 10 = month; 9 = year; below 9 is a decade or coarser.
+  if (!Number.isFinite(p) || p < 9) return none;
+  const signed = Number(`${match[1] === '-' ? '-' : ''}${match[2]}`);
+  if (signed < 100) {
+    // The query service writes XSD 1.1 years: 0000 is 1 BC, -0299 is 300 BC.
+    const dating = signed <= 0 ? `${1 - signed} BC` : `AD ${signed}`;
+    return { date: null, year: null, dating };
+  }
+  const year = parseYear(String(signed));
+  if (year === null) return none;
+  if (p >= 11)
+    return { date: `${match[2]}-${match[3]}-${match[4]}`, year, dating: null };
+  return { date: null, year, dating: null };
+}
+
+/** Whether a record (or a parsed time) says when the ship sank. */
+function hasWhen(when) {
+  return Boolean(when.date || Number.isInteger(when.year) || when.dating);
+}
+
+/** Copy when a ship sank from one record (or parsed time) to another. */
+function takeWhen(target, from) {
+  target.date = from.date ?? null;
+  target.year = from.year ?? null;
+  target.dating = from.dating ?? null;
+  target.ancient = Boolean(from.dating) || Boolean(from.ancient);
 }
 
 /** "sinking of the RMS Titanic" → "Sinking of the RMS Titanic". */
@@ -233,10 +258,7 @@ export function normalizeWikidataResults(payload) {
     if (known) {
       // Extra rows only add what the first one lacked.
       known.vesselType ||= clean(value('typeLabel'), 60);
-      if (!known.date && !known.year) {
-        known.date = sunk.date || ended.date;
-        known.year = sunk.year ?? ended.year;
-      }
+      if (!hasWhen(known)) takeWhen(known, hasWhen(sunk) ? sunk : ended);
       known.casualties ??= count(value('deaths'));
       known.survivors ??= count(value('survivors'));
       continue;
@@ -249,7 +271,7 @@ export function normalizeWikidataResults(payload) {
     if (!validPoint(lat, lon)) continue;
     const name = clean(value('itemLabel'), 100);
     const event = value('event') === 'event';
-    const when = sunk.date || sunk.year ? sunk : ended;
+    const when = hasWhen(sunk) ? sunk : ended;
     byItem.set(qid, {
       id: `wikidata:${qid}`,
       source: 'wikidata',
@@ -261,8 +283,8 @@ export function normalizeWikidataResults(payload) {
       vesselType: event ? null : clean(value('typeLabel'), 60),
       year: when.year,
       date: when.date,
-      dating: null,
-      ancient: false,
+      dating: when.dating,
+      ancient: Boolean(when.dating),
       cause: null,
       notes: impersonalText(value('itemDescription'), MAX_TEXT),
       cargo: null,
@@ -313,10 +335,7 @@ function foldSinkingEvents(records) {
       continue;
     }
     twin.vesselType ||= record.vesselType;
-    if (!twin.date && !twin.year) {
-      twin.date = record.date;
-      twin.year = record.year;
-    }
+    if (!hasWhen(twin)) takeWhen(twin, record);
     twin.casualties ??= record.casualties;
     twin.survivors ??= record.survivors;
   }
@@ -335,9 +354,8 @@ function foldSinkingEvents(records) {
       out.push(event);
       continue;
     }
-    if (!ship.date && !ship.year) {
-      ship.date = event.date;
-      ship.year = event.year;
+    if (!hasWhen(ship)) {
+      takeWhen(ship, event);
     } else if (!ship.date && event.date && event.year === ship.year) {
       ship.date = event.date;
     }
@@ -395,7 +413,7 @@ export function mergeShipwreckRecords(emodnet = [], wikidata = []) {
       kept.push(record);
       continue;
     }
-    twin.year ??= record.year;
+    if (!hasWhen(twin)) takeWhen(twin, record);
     twin.vesselType ||= record.vesselType;
     twin.cause ||= record.cause;
     twin.depth ??= record.depth;
