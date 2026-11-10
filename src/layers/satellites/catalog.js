@@ -124,6 +124,13 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             satrec,
             group: 'dense',
             launchYear: tleLineLaunchYear(entry.line1),
+            line1: entry.line1,
+            line2: entry.line2,
+            // The dense feed is CelesTrak's Starlink group.
+            satelliteClass: 'starlink',
+            ucs: null,
+            satcat: null,
+            sensor: null,
           });
           parts.rendering._addPoint(
             noradId,
@@ -195,6 +202,14 @@ export function createCatalog({ state: layerState, services, parts, source }) {
     if (token !== layerState._denseLoadToken) return;
     layerState._params.catalog = 'core';
     _removeDenseCatalog();
+    // Back on core, Starlink is off: hide the core catalog's own Starlink
+    // points again, and say so in the class choice.
+    if (layerState._params.classes)
+      layerState._params.classes = {
+        ...layerState._params.classes,
+        starlink: false,
+      };
+    parts.controls._applyClassVisibility?.();
     layerState._denseStatus = 'failed';
     layerState._denseError = reason;
     parts.controls._notifyRowControls();

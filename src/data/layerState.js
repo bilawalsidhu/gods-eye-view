@@ -2,6 +2,7 @@
 // Local, not i18n/marker.js: the token-ledger tests run this file in isolation.
 const msg = (text) => text;
 import { normalizeIdSwitches, patchRequestedIdSwitches } from './idSwitches.js';
+import { normalizeSatelliteClassMask } from './satelliteClassMask.js';
 import reservationRows from './layerStateTokenReservations.json' with { type: 'json' };
 
 const VALID_DISPOSITIONS = new Set([
@@ -416,6 +417,16 @@ const OPTION_GROUPS = Object.freeze({
       dense: 'd',
     }),
     integerOption('selectedSatTrackingId', 't', null),
+    // Every class but Starlink shows by default (satellites/classes.js).
+    Object.freeze({
+      key: 'classes',
+      token: 'k',
+      defaultValue: 'sitpd',
+      normalize: normalizeSatelliteClassMask,
+      encode: (value) => value,
+      decode: (value) =>
+        typeof value === 'string' ? normalizeSatelliteClassMask(value) : null,
+    }),
   ]),
   cctv: Object.freeze([
     enumOption('coverageMode', 'c', 'on', ['off', 'on', 'viewshed'], {

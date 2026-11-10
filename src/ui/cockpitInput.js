@@ -1,5 +1,7 @@
 /** Route Cockpit keys while preserving the active disclosure and form-control owner. */
 import { followedOf } from '../data/followed.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { lookKeyStep } from '../cockpitLook.js';
 import { isPointerFree } from '../data/inputOwnership.js';
 import { inputFor } from '../input/dispatcher.js';
 import { findInput, findQuery } from '../render/rendererOf.js';
@@ -25,10 +27,30 @@ export function doubleClickHitsSubject(
   return Number.isFinite(distance) && distance <= radiusPx;
 }
 
+/**
+ * How long the first press of a double-click keeps its picture of the track,
+ * ms: a click on a selected ship re-centres the camera, so the ship can move
+ * on screen before the second click lands.
+ */
+export const DOUBLE_CLICK_MEMORY_MS = 700;
+
 /** Where the track `kind` would ride is drawn now, as a world position. */
 function subjectWorldPosition(kind) {
-  if (kind !== 'aircraft') return null;
-  return trackedPositionNow(this.viewer, followedOf(this.viewer));
+  if (kind === 'aircraft')
+    return trackedPositionNow(this.viewer, followedOf(this.viewer));
+  if (kind === 'satellite')
+    return this.services.satellitesLayer?.getCockpitPosition?.() ?? null;
+  const info = this.readVesselInfo();
+  if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude))
+    return null;
+  // The sprite floats on the geoid, not on the ellipsoid (tens of metres
+  // apart): project the height it is drawn at.
+  const heightM = Number.isFinite(info.markHeightM)
+    ? info.markHeightM
+    : Number.isFinite(info.seaSurfaceHeightM)
+      ? info.seaSurfaceHeightM
+      : 0;
+  return fromDegrees(info.longitude, info.latitude, heightM);
 }
 
 /** The followed track's canvas position now, or null off screen. */
@@ -40,20 +62,53 @@ function subjectCanvasPosition() {
 }
 
 /**
+ * Note where the selected ship is drawn as a press begins, for a
+ * double-click whose first click moves it. The second press of the gesture
+ * keeps the first one's picture: by then the first click may have moved it.
+ * @param {number} [nowMs]
+ */
+export function onScenePointerDown(nowMs = performance.now()) {
+  if (this.active || this.destroyed) return;
+  const start = this.doubleClickStart;
+  if (start && nowMs - start.atMs <= DOUBLE_CLICK_MEMORY_MS) return;
+  // Only a ship moves under its own click (selecting it re-centres the
+  // camera); a followed aircraft stays put, so its hit area stays its own.
+  if (this.resolveEntryKind() !== 'vessel') {
+    this.doubleClickStart = null;
+    return;
+  }
+  const at = subjectCanvasPosition.call(this);
+  const mmsi = this.readVesselInfo()?.mmsi ?? null;
+  this.doubleClickStart = at ? { x: at.x, y: at.y, atMs: nowMs, mmsi } : null;
+}
+
+/**
  * Enter first person when the followed track itself is double-clicked: the
- * same entry, and the same gates, as C and the entry buttons. A
+ * same entry, and the same gates, as the entry buttons. The click may
+ * land where the track is drawn now or where it was as the gesture began. A
  * double-click anywhere else, or one a tool owns (drawing ends a shape with
  * one), is left alone.
  * @param {{x: number, y: number}|null|undefined} position Canvas position.
+ * @param {number} [nowMs]
  * @returns {boolean} True when it landed on the followed track, entered or
  *   refused by the gate: the caller does nothing else with it.
  */
-export function onSceneDoubleClick(position) {
+export function onSceneDoubleClick(position, nowMs = performance.now()) {
+  const start = this.doubleClickStart;
+  this.doubleClickStart = null;
   if (this.active || this.destroyed || !isPointerFree()) return false;
   if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
     return false;
-  if (!doubleClickHitsSubject(position, subjectCanvasPosition.call(this)))
-    return false;
+  const hit =
+    doubleClickHitsSubject(position, subjectCanvasPosition.call(this)) ||
+    (Boolean(start) &&
+      nowMs - start.atMs <= DOUBLE_CLICK_MEMORY_MS &&
+      // The memory is the ship's it was taken for: one followed since (an
+      // aircraft, another ship) is hit only where it is drawn.
+      this.resolveEntryKind() === 'vessel' &&
+      start.mmsi === (this.readVesselInfo()?.mmsi ?? null) &&
+      doubleClickHitsSubject(position, start));
+  if (!hit) return false;
   this.enter();
   return true;
 }
@@ -85,7 +140,8 @@ const DOUBLE_CLICK_SLOP_PX = 8;
  * went down, so a press that cannot end a double-click on the track (no
  * press on the track came just before it, at about the same spot) gives
  * its hold back at its release: a second press off the track then finds
- * the follow free. `this.holdStockFollow`, when set, takes
+ * the follow free. In orbit a press on a mapped ground point holds it
+ * off the same way, and the double-click it ends in is a focus. `this.holdStockFollow`, when set, takes
  * the hold in place of the renderer's input port (tests).
  * @returns {() => void} Stops listening and lets any hold go.
  */
@@ -116,10 +172,11 @@ export function routeSceneDoubleClick() {
     drop();
     const at = Date.now();
     const onSubject =
-      !this.active &&
       !this.destroyed &&
       isPointerFree() &&
-      doubleClickHitsSubject(position, subjectCanvasPosition.call(this));
+      (this.active
+        ? Boolean(this.orbitalSiteUnder?.(position))
+        : doubleClickHitsSubject(position, subjectCanvasPosition.call(this)));
     endsDouble =
       !!last?.onSubject &&
       at - last.at <= SUBJECT_PRESS_HOLD_MS &&
@@ -137,8 +194,14 @@ export function routeSceneDoubleClick() {
     if (!endsDouble) drop();
   });
   const offDouble = input.onPointer('dblclick', ({ position }) => {
-    this.onSceneDoubleClick(position);
-    drop();
+    // In orbit, a double-click on a mapped ground point is a focus, never a
+    // retarget that would end the view.
+    if (!this.onSceneDoubleClick(position))
+      this.onOrbitalDoubleClick?.(position);
+    // The hold covers the whole double-click: subscribers after this one
+    // (a layer's own follow on a double-click) must still find the stock
+    // follow held, so it is given back once the dispatch is over.
+    queueMicrotask(drop);
   });
   return () => {
     offDown();
@@ -149,12 +212,92 @@ export function routeSceneDoubleClick() {
 }
 
 /**
- * The Cockpit's capture-phase keydown: Escape and C.
+ * Focus inside one of these keeps its arrows (and Home): text entry, sliders,
+ * tabs, radio groups, lists and menus all move with them.
+ */
+const LOOK_KEY_OWNERS = [
+  'input',
+  'textarea',
+  'select',
+  '[contenteditable]',
+  '[role=combobox]',
+  '[role=grid]',
+  '[role=menubar]',
+  '[role=menuitemcheckbox]',
+  '[role=menuitemradio]',
+  '[role=scrollbar]',
+  '[role=searchbox]',
+  '[role=slider]',
+  '[role=spinbutton]',
+  '[role=textbox]',
+  '[role=tree]',
+  '[role=treeitem]',
+  '[role=tab]',
+  '[role=tablist]',
+  '[role=radio]',
+  '[role=radiogroup]',
+  '[role=listbox]',
+  '[role=menu]',
+  '[role=menuitem]',
+  '[role=option]',
+].join(', ');
+
+/**
+ * Turn the bridge view with the arrow keys (Shift for 45° steps) and bring
+ * it back over the bow with Home or 0. Only a bridge looks around, and only
+ * while focus is on the scene or a plain HUD button.
+ * @returns {boolean} True when the key was taken.
+ */
+function handleLookKey(event) {
+  if (!this.active || this.subjectKind !== 'vessel') return false;
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  const step = lookKeyStep(event.key, event.shiftKey);
+  const reset = !event.repeat && (event.key === 'Home' || event.key === '0');
+  if (!step && !reset) return false;
+  if (event.target?.closest?.(LOOK_KEY_OWNERS)) return false;
+  if (this.isUtilityDisclosureOpen?.()) return false;
+  event.preventDefault();
+  if (step) this.turnLook(step);
+  else this.lookAhead();
+  return true;
+}
+
+/** Zoom keys in orbit: `+` (or `=`, unshifted) in and `-` (or `_`) out. */
+const ORBITAL_ZOOM_KEYS = Object.freeze({ '+': 1, '=': 1, '-': -1, _: -1 });
+
+/**
+ * In an orbital view: tilt off nadir with the arrows (single 5° steps; Shift
+ * does not take the bridge's 45° step), return to nadir with Home or 0, and
+ * step the zoom with + and −. The bridge's focus guards apply.
+ * @returns {boolean} True when the key was taken.
+ */
+function handleOrbitalKey(event) {
+  if (!this.active || this.subjectKind !== 'satellite') return false;
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  const step = lookKeyStep(event.key);
+  const reset = !event.repeat && (event.key === 'Home' || event.key === '0');
+  const zoom = event.repeat ? 0 : ORBITAL_ZOOM_KEYS[event.key] || 0;
+  if (!step && !reset && !zoom) return false;
+  if (event.target?.closest?.(LOOK_KEY_OWNERS)) return false;
+  if (this.isUtilityDisclosureOpen?.()) return false;
+  event.preventDefault();
+  if (step) this.turnOrbitalLook(step);
+  else if (reset) this.orbitalNadir();
+  else this.stepOrbitalZoom(zoom);
+  return true;
+}
+
+/**
+ * The Cockpit's capture-phase keydown: Escape, on a bridge the look-around
+ * keys and in orbit the tilt and zoom keys. C is left to the app-wide CCTV
+ * shortcut; entry is by double-click or the entry buttons.
  * @param {KeyboardEvent} event
  */
 export function onKeyDown(event) {
   if (this.destroyed) return false;
-  if (event.repeat || event.isComposing) return;
+  if (event.isComposing) return;
+  // Held arrows turn a bridge view smoothly; every other key acts once.
+  if (event.repeat && !lookKeyStep(event.key)) return;
   if (event.key === 'Escape' && this.active) {
     // The credit lightbox owns Escape while its Close control or links hold
     // focus. Its target handler closes the overlay and restores attribution
@@ -197,19 +340,6 @@ export function onKeyDown(event) {
   }
   if (event.target?.closest?.('input, textarea, select, [contenteditable]'))
     return;
-  const key = event.key?.toLowerCase();
-  if (key === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-    if (!this.active) {
-      const cockpitAttempt = !!(
-        this.readAircraftInfo() && followedOf(this.viewer)?.entity?.position
-      );
-      if (!cockpitAttempt) return;
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (!this.active && !this.isEntryAllowed()) return;
-    if (this.active) this.exit();
-    else this.enter();
-    return;
-  }
+  if (handleLookKey.call(this, event)) return;
+  handleOrbitalKey.call(this, event);
 }

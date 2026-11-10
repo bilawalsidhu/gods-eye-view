@@ -987,6 +987,26 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 .draw-mark-row.hidden-mark .draw-mark-swatch {
   opacity: 0.45;
 }
+/* What an application's row action said (a measurement, a confirmation), under
+   the row; empty, it takes no room. */
+.draw-mark-note {
+  order: 2;
+  flex-basis: 100%;
+  padding: 0 0 2px 16px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.draw-mark-note:empty {
+  display: none;
+}
+/* Busy, but focusable: disabling the pressed button would drop focus. */
+.draw-mark-action[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: progress;
+}
 .draw-mark-colors {
   /* Right after its swatch for keyboard and screen readers, shown last. */
   order: 1;

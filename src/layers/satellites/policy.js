@@ -1,12 +1,16 @@
 import { satelliteClassColor } from '../../data/satelliteClass.js';
-import { hexColor } from '../../render/color.js';
+import { cssColor, hexColor } from '../../render/color.js';
+import { SATELLITE_CLASS_DISPLAY, SATELLITE_CLASS_IDS } from './classes.js';
 
 /**
  * Satellite Orbits — Real-time positions via CelesTrak TLE + SGP4 propagation.
  *
- * Loads six CelesTrak groups (~840 sats): stations, visual, GPS, GLONASS,
- * Galileo, and the geosynchronous belt. Optional dense mode (setParams
- * catalog:'dense') adds the Starlink shell as points-only extras.
+ * Loads eleven CelesTrak groups: stations, visual, GPS, GLONASS, Galileo, the
+ * geosynchronous belt, and the Earth resources, weather, Planet, SAR and
+ * science groups. Each object is filed under one of six classes
+ * (src/layers/satellites/classes.js) whose visibility the layer row toggles; dense mode
+ * (setParams catalog:'dense', the STARLINK toggle) adds the Starlink shell as
+ * points-only extras.
  * Renders positions as points, orbital paths as polylines.
  * Click any satellite to track it with camera follow + orbital path.
  *
@@ -58,6 +62,13 @@ export const CATALOG_GROUPS = [
   { tag: 'glonass', path: 'glo-ops' },
   { tag: 'galileo', path: 'galileo' },
   { tag: 'geo', path: 'geo' },
+  // Earth observation launched after the UCS snapshot, and science probes.
+  // Each object's class comes from src/layers/satellites/classes.js, not its group.
+  { tag: 'resource', path: 'resource' },
+  { tag: 'weather', path: 'weather' },
+  { tag: 'planet', path: 'planet' },
+  { tag: 'sar', path: 'sar' },
+  { tag: 'science', path: 'science' },
 ];
 
 // Dense-catalog mode (setParams({ catalog: 'dense' })): Starlink shell as
@@ -170,6 +181,40 @@ export const POINT_STYLES = {
     outlineWidth: 0,
   },
 };
+
+const CLASS_COLORS = Object.fromEntries(
+  SATELLITE_CLASS_IDS.map((id) => [
+    id,
+    Object.freeze(cssColor(SATELLITE_CLASS_DISPLAY[id].color)),
+  ]),
+);
+const _classStyles = new Map();
+
+/**
+ * A satellite's point style: its group's size and outline, in its class's
+ * colour (src/layers/satellites/classes.js), so the dots match the class legend and
+ * toggles. Styles are shared per group and class.
+ * @param {string|undefined} group Catalog group tag.
+ * @param {string|undefined} satelliteClass Class id.
+ */
+export function classPointStyle(group, satelliteClass) {
+  const base = POINT_STYLES[group] || POINT_STYLES.visual;
+  const color = CLASS_COLORS[satelliteClass];
+  if (!color) return base;
+  const key = `${group}|${satelliteClass}`;
+  let style = _classStyles.get(key);
+  if (!style) {
+    style = Object.freeze({
+      ...base,
+      color:
+        group === 'dense'
+          ? Object.freeze([color[0], color[1], color[2], 0.9])
+          : color,
+    });
+    _classStyles.set(key, style);
+  }
+  return style;
+}
 
 /**
  * Physically DOCKED vehicles are separate real tracks sharing one position: the

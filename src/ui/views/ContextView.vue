@@ -20,8 +20,8 @@ import { cockpitEntryFace } from '../cockpitPresentation.js';
 // publishes them; until it does, the panel shows its initial markup.
 const { view: ctx } = storeToRefs(useContextStore());
 const { presence: cockpit } = storeToRefs(useCockpitStore());
-// The entry rides the tracked aircraft (cockpitEntryFace).
-const entry = computed(() => cockpitEntryFace('aircraft'));
+// The entry names the subject it would ride (cockpitEntryFace).
+const entry = computed(() => cockpitEntryFace(cockpit.value?.entryKind));
 // While the Bhote Koshi event is on, its panel is the rail's only content.
 const { panel: bhotePanel } = storeToRefs(useBhoteKoshiPanelStore());
 // The Scene runtime chip SceneControls presents while a scene plays.

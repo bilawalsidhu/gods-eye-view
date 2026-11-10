@@ -74,6 +74,7 @@ test('positions read back from the drawn dots match the Cesium geodetic conversi
 test('no part of the layer drives Cesium', () => {
   const offList = [
     'catalog',
+    'cockpitSubject',
     'controls',
     'index',
     'ingestion',

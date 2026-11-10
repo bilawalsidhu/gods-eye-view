@@ -283,6 +283,10 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed))
   color: var(--cockpit-accent);
   opacity: 0.9;
 }
+/* A bridge has no altitude tape; course over ground replaces the readout. */
+#cockpit-altitude-rim[hidden] {
+  display: none;
+}
 .cockpit-altitude-rim-label {
   position: absolute;
   top: 20%;

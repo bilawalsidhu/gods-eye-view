@@ -13,6 +13,7 @@ import {
 import { bindRenderer } from '../render/rendererOf.js';
 import { createCesiumInput } from '../render/cesium/input.js';
 import { routeSceneDoubleClick, onSceneDoubleClick } from './cockpitInput.js';
+import { inputFor } from '../input/dispatcher.js';
 
 function harness(t, { stock = null } = {}) {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
@@ -111,7 +112,7 @@ const doubleClick = (input, position) => {
   input.dblclick(position);
 };
 
-test('a double-click on the followed track enters, with the stock follow held off for the press', (t) => {
+test('a double-click on the followed track enters, with the stock follow held off for the press', async (t) => {
   const { input, controller } = harness(t);
   const on = { x: 110, y: 95 };
   input.down(on);
@@ -126,6 +127,8 @@ test('a double-click on the followed track enters, with the stock follow held of
   input.up(on);
   input.dblclick(on);
   assert.equal(controller.entered, 1);
+  // Given back once the double-click's dispatch is over.
+  await Promise.resolve();
   assert.equal(controller.holds, 0, 'given back');
 });
 
@@ -193,7 +196,7 @@ test('a press on the track long after the last keeps no hold past its release', 
   assert.equal(controller.holds, 1, 'a quick second press keeps it');
 });
 
-test('a double-click that ends on the track holds the stock follow off', (t) => {
+test('a double-click that ends on the track holds the stock follow off', async (t) => {
   const follows = [];
   const { input, controller } = harness(t, {
     stock: (event) => follows.push(event.position),
@@ -204,7 +207,26 @@ test('a double-click that ends on the track holds the stock follow off', (t) => 
   input.dblclick(on);
   assert.equal(controller.entered, 1);
   assert.deepEqual(follows, [], 'the stock follow did not run');
+  await Promise.resolve();
   assert.equal(input.stockEnabled('dblclickFollow'), true, 'given back');
+});
+
+test('subscribers after the Cockpit find the stock follow held through the double-click', async (t) => {
+  const { input, controller } = harness(t, { stock: () => {} });
+  // A layer's own follow on a double-click, subscribed after the Cockpit
+  // (Mapped Installations follows a site only while the stock follow runs).
+  const seen = [];
+  const off = inputFor(controller.viewer).onPointer('dblclick', () =>
+    seen.push(input.stockEnabled('dblclickFollow')),
+  );
+  t.after(off);
+  const on = { x: 110, y: 95 };
+  input.tap(on);
+  input.tap(on);
+  input.dblclick(on);
+  assert.deepEqual(seen, [false], 'held for the whole dispatch');
+  await Promise.resolve();
+  assert.equal(input.stockEnabled('dblclickFollow'), true, 'given back after');
 });
 
 test('an active Cockpit leaves presses alone, and stopping lets a hold go', (t) => {

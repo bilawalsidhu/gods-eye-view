@@ -46,6 +46,8 @@ export function createVesselState({ source, services }) {
   /** Row ids for unkeyed (no-MMSI) records, which are rebuilt every poll. */
 
   vesselState._unkeyedIconSequence = 0;
+  // The ship whose icon is hidden under the bridge camera (cockpit subject).
+  vesselState._iconHiddenMmsi = null;
 
   vesselState.state = {
     feed: createVesselFeed(),
@@ -73,6 +75,8 @@ export function createVesselState({ source, services }) {
     activeFocusCount: 0,
     activeLabelCount: 0,
     selectedRecord: null,
+    /** @type {string|null} MMSI whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
+    cockpitSubjectMmsi: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
     /** @type {{x: number, y: number, z: number}[]} Chronological ECEF trail vertices (oldest first) */

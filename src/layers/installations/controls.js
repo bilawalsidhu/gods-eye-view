@@ -160,6 +160,44 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * A loaded mapped installation by id, as `getNearby` returns it (with its
+     * drawn `position`), or null while the layer is off or the id is not
+     * loaded. Read-only: nothing is selected.
+     * @param {string} id Source-backed installation id.
+     * @returns {object|null}
+     */
+    getById(id) {
+      if (!layerState.enabled || id === null || id === undefined) return null;
+      const record = layerState.recordById.get(String(id));
+      if (!record || record.kind !== 'installation') return null;
+      return {
+        ...record,
+        position: fromDegrees(
+          record.longitude,
+          record.latitude,
+          parts.rendering.installationSurfaceHeightM(record),
+        ),
+      };
+    },
+
+    /**
+     * The mapped installation a query port's pick landed on: a site's dot,
+     * outline or fill, or a named marker, each naming its installation in
+     * its `meta`, as this layer's own click selection reads them. Null for
+     * anything else.
+     * @param {object|null|undefined} hit A query port `Hit`.
+     * @returns {object|null} As {@link getById}.
+     */
+    findByPick(hit) {
+      const id =
+        hit?.set === parts.namedMarkers?.setId ||
+        parts.rendering.ownsSet(hit?.set)
+          ? hit.meta?.installationId
+          : null;
+      return id ? methods.getById(id) : null;
+    },
+
+    /**
      * Select and frame a mapped installation from another contextual UI.
      * @param {string} id Source-backed installation id.
      * @returns {boolean} True when an available installation was focused.

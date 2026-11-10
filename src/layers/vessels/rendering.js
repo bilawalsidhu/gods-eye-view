@@ -152,12 +152,37 @@ export function createRendering({
     state.icons = null;
   }
 
+  /** Whether the Cockpit's bridge camera rides this record's ship. */
+  function isCockpitSubject(record) {
+    return (
+      Boolean(state.cockpitSubjectMmsi) &&
+      record.mmsi === state.cockpitSubjectMmsi
+    );
+  }
+
+  /**
+   * Redraw the icons of the ship the bridge camera rode and the one it now
+   * rides: the camera sits on the ridden ship's icon, which would fill the
+   * view, so it is hidden while held.
+   */
+  function syncCockpitSubjectIcon() {
+    const held = state.cockpitSubjectMmsi || null;
+    if (vesselState._iconHiddenMmsi === held) return;
+    const before = vesselState._iconHiddenMmsi;
+    vesselState._iconHiddenMmsi = held;
+    for (const mmsi of [before, held]) {
+      const record = mmsi ? state.records.byMmsi.get(mmsi) : null;
+      if (record) syncRecordIcon(record);
+    }
+  }
+
   /** The icon item a record draws, as it now is. */
   function iconItem(record, visual) {
     const selected = record === state.selectedRecord;
     const courseDeg = vesselCourseDeg(record);
     return {
       id: visual.iconId,
+      show: !isCockpitSubject(record),
       pos: visual.position,
       image: shipIcon(record, selected),
       size: [SHIP_ICON_PX, SHIP_ICON_PX],
@@ -341,6 +366,7 @@ export function createRendering({
     }
 
     const query = state.viewer ? findQuery(state.viewer) : null;
+    syncCockpitSubjectIcon();
     if (regularPass) {
       // Candidate construction stays on the original 800 ms selector cadence.
       // The 80 ms focus-only pass below never allocates label candidates.
@@ -466,7 +492,11 @@ export function createRendering({
     const viewer = state.viewer;
     const query = viewer ? findQuery(viewer) : null;
     const selected = state.selectedRecord;
-    const entries = selected
+    // From the bridge, the selected vessel is the viewer; its card would be
+    // pinned to the camera position.
+    const selectedCarded =
+      selected && selected.mmsi !== state.cockpitSubjectMmsi;
+    const entries = selectedCarded
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
     const maxLabels = labelRowLimit();
@@ -515,7 +545,7 @@ export function createRendering({
     // Greedy min-separation pass over the priority-ranked cell winners: the
     // selected card's anchor seeds the accepted set so ambient cards keep clear.
     const accepted = [];
-    if (selected) {
+    if (selectedCarded) {
       const screen = query.project(iconPosition(selected));
       if (screen) accepted.push({ x: screen.x, y: screen.y });
     }

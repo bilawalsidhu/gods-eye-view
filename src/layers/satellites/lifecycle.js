@@ -1,5 +1,9 @@
 import { frameOf } from '../../render/rendererOf.js';
-import { ISS_OVERLAY_SOURCE_ID, SATELLITE_COVERAGE_MS } from './policy.js';
+import {
+  ISS_NORAD,
+  ISS_OVERLAY_SOURCE_ID,
+  SATELLITE_COVERAGE_MS,
+} from './policy.js';
 import { worldClock } from '../../time/worldClock.js';
 
 export function createLifecycle({
@@ -54,6 +58,10 @@ export function createLifecycle({
       layerState._trackedFrameNumber = -1;
       layerState._trackedFrameGeo = null;
       layerState._trackedFrameNowForTest = null;
+      // The new catalog's points and rings carry no hold.
+      layerState._cockpitHiddenPoints = new Set();
+      layerState._cockpitHiddenPath = null;
+      layerState._cockpitHiddenDot = false;
       layerState._lastFocusUpdate = 0;
       layerState._activeFocusCount = 0;
       layerState._enabled = false;
@@ -91,13 +99,18 @@ export function createLifecycle({
           layerState._params.showPoints,
         ),
       );
-      // Orbit rings + persistent ISS host label — show them
-      parts.rendering._setOrbitPathsShown(
-        parts.controls.satelliteVisualsVisible(
-          layerState._enabled,
-          layerState._params.showOrbits,
-        ),
-      );
+      // Orbit rings + persistent ISS host label — show them; the ISS's ring
+      // follows its class (and its tracking).
+      for (const noradId of layerState._orbitPaths.keys())
+        parts.rendering._setOrbitPathShown(
+          noradId,
+          noradId === ISS_NORAD
+            ? parts.controls._issOrbitVisible()
+            : parts.controls.satelliteVisualsVisible(
+                layerState._enabled,
+                layerState._params.showOrbits,
+              ),
+        );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation
       parts.interaction._installClickHandler(viewer);

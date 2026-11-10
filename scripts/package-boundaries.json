@@ -88,6 +88,10 @@
       "src/ui/views/panels/CockpitBriefing.vue",
       "src/ui/views/panels/CockpitContext.vue",
       "src/ui/views/panels/CockpitRoute.vue",
+      "src/ui/views/panels/CockpitRadar.vue",
+      "src/ui/views/panels/CockpitOrbital.vue",
+      "src/ui/ownerFlag.js",
+      "src/ui/ownerFlagSheet.js",
       "src/ui/cockpitPresentation.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
@@ -1024,7 +1028,26 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/ui/cockpitOrbitalView.js",
+      "src/ui/cockpitOrbitalFocus.js",
+      "src/ui/cockpitOrbitalSignals.js",
+      "src/ui/cockpitOrbitalSatellites.js",
+      "src/cockpitOrbitalSatellites.js",
+      "src/layers/installations/classLabel.js",
+      "src/data/installationNames.js",
+      "src/i18n/marker.js",
+      "src/data/placeBelow.js",
+      "src/layers/satellites/sensors.js",
+      "src/data/adminBoundaries.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js",
+      "src/cockpitSubjects.js",
+      "src/cockpitRadar.js",
+      "src/cockpitLook.js",
+      "src/cockpitOrbital.js",
+      "src/cockpitOrbitalFocus.js",
+      "src/geoDistance.js"
     ],
     "external": ["cesium"]
   },
@@ -1357,7 +1380,27 @@
       "src/layers/wildlifeSightings/photoText.js",
       "src/data/iconOrientation.js",
       "src/ui/quebecCctvOverlay.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/cockpitSubjects.js",
+      "src/cockpitRadar.js",
+      "src/cockpitLook.js",
+      "src/cockpitOrbital.js",
+      "src/cockpitOrbitalFocus.js",
+      "src/geoDistance.js",
+      "src/data/satelliteClassMask.js",
+      "src/ui/cockpitOrbitalView.js",
+      "src/ui/cockpitOrbitalFocus.js",
+      "src/ui/cockpitOrbitalSignals.js",
+      "src/ui/cockpitOrbitalSatellites.js",
+      "src/cockpitOrbitalSatellites.js",
+      "src/layers/installations/classLabel.js",
+      "src/data/placeBelow.js",
+      "src/ui/placePacksLoading.js",
+      "src/ui/ownerFlag.js",
+      "src/ui/ownerFlagSheet.js",
+      "src/layers/satellites/sensors.js",
+      "src/data/adminBoundaries.js",
+      "src/data/retryableLoad.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1371,6 +1414,8 @@
       "src/ui/styles/location.css",
       "src/ui/styles/status.css",
       "src/ui/styles/cockpit.css",
+      "src/ui/styles/cockpitBridge.css",
+      "src/ui/styles/cockpitRadar.css",
       "src/ui/styles/overlays.css",
       "src/ui/styles/layers.css",
       "src/ui/styles/radio.css",
@@ -1669,7 +1714,8 @@
       "src/render/input/router.js",
       "src/render/cesium/internals.js",
       "src/data/firmsIntensity.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/satelliteClassMask.js"
     ],
     "external": ["cesium"]
   },
@@ -1782,7 +1828,8 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/data/firmsIntensity.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/satelliteClassMask.js"
     ],
     "external": ["cesium"]
   },
@@ -1821,7 +1868,8 @@
       "src/layers/aircraft/classification.js",
       "src/layers/aircraft/index.js",
       "src/data/inputOwnership.js",
-      "src/data/firmsIntensity.js"
+      "src/data/firmsIntensity.js",
+      "src/data/satelliteClassMask.js"
     ],
     "external": ["cesium"]
   },
@@ -1907,7 +1955,9 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/layers/vessels/cockpitSubject.js",
+      "src/geoDistance.js"
     ],
     "external": ["cesium"]
   },
@@ -2203,7 +2253,15 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/satelliteClassMask.js",
+      "src/layers/satellites/cockpitSubject.js",
+      "src/layers/satellites/classes.js",
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -3041,7 +3099,8 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/render/cesium/internals.js",
-      "src/data/firmsIntensity.js"
+      "src/data/firmsIntensity.js",
+      "src/data/satelliteClassMask.js"
     ],
     "external": ["cesium"]
   },
@@ -4465,7 +4524,28 @@
       "src/layers/wildlifeSightings/view.js",
       "src/ui/quebecCctvOverlay.js",
       "src/time/viewerClock.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/cockpitSubjects.js",
+      "src/cockpitRadar.js",
+      "src/cockpitLook.js",
+      "src/cockpitOrbital.js",
+      "src/cockpitOrbitalFocus.js",
+      "src/data/satelliteClassMask.js",
+      "src/layers/satellites/cockpitSubject.js",
+      "src/ui/cockpitOrbitalView.js",
+      "src/ui/cockpitOrbitalFocus.js",
+      "src/ui/cockpitOrbitalSignals.js",
+      "src/ui/cockpitOrbitalSatellites.js",
+      "src/cockpitOrbitalSatellites.js",
+      "src/data/placeBelow.js",
+      "src/ui/placePacksLoading.js",
+      "src/ui/ownerFlag.js",
+      "src/ui/ownerFlagSheet.js",
+      "src/layers/vessels/cockpitSubject.js",
+      "src/layers/satellites/classes.js",
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js"
     ],
     "external": [
       "hls.js",
@@ -5198,7 +5278,14 @@
       "src/layers/wildlifeSightings/performance.js",
       "src/layers/wildlifeSightings/view.js",
       "src/layers/wildlifeSightings/iconCollection.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/satelliteClassMask.js",
+      "src/layers/satellites/cockpitSubject.js",
+      "src/layers/vessels/cockpitSubject.js",
+      "src/layers/satellites/classes.js",
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js"
     ],
     "external": [
       "hls.js",
@@ -5462,7 +5549,8 @@
       "src/data/entityRecords.js",
       "src/render/rendererOf.js",
       "src/data/firmsIntensity.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/satelliteClassMask.js"
     ],
     "external": []
   },
@@ -5515,7 +5603,15 @@
       "src/visualStylePolicy.js",
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/cockpitSubjects.js",
+      "src/cockpitRadar.js",
+      "src/cockpitLook.js",
+      "src/cockpitOrbital.js",
+      "src/cockpitOrbitalFocus.js",
+      "src/cockpitOrbitalSatellites.js",
+      "src/geoDistance.js",
+      "src/data/motionModel.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -5828,7 +5924,15 @@
   },
   "satellites-source": {
     "exports": ["./layers/satellites/source"],
-    "modules": ["src/layers/satellites/source.js"],
+    "modules": [
+      "src/layers/satellites/source.js",
+      "src/layers/satellites/classes.js",
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js"
+    ],
     "external": []
   },
   "traffic-source-factory": {
@@ -6328,6 +6432,7 @@
       "src/view/index.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/idSwitches.js",
       "src/data/detectionPolicy.js",
@@ -6551,7 +6656,8 @@
       "src/geo/vector.js",
       "src/data/firmsIntensity.js",
       "src/data/firmsAdapt.js",
-      "src/data/rioRouteNames.js"
+      "src/data/rioRouteNames.js",
+      "src/data/satelliteClassMask.js"
     ],
     "external": ["satellite.js"]
   },
@@ -6643,7 +6749,11 @@
       "src/layers/alpr/records.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/infrastructureData.js",
-      "src/sources/eventPacks.js"
+      "src/sources/eventPacks.js",
+      "src/layers/satellites/classes.js",
+      "src/layers/satellites/sensors.js",
+      "src/data/ucsSatellites.js",
+      "src/data/imagingSensors.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -6654,6 +6764,7 @@
       "src/data/idSwitches.js",
       "src/data/firmsIntensity.js",
       "src/data/layerState.js",
+      "src/data/satelliteClassMask.js",
       "src/data/layerStateTokenReservations.json",
       "src/visualStylePolicy.js"
     ],

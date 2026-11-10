@@ -27,6 +27,9 @@ export function createSelection({
   function bindVesselInteraction(viewer, keyTarget) {
     state.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state.feed.enabled) return;
+      // The bridge view owns the selection: a click on open water must not
+      // deselect the vessel the camera is riding.
+      if (state.cockpitSubjectMmsi) return;
       const pickedId = event.id;
       let record = pickedId ? state.records.byMmsi.get(pickedId) : null;
       // A vessel icon's pick is an item of the layer's icon set, whose id is

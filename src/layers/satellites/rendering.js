@@ -210,6 +210,53 @@ export function createRendering({
     sets?.rings.upsert([path.item]);
   }
 
+  /** Whether a ring is shown; false when there is none. */
+  function _orbitPathShown(noradId) {
+    return layerState._orbitPaths.get(noradId)?.item.show === true;
+  }
+
+  /**
+   * Draw a ring at `factor` times the alpha it was built with; 1 restores
+   * it exactly.
+   * @returns {boolean} True when the ring now carries `factor`.
+   */
+  function _setOrbitPathAlpha(noradId, factor) {
+    const path = layerState._orbitPaths.get(noradId);
+    if (!path) return false;
+    if (path.alphaFactor === factor) return true;
+    path.alphaFactor = factor;
+    path.item.style = {
+      kind: 'solid',
+      color: withAlpha(path.color, RING_ALPHA * factor),
+    };
+    path.item.depthFailColor = withAlpha(
+      path.color,
+      RING_BEHIND_ALPHA * factor,
+    );
+    sets?.rings.upsert([path.item]);
+    return true;
+  }
+
+  /** Show or hide one satellite's dot, keeping its style. */
+  function _setPointShown(noradId, show) {
+    const point = layerState._points.get(noradId);
+    if (!point || point.show === show) return;
+    point.show = show;
+    _markDirty(noradId);
+  }
+
+  /** Whether a satellite's dot is shown; false when it has none. */
+  function _pointShown(noradId) {
+    return layerState._points.get(noradId)?.show === true;
+  }
+
+  /** Show or hide the tracked satellite's dot (the Cockpit rides it). */
+  function _setTrackedDotShown(show) {
+    if (!trackedDot || trackedDot.item.show === show) return;
+    trackedDot.item.show = show;
+    if (trackedDot.drawn) sets?.tracked.upsert([trackedDot.item]);
+  }
+
   /** Remove every orbit ring. */
   function _clearOrbitPaths() {
     const ids = [...layerState._orbitPaths.values()].map(
@@ -256,7 +303,7 @@ export function createRendering({
    * @param {{x: number, y: number, z: number}} position ECEF metres.
    * @param {object} style A `POINT_STYLES` entry.
    */
-  function _addPoint(noradId, position, style) {
+  function _addPoint(noradId, position, style, show = true) {
     layerState._points.set(noradId, {
       id: String(noradId),
       pos: { x: position.x, y: position.y, z: position.z },
@@ -266,7 +313,7 @@ export function createRendering({
       outlineWidth: style.outlineWidth,
       scaleByDistance: POINT_SCALE_BY_DISTANCE,
       disableDepthTest: 0,
-      show: true,
+      show,
       meta: { noradId },
     });
     _markDirty(noradId);
@@ -310,11 +357,22 @@ export function createRendering({
     _markDirty(noradId);
   }
 
-  /** Show a dot again in its group's style (WS-D3). */
-  function _restorePoint(noradId, style) {
+  /** Draw a dot in `style` (a `POINT_STYLES` entry), keeping whether it shows. */
+  function _setPointStyle(noradId, style) {
     const point = layerState._points.get(noradId);
     if (!point) return;
-    point.show = true;
+    point.pixelSize = style.pixelSize;
+    point.color = style.color;
+    point.outlineColor = style.outlineColor;
+    point.outlineWidth = style.outlineWidth;
+    _markDirty(noradId);
+  }
+
+  /** Show a dot again in its group's style (WS-D3), or keep it hidden. */
+  function _restorePoint(noradId, style, show = true) {
+    const point = layerState._points.get(noradId);
+    if (!point) return;
+    point.show = show;
     point.pixelSize = style.pixelSize;
     point.color = style.color;
     point.outlineColor = style.outlineColor;
@@ -425,6 +483,9 @@ export function createRendering({
       // GMST value (gstime is pure), so the ring starts unturned.
       gmstAtBake: gstime(bakeDate),
       item: null,
+      // The alpha multiple the ring is drawn at (1: as built); the Cockpit's
+      // orbit dim (cockpitSubject.js) sets it.
+      alphaFactor: 1,
     };
     path.item = {
       id: String(noradId),
@@ -495,7 +556,8 @@ export function createRendering({
 
   /**
    * Propagate all CORE satellite positions and update their dots.
-   * (~840 sats ≈ 1.6 ms/pass — fine at the 1s/200ms cadence.) Dense extras are
+   * (About 1,300 core satellites: ~840 measured at ≈ 1.6 ms/pass, so ≈ 2.5 ms,
+   * fine at the 1s/200ms cadence.) Dense extras are
    * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
    */
 
@@ -583,6 +645,10 @@ export function createRendering({
         _movePoint(layerState._trackedNorad, layerState._trackedFrameCartesian);
       if (!trackedDrawnThisTick) _drawTrackedDot();
     }
+
+    // While the Cockpit rides the tracked satellite, keep its marks hidden.
+    if (layerState._cockpitSubjectNorad !== null)
+      parts.cockpit?._syncCockpitSubjectVisuals();
 
     _updatePointFocus(now);
 
@@ -739,6 +805,12 @@ export function createRendering({
     _setPointsShown,
     _setOrbitPathsShown,
     _setOrbitPathShown,
+    _orbitPathShown,
+    _setOrbitPathAlpha,
+    _setPointShown,
+    _setPointStyle,
+    _pointShown,
+    _setTrackedDotShown,
     _clearOrbitPaths,
     _addPoint,
     _movePoint,

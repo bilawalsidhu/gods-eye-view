@@ -26,10 +26,7 @@ import {
   setSignalCollapsed,
 } from './ui/cockpitLayout.js';
 import { createBriefState } from './ui/cockpitBriefPages.js';
-import {
-  publishBriefView,
-  setBriefAutoRotate,
-} from './ui/cockpitBriefing.js';
+import { publishBriefView, setBriefAutoRotate } from './ui/cockpitBriefing.js';
 import { CockpitDisplayPortal } from './ui/cockpitDisplayPortal.js';
 import { _handleContextLayerChange } from './ui/contextLayerChanges.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
@@ -79,7 +76,7 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
   assert.doesNotMatch(html, /id="cockpit-exit"/);
   assert.match(
     html,
-    /id="map-view-switch"[^>]*aria-label="Exit cockpit view"[^>]*aria-keyshortcuts="Escape C"[\s\S]*?close_fullscreen[\s\S]*?EXIT COCKPIT/,
+    /id="map-view-switch"[^>]*aria-label="Exit cockpit view"[^>]*aria-keyshortcuts="Escape"[\s\S]*?close_fullscreen[\s\S]*?EXIT COCKPIT/,
   );
   const topCenterActions = html.match(
     /<nav id="top-center-actions"[\s\S]*?<\/nav>/,
@@ -163,7 +160,8 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
   assert.match(html, /id="cockpit-vision-current-label"[^>]*>NORMAL<\/strong>/);
   assert.match(
     cockpitEnter.toString(),
-    /this\.setVisionMode\(this\.getInitialVisionMode\(\)\)/,
+    // Orbit alone opens optical (src/ui/cockpitOrbitalView.test.mjs).
+    /this\.setVisionMode\(\s*satellite \? 'optical' : this\.getInitialVisionMode\(\)\s*,?\s*\)/,
     'Cockpit must enter on the mode matching the active map preset',
   );
   assert.match(
@@ -232,14 +230,12 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   );
 });
 
-test('Cockpit shortcut failures do not leak and open utilities own the first Escape', () => {
+test('open utilities own the first Escape and Cockpit leaves C alone', () => {
   const keydown = cockpitKeyDown.toString();
   assert.ok(keydown, 'Cockpit keyboard handler is missing');
   assert.match(keydown, /if \(this\.isUtilityDisclosureOpen\?\.\(\)\) return;/);
-  assert.match(
-    keydown,
-    /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && followedOf\(this\.viewer\)\?\.entity\?\.position\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
-  );
+  // C is the app-wide CCTV shortcut; Cockpit never claims it.
+  assert.doesNotMatch(keydown, /=== 'c'/);
 });
 
 test('the Contact panel never hides itself out from under its own NEXT button', () => {
@@ -442,10 +438,7 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
     /id="cockpit-radio-panel"[\s\S]*?<\/div>\s*<\/div>\s*<\/aside>/,
   );
   assert.ok(cockpitRadio, 'Cockpit compact Radio controls are missing');
-  assert.doesNotMatch(
-    cockpitRadio[0],
-    /radio-filter|radio-tuner/,
-  );
+  assert.doesNotMatch(cockpitRadio[0], /radio-filter|radio-tuner/);
   assert.match(
     css,
     /\.cockpit-utility-controls[\s\S]*?top:\s*var\(\s*--cockpit-utility-top/,
@@ -812,18 +805,27 @@ test('Reset releases Contact camera ownership through its selection-preserving r
   );
   assert.match(ui, /onReset: \(\) => this\.resetToGlobeView\(\)/);
   assert.match(ui, /this\._connectGlobeReset\?\.\(this\._locationControls\)/);
-  assert.match(controls, /reset\(\) \{\s*if \(!this\.destroyed\) return this\.onReset\(\);/);
+  assert.match(
+    controls,
+    /reset\(\) \{\s*if \(!this\.destroyed\) return this\.onReset\(\);/,
+  );
   // Both reset buttons ask the one reset owner.
   const globeActions = fs.readFileSync(
     path.join(ROOT, 'src', 'ui', 'views', 'panels', 'GlobeActions.vue'),
     'utf8',
   );
-  assert.match(globeActions, /id="reset-globe-view"[^>]*@click="act\('reset'\)"/);
+  assert.match(
+    globeActions,
+    /id="reset-globe-view"[^>]*@click="act\('reset'\)"/,
+  );
   const cockpitView = readRadioSource(
     new URL('./ui/views/CockpitView.vue', import.meta.url),
     'utf8',
   );
-  assert.match(cockpitView, /id="cockpit-reset-globe"[^>]*@click="globe\.act\('reset'\)"/);
+  assert.match(
+    cockpitView,
+    /id="cockpit-reset-globe"[^>]*@click="globe\.act\('reset'\)"/,
+  );
   assert.match(
     cockpitEnter.toString(),
     /Object\.assign\(this\.presence, \{\s*active: true,/,
@@ -1194,7 +1196,10 @@ test('cockpit summary presents the focused item as Contact', () => {
   const match = html.match(/<aside id="cockpit-context"[\s\S]*?<\/aside>/);
   assert.ok(match, 'cockpit Contact summary is missing');
   assert.match(match[0], /aria-label="Contact cockpit summary"/);
-  assert.match(match[0], /class="cockpit-card-kicker cockpit-context-kicker">CONTACT</);
+  assert.match(
+    match[0],
+    /class="cockpit-card-kicker cockpit-context-kicker">CONTACT</,
+  );
   assert.match(match[0], /aria-label="Contact navigation"/);
   assert.match(
     match[0],
@@ -1409,15 +1414,30 @@ test('Contact folded for one Cockpit left panel comes back only once neither is 
   const previous = globalThis.document;
   const panels = {};
   globalThis.document = { getElementById: (id) => panels[id] ?? null };
-  const panel = (...classes) => ({ classList: { contains: (name) => classes.includes(name) } });
+  const panel = (...classes) => ({
+    classList: { contains: (name) => classes.includes(name) },
+  });
   try {
-    const otherOpen = (id) => PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
+    const otherOpen = (id) =>
+      PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
     panels['data-panel'] = panel('collapsed');
-    assert.equal(otherOpen('utilities-panel'), false, 'Data Layers closed: restore');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      false,
+      'Data Layers closed: restore',
+    );
     panels['data-panel'] = panel('collapsed', 'layout-auto-collapsed');
-    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers comes back: keep Contact folded');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      true,
+      'Data Layers comes back: keep Contact folded',
+    );
     panels['data-panel'] = panel();
-    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers open: keep it folded');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      true,
+      'Data Layers open: keep it folded',
+    );
   } finally {
     globalThis.document = previous;
   }
