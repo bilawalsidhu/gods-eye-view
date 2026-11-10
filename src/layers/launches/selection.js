@@ -22,7 +22,8 @@ export function createSelection({
 }) {
   const { getKeyholeGeometry } = services.geometry;
 
-  function focusFullGlobe(viewer, duration = 2.4) {
+  /** @returns {boolean} Whether the flight started. */
+  function focusFullGlobe(viewer, { duration = 2.4, complete, cancel } = {}) {
     const canvas = canvasOf(viewer);
     const height = canvas?.clientHeight || canvas?.height;
     const width = canvas?.clientWidth || canvas?.width;
@@ -36,7 +37,7 @@ export function createSelection({
       fovy <= 0 ||
       fovy >= Math.PI
     )
-      return;
+      return false;
     const earthRadius = WGS84.radii.x;
     const keyholeRadius = getKeyholeGeometry(width, height).radius;
     const targetScreenRadius = keyholeRadius * 0.61;
@@ -46,6 +47,7 @@ export function createSelection({
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
     const camera = cameraOf(viewer);
+    layerState._cameraReleased = false;
     camera.flyTo(
       { lon: pose.lon, lat: pose.lat, height: altitude },
       {
@@ -56,8 +58,11 @@ export function createSelection({
         },
         durationS: duration,
         easing: 'cubicInOut',
+        onComplete: complete,
+        onCancel: cancel,
       },
     );
+    return true;
   }
 
   function setSelectedMission(launchId, isolate = true) {
@@ -146,6 +151,7 @@ export function createSelection({
     if (dot(right, right) < 1e-8) right = cross(direction, vec(0, 1, 0));
     right = normalize(right);
     const up = normalize(cross(right, direction));
+    layerState._cameraReleased = false;
     camera.flyTo(destination, {
       orientation: { direction, up },
       durationS: 1.1,
@@ -161,6 +167,7 @@ export function createSelection({
     parts.replay.stopMissionReplay();
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);
+    layerState._cameraReleased = false;
     cameraOf(layerState._viewer).flyToBounds(
       { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
       {

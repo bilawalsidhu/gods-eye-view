@@ -20,6 +20,8 @@ export function filtersOf(provider) {
  * @property {boolean} [groundClick]   No coverage: a ground click at street zoom opens its nearest image.
  * @property {string} [requiresMapStack]   Usable only on this map stack.
  * @property {boolean} [defaultOn]     Default true; the first that defaults on is lit.
+ * @property {() => boolean} [keyReady] False when its key is missing now; the
+ *   first keyless provider is lit instead of a default that cannot draw.
  * @property {{kind: 'view-cone', color: string}} [marker]   Default: GEV's pin.
  * @property {Array<'pano'|'since'>} [filters]   Filters it honours (default both).
  * @property {{noun: string, action: string}} [coverageLabel]   How the panel counts its lines and says what a click does (default: sequences, "click a line for its photos").

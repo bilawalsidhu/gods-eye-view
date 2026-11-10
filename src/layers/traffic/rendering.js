@@ -1,6 +1,10 @@
 import { flowBucket } from '../../data/trafficFlowStyle.js';
 import { trafficStyleProfile } from '../../data/trafficPresetStyle.js';
 import {
+  FLOW_BUCKET_COLORS,
+  FLOW_LINE_ALPHA,
+  FLOW_LINE_CAP,
+  FLOW_LINE_WIDTH,
   HEAT_LINE_CAP,
   HEAT_JAM_COLOR,
   HEAT_SLOW_COLOR,
@@ -36,7 +40,7 @@ export function createRendering({
       : roads;
   }
 
-  /** Take every heat-line down. */
+  /** Take every road line (heat-lines or flow lines) down. */
 
   function removeHeatLines() {
     if (layerState._heatLineCount) layerState._heatSet?.clear();
@@ -46,14 +50,22 @@ export function createRendering({
   }
 
   /**
-   * Rebuild the congestion heat-line underlay (jam-viz heatline prototype):
-   * slow/jam roads drape a corridor line onto the rendered 3D tiles — glowing
-   * pulsing red for jam, faint flat amber for slow — with the dots animating
-   * on top. Lines of the layer's heat-line draw set, draped on the tiles;
-   * the jam lines pulse together (`pulseHeatLines`). Capped at
-   * HEAT_LINE_CAP (jam first, longest first); overflow is logged. No-op in
-   * sim mode or when the heatline mode is off. A renderer that cannot drape
-   * draws them over the surface instead (the draw port's `overlay`).
+   * Rebuild the road-line underlay drawn from live flow, in one of two looks,
+   * as lines of the layer's heat-line draw set:
+   *
+   * - Flow lines (the `lines` row toggle): every road with flow drapes a
+   *   steady line in its bucket color — green free-flow, amber slow, red
+   *   jam — on the terrain and the 3D tiles alike. Capped at FLOW_LINE_CAP.
+   * - Heat-lines (jam-viz `heatline` prototype): only slow/jam roads, draped
+   *   on the 3D tiles: a glowing red for jam, pulsing together
+   *   (`pulseHeatLines`), and a faint flat amber for slow. Capped at
+   *   HEAT_LINE_CAP.
+   *
+   * Kept roads are jam first, then slow, then free, longest first; overflow
+   * is logged. The set swaps its whole contents at once, so a rebuild never
+   * blinks. No-op in sim mode or when both looks are off. Where the renderer
+   * cannot drape draws them over the surface instead (the draw port's
+   * `overlay`).
    *
    * @param {Array} roads - Road objects visible in the current render.
    */
@@ -68,32 +80,60 @@ export function createRendering({
       removeHeatLines();
       return;
     }
+    const flowLines = layerState._showLines;
+    const cap = flowLines ? FLOW_LINE_CAP : HEAT_LINE_CAP;
+    const rank = { jam: 0, slow: 1, free: 2 };
     const candidates = [];
     for (const road of roads) {
       const flow = road.flow;
       if (!flow || flow.closure) continue;
       const bucket = flowBucket(flow.level);
-      if (bucket === 'free') continue;
+      if (bucket === 'free' && !flowLines) continue;
       let len = 0;
       for (const d of road.segmentDist) len += d;
       candidates.push({ road, bucket, len });
     }
     candidates.sort((a, b) =>
-      a.bucket === b.bucket ? b.len - a.len : a.bucket === 'jam' ? -1 : 1,
+      a.bucket === b.bucket ? b.len - a.len : rank[a.bucket] - rank[b.bucket],
     );
-    const kept = candidates.slice(0, HEAT_LINE_CAP);
+    const kept = candidates.slice(0, cap);
 
-    // Mono presets (NVG/FLIR/noir) discard hue — heat-lines re-encode in
-    // luminance like the dots: jam = white glow, slow = faint gray.
-    const monoHeat =
+    // Mono presets (NVG/FLIR/noir) discard hue — lines re-encode in
+    // luminance like the dots: jam = white, slow = gray, free = dim gray.
+    const mono =
       layerState._presetDots === 'on' &&
       trafficStyleProfile(layerState._stylePreset) === 'mono';
-    layerState._heatJamRgb = monoHeat ? [1, 1, 1] : HEAT_JAM_COLOR.slice(0, 3);
-    const jamStyle = jamLineStyle(HEAT_JAM_BASE_ALPHA);
-    const slowStyle = {
-      kind: 'solid',
-      color: monoHeat ? [0.7, 0.7, 0.7, HEAT_SLOW_COLOR[3]] : HEAT_SLOW_COLOR,
-    };
+    const gray = (level, alpha) => [level, level, level, alpha];
+    let styleFor;
+    let widthFor;
+    if (flowLines) {
+      // Lines take the dots' active (preset-aware) colors, steady.
+      const dotColor = (bucket) =>
+        layerState._activeBucketColors?.[bucket] || FLOW_BUCKET_COLORS[bucket];
+      const level = { jam: 1, slow: 0.7, free: 0.45 };
+      const styles = {};
+      for (const bucket of ['jam', 'slow', 'free']) {
+        const rgb = mono
+          ? gray(level[bucket], 1)
+          : dotColor(bucket).slice(0, 3);
+        styles[bucket] = {
+          kind: 'solid',
+          color: [rgb[0], rgb[1], rgb[2], FLOW_LINE_ALPHA],
+        };
+      }
+      styleFor = (bucket) => styles[bucket];
+      widthFor = () => FLOW_LINE_WIDTH;
+    } else {
+      layerState._heatJamRgb = mono ? [1, 1, 1] : HEAT_JAM_COLOR.slice(0, 3);
+      const jamStyle = jamLineStyle(HEAT_JAM_BASE_ALPHA);
+      const slowStyle = {
+        kind: 'solid',
+        color: mono ? gray(0.7, HEAT_SLOW_COLOR[3]) : HEAT_SLOW_COLOR,
+      };
+      styleFor = (bucket) => (bucket === 'jam' ? jamStyle : slowStyle);
+      widthFor = (bucket) =>
+        bucket === 'jam' ? HEAT_LINE_JAM_WIDTH : HEAT_LINE_SLOW_WIDTH;
+    }
 
     const items = [];
     const jam = [];
@@ -103,13 +143,15 @@ export function createRendering({
         id: `heat:${i}`,
         // A snapshot of the waypoints, as the renderer's points.
         positions: road.waypoints.map((p) => ({ x: p.x, y: p.y, z: p.z })),
-        widthPx: bucket === 'jam' ? HEAT_LINE_JAM_WIDTH : HEAT_LINE_SLOW_WIDTH,
+        widthPx: widthFor(bucket),
         mode: 'draped',
-        clampTo: 'tiles',
-        style: bucket === 'jam' ? jamStyle : slowStyle,
+        // Flow lines drape on terrain or tiles; heat-lines on the tiles.
+        clampTo: flowLines ? 'both' : 'tiles',
+        style: styleFor(bucket),
       };
       items.push(item);
-      if (bucket === 'jam') jam.push(item);
+      // The steady flow lines never pulse.
+      if (bucket === 'jam' && !flowLines) jam.push(item);
     }
     if (items.length || layerState._heatLineCount)
       layerState._heatSet.set(items);
@@ -119,7 +161,7 @@ export function createRendering({
     parts.animation.syncRenderDemand?.();
     if (candidates.length > kept.length) {
       console.log(
-        `[Data:Traffic] Heat-lines capped at ${HEAT_LINE_CAP} (${candidates.length} congested roads in view)`,
+        `[Data:Traffic] ${flowLines ? 'Flow lines' : 'Heat-lines'} capped at ${cap} (${candidates.length} roads in view)`,
       );
     }
   }
@@ -254,7 +296,13 @@ export function createRendering({
           renderMetrics,
         )
       : null;
-    if (!label.includes('tile')) rebuildHeatLines(filteredRoads);
+    // The flow recolor above already rebuilt the lines from every retained
+    // road; without dots to recolor, rebuild them here.
+    if (
+      !label.includes('tile') &&
+      !(layerState._liveMode && layerState._dots.length)
+    )
+      rebuildHeatLines(visibleRoadsForAltitude(layerState._roads, altitude));
     if (state) {
       const heatEnd = parts.timing.trafficTimingMark(
         state,

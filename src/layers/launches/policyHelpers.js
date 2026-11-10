@@ -228,6 +228,7 @@ export function createPolicyHelpers({
     if (!layerState._viewer || !launch || layerState._selectedLaunchId) return;
     const camera = cameraOf(layerState._viewer);
     const range = parts.panel.missionHoverPreviewRange(camera.pose().height);
+    layerState._cameraReleased = false;
     camera.flyToBounds(
       { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
       {

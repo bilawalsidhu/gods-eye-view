@@ -314,9 +314,13 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._replayCameraToken++;
     if (layerState._replayCameraRemover) layerState._replayCameraRemover();
     layerState._replayCameraRemover = null;
-    const camera = findCamera(layerState._viewer);
-    camera?.cancelFlight();
-    camera?.release();
+    // Cancel the layer's own flights, never one navigation started after
+    // taking the camera.
+    if (stoppedLaunchId || !layerState._cameraReleased) {
+      const camera = findCamera(layerState._viewer);
+      camera?.cancelFlight();
+      camera?.release();
+    }
     layerState._replayCameraLaunchId = null;
     layerState._replayPaused = false;
     layerState._replayPausedAtMs = null;

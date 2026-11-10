@@ -33,9 +33,12 @@ export function createAnimation({
   }
 
   function syncRenderDemand() {
+    // Hidden dots (`dots` off) need no frames; lines need them only while
+    // the heat-line prototype's jam lines pulse.
     const needed = Boolean(
       layerState._enabled &&
-      (layerState._dots.length || parts.rendering.heatPulsing?.()),
+      ((layerState._showDots !== false && layerState._dots.length) ||
+        parts.rendering.heatPulsing?.()),
     );
     // Height easing only runs in a held frame. Settle it before releasing, so
     // a population emptied mid-correction cannot report loading forever.
@@ -317,7 +320,8 @@ export function createAnimation({
     }
     flushDots();
 
-    // Jam heat-lines throb (~1.6 s period); none outside live heatline mode.
+    // Jam heat-lines throb (~1.6 s period); none outside live heatline mode,
+    // and the steady flow lines (`lines` toggle) never pulse.
     parts.rendering.pulseHeatLines?.(now);
 
     layerState._animFrame++;

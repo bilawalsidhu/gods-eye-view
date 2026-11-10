@@ -139,7 +139,7 @@ existing batch size and one bounded upstream chunk. Larger requests return HTTP
 413 before disk-cache loading or upstream work; malformed coordinates remain 400.
 The browser continues to split larger workloads into sequential 64-point requests.
 
-Traffic holds continuous rendering only while enabled with animated dots or a pulsing jam heat-line. Empty and high-altitude views release the hold. A failed load leaves no hold only when no animated content is retained: if an earlier load succeeded, ingestion keeps its animated points and the hold stays. Population admission reacquires the hold and resets animation time. Clear, disable, and destroy also release it. Retained fading dots keep animation alive until they are removed. When the last point leaves mid height correction, the correction is settled at once, before the hold is released, so it cannot keep the layer reporting loading.
+Traffic holds continuous rendering only while enabled with shown animated dots, a pulsing jam heat-line, or road lines whose geometry is still building (replaced lines stay drawn until their successors are ready, so a rebuild never blinks); hidden dots (`dots` off) and settled flow lines hold nothing. Empty and high-altitude views release the hold. A failed load leaves no hold only when no animated content is retained: if an earlier load succeeded, ingestion keeps its animated points and the hold stays. Population admission reacquires the hold and resets animation time. Clear, disable, and destroy also release it. Retained fading dots keep animation alive until they are removed. When the last point leaves mid height correction, the correction is settled at once, before the hold is released, so it cannot keep the layer reporting loading.
 
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
@@ -747,6 +747,12 @@ geographic seams and releases on disable; forecast animation is not implied.
 NHC movement speed is converted from miles per hour to rounded knots by the
 proxy; advisory wind intensity is already in knots and is passed through.
 Cyclone markers, labels, tracks and cones are hidden beyond the horizon on every map source.
+Explicitly selecting a storm publishes one shared `weather-cyclones` record:
+advisory provenance, source position, the English classification name and,
+while the proxy serves its cache, the cache fetch time. The automatic row
+selection does not claim shared context; refreshes do not re-announce it.
+Clear or disable reports `deliberate`; a storm leaving the feed reports
+`evicted`, with no fallback.
 Consult the linked official advisory for safety decisions.
 
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
@@ -4532,8 +4538,10 @@ provider draws in one colour (`PROVIDER_COLORS` in
 sequence is GEV cyan. Share options: `m` (Mapillary), `r` (the other providers' switches by id,
 e.g. `google-1` for Street View), `p` (`a`/`p`/`f` panoramas), `s` (since, days). Mapillary, Google
 Street View, KartaView and Panoramax are registered. Without
-`MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED and the controls are
-disabled. With it, coverage draws as z11–14 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
+`MAPILLARY_CLIENT_TOKEN` (and no Graph proxy) Street Level starts on the first
+keyless provider (KartaView), including a restored "Mapillary on" unless the link
+switches the keyless providers off; filter-only updates never change the source.
+With it, coverage draws as z11–14 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
 tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
 requests for a tile.
 
@@ -4547,7 +4555,7 @@ the camera, nearest first, at most 9 (the halves of a view across
 the date line count a shared tile once). Lines are draped
 `GroundPolylinePrimitive`s (`ClassificationType.BOTH`), so they follow terrain
 and Google 3D tiles alike; cones and the photo marker are ground-clamped
-billboards with a horizon cull. Without `MAPILLARY_CLIENT_TOKEN` the panel
+billboards with a horizon cull. When Mapillary is lit without `MAPILLARY_CLIENT_TOKEN` the panel
 reads KEY REQUIRED, says which key to add and disables the filters; a rejected
 key reads KEY REJECTED and stops tile requests until the layer goes off; a 429
 pauses them for its Retry-After.
@@ -5454,7 +5462,7 @@ silently demoting every later lookup for the session.
 - Context is set for reading in every theme: mode, standby and action labels are 10 px, and the panel draws no glow halo. Outside Cyber, the two modes form one segmented control, the standby guidance is plain left-aligned text rather than a dashed placeholder, and the panel's section titles share the side panels' dock-label colour. Cyber keeps its separately framed mode buttons, its red panel titles, and in layout-focus a framed, centred standby card over its radar art.
 - The expanded desktop header omits the redundant `ON` label; the active mode button carries state. Expanded Contact results also omit the duplicate `GLOBAL CONTEXT` / `CONTEXT ONLY` status row and begin with the selected subject and its 250 km scope. Global Context does not fabricate a selected-entity model preview: the provisional hand-authored aircraft wireframe was removed because it was not geometry extracted from the selected entity's actual asset.
 - Dependency ownership is reversible: disabling Global Context releases only dependencies it enabled, while user-enabled layers remain on. This also removes the Military-layer suppression handoff when Global Context owned Military, allowing an already-enabled civilian Flights layer to resume its normal mixed rendering. If OpenSky is unavailable and has no last-good cache, Flights requests a capped 250 nm adsb.lol point snapshot around the current view anchor and labels that provenance explicitly; it never relabels military-feed rows as civilian data. If both inputs fail, Flights remains `UNKNOWN`.
-- Space Missions is replay-isolated: Rocket Launches and Satellites are the only Data Layers permitted while the mode is active. Direct UI and voice entry capture the same pre-entry snapshot; internal dependency and restoration enables do not create a user-owned Context session. Entry waits for incompatible layers to shut down, direct incompatible enables are blocked before lifecycle work, and the entry gate remains active through the complete Rocket Launches enable. A newer same-target ON request takes ownership of the pending entry without releasing its isolation snapshot, including when it arrives while the prior request is awaiting the adoption guard. A caller abort, resource cancellation, newer OFF, or layer teardown waits for exact manager settlement and restores that snapshot without resurrecting Rocket Launches. If an abort lands after only part of a restore settles, Context completes the same exact target without the stale caller signal and then replays newer explicit layer intent. Dedicated Voice Context cancellation reports a stable cancelled result plus the current Context state; generic layer visibility additionally exposes manager phase, reason, successor, and lifecycle details. Once an exact voice visibility intent commits, a newer voice turn cannot relabel it as cancelled while Context settlement completes; pre-commit aborts remain cancellable and final lifecycle mismatches remain failures. Clear Selected Layers reserves its complete captured OFF set before sequential teardown; a newer absolute request of any origin supersedes only its layer reservation and remains authoritative. A rejected layer teardown retains the truthful enabled state, rolls already-stopped siblings back to the captured pre-entry set, and aborts replay; rapid exit/re-entry serializes the full Satellite enabled-state and parameter restore before a new snapshot is taken. Contacts remains additive and restores user-enabled layers normally.
+- Space Missions is replay-isolated: Rocket Launches and Satellites are the only Data Layers permitted while the mode is active. Direct UI and voice entry capture the same pre-entry snapshot; internal dependency and restoration enables do not create a user-owned Context session. Entry waits for incompatible layers to shut down, direct incompatible enables are blocked before lifecycle work, and the entry gate remains active through the complete Rocket Launches enable. That enable includes the first mission-index load: an HTTP error, timeout, network failure or malformed payload before any index has loaded fails the enable, so Context rolls back to the pre-entry layers instead of committing an empty, isolating mode; the camera returns to its pre-entry view unless navigation took it, and a toast says the mission index could not load. A valid empty index still enters, and a refresh failure after an index loaded keeps its records and the mode. Exiting cancels the layer's own camera flights but never one navigation started. A newer same-target ON request takes ownership of the pending entry without releasing its isolation snapshot, including when it arrives while the prior request is awaiting the adoption guard. A caller abort, resource cancellation, newer OFF, or layer teardown waits for exact manager settlement and restores that snapshot without resurrecting Rocket Launches. If an abort lands after only part of a restore settles, Context completes the same exact target without the stale caller signal and then replays newer explicit layer intent. Dedicated Voice Context cancellation reports a stable cancelled result plus the current Context state; generic layer visibility additionally exposes manager phase, reason, successor, and lifecycle details. Once an exact voice visibility intent commits, a newer voice turn cannot relabel it as cancelled while Context settlement completes; pre-commit aborts remain cancellable and final lifecycle mismatches remain failures. Clear Selected Layers reserves its complete captured OFF set before sequential teardown; a newer absolute request of any origin supersedes only its layer reservation and remains authoritative. A rejected layer teardown retains the truthful enabled state, rolls already-stopped siblings back to the captured pre-entry set, and aborts replay; rapid exit/re-entry serializes the full Satellite enabled-state and parameter restore before a new snapshot is taken. Contacts remains additive and restores user-enabled layers normally.
 - Enabled Data Layer controls report normalized feed health on the button (`LOADING`, `DEGRADED`, `STALE`, `FALLBACK`, or `UNAVAILABLE`) while the metadata line retains the source and reason. A partial CelesTrak group failure keeps the usable catalog and reports `DEGRADED`; a total outage keeps last-good catalog data visible but reports `UNAVAILABLE`.
 - On activation it focuses the nearest currently observed aircraft across the civilian and military feeds, with military winning an exact distance tie; if none are available, it focuses an observed AIS vessel. The aircraft search is deliberately uncapped and one refresh-tick retry handles initially empty feeds. This is an attention-priority navigation shortcut, not a high-risk, affiliation, or threat classification.
 - A selected aircraft, AIS vessel, or mapped installation gets a 250 km **context window** with nearby cohort counts, nearest examples, source labels, and stale/unavailable reasons. It emits `NEARBY` or `UNKNOWN`; no detection, engagement, affiliation, or sensor-activity conclusion is calculated.
@@ -6006,8 +6014,11 @@ HTTP refusals and outages remain retryable. Searches share a 12-second total
 deadline, with Photon requests capped at six seconds each. Caller/application
 cancellation stops retries and late cache writes. Replacing a location search
 cancels the previous lookup; disposing its controls cancels the active lookup. Photon uses a soft proximity bias, up to five
-candidates, and an unbiased retry for name mismatches. A "place, region" query
-prefers a candidate named exactly for the place whose city, county, state,
+candidates, and an unbiased retry for name mismatches. Name comparison folds
+Latin accents while preserving letters and marks in other scripts, so a
+non-Latin name spelled exactly, marks included, keeps its proximity ranking. A
+leading "the" counts: "The Hague" does not take a nearby "Hague". A "place, region" query prefers a
+candidate named exactly for the place whose city, county, state,
 country or country code (or USA/UK) contains every word of the region, and a
 settlement or administrative area over a POI when both fit. Nearby results that
 fail that check are retried unbiased. After the region checks of both passes, a
@@ -6131,6 +6142,7 @@ request viewbox and continues searching without that geographic preference.
 
 - **What it shows.** Events ▸ **S2 GhostMaps** draws the current edition of S2 Underground's KMZ intel products from `github.com/s2underground/GhostMaps`. The products are the Common Intelligence Picture and the 30-day kinetic pull (both on by default), the Border Crisis Map, the Iran Common Intelligence Picture, Iran Kinetic Events, Yemen FLOT, and **Latest Drop**: the newest dated incident file outside those series, `0_Archive`, `Basedata` and `Reference Material`. Each product has a chip in the row. The chip choice is kept in `localStorage` (`gev.ghostmaps.products`) and falls back to the defaults when storage is blocked.
 - **Editions.** `src/layers/ghostMaps/catalog.js` (pure) matches whole repository paths per product. The newest edition wins by the date written in the file name, then by `Export_N`/`vN`. Undated names, such as the fixed 30-day file, are identified by blob sha. Files over 50 MiB are left out (the 62 MB census KMZ, for example). A renamed folder drops the product rather than matching elsewhere.
+- **Event age filter.** One **Event age** switch in the S2 GhostMaps row applies to every selected product: 1, 3, 7 (default), 14 or 30 days, or **All** (every marker). The choice is saved separately from product selection in `localStorage` (`gev.ghostmaps.ageDays`); missing, invalid or blocked storage falls back to seven days. Age comes only from the placemark's `Date of Event` (or `EventDate`/`Date`), never from report, prose or KMZ edition dates. Undated, unparseable and future dates stay visible. ArcGIS `M/D/YYYY` dates with optional AM/PM times and ISO dates are read as UTC when no zone is given; a date without a time covers its whole UTC day, so **1d** still shows yesterday's reports. Events age out every minute while the layer is on. Narrowing the window only removes markers; widening restores them from the cached KMZ. An open card stays while its marker is shown.
 - **Updates.** The repository is not ours, so there is no webhook. `server/providers/ghostMaps.js` starts with the first `/api/ghostmaps` request, so an install that never enables the layer never contacts GitHub.
   - It reads the branch head from git's smart-HTTP ref advertisement (`/info/refs?service=git-upload-pack`, about 0.5 KB, outside the REST rate limit) every `GHOSTMAPS_POLL_SECONDS` (15 s by default, 5 s minimum). Failures back off from 15 s to 5 min.
   - Only a new head costs REST calls: one recursive tree and one commit. An optional `GITHUB_TOKEN` raises the REST limit.
@@ -6573,7 +6585,26 @@ on it.
 - Road source (`src/layers/traffic/roadModes.js`): the Street Traffic row has
   TomTom / OSM / Hybrid chips (`roadMode` param, stored in the existing layer
   state `lo` field, no new share token); `?trafficRoads=tomtom|osm|hybrid`
-  overrides restored state until the user picks a chip. With no stored choice
+  overrides restored state until the user picks a chip. A host may offer
+  fewer modes with `createTrafficSource({ roadModes })` (a non-empty subset,
+  default all three): only offered modes get chips (none for a single mode),
+  and other choices from chips, restores, share links or the query are
+  ignored. Without `osm` the layer never simulates: keyless or with the
+  status probe unreachable, loads fail with "TomTom roads need a TomTom key"
+  or "TomTom roads unavailable while the traffic service is unreachable" and
+  no roads are drawn.
+- Row toggles (live mode only): after the road-source chips, Lines draws
+  every road with flow as a steady draped line in its bucket color (green
+  free, amber slow, red jam; jam first, then slow, then free, longest first,
+  capped at 1,500; on 3D tiles under photoreal, on terrain or tiles
+  otherwise), and Dots shows or hides the moving dots (hidden dots are kept,
+  are not offered to detection overlays, and hold no render frames).
+  Without live flow only a hidden Dots toggle is offered, so dots hidden by a
+  live choice, a restore or a share link can always be shown again.
+  Defaults: Lines off, Dots on. Both are `lines` / `dots` params stored in the
+  layer state `lo` field (`l`, `d`). Toggling either restyles in place, with
+  no refetch. The owner `jamViz` heat-line prototype is unchanged when Lines
+  is off. With no stored choice
   the default is Hybrid with a TomTom key and OSM without one; share links
   without a road-source choice (including older ones) likewise use the
   installation's default (Hybrid when keyed, OpenStreetMap when keyless). Without a key

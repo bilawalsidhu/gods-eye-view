@@ -116,6 +116,37 @@ export function createLaunchHover({
   };
 }
 
+/** The camera pose to give back, in world coordinates. */
+function captureCameraView(viewer) {
+  const pose = viewer ? findCamera(viewer)?.pose() : null;
+  if (!pose?.position) return null;
+  const { x, y, z } = pose.position;
+  return {
+    destination: { x, y, z },
+    orientation: { heading: pose.heading, pitch: pose.pitch, roll: pose.roll },
+  };
+}
+
+function sameCameraView(pose, view) {
+  const { x, y, z } = view.destination;
+  return (
+    Math.hypot(pose.position.x - x, pose.position.y - y, pose.position.z - z) <=
+      1 &&
+    ['heading', 'pitch', 'roll'].every(
+      (key) => Math.abs(pose[key] - view.orientation[key]) <= 1e-6,
+    )
+  );
+}
+
+/** Restore the pre-entry view if the entry flight still holds the camera. */
+function restoreCameraView(viewer, view, landedView) {
+  const camera = viewer ? findCamera(viewer) : null;
+  if (!camera) return;
+  if (!landedView) camera.cancelFlight();
+  else if (!sameCameraView(camera.pose(), landedView)) return;
+  camera.setView(view);
+}
+
 export function createLifecycle({
   state: layerState,
   services,
@@ -208,7 +239,27 @@ export function createLifecycle({
       layerState._updateDirty = false;
       parts.rendering.showMissions(true);
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
-      parts.selection.focusFullGlobe(layerState._viewer);
+      if (layerState._lastUpdate === null) {
+        // A new attempt at an index that never loaded starts from loading.
+        layerState._lastError = null;
+        parts.panel.renderMissionRoster();
+        // Kept until the mission index loads, so an entry that never does
+        // gives the view back. A newer flight takes the camera and drops it.
+        layerState._entryCameraView = captureCameraView(layerState._viewer);
+        layerState._entryLandedView = null;
+      }
+      const token = layerState._lifecycleToken;
+      const flying = parts.selection.focusFullGlobe(layerState._viewer, {
+        complete: () => {
+          if (token === layerState._lifecycleToken)
+            layerState._entryLandedView = captureCameraView(layerState._viewer);
+        },
+        cancel: () => {
+          if (token === layerState._lifecycleToken)
+            layerState._entryCameraView = null;
+        },
+      });
+      if (!flying) layerState._entryCameraView = null;
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(
           layerState._selectedLaunchId,
@@ -222,12 +273,21 @@ export function createLifecycle({
       hover?.reset();
       layerState._sourceController.abort();
       layerState._enabled = false;
+      const entryView = layerState._entryCameraView;
+      layerState._entryCameraView = null;
+      if (entryView)
+        restoreCameraView(
+          layerState._viewer,
+          entryView,
+          layerState._entryLandedView,
+        );
       releaseContinuousRender('rocket-launches');
       layerState._lifecycleToken++;
       layerState._updateDirty = false;
       parts.ingestion.clearPostTleRetry();
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
+      layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       parts.rendering.showMissions(false);
       layerState._stockFollow?.stop();
@@ -253,6 +313,7 @@ export function createLifecycle({
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
+      layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       parts.ingestion.clearPostTleRetry();
       layerState._inputSubscription?.();
