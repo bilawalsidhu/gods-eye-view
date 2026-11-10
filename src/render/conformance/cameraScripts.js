@@ -253,7 +253,7 @@ export const CAMERA_SCRIPTS = Object.freeze([
       },
       { do: 'move', args: ['forward', 500] },
       { record: 'pose' },
-      { do: 'rotateAround', args: [{ x: 0, y: 0, z: 1 }, 0.4] },
+      { do: 'look', args: ['left', 0.4] },
       { record: 'pose' },
       { do: 'zoom', args: [-1000] },
       { record: 'pose' },

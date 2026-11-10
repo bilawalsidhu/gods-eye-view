@@ -211,7 +211,7 @@ test('the gizmo draws its parts through the draw port, shown in ADJUST mode only
   assert.equal(ring.widthPx, 3);
   assert.equal(ring.positions.length, 97, 'a closed 96-segment ring');
   assert.ok(Math.abs(ring.style.color[3] - 0.9) < 1e-12);
-  assert.ok(Math.abs(ring.depthFailColor[3] - 0.45) < 1e-12);
+  assert.ok(Math.abs(ring.depthFail.color[3] - 0.45) < 1e-12);
   const arrow = lines.items.get(`${GIZMO_ID_PREFIX}move-up`);
   assert.equal(arrow.style.kind, 'arrow');
   assert.equal(arrow.widthPx, 12);

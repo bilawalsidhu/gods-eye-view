@@ -481,7 +481,10 @@ test('tracking without a Cockpit subject keeps its marks', async (t) => {
 /** A ring's drawn colour and behind-the-globe colour. */
 function ringColors(f, id) {
   const item = f.ring(id);
-  return { color: [...item.style.color], depthFail: [...item.depthFailColor] };
+  return {
+    color: [...item.style.color],
+    depthFail: [...item.depthFail.color],
+  };
 }
 
 test('a Cockpit subject dims every other orbit ring and restores it exactly', async (t) => {
@@ -506,7 +509,11 @@ test('a Cockpit subject dims every other orbit ring and restores it exactly', as
   );
   assert.equal(f.ring(ISS_NORAD).show, true, 'other rings stay visible');
   assert.equal(f.ring(GPS).show, false, 'the ridden ring stays hidden');
-  assert.deepEqual(ringColors(f, GPS), gpsBuilt, 'the ridden ring is not dimmed');
+  assert.deepEqual(
+    ringColors(f, GPS),
+    gpsBuilt,
+    'the ridden ring is not dimmed',
+  );
   // Other satellites' points stay as they are.
   assert.equal(f.state._points.get(COMPANION).show, true);
 

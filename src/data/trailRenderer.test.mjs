@@ -34,7 +34,10 @@ test('a trail draws its history as one dimmed-when-hidden geodesic line', (t) =>
   assert.equal(line.mode, 'geodesic');
   assert.equal(line.style.kind, 'solid');
   assert.deepEqual(line.style.color, [0, 212 / 255, 1, 0.85]);
-  assert.deepEqual(line.depthFailColor, [0, 212 / 255, 1, 0.4]);
+  assert.deepEqual(line.depthFail, {
+    kind: 'solid',
+    color: [0, 212 / 255, 1, 0.4],
+  });
 
   // The same positions again change nothing; fewer than two distinct hide it.
   const writes = set.writes;
@@ -65,7 +68,7 @@ test('a trail head is a line of its own beside the history, at the head alphas',
   );
   assert.equal(findPickOwner(head.id), 'trails');
   assert.equal(head.style.color[3], 0.9);
-  assert.equal(head.depthFailColor[3], 0.45);
+  assert.equal(head.depthFail.color[3], 0.45);
   assert.equal(head.mode, '3d', 'short: straight, two positions a frame');
   // No head: hidden once, then nothing more to write.
   trail.setHead(null);

@@ -39,7 +39,7 @@ test('lines are written as they change, and drawn as their handles say', () => {
       widthPx: 1.2,
       mode: 'geodesic',
       style: { kind: 'solid', color: a.color },
-      depthFailColor: null,
+      depthFail: null,
       meta: { cameraId: 'cam' },
       show: true,
     });
@@ -58,7 +58,7 @@ test('lines are written as they change, and drawn as their handles say', () => {
       length: 16,
       pattern16: 255,
     });
-    assert.deepEqual(cap.depthFailColor, [1, 1, 1, 0.2]);
+    assert.deepEqual(cap.depthFail, { kind: 'solid', color: [1, 1, 1, 0.2] });
 
     assert.equal(drawSets.roleOfSet(coverage.spec.id), 'coverage');
     assert.equal(drawSets.roleOfSet('other:1:lines'), null);

@@ -184,15 +184,13 @@ function compositionFixture(
       positionCartographic: { height: state.height },
       moveEnd: { addEventListener() {} },
       cancelFlight() {},
-      zoomIn(metres) {
-        position.x -= metres;
-        state.height -= metres;
-        this.positionCartographic.height = state.height;
-        state.zooms++;
-      },
-      zoomOut(metres) {
-        position.x += metres;
-        state.height += metres;
+      // Looking straight down at the surface along -x.
+      directionWC: { x: -1, y: 0, z: 0 },
+      upWC: { x: 0, y: 0, z: 1 },
+      rightWC: { x: 0, y: 1, z: 0 },
+      setView({ destination }) {
+        state.height -= position.x - destination.x;
+        position.x = destination.x;
         this.positionCartographic.height = state.height;
         state.zooms++;
       },

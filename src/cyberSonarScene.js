@@ -6,8 +6,8 @@
  * Each tick, before the renderer decides whether to draw: a change of the
  * theme, the sweep, its settings or the map's size sets the sector at once;
  * while sweeping, the sector moves to the current angle on every tick that
- * draws anyway, and at least at the renderer's `sonarCadenceHz` (which then
- * asks for a frame). Out of the theme the sector is cleared.
+ * draws anyway, and at least every `CYBER_SONAR_RENDER_INTERVAL_MS` (which
+ * then asks for a frame). Out of the theme the sector is cleared.
  *
  * A renderer without the capability, or one that does not list the pass
  * once a sector is set, leaves markers as they are: the document's
@@ -25,16 +25,8 @@ import {
   readCyberSonarSettings,
   syncCyberSonarAnimation,
 } from './cyberSonar.js';
-import {
-  canvasOf,
-  findEffects,
-  findFrame,
-  rendererOf,
-} from './render/rendererOf.js';
+import { canvasOf, findEffects, findFrame } from './render/rendererOf.js';
 
-/** Sweep updates per second when the renderer's quality has no setting. */
-export const CYBER_SONAR_DEFAULT_CADENCE_HZ =
-  1000 / CYBER_SONAR_RENDER_INTERVAL_MS;
 const UNSUPPORTED_MESSAGE =
   'Contact GPU unavailable. Native contacts remain visible.';
 
@@ -54,13 +46,7 @@ export function createCyberSonarScene(viewer, manager) {
   let current = null;
   let key = null;
   let lastSetAt = Number.NEGATIVE_INFINITY;
-  let interval = CYBER_SONAR_RENDER_INTERVAL_MS;
   let disposed = false;
-
-  const readCadence = () => {
-    const hz = Number(rendererOf(viewer)?.quality?.get?.()?.sonarCadenceHz);
-    interval = 1000 / (hz > 0 ? hz : CYBER_SONAR_DEFAULT_CADENCE_HZ);
-  };
 
   const publish = () => {
     const support = failed ? 'unsupported' : 'supported';
@@ -120,11 +106,13 @@ export function createCyberSonarScene(viewer, manager) {
     const now = performance.now();
     if (
       next === key &&
-      !(sweeping && (now - lastSetAt >= interval || t.rendering))
+      !(
+        sweeping &&
+        (now - lastSetAt >= CYBER_SONAR_RENDER_INTERVAL_MS || t.rendering)
+      )
     )
       return;
     key = next;
-    readCadence();
     set(cyberSonarSector(width, height, now, { sweeping, root }), now);
   });
 

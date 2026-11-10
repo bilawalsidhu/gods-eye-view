@@ -32,7 +32,9 @@ function lineItemOf(handle) {
     style: handle.dashed
       ? { kind: 'dash', color, length: 16, pattern16: 255 }
       : { kind: 'solid', color },
-    depthFailColor: handle.depthFailColor ?? null,
+    depthFail: handle.depthFailColor
+      ? { kind: 'solid', color: handle.depthFailColor }
+      : null,
     meta: { cameraId: handle.cameraId },
     show: handle.show !== false,
   };
@@ -45,7 +47,7 @@ const lineKey = (item) =>
     item.widthPx,
     item.style.kind,
     item.style.color.join(','),
-    item.depthFailColor ? item.depthFailColor.join(',') : '',
+    item.depthFail ? item.depthFail.color.join(',') : '',
     item.show,
   ].join('|');
 

@@ -38,25 +38,6 @@ export const EASINGS = Object.freeze({
   sineInOut: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
 });
 
-/**
- * The contract's moves and looks as Cesium camera method names, called by
- * name: a caller's camera may come from another copy of Cesium.
- */
-const MOVES = Object.freeze({
-  forward: 'moveForward',
-  back: 'moveBackward',
-  left: 'moveLeft',
-  right: 'moveRight',
-  up: 'moveUp',
-  down: 'moveDown',
-});
-const LOOKS = Object.freeze({
-  left: 'lookLeft',
-  right: 'lookRight',
-  up: 'lookUp',
-  down: 'lookDown',
-});
-
 /** A contract destination as Cesium's: a Cartesian3, or a Rectangle. */
 export function toDestination(d) {
   if ('rect' in d) {
@@ -219,16 +200,60 @@ export function createCesiumCamera({
     if (frustum.fov !== fov) frustum.fov = fov;
   }
 
+  /**
+   * Put the eye at world point `destination` looking along `direction` with
+   * `up` up (made square to it), in the camera's frame: a `lookAt` frame
+   * stays, as Cesium's setView keeps it.
+   */
+  function placeEye(destination, { direction, up }) {
+    const at = toCartesian(destination);
+    const dir = Cesium.Cartesian3.normalize(
+      toCartesian(direction),
+      new Cesium.Cartesian3(),
+    );
+    const right = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.cross(dir, toCartesian(up), new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const square = Cesium.Cartesian3.cross(right, dir, new Cesium.Cartesian3());
+    const transform = camera.transform;
+    if (
+      transform &&
+      !Cesium.Matrix4.equals(transform, Cesium.Matrix4.IDENTITY)
+    ) {
+      const inverse = Cesium.Matrix4.inverseTransformation(
+        transform,
+        new Cesium.Matrix4(),
+      );
+      Cesium.Matrix4.multiplyByPoint(inverse, at, camera.position);
+      Cesium.Matrix4.multiplyByPointAsVector(inverse, dir, camera.direction);
+      Cesium.Matrix4.multiplyByPointAsVector(inverse, square, camera.up);
+      Cesium.Matrix4.multiplyByPointAsVector(inverse, right, camera.right);
+      return;
+    }
+    Cesium.Cartesian3.clone(at, camera.position);
+    Cesium.Cartesian3.clone(dir, camera.direction);
+    Cesium.Cartesian3.clone(square, camera.up);
+    Cesium.Cartesian3.clone(right, camera.right);
+  }
+
   const cameraPort = {
     on: (event, cb, options) => cameraEvents.on(event, cb, options),
     onCommand: (cb) => commandHooks.on(cb),
     setView(spec) {
       command('setView');
       const d = spec.destination;
-      camera.setView({
-        ...(d ? { destination: toDestination(d) } : {}),
-        orientation: toOrientation(spec.orientation),
-      });
+      const o = spec.orientation;
+      // A view by direction and up at a point is placed as given: Cesium's
+      // own setView would round it through heading, pitch and roll, which
+      // drifts looking straight down, where steps add up (the app's pans,
+      // turns and globe turns are setViews).
+      if (d && !('rect' in d) && o && 'direction' in o) placeEye(d, o);
+      else
+        camera.setView({
+          ...(d ? { destination: toDestination(d) } : {}),
+          orientation: toOrientation(o),
+        });
       scene.requestRender();
     },
     flyTo(destination, options = {}) {
@@ -312,24 +337,6 @@ export function createCesiumCamera({
     release() {
       command('release');
       camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      scene.requestRender();
-    },
-    move(direction, metres) {
-      camera[MOVES[direction]](metres);
-      scene.requestRender();
-    },
-    look(direction, radians) {
-      camera[LOOKS[direction]](radians);
-      scene.requestRender();
-    },
-    rotateAround(axis, radians) {
-      camera.rotate(toCartesian(axis), radians);
-      scene.requestRender();
-    },
-    zoom(metres) {
-      // Cesium's zoom, not a move: outside 3D it changes the view's width.
-      if (metres < 0) camera.zoomOut(-metres);
-      else camera.zoomIn(metres);
       scene.requestRender();
     },
     setFov({ vertical }) {

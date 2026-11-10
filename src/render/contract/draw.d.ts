@@ -212,15 +212,11 @@ export interface LineItem {
   mode: '3d' | 'geodesic' | 'draped';
   clampTo?: ClampTarget;
   style: LineStyle;
-  /** Colour where the line is behind the surface; `null` hides those parts. */
-  depthFailColor?: Color | null;
   /**
-   * Dash the parts behind the surface, in `depthFailColor`, as a `dash`
-   * style's `length` and `pattern16` dash a line. Omitted, they are solid; a
-   * renderer that predates it draws them solid too. Ignored without a
-   * `depthFailColor`, and on draped lines, which are never behind it.
+   * How the parts behind the surface draw, solid or dashed; omitted or
+   * `null` hides them. Ignored on draped lines, which are never behind it.
    */
-  depthFailDash?: { length: number; pattern16?: number };
+  depthFail?: Extract<LineStyle, { kind: 'solid' | 'dash' }> | null;
   /** Per-segment colours; changing them does not rebuild the line. */
   segmentColors?: Color[];
   segmentShow?: boolean[];
@@ -233,25 +229,23 @@ export interface LineItem {
   pickable?: boolean;
 }
 
-/** A shape's fill. */
-export type Fill =
-  | Color
-  | { image: ImageRef; repeat?: [number, number] }
-  | { preset: 'radialRim'; color: Color; rimColor: Color; rimWidth: number };
+/**
+ * A shape's fill: a colour, or an image stretched over the shape's extent
+ * (`repeat` times across and up). A canvas image sent again with a new
+ * `key` is new content.
+ */
+export type Fill = Color | { image: ImageRef; repeat?: [number, number] };
 
-/** Declarative animation the renderer runs (no per-frame callbacks). */
+/**
+ * Declarative animation the renderer runs (no per-frame callbacks): the
+ * fill's and outline's alpha swings between `from` and `to` and back every
+ * `periodMs`, forever.
+ */
 export interface Pulse {
-  property: 'radius' | 'alpha';
+  property: 'alpha';
   from: number;
   to: number;
   periodMs: number;
-  /** Repeat count; omitted repeats forever. */
-  repeat?: number;
-}
-
-/** A radius that follows the camera's height above the ground. */
-export interface RadiusByCameraHeight {
-  byCameraHeight: { factor: number; min: number; max: number };
 }
 
 export type ShapeGeometry =
@@ -259,12 +253,11 @@ export type ShapeGeometry =
   | {
       kind: 'ellipse';
       center: Position;
-      semiMajor: number | RadiusByCameraHeight;
-      semiMinor: number | RadiusByCameraHeight;
+      /** Metres. */
+      semiMajor: number;
+      semiMinor: number;
       /** Radians counter-clockwise from north to the semi-major axis. */
       rotation?: number;
-      /** Only part of the ellipse, radians from north. */
-      arc?: { start: number; end: number };
     }
   /**
    * `height`: metres above the ellipsoid, for a rectangle not clamped.
@@ -292,8 +285,6 @@ export interface ShapeItem {
   extrudeHeight?: number;
   height?: 'absolute' | 'clampGround';
   clampTo?: ClampTarget;
-  /** Pull toward the eye, metres, to win depth against coplanar surfaces. */
-  depthBias?: number;
   /**
    * Shaded by the renderer's fixed light (true) or flat colour (false).
    * Omitted: lit for extruded shapes, flat otherwise. A renderer

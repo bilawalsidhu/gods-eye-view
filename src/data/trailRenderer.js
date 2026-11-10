@@ -126,7 +126,7 @@ export function createTrail(viewer, { color, width = 2.5 }) {
       style: { kind: 'solid', color: colorAt(color, alpha) },
       // The owner-locked rule (round 6): a segment below the photoreal
       // mesh renders dimmed — it must never disappear into the ground.
-      depthFailColor: colorAt(color, occludedAlpha),
+      depthFail: { kind: 'solid', color: colorAt(color, occludedAlpha) },
     };
     drawn.set(id, { key, item });
     lines.upsert([item]);

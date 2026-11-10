@@ -503,11 +503,10 @@ test('the rubber band follows the pointer, closes an area and takes the chosen c
       'the band takes the colour',
     );
     assert.deepEqual(
-      band().depthFailColor,
-      [139 / 255, 233 / 255, 1, 0.35],
-      'behind the surface it stays the primary colour, as before',
+      band().depthFail,
+      { kind: 'dash', color: [139 / 255, 233 / 255, 1, 0.35], length: 16 },
+      'behind the surface it stays the primary colour, dashed, as before',
     );
-    assert.deepEqual(band().depthFailDash, { length: 16 }, 'and dashed there');
     assert.equal(band().style.kind, 'dash');
     assert.equal(band().style.length, 16);
     assert.equal(band().widthPx, 3);

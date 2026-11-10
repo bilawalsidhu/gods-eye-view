@@ -1714,7 +1714,7 @@ export function portChecks() {
       },
     ),
     check(
-      'draw.lines.depthFailDash',
+      'draw.lines.depthFail',
       'a line dashed behind the surface draws, moves in place and changes back to solid',
       async (h, r) => {
         await overAustin(h, r);
@@ -1727,8 +1727,7 @@ export function portChecks() {
           widthPx: 3,
           mode: 'geodesic',
           style: { kind: 'dash', color: [1, 1, 0, 0.9], length: 16 },
-          depthFailColor: [0, 1, 1, 0.35],
-          depthFailDash: { length: 16 },
+          depthFail: { kind: 'dash', color: [0, 1, 1, 0.35], length: 16 },
           ...extra,
         });
         lines.set([band(-200)]);
@@ -1737,7 +1736,9 @@ export function portChecks() {
         lines.upsert([band(-100)]);
         await drawn(h, r);
         equal(lines.size(), 1, 'moved in place, not added');
-        lines.upsert([band(-100, { depthFailDash: undefined })]);
+        lines.upsert([
+          band(-100, { depthFail: { kind: 'solid', color: [0, 1, 1, 0.35] } }),
+        ]);
         await drawn(h, r);
         equal(lines.size(), 1, 'solid behind the surface again');
         lines.dispose();
@@ -1877,24 +1878,21 @@ export function portChecks() {
       },
     ),
     check(
-      'draw.shapes.radiusByCameraHeight',
-      'a clamped ellipse with radii by camera height draws at the radius the camera height gives, held within its bounds, and follows the camera',
+      'draw.shapes.resize',
+      'a clamped ellipse whose radius alone is upserted draws at the new radius, growing and shrinking',
       async (h, r) => {
         const shapes = r.draw.shapes({ id: 'conf:rings' });
-        const radius = { byCameraHeight: { factor: 0.1, min: 50, max: 600 } };
-        shapes.set([
-          {
-            id: 'ring',
-            geometry: {
-              kind: 'ellipse',
-              center: { lon: AUSTIN.lon, lat: AUSTIN.lat },
-              semiMajor: radius,
-              semiMinor: radius,
-            },
-            fill: [0.5, 0.9, 1, 0.6],
-            height: 'clampGround',
+        const ring = (radius) => ({
+          id: 'ring',
+          geometry: {
+            kind: 'ellipse',
+            center: { lon: AUSTIN.lon, lat: AUSTIN.lat },
+            semiMajor: radius,
+            semiMinor: radius,
           },
-        ]);
+          fill: [0.5, 0.9, 1, 0.6],
+          height: 'clampGround',
+        });
         // Metres east of the centre, at its latitude.
         const east = (m) =>
           h.toEcef({
@@ -1919,22 +1917,19 @@ export function portChecks() {
           }
           return false;
         };
-        // 2000 m up: 200 m across its centre.
-        await overAustin(h, r, 2000);
-        ok(await until(() => covers(150)), 'at 2000 m it reaches 150 m');
-        ok(!covers(260), 'and not 260 m');
-        // 4000 m up: 400 m.
         await overAustin(h, r, 4000);
+        shapes.set([ring(200)]);
+        ok(
+          await until(() => covers(150) && !covers(260)),
+          'at 200 m it reaches 150 m, not 260 m',
+        );
+        shapes.upsert([ring(400)]);
         ok(
           await until(() => covers(300) && !covers(460)),
-          'at 4000 m it reaches 300 m, not 460 m',
+          'at 400 m it reaches 300 m, not 460 m',
         );
-        // 20 km up: held at 600 m.
-        await overAustin(h, r, 20000);
-        ok(
-          await until(() => covers(550) && !covers(700)),
-          'held at its largest',
-        );
+        shapes.upsert([ring(200)]);
+        ok(await until(() => covers(150) && !covers(260)), 'back at 200 m');
         shapes.dispose();
         await drawn(h, r);
         ok(!covers(0), 'gone with its set');
@@ -1961,7 +1956,7 @@ export function portChecks() {
           widthPx: 3,
           mode: '3d',
           style: { kind: 'solid', color: '#ff00ff' },
-          depthFailColor: [1, 0, 1, 0.45],
+          depthFail: { kind: 'solid', color: [1, 0, 1, 0.45] },
         });
         lines.set([
           {

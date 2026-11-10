@@ -477,8 +477,8 @@ test('the trail head runs from the last fix to the marker every frame, dimmed be
     color: hexColor('#ff4fd8', 0.9),
   });
   assert.deepEqual(
-    head.depthFailColor,
-    hexColor('#ff4fd8', 0.45),
+    head.depthFail,
+    { kind: 'solid', color: hexColor('#ff4fd8', 0.45) },
     'dimmed, not hidden, behind the surface',
   );
   assert.equal(head.positions.length, 2);

@@ -217,8 +217,11 @@ export function initDrawTool({
           length: 16,
         },
         // Dashed behind the surface too, as the band in front of it is.
-        depthFailColor: withAlpha(cssColor(PREVIEW.primary), 0.35),
-        depthFailDash: { length: 16 },
+        depthFail: {
+          kind: 'dash',
+          color: withAlpha(cssColor(PREVIEW.primary), 0.35),
+          length: 16,
+        },
       },
     ]);
   };

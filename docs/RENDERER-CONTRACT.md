@@ -78,9 +78,9 @@ optional, so a renderer written before it still conforms:
 - `camera.on('changed', cb, { threshold })` measures each listener by its
   own threshold under the capability `cameraChangeThreshold`; a renderer
   without it fires every `changed` listener at 0.5.
-- A line item's `depthFailDash` (`{ length, pattern16? }`) dashes the parts
-  behind the surface in `depthFailColor`, as the Draw tool's rubber band is.
-  A renderer that predates it draws those parts solid.
+- A line item's `depthFail` style, solid or dashed, draws the parts behind
+  the surface (the Draw tool's rubber band is dashed there too); without one
+  they are hidden.
 - A shape's `lit` chooses shading by the renderer's fixed light (true) or a
   flat colour (false); omitted, extruded shapes and boxes are lit and the
   rest flat, as before. The Cesium port lights unclamped shapes only
@@ -98,8 +98,10 @@ optional, so a renderer written before it still conforms:
 The Cesium port also draws `pattern` line styles (the image repeated
 `repeat` times along the line, in the translucent pass), lines in the
 `inertial` frame (turned each frame by the set's motion clock; never draped
-and never batched), and `radialRim` fills on clamped ellipses (`rimWidth` a
-fraction of the radius; `depthBias` pulls the fill toward the eye). A hidden
+and never batched), and image fills on clamped ellipses, cut finely so a
+round image (the launch pad zone's rim) runs round. A clamped colour fill
+whose geometry alone changes (an annotation's target ring, resized as the
+camera climbs) is drawn alone where it now is, in the same frame. A hidden
 line that cannot settle into a static batch leaves its polyline collection
 until it shows again, since the collection draws every line it holds.
 

@@ -2,7 +2,12 @@ import { recordWorkSlice } from '../sources/phaseTiming.js';
 import { ringCentroid } from '../sources/featureGeometry.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
-import { drawOf, frameOf } from '../render/rendererOf.js';
+import {
+  drawOf,
+  findCamera,
+  findFrame,
+  frameOf,
+} from '../render/rendererOf.js';
 import { heightsOf } from '../queries/heights.js';
 
 /**
@@ -22,7 +27,8 @@ import { heightsOf } from '../queries/heights.js';
  * Fades follow the mark's alpha: the engine calls `sync` as it changes, and
  * each mark's items take their new colours where they are. Pulsing fills
  * are a declarative pulse the renderer runs; target rings follow the
- * camera's height, which the renderer reads each frame.
+ * camera's height, read before each frame, and are sent again at the radius
+ * it gives when that changes.
  *
  * Each mark draws into sets of its own, so adding or removing one leaves
  * the others' geometry alone.
@@ -57,9 +63,23 @@ const PULSE_MS = (2 * Math.PI) / 0.005;
 const PULSE_LOW = 0.6;
 
 /** Target rings: 3% of the camera's height, between 14 m and 170 m. */
-const RING_RADIUS = Object.freeze({
-  byCameraHeight: Object.freeze({ factor: 0.03, min: 14, max: 170 }),
-});
+const RING_RADIUS = Object.freeze({ factor: 0.03, min: 14, max: 170 });
+
+/** Relative change of the ring radius under which rings are not redrawn. */
+const RING_RESIZE = 1e-3;
+
+/**
+ * A target ring's radius, metres, for a camera `height` metres above the
+ * ellipsoid; 1000 m stands in for a height the camera cannot give.
+ * @param {number} height
+ */
+export function ringRadiusAt(height) {
+  const h = Number.isFinite(height) ? height : 1000;
+  return Math.max(
+    RING_RADIUS.min,
+    Math.min(RING_RADIUS.max, h * RING_RADIUS.factor),
+  );
+}
 
 /**
  * Each renderer's sets have ids of their own, unique across copies of this
@@ -79,6 +99,56 @@ export function createWorldAnnotationRenderer(viewer) {
   const groundQueue = [];
   let offGroundFrame = null;
   let destroyed = false;
+  // Marks with a target ring, and the radius they are drawn at.
+  const ringed = new Set();
+  let offRingFrame = null;
+  let ringRadius = ringRadiusAt(cameraHeight());
+
+  /** The camera's height above the ellipsoid, or NaN when it has none. */
+  function cameraHeight() {
+    try {
+      return findCamera(viewer)?.pose().height ?? Number.NaN;
+    } catch {
+      return Number.NaN;
+    }
+  }
+
+  /** The current ring radius, for the items that draw rings. */
+  const ringRadiusNow = () => ringRadius;
+
+  /**
+   * Before each frame: when the camera's height gives the rings another
+   * radius, every shown mark's ring is sent again at it. A hidden mark's
+   * ring catches up when it shows (`sync`).
+   */
+  function followRings() {
+    const radius = ringRadiusAt(cameraHeight());
+    if (Math.abs(radius - ringRadius) <= RING_RESIZE * ringRadius) return;
+    ringRadius = radius;
+    for (const anno of ringed) if (!anno.hidden) resizeRing(anno);
+  }
+
+  /** Send a mark's ring again at the current radius, when it differs. */
+  function resizeRing(anno) {
+    const was = anno._drawn;
+    const set = anno._draw?.shapes;
+    if (!was?.ring || !set || was.ringRadius === ringRadius) return;
+    was.ringRadius = ringRadius;
+    set.upsert([was.ring(was.alpha)]);
+  }
+
+  /**
+   * Keep the ring frame listener while any mark has a ring. A host with no
+   * frame port draws its rings at the radius they were added with.
+   */
+  function watchRings() {
+    if (ringed.size && !offRingFrame)
+      offRingFrame = findFrame(viewer)?.on('preRender', followRings) ?? null;
+    else if (!ringed.size && offRingFrame) {
+      offRingFrame();
+      offRingFrame = null;
+    }
+  }
 
   const requestRender = () => frameOf(viewer).requestRender('annotations');
 
@@ -338,8 +408,18 @@ export function createWorldAnnotationRenderer(viewer) {
       return sampleBuilding(anno, options);
     }
 
-    const items = itemsOf(anno, options);
-    anno._drawn = { alpha: alphaOf(anno), items };
+    // Rings not yet followed take the camera's height now.
+    if (!offRingFrame) ringRadius = ringRadiusAt(cameraHeight());
+    const items = itemsOf(anno, options, ringRadiusNow);
+    anno._drawn = {
+      alpha: alphaOf(anno),
+      items,
+      ring: items.ring,
+      ringRadius,
+    };
+    if (items.ring) ringed.add(anno);
+    else ringed.delete(anno);
+    watchRings();
     const current = () => options.isCurrent?.() ?? true;
     const building = anno.footprintKind === 'building';
     for (const kind of ['shapes', 'lines', 'points']) {
@@ -394,6 +474,8 @@ export function createWorldAnnotationRenderer(viewer) {
     hideOsmCredit(viewer, anno);
     osmAnnotations.delete(anno);
     drawn.delete(anno);
+    ringed.delete(anno);
+    watchRings();
     clearSets(anno);
     if (anno) {
       anno._draw = null;
@@ -415,8 +497,13 @@ export function createWorldAnnotationRenderer(viewer) {
         if (sets[kind] && sets[kind].show !== show) sets[kind].show = show;
       const was = anno._drawn;
       const alpha = alphaOf(anno);
-      if (!was || was.alpha === alpha) continue;
+      if (!was || was.alpha === alpha) {
+        // Shown again: its ring catches up with the camera.
+        if (show) resizeRing(anno);
+        continue;
+      }
       was.alpha = alpha;
+      was.ringRadius = ringRadius;
       for (const kind of ['shapes', 'lines', 'points'])
         if (sets[kind] && was.items[kind].length)
           sets[kind].upsert(was.items[kind].map((item) => item(alpha)));
@@ -428,6 +515,8 @@ export function createWorldAnnotationRenderer(viewer) {
     for (const task of [...pendingGround.values()]) task.finish('cancelled');
     for (const anno of osmAnnotations) hideOsmCredit(viewer, anno);
     osmAnnotations.clear();
+    ringed.clear();
+    watchRings();
     for (const anno of drawn) {
       clearSets(anno);
       anno._draw = null;
@@ -455,14 +544,16 @@ const pulse = (alpha) => ({
 
 /**
  * What a mark draws, as item makers by kind, each taking the mark's alpha:
- * built once per add, called again on each fade step.
+ * built once per add, called again on each fade step. `ring` is the target
+ * ring's maker among the shapes, drawn at `ringRadiusNow()`.
  */
-function itemsOf(anno, options) {
+function itemsOf(anno, options, ringRadiusNow) {
   const base = PALETTE[anno.color] || PALETTE.primary;
   const shapes = [];
   const lines = [];
   const points = [];
   const meta = { annotation: anno.id };
+  let ring = null;
   const draped = (id, positions, widthPx, style) => (alpha) => ({
     id,
     positions,
@@ -612,21 +703,23 @@ function itemsOf(anno, options) {
   } else {
     // pin / highlight / label — a camera-proportional target ring + a marker.
     const pos = { lon: anno.anchor.lon, lat: anno.anchor.lat };
-    if (anno.type !== 'label')
-      shapes.push((alpha) => ({
+    if (anno.type !== 'label') {
+      ring = (alpha) => ({
         id: 'ring',
         geometry: {
           kind: 'ellipse',
           center: pos,
-          semiMajor: RING_RADIUS,
-          semiMinor: RING_RADIUS,
+          semiMajor: ringRadiusNow(),
+          semiMinor: ringRadiusNow(),
         },
         fill: colour(base, 0.38 * alpha),
         animate: pulse(0.38 * alpha),
         height: 'clampGround',
         clampTo: CLAMP_TO,
         meta,
-      }));
+      });
+      shapes.push(ring);
+    }
     // Captions belong to the hybrid renderer's screen-space callouts.
     points.push((alpha) => ({
       id: 'marker',
@@ -640,7 +733,7 @@ function itemsOf(anno, options) {
       meta,
     }));
   }
-  return { shapes, lines, points };
+  return { shapes, lines, points, ring };
 }
 
 /** `[lon, lat]` pairs as ECEF positions on the ellipsoid. */

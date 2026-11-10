@@ -229,10 +229,10 @@ export function createRendering({
       kind: 'solid',
       color: withAlpha(path.color, RING_ALPHA * factor),
     };
-    path.item.depthFailColor = withAlpha(
-      path.color,
-      RING_BEHIND_ALPHA * factor,
-    );
+    path.item.depthFail = {
+      kind: 'solid',
+      color: withAlpha(path.color, RING_BEHIND_ALPHA * factor),
+    };
     sets?.rings.upsert([path.item]);
     return true;
   }
@@ -460,7 +460,7 @@ export function createRendering({
   /**
    * Show orbital path for a satellite: the ring over one orbit, baked once
    * in ECEF at the current GMST, bright in front of the globe and dimmed
-   * behind it (`depthFailColor`), and turned with the Earth each
+   * behind it (`depthFail`), and turned with the Earth each
    * `RING_ROTATION_MS` (`_updateOrbitPathRotations`).
    */
 
@@ -494,7 +494,10 @@ export function createRendering({
       // Along the ellipsoid between samples, as the ring always ran.
       mode: 'geodesic',
       style: { kind: 'solid', color: withAlpha(pathColor, RING_ALPHA) },
-      depthFailColor: withAlpha(pathColor, RING_BEHIND_ALPHA),
+      depthFail: {
+        kind: 'solid',
+        color: withAlpha(pathColor, RING_BEHIND_ALPHA),
+      },
       show: true,
     };
     layerState._orbitPaths.set(noradId, path);
@@ -521,7 +524,7 @@ export function createRendering({
    *
    * No SGP4 here: WGS84 is rotationally symmetric about Z, so rotating the
    * baked curve rigidly equals rebaking from rotated points. A ring with a
-   * `depthFailColor` is built at once where it now runs, so it never blinks.
+   * `depthFail` style is built at once where it now runs, so it never blinks.
    * @param {Date} nowDate Epoch used for current GMST.
    */
 

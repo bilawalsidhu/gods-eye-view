@@ -76,17 +76,20 @@ export function nativeIntegrationFixture(t) {
       positionCartographic: { height: state.height },
       moveEnd: { addEventListener() {} },
       cancelFlight() {},
-      zoomIn(metres) {
-        position.x -= metres;
+      // Looking straight down at the surface along -x.
+      directionWC: { x: -1, y: 0, z: 0 },
+      upWC: { x: 0, y: 0, z: 1 },
+      rightWC: { x: 0, y: 1, z: 0 },
+      setView({ destination }) {
+        const metres = position.x - destination.x;
+        position.x = destination.x;
         state.height -= metres;
         this.positionCartographic.height = state.height;
-        state.zooms.push({ direction: 'in', metres });
-      },
-      zoomOut(metres) {
-        position.x += metres;
-        state.height += metres;
-        this.positionCartographic.height = state.height;
-        state.zooms.push({ direction: 'out', metres });
+        state.zooms.push(
+          metres < 0
+            ? { direction: 'out', metres: -metres }
+            : { direction: 'in', metres },
+        );
       },
     },
     scene: {

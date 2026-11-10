@@ -208,6 +208,13 @@ export type CameraEvent =
 
 export interface CameraPort {
   pose(): CameraPose;
+  /**
+   * Place the eye. A position with a `{direction, up}` orientation is placed
+   * exactly as given (`up` made square to `direction`), never rounded
+   * through heading, pitch and roll: the application's step moves (pans, turns, the
+   * globe turned under the eye, zooms; `geo/eyeMoves`) are such views,
+   * sent many times over.
+   */
   setView(view: ViewSpec): void;
   setFov(fov: { vertical: number }): void;
   /**
@@ -236,13 +243,6 @@ export interface CameraPort {
   lookAt(target: Ecef, offset: HeadingPitchRange): void;
   /** Leave `lookAt` for the world frame. */
   release(): void;
-  move(
-    direction: 'forward' | 'back' | 'left' | 'right' | 'up' | 'down',
-    metres: number,
-  ): void;
-  look(direction: 'left' | 'right' | 'up' | 'down', radians: number): void;
-  rotateAround(axis: Vec3, radians: number): void;
-  zoom(metres: number): void;
   /**
    * Follow `target`, or stop following with null; `followChanged` fires
    * whenever `followed` changes, and only then.

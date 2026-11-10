@@ -508,7 +508,7 @@ test('hidden clamped fills wait for nothing, and the hidden ones it cannot build
     set.set([
       fill('a', 0, false, { outline: '#000' }),
       fill('b', 1, false, { extrudeHeight: 10 }),
-      fill('c', 2, false, { fill: { preset: 'radialRim' } }),
+      fill('c', 2, false, { fill: { gradient: 'radial' } }),
     ]),
   );
   assert.equal(groundsIn(scene.added.at(-1)).length, 0);
@@ -596,57 +596,22 @@ test('clamped shapes refuse what they cannot draw', () => {
     fill: '#fff',
     height: 'clampGround',
   };
-  // A rim fill is drawn on ellipses alone.
+  // A fill that is neither a colour nor an image.
   assert.throws(
-    () =>
-      set.set([
-        {
-          ...disc,
-          geometry: {
-            kind: 'rectangle',
-            rect: { west: 0, south: 0, east: 1, north: 1 },
-          },
-          fill: {
-            preset: 'radialRim',
-            color: '#fff',
-            rimColor: '#fff',
-            rimWidth: 0.1,
-          },
-        },
-      ]),
+    () => set.set([{ ...disc, fill: { gradient: 'radial' } }]),
     /colours only/,
   );
   set.dispose();
-  // Radii by camera height are for clamped ellipses alone.
-  const unclamped = draw.shapes({ id: 'refuse-unclamped' });
-  assert.throws(
-    () =>
-      unclamped.set([
-        {
-          ...disc,
-          height: 'absolute',
-          geometry: {
-            ...disc.geometry,
-            semiMajor: { byCameraHeight: { factor: 1, min: 1, max: 2 } },
-          },
-        },
-      ]),
-    /radii by camera height on clamped ellipses only/,
-  );
-  unclamped.dispose();
 });
 
-test('a clamped ellipse with radii by camera height draws at the camera height and follows it', () =>
+test('a clamped colour ring whose radius alone changes is drawn alone where it now is', () =>
   withTerrainHeights(() => {
     const scene = fakeScene();
-    let height = 2000;
-    Object.defineProperty(scene.camera, 'positionCartographic', {
-      get: () => ({ height }),
-    });
     const { draw, frame } = drawOver(scene);
     const set = draw.shapes({ id: 'rings' });
-    const radius = { byCameraHeight: { factor: 0.03, min: 14, max: 170 } };
-    const ring = (show = true) => ({
+    // The app follows the camera's height and sends the radius it wants, as
+    // annotation target rings do.
+    const ring = (radius, show = true) => ({
       id: 'ring',
       geometry: {
         kind: 'ellipse',
@@ -658,115 +623,65 @@ test('a clamped ellipse with radii by camera height draws at the camera height a
       height: 'clampGround',
       show,
     });
-    set.set([ring()]);
+    set.set([ring(60)]);
     const host = scene.added[0];
     const radiusIn = (ground) =>
       ground.geometryInstances[0].geometry._semiMajorAxis;
     const last = () => host.get(host.length - 1);
-    assert.equal(radiusIn(last()), 60, '3% of 2000 m');
-    // The camera has not moved: nothing is built.
+    assert.equal(radiusIn(last()), 60);
     const built = last();
     frame();
-    assert.equal(last(), built);
-    // It climbs: the ring is drawn wider in the frame that draws it, alone.
-    height = 4000;
-    frame();
+    assert.equal(last(), built, 'nothing built while nothing changes');
+    // Wider: drawn alone, built in this frame, under its own pick id.
+    set.upsert([ring(120)]);
     const wider = last();
     assert.notEqual(wider, built);
     assert.equal(wider.asynchronous, false);
     assert.equal(radiusIn(wider), 120);
     assert.equal(wider.geometryInstances[0].id.id, 'ring', 'its own pick id');
-    // Held within its bounds.
-    height = 1e6;
-    frame();
-    assert.equal(radiusIn(last()), 170);
-    height = 10;
-    frame();
+    set.upsert([ring(14)]);
     assert.equal(radiusIn(last()), 14);
-    // Hidden, it waits; shown, it catches up.
-    set.upsert([ring(false)]);
-    const lastShown = last();
-    height = 3000;
-    frame();
-    assert.equal(last(), lastShown, 'hidden: not rebuilt');
-    set.upsert([ring(true)]);
-    frame();
-    assert.equal(radiusIn(last()), 90);
     assert.equal(scene.added[0], host, 'never a rebuild of the set');
     set.dispose();
     assert.equal(scene.added.length, 0);
   }));
 
-test('radii by camera height that cross draw the longer as the major axis; past the cap of shapes drawn alone, the set rebuilds', () =>
+test('a semi-minor axis longer than the semi-major is drawn as the major axis, a quarter turn on', () =>
   withTerrainHeights(() => {
     const scene = fakeScene();
-    let height = 1000;
-    Object.defineProperty(scene.camera, 'positionCartographic', {
-      get: () => ({ height }),
-    });
-    const { draw, frame } = drawOver(scene);
+    const { draw } = drawOver(scene);
     const set = draw.shapes({ id: 'crossing' });
-    const ring = (id, lon) => ({
-      id,
-      geometry: {
-        kind: 'ellipse',
-        center: { lon, lat: 0 },
-        semiMajor: { byCameraHeight: { factor: 0.03, min: 14, max: 170 } },
-        semiMinor: { byCameraHeight: { factor: 0.05, min: 20, max: 100 } },
-        rotation: 0.25,
+    set.set([
+      {
+        id: 'r',
+        geometry: {
+          kind: 'ellipse',
+          center: { lon: 0, lat: 0 },
+          semiMajor: 30,
+          semiMinor: 50,
+          rotation: 0.25,
+        },
+        fill: [0.5, 0.9, 1, 0.38],
+        height: 'clampGround',
       },
-      fill: [0.5, 0.9, 1, 0.38],
-      height: 'clampGround',
-    });
-    const rings = Array.from({ length: MOVING_SHAPES + 4 }, (_, i) =>
-      ring(`r${i}`, i * 0.1),
-    );
-    assert.doesNotThrow(() => set.set(rings));
-    const first = scene.added[0];
-    const ground = (host) => {
-      for (let i = 0; i < host.length; i++)
-        if (host.get(i) instanceof Cesium.GroundPrimitive) return host.get(i);
-      return null;
-    };
-    const geometry = ground(first).geometryInstances[0].geometry;
-    assert.equal(geometry._semiMajorAxis, 50, 'the longer, 5% of 1000 m');
+    ]);
+    const host = scene.added[0];
+    let ground = null;
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.GroundPrimitive) ground = host.get(i);
+    const geometry = ground.geometryInstances[0].geometry;
+    assert.equal(geometry._semiMajorAxis, 50);
     assert.equal(geometry._semiMinorAxis, 30);
     assert.ok(Math.abs(geometry._rotation - (0.25 + Math.PI / 2)) < 1e-12);
-    // Its batches built.
-    for (let i = 0; i < first.length; i++)
-      if (first.get(i) instanceof Cesium.GroundPrimitive) {
-        Object.defineProperty(first.get(i), 'ready', { value: true });
-        first.get(i).getGeometryInstanceAttributes = () => ({
-          show: new Uint8Array([1]),
-        });
-      }
-    frame();
-    // The camera climbs: no more than the cap are drawn alone; the set
-    // rebuilds for the rest, and nothing throws in the frame.
-    height = 1500;
-    assert.doesNotThrow(() => frame());
-    let solo = 0;
-    for (let i = 0; i < first.length; i++) {
-      const p = first.get(i);
-      if (p instanceof Cesium.GroundPrimitive && p.asynchronous === false)
-        solo += 1;
-    }
-    assert.equal(solo, MOVING_SHAPES);
-    assert.notEqual(scene.added.at(-1), first, 'rebuilt for the rest');
     set.dispose();
   }));
 
-test('rings drawn alone by a host still retiring count toward the cap when the camera moves again', () =>
+test('rings that would be drawn alone past the cap rebuild their set, counting those a retiring host draws alone', () =>
   withTerrainHeights(() => {
     const scene = fakeScene();
-    let height = 1000;
-    Object.defineProperty(scene.camera, 'positionCartographic', {
-      get: () => ({ height }),
-    });
     const { draw, frame } = drawOver(scene);
     const set = draw.shapes({ id: 'climbing' });
-    const radius = { byCameraHeight: { factor: 0.03, min: 14, max: 170 } };
-    const rings = Array.from({ length: MOVING_SHAPES + 4 }, (_, i) => ({
+    const ring = (i, radius) => ({
       id: `r${i}`,
       geometry: {
         kind: 'ellipse',
@@ -776,7 +691,9 @@ test('rings drawn alone by a host still retiring count toward the cap when the c
       },
       fill: [0.5, 0.9, 1, 0.38],
       height: 'clampGround',
-    }));
+    });
+    const all = (radius, from = 0, to = MOVING_SHAPES + 4) =>
+      Array.from({ length: to - from }, (_, k) => ring(from + k, radius));
     const ready = (host) => {
       for (let i = 0; i < host.length; i++)
         if (host.get(i) instanceof Cesium.GroundPrimitive) {
@@ -795,21 +712,22 @@ test('rings drawn alone by a host still retiring count toward the cap when the c
       }
       return n;
     };
-    set.set(rings);
+    set.set(all(30));
     const first = scene.added[0];
     ready(first);
     frame();
-    // A climb: the cap drawn alone, and a rebuild for the rest.
-    height = 1500;
-    frame();
+    // The cap moves alone.
+    set.upsert(all(45, 0, MOVING_SHAPES));
     assert.equal(solo(first), MOVING_SHAPES);
+    assert.equal(scene.added.at(-1), first);
+    // One more would pass it: the set rebuilds, the old host retiring.
+    set.upsert(all(45, MOVING_SHAPES));
     const second = scene.added.at(-1);
     assert.notEqual(second, first, 'rebuilding, the old host retiring');
     ready(second);
-    // Climbing on while the old host retires: its rings drawn alone still
-    // count, so none more are drawn alone.
-    height = 2500;
-    frame();
+    // While the old host retires, its rings drawn alone still count, so
+    // none more are drawn alone.
+    set.upsert([ring(0, 75)]);
     assert.equal(solo(second), 0, 'nothing more drawn alone');
     set.dispose();
   }));
@@ -4224,12 +4142,7 @@ test('an unclamped shape filled with an image draws a textured primitive and fre
               kind: 'rectangle',
               rect: { west: 0, south: 0, east: 1, north: 1 },
             },
-            fill: {
-              preset: 'radialRim',
-              color: '#fff',
-              rimColor: '#000',
-              rimWidth: 1,
-            },
+            fill: { gradient: 'radial' },
           },
         ]),
       /colours only/,
@@ -4564,7 +4477,7 @@ test('a line with a depth-fail colour draws it behind the surface, and moves in 
       widthPx: 2.5,
       mode: 'geodesic',
       style: { kind: 'solid', color: [1, 0, 1, 0.9] },
-      depthFailColor: [1, 0, 1, 0.45],
+      depthFail: { kind: 'solid', color: [1, 0, 1, 0.45] },
       meta: height,
       ...extra,
     });
@@ -4579,7 +4492,7 @@ test('a line with a depth-fail colour draws it behind the surface, and moves in 
         widthPx: 1,
         mode: '3d',
         style: { kind: 'solid', color: '#fff' },
-        depthFailColor: null,
+        depthFail: null,
       },
     ]);
     const host = scene.added[0];
@@ -4629,13 +4542,15 @@ test('a line with a depth-fail colour draws it behind the surface, and moves in 
     assert.equal(deep.length, 1);
     assert.equal(deep.get(0).show, false, 'hidden as asked');
     // A new colour is a new look: rebuilt.
-    set.upsert([head(400, { depthFailColor: [1, 1, 1, 1] })]);
+    set.upsert([
+      head(400, { depthFail: { kind: 'solid', color: [1, 1, 1, 1] } }),
+    ]);
     assert.notEqual(scene.added[0], host);
     set.dispose();
     assert.equal(scene.added.length, 0);
   }));
 
-test('a depth-fail dash dashes the parts behind the surface, in the depth-fail colour', () =>
+test('a dashed depth-fail style dashes the parts behind the surface, in its colour', () =>
   withImageClasses(() => {
     const { scene, draw } = drawOver();
     const set = draw.lines({ id: 'band' });
@@ -4648,8 +4563,7 @@ test('a depth-fail dash dashes the parts behind the surface, in the depth-fail c
       widthPx: 3,
       mode: 'geodesic',
       style: { kind: 'dash', color: [1, 1, 0, 0.9], length: 16 },
-      depthFailColor: [0, 1, 1, 0.35],
-      depthFailDash: { length: 16 },
+      depthFail: { kind: 'dash', color: [0, 1, 1, 0.35], length: 16 },
       ...extra,
     });
     set.set([band()]);
@@ -4666,21 +4580,27 @@ test('a depth-fail dash dashes the parts behind the surface, in the depth-fail c
     assert.equal(hidden.uniforms.dashLength, 16);
     assert.equal(hidden.uniforms.dashPattern, 255, 'the default pattern');
     // A move keeps the dash; its fields in another order are the same look.
-    set.upsert([band({ depthFailDash: { length: 16 } })]);
+    set.upsert([
+      band({ depthFail: { length: 16, color: [0, 1, 1, 0.35], kind: 'dash' } }),
+    ]);
     assert.equal(scene.added[0], host, 'not rebuilt');
     assert.equal(
       host.get(1).get(0).depthFailAppearance.material.type,
       'PolylineDash',
     );
-    set.upsert([band({ depthFailDash: { pattern16: 0xf0f0, length: 8 } })]);
+    const patternedBand = (fields) =>
+      band({ depthFail: { kind: 'dash', color: [0, 1, 1, 0.35], ...fields } });
+    set.upsert([patternedBand({ pattern16: 0xf0f0, length: 8 })]);
     const patterned = scene.added[0].get(1).get(0).depthFailAppearance.material;
     assert.equal(patterned.uniforms.dashPattern, 0xf0f0);
     assert.equal(patterned.uniforms.dashLength, 8);
     const again = scene.added[0];
-    set.upsert([band({ depthFailDash: { length: 8, pattern16: 0xf0f0 } })]);
+    set.upsert([patternedBand({ length: 8, pattern16: 0xf0f0 })]);
     assert.equal(scene.added[0], again, 'the same dash in another order');
-    // Without it the hidden parts are solid; the change is a new look.
-    set.upsert([band({ depthFailDash: undefined })]);
+    // Solid behind the surface: a new look.
+    set.upsert([
+      band({ depthFail: { kind: 'solid', color: [0, 1, 1, 0.35] } }),
+    ]);
     assert.notEqual(scene.added[0], host, 'rebuilt');
     const solid = scene.added[0].get(1).get(0).depthFailAppearance.material;
     assert.equal(solid.type, 'Color');
@@ -5456,7 +5376,7 @@ test('where the scene cannot drape, an overlay line is culled by its whole arc, 
         ],
         widthPx: 2,
         mode: '3d',
-        depthFailColor: [1, 0, 0, 1],
+        depthFail: { kind: 'solid', color: [1, 0, 0, 1] },
         style: { kind: 'solid', color: [1, 0, 0, 1] },
       },
     ]);
@@ -5615,7 +5535,7 @@ test('revealFraction reveals flow and depth-fail lines too, their clocks still r
         widthPx: 2,
         mode: '3d',
         style: { kind: 'solid', color: '#f0f' },
-        depthFailColor: [1, 0, 1, 0.45],
+        depthFail: { kind: 'solid', color: [1, 0, 1, 0.45] },
         revealFraction: 0.5,
       },
     ]);
@@ -6889,7 +6809,7 @@ test('a pattern line draws its image along it, repeated, and an inertial line tu
     assert.equal(scene.added.length, 0);
   }));
 
-test('a clamped ellipse filled with a radial rim drapes its material, finely cut, pulled toward the eye', () =>
+test('a clamped ellipse with an image fill drapes its material, finely cut so a round image runs round', () =>
   withImageClasses(() => {
     const { scene, draw } = drawOver();
     const set = draw.shapes({ id: 'pad-zone' });
@@ -6901,14 +6821,8 @@ test('a clamped ellipse filled with a radial rim drapes its material, finely cut
         semiMajor: 500,
         semiMinor: 500,
       },
-      fill: {
-        preset: 'radialRim',
-        color: [0.13, 0.9, 0.9, 0.105],
-        rimColor: [0.13, 0.9, 0.9, 0.72],
-        rimWidth: 0.033,
-      },
+      fill: { image: 'zone.png' },
       height: 'clampGround',
-      depthBias: 1,
     };
     set.set([zone]);
     const host = scene.added[0];
@@ -6918,17 +6832,8 @@ test('a clamped ellipse filled with a radial rim drapes its material, finely cut
     assert.ok(ground);
     const { appearance } = ground;
     assert.ok(appearance instanceof Cesium.MaterialAppearance);
-    assert.equal(appearance.material.type, 'DrawRadialRimFill');
-    const { color, rimColor, rimWidth } = appearance.material.uniforms;
-    assert.ok(
-      color.equalsEpsilon(new Cesium.Color(0.13, 0.9, 0.9, 0.105), 1e-9),
-    );
-    assert.ok(
-      rimColor.equalsEpsilon(new Cesium.Color(0.13, 0.9, 0.9, 0.72), 1e-9),
-    );
-    assert.equal(rimWidth, 0.033);
-    assert.equal(appearance.renderState.polygonOffset.enabled, true);
-    assert.equal(appearance.renderState.depthMask, false);
+    assert.equal(appearance.material.type, 'Image');
+    assert.equal(appearance.material.uniforms.image, 'zone.png');
     assert.equal(ground.classificationType, Cesium.ClassificationType.BOTH);
     const [instance] = ground.geometryInstances;
     assert.ok(instance.geometry instanceof Cesium.EllipseGeometry);

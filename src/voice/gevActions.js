@@ -21,6 +21,7 @@ import {
   toRadians,
 } from '../geo/index.js';
 import { sphereFromPoints } from '../geo/sphere.js';
+import { eyeZoomed } from '../geo/eyeMoves.js';
 import {
   cameraOf,
   findCamera,
@@ -3429,7 +3430,7 @@ function adjustCameraZoom(viewer, args) {
 
   camera.cancelFlight();
   if (direction === 'out') {
-    camera.zoom(-movementM);
+    camera.setView(eyeZoomed(before, -movementM));
   } else {
     const safeMovementM = Math.min(
       movementM,
@@ -3444,7 +3445,7 @@ function adjustCameraZoom(viewer, args) {
         error: 'Camera is already at the minimum target distance',
       };
     }
-    camera.zoom(safeMovementM);
+    camera.setView(eyeZoomed(before, safeMovementM));
   }
 
   const after = camera.pose();

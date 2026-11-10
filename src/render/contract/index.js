@@ -74,7 +74,6 @@ export const QUALITY_KEYS = Object.freeze([
   'particles',
   'models',
   'postFx',
-  'sonarCadenceHz',
   'targetFps',
 ]);
 
@@ -174,10 +173,6 @@ export const PORTS = deepFreeze({
       'flying',
       'lookAt',
       'release',
-      'move',
-      'look',
-      'rotateAround',
-      'zoom',
       'follow',
       'followed',
       'followFramed',

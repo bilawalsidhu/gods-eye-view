@@ -189,40 +189,11 @@ czm_material czm_getMaterial(czm_materialInput materialInput) {
   return m;
 }`;
 
-/** The `radialRim` fill's material type. */
-const RADIAL_RIM_MATERIAL = 'DrawRadialRimFill';
-
 /**
- * Across the ellipse (`st` from its centre, 1 at its edge) the fill's
- * colour, easing into the rim's over `rimWidth` (a fraction of the
- * radius) just inside a soft edge; the rim glows a little.
+ * How finely a clamped ellipse with an image fill is cut, radians, so an
+ * image's round edge (a zone's rim) runs round.
  */
-const RADIAL_RIM_SOURCE = `
-czm_material czm_getMaterial(czm_materialInput materialInput) {
-  czm_material material = czm_getDefaultMaterial(materialInput);
-  vec2 centered = (materialInput.st - vec2(0.5)) * 2.0;
-  float radius = length(centered);
-  float inside = 1.0 - smoothstep(0.985, 1.0, radius);
-  float rim = smoothstep(0.985 - rimWidth, 0.985, radius) * inside;
-  material.diffuse = mix(color.rgb, rimColor.rgb, rim);
-  material.emission = rimColor.rgb * rim * 0.35;
-  material.alpha = inside * mix(color.a, rimColor.a, rim);
-  return material;
-}`;
-
-/** How finely a rim-filled ellipse is cut, radians. */
-const RIM_GRANULARITY = Cesium.Math.toRadians(0.08);
-
-/**
- * A ground fill pulled toward the eye (`depthBias`): depth-tested, not
- * writing depth, offset toward the camera, alpha blended.
- */
-const DEPTH_BIASED_STATE = Object.freeze({
-  depthTest: { enabled: true },
-  depthMask: false,
-  polygonOffset: { enabled: true, factor: -1, units: -4 },
-  blending: Cesium.BlendingState.ALPHA_BLEND,
-});
+const IMAGE_ELLIPSE_GRANULARITY = Cesium.Math.toRadians(0.08);
 
 /**
  * An image fill's material. The image carries its own alpha, so it draws in
@@ -239,33 +210,6 @@ function imageMaterial(image, repeat = [1, 1]) {
   material.uniforms.image = image;
   material.uniforms.repeat = new Cesium.Cartesian2(...repeat);
   return material;
-}
-
-/** A `radialRim` fill's material. */
-function radialRimMaterial(fill) {
-  const uniforms = {
-    color: toColor(fill.color),
-    rimColor: toColor(fill.rimColor),
-    rimWidth: fill.rimWidth,
-  };
-  // Built from its type, then given its values, as the line materials are.
-  const material = new Cesium.Material({
-    fabric: { type: RADIAL_RIM_MATERIAL, uniforms, source: RADIAL_RIM_SOURCE },
-  });
-  Object.assign(material.uniforms, uniforms);
-  return material;
-}
-
-/**
- * An ellipse radius at a camera `height`: a fixed one as it is, one by
- * camera height scaled by its factor and held within its bounds.
- * @param {number|{byCameraHeight: {factor: number, min: number, max: number}}} radius
- * @param {number} height
- */
-export function radiusAt(radius, height) {
-  if (typeof radius === 'number') return radius;
-  const { factor, min, max } = radius.byCameraHeight;
-  return Math.max(min, Math.min(max, height * factor));
 }
 
 /**
@@ -304,12 +248,6 @@ export function pulseAlpha(pulse, now) {
   const turn = pulse.periodMs > 0 ? (2 * Math.PI * now) / pulse.periodMs : 0;
   return pulse.from + (pulse.to - pulse.from) * (0.5 + 0.5 * Math.sin(turn));
 }
-
-/** Whether a shape is an ellipse with a radius by camera height. */
-const byCameraHeight = (item) =>
-  item.geometry?.kind === 'ellipse' &&
-  (typeof item.geometry.semiMajor !== 'number' ||
-    typeof item.geometry.semiMinor !== 'number');
 
 /** The line styles the port drapes. */
 const DRAPED_STYLES = new Set(['solid', 'glow', 'dash', 'flow', 'arrow']);
@@ -1932,8 +1870,8 @@ export function createCesiumDraw({
     positions.some((p) => !Cesium.Cartesian3.equals(p, positions[0]));
 
   /**
-   * A line not draped that has a `depthFailColor`: a primitive of its own,
-   * drawn in that colour where the surface hides it. Built at once, so one
+   * A line not draped that has a `depthFail` style: a primitive of its own,
+   * drawn in that style where the surface hides it. Built at once, so one
    * built anew where it moves draws in the frame it replaces the old one.
    * Null when its positions make no line.
    */
@@ -1961,18 +1899,7 @@ export function createCesiumDraw({
       }),
       appearance: new Cesium.PolylineMaterialAppearance({ material }),
       depthFailAppearance: new Cesium.PolylineMaterialAppearance({
-        material: lineMaterial(
-          record,
-          item.depthFailDash
-            ? {
-                kind: 'dash',
-                color: item.depthFailColor,
-                length: item.depthFailDash.length,
-                pattern16: item.depthFailDash.pattern16,
-              }
-            : { kind: 'solid', color: item.depthFailColor },
-          reveal,
-        ),
+        material: lineMaterial(record, item.depthFail, reveal),
       }),
       show: item.show !== false,
       asynchronous: false,
@@ -2080,7 +2007,7 @@ export function createCesiumDraw({
     const line = {
       ...rest,
       mode: '3d',
-      depthFailColor: item.style.color,
+      depthFail: { kind: 'solid', color: item.style.color },
       overlaid: true,
     };
     if (segmentShow?.length) {
@@ -2113,10 +2040,9 @@ export function createCesiumDraw({
     return true;
   }
 
-  /** An overlay line's look but its colours (its depth-fail colour is its
+  /** An overlay line's look but its colours (its depth-fail style is its
    *  colour too). */
-  const overlayShape = (item) =>
-    lineLook({ ...item, depthFailColor: null }, true);
+  const overlayShape = (item) => lineLook({ ...item, depthFail: null }, true);
 
   /** Stop tracking a line no longer drawn over the surface for a draped
    *  one. */
@@ -2191,10 +2117,19 @@ export function createCesiumDraw({
         );
       else if (
         item.frame === 'inertial' &&
-        (item.mode === 'draped' || item.depthFailColor)
+        (item.mode === 'draped' || item.depthFail)
       )
         throw new Error(
           'the Cesium renderer draws inertial lines undraped, without depth-fail colours',
+        );
+      else if (
+        item.mode !== 'draped' &&
+        item.depthFail &&
+        item.depthFail.kind !== 'solid' &&
+        item.depthFail.kind !== 'dash'
+      )
+        throw new Error(
+          'the Cesium renderer draws solid and dashed lines behind the surface only',
         );
       else if (
         segmented(item) &&
@@ -2274,7 +2209,7 @@ export function createCesiumDraw({
         draped.get(clampTo).push(drapedInstance(item, part, true));
         continue;
       }
-      if (item.depthFailColor) {
+      if (item.depthFail) {
         deep ??= new Cesium.PrimitiveCollection();
         const id = pickId(record, item);
         const primitive = depthFailLine(record, item, id);
@@ -2418,10 +2353,14 @@ export function createCesiumDraw({
       item.widthPx,
       item.clampTo,
       colourless ? { ...item.style, color: undefined } : item.style,
-      item.depthFailColor,
-      // A dash is drawn only with a depth-fail colour, the same in any key order.
-      item.depthFailColor && item.depthFailDash
-        ? [item.depthFailDash.length, item.depthFailDash.pattern16]
+      // The same depth-fail style in any key order.
+      item.depthFail
+        ? [
+            item.depthFail.kind,
+            item.depthFail.color,
+            item.depthFail.length,
+            item.depthFail.pattern16,
+          ]
         : null,
       // Segment colours and shows change in place.
       item.segmentColors != null,
@@ -2439,7 +2378,7 @@ export function createCesiumDraw({
     Object.is(a.widthPx, b.widthPx) &&
     a.clampTo === b.clampTo &&
     a.style === b.style &&
-    a.depthFailColor === b.depthFailColor &&
+    a.depthFail === b.depthFail &&
     (a.segmentColors != null) === (b.segmentColors != null) &&
     (a.segmentShow != null) === (b.segmentShow != null) &&
     revealed(a) === revealed(b) &&
@@ -2756,7 +2695,7 @@ export function createCesiumDraw({
   const settles = (item) =>
     item.mode !== 'draped' &&
     item.frame !== 'inertial' &&
-    !item.depthFailColor &&
+    !item.depthFail &&
     item.style.kind === 'solid' &&
     !revealed(item) &&
     // The collection draws no line under half a pixel wide; a batch
@@ -3219,10 +3158,6 @@ export function createCesiumDraw({
         };
       }
       case 'ellipse': {
-        if (byCameraHeight(item))
-          throw new Error(
-            'the Cesium renderer takes radii by camera height on clamped ellipses only',
-          );
         const ellipse = {
           center: toCartesian(g.center),
           semiMajorAxis: g.semiMajor,
@@ -3277,90 +3212,11 @@ export function createCesiumDraw({
   }
 
   /**
-   * The camera's height for radii by camera height: above the ellipsoid,
-   * as Cesium places it (1000 m while it has none).
-   */
-  const cameraHeight = () => {
-    const height = scene.camera?.positionCartographic?.height;
-    return Number.isFinite(height) ? height : 1000;
-  };
-
-  /** A clamped ellipse's radii by camera height at this frame's height, or null. */
-  function radiiOf(item) {
-    if (!byCameraHeight(item)) return null;
-    const height = cameraHeight();
-    return [
-      radiusAt(item.geometry.semiMajor, height),
-      radiusAt(item.geometry.semiMinor, height),
-    ];
-  }
-
-  /**
-   * Before a frame draws: clamped ellipses with radii by camera height
-   * whose radii have changed with the camera are drawn at the new ones. A
-   * colour fill is drawn alone where it is, built in this frame
-   * (`moveShape`), as Cesium's entities rebuild a ground ellipse whose
-   * radius follows a callback, while no more than `MOVING_SHAPES` of the
-   * set would be drawn alone; past that, and for any other fill once its
-   * radii have changed by more than `REBUILD_RADII`, its set rebuilds (one
-   * rebuild at a time). Hidden ones wait until they show.
-   */
-  function followCameraHeight() {
-    for (const record of sets.values()) {
-      const parts = record.shapeParts;
-      if (record.kind !== 'shapes' || !parts || record.spec.show === false)
-        continue;
-      try {
-        followIn(record, parts);
-      } catch (error) {
-        // The set draws as it did; the next frame tries again.
-        report(error);
-      }
-    }
-  }
-
-  /** Relative change of radii past which a fill drawn in a batch rebuilds. */
-  const REBUILD_RADII = 0.02;
-
-  function followIn(record, parts) {
-    const changed = (radii, part, by) =>
-      Math.abs(radii[0] - part.radii[0]) > by * part.radii[0] ||
-      Math.abs(radii[1] - part.radii[1]) > by * part.radii[1];
-    let alone = 0;
-    for (const part of parts.values()) if (part.solo) alone += 1;
-    // Those the host still retiring draws alone count too, until it goes.
-    if (record.retiring)
-      for (const part of record.retiringShapeParts?.values() ?? [])
-        if (part.solo && part.ground && !part.ground.isDestroyed()) alone += 1;
-    let rebuild = false;
-    for (const [id, part] of parts) {
-      if (!part.radii || !part.ground) continue;
-      const item = record.items.get(id);
-      if (!item || item.show === false || !byCameraHeight(item)) continue;
-      const radii = radiiOf(item);
-      if (!changed(radii, part, 1e-3)) continue;
-      if (part.ground.isDestroyed() || part.batch?.isDestroyed()) continue;
-      const movable =
-        colourFill(item) &&
-        groundSyncs() &&
-        typeof record.host?.add === 'function' &&
-        (part.solo || alone < MOVING_SHAPES);
-      if (movable) {
-        if (!part.solo) alone += 1;
-        moveShape(record, part, item);
-      } else if (changed(radii, part, REBUILD_RADII)) rebuild = true;
-    }
-    if (rebuild && !record.pending) {
-      record.rebuild();
-      requestRender();
-    }
-  }
-
-  /**
    * A clamped shape's fill geometry, on the ellipsoid for draping; an
-   * ellipse with a rim fill is cut finely, so its rim runs round.
+   * ellipse with an image fill is cut finely, so a round image's edge runs
+   * round.
    */
-  function groundGeometry(item, rimFill = null) {
+  function groundGeometry(item, imageFill = false) {
     const g = item.geometry;
     switch (g.kind) {
       case 'polygon': {
@@ -3373,21 +3229,19 @@ export function createCesiumDraw({
         });
       }
       case 'ellipse': {
-        // Radii by camera height are the ones it has at this frame's height.
-        const height = cameraHeight();
-        const major = radiusAt(g.semiMajor, height);
-        const minor = radiusAt(g.semiMinor, height);
-        // Radii that follow the camera apart may cross: the longer is then
-        // drawn as Cesium's semi-major axis, a quarter turn on.
+        const major = g.semiMajor;
+        const minor = g.semiMinor;
+        // A semi-minor axis longer than the semi-major one is drawn as
+        // Cesium's semi-major axis, a quarter turn on.
         const crossed = minor > major;
         return new Cesium.EllipseGeometry({
           center: toCartesian(g.center),
           semiMajorAxis: crossed ? minor : major,
           semiMinorAxis: crossed ? major : minor,
           rotation: (g.rotation ?? 0) + (crossed ? Math.PI / 2 : 0),
-          ...(rimFill
+          ...(imageFill
             ? {
-                granularity: RIM_GRANULARITY,
+                granularity: IMAGE_ELLIPSE_GRANULARITY,
                 vertexFormat:
                   Cesium.MaterialAppearance.MaterialSupport.TEXTURED
                     .vertexFormat,
@@ -3436,11 +3290,7 @@ export function createCesiumDraw({
         typeof item.fill === 'object' && !Array.isArray(item.fill)
           ? item.fill
           : null;
-      const rimFill =
-        objectFill?.preset === 'radialRim' && item.geometry.kind === 'ellipse'
-          ? objectFill
-          : null;
-      const imageFill = rimFill ? null : objectFill;
+      const imageFill = objectFill;
       if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
       if (item.extrudeHeight !== undefined)
@@ -3457,7 +3307,7 @@ export function createCesiumDraw({
       // load when they show.
       let geometry;
       try {
-        geometry = groundGeometry(item, rimFill);
+        geometry = groundGeometry(item, Boolean(imageFill));
       } catch (error) {
         if (item.show === false) continue;
         throw error;
@@ -3466,8 +3316,6 @@ export function createCesiumDraw({
         look: lookOf(item),
         id: pickId(record, item),
         ground: null,
-        // Radii by camera height as drawn (`followCameraHeight`).
-        radii: radiiOf(item),
         pulse: pulseOf(item),
         show: item.show !== false,
       };
@@ -3477,29 +3325,17 @@ export function createCesiumDraw({
       );
       const instance = new Cesium.GeometryInstance({
         geometry,
-        attributes:
-          imageFill || rimFill
-            ? { show }
-            : {
-                color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                  toColor(item.fill),
-                ),
-                show,
-              },
+        attributes: imageFill
+          ? { show }
+          : {
+              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+                toColor(item.fill),
+              ),
+              show,
+            },
         id: part.id,
       });
       const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
-      if (rimFill) {
-        // A rim fill is a ground primitive of its own, with its material.
-        batches.push({
-          clampTo,
-          instances: [instance],
-          parts: [part],
-          rimFill,
-          depthBias: item.depthBias,
-        });
-        continue;
-      }
       if (imageFill) {
         // An image fill is a ground primitive of its own, with its material.
         // (Cesium turns its texture wrongly across the antimeridian: its
@@ -3540,9 +3376,7 @@ export function createCesiumDraw({
     const grounds = batches.map((batch) => {
       const material = batch.imageFill
         ? imageMaterial(batch.image, batch.imageFill.repeat)
-        : batch.rimFill
-          ? radialRimMaterial(batch.rimFill)
-          : null;
+        : null;
       const ground = new Ground({
         geometryInstances: batch.instances,
         classificationType: classificationOf(batch.clampTo),
@@ -3555,15 +3389,6 @@ export function createCesiumDraw({
                   Cesium.MaterialAppearance.MaterialSupport.TEXTURED,
                 translucent: true,
                 flat: true,
-                ...(batch.rimFill
-                  ? {
-                      closed: false,
-                      faceForward: true,
-                      ...(batch.depthBias
-                        ? { renderState: DEPTH_BIASED_STATE }
-                        : {}),
-                    }
-                  : {}),
               }),
             }
           : {}),
@@ -3943,7 +3768,6 @@ export function createCesiumDraw({
     part.solo = true;
     part.pendingShow = undefined;
     part.look = lookOf(item);
-    part.radii = radiiOf(item);
     part.pulse = pulseOf(item);
     part.show = item.show !== false;
     part.pendingColour = undefined;
@@ -4344,7 +4168,6 @@ export function createCesiumDraw({
     building: () => [...sets.values()].some((record) => record.pending),
     /** Each frame, before it draws: the horizon cull. */
     beforeRender() {
-      followCameraHeight();
       pulsing = runPulses();
       cullHorizon();
       runFlows();

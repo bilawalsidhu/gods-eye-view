@@ -707,23 +707,11 @@ export function createStubRenderer(options = {}) {
     );
   }
 
-  /** The eye's height above the ellipsoid, for radii by camera height. */
-  const eyeHeight = () => toCartographicRadians(eye().position)?.height ?? 0;
-
   /**
-   * Whether `lon`, `lat` (degrees) is in an ellipse geometry, its radii by
-   * camera height at the eye's height, measured in the plane tangent at its
-   * centre.
+   * Whether `lon`, `lat` (degrees) is in an ellipse geometry, measured in
+   * the plane tangent at its centre.
    */
   function inEllipse(g, lon, lat) {
-    const height = eyeHeight();
-    const radius = (r) =>
-      typeof r === 'number'
-        ? r
-        : Math.max(
-            r.byCameraHeight.min,
-            Math.min(r.byCameraHeight.max, height * r.byCameraHeight.factor),
-          );
     const centre = toCartographicRadians(toEcef(g.center));
     const metresPerRadian = 6378137;
     const east =
@@ -735,11 +723,7 @@ export function createStubRenderer(options = {}) {
     const turn = g.rotation ?? 0;
     const along = north * Math.cos(turn) - east * Math.sin(turn);
     const across = north * Math.sin(turn) + east * Math.cos(turn);
-    return (
-      (along / radius(g.semiMajor)) ** 2 +
-        (across / radius(g.semiMinor)) ** 2 <=
-      1
-    );
+    return (along / g.semiMajor) ** 2 + (across / g.semiMinor) ** 2 <= 1;
   }
 
   /**

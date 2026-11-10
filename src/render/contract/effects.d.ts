@@ -46,8 +46,8 @@ export interface StyleDefinition extends StyleDescriptor {
  * full inside the band, each by where its anchor is on screen; the map,
  * lines and shapes draw as they are, and picks are unchanged. A radius of 0
  * dims every marker to `floor` (the theme on, the sweep off). Setting a
- * sector, or clearing it, asks for one frame; the app sets it again at
- * `sonarCadenceHz`.
+ * sector, or clearing it, asks for one frame; the application moves it about every
+ * 80 ms while it sweeps.
  * `diagnostics().passes` lists `'screenModulation'` while it draws, so a
  * sector set but not listed is unsupported.
  */

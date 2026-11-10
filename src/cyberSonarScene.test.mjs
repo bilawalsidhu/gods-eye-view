@@ -92,7 +92,7 @@ test('the sector is the sweep the HUD shows, in CSS pixels and radians', () => {
  * viewer: its frame's preUpdate is ticked by hand and its effects record
  * each sector.
  */
-function fixture({ modulation = true, lists = true, cadenceHz } = {}) {
+function fixture({ modulation = true, lists = true } = {}) {
   const previous = {
     document: globalThis.document,
     matchMedia: globalThis.matchMedia,
@@ -137,7 +137,6 @@ function fixture({ modulation = true, lists = true, cadenceHz } = {}) {
   const unbind = bindRenderer(viewer, {
     canvas,
     effects,
-    quality: { get: () => (cadenceHz ? { sonarCadenceHz: cadenceHz } : {}) },
     frame: {
       on(phase, cb) {
         assert.equal(phase, 'preUpdate');
@@ -271,27 +270,6 @@ test('the sweep sets its sector on drawing ticks and at the cadence, and changes
     assert.equal(f.root.dataset.cyberSonarGpu, undefined);
     dispose();
     assert.equal(f.sets.length, 11);
-  } finally {
-    performance.now = now;
-    f.restore();
-  }
-});
-
-test('the renderer cadence paces the idle sweep', () => {
-  const f = fixture({ cadenceHz: 4 });
-  const now = performance.now;
-  let clock = 0;
-  performance.now = () => clock;
-  try {
-    const dispose = createCyberSonarScene(f.viewer);
-    f.tick();
-    clock += CYBER_SONAR_RENDER_INTERVAL_MS;
-    f.tick();
-    assert.equal(f.sets.length, 1, '4 Hz waits 250 ms');
-    clock += 250 - CYBER_SONAR_RENDER_INTERVAL_MS;
-    f.tick();
-    assert.equal(f.sets.length, 2);
-    dispose();
   } finally {
     performance.now = now;
     f.restore();

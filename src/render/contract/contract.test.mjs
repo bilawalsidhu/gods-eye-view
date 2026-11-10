@@ -183,7 +183,7 @@ test('members added to version 0 later are optional, each behind its capability'
     Object.fromEntries(
       members(checker.getTypeAtLocation(declared(shape).name)),
     )[field];
-  assert.equal(optional('LineItem', 'depthFailDash'), true);
+  assert.equal(optional('LineItem', 'depthFail'), true);
   // And on one kind of a union: the rectangle's rotation.
   const rectangle = checker
     .getTypeAtLocation(declared('ShapeGeometry').name)

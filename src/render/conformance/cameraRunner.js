@@ -6,6 +6,12 @@
  * reference recorder's own.
  */
 import { wheelLines } from '../input/wheel.js';
+import {
+  eyeMoved,
+  eyeRotatedAbout,
+  eyeTurned,
+  eyeZoomed,
+} from '../../geo/eyeMoves.js';
 
 const NO_MODIFIERS = Object.freeze({
   shift: false,
@@ -188,6 +194,18 @@ function resolveArgs(driver, name, args) {
 }
 
 /**
+ * Script steps that are the app's own sums over the pose, not port verbs: the
+ * contract driver turns them into `setView`, where the reference recorder
+ * runs Cesium's matching camera functions.
+ */
+const EYE_STEPS = {
+  move: eyeMoved,
+  look: eyeTurned,
+  rotateAround: eyeRotatedAbout,
+  zoom: eyeZoomed,
+};
+
+/**
  * A driver over a renderer, through the contract only.
  * @param {import('../contract/renderer').Renderer} renderer
  * `hooks.pointer(type, x, y, extra)` sends a pointer event the way a
@@ -200,6 +218,8 @@ export function contractDriver(renderer, hooks) {
   const camera = renderer.camera;
   return {
     command(name, args) {
+      if (Object.hasOwn(EYE_STEPS, name))
+        return camera.setView(EYE_STEPS[name](camera.pose(), ...args));
       return camera[name](...args);
     },
     frame: hooks.frame,

@@ -294,7 +294,7 @@ export function createCalibrationGizmo({
         // Standard gizmo convention: parts behind geometry stay clearly
         // visible, just dimmed (a street-level mount buries half the heading
         // ring in sloped photogrammetry tiles — smoke-tested 2026-07-05).
-        depthFailColor: rgba(color, 0.45),
+        depthFail: { kind: 'solid', color: rgba(color, 0.45) },
         show: shown,
       });
     }

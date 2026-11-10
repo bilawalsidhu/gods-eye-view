@@ -607,48 +607,6 @@ export function createStubCamera({
     finishFlight('cancelled');
   }
 
-  function move(dir, metres) {
-    const axis = {
-      forward: direction,
-      back: negate(direction),
-      right,
-      left: negate(right),
-      up,
-      down: negate(up),
-    }[dir];
-    position = add(position, scale(axis, metres));
-    requestRender('camera');
-  }
-
-  function look(dir, radians) {
-    const [axis, sign] = {
-      left: [up, -1],
-      right: [up, 1],
-      up: [right, -1],
-      down: [right, 1],
-    }[dir];
-    const a = clone(axis);
-    const angle = -(sign * radians);
-    direction = rotate(direction, a, angle);
-    up = rotate(up, a, angle);
-    right = rotate(right, a, angle);
-    requestRender('camera');
-  }
-
-  function rotateAround(axis, radians) {
-    const a = normalize(axis);
-    position = rotate(position, a, -radians);
-    direction = rotate(direction, a, -radians);
-    up = rotate(up, a, -radians);
-    right = cross(direction, up);
-    up = cross(right, direction);
-    requestRender('camera');
-  }
-
-  function zoom(metres) {
-    move('forward', metres);
-  }
-
   // --- Follow ----------------------------------------------------------------
 
   /** Where the target is drawn, for a drawn item; otherwise its own answer. */
@@ -797,10 +755,6 @@ export function createStubCamera({
     },
     lookAt,
     release,
-    move,
-    look,
-    rotateAround,
-    zoom,
     follow,
     get followed() {
       return followed;

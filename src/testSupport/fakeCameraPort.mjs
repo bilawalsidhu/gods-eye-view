@@ -107,8 +107,16 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
       return fly.apply(this, args);
     };
   const keepsFlight = '_currentFlight' in fake;
+  // The port places a view by direction and up on the camera's own vectors;
+  // a fake without them gets scratch ones, and the view is handed to its
+  // `setView` as Cesium's setView would have had it.
+  const placesOnSetView = !('position' in fake) && Boolean(fake.setView);
+  const placed = placesOnSetView
+    ? { position: {}, direction: {}, up: {}, right: {} }
+    : null;
   const camera = new Proxy(fake, {
     get(target, key, receiver) {
+      if (placed && Object.hasOwn(placed, key)) return placed[key];
       if ((key === 'moveStart' || key === 'moveEnd') && !target[key])
         return noEvent;
       if (!keepsFlight) {
@@ -173,6 +181,20 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
           pitch: fake.pitch ?? -Math.PI / 2,
           roll: fake.roll ?? 0,
         };
+      },
+    },
+    setView: {
+      value(spec) {
+        real.setView(spec);
+        const o = spec?.orientation;
+        if (placed && spec?.destination && o && 'direction' in o)
+          fake.setView({
+            destination: { ...placed.position },
+            orientation: {
+              direction: { ...placed.direction },
+              up: { ...placed.up },
+            },
+          });
       },
     },
     // A fake that computes a view rectangle answers with it, as the

@@ -10,6 +10,7 @@ import {
 } from '../cameraScripts.js';
 import { contractDriver, runCameraScript } from '../cameraRunner.js';
 import { deepEqual, equal, near, nearAngle, nearVec, ok } from '../expect.js';
+import { eyeMoved } from '../../../geo/eyeMoves.js';
 
 const lonLatToEcef = (h) => h.toEcef;
 
@@ -389,7 +390,7 @@ export function cameraChecks() {
         r.camera.on('moveEnd', () => events.push(['end', h.now(r)]));
         await h.frame(r);
         const movingAt = h.now(r);
-        r.camera.move('forward', 1000);
+        r.camera.setView(eyeMoved(r.camera.pose(), 'forward', 1000));
         await h.frame(r);
         equal(events[0]?.[0], 'start', 'moveStart after the move');
         const movedAt = h.now(r);

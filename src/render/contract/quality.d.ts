@@ -26,8 +26,6 @@ export interface QualitySettings {
   models: { maxInstances: number; maxDistance: number };
   /** Detail of the post-processing passes; bloom and sharpen are switched in `effects`. */
   postFx: 'low' | 'high';
-  /** Updates per second of a screen modulation sweep. */
-  sonarCadenceHz: number;
   targetFps: number;
 }
 

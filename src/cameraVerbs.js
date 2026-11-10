@@ -67,6 +67,7 @@ import {
   toRadians,
   vec,
 } from './geo/index.js';
+import { eyeMoved, eyeRotatedAbout, eyeTurned } from './geo/eyeMoves.js';
 import { heightsOf } from './queries/heights.js';
 import {
   cameraOf,
@@ -1083,7 +1084,7 @@ function lookWithinFrame(camera, m, look, angle) {
     if (allowed < owed) allowed = owed;
     m.turnedRad += allowed;
   }
-  if (allowed > 0) camera.look(look, allowed);
+  if (allowed > 0) camera.setView(eyeTurned(camera.pose(), look, allowed));
   // The pose this turn leaves, for a turn that continues from it.
   if (_lookBaseline) _lookBaseline.direction = camera.pose().direction;
   if (allowed < angle) interruptCameraMotion('globe-out-of-frame');
@@ -1343,7 +1344,9 @@ function onTick() {
           ? heightM * ONCE.panViewFraction * (scale - (m.lastScale || 0))
           : heightM * PAN_VIEW_FRACTION_S[m.speed] * dt;
       m.lastScale = scale;
-      camera.move(PAN_MOVES[m.direction] ?? 'down', step);
+      camera.setView(
+        eyeMoved(camera.pose(), PAN_MOVES[m.direction] ?? 'down', step),
+      );
     } else if (m.kind === 'tilt') {
       tickTilt(camera, m, scale, dt);
     } else if (m.kind === 'rotate' || m.kind === 'rotate_globe') {
@@ -1377,7 +1380,7 @@ function onTick() {
           interruptCameraMotion('globe-surface-limit');
           return;
         }
-        camera.rotateAround(m.rotationAxis, angle);
+        camera.setView(eyeRotatedAbout(pose, m.rotationAxis, angle));
       } else {
         lookWithinFrame(
           camera,

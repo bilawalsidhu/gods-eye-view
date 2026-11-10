@@ -55,14 +55,13 @@ function fixture({ holdFirst = false } = {}) {
       positionCartographic: { height: 1000 },
       moveEnd: { addEventListener() {} },
       cancelFlight() {},
-      zoomIn(n) {
-        position.x -= n;
-        state.height -= n;
-        this.positionCartographic.height = state.height;
-      },
-      zoomOut(n) {
-        position.x += n;
-        state.height += n;
+      // Looking straight down at the surface along -x.
+      directionWC: { x: -1, y: 0, z: 0 },
+      upWC: { x: 0, y: 0, z: 1 },
+      rightWC: { x: 0, y: 1, z: 0 },
+      setView({ destination }) {
+        state.height -= position.x - destination.x;
+        position.x = destination.x;
         this.positionCartographic.height = state.height;
       },
     },
