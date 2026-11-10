@@ -2954,10 +2954,16 @@ test('an outlined solid line draws one outline material, recoloured in place, an
       return null;
     };
     const first = line();
+    const drawnPositions = first.positions;
     assert.equal(first.material.type, 'PolylineOutline');
     assert.equal(first.material.uniforms.outlineWidth, 1);
     s.set.upsert([outlined([0, 0.5, 1, 0.4], [0, 0, 0, 0.32])]);
     assert.equal(line(), first, 'the same line');
+    assert.equal(
+      first.positions,
+      drawnPositions,
+      'positions sent again where they were are not rewritten',
+    );
     assert.equal(first.material.uniforms.color.alpha, 0.4);
     assert.ok(
       Math.abs(first.material.uniforms.outlineColor.alpha - 0.32) < 1e-9,

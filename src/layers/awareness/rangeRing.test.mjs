@@ -76,6 +76,16 @@ function fakeCanvas() {
   return canvas;
 }
 
+/**
+ * The first index where two byte arrays differ, -1 when they match: a
+ * bounded comparison for whole images.
+ */
+function firstMismatch(a, b) {
+  if (a.length !== b.length) return Math.min(a.length, b.length);
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return i;
+  return -1;
+}
+
 /** A Cesium scene double with the frame events the frame port listens to. */
 const sceneDouble = () => ({
   preRender: new Cesium.Event(),
@@ -1105,7 +1115,9 @@ test('the band is one flat unpickable ellipse at the rim, drawn anew each step a
     rangeM: AWARENESS_RADIUS_M,
     offset: { east: 0, north: 0 },
   });
-  assert.deepEqual(next.canvas.painted.data, expected.data);
+  // Compared byte by byte: a failing deepEqual on a 256×256 image builds a
+  // diff of every byte, which ran a test process out of memory.
+  assert.equal(firstMismatch(next.canvas.painted.data, expected.data), -1);
   // Each front is a haloed line at its radius, faded with its pulse.
   for (let index = 0; index < AWARENESS_RANGE_PULSE.count; index++) {
     const core = drawn(ring).pulse(index);

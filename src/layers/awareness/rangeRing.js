@@ -233,30 +233,39 @@ export function paintAwarenessBand(image, band) {
   const cx = size / 2 + offset.east / ((2 * spanM) / size);
   // Canvas rows run north to south.
   const cy = size / 2 - offset.north / ((2 * spanM) / size);
-  const count = radii.length;
+  // The band depends on the distance from the subject alone: its alpha
+  // byte is tabulated once along the radius, finer than a pixel, and each
+  // pixel looks it up.
   const opacity = pulse.gradientOpacity;
+  let outer = 0;
+  for (const radius of radii) outer = Math.max(outer, radius);
+  const bins = 4 * size;
+  const table = new Uint8Array(bins + 1);
+  for (let bin = 0; bin <= bins; bin++) {
+    const at = (bin / bins) * outer;
+    let sum = 0;
+    for (let i = 0; i < radii.length; i++) {
+      const inside = radii[i] - at;
+      if (inside >= 0 && inside <= depth) {
+        const t = 1 - inside / depth;
+        sum += alphas[i] * t * t;
+      }
+    }
+    // `Math.round` of a non-negative value.
+    table[bin] = (Math.min(1, sum * opacity) * 255 + 0.5) | 0;
+  }
+  const toBin = outer > 0 ? bins / outer : 0;
   for (let y = 0; y < size; y++) {
     const dy = (y + 0.5 - cy) * perPixel;
     const dy2 = dy * dy;
     for (let x = 0; x < size; x++) {
       const dx = (x + 0.5 - cx) * perPixel;
-      // Not `Math.hypot`, many times slower: this runs on every frame the
-      // camera moves while the pulses run.
       const at = Math.sqrt(dx * dx + dy2);
-      let sum = 0;
-      for (let i = 0; i < count; i++) {
-        const inside = radii[i] - at;
-        if (inside >= 0 && inside <= depth) {
-          const t = 1 - inside / depth;
-          sum += alphas[i] * t * t;
-        }
-      }
       const k = (y * size + x) * 4;
       data[k] = r;
       data[k + 1] = g;
       data[k + 2] = b;
-      // `Math.round` of a non-negative value.
-      data[k + 3] = (Math.min(1, sum * opacity) * 255 + 0.5) | 0;
+      data[k + 3] = at > outer ? 0 : table[(at * toBin + 0.5) | 0];
     }
   }
 }
@@ -413,8 +422,27 @@ export function createRangeRing({
     // sky, so the pulses are hidden there and rest with it: no flash, no
     // echoes, no frames.
     const belowRim = () => cameraHeightM(viewer) < CONTEXT_RIM_HEIGHT_M;
-    const levelAt = (nowMs) =>
-      wake && !belowRim() ? awarenessPulseLevel(nowMs, wake) : 0;
+    // One step asks for the level at one time several times over; the
+    // camera's pose is read once for them.
+    let levelMemo = { nowMs: NaN, startMs: NaN, untilMs: NaN, level: 0 };
+    const levelAt = (nowMs) => {
+      if (!wake) return 0;
+      const memo = levelMemo;
+      if (
+        memo.nowMs === nowMs &&
+        memo.startMs === wake.startMs &&
+        memo.untilMs === wake.untilMs
+      )
+        return memo.level;
+      const level = belowRim() ? 0 : awarenessPulseLevel(nowMs, wake);
+      levelMemo = {
+        nowMs,
+        startMs: wake.startMs,
+        untilMs: wake.untilMs,
+        level,
+      };
+      return level;
+    };
 
     const ring = AWARENESS_RANGE_RING_STYLE;
     const pulse = AWARENESS_RANGE_PULSE;

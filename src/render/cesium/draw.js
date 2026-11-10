@@ -2824,8 +2824,12 @@ export function createCesiumDraw({
       was.positions = flatPositions(item.positions);
       unsettle(record);
     }
-    const positions = linePositions(item);
-    was.polyline.positions = positions;
+    // A line sent again where it runs keeps its positions: writing them
+    // would have the collection rewrite its vertices.
+    const drawn = was.polyline.positions;
+    const unmoved = drawnAt(drawn, item.positions);
+    const positions = unmoved ? drawn : linePositions(item);
+    if (!unmoved) was.polyline.positions = positions;
     was.polyline.show = show;
     if (recolour) paintLine(was.polyline.material, item.style);
     if (was.reveal)
@@ -2833,6 +2837,41 @@ export function createCesiumDraw({
         item.revealFraction,
         positions,
       );
+  }
+
+  /**
+   * Whether `positions` (an item's, ECEF points or packed triples) are the
+   * Cartesians a polyline already draws. False for any given by longitude
+   * and latitude, which are converted, not compared.
+   */
+  function drawnAt(drawn, positions) {
+    if (!Array.isArray(drawn)) return false;
+    if (positions instanceof Float64Array) {
+      if (positions.length !== drawn.length * 3) return false;
+      for (let i = 0; i < drawn.length; i++) {
+        const p = drawn[i];
+        if (
+          !Object.is(p.x, positions[i * 3]) ||
+          !Object.is(p.y, positions[i * 3 + 1]) ||
+          !Object.is(p.z, positions[i * 3 + 2])
+        )
+          return false;
+      }
+      return true;
+    }
+    if (positions.length !== drawn.length) return false;
+    for (let i = 0; i < drawn.length; i++) {
+      const p = positions[i];
+      const q = drawn[i];
+      if (
+        !('x' in p) ||
+        !Object.is(p.x, q.x) ||
+        !Object.is(p.y, q.y) ||
+        !Object.is(p.z, q.z)
+      )
+        return false;
+    }
+    return true;
   }
 
   /**
