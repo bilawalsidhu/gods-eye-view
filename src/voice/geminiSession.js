@@ -184,6 +184,9 @@ export class GeminiSessionController {
     this.model = null;
     this.epoch = 0;
     this.turn = 0;
+    // Identifies one turn's tool calls to the runner as one reply; a new
+    // object each turn, so no two sessions or turns share it.
+    this.turnReply = {};
     this.globeToolsBlocked = false;
     this.globeResetFailed = false;
     this.inputGeneration = 0;
@@ -971,6 +974,7 @@ export class GeminiSessionController {
     const tools = [...this.tools.values()];
     this.turnAbort = new AbortController();
     this.turn++;
+    this.turnReply = {};
     this.typedIntent = null;
     this.radioStrongerCommit = null;
     this.pruneControls();
@@ -1544,6 +1548,7 @@ export class GeminiSessionController {
     )
       throw new Error(msg('Gemini requested too many simultaneous actions'));
     const turn = this.turn;
+    const reply = this.turnReply;
     this.userTurnPending = false;
     this.modelComplete = false;
     // Admit each valid native call ID once per connection.
@@ -1565,6 +1570,7 @@ export class GeminiSessionController {
       const action = new AbortController();
       action.call = { id: call.id, name: call.name };
       action.sequence = ++this.toolSequence;
+      action.reply = reply;
       this.tools.set(call.id, action);
       const priorTools = this.toolQueue;
       const args =
@@ -1674,6 +1680,9 @@ export class GeminiSessionController {
         this.runAction(call.name, args, {
           signal: toolSignal,
           callId: call.id,
+          // Calls run one by one, so a motion can follow a fly-to of the
+          // same reply that already found nothing.
+          reply: action.reply,
           progress: (update) => {
             if (actionCurrent()) this.narration.progress(call.id, update);
           },

@@ -133,8 +133,8 @@ export async function fetchFirms(
  * Upstream: https://firms.modaps.eosdis.nasa.gov/api/area/csv/{KEY}/{SOURCE}/world/2
  *
  * Merges two VIIRS NRT sources (NOAA-20, NOAA-21 — independent satellites, no
- * cross-source dedup) plus MODIS_NRT (combined Terra+Aqua,
- * ~1 km, numeric 0-100 confidence), fetched sequentially (quota courtesy)
+ * cross-source dedup) plus MODIS_NRT (combined Terra+Aqua, ~1 km, numeric
+ * 0-100 confidence), fetched sequentially (quota courtesy)
  * with `days=2` (`days=1` means "current UTC day", nearly empty just after
  * 00:00Z) and clamps to the trailing 24 h via src/data/firmsCsv.js. FIRMS
  * quota is 5,000 transactions / 10 min per MAP_KEY, so the cache is the point:
@@ -142,8 +142,7 @@ export async function fetchFirms(
  * fresh-enough disk cache (.gev-cache/firms.json) prevents ANY upstream
  * fetch across dev-server restarts. Pattern mirrors celestrakProxy.
  *
- * VIIRS_SNPP_NRT is not requested: NASA stopped delivering Suomi NPP data on
- * 2026-11-02, so that source only spent a transaction per refresh (#849).
+ * VIIRS_SNPP_NRT is left out: NASA stopped delivering Suomi NPP on 2026-11-02.
  *
  * Routes:
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}

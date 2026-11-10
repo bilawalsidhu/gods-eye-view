@@ -20,6 +20,7 @@ import {
   numericSummary,
   thinEvenly,
 } from '../results.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { normalizeVesselType } from '../../data/vesselTypes.js';
 
 const MMSI_SCHEMA = Object.freeze({
@@ -57,8 +58,8 @@ function vesselRow(record, from) {
     lat: round(record.latitude, 5),
     lon: round(record.longitude, 5),
     speed_mps: round(record.speedMps, 1),
-    course_deg: round(record.courseDeg, 0),
-    heading_deg: round(record.headingDeg, 0),
+    course_deg: roundHeadingDegrees(record.courseDeg),
+    heading_deg: roundHeadingDegrees(record.headingDeg),
     observed_at: isoTime(record.observedAtMs),
     ...(from ? { distance_km: round(distanceKm(from, point), 1) } : {}),
   };

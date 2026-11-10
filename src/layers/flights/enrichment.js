@@ -1,5 +1,6 @@
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
+import { parsePlanespottersPhoto } from '../../data/planespottersPhoto.js';
 import * as Cesium from 'cesium';
 import {
   ENRICH_MAX_INFLIGHT,
@@ -8,6 +9,7 @@ import {
   ENRICH_AMBIENT_REFILL_TOKENS,
   ENRICH_AMBIENT_REFILL_WINDOW_MS,
   ENRICH_AMBIENT_PER_SWEEP,
+  ENRICH_RETRY_COOLDOWN_MS,
 } from './policy.js';
 
 export function createEnrichment({
@@ -17,11 +19,62 @@ export function createEnrichment({
   layer,
   resolveAsset,
 }) {
-  function _enqueueEnrich(key, query, onData, priority = false) {
+  const { isMilitaryIcao } = services.militaryRegistry;
+  const { isTr3b } = services.aircraftPresentation;
+  /**
+   * Whether `key` is answered, queued, or cooling down after a failure. A
+   * key past its cool-down is released here so it can be asked again.
+   * @param {string} key Lookup key.
+   * @returns {boolean}
+   */
+  function _enrichHeld(key) {
+    if (flightState._enrichSeen.has(key)) return true;
+    const retryAfter = flightState._enrichRetryAfter.get(key);
+    if (retryAfter === undefined) return false;
+    if (Date.now() < retryAfter) return true;
+    flightState._enrichRetryAfter.delete(key);
+    return false;
+  }
+
+  /**
+   * Whether a source failure is permanent: an unsupported lookup, or an HTTP
+   * 4xx other than 401/403 (an authorization refusal that may clear), 408
+   * (timeout) and 429 (rate limited). Anything else, including an error without a
+   * status, is temporary.
+   * @param {*} error The rejection, as `LiveSourceError` / `httpError` carry it.
+   * @returns {boolean}
+   */
+  function _enrichFailureIsFinal(error) {
+    if (error?.code === 'unsupported') return true;
+    const status = Number(error?.status);
+    return (
+      Number.isInteger(status) &&
+      status >= 400 &&
+      status < 500 &&
+      status !== 401 &&
+      status !== 403 &&
+      status !== 408 &&
+      status !== 429
+    );
+  }
+
+  /**
+   * Ask each key at most once per session, except that a lookup whose source
+   * failed temporarily (rejected or threw) may be asked again after
+   * ENRICH_RETRY_COOLDOWN_MS; an answer, found or not, and a permanent
+   * refusal (see _enrichFailureIsFinal) are final.
+   * @param {string} key Session-unique lookup key.
+   * @param {object} query The source's enrichment query.
+   * @param {function(object):void} onData Receives a `found` answer.
+   * @param {boolean} [priority] Front of the queue.
+   * @param {function(*):?object} [read] Reads the source's answer first, for
+   *   a lookup whose answer may arrive in more than one shape.
+   */
+  function _enqueueEnrich(key, query, onData, priority = false, read = null) {
     if (flightState.lifetime.signal.aborted) return;
-    if (flightState._enrichSeen.has(key)) return;
+    if (_enrichHeld(key)) return;
     flightState._enrichSeen.add(key);
-    const job = { query, onData };
+    const job = { key, query, onData, read };
     // Priority (tracked / model-eligible) goes to the FRONT so a deep ambient
     // backlog can never delay the plane the user just clicked or zoomed into.
     if (priority) flightState._enrichQueue.unshift(job);
@@ -61,9 +114,24 @@ export function createEnrichment({
             signal: lifetime.signal,
           });
         })
-        .then((data) => {
-          if (!lifetime.signal.aborted && data && data.found) job.onData(data);
-        })
+        .then(
+          (answer) => {
+            const data = job.read ? job.read(answer) : answer;
+            if (!lifetime.signal.aborted && data && data.found)
+              job.onData(data);
+          },
+          (error) => {
+            // The source failed: release the key after a cool-down. A layer
+            // teardown is not a failure and schedules nothing, and a
+            // permanent refusal is as final as an answer.
+            if (lifetime.signal.aborted || _enrichFailureIsFinal(error)) return;
+            flightState._enrichSeen.delete(job.key);
+            flightState._enrichRetryAfter.set(
+              job.key,
+              Date.now() + ENRICH_RETRY_COOLDOWN_MS,
+            );
+          },
+        )
         .catch(() => {
           /* enrichment never surfaces errors */
         })
@@ -119,6 +187,14 @@ export function createEnrichment({
       (data) => {
         const meta = flightState.records.data.get(icao24);
         if (!meta) return;
+        // A late answer for a callsign the plane no longer flies is dropped.
+        if (
+          String(meta.callsign || '')
+            .trim()
+            .toUpperCase() !== cs
+        )
+          return;
+        meta.routeCallsign = cs;
         meta.airline = data.airline || meta.airline;
         if (data.origin && data.destination)
           meta.route = { origin: data.origin, destination: data.destination };
@@ -127,6 +203,31 @@ export function createEnrichment({
       },
       true,
     ); // route lookups only fire for the TRACKED plane — front of the queue
+  }
+
+  /** The tracked plane's photo from Planespotters, asked once per hex at the
+   *  front of the queue like its route. A miss is final; a temporary failure
+   *  is asked again after the cool-down. A military aircraft or a converted
+   *  TR-3B is never looked up. The answer is read with
+   *  `parsePlanespottersPhoto` whatever shape the source returns (the upstream
+   *  answer, a server's cached shape, or an already-read photo), so only a
+   *  checked photo is ever stored. */
+  function _requestPhotoEnrichment(icao24) {
+    if (!/^[0-9a-f]{6}$/i.test(icao24)) return;
+    const id = icao24.toLowerCase();
+    if (isMilitaryIcao(id) || isTr3b(id)) return;
+    _enqueueEnrich(
+      `p:${id}`,
+      { kind: 'photo', id },
+      (data) => {
+        const meta = flightState.records.data.get(id);
+        if (!meta) return; // evicted while the lookup was in flight
+        const { src, width, height, photographer, link } = data;
+        meta.photo = { src, width, height, photographer, link };
+      },
+      true,
+      parsePlanespottersPhoto,
+    );
   }
 
   /** QA seam: headless harnesses (scripts/qa-enrich-ambient.mjs) shrink the
@@ -196,7 +297,9 @@ export function createEnrichment({
       );
       const cand = [];
       for (const [icao24, bb] of flightState._billboards) {
-        if (flightState._enrichSeen.has(`t:${icao24}`)) continue; // answered / queued / negative this session
+        // Answered, queued, negative this session, or cooling down after a
+        // failure: never spend a token on it.
+        if (_enrichHeld(`t:${icao24}`)) continue;
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
@@ -233,6 +336,7 @@ export function createEnrichment({
     _drainEnrich,
     _requestTypeEnrichment,
     _requestRouteEnrichment,
+    _requestPhotoEnrichment,
     _ambientBudgetKnobs,
     _refillAmbientBudget,
     _sweepAmbientEnrichment,

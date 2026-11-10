@@ -24,7 +24,8 @@ export function createQueries({
   layer,
   resolveAsset,
 }) {
-  const { tr3bTypeLabel, tr3bAircraftClass } = services.aircraftPresentation;
+  const { isTr3b, tr3bTypeLabel, tr3bAircraftClass } =
+    services.aircraftPresentation;
   const { formatFlightLevel } = services.labels;
   const { isMilitaryIcao } = services.militaryRegistry;
   const { applyTrackedCameraFrame } = services.camera;
@@ -207,6 +208,12 @@ export function createQueries({
               origin: { ...info.route.origin },
               destination: { ...info.route.destination },
             }
+          : null,
+      // The airframe's Planespotters photo for the Context panel; a military
+      // aircraft or a converted TR-3B (it would name the real one) shows none.
+      photo:
+        info?.photo && !isTr3b(icao24) && !isMilitaryIcao(icao24)
+          ? { ...info.photo }
           : null,
     };
   }
@@ -875,8 +882,9 @@ export function createQueries({
 
     /**
      * Describe the currently tracked aircraft at its dead-reckoned position.
-     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
-     *   Tracked aircraft info, or null when nothing is tracked.
+     * @returns {{icao24: string, callsign: string|null, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null, photo: {src: string, width: number|null, height: number|null, photographer: string, link: string}|null}|null}
+     *   Tracked aircraft info, or null when nothing is tracked. `photo` is the
+     *   airframe's credited Planespotters photo, or null.
      */
     getTrackedInfo() {
       if (!flightState._trackedIcao) return null;
@@ -906,6 +914,8 @@ export function createQueries({
           _toCleanText(described.registration) ||
           described.icao24,
         position: Cesium.Cartesian3.clone(described.position),
+        // The airframe's photo for the Context panel, or null.
+        photo: described.photo,
       };
     },
 

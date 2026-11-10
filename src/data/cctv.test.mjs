@@ -61,6 +61,8 @@ import cctvLayer, {
   materializeCctvActiveCoverageEntities,
   materializeCctvVisibleCoverageEntities,
   maybeAutoHop,
+  openingCameraId,
+  reopenNearestCamera,
   prioritizeActiveCctvGeometryRecord,
   processCctvGeometryDrainBatch,
   processCctvGeometryQueueBatch,
@@ -1291,6 +1293,120 @@ test('CCTV null-active coverage, auto-hop, cycling, and panel targets stay hones
     assert.equal(cctvCycleIndex(0, -1, records.length), records.length - 1);
   } finally {
     cctvLayer.setParams({ autoHop: false });
+    _setCctvOverlayHostForTest();
+    _setCctvCoverageStateForTest({ enabled: false });
+  }
+});
+
+test('CCTV opens on the camera nearest the viewer, not the first in the catalog', () => {
+  // QA 2026-11-05: at King's Cross, turning CCTV on showed a Sydney camera,
+  // the first catalog record, instead of the TfL camera 0.3 km away.
+  const viewer = makeDeselectViewer();
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+    -0.1209,
+    51.5295,
+    187,
+  );
+  viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    -0.1209,
+    51.5295,
+    187,
+  );
+  const sydney = makeDeselectRecord('au-sydney');
+  sydney.camera = { ...sydney.camera, lat: -34.03, lon: 151.11 };
+  const london = makeDeselectRecord('gb-kings-cross');
+  london.camera = { ...london.camera, lat: 51.5318, lon: -0.1209 };
+  try {
+    _setCctvCoverageStateForTest({
+      viewer,
+      records: [sydney, london],
+      activeCameraId: null,
+      enabled: false,
+    });
+    assert.equal(openingCameraId(), 'gb-kings-cross');
+    _setCctvCoverageStateForTest({
+      viewer: null,
+      records: [sydney, london],
+      activeCameraId: null,
+      enabled: false,
+    });
+    assert.equal(
+      openingCameraId(),
+      'au-sydney',
+      'with no viewer position the first record is the fallback',
+    );
+    _setCctvCoverageStateForTest({ viewer, records: [], enabled: false });
+    assert.equal(openingCameraId(), null);
+  } finally {
+    _setCctvCoverageStateForTest({ enabled: false });
+  }
+});
+
+test('the opening camera follows a shared view that lands after CCTV turned on, until someone picks one', () => {
+  // A share link turns CCTV on before its flight lands, so enable() picks
+  // from the startup view; the flight's settled move re-picks near London.
+  const viewer = makeDeselectViewer();
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+    -0.1209,
+    51.5295,
+    187,
+  );
+  const sydney = makeDeselectRecord('au-sydney');
+  sydney.camera = { ...sydney.camera, lat: -34.03, lon: 151.11 };
+  const london = makeDeselectRecord('gb-kings-cross');
+  london.camera = { ...london.camera, lat: 51.5318, lon: -0.1209 };
+  for (const record of [sydney, london])
+    Object.assign(record, {
+      groundResolved: {},
+      groundSamples: {},
+      groundPrior: 0,
+      frustumGeometry: null,
+      frustumPositions: null,
+      probeClampRangeM: null,
+    });
+  _setCctvOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
+  // Activation builds the projection canvas and frame image.
+  const originalDocument = globalThis.document;
+  const originalImage = globalThis.Image;
+  globalThis.document = {
+    createElement: () => ({ getContext: () => null }),
+  };
+  globalThis.Image = class {};
+  try {
+    _setCctvCoverageStateForTest({
+      viewer,
+      records: [sydney, london],
+      activeCameraId: 'au-sydney',
+      enabled: true,
+      openingCameraProvisional: true,
+    });
+    assert.equal(reopenNearestCamera(), true);
+    assert.equal(cctvLayer.getUIState().activeCameraId, 'gb-kings-cross');
+    assert.equal(reopenNearestCamera(), false, 'already the nearest');
+
+    // Someone chooses a camera: settled moves leave it alone.
+    setActiveCamera('au-sydney');
+    assert.equal(reopenNearestCamera(), false);
+    assert.equal(cctvLayer.getUIState().activeCameraId, 'au-sydney');
+
+    // A deselect is a choice too.
+    _setCctvCoverageStateForTest({
+      viewer,
+      records: [sydney, london],
+      activeCameraId: 'au-sydney',
+      enabled: true,
+      openingCameraProvisional: true,
+    });
+    deactivateActiveCamera();
+    assert.equal(reopenNearestCamera(), false);
+    assert.equal(cctvLayer.getUIState().activeCameraId, null);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.Image = originalImage;
     _setCctvOverlayHostForTest();
     _setCctvCoverageStateForTest({ enabled: false });
   }

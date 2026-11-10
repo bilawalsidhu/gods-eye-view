@@ -8,6 +8,7 @@ import {
   t,
   translateKnown,
 } from '../../i18n/index.js';
+import { sourceStatusLabel } from '../../ui/layerNames.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 import { distanceParts } from '../../data/distanceFormat.js';
@@ -150,7 +151,7 @@ export function createPanel({ state: layerState, parts }) {
       relationship: summary.relationship.toLowerCase(),
       label: cohort.label,
       count: `${presentAwarenessCount(summary)}${pageLabel}`,
-      detail: `${cohort.source}${coverage} · ${presentAwarenessReason(summary)}`,
+      detail: `${sourceStatusLabel(cohort.source, cohort.sourceStatus)}${coverage} · ${presentAwarenessReason(summary)}`,
       nearest,
     };
   }
@@ -181,6 +182,28 @@ export function createPanel({ state: layerState, parts }) {
       : null;
   }
 
+  /** The tracked airliner's photo with its credit, or null. The subject
+   *  refresh resolves it; only the subject it was resolved for shows it. */
+  function presentPhoto(subject) {
+    const held = layerState.subjectPhoto;
+    if (
+      !held ||
+      held.layerId !== subject.layerId ||
+      String(held.id) !== String(subject.id)
+    )
+      return null;
+    const { photo } = held;
+    return {
+      src: photo.src,
+      width: photo.width ?? null,
+      height: photo.height ?? null,
+      link: photo.link,
+      credit: t('Photo © {photographer}', {
+        photographer: photo.photographer,
+      }),
+    };
+  }
+
   function renderResults() {
     if (!layerState.enabled || !layerState.results) return hidePanel();
     ensurePanel();
@@ -190,6 +213,7 @@ export function createPanel({ state: layerState, parts }) {
       kind: 'results',
       subject: `${subject.label} · ${t('{distance} FLIGHT / VESSEL WINDOW', { distance: presentAwarenessDistance(AWARENESS_RADIUS_M) })}`,
       subjectNames: presentNames(subject.memberNames),
+      photo: presentPhoto(subject),
       navigation: presentNavigation(),
       rows: cohorts.map(presentRow),
       note: t(
