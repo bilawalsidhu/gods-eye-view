@@ -1,3 +1,4 @@
+import { interruptGlobeRotation } from '../cameraVerbs.js';
 import { normalizeDisplayText } from '../data/displayText.js';
 import {
   layerSnapshot,

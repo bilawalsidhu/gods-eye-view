@@ -129,6 +129,14 @@ search keeps a successful geocode, with no search or view-based region recovery.
 
 Manager-owned periodic network updates pause while the document is hidden. Returning to a visible tab runs one overdue update per enabled layer without overlapping an active refresh and restarts that layer's polling schedule from the return, so the next poll follows one interval later whether or not the catch-up update succeeds; explicit refresh requests remain available. Transit also defers camera-driven feed admission while hidden and rechecks coverage on return. Visibility listeners are released with their polling intervals.
 
+Overpass reserves each normalized query before its disk-cache lookup. The
+initial disk lookup, upstream quota admission, fetching and memory publication
+are coalesced under that reservation. A caller that joined a reservation
+rejected by another client's quota retries admission with its own quota.
+Stale fallback runs per response after the reservation is released, and disk
+writes finish asynchronously. Settled and rejected reservations are removed
+only while they still own their map entry.
+
 External ALPR tags, surveillance-tool display fields, voice context text and
 compact analyst strings collapse controls and whitespace before a final
 180-character cap (scene labels retain their 120-character cap). Empty ALPR
