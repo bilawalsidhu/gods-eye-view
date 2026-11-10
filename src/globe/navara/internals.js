@@ -33,6 +33,7 @@ export function assertNavaraInternals(view) {
       `view._scenes.${name}.children`,
       Array.isArray(view?._scenes?.[name]?.children),
     );
+  requireMember('view._meshes', view?._meshes instanceof Map);
   requireMember(
     'ModelMesh.prototype._releaseGeometryArrays',
     typeof ModelMesh.prototype._releaseGeometryArrays === 'function',
@@ -121,6 +122,65 @@ export function tileRoots(view) {
   return (view._scenes?.mrt?.children ?? []).filter(
     (object) => object instanceof ModelMesh,
   );
+}
+
+// With a cache budget, Navara 0.2.1 deletes a 3D-tiles source without
+// emitting removals for its cached models. Tie each model to its layer so
+// deleting that layer also releases the scene objects and CPU geometry.
+// Private: FeatureEvaluator.obj and view._meshes. Upstream ask: deleting a
+// layer must evict its models regardless of the tile-cache budget.
+function releaseDeletedTileGeometry(view) {
+  const byLayer = new WeakMap();
+  view.on('layer', (event, layerId, { evaluator } = {}) => {
+    if (event !== 'featureCreated') return;
+    const root = evaluator?.obj;
+    if (!(root instanceof ModelMesh)) return;
+    const layer = view.findLayerById(layerId);
+    const release = (root) => {
+      root.traverse((object) => {
+        const geometry = object.geometry;
+        if (geometry) {
+          geometry.dispose();
+          for (const name of Object.keys(geometry.attributes))
+            geometry.deleteAttribute(name);
+          geometry.setIndex(null);
+          geometry.boundingBox = geometry.boundingSphere = null;
+        }
+        const materials = Array.isArray(object.material)
+          ? object.material
+          : [object.material];
+        for (const material of materials) material?.dispose();
+        object.customDepthMaterial?.dispose();
+      });
+      root.dispatchEvent({ type: 'removedFromWorld' });
+      root.clear();
+      root.removeFromParent();
+    };
+    // A decode already in flight can finish after the layer was deleted.
+    if (!layer) {
+      for (const [id, mesh] of view._meshes)
+        if (mesh === root) view._meshes.delete(id);
+      release(root);
+      return;
+    }
+    let roots = byLayer.get(layer);
+    if (!roots) {
+      roots = new Set();
+      byLayer.set(layer, roots);
+      layer.once('deleted', () => {
+        for (const [id, mesh] of view._meshes)
+          if (roots.has(mesh)) view._meshes.delete(id);
+        for (const root of roots) release(root);
+        roots.clear();
+      });
+    }
+    roots.add(root);
+    const removed = () => {
+      roots.delete(root);
+      root.removeEventListener('removedFromWorld', removed);
+    };
+    root.addEventListener('removedFromWorld', removed);
+  });
 }
 
 /**
@@ -249,6 +309,7 @@ export function setCameraFovy(view, radians) {
 /** The hooks createNavaraEngine takes. */
 export const navaraHooks = (view) => {
   assertNavaraInternals(view);
+  releaseDeletedTileGeometry(view);
   return {
     retainTileGeometry,
     setCameraFovy: (radians) => setCameraFovy(view, radians),

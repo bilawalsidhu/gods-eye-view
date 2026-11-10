@@ -318,9 +318,7 @@ export function createNavaraMaps(
     releasePhotorealTiles(source) {
       if (!knownTiles.delete(source)) return;
       if (tilesSource !== source) return;
-      tilesSource = null;
-      clear('photoreal');
-      changed();
+      void maps.setPhotorealTiles(null);
     },
     photorealActive: () => slots.photoreal != null,
     /**
