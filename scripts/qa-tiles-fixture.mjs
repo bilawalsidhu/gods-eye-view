@@ -565,6 +565,19 @@ async function checkPoints(page, kind) {
           pass = null;
         });
       }
+      // Only the placer's samples count against its budget: the fixture's
+      // points and one estimate of the ground under the camera. Other code
+      // that samples in the same task is counted apart.
+      const isPoint = points.some(
+        (p) =>
+          Math.abs(p.cartographic.longitude - args[0].longitude) < 1e-10 &&
+          Math.abs(p.cartographic.latitude - args[0].latitude) < 1e-10,
+      );
+      if (!isPoint && pass.estimated) {
+        pass.other = (pass.other ?? 0) + 1;
+        return sampleHeight.apply(this, args);
+      }
+      if (!isPoint) pass.estimated = true;
       pass.samples++;
       stats.samples++;
       const start = performance.now();
