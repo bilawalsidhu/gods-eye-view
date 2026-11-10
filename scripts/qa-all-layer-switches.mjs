@@ -352,6 +352,7 @@ const runs = [
   ],
   ['radio-engine-switch', 'radio-engine-switch', ['radio']],
   ['imagery-contract', 'imagery-contract', ['recent-imagery']],
+  ['tiles-fixture', 'tiles-fixture', ['osm-places']],
   ['fire-camera-switch', 'fire-camera-switch', ['alpr-cameras']],
   [
     'fire-camera-switch--fires',

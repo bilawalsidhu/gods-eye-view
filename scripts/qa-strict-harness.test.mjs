@@ -812,10 +812,13 @@ test('picker readiness also settles the surviving engine after a rollback', asyn
     observe() {}
     disconnect() {}
   };
+  // The keyless check reads the page address for the tiles fixture.
+  globalThis.location = new URL('http://localhost:4300/');
   t.after(() => {
     delete globalThis.window;
     delete globalThis.document;
     delete globalThis.MutationObserver;
+    delete globalThis.location;
   });
   engine.render.request = () => setImmediate(() => engine.fake.frame());
   const page = {

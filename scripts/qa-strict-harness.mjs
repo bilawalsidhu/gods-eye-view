@@ -117,10 +117,45 @@ export async function assertPreviewPortAvailable(href, request = fetch) {
 
 /** Check the running page before any scenario touches its layers. */
 export async function assertKeylessPreview(page) {
-  await page.evaluate(() => {
-    if (window.__godsEyeView.tileset || window.__GOOGLE_MAPS_API_KEY__)
-      throw new Error('Keyless preview required');
-  });
+  await page.evaluate(
+    (fixturePath) => {
+      const app = window.__godsEyeView;
+      const source = app.engine?.maps?.current()?.photoreal;
+      const fixture =
+        new URLSearchParams(location.search).get('qaTileset') === fixturePath &&
+        source?.tilesetUrl === fixturePath &&
+        (!source.tileset ||
+          new URL(source.tileset.resource?.url, location.href).href ===
+            location.origin + fixturePath);
+      if (
+        window.__GOOGLE_MAPS_API_KEY__ ||
+        (app.tileset && (!fixture || app.tileset !== source.tileset)) ||
+        ((source || app.engine?.maps?.photorealActive()) && !fixture)
+      )
+        throw new Error('Keyless preview required');
+    },
+    TILES_FIXTURE_PATH,
+  );
+}
+
+export const TILES_FIXTURE_PATH = '/__qa/tiles3d/tileset.json';
+
+// CDP serves these exact same-origin URLs, including requests from workers.
+// Keeping them in scripts/ avoids shipping fixture assets in normal builds.
+export function tilesFixtureRoutes(origin) {
+  return ['tileset.json', 'plate.glb', 'block50.glb', 'block200.glb', 'roof.glb'].map(
+    (name) => ({
+      pattern: new URL(`/__qa/tiles3d/${name}`, origin).href,
+      respond: () => ({
+        contentType: name.endsWith('.json')
+          ? 'application/json'
+          : 'model/gltf-binary',
+        body: fs.readFileSync(
+          new URL(`./fixtures/tiles3d/${name}`, import.meta.url),
+        ),
+      }),
+    }),
+  );
 }
 
 /** The URL with no remote IP: fulfilled by a fixture or a cache, or a data URL. */

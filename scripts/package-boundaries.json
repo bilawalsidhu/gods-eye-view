@@ -2286,7 +2286,9 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/globe/contract.js"
+      "src/globe/contract.js",
+      "src/globe/cesium/qaTileset.js",
+      "src/maps/qaTileset.js"
     ],
     "external": ["cesium"]
   },
@@ -3593,7 +3595,9 @@
       "src/globe/cesium/orbital.js",
       "src/globe/cesium/worldTime.js",
       "src/data/geoImportLimits.js",
-      "src/data/geoImportPlan.js"
+      "src/data/geoImportPlan.js",
+      "src/globe/cesium/qaTileset.js",
+      "src/maps/qaTileset.js"
     ],
     "external": [
       "hls.js",

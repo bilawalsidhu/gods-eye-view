@@ -22,6 +22,7 @@ import {
   SENTINEL2_MAX_ZOOM,
   SENTINEL2_URL,
 } from '../../maps/sentinel2.js';
+import { localTilesetPath } from '../../maps/qaTileset.js';
 
 const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_CREDIT = {
@@ -280,12 +281,15 @@ export function createNavaraMaps(
         return;
       }
       const key = String(source.googleApiKey || '').trim();
-      if (!key)
+      const tilesetUrl = localTilesetPath(source.tilesetUrl);
+      if (!tilesetUrl && !key)
         throw new Error(
           'Google 3D tiles on Navara need a browser key (googleApiKey)',
         );
       if (destroyed || generation !== generations.display) return;
-      const url = `${GOOGLE_TILES_ROOT}?key=${encodeURIComponent(key)}`;
+      const url = tilesetUrl
+        ? new URL(tilesetUrl, globalThis.location.origin).href
+        : `${GOOGLE_TILES_ROOT}?key=${encodeURIComponent(key)}`;
       setImageryShown(false);
       currentBase = null;
       tilesSource = source;
@@ -296,17 +300,19 @@ export function createNavaraMaps(
         url,
         { type: '3d-tiles', url },
         { type: '3d-tiles', model: { maxSse: PHOTOREAL_MAX_SSE } },
-        [
-          (layer) => ({
-            attribution: 'Google',
-            logo: GOOGLE_LOGO,
-            creditLayerId: layer.id,
-          }),
-        ],
+        tilesetUrl
+          ? []
+          : [
+              (layer) => ({
+                attribution: 'Google',
+                logo: GOOGLE_LOGO,
+                creditLayerId: layer.id,
+              }),
+            ],
       );
       // Google's terms want its copyright lines on screen, as Cesium shows
       // them; Navara lists them in its attribution card, collapsed by default.
-      view.attribution?.show();
+      if (!tilesetUrl) view.attribution?.show();
     },
     releasePhotorealTiles(source) {
       if (!knownTiles.delete(source)) return;
