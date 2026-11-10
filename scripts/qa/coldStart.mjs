@@ -317,30 +317,16 @@ export function compareColdStart(
     const next = cold.ledger.find(
       (other) => other.family === row.family && other.id === row.id,
     );
-    if (next) {
-      // A field entry excuses one field of one set, with its reason.
-      const rows = compareProbe(
-        { kind: row.kind, count: row.count },
-        { kind: next.kind, count: next.count },
-      ).filter((difference) => {
-        const exception = allow.find(
-          (entry) =>
-            entry.field === difference.field &&
-            entry.id === row.id &&
-            (!entry.family || entry.family === row.family),
-        );
-        if (exception)
-          skipped.push({
-            layer: layerOf(row.family, row.id),
-            family: row.family,
-            id: row.id,
-            ...difference,
-            reason: exception.reason,
-          });
-        return !exception;
-      });
-      add(layerOf(row.family, row.id), row.family, row.id, rows);
-    }
+    if (next)
+      add(
+        layerOf(row.family, row.id),
+        row.family,
+        row.id,
+        compareProbe(
+          { kind: row.kind, count: row.count },
+          { kind: next.kind, count: next.count },
+        ),
+      );
   }
   for (const layer of new Set([
     ...Object.keys(switched.layers),
@@ -369,8 +355,26 @@ export function compareColdStart(
       id,
       compareProbe(a.get(id), b.get(id)),
     );
+  // A field entry excuses one field of one set (in the ledger and the probe),
+  // within maxDelta when it has one, with its reason.
+  const excused = (row) =>
+    allow.find(
+      (entry) =>
+        entry.field === row.field &&
+        entry.id === row.id &&
+        (!entry.family ||
+          entry.family === row.family.replace(/^probe-/, '')) &&
+        (entry.maxDelta === undefined ||
+          Math.abs(Number(row.switchValue) - Number(row.coldStartValue)) <=
+            entry.maxDelta),
+    );
   return {
     differences: differences.filter((row) => {
+      const exception = excused(row);
+      if (exception) {
+        skipped.push({ ...row, reason: exception.reason });
+        return false;
+      }
       const field = sessionState && sessionExclusion(row, switched);
       if (!field) return true;
       skipped.push({ ...row, sessionState: field });
