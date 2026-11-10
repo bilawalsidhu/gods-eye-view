@@ -23,11 +23,18 @@ export function photorealChecks(engine, { settle }) {
         ].filter(Boolean);
         await engine.maps.setPhotorealTiles(null);
         await settle();
-        for (const place of places)
+        // Cesium labels every scene hit, the globe included, as tiles; what
+        // matters is that no tile geometry answers above the terrain.
+        for (const place of places) {
+          const sampled = engine.surface.sampleHeightDetailed(place);
+          const terrain = engine.surface.terrainHeight(place);
           ensure(
-            engine.surface.sampleHeightDetailed(place)?.source !== 'tiles',
+            sampled?.source !== 'tiles' ||
+              (Number.isFinite(terrain) &&
+                Math.abs(sampled.height - terrain) <= 1),
             'released photoreal tiles still answer surface queries',
           );
+        }
       },
     ],
   ];
