@@ -11,8 +11,10 @@ import { clientKey, makeRateLimiter } from './common/rate-limit.js';
 const MIB = 1024 * 1024;
 /** EMODnet republishes the wreck layer about once a year; Wikidata daily at most. */
 const REFRESH_MS = 24 * 60 * 60 * 1000;
-/** A failed refresh keeps serving the last snapshot this long, marked stale. */
+/** A source's last good records keep being served this long, marked stale. */
 const STALE_MAX_MS = 7 * REFRESH_MS;
+/** After a source fails, it is not asked again for this long. */
+const RETRY_MS = 15 * 60 * 1000;
 // Only the columns the card uses; ship_char/obj_desc histories can name people
 // and are not read beyond a short vessel type.
 const EMODNET_PROPERTIES = [
@@ -48,6 +50,13 @@ export function shipwrecksProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
 } = {}) {
+  // Each source keeps its last good records on its own, so one failing (or
+  // answering with nothing usable) never removes the other's wrecks or its
+  // own earlier ones. `retryAt` holds a failed source back for RETRY_MS.
+  const sources = {
+    emodnet: { load: fetchEmodnet, good: null, retryAt: 0 },
+    wikidata: { load: fetchWikidata, good: null, retryAt: 0 },
+  };
   let snapshot = null;
   const inFlight = new Map();
   const allow = makeRateLimiter({ windowMs: 60_000, max: 30, globalMax: 600 });
@@ -75,43 +84,77 @@ export function shipwrecksProxy({
   }
 
   async function fetchWikidata() {
-    return normalizeWikidataResults(await upstreamJson(WIKIDATA_URL, 16 * MIB));
+    const payload = await upstreamJson(WIKIDATA_URL, 16 * MIB);
+    if (!Array.isArray(payload?.results?.bindings))
+      throw new Error('invalid_wikidata_results');
+    const records = normalizeWikidataResults(payload);
+    // Wikidata lists over a thousand wrecks; none at all is a broken answer.
+    if (!records.length) throw new Error('invalid_wikidata_results');
+    return records;
   }
 
-  /** One source failing still serves the other; both failing is an error. */
-  async function load() {
-    const [emodnet, wikidata] = await Promise.allSettled([
-      fetchEmodnet(),
-      fetchWikidata(),
-    ]);
-    if (emodnet.status === 'rejected' && wikidata.status === 'rejected')
-      throw new Error('shipwrecks_unavailable');
-    const records = mergeShipwreckRecords(
-      emodnet.status === 'fulfilled' ? emodnet.value : [],
-      wikidata.status === 'fulfilled' ? wikidata.value : [],
+  const fresh = (state, at) =>
+    state.good !== null && at - state.good.fetchedAt < REFRESH_MS;
+  const usable = (state, at) =>
+    state.good !== null && at - state.good.fetchedAt <= STALE_MAX_MS;
+  const due = (state, at) => !fresh(state, at) && at >= state.retryAt;
+
+  /** Refresh the sources that are due; failures keep their last good records. */
+  async function refresh() {
+    const at = now();
+    const names = Object.keys(sources).filter((name) => due(sources[name], at));
+    const results = await Promise.allSettled(
+      names.map((name) => sources[name].load()),
     );
+    const done = now();
+    results.forEach((result, i) => {
+      const state = sources[names[i]];
+      if (result.status === 'fulfilled')
+        state.good = { records: result.value, fetchedAt: done };
+      else state.retryAt = done + RETRY_MS;
+    });
+  }
+
+  /** The served snapshot: every source with usable records, merged once. */
+  function compose(at) {
+    const sourceFlags = {};
+    let stale = false;
+    let fetchedAt = null;
+    for (const [name, state] of Object.entries(sources)) {
+      sourceFlags[name] = usable(state, at);
+      if (!sourceFlags[name]) continue;
+      if (!fresh(state, at)) stale = true;
+      fetchedAt = Math.min(fetchedAt ?? Infinity, state.good.fetchedAt);
+    }
+    if (!sourceFlags.emodnet && !sourceFlags.wikidata) return null;
+    const key = `${sourceFlags.emodnet && sources.emodnet.good.fetchedAt}:${
+      sourceFlags.wikidata && sources.wikidata.good.fetchedAt
+    }`;
+    if (snapshot?.key !== key) {
+      // The merge writes EMODnet facts into Wikidata records: work on copies
+      // so a source's kept records stay as fetched.
+      const copy = (name) =>
+        sourceFlags[name]
+          ? sources[name].good.records.map((record) => ({ ...record }))
+          : [];
+      snapshot = {
+        key,
+        records: mergeShipwreckRecords(copy('emodnet'), copy('wikidata')),
+      };
+    }
     return {
-      fetchedAt: now(),
-      sources: {
-        emodnet: emodnet.status === 'fulfilled',
-        wikidata: wikidata.status === 'fulfilled',
-      },
-      records,
+      value: { fetchedAt, sources: sourceFlags, records: snapshot.records },
+      stale,
     };
   }
 
   async function acquire() {
-    if (snapshot && now() - snapshot.fetchedAt < REFRESH_MS)
-      return { value: snapshot, stale: false };
-    try {
-      const { promise } = coalesceProxyRequest(inFlight, 'snapshot', load);
-      snapshot = await promise;
-      return { value: snapshot, stale: false };
-    } catch (error) {
-      if (snapshot && now() - snapshot.fetchedAt <= STALE_MAX_MS)
-        return { value: snapshot, stale: true };
-      throw error;
-    }
+    const at = now();
+    if (Object.values(sources).some((state) => due(state, at)))
+      await coalesceProxyRequest(inFlight, 'refresh', refresh).promise;
+    const composed = compose(now());
+    if (!composed) throw new Error('shipwrecks_unavailable');
+    return composed;
   }
 
   async function handler(req, res) {

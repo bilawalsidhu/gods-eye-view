@@ -14,22 +14,54 @@ const EMODNET = {
   ],
 };
 
+const WIKIDATA = {
+  results: {
+    bindings: [
+      {
+        item: { value: 'http://www.wikidata.org/entity/Q25173' },
+        itemLabel: { value: 'Titanic' },
+        coord: { value: 'Point(-49.9469 41.7325)' },
+      },
+    ],
+  },
+};
+
+/**
+ * Upstream fake. Each source answers 'ok', 'down' (HTTP 503) or 'malformed'
+ * (HTTP 200 with a body that is not that source's data); change `state` to
+ * switch between requests.
+ */
 function fakeFetch({ wikidataFails = false, emodnetFails = false } = {}) {
   const calls = [];
+  const state = {
+    emodnet: emodnetFails ? 'down' : 'ok',
+    wikidata: wikidataFails ? 'down' : 'ok',
+  };
   const fetchImpl = async (url, options) => {
     calls.push({ url: String(url), options });
     const href = String(url);
-    if (href.includes('query.wikidata.org')) {
-      if (wikidataFails) return new Response('', { status: 503 });
-      return Response.json({ results: { bindings: [] } });
-    }
-    if (emodnetFails) return new Response('', { status: 503 });
-    if (href.includes('ows.emodnet-humanactivities.eu'))
-      return Response.json(EMODNET);
-    return new Response('', { status: 404 });
+    const name = href.includes('query.wikidata.org')
+      ? 'wikidata'
+      : href.includes('ows.emodnet-humanactivities.eu')
+        ? 'emodnet'
+        : null;
+    if (!name) return new Response('', { status: 404 });
+    if (state[name] === 'down') return new Response('', { status: 503 });
+    if (state[name] === 'malformed') return Response.json({});
+    return Response.json(name === 'wikidata' ? WIKIDATA : EMODNET);
   };
-  return { fetchImpl, calls };
+  const callsTo = (name) =>
+    calls.filter(({ url }) =>
+      url.includes(
+        name === 'wikidata'
+          ? 'query.wikidata.org'
+          : 'ows.emodnet-humanactivities',
+      ),
+    ).length;
+  return { fetchImpl, calls, state, callsTo };
 }
+
+const HOUR = 60 * 60 * 1000;
 
 function handlerOf(plugin) {
   let handler;
@@ -67,9 +99,9 @@ test('serves one cached snapshot from fixed upstreams', async () => {
   const handler = handlerOf(shipwrecksProxy({ fetchImpl }));
   const first = await request(handler);
   assert.equal(first.status, 200);
-  assert.equal(first.body.records.length, 1);
-  assert.equal(first.body.records[0].name, 'HMS/m A1');
-  assert.equal(first.body.records[0].year, 1911);
+  assert.equal(first.body.records.length, 2);
+  const a1 = first.body.records.find((record) => record.name === 'HMS/m A1');
+  assert.equal(a1.year, 1911);
   assert.deepEqual(first.body.sources, { emodnet: true, wikidata: true });
   for (const { url } of calls)
     assert.match(
@@ -129,4 +161,102 @@ test('rejects other methods and routes', async () => {
   );
   assert.equal((await request(handler, { method: 'POST' })).status, 405);
   assert.equal((await request(handler, { url: '/x' })).status, 404);
+});
+
+test("a refresh that gets nothing usable keeps every source's last good wrecks", async () => {
+  let clock = 0;
+  const upstream = fakeFetch();
+  const handler = handlerOf(
+    shipwrecksProxy({ fetchImpl: upstream.fetchImpl, now: () => clock }),
+  );
+  const first = await request(handler);
+  assert.equal(first.body.records.length, 2);
+  // A day later EMODnet is down and Wikidata answers 200 with no results.
+  upstream.state.emodnet = 'down';
+  upstream.state.wikidata = 'malformed';
+  clock = 25 * HOUR;
+  const later = await request(handler);
+  assert.equal(later.status, 200);
+  assert.equal(later.body.records.length, 2, 'no wreck is lost');
+  assert.deepEqual(later.body.sources, { emodnet: true, wikidata: true });
+  assert.equal(later.body.stale, true);
+  assert.equal(later.body.fetchedAt, 0, 'the age of the oldest data served');
+});
+
+test('one source failing keeps its own last records while the other refreshes', async () => {
+  let clock = 0;
+  const upstream = fakeFetch();
+  const handler = handlerOf(
+    shipwrecksProxy({ fetchImpl: upstream.fetchImpl, now: () => clock }),
+  );
+  await request(handler);
+  upstream.state.wikidata = 'down';
+  clock = 25 * HOUR;
+  const later = await request(handler);
+  assert.equal(later.body.records.length, 2);
+  assert.deepEqual(later.body.sources, { emodnet: true, wikidata: true });
+  assert.equal(later.body.stale, true);
+  assert.equal(upstream.callsTo('emodnet'), 2, 'EMODnet was refreshed');
+});
+
+test('a failed source waits before it is asked again', async () => {
+  let clock = 0;
+  const upstream = fakeFetch();
+  const handler = handlerOf(
+    shipwrecksProxy({ fetchImpl: upstream.fetchImpl, now: () => clock }),
+  );
+  await request(handler);
+  upstream.state.emodnet = 'down';
+  upstream.state.wikidata = 'down';
+  clock = 25 * HOUR;
+  await request(handler);
+  const asked = upstream.calls.length;
+  for (let i = 0; i < 10; i += 1) {
+    clock += 60 * 1000;
+    const res = await request(handler);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.stale, true);
+  }
+  assert.equal(upstream.calls.length, asked, 'no upstream call while waiting');
+  clock = 25 * HOUR + 16 * 60 * 1000;
+  upstream.state.emodnet = 'ok';
+  upstream.state.wikidata = 'ok';
+  const back = await request(handler);
+  assert.equal(
+    upstream.calls.length,
+    asked + 2,
+    'both are retried after the wait',
+  );
+  assert.equal(back.body.stale, undefined);
+});
+
+test('with no data yet, failures are retried only after the wait', async () => {
+  let clock = 0;
+  const upstream = fakeFetch({ emodnetFails: true, wikidataFails: true });
+  const handler = handlerOf(
+    shipwrecksProxy({ fetchImpl: upstream.fetchImpl, now: () => clock }),
+  );
+  assert.equal((await request(handler)).status, 502);
+  const asked = upstream.calls.length;
+  clock += 5 * 60 * 1000;
+  assert.equal((await request(handler)).status, 502);
+  assert.equal(upstream.calls.length, asked);
+  clock += 11 * 60 * 1000;
+  assert.equal((await request(handler)).status, 502);
+  assert.equal(upstream.calls.length, asked * 2);
+});
+
+test('a source older than seven days is no longer served', async () => {
+  let clock = 0;
+  const upstream = fakeFetch();
+  const handler = handlerOf(
+    shipwrecksProxy({ fetchImpl: upstream.fetchImpl, now: () => clock }),
+  );
+  await request(handler);
+  upstream.state.emodnet = 'down';
+  upstream.state.wikidata = 'down';
+  clock = 7 * 24 * HOUR;
+  assert.equal((await request(handler)).status, 200, 'seven days is served');
+  clock = 7 * 24 * HOUR + 16 * 60 * 1000;
+  assert.equal((await request(handler)).status, 502, 'older is dropped');
 });

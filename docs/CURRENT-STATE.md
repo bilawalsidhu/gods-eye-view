@@ -159,9 +159,10 @@ off by default. `/api/shipwrecks` downloads EMODnet Human Activities'
 compiled from SHOM, Ireland's National Monuments Service, Historic England and
 the Oxford Roman Economy Project; CC BY 4.0) and a Wikidata SPARQL query for
 shipwreck items with a coordinate and at least one Wikipedia article (about
-1,450 worldwide; CC0), at most once a day, and serves the last good snapshot as
-stale for up to seven days when a refresh fails. One source failing still serves
-the other. EMODnet rows the portal took from wrecksite.eu are skipped (that site
+1,450 worldwide; CC0), each at most once a day. Each source keeps its own last
+good records: a source that fails, or answers with nothing usable, keeps serving
+its earlier records as stale for up to seven days and is not asked again for
+15 minutes, and never removes the other source's wrecks. EMODnet rows the portal took from wrecksite.eu are skipped (that site
 is not openly licensed). A Wikidata wreck with the same name within 3 km of an
 EMODnet wreck is merged into one record that keeps the article link and takes
 EMODnet's year, sinking text, depth and position accuracy. Only ship columns are
