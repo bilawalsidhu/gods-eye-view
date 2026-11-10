@@ -353,7 +353,7 @@ function placeIn(outer, inner) {
  * pixel wide image would never draw. Doubling the column samples the same.
  */
 function widened(source) {
-  if (!(source?.width < 2)) return source;
+  if (source?.width !== 1) return source;
   const canvas =
     typeof document !== 'undefined'
       ? document.createElement('canvas')

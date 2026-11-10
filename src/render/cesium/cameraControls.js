@@ -250,6 +250,8 @@ export function createCesiumControls({
       relayPinches(value.includes('ctrlWheel'));
     },
   };
+  // A controller that already binds Ctrl+wheel relays pinches from the start.
+  relayPinches(controls.zoomInputs.includes('ctrlWheel'));
 
   return {
     controls,

@@ -215,6 +215,38 @@ test('draped lines are ground polylines; a rebuild keeps the old ones until the 
   assert.equal(scene.added.length, 0);
 });
 
+test('a draped outlined line keeps its outline in its own material', () =>
+  withImageClasses(() => {
+    const { scene, draw } = drawOver();
+    const set = draw.lines({ id: 'edged' });
+    set.set([
+      {
+        id: 'a',
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon: 1, lat: 1 },
+        ],
+        widthPx: 6,
+        mode: 'draped',
+        style: {
+          kind: 'solid',
+          color: '#7fe6ed',
+          outline: { color: '#000000', widthPx: 2 },
+        },
+      },
+    ]);
+    const host = scene.added[0];
+    const grounds = [];
+    for (let i = 0; i < host.length; i++)
+      if (host.get(i) instanceof Cesium.GroundPolylinePrimitive)
+        grounds.push(host.get(i));
+    assert.equal(grounds.length, 1);
+    const { material } = grounds[0].appearance;
+    assert.equal(material.type, 'PolylineOutline');
+    assert.equal(material.uniforms.outlineWidth, 2);
+    set.dispose();
+  }));
+
 test('clamped fills are ground primitives packed so none overlap within one', () => {
   const { scene, draw } = drawOver();
   const set = draw.shapes({ id: 'discs' });

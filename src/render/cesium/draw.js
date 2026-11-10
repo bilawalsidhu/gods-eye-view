@@ -1944,8 +1944,12 @@ export function createCesiumDraw({
     });
   }
 
-  /** Whether a draped line draws in a batch of solid ones. */
-  const batchable = (item) => item.style.kind === 'solid' && !revealed(item);
+  /**
+   * Whether a draped line draws in a batch of solid ones: a batch draws
+   * colours only, so an outlined line draws by its own material.
+   */
+  const batchable = (item) =>
+    item.style.kind === 'solid' && !item.style.outline && !revealed(item);
 
   /**
    * A ground primitive of a draped line's own, drawn by a material (a

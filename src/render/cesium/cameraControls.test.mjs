@@ -157,6 +157,24 @@ test('ctrlWheel relays trackpad pinches while it is bound, and not after', () =>
   assert.deepEqual(relays, ['on', 'off', 'on', 'off'], 'none after dispose');
 });
 
+test('a controller that already binds Ctrl+wheel relays pinches from the start', () => {
+  const scene = sceneWithController();
+  const c = scene.screenSpaceCameraController;
+  c.zoomEventTypes = [WHEEL, { eventType: WHEEL, modifier: CTRL }];
+  const relays = [];
+  const { dispose } = createCesiumControls({
+    scene,
+    widget: { container: {} },
+    pinchRelay: () => {
+      relays.push('on');
+      return () => relays.push('off');
+    },
+  });
+  assert.deepEqual(relays, ['on']);
+  dispose();
+  assert.deepEqual(relays, ['on', 'off']);
+});
+
 test('suspend shares the scene’s holds with other users', () => {
   const scene = sceneWithController();
   const c = scene.screenSpaceCameraController;
