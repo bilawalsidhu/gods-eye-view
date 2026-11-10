@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import {
@@ -89,7 +90,7 @@ await strict.run({}, async (b) => {
     });
   });
   const sample = async () => {
-    await new Promise((r) => setTimeout(r, 500));
+    await whenSettled(p);
     return sharp(await p.screenshot())
       .extract({ left: 490, top: 370, width: 25, height: 25 })
       .removeAlpha()

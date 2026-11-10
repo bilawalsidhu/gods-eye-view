@@ -30,9 +30,9 @@ const base = localPreview(process.argv[2]);
 
 // Play one server function call on the fake data channel and wait for the
 // client's function_call_output.
-function callTool(page, name, args, { beforeCall = null } = {}) {
-  return page.evaluate(
-    async (name, args, beforeCall) => {
+async function callTool(page, name, args, { beforeCall = null } = {}) {
+  const call = await page.evaluate(
+    (name, args, beforeCall) => {
       const evidence = window.__qaVoice;
       const callId = `qa-call-${(window.__qaCalls = (window.__qaCalls ?? 0) + 1)}`;
       const responseId = `qa-response-${callId}`;
@@ -54,30 +54,41 @@ function callTool(page, name, args, { beforeCall = null } = {}) {
         name,
         arguments: JSON.stringify(args),
       });
-      const started = performance.now();
-      for (;;) {
-        const sent = evidence.sent.find(
-          (event) =>
-            event?.type === 'conversation.item.create' &&
-            event.item?.type === 'function_call_output' &&
-            event.item.call_id === callId,
-        );
-        if (sent) {
-          deliver({
-            type: 'response.done',
-            response: { id: responseId, status: 'completed', output: [] },
-          });
-          return JSON.parse(sent.item.output);
-        }
-        if (performance.now() - started > 60_000)
-          throw new Error(`No output for ${name}`);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
+      return { callId, responseId };
     },
     name,
     args,
     beforeCall,
   );
+  await page.waitForFunction(
+    (callId) =>
+      window.__qaVoice.sent.some(
+        (event) =>
+          event?.type === 'conversation.item.create' &&
+          event.item?.type === 'function_call_output' &&
+          event.item.call_id === callId,
+      ),
+    { timeout: 60000 },
+    call.callId,
+  );
+  return page.evaluate(({ callId, responseId }) => {
+    const evidence = window.__qaVoice;
+    const sent = evidence.sent.find(
+      (event) =>
+        event?.type === 'conversation.item.create' &&
+        event.item?.type === 'function_call_output' &&
+        event.item.call_id === callId,
+    );
+    evidence.channel.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({
+          type: 'response.done',
+          response: { id: responseId, status: 'completed', output: [] },
+        }),
+      }),
+    );
+    return JSON.parse(sent.item.output);
+  }, call);
 }
 
 const engineChanges = (page) =>

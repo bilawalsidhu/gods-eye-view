@@ -1,3 +1,4 @@
+import { waitForEngine } from './qa-strict-harness.mjs';
 import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import { launchFixture } from '../src/bench/launchFixture.js';
@@ -58,11 +59,7 @@ await strict.run({}, async (b) => {
     SATELLITE_FIXTURE_EPOCH,
   );
   await p.goto(url.href);
-  await p.waitForFunction(
-    () =>
-      window.__godsEyeView?.engine?.kind === 'navara' &&
-      document.querySelector('#loading-screen.hidden'),
-  );
+  await waitForEngine(p, 'navara');
   await assertKeylessPreview(p);
   await p.evaluate(async (missions) => {
     const { dataManager, styleManager } = window.__godsEyeView;

@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 import { closeBrowser, exitAfterFlush } from './qa/browser.mjs';
 import { localPreview, waitForEngine } from './qa-strict-harness.mjs';
 // The application is created once per page: switching engines detaches and
@@ -56,7 +57,7 @@ async function escapeEffect(page) {
   await page.focus(FIELD);
   const before = await readUi(page);
   await page.keyboard.press('Escape');
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await whenSettled(page);
   const after = await readUi(page);
   return { before, after };
 }
@@ -141,7 +142,7 @@ try {
   );
   await waitForEngine(page, 'cesium', { timeout: 90_000 });
   // Let the first boot's deferred listeners land before counting.
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await whenSettled(page);
   const boot = await readSession(page);
   const bootListeners = await listenerCounts(page, { bySource: true });
   report.boot = boot;
@@ -218,7 +219,7 @@ try {
         window.__qaParkedNavara = window.__godsEyeView.engine;
       });
     if (report.switches.length === 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await whenSettled(page);
       report.firstRoundTrip = await listenerCounts(page, { bySource: true });
     }
     // Both engines draw the session's marks and files (Navara included).
@@ -261,7 +262,7 @@ try {
       ui,
     );
   }
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await whenSettled(page);
   const after = await readSession(page);
   const afterListeners = await listenerCounts(page, { bySource: true });
   report.after = after;

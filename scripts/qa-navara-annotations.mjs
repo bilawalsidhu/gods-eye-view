@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenSettled } from './qa/ready.mjs';
 // Annotations on both engines, under the strict network policy: the same
 // board (a hand-drawn area, a pin in view and a pin on the far side of the
 // globe) is drawn on Navara, survives a switch to Cesium and back, and on
@@ -23,7 +24,6 @@ base.hash = `v=2&lat=${LAT}&lon=${LON}&alt=7000&heading=0&pitch=-90&roll=0&map=o
 const strict = createStrict({ origin: base.origin, layers: ['annotations'] });
 const SHOTS = process.env.QA_SHOT_DIR || 'qa-shots/navara-annotations';
 fs.mkdirSync(SHOTS, { recursive: true });
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // The area: a box around the view centre, clear of the panels.
 const RING = [
   [LON - 0.012, LAT - 0.009],
@@ -53,7 +53,7 @@ await strict.run(
         content: '.gev-screen-whiteboard{visibility:hidden!important}',
       });
       await page.evaluate(() => window.__godsEyeView.requestRender?.('qa'));
-      await wait(700);
+      await whenSettled(page);
       const { data, info } = await sharp(
         await page.screenshot({
           clip: { x: 340, y: 180, width: 600, height: 500 },
@@ -155,7 +155,7 @@ await strict.run(
       ) {
         await strict.switchTo(page, kind);
       }
-      await wait(2500);
+      await whenSettled(page);
       const state = await page.evaluate(() => ({
         same: window.__gevAnnotations === window.qaBoard,
         count: window.qaBoard.count(),
@@ -210,9 +210,12 @@ await strict.run(
       const before = engine.camera.height();
       const area = window.qaBoard.list().find((m) => m.label === 'QA Area');
       const ok = window.qaBoard.frame(area.id);
-      await new Promise((r) => setTimeout(r, 2600));
-      return { ok, before, after: engine.camera.height() };
+      return { ok, before };
     });
+    await whenSettled(page);
+    flight.after = await page.evaluate(() =>
+      window.__godsEyeView.engine.camera.height(),
+    );
     await strict.check(
       page,
       'annotations',
@@ -224,9 +227,9 @@ await strict.run(
     const hidden = await page.evaluate(async () => {
       for (const mark of window.qaBoard.list())
         window.qaBoard.setHidden(mark.id, true);
-      await new Promise((r) => setTimeout(r, 600));
       return window.qaBoard.list().every((m) => m.hidden);
     });
+    await whenSettled(page);
     const afterHide = await board();
     await strict.check(
       page,

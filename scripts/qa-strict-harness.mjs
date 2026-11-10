@@ -29,6 +29,30 @@ import {
 import { createMissLoader, tileCacheFile } from './qa/tileCache.mjs';
 import { closeBrowser, diagnoseExit, exitAfterFlush } from './qa/browser.mjs';
 import { DAYTIME, shiftTime } from './qa/time.mjs';
+import { whenSettled } from './qa/ready.mjs';
+import { drawLedger, compareLedgers } from './qa/ledger.mjs';
+import { createContractMonitor } from '../src/globe/testing/contractMonitor.js';
+
+const ledgerAllow = JSON.parse(
+  fs.readFileSync(new URL('./qa-ledger-allow.json', import.meta.url), 'utf8'),
+);
+const drawComparisons = new WeakMap();
+const pendingDraws = new WeakMap();
+
+async function finishDrawComparison(page) {
+  const pending = pendingDraws.get(page);
+  if (!pending) return;
+  const after = await drawLedger(page);
+  const settledEngine = await page.evaluate(
+    () => window.__godsEyeView.engine.kind,
+  );
+  pendingDraws.delete(page);
+  for (const draw of pending) {
+    draw.after = after;
+    draw.settledEngine = settledEngine;
+    draw.comparison = compareLedgers(draw.before, after, ledgerAllow);
+  }
+}
 
 export const ENGINES = Object.freeze(['cesium', 'navara']);
 /** What the Globe Engine picker offers: the engines and Navara HD. */
@@ -363,11 +387,28 @@ async function trapCesiumGlobal(session, ledger, time) {
     else if (ledger.cesiumBeforeLoad.length < 50)
       ledger.cesiumBeforeLoad.push({ stack, count: 1 });
   });
+  const monitorBinding = '__gevStrictMonitor';
+  const monitors = new Map();
+  session.on('Runtime.bindingCalled', (event) => {
+    if (event.name !== monitorBinding) return;
+    const { id, kind, record, finished } = JSON.parse(event.payload);
+    const key = `${event.executionContextId}:${id}`;
+    let entry = monitors.get(key);
+    if (!entry) {
+      entry = { id: ledger.contractMonitors.length + 1, kind, records: [] };
+      monitors.set(key, entry);
+      ledger.contractMonitors.push(entry);
+    }
+    if (record) entry.records.push(record);
+    if (finished) entry.finished = true;
+  });
   await session.send('Runtime.enable');
+  await session.send('Runtime.addBinding', { name: monitorBinding });
   await session.send('Runtime.addBinding', { name: binding });
   await session.send('Page.enable');
   await session.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `(${shiftTime})(${JSON.stringify(time)});
+    (${installContractMonitors})(${createContractMonitor});
     (() => {
       if (window.top !== window) return;
       const seen = new Set();
@@ -396,6 +437,74 @@ async function trapCesiumGlobal(session, ledger, time) {
   });
 }
 
+/** Injected before the app: follow the existing debug handle across attachments. */
+export function installContractMonitors(createMonitor) {
+  if (window.top !== window || typeof document === 'undefined') return;
+  const entries = new WeakMap();
+  const engines = [];
+  const handles = new WeakSet();
+  const attach = (engine) => {
+    if (!engine || entries.has(engine)) return;
+    const id = engines.length + 1;
+    engines.push(new WeakRef(engine));
+    const send = (value) =>
+      window.__gevStrictMonitor?.(
+        JSON.stringify({ id, kind: engine.kind, ...value }),
+      );
+    send({});
+    const monitor = createMonitor(engine, (record) => send({ record }));
+    entries.set(engine, { monitor, send });
+  };
+  const observe = (debug) => {
+    if (!debug || handles.has(debug)) return;
+    handles.add(debug);
+    let engine = debug.engine;
+    attach(engine);
+    Object.defineProperty(debug, 'engine', {
+      configurable: true,
+      enumerable: true,
+      get: () => engine,
+      set(value) {
+        engine = value;
+        attach(value);
+      },
+    });
+  };
+  const arm = () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, '__godsEyeView');
+    if (descriptor?.get) return;
+    let debug = window.__godsEyeView;
+    observe(debug);
+    Object.defineProperty(window, '__godsEyeView', {
+      configurable: true,
+      get: () => debug,
+      set(value) {
+        debug = value;
+        observe(value);
+      },
+    });
+  };
+  arm();
+  new MutationObserver(arm).observe(document, {
+    childList: true,
+    subtree: true,
+  });
+  let finishing;
+  window.__qaFinishMonitors = () =>
+    (finishing ??= Promise.all(
+      engines.map(async (ref) => {
+        const engine = ref.deref();
+        if (!engine) return;
+        const { monitor, send } = entries.get(engine);
+        await monitor.finish({
+          active: engine === window.__godsEyeView?.engine,
+        });
+        send({ finished: true });
+      }),
+    ));
+  window.addEventListener('pagehide', window.__qaFinishMonitors);
+}
+
 /** A new, empty network ledger. */
 export function networkLedger() {
   return {
@@ -416,6 +525,7 @@ export function networkLedger() {
     violations: [],
     setupErrors: [],
     cesiumBeforeLoad: [],
+    contractMonitors: [],
   };
 }
 
@@ -532,6 +642,9 @@ export async function pickEngine(
     'globe-engine',
     'the click focuses the picker',
   );
+  const draw = { from, to: kind, before: await drawLedger(page) };
+  drawComparisons.get(page)?.push(draw);
+  pendingDraws.set(page, [...(pendingDraws.get(page) ?? []), draw]);
   await page.keyboard.type(kind[0]);
   // Whatever the person does next, right after the key (no round trip to
   // the page in between).
@@ -555,12 +668,13 @@ export async function pickEngine(
       (window.__qaPick.busy &&
         !document.querySelector(
           '#globe-engine:is([disabled], [aria-busy="true"])',
-        ) &&
-        document.querySelector('#loading-screen.hidden') &&
-        !document.querySelector('.engine-switch-frame')) ||
-      document.querySelector('.engine-switch-retry'),
+        )) || document.querySelector('.engine-switch-retry'),
     { timeout: 120000, polling: 50 },
   );
+  if (!(await page.$('.engine-switch-retry'))) {
+    const running = await page.$eval('#globe-engine', (el) => el.value);
+    await waitForEngine(page, running);
+  }
   await page.evaluate(() => window.__qaPickObserver?.disconnect());
   Object.assign(
     how,
@@ -583,23 +697,22 @@ export async function pickEngine(
 
 /** Wait until `kind` runs, its picker is idle and its view is restored. */
 export async function waitForEngine(page, kind, { timeout = 120000 } = {}) {
+  const started = Date.now();
   await page.waitForFunction(
     (expected) =>
-      // Navara HD runs the Navara engine.
       window.__godsEyeView?.engine?.kind ===
         (expected === 'cesium' ? 'cesium' : 'navara') &&
       document.querySelector('#globe-engine')?.value === expected &&
       !document.querySelector(
         '#globe-engine:is([disabled], [aria-busy="true"])',
-      ) &&
-      !document.querySelector('.engine-switch-frame') &&
-      document.querySelector('#loading-screen.hidden'),
+      ),
     { timeout },
     kind,
   );
-  await page.evaluate(
-    () => window.__godsEyeView.styleManager.initialRestorePromise,
-  );
+  await whenSettled(page, {
+    timeoutMs: Math.max(1, timeout - (Date.now() - started)),
+  });
+  await finishDrawComparison(page);
   await assertKeylessPreview(page);
 }
 
@@ -668,6 +781,7 @@ export function createStrict({
   const ledger = networkLedger();
   const assertions = [];
   const picks = [];
+  const draws = [];
   const timings = [];
   const extra = {};
   let finished = false;
@@ -718,6 +832,29 @@ export function createStrict({
         await closeBrowser(browser);
         throw error;
       }
+      const newPage = browser.newPage.bind(browser);
+      browser.newPage = async (...args) => {
+        const page = await newPage(...args);
+        drawComparisons.set(page, draws);
+        const close = page.close.bind(page);
+        page.close = async (...args) => {
+          await page
+            .evaluate(() => window.__qaFinishMonitors?.())
+            .catch(() => {});
+          return close(...args);
+        };
+        return page;
+      };
+      const close = browser.close.bind(browser);
+      browser.close = async (...args) => {
+        const pages = await browser.pages().catch(() => []);
+        await Promise.all(
+          pages.map((page) =>
+            page.evaluate(() => window.__qaFinishMonitors?.()).catch(() => {}),
+          ),
+        );
+        return close(...args);
+      };
       return browser;
     },
     /** Launch with `options`, run `body(browser)`, close, then finish(). */
@@ -859,6 +996,8 @@ export function createStrict({
         assertions,
         network,
         timings,
+        drawLedgers: draws,
+        contractMonitors: ledger.contractMonitors,
         ...extra,
       };
       if (args.evidence) {
@@ -937,18 +1076,5 @@ export async function clickEmptyGround(
  * inputs off, and a click does not cut it short.
  */
 export async function waitForCameraAtRest(page, { timeout = 15000 } = {}) {
-  await page.evaluate(() => {
-    window.__qaRestPose = null;
-  });
-  await page.waitForFunction(
-    () => {
-      const { engine } = window.__godsEyeView;
-      const { x, y, z } = engine.camera.pose().position;
-      const pose = [x, y, z].map((value) => value.toFixed(2)).join();
-      const still = window.__qaRestPose === pose;
-      window.__qaRestPose = pose;
-      return still && engine.input.cameraInputsEnabled();
-    },
-    { timeout, polling: 100 },
-  );
+  await whenSettled(page, { timeoutMs: timeout });
 }

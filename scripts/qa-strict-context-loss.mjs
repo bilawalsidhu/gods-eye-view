@@ -70,12 +70,14 @@ await strict.run({}, async (b) => {
           !document.querySelector(
             '#globe-engine:is([disabled], [aria-busy="true"])',
           ) &&
-          !document.querySelector('.engine-switch-frame') &&
-          document.querySelector('#loading-screen.hidden')) ||
+          !document.querySelector('.engine-switch-frame')) ||
         document.querySelector('.engine-switch-retry'),
       { polling: 100, timeout: 90000 },
     );
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (!(await p.$('.engine-switch-retry'))) {
+      const kind = await p.$eval('#globe-engine', (el) => el.value);
+      await waitForEngine(p, kind);
+    }
   };
   const intact = (state) =>
     state.running &&
@@ -166,7 +168,7 @@ await strict.run({}, async (b) => {
     const outcome = after.engine === to ? 'switched' : 'rolled back';
     if (after.running) await rememberEngine(p);
     const drawn = after.running ? await draws(after.engine) : false;
-    // Why no frame passed, when none did: frames drawn in 3 s by the engine
+    // Why no frame passed, when none did: three frames drawn by the engine
     // the page runs and by the one the probe watched, and how many of 48x48
     // samples of the last frame differ from the first one.
     const noFrame =
@@ -202,7 +204,23 @@ await strict.run({}, async (b) => {
                     () => count.watched++,
                   ),
             ];
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve, reject) => {
+              const timer = setTimeout(() => {
+                remove();
+                reject(new Error('No running frames'));
+              }, 15000);
+              const remove = running.frames.postRender.addEventListener(() => {
+                if (count.running >= 3) {
+                  remove();
+                  clearTimeout(timer);
+                  resolve();
+                } else
+                  queueMicrotask(() =>
+                    running.render.request('qa-context-frames'),
+                  );
+              });
+              running.render.request('qa-context-frames');
+            });
             offs.forEach((off) => off?.());
             return {
               ...count,

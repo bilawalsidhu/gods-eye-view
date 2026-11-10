@@ -1,3 +1,5 @@
+import { waitForEngine } from './qa-strict-harness.mjs';
+import { whenSettled } from './qa/ready.mjs';
 import { assertKeylessPreview } from './qa-strict-harness.mjs';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
@@ -61,17 +63,7 @@ await strict.run({}, async (browser) => {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   async function ready(kind) {
-    await page.waitForFunction(
-      (kind) =>
-        window.__godsEyeView?.engine?.kind === kind &&
-        document.querySelector('#globe-engine')?.value === kind &&
-        !document.querySelector(
-          '#globe-engine:is([disabled], [aria-busy="true"])',
-        ) &&
-        document.getElementById('loading-screen')?.classList.contains('hidden'),
-      { timeout: 90000 },
-      kind,
-    );
+    await waitForEngine(page, kind);
     await assertKeylessPreview(page);
     await page.evaluate(async () => {
       await window.__godsEyeView.styleManager.initialRestorePromise;
@@ -94,7 +86,7 @@ await strict.run({}, async (browser) => {
               .get('earthquakes')
               .module.getAnalystRecords().length === 1,
         );
-      await new Promise((resolve) => setTimeout(resolve, 1800));
+      await whenSettled(page);
       const bytes = await page.screenshot({
         clip: { x: 675, y: 403, width: 20, height: 20 },
       });
@@ -272,17 +264,11 @@ await strict.run({}, async (browser) => {
   await switchTo('navara');
   assert.deepEqual(await sharpen(), { enabled: false, intensityPct: 49 });
   // The address carries the running layer set once its debounced write lands.
-  const settledAddress = async () => {
-    let previous;
-    for (;;) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      const current = await page.evaluate(() =>
-        new URLSearchParams(location.hash.slice(1)).get('l'),
-      );
-      if (current === previous) return current;
-      previous = current;
-    }
-  };
+  const settledAddress = () =>
+    page.evaluate(() => {
+      window.__godsEyeView.styleManager.shareLinkManager.flush();
+      return new URLSearchParams(location.hash.slice(1)).get('l');
+    });
   const pick = async (kind) => {
     await strict.pick(page, kind);
     await ready(kind);

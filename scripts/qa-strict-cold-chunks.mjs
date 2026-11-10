@@ -1,3 +1,4 @@
+import { whenSettled } from './qa/ready.mjs';
 // Contract: a cold start loads only the engine it starts. From the network
 // log of a fresh page:
 // - a cold Navara start requests nothing of the Cesium library (/cesium/…:
@@ -52,7 +53,8 @@ await strict.run({}, async (b) => {
     await installSessionFixtures(p);
     await openApp(p, base.origin, start);
     // Let lazy loads that follow the start (workers, idle prefetch) happen.
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await p.waitForNetworkIdle({ idleTime: 500, timeout: 30000 });
+    await whenSettled(p);
     const before = [...urls];
     const other = start === 'navara' ? 'cesium' : 'navara';
     await strict.pick(p, other);

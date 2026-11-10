@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { waitForEngine } from './qa-strict-harness.mjs';
+import { whenSettled } from './qa/ready.mjs';
 // UTILITIES ▸ Import on Navara under the strict network policy: GeoJSON,
 // KML, KMZ (a packed icon and a ground overlay) and GPX through the real
 // file input, each one row; Navara draws their shapes in the row colour and
@@ -25,7 +27,6 @@ base.hash = `v=2&lat=${VIEW.lat}&lon=${VIEW.lon}&alt=${VIEW.alt}&heading=0&pitch
 const strict = createStrict({ origin: base.origin, layers: ['geo-import'] });
 const SHOTS = process.env.QA_SHOT_DIR || 'qa-shots/navara-geo-import';
 fs.mkdirSync(SHOTS, { recursive: true });
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const TRAP = 'gev-qa-trap.invalid';
 
 /* ── fixtures (as scripts/qa-geo-import.mjs) ───────────────────────────── */
@@ -148,17 +149,9 @@ await strict.run(
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(base.href);
     const ready = async (kind) => {
+      await waitForEngine(page, kind);
       await page.waitForFunction(
-        (k) =>
-          window.__godsEyeView?.engine?.kind === k &&
-          window.__gevGeoImport?.diagnostics().attached &&
-          !document.querySelector(
-            '#globe-engine:is([disabled], [aria-busy="true"])',
-          ) &&
-          !document.querySelector('.engine-switch-frame') &&
-          document.querySelector('#loading-screen.hidden'),
-        { timeout: 120000 },
-        kind,
+        () => window.__gevGeoImport?.diagnostics().attached,
       );
       await page.evaluate(
         () => window.__godsEyeView.styleManager.initialRestorePromise,
@@ -182,7 +175,7 @@ await strict.run(
     /** Pixels near the first file's colour (#39d0ff) on the canvas. */
     const cyan = async () => {
       await page.evaluate(() => window.__godsEyeView.requestRender?.('qa'));
-      await wait(900);
+      await whenSettled(page);
       const { data, info } = await sharp(
         await page.screenshot({
           clip: { x: 400, y: 260, width: 480, height: 300 },
@@ -257,7 +250,7 @@ await strict.run(
       { pins: imported.pins },
     );
     // The first file is flown to after the batch; settle there.
-    await wait(3000);
+    await whenSettled(page);
     await page.screenshot({ path: `${SHOTS}/navara-imported.png` });
 
     for (const kind of ['navara', 'cesium', 'navara']) {
@@ -270,7 +263,7 @@ await strict.run(
           () => window.__gevGeoImport.diagnostics().drawn === 4,
           { timeout: 60000 },
         );
-        await wait(2500);
+        await whenSettled(page);
         await page.screenshot({ path: `${SHOTS}/${kind}-after-switch.png` });
       }
       const shown = await cyan();
@@ -302,10 +295,13 @@ await strict.run(
         const before = engine.camera.height();
         const [first] = window.__gevGeoImport.list();
         const ok = window.__gevGeoImport.flyTo(first.id);
-        await new Promise((r) => setTimeout(r, 2500));
-        return { ok, before, after: engine.camera.height() };
+        return { ok, before };
       },
       fromDegrees(-100, 40, 3e6),
+    );
+    await whenSettled(page);
+    flight.after = await page.evaluate(() =>
+      window.__godsEyeView.engine.camera.height(),
     );
     await strict.check(
       page,
