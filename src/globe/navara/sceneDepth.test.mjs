@@ -78,34 +78,25 @@ test('the test binds the MRT pass packed depth before each draw, and only packed
   assert.equal(depth.uniforms.tGevSceneDepth.value, null);
 });
 
-/** A Navara view that builds each descriptor as the SDK does. */
+/** An overlay that exposes the scene's packed depth to its meshes. */
 function fakeView() {
-  const kinds = new Map();
   const created = [];
   const mrt = {
     depthBuffer: new DataTexture(),
     depthBufferPacking: RGBADepthPacking,
   };
   const ctx = { findEffect: (key) => (key === 'mrt' ? mrt : undefined) };
-  class MeshDesc {
-    constructor(view, context, config) {
-      this.ctx = context;
-      this.config = config;
-    }
-    onDestroy() {}
-  }
   const view = {
     forceUpdate() {},
-    registerMesh: (kind, desc) => kinds.set(kind, desc),
-    addMesh(config) {
-      const kind = Object.keys(config)[0];
-      const desc = new (kinds.get(kind))(view, ctx, config);
-      const object = desc.createMesh();
-      created.push({ kind, pass: desc.getPassKey(), object });
-      return { delete: () => desc.onDestroy() };
-    },
   };
-  return { view, MeshDesc, created, mrt };
+  const overlay = {
+    ctx,
+    add(object) {
+      created.push(object);
+    },
+    remove() {},
+  };
+  return { view, overlay, created, mrt };
 }
 
 /** Every renderable under an object compiles with the test and binds depth. */
@@ -141,11 +132,11 @@ function assertTested(object, mrt) {
   }
 }
 
-test('pack meshes stay transparent and test the scene depth', () => {
+test('pack meshes draw in the overlay and test the scene depth', () => {
   const packs = fakeView();
   const owned = [];
   const port = createNavaraMeshes(packs.view, {
-    MeshDesc: packs.MeshDesc,
+    overlay: packs.overlay,
     camera: {},
     picker: { registerMeshPicker: () => () => {} },
   });
@@ -156,9 +147,8 @@ test('pack meshes stay transparent and test the scene depth', () => {
     { own: (fn) => owned.push(fn) },
   );
   assert.equal(packs.created.length, 1);
-  assert.equal(packs.created[0].pass, 'transparent');
-  assertTested(packs.created[0].object, packs.mrt);
-  assert.equal(packs.created[0].object.children[0].material.depthTest, true);
+  assertTested(packs.created[0], packs.mrt);
+  assert.equal(packs.created[0].children[0].material.depthTest, true);
   for (const release of owned) release();
   port.destroy();
 });

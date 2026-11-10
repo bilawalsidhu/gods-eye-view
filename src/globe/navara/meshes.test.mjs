@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Group, Vector3 } from 'three';
+import {
+  Color,
+  Group,
+  RGBADepthPacking,
+  ShaderLib,
+  SRGBColorSpace,
+  Vector3,
+} from 'three';
 import * as Cesium from 'cesium';
 import { createNavaraMeshes } from './meshes.js';
 import { createCctvMeshes } from '../../layers/cctv/render/meshes.js';
@@ -8,40 +15,30 @@ import { viewshedColors } from '../../data/cctvViewshed.js';
 
 function harness() {
   const scene = new Group();
-  const kinds = new Map();
   const handles = new Set();
   let requests = 0;
   let fail = false;
   let failedGeometryDisposals = 0;
-  class MeshDesc {
-    onDestroy() {}
-  }
   const view = {
     forceUpdate: () => requests++,
-    registerMesh: (kind, desc) => kinds.set(kind, desc),
-    addMesh(config) {
+    toneMappingExposure: 1,
+  };
+  const overlay = {
+    ctx: null,
+    add(object) {
       if (fail) {
-        config.gevWorldMesh.group.children[0].geometry.addEventListener(
+        object.children[0].geometry.addEventListener(
           'dispose',
           () => failedGeometryDisposals++,
         );
-        throw new Error('descriptor failed');
+        throw new Error('overlay failed');
       }
-      const kind = Object.keys(config)[0];
-      const desc = new (kinds.get(kind))(view, {}, config);
-      // After the effects, depth-tested against the scene's packed depth.
-      assert.equal(desc.getPassKey(), 'transparent');
-      const object = desc.createMesh();
       scene.add(object);
-      const handle = {
-        delete() {
-          handles.delete(handle);
-          scene.remove(object);
-          desc.onDestroy();
-        },
-      };
-      handles.add(handle);
-      return handle;
+      handles.add(object);
+    },
+    remove(object) {
+      scene.remove(object);
+      handles.delete(object);
     },
   };
   const pickers = new Set();
@@ -57,7 +54,7 @@ function harness() {
     },
   };
   const port = createNavaraMeshes(view, {
-    MeshDesc,
+    overlay,
     camera: engine.camera,
     picker: engine.picker,
   });
@@ -66,6 +63,8 @@ function harness() {
   return {
     owner,
     port,
+    view,
+    overlay,
     drawn: () => scene.children.at(-1)?.children[0],
     engine,
     scene,
@@ -81,6 +80,83 @@ const shape = { halfW: 80, halfH: 45 };
 const positions = { capCenter: { x: 6378137, y: 1234, z: 5678 } };
 const identity = { x: 0, y: 0, z: 0, w: 1 };
 const canvas = () => ({ width: 8, height: 8, tagName: 'CANVAS' });
+
+test('solid and textured overlay meshes keep authored colours through landscape exposure changes', () => {
+  const h = harness();
+  for (const image of [null, canvas()]) {
+    const handle = h.engine.meshes.createMesh({
+      id: image ? 'textured' : 'solid',
+      positions: [6378137, 0, 0, 6378137, 10, 0, 6378137, 0, 10],
+      indices: [0, 1, 2],
+      uv: [0, 0, 1, 0, 0, 1],
+      image,
+    });
+    const mesh = h.drawn();
+    assert.equal(mesh.parent.parent, h.scene);
+    assert.equal(mesh.material.toneMapped, false);
+    assert.equal(mesh.material.transparent, true);
+    assert.equal(mesh.material.depthWrite, false);
+    if (image) assert.equal(mesh.material.map.colorSpace, SRGBColorSpace);
+    for (const color of [
+      [0, 1, 0, 1],
+      [0.25, 0.5, 0.75, 0.4],
+    ]) {
+      handle.update({ color });
+      const expected = new Color().setRGB(...color.slice(0, 3), SRGBColorSpace);
+      for (const exposure of [1, 10, 1]) {
+        h.view.toneMappingExposure = exposure;
+        mesh.onBeforeRender({});
+        assert.deepEqual(mesh.material.color, expected);
+        assert.equal(mesh.material.opacity, color[3]);
+      }
+    }
+    handle.destroy();
+    assert.equal(h.scene.children.length, 0);
+  }
+  h.port.destroy();
+});
+
+test('overlay meshes bind late and replaced scene depth and honour depth-test updates', () => {
+  const h = harness();
+  const plane = h.owner.createPlane(
+    'depth',
+    h.owner.createMaterial(canvas()),
+    shape,
+    positions,
+    identity,
+  );
+  const mesh = h.drawn();
+  const shader = {
+    uniforms: {},
+    fragmentShader: ShaderLib.basic.fragmentShader,
+  };
+  mesh.material.onBeforeCompile(shader, null);
+  assert.match(shader.fragmentShader, /packedDepthOccluded/);
+  const renderer = { getRenderTarget: () => ({ width: 640, height: 360 }) };
+  const { tGevSceneDepth, uGevSceneDepthOn, uGevTargetSize } = shader.uniforms;
+  mesh.onBeforeRender(renderer);
+  assert.equal(uGevSceneDepthOn.value, 0);
+  const mrt = { depthBuffer: {}, depthBufferPacking: RGBADepthPacking };
+  h.overlay.ctx = { findEffect: (key) => (key === 'mrt' ? mrt : null) };
+  mesh.onBeforeRender(renderer);
+  assert.equal(tGevSceneDepth.value, mrt.depthBuffer);
+  assert.equal(uGevSceneDepthOn.value, 1);
+  assert.deepEqual(uGevTargetSize.value.toArray(), [640, 360]);
+  plane.mesh.update({ depthTest: 'always' });
+  mesh.onBeforeRender(renderer);
+  assert.equal(uGevSceneDepthOn.value, 0);
+  assert.equal(mesh.material.depthTest, false);
+  plane.mesh.update({ depthTest: 'normal' });
+  mrt.depthBuffer = {};
+  mesh.onBeforeRender({ getDrawingBufferSize: (size) => size.set(1280, 720) });
+  assert.equal(tGevSceneDepth.value, mrt.depthBuffer);
+  assert.equal(uGevSceneDepthOn.value, 1);
+  assert.equal(mesh.material.depthTest, true);
+  assert.deepEqual(uGevTargetSize.value.toArray(), [1280, 720]);
+  h.owner.destroy();
+  h.port.destroy();
+  assert.equal(h.scene.children.length, 0);
+});
 
 test('Navara CCTV plane preserves native rotated geometry, UVs and metre precision', (t) => {
   const h = harness();
@@ -213,7 +289,7 @@ test('world meshes release replaced images and video callbacks exactly once', ()
   assert.equal(finalDisposed, 1);
 });
 
-test('world mesh descriptor failure releases geometry and rejects later creates after teardown', () => {
+test('world mesh overlay failure releases geometry and rejects later creates after teardown', () => {
   const h = harness();
   h.fail();
   assert.throws(
@@ -225,7 +301,7 @@ test('world mesh descriptor failure releases geometry and rejects later creates 
         positions,
         identity,
       ),
-    /descriptor failed/,
+    /overlay failed/,
   );
   assert.equal(h.failedGeometryDisposals(), 1);
   assert.equal(h.handles.size, 0);
