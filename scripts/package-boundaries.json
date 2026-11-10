@@ -5140,7 +5140,6 @@
       "src/i18n/marker.js",
       "src/tools/queries/imagery.js",
       "src/tools/queries/cables.js",
-      "src/data/displayText.js",
       "src/tools/queries/surveillance.js",
       "src/tools/queries/infrastructure.js",
       "src/tools/queries/events.js",

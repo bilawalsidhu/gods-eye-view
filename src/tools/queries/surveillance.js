@@ -1,6 +1,5 @@
 /** Automated license plate reader cameras mapped in OpenStreetMap. */
 
-import { normalizeDisplayText } from '../../data/displayText.js';
 import { suggestView } from '../views.js';
 import { defineTool, ToolError } from '../catalog.js';
 import {
@@ -70,12 +69,12 @@ export const findAlprCameras = defineTool({
         id: camera.id,
         lat: round(point.lat, 6),
         lon: round(point.lon, 6),
-        operator: normalizeDisplayText(camera.operator) || null,
-        manufacturer: normalizeDisplayText(camera.manufacturer) || null,
-        camera_type: normalizeDisplayText(camera.cameraType) || null,
-        zone: normalizeDisplayText(camera.zone) || null,
+        operator: camera.operator || null,
+        manufacturer: camera.manufacturer || null,
+        camera_type: camera.cameraType || null,
+        zone: camera.zone || null,
         direction_deg: camera.directionDeg ?? null,
-        last_verified: normalizeDisplayText(camera.lastVerified) || null,
+        last_verified: camera.lastVerified || null,
         distance_km: round(distanceKm(center, point), 2),
       }))
       .sort((a, b) => a.distance_km - b.distance_km);
