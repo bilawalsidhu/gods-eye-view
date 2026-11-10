@@ -4,7 +4,7 @@ import {
   WIND_DISPLAY_HEIGHT_METERS,
   WIND_PATH_LIMIT,
   WIND_NARROW_PATH_LIMIT,
-} from './streamlines.js';
+} from '../../layers/wind/streamlines.js';
 
 const WIND_FADE_LOW_METERS = 15000;
 const WIND_FADE_HIGH_METERS = 60000;
