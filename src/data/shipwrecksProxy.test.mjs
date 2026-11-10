@@ -199,6 +199,8 @@ test('one source failing keeps its own last records while the other refreshes', 
   assert.deepEqual(later.body.sources, { emodnet: true, wikidata: true });
   assert.equal(later.body.stale, true);
   assert.equal(upstream.callsTo('emodnet'), 2, 'EMODnet was refreshed');
+  assert.deepEqual(later.body.ages, { emodnet: 0, wikidata: 25 * HOUR });
+  assert.equal(later.body.maxAgeMs, 7 * 24 * HOUR);
 });
 
 test('a failed source waits before it is asked again', async () => {

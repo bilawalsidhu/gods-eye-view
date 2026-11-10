@@ -164,8 +164,9 @@ one that failed is asked again after 15 minutes. Each source keeps its own last
 good records: a source that fails, answers with nothing usable, or answers with
 less than half of its last good set keeps serving its earlier records as stale
 for up to seven days, and never removes the other source's wrecks. When the
-page cannot refresh, the wrecks it shows are marked stale, and it clears them
-once they are more than seven days old. EMODnet rows the portal took from
+page cannot refresh, the wrecks it shows are marked stale, and it removes each
+source's wrecks once they pass seven days, counted from the age the proxy
+reported (so the page and server clocks are never compared). EMODnet rows the portal took from
 wrecksite.eu are skipped (that site is not openly licensed). A Wikidata wreck
 with the same name within 3 km of an EMODnet wreck is merged into one record
 that keeps the article link and takes EMODnet's year, sinking text, depth and

@@ -120,16 +120,25 @@ export function shipwrecksProxy({
       if (result.status === 'fulfilled' && !shrunk)
         state.good = { records: result.value, fetchedAt: done };
       else state.retryAt = done + RETRY_MS;
+      if (shrunk)
+        console.warn(
+          `[shipwrecks] ${names[i]} refresh refused: ${result.value.length} ` +
+            `records against ${state.good.records.length} last good`,
+        );
     });
   }
 
   /** The served snapshot: every source with usable records, merged once. */
   function compose(at) {
     const sourceFlags = {};
+    // How old each source's records are, on this clock, so the page can
+    // expire them by its own clock without comparing the two.
+    const ages = {};
     let stale = false;
     let fetchedAt = null;
     for (const [name, state] of Object.entries(sources)) {
       sourceFlags[name] = usable(state, at);
+      ages[name] = sourceFlags[name] ? at - state.good.fetchedAt : null;
       if (!sourceFlags[name]) continue;
       if (!fresh(state, at)) stale = true;
       fetchedAt = Math.min(fetchedAt ?? Infinity, state.good.fetchedAt);
@@ -155,6 +164,8 @@ export function shipwrecksProxy({
         fetchedAt,
         version: key,
         sources: sourceFlags,
+        ages,
+        maxAgeMs: STALE_MAX_MS,
         records: snapshot.records,
       },
       stale,

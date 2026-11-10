@@ -291,3 +291,60 @@ test('a failed refresh marks the shown wrecks stale, and clears them after seven
   assert.equal(h.layer.getStats().count, 0, 'expired wrecks leave the map');
   assert.equal(h.markers.billboards.length, 0);
 });
+
+test('expiry runs on the page clock, per source, even without timestamps', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const down = () => new Error('Shipwrecks unavailable (HTTP 502)');
+  // A page clock far from the proxy's: only the reported ages count.
+  let clock = 5e12;
+  const h = harness({
+    now: () => clock,
+    snapshots: [
+      {
+        ...snapshot([
+          wreck('fresh', { source: 'emodnet' }),
+          wreck('old', { source: 'wikidata' }),
+        ]),
+        fetchedAt: null,
+        ages: { emodnet: 0, wikidata: 6.5 * DAY },
+        maxAgeMs: 7 * DAY,
+      },
+      down(),
+      down(),
+      down(),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  clock += 0.25 * DAY;
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 2, 'both still inside their limit');
+  clock += 0.5 * DAY;
+  await h.layer.update();
+  assert.deepEqual(
+    h.markers.billboards.map((billboard) => billboard.id),
+    ['shipwreck:fresh'],
+    'only the source past its limit leaves',
+  );
+  assert.equal(h.layer.getStats().stale, true);
+  clock += 7 * DAY;
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 0);
+});
+
+test('a snapshot with no timestamp or ages still expires seven days after it arrived', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  let clock = 100;
+  const h = harness({
+    now: () => clock,
+    snapshots: [
+      { ...snapshot([wreck('a')]), fetchedAt: null },
+      new Error('down'),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  clock += 8 * DAY;
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 0);
+});
