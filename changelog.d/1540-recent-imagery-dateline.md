@@ -2,7 +2,7 @@
   into a box about 360° wide and refused as too large; it is now the short box
   across ±180°, which lists the days for that box and drapes a pinned day on
   both sides. Availability probes both sides of ±180° (a day counts as present when either
-  side has data, and only the sides the probe proved present are draped — a
+  side has data, and sides confirmed empty are not draped — a
   side confirmed empty never lands on the map), each side is bounded by its
   own deadline and both sides' answers are heard — sides proven present all
   drape, a side that stalls only bounds the day for its deadline instead of

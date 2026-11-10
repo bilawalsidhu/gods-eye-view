@@ -549,9 +549,7 @@ export function createRecentImageryLayer({
             : (slotId === 'a') !== _swapped
               ? 'left'
               : 'right',
-          // Which halves of a dateline box the probe proved present; the
-          // renderer drapes only those, so a confirmed-empty half never
-          // lands on the map as black "no data" tiles.
+          // Keep every half except those confirmed empty by the probe.
           availableBoxes: thumbnails.get(candidate.key)?.availableBoxes ?? null,
         });
       } else {

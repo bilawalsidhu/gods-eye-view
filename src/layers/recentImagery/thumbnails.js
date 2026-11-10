@@ -91,8 +91,7 @@ export function createThumbnailLoader({
     let status = 'error';
     let objectUrl = null;
     let acquisitionTime = null;
-    // Which half of a dateline box the probe proved present; null when the
-    // request was not probed per half.
+    // Halves not confirmed empty; null when no per-half probe is available.
     let availableBoxes = null;
     let cancelled = false;
     try {

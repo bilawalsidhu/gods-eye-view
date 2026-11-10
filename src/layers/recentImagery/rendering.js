@@ -29,7 +29,7 @@ function clampAlpha(value) {
 const boxKey = (box) =>
   [box.west, box.south, box.east, box.north].map(Number).join(',');
 
-/** Comparable per-half availability signature; '' with no evidence. */
+/** Comparable per-half availability signature; unknown differs from empty. */
 const boxesKey = (list) =>
   Array.isArray(list)
     ? list
@@ -160,10 +160,9 @@ export function createRecentImageryRenderer({
     // [] means "not a box": add no layer rather than drape the raw box.
     const parts = nonCrossingBoxes(box);
     if (!parts.length) return false;
-    // A dateline day drapes only the halves its probe proved present (VIIRS
-    // is a JPEG product; a draped confirmed-empty half is a black rectangle).
-    // No evidence drapes the whole box, as before. Proven halves that do not
-    // match this box (a stale entry) leave the slot empty, never draped.
+    // Skip confirmed-empty halves; a failed probe is not proof of emptiness.
+    // No evidence drapes the whole box, as before. Evidence for a different
+    // box leaves the slot empty rather than applying stale availability.
     const allowed = Array.isArray(availableBoxes)
       ? parts.filter((part) =>
           availableBoxes.some((half) => half && boxKey(half) === boxKey(part)),
@@ -237,9 +236,11 @@ export function createRecentImageryRenderer({
         }
         return true;
       }
-      removeOwned(slotId);
-      if (!mount(slotId, { candidate, box, ...look, availableBoxes }))
+      const removed = removeOwned(slotId);
+      if (!mount(slotId, { candidate, box, ...look, availableBoxes })) {
+        if (removed) requestRender('recent-imagery-hide');
         return false;
+      }
       requestRender('recent-imagery-show');
       return true;
     },

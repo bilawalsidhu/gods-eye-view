@@ -119,8 +119,8 @@ function probeHalf(
 /**
  * The answer to one request: the response, enriched (non-enumerably, so the
  * transport's own shape is untouched) with the non-crossing halves the probe
- * proved present. An empty evidence list is a confirmed-empty day; no field
- * means the caller did not probe per half.
+ * did not confirm empty. An empty evidence list is a confirmed-empty day;
+ * no field means the caller did not probe per half.
  */
 function withPresentBoxes(response, presentBoxes) {
   if (!response) return response;
