@@ -1,8 +1,8 @@
 import { createEngineEvent, engineCapabilities } from '../../contract.js';
 import { MapSourceController } from '../../../maps/controller.js';
-import { ensure } from './helpers.mjs';
+import { cartographic, ensure } from './helpers.mjs';
 
-export function photorealChecks(engine) {
+export function photorealChecks(engine, { settle }) {
   return [
     [
       'maps.setPhotorealTiles: photoreal is inactive',
@@ -12,6 +12,22 @@ export function photorealChecks(engine) {
           engine.maps.photorealActive() === false,
           'photoreal still active',
         );
+      },
+    ],
+    [
+      'surface.sampleHeightDetailed: leaving photoreal no longer reports tiles',
+      async () => {
+        const places = [
+          cartographic.fromCartesian(engine.camera.pose().position),
+          cartographic.fromDegrees(20, 10),
+        ].filter(Boolean);
+        await engine.maps.setPhotorealTiles(null);
+        await settle();
+        for (const place of places)
+          ensure(
+            engine.surface.sampleHeightDetailed(place)?.source !== 'tiles',
+            'released photoreal tiles still answer surface queries',
+          );
       },
     ],
   ];

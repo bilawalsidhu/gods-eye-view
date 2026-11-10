@@ -72,10 +72,12 @@ test('only internals.js reaches private Navara members', () => {
 
 function stubView() {
   return {
+    on() {},
     _isIdle: false,
     _startMainLoop() {},
     _renderer: { setAnimationLoop() {} },
     _scenes: { mrt: { children: [] }, light: { children: [] } },
+    _meshes: new Map(),
     _eventManager: {
       stacks: { renderable_feature_changed: [] },
       removeAt() {},
@@ -100,6 +102,7 @@ test('engine startup probes every required view internal', () => {
     '_renderer.setAnimationLoop',
     '_scenes.mrt.children',
     '_scenes.light.children',
+    '_meshes',
     '_eventManager.stacks.renderable_feature_changed',
     '_eventManager.removeAt',
     'viewContext.findMesh',

@@ -375,6 +375,20 @@ const mutants = [
       );
     },
   ],
+  [
+    'released photoreal tiles still answer surface queries',
+    'surface.sampleHeightDetailed: leaving photoreal',
+    (e) => {
+      replace(e.maps, 'setPhotorealTiles', (set) => async (source) => {
+        await set(source);
+        if (source === null)
+          e.fake.script('sampleHeightDetailed', () => ({
+            height: 50,
+            source: 'tiles',
+          }));
+      });
+    },
+  ],
 ];
 
 for (const [name, killedBy, mutate] of mutants) {
@@ -399,6 +413,28 @@ for (const [name, killedBy, mutate] of mutants) {
     }
   });
 }
+
+test('released tile surface check runs without a tileset fixture', async () => {
+  const engine = createFakeEngine();
+  try {
+    const check = createContractSuite(engine, {
+      ...fakeContractOptions(engine),
+      fixtures: null,
+      mapSources: null,
+    }).find(({ name }) =>
+      name.startsWith('surface.sampleHeightDetailed: leaving photoreal'),
+    );
+    assert.ok(check);
+    await check.run();
+    engine.fake.script('sampleHeightDetailed', () => ({
+      height: 50,
+      source: 'tiles',
+    }));
+    await assert.rejects(check.run(), /released photoreal tiles/);
+  } finally {
+    engine.destroy();
+  }
+});
 
 test('tiles-only ground pixels on terrain are detected without a tileset fixture or a picking defect', async () => {
   for (const drawsOnTerrain of [false, true]) {
