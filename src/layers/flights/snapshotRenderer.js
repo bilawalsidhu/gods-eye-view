@@ -3,6 +3,7 @@ import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import {
   turnRateFromFixHistory,
   liftRepeatedGroundFix,
+  staleHoldsForFix,
   synthesizeForwardKinematicsFix,
 } from '../../data/motionModel.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
@@ -22,7 +23,7 @@ export function createFlightSnapshotRenderer({
   queries,
 }) {
   const { refreshMilitaryRegistryIfStale, isMilitaryIcao } = militaryRegistry;
-  const { warmGroundFloor } = groundFloor;
+  const { warmGroundFloor, cachedGroundFloor } = groundFloor;
   const { sampleMeshFloorCells } = meshFloor;
   return function applySnapshot(snapshot, viewer) {
     const currentIcaos = new Set();
@@ -39,6 +40,7 @@ export function createFlightSnapshotRenderer({
       ? Cesium.Math.toDegrees(viewerCarto.longitude)
       : null;
     const floorWarmPoints = [];
+    records.beginSnapshot(snapshot.observedAtMs);
 
     // Classification and display policy consume source-independent observations.
     refreshMilitaryRegistryIfStale();
@@ -112,6 +114,9 @@ export function createFlightSnapshotRenderer({
           position: position.clone(),
           velocity: meta.velocity,
           track: meta.true_track,
+          // Drawn at an invented height: a trail seeded from history keeps no
+          // position for it.
+          inventedHeight: meta.renderAltitudeInvented === true,
         });
         if (history.length > POSITION_HISTORY_LIMIT) {
           history.shift();
@@ -125,7 +130,10 @@ export function createFlightSnapshotRenderer({
         // Round 2 (owner): ground traffic appends too — taxi history stays
         // live after touchdown (grounded flights positions are already
         // surface-clamped via the surfaceM chain, so the ground leg drapes).
-        if (isTracked) tracking._appendTrailFix(position.clone());
+        if (isTracked)
+          tracking._appendTrailFix(position.clone(), fixEpochMs, {
+            nullAltitude: meta.renderAltitudeInvented === true,
+          });
       } else {
         const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
         if (!modelOwnsGroundVisual) {
@@ -133,21 +141,28 @@ export function createFlightSnapshotRenderer({
         }
         // Apply fresh kinematics only from a forward synthetic fix. Mutating
         // the historical fix reprojects the entire stale interval and snaps
-        // the rendered aircraft when course or speed changes late.
+        // the rendered aircraft when course or speed changes late. The stale
+        // rules apply: none for a contact that holds at its report, a coast
+        // capped from the real report, never below the ground. It is a motion
+        // aid, not a report, so it never joins the trail.
         const kinematicsChanged =
           newest.velocity !== meta.velocity || newest.track !== meta.true_track;
-        if (kinematicsChanged) {
+        const holds = staleHoldsForFix(newest, {
+          onGround: meta.onGround,
+          cachedGroundFloor,
+        });
+        if (kinematicsChanged && !holds) {
           const synthetic = synthesizeForwardKinematicsFix(newest, {
             epochMs: Date.now(),
             velocity: meta.velocity,
             track: meta.true_track,
             turnRateDps: meta.turnRateDps,
+            cachedGroundFloor,
           });
           if (synthetic) {
             history.push(synthetic);
             if (history.length > POSITION_HISTORY_LIMIT) history.shift();
             meta.turnRateDps = turnRateFromFixHistory(history);
-            if (isTracked) tracking._appendTrailFix(synthetic.position.clone());
           }
         }
       }
@@ -252,6 +267,7 @@ export function createFlightSnapshotRenderer({
         complete: snapshot.complete,
         retainIds: snapshot.retainIds,
         likelyLanded: queries._likelyLanded(icao24),
+        tracked: icao24 === flightState._trackedIcao,
       });
       if (absence === 'retain') continue;
       if (absence === 'stale') {

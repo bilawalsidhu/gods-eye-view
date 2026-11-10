@@ -323,6 +323,7 @@
   "LOADING": "加載中",
   "DEGRADED": "降級",
   "STALE": "過期",
+  "SIGNAL LOST · {time}": "訊號遺失 · {time}",
   "PARTIAL": "部分",
   "FALLBACK": "備用",
   "view band|STREET": "街道",

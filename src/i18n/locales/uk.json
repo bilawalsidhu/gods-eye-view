@@ -332,6 +332,7 @@
   "LOADING": "ЗАВАНТАЖЕННЯ",
   "DEGRADED": "ПЕРЕБОЇ",
   "STALE": "ЗАСТАРІЛО",
+  "SIGNAL LOST · {time}": "СИГНАЛ ВТРАЧЕНО · {time}",
   "PARTIAL": "ЧАСТКОВО",
   "FALLBACK": "РЕЗЕРВ",
   "view band|STREET": "ВУЛИЦЯ",
