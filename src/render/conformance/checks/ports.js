@@ -724,9 +724,49 @@ export function portChecks() {
     ),
     check(
       'draw.field.rasterShell',
-      "a shell's 'drawn' comes once per change, never while hidden",
+      "a shell draws its image, and its 'drawn' comes once per change, never while hidden",
       async (h, r) => {
         await overAustin(h, r, 20000);
+        // The middle of the frame, which the shell below covers whole.
+        const middle = async () => {
+          await settled(r);
+          r.frame.renderNow();
+          const { width, height } = r.canvas;
+          return r.readPixels({
+            crop: {
+              x: Math.round(width / 2) - 6,
+              y: Math.round(height / 2) - 6,
+              width: 13,
+              height: 13,
+            },
+          }).data;
+        };
+        // How many pixels are clearly bluer than they were.
+        const bluer = (now, was) => {
+          let n = 0;
+          for (let i = 0; i < now.length; i += 4)
+            if (now[i + 2] - was[i + 2] > 40 && now[i] - was[i] < 20) n++;
+          return n;
+        };
+        const empty = await middle();
+        // A renderer that draws lines into pixels must draw the shell too;
+        // one that draws neither (the stub) leaves the pixels unread.
+        const probe = r.draw.lines({ id: 'conf:shell-probe' });
+        const at = (dLon) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat, height: 0 });
+        probe.set([
+          {
+            id: 'l',
+            positions: [at(-0.02), at(0.02)],
+            widthPx: 20,
+            mode: '3d',
+            style: { kind: 'solid', color: '#0000ff' },
+          },
+        ]);
+        await drawn(h, r);
+        const drawsPixels = bluer(await middle(), empty) >= 20;
+        probe.dispose();
+        await drawn(h, r);
         const svg = (fill) => ({
           svg: `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${fill}"/></svg>`,
         });
@@ -751,6 +791,11 @@ export function portChecks() {
         try {
           await until(1);
           equal(drawnCount, 1, 'drawn once made');
+          if (drawsPixels)
+            ok(
+              bluer(await middle(), empty) >= 150,
+              'the shell draws its image over the frame',
+            );
           await drawn(h, r, 4);
           equal(drawnCount, 1, 'not again while nothing changes');
           field.update({ image: svg('#ff3b30') });
