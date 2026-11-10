@@ -74,9 +74,11 @@ test('bikeshare stations join coordinates from station information', () => {
   assert.deepEqual(methods.getAnalystRecords(), []);
 });
 
-test('launches carry time and hours until launch', () => {
-  const at = Date.now() + 5 * 3_600_000;
+test('launches carry time and hours until launch at the world time', () => {
+  const now = Date.UTC(2026, 10, 1);
+  const at = now + 5 * 3_600_000;
   const state = {
+    now: () => now,
     _enabled: true,
     _launches: [
       {

@@ -26,6 +26,18 @@ export function normalizeVessel(row) {
   };
 }
 
+/**
+ * Note when a fix was first received (`fixReceivedAtMs`, this client's
+ * clock) and the newest fix in that refresh (`fixFeedEpoch`, the feed's
+ * clock): its age is then read on each clock separately, so neither a
+ * skewed client clock nor a re-served cached row hides how old it is.
+ * `receivedAtMs` stays the time the row was last seen, for retention.
+ */
+function stampFix(record, receivedAtMs, feedLatestEpoch) {
+  record.fixReceivedAtMs = receivedAtMs;
+  record.fixFeedEpoch = feedLatestEpoch;
+}
+
 function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -46,6 +58,18 @@ export class VesselRecords {
     effects,
   ) {
     const receivedAtMs = this.now();
+    // The newest fix in the batch: the feed's own "now", so a fix's age can
+    // be read on the feed's clock rather than against this client's (see
+    // stampFix).
+    let feedLatestEpoch = null;
+    for (const row of rows) {
+      const epoch = finiteNumber(row?.last_position_epoch);
+      if (
+        epoch !== null &&
+        (feedLatestEpoch === null || epoch > feedLatestEpoch)
+      )
+        feedLatestEpoch = epoch;
+    }
     for (const record of this.unkeyed) effects.remove(record, false);
     this.unkeyed = [];
     const seen = new Set();
@@ -53,6 +77,7 @@ export class VesselRecords {
       const next = normalizeVessel(row);
       if (!next) continue;
       next.receivedAtMs = receivedAtMs;
+      stampFix(next, receivedAtMs, feedLatestEpoch);
       if (!next.mmsi) {
         effects.add(next);
         this.unkeyed.push(next);
@@ -63,6 +88,12 @@ export class VesselRecords {
       const record = this.byMmsi.get(next.mmsi);
       if (record) {
         const before = effects.beforeUpdate(record);
+        // A feed re-serving a cached row repeats its fix: the fix keeps the
+        // time it was first received, so it goes on ageing.
+        if (next.lastPositionEpoch !== record.lastPositionEpoch) {
+          record.fixReceivedAtMs = next.fixReceivedAtMs;
+          record.fixFeedEpoch = next.fixFeedEpoch;
+        }
         record.reference = next.reference;
         record.receivedAtMs = next.receivedAtMs;
         record.lat = next.lat;

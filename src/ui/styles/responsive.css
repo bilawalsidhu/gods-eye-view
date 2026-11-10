@@ -177,7 +177,7 @@
        drawn straight over the notice. Track the credit's own anchor instead
        and the 12px of clear air holds regardless of height; the rail already
        scrolls (overflow-y below), so it loses reach, not content. */
-    bottom: calc(2vh + 7.5rem);
+    bottom: calc(2vh + 7.5rem + var(--world-timeline-lift, 0px));
     left: 16px;
     width: auto;
     max-height: none;

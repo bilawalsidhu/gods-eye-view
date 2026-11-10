@@ -19,6 +19,7 @@ import {
   numericSummary,
   thinEvenly,
 } from '../results.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const ICAO24_SCHEMA = Object.freeze({
   type: 'string',
@@ -75,7 +76,7 @@ function aircraftRow(record, from) {
     altitude_m: round(record.baroAltitudeM ?? record.ellipsoidAltitudeM, 0),
     on_ground: record.onGround === true,
     speed_mps: round(record.speedMps, 1),
-    course_deg: round(record.courseDeg, 0),
+    course_deg: roundHeadingDegrees(record.courseDeg),
     vertical_rate_mps: round(record.verticalRateMps, 1),
     type_code: record.typeCode || null,
     registration: record.registration || null,
