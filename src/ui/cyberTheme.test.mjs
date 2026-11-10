@@ -434,12 +434,12 @@ test('Cyber lower-left telemetry tracks the credit anchor with clearance for its
     cyberStyles,
     /#intel-hud\[data-variant='cyber'\] \.hud-bottom-left/,
   );
-  const offset = telemetry.match(/bottom:\s*calc\(2vh \+ ([\d.]+)rem\);/);
+  const offset = telemetry.match(/bottom:\s*calc\(2vh \+ ([\d.]+)rem \+ var\(--world-timeline-lift, 0px\)\);/);
   assert.ok(offset, 'telemetry must retain the attribution viewport anchor');
   const credits = read('./styles/command-dock-trays.css');
   const creditOffsets = [
     ...credits.matchAll(
-      /#cesium-credits\s*\{[^}]*bottom:\s*calc\(2vh \+ ([\d.]+)rem\);/g,
+      /#cesium-credits\s*\{[^}]*bottom:\s*calc\(2vh \+ ([\d.]+)rem \+ var\(--world-timeline-lift, 0px\)\);/g,
     ),
   ];
   assert.ok(creditOffsets.length > 0);
@@ -738,7 +738,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(
     cyberStyles,
-    /#left-panel-stack \{[\s\S]*?top: var\(--cyber-left-rail-top\) !important;[\s\S]*?bottom: calc\(2vh \+ 13rem\);/,
+    /#left-panel-stack \{[\s\S]*?top: var\(--cyber-left-rail-top\) !important;[\s\S]*?bottom: calc\(2vh \+ 13rem \+ var\(--world-timeline-lift, 0px\)\);/,
   );
   assert.match(
     cyberStyles,
@@ -793,7 +793,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
     cyberStyles,
     /#right-context-rail:has\(> \[data-panel-id\]:not\(\.collapsed, \[hidden\]\)\) \{\s*border-inline-end-color:/,
   );
-  assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem\);/);
+  assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem \+ var\(--world-timeline-lift, 0px\)\);/);
   assert.doesNotMatch(cyberStyles, /NAV 01  \/\/  COMMAND BUS  \/\/  VIS 03/);
   assert.match(cyberStyles, /data-layer-id='satellites'/);
   assert.match(cyberStyles, /#search-toggle::before/);

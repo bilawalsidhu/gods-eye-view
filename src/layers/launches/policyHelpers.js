@@ -229,6 +229,7 @@ export function createPolicyHelpers({
       layerState._viewer.camera.positionCartographic?.height,
     );
     const position = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
+    layerState._cameraReleased = false;
     layerState._viewer.camera.flyToBoundingSphere(
       new Cesium.BoundingSphere(position, 0),
       {
