@@ -153,9 +153,8 @@ export function createScreenAnnotationRenderer(
   // Best-effort surface height under a coordinate (clamps onto the 3D tiles).
   // Returns 0 until the tile loads, then caches the validated height.
   // canSample=false returns the cached height (or 0) without surface sampling.
-  function groundHeight(lon, lat, canSample = true) {
-    const key = heightKey(lon, lat);
-    const cached = heightCache.get(key);
+  // `key` and `cached` are the caller's cache lookup for this coordinate.
+  function groundHeight(lon, lat, key, cached, canSample = true) {
     if (cached && cached.settled) {
       // Mark hot for this frame + bump to most-recently-used so heights for live
       // marks survive eviction while places we've navigated away from age out.
@@ -413,9 +412,11 @@ export function createScreenAnnotationRenderer(
     // A settled height is tested as the actual point below. An unknown height
     // is rejected before GPU-backed surface sampling only when the whole
     // accepted height range is proven hidden by one constraint.
+    const key = heightKey(lon, lat);
+    const cached = heightCache.get(key);
     let height;
-    if (heightCache.get(heightKey(lon, lat))?.settled) {
-      height = groundHeight(lon, lat);
+    if (cached?.settled) {
+      height = groundHeight(lon, lat, key, cached);
     } else {
       if (heightRangeHidden(lon, lat)) return null;
       // The frustum restricts sampling only; an endpoint outside it still
@@ -431,7 +432,7 @@ export function createScreenAnnotationRenderer(
       const inFrustum =
         cullingVolume?.computeVisibility(heightBounds) !==
         Cesium.Intersect.OUTSIDE;
-      height = groundHeight(lon, lat, inFrustum);
+      height = groundHeight(lon, lat, key, cached, inFrustum);
     }
     const world = Cesium.Cartesian3.fromDegrees(lon, lat, height);
     // Reject points behind the camera (they produce wrapped/extreme coords).
@@ -552,7 +553,10 @@ export function createScreenAnnotationRenderer(
   }
 
   function projectAll() {
-    if (!records.size) return;
+    if (!records.size) {
+      publish();
+      return;
+    }
     // Serve the oldest refused keys first; the rest of the budget is open.
     heightReserved = new Set();
     for (const key of heightQueue) {
@@ -931,6 +935,8 @@ export function createScreenAnnotationRenderer(
       store.publish(null);
     }
     records.clear();
+    leaving.clear();
+    byKey.clear();
     clearHeights();
   }
 

@@ -584,17 +584,7 @@ test('a mark hidden from Draw is not drawn or placed, and comes back when shown'
 });
 
 test('hidden and back-facing annotations do not sample; visible unresolved heights have bounded retries', (t) => {
-  const previous = globalThis.document;
-  const previousRaf = globalThis.requestAnimationFrame;
-  globalThis.document = fakeDocument();
-  globalThis.requestAnimationFrame = (fn) => {
-    fn();
-    return 1;
-  };
-  t.after(() => {
-    globalThis.document = previous;
-    globalThis.requestAnimationFrame = previousRaf;
-  });
+  const store = samplingBoard(t);
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
   t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', () => ({
     x: 100,
@@ -618,7 +608,7 @@ test('hidden and back-facing annotations do not sample; visible unresolved heigh
     },
     requestRender() {},
   };
-  const renderer = createScreenAnnotationRenderer({ scene, camera });
+  const renderer = samplingRenderer(store, scene);
   const mark = (id, lon) => ({
     id,
     type: 'label',
@@ -679,18 +669,29 @@ function sampledLon(world) {
   return Number(Cesium.Math.toDegrees(carto.longitude).toFixed(5));
 }
 
-function installDom(t) {
-  const previous = globalThis.document;
+/**
+ * A board with no view mounted, for tests that count surface samples: the
+ * renderer projects on `add` and on each post-render event, and the store
+ * holds what it would draw. Animation frames run at once.
+ */
+function samplingBoard(t) {
   const previousRaf = globalThis.requestAnimationFrame;
-  globalThis.document = fakeDocument();
   globalThis.requestAnimationFrame = (fn) => {
     fn();
     return 1;
   };
   t.after(() => {
-    globalThis.document = previous;
     globalThis.requestAnimationFrame = previousRaf;
   });
+  return useScreenAnnotationsStore(createPinia());
+}
+
+/** The renderer under test, on the given board and scene. */
+function samplingRenderer(store, scene) {
+  return createScreenAnnotationRenderer(
+    { scene, camera: scene.camera, trackedEntity: null },
+    { store, activeTrackedReadoutId: () => null },
+  );
 }
 
 function squareFrustum() {
@@ -703,7 +704,7 @@ function squareFrustum() {
 }
 
 test('an arrow with one endpoint outside a real frustum keeps its visible connector', (t) => {
-  installDom(t);
+  const store = samplingBoard(t);
   t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, world) =>
     sampledLon(world) > 0.1 ? { x: 1100, y: 400 } : { x: 400, y: 400 },
   );
@@ -739,7 +740,7 @@ test('an arrow with one endpoint outside a real frustum keeps its visible connec
     volume.computeVisibility(new Cesium.BoundingSphere(far, 9500)),
     Cesium.Intersect.OUTSIDE,
   );
-  const renderer = createScreenAnnotationRenderer({ scene, camera });
+  const renderer = samplingRenderer(store, scene);
   renderer.add({
     id: 'partial-arrow',
     type: 'arrow',
@@ -748,16 +749,16 @@ test('an arrow with one endpoint outside a real frustum keeps its visible connec
     to: { lon: 0.2, lat: 0 },
   });
   postRender.raiseEvent();
-  const { group } = findAnnotationGroup(globalThis.document);
-  assert.equal(group.style.display, '', 'the arrow stays drawn');
-  const path = group.children.find((child) => child.classList.contains('gev-anno-arrow'));
-  assert.match(path.getAttribute('d'), /^M 400\.0 400\.0 Q .* 1100\.0 400\.0$/);
+  const [mark] = store.board.marks;
+  assert.equal(mark.display, '', 'the arrow stays drawn');
+  const path = mark.children.find((child) => child.attrs.class?.includes('gev-anno-arrow'));
+  assert.match(path.attrs.d, /^M 400\.0 400\.0 Q .* 1100\.0 400\.0$/);
   assert.deepEqual([...new Set(sampled)], [0], 'only the in-frustum endpoint samples');
   renderer.destroy();
 });
 
 test('a low-angle cached roof stays visible when range endpoints fail different tests', (t) => {
-  installDom(t);
+  const store = samplingBoard(t);
   t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', () => ({ x: 400, y: 380 }));
   // Camera 1 m above the ellipsoid, heading east, pitched 25 degrees down.
   const pitch = Cesium.Math.toRadians(25);
@@ -794,19 +795,18 @@ test('a low-angle cached roof stays visible when range endpoints fail different 
   assert.equal(ahead(20), true);
   assert.equal(occluder.isPointVisible(Cesium.Cartesian3.fromDegrees(roofLon, 0, 20)), true);
 
-  const renderer = createScreenAnnotationRenderer({ scene, camera });
+  const renderer = samplingRenderer(store, scene);
   renderer.add({ id: 'roof', type: 'label', label: 'Roof', anchor: { lon: roofLon, lat: 0 } });
-  const { group } = findAnnotationGroup(globalThis.document);
   assert.equal(samples, 1, 'the unknown height is sampled, not culled');
-  assert.equal(group.style.display, '');
+  assert.equal(store.board.marks[0].display, '');
   for (let i = 0; i < 5; i++) postRender.raiseEvent();
   assert.equal(samples, 1, 'the settled height is reused');
-  assert.equal(group.style.display, '', 'the cached roof point is tested and shown');
+  assert.equal(store.board.marks[0].display, '', 'the cached roof point is tested and shown');
   renderer.destroy();
 });
 
 test('height retries beyond the first budget are served under sparse passes', (t) => {
-  installDom(t);
+  const store = samplingBoard(t);
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
   t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', () => ({ x: 100, y: 100 }));
   const camera = {
@@ -830,7 +830,7 @@ test('height retries beyond the first budget are served under sparse passes', (t
       return tilesReady && lon === last ? Cesium.Cartesian3.fromDegrees(lon, 0, 12) : undefined;
     },
   };
-  const renderer = createScreenAnnotationRenderer({ scene, camera });
+  const renderer = samplingRenderer(store, scene);
   for (const lon of lons) {
     renderer.add({ id: `p${lon}`, type: 'label', label: 'P', anchor: { lon, lat: 0 } });
   }
