@@ -1279,6 +1279,7 @@
   "src/layers/shipwrecks/cards.test.mjs",
   "src/layers/shipwrecks/eras.test.mjs",
   "src/layers/shipwrecks/period.test.mjs",
+  "src/layers/shipwrecks/index.test.mjs",
   "src/data/shipwrecksProxy.test.mjs",
   "src/app/sourceComposition.js",
   "src/app/sourceComposition.test.mjs",

@@ -25,6 +25,8 @@ export function createShipwrecksSource({
           ? payload.fetchedAt
           : null,
         stale: payload.stale === true,
+        // Changes whenever either source's data does; null from an older proxy.
+        version: typeof payload.version === 'string' ? payload.version : null,
         sources: {
           emodnet: payload.sources?.emodnet !== false,
           wikidata: payload.sources?.wikidata !== false,

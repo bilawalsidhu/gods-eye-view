@@ -1,5 +1,10 @@
 import * as Cesium from 'cesium';
 import { formatNumber, msg, t, tn } from '../../i18n/index.js';
+import {
+  registerSpriteCollection,
+  restoreSpriteOrder,
+  unregisterSpriteCollection,
+} from '../../data/spriteOrder.js';
 import { createHorizonCull } from '../streetLevel/view.js';
 import { ERA_COLORS, ERA_LABELS, describeShipwreck } from './cards.js';
 import { SHIPWRECK_ERAS, eraOf } from './eras.js';
@@ -61,12 +66,19 @@ export function createShipwrecksLayer({
   picking = null,
   pointer = null,
   openExternal = null,
+  // One collection for every wreck marker (thousands of them): far cheaper to
+  // draw and rebuild than an entity each. Tests pass a fake.
+  createMarkers = (scene) =>
+    new Cesium.BillboardCollection({
+      scene,
+      blendOption: Cesium.BlendOption.TRANSLUCENT,
+    }),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Shipwrecks require a snapshot source');
   let _viewer = null;
   let _enabled = false;
-  let _dataSource = null;
+  let _markers = null;
   let _request = null;
   let _records = new Map();
   let _pins = [];
@@ -102,7 +114,8 @@ export function createShipwrecksLayer({
   }
 
   function applyPin(pin) {
-    pin.entity.show = pin.inFront && visible(pin.record);
+    const show = pin.inFront && visible(pin.record);
+    if (pin.billboard.show !== show) pin.billboard.show = show;
   }
 
   /** Re-apply the period to every marker and the open card. */
@@ -118,30 +131,27 @@ export function createShipwrecksLayer({
     _extent = yearExtent(records);
     _range = periodRange(_period, _extent);
     _pins = [];
-    if (!_dataSource) return;
-    _dataSource.entities.suspendEvents();
-    _dataSource.entities.removeAll();
-    for (const record of records) {
+    if (!_markers) return;
+    _markers.removeAll();
+    // Within one collection later markers draw on top: add by rising death
+    // toll so a bigger toll covers smaller neighbours.
+    const ordered = [...records].sort(
+      (a, b) => (a.casualties || 0) - (b.casualties || 0),
+    );
+    for (const record of ordered) {
       const position = Cesium.Cartesian3.fromDegrees(record.lon, record.lat);
-      const entity = _dataSource.entities.add({
+      const size = markerPixelSize(record.casualties);
+      const billboard = _markers.add({
         id: `${PICK_PREFIX}${record.id}`,
         position,
-        billboard: {
-          image: _images[eraOf(record)],
-          width: markerPixelSize(record.casualties),
-          height: markerPixelSize(record.casualties),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          // Bigger toll, drawn on top of smaller neighbours.
-          eyeOffset: new Cesium.Cartesian3(
-            0,
-            0,
-            -Math.min(record.casualties || 0, 5000),
-          ),
-        },
+        image: _images[eraOf(record)],
+        width: size,
+        height: size,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
       const pin = {
-        entity,
+        billboard,
         record,
         position,
         inFront: true,
@@ -156,7 +166,6 @@ export function createShipwrecksLayer({
       applyPin(pin);
       _pins.push(pin);
     }
-    _dataSource.entities.resumeEvents();
     _horizon.update();
     if (_selectedId && !_records.has(_selectedId)) clearSelection();
     else if (_selectedId) publishCard();
@@ -320,14 +329,16 @@ export function createShipwrecksLayer({
     init(viewer) {
       if (_viewer) throw new Error('Shipwrecks layer is already initialized');
       _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource(SHIPWRECKS_LAYER_ID);
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
+      _markers = createMarkers(viewer.scene);
+      _markers.show = false;
+      viewer.scene.primitives.add(_markers);
+      registerSpriteCollection(SHIPWRECKS_LAYER_ID, _markers);
     },
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      if (_markers) _markers.show = true;
+      restoreSpriteOrder(_viewer);
       installClickHandler();
       if (_pins.length) _horizon.update();
     },
@@ -336,7 +347,7 @@ export function createShipwrecksLayer({
       _enabled = false;
       _request?.abort();
       _request = null;
-      if (_dataSource) _dataSource.show = false;
+      if (_markers) _markers.show = false;
       removeClickHandler();
       clearSelection();
       _horizon.stop();
@@ -344,7 +355,7 @@ export function createShipwrecksLayer({
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_markers) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -352,6 +363,12 @@ export function createShipwrecksLayer({
         const snapshot = await source.getSnapshot({ signal: request.signal });
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
+        // The page checks every 6 h; the proxy refreshes once a day. Only a
+        // new snapshot rebuilds the markers.
+        const unchanged =
+          snapshot.version !== null &&
+          snapshot.version === _snapshot?.version &&
+          _pins.length > 0;
         _snapshot = snapshot;
         _lastError =
           snapshot.sources.emodnet && snapshot.sources.wikidata
@@ -359,7 +376,7 @@ export function createShipwrecksLayer({
             : snapshot.sources.emodnet
               ? msg('Wikidata unavailable; showing EMODnet only')
               : msg('EMODnet unavailable; showing Wikidata only');
-        rebuild(snapshot.records);
+        if (!unchanged) rebuild(snapshot.records);
         notifyRow();
         return true;
       } catch (error) {
@@ -376,9 +393,12 @@ export function createShipwrecksLayer({
 
     destroy(viewer = _viewer) {
       layer.disable();
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
+      if (_markers) {
+        unregisterSpriteCollection(SHIPWRECKS_LAYER_ID, _markers);
+        const primitives = viewer?.scene?.primitives;
+        if (primitives && !primitives.isDestroyed?.())
+          primitives.remove(_markers);
+        _markers = null;
       }
       _records = new Map();
       _pins = [];

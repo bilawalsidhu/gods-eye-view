@@ -143,7 +143,12 @@ export function shipwrecksProxy({
       };
     }
     return {
-      value: { fetchedAt, sources: sourceFlags, records: snapshot.records },
+      value: {
+        fetchedAt,
+        version: key,
+        sources: sourceFlags,
+        records: snapshot.records,
+      },
       stale,
     };
   }

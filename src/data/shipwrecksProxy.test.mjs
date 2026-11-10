@@ -189,10 +189,12 @@ test('one source failing keeps its own last records while the other refreshes', 
   const handler = handlerOf(
     shipwrecksProxy({ fetchImpl: upstream.fetchImpl, now: () => clock }),
   );
-  await request(handler);
+  const first = await request(handler);
+  assert.equal((await request(handler)).body.version, first.body.version);
   upstream.state.wikidata = 'down';
   clock = 25 * HOUR;
   const later = await request(handler);
+  assert.notEqual(later.body.version, first.body.version, 'new EMODnet data');
   assert.equal(later.body.records.length, 2);
   assert.deepEqual(later.body.sources, { emodnet: true, wikidata: true });
   assert.equal(later.body.stale, true);
