@@ -586,7 +586,7 @@ test('the phone shell keeps the required attribution visible', () => {
   };
   const lift = (block) =>
     Number(
-      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px\)/.exec(block)?.[1],
+      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px \+ var\(--world-timeline-lift, 0px\)\)/.exec(block)?.[1],
     );
   const z = (block) => Number(/z-index: (\d+);/.exec(block)?.[1]);
   const idleCredit = rule(

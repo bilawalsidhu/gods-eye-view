@@ -1,6 +1,7 @@
 import { FlightRecords } from './records.js';
 import { createFlightFeed } from './ingestion.js';
 import * as Cesium from 'cesium';
+import { worldTimeFor } from '../../time/worldClock.js';
 import { ENRICH_AMBIENT_BUDGET_CEIL } from './policy.js';
 
 export function createFlightState({ source, services }) {
@@ -12,6 +13,8 @@ export function createFlightState({ source, services }) {
     ...services.groundFloor,
   });
   flightState._cullPositions = new Map();
+  /** The time contacts are drawn behind by the render delay, in epoch ms. */
+  flightState.now = worldTimeFor('flights');
 
   /** Per-class model spec. Hangar-fleet classes (CLASS_MODEL_REAL) ship GLBs
    *  vertex-baked to real-world METERS in the airplane.glb axis convention, so
@@ -204,6 +207,10 @@ export function createFlightState({ source, services }) {
 
   flightState._lastFleetTickMs = 0;
 
+  /** @type {number} Fleet ticks run; selects which hidden contacts re-reckon */
+
+  flightState._fleetTickSeq = 0;
+
   /** @type {string} Camera pose signature at the last rotation pass */
 
   flightState._lastCamPoseSig = '';
@@ -334,6 +341,10 @@ export function createFlightState({ source, services }) {
   flightState._enrichQueue = [];
 
   flightState._enrichSeen = new Set();
+
+  /** Lookup key -> epoch ms before which a failed lookup is not asked again. */
+
+  flightState._enrichRetryAfter = new Map();
 
   flightState._enrichAmbientBudget = ENRICH_AMBIENT_BUDGET_CEIL;
 

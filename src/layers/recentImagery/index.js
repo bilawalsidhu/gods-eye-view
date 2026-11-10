@@ -822,7 +822,17 @@ export function createRecentImageryLayer({
         // A probe can take a pinned day off the map or let a followed focus
         // preview; both change more than the cards, so a full notification
         // follows the thumbnail one.
+        const previousFollow = _followKey;
+        const previousPreview = _previewKey;
         const pruned = pruneEmpty();
+        if (
+          pruned &&
+          (_followKey !== previousFollow || _previewKey !== previousPreview)
+        ) {
+          // A new automatic day can have had its probe cancelled while offscreen.
+          // Re-request it even when the visible window has not moved.
+          requestThumbnails();
+        }
         if (pruned) syncRender();
         const followed =
           Boolean(_followKey) &&
@@ -1212,6 +1222,16 @@ export function createRecentImageryLayer({
       _alpha = next;
       for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, next);
       notify('alpha');
+    },
+
+    /** Stop catalog/preview work owned by a cancelled voice action. */
+    cancelPendingSearch() {
+      // Without a note the emptied strip would read as "no imagery".
+      if (_searching) _notice = msg('Search cancelled');
+      cancelSearch();
+      clearPending();
+      syncRender();
+      notify();
     },
 
     /**

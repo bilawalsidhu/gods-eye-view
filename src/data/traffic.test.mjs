@@ -30,6 +30,28 @@ test('a superseded flow fetch is not an outage', () => {
   assert.equal(deriveTrafficFlowError(undefined), null);
 });
 
+test('hosted account limits and service failures name their own reason', () => {
+  const failure = (status, code) =>
+    deriveTrafficFlowError(
+      Object.assign(new Error(`TomTom flow unavailable (HTTP ${status})`), {
+        status,
+        code,
+      }),
+    );
+  assert.equal(
+    failure(429, 'USAGE_LIMIT_REACHED'),
+    'Monthly traffic allowance used',
+  );
+  assert.equal(failure(429, 'RATE_LIMITED'), 'Traffic rate limit reached');
+  assert.equal(failure(429, 'budget'), 'TomTom daily budget reached');
+  assert.equal(failure(503, 'no_key'), 'TomTom key unavailable');
+  assert.equal(failure(503, null), 'TomTom key unavailable');
+  assert.equal(
+    failure(503, 'USAGE_UNAVAILABLE'),
+    'Traffic service unavailable',
+  );
+});
+
 test('flow failures map onto short, specific reasons', () => {
   const reason = (message) => deriveTrafficFlowError(new Error(message));
   assert.equal(reason('flow tile 12/1/1: HTTP 503'), 'TomTom key unavailable');

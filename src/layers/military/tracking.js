@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import { t } from '../../i18n/index.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
@@ -500,7 +501,7 @@ export function createTracking({
     // newest ~RENDER_DELAY_SEC of fixes are AHEAD of the displayed icon; including them
     // would draw the trail in front of the plane. They join via _appendTrailFix as they age.
     const seedRenderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
+      julianAt(flightState.now()),
       -RENDER_DELAY_SEC,
       flightState._scratchWarmupTime,
     );

@@ -856,3 +856,18 @@ for (const action of ['stop', 'destroy']) {
     });
   }
 }
+
+test('a provider switch hands chat Settings to the new mount', async (t) => {
+  const f = compositionFixture(t);
+  const first = f.facade.provider;
+  const next = first === 'openai' ? 'gemini' : 'openai';
+  // Without chat open there is nothing to carry.
+  assert.equal(f.mounts[0].controls.chatPresentation(), null);
+  const shown = { view: 'settings', frame: { width: 320, height: 480 } };
+  f.mounts[0].controls.chatPresentation = () => shown;
+  f.select(next);
+  await settle();
+  assert.equal(f.mounts.length, 2);
+  assert.deepEqual(f.mounts[1].options.presentation, shown);
+  assert.equal(f.facade.provider, next);
+});

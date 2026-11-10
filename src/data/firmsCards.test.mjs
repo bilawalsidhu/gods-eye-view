@@ -45,7 +45,7 @@ test('buildFireCard: title carries FRP, detail carries conf/age/satellite', () =
   assert.equal(card.details.length, 1);
   assert.equal(card.details[0], 'high · 2h · N20');
   assert.equal(card.selected, false);
-  assert.equal(card.accent, accentForSeverity('red'), 'FRP 1520 is red-hot');
+  assert.equal(card.accent, accentForSeverity('white-hot'), 'FRP 1520 is white-hot');
   assert.deepEqual(card.position, { x: 1, y: 2, z: 3 }, 'uses the candidate position untouched');
 });
 
@@ -69,11 +69,27 @@ test('buildFireCard: power that rounds to 10 MW drops the decimal', () => {
   assert.equal(selected.title, 'FIRE · 10 MW');
 });
 
-test('buildFireCard: SNPP satellite code renders as SNPP, weak fire is not red', () => {
+test('buildFireCard: SNPP satellite code renders as SNPP, weak fire is an ember', () => {
   const card = buildFireCard({ fire: fire({ satellite: 'N', frp: 0.8, confidence: 0.3 }), position: {} }, NOW);
   assert.match(card.details[0], /SNPP$/);
   assert.equal(card.title, '▲ 0.8 MW');
-  assert.notEqual(card.accent, accentForSeverity('red'));
+  assert.equal(card.accent, accentForSeverity('ember'));
+});
+
+test('buildFireCard: accent steps through the FRP ramp at 5 · 20 · 50 · 100 · 300 MW', () => {
+  const accentAt = (frp) =>
+    buildFireCard({ fire: fire({ frp }), position: {} }, NOW).accent;
+  assert.equal(accentAt(4.9), accentForSeverity('ember'));
+  assert.equal(accentAt(5), accentForSeverity('red'));
+  assert.equal(accentAt(20), accentForSeverity('flame'));
+  assert.equal(accentAt(50), accentForSeverity('orange'));
+  assert.equal(accentAt(100), accentForSeverity('gold'));
+  assert.equal(accentAt(300), accentForSeverity('white-hot'));
+  // Confidence never moves the color: a low-confidence 864 MW fire stays red.
+  assert.equal(
+    buildFireCard({ fire: fire({ frp: 864, confidence: 0.3 }), position: {} }, NOW).accent,
+    accentForSeverity('white-hot'),
+  );
 });
 
 test('buildSelectedFireCard: full detail card with coords, selected flag, no fade', () => {
@@ -93,12 +109,12 @@ test('buildCellCard: plural noun, max FRP and newest age, accent passthrough', (
   const candidate = {
     cell: { count: 14, maxFrp: 210.4, newestAcqMs: NOW - 3 * H, night: 2 },
     position: { x: 0, y: 0, z: 0 },
-    accent: accentForSeverity('orange'),
+    accent: accentForSeverity('gold'),
   };
   const card = buildCellCard(candidate, NOW);
   assert.equal(card.title, '14 FIRES');
   assert.equal(card.details[0], 'max 210 MW · new 3h');
-  assert.equal(card.accent, accentForSeverity('orange'));
+  assert.equal(card.accent, accentForSeverity('gold'));
 });
 
 test('buildCellCard: the count picks the plural form of the language', () => {
@@ -150,7 +166,7 @@ test('buildCellCard: singular noun and missing-age omission', () => {
   const card = buildCellCard(candidate, NOW);
   assert.equal(card.title, '1 FIRE');
   assert.equal(card.details[0], 'max 9.9 MW');
-  assert.equal(card.accent, accentForSeverity('yellow'), 'missing accent defaults to yellow');
+  assert.equal(card.accent, accentForSeverity('ember'), 'missing accent defaults to the weakest stop');
 });
 
 test('FIRMS host policy keeps ambient cards bounded and selected cards protected', () => {

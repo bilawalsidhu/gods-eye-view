@@ -91,6 +91,7 @@ export function createQueries({ state: layerState, services, parts, source }) {
         stats.count ?? null,
         stats.status || null,
         stats.error || null,
+        stats.source || null,
       ];
     })
       .map((parts) => parts.join(':'))
