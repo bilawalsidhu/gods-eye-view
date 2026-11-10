@@ -108,7 +108,7 @@ test('destroy and a renderer detach remove the owned imagery', () => {
   layer.enable();
   layer.detachRenderer();
   assert.equal(layers().length, 0);
-  layer.attachRenderer(null, { engine });
+  layer.attachRenderer({ engine });
   assert.equal(
     layers().length,
     1,
@@ -140,7 +140,7 @@ test('on Navara an overlay drapes through engine.maps and follows the globe', ()
   // An engine switch: the drape leaves with the old globe, comes back on the next.
   seaMarks.detachRenderer();
   assert.equal(added[0].removed, true);
-  seaMarks.attachRenderer(null, { engine: engineWith() });
+  seaMarks.attachRenderer({ engine: engineWith() });
   assert.equal(added.length, 2);
   assert.equal(added[1].removed, false);
   seaMarks.disable();

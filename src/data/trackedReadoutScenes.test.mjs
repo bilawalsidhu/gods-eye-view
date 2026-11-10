@@ -1,3 +1,4 @@
+import { createLayerSceneContext } from './layerSceneBinding.js';
 import * as geo from '../geo/index.js';
 import { createApplicationScene } from '../app/scene.js';
 import { createLayerSession } from '../app/layerSession.js';
@@ -275,7 +276,12 @@ for (const makeHarness of GROUND_HARNESSES) {
         },
       },
     };
-    session.handoffLayers = new Map();
+    session.handoff = {
+      layers: new Map(),
+      cameraOwners: [],
+      selection: null,
+      director: null,
+    };
     const cleanups = [];
     const open = (engine) =>
       createApplicationScene({
@@ -297,10 +303,10 @@ for (const makeHarness of GROUND_HARNESSES) {
     const outgoing = await open(first.engine);
     const record = select(outgoing.services.context, subject());
     cleanups.pop()();
-    assert.equal(session.selectionContext, record);
+    assert.equal(session.handoff.selection, record);
     assert.equal(getSelectedEntityContext(), record);
     const incoming = await open(second.engine);
-    assert.equal(session.selectionContext, null);
+    assert.equal(session.handoff.selection, null);
     assert.equal(incoming.services.context.getSelectedEntityContext(), record);
     assert.equal(getSelectedEntityContext(), record);
     session.lifetime.abort();
@@ -451,7 +457,7 @@ for (const makeHarness of GROUND_HARNESSES) {
     assert.equal(hosts[0].last().title, 'LOCAL2');
     layer.detachRenderer();
     assert.equal(a.trackedReadout.activeId(), null);
-    await layer.attachRenderer(null, { engine: second.engine });
+    await layer.attachRenderer({ engine: second.engine });
     assert.equal(layer.selectById('abc123'), true);
     assert.equal(b.trackedReadout.activeId(), 'local-adsb:abc123');
     assert.equal(a.trackedReadout.activeId(), null);
@@ -490,7 +496,12 @@ for (const makeHarness of GROUND_HARNESSES) {
         },
       },
     };
-    session.handoffLayers = new Map();
+    session.handoff = {
+      layers: new Map(),
+      cameraOwners: [],
+      selection: null,
+      director: null,
+    };
     const cleanups = [];
     const open = (engine) =>
       createApplicationScene({
@@ -564,12 +575,16 @@ for (const makeHarness of GROUND_HARNESSES) {
     const selectedAt = window.__gevContextStore.selectedAt;
     layer.detachRenderer();
     cleanups.pop()();
-    assert.equal(session.selectionContext.id, id);
+    assert.equal(session.handoff.selection.id, id);
     const incoming = await open(second.engine);
-    layer.attachRenderer(null, {
+    let restoreView;
+    const attachmentContext = createLayerSceneContext({
       engine: second.engine,
-      waitForCameraRestore: true,
+      viewRestored: new Promise((resolve) => {
+        restoreView = resolve;
+      }),
     });
+    layer.attachRenderer(attachmentContext);
     // The shell initializes readouts before restoring the camera and resuming layers.
     incoming.services.trackedReadout.init();
     assert.equal(window.__gevContextStore.selectedEntityId, id);
@@ -577,6 +592,8 @@ for (const makeHarness of GROUND_HARNESSES) {
     second.engine.camera.setView({
       destination: geo.cartesian3.fromDegrees(fire.lon, fire.lat, 100_000),
     });
+    restoreView();
+    await attachmentContext.viewRestored;
     layer.resumeViewport();
     assert.equal(layer.getSelectedInfo().id, id);
     assert.equal(incoming.services.context.getSelectedEntityContext().id, id);

@@ -76,7 +76,11 @@ export function createViewport({ state, services, parts }) {
       globalThis.document?.visibilityState === 'hidden'
     )
       return;
-    if (!state._enabled || !parts.renderer?.ready || state._restoringViewport)
+    if (
+      !state._enabled ||
+      !parts.renderer?.ready ||
+      state._sceneContext?.viewReady === false
+    )
       return;
     refreshViewBounds();
     const altitude = getCameraAltitude();
@@ -125,7 +129,7 @@ export function createViewport({ state, services, parts }) {
   }
 
   function onCameraChanged() {
-    if (state._restoringViewport) return;
+    if (state._sceneContext?.viewReady === false) return;
     // The bounds update immediately; the feed proximity check stays debounced.
     // A person dragging the globe should not wait a third of a second for the
     // vehicles under the cursor to start moving again.

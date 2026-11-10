@@ -188,6 +188,10 @@ for (const makeHarness of HARNESSES) {
       );
     near(station.pixelSize, 13, 'station size');
     const cluster = f.instance('radio-clusters', 0);
+    assert.equal(f.layer.picks.owner, 'radio');
+    assert.equal(f.layer.picks.predicate(station.id), true);
+    assert.equal(f.layer.picks.predicate(cluster.id), true);
+    assert.equal(f.layer.picks.predicate('other'), false);
     near(
       cluster.pixelSize,
       Math.min(26, 12 + Math.log2(3) * 1.6),
@@ -235,6 +239,7 @@ for (const makeHarness of HARNESSES) {
     const bracket = f.instance('radio-bracket', 0);
     near(bracket.pixelSize, 40, 'bracket size');
     assert.equal(bracket.id, `radio:selected:${clusterId}`);
+    assert.equal(f.layer.picks.predicate(bracket.id), true);
     {
       const { options } = f.engine.fake.moverSet('radio-selected');
       assert.equal(options.point.sizePx, 14);

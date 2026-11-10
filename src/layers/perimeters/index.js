@@ -277,19 +277,23 @@ export function createFirePerimetersLayer({
         throw new Error('Fire perimeter layer is already initialized');
       initialized = true;
       try {
-        if (engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer({ engine });
       } catch (error) {
         this.destroy();
         throw error;
       }
     },
 
-    attachRenderer(viewer, { engine = null } = {}) {
+    show(enabled) {
+      renderer?.setVisible(enabled);
+      overlayHost?.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid fire perimeter scene attachment');
       sceneEngine = engine;
       renderer = createRenderer({ engine });
-      renderer.setVisible(_enabled);
+      this.show(_enabled);
       if (geometry.size) renderer.replace([...geometry.values()]);
       if (_enabled) {
         overlayHost?.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, true);

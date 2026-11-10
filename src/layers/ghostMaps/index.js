@@ -524,12 +524,7 @@ export function createGhostMapsLayer({
 
   function installClickHandler() {
     if (!canSelect() || _clickHandler || !_display) return;
-    picking.registerPickOwner?.(
-      GHOSTMAPS_LAYER_ID,
-      (pickedId) =>
-        typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
-      sceneEngine,
-    );
+    picking.registerPickOwner?.(picks.owner, picks.predicate, sceneEngine);
     _clickHandler = _display.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
       const cardHit = overlayHost.hitTest?.(
@@ -576,6 +571,11 @@ export function createGhostMapsLayer({
     return count;
   }
 
+  const picks = {
+    owner: GHOSTMAPS_LAYER_ID,
+    predicate: (pickedId) =>
+      typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
+  };
   const layer = {
     id: GHOSTMAPS_LAYER_ID,
     name: 'S2 GhostMaps',
@@ -586,10 +586,11 @@ export function createGhostMapsLayer({
     updateInterval: 300000,
 
     init(viewer, options = {}) {
-      if (options.engine) return this.attachRenderer(viewer, options);
+      if (options.engine) return this.attachRenderer(options);
     },
 
-    attachRenderer(_viewer, { engine = null, signal = null } = {}) {
+    picks,
+    attachRenderer({ engine = null, signal = null } = {}) {
       if (_display) throw new Error('GhostMaps display is already attached');
       if (typeof createRenderer !== 'function')
         throw new TypeError('GhostMaps needs a renderer factory');

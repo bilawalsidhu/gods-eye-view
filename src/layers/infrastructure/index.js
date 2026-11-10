@@ -136,9 +136,9 @@ export function createInfrastructureSessionLayer(
     updateInterval: 0,
     statsRefreshInterval: 1000,
     init(_viewer, options = {}) {
-      if (options.engine) return this.attachRenderer(_viewer, options);
+      if (options.engine) return this.attachRenderer(options);
     },
-    attachRenderer(_viewer, { engine = null, signal = null } = {}) {
+    attachRenderer({ engine = null, signal = null } = {}) {
       if (display) throw Error('Infrastructure display already attached');
       display = engine ? createDisplay(engine, config, services) : null;
       // The dataset load belongs to the session and keeps running; only this

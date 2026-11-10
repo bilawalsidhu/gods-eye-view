@@ -167,7 +167,7 @@ test('edge:local-adsb: an unplugged receiver ends one session and a scene switch
   layer.detachRenderer();
   clock.now += 1_000;
   await layer.update();
-  layer.attachRenderer(null, { engine: createFakeEngine() });
+  layer.attachRenderer({ engine: createFakeEngine() });
   await layer.update();
 
   assert.deepEqual(receiver.modeCalls, ['adsb'], 'the tuner is asked once');

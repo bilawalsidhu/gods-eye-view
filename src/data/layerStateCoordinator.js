@@ -120,7 +120,7 @@ export class LayerStateCoordinator {
   start({
     shareLayerState = null,
     allowLocalState = true,
-    handoffLayers = null,
+    handoff = null,
     shareCreatedAtMs = null,
   } = {}) {
     if (this._destroyed)
@@ -156,12 +156,12 @@ export class LayerStateCoordinator {
     );
     this.shareLinkManager?.onLayerStateChange?.();
     this._notifyDurableState();
-    if (!selected && !handoffLayers) return this.restorePromise;
+    if (!selected && !handoff) return this.restorePromise;
     this.restorePromise = this._restoreSelectedState(
       this._source === 'share'
         ? LAYER_RESTORE_ORIGINS.share
         : LAYER_RESTORE_ORIGINS.local,
-      handoffLayers,
+      handoff,
     );
     return this.restorePromise;
   }
@@ -400,7 +400,7 @@ export class LayerStateCoordinator {
       : this.restoreGate);
   }
 
-  async _restoreSelectedState(origin, handoffLayers = null) {
+  async _restoreSelectedState(origin, handoff = null) {
     // One controller set per run: a superseded run must not clear the newer
     // run's controllers when it settles.
     const controllers = new Map();
@@ -414,7 +414,8 @@ export class LayerStateCoordinator {
       const settled = await Promise.allSettled(
         LAYER_STATE_REGISTRY.map(async (entry) => {
           const controller = controllers.get(entry.id);
-          const live = handoffLayers?.get(entry.id);
+          const live = handoff?.layers.get(entry.id);
+          const retained = this.dataManager.layers.get(entry.id);
           const targetEnabled = handoffTargetEnabled(
             live,
             enabled.has(entry.id),
@@ -447,9 +448,10 @@ export class LayerStateCoordinator {
           // apply; a pick keeps the live layer as it is.
           if (
             live &&
-            this.dataManager.layers.get(entry.id) === live.entry &&
-            !live.entry.lifecycleUncertain &&
-            live.entry.enabled === targetEnabled
+            retained?.module.attachRenderer &&
+            retained.initialized &&
+            !retained.lifecycleUncertain &&
+            retained.enabled === targetEnabled
           ) {
             const current = this.dataManager.getLayerParams(entry.id);
             const changed =

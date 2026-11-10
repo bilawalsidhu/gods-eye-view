@@ -3070,7 +3070,7 @@ for (const stop of ['detach', 'scene-abort']) {
       const gate = new Promise((resolve) => { openGate = resolve; });
       layer.attachMapStackController(stack('photoreal', gate));
       const scene = new AbortController();
-      const attaching = layer.attachRenderer(second, { signal: scene.signal });
+      const attaching = layer.attachRenderer({ signal: scene.signal });
       let detaching = null;
       if (stop === 'detach') detaching = layer.detachRenderer();
       else scene.abort();
@@ -3121,7 +3121,7 @@ test('Bhote Koshi stops waiting for a stalled map switch when its scene is relea
       setStack: (id) => (id === 'esri-imagery' ? new Promise(() => {}) : Promise.resolve()),
     });
     const scene = new AbortController();
-    const attaching = layer.attachRenderer(second, { signal: scene.signal });
+    const attaching = layer.attachRenderer({ signal: scene.signal });
     scene.abort();
     await attaching;
     await layer.detachRenderer();
@@ -3196,7 +3196,7 @@ test('Bhote Koshi republishes its evidence cards to the incoming engine overlay'
       'first engine got the cards',
     );
     await layer.detachRenderer();
-    await layer.attachRenderer(second, { engine: engineB });
+    await layer.attachRenderer({ engine: engineB });
     const b = hostFor(engineB);
     assert.ok(
       [...b.entries.values()].some((e) => e.length > 0),

@@ -1,3 +1,4 @@
+import { createSessionHandoff } from '../app/sessionHandoff.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -75,8 +76,10 @@ function fakeSession(log) {
       'directions',
       {
         module: module('directions', {
-          suspendCamera: () => log.push('suspend:directions'),
-          resumeCamera: () => log.push('resume:directions'),
+          cameraOwner: {
+            suspend: () => log.push('suspend:directions'),
+            resume: () => log.push('resume:directions'),
+          },
         }),
       },
     ],
@@ -84,15 +87,19 @@ function fakeSession(log) {
       'satellites',
       {
         module: module('satellites', {
-          suspendCamera: () => log.push('suspend:satellites'),
+          cameraOwner: { suspend: () => log.push('suspend:satellites'), resume() {} },
         }),
       },
     ],
   ]);
   return {
-    handoffLayers: null,
+    handoff: null,
     manager: {
       layers,
+      resumeScene() {
+        for (const { module } of layers.values()) module.resumeViewport();
+        for (const { module } of layers.values()) module.cameraOwner?.resume();
+      },
       isEffectivelyEnabled: (id) => id === 'flights',
     },
     director: {
@@ -127,7 +134,8 @@ function harness({
     signal: lifetime.signal,
     async leave(from, to) {
       log.push(`leave:${from}->${to}`);
-      handOffSession(session, { addressLayerIds: session.addressLayerIds });
+      session.handoff = createSessionHandoff(session, { addressLayerIds: session.addressLayerIds });
+      handOffSession(session);
       parked.add(from);
       running = null;
     },
@@ -138,7 +146,7 @@ function harness({
       );
       await outcome?.(next, { ...attempt, warm });
       running = next;
-      resumeSession(session);
+      await resumeSession(session);
     },
     address: createEngineAddress({
       location: browser.location,
@@ -146,7 +154,7 @@ function harness({
       flush: () => log.push('flush'),
     }),
     settle: () => {
-      if (running) session.handoffLayers = null;
+      if (running) session.handoff = null;
     },
     remember: (next) => remembered.push(next),
     onFailure: (error, outcome) =>
@@ -193,7 +201,7 @@ test('Back and Forward hand the session off exactly like the picker', async () =
   h.session.addressLayerIds = ['flights'];
   let captured;
   h.session.director.suspendScene = () => {
-    captured = h.session.handoffLayers;
+    captured = h.session.handoff.layers;
     h.log.push('suspend:director');
   };
   await h.machine.select('navara');
@@ -225,10 +233,7 @@ test('Back and Forward hand the session off exactly like the picker', async () =
   // The visit records the same running state and outgoing address; the
   // layer-state coordinator compares that with the visited entry.
   assert.deepEqual(record(captured), afterPick);
-  assert.equal(
-    captured.get('flights').entry,
-    h.session.manager.layers.get('flights'),
-  );
+  assert.equal('entry' in captured.get('flights'), false);
   h.browser.go(1);
   await h.machine.reconcile();
   assert.equal(h.machine.state().kind, 'navara');

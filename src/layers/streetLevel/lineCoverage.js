@@ -373,7 +373,7 @@ export function createLineCoverage({
     const map = state.map;
     if (
       !map ||
-      state.context.waitingForView?.() ||
+      state.context.viewReady?.() === false ||
       !state.context.isActive() ||
       state.coverage.blocked
     )

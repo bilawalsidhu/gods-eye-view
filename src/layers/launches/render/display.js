@@ -376,6 +376,7 @@ export function createLaunchesDisplay(engine, { layerId = LAYER_ID } = {}) {
 
   return {
     engine,
+    ownsPick: owns,
     occluder,
     /** The engine frames seen so far (preUpdate). */
     frameNumber: () => frameNumber,

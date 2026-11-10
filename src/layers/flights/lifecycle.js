@@ -15,8 +15,15 @@ export function createLifecycle({ flightState, services, parts, layer }) {
     enable: () => methods.enable(),
   });
 
+  const picks = {
+    owner: 'flights',
+    predicate: (pickedId) => flightState._billboards.has(pickedId),
+  };
   const methods = {
+    picks,
     attachRenderer: binding.attachRenderer,
+    cameraOwner: binding.cameraOwner,
+    show: binding.show,
     detachRenderer: binding.detachRenderer,
     /** Configure the source before initialization; an active layer keeps its owner. */
     setSource(source) {
@@ -93,7 +100,7 @@ export function createLifecycle({ flightState, services, parts, layer }) {
 
       flightState.initialized = true;
       try {
-        if (viewer || engine) methods.attachRenderer(viewer, { engine });
+        if (viewer || engine) methods.attachRenderer({ engine });
       } catch (error) {
         methods.destroy(viewer);
         throw error;
@@ -129,8 +136,8 @@ export function createLifecycle({ flightState, services, parts, layer }) {
       if (!renderer) return;
       parts.tracking._installClickHandler();
       registerPickOwner(
-        'flights',
-        (pickedId) => flightState._billboards.has(pickedId),
+        picks.owner,
+        picks.predicate,
         flightState._renderer?.engine,
       );
       // Force a fresh rotation pass on the first tick after re-enable

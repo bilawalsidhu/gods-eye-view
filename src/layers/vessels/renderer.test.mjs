@@ -243,7 +243,7 @@ test('a pending AIS poll and selected trail survive replacement of the planet', 
   assert.equal(layer.getSelectedInfo()?.mmsi, '111');
   assert.ok(layer.findByQuery('222').position);
   assert.equal(layer.testing._getVesselStateForTest().trailPositionCount, 3);
-  layer.attachRenderer(null, { engine: engines[1] });
+  layer.attachRenderer({ engine: engines[1] });
   assert.equal(recorders[1].sprites.size, 2);
   const selected = [...recorders[1].sprites].find(({ id }) => id === record);
   assert.equal(selected.image, vesselChevronIcon('#ffffff', true));

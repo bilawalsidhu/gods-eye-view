@@ -78,7 +78,7 @@ export function createStreetLevelLayer({
     isAvailable: (entry) => providerAvailable(entry),
   });
 
-  let waitingForView = false;
+  let sceneContext = null;
   let notifyQueued = false;
   function notify() {
     if (notifyQueued) return;
@@ -113,7 +113,7 @@ export function createStreetLevelLayer({
       getFilter: () => resolveFilter(state.filter, streetLevelTime()),
       /** The layer and this provider's switch are both on. */
       isActive: () => state.enabled && entry.on,
-      waitingForView: () => waitingForView,
+      viewReady: () => Boolean(state.map) && sceneContext?.viewReady !== false,
       notify,
       actions: {
         /**
@@ -510,21 +510,23 @@ export function createStreetLevelLayer({
     },
 
     init(scene, options) {
-      this.attachRenderer(scene, options);
+      this.attachRenderer(options);
       for (const entry of state.providers.values()) checkStatus(entry);
     },
-    /** Draws on `engine` through its display; the first argument is not read. */
-    attachRenderer(
-      _scene,
-      { engine = null, waitForCameraRestore = false } = {},
-    ) {
+    /** Draws on `engine` through its display. */
+    show(enabled) {
+      parts.marker.setVisible(enabled);
+    },
+    picks: { owner: STREET_LEVEL_LAYER_ID, predicate: parts.router.ownsPick },
+    attachRenderer(context = {}) {
+      const { engine = null } = context;
+      sceneContext = context;
       const createDisplay = services.createDisplay ?? createStreetLevelDisplay;
       const map = engine ? (createDisplay(engine) ?? null) : null;
       state.map = map;
-      waitingForView = waitForCameraRestore;
       if (!map) return;
       parts.marker.ensure(map);
-      parts.marker.setVisible(state.enabled);
+      this.show(state.enabled);
       for (const entry of state.providers.values()) {
         entry.instance.init(map);
         if (state.enabled && entry.on) {
@@ -544,18 +546,23 @@ export function createStreetLevelLayer({
         remeasureGround();
       }
     },
+    cameraOwner: {
+      suspend: () => parts.framing.cancel(),
+      resume() {
+        if (state.enabled && state.map) {
+          for (const entry of activeEntries())
+            entry.instance.refreshCoverage?.();
+          remeasureGround();
+        }
+      },
+    },
     resumeViewport() {
-      if (!waitingForView) return;
-      waitingForView = false;
-      if (state.enabled && state.map) {
-        for (const entry of activeEntries()) entry.instance.refreshCoverage?.();
-        remeasureGround();
-      }
+      this.cameraOwner.resume();
     },
     detachRenderer() {
       const map = state.map;
       if (!map) return;
-      waitingForView = true;
+      sceneContext = null;
       removeCameraListener?.();
       removeCameraListener = null;
       cancelGroundRetry();

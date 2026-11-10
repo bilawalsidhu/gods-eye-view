@@ -280,7 +280,7 @@ test('station data stays queryable and attaches to a fresh scene without polling
     assert.equal(await h.layer.update(), true);
     assert.equal(h.events.length, 0);
     assert.equal(h.layer.getAnalystRecords()[0].value, 7);
-    h.layer.attachRenderer(null, { engine: h.engine });
+    h.layer.attachRenderer({ engine: h.engine });
     assert.equal(h.events.at(-1)[0], 'air-quality');
     assert.equal(h.ground.set('air-quality').items.length, 1);
     assert.equal(polls, 1);

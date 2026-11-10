@@ -104,6 +104,10 @@ export function createLifecycle({
     hidden = false;
   }
 
+  const picks = {
+    owner: 'transit',
+    predicate: (pickedId) => state._vehicles.has(pickedId),
+  };
   const methods = {
     id: 'transit',
     name: 'Transit',
@@ -114,10 +118,19 @@ export function createLifecycle({
      * Create the marker sets. Called once at bootstrap.
      */
     init(viewer, options) {
-      this.attachRenderer(viewer, options);
+      this.attachRenderer(options);
     },
-    attachRenderer(viewer, options = {}) {
-      state._restoringViewport = Boolean(options.waitForCameraRestore);
+    show(enabled) {
+      if (state._markers) state._markers.show = enabled;
+      if (state._animatedMarkers) state._animatedMarkers.show = enabled;
+      state._overlayHost.setVisible(
+        TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
+        enabled,
+      );
+    },
+    picks,
+    attachRenderer(options = {}) {
+      state._sceneContext = options;
       if (parts.renderer)
         throw new Error('Transit layer is already initialized');
       if (typeof rendererFactory !== 'function')
@@ -151,7 +164,7 @@ export function createLifecycle({
           entry.pathRevision = -1;
         }
         this.bindScene();
-        if (!state._restoringViewport) this.repaint();
+        if (state._sceneContext?.viewReady !== false) this.repaint();
       }
       bindStyleEvents();
       console.log(
@@ -179,11 +192,7 @@ export function createLifecycle({
       );
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.selection.installClickHandler();
-      registerPickOwner(
-        'transit',
-        (pickedId) => state._vehicles.has(pickedId),
-        parts.renderer?.engine,
-      );
+      registerPickOwner(picks.owner, picks.predicate, parts.renderer?.engine);
       if (!state._cameraChangedAttached) {
         state._cameraChangedRemove = parts.renderer.onCameraChanged(
           parts.viewport.onCameraChanged,
@@ -213,13 +222,11 @@ export function createLifecycle({
         );
     },
     resumeViewport() {
-      if (!state._restoringViewport) return;
-      state._restoringViewport = false;
       if (state._enabled && parts.renderer) this.repaint();
     },
     detachRenderer() {
       if (!parts.renderer) return;
-      state._restoringViewport = true;
+      state._sceneContext = null;
       unbindVisibility();
       clearInterval(state._maintenanceTimer);
       clearTimeout(state._cameraDebounceTimer);

@@ -15,9 +15,13 @@ export function createLifecycle({
   const { clearSource, setVisible } = services.overlays;
 
   const methods = {
+    picks: {
+      owner: 'radio',
+      predicate: (id) => parts.renderer?.ownsPick(id) ?? false,
+    },
     /** Initialize scene resources and the single audio element. */
     init(viewer, options = {}) {
-      this.attachRenderer(viewer, options);
+      this.attachRenderer(options);
       layerState._sessionGeneration += 1;
       parts.clustering.resetRadioClusterOverlayIdentities();
       parts.playback.installAudio();
@@ -25,7 +29,7 @@ export function createLifecycle({
       setVisible(RADIO_OVERLAY_SOURCE_ID, false);
     },
 
-    attachRenderer(viewer, options = {}) {
+    attachRenderer(options = {}) {
       if (parts.renderer?.ready)
         throw new Error('Radio layer is already initialized');
       if (typeof rendererFactory !== 'function')

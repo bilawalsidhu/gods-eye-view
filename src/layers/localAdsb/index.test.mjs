@@ -1152,7 +1152,7 @@ test('globe handoff retains the receiver, feed, trail fixes and selection', asyn
   });
   await layer.update();
   assert.equal(layer.getAnalystRecords()[0].icao24, 'abc123');
-  layer.attachRenderer(null, { engine: fakeEngine() });
+  layer.attachRenderer({ engine: fakeEngine() });
   assert.deepEqual(receiver.modeCalls, ['adsb']);
   assert.deepEqual(feeds.calls, ['start']);
   assert.equal(closes, 0);

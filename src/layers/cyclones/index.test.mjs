@@ -935,7 +935,7 @@ test('advisories delivered between scenes keep a deliberate selection without an
   pending.resolve(snapshot([{ ...storm(), advisoryNumber: '11' }]));
   await refresh;
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  await layer.attachRenderer(null, { engine: second });
+  await layer.attachRenderer({ engine: second });
   assert.equal(
     isOwnedByOtherLayer('flights', 'cyclone:ep152026:center', second),
     true,

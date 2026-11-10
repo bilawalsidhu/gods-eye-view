@@ -76,9 +76,9 @@ export function createCableSessionLayer({ source, createDisplay }) {
     updateInterval: 0,
     statsRefreshInterval: 500,
     init(_viewer, ctx) {
-      return this.attachRenderer(_viewer, ctx);
+      return this.attachRenderer(ctx);
     },
-    attachRenderer(_viewer, { engine = null, signal = null } = {}) {
+    attachRenderer({ engine = null, signal = null } = {}) {
       display = engine ? createDisplay(engine) : null;
       // The cable data load belongs to the session and keeps running; only
       // this scene's wait for it ends when the scene is released. show()

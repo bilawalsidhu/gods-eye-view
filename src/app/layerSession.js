@@ -15,10 +15,9 @@
  * @property {{draw?: ReturnType<typeof import('../annotations/drawTool.js').createSessionDrawTool>, geoImport?: ReturnType<typeof import('../ui/geoFileImport.js').createGeoFileImport>}} tools Session tools.
  * @property {ReturnType<typeof import('../voice/gevRealtime.js').createSceneVoice> | null} voice Session voice.
  * @property {{locale?: () => void, placeSearch?: object, sceneChrome?: boolean}} chrome Standalone startup and scene factory.
- * @property {Map<string, {entry: object | null, enabled: boolean, durable: boolean | undefined, visit: boolean}> | null} handoffLayers Switch coordinator: outgoing layer intentions; visit restores the incoming address's options instead of keeping the live options.
- * @property {boolean} restoringView Switch coordinator: incoming address restoration.
+ * @property {import('./sessionHandoff.js').SessionHandoff | null} handoff Switch coordinator: retained intentions and scene owners.
+ * @property {Promise<void>} viewRestored Switch coordinator: incoming camera restoration.
  * @property {() => boolean} switching Switch coordinator: voice waits while busy.
- * @property {object | null} selectionContext Scene factory: selected record carried to the next attachment.
  * @property {object | null} contextScene Shell: retained Context state.
  */
 
@@ -37,15 +36,14 @@ export function createLayerSession() {
     tools: {},
     voice: null,
     chrome: {},
-    handoffLayers: null,
-    restoringView: false,
+    handoff: null,
+    viewRestored: Promise.resolve(),
     switching: () => false,
     contextScene: null,
-    selectionContext: null,
   };
 }
 
 /** Whether teardown preserves the session for another globe. */
 export function retainsLayerSession(session) {
-  return Boolean(session?.handoffLayers && !session.lifetime.signal.aborted);
+  return Boolean(session?.handoff && !session.lifetime.signal.aborted);
 }

@@ -32,7 +32,8 @@ export function createLifecycle({
    * set changed since they were last told, including by motion passes.
    */
   function settleView() {
-    if (layerState._restoringViewport || !parts.renderer?.ready) return;
+    if (layerState._sceneContext?.viewReady === false || !parts.renderer?.ready)
+      return;
     const changed = parts.rendering.refreshHorizonCulling();
     noteViewPose();
     parts.geometryQueue.enqueueViewGeometry();
@@ -242,7 +243,24 @@ export function createLifecycle({
       throw error;
     }
   }
+  const picks = {
+    owner: 'cctv',
+    predicate: (pickedId) => {
+      if (layerState._recordById.has(pickedId)) return true;
+      if (typeof pickedId === 'string' && pickedId.startsWith(GIZMO_ID_PREFIX))
+        return true;
+      const coverage =
+        /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
+          pickedId,
+        );
+      return Boolean(coverage && layerState._recordById.has(coverage[1]));
+    },
+  };
   const methods = {
+    cameraOwner: {
+      suspend: () => {},
+      resume: () => methods.resumeViewport(),
+    },
     /**
      * Initializes the CCTV layer: loads camera sources, builds the catalog,
      * restores calibration from localStorage, creates billboards, sets up click
@@ -421,9 +439,13 @@ export function createLifecycle({
       }
     },
 
-    attachRenderer(viewer, options = {}) {
-      const renderer = createRenderer(viewer, options);
-      layerState._restoringViewport = Boolean(options.waitForCameraRestore);
+    show(enabled) {
+      parts.renderer?.setMarkersVisible(enabled);
+    },
+    picks,
+    attachRenderer(options = {}) {
+      const renderer = createRenderer(null, options);
+      layerState._sceneContext = options;
       renderer.createMarkers();
       const active = parts.selection.getActiveRecord();
       for (const record of layerState._records) {
@@ -440,15 +462,13 @@ export function createLifecycle({
           record === active && record.activationDone === true;
         record.activationDone = false;
       }
-      renderer.setMarkersVisible(layerState._enabled);
-      bindScene(viewer, options);
-      if (!layerState._restoringViewport && layerState._enabled)
+      this.show(layerState._enabled);
+      bindScene(null, options);
+      if (layerState._sceneContext?.viewReady !== false && layerState._enabled)
         this.resumeDisplay();
     },
 
     resumeViewport() {
-      if (!layerState._restoringViewport) return;
-      layerState._restoringViewport = false;
       if (layerState._enabled && parts.renderer) this.resumeDisplay();
     },
 
@@ -467,7 +487,7 @@ export function createLifecycle({
 
     detachRenderer() {
       if (!parts.renderer) return;
-      layerState._restoringViewport = true;
+      layerState._sceneContext = null;
       parts.renderer.hideCredit();
       unregisterPickOwner('cctv', parts.renderer?.engine);
       if (layerState._mapStackListener) {
@@ -536,23 +556,7 @@ export function createLifecycle({
         parts.renderer?.showCredit();
       // Pick-ownership (H2): camera billboards use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
-      registerPickOwner(
-        'cctv',
-        (pickedId) => {
-          if (layerState._recordById.has(pickedId)) return true;
-          if (
-            typeof pickedId === 'string' &&
-            pickedId.startsWith(GIZMO_ID_PREFIX)
-          )
-            return true;
-          const coverage =
-            /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
-              pickedId,
-            );
-          return Boolean(coverage && layerState._recordById.has(coverage[1]));
-        },
-        parts.renderer?.engine,
-      );
+      registerPickOwner(picks.owner, picks.predicate, parts.renderer?.engine);
       const activeRecord = parts.selection.getActiveRecord();
       if (activeRecord) {
         parts.projection.ensureProjectionRuntime(activeRecord);

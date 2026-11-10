@@ -132,7 +132,7 @@ for (const makeHarness of HARNESSES) {
       layer.detachRenderer();
       assert.equal(count(h.engine), undefined, 'the points go with the globe');
       const next = makeHarness();
-      layer.attachRenderer(null, { engine: next.engine });
+      layer.attachRenderer({ engine: next.engine });
       assert.equal(count(next.engine), 2);
       assert.equal(layer.getAnalystRecords().length, 2, 'the results stayed');
       layer.disable();

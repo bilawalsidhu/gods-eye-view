@@ -274,7 +274,7 @@ test('an engine switch keeps the zones and the selected card for the next globe'
   renderers[0].click({ position: { x: 1, y: 1 } });
   layer.detachRenderer();
   assert.equal(renderers[0].destroyed, true);
-  layer.attachRenderer(null, { engine: 'navara' });
+  layer.attachRenderer({ engine: 'navara' });
   const [, next] = renderers;
   assert.equal(next.engine, 'navara');
   assert.equal(next.visible, true);

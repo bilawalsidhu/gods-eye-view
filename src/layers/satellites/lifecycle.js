@@ -30,7 +30,18 @@ export function createLifecycle({
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
+  const picks = {
+    owner: 'satellites',
+    predicate: (pickedId) => {
+      const norad = Number(pickedId);
+      return Number.isFinite(norad) && layerState._points.has(norad);
+    },
+  };
   const methods = {
+    cameraOwner: {
+      suspend: () => methods.suspendCamera(),
+      resume: () => methods.resumeViewport(),
+    },
     // Catalog data refresh; propagation remains preRender-owned.
 
     // The display draws on `engine` (none without one: nothing is drawn).
@@ -160,10 +171,23 @@ export function createLifecycle({
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
     },
 
-    attachRenderer(
-      _viewer,
-      { engine = null, waitForCameraRestore = false } = {},
-    ) {
+    show(enabled) {
+      if (layerState._pointCollection)
+        layerState._pointCollection.show =
+          enabled && layerState._params.showPoints;
+      for (const [id, path] of layerState._orbitPaths) {
+        if (path.primitive)
+          path.primitive.show =
+            enabled &&
+            (id === ISS_NORAD
+              ? parts.controls._issOrbitVisible()
+              : layerState._params.showOrbits);
+      }
+    },
+    picks,
+    attachRenderer(context = {}) {
+      const { engine = null } = context;
+      layerState._sceneContext = context;
       layerState._engine = engine;
       const renderer = engine
         ? (services.renderer.create({ engine }) ?? null)
@@ -196,13 +220,11 @@ export function createLifecycle({
       layerState._resumeRenderer?.();
       layerState._waitForRenderer = layerState._resumeRenderer = null;
       // The restored camera runs before a retained follow gets its new native target.
-      layerState._restoringViewport = true;
-      if (!waitForCameraRestore) this.resumeViewport();
+      if (!context.viewRestored) this.resumeViewport();
     },
 
     resumeViewport() {
-      if (!layerState._restoringViewport || !layerState._renderer) return;
-      layerState._restoringViewport = false;
+      if (!layerState._renderer) return;
       if (layerState._enabled) {
         if (layerState._trackedNorad != null && !layerState._trackedEntity)
           parts.tracking._trackSatellite(layerState._trackedNorad, {
@@ -239,14 +261,7 @@ export function createLifecycle({
       if (layerState._renderer) parts.interaction._installClickHandler();
       // Pick-ownership (H2): satellite dot ids are numeric NORAD catalog numbers;
       // the registry hands predicates String()-coerced ids, so match via Number().
-      registerPickOwner(
-        'satellites',
-        (pickedId) => {
-          const norad = Number(pickedId);
-          return Number.isFinite(norad) && layerState._points.has(norad);
-        },
-        layerState._engine,
-      );
+      registerPickOwner(picks.owner, picks.predicate, layerState._engine);
       if (!layerState._preRenderListener && layerState._renderer) {
         layerState._preRenderListener = getRenderer().onFrame(
           parts.rendering._preRenderTick,

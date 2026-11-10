@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as geo from '../../geo/index.js';
 import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import { createLayerSceneContext } from '../../data/layerSceneBinding.js';
 import { createSatellitesDisplay } from './render/display.js';
 import { constantRgba } from '../shared/color.js';
 import { createState } from './state.js';
@@ -545,10 +546,20 @@ test('an engine switch retains the held subject and dims the replacement rings',
 
   const engine = createFakeEngine();
   t.after(() => engine.destroy());
-  f.parts.lifecycle.methods.attachRenderer(null, {
+  let restoreView;
+  const context = createLayerSceneContext({
     engine,
-    waitForCameraRestore: true,
+    viewRestored: new Promise((resolve) => {
+      restoreView = resolve;
+    }),
   });
+  f.parts.lifecycle.methods.attachRenderer(context);
+  assert.equal(f.methods.trackById(GPS, { origin: 'share-restore' }), true);
+  assert.equal(
+    engine.camera.following(),
+    null,
+    'retained tracking waits for the view',
+  );
   const issPath = f.state._orbitPaths.get(ISS_NORAD);
   assert.equal(f.ring(ISS_NORAD).show, false, 'the hidden class stays hidden');
   assert.equal(f.ring(GPS).show, false, 'the held ring stays hidden');
@@ -557,7 +568,10 @@ test('an engine switch retains the held subject and dims the replacement rings',
     ringColors({ ...f, engine }, ISS_NORAD).color[3],
     issPath.baseColor.alpha * COCKPIT_ORBIT_DIM_FACTOR,
   );
+  restoreView();
+  await context.viewRestored;
   f.parts.lifecycle.methods.resumeViewport();
+  assert.equal(engine.camera.following().native, f.state._trackedEntity);
   engine.fake.frame();
   assert.equal(dotShown(f), false);
   f.methods.setCockpitSubject(null);

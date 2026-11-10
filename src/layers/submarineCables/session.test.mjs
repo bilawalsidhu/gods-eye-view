@@ -25,7 +25,7 @@ test('cables arriving during handoff belong to the incoming display', async () =
   layer.init(null, { engine: 'outgoing' });
   const pending = layer.enable();
   layer.detachRenderer();
-  const handoff = layer.attachRenderer(null, { engine: 'incoming' });
+  const handoff = layer.attachRenderer({ engine: 'incoming' });
   const dataset = { cables: { features: [] }, landingPoints: { features: [] } };
   resolve(dataset);
   await Promise.all([pending, handoff]);
@@ -55,7 +55,7 @@ test('a released scene stops waiting for a stalled cable load, which stays in th
   const pending = layer.enable();
   layer.detachRenderer();
   const scene = new AbortController();
-  const attaching = layer.attachRenderer(null, {
+  const attaching = layer.attachRenderer({
     engine: 'released',
     signal: scene.signal,
   });
@@ -66,7 +66,7 @@ test('a released scene stops waiting for a stalled cable load, which stays in th
   resolve(dataset);
   await pending;
   assert.deepEqual(shown, []);
-  await layer.attachRenderer(null, { engine: 'next' });
+  await layer.attachRenderer({ engine: 'next' });
   assert.deepEqual(shown, [['next', dataset]]);
   layer.destroy();
 });

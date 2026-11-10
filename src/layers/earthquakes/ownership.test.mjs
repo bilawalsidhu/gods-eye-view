@@ -101,7 +101,7 @@ test('an observation received between scenes is queryable and draws without a se
     assert.equal(record.id, row.usgsId);
     assert.equal(record.lat, row.lat);
     assert.equal(h.events.length, 0);
-    h.layer.attachRenderer(null, { engine: h.ground.engine });
+    h.layer.attachRenderer({ engine: h.ground.engine });
     assert.equal(h.ground.set('earthquakes').items.length, 1);
     assert.equal(h.events.length, 1);
     assert.equal(polls, 1);

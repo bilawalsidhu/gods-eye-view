@@ -603,6 +603,7 @@ export function createLocalAdsbLayer({
     return rows;
   }
 
+  const picks = { owner: LAYER_ID, predicate: (id) => markers.has(id) };
   return {
     id: LAYER_ID,
     name: LAYER_NAME,
@@ -632,11 +633,15 @@ export function createLocalAdsbLayer({
         });
       unsubscribe = receiver.subscribe?.(scheduleSync) || null;
       unsubscribeFeeds = feeds?.subscribe?.(requestSync) || null;
-      return this.attachRenderer(nextViewer, options);
+      return this.attachRenderer(options);
     },
 
-    attachRenderer(nextViewer, { engine = null } = {}) {
-      renderer = services.renderer.create({ viewer: nextViewer, engine });
+    show(enabled) {
+      renderer?.setVisible(enabled);
+    },
+    picks,
+    attachRenderer({ engine = null } = {}) {
+      renderer = services.renderer.create({ engine });
       renderer.attach();
       if (renderer.models) {
         models = createLocalAdsbModels({
@@ -650,7 +655,7 @@ export function createLocalAdsbLayer({
         const restore = selectedId;
         selectedId = null;
         renderer.setVisible(true);
-        registerPickOwner(LAYER_ID, (id) => markers.has(id), renderer?.engine);
+        registerPickOwner(picks.owner, picks.predicate, renderer?.engine);
         installInteraction();
         installFrame();
         sync();
@@ -687,11 +692,7 @@ export function createLocalAdsbLayer({
     async enable() {
       enabled = true;
       renderer?.setVisible(true);
-      registerPickOwner(
-        LAYER_ID,
-        (pickedValue) => markers.has(pickedValue),
-        renderer?.engine,
-      );
+      registerPickOwner(picks.owner, picks.predicate, renderer?.engine);
       installInteraction();
       installFrame();
       clearInterval(tickTimer);

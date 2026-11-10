@@ -84,7 +84,7 @@ export function createLifecycle({
      * @param {{ engine?: object, waitForCameraRestore?: boolean }} [options]
      */
     init(_viewer, options) {
-      this.attachRenderer(_viewer, options);
+      this.attachRenderer(options);
       layerState._dots = [];
       layerState._roads = [];
       layerState._count = 0;
@@ -128,15 +128,16 @@ export function createLifecycle({
       console.log('[Data:Traffic] Initialized');
     },
 
-    attachRenderer(
-      _viewer,
-      { engine = null, waitForCameraRestore = false } = {},
-    ) {
-      layerState._restoringViewport = waitForCameraRestore;
+    show(enabled) {
+      layerState._display?.show(enabled && layerState._showDots);
+    },
+    attachRenderer(context = {}) {
+      const { engine = null } = context;
+      layerState._sceneContext = context;
       layerState._engine = engine;
       layerState._display = engine ? services.createRenderer(engine) : null;
-      layerState._display?.show(layerState._enabled && layerState._showDots);
-      if (!waitForCameraRestore) readyForSurfaceWork();
+      this.show(layerState._enabled);
+      if (context.viewReady !== false) readyForSurfaceWork();
       if (layerState._enabled) {
         bindScene();
         parts.animation.drawDots();
@@ -157,8 +158,6 @@ export function createLifecycle({
       }
     },
     resumeViewport() {
-      if (!layerState._restoringViewport) return;
-      layerState._restoringViewport = false;
       readyForSurfaceWork();
       if (!layerState._enabled) return;
       if (layerState._populationPending) parts.retention.resume();

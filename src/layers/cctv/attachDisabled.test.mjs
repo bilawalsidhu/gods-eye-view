@@ -37,7 +37,7 @@ test('disabled CCTV markers stay hidden after an engine switch', () => {
   });
   try {
     cctvLayer.detachRenderer();
-    cctvLayer.attachRenderer(null, { engine: second });
+    cctvLayer.attachRenderer({ engine: second });
     second.fake.frames(2);
     const set = second.fake.moverSet('cctv');
     assert.ok(set, 'marker set exists');

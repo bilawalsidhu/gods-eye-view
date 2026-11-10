@@ -29,16 +29,10 @@ export function createAircraftSceneBinding({
   }
 
   const methods = {
-    attachRenderer(viewer, { engine = null } = {}) {
-      if (!flightState.initialized)
-        throw new Error('Initialize the flight layer before attaching');
-      if (flightState._renderer)
-        throw new Error('Flight renderer already attached');
-      const renderer = services.renderer.create({ viewer, engine });
-      flightState._renderer = renderer;
-      try {
-        renderer.fleet.attach();
-        parts.snapshots.presentRecords();
+    cameraOwner: {
+      suspend() {},
+      resume() {
+        if (!flightState._renderer) return;
         if (flightState._trackedIcao) {
           parts.tracking._trackFlight(flightState._trackedIcao, {
             origin: resumeOrigin,
@@ -46,15 +40,32 @@ export function createAircraftSceneBinding({
             follow: resumeFollow,
           });
         }
+        if (flightState.enabled) parts.tracking._applyPendingTrackingRestore();
+      },
+    },
+    show(enabled) {
+      flightState._renderer?.fleet.setVisible(enabled);
+      flightState._renderer?.models.setVisible(enabled);
+    },
+    attachRenderer({ engine = null, viewRestored } = {}) {
+      if (!flightState.initialized)
+        throw new Error('Initialize the flight layer before attaching');
+      if (flightState._renderer)
+        throw new Error('Flight renderer already attached');
+      const renderer = services.renderer.create({ engine });
+      flightState._renderer = renderer;
+      try {
+        renderer.fleet.attach();
+        parts.snapshots.presentRecords();
         renderer.fleet.setVisible(flightState.enabled);
         renderer.models.setVisible(flightState.enabled);
         renderer.fleet.restoreOrder();
+        if (!viewRestored) methods.cameraOwner.resume();
         if (flightState.enabled) {
           enable();
-          parts.tracking._applyPendingTrackingRestore();
         }
       } catch (error) {
-        methods.detachRenderer(viewer);
+        methods.detachRenderer();
         throw error;
       }
     },

@@ -65,7 +65,7 @@ export function createEarthquakesLayer({
         throw new Error('Earthquake layer is already initialized');
       initialized = true;
       try {
-        if (engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer({ engine });
       } catch (error) {
         this.destroy();
         throw error;
@@ -73,13 +73,17 @@ export function createEarthquakesLayer({
       console.log('[Data:Earthquakes] Initialized');
     },
 
-    attachRenderer(viewer, { engine = null } = {}) {
+    show(enabled) {
+      _renderer?.setVisible(enabled);
+      overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
       if (!initialized || _renderer)
         throw new Error('Invalid earthquake scene attachment');
       sceneEngine = engine;
       _renderer = rendererFactory({ engine });
       if (!_renderer) throw new Error('Earthquake renderer unavailable');
-      _renderer.setVisible(_enabled);
+      this.show(_enabled);
       if (discs.length) _renderer.replace(discs);
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, _enabled);
       if (_enabled) publishLabels();

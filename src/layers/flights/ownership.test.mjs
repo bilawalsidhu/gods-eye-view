@@ -238,7 +238,7 @@ test('a live flight keeps observations, selection and freshness across renderer 
     assert.equal(layer.hasContact('71BE26'), true);
     assert.equal(layer.getAnalystRecords().length, 1);
     assert.equal(layer.findByQuery('QA').icao24, '71be26');
-    layer.attachRenderer(null, { engine: first });
+    layer.attachRenderer({ engine: first });
     assert.equal(layer.qaDrawn().length, 1);
     assert.equal(layer.trackById('71be26'), true);
     layer.detachRenderer();
@@ -246,7 +246,7 @@ test('a live flight keeps observations, selection and freshness across renderer 
     assert.equal(layer.getTrackedInfo().icao24, '71be26');
     await layer.update(null);
     assert.equal(layer.getStats().lastUpdate, epoch + 2000);
-    layer.attachRenderer(null, { engine: second });
+    layer.attachRenderer({ engine: second });
     assert.equal(second.camera.following()?.label.id, 'flights:71be26');
     assert.equal(layer.qaDrawn().length, 1);
     assert.equal(polls, 2, 'attaching either renderer performs no source poll');

@@ -161,14 +161,17 @@ export function createGnssIntegrityLayer({
         throw new Error('GNSS integrity layer is already initialized');
       initialized = true;
       try {
-        if (engine) this.attachRenderer(viewer, { engine });
+        if (engine) this.attachRenderer({ engine });
       } catch (error) {
         this.destroy();
         throw error;
       }
     },
 
-    attachRenderer(viewer, { engine = null } = {}) {
+    show(enabled) {
+      renderer?.setVisible(enabled);
+    },
+    attachRenderer({ engine = null } = {}) {
       if (!initialized || renderer)
         throw new Error('Invalid GNSS scene attachment');
       renderer = rendererFactory({ engine });
@@ -180,7 +183,7 @@ export function createGnssIntegrityLayer({
       );
       _signature = null;
       if (_enabled) expire();
-      renderer.setVisible(_enabled);
+      this.show(_enabled);
     },
 
     detachRenderer() {

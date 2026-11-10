@@ -1,13 +1,13 @@
 {
   "metrics": {
-    "attachRendererWithViewer": 33,
-    "restoreFlagCopies": 9,
+    "attachRendererWithViewer": 0,
+    "restoreFlagCopies": 0,
     "surfaceCallsOutsideGlobe": 10,
-    "engineSwitchLayerIds": 3,
+    "engineSwitchLayerIds": 0,
     "cesiumLayerRendererLines": 0,
     "navaraLayerRendererLines": 0,
     "cesiumImportFiles": 2,
-    "viewerLines": 666,
+    "viewerLines": 613,
     "navaraKindChecks": 1,
     "engineSniffCalls": 0,
     "engineExtensionReads": 2,

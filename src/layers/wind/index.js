@@ -61,7 +61,6 @@ export function createWindLayer({
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Wind requires a snapshot source');
-  let viewer = null;
   let engine = null;
   let request = null;
   let enabled = false;
@@ -112,10 +111,9 @@ export function createWindLayer({
     source: 'GFS / ECMWF IFS · FORECAST',
     updateInterval: 3600_000,
     init(nextViewer, options) {
-      layer.attachRenderer(nextViewer, options);
+      layer.attachRenderer(options);
     },
-    attachRenderer(nextViewer, { engine: nextEngine = null } = {}) {
-      viewer = nextViewer;
+    attachRenderer({ engine: nextEngine = null } = {}) {
       engine = nextEngine;
       if (!engine) return;
       rendering = createNativeRendering(engine, { onStatusChange: notify });
@@ -135,7 +133,7 @@ export function createWindLayer({
       inspectionMarker?.destroy();
       inspectionMarker = null;
       rendering?.destroy();
-      rendering = viewer = engine = null;
+      rendering = engine = null;
     },
     attachShellServices() {
       rendering?.rehome?.();
