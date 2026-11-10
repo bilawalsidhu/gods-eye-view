@@ -242,6 +242,11 @@
     "modules": ["src/data/adsbLolFallback.js", "src/sources/adsbFields.js"],
     "external": []
   },
+  "planespotters-source": {
+    "exports": ["./sources/planespotters"],
+    "modules": ["src/data/planespottersPhoto.js"],
+    "external": []
+  },
   "place-providers": {
     "runtime": "node",
     "exports": ["./server/providers/places"],
@@ -1395,7 +1400,8 @@
       "src/sources/live/contract.js",
       "src/sources/live/index.js",
       "src/sources/live/standalone.js",
-      "src/sources/live/vessels.js"
+      "src/sources/live/vessels.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": []
   },
@@ -1462,7 +1468,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/time/julian.js"
+      "src/time/julian.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": ["cesium"]
   },
@@ -3438,7 +3445,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": [
       "hls.js",
@@ -4098,7 +4106,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": [
       "hls.js",
@@ -5244,7 +5253,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

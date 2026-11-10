@@ -230,6 +230,13 @@ export function createFlightSnapshotRenderer({
       // (position updates automatically via dead-reckoning CallbackProperty)
       if (isTracked && flightState._trackedEntity) {
         tracking._updateTrackedLabelModel(icao24);
+        // Re-ask the tracked plane's lookups each poll. Answered and queued
+        // keys return at once; a lookup whose source failed runs again once
+        // its cool-down has passed, and the route uses the callsign this
+        // snapshot just recorded.
+        enrichment._requestTypeEnrichment(icao24, true);
+        enrichment._requestRouteEnrichment(icao24);
+        enrichment._requestPhotoEnrichment(icao24);
       }
     }
 

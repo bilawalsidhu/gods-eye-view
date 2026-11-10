@@ -412,3 +412,77 @@ test('squawks are validated and omitted OpenSky status differs from an explicit 
   assert.equal(quiet.squawk, null);
   assert.equal(quiet.emergency, null);
 });
+
+test('a photo enrichment asks Planespotters directly and returns the checked photo', async () => {
+  const requests = [];
+  const source = createFlightSource({
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return response({
+        photos: [
+          {
+            thumbnail_large: {
+              src: 'https://t.plnspttrs.net/33043/1745410_822dfe330c_280.jpg',
+              size: { width: 420, height: 280 },
+            },
+            link: 'https://www.planespotters.net/photo/1745410/x?utm_source=api',
+            photographer: 'Jan Seler',
+          },
+        ],
+      });
+    },
+  });
+  const signal = new AbortController().signal;
+  const photo = await source.getEnrichment(
+    { kind: 'photo', id: 'a0f1bb' },
+    { signal },
+  );
+  assert.equal(
+    requests[0].url,
+    'https://api.planespotters.net/pub/photos/hex/a0f1bb',
+  );
+  assert.ok(requests[0].init.signal, 'the request is cancellable');
+  assert.equal(requests[0].init.credentials, 'omit');
+  assert.deepEqual(photo, {
+    found: true,
+    src: 'https://t.plnspttrs.net/33043/1745410_822dfe330c_280.jpg',
+    width: 420,
+    height: 280,
+    photographer: 'Jan Seler',
+    link: 'https://www.planespotters.net/photo/1745410/x?utm_source=api',
+  });
+});
+
+test('a photo enrichment reads an empty answer as no photo and refuses a bad hex', async () => {
+  let calls = 0;
+  const source = createFlightSource({
+    fetchImpl: async (_url, _init) => {
+      calls++;
+      return response({ photos: [] });
+    },
+  });
+  assert.deepEqual(
+    await source.getEnrichment({ kind: 'photo', id: 'a0f1bb' }),
+    { found: false },
+  );
+  await assert.rejects(source.getEnrichment({ kind: 'photo', id: '../x' }), {
+    code: 'unsupported',
+  });
+  assert.equal(calls, 1);
+});
+
+test('a photo enrichment outage rejects without echoing the body', async () => {
+  for (const status of [403, 429, 502]) {
+    const source = createFlightSource({
+      fetchImpl: async () => response({ error: 'sensitive' }, {}, status),
+    });
+    await assert.rejects(
+      source.getEnrichment({ kind: 'photo', id: 'a0f1bb' }),
+      (error) => {
+        assert.equal(error.status, status);
+        assert.equal(error.message.includes('sensitive'), false);
+        return true;
+      },
+    );
+  }
+});
