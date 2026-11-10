@@ -43,7 +43,11 @@
     "{direction} {angle}°",
     "{direction} · {elevation}",
     "{source} HTTP {status}",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "de": [
     "1090 MHz",
@@ -230,7 +234,11 @@
     "ΔN",
     "Ⅱ PAUSE",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "es": [
     "1 min/s",
@@ -381,7 +389,11 @@
     "Reptiles",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "fr": [
     "1 min/s",
@@ -587,7 +599,12 @@
     "≥ {value} MW",
     "▲ {frp} MW",
     "SATELLITE",
-    "Photo © {photographer}"
+    "Photo © {photographer}",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS",
+    "En route"
   ],
   "it": [
     "1 min/s",
@@ -779,7 +796,11 @@
     "acartia.io ↗",
     "iNaturalist ↗",
     "iNaturalist",
-    "SATELLITE"
+    "SATELLITE",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "ja": [
     "1090 MHz",
@@ -841,7 +862,11 @@
     "ΔE",
     "ΔN",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "pt": [
     "1 min/s",
@@ -992,7 +1017,11 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "ru": [
     "AIS: --",
@@ -1023,7 +1052,11 @@
     "iNaturalist ↗",
     "{direction} · {elevation}",
     "{direction} {angle}°",
-    "{division}, {country}"
+    "{division}, {country}",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "uk": [
     "AIS: --",
@@ -1049,7 +1082,11 @@
     "iNaturalist ↗",
     "{direction} · {elevation}",
     "{direction} {angle}°",
-    "{division}, {country}"
+    "{division}, {country}",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1119,7 +1156,11 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1189,6 +1230,10 @@
     "CC BY 4.0",
     "acartia.io ↗",
     "iNaturalist ↗",
-    "iNaturalist"
+    "iNaturalist",
+    "ATIS",
+    "CTAF",
+    "UNICOM",
+    "AFIS"
   ]
 }
