@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as geo from '../../geo/index.js';
 import { createLocalAdsbModels } from './models.js';
+import { createFakeEngine } from '../../globe/testing/fakeEngine.js';
+import {
+  createAircraftDisplay,
+  aircraftAtlasLayout,
+} from '../aircraft/render/display.js';
 
 test('ground snapping excludes the aircraft by its engine pick id', async () => {
   const position = geo.cartesian3.fromDegrees(0, 0, 0);
@@ -49,26 +54,35 @@ test('ground snapping excludes the aircraft by its engine pick id', async () => 
   models.destroy();
 });
 
-test('a failed model frees its slot and leaves the marker visible', async () => {
+test('a failed model retains its slot and the marker until the engine retry succeeds', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const engine = createFakeEngine();
+  const attempts = [];
+  engine.fake.script('moverFailed', (id, index, attempt) => {
+    if (!id.includes('-models-')) return false;
+    attempts.push(attempt);
+    return attempt === 1;
+  });
   const position = geo.cartesian3.fromDegrees(0, 0, 100);
-  const removed = [];
-  let loads = 0;
-  const renderer = {
-    models: {
-      loadFleet: async () => ({ failed: loads++ === 0, ready: loads > 1 }),
-      add() {},
-      remove: (model) => removed.push(model),
-      destroy() {},
-      setPose() {},
-    },
-    view: {
-      camera: { positionWC: position, positionCartographic: { height: 100 } },
-      frustumTester: () => () => true,
-      horizon: () => ({ isPointVisible: () => true }),
-    },
-  };
+  const layout = aircraftAtlasLayout();
+  const display = createAircraftDisplay(engine, {
+    layerId: 'local-adsb',
+    drawAtlas: async () => ({
+      canvas: { width: layout.width, height: layout.height },
+      cells: layout.cells,
+    }),
+  });
+  await display.whenReady();
+  display.fleet.attach();
   const models = createLocalAdsbModels({
-    renderer,
+    renderer: {
+      models: display.models,
+      view: {
+        camera: { positionWC: position, positionCartographic: { height: 100 } },
+        frustumTester: () => () => true,
+        horizon: () => ({ isPointVisible: () => true }),
+      },
+    },
     color: {},
     resolveAsset: (url) => url,
   });
@@ -78,15 +92,21 @@ test('a failed model frees its slot and leaves the marker visible', async () => 
     models.frame(markers, { models3d: true }, 1000);
     await new Promise(setImmediate);
     models.frame(markers, { models3d: true }, 1100);
-    assert.equal(models.size, 0);
-    assert.equal(removed.length, 1);
+    const set = engine.movers.list().find((row) => row.kind === 'model');
+    assert.equal(models.size, 1);
     assert.equal(marker.modelOwnsVisual, false);
-    models.frame(markers, { models3d: true }, 2700);
-    await new Promise(setImmediate);
+    t.mock.timers.tick(1500);
     models.frame(markers, { models3d: true }, 2800);
     assert.equal(models.size, 1);
     assert.equal(marker.modelOwnsVisual, true);
+    assert.deepEqual(attempts, [1, 2]);
+    assert.equal(
+      engine.movers.list().find((row) => row.kind === 'model').id,
+      set.id,
+    );
   } finally {
     models.destroy();
+    display.destroy();
+    engine.destroy();
   }
 });

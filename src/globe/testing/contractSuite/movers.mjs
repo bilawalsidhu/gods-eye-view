@@ -498,43 +498,132 @@ export function moverChecks(
   ];
 }
 
-export function failedModelChecks(engine, { settle, until, fixtures }) {
+export function failedModelChecks(
+  engine,
+  { until, fixtures, nadirView, readRegion },
+) {
   return [
     [
-      'MoverSet.failed: a failed model stays unready and reports its failure scope',
+      'movers.createSet: failed model retries, recovers and stops after three attempts',
       async () => {
+        await nadirView(1e6);
         const id = 'contract-failed-model';
+        const url = '/models/airplane.glb?contract-retry';
+        let failing = true;
+        let attempts = 0;
+        const fetch = globalThis.fetch;
+        const open = globalThis.XMLHttpRequest?.prototype.open;
+        // Route this model alone to the runner's missing asset while failing.
+        // The next attempt uses the real GLB without replacing the mover set.
+        const route = (value) => {
+          if (!String(value).endsWith(url)) return value;
+          attempts++;
+          return failing ? '/__contract_missing_model.glb' : value;
+        };
+        if (fixtures?.failModel) fixtures.failModel(id, true);
+        else {
+          globalThis.fetch = (input, init) => {
+            const value = route(input?.url ?? input);
+            return fetch(value === (input?.url ?? input) ? input : value, init);
+          };
+          globalThis.XMLHttpRequest.prototype.open = function (
+            method,
+            value,
+            ...args
+          ) {
+            return open.call(this, method, route(value), ...args);
+          };
+        }
         const set = engine.movers.createSet({
           id,
           kind: 'model',
           capacity: 2,
-          model: { url: '/__contract_missing_model.glb' },
+          retryAfterMs: 100,
+          model: {
+            url,
+            minimumPixelSize: 80,
+            colorBlend: { mode: 'replace', amount: 1 },
+          },
         });
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const fail = (value) => {
+          failing = value;
+          fixtures?.failModel?.(id, value);
+        };
         try {
-          set.set(0, {
-            position: cartesian3.fromDegrees(20, 10, 1000),
-            pickId: 'failed',
-          });
+          ensure(
+            set.ready() && !set.failed(),
+            'empty model set reports a load',
+          );
+          const position = cartesian3.fromDegrees(20, 10, 50_000);
+          set.set(0, { position, color: [1, 0, 1, 1], pickId: 'first' });
           set.setCount(1);
           set.commit();
-          fixtures?.failModel?.(id, true);
           await until(() => set.failed(0), 'failed model');
-          ensure(set.failed() === true, 'set did not report the failure');
           ensure(
-            set.ready(0) === false && set.ready() === false,
+            set.failed() && !set.ready() && !set.ready(0),
             'failed model is ready',
           );
           ensure(
-            set.failed(1) === (engine.kind === 'navara'),
-            'failure scope changed',
+            !set.failed(1) && !set.ready(1),
+            'inactive instance reports a load',
           );
-          await settle(3);
+          fail(false);
+          await wait(120);
+          await until(() => set.ready(0), 'model ready after engine retry');
           ensure(
-            set.failed(0) && !set.ready(0),
-            'failed model silently recovered',
+            set.ready() && !set.failed(),
+            'retry did not clear the failure',
           );
+          if (readRegion) {
+            const screen = engine.projector.worldToWindow(position);
+            await until(() => {
+              const data = readRegion(
+                Math.round(screen.x) - 50,
+                Math.round(screen.y) - 50,
+                100,
+                100,
+              );
+              let pixels = 0;
+              for (let i = 0; i < data.length; i += 4)
+                if (
+                  Math.min(data[i], data[i + 2]) - data[i + 1] > 40 &&
+                  data[i] > 60
+                )
+                  pixels++;
+              return pixels > 150;
+            }, 'retried model drawn');
+          }
+          // A new identity reloads even a previously healthy index.
+          fail(true);
+          attempts = 0;
+          set.set(0, { pickId: 'second' });
+          set.commit();
+          await until(() => set.failed(0), 'replacement model failure');
+          await wait(350);
+          ensure(set.failed() && !set.ready(), 'permanent failure disappeared');
+          if (!fixtures?.failModel)
+            ensure(attempts === 3, `expected 3 attempts, got ${attempts}`);
+          fail(false);
+          await wait(150);
+          ensure(set.failed(0) && !set.ready(0), 'exhausted model retried');
+          set.set(0, { pickId: 'third' });
+          ensure(
+            !set.failed(0) && !set.failed(),
+            'new identity inherited failure',
+          );
+          set.commit();
+          await until(
+            () => set.ready(0),
+            'replacement after exhausted attempts',
+          );
+          ensure(!set.failed(), 'replacement inherited exhausted failure');
         } finally {
           fixtures?.failModel?.(id, false);
+          if (!fixtures?.failModel) {
+            globalThis.fetch = fetch;
+            globalThis.XMLHttpRequest.prototype.open = open;
+          }
           set.destroy();
         }
         ensure(

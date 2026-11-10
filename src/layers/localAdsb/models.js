@@ -208,10 +208,6 @@ export function createLocalAdsbModels({
       for (const [id, marker] of markers) {
         const model = models.get(id);
         marker.modelOwnsVisual = false;
-        if (model?.failed) {
-          release(id);
-          continue;
-        }
         if (!model || !marker.position) continue;
         const position = placement(id, marker);
         if (!position || !occluder.isPointVisible(marker.position)) {

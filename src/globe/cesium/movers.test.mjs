@@ -8,17 +8,19 @@ import { createFakeViewer } from './testing/fakeViewer.mjs';
 // Cesium's own collections, billboards and points (they draw nothing
 // without a renderer, but hold what the engine writes). What needs the
 // network or a DOM is faked: the glTF load and the atlas crop.
-function setup({ loadModel } = {}) {
+function setup({ loadModel, cropCells } = {}) {
   const viewer = createFakeViewer();
   viewer.scene.frameState.mode = Cesium.SceneMode.SCENE3D;
   const requests = [];
   const crops = [];
   const loads = [];
   const factories = {
-    cropCells: async (atlas, keys) => {
-      crops.push({ atlas, keys });
-      return new Map(keys.map((key) => [key, { width: 8, height: 8, key }]));
-    },
+    cropCells:
+      cropCells ??
+      (async (atlas, keys) => {
+        crops.push({ atlas, keys });
+        return new Map(keys.map((key) => [key, { width: 8, height: 8, key }]));
+      }),
     loadModel:
       loadModel ??
       (async (options) => {
@@ -412,13 +414,14 @@ test('a model that loads after its set is destroyed is released', async () => {
   assert.equal(root().length, 0);
 });
 
-test('a model that fails to load marks its instance failed, once', async (t) => {
+test('failed model attempts stop at three and a replacement gets a fresh budget', async (t) => {
   t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let loads = 0;
   const { movers } = setup({
     loadModel: async () => {
       loads++;
-      throw new Error('404');
+      throw new Error('503');
     },
   });
   const set = movers.createSet({
@@ -427,19 +430,123 @@ test('a model that fails to load marks its instance failed, once', async (t) => 
     capacity: 1,
     model: { url: '/a.glb' },
   });
-  set.set(0, { position: at(0, 0) });
+  set.set(0, { position: at(0, 0), pickId: 'a' });
   set.setCount(1);
   set.commit();
-  assert.equal(set.failed(), false, 'still loading');
-  await settle();
+  assert.equal(set.failed(), false);
+  await new Promise(setImmediate);
   assert.equal(set.failed(0), true);
+  t.mock.timers.tick(1499);
+  assert.equal(loads, 1);
+  for (const delay of [1, 1500]) {
+    t.mock.timers.tick(delay);
+    await new Promise(setImmediate);
+  }
+  t.mock.timers.tick(10000);
+  assert.equal(loads, 3);
   assert.equal(set.failed(), true);
   assert.equal(set.ready(), false);
+  set.set(0, { pickId: 'b' });
   set.commit();
-  await settle();
-  assert.equal(loads, 1, 'not tried again');
+  await new Promise(setImmediate);
+  assert.equal(loads, 4);
   set.destroy();
-  assert.equal(set.failed(), false, 'a destroyed set reports nothing');
+  t.mock.timers.tick(10000);
+  assert.equal(loads, 4);
+  assert.equal(set.failed(), false);
+});
+
+test('a failed instance retries without reloading its healthy neighbour', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let loads = 0;
+  let finish;
+  const { movers, root } = setup({
+    loadModel: async (options) => {
+      loads++;
+      if (loads === 1) throw new Error('503');
+      if (loads === 3) await new Promise((resolve) => (finish = resolve));
+      return { ...fakeModel(options), ready: true };
+    },
+  });
+  const set = movers.createSet({
+    id: 'fleet',
+    kind: 'model',
+    capacity: 2,
+    retryAfterMs: 20,
+    model: { url: '/a.glb' },
+  });
+  t.after(() => set.destroy());
+  set.set(0, { position: at(0, 0), pickId: 'a' });
+  set.set(1, { position: at(1, 0), pickId: 'b' });
+  set.setCount(2);
+  set.commit();
+  await new Promise(setImmediate);
+  const [collection] = items(root());
+  const [healthy] = items(collection);
+  assert.equal(set.failed(0), true);
+  assert.equal(set.ready(1), true);
+  t.mock.timers.tick(20);
+  assert.equal(
+    set.failed(0),
+    true,
+    'failure stays visible while retry is pending',
+  );
+  set.set(0, { position: at(2, 0), show: false });
+  set.commit();
+  finish();
+  await new Promise(setImmediate);
+  assert.equal(loads, 3);
+  assert.equal(set.ready(), true);
+  assert.equal(set.failed(), false);
+  assert.equal(collection.get(0), healthy);
+  assert.equal(collection.get(1).show, false);
+  assert.equal(collection.get(1).modelMatrix[12], at(2, 0).x);
+  set.set(0, { pickId: 'c' });
+  set.commit();
+  await new Promise(setImmediate);
+  assert.equal(loads, 4, 'a healthy index reloads for its new identity');
+});
+
+test('atlas retries apply the latest instances and cancel on destruction', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let loads = 0;
+  const { movers, root } = setup({
+    cropCells: async (atlas, keys) => {
+      if (++loads < 3) throw new Error('503');
+      return new Map(keys.map((key) => [key, { width: 8, height: 8 }]));
+    },
+  });
+  const set = movers.createSet({
+    id: 'sprites',
+    kind: 'sprite',
+    capacity: 1,
+    retryAfterMs: 20,
+    sprite: { atlas, sizePx: 8 },
+  });
+  set.setCount(1);
+  set.commit();
+  await new Promise(setImmediate);
+  assert.equal(set.failed(), true);
+  for (let i = 0; i < 2; i++) {
+    t.mock.timers.tick(20);
+    await new Promise(setImmediate);
+  }
+  assert.equal(set.ready(), true);
+  assert.equal(set.failed(), false);
+  assert.equal(root().get(0).length, 1);
+  set.destroy();
+  const cancelled = movers.createSet({
+    id: 'cancelled',
+    kind: 'sprite',
+    capacity: 1,
+    sprite: { atlas, sizePx: 8 },
+  });
+  cancelled.destroy();
+  await new Promise(setImmediate);
+  t.mock.timers.tick(10000);
+  assert.equal(loads, 4);
 });
 
 // A layer removes an instance by moving its last one into the freed index

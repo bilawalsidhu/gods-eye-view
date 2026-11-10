@@ -727,17 +727,6 @@ export function createRendering({
         });
       return; // billboard carries the visual until the model is ready
     }
-    if (flightState._trackedModel?.failed) {
-      // The engine could not load the glTF: the billboard stays the visual
-      // and the load is tried again after the backoff.
-      const { url } = flightState._trackedModel.spec ?? {};
-      _releaseTrackedModel();
-      parts.tracking._noteTrackedModelLoadFailure(
-        url,
-        new Error('model failed to load'),
-      );
-      return;
-    }
     if (flightState._trackedModel) {
       // Keep the transform current while GPU resources are still loading. Cesium
       // can flip ready during scene update after this callback; waiting for ready
@@ -824,10 +813,6 @@ export function createRendering({
     const occluder = view.horizon();
     const focusTarget = getFocusTarget();
 
-    // A model the engine failed to load gives its slot back, in view or not;
-    // the renderer loads its class again after a backoff.
-    for (const [icao24, model] of flightState._models)
-      if (model.failed) _releaseModel(icao24);
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
     // Drop all models the moment we leave it (toggled off / zoomed out) so billboards resume.
     const useModels = _modelRegimeActive();

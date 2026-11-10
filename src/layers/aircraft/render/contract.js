@@ -19,8 +19,8 @@
 //     bookkeeping fields on a handle (prefixed _gev).
 //   ModelHandle (models.load*) — one glTF instance:
 //     show, ready (read-only: placed, and its model loaded), failed
-//     (read-only: its model would not load; a tracked one is loaded again
-//     after models.remove), scale,
+//     (read-only: the latest load of its model failed; the engine retries
+//     it, and ready turns true once a retry loads), scale,
 //     computedScale (read-only: scale after minimumPixelSize), color, id,
 //     modelMatrix (16 numbers, column-major, the model frame: written by
 //     models.setPose and read for anchors).

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createFakeEngine } from './testing/fakeEngine.js';
 import {
   MOVER_KINDS,
   createMoverRegistry,
@@ -23,6 +24,7 @@ test('set options are normalised with the contract defaults', () => {
   });
   assert.equal(sprite.id, 'flights');
   assert.equal(sprite.order, 0);
+  assert.equal(sprite.retryAfterMs, 1500);
   assert.equal(sprite.depthTest, 'normal');
   assert.equal(sprite.pickable, false);
   assert.deepEqual(sprite.cellKeys, ['jet', 'heli']);
@@ -291,4 +293,88 @@ test('native-stage sprite fields opt into sharpening explicitly and reject model
       }),
     TypeError,
   );
+});
+
+test('retry delay rejects invalid values and accepts zero', () => {
+  const options = {
+    id: 'retry',
+    kind: 'model',
+    capacity: 1,
+    model: { url: '/a.glb' },
+  };
+  for (const retryAfterMs of [-1, NaN, Infinity, '1500'])
+    assert.throws(
+      () => normalizeMoverSetOptions({ ...options, retryAfterMs }),
+      /retryAfterMs/,
+    );
+  assert.equal(
+    normalizeMoverSetOptions({ ...options, retryAfterMs: 0 }).retryAfterMs,
+    0,
+  );
+});
+
+for (const kind of ['cesium', 'navara'])
+  test(`${kind} fake models retry twice, keep failure until success and reset for a new identity`, (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const engine = createFakeEngine({ kind });
+    t.after(() => engine.destroy());
+    const attempts = [];
+    engine.fake.script('moverFailed', (id, index, attempt) => {
+      attempts.push(attempt);
+      return attempt < 3;
+    });
+    const set = engine.movers.createSet({
+      id: 'model',
+      kind: 'model',
+      capacity: 2,
+      model: { url: '/a.glb' },
+    });
+    set.set(0, { pickId: 'a' });
+    set.setCount(1);
+    set.commit();
+    assert.equal(set.failed(), true);
+    assert.equal(set.failed(1), false);
+    assert.equal(set.ready(1), false);
+    t.mock.timers.tick(1499);
+    assert.deepEqual(attempts, [1]);
+    t.mock.timers.tick(1);
+    assert.equal(set.failed(0), true);
+    t.mock.timers.tick(1500);
+    assert.equal(set.failed(), false);
+    assert.equal(set.ready(0), true);
+    assert.deepEqual(attempts, [1, 2, 3]);
+    set.set(0, { pickId: 'b' });
+    set.commit();
+    assert.equal(set.failed(0), true);
+    set.destroy();
+    t.mock.timers.tick(10000);
+    assert.deepEqual(attempts, [1, 2, 3, 1]);
+    assert.equal(set.ready(), false);
+    assert.equal(set.failed(), false);
+  });
+
+test('fake model permanent failure stops after three attempts', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  let attempts = 0;
+  engine.fake.script('moverFailed', () => {
+    attempts++;
+    return true;
+  });
+  const set = engine.movers.createSet({
+    id: 'model',
+    kind: 'model',
+    capacity: 1,
+    retryAfterMs: 10,
+    model: { url: '/a.glb' },
+  });
+  set.setCount(1);
+  set.commit();
+  t.mock.timers.tick(10);
+  t.mock.timers.tick(10);
+  t.mock.timers.tick(1000);
+  assert.equal(attempts, 3);
+  assert.equal(set.failed(), true);
+  assert.equal(set.ready(), false);
 });

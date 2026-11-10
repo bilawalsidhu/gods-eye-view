@@ -68,7 +68,7 @@ function atlasOf(atlas) {
  * @returns {{ id: string, kind: string, capacity: number, order: number,
  *   depthTest: 'normal'|'always'|{ disableWithinM: number }, pickable: boolean, sharpen: boolean,
  *   cellKeys: string[], sprite: object | null, point: object | null,
- *   model: object | null }}
+ *   model: object | null, retryAfterMs: number }}
  */
 export function normalizeMoverSetOptions(options) {
   if (!isObject(options)) fail('options must be an object');
@@ -89,6 +89,7 @@ export function normalizeMoverSetOptions(options) {
     kind,
     capacity,
     order,
+    retryAfterMs: nonNegative(options.retryAfterMs, 'retryAfterMs', 1500),
     depthTest: depthTestOf(options.depthTest),
     pickable: options.pickable === true,
     sharpen: options.sharpen === true,
@@ -353,6 +354,9 @@ export function createMoverSet(
   const alive = () => {
     if (destroyed) throw new Error('Mover set was destroyed');
   };
+  const active = (index) =>
+    index === undefined ||
+    (Number.isInteger(index) && index >= 0 && index < store.count);
   return {
     // The set's id (createSet's `id`): surface exclusion and picks name it.
     id,
@@ -372,9 +376,9 @@ export function createMoverSet(
     },
     // Whether what it draws has loaded (a model's glTF, an atlas image); with
     // an index, what that instance draws.
-    ready: (index) => !destroyed && ready(index) === true,
-    // Whether that load failed for good (the set is not tried again).
-    failed: (index) => !destroyed && failed(index) === true,
+    ready: (index) => !destroyed && active(index) && ready(index) === true,
+    // The latest attempt failed; the engine owns the bounded retry.
+    failed: (index) => !destroyed && active(index) && failed(index) === true,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -382,6 +386,39 @@ export function createMoverSet(
       store.release();
     },
     isDestroyed: () => destroyed,
+  };
+}
+
+/** A load gets three attempts, including the first, until cancelled. */
+export function createMoverRetry(retryAfterMs, load) {
+  let attempts = 0;
+  let failed = false;
+  let timer = null;
+  let destroyed = false;
+  const attempt = () => {
+    timer = null;
+    if (!destroyed) load(++attempts);
+  };
+  return {
+    start() {
+      clearTimeout(timer);
+      attempts = 0;
+      failed = false;
+      attempt();
+    },
+    fail() {
+      if (destroyed) return;
+      failed = true;
+      if (attempts < 3) timer = setTimeout(attempt, retryAfterMs);
+    },
+    succeed() {
+      failed = false;
+    },
+    failed: () => failed,
+    destroy() {
+      destroyed = true;
+      clearTimeout(timer);
+    },
   };
 }
 

@@ -29,10 +29,6 @@ import { SPRITE_LAYER_ORDER } from '../../../data/spriteOrder.js';
 import { createMoverBank, writeFields } from '../../shared/render/moverBank.js';
 
 const BASE_SIZE_PX = 20;
-// A failed glTF is fetched again no sooner than this (the layers' tracked
-// model backoff), not on the next fleet tick.
-const MODEL_RETRY_BACKOFF_MS = 1500;
-
 /**
  * The model frame → the glTF's own axes (the movers' orientation): Cesium's
  * glTF axis correction, Y_UP_TO_Z_UP × Z_UP_TO_X_UP (data/modelVisualAnchor.js),
@@ -460,7 +456,6 @@ export function createAircraftDisplay(
   // --- models ----------------------------------------------------------------
   let modelsVisible = true;
   const modelBanks = new Map();
-  const modelRetryAt = new Map();
   const scratchMatrix3 = geo.matrix3.create();
   const scratchCorrected = geo.matrix4.create();
   const scratchQuaternion = geo.quaternion.create();
@@ -603,16 +598,7 @@ export function createAircraftDisplay(
     }
   }
 
-  // A failed glTF needs a fresh set, created only when a retry is admitted.
-  const dropModel = (model) => {
-    const bank = model?.gevBank;
-    const retry = model?.failed;
-    bank?.remove(model);
-    if (retry) {
-      modelRetryAt.set(model.spec.url, Date.now() + MODEL_RETRY_BACKOFF_MS);
-      bank.rebuild();
-    }
-  };
+  const dropModel = (model) => model?.gevBank?.remove(model);
 
   const models = {
     live: () => attached && !destroyed,
@@ -620,10 +606,7 @@ export function createAircraftDisplay(
       modelsVisible = visible;
       for (const bank of modelBanks.values()) bank.setVisible(visible);
     },
-    loadFleet: (spec) =>
-      Date.now() < (modelRetryAt.get(spec.url) ?? 0)
-        ? Promise.reject(new Error('model retry backoff'))
-        : Promise.resolve(new ModelHandle(spec)),
+    loadFleet: (spec) => Promise.resolve(new ModelHandle(spec)),
     loadTracked: (spec) => Promise.resolve(new ModelHandle(spec)),
     add(model) {
       modelBankFor(model).add(model);

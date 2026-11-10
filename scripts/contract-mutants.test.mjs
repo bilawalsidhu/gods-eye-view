@@ -207,7 +207,7 @@ const mutants = [
   ],
   [
     'failed model reports no failure',
-    'MoverSet.failed:',
+    'movers.createSet: failed model retries',
     (e) => {
       handle(e, 'movers', 'createSet', (set) => {
         set.failed = () => false;
@@ -216,10 +216,27 @@ const mutants = [
   ],
   [
     'failed model reports ready',
-    'MoverSet.failed:',
+    'movers.createSet: failed model retries',
     (e) => {
       handle(e, 'movers', 'createSet', (set) => {
         set.ready = () => true;
+      });
+    },
+  ],
+  [
+    'failed model never retries',
+    'movers.createSet: failed model retries',
+    (e) => {
+      handle(e, 'movers', 'createSet', (set) => {
+        replace(set, 'commit', (commit) => () => {
+          const schedule = globalThis.setTimeout;
+          globalThis.setTimeout = () => null;
+          try {
+            commit();
+          } finally {
+            globalThis.setTimeout = schedule;
+          }
+        });
       });
     },
   ],

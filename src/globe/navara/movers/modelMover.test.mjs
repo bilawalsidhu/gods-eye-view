@@ -197,12 +197,14 @@ test('a model removed before its load completes releases the arriving textures',
 test('a failed model load stays not-ready without an unhandled rejection or leaking the URL', async (t) => {
   const warnings = [];
   t.mock.method(console, 'warn', (message) => warnings.push(message));
-  const mover = createModelMover(options, createMoverStore(options), {
+  const store = createMoverStore(options);
+  store.setCount(1);
+  const mover = createModelMover(options, store, {
     load: async () => {
       throw new Error('unavailable asset URL');
     },
   });
-  await mover.group.ready;
+  await new Promise(setImmediate);
   assert.equal(mover.ready(), false);
   assert.equal(mover.failed(), true);
   assert.equal(mover.group.meshes.length, 0);
@@ -332,4 +334,100 @@ test('the display pass preserves unlit model colour without a lighting tone curv
     /gevModelAces\(gl_FragColor.rgb\)/,
   );
   mover.dispose();
+});
+
+for (const failures of [1, 2, 3])
+  test(`model retries ${failures} failures with one budget and releases its timer`, async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const store = createMoverStore(options);
+    let loads = 0;
+    let added = 0;
+    const mover = createModelMover({ ...options, retryAfterMs: 20 }, store, {
+      load: async () => {
+        if (++loads <= failures) throw new Error('503');
+        return fakeGltf();
+      },
+    });
+    mover.group.onLoad = () => added++;
+    t.after(() => mover.dispose());
+    store.set(0, { position: { x: 6378137, y: 0, z: 0 }, pickId: 'a' });
+    store.setCount(1);
+    mover.commit(store.dirty());
+    await new Promise(setImmediate);
+    assert.equal(mover.failed(0), true);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      t.mock.timers.tick(19);
+      assert.equal(loads, attempt + 1);
+      t.mock.timers.tick(1);
+      await new Promise(setImmediate);
+      if (mover.ready()) break;
+    }
+    assert.equal(loads, Math.min(failures + 1, 3));
+    assert.equal(mover.ready(), failures < 3);
+    assert.equal(mover.failed(), failures === 3);
+    t.mock.timers.tick(10000);
+    assert.equal(loads, Math.min(failures + 1, 3));
+    store.set(0, { pickId: 'b' });
+    assert.equal(
+      mover.failed(),
+      false,
+      'the replacement has no failed attempt',
+    );
+    mover.commit(store.dirty());
+    assert.equal(mover.failed(0), false);
+    await new Promise(setImmediate);
+    assert.equal(mover.ready(0), true);
+    assert.equal(added, failures < 3 ? 2 : 1);
+    assert.equal(
+      mover.group.meshes.length,
+      1,
+      'replacement does not accumulate meshes',
+    );
+    mover.dispose();
+    t.mock.timers.tick(10000);
+    assert.equal(loads, Math.min(failures + 1, 3) + 1);
+  });
+
+test('a pending obsolete identity releases its asset without overwriting the replacement', async (t) => {
+  const store = createMoverStore(options);
+  const pending = [];
+  const mover = createModelMover(options, store, {
+    load: () => new Promise((resolve) => pending.push(resolve)),
+  });
+  t.after(() => mover.dispose());
+  store.set(0, { pickId: 'a' });
+  store.setCount(1);
+  mover.commit(store.dirty());
+  store.set(0, { pickId: 'b' });
+  mover.commit(store.dirty());
+  const stale = fakeGltf();
+  let released = 0;
+  stale.scene.children[0].geometry.addEventListener(
+    'dispose',
+    () => released++,
+  );
+  pending[0](stale);
+  await new Promise(setImmediate);
+  assert.equal(released, 1);
+  assert.equal(mover.ready(), false);
+  pending[1](fakeGltf());
+  await mover.group.ready;
+  assert.equal(mover.ready(), true);
+});
+
+test('destroying a failed model cancels its pending retry', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let loads = 0;
+  const mover = createModelMover(options, createMoverStore(options), {
+    load: async () => {
+      loads++;
+      throw new Error('503');
+    },
+  });
+  await new Promise(setImmediate);
+  mover.dispose();
+  t.mock.timers.tick(10000);
+  assert.equal(loads, 1);
 });
