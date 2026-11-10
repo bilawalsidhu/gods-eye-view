@@ -115,11 +115,11 @@ async function getText(
         : AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (cause) {
+    // A request that timed out may have been read; one refused was not.
+    const timedOut = cause?.name === 'TimeoutError';
     throw new UpstreamError(
-      cause?.name === 'TimeoutError'
-        ? `${what} timed out`
-        : `${what} unreachable`,
-      { unreached: true },
+      timedOut ? `${what} timed out` : `${what} unreachable`,
+      { unreached: !timedOut },
     );
   }
   if (!response.ok) {

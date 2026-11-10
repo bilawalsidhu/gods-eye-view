@@ -1229,8 +1229,11 @@ test('a World News API read that never reached it is not counted against the day
   // Back online: the day's reads are all still there.
   answers.worldnews = WORLD_NEWS;
   assert.equal((await paris()).status, 200);
-  // An answer, even a failing one, is a read: two of them spend the day.
-  answers.worldnews = 500;
+  // An answer, even a failing one, is a read, and so is a request that
+  // timed out, which it may have read: two of them spend the day.
+  answers.worldnews = () => {
+    throw new DOMException('timed out', 'TimeoutError');
+  };
   const berlin = () => ask('/feed', 'hotspot=all&at=52.52,13.4');
   assert.deepEqual(await berlin(), UPSTREAM_ERROR);
   clock.now += 2 * MINUTE;

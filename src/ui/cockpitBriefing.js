@@ -225,7 +225,11 @@ export function maybeRefreshRegionalBrief(info) {
         if (previous) {
           this.regionalBrief = cachedNews(previous, previous);
           this.renderRegionalBrief(this.regionalBrief, info);
-        } else this.renderRegionalBriefStatus('unavailable', info);
+        } else {
+          // Another place's brief: not to come back with a language change.
+          this.regionalBrief = null;
+          this.renderRegionalBriefStatus('unavailable', info);
+        }
       }
     })
     .finally(() => {

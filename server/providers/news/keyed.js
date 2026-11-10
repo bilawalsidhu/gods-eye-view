@@ -370,7 +370,13 @@ export function createKeyedNews({
             (value) => ({ key, value, readAt: now() }),
             (error) => {
               logFailure(section, what, key, error);
-              return { ...prior, failedAt: now(), error };
+              // What is held now: news deleted meanwhile stays deleted.
+              const held = store.get(id);
+              return {
+                ...(held?.key === key ? held : { key }),
+                failedAt: now(),
+                error,
+              };
             },
           )
           .then((entry) => {
@@ -720,6 +726,7 @@ export function createKeyedNews({
           throw new UpstreamError("World News API's reads for today spent", {
             quota: true,
           });
+        const { day } = budget;
         try {
           const reports = (
             await fetchWorldNews({
@@ -735,8 +742,9 @@ export function createKeyedNews({
         } catch (error) {
           // Out of points: nothing more is asked today.
           if (error.status === 402) budget.spent = true;
-          // Never reached (offline, timed out): no read of the day's.
-          if (error.unreached && budget.reads > 0) budget.reads -= 1;
+          // Never reached (offline): no read of the day it was counted in.
+          if (error.unreached && budget.day === day && budget.reads > 0)
+            budget.reads -= 1;
           throw error;
         }
       },

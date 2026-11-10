@@ -67,7 +67,12 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
       const filters = JSON.stringify(next?.filters ?? null);
       // A new list (other filters or hotspot), or a read that failed, may stop
       // at the same length as the last request: let the next scroll ask.
-      if (filters !== shownFilters || (next?.error && !view?.error))
+      // A list started over is shorter than the one the last request saw.
+      if (
+        filters !== shownFilters ||
+        (next?.error && !view?.error) ||
+        (next?.items?.length ?? 0) < requestedAt
+      )
         requestedAt = -1;
       shownFilters = filters;
       view = next || null;
