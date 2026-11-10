@@ -1092,6 +1092,43 @@ html:not([lang='en']) .data-row-list-text {
   letter-spacing: 0.8px;
 }
 
+/* Optional start and end pickers on one line (e.g. a layer's period). The
+   shared field style paints each select. */
+.data-toggle-range {
+  flex-basis: 100%;
+  display: grid;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.data-toggle-range-ends {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.data-toggle-range-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.data-toggle-range-caption {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.data-toggle-range-select {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  font: 10px/1 var(--font-mono);
+}
+
 /* Optional per-layer quantitative slider (Active Fires minimum FRP). The
    track is painted by the layer (`--slider-track`, a stepped color ramp), so
    the slider doubles as the marker legend; ticks sit under their thresholds. */

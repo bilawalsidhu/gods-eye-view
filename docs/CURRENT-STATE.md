@@ -167,6 +167,49 @@ across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
 
+## Shipwrecks — EMODnet and Wikidata
+
+The Events group includes **Shipwrecks** (`shipwrecks`, share-link token `01`),
+off by default. `/api/shipwrecks` downloads EMODnet Human Activities'
+`emodnet:heritageshipwrecks` WFS layer (about 7,000 wrecks in European waters
+compiled from SHOM, Ireland's National Monuments Service, Historic England and
+the Oxford Roman Economy Project; CC BY 4.0) and a Wikidata SPARQL query for
+shipwreck items with a coordinate and at least one Wikipedia article (about
+1,450 worldwide; CC0). A source that answered well is asked again after 24 hours;
+one that failed is asked again after 15 minutes. Each source keeps its own last
+good records: a source that fails, answers with nothing usable, or answers with
+less than half of its last good set keeps serving its earlier records as stale
+for up to seven days, and never removes the other source's wrecks. When the
+page cannot refresh, the wrecks it shows are marked stale, and it removes them
+once even the newest source is past seven days, counted from the ages the
+proxy reported (so the page and server clocks are never compared; a wreck
+both sources list is one record, so nothing is removed per source). EMODnet rows the portal took from
+wrecksite.eu are skipped (that site is not openly licensed). A Wikidata wreck
+with the same name within 3 km of an EMODnet wreck is merged into one record
+that keeps the article link and takes EMODnet's year, sinking text, depth and
+position accuracy. Only ship columns are read: EMODnet's long histories
+(`ship_char`, `obj_desc`) are not. Sinking, cargo and description text that
+refers to a person by a title or role (Mr, captain, master, owner, crew,
+"reported by", …) is dropped whole by a keyword filter; a bare name with no
+such word can still pass. Deaths appear only as a Wikidata count.
+
+The globe draws a round marker with a hull and mast per wreck, all in one
+billboard collection, ground-clamped with the depth test off and the horizon
+cull GhostMaps uses, sized by deaths (a bigger toll draws on top) and coloured
+by era (a legend under the row): before 1900 (ancient wrecks dated only by
+period count here), 1900–1945, after 1945, and date unknown. A period filter
+under the row picks a start year and an end year side by side (two pickers
+over the years that have a wreck; a reversed pair is stored swapped); undated
+wrecks show only when every year is selected. The filter is session-only (not
+in the share link). Clicking a marker opens a `stateless` card: deaths and
+survivors first, then the sinking date or year (or the archaeological dating)
+and waters, vessel type, what happened, least depth and its quality, how well
+the position is known, period notes or the Wikidata description, cargo or
+finds, protected status and source.
+Clicking the card opens the Wikipedia article (else the Wikidata item), the
+wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
+not toggle this layer yet (prompt budget, as for the airspace layer).
+
 ## Wildlife Sightings — iNaturalist and Acartia
 
 **Wildlife Sightings** (`wildlife-sightings`, share-link token `9`) is off by
@@ -4805,6 +4848,7 @@ its criteria cannot be silently ignored.
 | Ski Pistes ⛷ (`ski-pistes`)          | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `src/data/osmOverlays.js`                                                                                                                                 | — (browser-direct tiles)                                                                                                     | on view (Cesium tile requests; no polling)                                                                                  |
 | Fire Perimeters 🔥                   | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/perimeters/` via `src/app/layers/perimeters.js`                                                                                               | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*`                                                                    | 5 min (server caches: catalog 1 h; publication 30 min)                                                                      |
 | Prohibited & Restricted Airspace 🚫  | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js`                                                                                         | `/api/drone-airspace`                                                                                                        | 1 h (server cache 1 h; stale-on-error)                                                                                      |
+| Shipwrecks ⚓ (`shipwrecks`)         | EMODnet Human Activities heritage shipwrecks (European waters, keyless WFS, CC BY 4.0) and Wikidata (notable wrecks worldwide, keyless, CC0)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/layers/shipwrecks/` via `src/app/layers/shipwrecks.js`                                                                                               | `/api/shipwrecks`                                                                                                            | 6 h page check; server refresh once a day (stale-on-error up to 7 days)                                                     |
 | News ◆ (`news`)                      | The last 24 h of reports in two sections, Conflicts and Local, with hotspots, outlines and disputed areas: from a news server (`GEV_NEWS_ORIGIN`), else Core's own reading of GDELT 2.0 events (no key), Liveuamap (`LIVEUAMAP_API_KEY`) and World News API (`WORLDNEWSAPI_KEY`)                                                                                                                                                                                                                                                                                                                           | `src/layers/news/` via `src/app/layers/news.js`; panel `src/ui/newsPanel.js`, `src/ui/news/`; server `server/providers/news.js`, `server/providers/news/` | `/api/news/hotspots`, `/api/news/feed`, `/api/news/outline` (forwarded to `GEV_NEWS_ORIGIN` when set, else answered by Core) | 2 min map refresh; Local re-read when the camera settles 0.8 s in a new half-degree cell below 3,000 km                     |
 | Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js`                                                                                 | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                                           | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
 

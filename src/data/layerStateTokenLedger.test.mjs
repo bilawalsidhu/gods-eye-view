@@ -97,10 +97,10 @@ function withPublishedBase(
   }
 }
 
-// The ledger before Wildlife Sightings took the last digit and News the first
-// pair, for the allocation rules written against it.
+// The ledger before Wildlife Sightings took the last digit and News and
+// Shipwrecks the first pairs, for the allocation rules written against it.
 const beforeLastDigitRows = reservationRows.filter(
-  ([id]) => id !== 'wildlife-sightings' && id !== 'news',
+  ([id]) => !['wildlife-sightings', 'news', 'shipwrecks'].includes(id),
 );
 
 function writeCodecFixture(cwd, rows, entries) {
@@ -120,6 +120,11 @@ function writeCodecFixture(cwd, rows, entries) {
   if (!rows.some(([id]) => id === 'news'))
     source = source.replace(
       /  Object\.freeze\(\{\s*id: 'news',[\s\S]*?\}\),\n/,
+      '',
+    );
+  if (!rows.some(([id]) => id === 'shipwrecks'))
+    source = source.replace(
+      /  Object\.freeze\(\{\s*id: 'shipwrecks',[\s\S]*?\}\),\n/,
       '',
     );
   const registryEnd = ']);\n\nexport const REGISTERED_LAYER_IDS';
@@ -145,7 +150,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
     { ...parseLayerStateTokenReservations(reservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 37);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 38);
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
     {
@@ -159,6 +164,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       'drone-airspace': '8',
       'wildlife-sightings': '9',
       news: '00',
+      shipwrecks: '01',
     },
   );
   assert.throws(
@@ -184,9 +190,9 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
     /Duplicate layer-state token reservation/,
   );
   assert.equal(
-    parseLayerStateTokenReservations([...reservationRows, ['future', '01']])
+    parseLayerStateTokenReservations([...reservationRows, ['future', '02']])
       .future,
-    '01',
+    '02',
   );
   assert.throws(
     () =>
@@ -417,19 +423,19 @@ test('an isolated valid two-character fixture round-trips an l field beyond the 
 test('checker reads a complete future base ledger and rejects retired-token reuse', () => {
   withPublishedBase(
     {
-      rows: [...reservationRows, ['retired-layer', '01']],
+      rows: [...reservationRows, ['retired-layer', '02']],
       source:
-        'export const LAYER_STATE_TOKEN_RESERVATIONS = Object.freeze({ ["retired-layer"]: "01" });\n',
+        'export const LAYER_STATE_TOKEN_RESERVATIONS = Object.freeze({ ["retired-layer"]: "02" });\n',
     },
     (cwd) => {
       const published = readPublishedLayerStateReservations('HEAD', cwd);
-      assert.equal(Object.keys(published).length, 38);
-      assert.equal(published['retired-layer'], '01');
+      assert.equal(Object.keys(published).length, 39);
+      assert.equal(published['retired-layer'], '02');
       assert.throws(
         () =>
           validateLayerStateAllocations(published, {
             ...LAYER_STATE_TOKEN_RESERVATIONS,
-            newcomer: '00',
+            newcomer: '02',
           }),
         /changed or removed/,
       );

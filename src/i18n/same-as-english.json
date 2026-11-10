@@ -1,6 +1,7 @@
 {
   "ar": [
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AIS: --",
     "AIS: {name}",
@@ -47,6 +48,7 @@
   ],
   "de": [
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AIS: --",
     "AIS: {name}",
@@ -241,6 +243,7 @@
   "es": [
     "1 min/s",
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AIS: --",
     "AIS: {name}",
@@ -397,6 +400,7 @@
   "fr": [
     "1 min/s",
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "ALTITUDE",
     "ALTITUDE · FT",
@@ -611,6 +615,7 @@
   "it": [
     "1 min/s",
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AFRICA",
     "AIS: --",
@@ -809,6 +814,7 @@
   ],
   "ja": [
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AIS: --",
     "AIS: {name}",
@@ -872,6 +878,7 @@
   "pt": [
     "1 min/s",
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AIS: --",
     "AIS: {name}",
@@ -1027,6 +1034,7 @@
     "iNaturalist"
   ],
   "ru": [
+    "1900–1945",
     "AIS: --",
     "AIS: {name}",
     "Acartia",
@@ -1059,6 +1067,7 @@
     "{division}, {country}"
   ],
   "uk": [
+    "1900–1945",
     "AIS: --",
     "AIS: {name}",
     "Acartia",
@@ -1087,6 +1096,7 @@
   ],
   "zh-CN": [
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AIS: --",
     "AIS: {name}",
@@ -1157,6 +1167,7 @@
   ],
   "zh-Hant": [
     "1090 MHz",
+    "1900–1945",
     "978 MHz UAT",
     "AIS: --",
     "AIS: {name}",

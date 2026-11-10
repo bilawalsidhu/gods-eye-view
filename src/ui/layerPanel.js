@@ -82,6 +82,7 @@ const PANEL_GROUPS = [
       'fire-perimeters',
       'gnss-integrity',
       's2-ghostmaps',
+      'shipwrecks',
       'news',
     ],
   },
@@ -462,6 +463,8 @@ export class LayerPanel {
             this._selectListItem(layerId, itemId, generation),
           onSlider: (layerId, sliderId, value) =>
             this._moveSlider(layerId, sliderId, value, generation),
+          onRange: (layerId, rangeId, end, value) =>
+            this._pickRangeEnd(layerId, rangeId, end, value, generation),
         }),
         id === null ? this._toggleContainer : this._groupContainers.get(id),
       );
@@ -491,7 +494,7 @@ export class LayerPanel {
   }
 
   /**
-   * A layer's row chips, one-of-many switch, slider, color legend, info line
+   * A layer's row chips, one-of-many switch, slider, start/end pickers, color legend, info line
    * and ordered list. The block
    * is hidden while the layer is off (or while a dependency owner has
    * surrendered it), so a quiet row stays quiet. Chips and list items are
@@ -518,6 +521,7 @@ export class LayerPanel {
     const infoText = controls?.info ? String(controls.info) : '';
     const segmented = controls?.segmented || null;
     const slider = controls?.slider || null;
+    const range = controls?.range || null;
     // The info line, once shown, stays in place and hides when empty.
     if (infoText) row.info = true;
     return {
@@ -526,10 +530,12 @@ export class LayerPanel {
         legend.length === 0 &&
         !infoText &&
         !segmented &&
-        !slider,
+        !slider &&
+        !range,
       chips,
       segmented,
       slider,
+      range,
       legend,
       info: row.info
         ? { text: infoText, title: controls?.infoTitle || '' }
@@ -592,6 +598,20 @@ export class LayerPanel {
     )
       return;
     this.setLayerParams(id, slider.params(value), { origin: 'user' });
+  }
+
+  _pickRangeEnd(id, rangeId, end, value, generation = this._generation) {
+    if (this._destroyed || this._generation !== generation) return;
+    const range = this._rowControlsFor(id)?.range;
+    if (
+      !range ||
+      range.id !== rangeId ||
+      (end !== 'from' && end !== 'to') ||
+      typeof range.params !== 'function' ||
+      !this.isEnabled(id)
+    )
+      return;
+    this.setLayerParams(id, range.params(end, value), { origin: 'user' });
   }
 
   _selectListItem(id, itemId, generation = this._generation) {

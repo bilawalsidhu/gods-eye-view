@@ -598,6 +598,14 @@ export const DATA_CREDITS = [
       '<a href="https://worldnewsapi.com/" target="_blank" rel="noopener">World News API</a>',
   },
   {
+    key: 'shipwrecks',
+    html:
+      'Shipwrecks (Europe): <a href="https://emodnet.ec.europa.eu/en/human-activities" target="_blank" rel="noopener">EMODnet Human Activities</a> ' +
+      '(data originator AND-International, compiled from SHOM, Ireland&rsquo;s National Monuments Service, Historic England and the Oxford Roman Economy Project), ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>' +
+      ' · Shipwrecks (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +
