@@ -606,6 +606,7 @@ export function createLocalAdsbLayer({
   const picks = { owner: LAYER_ID, predicate: (id) => markers.has(id) };
   return {
     id: LAYER_ID,
+    sessionState: ['enabled'],
     name: LAYER_NAME,
     icon: '📡',
     source: LAYER_SOURCE,

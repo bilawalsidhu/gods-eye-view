@@ -52,6 +52,7 @@ export function createRadioLayer({ services, source, rendererFactory }) {
     parts.lifecycle.methods,
     parts.ingestion?.methods,
     {
+      sessionState: ['selected', 'audioState'],
       radioGlobeLabel: parts.labels.radioGlobeLabel,
       createRadioSelectedOverlayEntry:
         parts.labels.createRadioSelectedOverlayEntry,
