@@ -119,10 +119,11 @@ test("an article is one report, at its most-mentioned event, in its address's wo
   assert.equal(drones.publisher, 'wire.example');
   assert.equal(drones.source.attribution, 'GDELT Project');
   assert.equal(drones.side, 'unknown', 'no actor is said');
-  // No words in the address: GDELT's coding, related, at least severity 1.
+  // No words in the address: GDELT's coding alone, so minor (not listed
+  // under Conflicts), at least severity 1.
   assert.equal(bare.title, 'Fighting reported in Ukraine');
   assert.equal(bare.category, 'ground');
-  assert.equal(bare.relevance, 'related');
+  assert.equal(bare.relevance, 'minor');
   assert.equal(bare.severity, 1);
   assert.equal(bare.geo.precision, 'country');
 });

@@ -76,7 +76,13 @@ const finiteNumber = (value) => {
 export class UpstreamError extends Error {
   constructor(
     message,
-    { status = null, rejected = false, quota = false, unreadable = false } = {},
+    {
+      status = null,
+      rejected = false,
+      quota = false,
+      unreadable = false,
+      unreached = false,
+    } = {},
   ) {
     super(message);
     this.name = 'UpstreamError';
@@ -89,6 +95,8 @@ export class UpstreamError extends Error {
     // The answer itself cannot be read (corrupt, or over a size cap): asking
     // again gets the same.
     this.unreadable = unreadable;
+    // The request got no answer at all (offline, timed out).
+    this.unreached = unreached;
   }
 }
 
@@ -111,6 +119,7 @@ async function getText(
       cause?.name === 'TimeoutError'
         ? `${what} timed out`
         : `${what} unreachable`,
+      { unreached: true },
     );
   }
   if (!response.ok) {

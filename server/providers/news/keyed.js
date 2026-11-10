@@ -84,7 +84,9 @@ const RETRY_MS = 60_000;
 const FIRST_ANSWER_MS = 10_000;
 const GDELT_STALE_MS = 2 * HOUR_MS;
 const LIVE_STALE_MS = HOUR_MS;
-const COUNTRY_STALE_MS = 6 * HOUR_MS;
+// World News API's terms allow a cache of at most an hour, deleted after:
+// a country's news is kept no longer, served or not (dropExpiredCountries).
+const COUNTRY_STALE_MS = HOUR_MS;
 const MAX_COUNTRIES = 64;
 // World News API reads a UTC day, across all countries: each is about 1.5
 // of the free plan's 50 daily points.
@@ -310,16 +312,18 @@ export function createKeyedNews({
   const refused = new Set();
   // World News API reads of the UTC day; `spent` once it answered 402.
   const budget = { day: null, reads: 0, spent: false, logged: false };
-  // The area (disputed area or country) each placed Conflicts report lies
-  // in, looked up once.
+  // The areas (disputed area or country) of a placed Conflicts report's
+  // pins, its first and the others, looked up once.
   const reportAreas = new WeakMap();
-  const reportArea = (report) => {
+  const areasOf = (report) => {
     if (!reportAreas.has(report))
       reportAreas.set(
         report,
-        report.geo
-          ? (areaAt(report.geo.lat, report.geo.lon)?.key ?? null)
-          : null,
+        new Set(
+          [report.geo, ...(report.locations || [])]
+            .filter(Boolean)
+            .map((pin) => areaAt(pin.lat, pin.lon)?.key),
+        ),
       );
     return reportAreas.get(report);
   };
@@ -690,6 +694,15 @@ export function createKeyedNews({
     return false;
   }
 
+  /** World News API's news an hour old is deleted, as its terms ask. */
+  function dropExpiredCountries() {
+    for (const [code, entry] of countries)
+      if (entry.value && now() - entry.readAt >= COUNTRY_STALE_MS) {
+        const { value, readAt, ...rest } = entry;
+        countries.set(code, rest);
+      }
+  }
+
   async function countryReports(country) {
     const key = keyOf('worldnewsapi');
     if (!key) return { missing: 'worldnewsapi' };
@@ -708,7 +721,7 @@ export function createKeyedNews({
             quota: true,
           });
         try {
-          return (
+          const reports = (
             await fetchWorldNews({
               key: k,
               country: country.code,
@@ -716,9 +729,14 @@ export function createKeyedNews({
               now: now(),
             })
           ).map((article) => worldNewsReport(article, country));
+          // Deleted an hour on, whether or not anything is asked then.
+          setTimeout(dropExpiredCountries, COUNTRY_STALE_MS + 1000).unref?.();
+          return reports;
         } catch (error) {
           // Out of points: nothing more is asked today.
           if (error.status === 402) budget.spent = true;
+          // Never reached (offline, timed out): no read of the day's.
+          if (error.unreached && budget.reads > 0) budget.reads -= 1;
           throw error;
         }
       },
@@ -743,7 +761,10 @@ export function createKeyedNews({
     if (refused) return refused;
     const hours = Number(params.get('hours')) || 24;
     const since = new Date(now() - hours * HOUR_MS).toISOString();
-    const shown = read.reports.filter((r) => r.publishedAt >= since);
+    // The reports Conflicts lists: a minor one is in no count.
+    const shown = read.reports.filter(
+      (r) => r.publishedAt >= since && r.relevance !== 'minor',
+    );
     return {
       status: 200,
       body: {
@@ -825,8 +846,8 @@ export function createKeyedNews({
     ]);
     const refused = refusal(national) || (!country && refusal(conflicts));
     if (refused) return refused;
-    const inside = (conflicts.reports || []).filter(
-      (r) => reportArea(r) === area.key,
+    const inside = (conflicts.reports || []).filter((r) =>
+      areasOf(r).has(area.key),
     );
     const reports = [...national.reports, ...inside].sort((a, b) =>
       b.publishedAt.localeCompare(a.publishedAt),
@@ -870,6 +891,7 @@ export function createKeyedNews({
 
   return {
     async answer(path, params) {
+      dropExpiredCountries();
       if (path === '/hotspots') return hotspots(params);
       if (path === '/feed') return feed(params);
       if (path === '/outline') return outline(params);

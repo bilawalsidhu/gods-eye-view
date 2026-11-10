@@ -181,7 +181,11 @@ export function countryPolygons(entry) {
         ...holes,
         ...areas
           .flatMap((area) => area.rings)
-          .filter((ring) => pointInRing(outer, ring[0][1], ring[0][0])),
+          // By a point inside it: its corners lie on the neighbours' borders.
+          .filter((ring) => {
+            const inside = ringInterior(ring);
+            return inside && pointInRing(outer, inside.lat, inside.lon);
+          }),
       ],
     })),
   );
@@ -196,10 +200,17 @@ export function countryAnchor(entry) {
   const largest = geometries(entry).sort((a, b) => b.areaKm2 - a.areaKm2)[0];
   const { label, polygons, bbox } = largest;
   if (containsAnchor(polygons, label.lat, label.lon)) return label;
-  const lat = (bbox[1] + bbox[3]) / 2;
   const [outer] = polygons.reduce((a, b) =>
     b[0].length > a[0].length ? b : a,
   );
+  return ringInterior(outer, (bbox[1] + bbox[3]) / 2) || label;
+}
+
+/**
+ * A point inside a ring: the middle of its widest span at `lat` (its middle
+ * latitude by default); null when the ring is not crossed there.
+ */
+function ringInterior(outer, lat = middleLat(outer)) {
   const crossings = [];
   for (let i = 0, j = outer.length - 1; i < outer.length; j = i++) {
     const [x1, y1] = outer[j];
@@ -212,5 +223,10 @@ export function countryAnchor(entry) {
   for (let i = 0; i + 1 < crossings.length; i += 2)
     if (!best || crossings[i + 1] - crossings[i] > best[1] - best[0])
       best = [crossings[i], crossings[i + 1]];
-  return best ? { lat, lon: (best[0] + best[1]) / 2 } : label;
+  return best ? { lat, lon: (best[0] + best[1]) / 2 } : null;
 }
+
+const middleLat = (ring) => {
+  const lats = ring.map(([, y]) => y);
+  return (Math.min(...lats) + Math.max(...lats)) / 2;
+};

@@ -13,6 +13,8 @@ import {
   normalizeHotspotsPayload,
   normalizeOutlinePayload,
 } from '../../../src/layers/news/records.js';
+import { inPolygons } from '../../../src/layers/news/model.js';
+import { areaAt, countryPolygons } from './areas.js';
 import { exportsOfDay } from './gdeltEvents.js';
 import { eventRow, gkgRow, zipTable } from './gdeltFixtures.mjs';
 
@@ -277,8 +279,8 @@ test('without any key Conflicts are the day of GDELT events, one worldwide hotsp
     payload.hotspots.map((h) => [h.id, h.catchAll]),
     [[WORLDWIDE_HOTSPOT, true]],
   );
-  assert.equal(payload.hotspots[0].last24h, 4);
-  assert.equal(payload.hotspots[0].mapped24h, 4);
+  assert.equal(payload.hotspots[0].last24h, 2);
+  assert.equal(payload.hotspots[0].mapped24h, 2);
   assert.equal(payload.maxWindowHours, 24);
   // The newest dozen first; the rest of the day after, in the background.
   assert.deepEqual(
@@ -315,9 +317,9 @@ test('a GDELT article is a report at its place, in its words, credited to GDELT'
   // names it.
   assert.deepEqual(
     reports.map((r) => r.id),
-    ['gdelt-2', 'gdelt-5', 'gdelt-4'],
+    ['gdelt-2', 'gdelt-5'],
   );
-  const [redSea, kharkiv, bare] = reports;
+  const [redSea, kharkiv] = reports;
   // Its page title, from the GKG export.
   assert.equal(
     kharkiv.title,
@@ -337,8 +339,13 @@ test('a GDELT article is a report at its place, in its words, credited to GDELT'
   );
   assert.equal(redSea.geo.place, 'Yemen');
   assert.equal(redSea.geo.precision, 'country');
+  // An address without words has GDELT's coding alone: minor, so not in
+  // Conflicts, until a page title says what it is.
+  const bare = (await ask('/feed', 'hotspot=all&today=1')).body.reports.find(
+    (r) => r.id === 'gdelt-4',
+  );
   assert.equal(bare.title, 'Fighting reported in Ukraine');
-  assert.equal(bare.relevance, 'related');
+  assert.equal(bare.relevance, 'minor');
   // The council story GDELT coded as fighting is minor: not in Conflicts.
   assert.ok(!reports.some((r) => r.url.includes('city-council')));
 });
@@ -346,7 +353,7 @@ test('a GDELT article is a report at its place, in its words, credited to GDELT'
 test('with a Liveuamap key its mapped items join GDELT in the one hotspot', async () => {
   const { ask, calls, settle } = keyed();
   const answer = await ask('/hotspots');
-  assert.equal(answer.body.hotspots[0].counts.last24h, 7);
+  assert.equal(answer.body.hotspots[0].counts.last24h, 5);
   const live = calls.find((c) => host(c) === 'a.liveuamap.com').url;
   assert.equal(live.searchParams.get('a'), 'mpts');
   assert.equal(live.searchParams.get('key'), 'live-key');
@@ -376,21 +383,22 @@ test('with a Liveuamap key its mapped items join GDELT in the one hotspot', asyn
   );
   // Counts over a shorter window.
   const short = await ask('/hotspots', 'hours=2');
-  assert.equal(short.body.hotspots[0].counts.last24h, 6);
+  assert.equal(short.body.hotspots[0].counts.last24h, 4);
   await settle();
 });
 
 test('the Conflicts feed pages by time and filters by category and hotspot', async () => {
   const { ask, settle } = keyed({ env: {} });
-  const all = 'hotspot=all&today=1&relevance=core,related&events=1';
+  // Every report of the day, the minor ones too.
+  const all = 'hotspot=all&today=1&events=1';
+  // A page ends between two times: both of 11:45 come together, though
+  // the page asked for one.
   const first = await ask('/feed', `${all}&limit=1`);
   assert.deepEqual(
     first.body.reports.map((r) => r.id),
-    ['gdelt-2'],
+    ['gdelt-2', 'gdelt-3'],
   );
   assert.equal(first.body.nextBefore, '2026-11-05T11:45:00.000Z');
-  // A page ends between two times: both of 11:30 come together, though
-  // the page asked for one.
   const next = await ask(
     '/feed',
     `${all}&limit=1&before=${first.body.nextBefore}`,
@@ -436,7 +444,7 @@ test('an export not published yet is looked for again, and the day is kept a day
   await ask('/hotspots');
   await settle();
   const later = await ask('/hotspots');
-  assert.equal(later.body.hotspots[0].counts.last24h, 5, 'added, not replaced');
+  assert.equal(later.body.hotspots[0].counts.last24h, 3, 'added, not replaced');
   assert.equal(
     gdeltCalls(calls)
       .slice(read)
@@ -588,7 +596,7 @@ test('a refused Liveuamap key leaves GDELT; World News API refusing names its ke
   const refused = keyed({ answers: { liveuamap: 401, worldnews: 403 }, logs });
   const conflicts = await refused.ask('/hotspots');
   assert.equal(conflicts.status, 200);
-  assert.equal(conflicts.body.hotspots[0].counts.last24h, 4);
+  assert.equal(conflicts.body.hotspots[0].counts.last24h, 2);
   assert.deepEqual(await refused.ask('/feed', 'at=31.95,35.93'), {
     status: 503,
     body: { error: 'key_rejected', key: 'worldnewsapi' },
@@ -632,7 +640,7 @@ test('a failing GDELT is tried again after a minute, and what it read is kept', 
   const kept = await flaky.ask('/hotspots');
   await flaky.settle();
   assert.equal(kept.status, 200);
-  assert.equal(kept.body.hotspots[0].counts.last24h, 4);
+  assert.equal(kept.body.hotspots[0].counts.last24h, 2);
 });
 
 test('a new key drops what the old one read', async () => {
@@ -678,7 +686,7 @@ test('exports never published are given up on, not looked for back to back', asy
       lastupdate: '20261105120000',
     },
   });
-  assert.equal((await ask('/hotspots')).body.hotspots[0].counts.last24h, 3);
+  assert.equal((await ask('/hotspots')).body.hotspots[0].counts.last24h, 2);
   await settle();
   // A round that brings nothing in is the last until the next five minutes.
   let seen = gdeltCalls(calls).length;
@@ -720,7 +728,7 @@ test('GDELT failing for two hours answers 502; until then what it read is served
   clock.now += 60 * MINUTE;
   const hour = await ask('/hotspots');
   assert.equal(hour.status, 200);
-  assert.equal(hour.body.hotspots[0].counts.last24h, 4);
+  assert.equal(hour.body.hotspots[0].counts.last24h, 2);
   clock.now += 61 * MINUTE;
   assert.deepEqual(await ask('/hotspots'), UPSTREAM_ERROR);
   assert.deepEqual(await ask('/feed', CONFLICTS), UPSTREAM_ERROR);
@@ -736,7 +744,7 @@ test('a failed GKG read keeps the events, titled by their words, and is tried ag
   await settle();
   const read = await ask('/feed', CONFLICTS);
   assert.equal(read.status, 200);
-  assert.equal(read.body.reports.length, 3);
+  assert.equal(read.body.reports.length, 2);
   assert.equal(
     kharkiv(read).title,
     'Russian drones attack Kharkiv overnight three killed',
@@ -858,7 +866,7 @@ test('a read in flight with a replaced key is not the answer for the new one', a
   env.LIVEUAMAP_API_KEY = 'new';
   delete answers.liveuamap;
   const after = await ask('/hotspots');
-  assert.equal(after.body.hotspots[0].counts.last24h, 7);
+  assert.equal(after.body.hotspots[0].counts.last24h, 5);
   assert.deepEqual(
     calls
       .filter((c) => host(c) === 'a.liveuamap.com')
@@ -868,7 +876,7 @@ test('a read in flight with a replaced key is not the answer for the new one', a
   release();
   await before;
   // The old key's late answer does not replace the new one's.
-  assert.equal((await ask('/hotspots')).body.hotspots[0].counts.last24h, 7);
+  assert.equal((await ask('/hotspots')).body.hotspots[0].counts.last24h, 5);
   await settle();
 });
 
@@ -922,7 +930,7 @@ test('one unreadable export is given up on and never holds the rest back', async
   // copy of the Kharkiv story among them).
   const first = await ask('/hotspots');
   assert.equal(first.status, 200);
-  assert.equal(first.body.hotspots[0].counts.last24h, 2);
+  assert.equal(first.body.hotspots[0].counts.last24h, 1);
   await settle();
   clock.now += 6 * MINUTE;
   assert.equal((await ask('/hotspots')).status, 200);
@@ -986,7 +994,7 @@ test('GDELT down for a few minutes gives up on no export: they are all read once
   const back = await ask('/hotspots');
   await settle();
   assert.equal(back.status, 200);
-  assert.equal(back.body.hotspots[0].counts.last24h, 4);
+  assert.equal(back.body.hotspots[0].counts.last24h, 2);
   assert.ok(
     gdeltCalls(calls).some(
       (c) => String(c.url) === exportName('20261105114500'),
@@ -1012,7 +1020,7 @@ test('a GDELT outage answering 404, its list down too, gives up on no export', a
   }
   const back = await ask('/hotspots');
   assert.equal(back.status, 200);
-  assert.equal(back.body.hotspots[0].counts.last24h, 4);
+  assert.equal(back.body.hotspots[0].counts.last24h, 2);
 });
 
 test('a host answering junk for every file gives up on none of them', async () => {
@@ -1031,7 +1039,7 @@ test('a host answering junk for every file gives up on none of them', async () =
   await ask('/hotspots');
   await settle();
   const back = await ask('/hotspots');
-  assert.equal(back.body.hotspots[0].counts.last24h, 4);
+  assert.equal(back.body.hotspots[0].counts.last24h, 2);
 });
 
 test('a failing file gets one strike a round, not three within seconds', async () => {
@@ -1047,7 +1055,7 @@ test('a failing file gets one strike a round, not three within seconds', async (
   await ask('/hotspots');
   await settle();
   const back = await ask('/hotspots');
-  assert.equal(back.body.hotspots[0].counts.last24h, 4);
+  assert.equal(back.body.hotspots[0].counts.last24h, 2);
   assert.ok(
     gdeltCalls(calls).filter((c) => String(c.url) === flaky).length >= 2,
   );
@@ -1186,3 +1194,105 @@ test(
     release();
   },
 );
+
+test("World News API's news is kept an hour at most, also while it cannot be read again", async () => {
+  const answers = {};
+  const { ask, clock, settle } = keyed({ answers });
+  const local = 'hotspot=all&at=31.95,35.93';
+  const own = (answer) =>
+    answer.body.reports.filter((r) => r.id.startsWith('wna-')).length;
+  assert.equal(own(await ask('/feed', local)), 2);
+  // Its terms: a cache of at most an hour, then deleted.
+  answers.worldnews = 500;
+  clock.now += 59 * MINUTE;
+  assert.equal(own(await ask('/feed', local)), 2);
+  clock.now += 2 * MINUTE;
+  assert.deepEqual(await ask('/feed', local), UPSTREAM_ERROR);
+  await settle();
+});
+
+test('a World News API read that never reached it is not counted against the day', async () => {
+  const answers = {
+    worldnews: () => {
+      throw new TypeError('fetch failed');
+    },
+  };
+  const { ask, clock, settle } = keyed({
+    env: { WORLDNEWSAPI_KEY: 'wna-key', WORLDNEWSAPI_DAILY_READS: '2' },
+    answers,
+  });
+  const paris = () => ask('/feed', 'hotspot=all&at=48.85,2.35');
+  for (let i = 0; i < 3; i++) {
+    assert.deepEqual(await paris(), UPSTREAM_ERROR);
+    clock.now += 2 * MINUTE;
+  }
+  // Back online: the day's reads are all still there.
+  answers.worldnews = WORLD_NEWS;
+  assert.equal((await paris()).status, 200);
+  // An answer, even a failing one, is a read: two of them spend the day.
+  answers.worldnews = 500;
+  const berlin = () => ask('/feed', 'hotspot=all&at=52.52,13.4');
+  assert.deepEqual(await berlin(), UPSTREAM_ERROR);
+  clock.now += 2 * MINUTE;
+  assert.deepEqual(await berlin(), KEY_QUOTA);
+  await settle();
+});
+
+test('Local lists a Conflicts report by any of its pins, not its first alone', async () => {
+  const url =
+    'https://news.example.com/2026/11/05/drones-hit-kharkiv-and-belgorod-overnight';
+  const exports = {
+    [exportName('20261105114500')]: [
+      eventRow({ id: 1, code: '195', mentions: 9, url }),
+      eventRow({
+        id: 2,
+        code: '195',
+        mentions: 2,
+        place: "Belgorod, Belgorodskaya Oblast', Russia",
+        lat: 50.6,
+        lon: 36.6,
+        url,
+      }),
+    ],
+  };
+  const { ask, settle } = keyed({
+    env: { WORLDNEWSAPI_KEY: 'wna-key' },
+    answers: { exports, worldnews: { news: [] } },
+  });
+  const urls = async (at) =>
+    (await ask('/feed', `hotspot=all&at=${at}`)).body.reports.map((r) => r.url);
+  assert.deepEqual(await urls('49.99,36.23'), [url]);
+  assert.deepEqual(await urls('50.6,36.6'), [url]);
+  await settle();
+});
+
+test('the hotspot counts the reports Conflicts lists: no minor ones', async () => {
+  const { ask, settle } = keyed({ env: {} });
+  const listed = (
+    await ask('/feed', 'hotspot=all&today=1&relevance=core,related&limit=60')
+  ).body.reports;
+  const { counts } = (await ask('/hotspots')).body.hotspots[0];
+  assert.equal(counts.last24h, listed.length);
+  assert.equal(counts.mapped24h, listed.filter((r) => r.geo).length);
+  // The council story is among the day's reports, and minor.
+  const all = (await ask('/feed', 'hotspot=all&today=1&limit=60')).body.reports;
+  assert.ok(all.length > listed.length);
+  await settle();
+});
+
+test('a disputed area is cut out of the country it lies in, not of the neighbour its first corner touches', () => {
+  const outline = (lat, lon) => countryPolygons(areaAt(lat, lon).country);
+  for (const [country, at, name, inside] of [
+    ['Israel', [32.08, 34.78], 'Golan Heights', [33.0, 35.75]],
+    ['Moldova', [47.0, 28.85], 'Transnistria', [47.2, 29.5]],
+    ['Egypt', [30.0, 31.2], 'Halayib', [22.5, 35.5]],
+  ]) {
+    const [lat, lon] = inside;
+    assert.equal(areaAt(lat, lon).kind, 'disputed', name);
+    assert.equal(
+      inPolygons(outline(...at), { lat, lon }),
+      false,
+      `${country} without ${name}`,
+    );
+  }
+});

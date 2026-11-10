@@ -170,7 +170,20 @@ Status: Open (limits)
   and is tried again with the first ask a minute or more later.
 - Local needs a World News API key. Its free plan allows 50 points a day; Core
   stops at `WORLDNEWSAPI_DAILY_READS` reads (default 30) and Local then says the
-  daily limit is reached.
+  daily limit is reached. A request that never reached World News API (offline,
+  timed out) is not counted; any answer from it is, a failing one too.
+- A country's news is kept for at most 1 hour (World News API's terms, which
+  also ask the operator for its written permission to cache at all). While
+  World News API cannot be read, Local in that country therefore reads
+  unavailable from an hour after its last good read.
+- A story GDELT codes as violence whose address has no words, and whose page
+  title is not in yet (titles are read for the newest 3 hours only), is not
+  listed under Conflicts or counted in its hotspot: GDELT's coding alone is
+  wrong too often. It still shows in Local for its area, as "… reported in
+  <place>".
+- `/api/news/*` refuses cross-site browser requests and requests carrying
+  reverse-proxy forwarding headers, like the other key-spending routes
+  (SECURITY.md): behind a reverse proxy the News layer reads unavailable.
 
 ---
 

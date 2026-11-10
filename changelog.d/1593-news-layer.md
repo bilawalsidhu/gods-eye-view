@@ -15,8 +15,9 @@
   titled from GDELT's GKG files for the newest 3 hours), plus Liveuamap's
   mapped items with `LIVEUAMAP_API_KEY`; Local from World News API with
   `WORLDNEWSAPI_KEY`, at most `WORLDNEWSAPI_DAILY_READS` reads a day
-  (default 30). A section says when its key is required, refused or out of
-  its daily allowance. The Data attribution popover credits the GDELT
+  (default 30), each country's news kept for at most 1 hour. The routes
+  refuse cross-site and proxied requests. A section says when its key is
+  required, refused or out of its daily allowance. The Data attribution popover credits the GDELT
   Project, World News API and, once its items show, Liveuamap
   (Denis Groshev, @ZloyS, #1593).
 - Cockpit Regional News holds its list to the last 24 hours, newest first, on

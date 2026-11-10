@@ -423,14 +423,17 @@ export function eventReports(events, { titleOf = () => null } = {}) {
     // The article's words decide whether it is conflict, as any headline's
     // would: GDELT codes an election story as "fighting" too. GDELT's code
     // names the kind only where the words read as conflict without naming
-    // one, or there are no words.
+    // one. A story with no words at all has GDELT's code alone to go by,
+    // which is not enough to list it under Conflicts: it is minor (kept
+    // for Local) until a page title comes in.
     const read = own ? categorizeText({ title: own }) : null;
     const tags = read?.tags || [];
     const relevance = read
       ? relevanceOf({ category: read.category, tags, title: own })
-      : 'related';
-    const category =
-      read && read.category !== 'other'
+      : 'minor';
+    const category = !read
+      ? eventCategory
+      : read.category !== 'other'
         ? read.category
         : relevance === 'minor'
           ? 'other'
