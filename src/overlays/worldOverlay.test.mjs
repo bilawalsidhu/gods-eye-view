@@ -1259,6 +1259,43 @@ test('a detection lane sees which cards this frame will paint before they publis
   env.cleanup();
 });
 
+test('a detection lane reads zero for a yielding entry the declutter pass hid this frame', () => {
+  // Declutter runs before custom lanes, so a yielding entry it hid must not
+  // report its full queued alpha to them.
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  initWorldOverlay(env.viewer);
+  const seen = [];
+  registerWorldOverlayPaintLane('detection', () => {
+    seen.push({
+      winner: getQueuedOverlayEntryAlpha('cards', 'ABOVE'),
+      yielder: getQueuedOverlayEntryAlpha('labels', 'YIELDER'),
+    });
+  }, { id: 'detection', active: true, target: 'detection' });
+  // Two cards take both vertical slots, so a vertical-only yielder has none.
+  const at = positionAtScreen(200, 150);
+  const card = (id, placement) => selectedEntry(id, {
+    position: at,
+    placement,
+    verticalOnly: true,
+    collisionGroup: 'shared-card',
+  });
+  setOverlayEntries('cards', [card('ABOVE', 'above'), card('BELOW', 'below')]);
+  setOverlayEntries('labels', [selectedEntry('YIELDER', {
+    position: at,
+    verticalOnly: true,
+    collisionGroup: 'yielding-label',
+    yieldToCollisionGroup: 'shared-card',
+  })]);
+
+  env.postRender.raise();
+  assert.ok(getOverlayPaintRect('cards', 'ABOVE'), 'the winner painted');
+  assert.equal(getOverlayPaintRect('labels', 'YIELDER'), null, 'the yielder was hidden');
+  assert.ok(seen[0].winner > 0, 'the winner reads its queued alpha');
+  assert.equal(seen[0].yielder, 0, 'the yielder hidden this frame reads zero');
+  destroyWorldOverlay();
+  env.cleanup();
+});
+
 test('custom-lane painter state is bracketed by host save/restore', () => {
   // A painter that leaks a clip or alpha must not corrupt later frames: the
   // host wraps every custom-lane painter in save/try/finally-restore. Pin the
