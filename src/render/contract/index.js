@@ -24,8 +24,6 @@ export const CAPABILITIES = Object.freeze([
   'imageryFrames',
   'surfaceShading',
   'surfaceIdentity',
-  'clouds',
-  'water',
   'imageHooks',
   'screenModulation',
   'gpuTiming',
@@ -38,9 +36,6 @@ export const CAPABILITIES = Object.freeze([
   'quads',
   'meshes',
   'fields',
-  'celestial',
-  'agents',
-  'orbits',
   'courseGlide',
   'cluster',
   'styles',
@@ -50,7 +45,6 @@ export const CAPABILITIES = Object.freeze([
   'globeVisibility',
   'followFrame',
   'cameraChangeThreshold',
-  'benchmark',
 ]);
 
 /** @type {readonly import('./frame').FrameStep[]} */
@@ -69,7 +63,6 @@ export const FRAME_STEPS = Object.freeze([
 /** Every quality setting a renderer may support. */
 export const QUALITY_KEYS = Object.freeze([
   'pixelRatio',
-  'overlayPixelRatio',
   'msaa',
   'tiles3dDetail',
   'terrainDetail',
@@ -83,7 +76,6 @@ export const QUALITY_KEYS = Object.freeze([
   'particles',
   'models',
   'postFx',
-  'animatedStyleFps',
   'sonarCadenceHz',
   'targetFps',
 ]);
@@ -154,8 +146,6 @@ export const PORTS = deepFreeze({
     ['isGlobeVisible', 'globeVisibility'],
     ['surfaceVersion', 'surfaceIdentity'],
     ['setSurfaceShading', 'surfaceShading'],
-    ['setClouds', 'clouds'],
-    ['setWater', 'water'],
     ['imagery.getSplit', 'splitSwipe'],
     ['imagery.setSplit', 'splitSwipe'],
   ]),
@@ -173,9 +163,6 @@ export const PORTS = deepFreeze({
     ['quads', 'quads'],
     ['meshes', 'meshes'],
     ['field', 'fields'],
-    ['celestial', 'celestial'],
-    ['agents', 'agents'],
-    ['orbits', 'orbits'],
   ]),
   camera: Object.fromEntries([
     ...required(
@@ -232,7 +219,6 @@ export const PORTS = deepFreeze({
       'projectMany',
       'isOccluded',
       'sampleHeightNow',
-      'sampleHeightNowMany',
       'sampleHeight',
       'clampToSurface',
       'rayCast',
@@ -269,8 +255,8 @@ export const PORTS = deepFreeze({
     ['screenModulation', 'screenModulation'],
   ]),
   credits: Object.fromEntries(required('addStatic', 'list', 'on')),
-  quality: Object.fromEntries([
-    ...required(
+  quality: Object.fromEntries(
+    required(
       'knobs',
       'get',
       'set',
@@ -280,8 +266,7 @@ export const PORTS = deepFreeze({
       'signals.gpuTiming',
       'signals.on',
     ),
-    ['benchmark', 'benchmark'],
-  ]),
+  ),
   drawSet: Object.fromEntries([
     ...required(
       'id',

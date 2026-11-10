@@ -117,23 +117,6 @@ export function providerFor(spec, { worldDataToken } = {}) {
         ...(spec.subdomains ? { subdomains: spec.subdomains } : {}),
         ...common,
       });
-    case 'wmts':
-      if (!spec.wmts) throw new TypeError('WMTS imagery needs its wmts fields');
-      return new Cesium.WebMapTileServiceImageryProvider({
-        url: resourceOf(spec),
-        layer: spec.wmts.layer,
-        style: spec.wmts.style,
-        tileMatrixSetID: spec.wmts.tileMatrixSetId,
-        ...(spec.wmts.format ? { format: spec.wmts.format } : {}),
-        tilingScheme: tilingOf(spec.tiling),
-        ...(spec.subdomains ? { subdomains: spec.subdomains } : {}),
-        ...common,
-      });
-    case 'arcgis':
-      return Cesium.ArcGisMapServerImageryProvider.fromUrl(resourceOf(spec), {
-        enablePickFeatures: false,
-        ...common,
-      });
     case 'single-image':
       return Cesium.SingleTileImageryProvider.fromUrl(resourceOf(spec), common);
     case 'world': {

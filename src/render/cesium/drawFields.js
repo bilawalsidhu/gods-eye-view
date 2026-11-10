@@ -4,8 +4,7 @@
  * `windStreamlines` (drawStreamlines.js) and `rasterShell`, a raster on a
  * rectangle raised above the ellipsoid, drawn flat in the opaque pass in
  * the scene's primitive order (ascending height), alpha-blended, without
- * depth writes and never picked. Other kinds (`scalarRaster`) are refused
- * loudly.
+ * depth writes and never picked. Other kinds are refused loudly.
  *
  * Choices the contract leaves open, taken conservatively:
  * - An image is read when it is first named, as a Cesium material reads

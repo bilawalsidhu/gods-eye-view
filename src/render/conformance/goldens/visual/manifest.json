@@ -10,12 +10,12 @@
     "points-top.png",
     "lines-top.png",
     "lines-tilted.png",
-    "shapes-top.png",
-    "shapes-tilted.png",
     "models-oblique.png",
-    "shapes-lit-tilted.png",
     "city-orbit.png",
     "city-city.png",
-    "city-street.png"
+    "city-street.png",
+    "shapes-top.png",
+    "shapes-tilted.png",
+    "shapes-lit-tilted.png"
   ]
 }

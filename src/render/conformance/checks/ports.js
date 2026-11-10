@@ -11,13 +11,6 @@ import {
   checkRendererShape,
 } from '../../contract/index.js';
 import { AUSTIN, SCRIPT_VIEWPORT } from '../cameraScripts.js';
-import {
-  eciToEcf,
-  eciToGeodetic,
-  gstime,
-  propagate,
-  twoline2satrec,
-} from 'satellite.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
 import { iconPosition } from '../../motion/iconMotion.js';
 
@@ -28,12 +21,6 @@ const PIXEL_PNGS = [
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==',
 ];
 const PIXEL_PNG = PIXEL_PNGS[0];
-
-/** Elements for the orbit check: a station-like orbit, epoch 2026-01-04. */
-const ISS_TLE = Object.freeze([
-  '1 25544U 98067A   26004.50000000  .00016717  00000-0  10270-3 0  9992',
-  '2 25544  51.6400 208.9163 0006317  69.9862  25.2906 15.49560532 10009',
-]);
 
 const DOT = {
   svg: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="8" fill="#fff"/></svg>',
@@ -182,8 +169,6 @@ const SET_KINDS = [
   ['models', 'models'],
   ['quads', 'quads'],
   ['meshes', 'meshes'],
-  ['agents', 'agents'],
-  ['orbits', 'orbits'],
 ];
 
 /** A plain style that swaps colour channels by its intensity. */
@@ -1511,8 +1496,8 @@ export function portChecks() {
       { capability: 'motionSegments' },
     ),
     check(
-      'draw.lodGroup',
-      'members of a lodGroup show over their own ranges and picks report the group',
+      'draw.displayRange',
+      'one thing drawn near and far in two sets shows each over its own range',
       async (h, r) => {
         const pos = h.toEcef({ ...AUSTIN, height: 0 });
         const near = r.draw.points({ id: 'conf:lod-near' });
@@ -1524,7 +1509,6 @@ export function portChecks() {
               pos,
               pixelSize: 20,
               color: '#f00',
-              lodGroup: 'thing',
               displayRange: nearRange,
             },
           ]);
@@ -1534,7 +1518,6 @@ export function portChecks() {
               pos,
               image: DOT,
               size: [20, 20],
-              lodGroup: 'thing',
               displayRange: farRange,
             },
           ]);
@@ -1560,8 +1543,7 @@ export function portChecks() {
             [set],
             `at ${height} m only ${set} is drawn`,
           );
-          equal(hits[0]?.id, 'a', `at ${height} m the hit names the member`);
-          equal(hits[0]?.lodGroup, 'thing', `at ${height} m the group`);
+          equal(hits[0]?.id, 'a', `at ${height} m the hit names the item`);
         }
         members([0, 100000], [1000, Infinity]);
         await drawn(h, r);
@@ -1570,131 +1552,11 @@ export function portChecks() {
             .map((x) => x.set)
             .sort(),
           ['conf:lod-far', 'conf:lod-near'],
-          'overlapping ranges show both members',
+          'overlapping ranges show both',
         );
-        const plain = r.draw.points({ id: 'conf:lod-none' });
-        plain.set([{ id: 'b', pos, pixelSize: 20, color: '#0f0' }]);
-        await drawn(h, r);
-        const s = r.query.project(pos);
-        const hit = r.query.drillPick(s.x, s.y).find((x) => x.id === 'b');
-        ok(hit && !('lodGroup' in hit), 'an item without a group has none');
         near.dispose();
         far.dispose();
-        plain.dispose();
       },
-    ),
-    check(
-      'draw.orbits',
-      'an orbit is drawn where SGP4 puts it on its set’s motion clock',
-      async (h, r) => {
-        const t = Date.UTC(2026, 0, 4, 12);
-        const expected = (ms) => {
-          const date = new Date(ms);
-          const satrec = twoline2satrec(ISS_TLE[0], ISS_TLE[1]);
-          const eci = propagate(satrec, date).position;
-          const gmst = gstime(date);
-          const ecf = eciToEcf(eci, gmst);
-          const geo = eciToGeodetic(eci, gmst);
-          return {
-            ecef: { x: ecf.x * 1000, y: ecf.y * 1000, z: ecf.z * 1000 },
-            lon: (geo.longitude * 180) / Math.PI,
-            lat: (geo.latitude * 180) / Math.PI,
-            height: geo.height * 1000,
-          };
-        };
-        const set = r.draw.orbits({
-          id: 'conf:orbits',
-          motionClock: { kind: 'scene' },
-        });
-        set.set([
-          {
-            id: 'iss',
-            tle: ISS_TLE,
-            marker: { pixelSize: 16, color: '#fff' },
-            meta: { n: 1 },
-          },
-        ]);
-        const hitAt = (p) => {
-          const s = r.query.project(p);
-          return s
-            ? r.query
-                .drillPick(s.x, s.y)
-                .find((x) => x.set === 'conf:orbits' && x.id === 'iss')
-            : undefined;
-        };
-        const now = expected(t);
-        r.camera.setView({
-          destination: {
-            lon: now.lon,
-            lat: now.lat,
-            height: now.height + 2000000,
-          },
-          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        });
-        r.frame.setTime(t);
-        await drawn(h, r);
-        const hit = hitAt(now.ecef);
-        ok(hit, 'picked at its propagated position');
-        deepEqual(hit?.meta, { n: 1 }, 'Hit.meta');
-        if (hit?.position)
-          nearVec(hit.position, now.ecef, 1000, 'within a kilometre of SGP4');
-        r.frame.setTime(t + 60000);
-        await drawn(h, r);
-        const later = expected(t + 60000);
-        const laterHit = hitAt(later.ecef);
-        ok(laterHit, 'a minute on, where SGP4 puts it then');
-        if (laterHit?.position)
-          nearVec(
-            laterHit.position,
-            later.ecef,
-            1000,
-            'a minute on, within a kilometre',
-          );
-        ok(!hitAt(now.ecef), 'no longer where it was');
-        set.dispose();
-        // `orbits` alone, without `motionSegments`, still reads the clock.
-        const alone = await h.create({
-          viewport: SCRIPT_VIEWPORT,
-          capabilities: [...r.capabilities].filter(
-            (c) => c !== 'motionSegments',
-          ),
-        });
-        if (alone)
-          try {
-            const only = alone.draw.orbits({
-              id: 'conf:orbits-alone',
-              motionClock: { kind: 'scene' },
-            });
-            only.set([
-              {
-                id: 'iss',
-                tle: ISS_TLE,
-                marker: { pixelSize: 16, color: '#fff' },
-              },
-            ]);
-            alone.camera.setView({
-              destination: {
-                lon: now.lon,
-                lat: now.lat,
-                height: now.height + 2000000,
-              },
-              orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-            });
-            alone.frame.setTime(t);
-            await drawn(h, alone);
-            const s = alone.query.project(now.ecef);
-            ok(
-              alone.query
-                .drillPick(s.x, s.y)
-                .some((x) => x.set === 'conf:orbits-alone'),
-              'without motionSegments, on the scene clock it was given',
-            );
-            only.dispose();
-          } finally {
-            alone.destroy();
-          }
-      },
-      { capability: 'orbits' },
     ),
     check(
       'draw.clampState',
@@ -2079,62 +1941,6 @@ export function portChecks() {
       },
     ),
     check(
-      'draw.shapes.classifyVolume',
-      'an extruded shape that classifies its volume picks where it tints what it covers, and hides',
-      async (h, r) => {
-        await overAustin(h, r);
-        const shapes = r.draw.shapes({ id: 'conf:volume' });
-        const d = 0.002;
-        const ring = [
-          [-d, -d],
-          [d, -d],
-          [d, d],
-          [-d, d],
-        ].map(([dLon, dLat]) => ({
-          lon: AUSTIN.lon + dLon,
-          lat: AUSTIN.lat + dLat,
-          height: -200,
-        }));
-        const volume = (extra = {}) => ({
-          id: 'volume',
-          geometry: { kind: 'polygon', rings: [ring] },
-          fill: [1, 0.7, 0.3, 0.45],
-          extrudeHeight: 300,
-          height: 'absolute',
-          classifyVolume: true,
-          ...extra,
-        });
-        const mine = (dLon) => {
-          const s = r.query.project(
-            h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat }),
-          );
-          return Boolean(
-            s &&
-            r.query
-              .drillPick(s.x, s.y)
-              .some((hit) => hit.set === 'conf:volume' && hit.id === 'volume'),
-          );
-        };
-        const until = async (test) => {
-          for (let i = 0; i < 300; i++) {
-            await drawn(h, r, 1);
-            if (test()) return true;
-          }
-          return false;
-        };
-        shapes.set([volume()]);
-        ok(await until(() => mine(0)), 'it picks inside');
-        ok(!mine(0.008), 'and not outside');
-        shapes.upsert([volume({ show: false })]);
-        ok(await until(() => !mine(0)), 'hidden');
-        shapes.upsert([volume()]);
-        ok(await until(() => mine(0)), 'shown again');
-        shapes.dispose();
-        await drawn(h, r);
-        ok(!mine(0), 'gone with its set');
-      },
-    ),
-    check(
       'draw.lines.styles',
       'flow lines draw draped and in space, and a line with a depth-fail colour moves every frame, without stopping the frame or picks',
       async (h, r) => {
@@ -2236,7 +2042,6 @@ export function portChecks() {
             style: {
               kind: 'dash',
               color: [1, 0.6, 0.2, 1],
-              gapColor: [0.2, 0.6, 1, 1],
               length: 16,
             },
           },
@@ -2890,13 +2695,6 @@ export function portChecks() {
         near(terrain.height, 123.5, 0.01, 'terrain');
         near(tiles.height, 300, 0.01, 'tiles, not the terrain answer');
         h.scriptHeights(r, (point) => (point.lon > 0 ? null : 123.5));
-        const out = new Float64Array(2);
-        r.query.sampleHeightNowMany(
-          new Float64Array([AUSTIN.lon, AUSTIN.lat, 10, 10]),
-          out,
-        );
-        near(out[0], 123.5, 0.01, 'a batched cached height');
-        ok(Number.isNaN(out[1]), 'a batched miss is NaN');
         const [plain] = await r.query.sampleHeight([{ ...AUSTIN }], {
           mostDetailed: true,
         });
@@ -2931,10 +2729,21 @@ export function portChecks() {
           {
             id: 'tower',
             geometry: {
-              kind: 'box',
-              center: { ...AUSTIN, height: 500 },
-              dimensions: { x: 200, y: 200, z: 1000 },
+              kind: 'polygon',
+              rings: [
+                [
+                  [-0.001, -0.001],
+                  [0.001, -0.001],
+                  [0.001, 0.001],
+                  [-0.001, 0.001],
+                ].map(([dLon, dLat]) => ({
+                  lon: AUSTIN.lon + dLon,
+                  lat: AUSTIN.lat + dLat,
+                  height: 0,
+                })),
+              ],
             },
+            extrudeHeight: 1000,
             fill: '#888',
           },
         ]);

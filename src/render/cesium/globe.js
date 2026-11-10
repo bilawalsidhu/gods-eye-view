@@ -33,61 +33,10 @@ const ROUTES = {
   'google-ion': 'fallback',
 };
 
-/** Heights of one DEM tile, decoded from its RGB pixels. */
-function decodeHeights(pixels, encoding) {
-  const heights = new Float32Array(pixels.length / 4);
-  for (let i = 0, p = 0; i < heights.length; i++, p += 4) {
-    const r = pixels[p];
-    const g = pixels[p + 1];
-    const b = pixels[p + 2];
-    heights[i] =
-      encoding === 'mapbox'
-        ? -10000 + (r * 65536 + g * 256 + b) * 0.1
-        : r * 256 + g + b / 256 - 32768;
-  }
-  return heights;
-}
-
-/** A terrain provider for a heightmap DEM pyramid. */
-function heightmapTerrain(spec) {
-  if (spec.geoid)
-    throw new TypeError('Geoid-relative heightmaps are not supported yet');
-  const size = 256;
-  return new Cesium.CustomHeightmapTerrainProvider({
-    width: size,
-    height: size,
-    tilingScheme: new Cesium.WebMercatorTilingScheme(),
-    callback: async (x, y, level) => {
-      // Past the pyramid a tile fails, and the globe refines its parent's.
-      if (spec.maxLevel !== undefined && level > spec.maxLevel)
-        throw new RangeError('Past the heightmap’s deepest level');
-      const url = spec.url
-        .replaceAll('{x}', String(x))
-        .replaceAll('{y}', String(y))
-        .replaceAll('{z}', String(level));
-      const image = await Cesium.Resource.fetchImage({
-        url,
-        preferImageBitmap: true,
-      });
-      const canvas = new OffscreenCanvas(size, size);
-      const context = canvas.getContext('2d');
-      context.drawImage(image, 0, 0, size, size);
-      return decodeHeights(
-        context.getImageData(0, 0, size, size).data,
-        spec.encoding,
-      );
-    },
-  });
-}
-
 /** The terrain provider a spec describes, once ready. */
 async function terrainProvider(spec, { worldDataToken }) {
   if (!spec || spec.kind === 'ellipsoid')
     return new Cesium.EllipsoidTerrainProvider();
-  if (spec.kind === 'quantizedMesh')
-    return Cesium.CesiumTerrainProvider.fromUrl(spec.url, {
-      requestVertexNormals: spec.requestVertexNormals ?? false,
-    });
   if (spec.kind === 'world') {
     const accessToken = String(worldDataToken || '').trim();
     if (!accessToken)
@@ -102,7 +51,6 @@ async function terrainProvider(spec, { worldDataToken }) {
       requestWaterMask: false,
     });
   }
-  if (spec.kind === 'heightmap') return heightmapTerrain(spec);
   throw new TypeError(`Unknown terrain kind: ${spec.kind}`);
 }
 
@@ -322,11 +270,6 @@ export function createCesiumGlobe(
   const sky = {
     atmosphere:
       scene.skyAtmosphere?.show ?? scene.globe?.showGroundAtmosphere ?? false,
-    atmosphereTuning: {
-      brightness: scene.skyAtmosphere?.brightnessShift ?? 0,
-      hueShift: scene.skyAtmosphere?.hueShift ?? 0,
-      saturation: scene.skyAtmosphere?.saturationShift ?? 0,
-    },
     stars: scene.skyBox?.show ?? false,
     milkyWay: scene.skyBox?.milkyWayVisibility ?? 0,
     sun: scene.sun?.show ?? false,
@@ -337,7 +280,7 @@ export function createCesiumGlobe(
 
   /** The settings as drawn: the scene's own parts, else what was set. */
   function readSky() {
-    const out = { ...sky, atmosphereTuning: { ...sky.atmosphereTuning } };
+    const out = { ...sky };
     if (scene.skyAtmosphere) out.atmosphere = scene.skyAtmosphere.show;
     else if (scene.globe) out.atmosphere = scene.globe.showGroundAtmosphere;
     if (scene.skyBox && 'show' in scene.skyBox) out.stars = scene.skyBox.show;
@@ -351,22 +294,10 @@ export function createCesiumGlobe(
   }
 
   function setSky(settings) {
-    const { atmosphereTuning, ...rest } = settings;
-    Object.assign(sky, rest);
-    if (atmosphereTuning)
-      sky.atmosphereTuning = { ...sky.atmosphereTuning, ...atmosphereTuning };
+    Object.assign(sky, settings);
     if ('atmosphere' in settings) {
       if (scene.skyAtmosphere) scene.skyAtmosphere.show = sky.atmosphere;
       if (scene.globe) scene.globe.showGroundAtmosphere = sky.atmosphere;
-    }
-    if (atmosphereTuning && scene.skyAtmosphere) {
-      const tuning = sky.atmosphereTuning;
-      if (tuning.brightness !== undefined)
-        scene.skyAtmosphere.brightnessShift = tuning.brightness;
-      if (tuning.hueShift !== undefined)
-        scene.skyAtmosphere.hueShift = tuning.hueShift;
-      if (tuning.saturation !== undefined)
-        scene.skyAtmosphere.saturationShift = tuning.saturation;
     }
     if ('stars' in settings && scene.skyBox && 'show' in scene.skyBox)
       scene.skyBox.show = sky.stars;

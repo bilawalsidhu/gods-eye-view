@@ -112,13 +112,6 @@ test('terrain heights answer without depth textures; the drawn surface does not'
   const point = { lon: 1, lat: 2 };
   assert.equal(query.sampleHeightNow(point, { against: 'terrain' }), 2600);
   assert.equal(query.sampleHeightNow(point), null);
-  const out = new Float64Array(1);
-  query.sampleHeightNowMany(new Float64Array([1, 2]), out, {
-    against: 'terrain',
-  });
-  assert.equal(out[0], 2600);
-  query.sampleHeightNowMany(new Float64Array([1, 2]), out);
-  assert.ok(Number.isNaN(out[0]));
 });
 
 test('nothing to query, no port', () => {
@@ -200,9 +193,11 @@ test('a height sample hides the sets it sees through for that sample alone', () 
     [true, true, false],
   );
 
-  const out = new Float64Array(2);
-  query.sampleHeightNowMany(new Float64Array([0, 0, 1, 0]), out);
-  assert.deepEqual([...out], [12, 12]);
+  const out = [
+    query.sampleHeightNow({ lon: 0, lat: 0 }),
+    query.sampleHeightNow({ lon: 1, lat: 0 }),
+  ];
+  assert.deepEqual(out, [12, 12]);
   assert.deepEqual(shownWhileSampling.slice(-2), [
     [true, false, false],
     [true, false, false],

@@ -5,7 +5,7 @@
  * primitive collection in the scene, rebuilt when its items change (icon
  * sets, unclamped points restyled or moved, and models, change in place;
  * `drawModels.js`). Every
- * item carries a pick id `{set, id, meta, lodGroup}`, which the query port
+ * item carries a pick id `{set, id, meta}`, which the query port
  * (`ports.js`) reads picks back through.
  *
  * Clamped items follow the ground as Cesium's own entities do: a clamped
@@ -676,17 +676,7 @@ export function createCesiumDraw({
    */
   function onGpu(record, list, replacing = false, force = false) {
     if (record.kind !== 'icons') return false;
-    const wanted = record.gpu || force ? 'needs' : gpu.wants(list);
-    if (!wanted) return false;
-    if (wanted === 'prefers') {
-      // Only a course blend: on the GPU if all of it can be, else billboards.
-      try {
-        gpu.check(list, record.spec);
-        if (!replacing) gpu.check(record.items.values(), record.spec);
-      } catch {
-        return false;
-      }
-    }
+    if (!record.gpu && !force && !gpu.wants(list)) return false;
     gpu.check(list, record.spec);
     if (record.gpu) return true;
     if (!replacing) gpu.check(record.items.values(), record.spec);
@@ -706,7 +696,6 @@ export function createCesiumDraw({
       set: record.spec.id,
       id: item.id,
       meta: item.meta,
-      lodGroup: item.lodGroup,
     };
     record.pickIds.push(id);
     return id;
@@ -1061,8 +1050,8 @@ export function createCesiumDraw({
   }
 
   /**
-   * What a billboard draws of an icon item but its position, image, `meta`
-   * and `lodGroup`, as plain values: the course rotation follows the
+   * What a billboard draws of an icon item but its position, image and
+   * `meta`, as plain values: the course rotation follows the
    * position, so it is written with it.
    */
   function iconStyleOf(record, item) {
@@ -1170,7 +1159,6 @@ export function createCesiumDraw({
       entry.style.rotation = item.rotation;
     }
     billboard.id.meta = item.meta;
-    billboard.id.lodGroup = item.lodGroup;
     billboard.show = shownNow(record, placed);
   }
 
@@ -1232,7 +1220,6 @@ export function createCesiumDraw({
     }
     // Picks and height queries hold this id object: changed, not replaced.
     billboard.id.meta = item.meta;
-    billboard.id.lodGroup = item.lodGroup;
     placed.position = position;
     placed.shown = look.show;
     billboard.show = shownNow(record, placed);
@@ -1413,7 +1400,6 @@ export function createCesiumDraw({
         primitive,
         placed: place(record, primitive, position, show),
         at: placeOf(item),
-        lodGroup: item.lodGroup,
         dot: dotLook(item).key,
         heightReference,
       });
@@ -1448,7 +1434,6 @@ export function createCesiumDraw({
       primitive,
       placed: place(record, primitive, position, show),
       at: placeOf(item),
-      lodGroup: item.lodGroup,
       look: pointLookOf(item),
     });
   }
@@ -1661,7 +1646,6 @@ export function createCesiumDraw({
         (added ??= new Set()).add(item.id);
         continue;
       }
-      if (item.lodGroup !== was.lodGroup) return false;
       if (was.dot === undefined) {
         if (heightReference !== Cesium.HeightReference.NONE) return false;
       } else if (
@@ -1870,7 +1854,7 @@ export function createCesiumDraw({
           type: 'PolylineDash',
           uniforms: {
             color: toColor(style.color),
-            gapColor: toColor(style.gapColor ?? [0, 0, 0, 0]),
+            gapColor: toColor([0, 0, 0, 0]),
             dashLength: style.length,
             ...(style.pattern16 !== undefined
               ? { dashPattern: style.pattern16 }
@@ -3272,18 +3256,6 @@ export function createCesiumDraw({
             vertexFormat,
           }),
         };
-      case 'box': {
-        const d = g.dimensions;
-        return {
-          fill: Cesium.BoxGeometry.fromDimensions({
-            dimensions: new Cesium.Cartesian3(d.x, d.y, d.z),
-            vertexFormat,
-          }),
-          modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(
-            toCartesian(g.center),
-          ),
-        };
-      }
       case 'wall': {
         // Up from `minimumHeights` (the ellipsoid) to `maximumHeights` (the
         // positions' own), as the entities' walls draw.
@@ -4069,22 +4041,6 @@ export function createCesiumDraw({
     item.extrudeHeight === undefined &&
     (typeof item.fill !== 'object' || Array.isArray(item.fill));
 
-  /**
-   * Whether an unclamped shape classifies what is inside its volume: one
-   * with a volume (extruded, or a box) and a fill, on a scene that can
-   * classify. Where it cannot, it draws as the volume itself.
-   */
-  function classifies(item) {
-    if (!item.classifyVolume || !item.fill) return false;
-    if (item.extrudeHeight === undefined && item.geometry.kind !== 'box')
-      return false;
-    try {
-      return Cesium.ClassificationPrimitive.isSupported(scene);
-    } catch {
-      return false;
-    }
-  }
-
   function buildShapes(record) {
     // Refused before anything is built: a pulse it cannot run.
     record.mayPulse = false;
@@ -4154,37 +4110,10 @@ export function createCesiumDraw({
         show: true,
       };
       solids.set(item.id, part);
-      const solid =
-        item.extrudeHeight !== undefined || item.geometry.kind === 'box';
+      const solid = item.extrudeHeight !== undefined;
       // `lit`: shaded by Cesium's light, or flat; by default solids are lit.
       const lit = item.lit ?? solid;
-      if (classifies(item) && !item.outlineOnly) {
-        if (imageFill)
-          throw new Error(
-            'the Cesium renderer classifies volumes with colours only',
-          );
-        // What lies inside the volume is tinted: the tiles and terrain it
-        // covers, as `clampTo` names them.
-        part.fill = host.add(
-          new Cesium.ClassificationPrimitive({
-            geometryInstances: new Cesium.GeometryInstance({
-              geometry: shape.fill,
-              modelMatrix: shape.modelMatrix,
-              attributes: {
-                color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                  toColor(item.fill),
-                ),
-              },
-              id,
-            }),
-            classificationType: classificationOf(
-              item.clampTo ?? record.spec.clampTo ?? 'both',
-            ),
-            allowPicking: record.spec.pickable !== false,
-            asynchronous: false,
-          }),
-        );
-      } else if (imageFill && !item.outlineOnly) {
+      if (imageFill && !item.outlineOnly) {
         const material = ownMaterial(
           imageMaterial(toImage(imageFill.image), imageFill.repeat),
         );
@@ -4223,7 +4152,7 @@ export function createCesiumDraw({
               translucent: part.translucent.fill,
               closed: solid,
               // Flat shapes unlit by default: lit, their faces shade by
-              // the light (a lit box's sides differ, an unlit one's match).
+              // the light (a lit block's sides differ, an unlit one's match).
               flat: !lit,
               faceForward: !solid,
             }),

@@ -166,8 +166,7 @@ test('height queries see through very large sets, built once per change', () => 
   big.set(Array.from({ length: 150_000 }, (_, i) => point(String(i))));
   assert.equal(ports.query.sampleHeightNow({ lon: 0, lat: 0 }), 10);
   assert.equal(calls[0].exclude.length, 150_000, 'every item seen through');
-  const out = new Float64Array(3);
-  ports.query.sampleHeightNowMany(new Float64Array(6), out);
+  ports.query.sampleHeightNow({ lon: 1, lat: 1 });
   assert.ok(calls.slice(1).every((c) => c.exclude === calls[0].exclude));
   big.setOptions({ includeInHeightQueries: true });
   ports.query.sampleHeightNow({ lon: 0, lat: 0 });
@@ -711,7 +710,10 @@ test('camera events: Cesium’s moves relayed, a throw reported, off and dispose
   off();
   scene.camera.moveStart.raiseEvent();
   assert.deepEqual(seen, ['start', 'end']);
-  assert.throws(() => ports.camera.on('turned', () => {}), /Unknown camera event/);
+  assert.throws(
+    () => ports.camera.on('turned', () => {}),
+    /Unknown camera event/,
+  );
   ports.dispose();
   scene.camera.moveEnd.raiseEvent();
   scene.camera.lookRight(1);
@@ -724,7 +726,9 @@ test('pose: degrees, and NaN where Cesium has no cartographic position', () => {
   cityView(scene.camera);
   const ports = createCesiumPorts(widget, { capabilities: all });
   const pose = ports.camera.pose();
-  assert.ok(Math.abs(pose.lon + 97.74) < 1e-9 && Math.abs(pose.lat - 30.27) < 1e-9);
+  assert.ok(
+    Math.abs(pose.lon + 97.74) < 1e-9 && Math.abs(pose.lat - 30.27) < 1e-9,
+  );
   assert.ok(Math.abs(pose.height - 2000) < 1e-6);
   scene.camera.position = new Cesium.Cartesian3(0, 0, 0);
   const centre = ports.camera.pose();

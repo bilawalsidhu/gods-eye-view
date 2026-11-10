@@ -628,8 +628,8 @@ test('a raster shell never swaps in a stage superseded by content still decoding
 test('the Cesium fields refuse kinds they cannot draw and live ids', () => {
   const h = fieldHarness();
   assert.throws(
-    () => h.fields.field({ kind: 'scalarRaster', id: 'x' }),
-    /no scalarRaster fields/,
+    () => h.fields.field(/** @type {any} */ ({ kind: 'contours', id: 'x' })),
+    /no contours fields/,
   );
   const spec = {
     kind: 'rasterShell',

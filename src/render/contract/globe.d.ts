@@ -31,21 +31,11 @@ export interface PhotorealStatus {
  */
 export type TerrainSpec = (
   | { kind: 'ellipsoid' }
-  | { kind: 'quantizedMesh'; url: string; requestVertexNormals?: boolean }
   /**
    * The renderer's global terrain, through `CreateOptions.worldDataToken`
    * (for the default renderer, Cesium World Terrain).
    */
   | { kind: 'world'; requestVertexNormals?: boolean }
-  /** A DEM image pyramid (`{z}/{x}/{y}`), heights encoded in RGB. */
-  | {
-      kind: 'heightmap';
-      url: string;
-      encoding: 'terrarium' | 'mapbox';
-      maxLevel?: number;
-      /** The geoid the encoded heights are relative to; omitted: the ellipsoid. */
-      geoid?: 'egm96' | 'egm2008';
-    }
 ) & {
   /** Vertical exaggeration of the drawn terrain; default 1. */
   exaggeration?: number;
@@ -75,20 +65,13 @@ export interface ImagerySpec {
    * `CreateOptions.worldDataToken` (for the default renderer, Cesium ion's
    * world imagery), in `worldStyle`. `canvas`: `imageHooks`.
    */
-  kind: 'xyz' | 'wmts' | 'arcgis' | 'world' | 'single-image' | 'canvas';
+  kind: 'xyz' | 'world' | 'single-image' | 'canvas';
   /** `world`: aerial (the default), or aerial with labels. */
   worldStyle?: 'aerial' | 'aerialLabels';
   /** URL or URL template (`{x}`, `{y}`, `{z}`, `{s}`, `{time}`). */
   url?: string;
   /** `'canvas'` (`imageHooks`): draws one tile. */
   drawTile?: (tile: TileRequest, canvas: HTMLCanvasElement) => void;
-  /** WMTS: layer, style, tile matrix set and format. */
-  wmts?: {
-    layer: string;
-    style: string;
-    tileMatrixSetId: string;
-    format?: string;
-  };
   subdomains?: string[];
   tiling?: TilingScheme;
   rectangle?: GeoRect;
@@ -216,11 +199,6 @@ export interface BaseStatus {
  */
 export interface SkySettings {
   atmosphere: boolean;
-  atmosphereTuning?: {
-    brightness?: number;
-    hueShift?: number;
-    saturation?: number;
-  };
   stars: boolean;
   /** Milky Way brightness, 0..1. */
   milkyWay: number;
@@ -232,22 +210,12 @@ export interface SkySettings {
   lighting: boolean;
 }
 
-export type SurfaceShading =
-  | {
-      kind: 'relief';
-      /** Elevation-like field to shade, row-major, `width × height`. */
-      values: Float32Array;
-      width: number;
-      height: number;
-      rectangle: GeoRect;
-      strength: number;
-    }
-  /**
-   * View-lit shading of the drawn terrain's own relief (the ellipsoid's
-   * curvature where terrain has no normals); darkens only, at most
-   * `strength` opacity.
-   */
-  | { kind: 'hillshade'; strength: number };
+/**
+ * View-lit shading of the drawn terrain's own relief (the ellipsoid's
+ * curvature where terrain has no normals); darkens only, at most
+ * `strength` opacity.
+ */
+export type SurfaceShading = { kind: 'hillshade'; strength: number };
 
 export interface LoadProgress {
   tilesPending: number;
@@ -287,10 +255,6 @@ export interface GlobePort {
   surfaceVersion?(): number;
   /** `surfaceShading`. */
   setSurfaceShading?(shading: SurfaceShading | null): void;
-  /** `clouds`: the renderer's volumetric clouds, or none. */
-  setClouds?(clouds: { coverage: number } | null): void;
-  /** `water`: the renderer's own water surface on the oceans, on or off. */
-  setWater?(enabled: boolean): void;
   readonly imagery: {
     /**
      * Without `imageHooks`, a spec with `tileTransform`, `admit` or kind

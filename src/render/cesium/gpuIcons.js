@@ -1,8 +1,8 @@
 /**
  * @module render/cesium/gpuIcons
  * @description The Cesium draw port's GPU icon sets: an icon set whose items
- * move (`motionSegments`), glide their course (`courseGlide`,
- * `courseBlendMs`), recede toward the limb, pick through a larger proxy,
+ * move (`motionSegments`), glide their course (`courseGlide`), recede
+ * toward the limb, pick through a larger proxy,
  * switch images by drawn size, or that takes columns (`columns`), draws as
  * one instanced primitive (`IconSetPrimitive`) over an icon set's typed
  * columns (`iconSet.js`) instead of a billboard collection. Each item is one
@@ -10,12 +10,11 @@
  * row is written only when its item changes.
  *
  * What these sets draw as billboards do not: an icon set becomes one when
- * an item first needs it (or it first takes columns), and stays one; a
- * course blend alone moves it only when all of it can move. They refuse
- * loudly what billboards draw and they do not: clamped heights,
- * `fadeByDistance`, `displayRange`, pixel and eye offsets, anchors other
- * than the centre, axis and screen rotations, opaque and additive blends,
- * and images other than URLs, SVG and atlas slots of those. Their images
+ * an item first needs it (or it first takes columns), and stays one. They
+ * refuse loudly what billboards draw and they do not: clamped heights,
+ * `fadeByDistance`, `displayRange`, pixel offsets, anchors other than the
+ * centre, axis and screen rotations, opaque and additive blends, and
+ * images other than URLs, SVG and atlas slots of those. Their images
  * are rasterised square into the icon atlas every GPU icon set shares, and
  * refused when it has no room left for them: an SVG at its own size (its
  * root's larger `width`/`height`, as a billboard rasterises it), any other
@@ -33,9 +32,6 @@
  *   ids are those of the last columns, row for row.
  * - A `lerp` whose `t1` is not after `t0` steps from `from` to `to` 1 ms
  *   after `t0`.
- * - A course blend eases from the course shown when its course changes;
- *   writes keeping that course (and columns of neither position nor
- *   course) let it go on rather than start over.
  */
 import * as Cesium from 'cesium';
 import {
@@ -54,10 +50,8 @@ import { contextIconSlots, IconSetPrimitive } from './iconSetPrimitive.js';
 import { iconAtlas, MAX_ICON_SLOTS } from '../../data/iconAtlas.js';
 import {
   glideOffset,
-  iconCourse,
   LERP_STEP_MS,
   motionEndsAt,
-  norm180,
 } from '../motion/iconMotion.js';
 import { toCartesian } from './common.js';
 
@@ -89,7 +83,6 @@ function motionOf(item) {
     course: item.course,
     motion: item.motion ? { ...item.motion } : undefined,
     courseGlide: item.courseGlide ? { ...item.courseGlide } : undefined,
-    courseBlendMs: item.courseBlendMs,
   };
 }
 
@@ -185,13 +178,8 @@ export function createGpuIcons({
 }) {
   const can = (capability) => capabilities.has(capability);
 
-  /**
-   * Whether drawing these items needs a GPU icon set ('needs'), would only
-   * draw them better on one ('prefers': a course blend, which billboards
-   * draw as a snap), or neither (false).
-   */
+  /** Whether drawing these items needs a GPU icon set. */
   function wants(items) {
-    let prefers = false;
     for (const item of items) {
       if (
         (item.motion && can('motionSegments')) ||
@@ -200,10 +188,9 @@ export function createGpuIcons({
         item.pickProxy ||
         item.imageLod
       )
-        return 'needs';
-      if (item.courseBlendMs > 0) prefers = true;
+        return true;
     }
-    return prefers ? 'prefers' : false;
+    return false;
   }
 
   /** Refuse what a GPU icon set cannot draw, before anything changes. */
@@ -223,7 +210,6 @@ export function createGpuIcons({
       if (item.fadeByDistance) refuse('fadeByDistance');
       if (item.displayRange) refuse('displayRange');
       if (nonZero(item.pixelOffset)) refuse('pixelOffset');
-      if (nonZero(item.eyeOffset)) refuse('eyeOffset');
       if (item.anchor !== undefined && item.anchor !== 'center')
         refuse('anchors but the centre');
       if (item.rotationMode === 'axis') refuse('axis rotation');
@@ -285,8 +271,8 @@ export function createGpuIcons({
         clockTime(frameState, new Cesium.JulianDate()),
       requestRender: () => requestRender(`icons:${spec.id}`),
       cull: () => spec.horizonCull === true,
-      // Picked as the draw port's other items are: `{set, id, meta,
-      // lodGroup}` as the item now is, hidden row by row for drill picks.
+      // Picked as the draw port's other items are: `{set, id, meta}` as
+      // the item now is, hidden row by row for drill picks.
       pickObject: (id, _set, primitive) => ({
         primitive,
         id: {
@@ -295,9 +281,6 @@ export function createGpuIcons({
           get meta() {
             return record.items.get(id)?.meta;
           },
-          get lodGroup() {
-            return record.items.get(id)?.lodGroup;
-          },
         },
       }),
     });
@@ -305,14 +288,8 @@ export function createGpuIcons({
     // Until when (epoch ms on the motion clock) a row may still move or turn.
     let movingUntil = -Infinity;
     const clockMs = () => Cesium.JulianDate.toDate(clockTime()).getTime();
-    // Each row's course blend, by id: {target, from, t0 (epoch ms), rate}.
-    const blends = new Map();
     // What each row's segment was last written from, by id.
     const written = new Map();
-    // What each row is drawn along now, by id: its position, course and
-    // motion as the renderer reads them, and the course glide in effect
-    // (`iconMotion` evaluates it as the GPU does).
-    const drawn = new Map();
     // The ids of the last columns, while no other write came after them.
     let columnIds = null;
     // Written in full on the first write.
@@ -385,12 +362,6 @@ export function createGpuIcons({
       let row = set.row(item.id);
       const added = row < 0;
       if (added) row = set.add(item.id);
-      const now = clockMs();
-      // The course on screen before this write, to ease from.
-      const shownCourse =
-        added || !drawn.has(item.id)
-          ? null
-          : iconCourse(drawn.get(item.id), now);
       const [width = 0, height = 0] = item.size ?? [];
       const far = slotOf(item.image, item);
       const near = item.imageLod ? slotOf(item.imageLod.near, item) : far;
@@ -445,41 +416,11 @@ export function createGpuIcons({
           glideOffset(along.motion, along.course, g),
         );
       let end = motionEndsAt(along);
-      let glide = can('courseGlide') ? from.courseGlide : undefined;
+      const glide = can('courseGlide') ? from.courseGlide : undefined;
       if (glide) {
         writeGlide(glide);
         end = motionEndsAt({ ...along, courseGlide: glide });
-      } else if (item.courseBlendMs > 0 && shownCourse !== null) {
-        const target = iconCourse(along, now);
-        let blend = blends.get(item.id);
-        // The same course as the blend under way heads for: it goes on.
-        if (!blend || blend.target !== target) {
-          // Over `courseBlendMs`: at the rate that closes the gap in that time.
-          const gap = Math.abs(norm180(shownCourse - target));
-          blend =
-            gap > 0
-              ? {
-                  target,
-                  from: shownCourse,
-                  t0: now,
-                  rate: gap / (item.courseBlendMs / 1000),
-                  until: now + item.courseBlendMs,
-                }
-              : null;
-          if (blend) blends.set(item.id, blend);
-          else blends.delete(item.id);
-        }
-        if (blend) {
-          glide = {
-            fromCourseDeg: blend.from,
-            t0: blend.t0,
-            rateDps: blend.rate,
-          };
-          writeGlide(glide);
-          end = Math.max(end, blend.until);
-        }
-      } else blends.delete(item.id);
-      drawn.set(item.id, { ...along, courseGlide: glide });
+      }
       set.segmentWritten(row);
       if (end > movingUntil) movingUntil = end;
     }
@@ -495,9 +436,7 @@ export function createGpuIcons({
         const id = set.idAt(row);
         if (!record.items.has(id)) {
           set.remove(id);
-          blends.delete(id);
           written.delete(id);
-          drawn.delete(id);
         }
       }
       for (const item of record.items.values()) writeRow(item);
@@ -519,9 +458,7 @@ export function createGpuIcons({
         columnIds = null;
         for (const id of ids) {
           set.remove(id);
-          blends.delete(id);
           written.delete(id);
-          drawn.delete(id);
         }
         if (record.items.size === 0) movingUntil = -Infinity;
       },
@@ -544,9 +481,7 @@ export function createGpuIcons({
             if (!keep.has(id)) {
               record.items.delete(id);
               set.remove(id);
-              blends.delete(id);
               written.delete(id);
-              drawn.delete(id);
             }
         }
         const runs =

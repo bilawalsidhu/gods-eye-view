@@ -35,15 +35,44 @@ function viewer(t, { heights = () => null } = {}) {
 }
 
 const marks = () => [
-  { id: 'route', type: 'route', color: 'amber', alpha: 1, anchor: { lat: 0, lon: 0 }, path: [{ lat: 0, lon: 0 }, { lat: 0.01, lon: 0.01 }] },
-  { id: 'area', type: 'area', color: 'green', alpha: 1, anchor: { lat: 0.005, lon: 0.005 }, ring: [[0, 0], [0.01, 0], [0.01, 0.01], [0, 0]] },
-  { id: 'pin', type: 'pin', color: 'primary', alpha: 1, anchor: { lat: 0.02, lon: 0.02 } },
+  {
+    id: 'route',
+    type: 'route',
+    color: 'amber',
+    alpha: 1,
+    anchor: { lat: 0, lon: 0 },
+    path: [
+      { lat: 0, lon: 0 },
+      { lat: 0.01, lon: 0.01 },
+    ],
+  },
+  {
+    id: 'area',
+    type: 'area',
+    color: 'green',
+    alpha: 1,
+    anchor: { lat: 0.005, lon: 0.005 },
+    ring: [
+      [0, 0],
+      [0.01, 0],
+      [0.01, 0.01],
+      [0, 0],
+    ],
+  },
+  {
+    id: 'pin',
+    type: 'pin',
+    color: 'primary',
+    alpha: 1,
+    anchor: { lat: 0.02, lon: 0.02 },
+  },
 ];
 
 /** The live sets a mark draws into. */
 const setsOf = (draw, anno) =>
   [...draw.sets.values()].filter(
-    (record) => !record.disposed && record.spec.id.startsWith(`${anno._draw.prefix}:`),
+    (record) =>
+      !record.disposed && record.spec.id.startsWith(`${anno._draw.prefix}:`),
   );
 
 test('each mark draws in sets of its own; a hidden one has them hidden on sync, and back when shown', (t) => {
@@ -51,25 +80,44 @@ test('each mark draws in sets of its own; a hidden one has them hidden on sync, 
   const renderer = createWorldAnnotationRenderer(v);
   const [route, area, pin] = marks();
   for (const anno of [route, area, pin]) renderer.add(anno);
-  for (const anno of [route, area, pin]) assert.ok(setsOf(draw, anno).length > 0, anno.id);
+  for (const anno of [route, area, pin])
+    assert.ok(setsOf(draw, anno).length > 0, anno.id);
   const shown = (anno) => setsOf(draw, anno).map((record) => record.show);
 
   route.hidden = true;
   area.hidden = true;
   renderer.sync();
-  assert.ok(shown(route).every((show) => show === false), 'the line is off');
-  assert.ok(shown(area).every((show) => show === false), 'the area is off');
-  assert.ok(shown(pin).every((show) => show === true), 'a visible mark stays');
+  assert.ok(
+    shown(route).every((show) => show === false),
+    'the line is off',
+  );
+  assert.ok(
+    shown(area).every((show) => show === false),
+    'the area is off',
+  );
+  assert.ok(
+    shown(pin).every((show) => show === true),
+    'a visible mark stays',
+  );
 
   route.hidden = false;
   renderer.sync();
-  assert.ok(shown(route).every((show) => show === true), 'the line is back');
+  assert.ok(
+    shown(route).every((show) => show === true),
+    'the line is back',
+  );
   const areaSets = setsOf(draw, area);
   renderer.remove(area);
-  assert.ok(areaSets.every((record) => record.disposed), 'a removed mark lets its sets go');
+  assert.ok(
+    areaSets.every((record) => record.disposed),
+    'a removed mark lets its sets go',
+  );
   renderer.sync();
   renderer.destroy();
-  assert.equal([...draw.sets.values()].filter((record) => !record.disposed).length, 0);
+  assert.equal(
+    [...draw.sets.values()].filter((record) => !record.disposed).length,
+    0,
+  );
 });
 
 test('a fading mark takes its new colours in place, its pulses with them', (t) => {
@@ -79,7 +127,10 @@ test('a fading mark takes its new colours in place, its pulses with them', (t) =
   renderer.add(route);
   renderer.add(area);
   const line = () => [...setsOf(draw, route)[0].items.values()][0];
-  const fill = () => setsOf(draw, area).find((r) => r.kind === 'shapes').items.get('fill:0');
+  const fill = () =>
+    setsOf(draw, area)
+      .find((r) => r.kind === 'shapes')
+      .items.get('fill:0');
   assert.ok(Math.abs(line().style.color[3] - 0.95) < 1e-9);
   assert.ok(Math.abs(fill().fill[3] - 0.2) < 1e-9);
   route.alpha = 0.5;
@@ -103,35 +154,79 @@ test('every kind draws as it did: draped on terrain and tiles alike, rings by ca
   const renderer = createWorldAnnotationRenderer(v);
   const [route, area, pin] = marks();
   const synth = { ...area, id: 'synth', synthesized: true };
-  const arrow = { id: 'arrow', type: 'arrow', color: 'red', alpha: 1, anchor: { lon: 0, lat: 0 }, to: { lon: 0.01, lat: 0 } };
-  const label = { id: 'label', type: 'label', color: 'amber', alpha: 1, anchor: { lon: 0.03, lat: 0 } };
-  for (const anno of [route, area, pin, synth, arrow, label]) renderer.add(anno);
-  const items = (anno, kind) => [...(setsOf(draw, anno).find((r) => r.kind === kind)?.items.values() ?? [])];
-  for (const record of [...draw.sets.values()]) assert.equal(record.spec.clampTo, 'both');
+  const arrow = {
+    id: 'arrow',
+    type: 'arrow',
+    color: 'red',
+    alpha: 1,
+    anchor: { lon: 0, lat: 0 },
+    to: { lon: 0.01, lat: 0 },
+  };
+  const label = {
+    id: 'label',
+    type: 'label',
+    color: 'amber',
+    alpha: 1,
+    anchor: { lon: 0.03, lat: 0 },
+  };
+  for (const anno of [route, area, pin, synth, arrow, label])
+    renderer.add(anno);
+  const items = (anno, kind) => [
+    ...(setsOf(draw, anno)
+      .find((r) => r.kind === kind)
+      ?.items.values() ?? []),
+  ];
+  for (const record of [...draw.sets.values()])
+    assert.equal(record.spec.clampTo, 'both');
 
   const [flow] = items(route, 'lines');
   assert.equal(flow.mode, 'draped');
   assert.equal(flow.widthPx, 9);
-  assert.deepEqual({ ...flow.style, color: undefined }, { kind: 'flow', color: undefined, repeat: 64, duty: 0.46, speed: 0.55 });
+  assert.deepEqual(
+    { ...flow.style, color: undefined },
+    { kind: 'flow', color: undefined, repeat: 64, duty: 0.46, speed: 0.55 },
+  );
 
   const [areaFill] = items(area, 'shapes');
   assert.equal(areaFill.height, 'clampGround');
   assert.equal(areaFill.animate.property, 'alpha');
   assert.ok(Math.abs(areaFill.animate.periodMs - (2 * Math.PI) / 0.005) < 1e-9);
   const [areaLine] = items(area, 'lines');
-  assert.deepEqual([areaLine.widthPx, areaLine.style.kind, areaLine.style.power], [6, 'glow', 0.35]);
+  assert.deepEqual(
+    [areaLine.widthPx, areaLine.style.kind, areaLine.style.power],
+    [6, 'glow', 0.35],
+  );
   const [synthLine] = items(synth, 'lines');
-  assert.deepEqual([synthLine.style.kind, synthLine.style.length], ['dash', 24]);
-  assert.ok(Math.abs(items(synth, 'shapes')[0].fill[3] - 0.1) < 1e-9, 'an approximate area is fainter');
+  assert.deepEqual(
+    [synthLine.style.kind, synthLine.style.length],
+    ['dash', 24],
+  );
+  assert.ok(
+    Math.abs(items(synth, 'shapes')[0].fill[3] - 0.1) < 1e-9,
+    'an approximate area is fainter',
+  );
 
   const [arrowLine] = items(arrow, 'lines');
-  assert.deepEqual([arrowLine.mode, arrowLine.widthPx, arrowLine.style.kind], ['draped', 16, 'arrow']);
+  assert.deepEqual(
+    [arrowLine.mode, arrowLine.widthPx, arrowLine.style.kind],
+    ['draped', 16, 'arrow'],
+  );
 
   const [ring] = items(pin, 'shapes');
-  assert.deepEqual(ring.geometry.semiMajor, { byCameraHeight: { factor: 0.03, min: 14, max: 170 } });
+  assert.deepEqual(ring.geometry.semiMajor, {
+    byCameraHeight: { factor: 0.03, min: 14, max: 170 },
+  });
   assert.equal(ring.geometry.semiMinor, ring.geometry.semiMajor);
   const [marker] = items(pin, 'points');
-  assert.deepEqual([marker.pixelSize, marker.height, marker.outlineWidth, marker.disableDepthTest], [14, 'clampGround', 3, Infinity]);
+  assert.deepEqual(
+    [
+      marker.pixelSize,
+      marker.height,
+      marker.outlineWidth,
+      marker.disableDepthTest,
+    ],
+    [14, 'clampGround', 3, Infinity],
+  );
   assert.equal(items(label, 'shapes').length, 0, 'a label has no ring');
   assert.equal(items(label, 'points')[0].pixelSize, 8);
   renderer.destroy();
@@ -140,28 +235,52 @@ test('every kind draws as it did: draped on terrain and tiles alike, rings by ca
 test('a building waits for its ground probes, then draws a pulsing column, a cage and a draped base', async (t) => {
   const { v, draw, emit, frames } = viewer(t, { heights: () => 150 });
   const renderer = createWorldAnnotationRenderer(v);
-  const ring = [[0, 0], [0.001, 0], [0.001, 0.001], [0, 0.001], [0, 0]];
+  const ring = [
+    [0, 0],
+    [0.001, 0],
+    [0.001, 0.001],
+    [0, 0.001],
+    [0, 0],
+  ];
   const anno = {
-    id: 'b', type: 'area', color: 'amber', alpha: 1, footprintKind: 'building', buildingHeight: 40,
-    anchor: { lon: 0.0005, lat: 0.0005, height: 200 }, ring,
+    id: 'b',
+    type: 'area',
+    color: 'amber',
+    alpha: 1,
+    footprintKind: 'building',
+    buildingHeight: 40,
+    anchor: { lon: 0.0005, lat: 0.0005, height: 200 },
+    ring,
   };
   const done = renderer.add(anno);
   assert.equal(frames.size, 1, 'probing on the frames');
-  assert.equal(setsOf(draw, anno).length, 0, 'nothing until its ground is known');
+  assert.equal(
+    setsOf(draw, anno).length,
+    0,
+    'nothing until its ground is known',
+  );
   for (let i = 0; i < 8; i++) emit();
   assert.equal((await done).status, 'installed');
   assert.equal(frames.size, 0, 'done probing');
-  const shapes = [...setsOf(draw, anno).find((r) => r.kind === 'shapes').items.values()];
+  const shapes = [
+    ...setsOf(draw, anno)
+      .find((r) => r.kind === 'shapes')
+      .items.values(),
+  ];
   const volume = shapes.find((s) => s.id === 'volume:0');
   assert.equal(volume.extrudeHeight, 150 + 40 + 24);
   assert.equal(volume.geometry.rings[0][0].height, 147);
   assert.equal(volume.height, 'absolute');
-  assert.equal(volume.classifyVolume, undefined, 'a translucent column, as before');
   const cage = shapes.find((s) => s.id === 'cage:0');
   assert.equal(cage.outlineOnly, true);
   assert.ok(cage.geometry.rings[0].length <= 14);
-  const [base] = setsOf(draw, anno).find((r) => r.kind === 'lines').items.values();
-  assert.deepEqual([base.mode, base.widthPx, base.style.kind, base.style.power], ['draped', 3, 'glow', 0.25]);
+  const [base] = setsOf(draw, anno)
+    .find((r) => r.kind === 'lines')
+    .items.values();
+  assert.deepEqual(
+    [base.mode, base.widthPx, base.style.kind, base.style.power],
+    ['draped', 3, 'glow', 0.25],
+  );
   renderer.destroy();
 });
 
@@ -170,18 +289,35 @@ test('each kind paints the alphas it painted as entities, at full alpha', (t) =>
   const renderer = createWorldAnnotationRenderer(v);
   const [route, area, pin] = marks();
   const synth = { ...area, id: 'synth', synthesized: true };
-  const arrow = { id: 'arrow', type: 'arrow', color: 'red', alpha: 1, anchor: { lon: 0, lat: 0 }, to: { lon: 0.01, lat: 0 } };
+  const arrow = {
+    id: 'arrow',
+    type: 'arrow',
+    color: 'red',
+    alpha: 1,
+    anchor: { lon: 0, lat: 0 },
+    to: { lon: 0.01, lat: 0 },
+  };
   const ring = Array.from({ length: 40 }, (_, i) => [
     0.0005 + 0.0004 * Math.cos((i / 40) * 2 * Math.PI),
     0.0005 + 0.0004 * Math.sin((i / 40) * 2 * Math.PI),
   ]);
   const building = {
-    id: 'b', type: 'area', color: 'amber', alpha: 1, footprintKind: 'building', buildingHeight: 40,
-    anchor: { lon: 0.0005, lat: 0.0005, height: 200 }, ring,
+    id: 'b',
+    type: 'area',
+    color: 'amber',
+    alpha: 1,
+    footprintKind: 'building',
+    buildingHeight: 40,
+    anchor: { lon: 0.0005, lat: 0.0005, height: 200 },
+    ring,
   };
   for (const anno of [route, area, pin, synth, arrow]) renderer.add(anno);
   renderer.add(building, { sampledGroundHeight: 150 });
-  const items = (anno, kind) => [...(setsOf(draw, anno).find((r) => r.kind === kind)?.items.values() ?? [])];
+  const items = (anno, kind) => [
+    ...(setsOf(draw, anno)
+      .find((r) => r.kind === kind)
+      ?.items.values() ?? []),
+  ];
   const alpha = (c) => Math.round(c[3] * 1000) / 1000;
   assert.equal(alpha(items(route, 'lines')[0].style.color), 0.95);
   assert.equal(alpha(items(area, 'lines')[0].style.color), 1);
@@ -189,12 +325,19 @@ test('each kind paints the alphas it painted as entities, at full alpha', (t) =>
   assert.equal(alpha(items(arrow, 'lines')[0].style.color), 0.95);
   assert.equal(alpha(items(pin, 'shapes')[0].fill), 0.38);
   const marker = items(pin, 'points')[0];
-  assert.deepEqual([alpha(marker.color), alpha(marker.outlineColor)], [1, 0.95]);
+  assert.deepEqual(
+    [alpha(marker.color), alpha(marker.outlineColor)],
+    [1, 0.95],
+  );
   assert.deepEqual(marker.outlineColor.slice(0, 3), [1, 1, 1]);
   const [volume, cage] = items(building, 'shapes');
   assert.equal(alpha(volume.fill), 0.45);
   assert.equal(alpha(cage.outline), 0.32);
-  assert.equal(Math.round(cage.animate.from * 1000) / 1000, 0.192, 'the cage pulses too');
+  assert.equal(
+    Math.round(cage.animate.from * 1000) / 1000,
+    0.192,
+    'the cage pulses too',
+  );
   assert.equal(cage.geometry.rings[0].length, 14, 'decimated to 14');
   assert.equal(alpha(items(building, 'lines')[0].style.color), 0.7);
   renderer.destroy();
@@ -211,9 +354,16 @@ test('a mark removed and added again draws afresh; two renderers on one viewer k
   assert.doesNotThrow(() => first.add(route));
   assert.notEqual(route._draw.prefix, prefix, 'fresh sets');
   assert.doesNotThrow(() => second.add(area));
-  assert.ok(!area._draw.prefix.startsWith(route._draw.prefix.split(':').slice(0, 2).join(':') + ':'));
+  assert.ok(
+    !area._draw.prefix.startsWith(
+      route._draw.prefix.split(':').slice(0, 2).join(':') + ':',
+    ),
+  );
   // Added again as another kind, its old sets go.
-  const kinds = () => setsOf(draw, route).map((r) => r.kind).sort();
+  const kinds = () =>
+    setsOf(draw, route)
+      .map((r) => r.kind)
+      .sort();
   assert.deepEqual(kinds(), ['lines']);
   Object.assign(route, { type: 'pin', path: undefined });
   first.add(route);

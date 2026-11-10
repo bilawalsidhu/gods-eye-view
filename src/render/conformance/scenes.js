@@ -303,15 +303,6 @@ export const REFERENCE_SCENES = Object.freeze([
           fill: '#bf5af2',
         },
         {
-          id: 'box',
-          geometry: {
-            kind: 'box',
-            center: offset(700, -400, 150),
-            dimensions: { x: 300, y: 300, z: 300 },
-          },
-          fill: '#ff9f0a',
-        },
-        {
           id: 'outline',
           geometry: { kind: 'polygon', rings: [square(0, -1000, 200)] },
           outline: '#ffffff',
@@ -326,7 +317,7 @@ export const REFERENCE_SCENES = Object.freeze([
     ],
   },
   {
-    // `ShapeItem.lit`: a lit box's faces shade apart, an unlit one's match;
+    // `ShapeItem.lit`: a lit block's faces shade apart, an unlit one's match;
     // a flat square lit, beside one drawn flat. Lit, the default renderer
     // shades a flat square's two triangles apart (a seam on the diagonal):
     // that is its lighting, recorded as it is.
@@ -342,19 +333,26 @@ export const REFERENCE_SCENES = Object.freeze([
         offset(east + half, north + half, 5),
         offset(east - half, north + half, 5),
       ];
-      const box = (id, east, lit) => ({
+      const block = (id, east, lit) => ({
         id,
         geometry: {
-          kind: 'box',
-          center: offset(east, 300, 150),
-          dimensions: { x: 300, y: 300, z: 300 },
+          kind: 'polygon',
+          rings: [
+            [
+              offset(east - 150, 150, 0),
+              offset(east + 150, 150, 0),
+              offset(east + 150, 450, 0),
+              offset(east - 150, 450, 0),
+            ],
+          ],
         },
+        extrudeHeight: 300,
         fill: '#ff9f0a',
         lit,
       });
       set.set([
-        box('lit-box', -400, true),
-        box('flat-box', 400, false),
+        block('lit-block', -400, true),
+        block('flat-block', 400, false),
         {
           id: 'lit-square',
           geometry: { kind: 'polygon', rings: [square(-400, -500, 200)] },
@@ -450,24 +448,15 @@ export const REFERENCE_SCENES = Object.freeze([
     capability: 'fields',
     async build(r) {
       await bare(r);
-      const width = 32;
-      const height = 16;
-      const values = new Float32Array(width * height).map(
-        (_, i) => (i % width) / width,
-      );
       const field = r.draw.field({
-        kind: 'scalarRaster',
-        id: 'ref:scalar',
-        values,
-        width,
-        height,
+        kind: 'rasterShell',
+        id: 'ref:shell',
+        // A 1 × 1 red PNG, stretched over the rectangle.
+        image:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
         rectangle: { west: -100, south: 28, east: -95, north: 32 },
-        ramp: [
-          { value: 0, color: '#0a84ff' },
-          { value: 0.5, color: '#34c759' },
-          { value: 1, color: '#ff3b30' },
-        ],
-        alpha: 0.8,
+        heightM: 10000,
+        alpha: 0.6,
       });
       return () => field.dispose();
     },
@@ -477,27 +466,6 @@ export const REFERENCE_SCENES = Object.freeze([
         view: over(900000, -Math.PI / 2, 0, { lon: -97.5, lat: 30 }),
       },
     ],
-  },
-  {
-    id: 'agents',
-    family: 'agents',
-    capability: 'agents',
-    async build(r, ctx) {
-      await bare(r);
-      const set = r.draw.agents({ id: 'ref:agents' });
-      set.set([
-        {
-          id: 'road',
-          positions: [ctx.toEcef(offset(-800, 0)), ctx.toEcef(offset(800, 0))],
-          count: 20,
-          speedMps: 0,
-          color: '#ffd60a',
-          pixelSize: 6,
-        },
-      ]);
-      return disposeAll(set);
-    },
-    views: [{ name: 'top', view: over(2500) }],
   },
   {
     id: 'city',

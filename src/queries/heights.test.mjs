@@ -280,7 +280,7 @@ test('height queries go through the service', () => {
     'src/layers/streetLevel/view.js',
   ]);
   const NAMES =
-    'sampleHeight|sampleHeightNow|sampleHeightNowMany|clampToSurface|clampToHeight|sampleHeightMostDetailed|clampToHeightMostDetailed|getHeight';
+    'sampleHeight|sampleHeightNow|clampToSurface|clampToHeight|sampleHeightMostDetailed|clampToHeightMostDetailed|getHeight';
   const direct = new RegExp(
     `\\.(${NAMES})\\b|\\[\\s*['"\`](${NAMES})['"\`]\\s*\\]|\\bsampleTerrain(MostDetailed)?\\b`,
   );

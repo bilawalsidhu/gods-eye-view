@@ -19,8 +19,6 @@ export interface Hit {
   id: string;
   /** The item's `meta`, as it was given; absent when the item had none. */
   meta?: Meta;
-  /** The item's `lodGroup`, when it has one: the thing it is a detail level of. */
-  lodGroup?: string;
   /** The map itself (tiles or globe), rather than a drawn item. */
   surface: boolean;
   /** Where the hit is, when the renderer knows it. */
@@ -96,16 +94,6 @@ export interface QueryPort {
   isOccluded(position: Ecef): boolean;
   /** `sampleHeight`: cached height now, or null when not loaded. */
   sampleHeightNow(point: LonLat, options?: HeightOptions): number | null;
-  /**
-   * `sampleHeight`: cached heights for many points at once: packed `lon, lat`
-   * degrees in, one height per point out (NaN when not loaded). The app makes
-   * its per-frame height reads through this, once a frame.
-   */
-  sampleHeightNowMany(
-    points: Float64Array,
-    out: Float64Array,
-    options?: HeightOptions,
-  ): void;
   /**
    * `sampleHeight`: heights, loading as needed; null per miss.
    * `mostDetailed` (`finestHeights`) waits for the finest data.

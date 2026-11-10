@@ -269,14 +269,11 @@ test('a row picks as a draw-set item, with the meta its item has now', () => {
     meta: { n: 1 },
     surface: false,
   });
-  set.upsert([
-    icon('a', { motion: { kind: 'hold' }, meta: { n: 2 }, lodGroup: 'g' }),
-  ]);
+  set.upsert([icon('a', { motion: { kind: 'hold' }, meta: { n: 2 } })]);
   assert.deepEqual(drawHitOf(picked).meta, { n: 2 });
-  assert.equal(drawHitOf(picked).lodGroup, 'g');
 });
 
-test('a course glides at its rate with courseGlide, and eases over courseBlendMs without it', () => {
+test('a course glides at its rate with courseGlide, and turns at once without it', () => {
   const t0 = Date.now();
   const glideItem = (rateDps) =>
     icon('a', {
@@ -293,27 +290,24 @@ test('a course glides at its rate with courseGlide, and eases over courseBlendMs
   set.set([glideItem(0)]);
   assert.ok(Math.abs(course('a', t0 + 20000) - 0) < 0.01, '0°/s holds');
 
-  // Without the capability: the blend over courseBlendMs instead.
+  // Without the capability: the glide is ignored and the course turns at once.
   const without = drawOver({
     capabilities: new Set(['motionSegments', 'columns']),
   });
-  const blended = without.draw.icons({ id: 'gpu:blend' });
-  const blend = (courseDeg) =>
+  const turned = without.draw.icons({ id: 'gpu:turn' });
+  const turn = (courseDeg) =>
     icon('a', {
       motion: { kind: 'hold', courseDeg },
-      courseBlendMs: 2000,
       courseGlide: { fromCourseDeg: 180, t0, rateDps: 1 },
     });
-  blended.set([blend(0)]);
-  const r = rows(without.part, 'gpu:blend');
+  turned.set([turn(0)]);
+  const r = rows(without.part, 'gpu:turn');
   assert.ok(
     Math.abs(r.course('a', Date.now())) < 0.01,
     'new: on course at once, its glide ignored',
   );
-  blended.upsert([blend(60)]);
-  const at = Date.now();
-  assert.ok(Math.abs(r.course('a', at + 1000) - 30) < 1, 'halfway at 1 s');
-  assert.ok(Math.abs(r.course('a', at + 2500) - 60) < 0.01, 'there by 2 s');
+  turned.upsert([turn(60)]);
+  assert.ok(Math.abs(r.course('a', Date.now()) - 60) < 0.01, 'turned at once');
 });
 
 test('without motionSegments, motion is ignored: billboards at the item’s place', () => {
@@ -333,7 +327,6 @@ test('GPU icon sets refuse what they cannot draw, changing nothing', () => {
     { fadeByDistance: { near: 1, nearValue: 1, far: 2, farValue: 0 } },
     { displayRange: [0, 10] },
     { pixelOffset: { x: 1, y: 0 } },
-    { eyeOffset: { x: 0, y: 0, z: 5 } },
     { anchor: 'bottom' },
     { rotationMode: 'axis' },
     { rotationMode: 'screen', rotation: 1 },
@@ -465,38 +458,6 @@ test('held rows still turning keep frames coming until their course settles', ()
   const settled = scene.renders;
   part.afterRender();
   assert.equal(scene.renders, settled);
-  // A course blend under way: frames until it ends.
-  set.set([
-    icon('a', { motion: { kind: 'hold', courseDeg: 0 }, courseBlendMs: 2000 }),
-  ]);
-  set.upsert([
-    icon('a', { motion: { kind: 'hold', courseDeg: 50 }, courseBlendMs: 2000 }),
-  ]);
-  const blending = scene.renders;
-  part.afterRender();
-  assert.equal(scene.renders, blending + 1, 'blending: another frame');
-});
-
-test('a course blend goes on through writes that keep its course, columns that only hide included', () => {
-  const { part, draw } = drawOver({
-    capabilities: new Set(['motionSegments', 'columns']),
-  });
-  const set = draw.icons({ id: 'gpu:blend-keep' });
-  const item = (courseDeg) =>
-    icon('a', { motion: { kind: 'hold', courseDeg }, courseBlendMs: 2000 });
-  set.set([item(0)]);
-  set.upsert([item(60)]);
-  const at = Date.now();
-  const r = rows(part, 'gpu:blend-keep');
-  const halfway = r.course('a', at + 1000);
-  // The same course again, then a column that only hides and shows it.
-  set.upsert([{ ...item(60), alpha: 0.5 }]);
-  set.setColumns({ ids: ['a'], shown: new Uint8Array([1]) });
-  assert.ok(
-    Math.abs(r.course('a', at + 1000) - halfway) < 1,
-    'not restarted from where it is now',
-  );
-  assert.ok(Math.abs(r.course('a', at + 2500) - 60) < 0.01, 'there by 2 s');
 });
 
 test('an icon set refuses, changing nothing, images the shared atlas has no room for', () => {
@@ -522,21 +483,18 @@ test('focus fades a billboard icon as it fades a GPU one', () => {
   assert.equal(billboards.get(0).color.alpha, 1, 'at most no fade');
 });
 
-test('a course blend alone moves a set onto the GPU only when all of it can go', () => {
+test('an icon set stays on billboards until an item needs the GPU', () => {
   const { scene, part, draw } = drawOver();
-  const stays = draw.icons({ id: 'gpu:blend-stays' });
-  stays.set([icon('a', { anchor: 'bottom', courseBlendMs: 500 })]);
-  assert.equal(part.sets.get('gpu:blend-stays').gpu, undefined, 'billboards');
-  const goes = draw.icons({ id: 'gpu:blend-goes' });
-  goes.set([icon('a', { courseBlendMs: 500 })]);
-  assert.ok(part.sets.get('gpu:blend-goes').gpu, 'on the GPU');
+  const stays = draw.icons({ id: 'gpu:stays' });
+  stays.set([icon('a', { anchor: 'bottom' })]);
+  assert.equal(part.sets.get('gpu:stays').gpu, undefined, 'billboards');
   // A blend GPU icons do not draw is refused, not ignored.
   const additive = draw.icons({ id: 'gpu:additive', blend: 'additive' });
   assert.throws(
     () => additive.set([icon('a', { motion: { kind: 'hold' } })]),
     /additive blend/,
   );
-  assert.ok(scene.added.length >= 2);
+  assert.ok(scene.added.length >= 1);
 });
 
 test('a write that moves a row as it already moves keeps its segment', () => {
@@ -632,52 +590,19 @@ test('rows draw where the shared evaluator puts them, with the course it gives',
     }
 });
 
-test('a course blend starts from the course shown, as the shared evaluator reads it', () => {
-  const t0 = Date.now();
-  const { part, draw } = drawOver();
-  const set = draw.icons({ id: 'gpu:blend-parity' });
-  const motion = { kind: 'hold', courseDeg: 0 };
-  const item = (courseDeg) =>
-    icon('a', {
-      motion: { ...motion, courseDeg },
-      rotationMode: 'course',
-      courseBlendMs: 4000,
-    });
-  set.set([item(0)]);
-  set.upsert([item(80)]);
-  const { course } = rows(part, 'gpu:blend-parity');
-  // Partway through, a new course: the next blend starts where this one is.
-  const before = course('a', Date.now());
-  set.upsert([item(150)]);
-  const at = Date.now();
-  const turn = (x, y) => Math.abs(((x - y + 540) % 360) - 180);
-  assert.ok(
-    turn(course('a', at), before) < 0.5,
-    `no jump: ${before} then ${course('a', at)}`,
-  );
-  assert.ok(Math.abs(course('a', at + 10_000) - 150) < 0.01, 'then there');
-  assert.ok(at - t0 < 4000, 'the test ran inside the first blend');
-});
-
-test('a row keeps the course it showed when its item’s motion is changed in place', () => {
+test('a row takes its item’s motion changed in place', () => {
   const { part, draw } = drawOver();
   const set = draw.icons({ id: 'gpu:in-place' });
   const motion = { kind: 'hold', courseDeg: 0 };
-  const item = icon('a', {
-    motion,
-    rotationMode: 'course',
-    courseBlendMs: 2000,
-  });
+  const item = icon('a', { motion, rotationMode: 'course' });
   set.set([item]);
   motion.courseDeg = 90;
   set.upsert([item]);
   const { course } = rows(part, 'gpu:in-place');
-  const at = Date.now();
   assert.ok(
-    course('a', at) < 1,
-    `blends from 0, not from 90: ${course('a', at)}`,
+    Math.abs(course('a', Date.now()) - 90) < 0.01,
+    'the written copy is not the item, so the change is seen',
   );
-  assert.ok(Math.abs(course('a', at + 2500) - 90) < 0.01, 'there by 2 s');
 });
 
 test('an SVG takes the atlas at its own size, other images at the item’s', async () => {

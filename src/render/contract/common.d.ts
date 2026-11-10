@@ -162,10 +162,6 @@ export type Capability =
   | 'surfaceShading'
   /** A version of what surface heights answer against (`globe.surfaceVersion`). */
   | 'surfaceIdentity'
-  /** Volumetric clouds (`globe.setClouds`). */
-  | 'clouds'
-  /** A water surface on the oceans (`globe.setWater`). */
-  | 'water'
   /** Main-thread tile hooks: `tileTransform`, `admit` and `canvas` imagery. */
   | 'imageHooks'
   /** A screen-space sector modulation pass (a sweeping sonar band). */
@@ -188,14 +184,8 @@ export type Capability =
   | 'quads'
   /** Custom meshes in a local east-north-up frame. */
   | 'meshes'
-  /** Wind streamlines, scalar rasters and raised raster shells. */
+  /** Wind streamlines and raised raster shells. */
   | 'fields'
-  /** Stars and orbit rings in an inertial frame. */
-  | 'celestial'
-  /** Agents moving along polylines (traffic flow). */
-  | 'agents'
-  /** Satellites propagated by the renderer from their elements (`draw.orbits`). */
-  | 'orbits'
   /** Rate-limited course easing (`IconItem.courseGlide`). */
   | 'courseGlide'
   /** Screen-space clustering of icons. */
@@ -213,6 +203,4 @@ export type Capability =
   /** Reading the frame the eye is placed in (`camera.followFrame`). */
   | 'followFrame'
   /** A `threshold` per `changed` listener (`camera.on`). */
-  | 'cameraChangeThreshold'
-  /** A built-in quality benchmark. */
-  | 'benchmark';
+  | 'cameraChangeThreshold';

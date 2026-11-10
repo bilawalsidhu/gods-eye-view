@@ -389,17 +389,6 @@ export function createCesiumQuery({
       if (!can('sampleHeight')) return null;
       return heightNow(point, against, seeThrough(exclude));
     },
-    sampleHeightNowMany(points, out, { against = 'surface', exclude } = {}) {
-      // Terrain sees through nothing, so it needs no sets to see through.
-      const excluded =
-        against === 'terrain' || (can('sampleHeight') && seeThrough(exclude));
-      const point = { lon: 0, lat: 0 };
-      for (let i = 0; i < out.length; i++) {
-        point.lon = points[i * 2];
-        point.lat = points[i * 2 + 1];
-        out[i] = excluded ? (heightNow(point, against, excluded) ?? NaN) : NaN;
-      }
-    },
     /**
      * Cesium streams the finest tiles for every sample, `mostDetailed` or
      * not. Against `tiles` it streams them, then samples them with the

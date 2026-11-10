@@ -16,7 +16,6 @@ import { cssColor } from '../color.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
-import { orbitPosition } from './orbits.js';
 import { computeViewRectangle } from './viewRectangle.js';
 import {
   add,
@@ -510,12 +509,6 @@ export function createStubRenderer(options = {}) {
   if (capabilities.has('quads')) draw.quads = (spec) => makeSet('quads', spec);
   if (capabilities.has('meshes'))
     draw.meshes = (spec) => makeSet('meshes', spec);
-  if (capabilities.has('agents'))
-    draw.agents = (spec) => makeSet('agents', spec);
-  /** Parsed orbit elements, by line pair; cleared on destroy. */
-  const satrecs = new Map();
-  if (capabilities.has('orbits'))
-    draw.orbits = (spec) => makeSet('orbits', spec);
   if (capabilities.has('fields'))
     draw.field = (spec) => {
       const handle = simpleHandle('field', spec);
@@ -554,8 +547,6 @@ export function createStubRenderer(options = {}) {
       };
       return handle;
     };
-  if (capabilities.has('celestial'))
-    draw.celestial = (spec) => simpleHandle('celestial', spec);
 
   // --- Query -----------------------------------------------------------------
 
@@ -618,10 +609,6 @@ export function createStubRenderer(options = {}) {
   }
 
   function itemPosition(set, item, aheadMs = 0) {
-    if (set.kind === 'orbits')
-      return item.tle
-        ? orbitPosition(satrecs, item.tle, motionTime(set) + aheadMs)
-        : null;
     if (!item.pos) return null;
     const base = toEcef(item.pos);
     if (
@@ -755,25 +742,6 @@ export function createStubRenderer(options = {}) {
     );
   }
 
-  /** Whether `lon`, `lat` (degrees) is inside a ring of positions. */
-  function inRing(ring, lon, lat) {
-    const points = ring.map((p) => {
-      const c = toCartographicRadians(toEcef(p));
-      return [toDegrees(c.lon), toDegrees(c.lat)];
-    });
-    let inside = false;
-    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-      const [xi, yi] = points[i];
-      const [xj, yj] = points[j];
-      if (
-        yi > lat !== yj > lat &&
-        lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
-      )
-        inside = !inside;
-    }
-    return inside;
-  }
-
   /**
    * The pickable items under a pixel, nearest first. With a `depth`, only
    * the nearest `depth` things drawn there are looked through, unpickable
@@ -809,10 +777,9 @@ export function createStubRenderer(options = {}) {
         continue;
       }
       if (set.kind === 'shapes') {
-        // Draped rectangles and ellipses, and volumes that classify what
-        // they cover, are picked where they cover the ellipsoid (rectangles
-        // turned as the default renderer turns them); other shapes are not
-        // picked.
+        // Draped rectangles and ellipses are picked where they cover the
+        // ellipsoid (rectangles turned as the default renderer turns them);
+        // other shapes are not picked.
         const ground = rayEllipsoid(pickRay(x, y));
         const at = ground && toCartographicRadians(ground);
         if (!at) continue;
@@ -823,14 +790,9 @@ export function createStubRenderer(options = {}) {
           if (!item.fill || item.outlineOnly) continue;
           const g = item.geometry;
           const covers =
-            item.height === 'clampGround'
-              ? (g?.kind === 'rectangle' && inRectangle(g, lon, lat)) ||
-                (g?.kind === 'ellipse' && inEllipse(g, lon, lat))
-              : item.classifyVolume === true &&
-                item.extrudeHeight !== undefined &&
-                g?.kind === 'polygon' &&
-                inRing(g.rings[0], lon, lat) &&
-                !g.rings.slice(1).some((hole) => inRing(hole, lon, lat));
+            item.height === 'clampGround' &&
+            ((g?.kind === 'rectangle' && inRectangle(g, lon, lat)) ||
+              (g?.kind === 'ellipse' && inEllipse(g, lon, lat)));
           if (!covers) continue;
           hits.push({
             set: setId,
@@ -847,8 +809,7 @@ export function createStubRenderer(options = {}) {
       if (
         set.kind !== 'icons' &&
         set.kind !== 'points' &&
-        set.kind !== 'models' &&
-        set.kind !== 'orbits'
+        set.kind !== 'models'
       )
         continue;
       for (const item of set.items.values()) {
@@ -868,10 +829,8 @@ export function createStubRenderer(options = {}) {
           continue;
         const s = project(p);
         if (!s) continue;
-        const pixel = item.pixelSize ?? item.marker?.pixelSize ?? 10;
-        const size = item.pickProxy?.size ??
-          item.size ??
-          item.marker?.size ?? [pixel, pixel];
+        const pixel = item.pixelSize ?? 10;
+        const size = item.pickProxy?.size ?? item.size ?? [pixel, pixel];
         const scale = item.scaleByDistance
           ? nearFarValue(item.scaleByDistance, distance)
           : 1;
@@ -885,7 +844,6 @@ export function createStubRenderer(options = {}) {
             set: setId,
             id: item.id,
             meta: item.meta,
-            ...(item.lodGroup !== undefined ? { lodGroup: item.lodGroup } : {}),
             surface: false,
             position: p,
             depth: distance,
@@ -1033,15 +991,6 @@ export function createStubRenderer(options = {}) {
       if (!capabilities.has('sampleHeight')) return null;
       const key = cacheKey(point, opts.against);
       return heightCache.has(key) ? heightCache.get(key) : null;
-    },
-    sampleHeightNowMany(points, out, opts = {}) {
-      for (let i = 0; i < out.length; i++) {
-        const height = query.sampleHeightNow(
-          { lon: points[i * 2], lat: points[i * 2 + 1] },
-          opts,
-        );
-        out[i] = height ?? NaN;
-      }
     },
     async sampleHeight(points, opts = {}) {
       if (!capabilities.has('sampleHeight')) return points.map(() => null);
@@ -1319,16 +1268,6 @@ export function createStubRenderer(options = {}) {
       log('globe', 'setSurfaceShading', [shading]);
       requestRender('base');
     };
-  if (capabilities.has('clouds'))
-    globe.setClouds = (clouds) => {
-      log('globe', 'setClouds', [clouds]);
-      requestRender('base');
-    };
-  if (capabilities.has('water'))
-    globe.setWater = (water) => {
-      log('globe', 'setWater', [water]);
-      requestRender('base');
-    };
   if (capabilities.has('splitSwipe')) {
     globe.imagery.getSplit = () => split;
     globe.imagery.setSplit = (x01) => {
@@ -1534,11 +1473,6 @@ export function createStubRenderer(options = {}) {
       },
     },
   };
-  if (capabilities.has('benchmark'))
-    quality.benchmark = async ({ durationMs }) => ({
-      frames: Math.round(durationMs / FRAME_MS),
-      cpuMs: { median: 0, p95: 0 },
-    });
 
   // --- Renderer --------------------------------------------------------------
 
@@ -1625,7 +1559,6 @@ export function createStubRenderer(options = {}) {
       for (const clear of onceTimers) clear();
       onceTimers.clear();
       sets.clear();
-      satrecs.clear();
       sceneFrameLayers.clear();
       frameFlushes.clear();
     },

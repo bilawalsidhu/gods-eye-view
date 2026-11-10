@@ -26,7 +26,7 @@ function contractOnly(renderer) {
           return (...args) =>
             guard(
               value.apply(obj, args),
-              key === 'field' || key === 'celestial' ? 'handle' : 'drawSet',
+              key === 'field' ? 'handle' : 'drawSet',
             );
         const nested = Object.keys(MEMBERS[port]).some((m) =>
           m.startsWith(`${member}.`),
@@ -80,7 +80,6 @@ test('every reference scene builds and disposes on the stub through the contract
     'quads',
     'meshes',
     'fields',
-    'agents',
     'city',
   ])
     assert.ok(ids.has(family), `a ${family} scene`);

@@ -6906,12 +6906,11 @@
       "src/geo/geodesic.js",
       "src/render/camera/events.js",
       "src/render/stub/viewRectangle.js",
-      "src/render/stub/orbits.js",
       "src/render/input/router.js",
       "src/render/conformance/goldens/camera.json",
       "src/render/conformance/checks/camera.js"
     ],
-    "external": ["satellite.js"]
+    "external": []
   },
   "wildlife-sightings": {
     "exports": ["./layers/wildlife-sightings"],

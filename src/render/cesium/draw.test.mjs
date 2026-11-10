@@ -137,7 +137,6 @@ test('a clamped point is a billboard dot that follows the ground; others stay po
     set: 'dots',
     id: 'ground',
     meta: undefined,
-    lodGroup: undefined,
   });
   set.dispose();
 });
@@ -510,13 +509,6 @@ test('hidden clamped fills wait for nothing, and the hidden ones it cannot build
       fill('a', 0, false, { outline: '#000' }),
       fill('b', 1, false, { extrudeHeight: 10 }),
       fill('c', 2, false, { fill: { preset: 'radialRim' } }),
-      fill('d', 3, false, {
-        geometry: {
-          kind: 'box',
-          center: { lon: 3, lat: 0 },
-          dimensions: { x: 1, y: 1, z: 1 },
-        },
-      }),
     ]),
   );
   assert.equal(groundsIn(scene.added.at(-1)).length, 0);
@@ -960,16 +952,6 @@ test('colour fills carry what their appearance reads, as entities do', () =>
         height: 'absolute',
       },
       {
-        id: 'box',
-        geometry: {
-          kind: 'box',
-          center: { lon: 1, lat: 0, height: 10 },
-          dimensions: { x: 10, y: 10, z: 10 },
-        },
-        fill: '#fff',
-        height: 'absolute',
-      },
-      {
         id: 'disc',
         geometry: {
           kind: 'ellipse',
@@ -1004,7 +986,7 @@ test('colour fills carry what their appearance reads, as entities do', () =>
       }
     };
     walk(host);
-    assert.equal(formats.length, 4);
+    assert.equal(formats.length, 3);
     // Position and normal only: with texture coordinates too, Cesium packs
     // them with the normals, and the colour appearance misreads them.
     for (const format of formats) {
@@ -1999,12 +1981,12 @@ test('unclamped points join and leave their collection in place, and keep what h
   assert.deepEqual(ids(), ['b', 'c', 'a']);
   // A new id sent twice is drawn once, as the last one.
   set.upsert([
-    { ...dot('n', 6), lodGroup: 'first' },
-    { ...dot('n', 6), lodGroup: 'last' },
+    { ...dot('n', 6), meta: 'first' },
+    { ...dot('n', 6), meta: 'last' },
   ]);
   const picks = part.sets.get('population').pickIds;
   assert.deepEqual(
-    picks.filter((pick) => pick.id === 'n').map((pick) => pick.lodGroup),
+    picks.filter((pick) => pick.id === 'n').map((pick) => pick.meta),
     ['last'],
   );
   set.dispose();
@@ -4137,7 +4119,7 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     unbind();
   }
 });
-test('an extruded shape that classifies its volume tints what it covers; its outline is the volume edges', () => {
+test('an extruded outline-only shape draws the volume edges, not a ring at its base', () => {
   const scene = fakeScene();
   const { draw } = drawOver(scene);
   const set = draw.shapes({ id: 'volumes' });
@@ -4146,53 +4128,21 @@ test('an extruded shape that classifies its volume tints what it covers; its out
     { lon: 0.001, lat: 0, height: 100 },
     { lon: 0.001, lat: 0.001, height: 100 },
   ];
-  const volume = {
-    id: 'volume',
-    geometry: { kind: 'polygon', rings: [ring] },
-    fill: [1, 0.7, 0.3, 0.45],
-    extrudeHeight: 220,
-    height: 'absolute',
-    classifyVolume: true,
-  };
-  const cage = {
-    id: 'cage',
-    geometry: { kind: 'polygon', rings: [ring] },
-    outline: [1, 0.7, 0.3, 0.32],
-    outlineOnly: true,
-    extrudeHeight: 220,
-    height: 'absolute',
-  };
-  // A scene that cannot classify draws the volume itself.
-  set.set([volume]);
-  assert.ok(scene.added[0].get(0) instanceof Cesium.Primitive);
-  assert.ok(!(scene.added[0].get(0) instanceof Cesium.ClassificationPrimitive));
-  scene.context = { stencilBuffer: true };
-  set.set([volume, cage]);
-  const host = scene.added[0];
-  const classified = host.get(0);
-  assert.ok(classified instanceof Cesium.ClassificationPrimitive);
-  assert.equal(classified.classificationType, Cesium.ClassificationType.BOTH);
-  const [instance] = [classified.geometryInstances].flat();
-  assert.ok(instance.geometry instanceof Cesium.PolygonGeometry);
-  assert.deepEqual(
-    [instance.geometry._extrudedHeight, instance.geometry._height].sort(
-      (a, b) => a - b,
-    ),
-    [100, 220],
-    'from its base to its extruded face',
-  );
-  assert.equal(instance.id.id, 'volume');
-  // The cage: the extruded outline, not a ring at its base.
-  const edges = host.get(1);
+  set.set([
+    {
+      id: 'cage',
+      geometry: { kind: 'polygon', rings: [ring] },
+      outline: [1, 0.7, 0.3, 0.32],
+      outlineOnly: true,
+      extrudeHeight: 220,
+      height: 'absolute',
+    },
+  ]);
+  const edges = scene.added[0].get(0);
   assert.ok(edges instanceof Cesium.Primitive);
   assert.ok(
     [edges.geometryInstances].flat()[0].geometry instanceof
       Cesium.PolygonOutlineGeometry,
-  );
-  // An image cannot classify.
-  assert.throws(
-    () => set.set([{ ...volume, fill: { image: 'a.png' } }]),
-    /classifies volumes with colours only/,
   );
   set.dispose();
 });
@@ -6218,7 +6168,6 @@ test('models re-pose and restyle in place; only a new url loads again', async ()
       set: 'planes',
       id: 'p',
       meta: { n: 1 },
-      lodGroup: undefined,
     });
 
     // Moved, turned and restyled: the same model, no load, no ready.
@@ -6600,7 +6549,6 @@ test('quads draw a posed plane and its outline, changed in place', () =>
       set: 'monitors',
       id: 'q',
       meta: { camera: 'c1' },
-      lodGroup: undefined,
     });
     // Scaled to its size about its centre, as a plane entity's matrix is.
     const scale = Cesium.Matrix4.getScale(

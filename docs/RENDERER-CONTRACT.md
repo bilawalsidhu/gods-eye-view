@@ -25,17 +25,17 @@ measures and fires exactly as the stub does.
 A renderer is created by a `RendererPlugin` (`{ id, create(options) }`). It
 exposes nine ports, each typed in its own file in `src/render/contract/`:
 
-| Port      | File           | Covers                                                                         |
-| --------- | -------------- | ------------------------------------------------------------------------------ |
-| `frame`   | `frame.d.ts`   | The render-on-demand loop, frame phases, continuous holds, scene time          |
-| `globe`   | `globe.d.ts`   | Base (photoreal, terrain, vector, imagery), imagery layers, split, sky         |
-| `draw`    | `draw.d.ts`    | Draw sets: icons, points, lines, shapes, models, quads, meshes, fields, agents |
-| `camera`  | `camera.d.ts`  | Pose, views, flights, `lookAt`, follow, user controls, events, matrices        |
-| `query`   | `query.d.ts`   | Picks, projection, rays, heights                                               |
-| `input`   | `input.d.ts`   | Pointer events with their pick made, leases, stock behaviours                  |
-| `effects` | `effects.d.ts` | Screen styles, bloom, sharpen, screen modulation                               |
-| `credits` | `credits.d.ts` | Data credits owed                                                              |
-| `quality` | `quality.d.ts` | Quality knobs, device facts, frame signals, benchmark                          |
+| Port      | File           | Covers                                                                  |
+| --------- | -------------- | ----------------------------------------------------------------------- |
+| `frame`   | `frame.d.ts`   | The render-on-demand loop, frame phases, continuous holds, scene time   |
+| `globe`   | `globe.d.ts`   | Base (photoreal, terrain, vector, imagery), imagery layers, split, sky  |
+| `draw`    | `draw.d.ts`    | Draw sets: icons, points, lines, shapes, models, quads, meshes, fields  |
+| `camera`  | `camera.d.ts`  | Pose, views, flights, `lookAt`, follow, user controls, events, matrices |
+| `query`   | `query.d.ts`   | Picks, projection, rays, heights                                        |
+| `input`   | `input.d.ts`   | Pointer events with their pick made, leases, stock behaviours           |
+| `effects` | `effects.d.ts` | Screen styles, bloom, sharpen, screen modulation                        |
+| `credits` | `credits.d.ts` | Data credits owed                                                       |
+| `quality` | `quality.d.ts` | Quality knobs, device facts, frame signals                              |
 
 Some members and options were added to version `0` later. Each is
 optional, so a renderer written before it still conforms:
@@ -54,11 +54,11 @@ optional, so a renderer written before it still conforms:
   otherwise (not on camera moves or tile loads), so the application can key cached
   heights by it. `isSettled('surface')` says whether that surface has
   loaded what is in view; a renderer without it answers `surface` as `base`.
-- `SurfaceShading` has a `hillshade` kind: view-lit shading of the drawn
-  terrain's own relief (the ellipsoid's curvature where terrain has no
-  normals) that only darkens, at most `strength` opacity. The Cesium port
-  draws it as a globe material it takes only while no one else holds the
-  globe's material; it has no `relief` kind.
+- `SurfaceShading` is `hillshade`: view-lit shading of the drawn terrain's
+  own relief (the ellipsoid's curvature where terrain has no normals) that
+  only darkens, at most `strength` opacity. The Cesium port draws it as a
+  globe material it takes only while no one else holds the globe's
+  material.
 - Fields: `windStreamlines` takes `alpha` (changed without a rebuild) and
   `paused`; `rasterShell` replaces `detailWindow` with
   `detail: {image, rectangle}`, a sharper image drawn in place of the base
@@ -66,8 +66,7 @@ optional, so a renderer written before it still conforms:
   says once per spec or `update` that it is drawn, never while hidden. These
   change `fields` itself rather than add to it, so the renderer follows
   `fields` before must follow them. The Cesium adapter lists `fields` and
-  draws `rasterShell` and `windStreamlines`; it refuses `scalarRaster`. It
-  draws streamlines only over the whole globe: it reads the grid's samples
+  draws `rasterShell` and `windStreamlines`. It draws streamlines only over the whole globe: it reads the grid's samples
   as points, the first column at `rectangle.west` and the first row at
   `rectangle.north`, rows running south, and traces paths that wrap east
   and west, so it refuses a grid short of 360° of longitude.
@@ -301,15 +300,14 @@ Browser checks use the chrome-devtools MCP against a page in its own window.
 
 The Cesium scene renderer (`src/render/cesium/sceneRenderer.js`) draws the
 icon, point, line, shape, model and city scenes, and the references were
-recorded with it. It has only the members the scenes need. The quad, mesh,
-field, agent and orbit scenes have no reference yet. Each family's reference
+recorded with it. It has only the members the scenes need. The quad, mesh
+and field scenes have no reference yet. Each family's reference
 is recorded when the Cesium renderer gains that family.
 
 Some behaviour is only drawn, so the logic checks cannot see it: course
-easing (`courseBlendMs`, `courseGlide`), and a hidden row keeping its eased
+easing (`courseGlide`), and a hidden row keeping its eased
 course. The stub keeps no drawn course. These wait for scenes that capture
 an icon mid-turn. Height queries that count a set
 (`includeInHeightQueries`) are not checked either: the stub's heights are
 scripted, so it does not model them. Nor are video frames (a check needs a
-video), `fetchTile` (the stub fetches nothing) or what clouds and water
-draw.
+video) or `fetchTile` (the stub fetches nothing).

@@ -102,12 +102,11 @@ test('a click on a draw-set item reads as its hit; anything else as none', (t) =
     surface: false,
   });
   assert.equal(seen[0][0], seen[0][1], 'read once per click');
-  picked = { id: { set: 'quakes:1', id: 'quake:b', lodGroup: 'near' } };
+  picked = { id: { set: 'quakes:1', id: 'quake:b' } };
   h.click();
   assert.deepEqual(seen.at(-1)[0], {
     set: 'quakes:1',
     id: 'quake:b',
-    lodGroup: 'near',
     surface: false,
   });
   for (picked of [

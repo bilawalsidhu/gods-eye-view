@@ -5,7 +5,7 @@
  */
 /**
  * A Cesium pick as the contract's `Hit` (`query.d.ts`), when what it picked
- * is a draw-set item (its pick id is `{set, id, meta, lodGroup}`); else
+ * is a draw-set item (its pick id is `{set, id, meta}`); else
  * null. For code that reads a pick Cesium already made (the click
  * dispatcher's); `query.pick` makes its own, and also leaves out items of
  * hidden or unpickable sets. It does not check that the set or item is
@@ -21,7 +21,6 @@ export function drawHitOf(picked) {
     set: id.set,
     id: id.id,
     ...(id.meta === undefined ? {} : { meta: id.meta }),
-    ...(id.lodGroup === undefined ? {} : { lodGroup: id.lodGroup }),
     surface: false,
   };
 }

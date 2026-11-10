@@ -389,7 +389,6 @@ export function createModelSets({
       entry.item = item;
       // The pick id is the model's own object: changed where it is.
       entry.pickId.meta = item.meta;
-      entry.pickId.lodGroup = item.lodGroup;
     }
     positionOf(item.pos, entry.at);
     // A fleet re-poses every frame with the same tint: parsed when it changes.

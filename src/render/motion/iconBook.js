@@ -9,9 +9,7 @@
  * Positions and courses come from the shared evaluator (`iconMotion.js`), on
  * the set's motion clock: pass the same epoch ms the set draws at (wall time
  * less its `delayMs` for a live clock, the frame port's time for a scene
- * clock). An item's `courseBlendMs` is not modelled: an item easing its
- * course by it reads its target course (give it a `courseGlide` to read the
- * eased one).
+ * clock). An item's course eases only by its `courseGlide`.
  */
 import { iconCourse, iconPosition } from './iconMotion.js';
 

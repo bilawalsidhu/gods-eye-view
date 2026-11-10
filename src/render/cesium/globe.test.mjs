@@ -357,8 +357,8 @@ test('fetchTile fetches in place of the provider, with the URL it would fetch', 
   assert.throws(
     () =>
       port.imagery.add({
-        kind: 'arcgis',
-        url: 'https://arcgis.invalid',
+        kind: 'single-image',
+        url: 'https://image.invalid/one.png',
         fetchTile: async () => ({ missing: true }),
       }),
     /xyz/,
@@ -377,10 +377,9 @@ test('the sky reads the scene and writes through, keeping the rest', () => {
   const { scene, port } = setup();
   const before = port.sky.get();
   assert.deepEqual(
-    { ...before, atmosphereTuning: undefined },
+    { ...before },
     {
       atmosphere: true,
-      atmosphereTuning: undefined,
       stars: true,
       milkyWay: 1,
       sun: true,
@@ -389,15 +388,9 @@ test('the sky reads the scene and writes through, keeping the rest', () => {
       lighting: false,
     },
   );
-  port.sky.set({
-    fog: false,
-    milkyWay: 0.25,
-    atmosphereTuning: { hueShift: 0.1 },
-  });
+  port.sky.set({ fog: false, milkyWay: 0.25 });
   assert.equal(scene.fog.enabled, false);
   assert.equal(scene.skyBox.milkyWayVisibility, 0.25);
-  assert.equal(scene.skyAtmosphere.hueShift, 0.1);
-  assert.equal(scene.skyAtmosphere.brightnessShift, -0.08, 'tuning kept');
   // Written outside the port, as the IR mode still does: read as drawn.
   scene.fog.enabled = true;
   assert.equal(port.sky.get().fog, true);
@@ -424,20 +417,8 @@ test('terrain: the ellipsoid with exaggeration; the last call wins', async () =>
   assert.equal(scene.verticalExaggeration, 2);
   await port.setTerrain(null);
   assert.equal(scene.verticalExaggeration, 1);
-  await assert.rejects(
-    port.setTerrain({
-      kind: 'heightmap',
-      url: '',
-      encoding: 'mapbox',
-      geoid: 'egm96',
-    }),
-    /Geoid/,
-  );
   const flat = setup(new Set());
-  await assert.rejects(
-    flat.port.setTerrain({ kind: 'quantizedMesh', url: 'x' }),
-    /no terrain/,
-  );
+  await assert.rejects(flat.port.setTerrain({ kind: 'world' }), /no terrain/);
 });
 
 test('setBase replaces the imagery and says what it drew', async () => {
@@ -636,15 +617,10 @@ test('hillshade shading owns a free globe material, follows the terrain, gives i
   );
   assert.throws(
     () =>
-      port.setSurfaceShading({
-        kind: 'relief',
-        values: new Float32Array(1),
-        width: 1,
-        height: 1,
-        rectangle: { west: 0, south: 0, east: 1, north: 1 },
-        strength: 1,
-      }),
-    /no relief shading/,
+      port.setSurfaceShading(
+        /** @type {any} */ ({ kind: 'contour', strength: 1 }),
+      ),
+    /no contour shading/,
   );
   port.setSurfaceShading({ kind: 'hillshade', strength: 0.28 });
   const curvature = scene.globe.material;

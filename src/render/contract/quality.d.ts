@@ -8,8 +8,6 @@ import type { Off } from './common';
 export interface QualitySettings {
   /** Absolute device pixel ratio for the scene; 0 = browser recommended. */
   pixelRatio: number;
-  /** Pixel ratio of screen-space overlays. */
-  overlayPixelRatio: number;
   msaa: 0 | 2 | 4 | 8;
   /** 0..1: 3D tile detail (screen-space error, both directions). */
   tiles3dDetail: number;
@@ -25,8 +23,6 @@ export interface QualitySettings {
   particles: number;
   models: { maxInstances: number; maxDistance: number };
   postFx: { bloom: boolean; sharpen: boolean; style: 'low' | 'high' };
-  /** Frame rate of animated styles. */
-  animatedStyleFps: number;
   /** Updates per second of a screen modulation sweep. */
   sonarCadenceHz: number;
   targetFps: number;
@@ -90,12 +86,6 @@ export interface ProbeResult {
   knobs: KnobDescriptor[];
 }
 
-export interface BenchResult {
-  frames: number;
-  cpuMs: { median: number; p95: number };
-  gpuMs?: { median: number; p95: number };
-}
-
 export interface QualityPort {
   /** The settings this renderer supports, with ranges, defaults and costs. */
   knobs(): KnobDescriptor[];
@@ -108,9 +98,4 @@ export interface QualityPort {
     readonly gpuTiming: 'none' | 'frame' | 'perPass';
     on(event: 'frame', cb: (signals: FrameSignals) => void): Off;
   };
-  /** `benchmark`: the renderer's own; the governor has a default. */
-  benchmark?(options: {
-    durationMs: number;
-    scene?: 'standard';
-  }): Promise<BenchResult>;
 }

@@ -68,8 +68,7 @@ export interface SetSpec {
   /** What clamped items clamp to. */
   clampTo?: ClampTarget;
   /**
-   * `motionSegments` or `orbits`: the clock motion segments and orbits are
-   * evaluated on.
+   * `motionSegments`: the clock motion segments are evaluated on.
    * `live` (the default) is wall time minus `delayMs`, as a live feed is
    * drawn a little behind real time; `scene` is the frame port's scene time.
    */
@@ -90,14 +89,6 @@ export interface Placed {
   fadeByDistance?: NearFar;
   /** Shown only at eye distances in `[near, far)`, metres. */
   displayRange?: [near: number, far: number];
-  /**
-   * Items in different sets that share a `lodGroup` are one thing drawn at
-   * different detail (a model near, an icon far), each shown over its own
-   * `displayRange`. A renderer may draw the group as one entity; a pick on
-   * it names the member shown at that distance (`Hit.set`, `Hit.id`) and
-   * reports the group (`Hit.lodGroup`).
-   */
-  lodGroup?: string;
   /** Draw over depth within this many metres of the eye (`Infinity`: always). */
   disableDepthTest?: number;
 }
@@ -124,9 +115,8 @@ export type ImageRef =
  *   climbing along the fix's up axis at `climbMps` (default 0). The elapsed
  *   time is clamped to `[minDtS, maxDtS]`; a negative `minDtS` runs the same
  *   path backward before `t0` (a warm-up), `maxDtS` is how long it coasts.
- * The drawn course eases onto a new one over the item's `courseBlendMs`; an
- * item that also has `courseGlide` eases at its rate instead, on a renderer
- * with the `courseGlide` capability.
+ * The drawn course turns onto a new one at once; an item with `courseGlide`
+ * eases at its rate instead, on a renderer with the `courseGlide` capability.
  */
 export type MotionSegment =
   | { kind: 'hold'; courseDeg?: number }
@@ -170,12 +160,6 @@ export interface IconItem extends Placed {
   motion?: MotionSegment;
   /** `courseGlide`: ease the drawn course at a rate, from `fromCourseDeg`. */
   courseGlide?: CourseGlide;
-  /**
-   * Ease the drawn course onto a new one over this long; 0 or omitted turns
-   * at once. The renderer has it; with the `courseGlide` capability an
-   * item's `courseGlide`, when it has one, is used instead.
-   */
-  courseBlendMs?: number;
   /** Degrees clockwise from north. */
   course?: number;
   /**
@@ -189,8 +173,6 @@ export interface IconItem extends Placed {
   /** ECEF axis for `rotationMode: 'axis'`. */
   alignedAxis?: Vec3;
   pixelOffset?: ScreenXY;
-  /** Offset toward the eye, metres in eye space. */
-  eyeOffset?: Vec3;
   anchor?: 'center' | 'bottom' | 'top';
   /** Swap to `near` when drawn larger than `switchPx`. */
   imageLod?: { near: ImageRef; switchPx: number };
@@ -212,13 +194,7 @@ export interface PointItem extends Placed {
 export type LineStyle =
   | { kind: 'solid'; color: Color }
   | { kind: 'glow'; color: Color; power: number; taper?: number }
-  | {
-      kind: 'dash';
-      color: Color;
-      gapColor?: Color;
-      length: number;
-      pattern16?: number;
-    }
+  | { kind: 'dash'; color: Color; length: number; pattern16?: number }
   | { kind: 'arrow'; color: Color }
   | { kind: 'pattern'; image: ImageRef; repeat: number }
   | { kind: 'flow'; color: Color; repeat: number; duty: number; speed: number };
@@ -298,12 +274,6 @@ export type ShapeGeometry =
    */
   | { kind: 'rectangle'; rect: GeoRect; height?: number; rotation?: number }
   | {
-      kind: 'box';
-      center: Position;
-      dimensions: Vec3;
-      orientation?: Quaternion;
-    }
-  | {
       kind: 'wall';
       positions: Position[];
       minimumHeights?: number[];
@@ -322,13 +292,11 @@ export interface ShapeItem {
   extrudeHeight?: number;
   height?: 'absolute' | 'clampGround';
   clampTo?: ClampTarget;
-  /** Classify what is inside the volume (tint the tiles it covers). */
-  classifyVolume?: boolean;
   /** Pull toward the eye, metres, to win depth against coplanar surfaces. */
   depthBias?: number;
   /**
    * Shaded by the renderer's fixed light (true) or flat colour (false).
-   * Omitted: lit for extruded shapes and boxes, flat otherwise. A renderer
+   * Omitted: lit for extruded shapes, flat otherwise. A renderer
    * may draw clamped shapes, which drape on the surface, flat whatever it
    * says.
    */
@@ -413,17 +381,6 @@ export type FieldSpec =
       paused?: boolean;
     }
   | {
-      kind: 'scalarRaster';
-      id: string;
-      values: Float32Array;
-      width: number;
-      height: number;
-      rectangle: GeoRect;
-      /** Colour ramp: value stops in ascending order. */
-      ramp: Array<{ value: number; color: Color }>;
-      alpha?: number;
-    }
-  | {
       /**
        * A raster on a sphere raised above the ground. Shells draw in
        * ascending `heightM`, alpha-blended and unlit; they are never picked
@@ -454,65 +411,6 @@ export interface FieldHandle extends Handle {
    * when the latest is drawn.
    */
   on(event: 'drawn', cb: () => void): Off;
-}
-
-export type CelestialSpec =
-  | {
-      kind: 'stars';
-      id: string;
-      /**
-       * Packed stars; omitted draws the renderer's own catalogue (one it
-       * streams, say), down to `magnitudeLimit`, or no stars when it has
-       * none.
-       */
-      catalogue?: Float32Array;
-      magnitudeLimit?: number;
-    }
-  | {
-      kind: 'orbitRings';
-      id: string;
-      /** Each ring: packed `x, y, z` in the inertial frame, metres. */
-      rings: Float64Array[];
-      color: Color;
-      widthPx: number;
-    };
-
-/**
- * `orbits`: a satellite from its elements. The renderer propagates it with
- * SGP4 on its set's `motionClock` and draws the marker and, optionally, its
- * ring. Without the capability the app propagates and draws the positions
- * itself as icons and lines.
- */
-export interface OrbitItem {
-  id: string;
-  /** A two-line element set. */
-  tle: [line1: string, line2: string];
-  marker:
-    | { image: ImageRef; size: [width: number, height: number] }
-    | { pixelSize: number; color: Color };
-  /** The orbit's ring over `periods` orbits (default 1), in the inertial frame. */
-  ring?: { color: Color; widthPx: number; periods?: number } | null;
-  meta?: Meta;
-  show?: boolean;
-  pickable?: boolean;
-  /** As on `Placed`. */
-  displayRange?: [near: number, far: number];
-  lodGroup?: string;
-}
-
-/** `agents`: dots moving along polylines (traffic flow). */
-export interface AgentPathItem {
-  id: string;
-  positions: Ecef[] | Float64Array;
-  /** Agents on this path. */
-  count: number;
-  speedMps: number;
-  /** 0 flows freely; 1 stopped; between creeps. */
-  congestion?: number;
-  color: Color;
-  pixelSize: number;
-  fadeByDistance?: NearFar;
-  meta?: Meta;
 }
 
 /**
@@ -580,12 +478,6 @@ export interface DrawPort {
   meshes?(spec: SetSpec): DrawSet<MeshItem>;
   /** `fields`. */
   field?(spec: FieldSpec): FieldHandle;
-  /** `celestial`: drawn in an inertial frame rotated by sidereal time. */
-  celestial?(spec: CelestialSpec): Handle;
-  /** `agents`. */
-  agents?(spec: SetSpec): DrawSet<AgentPathItem>;
-  /** `orbits`. */
-  orbits?(spec: SetSpec): DrawSet<OrbitItem>;
   /**
    * Whether clamped items (`clampTo: 'tiles' | 'both'`, draped lines and
    * shapes) are draped onto the 3D tiles now (`draped`), or drawn over them
