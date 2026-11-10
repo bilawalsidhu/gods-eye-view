@@ -135,6 +135,9 @@ export function createSurfacePoints(
   let revision = 0;
   let timer = null;
   let destroyed = false;
+  // Placements in one task (two triggers at once) share one sample budget.
+  let taskSamples = 0;
+  let taskCounted = false;
 
   function onScreen(position, size) {
     if (screenMargin === Infinity) return true;
@@ -160,6 +163,12 @@ export function createSurfacePoints(
     return plausible(height) ? height : Number.NaN;
   }
 
+  // A pass continued by its own timer starts a new task's budget.
+  function continuePlacing() {
+    taskSamples = 0;
+    place();
+  }
+
   // Points off screen are passed over until the next move or tile load.
   function place({ all = false } = {}) {
     if (all) revision++;
@@ -169,7 +178,14 @@ export function createSurfacePoints(
     const size = engine.host.size();
     const tiles = engine.maps?.photorealActive?.() === true;
     const started = performance.now();
-    let samples = 0;
+    if (!taskCounted) {
+      taskCounted = true;
+      queueMicrotask(() => {
+        taskSamples = 0;
+        taskCounted = false;
+      });
+    }
+    let samples = taskSamples;
     let visited = 0;
     let moved = false;
     let cameraGround;
@@ -179,7 +195,7 @@ export function createSurfacePoints(
       const yieldPass = () => {
         if (changed) set.commit();
         if (changed || moved) request();
-        timer = setTimeout(place, 0);
+        timer = setTimeout(continuePlacing, 0);
       };
       for (let index = 0; index < points.length; index++) {
         const point = points[index];
@@ -207,6 +223,7 @@ export function createSurfacePoints(
         if (estimate && tiles && !plausible(ground)) {
           if (cameraGround === undefined) {
             samples++;
+            taskSamples = samples;
             cameraGround = groundUnderCamera(exclude);
           }
           ground = cameraGround;
@@ -230,6 +247,7 @@ export function createSurfacePoints(
           return;
         }
         samples++;
+        taskSamples = samples;
         const height = readSurface(engine, point.cartographic, {
           exclude,
           prefer: typeof prefer === 'function' ? prefer(point) : prefer,

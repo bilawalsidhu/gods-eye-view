@@ -293,3 +293,19 @@ test('no tile sample starts once the pass has used its time', async (t) => {
     `samples started at ${starts.join(', ')} ms`,
   );
 });
+
+test('two placements in one task share one pass budget', async (t) => {
+  const { engine, surface } = setup(t, 40);
+  await engine.maps.setPhotorealTiles({});
+  engine.fake.script('terrainHeight', 10);
+  engine.fake.script('sampleHeight', 50);
+  const sampled = t.mock.method(engine.surface, 'sampleHeight');
+  surface.place();
+  surface.place({ all: true });
+  assert.ok(
+    sampled.mock.callCount() <= 16,
+    `${sampled.mock.callCount()} samples in one task`,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.ok(sampled.mock.callCount() > 16, 'the deferred placement ran');
+});
