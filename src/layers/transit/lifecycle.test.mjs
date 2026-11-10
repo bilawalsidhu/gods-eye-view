@@ -2938,6 +2938,114 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
   assert.equal(probed.size, 100);
 });
 
+test('mesh refinement probes the latest point the path offers in a cell', async (t) => {
+  const { createHeight } = await import('./height.js');
+  // Three points along one cell's stretch of path, oldest first.
+  const path = [
+    { lat: 42.3611, lon: -71.0751 },
+    { lat: 42.3612, lon: -71.0753 },
+    { lat: 42.3614, lon: -71.0754 },
+  ];
+  const entry = { key: 'train', to: path[0], fixes: [path.at(-1)] };
+  const probed = [];
+  const state = {
+    _enabled: true,
+    _selectedKey: null,
+    _visible: new Set([entry]),
+    _vehicles: new Map([[entry.key, entry]]),
+    _floorCursor: 0,
+    _heightDirty: new Set(),
+    _viewer: { camera: { positionCartographic: { height: 100 } } },
+  };
+  const height = createHeight({
+    state,
+    services: {
+      render: { governorRequestRender() {} },
+      ground: {
+        coarseFloorCoord: (lat, lon) => ({
+          lat: Number(lat.toFixed(3)),
+          lon: Number(lon.toFixed(3)),
+        }),
+        cachedGroundFloor: () => 10,
+        GROUND_FLOOR_LIFT_M: 1.5,
+      },
+      mesh: {
+        sampleMeshFloorCells(scene, points) {
+          probed.push(...points.map((p) => [p.lat, p.lon]));
+        },
+      },
+    },
+    parts: {
+      trails: {
+        prepareEntry(e, collect) {
+          if (collect)
+            for (const point of path)
+              collect(point, height.requestHeight(point.lat, point.lon));
+        },
+      },
+      rendering: { requestVisibility() {} },
+    },
+  });
+  t.after(() => height.clear());
+  height.anchorFloors();
+  assert.deepEqual(probed, [[42.3614, -71.0754]]);
+});
+
+test('the selected vehicle is probed at its newest fix in its own cell', async (t) => {
+  const { createHeight } = await import('./height.js');
+  // The selected path offers its active corridor first, then its history
+  // newest segment first, so the last offer in the cell is an older point.
+  const newest = { lat: 42.3614, lon: -71.0754 };
+  const offers = [
+    newest,
+    { lat: 42.3612, lon: -71.0753 },
+    { lat: 42.3611, lon: -71.0751 },
+  ];
+  const entry = { key: 'train', to: offers[0], fixes: [newest] };
+  const probed = [];
+  const state = {
+    _enabled: true,
+    _selectedKey: entry.key,
+    _visible: new Set([entry]),
+    _vehicles: new Map([[entry.key, entry]]),
+    _floorCursor: 0,
+    _heightDirty: new Set(),
+    _viewer: { camera: { positionCartographic: { height: 100 } } },
+  };
+  const height = createHeight({
+    state,
+    services: {
+      render: { governorRequestRender() {} },
+      ground: {
+        coarseFloorCoord: (lat, lon) => ({
+          lat: Number(lat.toFixed(3)),
+          lon: Number(lon.toFixed(3)),
+        }),
+        cachedGroundFloor: () => 10,
+        GROUND_FLOOR_LIFT_M: 1.5,
+      },
+      mesh: {
+        sampleMeshFloorCells(scene, points) {
+          probed.push(...points.map((p) => [p.lat, p.lon]));
+        },
+      },
+    },
+    parts: {
+      trails: {
+        prepareEntry(e, collect) {
+          if (collect)
+            for (const point of offers)
+              collect(point, height.requestHeight(point.lat, point.lon));
+        },
+      },
+      rendering: { requestVisibility() {} },
+    },
+  });
+  t.after(() => height.clear());
+  height.anchorFloors();
+  assert.deepEqual(probed, [[42.3614, -71.0754]]);
+});
+
 test('selection churn releases past geometry on every retained vehicle', async (t) => {
   const app = harness(t, { floorAt: () => 10 });
   const { mergeHistory, seek } = await import('../../data/contactPlayback.js');
@@ -3574,7 +3682,7 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
     source: {},
     parts: {
       flow: { ensureFlowStatus: noop },
-      animation: { animate: noop, clearDots: noop },
+      animation: { animate: noop, clearDots: noop, syncRenderDemand: noop },
       viewport: { onCameraChanged: noop },
       ingestion: { cancelActiveFetch: noop },
     },
@@ -3927,6 +4035,7 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     _rotationRevision: -1,
     _cameraRevision: 0,
     _rotationDirty: false,
+    now: () => Date.now(),
   };
   const noop = () => {};
   const rendering = createRendering({
@@ -3980,5 +4089,56 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     unknown.marker.rotation,
     0,
     'selected unknown course also stays screen-up',
+  );
+});
+
+test('a view with no feed reads its coverage prompt, not an undated feed', async (t) => {
+  const app = harness(t);
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.ok(app.layer.getStats().lastUpdate, 'Boston has a dated snapshot');
+
+  // London has no registered feed: the row prompts instead of dating Boston's
+  // last snapshot over an empty map.
+  app.lookAt({ west: -0.2, south: 51.45, east: -0.05, north: 51.55 });
+  app.advance(1_000);
+  const away = app.layer.getStats();
+  assert.equal(away.status, 'zoom-in');
+  assert.equal(away.count, 0);
+  assert.equal(away.lastUpdate, null);
+  assert.match(
+    away.statusMessage,
+    /^No feed here yet · \d+ regions available$/,
+  );
+  assert.equal(away.coverage, away.statusMessage);
+
+  // Above the altitude gate the prompt says how low to fly.
+  app.viewer.camera.positionCartographic.height = 10_000_000;
+  app.lookAt({ west: -0.2, south: 51.45, east: -0.05, north: 51.55 });
+  app.advance(1_000);
+  assert.equal(
+    app.layer.getStats().statusMessage,
+    'Fly below 2,850 km to a covered region',
+  );
+});
+
+test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) => {
+  // 2,900 km is under ACTIVATION_ALTITUDE_M but above the enter threshold.
+  const app = harness(t, { altitude: 2_900_000 });
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  assert.deepEqual(app.requested, [], 'nothing loads over Boston');
+  assert.equal(
+    app.layer.getStats().statusMessage,
+    'Fly below 2,850 km to a covered region',
   );
 });

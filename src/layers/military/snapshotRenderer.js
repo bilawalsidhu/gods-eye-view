@@ -4,6 +4,7 @@ import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   turnRateFromFixHistory,
   liftRepeatedGroundFix,
+  staleHoldsForFix,
   synthesizeForwardKinematicsFix,
 } from '../../data/motionModel.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
@@ -29,6 +30,7 @@ export function createMilitarySnapshotRenderer({
   return function applySnapshot(snapshot, viewer) {
     const currentIcaos = new Set();
     const receiptNowMs = snapshot.observedAtMs;
+    records.beginSnapshot(snapshot.observedAtMs);
     // Field-test fix (RS46): coarse floor cells to warm for the below-ground
     // clamp — collected during the loop (low airborne contacts only),
     // batch-resolved once after it. Never a fetch inside the loop.
@@ -83,6 +85,9 @@ export function createMilitarySnapshotRenderer({
           position: position.clone(),
           velocity: meta.speedMps,
           track: meta.track,
+          // Drawn at an invented height: a trail seeded from history keeps no
+          // position for it.
+          inventedHeight: meta.renderAltitudeInvented === true,
         });
         if (history.length > POSITION_HISTORY_LIMIT) {
           history.shift();
@@ -95,26 +100,36 @@ export function createMilitarySnapshotRenderer({
         // (owner): ground traffic appends too — taxi history stays live
         // after touchdown; _appendTrailFix floors grounded positions at
         // the surface so the ground leg drapes instead of diving.
-        if (isTracked) tracking._appendTrailFix(position.clone());
+        if (isTracked)
+          tracking._appendTrailFix(position.clone(), fixEpochMs, {
+            nullAltitude: meta.renderAltitudeInvented === true,
+          });
       } else {
         const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
         if (!modelOwnsGroundVisual) {
           liftRepeatedGroundFix(newest, position, meta.onGround);
         }
+        // A forward synthetic fix follows the stale rules (none while the
+        // contact holds at its report, a coast capped from the real report,
+        // never below the ground) and is a motion aid, never a trail report.
         const kinematicsChanged =
           newest.velocity !== meta.speedMps || newest.track !== meta.track;
-        if (kinematicsChanged) {
+        const holds = staleHoldsForFix(newest, {
+          onGround: meta.onGround,
+          cachedGroundFloor,
+        });
+        if (kinematicsChanged && !holds) {
           const synthetic = synthesizeForwardKinematicsFix(newest, {
             epochMs: Date.now(),
             velocity: meta.speedMps,
             track: meta.track,
             turnRateDps: meta.turnRateDps,
+            cachedGroundFloor,
           });
           if (synthetic) {
             history.push(synthetic);
             if (history.length > POSITION_HISTORY_LIMIT) history.shift();
             meta.turnRateDps = turnRateFromFixHistory(history);
-            if (isTracked) tracking._appendTrailFix(synthetic.position.clone());
           }
         }
       }
@@ -228,8 +243,8 @@ export function createMilitarySnapshotRenderer({
       const bbStale = flightState._billboards.get(icao24);
       if (bbStale) bbStale.position = liftedPos;
     }
-    // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
-    // budget-capped, viewer-proximate, google-3d regime only), excluding
+    // Round 4: sample the RENDERED mesh for those cells (a few probes per
+    // cell, budget-capped, viewer-proximate, google-3d regime only), excluding
     // this layer's own billboards/models from the probe.
     {
       const viewerCarto =
@@ -259,7 +274,9 @@ export function createMilitarySnapshotRenderer({
       if (currentIcaos.has(icao24)) continue;
       const absence = records.absence(icao24, {
         complete: snapshot.complete,
+        retainIds: snapshot.retainIds,
         likelyLanded: queries._likelyLanded(icao24),
+        tracked: icao24 === flightState._trackedIcao,
       });
       if (absence === 'retain') continue;
       if (absence === 'stale') {

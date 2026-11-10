@@ -52,17 +52,11 @@ function element() {
 test('ru: location pills and the mini-status show the translated city', () => {
   setLocale('ru');
   const elements = {
-    pills: element(),
-    poiRow: element(),
-    divider: element(),
     search: element(),
-    searchToggle: element(),
-    resetButtons: [],
-    statusCity: element(),
-    statusPoi: element(),
   };
   const doc = { ...element(), createElement: element };
   const cities = { tokyo: CITY_POIS.tokyo };
+  const views = [];
   const controls = new LocationControls({
     elements,
     cities,
@@ -71,12 +65,13 @@ test('ru: location pills and the mini-status show the translated city', () => {
     onPoi() {},
     onSearch() {},
     onReset() {},
+    publish: (view) => views.push(view),
     doc,
     requestFrame: () => 0,
     cancelFrame() {},
   });
-  assert.equal(elements.pills.children[0].textContent, 'Токио');
+  assert.equal(views.at(-1).cities[0].label, 'Токио');
   controls.renderStatus({ city: CITY_POIS.tokyo, currentPoi: null });
-  assert.equal(elements.statusCity.textContent, '📍 Токио');
+  assert.equal(views.at(-1).status.city, '📍 Токио');
   assert.equal(CITY_POIS.tokyo.name, 'Tokyo');
 });

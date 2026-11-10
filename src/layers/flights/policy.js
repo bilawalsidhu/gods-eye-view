@@ -132,7 +132,7 @@ export const TRAIL_COLOR = '#00d4ff';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (PRD WS-C C2 — approved product decision):
@@ -198,6 +198,37 @@ export const FLEET_DR_INTERVAL_MS = 80;
 
 export const ROTATION_REFRESH_MS = 1000;
 
+/**
+ * @constant {number} Dead-reckoning cadence (ms) for contacts hidden behind the
+ * horizon. The worldwide feed carries ~13k contacts and a zoomed-in view shows
+ * well under 1% of them; the rest still need positions for hidden-inclusive
+ * proximity queries, but ~1 s old (≈250 m for an airliner) is well inside the
+ * 30 s poll's own uncertainty. Each hidden contact is re-reckoned on one tick in
+ * every HIDDEN_CONTACT_DR_TICKS, staggered by id so no tick carries them all.
+ */
+
+export const HIDDEN_CONTACT_DR_INTERVAL_MS = 1000;
+
+export const HIDDEN_CONTACT_DR_TICKS = Math.max(
+  1,
+  Math.round(HIDDEN_CONTACT_DR_INTERVAL_MS / FLEET_DR_INTERVAL_MS),
+);
+
+/**
+ * Stable slot in [0, HIDDEN_CONTACT_DR_TICKS) for a contact id, so each hidden
+ * contact re-reckons on the same tick of every rotation.
+ * @param {string} id Contact id (ICAO24).
+ * @returns {number}
+ */
+
+export function hiddenContactDrPhase(id) {
+  const text = String(id);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++)
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return hash % HIDDEN_CONTACT_DR_TICKS;
+}
+
 /** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
  *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */
 
@@ -222,6 +253,11 @@ export const ENRICH_MAX_INFLIGHT = 4;
 /** Min ms between request dispatches — the drip that bounds the fan-out to ≤5/s. */
 
 export const ENRICH_DISPATCH_GAP_MS = 200;
+
+/** A lookup whose source failed (an outage, a timeout, a restarting server) may
+ *  be asked again after this long; a real "not found" answer never is. */
+
+export const ENRICH_RETRY_COOLDOWN_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Ambient fleet type enrichment (2026-07-02 field data: OpenSky's live
@@ -435,3 +471,6 @@ export const FLOOR_SEED_GRACE_MS = 90_000;
  *  reloads synchronously. */
 
 export const IR_RELOAD_BATCH = 40;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;

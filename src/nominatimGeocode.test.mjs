@@ -75,6 +75,20 @@ test('a hit without real coordinates produces no result at all', () => {
     );
 });
 
+test('a documented JSONv2 highway hit carries route type and canonical identity', () => {
+  const result = nominatimToGeocodeResult({
+    lat: '30.2672',
+    lon: '-97.7425',
+    display_name: 'Congress Avenue, Austin, Texas, United States',
+    name: 'Congress Avenue',
+    category: 'highway',
+    type: 'primary',
+  });
+  assert.deepEqual(result.types, ['route']);
+  assert.deepEqual(result.geometry.location, { lat: 30.2672, lng: -97.7425 });
+  assert.equal(result.address_components[0].long_name, 'Congress Avenue');
+});
+
 test('a real hit carries its point, label, types and box', () => {
   const result = nominatimToGeocodeResult({
     lat: '43.1731',
@@ -172,4 +186,13 @@ test('a viewport hint is sent only when every edge is a real coordinate', () => 
       null,
       `${JSON.stringify(bounds)} must not become a viewbox`,
     );
+});
+
+test('wrapped viewports omit the Nominatim bias without rejecting the search', () => {
+  assert.equal(nominatimViewboxFromBounds('-20,170|-10,-171'), null);
+  assert.equal(nominatimViewboxFromBounds('50,175|60,-165'), null);
+  assert.equal(
+    nominatimViewboxFromBounds('-20,170|-10,180'),
+    '170,-10,180,-20',
+  );
 });

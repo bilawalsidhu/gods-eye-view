@@ -17,10 +17,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.42rem;
-  color: rgba(206, 232, 239, 0.72);
-  font-size: 0.58rem;
-  font-weight: 500;
-  letter-spacing: 0.13rem;
+  color: var(--dock-label-color);
+  font-size: var(--dock-label-font-size);
+  font-weight: var(--dock-label-font-weight);
+  letter-spacing: var(--dock-label-letter-spacing);
 }
 
 #command-dock .dock-label-icon {
@@ -455,7 +455,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   )
   #cesium-credits {
   right: auto;
-  bottom: calc(2vh + 5rem);
+  bottom: calc(2vh + 5rem + var(--world-timeline-lift, 0px));
   left: 1.5rem;
   width: auto !important;
   max-width: calc(100vw - 3rem);
@@ -463,23 +463,22 @@ body:not(.ui-clean-view):not(.recording-mode):has(
 }
 
 #intel-hud[data-variant='tactical'] .hud-bottom-left,
-#intel-hud[data-variant='tactical'] .hud-bottom-right,
-#intel-hud[data-variant='operator'] .hud-bottom-left,
-#intel-hud[data-variant='operator'] .hud-bottom-right {
-  bottom: calc(2vh + 6.5rem);
-}
-
-#intel-hud[data-variant='operator'] .hud-bottom-bar {
-  bottom: calc(2vh + 9.8rem);
-  width: min(48vw, 680px);
+#intel-hud[data-variant='tactical'] .hud-bottom-right {
+  bottom: calc(2vh + 6.5rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 5.4rem);
+  bottom: calc(2vh + 5.4rem + var(--world-timeline-lift, 0px));
+}
+
+:root[data-scope-mask='off']
+  #intel-hud[data-variant='minimal']
+  .hud-bottom-left {
+  bottom: calc(2vh + 6.5rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 9rem);
+  bottom: calc(2vh + 9rem + var(--world-timeline-lift, 0px));
 }
 
 @media (max-width: 900px) {
@@ -488,7 +487,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(
       #intel-hud[data-variant='minimal'].active
     )
     #cesium-credits {
-    bottom: calc(2vh + 5rem);
+    bottom: calc(2vh + 5rem + var(--world-timeline-lift, 0px));
     left: 0.75rem;
     max-width: calc(100vw - 1.5rem);
   }
@@ -496,19 +495,42 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   #command-dock .gev-voice-error-tray {
     width: min(24rem, calc(100vw - 1.5rem));
   }
+
+  /* The wings shrink to --dock-side-compact at this width, open or closed (an
+     open tray pops out above the dock), which is too narrow for the text
+     labels; they would spill over the voice control and take its taps. The
+     wings show only their icon; the toggles keep their aria-label. Cyber sets
+     a wider --dock-side-compact that fits its labels, so it keeps them. */
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .panel-title,
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .location-toolbar-label {
+    font-size: 0;
+    letter-spacing: 0;
+    /* The empty text is still a flex item; drop the gap it would claim. */
+    gap: 0;
+  }
+
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .panel-title::after,
+  :root:not([data-ui-theme='cyber'])
+    #command-dock
+    :is(#location-bar, #control-panel)
+    .location-toolbar-label::after {
+    content: none;
+  }
 }
 
 @media (max-width: 620px) {
   #command-dock {
     --dock-side-compact: 3.25rem;
     --dock-voice-width: 8.75rem;
-  }
-
-  #command-dock .panel-title,
-  #command-dock .location-toolbar-label {
-    max-width: 2.3rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   #left-panel-stack {

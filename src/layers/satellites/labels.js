@@ -83,6 +83,8 @@ export function createLabels({ state: layerState, services, parts, source }) {
   function _dockedCompanionNames() {
     const names = [];
     for (const noradId of layerState._dockedCompanions) {
+      // A hidden class is not named on the tracked card either.
+      if (parts.controls?._classVisible?.(noradId) === false) continue;
       names.push(
         layerState._catalog.get(noradId)?.name?.trim() || `SAT-${noradId}`,
       );
@@ -102,6 +104,7 @@ export function createLabels({ state: layerState, services, parts, source }) {
       layerState._trackedNorad !== ISS_NORAD &&
       !layerState._dockedCompanions.has(ISS_NORAD) &&
       layerState._catalog.has(ISS_NORAD) &&
+      parts.controls?._classVisible?.(ISS_NORAD) !== false &&
       _issDisplayCached();
     if (!visible) {
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);

@@ -243,6 +243,8 @@ test('Codex login hides spawn errors and can cancel only its owned child', async
   const child = new EventEmitter();
   await assert.rejects(
     startCodexChatGptLogin({
+      environment: {},
+      home: '/home/fixture',
       executable: 'codex',
       spawnImpl() {
         queueMicrotask(() =>
@@ -264,6 +266,8 @@ test('Codex login hides spawn errors and can cancel only its owned child', async
     running.emit('exit', null);
   };
   const login = await startCodexChatGptLogin({
+    environment: {},
+    home: '/home/fixture',
     executable: 'codex',
     spawnImpl() {
       queueMicrotask(() => running.emit('spawn'));

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { julianAt } from '../../time/julian.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
 import { civilAircraftModelSpec } from './modelSpec.js';
@@ -32,10 +33,15 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
+  RENDER_DELAY_SEC,
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
+  HIDDEN_CONTACT_DR_TICKS,
+  hiddenContactDrPhase,
+  STALE_ALPHA,
 } from './policy.js';
+import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -382,17 +388,20 @@ export function createRendering({
    *    null or still-loading tracked model from claiming a visual it is not
    *    drawing yet.
    * @param {string} icao24
+   * @param {Cesium.Model|null} [model] Resolved fleet model; null means absent.
    * @returns {boolean}
    */
 
-  function _modelOwnsVisual(icao24) {
+  function _modelOwnsVisual(icao24, model) {
     if (icao24 === flightState._trackedIcao) {
       return (
         parts.tracking._trackedModelRegimeActive() &&
         _modelIsRendering(flightState._trackedModel)
       );
     }
-    return _modelIsRendering(flightState._models.get(icao24));
+    return _modelIsRendering(
+      model === undefined ? flightState._models.get(icao24) : model,
+    );
   }
 
   /** A model is the visual only once it actually draws — loaded AND shown.
@@ -503,6 +512,7 @@ export function createRendering({
       model = await Cesium.Model.fromGltfAsync({
         url: resolveAsset(spec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
@@ -671,6 +681,19 @@ export function createRendering({
    *  follow-camera's bounding sphere is ALWAYS ready — toggling 3D, or tracking while already zoomed
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode). */
 
+  /** Fade the tracked 3D model like the billboard while the plane is stale. */
+
+  function _applyTrackedModelFade(model) {
+    const alpha = parts.tracking._trackedStaleCue?.(flightState._trackedIcao)
+      ?.dimmed
+      ? STALE_ALPHA
+      : 1;
+    if (model.color?.alpha === alpha) return;
+    model.color = (
+      flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN
+    ).withAlpha(alpha);
+  }
+
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
@@ -709,6 +732,7 @@ export function createRendering({
       Cesium.Model.fromGltfAsync({
         url: resolveAsset(trackedSpec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
@@ -813,6 +837,7 @@ export function createRendering({
         parts.motion._trackedDisplayCourse(),
         flightState._trackedModel.modelMatrix,
       );
+      _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       const spec = _modelSpec(
         flightState.records.data.get(flightState._trackedIcao)?.klass,
@@ -832,7 +857,20 @@ export function createRendering({
     }
   }
 
+  /** The contact's hidden-rotation slot, cached on its billboard. */
+  function _hiddenDrPhase(bb, icao24) {
+    bb._gevHiddenDrPhase ??= hiddenContactDrPhase(icao24);
+    return bb._gevHiddenDrPhase;
+  }
+
   function _fleetTick() {
+    // Every frame, shown or not: the tracked trail records where its icon is
+    // drawn and moves its body on (the head callback only reads the result),
+    // and the tracked label's stale cue follows the clock.
+    if (flightState._viewer) {
+      parts.tracking._trailTick?.();
+      parts.tracking._staleCueTick?.();
+    }
     if (
       !flightState._viewer ||
       !flightState._billboardCollection ||
@@ -854,6 +892,12 @@ export function createRendering({
         )
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
+    // Every contact in this pass shares the same delayed display instant.
+    const renderTime = Cesium.JulianDate.addSeconds(
+      julianAt(flightState.now(), flightState._scratchFleetRenderTime),
+      -RENDER_DELAY_SEC,
+      flightState._scratchFleetRenderTime,
+    );
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)
@@ -952,12 +996,32 @@ export function createRendering({
       for (const icao of toRelease) _releaseModel(icao);
     }
 
+    const hiddenDrPhase = flightState._fleetTickSeq++ % HIDDEN_CONTACT_DR_TICKS;
+
     for (const [icao24, bb] of flightState._billboards) {
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
 
+      // A contact still behind the horizon at its last position would only be
+      // re-reckoned to be hidden again, so off its turn it keeps that position
+      // (see HIDDEN_CONTACT_DR_TICKS). Anything the stale position puts in view,
+      // and any contact with a fleet model, takes the full pass below at once.
+      if (
+        !bb.show &&
+        _hiddenDrPhase(bb, icao24) !== hiddenDrPhase &&
+        !flightState._models.has(icao24) &&
+        !occluder.isPointVisible(
+          flightState._cullPositions.get(icao24) || bb.position,
+        )
+      )
+        continue;
+
       const info = flightState.records.data.get(icao24);
 
-      const dr = parts.motion._deadReckon(icao24, flightState._scratchFleetPos);
+      const dr = parts.motion._deadReckon(
+        icao24,
+        flightState._scratchFleetPos,
+        renderTime,
+      );
       // The dead-reckoned point drifts away from the fix whose cell supplied the
       // height, so a grounded contact's sprite ends up under the mesh it taxied
       // (or coasted) over. Re-floor at the DISPLAYED coordinate — read-only, and
@@ -1039,7 +1103,9 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _fleetBillboardScale(icao24, info?.klass),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24)
+          ? STALE_ALPHA
+          : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,

@@ -1,1 +1,0 @@
-- Validate provider response formats, strengthen camera source checks, and apply consistent API response protections (samehkhamis, #1317).

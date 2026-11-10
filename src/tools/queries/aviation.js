@@ -19,6 +19,7 @@ import {
   numericSummary,
   thinEvenly,
 } from '../results.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const ICAO24_SCHEMA = Object.freeze({
   type: 'string',
@@ -75,7 +76,7 @@ function aircraftRow(record, from) {
     altitude_m: round(record.baroAltitudeM ?? record.ellipsoidAltitudeM, 0),
     on_ground: record.onGround === true,
     speed_mps: round(record.speedMps, 1),
-    course_deg: round(record.courseDeg, 0),
+    course_deg: roundHeadingDegrees(record.courseDeg),
     vertical_rate_mps: round(record.verticalRateMps, 1),
     type_code: record.typeCode || null,
     registration: record.registration || null,
@@ -333,13 +334,20 @@ export const getAircraftTrack = defineTool({
   requires: ['aircraft'],
   async run(args, { services, signal }) {
     const icao24 = args.icao24.toLowerCase();
+    const source = feedFor(services, args.military);
+    // History is optional: the standalone military source has none.
+    if (typeof source.getTrack !== 'function')
+      throw new ToolError(
+        'unsupported',
+        args.military
+          ? 'Track history is not available for the military aircraft feed'
+          : 'Track history is not available for the aircraft feed',
+      );
     // A track server answers 404 for an aircraft it has no positions for.
-    const track = await feedFor(services, args.military)
-      .getTrack(icao24, { signal })
-      .catch((error) => {
-        if (error?.status === 404) return { records: [] };
-        throw error;
-      });
+    const track = await source.getTrack(icao24, { signal }).catch((error) => {
+      if (error?.status === 404) return { records: [] };
+      throw error;
+    });
     const points = [...track.records].sort(
       (a, b) => a.observedAtMs - b.observedAtMs,
     );

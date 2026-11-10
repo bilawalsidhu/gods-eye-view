@@ -71,6 +71,7 @@ function weatherRow(weather) {
     precipitation_mm: weather.precipitationMm ?? null,
     cloud_cover_pct: weather.cloudCoverPct ?? null,
     wind_kph: weather.windKph ?? null,
+    // Raw Open-Meteo value, so north reads 360.
     wind_direction_deg: weather.windDirectionDeg ?? null,
     visibility_m: weather.visibilityM ?? null,
   };
@@ -257,7 +258,14 @@ export const getFirePerimeters = defineTool({
   requires: ['perimeters'],
   async run(args, { services, signal }) {
     const area = await resolveArea(args.area, { services, signal });
-    const rows = (await services.perimeters.getSnapshot({ signal }))
+    const snapshot =
+      typeof services.perimeters.getSnapshotDetail === 'function'
+        ? await services.perimeters.getSnapshotDetail({ signal })
+        : { rows: await services.perimeters.getSnapshot({ signal }) };
+    // The proxy answers from its last snapshot, marked stale, while WFIGS is
+    // unreachable.
+    const stale = snapshot.stale === true;
+    const rows = snapshot.rows
       .filter((fire) => polygonsTouchArea(fire.polygons, area))
       .map((fire) => ({ fire, point: polygonCenter(fire.polygons) }))
       .filter(({ point }) => point)
@@ -279,9 +287,13 @@ export const getFirePerimeters = defineTool({
       }))
       .sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0));
     return {
-      summary: `${countNoun(rows.length, 'mapped wildfire perimeter')} in ${area.label}.`,
+      summary:
+        `${countNoun(rows.length, 'mapped wildfire perimeter')} in ${area.label}` +
+        (stale ? ' (data may be stale).' : '.'),
       data: {
         view: suggestView(services, { area, layers: ['fire-perimeters'] }),
+        stale,
+        retrieved_at: isoTime(snapshot.fetchedAt),
         ...capRows(rows, args.limit),
       },
     };

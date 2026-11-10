@@ -19,7 +19,7 @@ import { VectorTile } from '@mapbox/vector-tile';
  * tree-shakeable; decoding happens client-side so the proxy stays a dumb
  * binary cache.
  *
- * @module data/flowTiles
+ * @module layers/traffic/flowDecode
  */
 
 const FLOW_LAYER_NAME = 'Traffic flow';

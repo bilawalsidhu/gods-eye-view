@@ -6,6 +6,7 @@ import {
   epoch,
   finite,
 } from './contract.js';
+import { readAdsbVerticalRateFpm } from '../adsbFields.js';
 
 const openSkyId = (row) =>
   Array.isArray(row) ? cleanText(row[0]).toLowerCase() : '';
@@ -39,16 +40,18 @@ export function normalizeOpenSkyAircraft(row) {
   };
 }
 
+const readsbId = (row) => cleanText(row?.hex).toLowerCase();
+
 /** Normalize readsb observations. The caller supplies the source snapshot epoch. */
 export function normalizeReadsbAircraft(row, snapshotTimeMs) {
-  const id = cleanText(row?.hex).toLowerCase();
+  const id = readsbId(row);
   const latitude = finite(row?.lat),
     longitude = finite(row?.lon);
   if (!id || !coordinates(latitude, longitude)) return null;
   const baroFt = finite(row.alt_baro),
     geoFt = finite(row.alt_geom);
   const speedKts = finite(row.gs),
-    rateFtMin = finite(row.baro_rate);
+    rateFtMin = readAdsbVerticalRateFpm(row);
   const seen = finite(row.seen),
     seenPos = finite(row.seen_pos);
   return {
@@ -128,6 +131,14 @@ export function openSkySnapshot(
   };
 }
 
+/**
+ * readsb omits lat/lon for a contact heard without a current position. Both
+ * must be absent; a half or unreadable position still marks the row malformed.
+ */
+function readsbUnpositionedId(row) {
+  return row?.lat == null && row?.lon == null ? readsbId(row) : '';
+}
+
 export function readsbSnapshot(
   payload,
   {
@@ -142,6 +153,7 @@ export function readsbSnapshot(
     payload?.ac,
     (row) => normalizeReadsbAircraft(row, observedAtMs),
     'adsb.lol',
+    readsbUnpositionedId,
   );
   const ageMs = observedAtMs == null ? null : Math.max(0, now - observedAtMs);
   return {

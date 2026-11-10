@@ -222,9 +222,32 @@ export function kartaViewTimeMs(value) {
       String(value ?? ''),
     );
   if (!match) return null;
-  const [, y, mo, d, h = '0', mi = '0', s = '0'] = match;
-  if (Number(y) < 1990) return null;
-  const ms = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hours = Number(match[4] ?? 0);
+  const minutes = Number(match[5] ?? 0);
+  const seconds = Number(match[6] ?? 0);
+  if (year < 1990) return null;
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    hours > 23 ||
+    minutes > 59 ||
+    seconds > 59
+  )
+    return null;
+  // Date.UTC rolls 31 February into March. A photo would then pass or fail
+  // the day filter on the wrong calendar day, so an impossible date is unknown.
+  const ms = Date.UTC(year, month - 1, day, hours, minutes, seconds);
+  const parsed = new Date(ms);
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  )
+    return null;
   return Number.isFinite(ms) ? ms : null;
 }
 

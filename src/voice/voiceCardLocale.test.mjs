@@ -3,8 +3,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale } from '../i18n/index.js';
-import { attachVoiceResult, planStepLabel } from './speech.js';
-import { voiceCardView } from './voiceCardPresentation.js';
+import {
+  attachVoiceResult,
+  planStepLabel,
+  shownEntityLabel,
+} from './speech.js';
+import {
+  initialVoiceCardState,
+  reduceVoiceCard,
+  voiceCardView,
+} from './voiceCardPresentation.js';
 
 for (const locale of ['ru', 'es']) {
   test(`voice card is in ${locale} for a layer switch`, (t) => {
@@ -85,4 +93,50 @@ test('en: layer switch, distance and plan labels in English', () => {
     }),
     'Earthquakes (24h) on',
   );
+});
+
+// FIRMS and ALPR register English entity labels: the model reads them as data
+// (get_entity_context, pointer_context), the card shows them translated.
+const ENTITY_LABELS = {
+  ru: { fire: 'Пожар · FRP 12 МВт', alpr: 'Камера ALPR' },
+  es: { fire: 'Incendio · FRP 12 MW', alpr: 'Cámara ALPR' },
+};
+
+for (const [locale, shown] of Object.entries(ENTITY_LABELS)) {
+  test(`entity labels stay English in the result and show in ${locale}`, (t) => {
+    t.after(() => setLocale('en'));
+    setLocale(locale);
+    const out = attachVoiceResult('get_entity_context', {
+      ok: true,
+      selected: {
+        id: 'fire-1',
+        name: 'Fire · FRP 12 MW',
+        layerId: 'local-firms',
+        layerName: 'NASA FIRMS',
+      },
+    });
+    assert.equal(out.selected.name, 'Fire · FRP 12 MW');
+    assert.equal(out.display.title, shown.fire);
+
+    const state = reduceVoiceCard(initialVoiceCardState(), {
+      type: 'pointer',
+      pointer: { kind: 'this', label: 'ALPR camera' },
+    });
+    assert.equal(state.pointer.label, 'ALPR camera');
+    assert.equal(voiceCardView(state).pointer.text, shown.alpr);
+    assert.equal(state.announce, `This: ${shown.alpr}`);
+  });
+}
+
+test('only the registered entity labels are translated', () => {
+  assert.equal(shownEntityLabel('Fire · FRP 4.9 MW'), 'Fire · FRP 4.9 MW');
+  assert.equal(shownEntityLabel('ALPR camera'), 'ALPR camera');
+  setLocale('ru');
+  try {
+    assert.equal(shownEntityLabel('Fire · FRP 4.9 MW'), 'Пожар · FRP 4.9 МВт');
+    assert.equal(shownEntityLabel('UPS793'), 'UPS793');
+    assert.equal(shownEntityLabel('Fire Station 5'), 'Fire Station 5');
+  } finally {
+    setLocale('en');
+  }
 });

@@ -37,7 +37,7 @@ test('every acquisition source can be omitted without losing catalog membership'
 
 test('all acquisition sources may be absent, and enable fails before initializing or fetching', async (t) => {
   const actual = catalog({}, t);
-  assert.equal(actual.layers.length, 32);
+  assert.equal(actual.layers.length, 40);
   const manager = new LayerLifecycle(
     {},
     { getSourceAvailability: actual.getSourceAvailability },
@@ -84,6 +84,99 @@ test('standalone defaults allow exact replacements and explicit removal, and rej
     () => createStandaloneLayerSources({ fligts: source }),
     /Unknown source/,
   );
+});
+
+test('GhostMaps obeys source omission, replacement and explicit removal', async (t) => {
+  let fetches = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    fetches++;
+    throw new Error('Unexpected standalone acquisition');
+  });
+  const missing = catalog({}, t);
+  assert.equal(missing.getSourceAvailability('s2-ghostmaps')?.available, false);
+  const manager = new LayerLifecycle(
+    {},
+    { getSourceAvailability: missing.getSourceAvailability },
+  );
+  manager.register(missing.get('s2-ghostmaps'));
+  assert.equal(await manager.setEnabled('s2-ghostmaps', true), false);
+  assert.equal(manager.layers.get('s2-ghostmaps').initialized, false);
+  assert.equal(
+    createStandaloneLayerSources({ 's2-ghostmaps': null })['s2-ghostmaps'],
+    null,
+  );
+
+  let reads = 0;
+  let subscriptions = 0;
+  let unsubscribed = 0;
+  const source = {
+    getCatalog: async () => {
+      reads++;
+      return { commit: 'a'.repeat(40), products: [] };
+    },
+    getFile: async () => {
+      throw new Error('Empty catalog must not read files');
+    },
+    subscribe: () => {
+      subscriptions++;
+      return () => {
+        unsubscribed++;
+      };
+    },
+  };
+  const supplied = createStandaloneLayerSources({ 's2-ghostmaps': source });
+  assert.equal(supplied['s2-ghostmaps'], source);
+  const configured = catalog(supplied, t);
+  assert.equal(
+    configured.getSourceAvailability('s2-ghostmaps').available,
+    true,
+  );
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  globalThis.document = { addEventListener() {}, removeEventListener() {} };
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'document', previous);
+    else delete globalThis.document;
+  });
+  const layer = configured.get('s2-ghostmaps');
+  t.after(() => layer.destroy());
+  layer.init({ scene: { requestRender() {} } });
+  layer.enable();
+  await layer.update();
+  layer.disable();
+  assert.equal(reads, 1);
+  assert.equal(subscriptions, 1);
+  assert.equal(unsubscribed, 1);
+  assert.equal(layer.getStats().commit, 'a'.repeat(40));
+  assert.equal(fetches, 0);
+});
+
+test('News is unavailable without a source and the standalone default reads only same-origin /api/news', async (t) => {
+  const missing = catalog({}, t);
+  assert.equal(missing.getSourceAvailability('news')?.available, false);
+  const manager = new LayerLifecycle(
+    {},
+    { getSourceAvailability: missing.getSourceAvailability },
+  );
+  manager.register(missing.get('news'));
+  assert.equal(await manager.setEnabled('news', true), false);
+  assert.equal(manager.layers.get('news').initialized, false);
+  assert.equal(createStandaloneLayerSources({ news: null }).news, null);
+
+  const urls = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    urls.push(url);
+    return new Response(
+      JSON.stringify({
+        error: 'news_not_configured',
+        unavailable: true,
+        retryable: false,
+      }),
+      { status: 503 },
+    );
+  });
+  const standalone = createStandaloneLayerSources().news;
+  await assert.rejects(standalone.getHotspots(), { unavailable: true });
+  assert.deepEqual(urls, ['/api/news/hotspots']);
 });
 
 test('empty Street Level uses the shared unavailable lifecycle without initialization', async (t) => {

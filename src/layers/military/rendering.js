@@ -52,7 +52,9 @@ import {
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
+  STALE_ALPHA,
 } from './policy.js';
+import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -473,6 +475,7 @@ export function createRendering({
       model = await Cesium.Model.fromGltfAsync({
         url: resolveAsset(spec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
@@ -638,6 +641,19 @@ export function createRendering({
   /** Per-frame driver for the standalone tracked model (see flights.js for the rationale). The
    *  tracked entity stays a pure billboard, so the follow-camera never stalls/freezes on 3D-toggle. */
 
+  /** Fade the tracked 3D model like the billboard while the plane is stale. */
+
+  function _applyTrackedModelFade(model) {
+    const alpha = parts.tracking._trackedStaleCue?.(flightState._trackedIcao)
+      ?.dimmed
+      ? STALE_ALPHA
+      : 1;
+    if (model.color?.alpha === alpha) return;
+    model.color = (
+      flightState._irBoost ? Cesium.Color.WHITE : TRACKED_ICON_COLOR
+    ).withAlpha(alpha);
+  }
+
   function _updateTrackedModel() {
     const active =
       flightState._trackedIcao &&
@@ -676,6 +692,7 @@ export function createRendering({
       Cesium.Model.fromGltfAsync({
         url: resolveAsset(trackedSpec.url),
         asynchronous: false,
+        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : TRACKED_ICON_COLOR,
@@ -784,6 +801,7 @@ export function createRendering({
         flightState._trackedModel.modelMatrix,
         spec.headingOffsetDeg,
       );
+      _applyTrackedModelFade(flightState._trackedModel);
       if (!flightState._trackedModel.ready) return;
       flightState._trackedModel.scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
@@ -811,6 +829,13 @@ export function createRendering({
    */
 
   function _fleetTick() {
+    // Every frame, shown or not: the tracked trail records where its icon is
+    // drawn and moves its body on (the head callback only reads the result),
+    // and the tracked label's stale cue follows the clock.
+    if (flightState._viewer) {
+      parts.tracking._trailTick?.();
+      parts.tracking._staleCueTick?.();
+    }
     if (
       !flightState._viewer ||
       !flightState._billboardCollection ||
@@ -986,7 +1011,9 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _militaryBillboardScale(icao24),
-        baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
+        baseAlpha: flightState.records.missingPolls.get(icao24)
+          ? STALE_ALPHA
+          : 1,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,

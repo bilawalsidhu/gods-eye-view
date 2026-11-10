@@ -5,6 +5,7 @@ const CONTROL_LAYER_IDS = Object.freeze({
   satellitesLayer: 'satellites',
   cctvLayer: 'cctv',
   streetLevelLayer: 'street-level',
+  wildlifeSightingsLayer: 'wildlife-sightings',
   radioLayer: 'radio',
   bikeshareLayer: 'bikeshare',
   transitLayer: 'transit',

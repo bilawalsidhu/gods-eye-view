@@ -1,5 +1,10 @@
 import { fetchRegionalText, fetchRegionalJson } from './http.js';
-import { normalizeRegionalArticles } from '../../../src/data/regionalModel.js';
+import {
+  REGIONAL_NEWS_WINDOW_HOURS,
+  googleNewsWindowOperator,
+  normalizeRegionalArticles,
+  recentRegionalArticles,
+} from '../../../src/data/regionalModel.js';
 
 function decodeRssText(value) {
   return String(value || '')
@@ -22,7 +27,10 @@ function rssTag(block, tag) {
   );
 }
 
-function normalizeRssArticles(xml, limit = 5) {
+// Feed items read before the window filter; Google returns about 100.
+const RSS_ITEM_CAP = 100;
+
+function normalizeRssArticles(xml, limit = RSS_ITEM_CAP) {
   const seen = new Set();
   const articles = [];
   for (const match of String(xml || '').matchAll(
@@ -57,12 +65,27 @@ function normalizeRssArticles(xml, limit = 5) {
   return articles;
 }
 
-async function fetchRegionalNews(place) {
+/**
+ * Headlines for a place from the last REGIONAL_NEWS_WINDOW_HOURS, newest
+ * first: Google News RSS, then GDELT when RSS fails or has nothing recent.
+ * `empty` means a source answered with nothing in the window; `unavailable`
+ * means there was no place or no source answered.
+ * @param {{locality?: string, region?: string, country?: string}|null} place
+ * @param {{now?: () => number}} [options]
+ */
+async function fetchRegionalNews(place, { now = Date.now } = {}) {
   const query = place?.locality || place?.region || place?.country;
   if (!query)
     return { status: 'unavailable', query: null, articles: [], source: null };
+  const recent = (articles) =>
+    recentRegionalArticles(articles, {
+      now: now(),
+      windowHours: REGIONAL_NEWS_WINDOW_HOURS,
+      limit: 5,
+    });
+  let answered = false;
   const rssParams = new URLSearchParams({
-    q: String(query).replace(/["\\]/g, ' ').trim(),
+    q: `${String(query).replace(/["\\]/g, ' ').trim()} ${googleNewsWindowOperator()}`,
     hl: 'en-US',
     gl: 'US',
     ceid: 'US:en',
@@ -75,7 +98,8 @@ async function fetchRegionalNews(place) {
         timeoutMs: 12_000,
       },
     );
-    const articles = normalizeRssArticles(xml, 5);
+    answered = true;
+    const articles = recent(normalizeRssArticles(xml));
     if (articles.length)
       return { status: 'ready', query, articles, source: 'Google News RSS' };
   } catch {
@@ -87,7 +111,7 @@ async function fetchRegionalNews(place) {
     format: 'json',
     maxrecords: '5',
     sort: 'datedesc',
-    timespan: '48h',
+    timespan: `${REGIONAL_NEWS_WINDOW_HOURS}h`,
   });
   try {
     const payload = await fetchRegionalJson(
@@ -97,7 +121,7 @@ async function fetchRegionalNews(place) {
         timeoutMs: 12_000,
       },
     );
-    const articles = normalizeRegionalArticles(payload, 5);
+    const articles = recent(normalizeRegionalArticles(payload, 5));
     return {
       status: articles.length ? 'ready' : 'empty',
       query,
@@ -105,7 +129,10 @@ async function fetchRegionalNews(place) {
       source: 'GDELT fallback',
     };
   } catch {
-    return { status: 'unavailable', query, articles: [], source: null };
+    // An RSS answer with nothing recent is still a true empty result.
+    return answered
+      ? { status: 'empty', query, articles: [], source: 'Google News RSS' }
+      : { status: 'unavailable', query, articles: [], source: null };
   }
 }
 
