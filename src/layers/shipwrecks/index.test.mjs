@@ -208,3 +208,39 @@ test('a click opens the card; a period that excludes the wreck closes it', async
   );
   assert.equal(h.layer.getStats().count, 1);
 });
+
+test('the year pickers list only years with a wreck, and each era is counted', async () => {
+  const h = harness({
+    snapshots: [
+      snapshot([
+        wreck('a', { year: 300 }),
+        wreck('b', { year: 1912 }),
+        wreck('c', { year: 1912 }),
+        wreck('d', { year: 1990 }),
+        wreck('e', { year: null }),
+      ]),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  let controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.range.options.map((option) => option.value),
+    [1990, 1912, 300],
+  );
+  assert.deepEqual(
+    controls.legend.map((era) => era.count),
+    [1, 2, 1, 1],
+  );
+  h.layer.setParams({ from: 1900, to: 1950 });
+  controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.range.options.map((option) => option.value),
+    [1990, 1950, 1912, 1900, 300],
+    'the chosen ends are listed too',
+  );
+  assert.deepEqual(
+    controls.legend.map((era) => era.count),
+    [0, 2, 0, 0],
+  );
+});

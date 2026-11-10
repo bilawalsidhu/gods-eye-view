@@ -277,11 +277,20 @@ export function createShipwrecksLayer({
     picking?.unregisterPickOwner?.(SHIPWRECKS_LAYER_ID);
   }
 
-  function countOf(era) {
-    let count = 0;
+  /** Wrecks shown per era, in one pass over the records. */
+  function eraCounts() {
+    const counts = Object.fromEntries(SHIPWRECK_ERAS.map((era) => [era, 0]));
     for (const record of _records.values())
-      if (eraOf(record) === era && inPeriod(record, _range)) count++;
-    return count;
+      if (inPeriod(record, _range)) counts[eraOf(record)]++;
+    return counts;
+  }
+
+  /** The years that have a dated wreck, plus `extra` ones, newest first. */
+  function yearsInData(extra = []) {
+    const years = new Set(extra);
+    for (const record of _records.values())
+      if (Number.isInteger(record.year)) years.add(record.year);
+    return [...years].sort((a, b) => b - a);
   }
 
   /** The start and end year pickers, side by side. */
@@ -293,9 +302,13 @@ export function createShipwrecksLayer({
       : range.from === range.to
         ? String(range.from)
         : `${range.from}–${range.to}`;
-    const options = [];
-    for (let year = _extent.max; year >= _extent.min; year--)
-      options.push({ value: year, label: String(year) });
+    // Only years with a wreck: a picker of every year since the oldest
+    // dated wreck would run to well over a thousand entries.
+    // The chosen ends stay listed even when no wreck sank that year.
+    const options = yearsInData([range.from, range.to]).map((year) => ({
+      value: year,
+      label: String(year),
+    }));
     return {
       range: {
         id: 'period',
@@ -425,16 +438,17 @@ export function createShipwrecksLayer({
     },
 
     getRowControls() {
+      const counts = eraCounts();
       return {
         chips: [],
         ...periodControls(),
         // The colours are a legend: when the ship sank.
         legend: SHIPWRECK_ERAS.map((era) => ({
           label: t(ERA_LABELS[era]),
-          count: countOf(era),
+          count: counts[era],
           color: ERA_COLORS[era],
-          blurb: tn(countOf(era), '{count} wreck', '{count} wrecks', {
-            count: formatNumber(countOf(era)),
+          blurb: tn(counts[era], '{count} wreck', '{count} wrecks', {
+            count: formatNumber(counts[era]),
           }),
         })),
         info: t('EMODnet (European waters) · Wikidata (worldwide)'),

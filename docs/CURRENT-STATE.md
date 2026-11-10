@@ -178,7 +178,7 @@ cull GhostMaps uses, sized by deaths (a bigger toll draws on top) and coloured
 by era (a legend under the row): before 1900
 (ancient wrecks dated only by period count here), 1900–1945, after 1945, and
 date unknown. A period filter under the row picks a start year and an end year
-side by side (two pickers over the years in the data; a reversed pair is
+side by side (two pickers over the years that have a wreck; a reversed pair is
 stored swapped); undated wrecks show only when every year
 is selected. The filter is session-only (not in the share link). Clicking a marker opens a `stateless` card: deaths and
 survivors first, then the sinking date or year (or the archaeological dating) and

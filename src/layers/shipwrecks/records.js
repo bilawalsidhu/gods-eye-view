@@ -20,7 +20,7 @@ export const SHIPWRECK_SOURCES = Object.freeze(['emodnet', 'wikidata']);
  * come with their precision so a month-precise date is not shown as the 1st.
  * Only ship and event facts are read: no items about people.
  */
-export const WIKIDATA_QUERY = `SELECT ?item ?itemLabel ?itemDescription ?coord ?sunk ?sunkPrecision ?end ?endPrecision ?deaths ?survivors ?typeLabel ?enwiki ?ptwiki ?event WHERE {
+export const WIKIDATA_QUERY = `SELECT ?item ?itemLabel ?itemDescription ?coord ?sunk ?sunkPrecision ?end ?endPrecision ?deaths ?survivors ?typeLabel ?enwiki ?event WHERE {
   {
     ?item wdt:P31/wdt:P279* wd:Q852190 ; wdt:P625 ?coord ; wikibase:sitelinks ?links .
     FILTER(?links > 0)
@@ -35,8 +35,7 @@ export const WIKIDATA_QUERY = `SELECT ?item ?itemLabel ?itemDescription ?coord ?
   }
   OPTIONAL { ?item wdt:P1120 ?deaths }
   OPTIONAL { ?enwiki schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> }
-  OPTIONAL { ?ptwiki schema:about ?item ; schema:isPartOf <https://pt.wikipedia.org/> }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,pt,mul". }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul,fr,de,es,it,pt,ru,uk,ja,zh,ar". }
 }`;
 
 const MAX_TEXT = 160;
@@ -300,9 +299,9 @@ export function normalizeWikidataResults(payload) {
       country: null,
       originator: null,
       url:
-        wikiUrl(value('enwiki')) ||
-        wikiUrl(value('ptwiki')) ||
-        `https://www.wikidata.org/wiki/${qid}`,
+        // English Wikipedia, else the Wikidata item, which links the
+        // article in every language that has one.
+        wikiUrl(value('enwiki')) || `https://www.wikidata.org/wiki/${qid}`,
     });
   }
   return foldSinkingEvents([...byItem.values()]);

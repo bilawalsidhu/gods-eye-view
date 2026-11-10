@@ -307,3 +307,8 @@ test('the query reads the end of service with its precision', () => {
   );
   assert.doesNotMatch(WIKIDATA_QUERY, /wdt:P576/);
 });
+
+test('labels and links do not default to one other language', () => {
+  assert.doesNotMatch(WIKIDATA_QUERY, /ptwiki|pt\.wikipedia/);
+  assert.match(WIKIDATA_QUERY, /wikibase:language "en,mul,/);
+});
