@@ -95,9 +95,10 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  (tracking, cockpit, orbit, a fly-to) do not. Below the band's height they
  *  rest too. While they run they never hold
  *  continuous rendering; each drawn frame arms one more step after the
- *  Cyber sonar's 80 ms cadence, so the two never beat. The fronts move on
- *  every frame the camera moves in, or while something else holds
- *  continuous rendering; the band is repainted at most every 80 ms.
+ *  Cyber sonar's 80 ms cadence, so the two never beat. Fronts and band,
+ *  fixed in the world, step at that cadence however many frames are
+ *  drawn, so they look the same whether the camera moves or not; crossing
+ *  the rim height shows or hides them at once.
  *  Skipped under prefers-reduced-motion. */
 export const AWARENESS_RANGE_PULSE = Object.freeze({
   count: 3,

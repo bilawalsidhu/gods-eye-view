@@ -3,11 +3,10 @@
  * @description The Global Context range ring and its sonar pulses, drawn
  * through the renderer's draw port. The ring is a haloed line (a solid line
  * with an outline) 2.5 km above the ellipsoid. While pulses run, each pulse
- * front is a haloed line whose positions move each step: every
- * `CYBER_SONAR_RENDER_INTERVAL_MS` on a parked view, every frame the camera
- * moves in. The band behind the fronts is one flat ellipse at the same
- * height filled with a canvas painted anew at most every interval (a new
- * key for new content). Nothing here is
+ * front is a haloed line whose positions move each step, every
+ * `CYBER_SONAR_RENDER_INTERVAL_MS` whether the camera moves or not. The
+ * band behind the fronts is one flat ellipse at the same height filled
+ * with a canvas painted anew each step (a new key for new content). Nothing here is
  * pickable, so a click or tap near the ring reaches the contact underneath.
  * Under reduced motion, or where the renderer has no frame hooks, the ring
  * alone is drawn and stays.
@@ -619,35 +618,30 @@ export function createRangeRing({
           next.step(nowMs);
         }
       };
-      // The eye as the pulses were last drawn under it, to tell frames the
-      // camera moved in from frames the pulses themselves asked for.
-      const camera = findCamera(viewer);
-      let lastEye = '';
-      const eyeMoved = () => {
-        const pose = camera?.pose();
-        if (!pose) return false;
-        const { position: p, direction: d } = pose;
-        const eye = `${p.x},${p.y},${p.z},${d.x},${d.y},${d.z}`;
-        if (eye === lastEye) return false;
-        lastEye = eye;
-        return true;
-      };
       next.lastStepMs = performance.now();
       next.step(next.lastStepMs);
-      // Each frame drawn while the camera moves, or held drawing, or at
-      // least a Cyber sonar interval after the last step, steps them. A
-      // step asks for the frame that draws it, which is no reason to step
-      // again: a parked view, held by nothing, draws one frame each
-      // interval, as the timer below asks.
+      // Whether the camera was below the rim at the last step.
+      let wasBelow = belowRim();
+      // The fronts and band are fixed in the world: a camera move needs
+      // nothing of them, so they step a Cyber sonar interval apart however
+      // many frames are drawn, and look the same parked or moving. Each
+      // frame checks only whether the camera crossed the rim height, which
+      // shows or hides them at once. A step asks for the frame that draws
+      // it, which is no reason to step again: a parked view draws one
+      // frame each interval, as the timer below asks.
       const offPreRender = frame.on('preRender', () => {
         const nowMs = performance.now();
-        const moved = eyeMoved();
+        const below = belowRim();
         if (
-          moved ||
-          frame.diagnostics?.()?.holds?.length > 0 ||
+          below !== wasBelow ||
           nowMs - next.lastStepMs >= CYBER_SONAR_RENDER_INTERVAL_MS
-        )
+        ) {
+          // A crossing at the instant of the last step must not reuse
+          // that step's level.
+          if (below !== wasBelow) levelMemo.nowMs = Number.NaN;
+          wasBelow = below;
           stepRunning(nowMs);
+        }
       });
       // Each drawn frame, whoever asked for it, arms one step a Cyber
       // sonar interval later, as the Cyber sonar scene does, whose changes

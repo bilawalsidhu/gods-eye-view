@@ -502,7 +502,7 @@ test('pulses ask for a frame 80 ms after each drawn frame instead of holding con
   assert.equal(pulseFrames(), frames, 'no frames once the ring is gone');
 });
 
-test('a pulse frame draws the step made before it was asked for; only a moving camera steps every frame', (t) => {
+test('a pulse frame draws the step made before it was asked for; a moving camera steps nothing sooner', (t) => {
   const ring = ringRendering(t);
   const { rendering, state } = ring;
   const loop = frameLoop(t, ring);
@@ -527,8 +527,8 @@ test('a pulse frame draws the step made before it was asked for; only a moving c
   assert.ok(pulses.length >= 9, `${pulses.length} pulse frames`);
   for (const [, stepMs, nowMs] of pulses) assert.equal(stepMs, nowMs);
   assert.equal(steps, pulses.length, 'one step a pulse frame');
-  // Frames the camera moves in step each one: the fronts move, and the
-  // soft band is painted again only a Cyber sonar interval on.
+  // The fronts and band are fixed in the world: frames the camera moves
+  // in within the interval step nothing, as a parked view's would not.
   steps = 0;
   const bandKey = drawn(ring).band.fill.image.key;
   for (let i = 0; i < 5; i++) {
@@ -539,13 +539,14 @@ test('a pulse frame draws the step made before it was asked for; only a moving c
     );
     loop.draw();
   }
-  assert.equal(steps, 5);
-  assert.equal(drawn(ring).band.fill.image.key, bandKey);
-  // A frame asked for by something else within the interval, the camera
-  // parked, steps nothing.
-  steps = 0;
-  loop.draw();
   assert.equal(steps, 0);
+  assert.equal(drawn(ring).band.fill.image.key, bandKey);
+  // Crossing below the rim height hides them at once, interval or not.
+  state.viewer.camera.positionCartographic = { height: 1_000 };
+  loop.draw();
+  assert.equal(steps, 1);
+  assert.equal(drawn(ring).pulse(0).show, false);
+  assert.equal(drawn(ring).band.show, false);
 });
 
 test('a parked view stops asking for frames once the pulses rest', (t) => {
