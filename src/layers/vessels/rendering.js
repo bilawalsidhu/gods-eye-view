@@ -19,7 +19,12 @@ import {
   FOCUS_UPDATE_MS,
   LABEL_GRID_PX,
   CARD_MIN_SEP_PX,
+  followsClock,
 } from './policy.js';
+import { vesselPositionAt } from './motion.js';
+
+/** How often vessels move on as the world clock plays (wall ms). */
+const FOLLOW_POSITION_MS = 250;
 
 export function createRendering({
   vesselState,
@@ -42,20 +47,16 @@ export function createRendering({
       visual = { billboard: record.billboard || null };
       visualRecords.set(record, visual);
     }
+    // Following the world clock, a vessel is drawn where it was at the time.
+    const { lat, lon } = followsClock(vesselState)
+      ? vesselPositionAt(record, vesselState.worldNow())
+      : record;
     const heightM = components.queries.vesselDatumHeightM(
-      components.tracking.currentGeoidN(record.lat, record.lon),
+      components.tracking.currentGeoidN(lat, lon),
       VESSEL_LIFT_M,
     );
-    visual.position = Cesium.Cartesian3.fromDegrees(
-      record.lon,
-      record.lat,
-      heightM,
-    );
-    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(
-      record.lon,
-      record.lat,
-      0,
-    );
+    visual.position = Cesium.Cartesian3.fromDegrees(lon, lat, heightM);
+    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
     visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
       visual.position,
       new Cesium.Cartesian3(),
@@ -212,9 +213,27 @@ export function createRendering({
   // own label publication requests a frame, and scheduling on that would loop.
   function installRuntime(viewer) {
     if (state.preRenderRemover || !viewer) return;
-    state.preRenderRemover = viewer.scene.preRender.addEventListener(() =>
-      updateVisibility(),
-    );
+    state.preRenderRemover = viewer.scene.preRender.addEventListener(() => {
+      if (followsClock(vesselState)) followClockPositions();
+      updateVisibility();
+    });
+  }
+
+  // As the world clock plays, vessels between two fixes move on along them.
+  let followedAtWallMs = -Infinity;
+  let followedAtMs = null;
+  function followClockPositions() {
+    const wallMs = performance.now();
+    if (wallMs - followedAtWallMs < FOLLOW_POSITION_MS) return;
+    followedAtWallMs = wallMs;
+    const atMs = vesselState.worldNow();
+    if (atMs === followedAtMs) return;
+    followedAtMs = atMs;
+    for (const record of state.records.all) {
+      if (!record.motion) continue;
+      const visual = prepareRecordVisual(record);
+      if (visual.billboard) visual.billboard.position = visual.position;
+    }
   }
 
   function scheduleTrailingVisibilityPass(now) {

@@ -1589,6 +1589,47 @@ messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
 Sources receive cancellation signals and check them after body parsing. The
 layer's existing lifecycle and selection guards continue to reject late work.
 
+### Following the world clock
+
+A source may declare a timeline: it can answer a snapshot at a given time.
+`source.timeline` is `{ coverage(), stepMs, subscribe? }`, validated by
+`readSnapshotTimeline` (`src/sources/live/contract.js`): `coverage()` returns
+the span `{ start, end }` in epoch ms it can answer, or null while it does not
+know yet; `stepMs` is the spacing of its snapshots; the optional
+`subscribe(listener)` tells of a change in coverage. Flights, Military Flights
+and AIS Vessels follow the world clock only while their source declares one
+(`src/time/snapshotTimeline.js`); with none they never follow it, and every
+request, timing and display stays as it is live.
+
+While such a layer is on it follows the clock and registers the source's
+coverage on the timeline. At the live edge it polls as it always has. Away
+from it the layer stops polling and asks for `getSnapshot({ ...query, atMs })`
+at the step at or before the clock's time; a request at the live edge carries
+no `atMs`. A seek, the time going backwards or leaving live is a jump (the
+clock's `getState().jumps` counts seeks and returns to live, not play): what
+loads is dropped, play holds while the snapshot loads, and the snapshot then
+stands in for every contact. A contact it lacks is gone at once; a tracked or
+selected contact it lacks is released, and one it has starts its trail afresh,
+whose track request carries `atMs` and draws only points at or before it.
+Playing, the layer stays a snapshot ahead of the time, and play does not pass a
+snapshot still loading for more than 8 seconds. Those snapshots apply as polls
+do, so contacts move on smoothly: aircraft are drawn at the clock's time
+rather than behind it, and vessels between two fixes move along the great
+circle, never past the newer one. Records, absences and the Layers panel's age
+are judged at the clock's time. Outside the coverage the layer shows no
+contacts and loads nothing; while the coverage is unknown it loads nothing and
+clears nothing. A snapshot that fails clears the time and is asked again after
+5 seconds; one the source drops for a newer request (an `AbortError`) is no
+failure, and nothing is cleared. A layer has one snapshot loading at a time:
+the older is aborted before a newer starts. Moving the view while vessels follow the clock asks for the new
+area at the same time. Back at live the contacts are cleared and the layer
+polls at once.
+
+A snapshot at `atMs` describes the world as it stood then: `observedAtMs` is
+at or before `atMs`, no record is observed later than `atMs`, freshness and
+staleness are judged against `atMs`, `atMs` is echoed back, and a vessel
+snapshot reports `transportStatus: 'live'`.
+
 ## State and action outcomes
 
 Share preferences, place lookups and Scene playback expose immutable snapshots

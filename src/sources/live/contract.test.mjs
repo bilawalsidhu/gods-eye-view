@@ -8,6 +8,7 @@ import {
   normalizeVesselObservation,
   openSkySnapshot,
   readsbSnapshot,
+  readSnapshotTimeline,
 } from './index.js';
 
 const now = 1800000000000;
@@ -485,4 +486,42 @@ test('a photo enrichment outage rejects without echoing the body', async () => {
       },
     );
   }
+});
+
+test('a source declares a timeline only with a coverage reader and a positive step', () => {
+  assert.equal(readSnapshotTimeline(null), null);
+  assert.equal(readSnapshotTimeline({ getSnapshot() {} }), null);
+  assert.equal(readSnapshotTimeline({ timeline: { stepMs: 10_000 } }), null);
+  assert.equal(
+    readSnapshotTimeline({ timeline: { coverage: () => null, stepMs: 0 } }),
+    null,
+  );
+  assert.equal(
+    readSnapshotTimeline({
+      timeline: { coverage: () => null, stepMs: 10_000, subscribe: 'no' },
+    }),
+    null,
+  );
+  const span = { start: 1000, end: 5000 };
+  const plain = readSnapshotTimeline({
+    timeline: { coverage: () => span, stepMs: 10_000 },
+  });
+  assert.equal(plain.stepMs, 10_000);
+  assert.deepEqual(plain.coverage(), span);
+  assert.equal(plain.subscribe, null);
+  const listeners = [];
+  const told = readSnapshotTimeline({
+    timeline: {
+      coverage: () => null,
+      stepMs: 5_000,
+      subscribe(listener) {
+        listeners.push(listener);
+        return () => listeners.splice(listeners.indexOf(listener), 1);
+      },
+    },
+  });
+  const stop = told.subscribe(() => {});
+  assert.equal(listeners.length, 1);
+  stop();
+  assert.equal(listeners.length, 0);
 });

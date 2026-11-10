@@ -200,10 +200,12 @@ export function createLifecycle({
         state.feed.removeViewListener = moveEnd.addEventListener(() => {
           components.ingestion.refreshIfMoved(activeViewer);
         });
+      vesselState.timeline?.start();
       return components.ingestion.loadLivePositions(activeViewer);
     },
 
     disable() {
+      vesselState.timeline?.stop();
       removeViewListener();
       state.feed.enabled = false;
       invalidateAisSession();
@@ -224,6 +226,7 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      vesselState.timeline?.stop();
       removeViewListener();
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();

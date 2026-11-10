@@ -44,6 +44,26 @@ function finiteNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * The move from a record's fix to the next row's, when the fix moves on in
+ * time; otherwise the move it was making, if the row repeats its fix.
+ */
+function motionBetween(record, next) {
+  const fromEpoch = record.lastPositionEpoch;
+  const toEpoch = next.lastPositionEpoch;
+  if (fromEpoch === toEpoch) return record.motion ?? null;
+  if (!Number.isFinite(fromEpoch) || !Number.isFinite(toEpoch)) return null;
+  if (!(toEpoch > fromEpoch)) return null;
+  return {
+    fromLat: record.lat,
+    fromLon: record.lon,
+    fromMs: fromEpoch * 1000,
+    toLat: next.lat,
+    toLon: next.lon,
+    toMs: toEpoch * 1000,
+  };
+}
+
 /** Own stable vessel records and bounded incomplete/selected retention. */
 export class VesselRecords {
   constructor({ now = () => Date.now() } = {}) {
@@ -52,9 +72,23 @@ export class VesselRecords {
     this.unkeyed = [];
     this.all = [];
   }
+  /**
+   * Fold a refresh into the records. Following the world clock (`follow`),
+   * a vessel whose fix moves on keeps where it moved from, so it can be drawn
+   * between the two (see motion.js). `replace`: the rows are the world at
+   * another time (the clock jumped), so they stand in for every vessel: one
+   * they lack is gone at once, selected or not, and none moves from where it
+   * was at the time the clock left.
+   */
   reconcile(
     rows,
-    { complete = true, selectedRecord = null, cap = Infinity },
+    {
+      complete = true,
+      selectedRecord = null,
+      cap = Infinity,
+      replace = false,
+      follow = false,
+    },
     effects,
   ) {
     const receivedAtMs = this.now();
@@ -94,6 +128,8 @@ export class VesselRecords {
           record.fixReceivedAtMs = next.fixReceivedAtMs;
           record.fixFeedEpoch = next.fixFeedEpoch;
         }
+        if (replace) record.motion = null;
+        else if (follow) record.motion = motionBetween(record, next);
         record.reference = next.reference;
         record.receivedAtMs = next.receivedAtMs;
         record.lat = next.lat;
@@ -117,6 +153,12 @@ export class VesselRecords {
     }
     for (const [mmsi, record] of this.byMmsi) {
       if (seen.has(mmsi)) continue;
+      if (replace) {
+        effects.remove(record, record === selectedRecord);
+        this.byMmsi.delete(mmsi);
+        effects.removed(mmsi);
+        continue;
+      }
       if (
         !complete &&
         Number.isFinite(record.receivedAtMs) &&

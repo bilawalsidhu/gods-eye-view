@@ -167,6 +167,7 @@ export function createLifecycle({
         );
       }
       restoreSpriteOrder(viewer);
+      flightState.timeline?.start();
     },
 
     /**
@@ -175,6 +176,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance
      */
     disable(viewer) {
+      flightState.timeline?.stop();
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._billboardCollection)
@@ -219,6 +221,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance
      */
     destroy(viewer) {
+      flightState.timeline?.stop();
       flightState.lifetime.abort();
       parts.controller._abortActiveUpdates();
       releaseContinuousRender('military'); // direct-destroy path (perf wave 2 fix)

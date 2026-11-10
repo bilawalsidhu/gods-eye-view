@@ -6,16 +6,25 @@ export function createVesselSnapshotRenderer({
   tracking,
   selection,
   cards,
+  followsClock = () => false,
 }) {
-  function reconcileVessels(viewer, rows, { complete = true } = {}) {
+  /** `replace`: the rows are the world at another time (see VesselRecords). */
+  function reconcileVessels(
+    viewer,
+    rows,
+    { complete = true, replace = false } = {},
+  ) {
     rendering.ensureCollections(viewer);
     const occluder = rendering.makeOccluder();
+    const follow = followsClock();
     records.reconcile(
       rows,
       {
         complete,
         selectedRecord: state.selectedRecord,
         cap: rendering.renderRowLimit(),
+        ...(replace && { replace }),
+        ...(follow && { follow }),
       },
       {
         add(record) {
@@ -54,6 +63,9 @@ export function createVesselSnapshotRenderer({
         },
       },
     );
+    // The selected vessel at the new time: its trail starts there.
+    if (replace && state.selectedRecord && state.trailMmsi)
+      tracking.startSelectedVesselTrail(state.selectedRecord);
     state.lastVisibilityUpdate = 0;
     rendering.updateVisibility(true);
   }

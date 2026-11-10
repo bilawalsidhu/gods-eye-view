@@ -8,8 +8,10 @@
  * clock holds a cursor, fixed or playing. Only the layers that follow the clock
  * move with the cursor; the rest keep reading the live edge through
  * `timeFor(id)`. On the page's clock the layers whose data has a time of its
- * own (the sky, satellites, launches and weather) follow it; live feeds such
- * as flights and vessels have no time to move to and stay live.
+ * own (the sky, satellites, launches and weather) follow it. Flights,
+ * military aircraft and vessels follow it only when their source declares a
+ * timeline, that is, can answer a snapshot at a given time (see
+ * src/time/snapshotTimeline.js); otherwise they stay live.
  *
  * Playback is continuous (`cursor + elapsed × rate`) unless a driver takes
  * it: weather replay steps its observed frames itself and moves the clock as
@@ -64,6 +66,9 @@ export function createWorldClock({
   let anchorMono = 0;
   let rate = 1;
   let playing = false;
+  // How many times the cursor has jumped (a seek, a return to live), so a
+  // layer can tell a jump from the cursor playing on.
+  let jumps = 0;
   // The driver handle stepping the clock, or null.
   let active = null;
   let ticker = null;
@@ -118,6 +123,7 @@ export function createWorldClock({
       buffering: continuous() && buffering(),
       following: followedIds(),
       supported: isSupported(),
+      jumps,
     });
   // Each listener hears the state as it is when called. A change made from
   // inside a listener notifies everyone afresh, and the outer round stops, so
@@ -182,6 +188,7 @@ export function createWorldClock({
       live = false;
       cursorMs = ms;
       anchorMono = monotonicNow();
+      jumps += 1;
       changed();
     },
     /** Back to the wall clock; playback stops and its rate goes back to 1. */
@@ -193,6 +200,7 @@ export function createWorldClock({
       playing = false;
       active = null;
       rate = 1;
+      jumps += 1;
       // Its driven(false) finds nothing left to stop.
       stepping?.driver.pause();
       changed();
@@ -300,8 +308,10 @@ export function createWorldClock({
           active = handle;
           playing = true;
           live = false;
-          if (Number.isFinite(atMs)) cursorMs = atMs;
-          else cursorMs ??= now();
+          if (Number.isFinite(atMs)) {
+            cursorMs = atMs;
+            jumps += 1;
+          } else cursorMs ??= now();
           anchorMono = monotonicNow();
           if (previous && previous !== handle) previous.driver.pause();
           changed();

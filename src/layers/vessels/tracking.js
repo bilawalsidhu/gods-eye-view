@@ -5,6 +5,7 @@ import {
   TRAIL_COLOR,
   TRAIL_MAX_POINTS,
   TRAIL_MIN_MOVE_M,
+  followsClock,
 } from './policy.js';
 
 export function createTracking({
@@ -116,12 +117,17 @@ export function createTracking({
 
   async function backfillVesselTrail(mmsi, token, reference = mmsi) {
     const owner = state.trailAbort;
+    // Following the world clock, the track ends at the world's time.
+    const atMs = followsClock(vesselState) ? vesselState.worldNow() : undefined;
     const signal = owner
       ? AbortSignal.any([owner.signal, AbortSignal.timeout(8000)])
       : AbortSignal.timeout(8000);
     let samples = null;
     try {
-      const track = await vesselState._source.getTrack?.(reference, { signal });
+      const track = await vesselState._source.getTrack?.(
+        reference,
+        atMs === undefined ? { signal } : { signal, atMs },
+      );
       samples = track?.records ?? null;
     } catch {
       return; // silent — keep the live-accumulated trail
@@ -140,6 +146,12 @@ export function createTracking({
       const lat = Number(sample?.latitude);
       const lon = Number(sample?.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      // Following the clock, an undated sample may be later than the time.
+      if (
+        atMs !== undefined &&
+        !(Number.isFinite(sample?.observedAtMs) && sample.observedAtMs <= atMs)
+      )
+        continue;
       // Per-sample N (≤ TRAIL_MAX_POINTS lookups) — same sea-surface datum as
       // the live vertices so the spliced trail is height-continuous.
       const heightM = components.queries.vesselDatumHeightM(

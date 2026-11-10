@@ -24,6 +24,7 @@ import {
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
   VESSEL_LIFT_M,
+  followsClock,
 } from './policy.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
@@ -660,6 +661,8 @@ export function createQueries({
         retryInSec: aisRetryInSec(),
         // Same field as flights and military, so Contacts names the provider.
         source: layer.source,
+        // Following the world clock, the snapshot's age is told from its time.
+        ...(followsClock(vesselState) && { atMs: vesselState.worldNow() }),
       };
     },
   };

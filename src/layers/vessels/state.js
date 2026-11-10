@@ -1,7 +1,8 @@
 import { createVesselFeed } from './ingestion.js';
 import { VesselRecords } from './records.js';
 import * as Cesium from 'cesium';
-import { DEFAULT_AIS_RUNTIME } from './policy.js';
+import { DEFAULT_AIS_RUNTIME, followsClock } from './policy.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 
 export function createVesselState({ source, services }) {
   const {
@@ -31,6 +32,19 @@ export function createVesselState({ source, services }) {
 
   vesselState._aisRuntime = DEFAULT_AIS_RUNTIME;
 
+  /** Follows the world clock while the source declares a timeline (set by the
+   *  layer); see followsClock in policy.js. */
+  vesselState.timeline = null;
+
+  /** The world time the layer draws at while it follows the clock. */
+  vesselState.worldNow = worldTimeFor('ais-live-vessels');
+
+  /** The time records are judged at: the world's while following the clock. */
+  vesselState.recordsNow = () =>
+    followsClock(vesselState)
+      ? vesselState.worldNow()
+      : vesselState._aisRuntime.now();
+
   vesselState._aisSessionSequence = 0;
 
   /**
@@ -48,7 +62,7 @@ export function createVesselState({ source, services }) {
 
   vesselState.state = {
     feed: createVesselFeed(),
-    records: new VesselRecords({ now: () => vesselState._aisRuntime.now() }),
+    records: new VesselRecords({ now: () => vesselState.recordsNow() }),
     viewer: null,
 
     billboardCollection: null,
