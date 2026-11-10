@@ -3235,5 +3235,12 @@
   "Play speed": "再生速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
   "1 min/s": "1分/秒",
-  "Photo © {photographer}": "写真 © {photographer}"
+  "Photo © {photographer}": "写真 © {photographer}",
+  "{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.": "{flight} は {callsign} として地図上にありますが、追跡できませんでした。Enterを押してもう一度お試しください。",
+  "Tracking {callsign} ({flight})": "{callsign} を追跡中（{flight}）",
+  "{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.": "{flight} に一致する機体が複数あります: {callsigns}。追跡するコールサインを1つ入力してください。",
+  "No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.": "{flight} に一致する場所も機体も見つかりません。便名で機体を検索するには、フライトレイヤーをオンにしてください。",
+  "No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.": "{flight} に一致する場所が見つからず、航空会社コードの照会も利用できません。代わりに BAW123 のような ICAO コールサインをお試しください。",
+  "No place found for {flight}, and no airline uses that code.": "{flight} に一致する場所が見つからず、そのコードを使う航空会社もありません。",
+  "No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.": "{flight} に一致する場所が見つからず、地図上にその便を運航している機体もありません。検索できるのは地図に読み込み済みの機体だけです。"
 }

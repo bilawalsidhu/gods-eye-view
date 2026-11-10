@@ -3235,5 +3235,12 @@
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "捲動或雙指縮放，拖曳以移動 · 按兩下查看全部",
   "1 min/s": "1 分鐘/秒",
-  "Photo © {photographer}": "照片 © {photographer}"
+  "Photo © {photographer}": "照片 © {photographer}",
+  "{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.": "{flight} 在地圖上顯示為 {callsign}，但追蹤失敗。按 Enter 重試。",
+  "Tracking {callsign} ({flight})": "正在追蹤 {callsign}（{flight}）",
+  "{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.": "{flight} 符合多架飛機：{callsigns}。輸入其中一個呼號以追蹤。",
+  "No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.": "找不到 {flight} 對應的地點或飛機。開啟「航班」圖層即可依航班號碼搜尋飛機。",
+  "No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.": "找不到 {flight} 對應的地點，且航空公司代碼查詢無法使用。請改用 ICAO 呼號，例如 BAW123。",
+  "No place found for {flight}, and no airline uses that code.": "找不到 {flight} 對應的地點，且沒有航空公司使用該代碼。",
+  "No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.": "找不到 {flight} 對應的地點，且地圖上沒有飛機執飛該航班。只能找到已載入地圖的飛機。"
 }

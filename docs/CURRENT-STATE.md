@@ -1199,6 +1199,19 @@ an actual separator and an unambiguous hemisphere assignment; malformed numeric
 fragments and scientific notation fall through to geocoders instead of becoming
 exact coordinate results.
 
+Flight number search (`src/data/flightNumber.js`,
+`src/ui/flightNumberSearch.js`) runs before place search. A two-character IATA
+designator plus a number (`BA 123`, `A3-602`) or a three-letter ICAO
+designator plus a number (`BAW123`) becomes exact callsigns: ICAO as typed,
+IATA through `/api/adsbdb/airline/<code>`, one callsign per airline holding the
+code. Only aircraft already loaded in the enabled Flights or Military layers
+are searched, and only an exact callsign matches. One match is followed with
+origin `user`; several matches list their callsigns and follow none; no match
+falls through to place search, and only if no place answers does the field say
+why (layers off, unknown airline code, lookup unavailable, or no aircraft on the
+map). Callsigns that do not follow the flight number (`EZY12AB`) are found by
+callsign, not by flight number. Voice does not use this resolver yet.
+
 Geospatial lookups are composed through `src/search`: forward/reverse geocoding,
 text/nearby search and routing use configurable providers/endpoints. Annotation,
 HUD and voice consumers share the configured service. Existing Google/Photon

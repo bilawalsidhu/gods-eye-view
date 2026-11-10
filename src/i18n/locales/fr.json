@@ -3389,5 +3389,12 @@
   "Play speed": "Vitesse de lecture",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Faites défiler ou pincez pour zoomer, glissez pour vous déplacer · double-clic pour tout voir",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Photo © {photographer}"
+  "Photo © {photographer}": "Photo © {photographer}",
+  "{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.": "{flight} est sur la carte sous l’indicatif {callsign}, mais le suivi a échoué. Appuyez sur Enter pour réessayer.",
+  "Tracking {callsign} ({flight})": "Suivi de {callsign} ({flight})",
+  "{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.": "{flight} correspond à plusieurs aéronefs : {callsigns}. Saisissez un indicatif pour le suivre.",
+  "No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.": "Aucun lieu ni aéronef trouvé pour {flight}. Activez la couche Vols pour rechercher des aéronefs par numéro de vol.",
+  "No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.": "Aucun lieu trouvé pour {flight}, et la recherche du code de compagnie est indisponible. Essayez plutôt l’indicatif OACI, par exemple BAW123.",
+  "No place found for {flight}, and no airline uses that code.": "Aucun lieu trouvé pour {flight}, et aucune compagnie n’utilise ce code.",
+  "No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.": "Aucun lieu trouvé pour {flight}, et aucun aéronef de la carte n’assure ce vol. Seuls les aéronefs déjà chargés sur la carte peuvent être trouvés."
 }

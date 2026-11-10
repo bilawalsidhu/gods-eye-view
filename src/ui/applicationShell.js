@@ -327,6 +327,8 @@ export class StyleManager extends ShellFacade {
         interruptGlobeRotation: services.interruptGlobeRotation,
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
+        isLayerEnabled: (layerId) =>
+          this._dataManager?.isEnabled?.(layerId) === true,
         satellitesLayer: services.satellitesLayer,
         aisLiveVesselsLayer: services.aisLiveVesselsLayer,
         militaryAwarenessLayer: services.militaryAwarenessLayer,

@@ -3466,5 +3466,12 @@
   "Play speed": "Швидкість відтворення",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутіть або зведіть пальці для масштабу, перетягніть для переміщення · подвійне клацання — показати все",
   "1 min/s": "1 хв/с",
-  "Photo © {photographer}": "Фото © {photographer}"
+  "Photo © {photographer}": "Фото © {photographer}",
+  "{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.": "{flight} є на карті як {callsign}, але відстежити його не вдалося. Натисніть Enter, щоб спробувати знову.",
+  "Tracking {callsign} ({flight})": "Відстеження {callsign} ({flight})",
+  "{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.": "{flight} відповідає кільком бортам: {callsigns}. Введіть один позивний, щоб стежити за ним.",
+  "No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.": "Для {flight} не знайдено ні місця, ні борту. Увімкніть шар «Рейси», щоб шукати борти за номером рейсу.",
+  "No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.": "Для {flight} місце не знайдено, а пошук коду авіакомпанії недоступний. Спробуйте позивний ICAO, наприклад BAW123.",
+  "No place found for {flight}, and no airline uses that code.": "Для {flight} місце не знайдено, і жодна авіакомпанія не використовує цей код.",
+  "No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.": "Для {flight} місце не знайдено, і жоден борт на карті не виконує цей рейс. Знайти можна лише борти, вже завантажені на карту."
 }

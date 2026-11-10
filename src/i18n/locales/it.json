@@ -3389,5 +3389,12 @@
   "Play speed": "Velocità di riproduzione",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scorri o pizzica per lo zoom, trascina per spostarti · doppio clic per vedere tutto",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.": "{flight} è sulla mappa come {callsign}, ma il tracciamento non è riuscito. Premi Enter per riprovare.",
+  "Tracking {callsign} ({flight})": "Tracciamento di {callsign} ({flight})",
+  "{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.": "{flight} corrisponde a più aeromobili: {callsigns}. Digita un nominativo per seguirlo.",
+  "No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.": "Nessun luogo o aeromobile trovato per {flight}. Attiva il livello Voli per cercare aeromobili per numero di volo.",
+  "No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.": "Nessun luogo trovato per {flight} e la ricerca del codice compagnia non è disponibile. Prova invece il nominativo ICAO, ad esempio BAW123.",
+  "No place found for {flight}, and no airline uses that code.": "Nessun luogo trovato per {flight} e nessuna compagnia usa quel codice.",
+  "No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.": "Nessun luogo trovato per {flight} e nessun aeromobile sulla mappa opera quel volo. Si possono trovare solo aeromobili già caricati sulla mappa."
 }

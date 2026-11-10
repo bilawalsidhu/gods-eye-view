@@ -38,6 +38,7 @@ export class LocationSearch {
       generation: null,
       requestId: 0,
       destination: null,
+      missingMessage: null,
       error: null,
     };
     this.channel = createStateChannel(() => this.state);
@@ -78,6 +79,7 @@ export class LocationSearch {
       generation: authority,
       requestId: generation,
       destination: null,
+      missingMessage: null,
       error: null,
     };
     try {
@@ -92,7 +94,9 @@ export class LocationSearch {
       });
       if (!current() || controller.signal.aborted) return;
       if (destination?.cancelled) return;
-      if (destination) {
+      // A lookup that understood the query but cannot answer it (a flight
+      // that is not on the map) reports why instead of a generic miss.
+      if (destination && !destination.missingMessage) {
         this.onResult?.(destination, query);
         if (!current() || controller.signal.aborted) return;
         this.state = {
@@ -104,7 +108,11 @@ export class LocationSearch {
       } else {
         this.onMissing?.();
         if (!current() || controller.signal.aborted) return;
-        this.state = { ...this.state, status: 'missing' };
+        this.state = {
+          ...this.state,
+          status: 'missing',
+          missingMessage: destination?.missingMessage || null,
+        };
         this.channel.publish(change('missing'));
       }
     } catch (error) {
