@@ -543,6 +543,7 @@
       "server/providers/news/gdeltEvents.js",
       "server/providers/news/upstream.js",
       "server/providers/common/http.js",
+      "server/providers/common/same-site.js",
       "src/data/adminBoundaries.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -550,6 +551,7 @@
       "src/data/local_data/natural_earth/disputed_areas.json",
       "src/layers/news/source.js",
       "src/layers/news/records.js",
+      "src/localRequestGate.mjs",
       "src/sources/httpBody.js",
       "src/sources/capability.js",
       "src/i18n/marker.js"
