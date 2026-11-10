@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native clock, tracking and manual rendering provide the Cesium focus oracle.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
 /**
  * Moving visual evidence for focus de-emphasis and aircraft recession.
  *
@@ -17,11 +20,11 @@
  * --headful drops those flags and is the real-GPU visual sign-off path.
  */
 
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import { redact } from './qa-browserEvidence.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 const argv = process.argv.slice(2);
@@ -303,6 +306,7 @@ async function waitForApp(page) {
     () => Boolean(window.__godsEyeView?.layers && window.__godsEyeView?.dataManager),
     { timeout: 60_000, polling: 200 },
   );
+  await whenSettled(page);
   await page.evaluate(async () => { window.__focusGeo = await import('/src/geo/index.js'); });
 }
 
@@ -336,7 +340,7 @@ async function requireEvidenceSeams(page) {
 }
 
 async function setCamera(page, values) {
-  await page.evaluate(([lon, lat, height, heading, pitch]) => {
+  await evaluateWithGeo(page, async (qaGeo, [lon, lat, height, heading, pitch]) => {
     const app = window.__godsEyeView;
     if (!app.viewer) {
       const geo = window.__focusGeo;
@@ -349,12 +353,10 @@ async function setCamera(page, values) {
       return;
     }
     const viewer = app.viewer;
-    const ellipsoid = viewer.scene.globe.ellipsoid;
     viewer.trackedEntity = undefined;
-    viewer.camera.cancelFlight?.();
-    viewer.scene.tweens?.removeAll?.();
-    viewer.camera.setView({
-      destination: ellipsoid.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.cancelFlight?.();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: lon * Math.PI / 180,
         latitude: lat * Math.PI / 180,
         height,
@@ -654,11 +656,7 @@ async function browserContext(page, browser) {
       platform: os.platform(),
       arch: os.arch(),
     },
-    caveat: HEADFUL
-      ? 'Headful capture omits SwiftShader flags and is the real-GPU visual sign-off path.'
-      : process.env.QA_ANGLE === 'metal'
-        ? 'Headless ANGLE/Metal capture; renderer and DPR recorded above.'
-        : 'SwiftShader/headless output is relative-only.',
+    caveat: `Headless capture with QA_ANGLE=${process.env.QA_ANGLE || 'metal'}; renderer and DPR recorded above.`,
   };
 }
 
@@ -671,18 +669,10 @@ async function main() {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   fs.mkdirSync(path.dirname(JSON_PATH), { recursive: true });
 
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
+  const browser = await launchBrowser({
+    headless: true,
     protocolTimeout: 300000,
-    args: [
-      ...(HEADFUL ? [] : process.env.QA_ANGLE ? ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE}`] : ['--enable-unsafe-swiftshader', '--use-gl=swiftshader']),
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      `--window-size=${VIEWPORT.width},${VIEWPORT.height}`,
-    ],
+    args: [...(HEADFUL ? [] : process.env.QA_ANGLE ? [] : ['--enable-unsafe-swiftshader']), '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', `--window-size=${VIEWPORT.width},${VIEWPORT.height}`],
   });
   const page = await browser.newPage();
   await stubPlanespotters(page);
@@ -740,7 +730,7 @@ async function main() {
     }
   } finally {
     if (!page.isClosed()) await releaseFrameClock(page).catch(() => {});
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   fs.writeFileSync(JSON_PATH, `${JSON.stringify(report, null, 2)}\n`);

@@ -1,13 +1,15 @@
 #!/usr/bin/env node
+// Cesium-only probes: primitive failure injection and terrain isolation exercise the Cesium import adapter.
 /** Import regressions through the real UI controller and globe primitives.
  * Run against dev and preview: QA_BASE_URL=http://localhost:4173 node scripts/qa-geo-import-regressions.mjs
  */
-import puppeteer from 'puppeteer';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import * as Cesium from 'cesium';
 import { installImportProbe } from './qa-geo-import-probe.mjs';
 import { hookRenderErrors, readRenderErrors } from './qa-browserEvidence.mjs';
 
-const browser = await puppeteer.launch({ headless: true });
+const browser = await launchBrowser({ headless: true });
 const page = await browser.newPage();
 const meshBytes = Buffer.alloc(60);
 [
@@ -92,12 +94,8 @@ try {
     `${process.argv.find((arg) => /^https?:/.test(arg)) || process.env.QA_BASE_URL || 'http://localhost:4173'}/?welcome=0`,
     { waitUntil: 'domcontentloaded' },
   );
-  await page.waitForFunction(
-    () =>
-      window.__gevGeoImport &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
-    { timeout: 90000 },
-  );
+  await page.waitForFunction(() => window.__gevGeoImport, { timeout: 90000 });
+  await whenSettled(page);
   await page.evaluate(async () => {
     const { viewer, dataManager } = window.__godsEyeView,
       C = window.__CESIUM__;
@@ -106,8 +104,8 @@ try {
     viewer.imageryLayers.removeAll();
     viewer.terrainProvider = new C.EllipsoidTerrainProvider();
     viewer.clock.shouldAnimate = false;
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
       destination: C.Cartesian3.fromDegrees(-122.5, 37.7, 100000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
@@ -198,7 +196,7 @@ try {
       Math.abs(pinHeight()) >= 0.01 &&
       performance.now() < groundDeadline
     ) {
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     const pin = pins(r)[0],
@@ -402,11 +400,13 @@ try {
     check(
       'symmetric global extents keep a finite camera',
       r.outcome.ok &&
-        Number.isFinite(viewer.camera.positionCartographic.height),
+        Number.isFinite(
+          window.__godsEyeView.engine.camera.pose().cartographic.height,
+        ),
     );
     remove(r);
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
       destination: C.Cartesian3.fromDegrees(-122.5, 37.7, 100000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
@@ -418,17 +418,18 @@ try {
     // Let the new camera/tiles reach a rendered frame before testing sampling.
     await new Promise((resolve) => {
       let frames = 0;
-      const remove = viewer.scene.postRender.addEventListener(() => {
-        if (++frames >= 2) {
-          remove();
-          resolve();
-        } else viewer.scene.requestRender();
-      });
-      viewer.scene.requestRender();
+      const remove =
+        window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
+          if (++frames >= 2) {
+            remove();
+            resolve();
+          } else window.__godsEyeView.engine.render.request();
+        });
+      window.__godsEyeView.engine.render.request();
     });
     const fixtureDeadline = performance.now() + 5000;
     while (!mesh.tilesLoaded && performance.now() < fixtureDeadline) {
-      viewer.scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     const globeShown = viewer.scene.globe.show;
@@ -461,8 +462,8 @@ try {
       {
         screen: meshScreen && [meshScreen.x, meshScreen.y],
         camera: {
-          height: viewer.camera.positionCartographic.height,
-          pitch: viewer.camera.pitch,
+          height: window.__godsEyeView.engine.camera.pose().cartographic.height,
+          pitch: window.__godsEyeView.engine.camera.pose().pitch,
         },
         meshHeight,
       },
@@ -551,6 +552,6 @@ try {
   );
   if (unexpected.length) failed++;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 process.exitCode = failed ? 1 : 0;

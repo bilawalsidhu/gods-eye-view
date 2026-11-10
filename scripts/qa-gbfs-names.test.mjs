@@ -30,6 +30,7 @@ function fixture({ extended, dev }) {
     information: {},
     status: {},
     fromDegrees: () => ({}),
+    whenSettled: async () => {},
   };
   return new Function(
     ...Object.keys(dependencies),

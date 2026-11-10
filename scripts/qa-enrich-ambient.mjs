@@ -50,9 +50,10 @@
  * Exits non-zero if any assertion fails. Never commits anything.
  */
 
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { classifyAircraft, CLASS_SCALE_2D } from '../src/data/aircraftClass.js';
 import { aircraftIcon } from '../src/data/aircraftIcons.js';
 
@@ -91,26 +92,7 @@ const SESSION_CAP = 300;       // ENRICH_AMBIENT_BUDGET_CEIL (rolling-bucket cei
 const BUDGET_QA = { ceil: SESSION_CAP, refillTokens: 6, windowMs: 3600000 };
 const RESUME_WINDOW_MS = 1000; // E11 swaps windowMs to this to unlock refills
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* skip */ }
-  }
-  return null;
-}
 
 const results = [];
 function record(name, ok, detail) {
@@ -186,21 +168,9 @@ async function main() {
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
 
-  const chromeExecutable = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--use-gl=angle',
-      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
-      '--disable-dev-shm-usage',
-      '--disable-web-security',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1280,800',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1280,800'],
   });
 
   const consoleErrors = [];
@@ -303,8 +273,9 @@ async function main() {
       // A cold dev server compiles the Navara chunks on first load.
       { timeout: 180000, polling: 200 }
     );
+    await whenSettled(page);
     await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise);
-    await page.waitForFunction(() => document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 180000 });
+    await whenSettled(page);
     await page.evaluate(() => window.__godsEyeView.styleManager.orbitController.stop());
     console.log('  App globals ready.');
 
@@ -339,17 +310,16 @@ async function main() {
     console.log('Priming straight-flight history through the render delay (30 s)...');
     const primed = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer ?? null;
       window.__ENR.timeOffsetSec = -32;
       dm.setLayerParams('flights', { models3d: false }); // ambient budget excludes model-priority enrichment
       await dm.setEnabled('flights', true);
       const fl = dm.layers.get('flights').module;
       for (const off of [-24, -16, -8, 0]) {
         window.__ENR.timeOffsetSec = off;
-        await fl.update(v);
+        await fl.update();
       }
       window.__ENR.timeOffsetSec = 0;
-      window.__ENR_DRIVER = setInterval(() => { fl.update(v); }, 15000);
+      window.__ENR_DRIVER = setInterval(() => { fl.update(); }, 15000);
       return { count: fl.getStats().count, starts: window.__ENRICH_LOG.starts.length, models3d: fl.getParams().models3d };
     });
     console.log(`  flights count=${primed.count} | adsbdb requests started (held): ${primed.starts}`);
@@ -373,7 +343,7 @@ async function main() {
     record('E2 baseline: all 12 category-0 planes default to the airliner glyph',
       baselineBad.length === 0,
       baselineBad.length ? baselineBad.join(' ') : 'all 12 identical airliner silhouettes (the field-data problem)');
-    await sleep(1200); // let a fleet tick land rotations before the "before" shot
+    await whenSettled(page); // let a fleet tick land rotations before the "before" shot
     await page.screenshot({ path: path.join(SHOT_DIR, 'enrich-before-monoculture.png') });
     console.log('  saved enrich-before-monoculture.png (12 identical airliner glyphs)');
 
@@ -461,10 +431,9 @@ async function main() {
     console.log('\nE8 — next poll after enrichment');
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer ?? null;
-      await dm.layers.get('flights').module.update(v);
+      await dm.layers.get('flights').module.update();
     });
-    await sleep(500);
+    await whenSettled(page);
     const afterPoll = await page.evaluate(() => ({
       billboards: window.__collectBillboards(),
       starts: window.__ENRICH_LOG.starts.length,
@@ -497,7 +466,6 @@ async function main() {
     const startsBeforeBatch = await page.evaluate(() => window.__ENRICH_LOG.starts.length);
     await page.evaluate(async ({ hexes, rowLat, rowLon0, stepDeg }) => {
       const dm = window.__godsEyeView.dataManager;
-      const v = window.__godsEyeView.viewer ?? null;
       // Two fresh rows just north of the original one — still inside the
       // top-down 20 km frame, so the sweep's frustum test keeps them.
       // STATIONARY (speed 0): moving planes drift north out of the frustum at
@@ -525,8 +493,8 @@ async function main() {
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
       const fl = dm.layers.get('flights').module;
-      await fl.update(v); // sweep enqueues up to 150 ambient jobs
-      await fl.update(v); // spend the remaining initial tokens; later polls must stall
+      await fl.update(); // sweep enqueues up to 150 ambient jobs
+      await fl.update(); // spend the remaining initial tokens; later polls must stall
     }, { hexes: batchHexes, rowLat: ROW_LAT, rowLon0: ROW_LON0, stepDeg: ROW_STEP_DEG });
     // Wait for the drip to drain whatever was enqueued, then settle.
     await page.waitForFunction(
@@ -537,7 +505,7 @@ async function main() {
     // One more poll while exhausted — still nothing new.
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer ?? null);
+      await dm.layers.get('flights').module.update();
     });
     await sleep(1000);
     const exhausted = await page.evaluate(() => ({
@@ -562,7 +530,7 @@ async function main() {
     await sleep(RESUME_WINDOW_MS + 200); // a full (shortened) refill window elapses
     await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      await dm.layers.get('flights').module.update(window.__godsEyeView.viewer ?? null);
+      await dm.layers.get('flights').module.update();
     });
     const expectedTotal = startsBeforeBatch + BATCH_COUNT; // every batch plane eventually requested
     const resumed = await page.waitForFunction(
@@ -581,7 +549,7 @@ async function main() {
 
     finish();
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   function finish() {

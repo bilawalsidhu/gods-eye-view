@@ -1,3 +1,6 @@
+// Cesium-only probes: native primitive and streamed-tile positions provide the Cesium floor oracle.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled } from './qa/ready.mjs';
 // scripts/qa-floor-verify.mjs — live floor verification at AUS (round 5).
 // Pins the camera at Austin airport, enables flights, waits ~3 polls, then
 // measures every nearby contact's render height against the ACTUAL rendered
@@ -5,7 +8,7 @@
 // coarse-LOD poison and the taxiing cold-cell regression on 2026-07-06.
 // Run: node scripts/qa-floor-verify.mjs   (dev server on :4173, real GPU best)
 // with the poison fix + simplified chain live.
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 
 // QA_BASE_URL matches the sibling harnesses (qa-height-datum / qa-cctv-v2) so a
@@ -29,29 +32,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // (2026-07-30 lesson, already applied to the other harnesses): /Applications
 // auto-updates underneath the harnesses and its software-GL behavior shifts
 // across majors.
-const chrome = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean).find((p) => fs.existsSync(p));
 
-const browser = await puppeteer.launch({
-  headless: 'new', executablePath: chrome,
-  args: ['--use-gl=angle', `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`, '--enable-webgl', '--ignore-gpu-blocklist', '--no-sandbox'],
+const browser = await launchBrowser({
+  headless: true, args: ['--enable-webgl', '--ignore-gpu-blocklist', '--no-sandbox'],
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1400, height: 900 });
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.engine, { timeout: 150000 });
-await sleep(2000);
+await whenSettled(page);
 
 // Let the app's boot fly-to fully settle FIRST (it was overriding an early
 // setView, leaving the camera away from Austin — every probe then read
 // coarse global tiles at ~25 m and the oracle was garbage).
-await sleep(12000);
+await whenSettled(page);
 await page.evaluate((site) => { window.__QA_SITE = site; }, SITE);
-const camPin = async () => page.evaluate(async () => {
+const camPin = async () => evaluateWithGeo(page, async (qaGeo) => {
   const v = window.__godsEyeView.viewer;
   if (!v) {
     const geo = await import('/src/geo/index.js');
@@ -61,11 +58,11 @@ const camPin = async () => page.evaluate(async () => {
     const c = camera.pose().cartographic;
     return { lat: +(c.latitude * 180 / Math.PI).toFixed(3), lon: +(c.longitude * 180 / Math.PI).toFixed(3), h: Math.round(c.height) };
   }
-  const C = v.camera.positionCartographic.constructor;
-  v.camera.cancelFlight();
-  v.camera.setView({ destination: v.scene.globe.ellipsoid.cartographicToCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 3000)) });
-  v.camera.moveEnd.raiseEvent();
-  const c = v.camera.positionCartographic;
+  const C = qaGeo.cartographic;
+  window.__godsEyeView.engine.camera.cancelFlight();
+  window.__godsEyeView.engine.camera.setView({ destination: qaGeo.cartographic.toCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 3000)) });
+  window.__godsEyeView.engine.camera.moveEnd.raiseEvent();
+  const c = window.__godsEyeView.engine.camera.pose().cartographic;
   return { lat: +(c.latitude * 180 / Math.PI).toFixed(3), lon: +(c.longitude * 180 / Math.PI).toFixed(3), h: Math.round(c.height) };
 });
 console.log('camera pinned:', JSON.stringify(await camPin()));
@@ -87,7 +84,7 @@ const ready = await page.evaluate(() => {
 console.log('tileset ready:', JSON.stringify(ready));
 await sleep(8000);
 
-const report = await page.evaluate(async () => {
+const report = await evaluateWithGeo(page, async (qaGeo) => {
   const gev = window.__godsEyeView;
   const v = gev.viewer;
   const layer = gev.dataManager.layers.get('flights')?.module;
@@ -141,9 +138,8 @@ const report = await page.evaluate(async () => {
     }
     return { ausContacts: out.length, contacts: out.slice(0, 16), spritesShown: shown, spritesHidden: hidden };
   }
-  const ell = v.scene.globe.ellipsoid;
-  const C = v.camera.positionCartographic.constructor;
-  const center = ell.cartographicToCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 200));
+  const C = qaGeo.cartographic;
+  const center = qaGeo.cartographic.toCartesian(C.fromDegrees(window.__QA_SITE.lon, window.__QA_SITE.lat, 200));
   const nearby = layer.getNearby(center, 15000, 60);
   // Exclude EVERY billboard from the probes — sprites are pickable, so an
   // unexcluded probe can return another aircraft's height as "the mesh".
@@ -172,11 +168,11 @@ const report = await page.evaluate(async () => {
   const out = [];
   for (const p of nearby) {
     const modelAt = drawnAt(p);
-    const c = ell.cartesianToCartographic(modelAt ?? p.position);
+    const c = qaGeo.cartographic.fromCartesian(modelAt ?? p.position);
     const latDeg = c.latitude * 180 / Math.PI, lonDeg = c.longitude * 180 / Math.PI;
     let meshH = null;
     try {
-      const h = v.scene.sampleHeight(C.fromDegrees(lonDeg, latDeg), excludes);
+      const h = window.__godsEyeView.engine.surface.sampleHeight(C.fromDegrees(lonDeg, latDeg), excludes);
       if (Number.isFinite(h)) meshH = h;
     } catch { /* ignore */ }
     out.push({
@@ -201,7 +197,7 @@ const report = await page.evaluate(async () => {
   let shown = 0, hidden = 0;
   for (const row of gev.layers?.drawn('flights') ?? []) {
     if (!row.position || row.trackedModel) continue;
-    const cc = ell.cartesianToCartographic(row.position);
+    const cc = qaGeo.cartographic.fromCartesian(row.position);
     const la = cc.latitude * 180 / Math.PI, lo = cc.longitude * 180 / Math.PI;
     if (Math.abs(la - window.__QA_SITE.lat) > 0.08 || Math.abs(lo - window.__QA_SITE.lon) > 0.10) continue;
     if (row.show) shown++; else hidden++;
@@ -223,7 +219,7 @@ for (const b of buried) {
 }
 const verdict = lows.length === 0 ? 'INCONCLUSIVE' : (buried.length === 0 ? 'PASS' : 'FAIL');
 console.log(`VERDICT: ${verdict}`);
-await browser.close();
+await closeBrowser(browser);
 // Exit code (2026-08-19): this harness printed VERDICT: FAIL and still exited 0,
 // so a real regression (taxiing contacts rendering under the mesh) stayed
 // invisible to every automated caller. Now it reports like its siblings

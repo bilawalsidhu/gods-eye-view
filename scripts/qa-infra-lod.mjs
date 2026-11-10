@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Cesium-only probes: native camera rotation preserves the Cesium orbit performance measurement.
+import { evaluateWithGeo } from './qa/geometry.mjs';
 /**
  * qa-infra-lod — browser checks for the local-infrastructure LOD declutter.
  *
@@ -24,7 +26,8 @@
  * rAF throttling disabled so the frame clock is honest. Exits non-zero on any
  * FAIL. Commits nothing.
  */
-import puppeteer from 'puppeteer';
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,18 +62,10 @@ function report(name, detail) {
   console.log(`  [MEAS] ${name} — ${JSON.stringify(detail)}`);
 }
 
-const browser = await puppeteer.launch({
-  headless: HEADFUL ? false : 'new',
-  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+const browser = await launchBrowser({
+  headless: true,
   protocolTimeout: 300_000,
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--window-size=1440,900',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding',
-    '--disable-background-timer-throttling',
-  ],
+  args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1440,900', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
 });
 
 try {
@@ -81,8 +76,8 @@ try {
   const testUrl = new URL(APP_URL);
   testUrl.searchParams.set('welcome', '0');
   await page.goto(testUrl.href, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.__godsEyeView?.styleManager
-    && document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 90_000 });
+  await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 90_000 });
+  await whenSettled(page);
   // The startup view restore and any boot flight land after the loading
   // screen; park only once they are over, or they move the camera away from
   // the full-earth view before the first LOD walk.
@@ -101,20 +96,18 @@ try {
     !document.querySelector('#first-run-launcher:not([hidden])')
   )));
   report('renderer', await page.evaluate(() => {
-    const gl = window.__godsEyeView.viewer.scene.context._gl;
+    const gl = window.__godsEyeView.engine.host.canvas.getContext('webgl2');
     const debug = gl.getExtension('WEBGL_debug_renderer_info');
     return debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   }));
 
   // Park at a full-earth view and disable every layer so infra is measured
   // in isolation.
-  await page.evaluate(async () => {
+  await evaluateWithGeo(page, async (qaGeo) => {
     const gev = window.__godsEyeView;
-    const v = gev.viewer;
-    v.camera.cancelFlight();
-    const ell = v.scene.globe.ellipsoid;
-    v.camera.setView({
-      destination: ell.cartographicToCartesian({
+    window.__godsEyeView.engine.camera.cancelFlight();
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({
         longitude: 0, latitude: 15 * Math.PI / 180, height: 24_000_000,
       }),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
@@ -125,7 +118,7 @@ try {
       }
     }
   });
-  await new Promise((r) => setTimeout(r, 4_000));
+  await whenSettled(page);
 
   // Enable the infrastructure layers (skipped in --control so the orbit cost
   // measures the empty scene for attribution).
@@ -149,7 +142,7 @@ try {
           return (s.count || 0) > 0 || s.error;
         });
         if (done) break;
-        gev.viewer.scene.requestRender?.();
+        window.__godsEyeView.engine.render.request?.();
         await new Promise((r) => setTimeout(r, 200));
       }
       const out = {};
@@ -161,8 +154,8 @@ try {
       check(`${id} loaded its bundled dataset`, (loaded[id]?.count || 0) > 0, loaded[id]);
     }
     // Nudge a render pass so the first post-enable LOD walk runs.
-    await page.evaluate(() => window.__godsEyeView?.viewer?.scene?.requestRender?.());
-    await new Promise((r) => setTimeout(r, 2_000));
+    await page.evaluate(() => window.__godsEyeView.engine.render.request?.());
+    await whenSettled(page);
   }
 
   // ── GATE a: full-earth budget engaged ─────────────────────────────────
@@ -204,21 +197,19 @@ try {
     }
 
     // ── GATE b: zoom in widens the budget ───────────────────────────────
-    await page.evaluate(() => {
-      const v = window.__godsEyeView.viewer;
-      const ell = v.scene.globe.ellipsoid;
-      v.camera.cancelFlight();
-      v.camera.setView({
-        destination: ell.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.cancelFlight();
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: -97.74 * Math.PI / 180, latitude: 30.27 * Math.PI / 180, height: 55_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
       });
       // setView does not fire moveEnd; raise the LOD recompute trigger.
-      v.camera.moveEnd.raiseEvent?.();
-      v.scene.requestRender?.();
+      window.__godsEyeView.engine.camera.moveEnd.raiseEvent?.();
+      window.__godsEyeView.engine.render.request?.();
     });
-    await new Promise((r) => setTimeout(r, 3_000));
+    await whenSettled(page);
     const regionalLod = await readLod('getLodDiagnostics @ city');
     for (const id of INFRA_LAYER_IDS) {
       const g = globalLod[id];
@@ -240,7 +231,7 @@ try {
         .slice().sort());
       const before = snap();
       for (let i = 0; i < 5; i++) {
-        gev.viewer.scene.requestRender?.();
+        window.__godsEyeView.engine.render.request?.();
         await new Promise((r) => setTimeout(r, 120));
       }
       return { before, after: snap() };
@@ -251,29 +242,26 @@ try {
       { beforeCounts: churn.before.map((ids) => ids.length), afterCounts: churn.after.map((ids) => ids.length) });
 
     // Back to full-earth for the frame-cost measurement.
-    await page.evaluate(() => {
-      const v = window.__godsEyeView.viewer;
-      const ell = v.scene.globe.ellipsoid;
-      v.camera.setView({
-        destination: ell.cartographicToCartesian({
+    await evaluateWithGeo(page, async (qaGeo) => {
+      window.__godsEyeView.engine.camera.setView({
+        destination: qaGeo.cartographic.toCartesian({
           longitude: 0, latitude: 15 * Math.PI / 180, height: 24_000_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      v.camera.moveEnd.raiseEvent?.();
-      v.scene.requestRender?.();
+      window.__godsEyeView.engine.camera.moveEnd.raiseEvent?.();
+      window.__godsEyeView.engine.render.request?.();
     });
-    await new Promise((r) => setTimeout(r, 3_000));
+    await whenSettled(page);
   }
 
   // Count actual rendered frames: scene.render() can return without drawing.
   const frameCost = await page.evaluate(() => new Promise((resolve) => {
     const v = window.__godsEyeView.viewer;
-    const scene = v.scene;
     const durations = [];
     let frames = 0;
     let previous;
-    const remove = scene.postRender.addEventListener(() => {
+    const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
       const now = performance.now();
       if (previous !== undefined) durations.push(now - previous);
       previous = now;
@@ -282,7 +270,7 @@ try {
     const t0 = performance.now();
     const tick = () => {
       v.camera.rotateRight(0.0004);
-      scene.requestRender();
+      window.__godsEyeView.engine.render.request();
       if (performance.now() - t0 < 10_000) requestAnimationFrame(tick);
       else {
         remove();
@@ -308,24 +296,23 @@ try {
     : 'rendered-frame intervals, infra ON, 10s orbit', frameCost);
 
   // ── parked-idle honesty: the LOD walk must not force continuous render ─
-  await new Promise((r) => setTimeout(r, 4_000));
+  await whenSettled(page);
   const idle = await page.evaluate(async () => {
     // The debug handle's own governor read (no /src import: runs on a build).
     const { getRenderGovernorDiagnostics } = window.__godsEyeView;
     return new Promise((resolve) => {
-      const scene = window.__godsEyeView.viewer.scene;
       const startedAt = Date.now();
-      const tilesLoadedBefore = scene.globe.tilesLoaded;
+      const tilesLoadedBefore = window.__godsEyeView.engine.surface.tilesLoaded();
       let renders = 0;
       let framesWithPendingTiles = 0;
-      const remove = scene.postRender.addEventListener(() => {
+      const remove = window.__godsEyeView.engine.frames.postRender.addEventListener(() => {
         renders += 1;
-        if (!scene.globe.tilesLoaded) framesWithPendingTiles += 1;
+        if (!window.__godsEyeView.engine.surface.tilesLoaded()) framesWithPendingTiles += 1;
       });
       setTimeout(() => {
         remove();
         const governor = getRenderGovernorDiagnostics();
-        resolve({ renders, tilesLoadedBefore, tilesLoadedAfter: scene.globe.tilesLoaded,
+        resolve({ renders, tilesLoadedBefore, tilesLoadedAfter: window.__godsEyeView.engine.surface.tilesLoaded(),
           framesWithPendingTiles, mode: governor.mode, holds: governor.holds,
           requests: governor.recentRequests.filter(request => request.at >= startedAt) });
       }, 5_000);
@@ -348,7 +335,7 @@ try {
     console.log(`  [SHOT] skipped — ${e?.message || e}`);
   }
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 const passed = results.filter((r) => r.pass).length;

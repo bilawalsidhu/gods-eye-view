@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: entity sentinels and native flight interception verify the Cesium selection path.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn } from './qa/ready.mjs';
 /**
  * qa-firms.mjs — headless proof for the LIVE NASA FIRMS fires layer.
  *
@@ -29,7 +32,7 @@
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import {
   isExpectedPreviewSetupError,
   redact,
@@ -54,33 +57,14 @@ const APP_URL = appUrl.href;
 const HEADFUL = argv.includes('--headful');
 const FIXTURES = argv.includes('--fixtures');
 const PREVIEW = argv.includes('--preview');
-const ANGLE = getOpt('--angle', 'swiftshader');
+const ANGLE = process.env.QA_ANGLE || 'metal';
 const OUT = getOpt('--out', null);
 const SHOTS_DIR = OUT ? path.resolve(OUT).replace(/\.json$/, '') + '-shots' : path.join(REPO_ROOT, 'qa-shots');
 if (!['metal', 'swiftshader'].includes(ANGLE)) throw new Error('Unknown ANGLE backend');
 const runtimeErrors = [];
 const expectedSourceErrors = [];
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* ignore */ }
-  }
-  return null;
-}
 
 const results = [];
 function record(name, ok, detail) {
@@ -126,7 +110,7 @@ async function waitForCardCanvasInk(page, { timeoutMs = 12000 } = {}) {
   let consecutive = 0;
   let sample = null;
   while (Date.now() < deadline) {
-    await page.evaluate(() => window.__godsEyeView?.viewer?.scene?.requestRender?.());
+    await page.evaluate(() => window.__godsEyeView.engine.render.request?.());
     await sleep(150);
     sample = await cardCanvasInk(page);
     if (sample.present && sample.entries > 0 && sample.painted > 0 && sample.ink > 500) {
@@ -160,7 +144,7 @@ async function waitForFirmsActionCount(page, expected, { timeoutMs = 12000 } = {
   const deadline = Date.now() + timeoutMs;
   let snapshot = await firmsActionSnapshot(page);
   while (Date.now() < deadline && snapshot.count !== expected) {
-    await page.evaluate(() => window.__godsEyeView?.viewer?.scene?.requestRender?.());
+    await page.evaluate(() => window.__godsEyeView.engine.render.request?.());
     await sleep(175);
     snapshot = await firmsActionSnapshot(page);
   }
@@ -174,9 +158,10 @@ async function bootAndEnable(page, { timeoutS = 45 } = {}) {
     () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   const actualEngine = await page.evaluate(() => window.__godsEyeView.engine.kind);
   if (actualEngine !== ENGINE) throw new Error('Requested FIRMS engine did not load');
-  await sleep(5000);
+  await whenSettled(page);
   await page.keyboard.press('Escape');
   return page.evaluate(async (tS) => {
     const dm = window.__godsEyeView.dataManager;
@@ -194,7 +179,7 @@ async function bootAndEnable(page, { timeoutS = 45 } = {}) {
 
 /** Teleport the camera (duck-typed cartographic — no Cesium global). */
 async function setView(page, lon, lat, height) {
-  await page.evaluate(async (lo, la, h) => {
+  await evaluateWithGeo(page, async (qaGeo, lo, la, h) => {
     const gev = window.__godsEyeView;
     if (!gev.viewer) {
       const geo = await import('/src/geo/index.js');
@@ -203,15 +188,14 @@ async function setView(page, lon, lat, height) {
       gev.engine.render.request('firms-legacy-view');
       return;
     }
-    const ell = gev.viewer.scene.globe.ellipsoid;
     const d2r = Math.PI / 180;
     // The app's intro flyTo animation clobbers a setView issued mid-flight.
-    try { gev.viewer.camera.cancelFlight(); } catch { /* no flight active */ }
-    gev.viewer.camera.setView({
-      destination: ell.cartographicToCartesian({ longitude: lo * d2r, latitude: la * d2r, height: h }),
+    try { window.__godsEyeView.engine.camera.cancelFlight(); } catch { /* no flight active */ }
+    window.__godsEyeView.engine.camera.setView({
+      destination: qaGeo.cartographic.toCartesian({ longitude: lo * d2r, latitude: la * d2r, height: h }),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
-    gev.viewer.scene.requestRender?.();
+    window.__godsEyeView.engine.render.request?.();
   }, lon, lat, height);
 }
 
@@ -270,15 +254,9 @@ async function main() {
   }
 
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(findChromeExecutable() ? { executablePath: findChromeExecutable() } : {}),
-    args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', `--use-angle=${ANGLE}`,
-      '--disable-dev-shm-usage', '--disable-web-security',
-      '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-      '--window-size=1440,900',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1440,900'],
   });
 
   let exitCode = 0;
@@ -484,7 +462,7 @@ async function main() {
           if (settled) break;
           await sleep(100);
         }
-        await sleep(250);
+        await whenFramesDrawn(page);
 
         const proof = await page.evaluate(() => {
           const gev = window.__godsEyeView;
@@ -558,7 +536,7 @@ async function main() {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
     exitCode = 3;
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
 
   record('RUNTIME: no unexpected browser errors', runtimeErrors.length === 0,

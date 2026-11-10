@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Cesium-only probes: native primitive failure injection tests the Cesium paint path.
+import { evaluateWithGeo } from './qa/geometry.mjs';
+import { whenSettled, whenFramesDrawn, whenTilesLoaded } from './qa/ready.mjs';
 /**
  * qa-ghostmaps.mjs — headless proof for the S2 Underground GhostMaps layer
  * (id `s2-ghostmaps`): S2's public KMZ intel products, kept current from
@@ -39,7 +42,7 @@
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
-import puppeteer from 'puppeteer';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,7 +67,6 @@ function record(name, ok, detail) {
   const tag = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function boot(page) {
   await page.goto(`${APP_URL}/?welcome=0`, {
@@ -72,10 +74,11 @@ async function boot(page) {
     timeout: TIMEOUT_MS,
   });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
+    () => window.__godsEyeView?.engine && window.__godsEyeView?.dataManager,
     { timeout: TIMEOUT_MS },
   );
-  await sleep(5000);
+  await whenSettled(page);
+  await whenFramesDrawn(page);
   await page.keyboard.press('Escape');
 }
 
@@ -186,14 +189,14 @@ async function showRow(page) {
       .querySelector(`[data-layer-id="${id}"]`)
       ?.scrollIntoView({ block: 'center' });
   }, LAYER_ID);
-  await sleep(400);
+  await whenFramesDrawn(page);
 }
 
 async function main() {
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: !HEADFUL,
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--enable-unsafe-swiftshader'],
     defaultViewport: { width: 1440, height: 900 },
   });
   try {
@@ -330,6 +333,7 @@ async function main() {
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
       timeout: TIMEOUT_MS,
     });
+    await whenSettled(page);
     await enableAndSettle(page);
     const persistedAge = await stats(page);
     record(
@@ -351,41 +355,38 @@ async function main() {
 
     // ---- (ii) PICK ----------------------------------------------------------
     await installPins(page);
-    const target = await page.evaluate((id) => {
-      const gev = window.__godsEyeView;
-      const pin = window.__qaGhostPins(`${id}:cip:`)[0];
-      const carto = gev.viewer.scene.globe.ellipsoid.cartesianToCartographic(
-        pin.position,
-      );
-      try {
-        gev.viewer.camera.cancelFlight();
-      } catch {
-        /* no flight */
-      }
-      gev.viewer.camera.setView({
-        destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
-          longitude: carto.longitude,
-          latitude: carto.latitude,
-          height: 40000,
-        }),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-      gev.viewer.scene.requestRender?.();
-      return pin.id;
-    }, LAYER_ID);
-    await page
-      .waitForFunction(
-        () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
-        { timeout: 30000 },
-      )
-      .catch(() => {});
+    const target = await evaluateWithGeo(
+      page,
+      async (qaGeo, id) => {
+        const pin = window.__qaGhostPins(`${id}:cip:`)[0];
+        const carto = qaGeo.cartographic.fromCartesian(pin.position);
+        try {
+          window.__godsEyeView.engine.camera.cancelFlight();
+        } catch {
+          /* no flight */
+        }
+        window.__godsEyeView.engine.camera.setView({
+          destination: qaGeo.cartographic.toCartesian({
+            longitude: carto.longitude,
+            latitude: carto.latitude,
+            height: 40000,
+          }),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        window.__godsEyeView.engine.render.request?.();
+        return pin.id;
+      },
+      LAYER_ID,
+    );
+    await whenTilesLoaded(page, { timeoutMs: 30000 }).catch(() => {});
+    await whenSettled(page);
     // The horizon cull reveals the pin on the frame after the camera moves.
     await page
       .waitForFunction(
         () => {
-          const { viewer: v, engine } = window.__godsEyeView;
-          v.scene.requestRender?.();
-          const c = v.scene.canvas;
+          const { engine } = window.__godsEyeView;
+          window.__godsEyeView.engine.render.request?.();
+          const c = window.__godsEyeView.engine.host.canvas;
           return engine.picker
             .drillPick({ x: c.clientWidth / 2, y: c.clientHeight / 2 }, 8)
             .some((p) => String(p?.id ?? '').startsWith('ghostmaps:cip:'));
@@ -394,8 +395,8 @@ async function main() {
       )
       .catch(() => {});
     const probe = await page.evaluate(() => {
-      const { viewer: v, engine } = window.__godsEyeView;
-      const c = v.scene.canvas;
+      const { engine } = window.__godsEyeView;
+      const c = window.__godsEyeView.engine.host.canvas;
       const box = c.getBoundingClientRect();
       const centre = { x: c.clientWidth / 2, y: c.clientHeight / 2 };
       const picked = engine.picker.drillPick(centre, 8);
@@ -486,27 +487,26 @@ async function main() {
     // far side. A pin clearly behind the planet (sphere test with margin) must
     // be hidden, and pins facing the camera must still show.
     const horizonCounts = (lon, lat) =>
-      page.evaluate(
-        async (id, lo, la) => {
-          const gev = window.__godsEyeView;
+      evaluateWithGeo(
+        page,
+        async (qaGeo, id, lo, la) => {
           const d2r = Math.PI / 180;
           try {
-            gev.viewer.camera.cancelFlight();
+            window.__godsEyeView.engine.camera.cancelFlight();
           } catch {
             /* no flight */
           }
-          gev.viewer.camera.setView({
-            destination:
-              gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
-                longitude: lo * d2r,
-                latitude: la * d2r,
-                height: 18_000_000,
-              }),
+          window.__godsEyeView.engine.camera.setView({
+            destination: qaGeo.cartographic.toCartesian({
+              longitude: lo * d2r,
+              latitude: la * d2r,
+              height: 18_000_000,
+            }),
             orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
           });
-          gev.viewer.scene.requestRender?.();
+          window.__godsEyeView.engine.render.request?.();
           await new Promise((r) => setTimeout(r, 1200));
-          const c = gev.viewer.camera.positionWC;
+          const c = window.__godsEyeView.engine.camera.pose().position;
           const norm = (v) => Math.hypot(v.x, v.y, v.z);
           let far = 0;
           let nearShown = 0;
@@ -583,7 +583,8 @@ async function main() {
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
       timeout: TIMEOUT_MS,
     });
-    await sleep(3000);
+    await whenSettled(page);
+    await whenFramesDrawn(page);
     await enableAndSettle(page);
     const kept = await stats(page);
     record(
@@ -612,7 +613,7 @@ async function main() {
       (id) => window.__godsEyeView.dataManager.setEnabled(id, false),
       LAYER_ID,
     );
-    await sleep(500);
+    await whenFramesDrawn(page);
     record(
       'DISABLE: every GhostMaps data source leaves the viewer',
       (await sources(page)).length === 0,
@@ -679,7 +680,7 @@ async function main() {
       { timeout: 20000, polling: 100 },
       LAYER_ID,
     );
-    await sleep(500);
+    await whenFramesDrawn(page);
     const second = await identity();
     record(
       'PUSH: a new edition reloads only that product',
@@ -698,7 +699,7 @@ async function main() {
         .filter((s) => !s.closed)
         .forEach((s) => s.emit(catalog));
     });
-    await sleep(1000);
+    await whenFramesDrawn(page);
     const third = await identity();
     record(
       'PUSH: a product leaving the catalog leaves the globe',
@@ -738,7 +739,7 @@ async function main() {
     });
     await phone.close();
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
   const failed = results.filter((r) => !r.ok);
   console.log(

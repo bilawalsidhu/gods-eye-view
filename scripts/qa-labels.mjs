@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenSettled } from './qa/ready.mjs';
 /**
  * Deterministic QA for the detection overlay's bounded two-lane label pipeline.
  *
@@ -16,9 +17,9 @@
  * makes a small orbit.
  */
 
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 
 const argv = process.argv.slice(2);
 const getFlag = (name) => argv.includes(name);
@@ -58,30 +59,7 @@ const NORMAL_COUNTS = Object.freeze({
   satellites: 830,
 });
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
 
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch {
-      // Let Puppeteer use its bundled browser.
-    }
-  }
-  return null;
-}
 
 const results = [];
 let skippedChecks = 0;
@@ -218,21 +196,9 @@ async function main() {
   }
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
-  const executablePath = findChromeExecutable();
-  const browser = await puppeteer.launch({
-    headless: HEADFUL ? false : 'new',
-    ...(executablePath ? { executablePath } : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--use-gl=angle',
-      `--use-angle=${process.env.QA_ANGLE || 'swiftshader'}`,
-      '--disable-dev-shm-usage',
-      '--disable-web-security',
-      '--disable-background-timer-throttling',
-      '--disable-renderer-backgrounding',
-      '--window-size=1280,800',
-    ],
+  const browser = await launchBrowser({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1280,800'],
   });
 
   const consoleErrors = [];
@@ -278,11 +244,12 @@ async function main() {
       () => window.__godsEyeView?.layers && window.__godsEyeView?.styleManager,
       { timeout: 60000, polling: 100 },
     );
+    await whenSettled(page);
 
     // flyToAustin schedules its 600 m arrival 500 ms after initialization.
     // Let that callback start, then cancel it before establishing the global
     // measurement camera so startup motion cannot invalidate the sample.
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await whenSettled(page);
     await page.evaluate(() => window.__godsEyeView.engine.camera.cancelFlight());
 
     const stateChecks = await page.evaluate((storageKey) => {
@@ -647,7 +614,7 @@ async function main() {
     console.log(`  Screenshot: ${path.join(SHOT_DIR, 'normal-global-5200.png')}`);
     console.log(`  Synthetic solves: ${solveSamples.length}; normal frames: ${normalFieldFrames.length} (${normalFrames.length} non-solve)`);
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
     if (skippedField) summarize();
   }
 

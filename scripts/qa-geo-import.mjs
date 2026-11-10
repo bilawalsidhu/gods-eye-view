@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Cesium-only probes: imagery, terrain and the native timeline validate Cesium import integration.
 /**
  * Rendered acceptance for UTILITIES ▸ Import: real files through the real file
  * input and a real drop, drawn through the globe contract.
@@ -19,10 +20,11 @@
  * Usage: dev server up (`npm run dev`), then `node scripts/qa-geo-import.mjs`.
  * QA_BASE_URL (default http://localhost:4173), QA_SHOT_DIR, QA_HEADFUL=1.
  */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
 import { installImportProbe } from './qa-geo-import-probe.mjs';
 import { hookRenderErrors, readRenderErrors } from './qa-browserEvidence.mjs';
 
@@ -165,15 +167,13 @@ const FILES = [
 
 /* ── harness ───────────────────────────────────────────────────────────── */
 
-const browser = await puppeteer.launch({
-  headless: !HEADFUL,
+const browser = await launchBrowser({
+  headless: true,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    ...(process.platform === 'darwin' ? ['--enable-gpu'] : []),
   ],
 });
 const page = await browser.newPage();
@@ -211,8 +211,8 @@ const CLIP = { x: 380, y: 240, width: 480, height: 320 };
 
 /** Pixels in the clip close to the first import color (#39d0ff). */
 async function cyanPixels() {
-  await page.evaluate(() => window.__godsEyeView.viewer.scene.requestRender());
-  await wait(600);
+  await page.evaluate(() => window.__godsEyeView.engine.render.request());
+  await whenSettled(page);
   const base64 = await page.screenshot({
     clip: CLIP,
     type: 'png',
@@ -247,12 +247,10 @@ try {
   await page.setViewport({ width: 1280, height: 860 });
   await page.goto(`${BASE_URL}/?welcome=0`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
-    () =>
-      window.__gevGeoImport &&
-      window.__godsEyeView?.viewer &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__gevGeoImport && window.__godsEyeView?.engine,
     { timeout: 90_000 },
   );
+  await whenSettled(page);
   await page.evaluate(async (view) => {
     const viewer = window.__godsEyeView.viewer;
     for (const id of window.__godsEyeView.dataManager.layers.keys())
@@ -261,8 +259,8 @@ try {
     viewer.terrainProvider = new window.__CESIUM__.EllipsoidTerrainProvider();
     viewer.scene.globe.baseColor = window.__CESIUM__.Color.BLACK;
     viewer.scene.globe.enableLighting = false;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
+    window.__godsEyeView.engine.camera.cancelFlight?.();
+    window.__godsEyeView.engine.camera.setView({
       destination: window.__CESIUM__.Cartesian3.fromDegrees(
         view.lon,
         view.lat,
@@ -270,9 +268,9 @@ try {
       ),
       orientation: { heading: 0, pitch: (view.pitch * Math.PI) / 180, roll: 0 },
     });
-    viewer.scene.requestRender();
+    window.__godsEyeView.engine.render.request();
   }, VIEW);
-  await wait(4000);
+  await whenSettled(page);
   await page.evaluate(() => {
     const panel = document.getElementById('utilities-panel');
     if (panel?.classList.contains('collapsed'))
@@ -367,9 +365,8 @@ try {
   // Over the files: their pins on the ground show unless beyond the
   // horizon, so all of them show here.
   await page.evaluate((view) => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.camera.cancelFlight?.();
-    viewer.camera.setView({
+    window.__godsEyeView.engine.camera.cancelFlight?.();
+    window.__godsEyeView.engine.camera.setView({
       destination: window.__CESIUM__.Cartesian3.fromDegrees(
         view.lon,
         view.lat,
@@ -378,7 +375,7 @@ try {
       orientation: { heading: 0, pitch: (view.pitch * Math.PI) / 180, roll: 0 },
     });
   }, VIEW);
-  await wait(2500);
+  await whenSettled(page);
   const inside = await page.evaluate(() => {
     const groups = window.__qaImports.groups();
     const pins = (group) =>
@@ -506,7 +503,7 @@ try {
 
   // Dropped onto the globe, as a person drags from their file manager.
   await page.evaluate((text) => {
-    const container = window.__godsEyeView.viewer.container;
+    const container = window.__godsEyeView.engine.host.container;
     const transfer = new DataTransfer();
     transfer.items.add(
       new File([text], 'dropped.geojson', { type: 'application/geo+json' }),
@@ -536,7 +533,7 @@ try {
     transfer.items.add(
       new File(['just some notes'], 'notes.txt', { type: 'text/plain' }),
     );
-    window.__godsEyeView.viewer.container.dispatchEvent(
+    window.__godsEyeView.engine.host.container.dispatchEvent(
       new DragEvent('drop', {
         dataTransfer: transfer,
         bubbles: true,
@@ -544,7 +541,7 @@ try {
       }),
     );
   });
-  await wait(800);
+  await whenSettled(page);
   const refused = await state();
   check(
     'a file that is not geodata is refused with a reason',
@@ -576,7 +573,7 @@ try {
 } catch (error) {
   check('harness ran to completion', false, error?.stack || String(error));
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
   fs.rmSync(dir, { recursive: true, force: true });
 }
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');

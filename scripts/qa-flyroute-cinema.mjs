@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { whenSettled } from './qa/ready.mjs';
 /**
  * fly_route cinematic evidence — drives the REAL voice runner headlessly and
  * measures the REAL camera (Cesium heading/pitch/roll + position) every
@@ -9,10 +10,10 @@
  *
  * Writes a screenshot sequence plus a JSON trace to qa-shots/flyroute/.
  */
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,11 +26,6 @@ const OUT_DIR = getOpt('--out', path.join(ROOT, 'qa-shots', 'flyroute'));
 const MIRROR_DIR = getOpt('--mirror', '');
 const SHOT_EVERY_MS = Number(getOpt('--shot-ms', '2000'));
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-].filter(Boolean);
-const CHROME_EXECUTABLE = CHROME_CANDIDATES.find((c) => { try { return fs.existsSync(c); } catch { return false; } });
 
 // A 6-waypoint downtown Austin route: north, right, left, right, left.
 const ROUTE_POINTS = [
@@ -57,22 +53,9 @@ const wrapDeg = (deg) => ((deg + 540) % 360) - 180;
 fs.mkdirSync(OUT_DIR, { recursive: true });
 if (MIRROR_DIR) fs.mkdirSync(MIRROR_DIR, { recursive: true });
 
-const browser = await puppeteer.launch({
-  headless: 'new',
-  ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    // Real GPU when the host has one: the dolly is frame-rate independent, but
-    // a higher sample rate makes the roll and the ease ramps far easier to see.
-    ...(process.platform === 'darwin'
-      ? ['--use-angle=metal', '--enable-gpu']
-      : ['--use-gl=angle', '--use-angle=swiftshader']),
-    '--disable-dev-shm-usage',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--window-size=1500,950',
-  ],
+const browser = await launchBrowser({
+  headless: true,
+  args: ['--no-sandbox', '--disable-setuid-sandbox', ...(process.platform === 'darwin' ? ['--enable-gpu'] : []), '--disable-dev-shm-usage', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1500,950'],
   protocolTimeout: 240000,
 });
 const page = await browser.newPage();
@@ -99,21 +82,19 @@ if (TERRAIN_DELAY_MS > 0) {
 /** Install a postRender sampler: one row per RENDERED frame. */
 async function installSampler() {
   await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
     window.__gevFlyTrace = { rows: [], marks: [] };
     if (window.__gevFlyTraceRemove) window.__gevFlyTraceRemove();
     let frame = 0;
     const listener = () => {
-      const cam = viewer.camera;
-      const carto = cam.positionCartographic;
+      const carto = window.__godsEyeView.engine.camera.pose().cartographic;
       // Every 6th frame, ask the RENDERED WORLD what is under the camera. This
       // is the only measurement that can prove "never below terrain": it reads
       // the surface the user is actually looking at, not our own floor cache.
       let surfaceM = null;
       frame += 1;
-      if (frame % 6 === 0 && typeof viewer.scene.sampleHeight === 'function') {
+      if (frame % 6 === 0 && typeof window.__godsEyeView.engine.surface.sampleHeight === 'function') {
         try {
-          const probe = viewer.scene.sampleHeight(carto.clone());
+          const probe = window.__godsEyeView.engine.surface.sampleHeight(carto);
           if (Number.isFinite(probe)) surfaceM = probe;
         } catch { /* tiles not loaded under the camera */ }
       }
@@ -122,14 +103,14 @@ async function installSampler() {
         lon: (carto.longitude * 180) / Math.PI,
         lat: (carto.latitude * 180) / Math.PI,
         height: carto.height,
-        headingDeg: (cam.heading * 180) / Math.PI,
-        pitchDeg: (cam.pitch * 180) / Math.PI,
-        rollDeg: (cam.roll * 180) / Math.PI,
+        headingDeg: (window.__godsEyeView.engine.camera.pose().heading * 180) / Math.PI,
+        pitchDeg: (window.__godsEyeView.engine.camera.pose().pitch * 180) / Math.PI,
+        rollDeg: (window.__godsEyeView.engine.camera.pose().roll * 180) / Math.PI,
         surfaceM,
       });
     };
-    viewer.scene.postRender.addEventListener(listener);
-    window.__gevFlyTraceRemove = () => viewer.scene.postRender.removeEventListener(listener);
+    window.__godsEyeView.engine.frames.postRender.addEventListener(listener);
+    window.__gevFlyTraceRemove = () => window.__godsEyeView.engine.frames.postRender.removeEventListener(listener);
   });
 }
 
@@ -153,24 +134,25 @@ try {
   console.log(`\nfly_route cinematic evidence — ${APP_URL}`);
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForFunction(
-    () => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.runner && window.__gevAnnotations,
+    () => window.__godsEyeView?.engine && window.__gevVoiceCommands?.runner && window.__gevAnnotations,
     { timeout: 150000, polling: 250 },
   );
+  await whenSettled(page);
   const run = (name, args = {}) => page.evaluate(
     (n, a) => window.__gevVoiceCommands.runner(n, a), name, args,
   );
 
   // ── Setup: get over downtown Austin, draw the route ───────────────────
   await run('fly_to_location', { query: 'Texas State Capitol, Austin' });
-  await sleep(9000);
+  await whenSettled(page);
   await run('clear_annotations', {});
-  await sleep(500);
+  await whenSettled(page);
   const drawn = await run('annotate_map', {
     annotations: [{
       type: 'route', mode: 'driving', label: 'cinema evidence route', points: ROUTE_POINTS,
     }],
   });
-  await sleep(6000);
+  await whenSettled(page);
   const routeInfo = await page.evaluate(() => {
     const route = (window.__gevAnnotations.list?.() || []).filter((a) => a.type === 'route').at(-1);
     return route ? { label: route.label, waypoints: route.path?.length ?? 0 } : null;
@@ -421,12 +403,12 @@ try {
   // ── Run 2: interrupt the dolly MID-BANK ───────────────────────────────
   // Cutting a level camera proves nothing about levelling, so this waits for
   // the live camera to actually be rolled before it grabs the controls.
-  await sleep(1500);
+  await whenSettled(page);
   await installSampler();
   const second = await run('fly_route', { label: 'cinema evidence', speed: 'normal' });
   report(second?.ok === true, 'second flight starts for the interrupt case');
   const liveRollDeg = () => page.evaluate(
-    () => (window.__godsEyeView.viewer.camera.roll * 180) / Math.PI,
+    () => (window.__godsEyeView.engine.camera.pose().roll * 180) / Math.PI,
   );
   let rollBeforeCut = 0;
   for (let waited = 0; waited < 90000; waited += 400) {
@@ -439,8 +421,7 @@ try {
   await page.screenshot({ path: path.join(OUT_DIR, 'interrupt-0-banked.png') });
 
   const cut = await page.evaluate(async () => {
-    const viewer = window.__godsEyeView.viewer;
-    const canvas = viewer.scene.canvas;
+    const canvas = window.__godsEyeView.engine.host.canvas;
     // Read the motion slot BEFORE the cut too: under Vite a dynamic import can
     // hand back a second module instance whose slot is always empty, and an
     // "empty after" that was already empty before proves nothing.
@@ -452,11 +433,11 @@ try {
       read = () => mod.getActiveCameraMotion?.() ?? null;
       slotBefore = read();
     } catch { /* dev-only module read */ }
-    const rollBefore = (viewer.camera.roll * 180) / Math.PI;
+    const rollBefore = (window.__godsEyeView.engine.camera.pose().roll * 180) / Math.PI;
     window.__gevFlyTrace.marks.push({ label: 'pointerdown', t: performance.now() });
     canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
     // Same synchronous turn as the pointerdown — no frame has rendered yet.
-    const rollAfter = (viewer.camera.roll * 180) / Math.PI;
+    const rollAfter = (window.__godsEyeView.engine.camera.pose().roll * 180) / Math.PI;
     if (read) slotAfter = read();
     return { slotBefore, slotAfter, rollBefore, rollAfter };
   });
@@ -474,7 +455,7 @@ try {
     note('motion-slot read',
       'the dev server handed the harness a second module instance (HMR); the camera-side roll and freeze checks carry the proof');
   }
-  await sleep(2500);
+  await whenSettled(page);
   const rollAfterSettle = wrapDeg(await liveRollDeg());
   report(Math.abs(rollAfterSettle) < 0.01, 'and the horizon STAYS level after the cut',
     `roll ${rollAfterSettle.toFixed(4)}° 2.5 s later`);
@@ -596,7 +577,7 @@ try {
 } catch (error) {
   report(false, 'harness completed', String(error?.message || error).slice(0, 200));
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 
 const failed = results.filter((r) => r.ok === false).length;

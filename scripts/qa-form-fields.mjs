@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /** Native form-field regression gate. CCTV ports are fixtures, never live writes. */
+import { whenSettled } from './qa/ready.mjs';
+import { launchBrowser, closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs';
-import puppeteer from 'puppeteer';
 
-const browser = await puppeteer.launch({
+const browser = await launchBrowser({
   headless: true,
-  args: ['--use-gl=angle', '--use-angle=swiftshader'],
+  args: [],
 });
 const page = await browser.newPage();
 page.setDefaultNavigationTimeout(60000);
@@ -29,11 +30,10 @@ try {
     },
   );
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.styleManager?._cctvControls &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.styleManager?._cctvControls,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   const inventory = await page.evaluate(() => {
     const selects = [
       'scene-select',
@@ -400,11 +400,10 @@ try {
   localized.searchParams.set('lang', 'ru');
   await page.goto(localized.href, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
-    () =>
-      window.__godsEyeView?.styleManager?._cctvControls &&
-      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () => window.__godsEyeView?.styleManager?._cctvControls,
     { timeout: 60000 },
   );
+  await whenSettled(page);
   await page.evaluate(() => {
     for (const panel of ['pp-toggles', 'scene-panel', 'cctv-panel'])
       window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
@@ -439,6 +438,6 @@ try {
   await page.screenshot({ path: 'qa-shots/form-fields/ru-390.png' });
   check('no uncaught browser errors', errors.length === 0, errors);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
 process.exitCode = failures ? 1 : 0;
