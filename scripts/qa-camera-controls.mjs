@@ -279,6 +279,8 @@ try {
         .classList.contains('has-frame'),
   );
   await page.setCacheEnabled(false);
+  // Keep both options while selecting A flies the view away from B.
+  await page.focus('#cctv-camera-select');
   delayCameraA = true;
   await page.select('#cctv-camera-select', 'qa-camera-a');
   await page.waitForFunction(

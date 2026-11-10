@@ -38,32 +38,64 @@ export function moveTrafficCamera(page, view, seconds) {
   );
 }
 
+/** Compare the layer's camera-event sample with the view currently on screen. */
+export function trafficReadiness() {
+  const { engine, dataManager } = window.__godsEyeView;
+  const pose = engine.camera.pose();
+  const view = [
+    pose.cartographic.latitude,
+    pose.cartographic.longitude,
+    pose.cartographic.height / 10000,
+    pose.heading,
+    pose.pitch,
+  ];
+  const stats = dataManager.layers.get('traffic').module.getStats();
+  const coverageViewKey = stats.roadBounds?.coverage?.viewKey ?? null;
+  const coverage = coverageViewKey?.split(',').map(Number);
+  // Allow rounding and sub-metre settling, not another altitude or camera view.
+  // Angles are radians; scaled height has a one-metre tolerance.
+  const tolerances = [1e-7, 1e-7, 1e-4, 1e-6, 1e-6];
+  const viewMatches = Boolean(
+    coverage?.length === view.length &&
+    view.every((value, i) => {
+      if (!Number.isFinite(value) || !Number.isFinite(coverage[i]))
+        return false;
+      const delta = value - coverage[i];
+      const distance =
+        i === 1 || i === 3
+          ? Math.abs(Math.atan2(Math.sin(delta), Math.cos(delta)))
+          : Math.abs(delta);
+      return distance <= tolerances[i];
+    }),
+  );
+  return {
+    viewKey: view.map((value) => Number(value).toFixed(7)).join(','),
+    coverageViewKey,
+    count: stats.count,
+    loading: stats.loading,
+    surfacePending: stats.surfacePending,
+    settled:
+      viewMatches && stats.count > 0 && !stats.loading && !stats.surfacePending,
+  };
+}
+
 /** A quiet loader can still be waiting for its camera-change debounce. */
 export async function whenTrafficSettled(page) {
   await whenTilesLoaded(page);
   await whenSettled(page);
-  const handle = await page.waitForFunction(
-    () => {
-      const { engine, dataManager } = window.__godsEyeView;
-      const pose = engine.camera.pose();
-      const viewKey = [
-        pose.cartographic.latitude,
-        pose.cartographic.longitude,
-        pose.cartographic.height / 10000,
-        pose.heading,
-        pose.pitch,
-      ]
-        .map((value) => Number(value || 0).toFixed(7))
-        .join(',');
-      const stats = dataManager.layers.get('traffic').module.getStats();
-      return (
-        stats.roadBounds?.coverage?.viewKey === viewKey &&
-        stats.count > 0 &&
-        !stats.loading &&
-        !stats.surfacePending
-      );
-    },
-    { timeout: 60000, polling: 100 },
-  );
-  await handle.dispose();
+  let handle;
+  try {
+    handle = await page.waitForFunction(`(${trafficReadiness})().settled`, {
+      timeout: 60000,
+      polling: 100,
+    });
+  } catch (error) {
+    if (error.name !== 'TimeoutError') throw error;
+    const observed = await page.evaluate(trafficReadiness);
+    throw new Error(`Readiness timeout: traffic; ${JSON.stringify(observed)}`, {
+      cause: error,
+    });
+  } finally {
+    await handle?.dispose();
+  }
 }
