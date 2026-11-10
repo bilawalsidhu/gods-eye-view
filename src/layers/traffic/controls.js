@@ -296,7 +296,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         const dot = layerState._dots[i];
         const pos = dot.point.position;
         if (!pos) continue;
-        const entry = (dot.detectContact ||= { type: 'VEH' });
+        // Match the dot's native depth test while reusing its detection record.
+        const entry = (dot.detectContact ||= {
+          type: 'VEH',
+          depthTested: true,
+        });
         entry.position = pos;
         if (entry._dotId !== dot.id) {
           entry._dotId = dot.id;

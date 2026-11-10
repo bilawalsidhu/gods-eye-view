@@ -19,6 +19,11 @@ test('traffic detection reuses records while following positions, recycled ident
   });
   const first = methods.getDetectableObjects()[0];
   assert.equal(first.id, 'VEH-0001');
+  assert.equal(
+    first.depthTested,
+    true,
+    'cached contacts retain native depth occlusion',
+  );
   assert.ok(first.tier);
   assert.equal(methods.getDetectableObjects()[0], first);
   point.position.x = 42;
@@ -28,6 +33,7 @@ test('traffic detection reuses records while following positions, recycled ident
   state._liveMode = false;
   const recycled = methods.getDetectableObjects()[0];
   assert.equal(recycled, first);
+  assert.equal(recycled.depthTested, true);
   assert.equal(recycled.id, 'VEH-0099');
   assert.equal(recycled.position, point.position);
   assert.equal(recycled.tier, undefined, 'no stale live color in simulation');

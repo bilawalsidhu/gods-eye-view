@@ -53,6 +53,8 @@ import {
   viewScaleForAltitude,
 } from './detectionPolicy.js';
 import { detectionBracketOpacity } from './detectionPresentation.js';
+import { SurfaceOcclusion } from './detectionOcclusion.js';
+import { SceneOcclusionProbe } from './sceneOcclusionProbe.js';
 import {
   createCyberSonarSampler,
   cyberSonarFrameDelay,
@@ -275,6 +277,22 @@ let _allocationStrategy = ALLOCATION_ELASTIC;
 let _lastNonOffMode = MODE_BALANCED;
 /** @type {LabelArbiter} Shared stable callout selector. */
 const _labelArbiter = new LabelArbiter();
+/**
+ * Hides the bracket and callout of a depth-tested contact (a street vehicle)
+ * that the scene drew something in front of. `_occlusionProbe` asks the GPU
+ * about each such contact without waiting for the answer; `_surfaceOcclusion`
+ * remembers the answers and decides, every frame, who is drawn.
+ */
+const _occlusionProbe = new SceneOcclusionProbe();
+const _surfaceOcclusion = new SurfaceOcclusion(_occlusionProbe);
+/**
+ * Keys of callouts the label arbiter still holds for contacts last seen
+ * hidden. A key stays here until its contact is seen drawn again or the
+ * arbiter lets the callout go, so the callout cannot come back at its old
+ * place just because its contact has since left the view.
+ */
+const _surfaceSuppressedKeys = new Set();
+let _surfaceDepthFallbackReported = false;
 let _lastLabelSolveAt = 0;
 let _labelSolveDirty = true;
 let _lastDiagnostics = null;
@@ -379,6 +397,9 @@ export function destroyDetection() {
   _suspended = false;
   _suspendReason = '';
   _labelArbiter.clear();
+  _surfaceOcclusion.clear();
+  _surfaceSuppressedKeys.clear();
+  _occlusionProbe.destroy();
   _lastLabelSolveAt = 0;
   _labelSolveDirty = true;
   _lastDiagnostics = null;
@@ -709,6 +730,9 @@ function _applyModeState() {
     _syncSurfaceVisibility();
     _setLanesActive(false);
     _labelArbiter.clear();
+    _surfaceOcclusion.clear();
+    _surfaceSuppressedKeys.clear();
+    _occlusionProbe.reset();
     _lastLabelSolveAt = 0;
     _labelSolveDirty = true;
     _lastSolveSnapshot = {
@@ -1362,6 +1386,9 @@ function _drawOverlay(frame) {
   // every host lane. Detection retains the manual scalar projection below.
   const occluder = frame.occluder;
   const camPos = frame.cameraPosition;
+  // Answers to the occlusion tests started on earlier frames land here.
+  _surfaceOcclusion.beginFrame(now);
+  _occlusionProbe.beginFrame(_viewer?.scene, _surfaceOcclusion.now);
   const keyhole = frame.keyhole;
   // Read the OUTSIDE setting ONCE per paint, from the same module state the
   // host's own keyhole alpha comes from, so a bracket and its callout can never
@@ -1499,6 +1526,29 @@ function _drawOverlay(frame) {
     // The bracket follows the same linear radial keyhole fade as its callout.
     const color = colorFor(resolveTier(obj));
     const keyholeAlpha = keyholeLabelAlphaFromGeometry(sx, sy, keyhole);
+    // Something the scene drew in front of a depth-tested contact hides its
+    // bracket and callout too, on every frame, not only on solves.
+    if (obj.depthTested === true) {
+      const testedLayerId = obj._layerId || 'unknown';
+      const testedSourceId = obj.sourceId ?? obj.id ?? i;
+      const hidden = _surfaceOcclusion.isHidden(
+        testedLayerId,
+        testedSourceId,
+        obj.position,
+      );
+      // If the arbiter holds a callout for this contact it would keep painting
+      // it until the next solve, and then fade it out where it last stood;
+      // see `_surfaceSuppressedKeys`. Only held contacts cost a key.
+      if (
+        (hidden || _surfaceSuppressedKeys.size > 0) &&
+        renderIdentities.get(testedLayerId)?.has(testedSourceId)
+      ) {
+        const key = _detectionKey(testedLayerId, testedSourceId);
+        if (hidden) _surfaceSuppressedKeys.add(key);
+        else _surfaceSuppressedKeys.delete(key);
+      }
+      if (hidden) continue;
+    }
     const sonarFactor =
       sonarActive && !obj.skipLabel ? sonarSampler.at(sx, sy) : 1;
     const sonarLabelFactor = sonarSampler.label(sonarFactor);
@@ -1598,6 +1648,8 @@ function _drawOverlay(frame) {
         candidateMap.set(candidate.key, candidate);
     }
   }
+  // Start this frame's occlusion tests; nothing here waits for them.
+  _occlusionProbe.endFrame();
 
   const altitude = _viewer?.camera?.positionCartographic?.height ?? 1e9;
   const collectiveBudget = labelBudgetFor(altitude, _densityPct);
@@ -1608,6 +1660,13 @@ function _drawOverlay(frame) {
   let didSolve = false;
   let solveMs = 0;
   if (shouldSolve) {
+    _surfaceOcclusion.prune();
+    if (_occlusionProbe.mode === 'sync' && !_surfaceDepthFallbackReported) {
+      _surfaceDepthFallbackReported = true;
+      console.info(
+        '[detection] No occlusion queries here (WebGL 1); street-vehicle label occlusion reads the frame depth back synchronously, about 8 times a second.',
+      );
+    }
     const quotas = allocateLayerQuotas(
       demandByLayer,
       ambientBudget,
@@ -1705,7 +1764,25 @@ function _drawOverlay(frame) {
     _ctx.lineWidth = bracketWidth;
   }
 
-  const renderEntries = _labelArbiter.renderEntries(candidateMap, now);
+  let renderEntries = _labelArbiter.renderEntries(candidateMap, now);
+  // A callout whose contact has gone behind something goes with it at once:
+  // no carry-over to the next solve and no fade painted on the facade.
+  if (_surfaceSuppressedKeys.size > 0) {
+    const allEntries = renderEntries;
+    renderEntries = allEntries.filter(
+      (entry) => !_surfaceSuppressedKeys.has(entry.candidate.key),
+    );
+    // The arbiter has let some of them go: forget those.
+    if (
+      allEntries.length - renderEntries.length !==
+      _surfaceSuppressedKeys.size
+    ) {
+      const held = new Set();
+      for (const entry of allEntries) held.add(entry.candidate.key);
+      for (const key of _surfaceSuppressedKeys)
+        if (!held.has(key)) _surfaceSuppressedKeys.delete(key);
+    }
+  }
   const fadingCount = countFadingRenderEntries(renderEntries);
   // Demand counts fades in BOTH directions; `fadingCount` above stays the
   // fade-OUT tail because that is what the published diagnostics have always
@@ -1760,6 +1837,13 @@ function _drawOverlay(frame) {
       keyholeRadius: keyhole.radius,
       keyholeFeatherPx: keyhole.featherPx,
       calloutOcclusionCount: calloutOcclusionRects.length,
+      surfaceTestedCount: _surfaceOcclusion.testedCount,
+      surfaceHiddenCount: _surfaceOcclusion.hiddenCount,
+      surfaceDepthMode: _occlusionProbe.mode,
+      // Tests started on the last frame, and what collecting answers and
+      // drawing them cost it.
+      surfaceProbeTests: _occlusionProbe.lastFrameTests,
+      surfaceProbeMs: _occlusionProbe.lastFrameMs,
     };
   } else {
     const selectedCount = _labelArbiter.selectedKeys.size;
