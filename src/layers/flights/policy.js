@@ -254,6 +254,11 @@ export const ENRICH_MAX_INFLIGHT = 4;
 
 export const ENRICH_DISPATCH_GAP_MS = 200;
 
+/** A lookup whose source failed (an outage, a timeout, a restarting server) may
+ *  be asked again after this long; a real "not found" answer never is. */
+
+export const ENRICH_RETRY_COOLDOWN_MS = 60_000;
+
 // ---------------------------------------------------------------------------
 // Ambient fleet type enrichment (2026-07-02 field data: OpenSky's live
 // category field is 0/"no info" for ~94% of planes, so ambient classification

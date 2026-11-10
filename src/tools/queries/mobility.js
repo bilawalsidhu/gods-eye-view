@@ -19,6 +19,7 @@ import {
   resolveArea,
 } from '../area.js';
 import { LIMIT_SCHEMA, capRows, countNoun, isoTime } from '../results.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const MAX_SYSTEMS = 3;
 
@@ -244,7 +245,7 @@ export const getTransitVehicles = defineTool({
         trip_id: vehicle.tripId ?? null,
         lat: vehicle.lat,
         lon: vehicle.lon,
-        bearing_deg: round(vehicle.bearing, 0),
+        bearing_deg: roundHeadingDegrees(vehicle.bearing),
         speed_mps: round(vehicle.speedMps, 1),
         status: vehicle.status ?? null,
         occupancy: vehicle.occupancy ?? null,
