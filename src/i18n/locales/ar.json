@@ -3620,5 +3620,12 @@
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
   "1 min/s": "دقيقة/ث",
-  "Photo © {photographer}": "صورة © {photographer}"
+  "Photo © {photographer}": "صورة © {photographer}",
+  "{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.": "{flight} ظاهرة على الخريطة باسم {callsign}، لكن تعذّر تتبّعها. اضغط Enter لإعادة المحاولة.",
+  "Tracking {callsign} ({flight})": "تتبّع {callsign} ({flight})",
+  "{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.": "{flight} تطابق عدة طائرات: {callsigns}. اكتب رمز نداء واحدًا لتتبّعه.",
+  "No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.": "لم يُعثر على مكان أو طائرة لـ {flight}. شغّل طبقة الرحلات للبحث عن الطائرات برقم الرحلة.",
+  "No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.": "لم يُعثر على مكان لـ {flight}، والبحث عن رمز شركة الطيران غير متاح. جرّب رمز النداء ICAO بدلًا من ذلك، مثل BAW123.",
+  "No place found for {flight}, and no airline uses that code.": "لم يُعثر على مكان لـ {flight}، ولا تستخدم أي شركة طيران هذا الرمز.",
+  "No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.": "لم يُعثر على مكان لـ {flight}، ولا توجد طائرة على الخريطة تسيّر هذه الرحلة. يمكن العثور فقط على الطائرات المحمّلة على الخريطة."
 }

@@ -3389,5 +3389,12 @@
   "Play speed": "Velocidad de reproducción",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Desplaza o pellizca para ampliar, arrastra para moverte · doble clic para verlo todo",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.": "{flight} está en el mapa como {callsign}, pero no se pudo seguir. Pulsa Intro para intentarlo de nuevo.",
+  "Tracking {callsign} ({flight})": "Siguiendo {callsign} ({flight})",
+  "{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.": "{flight} coincide con varias aeronaves: {callsigns}. Escribe un indicativo para seguirla.",
+  "No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.": "No se encontró ningún lugar ni aeronave para {flight}. Activa la capa Vuelos para buscar aeronaves por número de vuelo.",
+  "No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.": "No se encontró ningún lugar para {flight} y la consulta del código de aerolínea no está disponible. Prueba con el indicativo OACI, como BAW123.",
+  "No place found for {flight}, and no airline uses that code.": "No se encontró ningún lugar para {flight} y ninguna aerolínea usa ese código.",
+  "No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.": "No se encontró ningún lugar para {flight} y ninguna aeronave del mapa opera ese vuelo. Solo se pueden encontrar aeronaves ya cargadas en el mapa."
 }

@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
+import { createFlightNumberSearch } from './flightNumberSearch.js';
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -32,6 +33,17 @@ export class LocationNavigation {
     this._cancelGlobeReset = null;
     this._worldJumpActive = false;
     this.orbitController = new services.OrbitController(viewer);
+    this._flightNumberSearch =
+      services.flightNumberSearch ||
+      createFlightNumberSearch({
+        readLayer: (layerId) => ({
+          enabled: services.isLayerEnabled?.(layerId) === true,
+          module:
+            layerId === 'military'
+              ? services.militaryFlightsLayer || null
+              : services.flightsLayer || null,
+        }),
+      });
     this._locationState = createStateChannel(
       () => this._locationLookup?.getState() || null,
     );
@@ -83,6 +95,12 @@ export class LocationNavigation {
       this._activeLocationSearchGeneration = change.generation;
       this._setLocationSearchError(null);
     } else if (change.type === 'found') {
+      // A followed aircraft is announced by its own tracking card; the
+      // location status keeps describing places.
+      if (state.destination.kind === 'aircraft') {
+        this._followSearchedAircraft(state.destination);
+        return;
+      }
       this._searchedLocationLabel = state.destination.label || state.query;
       this._setActiveLocation(null);
       this._currentPoi = null;
@@ -90,7 +108,8 @@ export class LocationNavigation {
       this._updateLocationMiniStatus();
     } else if (change.type === 'missing')
       this._setLocationSearchError(
-        `${t('Location not found')}. ${t('Check the spelling and press Enter to search again.')}`,
+        state.missingMessage ||
+          `${t('Location not found')}. ${t('Check the spelling and press Enter to search again.')}`,
       );
     else if (change.type === 'failed')
       this._setLocationSearchError(
@@ -128,10 +147,12 @@ export class LocationNavigation {
         !this._disposed && generation === this._navigationGeneration,
       beforeFly: (generation) => this._reassertNavigationHandoff(generation),
       search: (query, options) =>
-        searchAndFlyTo(this.viewer, query, {
-          placeSearch: this.placeSearch,
-          ...options,
-        }),
+        this._searchFlightOrPlace(query, options, () =>
+          searchAndFlyTo(this.viewer, query, {
+            placeSearch: this.placeSearch,
+            ...options,
+          }),
+        ),
       onResult: (destination) => {
         if (destination.outlineUnavailable)
           this._showToast(t('Detailed outline unavailable'));
@@ -161,6 +182,74 @@ export class LocationNavigation {
     );
     this._connectLocation?.(this._locationControls);
     this._connectGlobeReset?.(this._locationControls);
+  }
+
+  /**
+   * Follow the aircraft flying a typed flight number, else search places.
+   *
+   * A flight number answers only when an aircraft on the map broadcasts its
+   * exact callsign. Otherwise the text still goes to place search (a road
+   * such as "A10" reads as a flight number too), and only when no place
+   * answers does the miss explain what the flight lookup found.
+   */
+  async _searchFlightOrPlace(query, options, searchPlaces) {
+    const { signal, beforeFly } = options;
+    const flight = await this._flightNumberSearch.find(query, { signal });
+    signal?.throwIfAborted();
+    if (flight.status === 'found') {
+      if (beforeFly() === false) return { cancelled: true };
+      // Following starts once the lookup has reported `found`
+      // (_followSearchedAircraft): a user track supersedes pending location
+      // work, so starting it here would cancel this very search.
+      return {
+        kind: 'aircraft',
+        label: flight.match.callsign,
+        flightLabel: flight.flight.label,
+        icao24: flight.match.icao24,
+        layerId: flight.layerId,
+      };
+    }
+    if (flight.status === 'ambiguous') {
+      return {
+        missingMessage: t(
+          '{flight} matches several aircraft: {callsigns}. Type one callsign to follow it.',
+          {
+            flight: flight.flight.label,
+            callsigns: flight.matches
+              .map(({ match }) => match.callsign)
+              .join(', '),
+          },
+        ),
+      };
+    }
+    const place = await searchPlaces();
+    if (place || flight.status === 'not-flight') return place;
+    return { missingMessage: flightMissMessage(flight) };
+  }
+
+  /** Follow the aircraft a flight-number search found, or say why not. */
+  _followSearchedAircraft({ icao24, layerId, label, flightLabel }) {
+    const layer =
+      layerId === 'military'
+        ? this.services.militaryFlightsLayer
+        : this.services.flightsLayer;
+    const tracked = Boolean(layer?.trackById?.(icao24, { origin: 'user' }));
+    if (!tracked) {
+      this._setLocationSearchError(
+        t(
+          '{flight} is on the map as {callsign}, but tracking it failed. Press Enter to try again.',
+          { flight: flightLabel, callsign: label },
+        ),
+      );
+      return false;
+    }
+    this._showToast(
+      t('Tracking {callsign} ({flight})', {
+        callsign: label,
+        flight: flightLabel,
+      }),
+    );
+    return true;
   }
 
   _beginWorldJumpTransition() {
@@ -448,4 +537,28 @@ export class LocationNavigation {
     this._trafficTransitionTimer = null;
     this.orbitController?.stop();
   }
+}
+
+/** Explain why a typed flight number found no aircraft (and no place). */
+function flightMissMessage({ flight, reason }) {
+  const values = { flight: flight.label };
+  if (reason === 'layers-off')
+    return t(
+      'No place or aircraft found for {flight}. Turn on the Flights layer to search aircraft by flight number.',
+      values,
+    );
+  if (reason === 'airline-unavailable')
+    return t(
+      'No place found for {flight}, and the airline code lookup is unavailable. Try the ICAO callsign instead, such as BAW123.',
+      values,
+    );
+  if (reason === 'airline-unknown')
+    return t(
+      'No place found for {flight}, and no airline uses that code.',
+      values,
+    );
+  return t(
+    'No place found for {flight}, and no aircraft on the map is flying it. Only aircraft already loaded on the map can be found.',
+    values,
+  );
 }

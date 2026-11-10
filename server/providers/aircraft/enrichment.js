@@ -6,7 +6,9 @@ import { readResponseJsonCapped } from '../common/http.js';
 const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
 /**
  * adsbdb.com enrichment proxy: callsign → route (airline + origin/destination
- * airports) and hex → aircraft type/registration. Free community API — cached
+ * airports), hex → aircraft type/registration, and an airline designator
+ * (IATA or ICAO) → the airlines holding it, which turns a typed flight number
+ * into the callsign an aircraft broadcasts. Free community API — cached
  * aggressively: successes and 404s are kept per key for 24 hours (TTL_MS) and
  * persisted to disk so restarts don't re-hammer it; other failures are not
  * cached. Adapted from skylight
@@ -15,7 +17,7 @@ const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
 export function adsbdbProxy() {
   const TTL_MS = 24 * 3600_000;
   const CACHE_PATH = path.join(process.cwd(), '.gev-cache', 'adsbdb.json');
-  let cache = { routes: {}, aircraft: {} };
+  let cache = { routes: {}, aircraft: {}, airlines: {} };
   let dirty = false;
   let loaded = false;
   const inflight = new Map();
@@ -25,7 +27,11 @@ export function adsbdbProxy() {
     loaded = true;
     try {
       const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
-      cache = { routes: parsed.routes ?? {}, aircraft: parsed.aircraft ?? {} };
+      cache = {
+        routes: parsed.routes ?? {},
+        aircraft: parsed.aircraft ?? {},
+        airlines: parsed.airlines ?? {},
+      };
     } catch {
       /* first run */
     }
@@ -72,8 +78,37 @@ export function adsbdbProxy() {
     };
   }
 
+  function parseAirlines(json) {
+    const list = Array.isArray(json?.response) ? json.response : [];
+    const airlines = list
+      .map((a) => ({
+        name: typeof a?.name === 'string' ? a.name : null,
+        icao: String(a?.icao ?? '').toUpperCase(),
+        iata: a?.iata ? String(a.iata).toUpperCase() : null,
+      }))
+      .filter((a) => /^[A-Z]{3}$/.test(a.icao))
+      .slice(0, 16);
+    return airlines.length ? { airlines } : null;
+  }
+
+  const STORES = {
+    route: () => cache.routes,
+    aircraft: () => cache.aircraft,
+    airline: () => cache.airlines,
+  };
+  const UPSTREAM_PATHS = {
+    route: 'callsign',
+    aircraft: 'aircraft',
+    airline: 'airline',
+  };
+  const PARSERS = {
+    route: parseRoute,
+    aircraft: parseAircraft,
+    airline: parseAirlines,
+  };
+
   function lookup(kind, key) {
-    const store = kind === 'route' ? cache.routes : cache.aircraft;
+    const store = STORES[kind]();
     if (fresh(store[key])) return Promise.resolve(store[key].data);
     const ik = `${kind}:${key}`;
     if (!inflight.has(ik)) {
@@ -81,10 +116,7 @@ export function adsbdbProxy() {
         ik,
         (async () => {
           try {
-            const url =
-              kind === 'route'
-                ? `https://api.adsbdb.com/v0/callsign/${encodeURIComponent(key)}`
-                : `https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(key)}`;
+            const url = `https://api.adsbdb.com/v0/${UPSTREAM_PATHS[kind]}/${encodeURIComponent(key)}`;
             const signal = AbortSignal.timeout(8000);
             const res = await fetch(url, { signal });
             if (res.ok) {
@@ -93,8 +125,7 @@ export function adsbdbProxy() {
                 ADSBDB_MAX_RESPONSE_BYTES,
                 signal,
               );
-              const data =
-                kind === 'route' ? parseRoute(payload) : parseAircraft(payload);
+              const data = PARSERS[kind](payload);
               store[key] = { at: Date.now(), data }; // data may be null — negative cache
               dirty = true;
               return data;
@@ -139,6 +170,15 @@ export function adsbdbProxy() {
           if (!/^[0-9a-f]{6}$/.test(hex))
             return send(400, { error: 'invalid hex' });
           const data = await lookup('aircraft', hex);
+          return send(200, data ? { found: true, ...data } : { found: false });
+        }
+        if (kind === 'airline') {
+          const code = String(rawKey || '').toUpperCase();
+          // IATA designators are two letters or digits with one letter; ICAO
+          // designators are three letters.
+          if (!/^(?=[A-Z0-9]*[A-Z])[A-Z0-9]{2}$|^[A-Z]{3}$/.test(code))
+            return send(400, { error: 'invalid airline code' });
+          const data = await lookup('airline', code);
           return send(200, data ? { found: true, ...data } : { found: false });
         }
         return send(404, { error: 'unknown endpoint' });
