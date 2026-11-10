@@ -5,11 +5,15 @@ import {
   lerpAngleDeg,
   speedRamp,
   courseBetweenCartesians,
+  floorCoastedPosition,
   staleCoastLimitSeconds,
+  staleCoastSecondsFrom,
+  staleHoldsForFix,
   arcOffsetEnu,
   courseSlewCapDps,
   limitCourseStep,
   corridorPathLatLon,
+  COAST_MAX_SPEED_MPS,
 } from '../../data/motionModel.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
@@ -248,30 +252,88 @@ export function createMotion({
       );
     }
 
-    // Newest POSITION is older than renderTime. OpenSky can still be receiving
-    // fresh contact/kinematic messages for that aircraft; freezing at a hard
-    // 60 s-after-position boundary produced the visible stop → catch-up → stop
-    // cadence. Coast through the latest real contact plus a bounded grace
-    // window, with an absolute cap so a stale cached feed cannot drift forever.
+    // Newest POSITION is older than renderTime. Coast on the last speed and
+    // heading for five minutes past it, then stop, dimmed as SIGNAL LOST.
+    // A contact last heard on or near the ground holds there instead, and a
+    // coast never goes below the ground.
+    const { coastSec } = _coastPlan(newest, info, elapsedSec);
+    _extrapolateFix(
+      newest,
+      info,
+      coastSec,
+      out,
+      (info && info.turnRateDps) || 0,
+    );
+    return coastSec > 0 ? floorCoastedPosition(out, cachedGroundFloor) : out;
+  }
+
+  /**
+   * How far a contact coasts past its newest fix at a display time
+   * `elapsedSec` after it: up to five minutes, or not at all for a contact
+   * that holds at a report on or near the ground. The hold decision is made once
+   * per report and kept on it.
+   * @param {{epochMs?: number, time: Cesium.JulianDate}} newest
+   * @param {object|undefined} info - The contact's record.
+   * @param {number} elapsedSec
+   * @returns {{coastSec: number, holds: boolean}}
+   */
+  function _coastPlan(newest, info, elapsedSec) {
     const coastLimitSec = staleCoastLimitSeconds({
       // `epochMs` is captured once when the poll is normalized. Avoid allocating
-      // a Date per aircraft on every 12 Hz fleet tick.
+      // a Date per aircraft on every fleet tick.
       fixEpochMs: Number.isFinite(newest.epochMs)
         ? newest.epochMs
         : Cesium.JulianDate.toDate(newest.time).getTime(),
       lastContactEpochMs: info?.lastContactEpochMs,
-      // Permit one minute of contact grace but cap any cached-feed drift at
-      // five minutes. Source backoff is exposed separately as a STALE cue.
-      minimumSec: 60,
+      // A plane that stops reporting keeps flying for five minutes, whatever
+      // its contact time, then stops dimmed as SIGNAL LOST. A missed update
+      // shows STALE throughout.
+      minimumSec: 300,
       maximumSec: 300,
     });
-    return _extrapolateFix(
+    const holds = staleHoldsForFix(newest, {
+      onGround: info?.onGround,
+      cachedGroundFloor,
+    });
+    return {
+      coastSec: staleCoastSecondsFrom({
+        newest,
+        elapsedSec,
+        coastLimitSec,
+        holds,
+      }),
+      holds,
+    };
+  }
+
+  /**
+   * Whether a contact has stopped where its coast ended (or held at its last
+   * report) with no newer report, and since when it has had none.
+   * @param {string} icao24
+   * @returns {{reportEpochMs: number, holds: boolean}|null} Null while a
+   *   report is ahead of the display time or the contact is still coasting.
+   */
+  function _signalLost(icao24) {
+    const newest = flightState._positionHistory.get(icao24)?.at(-1);
+    if (!newest) return null;
+    const newestMs = Number.isFinite(newest.epochMs)
+      ? newest.epochMs
+      : Cesium.JulianDate.toDate(newest.time).getTime();
+    const elapsedSec =
+      (flightState.now() - RENDER_DELAY_SEC * 1000 - newestMs) / 1000;
+    if (!(elapsedSec > 0)) return null;
+    const { coastSec, holds } = _coastPlan(
       newest,
-      info,
-      Math.min(elapsedSec, coastLimitSec),
-      out,
-      (info && info.turnRateDps) || 0,
+      flightState.records.data.get(icao24),
+      elapsedSec,
     );
+    if (!(elapsedSec > coastSec)) return null;
+    return {
+      reportEpochMs: Number.isFinite(newest.reportEpochMs)
+        ? newest.reportEpochMs
+        : newestMs,
+      holds,
+    };
   }
 
   /**
@@ -286,9 +348,12 @@ export function createMotion({
    */
 
   function _extrapolateFix(fix, info, dt, out, turnRateDps = 0) {
-    const speed = Number.isFinite(fix.velocity)
-      ? fix.velocity
-      : (info && info.velocity) || 0;
+    const speed = Math.min(
+      Number.isFinite(fix.velocity)
+        ? fix.velocity
+        : (info && info.velocity) || 0,
+      COAST_MAX_SPEED_MPS,
+    );
     const heading = Number.isFinite(fix.track)
       ? fix.track
       : (info && info.true_track) || 0;
@@ -1131,6 +1196,7 @@ export function createMotion({
   return {
     _refloorStaleGroundedContacts,
     _deadReckon,
+    _signalLost,
     _extrapolateFix,
     _isTrackWarmingUp,
     _trackedFocusSizePx,

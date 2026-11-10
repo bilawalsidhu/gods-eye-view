@@ -46,29 +46,80 @@ test('fire acquisition timestamps preserve valid leap days and UTC times', async
 });
 
 const WEEK = [
-  { lat: 24.1, lon: 121.1, frp: 864, confidence: 'l', acqDate: '2026-10-01', acqTime: '0100' },
-  { lat: 24.2, lon: 121.2, frp: 120, confidence: 'h', acqDate: '2026-10-01', acqTime: '0100' },
-  { lat: 24.3, lon: 121.3, frp: 20, confidence: 'n', acqDate: '2026-10-01', acqTime: '0100' },
-  { lat: 24.4, lon: 121.4, frp: 2, confidence: 'h', acqDate: '2026-10-01', acqTime: '0100' },
-  { lat: 30, lon: 100, frp: 500, confidence: 'h', acqDate: '2026-10-01', acqTime: '0100' },
+  {
+    lat: 24.1,
+    lon: 121.1,
+    frp: 864,
+    confidence: 'l',
+    acqDate: '2026-10-01',
+    acqTime: '0100',
+  },
+  {
+    lat: 24.2,
+    lon: 121.2,
+    frp: 120,
+    confidence: 'h',
+    acqDate: '2026-10-01',
+    acqTime: '0100',
+  },
+  {
+    lat: 24.3,
+    lon: 121.3,
+    frp: 20,
+    confidence: 'n',
+    acqDate: '2026-10-01',
+    acqTime: '0100',
+  },
+  {
+    lat: 24.4,
+    lon: 121.4,
+    frp: 2,
+    confidence: 'h',
+    acqDate: '2026-10-01',
+    acqTime: '0100',
+  },
+  {
+    lat: 30,
+    lon: 100,
+    frp: 500,
+    confidence: 'h',
+    acqDate: '2026-10-01',
+    acqTime: '0100',
+  },
 ];
 const TAIWAN = { area: { bbox: [120, 23, 122, 25] } };
 
 test('get_active_fires shows every detection by default and reports the filter it used', async () => {
   const result = await catalogWith(WEEK).call('get_active_fires', TAIWAN);
-  assert.deepEqual(result.data.rows.map((row) => row.frp_mw), [864, 120, 20, 2]);
+  assert.deepEqual(
+    result.data.rows.map((row) => row.frp_mw),
+    [864, 120, 20, 2],
+  );
   assert.deepEqual(result.data.filter, { min_frp_mw: 0, confidence: 'all' });
   assert.match(result.summary, /^4 fire detections in /);
 });
 
 test('get_active_fires applies the same minimum-FRP and confidence filter as the layer', async () => {
   const catalog = catalogWith(WEEK);
-  const strong = await catalog.call('get_active_fires', { ...TAIWAN, min_frp_mw: 20 });
-  assert.deepEqual(strong.data.rows.map((row) => row.frp_mw), [864, 120, 20]);
+  const strong = await catalog.call('get_active_fires', {
+    ...TAIWAN,
+    min_frp_mw: 20,
+  });
+  assert.deepEqual(
+    strong.data.rows.map((row) => row.frp_mw),
+    [864, 120, 20],
+  );
   assert.match(strong.summary, /^3 fire detections \(≥ 20 MW\) in /);
 
-  const nominal = await catalog.call('get_active_fires', { ...TAIWAN, confidence: 'nominal' });
-  assert.deepEqual(nominal.data.rows.map((row) => row.frp_mw), [120, 20, 2], 'the 864 MW low-confidence fire drops');
+  const nominal = await catalog.call('get_active_fires', {
+    ...TAIWAN,
+    confidence: 'nominal',
+  });
+  assert.deepEqual(
+    nominal.data.rows.map((row) => row.frp_mw),
+    [120, 20, 2],
+    'the 864 MW low-confidence fire drops',
+  );
   assert.match(nominal.summary, /\(nominal or high confidence\)/);
 
   const both = await catalog.call('get_active_fires', {
@@ -76,7 +127,27 @@ test('get_active_fires applies the same minimum-FRP and confidence filter as the
     min_frp_mw: 19.6,
     confidence: 'high',
   });
-  assert.deepEqual(both.data.rows.map((row) => row.frp_mw), [120]);
+  assert.deepEqual(
+    both.data.rows.map((row) => row.frp_mw),
+    [120],
+  );
   assert.deepEqual(both.data.filter, { min_frp_mw: 20, confidence: 'high' });
   assert.match(both.summary, /\(≥ 20 MW, high confidence\)/);
+});
+
+test('get_active_fires names the end of a snapshot that ends at a set time', async () => {
+  const at = Date.UTC(2026, 9, 1, 3);
+  const catalog = composeCatalog({
+    tools: [getActiveFires],
+    services: { fires: { getSnapshot: async () => ({ fires: WEEK, at }) } },
+  });
+  const result = await catalog.call('get_active_fires', TAIWAN);
+  assert.match(
+    result.summary,
+    /in the 24 hours to 2026-10-01T03:00:00\.000Z\.$/,
+  );
+  assert.equal(result.data.window_end, '2026-10-01T03:00:00.000Z');
+  const now = await catalogWith(WEEK).call('get_active_fires', TAIWAN);
+  assert.match(now.summary, /in the last 24 hours\.$/);
+  assert.equal(now.data.window_end, null);
 });

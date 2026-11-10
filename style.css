@@ -34,6 +34,7 @@
 @import './src/ui/styles/provider-settings.css';
 @import './src/ui/styles/locale-picker.css';
 @import './src/ui/styles/weather.css';
+@import './src/ui/styles/news.css';
 @import './src/ui/styles/world-timeline.css';
 @import './src/ui/styles/panel-surfaces.css';
 @import './src/ui/styles/segmented-control.css';
