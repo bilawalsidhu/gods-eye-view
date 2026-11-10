@@ -101,7 +101,7 @@ export async function createApplicationTools({
       // Cesium only for now: it reads Cesium's camera (positionWC, its
       // running flight).
       attachScene(next, { defer: deferScene }) {
-        const viewer = cesiumViewerOf(next.engine);
+        const viewer = next.viewer;
         if (!viewer) return;
         deferScene(
           installGlobeInViewRecovery(viewer, {
@@ -256,12 +256,6 @@ export async function createApplicationTools({
 }
 
 /**
- * The Cesium viewer under an engine, or null on an engine without one: the
- * one place the tools read it.
- */
-const cesiumViewerOf = (engine) => engine?.extensions?.cesium?.viewer ?? null;
-
-/**
  * The tool backend of each engine kind (see attachEngineTools). Cesium's
  * holds the tools that still drive its viewer, so they stay absent on
  * other engines; Navara's loads with its mode (src/app/navaraMode.js), so
@@ -273,13 +267,8 @@ const TOOL_BACKENDS = Object.freeze({
 });
 
 /** The Cesium tool backend: the shared tools and its own on the viewer. */
-function cesiumToolBackend({ engine, tileset }) {
-  const viewer = cesiumViewerOf(engine);
-  const {
-    governorRequestRender,
-    holdContinuousRender,
-    releaseContinuousRender,
-  } = renderGovernorFor(engine);
+function cesiumToolBackend({ engine, viewer, tileset }) {
+  const { governorRequestRender } = renderGovernorFor(engine);
   return {
     viewer,
     startupChrome: {},
@@ -300,18 +289,6 @@ function cesiumToolBackend({ engine, tileset }) {
           requestRender: governorRequestRender,
         }),
       );
-      // The follow camera recomputes the tracked target's dead-reckon
-      // position every frame — tracking anything is a per-frame animation.
-      // (perf wave 2)
-      const removeTrackingListener =
-        viewer.trackedEntityChanged.addEventListener(() => {
-          if (viewer.trackedEntity) holdContinuousRender('tracked-entity');
-          else releaseContinuousRender('tracked-entity');
-        });
-      defer(() => {
-        removeTrackingListener();
-        releaseContinuousRender('tracked-entity');
-      });
     },
     // Hidden-state suspension (perf wave 2): when the window/tab is hidden,
     // stop the default render loop outright — a hidden canvas repaints for
@@ -417,6 +394,20 @@ async function attachEngineTools(
   // pre-install holds.
   governor.install();
   backend.attach?.({ data, styleManager, dataManager }, { signal, defer });
+
+  // A followed target moves every frame, even while the camera is still.
+  const updateFollow = () => {
+    if (engine.camera.following())
+      governor.holdContinuousRender('tracked-entity');
+    else governor.releaseContinuousRender('tracked-entity');
+  };
+  const removeFollow =
+    engine.camera.followChanged.addEventListener(updateFollow);
+  updateFollow();
+  defer(() => {
+    removeFollow();
+    governor.releaseContinuousRender('tracked-entity');
+  });
 
   // Install the explicit scope mask used by the DISPLAY controls: a canvas
   // in the engine's container, its terminus following the camera's height.

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t, msg, onLocaleChange } from '../i18n/index.js';
 
 const YOUTUBE_HOSTS = new Set([
@@ -538,25 +537,12 @@ function ensureProviderConnections(documentRef, provider) {
   }
 }
 
-function anchorOnScreen(viewer, engine, anchor, root) {
-  if ((!viewer?.scene && !engine) || !anchor || !root) return null;
-  const camera = viewer?.camera;
-  if (engine && !engine.projector.horizonVisible(anchor)) return null;
-  if (camera?.positionWC && camera?.directionWC) {
-    const delta = Cesium.Cartesian3.subtract(
-      anchor,
-      camera.positionWC,
-      new Cesium.Cartesian3(),
-    );
-    if (Cesium.Cartesian3.dot(delta, camera.directionWC) <= 0) return null;
-  }
-  const pixel = engine
-    ? engine.projector.worldToWindow(anchor, {})
-    : Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, anchor);
+function anchorOnScreen(engine, anchor, root) {
+  if (!engine || !anchor || !root) return null;
+  if (!engine.projector.horizonVisible(anchor)) return null;
+  const pixel = engine.projector.worldToWindow(anchor, {});
   if (!pixel) return null;
-  const canvasBounds = (
-    engine?.host.canvas ?? viewer?.canvas
-  )?.getBoundingClientRect?.();
+  const canvasBounds = engine.host.canvas?.getBoundingClientRect?.();
   const rootBounds = root.getBoundingClientRect?.();
   if (!canvasBounds || !rootBounds) return null;
   const x = pixel.x + canvasBounds.left - rootBounds.left;
@@ -855,7 +841,7 @@ export function createBhoteKoshiEmbeddedMedia({
 
   const position = () => {
     if (!record) return;
-    const projected = anchorOnScreen(viewer, engine, record.anchor, root);
+    const projected = anchorOnScreen(engine, record.anchor, root);
     record.card.hidden = !projected;
     if (projected) {
       placeCard(record.card, record.leader, projected);

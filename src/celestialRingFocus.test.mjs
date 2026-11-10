@@ -5,25 +5,19 @@ import { CelestialRing } from './celestialRing.js';
 test('full globe focus uses the engine without a Cesium global', () => {
   let flight;
   const engine = {
+    host: { canvas: { clientWidth: 1200, clientHeight: 800 } },
+    render: { request() {} },
     camera: {
-      flyTo: (options) => {
-        flight = options;
-      },
+      pose: () => ({
+        cartographic: { longitude: 0, latitude: 0 },
+        heading: 0,
+        fovy: Math.PI / 3,
+      }),
+      flyTo: (options) => { flight = options; },
     },
   };
   const ring = Object.assign(Object.create(CelestialRing.prototype), {
     _engine: engine,
-    viewer: {
-      scene: {
-        canvas: { clientWidth: 1200, clientHeight: 800 },
-        requestRender() {},
-      },
-      camera: {
-        positionCartographic: { longitude: 0, latitude: 0 },
-        heading: 0,
-        frustum: { fovy: Math.PI / 3 },
-      },
-    },
   });
   assert.equal(globalThis.Cesium, undefined);
   assert.equal(ring.focusFullGlobe(), true);
