@@ -1,5 +1,6 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
+import { worldClock } from '../time/worldClock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
@@ -31,6 +32,7 @@ import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationShipwrecks } from './layers/shipwrecks.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
+import { createApplicationNews } from './layers/news.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
@@ -79,7 +81,7 @@ export function createApplicationCatalog({
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
   const militaryRegistry = createMilitaryRegistry();
-  const weatherClock = createWeatherClock();
+  const weatherClock = createWeatherClock({ world: worldClock });
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
     militaryRegistry.dispose();
@@ -140,6 +142,7 @@ export function createApplicationCatalog({
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
         }),
+        createApplicationNews({ source: sources.news }),
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,

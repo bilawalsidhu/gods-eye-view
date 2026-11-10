@@ -360,6 +360,31 @@ html:not([lang='en']) .radio-transport button {
   margin: 0 0 7px;
   color: #fff;
 }
+.military-awareness-photo {
+  display: block;
+  margin: 0 0 8px;
+  color: #a9b7c7;
+  text-decoration: none;
+}
+.military-awareness-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid rgba(98, 181, 255, 0.34);
+  border-radius: 4px;
+}
+.military-awareness-photo small {
+  display: block;
+  margin-top: 3px;
+}
+.military-awareness-photo:hover small,
+.military-awareness-photo:focus-visible small {
+  color: #fff;
+}
+.military-awareness-photo:focus-visible {
+  outline: 1px solid rgba(127, 200, 255, 0.85);
+  outline-offset: 2px;
+}
 .military-awareness-controls {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

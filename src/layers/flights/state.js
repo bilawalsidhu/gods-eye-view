@@ -1,6 +1,7 @@
 import { FlightRecords } from './records.js';
 import { createFlightFeed } from './ingestion.js';
 import * as Cesium from 'cesium';
+import { worldTimeFor } from '../../time/worldClock.js';
 import { ENRICH_AMBIENT_BUDGET_CEIL } from './policy.js';
 
 export function createFlightState({ source, services }) {
@@ -12,6 +13,8 @@ export function createFlightState({ source, services }) {
     ...services.groundFloor,
   });
   flightState._cullPositions = new Map();
+  /** The time contacts are drawn behind by the render delay, in epoch ms. */
+  flightState.now = worldTimeFor('flights');
 
   /** Per-class model spec. Hangar-fleet classes (CLASS_MODEL_REAL) ship GLBs
    *  vertex-baked to real-world METERS in the airplane.glb axis convention, so
@@ -192,9 +195,32 @@ export function createFlightState({ source, services }) {
 
   flightState._trailHeadSeq = 0;
 
-  /** @type {Cesium.Cartesian3[]} Chronological tracked-aircraft fixes (oldest first) */
+  /** @type {{position: Cesium.Cartesian3|null, timeMs: number, nullAltitude: boolean, breakBefore: boolean, drawn?: boolean}[]}
+   *  Chronological tracked-aircraft trail (oldest first): reports, and
+   *  (`drawn`) where the icon was drawn between them; `breakBefore` starts a
+   *  new segment. */
 
-  flightState._trailPositions = [];
+  flightState._trailFixes = [];
+
+  /** @type {number} Body fixes drawn: those at or before the display time. */
+
+  flightState._trailBodyCount = 0;
+
+  /** @type {Cesium.Cartesian3|null} Where the tracked icon was last recorded into the trail. */
+
+  flightState._trailRecordPosition = null;
+
+  /** @type {number} Display time (epoch ms) of that recording. */
+
+  flightState._trailRecordMs = -Infinity;
+
+  /** @type {string|undefined} The stale cue last written into the tracked label (see `_staleCueTick`). */
+
+  flightState._trackedStaleCueText = undefined;
+
+  /** @type {{key: string, cue: {text: string, dimmed: boolean}}|null} This frame's tracked stale cue (see `_trackedStaleCue`). */
+
+  flightState._trackedStaleCueCache = null;
 
   /** @type {number} Monotonic token — invalidates in-flight backfill responses */
 
@@ -338,6 +364,10 @@ export function createFlightState({ source, services }) {
   flightState._enrichQueue = [];
 
   flightState._enrichSeen = new Set();
+
+  /** Lookup key -> epoch ms before which a failed lookup is not asked again. */
+
+  flightState._enrichRetryAfter = new Map();
 
   flightState._enrichAmbientBudget = ENRICH_AMBIENT_BUDGET_CEIL;
 

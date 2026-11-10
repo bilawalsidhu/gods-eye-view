@@ -27,6 +27,24 @@ test('plane in London with an SFO→LAX route: implausible', () => {
   }), false);
 });
 
+test('a long route allows a wider corridor; a short one does not', () => {
+  // JFK→SFO over Kansas, 384 km south of the great circle.
+  assert.equal(routePlausible({
+    latDeg: 38.21, lonDeg: -99.69, altitudeM: 10370, verticalRateMps: 0,
+    origin: JFK, destination: SFO,
+  }), true);
+  // 516 km off the 543 km SFO→LAX route is still the wrong route.
+  assert.equal(routePlausible({
+    latDeg: 37.9, lonDeg: -115.0, altitudeM: 10000, verticalRateMps: 0,
+    origin: SFO, destination: LAX,
+  }), false);
+  // 960 km off, past 15 % of the 4,152 km JFK→SFO route, is still wrong.
+  assert.equal(routePlausible({
+    latDeg: 33.0, lonDeg: -99.69, altitudeM: 10000, verticalRateMps: 0,
+    origin: JFK, destination: SFO,
+  }), false);
+});
+
 test('vertical trend: low climbing plane near SFO — origin must be local', () => {
   const nearSfo = { latDeg: 37.7, lonDeg: -122.4, altitudeM: 2500 };
   // JFK→SFO passes geometry (near destination), but a CLIMBING plane here just

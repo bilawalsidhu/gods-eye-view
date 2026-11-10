@@ -20,9 +20,16 @@ import {
 } from './detection.js';
 import {
   destroyWorldOverlay,
+  getOverlayPaintRect,
   initWorldOverlay,
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
+import { applyVesselOverlayPolicy } from './vesselLabels.js';
+import {
+  getKeyholeFadeTuning,
+  getKeyholeGeometry,
+  keyholeLabelAlphaFromGeometry,
+} from '../celestialRing.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
 import {
   clearAwarenessEchoField,
@@ -575,6 +582,178 @@ test('every style paints its OWN plate token through the production callout path
       }
     }
   } finally {
+    env.cleanup();
+  }
+});
+
+/** A vessel detection contact that names its ambient card, like the AIS layer does. */
+function shipWithCard(mmsi, position) {
+  return {
+    position,
+    sourceId: mmsi,
+    id: `SHIP-${mmsi}`,
+    metric: '6 kn',
+    type: 'SEA',
+    cardSourceId: 'ais-live-vessels',
+    cardEntryId: `vessel:${mmsi}`,
+  };
+}
+
+/** The production ambient vessel card (not protected: it goes through the arbiter). */
+function ambientVesselCard(mmsi, position) {
+  return applyVesselOverlayPolicy({
+    id: `vessel:${mmsi}`,
+    position,
+    title: `CARD-${mmsi}`,
+    details: ['CARGO · 6KT · 80°'],
+    gapPx: 10,
+  });
+}
+
+test('a callout stays readable when its own card is faded out at the keyhole rim', () => {
+  // Default keyhole tuning: 7% feather, 1% outside opacity.
+  assert.deepEqual(getKeyholeFadeTuning(), { fadeRatio: 0.07, outsideOpacity: 0.01 });
+  const width = 1600;
+  const height = 900;
+  const keyhole = getKeyholeGeometry(width, height);
+  const env = installEnvironment({ width, height, dpr: 1 });
+  // Just outside the keyhole's left rim: the card sits above or below the
+  // anchor (outside, 1% alpha), the callout to its right (inside the feather).
+  const position = new Cesium.Cartesian3(270 / (width / 2) - 1, 1 - 460 / (height / 2), 6_356_752);
+  const ship = shipWithCard('200', position);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const [alone] = getDetectionDiagnostics().calloutRects;
+    assert.ok(alone && alone.alpha >= 0.5, 'without a card the callout is clearly visible');
+
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', position)]);
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const rect = getOverlayPaintRect('ais-live-vessels', 'vessel:200');
+    assert.ok(rect, 'the host paints the card (at the outside opacity)');
+    const cardAlpha = keyholeLabelAlphaFromGeometry(rect.x + rect.w / 2, rect.y + rect.h / 2, keyhole);
+    assert.ok(cardAlpha <= 0.05, `the card is invisible at the rim (keyhole alpha ${cardAlpha})`);
+
+    const callouts = getDetectionDiagnostics().calloutRects;
+    assert.equal(callouts.length, 1, 'the callout keeps painting while its card is faded out');
+    assert.ok(callouts[0].alpha >= 0.4, 'and stays readable');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a callout stays hidden while its card fades out after leaving the published cohort', () => {
+  const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
+  const at = (x, y) => new Cesium.Cartesian3(x, y, 6_356_752);
+  const ship = shipWithCard('200', at(0.1, 0.1));
+  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  const frame = (ms) => {
+    env.ctx.calls.length = 0;
+    env.advance(ms);
+    env.postRender.raise();
+  };
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    for (let i = 0; i < 6; i++) frame(250);
+    frame(16);
+    assert.ok(painted('CARD-200') && !painted('SHIP-200'), 'steady state: card only');
+
+    // The vessel layer republishes its screen-grid cohort after a camera move:
+    // this vessel's card is replaced by another one, the vessel stays detectable.
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('300', at(-0.5, -0.4))]);
+    frame(16);
+    assert.ok(getOverlayPaintRect('ais-live-vessels', 'vessel:200'), 'the dropped card is still fading out');
+    assert.ok(painted('CARD-200'), 'and its text still paints');
+    assert.ok(!painted('SHIP-200'), 'no full callout under the fading card');
+
+    for (let i = 0; i < 4; i++) frame(250);
+    assert.ok(!painted('CARD-200'), 'the card has faded out');
+    assert.ok(painted('SHIP-200'), 'and the callout is back');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a vessel whose ambient card loses the collision keeps its callout', () => {
+  const env = installEnvironment({ width: 900, height: 600, dpr: 1 });
+  // Four vessels a few pixels apart: their cards collide (a card goes only
+  // above or below its anchor), so the arbiter paints only some of them.
+  const ships = [0, 1, 2, 3].map((i) =>
+    shipWithCard(String(100 + i), new Cesium.Cartesian3(-0.2 + i * 0.005, i * 0.005, 6_356_752)),
+  );
+  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }], () => {});
+    setOverlayEntries(
+      'ais-live-vessels',
+      ships.map((ship) => ambientVesselCard(ship.sourceId, ship.position)),
+    );
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    env.ctx.calls.length = 0;
+    settleFrame(env);
+
+    const winners = ships.filter((ship) => getOverlayPaintRect('ais-live-vessels', ship.cardEntryId));
+    assert.ok(
+      winners.length >= 1 && winners.length < ships.length,
+      `the colliding cards leave some unpainted (${winners.length} of ${ships.length} painted)`,
+    );
+    for (const ship of ships) {
+      const carded = winners.includes(ship);
+      assert.equal(
+        painted(ship.id),
+        !carded,
+        carded ? `${ship.id} draws no callout under its card` : `${ship.id} keeps its callout`,
+      );
+    }
+    assert.equal(
+      getDetectionDiagnostics().calloutRects.length,
+      ships.length - winners.length,
+      'only the callouts that painted are reported',
+    );
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
+test('a callout fades out while its card fades in instead of vanishing at once', () => {
+  const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
+  const ship = shipWithCard('200', new Cesium.Cartesian3(0.1, 0.1, 6_356_752));
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    setMode('DENSE');
+    for (let i = 0; i < 4; i++) settleFrame(env);
+    const [alone] = getDetectionDiagnostics().calloutRects;
+    assert.ok(alone.alpha >= 0.9, 'the callout starts fully visible');
+
+    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    const alphas = [];
+    for (let i = 0; i < 30; i++) {
+      env.advance(16);
+      env.postRender.raise();
+      alphas.push(getDetectionDiagnostics().calloutRects[0]?.alpha ?? 0);
+    }
+    assert.ok(
+      alphas.some((alpha) => alpha > 0.1 && alpha < alone.alpha - 0.1),
+      `the callout passes through partial opacity: ${alphas.map((a) => a.toFixed(2)).join(' ')}`,
+    );
+    assert.equal(alphas.at(-1), 0, 'and is gone once the card is fully in');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
     env.cleanup();
   }
 });

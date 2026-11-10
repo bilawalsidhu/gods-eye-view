@@ -132,7 +132,7 @@ export const TRAIL_COLOR = '#00d4ff';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (PRD WS-C C2 — approved product decision):
@@ -253,6 +253,11 @@ export const ENRICH_MAX_INFLIGHT = 4;
 /** Min ms between request dispatches — the drip that bounds the fan-out to ≤5/s. */
 
 export const ENRICH_DISPATCH_GAP_MS = 200;
+
+/** A lookup whose source failed (an outage, a timeout, a restarting server) may
+ *  be asked again after this long; a real "not found" answer never is. */
+
+export const ENRICH_RETRY_COOLDOWN_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Ambient fleet type enrichment (2026-07-02 field data: OpenSky's live
@@ -466,3 +471,6 @@ export const FLOOR_SEED_GRACE_MS = 90_000;
  *  reloads synchronously. */
 
 export const IR_RELOAD_BATCH = 40;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;
