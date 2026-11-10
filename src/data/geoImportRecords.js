@@ -69,8 +69,7 @@
 //   absolute overlay to it.
 // @property {'ground'|'relative'|'absolute'} altitudeMode
 
-/** Longest plain-text name kept from a file's features. */
-const MAX_IMPORT_NAME_LENGTH = 120;
+import { MAX_IMPORT_NAME_LENGTH } from './geoImportLimits.js';
 
 /** A feature name as short plain text (no control characters), or undefined. */
 export function importFeatureName(value) {

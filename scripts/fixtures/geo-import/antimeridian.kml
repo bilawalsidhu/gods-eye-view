@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2"><Document>
+<GroundOverlay><name>crossing-image</name><drawOrder>0</drawOrder><color>ffffffff</color><Icon><href>data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==</href></Icon><LatLonBox><west>179</west><south>-2</south><east>-179</east><north>2</north><rotation>30</rotation></LatLonBox></GroundOverlay>
+<Placemark><name>crossing-ring</name><Polygon><altitudeMode>absolute</altitudeMode><outerBoundaryIs><LinearRing><coordinates>179,-1,100 -179,-1,100 -179,1,100 179,1,100</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+
+</Document></kml>

@@ -8,20 +8,19 @@ import {
 } from './geoImportRecords.js';
 import { msg } from '../i18n/marker.js';
 
+import {
+  MAX_IMPORT_BYTES,
+  MAX_KMZ_INFLATED_BYTES,
+  MAX_IMPORT_ENTITIES,
+  MAX_IMPORT_POSITIONS,
+  MAX_KML_LINKS,
+  MAX_IMPORT_HEIGHT_M,
+  IMPORT_TIMEOUT_MS,
+  MAX_IMPORT_DISPLAY_NAME_LENGTH,
+} from './geoImportLimits.js';
+
 export { importFeatureName };
 
-/** Largest file accepted, in bytes. */
-const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
-/** Largest total a KMZ may inflate to — a zip bomb stops here. */
-const MAX_KMZ_INFLATED_BYTES = 120 * 1024 * 1024;
-/** Most files on the globe at once. */
-export const MAX_IMPORTED_FILES = 12;
-/** Most entities one file may create before it is refused. */
-export const MAX_IMPORT_ENTITIES = 20_000;
-/** Most vertices (points of every line, ring and marker) in one file. */
-export const MAX_IMPORT_POSITIONS = 250_000;
-/** Most normalized style definitions and local image links in one KML/KMZ. */
-const MAX_KML_LINKS = 2_000;
 /** What the file picker offers. */
 export const GEO_FILE_ACCEPT = '.geojson,.json,.kml,.kmz,.gpx';
 
@@ -122,7 +121,9 @@ export function importDisplayName(name) {
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .trim();
   if (!clean) return 'Imported file';
-  return clean.length > 60 ? `${clean.slice(0, 57)}…` : clean;
+  return clean.length > MAX_IMPORT_DISPLAY_NAME_LENGTH
+    ? `${clean.slice(0, MAX_IMPORT_DISPLAY_NAME_LENGTH - 3)}…`
+    : clean;
 }
 
 /**
@@ -240,7 +241,7 @@ export function countGeoJsonGeometry(
             !c.every(Number.isFinite) ||
             Math.abs(c[0]) > 180 ||
             Math.abs(c[1]) > 90 ||
-            (c.length === 3 && Math.abs(c[2]) > 1_000_000)
+            (c.length === 3 && Math.abs(c[2]) > MAX_IMPORT_HEIGHT_M)
           )
             throw new GeoImportError(
               msg('That GeoJSON has invalid coordinates.'),
@@ -800,7 +801,7 @@ export function countKmlGeometry(
       const limit = ['north', 'south'].includes(name)
         ? 90
         : name === 'altitude'
-          ? 1_000_000
+          ? MAX_IMPORT_HEIGHT_M
           : 360;
       if (
         !el.textContent.trim() ||
@@ -863,7 +864,7 @@ function checkKmlPosition(tuple) {
     !numbers.every(Number.isFinite) ||
     Math.abs(numbers[0]) > 180 ||
     Math.abs(numbers[1]) > 90 ||
-    (numbers.length === 3 && Math.abs(numbers[2]) > 1_000_000)
+    (numbers.length === 3 && Math.abs(numbers[2]) > MAX_IMPORT_HEIGHT_M)
   )
     throw new GeoImportError(msg('That KML has invalid coordinates.'));
 }
@@ -1123,7 +1124,7 @@ async function boundedImport(promise, signal) {
         timer = setTimeout(
           () =>
             reject(new GeoImportError(msg('That file took too long to read.'))),
-          60_000,
+          IMPORT_TIMEOUT_MS,
         );
       }),
     ]);
@@ -1147,8 +1148,8 @@ async function boundedImport(promise, signal) {
  */
 export async function loadGeoFile(file, { color = '#39d0ff', signal } = {}) {
   signal = signal
-    ? AbortSignal.any([signal, AbortSignal.timeout(60_000)])
-    : AbortSignal.timeout(60_000);
+    ? AbortSignal.any([signal, AbortSignal.timeout(IMPORT_TIMEOUT_MS)])
+    : AbortSignal.timeout(IMPORT_TIMEOUT_MS);
   signal?.throwIfAborted();
   if (!file || !Number.isFinite(file.size))
     throw new GeoImportError(msg('Nothing to import.'));

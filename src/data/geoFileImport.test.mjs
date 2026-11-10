@@ -6,8 +6,6 @@ import {
   GeoImportError,
   repairKmlRootNamespaces,
   loadGeoFile,
-  MAX_IMPORT_POSITIONS,
-  MAX_IMPORT_ENTITIES,
   countGeoJsonGeometry,
   countKmlGeometry,
   deduplicateKmlStyles,
@@ -23,6 +21,12 @@ import {
   readZipEntries,
   resolveKmzPath,
 } from './geoFileImport.js';
+import {
+  MAX_IMPORT_POSITIONS,
+  MAX_IMPORT_ENTITIES,
+  MAX_IMPORT_IMAGE_PIXELS,
+  MAX_IMPORT_IMAGE_SIDE,
+} from './geoImportLimits.js';
 import { createImportImageBudget, importImageSize } from './geoImportImages.js';
 
 test('real loader grounds XYZ GeoJSON and keeps only names and footprints in its records', async () => {
@@ -167,13 +171,14 @@ test('image budget rejects large decoded rasters before decoding and shares repe
     v.setUint32(20, h);
     return b;
   };
-  assert.deepEqual(importImageSize(png(4096, 4096)), [4096, 4096]);
+  const side = Math.sqrt(MAX_IMPORT_IMAGE_PIXELS);
+  assert.deepEqual(importImageSize(png(side, side)), [side, side]);
   const charge = createImportImageBudget();
-  charge('shared', png(4096, 4096));
-  charge('shared', png(4096, 4096));
+  charge('shared', png(side, side));
+  charge('shared', png(side, side));
   assert.throws(() => charge('other', png(1, 1)), /limit/);
   assert.throws(
-    () => createImportImageBudget()('huge', png(16384, 16384)),
+    () => createImportImageBudget()('huge', png(MAX_IMPORT_IMAGE_SIDE + 1, 1)),
     /limit/,
   );
 });
