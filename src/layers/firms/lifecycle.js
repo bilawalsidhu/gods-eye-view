@@ -46,6 +46,7 @@ export function createLifecycle({
       // Enabled before a renderer: the load enable() could not start.
       if (
         layerState._enabled &&
+        !waitForCameraRestore &&
         !layerState._fires.length &&
         !layerState._loading
       )
@@ -55,7 +56,11 @@ export function createLifecycle({
     resumeViewport() {
       if (!layerState._restoringViewport) return;
       layerState._restoringViewport = false;
-      if (layerState._enabled && layerState._renderer) this.showRenderer();
+      if (layerState._enabled && layerState._renderer) {
+        this.showRenderer();
+        if (!layerState._fires.length && !layerState._loading)
+          void components.ingestion.loadHeatmap();
+      }
     },
 
     detachRenderer() {

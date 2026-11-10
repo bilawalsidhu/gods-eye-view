@@ -73,6 +73,8 @@ export function createApplicationCatalog({
   nepalBoundaryResolver,
   streetLevelProviders,
   engineKind = 'cesium',
+  // Supply display options and scene services without replacing layer models.
+  createDisplay = rendererFor,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -80,6 +82,13 @@ export function createApplicationCatalog({
   if (!surface?.groundFloor || !surface?.terrain)
     throw new TypeError('Application surface services are required');
 
+  const renderer = (id) => ({
+    create: ({ engine, ...options }) => createDisplay(id, engine, options),
+  });
+  const rendererFactory =
+    (id) =>
+    ({ engine, ...options }) =>
+      createDisplay(id, engine, options);
   const sourceComposition = resolveCatalogSources(sources);
   sources = sourceComposition.sources;
   const militaryRegistry =
@@ -122,6 +131,7 @@ export function createApplicationCatalog({
     };
     const flights = sessionModel('flights', () =>
       createApplicationFlights({
+        renderer: renderer('flights'),
         surface,
         source: sources.flights,
         militaryRegistry,
@@ -130,6 +140,7 @@ export function createApplicationCatalog({
     );
     const military = sessionModel('military', () =>
       createApplicationMilitary({
+        renderer: renderer('military'),
         surface,
         source: sources.military,
         militaryRegistry,
@@ -138,6 +149,7 @@ export function createApplicationCatalog({
     );
     const vessels = sessionModel('ais-live-vessels', () =>
       createApplicationVessels({
+        renderer: renderer('ais-live-vessels'),
         source: sources.vessels,
         options: vesselOptions,
       }),
@@ -150,6 +162,7 @@ export function createApplicationCatalog({
     );
     const satellites = sessionModel('satellites', () =>
       createApplicationSatellites({
+        renderer: renderer('satellites'),
         source: sources.satellites,
       }),
     );
@@ -157,20 +170,21 @@ export function createApplicationCatalog({
       sessionModel('bhote-koshi-2026', () =>
         createBhoteKoshiEventLayer({
           createNativeRenderer: (engine) =>
-            rendererFor('bhote-koshi-2026', engine),
+            createDisplay('bhote-koshi-2026', engine),
         }),
       ),
       sessionModel('bhote-koshi-locator', () =>
         createBhoteKoshiLocatorLayer({
           boundaryResolver: nepalBoundaryResolver,
           createNativeRenderer: (engine, data) =>
-            rendererFor('bhote-koshi-locator', engine, { data }),
+            createDisplay('bhote-koshi-locator', engine, { data }),
         }),
       ),
       flights,
       military,
       sessionModel('local-adsb', () =>
         createApplicationLocalAdsb({
+          renderer: renderer('local-adsb'),
           surface,
           // QA fixture receivers (?qaFeed=local-adsb:fixture, dev only).
           ...(sources.localAdsbFeeds ? { feeds: sources.localAdsbFeeds } : {}),
@@ -180,18 +194,26 @@ export function createApplicationCatalog({
         }),
       ),
       sessionModel('earthquakes', () =>
-        createApplicationEarthquakes({ source: sources.earthquakes }),
+        createApplicationEarthquakes({
+          rendererFactory: rendererFactory('earthquakes'),
+          source: sources.earthquakes,
+        }),
       ),
       sessionModel('air-quality', () =>
-        createApplicationAirQuality({ source: sources['air-quality'] }),
+        createApplicationAirQuality({
+          rendererFactory: rendererFactory('air-quality'),
+          source: sources['air-quality'],
+        }),
       ),
       sessionModel('fire-perimeters', () =>
         createApplicationFirePerimeters({
+          createRenderer: rendererFactory('fire-perimeters'),
           source: sources['fire-perimeters'],
         }),
       ),
       sessionModel('gnss-integrity', () =>
         createApplicationGnssIntegrity({
+          rendererFactory: rendererFactory('gnss-integrity'),
           source: sources['gnss-integrity'],
           windowMs: sources['gnss-integrity'].windowMs,
         }),
@@ -201,6 +223,7 @@ export function createApplicationCatalog({
       ),
       sessionModel('drone-airspace', () =>
         createApplicationDroneAirspace({
+          rendererFactory: rendererFactory('drone-airspace'),
           source: sources['drone-airspace'],
         }),
       ),
@@ -211,12 +234,16 @@ export function createApplicationCatalog({
         }),
       ),
       sessionModel('alpr-cameras', () =>
-        createApplicationAlpr({ surface, source: sources.alpr }),
+        createApplicationAlpr({
+          rendererFactory: rendererFactory('alpr-cameras'),
+          surface,
+          source: sources.alpr,
+        }),
       ),
       sessionModel('street-level', () =>
         createApplicationStreetLevel({
           surface,
-          nativeRenderer: (engine) => rendererFor('street-level', engine),
+          nativeRenderer: (engine) => createDisplay('street-level', engine),
           sources: { mapillary: sources.mapillary },
           providers: streetLevelProviders,
         }),
@@ -224,6 +251,7 @@ export function createApplicationCatalog({
       satellites,
       sessionModel('rocket-launches', () =>
         createApplicationLaunches({
+          renderer: renderer('rocket-launches'),
           source: sources.launches,
           satellites: satellites,
         }),
@@ -235,13 +263,25 @@ export function createApplicationCatalog({
         }),
       ),
       sessionModel('cctv', () =>
-        createApplicationCctv({ surface, source: sources.cctv }),
+        createApplicationCctv({
+          rendererFactory: rendererFactory('cctv'),
+          surface,
+          source: sources.cctv,
+        }),
       ),
       sessionModel('radio', () =>
-        createApplicationRadio({ surface, source: sources.radio }),
+        createApplicationRadio({
+          rendererFactory: rendererFactory('radio'),
+          surface,
+          source: sources.radio,
+        }),
       ),
       sessionModel('transit', () =>
-        createApplicationTransit({ surface, source: sources.transit }),
+        createApplicationTransit({
+          rendererFactory: rendererFactory('transit'),
+          surface,
+          source: sources.transit,
+        }),
       ),
       sessionModel('bikeshare', () =>
         createApplicationBikeshare({ source: sources.bikeshare }),
@@ -273,7 +313,7 @@ export function createApplicationCatalog({
           feed: sources.wind,
           clock: weatherClock,
           createNativeRendering: (engine, options) =>
-            rendererFor('wind', engine, options),
+            createDisplay('wind', engine, options),
         }),
       ),
       ...['weather-radar', 'weather-satellite', 'weather-lightning'].map((id) =>
@@ -283,7 +323,7 @@ export function createApplicationCatalog({
             id,
             clock: weatherClock,
             createNativeRendering: (engine, options) =>
-              rendererFor(id, engine, options),
+              createDisplay(id, engine, options),
           }),
         ),
       ),
@@ -291,7 +331,7 @@ export function createApplicationCatalog({
         createApplicationCyclones({
           feed: sources.cyclones,
           createNativeRendering: (engine, options) =>
-            rendererFor('weather-cyclones', engine, options),
+            createDisplay('weather-cyclones', engine, options),
         }),
       ),
       ...sessionModel('osm-overlays', () => createOsmOverlayLayers()),
@@ -301,7 +341,7 @@ export function createApplicationCatalog({
             config,
             services,
             (engine, descriptor, ops) =>
-              rendererFor(config.id, engine, {
+              createDisplay(config.id, engine, {
                 config: descriptor,
                 services: ops,
               }),
@@ -313,6 +353,7 @@ export function createApplicationCatalog({
       ),
       sessionModel('local-firms', () =>
         createApplicationFirms({
+          renderer: renderer('local-firms'),
           surface,
           id: 'local-firms',
           name: 'FIRMS Active Fires',
