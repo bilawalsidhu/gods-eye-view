@@ -261,8 +261,9 @@ test('every rail rule written for RECENT IMAGERY has its Solunar twin', () => {
     const css = read(`src/ui/styles/${file}`);
     assert.equal(
       count(css, 'solunar-panel'),
-      count(css, 'recent-imagery-panel'),
-      `${file} selector parity`,
+      count(css, 'recent-imagery-panel') +
+        (file === 'layers.css' ? 2 : file === 'mobile-shell.css' ? 1 : 0),
+      `${file} selector parity plus Solunar scrolling overrides`,
     );
   }
 });
