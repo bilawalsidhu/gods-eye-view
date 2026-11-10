@@ -236,6 +236,84 @@ test('merge keeps the most recent position per ICAO, then the most recent messag
   assert.deepEqual(merged.bands, ['1090', '978']);
 });
 
+test('merging receiver positions does not launder held altitude provenance', () => {
+  const gate = createLocalAdsbAltitudeGate();
+  const provenance = (record) => ({
+    altitudeQuality: record.altitudeQuality,
+    altitudeObservedAt: record.altitudeObservedAt,
+    altitudeSource: record.altitudeSource,
+  });
+  const browser = heard({
+    altitudeFt: 35_000,
+    altitudeObservedAt: 10_000,
+    altitudeSequence: 1,
+    altitudeSessionAt: 9_000,
+    lastPositionAt: 10_000,
+    lastMessageAt: 10_000,
+  });
+  const [first] = mergeLocalAdsbRecords([[browser]], 10_000);
+  assert.deepEqual(
+    provenance(gateLocalAdsbAltitude(first, gate, 10_000)),
+    {
+      altitudeQuality: 'accepted',
+      altitudeObservedAt: 10_000,
+      altitudeSource: 'webusb',
+    },
+  );
+
+  // A newer feed POSITION wins the merge, but its impossible altitude must
+  // not steal the accepted browser altitude's observation time or source.
+  const feed = heard({
+    source: 'feed',
+    altitudeFt: 108_800,
+    altitudeObservedAt: null,
+    feedId: 'receiver-2',
+    feedSnapshotAt: 11_000,
+    messageCount: 12,
+    lastPositionAt: 11_000,
+    lastMessageAt: 11_000,
+  });
+  const [feedPosition] = mergeLocalAdsbRecords(
+    [[browser], [feed]],
+    11_000,
+  );
+  assert.equal(feedPosition.source, 'feed');
+  assert.equal(feedPosition.feedId, 'receiver-2');
+  const held = gateLocalAdsbAltitude(feedPosition, gate, 11_000);
+  assert.equal(held.altitudeFt, 35_000);
+  assert.equal(held.source, 'feed');
+  assert.deepEqual(provenance(held), {
+    altitudeQuality: 'held-after-rejection',
+    altitudeObservedAt: 10_000,
+    altitudeSource: 'webusb',
+  });
+  assert.equal(gate.rejected, 1);
+
+  // When a new browser altitude wins again, only that altitude frame
+  // advances the provenance. The earlier feed refusal is not recounted.
+  const correction = {
+    ...browser,
+    altitudeFt: 35_025,
+    altitudeObservedAt: 12_000,
+    altitudeSequence: 2,
+    lastPositionAt: 12_000,
+    lastMessageAt: 12_000,
+  };
+  const [browserPosition] = mergeLocalAdsbRecords(
+    [[correction], [feed]],
+    12_000,
+  );
+  assert.equal(browserPosition.source, 'webusb');
+  const accepted = gateLocalAdsbAltitude(browserPosition, gate, 12_000);
+  assert.equal(accepted.altitudeFt, 35_025);
+  assert.deepEqual(provenance(accepted), {
+    altitudeQuality: 'accepted',
+    altitudeObservedAt: 12_000,
+    altitudeSource: 'webusb',
+  });
+  assert.equal(gate.rejected, 1);
+});
+
 test('merge remembers the bands and sources that heard an aircraft for 60 s', () => {
   const memory = new Map();
   mergeLocalAdsbRecords(
