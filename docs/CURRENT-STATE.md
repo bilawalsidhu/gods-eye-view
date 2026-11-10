@@ -417,7 +417,8 @@ one application, and only the globe-bound parts move to the next engine.
   and switch scenario under a deny-by-default network policy, with free map
   tiles from a disk cache and a trap that fails any read of Cesium before it
   has loaded. Every catalog layer must be asserted on both engines.
-  Page clocks start at `2026-11-03T18:30:00Z` unless a scenario supplies
+  Page clocks start at the 18:30 UTC nearest to the real time, so the sun is
+  up over the test cities whenever the run happens, unless a scenario supplies
   `time` (an ISO instant or `'real'`); `QA_EXIT_DIAGNOSTICS=1` preserves
   shutdown resources and prints them five seconds after completion.
   A timed-out scenario with passing evidence is `hung`; non-passing scenarios

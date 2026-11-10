@@ -40,7 +40,8 @@ import {
 // scenario. A timed-out pass is hung; a retry that passes is flaky and does
 // not fail the run. QA_EXIT_DIAGNOSTICS=1 preserves Chrome resources and
 // reports them five seconds after strict completion instead of forcing exit.
-// Pages start at 2026-11-03T18:30:00Z unless createStrict's time overrides it.
+// Pages start at the 18:30 UTC nearest to the real time unless createStrict's
+// time overrides it.
 //
 //   node scripts/qa-all-layer-switches.mjs http://127.0.0.1:4208 <output>
 //     [--serve[=<commit>]]  build <commit> (default HEAD) keyless in a clean
