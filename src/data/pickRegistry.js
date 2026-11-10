@@ -150,6 +150,7 @@ export function createPickRegistry() {
 
   return {
     resolvePickId,
+    owners: () => [..._owners.keys()],
     registerPickOwner,
     unregisterPickOwner,
     findPickOwner,

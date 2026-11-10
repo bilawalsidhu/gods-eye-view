@@ -28,7 +28,8 @@ export function createWindInspectionMarker({
     removeRender = null;
     if (shown()) store.publish(null);
     marker = null;
-    viewer?.scene?.requestRender?.();
+    if (engine) engine.render.request('wind-inspection');
+    else viewer?.scene?.requestRender?.();
   };
   return {
     show(position) {
