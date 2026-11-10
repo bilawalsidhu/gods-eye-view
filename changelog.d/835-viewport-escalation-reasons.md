@@ -3,5 +3,5 @@
   the image step, the log records a reason-coded decision and, when an image
   was due, one outcome under the same id: sent, or why it was dropped (a stale
   pointer, a camera move, a newer turn). What is captured, sent and kept is
-  unchanged, and no image data or user text is logged (kvnloo, manjunath22466,
+  unchanged, and no image data or user text is logged (Kevin Rajan, Manjunath,
   #835).
