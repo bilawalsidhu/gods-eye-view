@@ -143,6 +143,7 @@
   "{count}h ago": "{count} ч назад",
   "STALE · cached {age}": "УСТАРЕЛ · кэш {age}",
   "STALE": "УСТАРЕЛ",
+  "SIGNAL LOST · {time}": "СИГНАЛ ПОТЕРЯН · {time}",
   "refreshing...": "обновление...",
   "loading...": "загрузка...",
   "KEY REQUIRED": "ТРЕБУЕТСЯ КЛЮЧ",

@@ -329,6 +329,7 @@
   "LOADING": "CHARGEMENT",
   "DEGRADED": "DÉGRADÉ",
   "STALE": "OBSOLÈTE",
+  "SIGNAL LOST · {time}": "SIGNAL PERDU · {time}",
   "PARTIAL": "PARTIEL",
   "FALLBACK": "SECOURS",
   "view band|STREET": "RUE",
