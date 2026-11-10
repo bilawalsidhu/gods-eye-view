@@ -74,6 +74,8 @@ async function fixture(t, { aircraft = null, failOpen = false } = {}) {
   };
   const engines = [];
   const newEngine = (kind) => {
+    const retained = engines.find((engine) => engine.kind === kind);
+    if (retained) return retained;
     const engine = createFakeEngine({
       kind,
       container: document.createElement('div'),
@@ -247,6 +249,46 @@ test('Space Missions keeps its context, selection and paused replay across engin
     assert.equal(after.speed, 4);
     assert.equal(after.replay.phaseProgress, before.replay.phaseProgress);
     assert.equal(launches.getStats().lastUpdate, stamp);
+  }
+});
+
+test('Space Missions keeps a running replay advancing across engines', async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.context.setContextMode('space-missions')).ok, true);
+  const launches = f.catalog.get('rocket-launches');
+  launches.selectMissionAt(0);
+  launches.setReplaySpeed(4);
+  launches.startSelectedReplay();
+  f.engine().camera.completeFlight();
+  await flushLifecycleTasks(t, 16_000);
+  f.engine().fake.frame();
+  launches.toggleReplayPause();
+  f.address({
+    enabledLayerIds: ['rocket-launches', 'satellites'],
+    options: {},
+  });
+  for (const kind of ['cesium', 'navara']) await f.switcher.select(kind);
+  launches.toggleReplayPause();
+  await flushLifecycleTasks(t, 100);
+  f.engine().fake.frame();
+  for (const kind of ['cesium', 'navara']) {
+    const before = launches.qaDrawn();
+    assert.ok(before.replay.active);
+    assert.equal(before.paused, false);
+    assert.ok(before.replay.phaseProgress > 0);
+    await f.switcher.select(kind);
+    const after = launches.qaDrawn();
+    assert.ok(after.replay.active);
+    assert.equal(after.paused, false);
+    await flushLifecycleTasks(t, 500);
+    f.engine().fake.frame();
+    const advanced = launches.qaDrawn();
+    assert.ok(advanced.replay.active);
+    assert.equal(advanced.paused, false);
+    assert.ok(
+      advanced.replay.phaseProgress > before.replay.phaseProgress,
+      'a running replay advances on the incoming engine',
+    );
   }
 });
 
