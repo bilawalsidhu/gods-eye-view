@@ -10,6 +10,61 @@ import { dropOrphanFeatureChanges } from './featureQueue.js';
 
 export const NAVARA_INTERNALS_VERSION = '0.2.1';
 
+function requireMember(name, valid) {
+  if (!valid)
+    throw new Error(
+      `Navara ${NAVARA_INTERNALS_VERSION}: required private member ${name} is missing or incompatible`,
+    );
+}
+
+/** Fail at startup, before an absent internal can leave tilesLoaded false forever. */
+export function assertNavaraInternals(view) {
+  requireMember('view._isIdle', typeof view?._isIdle === 'boolean');
+  requireMember(
+    'view._startMainLoop',
+    typeof view?._startMainLoop === 'function',
+  );
+  requireMember(
+    'view._renderer.setAnimationLoop',
+    typeof view?._renderer?.setAnimationLoop === 'function',
+  );
+  for (const name of ['mrt', 'light'])
+    requireMember(
+      `view._scenes.${name}.children`,
+      Array.isArray(view?._scenes?.[name]?.children),
+    );
+  requireMember(
+    'ModelMesh.prototype._releaseGeometryArrays',
+    typeof ModelMesh.prototype._releaseGeometryArrays === 'function',
+  );
+  requireMember(
+    'view._eventManager.stacks.renderable_feature_changed',
+    Array.isArray(view?._eventManager?.stacks?.renderable_feature_changed),
+  );
+  requireMember(
+    'view._eventManager.removeAt',
+    typeof view?._eventManager?.removeAt === 'function',
+  );
+  const ctx = view?.viewContext;
+  for (const name of ['findMesh', 'findEffect'])
+    requireMember(
+      `view.viewContext.${name}`,
+      typeof ctx?.[name] === 'function',
+    );
+  pipelinePassNames(ctx);
+  const handles = {};
+  for (const name of ['sky', 'stars', 'aerialPerspective', 'clouds']) {
+    const ref =
+      name === 'sky' || name === 'stars'
+        ? ctx.findMesh(name)
+        : ctx.findEffect(name);
+    if (!ref) continue; // This look does not use the descriptor.
+    requireMember(`${name}.ref.raw`, ref.raw != null);
+    handles[name] = { ref };
+  }
+  forEachLuminanceUniform(handles, () => {});
+}
+
 // Navara 0.2.1's animation=false still updates the tile tree every RAF.
 // Until ThreeView exposes suspend/resume, stop its underlying Three loop
 // while this view is parked and reinstall its normal loop when it returns.
@@ -32,8 +87,10 @@ export function retainTileGeometry() {
   if (restoreRelease) return restoreRelease;
   const proto = ModelMesh.prototype;
   const release = proto._releaseGeometryArrays;
-  if (typeof release !== 'function')
-    throw new Error('ModelMesh._releaseGeometryArrays not found');
+  requireMember(
+    'ModelMesh.prototype._releaseGeometryArrays',
+    typeof release === 'function',
+  );
   proto._releaseGeometryArrays = function releaseAllButPositions(mesh) {
     const geometry = mesh.geometry;
     const position = geometry?.attributes?.position;
@@ -85,24 +142,13 @@ export function isIdle(view) {
  *   (the clouds swap that material when their quality changes).
  * Calls `visit(key, uniform, scaled)` for each, scaled false for the stars.
  * A handle whose object is built but has lost a path fails loudly: it
- * throws in the dev server and warns once in a build. Upstream ask: a sky
+ * throws before scaling. Upstream ask: a sky
  * luminance or atmosphere exposure that leaves unlit content alone.
  */
 const LUMINANCE_UNIFORMS = Object.freeze([
   'SUN_SPECTRAL_RADIANCE_TO_LUMINANCE',
   'SKY_SPECTRAL_RADIANCE_TO_LUMINANCE',
 ]);
-const DEV = Boolean(import.meta.env?.DEV);
-const reported = new Set();
-
-function luminancePathLost(name) {
-  const message = `Navara ${NAVARA_INTERNALS_VERSION}: the ${name} luminance uniforms are not where internals.js expects them`;
-  if (DEV) throw new Error(message);
-  if (reported.has(name)) return;
-  reported.add(name);
-  console.warn(`[globe] ${message}; the atmosphere stays unscaled there`);
-}
-
 function visitLuminance(name, raw, uniforms, scaled, visit) {
   if (!raw) return; // not built yet
   const get = (key) =>
@@ -110,8 +156,7 @@ function visitLuminance(name, raw, uniforms, scaled, visit) {
   const sun = get(LUMINANCE_UNIFORMS[0]);
   const sky = get(LUMINANCE_UNIFORMS[1]);
   if (!sun?.value?.isVector3 || !sky?.value?.isVector3) {
-    luminancePathLost(name);
-    return;
+    requireMember(`${name} luminance uniforms`, false);
   }
   visit(LUMINANCE_UNIFORMS[0], sun, scaled);
   visit(LUMINANCE_UNIFORMS[1], sky, scaled);
@@ -119,12 +164,24 @@ function visitLuminance(name, raw, uniforms, scaled, visit) {
 
 export function forEachLuminanceUniform(handles, visit) {
   const sky = handles.sky?.ref?.raw;
-  visitLuminance('sky', sky, sky?.material?.uniforms, true, visit);
+  visitLuminance(
+    'sky.ref.raw.material.uniforms',
+    sky,
+    sky?.material?.uniforms,
+    true,
+    visit,
+  );
   const stars = handles.stars?.ref?.raw;
-  visitLuminance('stars', stars, stars?.material?.uniforms, false, visit);
+  visitLuminance(
+    'stars.ref.raw.material.uniforms',
+    stars,
+    stars?.material?.uniforms,
+    false,
+    visit,
+  );
   const aerial = handles.aerialPerspective?.ref?.raw;
   visitLuminance(
-    'aerial perspective',
+    'aerialPerspective.ref.raw.rawEffect.uniforms',
     aerial,
     aerial?.rawEffect?.uniforms,
     true,
@@ -132,7 +189,7 @@ export function forEachLuminanceUniform(handles, visit) {
   );
   const clouds = handles.clouds?.ref?.raw;
   visitLuminance(
-    'clouds',
+    'clouds.ref.raw.rawEffect.cloudsPass.currentMaterial.uniforms',
     clouds,
     clouds?.rawEffect?.cloudsPass?.currentMaterial?.uniforms,
     true,
@@ -177,24 +234,29 @@ export function featureChangeQueue(view) {
 }
 
 /** The hooks createNavaraEngine takes. */
-export const navaraHooks = (view) => ({
-  retainTileGeometry,
-  tileRoots: () => tileRoots(view),
-  isIdle: () => isIdle(view),
-  dropOrphanFeatureChanges: () =>
-    dropOrphanFeatureChanges(
-      featureChangeQueue(view),
-      (id) => view.findLayerById(id) != null,
-    ),
-});
+export const navaraHooks = (view) => {
+  assertNavaraInternals(view);
+  return {
+    retainTileGeometry,
+    tileRoots: () => tileRoots(view),
+    isIdle: () => isIdle(view),
+    dropOrphanFeatureChanges: () =>
+      dropOrphanFeatureChanges(
+        featureChangeQueue(view),
+        (id) => view.findLayerById(id) != null,
+      ),
+  };
+};
 
 /**
  * QA diagnostics only: the names of the passes in the view's
- * post-processing pipeline, in draw order, or null when the path is gone.
+ * post-processing pipeline, in draw order.
  * Private: ctx.renderPassOrchestrator.passMap.list ({ name, pass }).
  * Upstream ask: a public read of the pipeline order.
  */
 export function pipelinePassNames(ctx) {
+  if (ctx == null) return null; // The optional effect has not been created.
   const list = ctx?.renderPassOrchestrator?.passMap?.list;
-  return Array.isArray(list) ? list.map((entry) => entry.name) : null;
+  requireMember('renderPassOrchestrator.passMap.list', Array.isArray(list));
+  return list.map((entry) => entry.name);
 }
