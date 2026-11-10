@@ -129,6 +129,22 @@ search keeps a successful geocode, with no search or view-based region recovery.
 
 Manager-owned periodic network updates pause while the document is hidden. Returning to a visible tab runs one overdue update per enabled layer without overlapping an active refresh and restarts that layer's polling schedule from the return, so the next poll follows one interval later whether or not the catch-up update succeeds; explicit refresh requests remain available. Transit also defers camera-driven feed admission while hidden and rechecks coverage on return. Visibility listeners are released with their polling intervals.
 
+Overpass reserves each normalized query before its disk-cache lookup. The
+initial disk lookup, upstream quota admission, fetching and memory publication
+are coalesced under that reservation. A caller that joined a reservation
+rejected by another client's quota retries admission with its own quota.
+Stale fallback runs per response after the reservation is released, and disk
+writes finish asynchronously. Settled and rejected reservations are removed
+only while they still own their map entry.
+
+External ALPR tags, surveillance-tool fields, voice context text and compact
+analyst strings become one line of at most 180 characters (scene labels: 120).
+Empty ALPR values stay null, and the cap never splits a surrogate pair.
+Canonical analyst identifiers such as `id` and `routeId` stay unchanged, because
+voice follow-ups match on them and bikeshare uses the raw station name as its
+ID. The text is still untrusted: normalization does not prevent prompt
+injection.
+
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP
 413 before disk-cache loading or upstream work; malformed coordinates remain 400.
