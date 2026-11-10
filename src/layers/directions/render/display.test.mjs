@@ -351,3 +351,30 @@ test('route endpoints refine when the surface finishes loading', (t) => {
     ) < 0.01,
   );
 });
+
+test('A/B heights follow a terrain replacement with a parked camera', async (t) => {
+  const engine = createFakeEngine();
+  t.after(() => engine.destroy());
+  engine.projector.worldToWindow = () => ({ x: 1, y: 1 });
+  engine.fake.script('terrainHeight', 40);
+  const display = createDirectionsDisplay(engine);
+  t.after(() => display.destroy());
+  display.setMarker('a', { lon: 0, lat: 0 });
+  display.setMarker('b', { lon: 1, lat: 0 });
+  const heights = () => {
+    const { positions } = engine.fake.moverSet('directions-markers').store;
+    return [0, 3].map(
+      (i) =>
+        geo.cartographic.fromCartesian({
+          x: positions[i],
+          y: positions[i + 1],
+          z: positions[i + 2],
+        }).height,
+    );
+  };
+  for (const height of heights()) near(height, 40, 'original terrain');
+  engine.fake.script('terrainHeight', 70);
+  await engine.maps.setTerrain({ kind: 'ellipsoid' });
+  engine.fake.frames(1);
+  for (const height of heights()) near(height, 70, 'replacement terrain');
+});

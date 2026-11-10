@@ -1,3 +1,4 @@
+import { readSurface } from '../../globe/surfacePlacement.js';
 // What Street Level reads of the camera and the ground, on the globe
 // contract: `view` is the layer's display (render/display.js), whose
 // `engine` it asks. Screen rays meet an ellipsoid raised to the ground
@@ -43,25 +44,12 @@ export function plausibleSurfaceHeight(height) {
  * underground before tiles load).
  */
 export function sampledSurfaceHeight(engine, carto) {
-  let height = null;
-  try {
-    if (engine?.surface?.supported) height = engine.surface.sampleHeight(carto);
-  } catch {
-    /* not sampleable yet */
-  }
-  return plausibleSurfaceHeight(height) ? height : null;
+  return readSurface(engine, carto, { prefer: 'tiles' }) ?? null;
 }
 
 /** Height (m) of the terrain at `carto`, or null. */
 export function terrainSurfaceHeight(engine, carto) {
-  let height;
-  try {
-    if (engine?.surface?.terrainHeightSupported)
-      height = engine.surface.terrainHeight(carto);
-  } catch {
-    height = undefined;
-  }
-  return Number.isFinite(height) ? height : null;
+  return readSurface(engine, carto, { prefer: 'terrain' }) ?? null;
 }
 
 /**

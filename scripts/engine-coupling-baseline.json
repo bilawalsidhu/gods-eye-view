@@ -2,7 +2,7 @@
   "metrics": {
     "attachRendererWithViewer": 33,
     "restoreFlagCopies": 9,
-    "surfaceCallsOutsideGlobe": 41,
+    "surfaceCallsOutsideGlobe": 10,
     "engineSwitchLayerIds": 3,
     "cesiumLayerRendererLines": 0,
     "navaraLayerRendererLines": 0,

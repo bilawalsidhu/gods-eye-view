@@ -6,7 +6,7 @@
 
 import * as geo from '../../../geo/index.js';
 import { rgbaFromCss } from '../../shared/color.js';
-import { createSurfacePoints } from '../../shared/render/surfacePoints.js';
+import { createSurfacePoints } from '../../../globe/surfacePlacement.js';
 import { OSM_PLACES_LAYER_ID, OSM_PLACE_COLOR } from '../model.js';
 
 // Above the sampled surface, so a point does not sink into it.

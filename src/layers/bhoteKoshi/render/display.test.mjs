@@ -54,7 +54,7 @@ test('an image that will not load rejects; story displays release their frame li
   const before = engine.frames.preRender.numberOfListeners;
   const story = display.draw(data);
   const locator = createBhoteKoshiLocatorDisplay(engine, { data });
-  assert.equal(engine.frames.preRender.numberOfListeners, before + 2);
+  assert.equal(engine.frames.preRender.numberOfListeners, before + 4);
   story.destroy();
   locator.destroy();
   assert.equal(engine.frames.preRender.numberOfListeners, before);

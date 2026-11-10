@@ -1,3 +1,4 @@
+import { readSurface } from '../../globe/surfacePlacement.js';
 import * as geo from '../../geo/index.js';
 import { requestWithDeadline } from '../../sources/requestDeadline.js';
 import {
@@ -280,14 +281,11 @@ export function createIngestion({
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
     if (!Number.isFinite(estimated) && engine) {
       try {
-        estimated = !engine.maps.photorealActive()
-          ? engine.surface.terrainHeight(location)
-          : engine.surface.supported
-            ? engine.surface.sampleHeight(
-                location,
-                layerState._display?.excluded() ?? [],
-              )
-            : undefined;
+        estimated = readSurface(engine, location, {
+          exclude: layerState._display?.excluded() ?? [],
+          prefer: engine.maps.photorealActive() ? 'tiles' : 'terrain',
+          minHeight: -9000,
+        });
       } catch {
         /* the local mesh can still be loading */
       }

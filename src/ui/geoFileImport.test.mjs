@@ -755,7 +755,7 @@ test('what no engine draws of a file is reported, and the drawing follows the en
   assert.match(t.shown().hint, /leaves out of a\.kml: 3/);
   assert.ok(engine.host.canvas.listeners.length > 0, 'gestures on its canvas');
   assert.ok(engine.host.container.listeners.length > 0, 'drops on it');
-  assert.equal(engine.moveEnd.size, 1);
+  assert.equal(engine.moveEnd.size, 0);
   const [a] = rows(t);
   press(t, a, 'toggle');
   assert.equal(t.added.at(-1).show, false);

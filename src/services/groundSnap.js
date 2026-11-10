@@ -1,3 +1,4 @@
+import { readSurface } from '../globe/surfacePlacement.js';
 /**
  * groundSnap.js — one-shot cached ground-height snap for MODELED grounded aircraft.
  *
@@ -47,7 +48,6 @@
  */
 
 import * as geo from '../geo/index.js';
-import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
 import { MAX_FLOOR_TILE_SIZE_M } from './meshFloorSampler.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
@@ -352,10 +352,11 @@ export function createGroundSnap({ groundFloor }) {
       // sampleHeight throws when unsupported (no depth textures) — that's a miss.
       const exclusions = getExclusions ? getExclusions() : undefined;
       // A coarse tile's answer, or only terrain, is a miss.
-      sampled = acceptedSurfaceHeight(
-        engine.surface.sampleHeightDetailed(carto, { exclude: exclusions }),
-        { maxTileSizeM: MAX_FLOOR_TILE_SIZE_M },
-      );
+      sampled = readSurface(engine, carto, {
+        exclude: exclusions,
+        prefer: 'tiles',
+        maxTileSizeM: MAX_FLOOR_TILE_SIZE_M,
+      });
     } catch {
       sampled = undefined;
     }

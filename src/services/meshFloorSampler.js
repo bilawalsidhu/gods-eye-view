@@ -1,5 +1,5 @@
+import { readSurface } from '../globe/surfacePlacement.js';
 import * as geo from '../geo/index.js';
-import { acceptedSurfaceHeight } from '../globe/surfaceDetail.js';
 
 /** Answers from tiles larger than this are too coarse to latch (m).
  *  Measured on Navara: from 800 m the answering tiles were 112-314 m and
@@ -158,12 +158,11 @@ export function createMeshFloorSampler({
           _scratchEngineProbe,
         );
         // A coarse tile's answer, or only terrain, is a miss (no latch).
-        height = acceptedSurfaceHeight(
-          engine.surface.sampleHeightDetailed(carto, {
-            exclude: excludeObjects,
-          }),
-          { maxTileSizeM: MAX_FLOOR_TILE_SIZE_M },
-        );
+        height = readSurface(engine, carto, {
+          exclude: excludeObjects,
+          prefer: 'tiles',
+          maxTileSizeM: MAX_FLOOR_TILE_SIZE_M,
+        });
         sampled += 1;
       } catch {
         continue; // scene mid-teardown — try again next poll

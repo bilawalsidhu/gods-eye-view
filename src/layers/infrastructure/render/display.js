@@ -17,6 +17,11 @@ import { bindOverlayHost } from '../../../overlays/bindOverlayHost.js';
 // surface. The references' cards go to the shared world-overlay host. A
 // click on any of them selects the feature and flies there.
 
+import {
+  createSurfacePoints,
+  readSurface,
+  surfaceTriggers,
+} from '../../../globe/surfacePlacement.js';
 import * as geo from '../../../geo/index.js';
 import { isPointerFree } from '../../../data/inputOwnership.js';
 import {
@@ -58,16 +63,7 @@ const FLY_SECONDS = 1.5;
  * sampled once and the base moves onto it.
  */
 export const GROUND_SAMPLE_MAX_DISTANCE_M = 75000;
-export const GROUND_SAMPLE_RETRY_MS = 2000;
 const GROUND_SAMPLE_MAX_ABS_HEIGHT_M = 9000;
-/**
- * A sampleable scene can still never answer under a feature; each retry
- * asks for the frame the next one needs, so after this many armed retries
- * without a newly grounded base the layer stops asking. A camera move, a
- * grounded base or sampling becoming supported again re-opens the budget.
- * 30 × 2 s is far longer than a tile stream-in.
- */
-export const GROUND_SAMPLE_MAX_ARMED_RETRIES = 30;
 /** Tip moves below this are camera noise and are not drawn. */
 export const LOCAL_STEM_TIP_EPSILON_M = 0.5;
 const TIP_EPSILON_SQ = LOCAL_STEM_TIP_EPSILON_M ** 2;
@@ -151,10 +147,7 @@ export function createInfrastructureDisplay(
   let dirty = true,
     lastWalk = Number.NEGATIVE_INFINITY,
     walkCount = 0;
-  // The ground-sample retry.
-  let retryTimer = null,
-    retryArms = 0,
-    lastCapability = null;
+  let surface = null;
   // Per walk: the view-projection matrix, computed on first use.
   const viewProjection = geo.matrix4.create();
   let viewProjectionWalk = -1;
@@ -164,23 +157,6 @@ export function createInfrastructureDisplay(
   const scratchWindow = geo.cartesian2.create(0, 0);
 
   const photoreal = () => engine.maps?.photorealActive?.() === true;
-
-  function scheduleGroundRetry() {
-    if (retryTimer || !dataset || !engine.surface.supported) return;
-    if (retryArms >= GROUND_SAMPLE_MAX_ARMED_RETRIES) return;
-    retryArms += 1;
-    retryTimer = setTimeout(() => {
-      retryTimer = null;
-      if (dataset && !destroyed) wake(`local-ground-retry:${id}`);
-    }, GROUND_SAMPLE_RETRY_MS);
-  }
-
-  function clearGroundRetry() {
-    retryArms = 0;
-    lastCapability = null;
-    clearTimeout(retryTimer);
-    retryTimer = null;
-  }
 
   /** The record's vertical at `height` metres above the ellipsoid. */
   function vertical(row, height, result) {
@@ -227,7 +203,7 @@ export function createInfrastructureDisplay(
   function groundInView(row) {
     const terrain = photoreal()
       ? undefined
-      : engine.surface.terrainHeight(row.carto);
+      : readSurface(engine, row.carto, { prefer: 'terrain' });
     const known =
       finite(terrain) && Math.abs(terrain) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M;
     const low = vertical(
@@ -262,53 +238,36 @@ export function createInfrastructureDisplay(
     row.baseMoved = true;
   }
 
-  // The scene height under the record, once, while the visible surface has
-  // loaded. A coarse sample can lie below the loaded terrain: the terrain is
-  // the floor then (not under photoreal tiles), while roofs and valid
-  // below-sea-level heights stay.
-  function sampleGround(row, now) {
-    if (row.groundSampled || !engine.surface.supported) return false;
-    if (now - row.lastSample < GROUND_SAMPLE_RETRY_MS) return false;
-    if (!groundInView(row)) return false;
-    row.lastSample = now;
-    const globe = !photoreal();
-    if (globe && !engine.surface.tilesLoaded()) return false;
-    // The stem stands on the sample point: out of the sample.
-    stemBatch?.show(false);
-    let sampled;
-    try {
-      sampled = engine.surface.sampleHeight(row.carto, exclude);
-    } finally {
-      stemBatch?.show(true);
-    }
-    if (!finite(sampled) || Math.abs(sampled) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M)
-      return false;
-    const terrain = globe ? engine.surface.terrainHeight(row.carto) : undefined;
-    if (finite(terrain) && Math.abs(terrain) <= GROUND_SAMPLE_MAX_ABS_HEIGHT_M)
-      sampled = Math.max(sampled, terrain);
-    row.groundSampled = true;
-    setGroundHeight(row, sampled);
-    return true;
-  }
-
-  // A sampled base follows refined terrain upward on the bounded walks,
-  // without another sample.
-  function refreshTerrainFloor(row, camera) {
-    if (!row.groundSampled || photoreal() || !engine.surface.tilesLoaded())
-      return false;
-    if (
-      geo.cartesian3.distance(camera, row.base) >= GROUND_SAMPLE_MAX_DISTANCE_M
-    )
-      return false;
-    const height = engine.surface.terrainHeight(row.carto);
-    if (
-      !finite(height) ||
-      Math.abs(height) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M ||
-      height <= row.groundHeight
-    )
-      return false;
-    setGroundHeight(row, height);
-    return true;
+  function placeGround() {
+    const points = [...rows.values()];
+    surface = createSurfacePoints(engine, {
+      groups: () => {
+        viewProjectionWalk = -1;
+        return [
+          {
+            points: points.map((row) => row.surface),
+            exclude: [...exclude, stemBatch].filter(Boolean),
+            set: {
+              set(index, { position }) {
+                const row = points[index];
+                setGroundHeight(
+                  row,
+                  geo.cartographic.fromCartesian(position).height,
+                );
+              },
+              commit() {
+                dirty = true;
+                lastWalk = Number.NEGATIVE_INFINITY;
+              },
+            },
+          },
+        ];
+      },
+      // The LOD checks the entire ground vertical before offering a point.
+      screenMargin: Infinity,
+      prefer: 'sceneFloor',
+      request: wake,
+    });
   }
 
   // The tip STEM_TARGET_PX above the base at the camera's distance; a move
@@ -317,7 +276,6 @@ export function createInfrastructureDisplay(
     const distance = finite(knownDistance)
       ? knownDistance
       : geo.cartesian3.distance(pose.position, row.base);
-    if (distance < GROUND_SAMPLE_MAX_DISTANCE_M) sampleGround(row, now);
     const tipHeight =
       row.groundHeight +
       Math.max(distance, 1) *
@@ -395,6 +353,9 @@ export function createInfrastructureDisplay(
       nowMs: now,
       activeLimit: selection.budget.activeLimit,
     });
+    for (const id of kept.keepIds)
+      if (!active.has(id) || rows.get(id).surface.surfaceHeight === undefined)
+        delete rows.get(id).surface.surfaceRevision;
     active = new Set(kept.keepIds);
     grace = kept.graceState;
     budget = selection.budget.activeLimit;
@@ -433,20 +394,18 @@ export function createInfrastructureDisplay(
       if (probe.recompute) dirty = true;
     }
     const refresh = dirty;
-    // Without sampling no retry is armed and no per-record work is spent.
-    const canSample = engine.surface.supported === true;
-    // Sampling that comes back re-opens a spent budget on a parked camera.
-    if (canSample && lastCapability === false) retryArms = 0;
-    lastCapability = canSample;
-    let retryPending = false;
-    let grounded = false;
     if (refresh && rows.size) selectLod(pose, now);
+    surface.place();
     let tipsChanged = false;
     let pinsChanged = false;
     const visible = [];
     for (const row of rows.values()) {
       const isActive = !computed || active.has(row.id);
-      const isVisible = isActive && engine.projector.horizonVisible(row.base);
+      const isVisible =
+        isActive &&
+        engine.projector.horizonVisible(
+          vertical(row, Math.max(0, row.groundHeight), scratchLow),
+        );
       if (row.show !== isVisible) {
         row.show = isVisible;
         tips.set(row.index, { show: isVisible });
@@ -458,30 +417,7 @@ export function createInfrastructureDisplay(
       }
       if (!isVisible) dropStem(row.id);
       if (!isActive) continue;
-      const wasSampled = row.groundSampled;
-      const floorChanged = refreshTerrainFloor(row, camera);
-      if (refresh || floorChanged) sizeStem(row, now, pose, view);
-      else if (
-        canSample &&
-        !row.groundSampled &&
-        now - row.lastSample >= GROUND_SAMPLE_RETRY_MS
-      ) {
-        const distance = geo.cartesian3.distance(camera, row.base);
-        if (distance < GROUND_SAMPLE_MAX_DISTANCE_M && sampleGround(row, now))
-          sizeStem(row, now, pose, view, distance);
-      }
-      if (!wasSampled && row.groundSampled) grounded = true;
-      // An ungrounded base in range and in view: the retry needs a frame
-      // the idle governor would never produce.
-      if (
-        canSample &&
-        !row.groundSampled &&
-        !retryPending &&
-        geo.cartesian3.distance(camera, row.base) <
-          GROUND_SAMPLE_MAX_DISTANCE_M &&
-        groundInView(row)
-      )
-        retryPending = true;
+      if (refresh || row.baseMoved) sizeStem(row, now, pose, view);
       if (row.tipMoved) {
         row.tipMoved = false;
         tips.set(row.index, { position: row.tip });
@@ -521,9 +457,6 @@ export function createInfrastructureDisplay(
     dirty = false;
     if (tipsChanged) tips.commit();
     if (pinsChanged) pins.commit();
-    // Real progress re-opens the budget for the records still waiting.
-    if (grounded) retryArms = 0;
-    if (retryPending) scheduleGroundRetry();
     publisher.publish(
       selectLocalInfrastructureOverlayCohort(visible, {
         maxEntries: labelMax,
@@ -575,7 +508,8 @@ export function createInfrastructureDisplay(
   function hide() {
     const shown = Boolean(dataset);
     services.hideOsmCredit?.(engine, id);
-    clearGroundRetry();
+    surface?.destroy();
+    surface = null;
     for (const remove of removers.splice(0)) remove();
     stems.clear();
     stemBatch?.destroy();
@@ -640,8 +574,6 @@ export function createInfrastructureDisplay(
         nextTip: geo.cartesian3.clone(tip),
         priority,
         groundHeight: 0,
-        groundSampled: false,
-        lastSample: Number.NEGATIVE_INFINITY,
         // As a Cesium entity's: shown until the first walk decides; the
         // context store reads it (isContextRecordActive).
         show: true,
@@ -659,6 +591,19 @@ export function createInfrastructureDisplay(
           : null,
       };
       row.__localBaseCartesian = row.base;
+      row.surface = {
+        cartographic: carto,
+        position: base,
+        get show() {
+          return (
+            (photoreal() || engine.surface.tilesLoaded()) &&
+            (!computed || active.has(row.id)) &&
+            geo.cartesian3.distance(engine.camera.livePosition, row.base) <
+              GROUND_SAMPLE_MAX_DISTANCE_M &&
+            groundInView(row)
+          );
+        },
+      };
       rows.set(row.id, row);
       services.registerEntityContext?.(row, {
         id: row.pickId,
@@ -741,15 +686,14 @@ export function createInfrastructureDisplay(
       try {
         dataset = next;
         build(next);
+        placeGround();
         removers.push(
-          engine.frames.preRender.addEventListener(walk),
-          engine.camera.moveEnd.addEventListener(() => {
+          surfaceTriggers(engine, () => {
             dirty = true;
             lastWalk = Number.NEGATIVE_INFINITY;
-            // A camera move is a fresh situation with free frames.
-            retryArms = 0;
             wake();
           }),
+          engine.frames.preRender.addEventListener(walk),
           engine.input.on('click', onClick, { pick: true }),
         );
         publisher.show();

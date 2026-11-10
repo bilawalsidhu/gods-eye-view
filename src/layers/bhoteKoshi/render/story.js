@@ -1,5 +1,6 @@
 // Samples the authored story graphics into ground sets and point movers.
 // The story owns reveal time; this display owns only its attached drawing.
+import { createSurfacePoints } from '../../../globe/surfacePlacement.js';
 import * as geo from '../../../geo/index.js';
 
 const value = (property) =>
@@ -25,6 +26,13 @@ export function drawStorySource(engine, data) {
   const entries = new Map();
   let order = 0;
   let destroyed = false;
+  const groups = new Set();
+  const surface = createSurfacePoints(engine, {
+    groups: () => groups,
+    prefer: 'scene',
+    estimateGround: true,
+    request: () => engine.render.request(data.name),
+  });
 
   function point(entity) {
     const graphics = entity.point;
@@ -49,22 +57,27 @@ export function drawStorySource(engine, data) {
           : null,
       },
     });
+    const row = { show: false };
+    const group = { set, points: [row] };
+    groups.add(group);
+    let authored;
     let previous;
     return {
       paint(show) {
         let position = value(entity.position);
         show = Boolean(show && value(graphics.show) !== false && position);
-        if (show && value(graphics.heightReference) === 1) {
-          const place = geo.cartographic.fromCartesian(position);
-          const height =
-            engine.surface.sampleHeight(place, [set]) ??
-            engine.surface.terrainHeight(place);
-          if (Number.isFinite(height))
-            position = geo.cartesian3.fromRadians(
-              place.longitude,
-              place.latitude,
-              height,
-            );
+        const clamped = show && value(graphics.heightReference) === 1;
+        if (clamped && !row.show) delete row.surfaceRevision;
+        row.show = clamped;
+        if (row.show) {
+          if (!authored || !geo.cartesian3.equals(position, authored)) {
+            authored = geo.cartesian3.clone(position);
+            row.cartographic = geo.cartographic.fromCartesian(position);
+            row.position = position;
+            delete row.surfaceRevision;
+            delete row.surfaceHeight;
+          }
+          position = row.position;
         }
         const fields = show
           ? {
@@ -92,7 +105,10 @@ export function drawStorySource(engine, data) {
         set.commit();
         previous = snapshot;
       },
-      destroy: () => set.destroy(),
+      destroy() {
+        groups.delete(group);
+        set.destroy();
+      },
     };
   }
 
@@ -185,6 +201,7 @@ export function drawStorySource(engine, data) {
       }
       item.paint(data.show !== false && value(entity.show) !== false);
     }
+    surface.place();
   }
   const off = engine.frames.preRender.addEventListener(frame);
   engine.render.request(data.name);
@@ -193,6 +210,7 @@ export function drawStorySource(engine, data) {
       if (destroyed) return;
       destroyed = true;
       off();
+      surface.destroy();
       for (const item of entries.values()) item.destroy();
       entries.clear();
       engine.render.request(data.name);

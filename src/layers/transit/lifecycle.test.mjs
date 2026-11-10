@@ -3715,32 +3715,30 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
     },
   }).methods;
   // The bikeshare display claims through its engine's camera: the viewer's.
-  const bike = createBikeshareDisplay(
-    { camera: app.viewer.camera },
-    {
-      state: {
-        _overlayHost: { setVisible: noop },
-        _cityRuntime: new Map(),
-        _failedCityIds: new Set(),
-      },
-      services: {
-        render: { governorRequestRender: noop },
-        picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-      },
-      source: {},
-      parts: {
-        display: {
-          _installClickHandler: noop,
-          _uninstallClickHandler: noop,
-          _clearSelection: noop,
-          onCameraChanged: noop,
-          runProximityCheck: noop,
-          deactivateAllCities: noop,
-        },
-        ingestion: { abortAllInFlight: noop },
-      },
+  const bike = createBikeshareDisplay(app.engine, {
+    state: {
+      _stationRenderMap: new Map(),
+      _overlayHost: { setVisible: noop },
+      _cityRuntime: new Map(),
+      _failedCityIds: new Set(),
     },
-  );
+    services: {
+      render: { governorRequestRender: noop },
+      picking: { registerPickOwner: noop, unregisterPickOwner: noop },
+    },
+    source: {},
+    parts: {
+      display: {
+        _installClickHandler: noop,
+        _uninstallClickHandler: noop,
+        _clearSelection: noop,
+        onCameraChanged: noop,
+        runProximityCheck: noop,
+        deactivateAllCities: noop,
+      },
+      ingestion: { abortAllInFlight: noop },
+    },
+  });
   const layers = { traffic, bikeshare: bike, transit: app.layer };
   const orders = [
     ['traffic', 'bikeshare', 'transit'],

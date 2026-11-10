@@ -34,7 +34,9 @@
       "src/layers/infrastructure/render/display.js",
       "src/layers/shared/color.js",
       "src/sources/requestDeadline.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": []
   },
@@ -851,7 +853,9 @@
       "src/ui/unitLabels.js",
       "src/geo/",
       "src/globe/cesium/doubleClick.js",
-      "src/globe/cesium/orbital.js"
+      "src/globe/cesium/orbital.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium"]
   },
@@ -1644,7 +1648,9 @@
       "src/sources/phaseTiming.js",
       "src/layers/traffic/roadModes.js",
       "src/geo/",
-      "src/layers/traffic/render/display.js"
+      "src/layers/traffic/render/display.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile"]
   },
@@ -1775,7 +1781,6 @@
       "src/layers/shared/color.js",
       "src/globe/",
       "src/layers/streetLevel/render/display.js",
-      "src/layers/shared/render/surfacePoints.js",
       "src/time/worldClock.js",
       "src/time/clock.js"
     ],
@@ -1854,8 +1859,9 @@
       "src/sources/requestDeadline.js",
       "src/layers/shared/color.js",
       "src/layers/submarineCables/render/display.js",
-      "src/layers/shared/render/surfacePoints.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium"]
   },
@@ -3546,7 +3552,9 @@
       "src/geo/",
       "src/layers/directions/render/display.js",
       "src/layers/directions/render/style.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": []
   },
@@ -4353,7 +4361,9 @@
       "src/layers/wildlifeSightings/display.js",
       "src/data/spriteOrder.js",
       "src/layers/shared/color.js",
-      "src/overlays/bindOverlayHost.js"
+      "src/overlays/bindOverlayHost.js",
+      "src/globe/surfaceDetail.js",
+      "src/globe/surfacePlacement.js"
     ],
     "external": ["cesium"]
   },

@@ -12,18 +12,14 @@
 // - ground overlays: image layers, or textured meshes at absolute altitudes,
 //   tinted and turned on a canvas when the KML says so; a plain colour is
 //   a ground fill or a mesh at an absolute altitude.
-// Nothing is pickable: an imported file has no card. Ground heights under
-// the points come from engine.surface, sampled again by refreshGround():
-// the terrain where the globe is drawn, else (3D tiles) the scene drawn
-// under a low camera, never an imported point (as Cesium's import kept its
-// pins out of height queries).
+// Nothing is pickable: an imported file has no card. Ground pins share
+// the surface placer and exclude every imported pin set from its samples.
 
+import { createSurfacePoints } from '../globe/surfacePlacement.js';
 import * as geo from '../geo/index.js';
 import { planImport } from './geoImportPlan.js';
 import {
-  BATCH,
   HORIZON_LIFT_M,
-  CLAMP_TILES_BELOW_M,
   MAX_ICON_PIXEL_RATIO,
   POLYGON_YIELD_MS,
 } from './geoImportLimits.js';
@@ -112,6 +108,7 @@ export async function drawImportedFile(
   let shown = visible;
   let destroyed = false;
   let removeCull = null;
+  let surface = null;
   const groundSets = [];
   const lines = [];
   const meshes = [];
@@ -129,6 +126,7 @@ export async function drawImportedFile(
 
   function release() {
     destroyed = true;
+    surface?.destroy();
     removeCull?.();
     removeCull = null;
     for (const set of groundSets.splice(0)) set.destroy();
@@ -276,93 +274,67 @@ export async function drawImportedFile(
       pointSetsOf(engine).add(look.set);
     }
     checkActive();
-    for (let from = 0; from < pins.length; from += BATCH) {
-      settle(heightContext(), from, from + BATCH);
-      if (from + BATCH < pins.length) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        checkActive();
-      }
+    for (const pin of pins) {
+      pin.position = geo.cartesian3.fromDegrees(
+        pin.lon,
+        pin.lat,
+        pin.height ?? pin.offset,
+      );
+      pin.horizon = geo.cartesian3.fromDegrees(
+        pin.lon,
+        pin.lat,
+        (pin.height ?? pin.offset) + HORIZON_LIFT_M,
+      );
+      pin.surface = {
+        cartographic: geo.cartographic.fromDegrees(pin.lon, pin.lat),
+        position: pin.position,
+        offset: pin.offset,
+        get show() {
+          return shown && pin.height === null;
+        },
+      };
     }
     for (const look of looks.values()) writePins(look);
+    surface = createSurfacePoints(engine, {
+      groups: () =>
+        [...looks.values()]
+          .filter((look) => look.set)
+          .map((look) => ({
+            points: look.pins.map((pin) => pin.surface),
+            exclude: [...pointSetsOf(engine)],
+            set: {
+              set(index, { position }) {
+                const pin = look.pins[index];
+                pin.position = position;
+                pin.ground = pin.surface.surfaceHeight;
+                pin.horizon = geo.cartesian3.fromDegrees(
+                  pin.lon,
+                  pin.lat,
+                  pin.ground + pin.offset + HORIZON_LIFT_M,
+                );
+                look.set.set(index, { position });
+              },
+              commit() {
+                writePins(look);
+              },
+            },
+          })),
+      prefer: (point) =>
+        engine.maps.photorealActive() && point.surfaceHeight !== undefined
+          ? 'tiles'
+          : undefined,
+      heightOffset: (point) => point.offset,
+      estimateGround: true,
+      screenMargin: 0,
+      request,
+    });
+    surface.place();
     syncCull();
   } catch (error) {
     release();
     throw error;
   }
   request();
-
-  // Where heights come from now: the terrain, or the scene drawn under a
-  // low camera when the globe is not (3D tiles).
-  function heightContext() {
-    const surface = engine.surface;
-    const tiles =
-      (engine.imagery?.surface?.() ?? 'globe') !== 'globe' &&
-      surface.clampToHeightSupported &&
-      engine.camera.height() < CLAMP_TILES_BELOW_M;
-    return {
-      surface,
-      tiles,
-      exclude: [...pointSetsOf(engine)],
-      size: tiles ? engine.host.size() : null,
-    };
-  }
-
-  // Whether a position is in the window now: clamping to 3D tiles reads
-  // the tiles drawn, and a point elsewhere would only cost the query.
-  function inWindow(position, { width, height }) {
-    if (!engine.projector.horizonVisible(position)) return false;
-    const screen = engine.projector.worldToWindow(position);
-    return (
-      Boolean(screen) &&
-      screen.x >= 0 &&
-      screen.y >= 0 &&
-      screen.x <= width &&
-      screen.y <= height
-    );
-  }
-
-  // The ground under a pin, falling back to the last known one.
-  function groundUnder(pin, { surface, tiles, exclude, size }) {
-    const at = geo.cartographic.fromDegrees(pin.lon, pin.lat, 0);
-    const terrain = surface.terrainHeightSupported
-      ? surface.terrainHeight(at)
-      : undefined;
-    // A coarse ellipsoid mesh under 3D tiles can answer far below zero.
-    let ground = Number.isFinite(terrain)
-      ? tiles
-        ? Math.max(0, terrain)
-        : terrain
-      : (pin.ground ?? 0);
-    // On tiles the last height found stays until the tiles answer again:
-    // the terrain under them is not where the pin stands.
-    if (tiles) ground = pin.ground ?? ground;
-    if (
-      tiles &&
-      inWindow(geo.cartesian3.fromDegrees(pin.lon, pin.lat, ground), size)
-    ) {
-      const top = surface.clampToHeight(
-        geo.cartesian3.fromDegrees(pin.lon, pin.lat, Math.max(0, ground)),
-        exclude,
-      );
-      const height = top && geo.cartographic.fromCartesian(top)?.height;
-      ground = Number.isFinite(height) ? height : (pin.ground ?? ground);
-    }
-    return ground;
-  }
-
-  function settle(context, from = 0, to = pins.length) {
-    for (let i = from; i < Math.min(to, pins.length); i++) {
-      const pin = pins[i];
-      if (pin.height === null) pin.ground = groundUnder(pin, context);
-      const height = pin.height ?? pin.ground + pin.offset;
-      pin.position = geo.cartesian3.fromDegrees(pin.lon, pin.lat, height);
-      pin.horizon = geo.cartesian3.fromDegrees(
-        pin.lon,
-        pin.lat,
-        height + HORIZON_LIFT_M,
-      );
-    }
-  }
 
   function writePins(look) {
     const { set, pins } = look;
@@ -443,6 +415,7 @@ export async function drawImportedFile(
         look.set?.commit();
       }
       syncCull();
+      if (shown) surface.place({ all: true });
       request();
     },
     /**
@@ -460,20 +433,9 @@ export async function drawImportedFile(
           ]);
       return out;
     },
-    /** Sample the ground under the points again (a map or the terrain changed). */
     async refreshGround(signal) {
-      const total = pins.length;
-      for (let from = 0; from < total; from += BATCH) {
-        signal?.throwIfAborted();
-        if (destroyed) return;
-        settle(heightContext(), from, from + BATCH);
-        if (from + BATCH < total)
-          await new Promise((resolve) => setTimeout(resolve, 0));
-      }
       signal?.throwIfAborted();
-      if (destroyed) return;
-      for (const look of looks.values()) writePins(look);
-      request();
+      surface.place({ all: true });
     },
     destroy() {
       if (destroyed) return;

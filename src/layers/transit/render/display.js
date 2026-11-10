@@ -1,3 +1,4 @@
+import { readSurface } from '../../../globe/surfacePlacement.js';
 // The transit vehicles on the globe contract, the same on every engine:
 // - markers: two engine.movers sprite sets (the stationary fleet and the
 //   vehicles mid-glide, so a glide never rewrites the fleet), drawn over the
@@ -708,9 +709,10 @@ export function createTransitDisplay(
       // Photoreal tiles hide the globe: the floor comes from the mesh
       // samples and the coarse floors instead.
       if (engine.maps.photorealActive()) return undefined;
-      if (!engine.surface.terrainHeightSupported) return undefined;
-      return engine.surface.terrainHeight(
+      return readSurface(
+        engine,
         geo.cartographic.fromDegrees(lon, lat, 0, scratchCartographic),
+        { prefer: 'terrain' },
       );
     },
     // The engine's surface leaves out mover sets, not single sprites: a

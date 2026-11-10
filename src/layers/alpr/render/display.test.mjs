@@ -281,6 +281,12 @@ for (const makeHarness of HARNESSES) {
       assert.ok(
         Math.abs(heightOf(h.badge('alpr-cameras', 0).position) - 321.5) < 0.01,
       );
+      h.terrain(410);
+      await h.engine.maps.setTerrain({ kind: 'ellipsoid' });
+      h.frame();
+      assert.ok(
+        Math.abs(heightOf(h.badge('alpr-cameras', 0).position) - 411.5) < 0.01,
+      );
       h.terrain(undefined);
       h.load(records(1).map((r) => ({ ...r, latitude: 30.0001 })));
       await settle();

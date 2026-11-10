@@ -1,3 +1,4 @@
+import { surfaceTriggers } from '../../globe/surfacePlacement.js';
 import * as geo from '../../geo/index.js';
 import { rgbaFromCss } from '../shared/color.js';
 import { SPRITE_LAYER_ORDER } from '../../data/spriteOrder.js';
@@ -260,14 +261,7 @@ export function createRendering({ state, services, parts }) {
     refreshBadgeImages();
     // The ground floor cache warms as tiles arrive: resample once the
     // surface has settled, on the frame after loading ends.
-    let loaded = engine.surface.tilesLoaded();
-    surfaceRemovers.push(
-      engine.frames.postRender.addEventListener(() => {
-        const now = engine.surface.tilesLoaded();
-        if (now && !loaded) resampleAnchors();
-        loaded = now;
-      }),
-    );
+    surfaceRemovers.push(surfaceTriggers(engine, resampleAnchors));
     // Terrain, tileset and imagery changes all go through the map stack.
     services.eventTarget?.addEventListener?.(
       'gev:map-stack-changed',

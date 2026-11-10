@@ -187,12 +187,12 @@ test('badge sprites update in place, and unchanged refreshes write nothing', () 
   assert.equal(h.counts.created, 3);
   assert.equal(h.counts.removed, 1);
   assert.equal(h.counts.cleared, 0);
-  assert.equal(h.engine.frames.postRender.numberOfListeners, 1);
+  assert.equal(h.engine.frames.preRender.numberOfListeners, 1);
   h.rendering.destroy();
   assert.equal(h.badges(), undefined);
   assert.deepEqual(h.engine.movers.list(), []);
   assert.equal(h.state.pointById.size, 0);
-  assert.equal(h.engine.frames.postRender.numberOfListeners, 0);
+  assert.equal(h.engine.frames.preRender.numberOfListeners, 0);
 });
 
 test('horizon changes write only changed visibility, with one governor request per batch', () => {
@@ -349,8 +349,8 @@ test('sampled fallback buckets allocate only representatives at every height, wi
     assert.deepEqual(h.counts.writes, []);
     assert.equal(
       h.engine.frames.preRender.numberOfListeners,
-      0,
-      'badges need no frame work',
+      1,
+      'one shared surface observer',
     );
     h.rendering.destroy();
   }
@@ -384,8 +384,8 @@ test('UTFGrid creates a dedicated unpickable glow and observations alone create 
   );
   assert.equal(
     h.engine.frames.preRender.numberOfListeners,
-    1,
-    'metre-sized glow follows the camera',
+    2,
+    'glow and the shared surface observer follow the camera',
   );
   const glowSet = h.rendering.density.collection.set;
   h.state.gridCells = [...h.state.gridCells].reverse();
@@ -396,7 +396,7 @@ test('UTFGrid creates a dedicated unpickable glow and observations alone create 
   h.rendering.clear();
   assert.equal(glowSet.isDestroyed(), true);
   assert.equal(h.glow(), undefined);
-  assert.equal(h.engine.frames.preRender.numberOfListeners, 0);
+  assert.equal(h.engine.frames.preRender.numberOfListeners, 1);
   assert.equal(h.badges().store.count, 0);
   h.rendering.destroy();
   assert.deepEqual(h.engine.movers.list(), []);

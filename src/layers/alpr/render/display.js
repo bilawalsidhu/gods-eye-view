@@ -16,6 +16,10 @@ import {
 // floor cell, else on the terrain, and waits unseen until one of them is
 // known; floors still resolving are asked for once per render.
 
+import {
+  createSurfacePoints,
+  readSurface,
+} from '../../../globe/surfacePlacement.js';
 import * as geo from '../../../geo/index.js';
 import { distanceScale } from '../../../globe/cpuPicks.js';
 import { rgbaFromCss } from '../../shared/color.js';
@@ -96,20 +100,23 @@ export function createAlprDisplay(engine, { state, services, source }) {
     geo.cartographic.fromDegrees(record.longitude, record.latitude);
   const ownSets = () => [normal, selected].filter(Boolean);
 
-  // Each sample is a depth render on Cesium, a raycast on Navara.
-  function sampleHeight(record) {
-    if (!engine.surface.supported) return undefined;
-    try {
-      return engine.surface.sampleHeight(location(record), ownSets());
-    } catch {
-      return undefined;
-    }
-  }
-  function terrainHeight(record) {
-    return engine.surface.terrainHeightSupported
-      ? engine.surface.terrainHeight(location(record))
-      : undefined;
-  }
+  const sampleHeight = (record) =>
+    readSurface(engine, location(record), {
+      exclude: ownSets(),
+      prefer: 'tiles',
+    });
+  const terrainHeight = (record) =>
+    readSurface(engine, location(record), { prefer: 'terrain' });
+  let surface = null;
+  const surfaceSet = {
+    set(index, { position }) {
+      const marker = [...markers.values()][index];
+      marker.position = position;
+      marker.resolved = validAlprGroundHeight(marker.surface.surfaceHeight);
+      syncMarker(marker);
+    },
+    commit: () => flushSprites(),
+  };
   /** The rendered surface under a camera, else the terrain, else its floor. */
   function surfaceHeight(record) {
     let height = sampleHeight(record);
@@ -131,6 +138,15 @@ export function createAlprDisplay(engine, { state, services, source }) {
     return {
       clamped,
       resolved,
+      surface: {
+        cartographic: location(record),
+        surfaceHeight: resolved ? height : undefined,
+        position: geo.cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+          resolved ? height + MARKER_FLOOR_LIFT_M : 0,
+        ),
+      },
       position: geo.cartesian3.fromDegrees(
         record.longitude,
         record.latitude,
@@ -250,6 +266,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
       marker.drawn = null;
       syncMarker(marker);
     }
+    surface?.place({ all: true });
     resolveFloors();
     flushSprites();
     governorRequestRender('alpr-surface', engine);
@@ -461,6 +478,7 @@ export function createAlprDisplay(engine, { state, services, source }) {
     }
     flushSprites();
     if (changed) state.renderRevision += 1;
+    surface?.place();
     state.onScreen = countOnScreen();
     resolveFloors();
     const chosen = state.selectedId ? markers.get(state.selectedId) : null;
@@ -674,6 +692,20 @@ export function createAlprDisplay(engine, { state, services, source }) {
       normal.commit();
       selected.commit();
       initialized = true;
+      surface = createSurfacePoints(engine, {
+        groups: () => [
+          {
+            set: surfaceSet,
+            points: [...markers.values()].map((marker) => {
+              marker.surface.show = visible && marker.clamped;
+              return marker.surface;
+            }),
+            exclude: ownSets(),
+          },
+        ],
+        heightOffset: MARKER_FLOOR_LIFT_M,
+        request: () => governorRequestRender('alpr-surface', engine),
+      });
       removeMove = engine.camera.moveEnd.addEventListener(onMove);
       removeFrame = engine.frames.preRender.addEventListener(frame);
       overlay.init();
@@ -688,11 +720,14 @@ export function createAlprDisplay(engine, { state, services, source }) {
         : null;
       if (visible === next) return;
       visible = next;
+      if (visible) surface?.place({ all: true });
       for (const marker of markers.values()) syncMarker(marker);
       flushSprites();
     },
     destroy(options) {
       if (!initialized) return;
+      surface?.destroy();
+      surface = null;
       clearRendered(options);
       overlay.destroy();
       removeClick?.();

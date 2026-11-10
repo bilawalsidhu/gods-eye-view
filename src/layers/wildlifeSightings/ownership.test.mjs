@@ -296,7 +296,7 @@ function harness(
     /** Listeners that run on every drawn frame. */
     frameWork: () => engine.frames.preRender.numberOfListeners,
     /** The surface-loading watch (one per enabled scene). */
-    surfaceWatch: () => engine.frames.postRender.numberOfListeners,
+    surfaceWatch: () => engine.frames.preRender.numberOfListeners,
     /** Surface loading as the engine reports it, then one frame. */
     tiles(loaded) {
       tilesLoaded = loaded;
@@ -370,16 +370,16 @@ test('terrain warming resamples unchanged point, card and context anchors withou
   h.moveEnd.emit();
   assert.equal(
     samples,
-    before,
-    'unchanged snapshots and camera movement do not resample per point',
+    before + 1,
+    'camera rest resamples the land anchor once',
   );
   h.tiles(false);
-  assert.equal(samples, before, 'wait for terrain loading to settle');
+  assert.equal(samples, before + 1, 'wait for terrain loading to settle');
   h.tiles(true);
   assert.ok(Math.abs(cartographicOf(point.position).height - 600) < 0.01);
   assert.equal(
     samples,
-    before + 1,
+    before + 2,
     'Acartia sea anchors are never terrain-sampled',
   );
   assert.ok(Math.abs(cartographicOf(sea.position).height) < 0.01);
@@ -403,7 +403,7 @@ test('terrain warming resamples unchanged point, card and context anchors withou
     point.position,
   );
   assert.ok(h.renders.includes('wildlife-sightings-terrain'));
-  assert.equal(h.frameWork(), 0);
+  assert.equal(h.frameWork(), 1);
   h.layer.disable();
   assert.equal(h.surfaceWatch(), 0);
   const disabledSamples = samples;
@@ -864,7 +864,7 @@ test('privacy cells draw on ground, replace changed batches and release them', a
   await h.update();
   const first = cells();
   assert.equal(h.engine.ground.list().length, 1);
-  assert.equal(h.frameWork(), 0, 'static cells need no frame work');
+  assert.equal(h.frameWork(), 1, 'only the shared surface observer');
   rows = [{ ...rows[0], iconic: 'Fungi' }];
   await h.update();
   const second = cells();
@@ -1636,7 +1636,7 @@ test('ambient cards prefilter the horizon, spread over screen regions and retain
   assertCohort(entries);
   const farDot = h.badges().find((point) => point.id === 'wildlife:inat:far');
   assert.ok(!farDot || farDot.show === false);
-  assert.equal(h.frameWork(), 0);
+  assert.equal(h.frameWork(), 1);
   h.layer.selectSighting('inat:01');
   const selected = h.overlay.entries.get('wildlife-sightings-selected');
   h.moveEnd.emit();
@@ -1680,7 +1680,7 @@ test('observations publish real badges while grid acquisition is still pending',
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(h.badges()[0]?.id, 'wildlife:inat:1');
     assert.equal(h.layer.getStats().count, 1);
-    assert.equal(h.frameWork(), 0, 'acquisition adds no frame work');
+    assert.equal(h.frameWork(), 1, 'only the shared surface observer');
   } finally {
     finishGrid({ cells: [], totalResults: 0, fetchedAt: NOW });
     await updating;
@@ -1733,7 +1733,7 @@ test('each arriving tile extends the density glow before the remaining tiles fin
     assert.equal(h.badges().length, 0);
     assert.equal(h.glow().store.count, 2);
     assert.equal(h.layer.getStats().countLabel, '21 sightings in view');
-    assert.equal(h.frameWork(), 1, 'only the glow follows the camera');
+    assert.equal(h.frameWork(), 2, 'glow and the shared surface observer');
   } finally {
     finishGrid({ cells, totalResults: 21, fetchedAt: NOW });
     await updating;
@@ -1767,7 +1767,7 @@ test('grid-only views draw nonpickable glow without observation badges, labels o
   assert.deepEqual(h.overlay.entries.get('wildlife-sightings-labels'), []);
   assert.deepEqual(h.overlay.entries.get('wildlife-sightings-selected'), []);
   assert.equal(h.focus.length, 0);
-  assert.equal(h.frameWork(), 1, 'only the glow follows the camera');
+  assert.equal(h.frameWork(), 2, 'glow and the shared surface observer');
   h.layer.disable();
   assert.equal(h.glow(), undefined);
   assert.equal(h.frameWork(), 0);
@@ -2008,7 +2008,7 @@ test('label candidates are bounded after on-screen and horizon filtering, with n
       (entry) => cartographicOf(entry.position).latitude < toRadians(47.59),
     ),
   );
-  assert.equal(h.frameWork(), 0);
+  assert.equal(h.frameWork(), 1);
   h.layer.destroy();
 });
 
