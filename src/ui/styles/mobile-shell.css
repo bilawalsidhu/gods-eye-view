@@ -209,12 +209,23 @@ body.mobile-shell #right-context-rail > #news-panel:not(.collapsed) {
   flex-shrink: 0;
 }
 
+/* Preserve the expanded card's constrained flex chain inside the phone sheet. */
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
+  > #solunar-panel:not([hidden]):not(.collapsed) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* ── Dock: voice floats above the tab bar; search and presets are sheets ─ */
 body.mobile-shell #command-dock {
   /* The dock's tray rules size voice by this basis; a column makes it a height. */
   --dock-voice-width: auto;
   top: auto;
-  bottom: calc(var(--mobile-tab-space) + 10px + var(--world-timeline-lift, 0px));
+  bottom: calc(
+    var(--mobile-tab-space) + 10px + var(--world-timeline-lift, 0px)
+  );
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -394,7 +405,9 @@ body.mobile-shell #command-dock #gev-voice-control {
 body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   #cesium-credits {
   right: auto;
-  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
+  bottom: calc(
+    var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)
+  ) !important;
   left: 10px;
   /* With the base rule's nowrap the credits run off the right edge, and a
      max-width alone wrapped them into a narrow column: the line needs wrapping
@@ -421,7 +434,9 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
 /* The view switcher clears the tab bar and the voice bar, opposite the credit. */
 body.mobile-shell:not(.cockpit-mode) #view-switcher {
   right: 12px;
-  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px));
+  bottom: calc(
+    var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)
+  );
 }
 
 body.mobile-shell #corner-actions {
