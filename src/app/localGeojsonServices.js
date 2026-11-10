@@ -1,4 +1,5 @@
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
+import { t } from '../i18n/index.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   clearSelectedEntityContextForLayer,
@@ -25,4 +26,6 @@ export const localGeoJsonServices = Object.freeze({
   governorRequestRender,
   showOsmCredit,
   hideOsmCredit,
+  // Card copy follows the UI language; the standalone package stays English.
+  translate: t,
 });

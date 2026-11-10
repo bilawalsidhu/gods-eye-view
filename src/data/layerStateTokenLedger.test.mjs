@@ -97,8 +97,9 @@ function withPublishedBase(
   }
 }
 
+// The base before Wildlife Sightings took 9 and Airports took 00.
 const preWildlifeRows = reservationRows.filter(
-  ([id]) => id !== 'wildlife-sightings',
+  ([id]) => id !== 'wildlife-sightings' && id !== 'local-airports',
 );
 
 function writeCodecFixture(cwd, rows, entries) {
@@ -113,6 +114,11 @@ function writeCodecFixture(cwd, rows, entries) {
   if (!rows.some(([id]) => id === 'wildlife-sightings'))
     source = source.replace(
       /  Object\.freeze\(\{\s*id: 'wildlife-sightings',[\s\S]*?\}\),\n/,
+      '',
+    );
+  if (!rows.some(([id]) => id === 'local-airports'))
+    source = source.replace(
+      /  Object\.freeze\(\{\s*id: 'local-airports',[\s\S]*?\}\),\n/,
       '',
     );
   const registryEnd = ']);\n\nexport const REGISTERED_LAYER_IDS';
@@ -138,7 +144,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
     { ...parseLayerStateTokenReservations(reservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 36);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 37);
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
     {
@@ -151,6 +157,7 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       'ski-pistes': '7',
       'drone-airspace': '8',
       'wildlife-sightings': '9',
+      'local-airports': '00',
     },
   );
   assert.throws(
@@ -176,9 +183,9 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
     /Duplicate layer-state token reservation/,
   );
   assert.equal(
-    parseLayerStateTokenReservations([...reservationRows, ['future', '00']])
+    parseLayerStateTokenReservations([...reservationRows, ['future', '01']])
       .future,
-    '00',
+    '01',
   );
   assert.throws(
     () =>
@@ -400,19 +407,19 @@ test('an isolated valid two-character fixture round-trips an l field beyond the 
 test('checker reads a complete future base ledger and rejects retired-token reuse', () => {
   withPublishedBase(
     {
-      rows: [...reservationRows, ['retired-layer', '00']],
+      rows: [...reservationRows, ['retired-layer', '01']],
       source:
-        'export const LAYER_STATE_TOKEN_RESERVATIONS = Object.freeze({ ["retired-layer"]: "00" });\n',
+        'export const LAYER_STATE_TOKEN_RESERVATIONS = Object.freeze({ ["retired-layer"]: "01" });\n',
     },
     (cwd) => {
       const published = readPublishedLayerStateReservations('HEAD', cwd);
-      assert.equal(Object.keys(published).length, 37);
-      assert.equal(published['retired-layer'], '00');
+      assert.equal(Object.keys(published).length, 38);
+      assert.equal(published['retired-layer'], '01');
       assert.throws(
         () =>
           validateLayerStateAllocations(published, {
             ...LAYER_STATE_TOKEN_RESERVATIONS,
-            newcomer: '00',
+            newcomer: '01',
           }),
         /changed or removed/,
       );

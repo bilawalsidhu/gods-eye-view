@@ -1,5 +1,6 @@
 /**
- * Bundled OpenStreetMap infrastructure layers (datacenters and dams): their
+ * Bundled OpenStreetMap infrastructure layers (datacenters, dams and
+ * Norwegian airports): their
  * data files, line-delimited GeoJSON parsing and analyst records.
  */
 
@@ -16,6 +17,12 @@ export const INFRASTRUCTURE_DATA_URLS = Object.freeze({
     return new URL('../data/local_data/dams/dams.geojsonl', import.meta.url)
       .href;
   },
+  get 'local-airports'() {
+    return new URL(
+      '../data/local_data/airports/airports.geojsonl',
+      import.meta.url,
+    ).href;
+  },
 });
 
 /** Parse GeoJSON Lines: one Feature per non-empty line. */
@@ -30,6 +37,7 @@ export function parseGeojsonLines(text) {
 export function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
+  if (layerId === 'local-airports') return 'Airport';
   return 'Feature';
 }
 
@@ -102,6 +110,14 @@ export function mapAnalystRecord(raw, layerId = '') {
     capacity,
     river,
     output,
+    ...(layerId === 'local-airports'
+      ? {
+          icao: text(tags.icao),
+          iata: text(tags.iata),
+          kind: text(tags['aerodrome:type']),
+          status: text(tags.status),
+        }
+      : {}),
   };
 }
 
@@ -143,6 +159,8 @@ export function createInfrastructureSource({
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const records = parseGeojsonLines(await response.text()).flatMap(
           (feature) => {
+            // Drawn parts (runways, terminals) belong to their site's record.
+            if (feature.properties?.role) return [];
             const point = featurePoint(feature);
             return point
               ? [
