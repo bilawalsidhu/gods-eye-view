@@ -121,6 +121,4 @@ export interface InputPort {
     readonly dblclickFollow: StockBehaviour;
     readonly [name: string]: StockBehaviour;
   };
-  /** Ctrl+wheel zooms (rather than the page). */
-  ctrlWheelZoom: boolean;
 }

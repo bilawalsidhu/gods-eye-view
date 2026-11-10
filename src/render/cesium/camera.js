@@ -129,7 +129,7 @@ export function createCesiumCamera({
       })
     : null;
 
-  const controlsPart = createCesiumControls({ scene });
+  const controlsPart = createCesiumControls({ scene, widget });
 
   // Camera commands: hooks run before each one, so an owner can yield.
   const commandHooks = listenerList(report);

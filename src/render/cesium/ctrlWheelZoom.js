@@ -1,11 +1,9 @@
 /**
  * @module render/cesium/ctrlWheelZoom
- * @description Ctrl+wheel zoom on a Cesium scene: a Ctrl+wheel binding among
- * the camera controller's zoom inputs, and browser trackpad pinches (small
- * pixel-mode Ctrl+wheel events) relayed at a usable speed.
+ * @description Browser trackpad pinches (small pixel-mode Ctrl+wheel
+ * events) relayed to a Cesium scene at a usable speed, while the camera
+ * controls' zoom inputs hold `ctrlWheel` (`cameraControls.js`).
  */
-import * as Cesium from 'cesium';
-import { bindingList, zoomInputName } from './cameraControls.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -19,35 +17,19 @@ function boundedPinchDelta(delta) {
 }
 
 /**
- * Add browser trackpad pinch to Cesium's zoom inputs and return its disposer.
- * Browsers expose this gesture as a small pixel-mode Ctrl+wheel event.
+ * Relay browser trackpad pinches to the canvas, amplified and bounded, so
+ * the camera controller's Ctrl+wheel binding zooms at a usable speed;
+ * returns its disposer. Browsers expose this gesture as a small pixel-mode
+ * Ctrl+wheel event. The binding itself is the controls' (`zoomInputs`).
  */
-export function installTrackpadPinchZoom(
+export function installTrackpadPinchRelay(
   viewer,
   { createWheelEvent = (type, init) => new WheelEvent(type, init) } = {},
 ) {
-  const controller = viewer?.scene?.screenSpaceCameraController;
   const container = viewer?.container;
   const canvas = viewer?.canvas;
-  if (!controller || !container || !canvas)
-    throw new TypeError('A complete Cesium viewer is required');
-
-  const originalZoomEventTypes = controller.zoomEventTypes;
-  const zoomEventTypes = bindingList(originalZoomEventTypes);
-  const alreadyHandlesControlWheel = zoomEventTypes.some(
-    (binding) => zoomInputName(binding) === 'ctrlWheel',
-  );
-  const configuredZoomEventTypes = alreadyHandlesControlWheel
-    ? originalZoomEventTypes
-    : [
-        ...zoomEventTypes,
-        {
-          eventType: Cesium.CameraEventType.WHEEL,
-          modifier: Cesium.KeyboardEventModifier.CTRL,
-        },
-      ];
-  if (!alreadyHandlesControlWheel)
-    controller.zoomEventTypes = configuredZoomEventTypes;
+  if (!container || !canvas)
+    throw new TypeError('A viewer with a container and a canvas is required');
 
   const relayedEvents = new WeakSet();
   const relayPinch = (event) => {
@@ -76,7 +58,7 @@ export function installTrackpadPinchZoom(
         view: globalThis.window,
       });
     } catch {
-      // The registered Ctrl+wheel binding can still consume the original.
+      // The Ctrl+wheel binding can still consume the original.
       return;
     }
     relayedEvents.add(relayed);
@@ -94,10 +76,5 @@ export function installTrackpadPinchZoom(
     if (!active) return;
     active = false;
     container.removeEventListener('wheel', relayPinch, true);
-    if (
-      !alreadyHandlesControlWheel &&
-      controller.zoomEventTypes === configuredZoomEventTypes
-    )
-      controller.zoomEventTypes = originalZoomEventTypes;
   };
 }

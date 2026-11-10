@@ -75,15 +75,6 @@ test('an unsupported behaviour is never told; a throwing hook is reported', () =
   assert.equal(errors.length, 2);
 });
 
-test('ctrlWheelZoom is told to the renderer', () => {
-  const told = [];
-  const { port } = router({ onCtrlWheelZoom: (on) => told.push(on) });
-  assert.equal(port.ctrlWheelZoom, false);
-  port.ctrlWheelZoom = 1;
-  assert.equal(port.ctrlWheelZoom, true);
-  assert.deepEqual(told, [true]);
-});
-
 test('dispatch says who an event went to', () => {
   const { port, dispatch, listenerCount } = router();
   const off = port.on('down', () => {});

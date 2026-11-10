@@ -132,10 +132,10 @@ test('set applies supported keys, asks for a frame and returns the rest', () => 
     msaa: 0,
     shadows: true,
     targetFps: 30,
-    clouds: 'high',
-    water: 'off',
+    atmosphere: 'high',
+    milkyWay: 'low',
   });
-  assert.deepEqual(ignored, ['clouds', 'water']);
+  assert.deepEqual(ignored, ['atmosphere', 'milkyWay']);
   assert.equal(scene.msaaSamples, 1, 'off is Cesium’s 1');
   assert.equal(scene.shadowMap.enabled, true);
   assert.equal(quality.get().targetFps, 30);

@@ -20,8 +20,6 @@ const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) <= 4;
  *   has, beyond `select` and `dblclickFollow` (always listed).
  * @param {(name: string, enabled: boolean) => void} [options.onBehaviour]
  *   Told when a behaviour turns off (first hold) or back on (last release).
- * @param {(enabled: boolean) => void} [options.onCtrlWheelZoom] Told when
- *   `ctrlWheelZoom` is set.
  * @param {Record<string, boolean>} [options.supported] Behaviours the
  *   renderer cannot do, as `false`: listed, but reported disabled.
  */
@@ -30,7 +28,6 @@ export function createInputRouter({
   suspendCamera,
   behaviours: extra = [],
   onBehaviour = () => {},
-  onCtrlWheelZoom = () => {},
   supported = {},
 }) {
   const listeners = [];
@@ -88,7 +85,6 @@ export function createInputRouter({
   const leaseOf = (entry) =>
     typeof entry.lease === 'function' ? entry.lease() : entry.lease;
 
-  let ctrlWheelZoom = false;
   const port = {
     on(type, cb, opts = {}) {
       const entry = { type, cb, lease: opts.lease ?? null, live: true };
@@ -121,13 +117,6 @@ export function createInputRouter({
     isPointerFree: () => currentLease === null,
     suspendCameraControls: (reason) => suspendCamera(String(reason)),
     behaviours,
-    get ctrlWheelZoom() {
-      return ctrlWheelZoom;
-    },
-    set ctrlWheelZoom(value) {
-      ctrlWheelZoom = Boolean(value);
-      onCtrlWheelZoom(ctrlWheelZoom);
-    },
   };
 
   /** Who a new press belongs to, decided from its `down`. */

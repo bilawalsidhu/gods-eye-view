@@ -10,8 +10,9 @@
  *   the modifier it was bound with). The DOM event under each one, seen
  *   first on the document, gives the full modifiers and the pointer type.
  * - Wheel comes from the canvas's own `wheel` event, which this never
- *   cancels: the page keeps its Ctrl+wheel zoom unless `ctrlWheelZoom` is
- *   on. Pinch comes from the handler's two-finger events.
+ *   cancels: Ctrl+wheel zooms the globe only while the camera controls'
+ *   `zoomInputs` hold `ctrlWheel`. Pinch comes from the handler's
+ *   two-finger events.
  * - A click is picked lazily and once, through the query port, and shared
  *   by every subscriber.
  * - The viewer's stock select (left click) and follow (double-click) are
@@ -25,7 +26,6 @@
 import * as Cesium from 'cesium';
 import { createInputRouter } from '../input/router.js';
 import { acquireCameraInput } from './cameraInput.js';
-import { installTrackpadPinchZoom } from './ctrlWheelZoom.js';
 import { wheelLines } from '../input/wheel.js';
 import { provideUnboundInput } from '../rendererOf.js';
 
@@ -113,7 +113,6 @@ export const cesiumInputOf = (scene) => inputs.get(scene) ?? null;
  * @param {(canvas: object) => object} [options.createHandler]
  * @param {() => number} [options.now] Event time, ms.
  * @param {object} [options.document] Where the DOM events are watched.
- * @param {typeof installTrackpadPinchZoom} [options.ctrlWheelZoom]
  * @param {boolean} [options.takeStock] False leaves the viewer's stock
  *   actions on its own handler, taken off only while suppressed, for a
  *   viewer that is not this renderer's: its owner may still rebind them.
@@ -129,7 +128,6 @@ export function createCesiumInput(
     createHandler = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
     now = () => performance.now(),
     document: dom = globalThis.document,
-    ctrlWheelZoom = installTrackpadPinchZoom,
     takeStock = true,
   },
 ) {
@@ -170,20 +168,11 @@ export function createCesiumInput(
   }
 
   const cameraInput = acquireCameraInput(scene);
-  let uninstallCtrlWheel = null;
   const router = createInputRouter({
     report,
     suspendCamera: (reason) => cameraInput.suspend(reason),
     supported: { select: has.select, dblclickFollow: has.dblclickFollow },
     onBehaviour: borrowStock,
-    onCtrlWheelZoom(on) {
-      if (disposed) return;
-      if (on && !uninstallCtrlWheel) uninstallCtrlWheel = ctrlWheelZoom(widget);
-      else if (!on && uninstallCtrlWheel) {
-        uninstallCtrlWheel();
-        uninstallCtrlWheel = null;
-      }
-    },
   });
   const { behaviours } = router.port;
 
@@ -464,8 +453,6 @@ export function createCesiumInput(
       for (const type of DOM_EVENTS)
         dom?.removeEventListener?.(type, record, { capture: true });
       if (!handler.isDestroyed?.()) handler.destroy?.();
-      uninstallCtrlWheel?.();
-      uninstallCtrlWheel = null;
       cameraInput.release();
       for (const name of Object.keys(borrowed)) giveBack(name);
       if (stockHandler && !stockHandler.isDestroyed?.())

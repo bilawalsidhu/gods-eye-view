@@ -94,7 +94,9 @@ export async function createApplicationScene({
   const input = inputFor(viewer);
   defer(() => input.destroy());
   // Ctrl+wheel and trackpad pinches zoom the globe, not the page.
-  renderer.input.ctrlWheelZoom = true;
+  const { controls } = renderer.camera;
+  if (!controls.zoomInputs.includes('ctrlWheel'))
+    controls.zoomInputs = [...controls.zoomInputs, 'ctrlWheel'];
   defer(
     followWorldTime(viewer, worldTimeFor('sky'), {
       subscribe: worldClock.subscribe,

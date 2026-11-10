@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createApplication } from './application.js';
-import { installTrackpadPinchZoom } from '../render/cesium/ctrlWheelZoom.js';
+import { installTrackpadPinchRelay } from '../render/cesium/ctrlWheelZoom.js';
 import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
 import * as Cesium from 'cesium';
 import { installFreeLookHeightLimit } from '../render/cesium/freeLookLimit.js';
@@ -354,14 +354,13 @@ function pinchFixture({ zoomEventTypes } = {}) {
   return { viewer, controller, container, handlers, relayed, createEvent };
 }
 
-test('trackpad pinch adds the Ctrl+wheel binding without replacing Cesium inputs', () => {
+test('the trackpad pinch relay leaves the zoom bindings and plain or line-mode wheels alone', () => {
   const original = [1, 2, 3];
   const f = pinchFixture({ zoomEventTypes: original });
-  const dispose = installTrackpadPinchZoom(f.viewer, {
+  const dispose = installTrackpadPinchRelay(f.viewer, {
     createWheelEvent: (_type, init) => f.createEvent(init),
   });
-  assert.deepEqual(f.controller.zoomEventTypes.slice(0, 3), original);
-  assert.equal(f.controller.zoomEventTypes.length, 4);
+  assert.equal(f.controller.zoomEventTypes, original);
 
   const plain = f.createEvent({ deltaY: 2 });
   f.container.emit(plain);
@@ -379,7 +378,7 @@ test('trackpad pinch adds the Ctrl+wheel binding without replacing Cesium inputs
 
 test('trackpad pinch relays pixel deltas once with bounded amplification', () => {
   const f = pinchFixture({ zoomEventTypes: [1, 2, 3] });
-  installTrackpadPinchZoom(f.viewer, {
+  installTrackpadPinchRelay(f.viewer, {
     createWheelEvent: (_type, init) => f.createEvent(init),
   });
 
@@ -399,7 +398,7 @@ test('trackpad pinch relays pixel deltas once with bounded amplification', () =>
 
 test('trackpad pinch falls back to the original event when relay construction fails', () => {
   const f = pinchFixture({ zoomEventTypes: [1, 2, 3] });
-  installTrackpadPinchZoom(f.viewer, {
+  installTrackpadPinchRelay(f.viewer, {
     createWheelEvent() {
       throw new Error('unsupported');
     },

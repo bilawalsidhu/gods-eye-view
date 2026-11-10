@@ -78,7 +78,6 @@ function setup({ stock = true, document = null, takeStock = true } = {}) {
   };
   const handler = fakeHandler();
   const errors = [];
-  const wheelZoom = [];
   let clock = 0;
   const input = createCesiumInput(widget, {
     query,
@@ -87,10 +86,6 @@ function setup({ stock = true, document = null, takeStock = true } = {}) {
     now: () => clock,
     document,
     takeStock,
-    ctrlWheelZoom: () => {
-      wheelZoom.push('on');
-      return () => wheelZoom.push('off');
-    },
   });
   const at = (x, y) => new Cesium.Cartesian2(x, y);
   const press = (x, y, modifier) => {
@@ -109,7 +104,6 @@ function setup({ stock = true, document = null, takeStock = true } = {}) {
     canvas,
     passes,
     errors,
-    wheelZoom,
     press,
     at,
     tick: (ms) => (clock += ms),
@@ -228,16 +222,6 @@ test('camera holds turn the controller’s input off until the last release', ()
   s.port.suspendCameraControls('left out');
   s.input.dispose();
   assert.equal(s.controller.enableInputs, true, 'dispose gives them back');
-});
-
-test('ctrlWheelZoom installs the zoom and takes it out again', () => {
-  const s = setup();
-  s.port.ctrlWheelZoom = true;
-  s.port.ctrlWheelZoom = true;
-  s.port.ctrlWheelZoom = false;
-  s.port.ctrlWheelZoom = true;
-  s.input.dispose();
-  assert.deepEqual(s.wheelZoom, ['on', 'off', 'on', 'off']);
 });
 
 test('wheel is in lines as the reference counts them, where the pointer is over the canvas', () => {
@@ -360,8 +344,6 @@ test('a subscriber that disposes the port stops the rest of the click', () => {
   s.press(5, 6);
   assert.deepEqual(heard, ['first']);
   assert.equal(s.selected.length, 1, 'the stock select had run first');
-  s.port.ctrlWheelZoom = true;
-  assert.deepEqual(s.wheelZoom, [], 'nothing installs after dispose');
 });
 
 test('a double-tap is a touch; a click on Cesium’s timer ends no press', () => {

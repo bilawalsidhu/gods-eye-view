@@ -195,7 +195,11 @@ export interface CameraControls {
   zoomFactor: number;
   /** Pitch the user may tilt between, radians (−π/2 straight down). */
   pitchRange: [min: number, max: number];
-  /** Input bindings that zoom. */
+  /**
+   * Input bindings that zoom. `ctrlWheel`: Ctrl+wheel, and a trackpad
+   * pinch (which browsers send as Ctrl+wheel), zoom the globe rather than
+   * the page.
+   */
   zoomInputs: Array<'wheel' | 'pinch' | 'rightDrag' | 'ctrlWheel'>;
 }
 

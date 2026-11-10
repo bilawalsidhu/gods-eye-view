@@ -1,7 +1,9 @@
 /**
  * Adaptive quality. A governor above the contract decides a level; each
  * renderer reports its frame signals, lists the settings it supports and
- * applies them. Nothing here is engine-specific.
+ * applies them. Nothing here is engine-specific. Quality sets only how
+ * detailed a thing is drawn; switching it on or off is the port's that
+ * draws it (`globe.sky`, `effects`).
  */
 import type { Off } from './common';
 
@@ -14,15 +16,16 @@ export interface QualitySettings {
   terrainDetail: number;
   imageryDetail: number;
   tilesCacheBytes: number;
-  clouds: 'off' | 'low' | 'medium' | 'high' | 'ultra';
   shadows: boolean;
-  water: 'off' | 'low' | 'high';
-  atmosphere: 'off' | 'low' | 'high';
+  /** Detail of the atmosphere; whether it shows is `globe.sky`'s. */
+  atmosphere: 'low' | 'high';
+  /** Detail of the Milky Way; its brightness is `globe.sky`'s. */
   milkyWay: 'low' | 'high';
   /** 0..1 density of particle fields (wind, weather). */
   particles: number;
   models: { maxInstances: number; maxDistance: number };
-  postFx: { bloom: boolean; sharpen: boolean; style: 'low' | 'high' };
+  /** Detail of the post-processing passes; bloom and sharpen are switched in `effects`. */
+  postFx: 'low' | 'high';
   /** Updates per second of a screen modulation sweep. */
   sonarCadenceHz: number;
   targetFps: number;

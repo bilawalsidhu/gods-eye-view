@@ -135,6 +135,28 @@ test('zoomInputs name the zoom bindings and keep unnamed ones', () => {
   assert.throws(() => (controls.zoomInputs = ['scroll']), TypeError);
 });
 
+test('ctrlWheel relays trackpad pinches while it is bound, and not after', () => {
+  const scene = sceneWithController();
+  const relays = [];
+  const { controls, dispose } = createCesiumControls({
+    scene,
+    widget: { container: {} },
+    pinchRelay: () => {
+      relays.push('on');
+      return () => relays.push('off');
+    },
+  });
+  controls.zoomInputs = ['wheel', 'ctrlWheel'];
+  controls.zoomInputs = ['ctrlWheel', 'pinch'];
+  assert.deepEqual(relays, ['on'], 'installed once');
+  controls.zoomInputs = ['wheel'];
+  assert.deepEqual(relays, ['on', 'off']);
+  controls.zoomInputs = ['ctrlWheel'];
+  dispose();
+  controls.zoomInputs = ['ctrlWheel'];
+  assert.deepEqual(relays, ['on', 'off', 'on', 'off'], 'none after dispose');
+});
+
 test('suspend shares the scene’s holds with other users', () => {
   const scene = sceneWithController();
   const c = scene.screenSpaceCameraController;

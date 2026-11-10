@@ -68,9 +68,7 @@ export const QUALITY_KEYS = Object.freeze([
   'terrainDetail',
   'imageryDetail',
   'tilesCacheBytes',
-  'clouds',
   'shadows',
-  'water',
   'atmosphere',
   'milkyWay',
   'particles',
@@ -237,7 +235,6 @@ export const PORTS = deepFreeze({
       'behaviours.dblclickFollow',
       'behaviours.dblclickFollow.enabled',
       'behaviours.dblclickFollow.suppress',
-      'ctrlWheelZoom',
     ),
   ),
   effects: Object.fromEntries([

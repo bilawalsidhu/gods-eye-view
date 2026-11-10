@@ -23,10 +23,13 @@
  *   straight down on its own, and has no other lower bound, so the lower
  *   end is kept and read back but not enforced.
  * - `zoomInputs` are the controller's `zoomEventTypes`; a binding the
- *   contract has no name for is kept as it is when they are set.
+ *   contract has no name for is kept as it is when they are set. While
+ *   they hold `ctrlWheel`, trackpad pinches (small pixel-mode Ctrl+wheel
+ *   events) are relayed at a usable speed (`ctrlWheelZoom.js`).
  */
 import * as Cesium from 'cesium';
 import { acquireCameraInput } from './cameraInput.js';
+import { installTrackpadPinchRelay } from './ctrlWheelZoom.js';
 import { followZoomBase, setFollowZoomBase } from './follow.js';
 
 const HALF_PI = Math.PI / 2;
@@ -84,11 +87,18 @@ export const controllerDefaults = () => ({
 });
 
 /**
- * @param {{scene: {screenSpaceCameraController?: object}}} options
+ * @param {{scene: {screenSpaceCameraController?: object}, widget?: object,
+ *   pinchRelay?: typeof installTrackpadPinchRelay}} options `widget`, the
+ *   Viewer or CesiumWidget, takes the trackpad pinch relay; without one
+ *   `ctrlWheel` binds Ctrl+wheel alone.
  * @returns {{controls: import('../contract/camera').CameraControls,
  *   dispose: () => void}}
  */
-export function createCesiumControls({ scene }) {
+export function createCesiumControls({
+  scene,
+  widget,
+  pinchRelay = installTrackpadPinchRelay,
+}) {
   const ownController = scene.screenSpaceCameraController;
   const controller = ownController ?? controllerDefaults();
 
@@ -102,6 +112,16 @@ export function createCesiumControls({ scene }) {
   };
 
   let collision = controller.enableCollisionDetection ? 'both' : 'none';
+  // The trackpad pinch relay's disposer, while `ctrlWheel` is bound.
+  let uninstallPinch = null;
+  const relayPinches = (on) => {
+    if (on && !uninstallPinch && !disposed && widget?.container)
+      uninstallPinch = pinchRelay(widget);
+    else if (!on && uninstallPinch) {
+      uninstallPinch();
+      uninstallPinch = null;
+    }
+  };
   // The pitch range as last set, read back while the controller still has
   // the tilt limit it was given.
   let pitchSet = null;
@@ -227,12 +247,14 @@ export function createCesiumControls({ scene }) {
           return typeof binding === 'object' ? { ...binding } : binding;
         }),
       ];
+      relayPinches(value.includes('ctrlWheel'));
     },
   };
 
   return {
     controls,
     dispose() {
+      relayPinches(false);
       disposed = true;
       cameraInput?.release();
       cameraInput = null;
