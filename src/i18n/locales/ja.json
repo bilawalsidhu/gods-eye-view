@@ -323,6 +323,7 @@
   "LOADING": "読込中",
   "DEGRADED": "性能低下",
   "STALE": "更新遅延",
+  "SIGNAL LOST · {time}": "信号途絶 · {time}",
   "PARTIAL": "部分的",
   "FALLBACK": "フォールバック",
   "view band|STREET": "街路",

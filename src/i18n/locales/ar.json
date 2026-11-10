@@ -615,6 +615,7 @@
   "LOADING": "جارٍ التحميل",
   "DEGRADED": "متدهور",
   "STALE": "متقادم",
+  "SIGNAL LOST · {time}": "انقطعت الإشارة · {time}",
   "FALLBACK": "بديل",
   "PARTIAL": "جزئي",
   "UNCERTAIN": "غير مؤكد",

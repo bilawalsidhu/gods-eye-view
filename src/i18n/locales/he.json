@@ -328,6 +328,7 @@
   "LOADING": "טוען",
   "DEGRADED": "מופחת",
   "STALE": "מיושן",
+  "SIGNAL LOST · {time}": "האות אבד · {time}",
   "PARTIAL": "חלקי",
   "FALLBACK": "חלופה",
   "view band|STREET": "רחוב",

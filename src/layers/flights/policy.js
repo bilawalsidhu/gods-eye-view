@@ -132,7 +132,7 @@ export const TRAIL_COLOR = '#00d4ff';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (PRD WS-C C2 — approved product decision):
@@ -471,3 +471,6 @@ export const FLOOR_SEED_GRACE_MS = 90_000;
  *  reloads synchronously. */
 
 export const IR_RELOAD_BATCH = 40;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;
