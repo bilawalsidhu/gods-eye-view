@@ -219,9 +219,12 @@ export function createSurfacePoints(
             )
           : point.position;
         if (!onScreen(position, size)) continue;
-        // The camera estimate above counts too: leave this point for the
-        // next pass rather than go over the budget.
-        if (samples >= SAMPLES_PER_PASS) {
+        // The camera estimate and the work since the check above count too:
+        // leave this point for the next pass rather than go over the budget.
+        if (
+          samples >= SAMPLES_PER_PASS ||
+          (samples > 0 && performance.now() - started >= SAMPLE_BUDGET_MS)
+        ) {
           point.surfaceRevision = previousRevision;
           yieldPass();
           return;

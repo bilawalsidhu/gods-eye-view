@@ -263,3 +263,33 @@ test('placement makes progress when preparing a group exhausts the time budget',
   surface.place();
   assert.equal(point.surfaceHeight, 50);
 });
+
+test('no tile sample starts once the pass has used its time', async (t) => {
+  let now = 0;
+  const { engine, surface } = setup(t, 4);
+  t.mock.method(performance, 'now', () => now);
+  await engine.maps.setPhotorealTiles({});
+  engine.fake.script('terrainHeight', 10);
+  // Each sample takes 1.5 ms; projecting the next point another 0.4 ms.
+  engine.fake.script('sampleHeight', () => {
+    now += 1.5;
+    return 50;
+  });
+  const project = engine.projector.worldToWindow;
+  engine.projector.worldToWindow = (position) => {
+    now += 0.4;
+    return project(position);
+  };
+  const starts = [];
+  const sample = engine.surface.sampleHeight;
+  engine.surface.sampleHeight = (...args) => {
+    starts.push(now);
+    return sample(...args);
+  };
+  surface.place();
+  assert.ok(starts.length >= 1);
+  assert.ok(
+    starts.slice(1).every((ms) => ms < 4),
+    `samples started at ${starts.join(', ')} ms`,
+  );
+});
