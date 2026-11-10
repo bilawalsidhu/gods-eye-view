@@ -198,10 +198,16 @@ export class FlightRecords {
       !!prevMeta && (prevMeta.onGround === true) !== onGround;
     // Store flight metadata for click-to-track labels
     const cat = stickyNumber(category, prevMeta?.category, null);
+    const nextCallsign = stickyText(callsign, prevMeta?.callsign);
+    // A route (and its airline) belongs to the callsign it was looked up for;
+    // a new callsign drops it, so an old flight's route never shows under it.
+    const routeHeld =
+      Boolean(prevMeta?.routeCallsign) &&
+      prevMeta.routeCallsign === nextCallsign.toUpperCase();
     const meta = {
       sourceReference: observation.reference,
       observedReceiptMs: Date.now(),
-      callsign: stickyText(callsign, prevMeta?.callsign),
+      callsign: nextCallsign,
       altitude: alt,
       // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
       // untouched aviation `altitude` — never rename/replace it (labels,
@@ -256,8 +262,11 @@ export class FlightRecords {
       typeCode: prevMeta?.typeCode ?? null,
       typeName: prevMeta?.typeName ?? null,
       registration: prevMeta?.registration ?? null,
-      airline: prevMeta?.airline ?? null,
-      route: prevMeta?.route ?? null,
+      airline: routeHeld ? (prevMeta.airline ?? null) : null,
+      route: routeHeld ? (prevMeta.route ?? null) : null,
+      routeCallsign: routeHeld ? prevMeta.routeCallsign : null,
+      // Planespotters photo of the tracked airframe (Core asks it directly).
+      photo: prevMeta?.photo ?? null,
       // The RAW poll fix lat/lon (this tick's OpenSky state-vector
       // coords, pre-dead-reckon) — kept distinct from the continuously
       // dead-reckoned billboard position for any consumer that needs the

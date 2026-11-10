@@ -15,6 +15,7 @@ import {
 import { resolveVoiceLanguage } from '../../../src/voice/voiceLanguage.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS, offeredTools } from './tools.js';
+import { chatSchema } from './chat.js';
 import { resolveOverpassUpstreams } from '../overpass/constants.js';
 import {
   preferCodexOAuth,
@@ -127,6 +128,19 @@ function createRealtimeOAuthLoginHandler({
       );
     }
   };
+}
+
+/**
+ * The tools one Realtime session is offered, as OpenAI accepts them: it now
+ * refuses a whole session whose tool schema uses `\p{…}` patterns (#1618), as
+ * Chat Completions did (#1616), so voice drops the same pattern hints chat does.
+ */
+function realtimeSessionTools(tools, { overpass = false } = {}) {
+  return offeredTools(tools, { overpass }).map((tool) =>
+    tool.parameters
+      ? { ...tool, parameters: chatSchema(tool.parameters) }
+      : tool,
+  );
 }
 
 function createRealtimeTokenHandler({
@@ -316,7 +330,7 @@ function createRealtimeTokenHandler({
           overpass,
           language,
         }),
-        tools: offeredTools(tools, { overpass }),
+        tools: realtimeSessionTools(tools, { overpass }),
         tool_choice: 'auto',
       },
     };
@@ -384,4 +398,5 @@ export {
   createRealtimeOAuthLoginHandler,
   createRealtimeOAuthStatusHandler,
   createRealtimeTokenHandler,
+  realtimeSessionTools,
 };

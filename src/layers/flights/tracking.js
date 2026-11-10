@@ -1060,6 +1060,7 @@ export function createTracking({
     // starts one.
     parts.enrichment._requestTypeEnrichment(icao24, true); // tracked plane — front of the enrichment queue
     parts.enrichment._requestRouteEnrichment(icao24);
+    parts.enrichment._requestPhotoEnrichment(icao24);
     // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
     // aircraft's history is retrievable on select. Grounded flights positions
     // are already surface-clamped (the surfaceM chain), so seeds/appends drape.

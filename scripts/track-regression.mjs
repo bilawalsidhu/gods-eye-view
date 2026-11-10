@@ -94,6 +94,7 @@
 
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import { respondToPlanespotters } from './qa-photo-stub.mjs';
 import { arrivalAngleViolated, arrivalRotationPassed } from '../src/tooling/trackArrivalObservation.mjs';
 import { classifyAircraft, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
 import { ensureGeoidReady, geoidHeight } from '../src/data/geoid.js';
@@ -287,6 +288,8 @@ async function main() {
         });
         return;
       }
+      // Aircraft photo lookups never reach the third party: no photos.
+      if (respondToPlanespotters(request)) return;
       if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
         request.respond({
           status: 200,
