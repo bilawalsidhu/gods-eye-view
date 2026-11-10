@@ -192,6 +192,18 @@ export const REFERENCE_SCENES = Object.freeze([
           style: { kind: 'solid', color: '#ff3b30' },
         },
         {
+          // A bright core inside a dark edge 2 px wide on each side.
+          id: 'outlined',
+          positions: row(800),
+          widthPx: 8,
+          mode: '3d',
+          style: {
+            kind: 'solid',
+            color: '#30d158',
+            outline: { color: '#000000', widthPx: 2 },
+          },
+        },
+        {
           id: 'glow',
           positions: row(200),
           widthPx: 12,

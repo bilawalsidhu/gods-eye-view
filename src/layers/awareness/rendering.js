@@ -9,22 +9,13 @@ import {
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
-import {
-  AWARENESS_PAGE_SIZE,
-  AWARENESS_RANGE_RING_STYLE,
-  CONTEXT_RIM_HEIGHT_M,
-} from './policy.js';
-import {
-  awarenessRangeRingPositions,
-  createRangeRingCesium,
-} from './rangeRingCesium.js';
+import { AWARENESS_PAGE_SIZE } from './policy.js';
+import { createRangeRing } from './rangeRing.js';
 import { formatAwarenessDirection } from './presentation.js';
-import { canvasOf, drawOf, findCamera } from '../../render/rendererOf.js';
+import { canvasOf, findCamera } from '../../render/rendererOf.js';
 import {
   PI_OVER_TWO,
-  distance,
   dot,
-  fromDegrees,
   normalize,
   sub,
   toDegrees,
@@ -34,18 +25,14 @@ import {
 
 // The ring's and the pulses' own arithmetic, for their tests.
 export {
-  AWARENESS_PULSE_GRADIENT_MAX,
+  AWARENESS_BAND_PIXELS,
   awarenessPulseLevel,
   awarenessPulseState,
   awarenessRangeRingPositions,
   awarenessRingFlash,
-  awarenessRingGeometryOptions,
-  discFollowMatrix,
+  paintAwarenessBand,
   wakeAwarenessPulses,
-} from './rangeRingCesium.js';
-
-/** Each instance's rim set id is its own. */
-let instances = 0;
+} from './rangeRing.js';
 
 export function createRendering({
   state: layerState,
@@ -55,15 +42,8 @@ export function createRendering({
 }) {
   const { getKeyholeGeometry, celestialScreenAngle } = services.geometry;
   const { governorRequestRender } = services.render;
-  const rimSetId = `awareness:${++instances}:rim`;
-  /** The static range ring's draw set, and the viewer it draws on. */
-  let rim = null;
-  /**
-   * The ring with its pulses, where the viewer can draw them
-   * (`rangeRingCesium.js`); elsewhere the static ring goes through the draw
-   * port, below.
-   */
-  const pulsedRing = createRangeRingCesium({
+  /** The range ring with its pulses (`rangeRing.js`). */
+  const rangeRing = createRangeRing({
     state: layerState,
     governorRequestRender,
     redraw: (subject) => renderVisual(subject),
@@ -312,99 +292,20 @@ export function createRendering({
    * next request, so waking asks for no extra frame of its own.
    */
   function wakePulses() {
-    pulsedRing.wakePulses();
+    rangeRing.wakePulses();
   }
 
   function clearVisual() {
-    if (layerState.visual?.static) {
-      rim?.set.clear();
-      // Idle mode renders only on request; a removed ring must not linger.
-      governorRequestRender('awareness-visual');
-      layerState.visual = null;
-    }
-    pulsedRing.clearVisual();
+    rangeRing.clearVisual();
   }
 
-  /** Let the rim's draw set go, as the layer is destroyed. */
+  /** Let the ring's draw sets go, as the layer is destroyed. */
   function disposeVisual() {
-    clearVisual();
-    rim?.set.dispose();
-    rim = null;
-  }
-
-  /** The static ring's draw set on the current viewer, made on first use. */
-  function rimSet() {
-    if (rim?.viewer !== layerState.viewer) {
-      rim?.set.dispose();
-      rim = {
-        viewer: layerState.viewer,
-        // Unpickable, so a click on the ring's edge reaches the contact
-        // underneath.
-        set: drawOf(layerState.viewer).lines({ id: rimSetId, pickable: false }),
-      };
-    }
-    return rim.set;
-  }
-
-  /**
-   * The range ring around a ground point as the draw port draws it: a
-   * bright core over a dark halo (`AWARENESS_RANGE_RING_STYLE`), straight
-   * chords between positions that already follow the surface.
-   */
-  function rimItems(groundCenter) {
-    const ring = AWARENESS_RANGE_RING_STYLE;
-    const positions = awarenessRangeRingPositions(
-      groundCenter,
-      AWARENESS_RADIUS_M,
-      CONTEXT_RIM_HEIGHT_M,
-    );
-    const line = (id, widthPx, color) => ({
-      id,
-      positions,
-      widthPx,
-      mode: '3d',
-      style: { kind: 'solid', color },
-    });
-    return [
-      line('halo', ring.width, ring.outlineColor),
-      // The halo is `outlineWidth` of the line's width in all, half on each
-      // side, as the outline material of the pulsed ring draws it.
-      line('core', ring.width - ring.outlineWidth, ring.color),
-    ];
+    rangeRing.disposeVisual();
   }
 
   function renderVisual(subject) {
-    if (!layerState.viewer || !subject?.position) return;
-    if (pulsedRing.drawsOn(layerState.viewer)) {
-      if (layerState.visual?.static) clearVisual();
-      pulsedRing.renderVisual(subject);
-      return;
-    }
-    const location = toLonLatH(subject.position);
-    if (!location) return;
-    const { lon, lat } = location;
-    const groundCenter = fromDegrees(lon, lat, 0);
-    const key = `${subject.layerId}:${subject.id}`;
-    // A rim drawn on another viewer (the layer re-initialized) is redrawn.
-    if (
-      layerState.visual?.static &&
-      layerState.visual.key === key &&
-      rim?.viewer === layerState.viewer
-    ) {
-      // Move the large ring only after a meaningful displacement so live
-      // tracking does not rebuild it for sub-pixel motion every 750 ms.
-      if (distance(layerState.visual.center, groundCenter) >= 250) {
-        rimSet().set(rimItems(groundCenter));
-        layerState.visual.center = groundCenter;
-        // Content actually changed — buy exactly one frame instead of holding.
-        governorRequestRender('awareness-visual');
-      }
-      return;
-    }
-    clearVisual();
-    rimSet().set(rimItems(groundCenter));
-    layerState.visual = { key, center: groundCenter, static: true };
-    governorRequestRender('awareness-visual');
+    rangeRing.renderVisual(subject);
   }
   return {
     ensureDirectionOverlay,

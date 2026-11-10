@@ -192,7 +192,16 @@ export interface PointItem extends Placed {
 }
 
 export type LineStyle =
-  | { kind: 'solid'; color: Color }
+  | {
+      kind: 'solid';
+      color: Color;
+      /**
+       * A band `widthPx` wide each side, inside the line's width, drawn in
+       * the same pass as the line: a translucent halo that does not darken
+       * where it meets the line. Its colour changes in place.
+       */
+      outline?: { color: Color; widthPx: number };
+    }
   | { kind: 'glow'; color: Color; power: number; taper?: number }
   | { kind: 'dash'; color: Color; length: number; pattern16?: number }
   | { kind: 'arrow'; color: Color }
@@ -216,7 +225,10 @@ export interface LineItem {
    * How the parts behind the surface draw, solid or dashed; omitted or
    * `null` hides them. Ignored on draped lines, which are never behind it.
    */
-  depthFail?: Extract<LineStyle, { kind: 'solid' | 'dash' }> | null;
+  depthFail?:
+    | { kind: 'solid'; color: Color }
+    | Extract<LineStyle, { kind: 'dash' }>
+    | null;
   /** Per-segment colours; changing them does not rebuild the line. */
   segmentColors?: Color[];
   segmentShow?: boolean[];

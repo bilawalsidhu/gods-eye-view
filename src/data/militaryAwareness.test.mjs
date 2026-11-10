@@ -110,7 +110,9 @@ function installAwarenessRuntime({
   const originalDocument = globalThis.document;
   const listeners = new Map();
   let nextTimer = 1;
-  let preRenderListener = null;
+  // Every preRender listener, as a scene keeps them: the lifecycle's and
+  // the range ring's pulses both listen.
+  const preRenderListeners = new Set();
 
   class FakeElement {
     constructor() {
@@ -173,9 +175,9 @@ function installAwarenessRuntime({
       },
       preRender: {
         addEventListener(listener) {
-          preRenderListener = listener;
+          preRenderListeners.add(listener);
           return () => {
-            preRenderListener = null;
+            preRenderListeners.delete(listener);
           };
         },
       },
@@ -239,7 +241,7 @@ function installAwarenessRuntime({
   return {
     dispatch: fakeWindow.dispatch.bind(fakeWindow),
     tick() {
-      preRenderListener?.();
+      for (const listener of [...preRenderListeners]) listener();
     },
     viewer,
     renderRequests,

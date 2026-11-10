@@ -1777,7 +1777,18 @@ export function createCesiumDraw({
           source: FLOW_SOURCE,
         };
       case 'solid':
-        return { type: 'Color', uniforms: { color: toColor(style.color) } };
+        // An outlined line keeps its edge in one material: two lines
+        // stacked would darken where their translucent passes overlap.
+        return style.outline
+          ? {
+              type: 'PolylineOutline',
+              uniforms: {
+                color: toColor(style.color),
+                outlineColor: toColor(style.outline.color),
+                outlineWidth: style.outline.widthPx,
+              },
+            }
+          : { type: 'Color', uniforms: { color: toColor(style.color) } };
       case 'glow':
         return {
           type: 'PolylineGlow',
@@ -2030,7 +2041,7 @@ export function createCesiumDraw({
     if (!item.overlaid || !deep || revealed(item)) return false;
     if (!flatEquals(item.positions, part.overlayFrom)) return false;
     // Only its colour may have changed (`patchLines` checked its look).
-    deep.appearance.material.uniforms.color = toColor(item.style.color);
+    paintLine(deep.appearance.material, item.style);
     deep.depthFailAppearance.material.uniforms.color = toColor(
       item.style.color,
     );
@@ -2266,6 +2277,9 @@ export function createCesiumDraw({
         // change it takes in place: kept for lines that can settle.
         shape: settled ? looks.shape(item) : null,
         positions: settled ? flatPositions(item.positions) : null,
+        // An outlined line, which never settles, takes its colours in
+        // place too: how it draws but for them.
+        outlined: item.style.outline ? looks.shape(item) : null,
         id,
         polyline,
         reveal,
@@ -2343,6 +2357,23 @@ export function createCesiumDraw({
     replaceHost(record, collect(own, ground), ground, own);
   }
 
+  /** A line style but for its colours, which its material takes in place. */
+  const colourlessStyle = (style) =>
+    style.outline
+      ? {
+          ...style,
+          color: undefined,
+          outline: { ...style.outline, color: undefined },
+        }
+      : { ...style, color: undefined };
+
+  /** Give a line's material its style's colours, its outline's too. */
+  function paintLine(material, style) {
+    material.uniforms.color = toColor(style.color);
+    if (style.outline && 'outlineColor' in material.uniforms)
+      material.uniforms.outlineColor = toColor(style.outline.color);
+  }
+
   /**
    * How a line draws, but for where it runs, whether it shows and how much
    * of it is revealed: lines that keep it can be changed in place.
@@ -2352,7 +2383,7 @@ export function createCesiumDraw({
       item.mode,
       item.widthPx,
       item.clampTo,
-      colourless ? { ...item.style, color: undefined } : item.style,
+      colourless ? colourlessStyle(item.style) : item.style,
       // The same depth-fail style in any key order.
       item.depthFail
         ? [
@@ -2471,11 +2502,15 @@ export function createCesiumDraw({
 
   /**
    * Whether an undraped line that can settle (in the collection or a
-   * static batch) changes only its colour: it takes the new one in place.
+   * static batch), or an outlined one in the collection, changes only its
+   * colours: it takes the new ones in place.
    */
   const recolourableSolid = (was, item, looks) =>
-    Boolean((was.polyline || was.batched) && was.shape) &&
-    was.shape === looks.shape(item);
+    (Boolean((was.polyline || was.batched) && was.shape) &&
+      was.shape === looks.shape(item)) ||
+    (Boolean(was.polyline && was.outlined) &&
+      !revealed(item) &&
+      was.outlined === looks.shape(item));
 
   /**
    * Whether a line drawn over the surface for a draped one changes only its
@@ -2588,8 +2623,7 @@ export function createCesiumDraw({
     if (!shared) return false;
     // Shared materials take their one colour once, before lines move off
     // them.
-    for (const [material, item] of shared)
-      material.uniforms.color = toColor(item.style.color);
+    for (const [material, item] of shared) paintLine(material, item.style);
     for (let k = 0; k < list.length; k++) {
       const item = list[k];
       const was = parts.get(item.id);
@@ -2600,8 +2634,7 @@ export function createCesiumDraw({
       }
       if (was.look !== looks[k] && was.deep === undefined) {
         // A line drawing on a shared material took its colour above.
-        if (!was.shared || was.solo)
-          was.material.uniforms.color = toColor(item.style.color);
+        if (!was.shared || was.solo) paintLine(was.material, item.style);
         was.look = looks[k];
       }
       if (was.deep !== undefined) {
@@ -2697,6 +2730,8 @@ export function createCesiumDraw({
     item.frame !== 'inertial' &&
     !item.depthFail &&
     item.style.kind === 'solid' &&
+    // A batch draws one colour per line, no outline.
+    !item.style.outline &&
     !revealed(item) &&
     // The collection draws no line under half a pixel wide; a batch
     // would.
@@ -2792,8 +2827,7 @@ export function createCesiumDraw({
     const positions = linePositions(item);
     was.polyline.positions = positions;
     was.polyline.show = show;
-    if (recolour)
-      was.polyline.material.uniforms.color = toColor(item.style.color);
+    if (recolour) paintLine(was.polyline.material, item.style);
     if (was.reveal)
       was.reveal.uniforms.reveal = revealUniform(
         item.revealFraction,
@@ -3575,6 +3609,7 @@ export function createCesiumDraw({
    * hides it: a colour drawn opaque cannot become translucent in place.
    */
   function solidPatchable(part, item) {
+    if (part.image) return imagePatchable(part, item);
     if (!colourOnly(part.look, item)) return false;
     if (part.fill?.isDestroyed?.() || part.outline?.isDestroyed?.())
       return false;
@@ -3594,6 +3629,52 @@ export function createCesiumDraw({
     );
   }
 
+  /**
+   * Whether an unclamped image fill's upsert changes only its image (a
+   * canvas, under a new key for new content), its show or its `meta`: its
+   * texture takes a new canvas in place.
+   */
+  function imagePatchable(part, item) {
+    const fill = item.fill;
+    if (!fill || typeof fill !== 'object' || Array.isArray(fill)) return false;
+    if (!fill.image?.canvas || item.animate || part.pulse) return false;
+    if (!part.fill || part.fill.isDestroyed() || !part.fill.ready) return false;
+    const { fill: was, ...look } = part.look;
+    const { fill: now, show, meta, ...next } = item;
+    return (
+      sameValues(look, next) &&
+      sameValues(was.repeat ?? null, fill.repeat ?? null)
+    );
+  }
+
+  /**
+   * An image fill's texture takes `canvas`: copied into the texture it has
+   * where the size is the same, else a texture of its own, which the
+   * material holds (and destroys) from this frame on. Without a drawing
+   * context (a scene with no WebGL), the material takes the canvas, as it
+   * did when built.
+   */
+  function writeImage(part, canvas) {
+    const image = part.image;
+    const context = scene.context;
+    if (!context) {
+      image.material.uniforms.image = canvas;
+      return;
+    }
+    const texture = image.texture;
+    if (
+      texture &&
+      !texture.isDestroyed() &&
+      texture.width === canvas.width &&
+      texture.height === canvas.height
+    ) {
+      texture.copyFrom({ source: canvas });
+      return;
+    }
+    image.texture = new Cesium.Texture({ context, source: canvas });
+    image.material.uniforms.image = image.texture;
+  }
+
   /** An instance's colour, in a ready primitive. */
   function colourOn(primitive, id, color) {
     const attributes = primitive.getGeometryInstanceAttributes(id);
@@ -3605,6 +3686,9 @@ export function createCesiumDraw({
 
   /** An unclamped shape changed in place: its colours, pulse, show and `meta`. */
   function patchSolid(part, item) {
+    const image = part.image ? item.fill.image : null;
+    if (image && (image.key !== part.look.fill.image.key || !image.key))
+      writeImage(part, image.canvas);
     part.look = lookOf(item);
     part.pulse = pulseOf(item);
     part.id.meta = item.meta;
@@ -3632,7 +3716,12 @@ export function createCesiumDraw({
         ? Cesium.Color.clone(base, result)
         : base.withAlpha(alpha, result);
     };
-    if (look.fill && part.fill?.ready && !part.fill.isDestroyed())
+    if (
+      look.fill &&
+      !part.image &&
+      part.fill?.ready &&
+      !part.fill.isDestroyed()
+    )
       colourOn(part.fill, part.id, tint(look.fill, scratchColour));
     if (look.outline) {
       if (part.outline?.ready && !part.outline.isDestroyed())
@@ -3941,7 +4030,10 @@ export function createCesiumDraw({
         const material = ownMaterial(
           imageMaterial(toImage(imageFill.image), imageFill.repeat),
         );
-        host.add(
+        // Its image is changed in place (`writeImage`); it never recolours.
+        part.image = { material, texture: null };
+        part.translucent.fill = true;
+        part.fill = host.add(
           new Cesium.Primitive({
             geometryInstances: new Cesium.GeometryInstance({
               geometry: shape.fill,

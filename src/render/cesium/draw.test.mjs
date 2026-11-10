@@ -2208,19 +2208,24 @@ test('the context layer draws its static range ring as a haloed line on a viewer
     const linesOf = (from = scene) => {
       const [host] = from.added;
       const lines = [];
-      for (let i = 0; i < host.length; i++) {
-        const collection = host.get(i);
+      if (!host) return lines;
+      // Lines that never settle are drawn by the collection alone.
+      const collections =
+        host instanceof Cesium.PolylineCollection
+          ? [host]
+          : Array.from({ length: host.length }, (_, i) => host.get(i));
+      for (const collection of collections) {
         if (!(collection instanceof Cesium.PolylineCollection)) continue;
         for (let j = 0; j < collection.length; j++)
           lines.push(collection.get(j));
       }
       return lines.sort((x, y) => y.width - x.width);
     };
-    const [halo, core] = linesOf();
-    assert.equal(linesOf().length, 2, 'a halo and a core, nothing else');
-    assert.equal(halo.width, 4);
-    assert.equal(core.width, 3);
-    assert.equal(core.material.type, 'Color');
+    const [core] = linesOf();
+    assert.equal(linesOf().length, 1, 'one line, its halo its outline');
+    assert.equal(core.width, 4);
+    assert.equal(core.material.type, 'PolylineOutline');
+    assert.equal(core.material.uniforms.outlineWidth, 1);
     assert.ok(
       core.material.uniforms.color.equalsEpsilon(
         Cesium.Color.fromCssColorString('rgba(98, 181, 255, 0.95)'),
@@ -2228,7 +2233,7 @@ test('the context layer draws its static range ring as a haloed line on a viewer
       ),
     );
     assert.ok(
-      halo.material.uniforms.color.equalsEpsilon(
+      core.material.uniforms.outlineColor.equalsEpsilon(
         Cesium.Color.fromCssColorString('rgba(4, 12, 16, 0.8)'),
         1e-9,
       ),
@@ -2247,15 +2252,15 @@ test('the context layer draws its static range ring as a haloed line on a viewer
     // Small moves keep the ring; one past 250 m moves it.
     const first = core.positions[0];
     rendering.renderVisual(subject(0.001));
-    assert.ok(Cesium.Cartesian3.equals(linesOf()[1].positions[0], first));
+    assert.ok(Cesium.Cartesian3.equals(linesOf()[0].positions[0], first));
     rendering.renderVisual(subject(0.01));
-    assert.ok(!Cesium.Cartesian3.equals(linesOf()[1].positions[0], first));
+    assert.ok(!Cesium.Cartesian3.equals(linesOf()[0].positions[0], first));
     // Re-initialized on another viewer, the same subject's ring moves there.
     const other = drawOver().scene;
     state.viewer = { scene: other };
     rendering.renderVisual(subject(0.01));
     assert.equal(scene.added.length, 0, 'gone from the old viewer');
-    assert.equal(linesOf(other).length, 2, 'drawn on the new one');
+    assert.equal(linesOf(other).length, 1, 'drawn on the new one');
     rendering.clearVisual();
     assert.equal(linesOf(other).length, 0);
     rendering.disposeVisual();
@@ -2927,6 +2932,43 @@ test('many lines left beside a static batch settle as soon as they are unchanged
     s.settle();
     assert.equal(s.batches().length, 2, 'rebuilding at once');
     set.dispose();
+  }));
+
+test('an outlined solid line draws one outline material, recoloured in place, and never settles', () =>
+  withImageClasses(() => {
+    const s = settlingSet();
+    const outlined = (core, halo) =>
+      settleStem('ring', 100, {
+        widthPx: 4,
+        style: {
+          kind: 'solid',
+          color: core,
+          outline: { color: halo, widthPx: 1 },
+        },
+      });
+    s.set.set([outlined([0, 0.5, 1, 1], [0, 0, 0, 0.8]), settleStem('a', 200)]);
+    const line = () => {
+      const polylines = s.polylines();
+      for (let i = 0; i < polylines.length; i++)
+        if (polylines.get(i).id?.id === 'ring') return polylines.get(i);
+      return null;
+    };
+    const first = line();
+    assert.equal(first.material.type, 'PolylineOutline');
+    assert.equal(first.material.uniforms.outlineWidth, 1);
+    s.set.upsert([outlined([0, 0.5, 1, 0.4], [0, 0, 0, 0.32])]);
+    assert.equal(line(), first, 'the same line');
+    assert.equal(first.material.uniforms.color.alpha, 0.4);
+    assert.ok(
+      Math.abs(first.material.uniforms.outlineColor.alpha - 0.32) < 1e-9,
+    );
+    s.settle();
+    const [batch] = s.batches();
+    assert.deepEqual(
+      batch.geometryInstances.map((one) => one.id.id),
+      ['a'],
+    );
+    s.set.dispose();
   }));
 
 test('a line under half a pixel wide, which the collection does not draw, never settles', () =>
@@ -4147,6 +4189,58 @@ test('an unclamped shape filled with an image draws a textured primitive and fre
         ]),
       /colours only/,
     );
+  }));
+
+test('an unclamped image fill takes a new canvas in place; anything else about it rebuilds', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const draw = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    }).port;
+    const set = draw.shapes({ id: 'band' });
+    const canvases = [new HTMLCanvasElement(), new HTMLCanvasElement()];
+    const band = (k, extra = {}) => ({
+      id: 'band',
+      geometry: {
+        kind: 'ellipse',
+        center: { lon: 10, lat: 20, height: 2500 },
+        semiMajor: 50_000,
+        semiMinor: 50_000,
+      },
+      fill: { image: { canvas: canvases[k % 2], key: `band:${k}` } },
+      height: 'absolute',
+      ...extra,
+    });
+    set.set([band(0)]);
+    const host = scene.added[0];
+    const primitive = host.get(0);
+    const material = primitive.appearance.material;
+    assert.equal(material.uniforms.image, canvases[0]);
+    // Not yet drawn, it rebuilds.
+    set.upsert([band(1)]);
+    assert.notEqual(scene.added[0], host, 'not yet drawn: rebuilt');
+    const drawn = scene.added[0].get(0);
+    drawn._ready = true;
+    const drawnMaterial = drawn.appearance.material;
+    // Drawn, a new canvas, its show and its meta change in place; with no
+    // drawing context the material takes the canvas itself.
+    set.upsert([band(2, { meta: 'm', show: false })]);
+    assert.equal(scene.added[0].get(0), drawn, 'changed in place');
+    assert.equal(drawnMaterial.uniforms.image, canvases[0]);
+    assert.equal(drawn.show, false);
+    set.upsert([band(3)]);
+    assert.equal(scene.added[0].get(0), drawn);
+    assert.equal(drawnMaterial.uniforms.image, canvases[1]);
+    assert.equal(drawn.show, true);
+    // The same key is the same image: nothing is written.
+    drawnMaterial.uniforms.image = 'untouched';
+    set.upsert([band(3)]);
+    assert.equal(drawnMaterial.uniforms.image, 'untouched');
+    // Another shape or height rebuilds.
+    set.upsert([{ ...band(4), height: 'clampGround' }]);
+    assert.notEqual(scene.added[0].get?.(0), drawn, 'rebuilt');
+    set.dispose();
   }));
 
 test('a draped rectangle turns, its image fill with it, on a ground primitive that owns its material', () =>
