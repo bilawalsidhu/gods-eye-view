@@ -56,6 +56,8 @@ const fixture = wildlifeRoutes(base.origin);
 const strict = createStrict({
   origin: base.origin,
   layers: [LAYER],
+  // Wildlife freshness is checked against fixtures timestamped in Node.
+  time: 'real',
   routes: fixture.routes,
 });
 await strict.run({}, async (b) => {

@@ -7,6 +7,7 @@ import { assertKeylessPreview } from '../qa-strict-harness.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import { DAYTIME, shiftTime } from './time.mjs';
 
 /** A still view over Austin, no layers, OSM imagery. */
 export const STILL_VIEW =
@@ -18,21 +19,8 @@ export const STILL_VIEW =
  * the styles' signatures read) does not follow the time of day the
  * scenario happens to run at. Default: Austin early afternoon.
  */
-export function pinDaytime(page, utc = '2026-11-03T18:30:00Z') {
-  return page.evaluateOnNewDocument((utc) => {
-    const offset = Date.parse(utc) - Date.now();
-    const RealDate = Date;
-    class ShiftedDate extends RealDate {
-      constructor(...args) {
-        if (args.length === 0) super(RealDate.now() + offset);
-        else super(...args);
-      }
-      static now() {
-        return RealDate.now() + offset;
-      }
-    }
-    globalThis.Date = ShiftedDate;
-  }, utc);
+export function pinDaytime(page, utc = DAYTIME) {
+  return page.evaluateOnNewDocument(shiftTime, utc);
 }
 
 /** The keyless page on `engine` with the still view (and `extra` hash). */

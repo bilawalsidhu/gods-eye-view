@@ -1,6 +1,7 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -24,17 +25,31 @@ import {
   localPreview,
   waitForEngine,
 } from './qa-strict-harness.mjs';
+import { closeBrowser, exitAfterFlush } from './qa/browser.mjs';
+import { runScenario } from './qa/process.mjs';
+import {
+  classifyAttempt,
+  historyLine,
+  retryStatus,
+  statusCounts,
+} from './qa/acceptance.mjs';
 
 // The strict acceptance: every browser scenario against one keyless local
 // preview, under the strict network policy (scripts/qa-strict-harness.mjs),
 // writing <output>/acceptance.json, one log and one assertion manifest per
-// scenario.
+// scenario. A timed-out pass is hung; a retry that passes is flaky and does
+// not fail the run. QA_EXIT_DIAGNOSTICS=1 preserves Chrome resources and
+// reports them five seconds after strict completion instead of forcing exit.
+// Pages start at 2026-11-03T18:30:00Z unless createStrict's time overrides it.
 //
 //   node scripts/qa-all-layer-switches.mjs http://127.0.0.1:4208 <output>
 //     [--serve[=<commit>]]  build <commit> (default HEAD) keyless in a clean
 //                           worktree and serve it with every .env key blank
 //     [--scratch=DIR]       where --serve puts its checkout and build
 //     [--only=a,b]          run only these labels
+//     [--no-retry]          disable the one retry of a non-passing scenario
+//     [--history=FILE]      append a JSONL run summary; inspect it with
+//                           node scripts/report-acceptance-flake.mjs FILE
 //     [--quick]             the soak with 2 runs of 10 switches and 100
 //                           switches for the long run
 //
@@ -42,6 +57,7 @@ import {
 // the live page and cross-checked with src/app/layers/directory.js) has no
 // assertion on either engine, or when any network policy violation shows.
 
+const startedAt = new Date().toISOString();
 const base = localPreview(process.argv[2]);
 const output = process.argv[3]?.startsWith('--')
   ? mkdtempSync(join(tmpdir(), 'gev-acceptance-'))
@@ -67,7 +83,7 @@ let chrome;
 try {
   const browser = await puppeteer.launch({ headless: true });
   chrome = await browser.version();
-  await browser.close();
+  await closeBrowser(browser);
 } catch (error) {
   console.error(
     'Puppeteer cannot start Chrome: ' +
@@ -429,7 +445,7 @@ const liveCatalog = {};
       await page.close();
     }
   } finally {
-    await browser.close();
+    await closeBrowser(browser);
   }
   liveCatalog.violations = strict.ledger.violations;
 }
@@ -475,10 +491,11 @@ const report = {
     live: liveCatalog,
     scenarios: scenarioIds,
   },
-  startedAt: new Date().toISOString(),
+  startedAt,
   finishedAt: null,
   passed: 0,
   failed: 0,
+  counts: statusCounts([]),
   networkViolations: 0,
   coverage: null,
   uncovered: null,
@@ -495,7 +512,6 @@ for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
   if (only && !only.includes(label)) continue;
   const script = 'scripts/qa-' + name + '.mjs';
   const evidence = join(output, 'evidence', label + '.json');
-  rmSync(evidence, { force: true });
   const args = [base.origin, ...extra];
   if (external) args.splice(0, 1, base.origin + '/');
   else args.push(`--layers=${layers.join(',')}`, `--evidence=${evidence}`);
@@ -503,27 +519,69 @@ for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
   // With --serve the scenarios run from the same clean checkout the app was
   // built from, so other work in this tree cannot change them.
   const scripts = served?.worktree ?? root;
-  const run = spawnSync(process.execPath, [join(scripts, script), ...args], {
-    encoding: 'utf8',
-    timeout: seconds * 1000,
-    maxBuffer: 1 << 26,
-    env: scrubbed(),
-  });
-  const status =
-    run.status === 0
-      ? 'pass'
-      : run.error?.code === 'ETIMEDOUT'
-        ? 'timeout'
-        : 'fail';
-  const log = machinePaths(
-    (run.stdout || '') + (run.stderr || '') + (run.error?.message || ''),
-  );
-  writeFileSync(join(output, label + '.log'), log);
-  const manifest = existsSync(evidence)
-    ? JSON.parse(machinePaths(readFileSync(evidence, 'utf8')))
+  const attempts = [];
+  for (let attempt = 1; attempt <= (flag('no-retry') ? 1 : 2); attempt++) {
+    rmSync(evidence, { force: true });
+    const attemptStart = Date.now();
+    const run = await runScenario(
+      process.execPath,
+      [join(scripts, script), ...args],
+      {
+        timeout: seconds * 1000,
+        env: scrubbed(),
+      },
+    );
+    const log = machinePaths(
+      (run.stdout || '') + (run.stderr || '') + (run.error?.message || ''),
+    );
+    let manifest = null;
+    let evidenceError = null;
+    if (existsSync(evidence)) {
+      try {
+        manifest = JSON.parse(machinePaths(readFileSync(evidence, 'utf8')));
+      } catch (error) {
+        evidenceError = 'Invalid evidence: ' + error.message;
+      }
+    }
+    const status =
+      evidenceError && !run.error
+        ? 'fail'
+        : classifyAttempt(run, manifest, { external });
+    const logFile = `${label}.attempt-${attempt}.log`;
+    const evidenceFile = manifest
+      ? `evidence/${label}.attempt-${attempt}.json`
+      : null;
+    writeFileSync(join(output, logFile), log);
+    if (manifest)
+      writeFileSync(
+        join(output, evidenceFile),
+        JSON.stringify(manifest, null, 2) + '\n',
+      );
+    attempts.push({
+      status,
+      exitCode: run.status,
+      seconds: Math.round((Date.now() - attemptStart) / 100) / 10,
+      log: logFile,
+      logSha256: createHash('sha256').update(log).digest('hex'),
+      evidence: evidenceFile,
+      error: evidenceError ?? manifest?.error ?? run.error?.message ?? null,
+    });
+    writeFileSync(join(output, label + '.log'), log);
+    if (manifest)
+      writeFileSync(evidence, JSON.stringify(manifest, null, 2) + '\n');
+    console.log(
+      status.toUpperCase(),
+      label,
+      attempts.at(-1).seconds,
+      `attempt ${attempt}`,
+    );
+    if (status === 'pass' || attempt === 2 || flag('no-retry')) break;
+  }
+  const last = attempts.at(-1);
+  const status = retryStatus(attempts[0].status, attempts[1]?.status);
+  const manifest = last.evidence
+    ? JSON.parse(readFileSync(join(output, last.evidence), 'utf8'))
     : null;
-  if (manifest)
-    writeFileSync(evidence, JSON.stringify(manifest, null, 2) + '\n');
   scenarios.push({
     label,
     script,
@@ -533,10 +591,11 @@ for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
     layers,
     external: Boolean(external),
     status,
-    exitCode: run.status,
+    exitCode: last.exitCode,
     seconds: Math.round((Date.now() - start) / 100) / 10,
     log: label + '.log',
-    logSha256: createHash('sha256').update(log).digest('hex'),
+    logSha256: last.logSha256,
+    attempts,
     evidence: manifest ? 'evidence/' + label + '.json' : null,
     assertions: manifest?.assertions.length ?? 0,
     coverage: manifest?.coverage ?? null,
@@ -554,10 +613,11 @@ for (const [label, name, layers, extra = [], seconds = 300, external] of runs) {
         }
       : null,
     contracts: manifest?.contracts ?? null,
-    error: manifest?.error ?? null,
+    error: last.error,
   });
   if (manifest?.soak) scenarios.at(-1).soak = manifest.soak;
-  report.passed = scenarios.filter((row) => row.status === 'pass').length;
+  report.counts = statusCounts(scenarios);
+  report.passed = report.counts.pass + report.counts.flaky;
   report.failed = scenarios.length - report.passed;
   report.networkViolations =
     scenarios.reduce(
@@ -599,9 +659,18 @@ report.catalogMatches =
 report.finishedAt = new Date().toISOString();
 report.dirtyFilesAtEnd = dirty();
 save();
+if (flag('history'))
+  appendFileSync(
+    resolve(String(flag('history'))),
+    JSON.stringify(historyLine(report)) + '\n',
+  );
 console.log(
   `${catalogIds.length} catalog layers, ${report.uncovered.length} engine slots without an assertion, ` +
     `${report.networkViolations} network violations, ${report.passed}/${scenarios.length} scenarios, ` +
+    Object.entries(report.counts)
+      .map(([status, count]) => `${count} ${status}`)
+      .join(', ') +
+    ', ' +
     `paid keys configured: ${paidKeysConfigured.join(', ') || 'none'}. ${join(output, 'acceptance.json')}`,
 );
 if (
@@ -615,3 +684,4 @@ if (
 // The preview child would keep this process alive: stop it and drop the
 // checkout now.
 cleanup();
+await exitAfterFlush();

@@ -6,6 +6,7 @@
 //
 //   node scripts/qa-imagery-contract.mjs http://127.0.0.1:<PORT>
 //     [--layers=recent-imagery] [--evidence=FILE]
+import { closeBrowser } from './qa/browser.mjs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -470,9 +471,8 @@ try {
   report.errors.push(e.stack);
   check('driver completes', false);
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
   await fs.writeFile(output, JSON.stringify(report, null, 2));
 }
 const failed = report.checks.some((c) => !c.pass);
-await strict.finish({ failed: failed ? 'imagery checks failed' : null });
-if (failed) process.exitCode = 1;
+await strict.finishAndExit({ failed: failed ? 'imagery checks failed' : null });

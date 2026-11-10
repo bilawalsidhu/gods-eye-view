@@ -50,6 +50,7 @@ const asked = [];
 const strict = createStrict({
   origin: base.origin,
   layers: [],
+  time: MIDDAY_UTC,
   routes: [
     {
       pattern: `${base.origin}/api/weather-effects*`,
@@ -105,21 +106,9 @@ await strict.run({}, async (browser) => {
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.evaluateOnNewDocument((utc) => {
+  await page.evaluateOnNewDocument(() => {
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
-    const offset = Date.parse(utc) - Date.now();
-    const RealDate = Date;
-    class ShiftedDate extends RealDate {
-      constructor(...args) {
-        if (args.length === 0) super(RealDate.now() + offset);
-        else super(...args);
-      }
-      static now() {
-        return RealDate.now() + offset;
-      }
-    }
-    globalThis.Date = ShiftedDate;
-  }, MIDDAY_UTC);
+  });
   await page.setViewport({ width: 1280, height: 800 });
   await page.goto(visualPageUrl(base.origin, 'navara', '', LOW_VIEW), {
     waitUntil: 'domcontentloaded',

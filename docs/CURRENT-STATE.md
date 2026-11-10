@@ -416,7 +416,16 @@ one application, and only the globe-bound parts move to the next engine.
   --serve` builds the commit keyless in a clean worktree and runs every layer
   and switch scenario under a deny-by-default network policy, with free map
   tiles from a disk cache and a trap that fails any read of Cesium before it
-  has loaded. Every catalog layer must be asserted on both engines. Point
+  has loaded. Every catalog layer must be asserted on both engines.
+  Page clocks start at `2026-11-03T18:30:00Z` unless a scenario supplies
+  `time` (an ISO instant or `'real'`); `QA_EXIT_DIAGNOSTICS=1` preserves
+  shutdown resources and prints them five seconds after completion.
+  A timed-out scenario with passing evidence is `hung`; non-passing scenarios
+  retry once unless `--no-retry` is set, and a passing retry is reported as
+  `flaky` without failing the run.
+  `--history=FILE` appends run summaries, and
+  `node scripts/report-acceptance-flake.mjs FILE` reports each scenario's
+  share of non-pass runs, including flaky runs. Point
   `PUPPETEER_EXECUTABLE_PATH` at an installed Chrome if Puppeteer's pinned
   build is missing. Navara lights the globe by the real sun; every base map,
   street maps included, takes the night fill after dusk, so a scenario over

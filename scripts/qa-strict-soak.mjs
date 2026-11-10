@@ -28,6 +28,7 @@
 //   node scripts/qa-strict-soak.mjs http://127.0.0.1:4208 --runs=6 --swaps=50
 //   node scripts/qa-strict-soak.mjs http://127.0.0.1:4208 --runs=1 --swaps=500 --assert
 
+import { closeBrowser } from './qa/browser.mjs';
 import assert from 'node:assert/strict';
 import {
   createStrict,
@@ -311,7 +312,7 @@ for (let run = 1; run <= runs; run++) {
       }
     }
   } finally {
-    await browser.close().catch(() => {});
+    await closeBrowser(browser);
   }
   const warm = (to) =>
     row.swaps
@@ -433,8 +434,7 @@ if (strictMode) {
   report.checks = checks;
   for (const check of checks)
     console.log(check.pass ? 'PASS' : 'FAIL', JSON.stringify(check));
-  await strict.finish({
+  await strict.finishAndExit({
     failed: checks.some((c) => !c.pass) ? 'soak checks failed' : null,
   });
-  if (checks.some((c) => !c.pass)) process.exitCode = 1;
-} else await strict.finish();
+} else await strict.finishAndExit();

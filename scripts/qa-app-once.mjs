@@ -1,3 +1,4 @@
+import { closeBrowser, exitAfterFlush } from './qa/browser.mjs';
 import { localPreview, waitForEngine } from './qa-strict-harness.mjs';
 // The application is created once per page: switching engines detaches and
 // attaches only the engine-bound parts. This gate runs three Cesium→Navara→
@@ -413,6 +414,10 @@ try {
 
   console.log(JSON.stringify(report, null, 2));
   if (!reportOnly) console.log('PASS application created once; session kept');
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
+await exitAfterFlush();

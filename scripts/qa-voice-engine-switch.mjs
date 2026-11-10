@@ -1,3 +1,4 @@
+import { closeBrowser, exitAfterFlush } from './qa/browser.mjs';
 import { localPreview, waitForEngine } from './qa-strict-harness.mjs';
 // An active voice session survives engine switches. With a fake microphone
 // and a fake Realtime transport (no model is reached: /api/openai, /api/realtime
@@ -253,6 +254,10 @@ try {
   );
   results.push('PASS stopping voice closes the transport');
   console.log(results.join('\n'));
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
 } finally {
-  await browser.close();
+  await closeBrowser(browser);
 }
+await exitAfterFlush();

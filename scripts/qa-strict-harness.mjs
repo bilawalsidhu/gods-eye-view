@@ -27,6 +27,8 @@ import {
   STRICT_TILE_HOSTS,
 } from './qa-map-policy.mjs';
 import { createMissLoader, tileCacheFile } from './qa/tileCache.mjs';
+import { closeBrowser, diagnoseExit, exitAfterFlush } from './qa/browser.mjs';
+import { DAYTIME, shiftTime } from './qa/time.mjs';
 
 export const ENGINES = Object.freeze(['cesium', 'navara']);
 /** What the Globe Engine picker offers: the engines and Navara HD. */
@@ -92,7 +94,14 @@ const live = (response) => Boolean(response.remoteIPAddress);
  */
 export async function installStrictNetwork(
   browser,
-  { origin, fixtures = [], routes = [], tileHosts = STRICT_TILE_HOSTS, ledger },
+  {
+    origin,
+    fixtures = [],
+    routes = [],
+    tileHosts = STRICT_TILE_HOSTS,
+    ledger,
+    time = DAYTIME,
+  },
 ) {
   const preview = new URL(origin);
   fixtures = [...fixtures, ...routes.map((route) => route.pattern)];
@@ -298,7 +307,7 @@ export async function installStrictNetwork(
     // requests, and a live answer would still show up as a violation.
     if (type === 'page' || type === 'iframe')
       steps.push(intercept(session, type));
-    if (type === 'page') steps.push(trapCesiumGlobal(session, ledger));
+    if (type === 'page') steps.push(trapCesiumGlobal(session, ledger, time));
     await Promise.all(steps);
   };
   const attach = async (sessionId, info, waiting) => {
@@ -344,7 +353,7 @@ export async function installStrictNetwork(
  * has assigned it are logged with their stack in `ledger.cesiumBeforeLoad`
  * and answer `undefined`, as production would.
  */
-async function trapCesiumGlobal(session, ledger) {
+async function trapCesiumGlobal(session, ledger, time) {
   const binding = '__gevStrictCesiumRead';
   session.on('Runtime.bindingCalled', (event) => {
     if (event.name !== binding) return;
@@ -358,7 +367,8 @@ async function trapCesiumGlobal(session, ledger) {
   await session.send('Runtime.addBinding', { name: binding });
   await session.send('Page.enable');
   await session.send('Page.addScriptToEvaluateOnNewDocument', {
-    source: `(() => {
+    source: `(${shiftTime})(${JSON.stringify(time)});
+    (() => {
       if (window.top !== window) return;
       const seen = new Set();
       let sdk;
@@ -630,6 +640,7 @@ export async function openPage(browser, { shaderErrors = false } = {}) {
  * @param {readonly string[]} [options.tileHosts] Hosts the disk cache
  *   answers (default STRICT_TILE_HOSTS).
  * @param {string} [options.name] Scenario name for the manifest.
+ * @param {string} [options.time] ISO instant for the page clock, or 'real'.
  */
 export function createStrict({
   origin,
@@ -638,7 +649,14 @@ export function createStrict({
   routes = [],
   tileHosts = STRICT_TILE_HOSTS,
   name = path.basename(process.argv[1] ?? 'scenario', '.mjs'),
+  time = DAYTIME,
 }) {
+  assert.ok(
+    typeof time === 'string' &&
+      (time === 'real' || Number.isFinite(Date.parse(time))),
+    'valid page time',
+  );
+  const browserPids = [];
   const args = strictArguments();
   if (args.layers)
     assert.deepEqual(
@@ -685,28 +703,45 @@ export function createStrict({
         ...options,
         args: [...CHROME_ARGS, ...args],
       });
-      await installStrictNetwork(browser, {
-        origin,
-        fixtures,
-        routes,
-        tileHosts,
-        ledger,
-      });
+      const pid = browser.process()?.pid;
+      if (pid) browserPids.push(pid);
+      try {
+        await installStrictNetwork(browser, {
+          origin,
+          fixtures,
+          routes,
+          tileHosts,
+          ledger,
+          time,
+        });
+      } catch (error) {
+        await closeBrowser(browser);
+        throw error;
+      }
       return browser;
     },
     /** Launch with `options`, run `body(browser)`, close, then finish(). */
     async run(options, body) {
-      const browser = await strict.launch(options);
+      let browser;
       let failed = null;
       try {
+        browser = await strict.launch(options);
         await body(browser);
       } catch (error) {
         failed = error;
       } finally {
-        await browser.close().catch(() => {});
+        await closeBrowser(browser);
       }
-      await strict.finish({ failed });
-      if (failed) throw failed;
+      await strict.finishAndExit({ failed });
+    },
+    async finishAndExit({ failed = null } = {}) {
+      try {
+        await strict.finish({ failed });
+      } catch (error) {
+        failed = error;
+      }
+      if (failed) console.error(failed);
+      await exitAfterFlush(failed ? 1 : process.exitCode ?? 0);
     },
     /** Record an assertion that already passed. */
     record,
@@ -788,6 +823,30 @@ export function createStrict({
         fixtures,
         tileHosts: [...tileHosts],
       };
+      let validationError = null;
+      if (!failed) {
+        try {
+          assert.equal(
+            ledger.violations.length,
+            0,
+            'network policy violations: ' +
+              JSON.stringify(ledger.violations.slice(0, 5)),
+          );
+          assert.deepEqual(
+            ledger.cesiumBeforeLoad,
+            [],
+            'the page read the Cesium global before Cesium.js loaded',
+          );
+          assert.deepEqual(missing, [], 'layers without an assertion');
+          assert.ok(
+            picks.some((pick) => pick.via === 'pointer+keyboard'),
+            'switch at least once with real input on the picker',
+          );
+        } catch (error) {
+          validationError = error;
+          failed = error;
+        }
+      }
       const manifest = {
         scenario: name,
         argv: process.argv.slice(2),
@@ -825,23 +884,8 @@ export function createStrict({
         console.log('NETWORK VIOLATION', JSON.stringify(v));
       for (const read of ledger.cesiumBeforeLoad.slice(0, 10))
         console.log('CESIUM BEFORE LOAD', JSON.stringify(read));
-      if (failed) return;
-      assert.equal(
-        ledger.violations.length,
-        0,
-        'network policy violations: ' +
-          JSON.stringify(ledger.violations.slice(0, 5)),
-      );
-      assert.deepEqual(
-        ledger.cesiumBeforeLoad,
-        [],
-        'the page read the Cesium global before Cesium.js loaded',
-      );
-      assert.deepEqual(missing, [], 'layers without an assertion');
-      assert.ok(
-        picks.some((pick) => pick.via === 'pointer+keyboard'),
-        'switch at least once with real input on the picker',
-      );
+      diagnoseExit(browserPids);
+      if (validationError) throw validationError;
     },
   };
   return strict;

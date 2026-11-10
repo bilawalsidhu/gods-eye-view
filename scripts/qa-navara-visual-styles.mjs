@@ -24,7 +24,6 @@ import {
   freeze,
   histogramShift,
   pickStyle,
-  pinDaytime,
   saveCapture,
   stats,
   visualPageUrl,
@@ -51,7 +50,6 @@ await strict.run({}, async (browser) => {
   page.on('pageerror', (error) => errors.push(error.message));
   // The same sun on every run: the frame's brightness decides what blooms
   // and what each style's signature reads.
-  await pinDaytime(page);
   await page.evaluateOnNewDocument(() => {
     localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
   });
