@@ -131,6 +131,7 @@ html:not([lang='en']) #global-loading-detail {
 #global-loading-status:is(
   [data-state='complete'],
   [data-state='cancelled'],
+  [data-state='key'],
   [data-state='error']
 ) {
   justify-content: center;
@@ -139,6 +140,7 @@ html:not([lang='en']) #global-loading-detail {
 #global-loading-status:is(
     [data-state='complete'],
     [data-state='cancelled'],
+    [data-state='key'],
     [data-state='error']
   )
   #global-loading-detail {
@@ -155,11 +157,13 @@ html:not([lang='en']) #global-loading-detail {
 #global-loading-status[data-state='cancelled'] {
   color: #ffd488;
 }
-#global-loading-status[data-state='retry'] {
+#global-loading-status:is([data-state='retry'], [data-state='key']) {
   border-color: rgba(255, 212, 136, 0.55);
 }
-#global-loading-status[data-state='retry'] #global-loading-label,
-#global-loading-status[data-state='retry'] #global-loading-detail {
+#global-loading-status:is([data-state='retry'], [data-state='key'])
+  #global-loading-label,
+#global-loading-status:is([data-state='retry'], [data-state='key'])
+  #global-loading-detail {
   color: #ffd488;
 }
 #global-loading-status[data-state='cancelled'] #global-loading-label,
