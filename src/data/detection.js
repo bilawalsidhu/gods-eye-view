@@ -120,7 +120,6 @@ const BRACKET_ALPHA_STEPS = 4;
 const _bracketPathCache = new DetectionBracketPaths(BRACKET_ALPHA_STEPS);
 const _bracketRasterCache = new DetectionBracketRaster();
 const _projectionCache = new DetectionProjectionCache();
-const _movingVehicleProjection = {};
 /** Finer bands for Global Context echo brackets, whose fade is animated. */
 const ECHO_ALPHA_STEPS = 8;
 /** Stable per-layer candidate safety cap; independent of density and camera bearing. */
@@ -859,7 +858,9 @@ function _paintDetectionLane(frame) {
 function _collectDetectableObjects() {
   const label = MODE_LABELS[_mode];
   const objects = _detectableObjects;
-  objects.length = 0;
+  // Overwrite the existing backing store; resetting length before push would
+  // discard capacity and grow fresh arrays on every dense frame.
+  let objectCount = 0;
 
   for (let i = 0; i < _layers.length; i++) {
     const layer = _layers[i];
@@ -877,7 +878,7 @@ function _collectDetectableObjects() {
       if (items && items.length > 0) {
         for (const item of items) {
           item._layerId = layer.id;
-          objects.push(item);
+          objects[objectCount++] = item;
         }
       }
     } catch {
@@ -885,6 +886,7 @@ function _collectDetectableObjects() {
     }
   }
 
+  objects.length = objectCount;
   return objects;
 }
 
@@ -1267,78 +1269,6 @@ function _materializeCandidate(
   };
 }
 
-function _projectDetectionObject(obj, frame, row) {
-  row.visible = false;
-  const {
-    occluder,
-    cameraPosition: camPos,
-    width,
-    height,
-    viewProjectionMatrix: vp,
-  } = frame;
-  const vp0 = vp[0];
-  const vp1 = vp[1];
-  const vp3 = vp[3];
-  const vp4 = vp[4];
-  const vp5 = vp[5];
-  const vp7 = vp[7];
-  const vp8 = vp[8];
-  const vp9 = vp[9];
-  const vp11 = vp[11];
-  const vp12 = vp[12];
-  const vp13 = vp[13];
-  const vp15 = vp[15];
-
-  // Skip objects occluded by the ellipsoid (behind the horizon)
-  if (!occluder.isPointVisible(obj.position)) return;
-
-  // This product renders in Cesium's 3D scene mode. Multiplying by the
-  // once-per-frame view-projection matrix is equivalent to the general
-  // SceneTransforms helper here, without repeating its mode/viewport setup
-  // for every observation.
-  const px = obj.position.x;
-  const py = obj.position.y;
-  const pz = obj.position.z;
-  const clipW = vp3 * px + vp7 * py + vp11 * pz + vp15;
-  if (clipW <= 0) return;
-  const invW = 1 / clipW;
-  const sx = (row.x =
-    ((vp0 * px + vp4 * py + vp8 * pz + vp12) * invW * 0.5 + 0.5) * width);
-  const sy = (row.y =
-    (0.5 - (vp1 * px + vp5 * py + vp9 * pz + vp13) * invW * 0.5) * height);
-
-  // Tracked objects (skipLabel) get larger boxes. AIR reticles scale with the
-  // plane's on-screen size (same scaleByDistance curve as the billboards) so
-  // they don't look tiny at altitude; other types keep fixed sizes.
-  const isTracked = obj.skipLabel;
-  let halfW;
-  let halfH;
-  if (obj.type === 'AIR') {
-    const bscale = nearFarScale(
-      Cesium.Cartesian3.distance(camPos, obj.position),
-      BILL_NEAR,
-      BILL_NEAR_SCALE,
-      BILL_FAR,
-      BILL_FAR_SCALE,
-    );
-    halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
-    halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
-  } else if (obj.tier?.startsWith('transit_') && obj.bracketHalfWidth > 0) {
-    halfW = obj.bracketHalfWidth;
-    halfH = obj.bracketHalfHeight;
-  } else {
-    halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
-    halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
-  }
-  row.halfW = halfW;
-  row.halfH = halfH;
-  // Viewport bounds check with padding
-  if (sx < -halfW || sx > width + halfW || sy < -halfH || sy > height + halfH)
-    return;
-
-  row.visible = true;
-}
-
 /**
  * Paint detection against the shared host frame. Brackets remain broad and
  * per-frame; rich placements rebuild only for selected/fading identities and
@@ -1451,6 +1381,19 @@ function _drawOverlay(frame) {
   // disagree about the operator's setting within a frame.
   const keyholeOutsideOpacity = getKeyholeFadeTuning().outsideOpacity;
   _projectionCache.begin(frame, _mode);
+  const viewProjection = frame.viewProjectionMatrix;
+  const vp0 = viewProjection[0];
+  const vp1 = viewProjection[1];
+  const vp3 = viewProjection[3];
+  const vp4 = viewProjection[4];
+  const vp5 = viewProjection[5];
+  const vp7 = viewProjection[7];
+  const vp8 = viewProjection[8];
+  const vp9 = viewProjection[9];
+  const vp11 = viewProjection[11];
+  const vp12 = viewProjection[12];
+  const vp13 = viewProjection[13];
+  const vp15 = viewProjection[15];
 
   // Brackets stay broad inside the keyhole, fade outside it, and batch by tier
   // color plus a 32-step alpha band. Text candidates are projected once and
@@ -1494,15 +1437,76 @@ function _drawOverlay(frame) {
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
     if (!obj.position) continue;
-    // Transit and traffic move every frame: their geometry has no reuse window.
-    // Keep the direct path and one scratch row instead of maintaining cache rows.
-    const geometry =
-      obj.type === 'VEH'
-        ? _movingVehicleProjection
-        : _projectionCache.get(obj, frame, _projectDetectionObject);
-    if (obj.type === 'VEH') _projectDetectionObject(obj, frame, geometry);
-    if (!geometry.visible) continue;
-    const { x: sx, y: sy, halfW, halfH } = geometry;
+    // Keep cache misses inline: passing projected scalars through a helper
+    // boxes numbers in the continuously moving, GC-bracketed workload.
+    const geometry = obj.type === 'VEH' ? null : _projectionCache.lookup(obj);
+    let sx, sy, halfW, halfH;
+    if (geometry && !geometry.dirty) {
+      if (!geometry.visible) continue;
+      sx = geometry.x;
+      sy = geometry.y;
+      halfW = geometry.halfW;
+      halfH = geometry.halfH;
+    } else {
+      if (geometry) {
+        geometry.dirty = false;
+        geometry.visible = false;
+      }
+      // Skip objects occluded by the ellipsoid (behind the horizon)
+      if (!occluder.isPointVisible(obj.position)) continue;
+
+      // This product renders in Cesium's 3D scene mode. Multiplying by the
+      // once-per-frame view-projection matrix is equivalent to the general
+      // SceneTransforms helper here, without repeating its mode/viewport setup
+      // for every observation.
+      const px = obj.position.x;
+      const py = obj.position.y;
+      const pz = obj.position.z;
+      const clipW = vp3 * px + vp7 * py + vp11 * pz + vp15;
+      if (clipW <= 0) continue;
+      const invW = 1 / clipW;
+      sx = ((vp0 * px + vp4 * py + vp8 * pz + vp12) * invW * 0.5 + 0.5) * width;
+      sy =
+        (0.5 - (vp1 * px + vp5 * py + vp9 * pz + vp13) * invW * 0.5) * height;
+
+      // Tracked objects (skipLabel) get larger boxes. AIR reticles scale with the
+      // plane's on-screen size (same scaleByDistance curve as the billboards) so
+      // they don't look tiny at altitude; other types keep fixed sizes.
+      const isTracked = obj.skipLabel;
+      if (obj.type === 'AIR') {
+        const bscale = nearFarScale(
+          Cesium.Cartesian3.distance(camPos, obj.position),
+          BILL_NEAR,
+          BILL_NEAR_SCALE,
+          BILL_FAR,
+          BILL_FAR_SCALE,
+        );
+        halfW = _clamp((isTracked ? 14 : 9) * bscale, 7, 48);
+        halfH = _clamp((isTracked ? 11 : 7) * bscale, 5, 38);
+      } else if (obj.tier?.startsWith('transit_') && obj.bracketHalfWidth > 0) {
+        halfW = obj.bracketHalfWidth;
+        halfH = obj.bracketHalfHeight;
+      } else {
+        halfW = _mode === MODE_DENSE ? (isTracked ? 28 : 11) : 16;
+        halfH = _mode === MODE_DENSE ? (isTracked ? 22 : 7) : 10;
+      }
+      // Viewport bounds check with padding
+      if (
+        sx < -halfW ||
+        sx > width + halfW ||
+        sy < -halfH ||
+        sy > height + halfH
+      )
+        continue;
+
+      if (geometry) {
+        geometry.x = sx;
+        geometry.y = sy;
+        geometry.halfW = halfW;
+        geometry.halfH = halfH;
+        geometry.visible = true;
+      }
+    }
 
     // Tier color drives the bracket, accent bar, and leader line for this object.
     // The bracket follows the same linear radial keyhole fade as its callout.

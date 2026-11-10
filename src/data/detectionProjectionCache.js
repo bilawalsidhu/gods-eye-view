@@ -35,7 +35,7 @@ export class DetectionProjectionCache {
     if (changed) this.revision++;
   }
 
-  get(object, frame, project) {
+  lookup(object) {
     let row = this.entries.get(object);
     if (!row) {
       row = {};
@@ -62,6 +62,15 @@ export class DetectionProjectionCache {
       row.tracked = object.skipLabel;
       row.width = object.bracketHalfWidth;
       row.height = object.bracketHalfHeight;
+      row.dirty = true;
+    }
+    return row;
+  }
+
+  get(object, frame, project) {
+    const row = this.lookup(object);
+    if (row.dirty) {
+      row.dirty = false;
       project(object, frame, row);
     }
     return row;

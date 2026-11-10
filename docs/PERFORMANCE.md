@@ -863,3 +863,17 @@ node scripts/qa-traffic-satellites.mjs http://127.0.0.1:PORT OUTPUT
 node scripts/qa-traffic-satellites-paired.mjs BEFORE_URL AFTER_URL OUTPUT
 node scripts/qa-traffic.mjs --url http://127.0.0.1:PORT --fixtures
 ```
+
+### PR integration allocation check — 10 November 2026
+
+The final isolated PR branch was checked against the repository's unchanged
+5,000-observation moving-detection allocation gate on Node 24.22.1. Integration
+initially exposed about 1,326,927 bytes per frame in this synthetic workload.
+Keeping projection cache misses inline and overwriting the existing observation
+array backing store reduced the median to 209,338 bytes per frame (41.9 bytes
+per candidate), below the existing 700,000-byte and 154-byte-per-candidate
+limits. The same probe against current upstream measured 333,921 bytes per
+frame. All 5,000 brackets remained visible, with 56 selected labels and 60
+solves over 480 measured frames. These are transient JS allocation measurements,
+not retained browser/GPU memory or an app-wide memory reduction. Exact cached
+projection reuse remains available between contact/camera changes.
