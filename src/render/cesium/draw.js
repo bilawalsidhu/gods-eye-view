@@ -3710,8 +3710,22 @@ export function createCesiumDraw({
       texture.copyFrom({ source: canvas });
       return;
     }
+    dropPendingTexture(image);
     image.texture = new Cesium.Texture({ context, source: canvas });
     image.material.uniforms.image = image.texture;
+  }
+
+  /**
+   * Destroys an image fill's newest texture if its material has not taken
+   * it yet. A material takes a texture (and destroys it later) only when it
+   * next updates, so one replaced or disposed before then is no one's.
+   */
+  function dropPendingTexture(image) {
+    const texture = image.texture;
+    if (!texture || texture.isDestroyed()) return;
+    if (image.material._textures?.image === texture) return;
+    texture.destroy();
+    image.texture = null;
   }
 
   /** An instance's colour, in a ready primitive. */
@@ -4009,10 +4023,13 @@ export function createCesiumDraw({
     // Image fills' materials hold their textures, which primitives leave
     // alone: the host destroys them as it goes.
     const materials = [];
+    // Image fills, whose newest texture the material may not hold yet.
+    const images = [];
     const ownMaterial = (material) => {
       if (!materials.length) {
         const destroyHost = host.destroy.bind(host);
         host.destroy = () => {
+          for (const image of images.splice(0)) dropPendingTexture(image);
           for (const owned of materials.splice(0))
             if (!owned.isDestroyed()) owned.destroy();
           return destroyHost();
@@ -4071,6 +4088,7 @@ export function createCesiumDraw({
         );
         // Its image is changed in place (`writeImage`); it never recolours.
         part.image = { material, texture: null };
+        images.push(part.image);
         part.translucent.fill = true;
         part.fill = host.add(
           new Cesium.Primitive({
