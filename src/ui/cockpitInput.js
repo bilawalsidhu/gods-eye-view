@@ -39,6 +39,8 @@ function subjectWorldPosition(kind) {
       ) ?? null
     );
   }
+  if (kind === 'satellite')
+    return this.services.satellitesLayer?.getCockpitPosition?.() ?? null;
   const info = this.readVesselInfo();
   if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude))
     return null;
@@ -87,7 +89,7 @@ export function onScenePointerDown(nowMs = performance.now()) {
 
 /**
  * Enter first person when the followed track itself is double-clicked: the
- * same entry, and the same gates, as C and the entry buttons. The click may
+ * same entry, and the same gates, as the entry buttons. The click may
  * land where the track is drawn now or where it was as the gesture began. A
  * double-click anywhere else, or one a tool owns (drawing ends a shape with
  * one), is left alone.
@@ -121,7 +123,8 @@ export function onSceneDoubleClick(position, nowMs = performance.now()) {
  * installs its own (pickAndTrackObject), which untracks whenever the pick is
  * not an Entity: on a followed aircraft's model, a primitive, it would drop
  * the very track the double-click means to ride. A double-click on the
- * followed track is the Cockpit's; any other goes on to Cesium's.
+ * followed track is the Cockpit's, as is one on a mapped ground point in
+ * orbit (a focus); any other goes on to Cesium's.
  * @returns {() => void} Puts Cesium's handler back, unless another owner
  *   (the draw tool borrows it) has replaced ours since.
  */
@@ -132,6 +135,9 @@ export function routeSceneDoubleClick() {
   const stock = handler.getInputAction?.(type) ?? null;
   const routed = (event) => {
     if (this.onSceneDoubleClick(event?.position)) return;
+    // In orbit, a double-click on a mapped ground point is a focus, never a
+    // retarget that would end the view.
+    if (this.onOrbitalDoubleClick?.(event?.position)) return;
     stock?.(event);
   };
   handler.setInputAction(routed, type);
@@ -194,9 +200,35 @@ function handleLookKey(event) {
   return true;
 }
 
+/** Zoom keys in orbit: `+` (or `=`, unshifted) in and `-` (or `_`) out. */
+const ORBITAL_ZOOM_KEYS = Object.freeze({ '+': 1, '=': 1, '-': -1, _: -1 });
+
 /**
- * The Cockpit's capture-phase keydown: Escape and C, and on a bridge the
- * look-around keys.
+ * In an orbital view: tilt off nadir with the arrows (single 5° steps; Shift
+ * does not take the bridge's 45° step), return to nadir with Home or 0, and
+ * step the zoom with + and −. The bridge's focus guards apply.
+ * @returns {boolean} True when the key was taken.
+ */
+function handleOrbitalKey(event) {
+  if (!this.active || this.subjectKind !== 'satellite') return false;
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  const step = lookKeyStep(event.key);
+  const reset = !event.repeat && (event.key === 'Home' || event.key === '0');
+  const zoom = event.repeat ? 0 : ORBITAL_ZOOM_KEYS[event.key] || 0;
+  if (!step && !reset && !zoom) return false;
+  if (event.target?.closest?.(LOOK_KEY_OWNERS)) return false;
+  if (this.isUtilityDisclosureOpen?.()) return false;
+  event.preventDefault();
+  if (step) this.turnOrbitalLook(step);
+  else if (reset) this.orbitalNadir();
+  else this.stepOrbitalZoom(zoom);
+  return true;
+}
+
+/**
+ * The Cockpit's capture-phase keydown: Escape, on a bridge the look-around
+ * keys and in orbit the tilt and zoom keys. C is left to the app-wide CCTV
+ * shortcut; entry is by double-click or the entry buttons.
  * @param {KeyboardEvent} event
  */
 export function onKeyDown(event) {
@@ -247,32 +279,5 @@ export function onKeyDown(event) {
   if (event.target?.closest?.('input, textarea, select, [contenteditable]'))
     return;
   if (handleLookKey.call(this, event)) return;
-  const key = event.key?.toLowerCase();
-  if (key === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-    if (!this.active) {
-      const cockpitAttempt = !!(
-        this.readAircraftInfo() && this.viewer.trackedEntity?.position
-      );
-      // With no tracked aircraft, C takes the selected vessel's bridge, but
-      // only when the bridge can be entered: otherwise C stays the CCTV
-      // shortcut, as it is with nothing selected.
-      const bridgeAttempt =
-        !cockpitAttempt &&
-        !!this.readVesselInfo() &&
-        this.isBridgeEntryAllowed();
-      if (!cockpitAttempt && !bridgeAttempt) return;
-      if (bridgeAttempt) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        this.enter({ kind: 'vessel' });
-        return;
-      }
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (!this.active && !this.isEntryAllowed()) return;
-    if (this.active) this.exit();
-    else this.enter({ kind: 'aircraft' });
-    return;
-  }
+  handleOrbitalKey.call(this, event);
 }

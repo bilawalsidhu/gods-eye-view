@@ -48,12 +48,13 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   /**
    * Show or hide every point by its class. The tracked satellite's point
-   * stays hidden (its entity draws the dot). The ISS's ring and label go
-   * with its class.
+   * stays hidden (its entity draws the dot), as do points a Cockpit hold hid.
+   * The ISS's ring and label go with its class.
    */
   function _applyClassVisibility() {
     for (const [noradId, point] of layerState._points) {
       if (noradId === layerState._trackedNorad) continue;
+      if (layerState._cockpitHiddenPoints?.has(noradId)) continue;
       point.show = _classVisible(noradId);
     }
     _syncIssOrbit();
@@ -253,6 +254,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         // that card instead. Only members of the tracked cluster are affected —
         // unrelated nearby satellites are never suppressed.
         if (!isTracked && layerState._dockedCompanions.has(noradId)) continue;
+        // The Cockpit camera rides a held subject; a bracket on it would sit
+        // on the lens.
+        if (isTracked && parts.cockpit?._cockpitHeld()) continue;
         const cat = layerState._catalog.get(noradId);
         let object = layerState._detectionObjects.get(noradId);
         if (!object) {
@@ -362,6 +366,72 @@ export function createControls({ state: layerState, services, parts, source }) {
           latitude: Cesium.Math.toDegrees(carto.latitude),
           longitude: Cesium.Math.toDegrees(carto.longitude),
           altitudeM: carto.height,
+        });
+      }
+      return result;
+    },
+
+    /**
+     * The shown satellites nearest a position, nearest first, from per-point
+     * state (no SGP4 re-propagation): a bounded pass that keeps only the
+     * nearest `maxCount`, and reads latitude and longitude for those alone.
+     * Dense extras are left out, as in `getAllPositions`.
+     * @param {Cesium.Cartesian3} center Earth-fixed position.
+     * @param {number} [maxCount=8] Most entries to return.
+     * @param {{excludeIds?: Array<number|string>,
+     *   excludeClasses?: Array<string>}} [options] Satellites, and classes
+     *   (e.g. 'debris'), to leave out.
+     * @returns {Array<{ id: number, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, satelliteClass: string|null, distanceM: number }>}
+     */
+    getNearestPositions(
+      center,
+      maxCount = 8,
+      { excludeIds = [], excludeClasses = [] } = {},
+    ) {
+      const nearest = [];
+      const cap = Number.isFinite(maxCount) ? Math.floor(maxCount) : 8;
+      if (
+        cap < 1 ||
+        !center ||
+        !layerState._points ||
+        layerState._points.size === 0
+      )
+        return nearest;
+      const excluded = new Set(excludeIds.map(String));
+      const classes = new Set(excludeClasses);
+      const dense = layerState._denseIds.length > 0;
+      for (const [noradId, point] of layerState._points) {
+        const p = point.position;
+        if (!p || excluded.has(String(noradId))) continue;
+        if (!_classVisible(noradId)) continue;
+        const sat = layerState._catalog.get(noradId);
+        if (dense && sat?.group === 'dense') continue;
+        if (classes.size && classes.has(sat?.satelliteClass)) continue;
+        const dx = p.x - center.x;
+        const dy = p.y - center.y;
+        const dz = p.z - center.z;
+        const distanceSq = dx * dx + dy * dy + dz * dz;
+        if (nearest.length === cap && distanceSq >= nearest[cap - 1].distanceSq)
+          continue;
+        // Insertion into a short sorted list: no copy or sort of the rest.
+        let at = nearest.length;
+        while (at > 0 && nearest[at - 1].distanceSq > distanceSq) at -= 1;
+        nearest.splice(at, 0, { noradId, point, sat, distanceSq });
+        if (nearest.length > cap) nearest.pop();
+      }
+      const result = [];
+      for (const { noradId, point, sat, distanceSq } of nearest) {
+        const carto = Cesium.Cartographic.fromCartesian(point.position);
+        if (!carto) continue;
+        result.push({
+          id: noradId,
+          label: sat ? sat.name.trim() : String(noradId),
+          position: point.position,
+          latitude: Cesium.Math.toDegrees(carto.latitude),
+          longitude: Cesium.Math.toDegrees(carto.longitude),
+          altitudeM: carto.height,
+          satelliteClass: sat?.satelliteClass ?? null,
+          distanceM: Math.sqrt(distanceSq),
         });
       }
       return result;

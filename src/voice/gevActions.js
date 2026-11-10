@@ -1,4 +1,5 @@
 import { interruptGlobeRotation } from '../cameraVerbs.js';
+import { normalizeDisplayText } from '../data/displayText.js';
 import {
   layerSnapshot,
   feedProvenanceEnvelope,
@@ -5581,13 +5582,7 @@ function uniqueStrings(values) {
  * @returns {string} Sanitized single-line label (max 120 chars).
  */
 function sanitizeLabel(value) {
-  const text = String(value || '');
-  let out = '';
-  for (const ch of text) {
-    const code = ch.codePointAt(0);
-    out += code < 0x20 || code === 0x7f ? ' ' : ch; // drop control chars incl. newlines
-  }
-  return out.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return normalizeDisplayText(value, 120);
 }
 
 function cachePrecision(service) {
@@ -5704,10 +5699,8 @@ function compactProperties(props) {
 }
 
 function cleanText(value) {
-  if (value == null || typeof value === 'object') return '';
-  const text = String(value).trim();
-  if (!text || text === 'undefined' || text === 'null') return '';
-  return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  const text = normalizeDisplayText(value);
+  return text === 'undefined' || text === 'null' ? '' : text;
 }
 
 function layerTitle(layerId) {
@@ -5873,6 +5866,22 @@ const ANALYST_IDENTITY_FIELDS = Object.freeze([
 ]);
 
 /**
+ * Keys that identify an analyst record. The referent registry, track_entity,
+ * locateLayerEntity and follow-up filters match on them, so they skip
+ * display-text normalization.
+ */
+const ANALYST_CANONICAL_FIELDS = new Set([
+  'layerKey',
+  'id',
+  'icao24',
+  'mmsi',
+  'noradId',
+  'registration',
+  'callsign',
+  'routeId',
+]);
+
+/**
  * Compact one analyst record for the voice payload: identity, position (so a
  * follow-up can fly to it), distance, and that layer's manifest fields with
  * times as ISO text. The full record set stays engine-side for follow-ups.
@@ -5909,6 +5918,11 @@ function compactAnalystItem(r) {
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;
+  // Canonical keys stay raw: bikeshare's id is the raw station name.
+  for (const key of Object.keys(compact)) {
+    if (typeof compact[key] === 'string' && !ANALYST_CANONICAL_FIELDS.has(key))
+      compact[key] = normalizeDisplayText(compact[key]);
+  }
   return compact;
 }
 

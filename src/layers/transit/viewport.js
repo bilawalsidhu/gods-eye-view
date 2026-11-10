@@ -83,7 +83,9 @@ export function createViewport({ state, services, parts }) {
     if (!state._enabled || !state._viewer) return;
     refreshViewBounds();
     const altitude = getCameraAltitude();
+    const wasGateOpen = state._altitudeGateOpen;
     state._altitudeGateOpen = altitudeGateOpen(altitude);
+    let changed = state._altitudeGateOpen !== wasGateOpen;
     const center = state._altitudeGateOpen ? getCameraCenterLatLon() : null;
     const desired = new Map();
     if (center) {
@@ -106,17 +108,23 @@ export function createViewport({ state, services, parts }) {
         state._activeFeeds.delete(feedId);
         state._feedStatus.delete(feedId);
         parts.ingestion.removeFeedVehicles(feedId);
+        changed = true;
       }
     }
+    // Nothing is left on the map to date.
+    if (desired.size === 0) state._lastUpdate = null;
     for (const [feedId, feed] of desired) {
       if (!state._activeFeeds.has(feedId)) {
         state._activeFeeds.set(feedId, feed);
         void parts.ingestion.pollFeed(feed, state._generation);
+        changed = true;
       }
     }
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-proximity');
+    // Repaint now: the row follows the camera, the manager tick is 15 s.
+    if (changed) state._dataManager?.refreshLayerStats?.('transit');
   }
 
   function onCameraChanged() {
