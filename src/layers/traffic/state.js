@@ -200,6 +200,10 @@ export function createState({ services, source }) {
 
   layerState._heatRetired = [];
 
+  /** @type {Array|null} Roads of the newest rebuild asked for while the lines were building. */
+
+  layerState._heatPendingRoads = null;
+
   /** @type {number} Heat-lines in the current render (stats). */
 
   layerState._heatLineCount = 0;

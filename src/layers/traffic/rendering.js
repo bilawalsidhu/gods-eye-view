@@ -59,24 +59,37 @@ export function createRendering({
   /** Remove the heat-line / flow-line ground primitives from the scene. */
 
   function removeHeatLines() {
+    layerState._heatPendingRoads = null;
     removePrimitives(takeHeatLines());
     removePrimitives(layerState._heatRetired || []);
     layerState._heatRetired = [];
     parts.animation.syncRenderDemand?.();
   }
 
+  /** @returns {boolean} Whether a line primitive's geometry is still building. */
+
+  function linesBuilding() {
+    return LINE_KEYS.some((key) => layerState[key] && !layerState[key].ready);
+  }
+
   /**
    * Replaced lines stay drawn until their successors finish building
    * (GroundPolylinePrimitive geometry is asynchronous), so a rebuild never
-   * blinks. Called every held frame.
+   * blinks. Once they have, the replaced lines go and the newest rebuild
+   * asked for in the meantime starts. Called every held frame.
    */
 
   function retireHeatLines() {
-    if (!layerState._heatRetired?.length) return;
-    if (LINE_KEYS.some((key) => layerState[key] && !layerState[key].ready))
-      return;
-    removePrimitives(layerState._heatRetired);
-    layerState._heatRetired = [];
+    if (linesBuilding()) return;
+    if (layerState._heatRetired?.length) {
+      removePrimitives(layerState._heatRetired);
+      layerState._heatRetired = [];
+    }
+    const pending = layerState._heatPendingRoads;
+    if (pending) {
+      layerState._heatPendingRoads = null;
+      rebuildHeatLines(pending);
+    }
   }
 
   /**
@@ -95,24 +108,37 @@ export function createRendering({
    * the globe is hidden (photoreal) and on terrain or tiles otherwise. No-op in
    * sim mode, when both looks are off, or without ground-primitive support.
    *
+   * One build runs at a time. A city loads in progressive paints, each asking
+   * for a rebuild, and every build drapes up to the cap of polylines
+   * asynchronously. A rebuild asked for while lines are building only replaces
+   * the one waiting, which retireHeatLines starts when the build finishes, so
+   * the scene never holds more than the lines drawn and the lines building.
+   * Turning the lines off is never deferred.
+   *
    * @param {Array} roads - Road objects visible in the current render.
    */
 
   function rebuildHeatLines(roads) {
+    const wanted =
+      layerState._viewer && layerState._liveMode && parts.style.heatlineOn();
+    if (wanted && linesBuilding()) {
+      layerState._heatPendingRoads = roads;
+      return;
+    }
+    layerState._heatPendingRoads = null;
+    // No build is left for replaced lines to wait for (it finished, or lines
+    // are going off), so they go first and never pile up behind this rebuild.
+    removePrimitives(layerState._heatRetired || []);
+    layerState._heatRetired = [];
     const previous = takeHeatLines();
     const finish = () => {
-      // Nothing new to wait for: the old lines go now.
       if (LINE_KEYS.some((key) => layerState[key]))
         (layerState._heatRetired ||= []).push(...previous);
+      // Nothing new to wait for: the old lines go now.
       else removePrimitives(previous);
       parts.animation.syncRenderDemand?.();
     };
-    if (
-      !layerState._viewer ||
-      !layerState._liveMode ||
-      !parts.style.heatlineOn()
-    )
-      return finish();
+    if (!wanted) return finish();
     if (layerState._heatSupported === null) {
       layerState._heatSupported = Cesium.GroundPolylinePrimitive.isSupported(
         layerState._viewer.scene,
