@@ -2812,6 +2812,17 @@ in `ais-store.js`. Common response caps, request coalescing and query parsing
 have their own modules. `server/providers/local.js` composes these with the
 remaining providers and retains existing named compatibility exports.
 
+The tracked flight also gets a photo. The browser asks Planespotters for it
+directly (`src/sources/live/standalone.js`, read by
+`src/data/planespottersPhoto.js`), once per aircraft, and the CONTEXT panel's
+CONTACTS view shows it under the flight's name with the photographer's credit
+and a link to the photo's page. Military aircraft and a converted TR-3B are
+never looked up. A flight lookup (type, route or photo) whose source failed
+temporarily is asked again after a 60-second cool-down while the aircraft
+stays in view or tracked; an answer, found or not, and a permanent refusal
+stay final for the session. A route belongs to the callsign it was looked up
+for, so a callsign change drops the old route. See `DATA_SOURCES.md`.
+
 `gods-eye-view/server/providers/live` is a Node-only entry for the existing
 plugins and shared request helpers. Importing it starts no sockets or timers.
 The existing aircraft normalizer is separately available through the portable
