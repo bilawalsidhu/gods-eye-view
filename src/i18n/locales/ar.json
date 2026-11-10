@@ -3619,5 +3619,42 @@
   "1 wk/s": "أسبوع/ث",
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
-  "1 min/s": "دقيقة/ث"
+  "1 min/s": "دقيقة/ث",
+  "Loading the last 72 hours…": "جارٍ تحميل آخر 72 ساعة…",
+  "Last 72 hours unavailable": "آخر 72 ساعة غير متاحة",
+  "No readings in the last 72 hours": "لا توجد قراءات في آخر 72 ساعة",
+  "Last 72 h: low {min} · high {max}": "آخر 72 ساعة: الأدنى {min} · الأعلى {max}",
+  "Level flat over the last 72 hours": "المستوى ثابت خلال آخر 72 ساعة",
+  "Latest {value} is at {percent}% of that range": "آخر قيمة {value} عند {percent}% من ذلك النطاق",
+  "SEA LEVEL STATION · IOC {code}": "محطة مستوى سطح البحر · IOC {code}",
+  "Last reading {value} · {age}": "آخر قراءة {value} · {age}",
+  "No reading reported": "لا توجد قراءة مُبلَّغ عنها",
+  "Sensor {sensor} · {time} UTC": "المستشعر {sensor} · {time} بالتوقيت العالمي",
+  "Levels are against this gauge’s own datum; never compare stations": "المستويات مقيسة بالنسبة إلى المستوى المرجعي الخاص بهذا المقياس؛ لا تقارن بين المحطات",
+  "Raw data, not quality controlled": "بيانات خام، دون مراقبة جودة",
+  "IOC station page ↗ · click card to open": "صفحة المحطة في IOC ↗ · انقر البطاقة للفتح",
+  "Open {name} on the IOC station page": "افتح {name} في صفحة محطات IOC",
+  "IOC / VLIZ · RAW": "IOC / VLIZ · خام",
+  "Sea level source unavailable": "مصدر مستوى سطح البحر غير متاح",
+  "Colour shows how recently each tide gauge reported, never the level: every gauge has its own datum. Raw data, not quality controlled. Click a station for its last 72 hours.": "يوضح اللون مدى حداثة آخر إبلاغ لكل مقياس مد وجزر، وليس المستوى: لكل مقياس مستواه المرجعي الخاص. بيانات خام دون مراقبة جودة. انقر على محطة لعرض آخر 72 ساعة.",
+  "{count} reporting": {
+    "zero": "{count} تُبلِّغ",
+    "one": "{count} تُبلِّغ",
+    "two": "{count} تُبلِّغان",
+    "few": "{count} تُبلِّغ",
+    "many": "{count} تُبلِّغ",
+    "other": "{count} تُبلِّغ"
+  },
+  "{count} stations": {
+    "zero": "{count} محطة",
+    "one": "{count} محطة",
+    "two": "{count} محطتان",
+    "few": "{count} محطات",
+    "many": "{count} محطة",
+    "other": "{count} محطة"
+  },
+  "Reporting (within 3 h)": "تُبلِّغ (خلال 3 ساعات)",
+  "Late (3 to 24 h)": "متأخرة (من 3 إلى 24 ساعة)",
+  "Silent (over 24 h)": "صامتة (أكثر من 24 ساعة)",
+  "Sea level stations": "محطات مستوى سطح البحر"
 }

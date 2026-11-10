@@ -4717,6 +4717,7 @@ its criteria cannot be silently ignored.
 | Fire Perimeters 🔥                   | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links                                                                                                                                                                                                                                                                                                                                                                                          | `src/layers/perimeters/` via `src/app/layers/perimeters.js`               | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*`                                               | 5 min (server caches: catalog 1 h; publication 30 min)                                                                      |
 | Prohibited & Restricted Airspace 🚫  | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry)                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js`         | `/api/drone-airspace`                                                                                   | 1 h (server cache 1 h; stale-on-error)                                                                                      |
 | Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js` | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                      | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
+| Sea level stations ≈ (`sea-level-stations`) | IOC Sea Level Station Monitoring Facility station list (one primary water-level sensor per station) and per-station 72 h series (keyless, CC BY-NC 4.0, raw) | `src/layers/seaLevel/` via `src/app/layers/seaLevel.js`; server `server/providers/seaLevel.js` | `/api/sea-level/stations`, `/api/sea-level/station/<code>` | 10 min poll; server list cached 10 min (stale up to 6 h), series cached 10 min |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -4761,6 +4762,31 @@ proxy.
 Polygons keep holes; pick ownership is deliberately unregistered so sibling
 cards still work over a zone. The row legend and selected card state that the
 layer is informational only and not a substitute for B4UFLY / LAANC.
+
+Sea level stations (Weather group, share token `00`) shows measured water level
+at the IOC Sea Level Station Monitoring Facility's tide gauges. The facility's
+station list has one row per sensor; `server/providers/seaLevel.js` reads it at
+most every 10 minutes (single flight, 16 MB cap, `redirect: 'error'`) and keeps
+one entry per station: the water-level sensor (not `bat` or `atm`, units `M`
+or `F`) with the most recent reading, ties broken by a fixed sensor order
+(radar first). Times are UTC without a zone mark and are parsed as UTC; a
+reading is a time and a value, so a `-999` value or a time over an hour ahead
+counts as no reading. A failed read serves the previous list with `X-Data-Stale` for up to
+6 hours, then `503 {error: 'sea_level_unavailable'}` with `Retry-After: 60`;
+a failed read is not retried for a minute. `/api/sea-level/station/<code>`
+accepts only letters and digits (lower-cased, checked before any request),
+reads the last 72 hours, keeps the sensor with the newest reading, and returns
+low, high and latest from every raw reading plus 10-minute means, cached for 10
+minutes in a 256-entry LRU and served stale when a re-read fails. Each answer
+carries ages measured on the server's clock, so the browser never compares
+clocks. The browser draws every station as one point primitive coloured by
+freshness (within 3 h, 3 to 24 h, silent beyond), never by level: each gauge
+has its own datum. A click opens a card with the last reading, its UTC time and
+sensor, a one-line plot of the last 72 hours, low and high, and where the
+latest reading sits in that range; a click on the card opens the station's
+IOC page. The row counts reporting stations. Data is raw and not quality
+controlled, and the card says so. The layer is outside voice
+(`VOICE_OFF_LAYERS`).
 
 Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
 layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts

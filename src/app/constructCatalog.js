@@ -28,6 +28,7 @@ import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { createApplicationSeaLevel } from './layers/seaLevel.js';
 import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
@@ -143,6 +144,7 @@ export function createApplicationCatalog({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,
         }),
+        createApplicationSeaLevel({ source: sources['sea-level-stations'] }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,

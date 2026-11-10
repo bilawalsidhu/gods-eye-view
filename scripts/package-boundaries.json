@@ -3438,7 +3438,12 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/app/layers/seaLevel.js",
+      "src/layers/seaLevel/index.js",
+      "src/layers/seaLevel/records.js",
+      "src/layers/seaLevel/cards.js",
+      "src/layers/seaLevel/source.js"
     ],
     "external": [
       "hls.js",
@@ -4098,7 +4103,12 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/app/layers/seaLevel.js",
+      "src/layers/seaLevel/index.js",
+      "src/layers/seaLevel/records.js",
+      "src/layers/seaLevel/cards.js",
+      "src/layers/seaLevel/source.js"
     ],
     "external": [
       "hls.js",

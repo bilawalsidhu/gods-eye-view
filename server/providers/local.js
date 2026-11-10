@@ -33,6 +33,7 @@ import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { seaLevelProxy } from './seaLevel.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -80,6 +81,7 @@ function localProviderPlugins({
     cycloneProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
+    seaLevelProxy(),
     gnssIntegrityProxy(),
     ghostMapsProxy(),
     droneAirspaceProxy(),
