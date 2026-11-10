@@ -120,9 +120,10 @@ test('fire detection key survives a refetch that renumbers the index', () => {
 });
 
 test('two satellites over the same pixel at the same time stay distinct', () => {
-  // The proxy merges SNPP + NOAA-20 + NOAA-21 without dedup and their orbits
-  // overlap, so position and time alone are NOT unique. Collapsing them let a
-  // restored selection land on the other satellite's record.
+  // The proxy merges NOAA-20 + NOAA-21 without dedup and their orbits overlap,
+  // so position and time alone are NOT unique. Collapsing them let a restored
+  // selection land on the other satellite's record. Archived Suomi NPP (`N`)
+  // rows must stay distinct too.
   const base = makeFire({ satellite: 'N20' });
   const twin = makeFire({ satellite: 'N21' });
   const suomi = makeFire({ satellite: 'N' });

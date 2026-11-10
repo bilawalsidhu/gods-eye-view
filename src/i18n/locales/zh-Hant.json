@@ -2343,6 +2343,10 @@
   "No feed here yet · {n} regions available": {
     "other": "此處暫無數據源 · 有 {n} 個覆蓋區域"
   },
+  "Fly below {km} km to a covered city": "請降至 {km} km 以下並飛往有覆蓋的城市",
+  "No bike share here yet · {n} systems available": {
+    "other": "此處暫無共享單車 · 有 {n} 個可用系統"
+  },
   "degraded": "降級",
   "stale": "過期",
   "partial": "部分可用",
@@ -3230,5 +3234,6 @@
   "1 wk/s": "1 週/秒",
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "捲動或雙指縮放，拖曳以移動 · 按兩下查看全部",
-  "1 min/s": "1 分鐘/秒"
+  "1 min/s": "1 分鐘/秒",
+  "Photo © {photographer}": "照片 © {photographer}"
 }
