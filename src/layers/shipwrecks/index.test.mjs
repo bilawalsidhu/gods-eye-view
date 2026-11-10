@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import * as picking from '../../data/pickRegistry.js';
-import { createShipwrecksLayer, markerPixelSize } from './index.js';
+import {
+  createShipwrecksLayer,
+  markerPixelSize,
+  snapshotDeadline,
+} from './index.js';
 
 const wreck = (id, extra = {}) => ({
   id,
@@ -347,4 +351,33 @@ test('a snapshot with no timestamp or ages still expires seven days after it arr
   clock += 8 * DAY;
   await h.layer.update();
   assert.equal(h.layer.getStats().count, 0);
+});
+
+test('the page deadline subtracts the newest available source age from the limit', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const both = { emodnet: true, wikidata: true };
+  assert.equal(
+    snapshotDeadline(
+      {
+        sources: both,
+        ages: { emodnet: 2 * DAY, wikidata: 6.5 * DAY },
+        maxAgeMs: 5 * DAY,
+      },
+      100,
+    ),
+    100 + 3 * DAY,
+  );
+  assert.equal(
+    snapshotDeadline(
+      {
+        sources: { emodnet: false, wikidata: true },
+        ages: { emodnet: null, wikidata: 4 * DAY },
+        maxAgeMs: 5 * DAY,
+      },
+      0,
+    ),
+    1 * DAY,
+    'an unavailable source does not count',
+  );
+  assert.equal(snapshotDeadline({ sources: both }, 0), 7 * DAY, 'defaults');
 });
