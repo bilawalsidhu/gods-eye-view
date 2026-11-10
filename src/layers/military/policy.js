@@ -172,7 +172,7 @@ export const TRAIL_COLOR = '#FFB800';
 
 /** @constant {number} Combined cap on trail vertices (backfill + live accumulation). */
 
-export const TRAIL_MAX_POINTS = 400;
+export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
 // Render-behind smoothing (mirrors flights.js): the fleet renders at
@@ -271,3 +271,6 @@ export const TRACKED_MODEL_RETRY_BACKOFF_MS = 1500;
  *  synchronously (single primitive). */
 
 export const IR_RELOAD_BATCH = 40;
+
+/** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
+export const STALE_ALPHA = 0.45;

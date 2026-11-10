@@ -11,6 +11,7 @@ import {
   GROUND_FLOOR_WARM_MAX_ALT_M,
   LANDED_MISSING_POLL_LIMIT,
   MISSING_POLL_LIMIT,
+  TRACKED_RETENTION_MS,
 } from './recordPolicy.js';
 
 /** Source-independent aircraft metadata and bounded missing-poll retention. */
@@ -23,8 +24,43 @@ export class FlightRecords {
     };
     this.data = new Map();
     this.missingPolls = new Map();
+    // Contacts whose last poll re-sent a fix no newer than the one before.
+    this.fixRepeated = new Set();
+    this.lastSnapshotMs = null;
+    this.snapshotAdvanced = true;
     this.geoidNCache = new Map();
     this.geoidReady = false;
+  }
+
+  /**
+   * Start reading a snapshot taken at `observedAtMs`. A fix re-sent in a
+   * newer snapshot marks its contact as not updated; the same snapshot read
+   * again does not.
+   * @param {number} observedAtMs
+   */
+  beginSnapshot(observedAtMs) {
+    this.snapshotAdvanced =
+      !Number.isFinite(observedAtMs) ||
+      !Number.isFinite(this.lastSnapshotMs) ||
+      observedAtMs > this.lastSnapshotMs;
+    if (Number.isFinite(observedAtMs))
+      this.lastSnapshotMs = Math.max(
+        this.lastSnapshotMs ?? -Infinity,
+        observedAtMs,
+      );
+  }
+
+  /** Note a received fix: the newest fix time, and whether it advanced. */
+  _noteFix(id, prevMeta, fixEpochMs) {
+    const prevFixMs = prevMeta?.newestFixMs;
+    // A fix counts as new only when it moves on by a second: feeds that
+    // derive fix time from receipt (readsb `now − seen_pos`, 0.1 s) jitter.
+    if (!Number.isFinite(prevFixMs) || fixEpochMs >= prevFixMs + 1000) {
+      this.fixRepeated.delete(id);
+      return fixEpochMs;
+    }
+    if (this.snapshotAdvanced) this.fixRepeated.add(id);
+    return prevFixMs;
   }
 
   receive(
@@ -158,6 +194,12 @@ export class FlightRecords {
     //   (2) otherwise the SAME default policy `alt` already uses, so the two
     //       never disagree on the genuine "no data yet" case (a never-reported
     //       aircraft has no prior render height, so it lands here unchanged).
+    // Neither altitude this poll nor a held render height: the height below
+    // is the airborne default, invented. The tracked trail keeps no point there.
+    const renderAltitudeInvented =
+      pickedAltM == null &&
+      !onGround &&
+      !Number.isFinite(prevMeta?.renderAltitudeM);
     let renderAltitudeM;
     if (pickedAltM != null) {
       renderAltitudeM = pickedAltM;
@@ -198,10 +240,22 @@ export class FlightRecords {
       !!prevMeta && (prevMeta.onGround === true) !== onGround;
     // Store flight metadata for click-to-track labels
     const cat = stickyNumber(category, prevMeta?.category, null);
+    const nextCallsign = stickyText(callsign, prevMeta?.callsign);
+    // A route (and its airline) belongs to the callsign it was looked up for;
+    // a new callsign drops it, so an old flight's route never shows under it.
+    const routeHeld =
+      Boolean(prevMeta?.routeCallsign) &&
+      prevMeta.routeCallsign === nextCallsign.toUpperCase();
+    const fixEpochMs =
+      Number.isFinite(observation.positionTimeMs) &&
+      observation.positionTimeMs > 0
+        ? observation.positionTimeMs
+        : Date.now();
     const meta = {
       sourceReference: observation.reference,
       observedReceiptMs: Date.now(),
-      callsign: stickyText(callsign, prevMeta?.callsign),
+      newestFixMs: this._noteFix(icao24, prevMeta, fixEpochMs),
+      callsign: nextCallsign,
       altitude: alt,
       // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
       // untouched aviation `altitude` — never rename/replace it (labels,
@@ -209,6 +263,7 @@ export class FlightRecords {
       // still read `altitude`/baro).
       geoAltitudeM,
       renderAltitudeM,
+      renderAltitudeInvented,
       onGround,
       // Round 7: sticky airborne history — the landed fast-cull only
       // applies to contacts that actually flew this session.
@@ -256,8 +311,11 @@ export class FlightRecords {
       typeCode: prevMeta?.typeCode ?? null,
       typeName: prevMeta?.typeName ?? null,
       registration: prevMeta?.registration ?? null,
-      airline: prevMeta?.airline ?? null,
-      route: prevMeta?.route ?? null,
+      airline: routeHeld ? (prevMeta.airline ?? null) : null,
+      route: routeHeld ? (prevMeta.route ?? null) : null,
+      routeCallsign: routeHeld ? prevMeta.routeCallsign : null,
+      // Planespotters photo of the tracked airframe (Core asks it directly).
+      photo: prevMeta?.photo ?? null,
       // The RAW poll fix lat/lon (this tick's OpenSky state-vector
       // coords, pre-dead-reckon) — kept distinct from the continuously
       // dead-reckoned billboard position for any consumer that needs the
@@ -267,15 +325,25 @@ export class FlightRecords {
     };
     this.data.set(icao24, meta);
 
-    const fixEpochMs =
-      Number.isFinite(observation.positionTimeMs) &&
-      observation.positionTimeMs > 0
-        ? observation.positionTimeMs
-        : Date.now();
     return { icao24, prevMeta, meta, groundFlipped, fixEpochMs };
   }
 
-  absence(id, { complete, retainIds, likelyLanded }) {
+  absence(id, { complete, retainIds, likelyLanded, tracked = false }) {
+    const misses = (this.missingPolls.get(id) || 0) + 1;
+    // The tracked contact has missed an update: it is stale from the first
+    // one, and kept (so the camera keeps its target) until ten minutes after
+    // its newest fix, whatever the snapshot says. With no fix time known it
+    // takes the ordinary limits below.
+    const meta = this.data.get(id);
+    const fixMs = meta?.newestFixMs ?? meta?.observedReceiptMs;
+    if (tracked && Number.isFinite(fixMs)) {
+      if (Date.now() - fixMs < TRACKED_RETENTION_MS) {
+        this.missingPolls.set(id, misses);
+        return 'stale';
+      }
+      this.missingPolls.delete(id);
+      return 'remove';
+    }
     // Partial admissions and position-less rows do not prove absence, but
     // retention remains bounded; a likely-landed position-less contact
     // still takes the landed limit.
@@ -284,7 +352,6 @@ export class FlightRecords {
       Date.now() - (this.data.get(id)?.observedReceiptMs ?? 0) < 300000
     )
       return 'retain';
-    const misses = (this.missingPolls.get(id) || 0) + 1;
     const limit = likelyLanded ? LANDED_MISSING_POLL_LIMIT : MISSING_POLL_LIMIT;
     if (misses < limit) {
       this.missingPolls.set(id, misses);
@@ -297,6 +364,7 @@ export class FlightRecords {
   forget(id) {
     this.data.delete(id);
     this.missingPolls.delete(id);
+    this.fixRepeated.delete(id);
     this.geoidNCache.delete(id);
   }
 }

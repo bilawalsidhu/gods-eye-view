@@ -378,19 +378,48 @@ export function createSubject({ state: layerState, services, parts, source }) {
    *
    * Identity (`subject.id`) is NEVER re-derived — only the rendered string.
    * @param {{layerId: string, id: string, label: string}} subject Current subject.
+   * @param {?object} [tracked] The subject's tracked descriptor, when the
+   *   caller already has it (see trackedSubjectOf).
    * @returns {string} The current label, or the cached one when the owning layer
    *   has no tracked subject (e.g. a cross-layer handoff is in flight).
    */
 
-  function resolveSubjectLabel(subject) {
-    if (!parts.navigation.isFlightLayer(subject?.layerId))
-      return subject?.label;
+  function resolveSubjectLabel(subject, tracked = trackedSubjectOf(subject)) {
+    return tracked?.label || subject?.label;
+  }
+
+  /**
+   * The owning flight layer's tracked-subject descriptor when it describes
+   * this subject, else null. Built once per refresh and shared by the label
+   * and the photo.
+   * @param {{layerId: string, id: string}|null} subject Current subject.
+   * @returns {?{id: string, label: string, photo?: ?object}}
+   */
+  function trackedSubjectOf(subject) {
+    if (!parts.navigation.isFlightLayer(subject?.layerId)) return null;
     const layer =
       subject.layerId === 'flights' ? flightsLayer : militaryFlightsLayer;
     const tracked = layer.getTrackedSubject?.();
-    if (tracked?.label && String(tracked.id) === String(subject.id))
-      return tracked.label;
-    return subject.label;
+    return tracked && String(tracked.id) === String(subject.id)
+      ? tracked
+      : null;
+  }
+
+  /**
+   * The tracked airliner's Planespotters photo, for the Contacts panel.
+   *
+   * Only the flights layer looks photos up, and only for the plane it tracks;
+   * a vessel, an installation, a military aircraft or an untracked flight has
+   * none.
+   * @param {{layerId: string, id: string}|null} subject Current subject.
+   * @param {?object} [tracked] The subject's tracked descriptor, when the
+   *   caller already has it.
+   * @returns {?{src: string, width: ?number, height: ?number, photographer: string, link: string}}
+   */
+  function resolveSubjectPhoto(subject, tracked = trackedSubjectOf(subject)) {
+    return subject?.layerId === 'flights' && tracked?.photo
+      ? tracked.photo
+      : null;
   }
 
   /** Refresh proximity counts/distances against the subject's current live position. */
@@ -417,8 +446,21 @@ export function createSubject({ state: layerState, services, parts, source }) {
     if (presence === SUBJECT_PRESENCE.LIVE) layerState.subjectMissing = false;
     else if (presence === SUBJECT_PRESENCE.MISSING)
       layerState.subjectMissing = true;
-    const nextLabel = resolveSubjectLabel(layerState.subject);
+    const tracked = trackedSubjectOf(layerState.subject);
+    const nextLabel = resolveSubjectLabel(layerState.subject, tracked);
     const labelChanged = nextLabel !== layerState.subject.label;
+    // The panel reads the photo from here, with the subject it belongs to.
+    const photo = resolveSubjectPhoto(layerState.subject, tracked);
+    layerState.subjectPhoto = photo
+      ? {
+          layerId: layerState.subject.layerId,
+          id: layerState.subject.id,
+          photo,
+        }
+      : null;
+    // A photo arriving after selection is render-worthy on its own, as a label.
+    const photoChanged =
+      (photo?.src ?? null) !== (layerState.panelView?.photo?.src ?? null);
     layerState.subject = { ...layerState.subject, position, label: nextLabel };
     const movementM = layerState.lastEvaluatedPosition
       ? Cesium.Cartesian3.distance(layerState.lastEvaluatedPosition, position)
@@ -439,7 +481,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       // kept the ICAO hex until unrelated movement, a source-revision bump, or
       // page rotation happened to repaint it. Gated on an ACTUAL change so the
       // common no-op refresh (every 750 ms) still costs no repaint.
-      if (labelChanged) parts.panel.renderResults();
+      if (labelChanged || photoChanged) parts.panel.renderResults();
       parts.rendering.scheduleDirectionOverlayUpdate(force);
       return;
     }
@@ -502,6 +544,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     militaryInstallationsLayer.setContextAnchor?.(null);
     layerState.autoFocusRetryPending = false;
     layerState.subject = null;
+    layerState.subjectPhoto = null;
     layerState.subjectMissing = false;
     layerState.results = null;
     layerState.navigationHistory = [];
@@ -528,6 +571,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     resolveSubjectPosition,
     collectionSubjectPosition,
     resolveSubjectLabel,
+    resolveSubjectPhoto,
     refreshSelectedSubject,
     subjectFromContext,
     markSubjectEvicted,

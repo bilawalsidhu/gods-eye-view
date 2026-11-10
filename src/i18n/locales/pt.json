@@ -329,6 +329,7 @@
   "LOADING": "CARREGANDO",
   "DEGRADED": "DEGRADADO",
   "STALE": "DESATUALIZADO",
+  "SIGNAL LOST · {time}": "SINAL PERDIDO · {time}",
   "PARTIAL": "PARCIAL",
   "FALLBACK": "ALTERNATIVO",
   "view band|STREET": "RUA",
@@ -732,6 +733,7 @@
   "loading...": "carregando...",
   "KEY REQUIRED": "CHAVE NECESSÁRIA",
   "LIVE · updated {age}": "AO VIVO · atualizado {age}",
+  "24 h to {day} {time} UTC": "24 h até {day} {time} UTC",
   "Source snapshot time unavailable": "Horário do snapshot da fonte indisponível",
   "Live data unavailable": "Dados ao vivo indisponíveis",
   "Intel Picture": "Panorama de inteligência",
@@ -3388,5 +3390,6 @@
   "1 wk/s": "1 sem/s",
   "Play speed": "Velocidade de reprodução",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Role ou faça pinça para ampliar, arraste para se mover · clique duplo para ver tudo",
-  "1 min/s": "1 min/s"
+  "1 min/s": "1 min/s",
+  "Photo © {photographer}": "Foto © {photographer}"
 }
