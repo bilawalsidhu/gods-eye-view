@@ -274,7 +274,12 @@ export function createRadioDisplay(engine, { state, services, parts }) {
       if (initialized) syncSelection();
     },
     addSelected(station, position, color) {
-      selectedRecord = { station, position, color: rgba(color), visible: true };
+      selectedRecord = {
+        station,
+        position,
+        color: rgba(color),
+        visible: engine.projector.horizonVisible(position),
+      };
       syncSelection();
     },
     setSelectedVisible(value) {

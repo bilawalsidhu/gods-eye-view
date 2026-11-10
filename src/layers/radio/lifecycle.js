@@ -50,6 +50,11 @@ export function createLifecycle({
       }
     },
 
+    resumeViewport() {
+      if (parts.interaction.radioPresentationAllowed())
+        parts.rendering.updateRenderVisibility();
+    },
+
     detachRenderer() {
       parts.interaction.removeInteraction();
       clearTimeout(layerState._overlayPublishTimer);
