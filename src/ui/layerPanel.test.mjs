@@ -34,6 +34,27 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
   assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
 });
 
+test('Wildlife follows Events and precedes Weather', () => {
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const order = JSON.parse(
+    runInNewContext(
+      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
+    ),
+  );
+  const wildlife = order.findIndex(({ id }) => id === 'wildlife-sightings');
+  assert.equal(order[wildlife].label, 'Wildlife');
+  assert.equal(order[wildlife - 1].id, 's2-ghostmaps');
+  assert.equal(order[wildlife + 1].id, 'air-quality');
+  assert.equal(order.filter(({ id }) => id === 'wildlife-sightings').length, 1);
+});
+
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
   const { LayerPanel, layerFeedState, presentLayerToggle } =
     await import('./layerPanel.js');
@@ -429,5 +450,59 @@ test('without the Utilities list, Directions stays in Data Layers under Utilitie
     assert.deepEqual(headings(container), ['Movement', 'Utilities', 'Audio']);
   } finally {
     restore();
+  }
+});
+
+test('a layer with no feed in view says why instead of "never"', async () => {
+  const { LayerPanel, presentLayerCount, presentLayerToggle } =
+    await import('./layerPanel.js');
+  const { setLocale } = await import('../i18n/index.js');
+  const panel = LayerPanel.prototype;
+  const rows = [
+    {
+      id: 'transit',
+      name: 'Transit',
+      source: 'GTFS-RT',
+      enabled: true,
+      stats: {
+        count: 0,
+        lastUpdate: null,
+        source: 'GTFS-RT',
+        status: 'zoom-in',
+        statusMessage: 'No feed here yet · 16 regions available',
+      },
+      meta: 'GTFS-RT · No feed here yet · 16 regions available',
+    },
+    {
+      id: 'bikeshare',
+      name: 'Bikeshare',
+      source: 'GBFS',
+      enabled: true,
+      stats: {
+        count: 0,
+        lastUpdate: null,
+        loading: false,
+        status: 'zoom-in',
+        statusMessage: 'Fly below 48 km to a covered city',
+      },
+      meta: 'GBFS · Fly below 48 km to a covered city',
+    },
+  ];
+  for (const layer of rows) {
+    // Guidance is normal operation: the layer is on and nothing has failed.
+    assert.equal(presentLayerToggle(layer).text, 'ON');
+    assert.equal(presentLayerCount(layer.stats).empty, true);
+    assert.equal(panel._buildMetaText(layer), layer.meta);
+  }
+
+  setLocale('ru');
+  try {
+    for (const layer of rows) {
+      const meta = panel._buildMetaText(layer);
+      assert.doesNotMatch(meta, /never|Fly below|No feed|covered/, meta);
+      assert.match(meta, /^(GTFS-RT|GBFS) · /, meta);
+    }
+  } finally {
+    setLocale('en');
   }
 });

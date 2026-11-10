@@ -10,6 +10,24 @@ For the roadmap and open backlog, see the repository issue tracker.
 
 ## Open
 
+### Wildlife grid relies on the iNaturalist UTFGrid cell schema
+
+Status: Open (guarded fallback)
+
+The `/v1/grid/{z}/{x}/{y}.grid.json` endpoint is documented in the v1 and v2
+API docs (“Grid Tiles UTFGrid”), but the documented response only defines the
+UTFGrid `grid`, `keys` and `data` members; the per-cell records are not
+specified. Its 64×64 UTFGrid shape, keys and cell records
+are validated in full at the allow-list proxy. A schema change or unavailable
+tile retains its last good cells for at most one hour; a cold unavailable grid
+uses sampled observations with the same badges and screen buckets, without
+claiming complete worldwide coverage. Tests use
+synthetic fixtures with the locally inspected tile's exact structure. Retest
+and update the schema guard before accepting an upstream shape change. Grid
+and observation calls share the paced queue, provider budget and 429 cooldown;
+ordinary tile failures do not block observation queries.
+
+
 ### Street traffic can be slow/uneven when panning across dense city blocks
 Status: Open (partially mitigated)
 

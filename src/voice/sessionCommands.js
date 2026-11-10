@@ -3,7 +3,7 @@ import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
 import { bindChatControl } from './chatControl.js';
 import { bindVoiceMiniPreview } from './voiceMiniPreview.js';
 import { createVoiceControl, voiceStatusLabel } from './control.js';
-import { createVoiceSession } from './session.js';
+import { createVoiceSession, isStoppable } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
@@ -40,6 +40,8 @@ export function createVoiceCommands({
   createReticle = createDefaultReticle,
   panelHost = null,
   nativePanelProvider = null,
+  // Chat's Settings, carried across a provider switch.
+  presentation = null,
 }) {
   if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
   const ui = createControl(panelHost ? { panel: true } : {});
@@ -225,6 +227,8 @@ export function createVoiceCommands({
         onOpen: () => panelMount?.panel.close(),
       })
     : null;
+  chat?.restorePresentation(presentation);
+  controls.chatPresentation = () => chat?.presentation() ?? null;
   function minimizeVoicePanel() {
     const panel = ui.element('voicePanel');
     const holdsFocus = panel?.contains?.(globalThis.document?.activeElement);
@@ -284,7 +288,8 @@ export function createVoiceCommands({
   // The panel's close turns voice off, as chat's close ends the chat. A typed
   // session belongs to chat, which handles its own close.
   const offClose = ui.on('settings-close', () => {
-    if (!session.isActive() || adapter.getStartOptions?.().textOnly) return;
+    // A voice error the user closes is over too; stopping returns to idle.
+    if (!isStoppable(session) || adapter.getStartOptions?.().textOnly) return;
     const ticket = panelMount?.stopTicket();
     session.stop();
     panelMount?.closeAfterStop(ticket);

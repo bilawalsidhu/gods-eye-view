@@ -65,7 +65,8 @@ export function enterCockpitWithTracking({
         );
       }
     }
-    if (!entryError) entered = Boolean(cockpitView.enter());
+    // This transaction selects aircraft; a selected vessel must not stand in.
+    if (!entryError) entered = Boolean(cockpitView.enter({ kind: 'aircraft' }));
   } catch (error) {
     entryThrew = true;
     entryError = error instanceof Error ? error : new Error(String(error));

@@ -453,10 +453,12 @@ const layers = [
 export const VOICE_OFF_LAYERS = Object.freeze({
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
-  // The Realtime prompt is at its 52,000-character budget; voice toggle and
+  // The Realtime prompt is at its 55,500-character budget; voice toggle and
   // query for this layer wait until there is room.
   'drone-airspace':
     'informational airspace layer; no room in the prompt budget',
+  'wildlife-sightings':
+    'community observation layer; no room in the prompt budget',
 });
 
 const TYPE_NAMES = Object.freeze({

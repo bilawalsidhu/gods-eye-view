@@ -69,6 +69,8 @@ export function createGnssIntegrityLayer({
   source,
   viewAnchor = defaultGnssViewAnchor,
   now = () => Date.now(),
+  // The end of the window shown; retries and receipt times stay on `now`.
+  worldNow = now,
   monotonicNow = () => performance.now(),
   windowMs: requestedWindowMs,
 } = {}) {
@@ -163,7 +165,7 @@ export function createGnssIntegrityLayer({
 
   /** Age the store without new evidence, so expired cells leave the globe. */
   function expire() {
-    pruneGnssObservations(_observations, now(), { windowMs });
+    pruneGnssObservations(_observations, worldNow(), { windowMs });
     _cells = binGnssCells(_observations);
     render();
   }

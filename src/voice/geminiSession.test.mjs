@@ -1241,6 +1241,34 @@ test('successful stronger Radio stop still invalidates the prepared group', asyn
   h.c.stop();
 });
 
+test('Gemini tools of one turn share a reply identity, and a new turn gets another', async () => {
+  const replies = [];
+  const h = harness({
+    runAction: (name, _args, next) => {
+      replies.push([name, next.reply]);
+      return { ok: true, action: name };
+    },
+  });
+  await h.c.start({ pushToTalk: true });
+  h.c.sendTextCommand('Fly to Xyzzyville and pan left');
+  const ws = h.sockets[0];
+  requestTool(ws, 'fly', 'fly_to_location', { query: 'Xyzzyville' });
+  requestTool(ws, 'pan', 'move_camera', { motion: 'pan', direction: 'left' });
+  await h.c.toolQueue;
+  assert.equal(replies.length, 2);
+  assert.ok(replies[0][1], 'a sequentially run call carries its reply');
+  assert.equal(replies[1][1], replies[0][1]);
+  drainRadioReply(h);
+  await tick();
+  assert.equal(h.c.sendTextCommand('Pan left'), true);
+  requestTool(ws, 'pan-2', 'move_camera', { motion: 'pan', direction: 'left' });
+  await h.c.toolQueue;
+  assert.equal(replies.length, 3);
+  assert.ok(replies[2][1]);
+  assert.notEqual(replies[2][1], replies[0][1]);
+  h.c.stop();
+});
+
 test('slow Gemini tools reuse shared progress timing without injecting a conversation turn', async () => {
   const pending = deferred();
   let options;

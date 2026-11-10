@@ -364,3 +364,35 @@ test('the chat gear is named for the settings it opens', async (t) => {
     'Settings',
   );
 });
+
+test('a provider switch carries chat Settings to the next mount', async (t) => {
+  const mount = () => {
+    const ui = createTestVoiceUi({ panel: true });
+    const chat = bindChatControl({ ui, session: typedSession() });
+    t.after(() => chat.destroy());
+    return { ui, chat };
+  };
+  // Chat's Settings: the next mount shows Settings in chat's frame again.
+  const before = mount();
+  before.ui.emit('chat-button');
+  before.ui.update('voicePanel', { hidden: false });
+  before.ui.emit('settings-button');
+  before.ui.update('voicePanel', { frameWidth: 320, frameHeight: 480 });
+  const settings = before.chat.presentation();
+  assert.deepEqual(settings, {
+    view: 'settings',
+    frame: { width: 320, height: 480 },
+  });
+  const after = mount();
+  after.chat.restorePresentation(settings);
+  assert.equal(after.ui.state.voicePanel.context, 'chat');
+  assert.equal(after.ui.state.voicePanel.frameWidth, 320);
+  assert.equal(after.ui.state.voicePanel.frameHeight, 480);
+  assert.equal(after.ui.state.chat.backVisible, true);
+  assert.equal(after.ui.state.root.assistantMode, 'chat');
+  // Chat itself, or no chat at all, carries nothing.
+  const open = mount();
+  open.ui.emit('chat-button');
+  assert.equal(open.chat.presentation(), null);
+  assert.equal(mount().chat.presentation(), null);
+});
