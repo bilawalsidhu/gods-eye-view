@@ -99,6 +99,7 @@
       "node": "./server/providers/live.js"
     },
     "./sources/adsb-lol": "./src/data/adsbLolFallback.js",
+    "./sources/planespotters": "./src/data/planespottersPhoto.js",
     "./server/providers/places": {
       "node": "./server/providers/places.js"
     },

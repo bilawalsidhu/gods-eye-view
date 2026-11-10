@@ -2454,6 +2454,10 @@
   "No feed here yet · {n} regions available": {
     "other": "ここにはまだフィードがありません · 利用可能な地域 {n}か所"
   },
+  "Fly below {km} km to a covered city": "{km} km未満まで高度を下げ、カバー範囲内の都市へ移動してください",
+  "No bike share here yet · {n} systems available": {
+    "other": "ここにはまだシェアサイクルがありません · 利用可能なシステム {n}件"
+  },
   "degraded": "性能低下",
   "stale": "更新遅延",
   "partial": "部分的",
@@ -3230,5 +3234,6 @@
   "1 wk/s": "1週間/秒",
   "Play speed": "再生速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
-  "1 min/s": "1分/秒"
+  "1 min/s": "1分/秒",
+  "Photo © {photographer}": "写真 © {photographer}"
 }

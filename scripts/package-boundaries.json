@@ -205,6 +205,7 @@
     "modules": [
       "src/sources/adsbFields.js",
       "server/providers/live.js",
+      "server/providers/common/compress.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
       "server/providers/common/rate-limit.js",
@@ -241,6 +242,11 @@
   "adsb-lol-source": {
     "exports": ["./sources/adsb-lol"],
     "modules": ["src/data/adsbLolFallback.js", "src/sources/adsbFields.js"],
+    "external": []
+  },
+  "planespotters-source": {
+    "exports": ["./sources/planespotters"],
+    "modules": ["src/data/planespottersPhoto.js"],
     "external": []
   },
   "place-providers": {
@@ -320,6 +326,7 @@
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs"
     ],
@@ -327,7 +334,7 @@
   },
   "traffic-source": {
     "exports": ["./sources/traffic"],
-    "modules": ["src/data/tomtomTiles.js"],
+    "modules": ["src/data/tomtomTiles.js", "src/data/tileBudget.js"],
     "external": []
   },
   "firms-csv": {
@@ -1395,7 +1402,8 @@
       "src/sources/live/contract.js",
       "src/sources/live/index.js",
       "src/sources/live/standalone.js",
-      "src/sources/live/vessels.js"
+      "src/sources/live/vessels.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": []
   },
@@ -1462,7 +1470,8 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/time/julian.js"
+      "src/time/julian.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": ["cesium"]
   },
@@ -1788,6 +1797,7 @@
       "src/layers/installations/viewport.js",
       "src/data/inputOwnership.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/sources/capability.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
@@ -1876,6 +1886,7 @@
       "src/data/cameraSensitivity.js",
       "src/data/flowMatch.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/data/trafficBounds.js",
       "src/geoDistance.js",
       "src/data/trafficFlowStyle.js",
@@ -2108,6 +2119,7 @@
       "src/data/inputOwnership.js",
       "src/layers/alpr/records.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/capability.js",
       "src/sources/httpBody.js",
@@ -2579,6 +2591,7 @@
       "src/data/telegeographySubmarineCables.js",
       "src/data/terrainHeights.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/data/tr3bRegistry.js",
       "src/data/trackedCamera.js",
       "src/data/trackedModelRegime.js",
@@ -3434,7 +3447,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": [
       "hls.js",
@@ -3575,6 +3589,7 @@
       "src/data/scenePick.js",
       "src/data/spriteOrder.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/data/tr3bRegistry.js",
       "src/data/trackedCamera.js",
       "src/data/trackedModelRegime.js",
@@ -4093,7 +4108,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": [
       "hls.js",
@@ -4172,6 +4188,7 @@
       "src/sources/phaseTiming.js",
       "src/sources/militaryTileGeometry.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/data/installationNames.js",
       "src/annotations/outlineRungs.js",
       "src/sources/openFreeMapOutlines.js",
@@ -4535,6 +4552,7 @@
       "src/layers/alpr/records.js",
       "src/layers/alpr/source.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
@@ -4573,6 +4591,7 @@
       "src/data/militaryInstallationData.js",
       "src/data/installationNames.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/sources/capability.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
@@ -4615,6 +4634,7 @@
     "exports": ["./layers/traffic/source"],
     "modules": [
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
       "src/layers/traffic/footprint.js",
@@ -5189,6 +5209,7 @@
       "src/sources/vectorTiles.js",
       "src/sources/phaseTiming.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/sources/capability.js",
       "src/data/militaryInstallationData.js",
       "src/layers/launches/source.js",
@@ -5234,7 +5255,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/data/planespottersPhoto.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },

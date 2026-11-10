@@ -40,5 +40,7 @@ export const _driveFleetModelHandoffForTest =
   flightsLayer.testing._driveFleetModelHandoffForTest;
 export const _ensureFleetModelForTest =
   flightsLayer.testing._ensureFleetModelForTest;
+export const _resetEnrichmentForTest =
+  flightsLayer.testing._resetEnrichmentForTest;
 export const mapAnalystRecord = flightsLayer.mapAnalystRecord;
 export default flightsLayer;

@@ -342,6 +342,10 @@ export function createFlightState({ source, services }) {
 
   flightState._enrichSeen = new Set();
 
+  /** Lookup key -> epoch ms before which a failed lookup is not asked again. */
+
+  flightState._enrichRetryAfter = new Map();
+
   flightState._enrichAmbientBudget = ENRICH_AMBIENT_BUDGET_CEIL;
 
   /** Epoch ms the bucket last accounted a refill window from (0 = unset). */
