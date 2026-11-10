@@ -1787,6 +1787,7 @@
   "KartaView did not filter this area in time — move the map to ask again": "لم يُصفِّ KartaView هذه المنطقة في الوقت المحدد — حرّك الخريطة لإعادة الطلب",
   "None of KartaView’s photos here pass the imagery filter": "لا تجتاز أي من صور KartaView هنا مرشح الصور",
   "KartaView did not answer in time — try again": "لم يستجب KartaView في الوقت المحدد — أعد المحاولة",
+  "Mapillary did not answer in time — try again": "لم يستجب Mapillary في الوقت المحدد — أعد المحاولة",
   "KartaView could not be reached — check the network": "تعذّر الوصول إلى KartaView — تحقّق من الشبكة",
   "KartaView sent an answer that could not be read": "أرسل KartaView استجابة تعذّرت قراءتها",
   "KartaView is rate-limiting requests": "يقيّد KartaView معدل الطلبات",

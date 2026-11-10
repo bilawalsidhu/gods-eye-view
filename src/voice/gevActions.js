@@ -4084,14 +4084,12 @@ async function requestStreetLevel(
       location,
     });
 
-  // A photo of another place must not stay up beside this request's answer,
-  // armed or opened, found or not: the panel shows this request's outcome.
-  if (layerModule.getUIState?.()?.street?.open === true)
-    layerModule.closeViewer?.();
-
   // A billed source never loads from a link without a click: everything is
   // ready and OPEN is one press away at the view centre.
   if (args.autoOpen === false && status?.billed === true) {
+    // A photo of another place must not stay up beside the armed request.
+    if (layerModule.getUIState?.()?.street?.open === true)
+      layerModule.closeViewer?.();
     // The next OPEN press loads exactly what the link asked for.
     layerModule.armNearest?.(point, {
       providerIds: [provider],
@@ -4113,11 +4111,17 @@ async function requestStreetLevel(
 
   // A source with no coverage to click (Street View) is searched wider: a
   // geocoded landmark is rarely within 50 m of a street. A newer turn
-  // retires the lookup: nothing opens after the user moved on.
+  // retires the lookup: nothing opens after the user moved on. A photo of
+  // another place stays up while it looks (the viewer, EXPAND included, is
+  // replaced, not closed) and closes if this request opens nothing: the
+  // panel shows this request's outcome. Once an image is found it loads
+  // only if the camera and the panel are still the request's.
   reportProgress('imagery', label);
   const opened = await layerModule.openNearest(point, {
     providerIds: [provider],
     frame: false,
+    replace: true,
+    proceed: () => current() && !owner.taken() && !streetLevelPanelHidden(),
     // Under the screen centre, not the middle of a tilted view's footprint;
     // this request is the user's own, not a link's armed one.
     ...(point ? {} : { aim: 'screen-centre', armed: false }),

@@ -268,8 +268,14 @@ export async function applyView(
       streetLevelArgs(view.street_level, { autoOpen }),
     );
     if (result?.ok !== true) {
+      // Overtaken (a click on the map, a newer request): the panel and the
+      // camera are someone else's now.
+      if (result?.cancelled || result?.superseded) return steps;
       // An earlier view's photo must not stay over a place this view left.
-      dataManager.layers?.get?.(STREET_LEVEL_LAYER)?.module?.closeViewer?.();
+      // From the imagery stage on the action has settled the panel itself:
+      // a photo it found but could not load keeps its error in view.
+      if (result?.stage !== 'imagery')
+        dataManager.layers?.get?.(STREET_LEVEL_LAYER)?.module?.closeViewer?.();
       if (!result?.location)
         steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
     }
@@ -332,11 +338,16 @@ export function installViews({
   // link must not fly over them.
   // A start-up restore that a newer link superseded hands the camera to that
   // link: its own steps never run.
+  // A restore whose camera never landed (the recipient dragged, searched or
+  // opened another place during its flight) leaves the camera with them.
+  const cameraLanded = (outcome) => outcome?.share?.camera === 'applied';
   let generationAtRestore = null;
   let startSuperseded = false;
   let queue = ready.then((outcome) => {
     generationAtRestore = shell._navigationGeneration;
-    startSuperseded = outcome?.status === 'superseded';
+    startSuperseded =
+      outcome?.status === 'superseded' ||
+      (Boolean(outcome?.share) && !cameraLanded(outcome));
   });
   const navigatedSince = (generation) =>
     Number.isFinite(generation) && shell._navigationGeneration !== generation;
@@ -397,7 +408,8 @@ export function installViews({
   // its photos follow once that restore settles, under the same rule: a plain
   // link never loads a billed photo by itself.
   const onNavigatedRestore = (event) => {
-    if (event?.detail?.status !== 'settled') return;
+    if (event?.detail?.status !== 'settled' || !cameraLanded(event.detail))
+      return;
     const streetLevel = linkedStreetLevel(
       new URLSearchParams(String(location?.hash || '').replace(/^#/, '')),
     );

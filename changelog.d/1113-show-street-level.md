@@ -31,6 +31,10 @@
   recording and scene playback hide the photo. The action checks again after
   every wait: a navigation or a drag of the globe, or a mode that hides the
   panel, stops it before a photo loads for a place the user left or in a
-  panel nobody sees, and a request that finds nothing closes the previous
-  photo. The panel's later results open a billed photo only when they are
+  panel nobody sees, also between finding a photo and loading it. A request
+  that finds nothing closes the previous photo, and one that finds a photo
+  replaces it in place, so EXPAND stays. A link whose restore flight the
+  visitor interrupted, or a posted view the user overtook, leaves their
+  camera and photo alone, and a photo found but not loaded keeps its error.
+  Mapillary's timeout message is translated. The panel's later results open a billed photo only when they are
   fresh too (Said Turksever, @asturksever, #1113).

@@ -201,6 +201,25 @@ test('a nearest-image search that never answers is given up, body included', asy
   assert.ok(error instanceof MapillarySourceError, String(error));
   assert.equal(error.status, 504);
   assert.equal(error.keyRequired, false, 'not a key problem');
+  // English data, shown in the interface language like the other sources'.
+  const { setLocale } = await import('../../../../i18n/index.js');
+  const { translateStreetLevelError } =
+    await import('../../../../ui/streetLevelPresentation.js');
+  assert.equal(
+    translateStreetLevelError(error.message),
+    'Mapillary did not answer in time — try again',
+  );
+  for (const [locale, expected] of [
+    ['de', /nicht rechtzeitig/],
+    ['ja', /時間内に応答/],
+  ]) {
+    setLocale(locale);
+    try {
+      assert.match(translateStreetLevelError(error.message), expected, locale);
+    } finally {
+      setLocale('en');
+    }
+  }
 });
 
 test('the caller’s abort still ends a nearest-image search before its deadline', async () => {

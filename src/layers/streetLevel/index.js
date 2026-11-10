@@ -695,6 +695,12 @@ export function createStreetLevelLayer({
      * as the assistant's) neither uses nor drops a link's armed point. Why
      * nothing opened is left in `street.nearestOutcome`: 'empty' (no imagery
      * in reach), 'sky' (the screen centre is not ground), or null (an error).
+     * `replace: true` (a request that takes over the panel) keeps an open
+     * photo up while it looks, so the viewer and EXPAND stay, and closes it
+     * when the lookup opens nothing: the panel shows this request's outcome.
+     * `proceed()` is asked once the lookup has found an image and before it
+     * loads; false retires the request (a photo that bills every load must
+     * not load for a request its caller has given up).
      */
     async openNearest(
       point,
@@ -705,6 +711,8 @@ export function createStreetLevelLayer({
         radiusM = null,
         signal: callerSignal = null,
         armed: useArmed = true,
+        replace = false,
+        proceed = null,
       } = {},
     ) {
       if (callerSignal?.aborted) return false;
@@ -713,6 +721,11 @@ export function createStreetLevelLayer({
       // any other lookup is a new request and drops the armed one.
       const armed = useArmed ? state.street.armed : null;
       if (useArmed) state.street.armed = null;
+      const closeReplaced = () => {
+        if (!replace || !state.street.open) return;
+        parts.viewerHost.close();
+        parts.clearSequences();
+      };
       if (!point && aim === 'screen-centre' && armed) {
         // The button promises the centre of the view: the link's spot only
         // while the view still shows it, or when the view cannot be picked.
@@ -735,6 +748,7 @@ export function createStreetLevelLayer({
         view = screenCentreGround();
         if (view === null) {
           abortNearest();
+          closeReplaced();
           state.street.loading = false;
           state.street.error = AIM_AT_GROUND_MESSAGE;
           state.street.nearestOutcome = 'sky';
@@ -795,6 +809,7 @@ export function createStreetLevelLayer({
         if (!state.enabled) break;
         // Switched off, or its map left, while it looked: try the next.
         if (!imageId || !entry.on || !providerAvailable(entry)) continue;
+        if (proceed && proceed() !== true) return retired();
         nearestLookup = null;
         callerSignal?.removeEventListener('abort', onCallerAbort);
         // The caller's signal still counts while the viewer mounts and loads.
@@ -807,6 +822,7 @@ export function createStreetLevelLayer({
       // Replaced while it looked: the panel is the newer lookup's.
       if (nearestLookup !== lookup) return false;
       nearestLookup = null;
+      closeReplaced();
       // Switched off while it looked: nothing to open, nothing to report.
       const stillOn = entries.some(
         (entry) => entry.on && providerAvailable(entry),

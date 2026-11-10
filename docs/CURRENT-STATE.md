@@ -5119,13 +5119,22 @@ brings `map: photoreal` and refuses another map; not with `follow`), links as
 applies it through the action, and a plain link runs the action once restored
 (one shot: the rewritten hash drops `sl`). A link pasted into the open tab
 runs it after its restore settles (`gev:share-navigation-restore-settled`),
-and a start link whose restore a newer one superseded never runs. In embed mode the rail holding the
+and only when the restore's camera landed (`share.camera === 'applied'`): a
+link whose restore flight the visitor stopped with a drag or a search, or
+whose restore a newer link superseded, never runs and never pulls the camera
+back. In embed mode the rail holding the
 panel is hidden, so an open photo moves to an overlay on the globe
 (`sl-viewer-wrap-embed`) and back when it closes; Esc closes it (in full
 screen, Esc leaves full screen first). EXPAND stays open under embed mode's
 own clean view; cockpit, recording and scene playback hide the overlay. A
-posted view whose photo step fails closes the earlier photo before its
-camera flies. Image-loading failures render inside
+posted view whose photo step fails before the imagery stage closes the
+earlier photo before its camera flies; one the user overtook (a click on the
+map, a newer request) leaves their photo and camera alone, and one that
+found a photo it could not load keeps that error in view. The action's
+lookup replaces an open photo in place (`openNearest` `replace: true`), so
+the viewer and EXPAND stay up, and closes it only when it opens nothing; once
+an image is found, `proceed()` asks whether the camera and the panel are
+still the request's before a billed photo loads. Image-loading failures render inside
 the embedded overlay, since the panel's error region is hidden with the rail.
 A caller's abort is
 honoured through the viewer's mount and load, not just the lookup, and only

@@ -1033,6 +1033,7 @@
   "KartaView did not filter this area in time — move the map to ask again": "KartaView 未能及時篩選此區域——移動地圖以重新請求",
   "None of KartaView’s photos here pass the imagery filter": "此處沒有 KartaView 照片通過影像篩選",
   "KartaView did not answer in time — try again": "KartaView 未及時響應——請重試",
+  "Mapillary did not answer in time — try again": "Mapillary 未及時響應——請重試",
   "KartaView could not be reached — check the network": "無法連接 KartaView——請檢查網絡",
   "KartaView sent an answer that could not be read": "KartaView 返回的響應無法讀取",
   "KartaView is rate-limiting requests": "KartaView 已被限流",

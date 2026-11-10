@@ -1093,6 +1093,7 @@
   "KartaView did not filter this area in time — move the map to ask again": "KartaView non ha filtrato quest'area in tempo: sposta la mappa per riprovare",
   "None of KartaView’s photos here pass the imagery filter": "Nessuna delle foto KartaView qui supera il filtro delle immagini",
   "KartaView did not answer in time — try again": "KartaView non ha risposto in tempo: riprova",
+  "Mapillary did not answer in time — try again": "Mapillary non ha risposto in tempo: riprova",
   "KartaView could not be reached — check the network": "KartaView non è raggiungibile: controlla la rete",
   "KartaView sent an answer that could not be read": "KartaView ha inviato una risposta illeggibile",
   "KartaView is rate-limiting requests": "KartaView sta limitando le richieste",

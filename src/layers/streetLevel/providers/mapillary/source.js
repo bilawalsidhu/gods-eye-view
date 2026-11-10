@@ -1,3 +1,4 @@
+import { msg } from '../../../../i18n/marker.js';
 import { NEAREST_RADIUS_M } from '../../policy.js';
 import {
   MAPILLARY_GRAPH_HOST,
@@ -7,6 +8,9 @@ import {
   SEQUENCE_IMAGE_FIELDS,
   SEQUENCE_IMAGES_LIMIT,
 } from './policy.js';
+
+/** English data: the Street Level panel translates it. */
+const NO_ANSWER = msg('Mapillary did not answer in time — try again');
 
 /** HTTP error flagged `keyRequired`, `keyRejected` or `retryAfterSec` (429). */
 export class MapillarySourceError extends Error {
@@ -81,7 +85,7 @@ export function createMapillarySource({
     const timer = setTimeout(
       () =>
         controller.abort(
-          new MapillarySourceError('Mapillary did not answer in time', {
+          new MapillarySourceError(NO_ANSWER, {
             status: 504,
           }),
         ),

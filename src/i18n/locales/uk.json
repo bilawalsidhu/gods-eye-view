@@ -1108,6 +1108,7 @@
   "KartaView did not filter this area in time — move the map to ask again": "KartaView не встиг відфільтрувати цю область — зсуньте карту, щоб запитати знову",
   "None of KartaView’s photos here pass the imagery filter": "Жодне фото KartaView тут не проходить фільтр знімків",
   "KartaView did not answer in time — try again": "KartaView не відповів вчасно — спробуйте знову",
+  "Mapillary did not answer in time — try again": "Mapillary не відповів вчасно — спробуйте знову",
   "KartaView could not be reached — check the network": "Не вдалося звʼязатися з KartaView — перевірте мережу",
   "KartaView sent an answer that could not be read": "KartaView надіслав відповідь, яку не вдалося прочитати",
   "KartaView is rate-limiting requests": "KartaView обмежує частоту запитів",

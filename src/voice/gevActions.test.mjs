@@ -6660,16 +6660,26 @@ function createStreetLevelHarness({
           return false;
         }
       }
+      // Like the layer: a replacing lookup that opens nothing closes the photo.
+      const closeReplaced = () => {
+        if (!options.replace || !street.open) return;
+        order.push('close');
+        Object.assign(street, { open: false, imageId: null, error: null, nearestOutcome: null });
+      };
       if (imageryError) {
+        closeReplaced();
         street.error = imageryError;
         street.nearestOutcome = null;
         return false;
       }
       if (!nearest) {
+        closeReplaced();
         street.nearestOutcome = options.aim === 'screen-centre' && sky ? 'sky' : 'empty';
         street.error = `No street-level imagery within ${options.radiusM ?? 50} m of ${point ? 'that point' : 'the view centre'}`;
         return false;
       }
+      // Found: it loads only if the request still wants it.
+      if (options.proceed && options.proceed() !== true) return false;
       street.open = true;
       street.imageId = nearest;
       street.title = '10th St, Sacramento';
@@ -7424,6 +7434,40 @@ test('show_street_level stops once the camera is someone else’s: a navigation 
   const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
   assert.deepEqual([result.ok, result.stage, result.superseded], [false, 'layer', true]);
   assert.ok(!h.order.some((step) => step.startsWith('open:')));
+});
+
+test('show_street_level loads no photo it found once the camera or the panel moved on during the lookup', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  for (const take of ['navigate', 'gesture']) {
+    let h;
+    h = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', duringLookup: () => h[take]() });
+    const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+    assert.deepEqual([result.ok, result.stage, result.superseded], [false, 'imagery', true], take);
+    assert.equal(h.lookups.length, 1);
+    assert.equal(h.street.open, false, `${take}: the billed panorama never loads`);
+    assert.ok(!h.order.includes('close'), `${take}: nothing opened, nothing to close`);
+  }
+  const saved = globalThis.document;
+  const classes = new Set();
+  globalThis.document = { body: { classList: { contains: (name) => classes.has(name) } } };
+  try {
+    const h = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', duringLookup: () => classes.add('ui-clean-view') });
+    const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+    assert.deepEqual([result.ok, result.stage], [false, 'view']);
+    assert.equal(h.street.open, false, 'nothing loads into the hidden panel');
+  } finally {
+    globalThis.document = saved;
+  }
+});
+
+test('show_street_level replaces an open photo in place: the viewer (and EXPAND) stays up while it looks', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const h = createStreetLevelHarness({ enabled: true, photoOpen: true, nearest: 'pano-b' });
+  const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+  assert.equal(result.ok, true);
+  assert.equal(h.lookups[0].replace, true, 'the lookup takes over the open photo');
+  assert.ok(!h.order.includes('close'), 'never closed on the way');
+  assert.deepEqual([h.street.open, h.street.imageId], [true, 'pano-b']);
 });
 
 test('show_street_level owns the camera from where its own flight lands', async () => {

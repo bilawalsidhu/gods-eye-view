@@ -2110,3 +2110,83 @@ test('filter-only updates keep the lit source, even a chosen keyless Mapillary',
     );
   }
 });
+
+test('a replacing lookup keeps the viewer open while it looks, so EXPAND stays with the new photo', async (t) => {
+  const answers = ['img-1', 'img-2'];
+  const provider = posingProvider({
+    nearestImage: async () => answers.shift(),
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  assert.equal(await layer.openNearest({ lat: 1, lon: 2 }), true);
+  const seen = [];
+  const unsubscribe = layer.subscribe(() =>
+    seen.push(layer.getUIState().street.open),
+  );
+  t.after(unsubscribe);
+  assert.equal(
+    await layer.openNearest({ lat: 3, lon: 4 }, { replace: true }),
+    true,
+  );
+  assert.ok(seen.length > 0);
+  assert.ok(!seen.includes(false), 'never published closed on the way');
+  assert.deepEqual(provider.calls.open, ['img-1', 'img-2']);
+});
+
+test('a replacing lookup that finds nothing closes the old photo and keeps its own message', async (t) => {
+  const answers = ['img-1', null];
+  const provider = posingProvider({
+    nearestImage: async () => answers.shift(),
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  await layer.openNearest({ lat: 1, lon: 2 });
+  assert.equal(
+    await layer.openNearest({ lat: 3, lon: 4 }, { replace: true }),
+    false,
+  );
+  const street = layer.getUIState().street;
+  assert.equal(street.open, false, 'no photo of another place');
+  assert.equal(street.nearestOutcome, 'empty');
+  assert.match(street.error, /No street-level imagery within 50 m/);
+});
+
+test('a found photo the viewer cannot load keeps its error on the open viewer', async (t) => {
+  const provider = posingProvider({ nearestImage: async () => 'img-1' });
+  const create = provider.create;
+  provider.create = (context) => {
+    const instance = create(context);
+    instance.viewer.open = async () => {
+      throw new Error('Image could not be opened');
+    };
+    return instance;
+  };
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  assert.equal(
+    await layer.openNearest({ lat: 1, lon: 2 }, { replace: true }),
+    false,
+  );
+  const street = layer.getUIState().street;
+  assert.equal(street.open, true);
+  assert.equal(street.error, 'Image could not be opened');
+});
+
+test('proceed() is asked after the lookup: false loads nothing and clears the spinner', async (t) => {
+  const provider = posingProvider({ nearestImage: async () => 'img-1' });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  let asked = 0;
+  const opened = await layer.openNearest(
+    { lat: 1, lon: 2 },
+    { proceed: () => (asked++, false) },
+  );
+  assert.equal(opened, false);
+  assert.equal(asked, 1);
+  assert.deepEqual(provider.calls.open, [], 'the viewer never loads it');
+  assert.equal(layer.getUIState().street.loading, false);
+  assert.equal(
+    await layer.openNearest({ lat: 1, lon: 2 }, { proceed: () => true }),
+    true,
+  );
+});
