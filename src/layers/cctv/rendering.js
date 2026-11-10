@@ -381,6 +381,10 @@ export function createRendering({
     layerState._coverageVisibleIds = coverageVisible;
     const coverageOn = layerState._coverageMode !== 'off';
     const viewshedOn = layerState._coverageMode === 'viewshed';
+    parts.geometry.releaseUnusedCoverageEntities?.(
+      coverageOn ? coverageVisible : new Set(),
+      activeId,
+    );
     if (coverageOn) {
       parts.geometry.ensureVisibleCoverageEntities(
         layerState._records,

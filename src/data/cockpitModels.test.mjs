@@ -27,12 +27,12 @@ function numericConstant(source, name) {
 for (const layer of LAYERS) {
   const source = readLayerSource(layer.path);
 
-  test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
+  test(`${layer.name}: GLB creation spreads GPU work across frames`, () => {
     const calls = [...source.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
-    assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);
+    assert.ok(calls.length >= 2, `expected fleet and tracked model calls; found ${calls.length}`);
     for (const [index, call] of calls.entries()) {
-      assert.match(call[1], /\basynchronous:\s*false\b/,
-        `Model.fromGltfAsync call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
+      assert.match(call[1], /\basynchronous:\s*true\b/,
+        `Model.fromGltfAsync call ${index + 1} must spread GPU creation rather than blocking the render loop`);
     }
   });
 
@@ -88,7 +88,7 @@ for (const layer of LAYERS) {
     // `_iconKind` is identity for every unconverted contact (see
     // tr3bRegistry.test.mjs) — it only swaps the glyph for a contact the
     // operator explicitly converted into a TR-3B.
-    assert.match(source, /bb\.image\s*=\s*aircraftIcon\(\s*_iconKind\(\s*icao24,\s*meta\?\.klass,?\s*\)(,\s*bb\._gevIconLarge\s*\?\s*TRACKED_ICON_PX\s*:\s*undefined)?,?\s*\)/,
+    assert.match(source, /bb\.image\s*=\s*aircraftIcon\(\s*_iconKind\(\s*icao24,\s*meta\?\.klass,?\s*\)(,\s*bb\._gevIconPx\s*\|\|\s*\(bb\._gevIconLarge\s*\?\s*TRACKED_ICON_PX\s*:\s*undefined\))?,?\s*\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');
     assert.match(source, /bb\.rotation\s*=\s*0;/,
       'far dots are reset to a rotation-free presentation');

@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { JET_MODEL_URL } from './policy.js';
+import { ViewportBillboardCollection } from '../../data/viewportBillboards.js';
 
 export function createLifecycle({
   flightState,
@@ -42,36 +42,23 @@ export function createLifecycle({
         flightState.lifetime = new AbortController();
       clearFocusTarget('militaryFlights');
       flightState._viewer = viewer;
-      flightState._billboardCollection = new Cesium.BillboardCollection();
+      flightState._billboardCollection = new ViewportBillboardCollection(
+        viewer,
+        {
+          screenSpaceEnabled: () => !flightState._cockpitContactMode,
+          screenSpaceDistanceScale: services.focus.nearFarScalarValueAtDistance,
+          getTrackedEntity: () => flightState._trackedEntity,
+          isPinned: (id) =>
+            id === flightState._trackedIcao ||
+            id === flightState._cockpitSubjectId,
+        },
+      );
       viewer.scene.primitives.add(flightState._billboardCollection);
       registerSpriteCollection('military', flightState._billboardCollection);
       flightState._modelCollection = new Cesium.PrimitiveCollection();
       viewer.scene.primitives.add(flightState._modelCollection);
-      // Warm the glTF cache so the tracked plane's model instantiates instantly when first needed
-      // (keeps the retained instance referenced; never rendered). Captured against this epoch so a
-      // destroy/re-init mid-load doesn't flip the flag for a torn-down lifecycle.
-      if (!flightState._preloadModel) {
-        const epoch = flightState._modelEpoch;
-        Cesium.Model.fromGltfAsync({
-          url: resolveAsset(JET_MODEL_URL),
-          asynchronous: false,
-        })
-          .then((m) => {
-            if (epoch === flightState._modelEpoch) {
-              flightState._preloadModel = m;
-              flightState._planeModelLoaded = true;
-            } else {
-              try {
-                m.destroy();
-              } catch {
-                /* gone */
-              }
-            }
-          })
-          .catch(() => {
-            /* tracked plane just stays a billboard a beat longer */
-          });
-      }
+      // Assets load on demand; an invisible warm-up Model otherwise retains
+      // decoded resources even when the user stays on a flat map.
       flightState._billboards = new Map();
       flightState._cullPositions.clear();
       flightState._detectionObjects = new Map();
@@ -175,6 +162,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance
      */
     disable(viewer) {
+      flightState._detectionObjects.clear();
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._billboardCollection)

@@ -3535,5 +3535,14 @@
     "other": "{count} ספינות טרופות"
   },
   "EMODnet (European waters) · Wikidata (worldwide)": "EMODnet (מימי אירופה) · ויקינתונים (כל העולם)",
-  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "ספינות טרופות אירופיות בעלות ערך מורשת מגיעות מ־EMODnet Human Activities; ספינות טרופות בולטות מכל העולם מגיעות מוויקינתונים. הצבע מראה מתי הספינה טבעה; הסמן גדל ככל שמספר ההרוגים עולה. לחץ על סמן כדי לפתוח את הכרטיס שלו."
+  "European heritage wrecks come from EMODnet Human Activities; notable wrecks worldwide come from Wikidata. Colour shows when the ship sank; marker size grows with deaths. Click a marker for its card.": "ספינות טרופות אירופיות בעלות ערך מורשת מגיעות מ־EMODnet Human Activities; ספינות טרופות בולטות מכל העולם מגיעות מוויקינתונים. הצבע מראה מתי הספינה טבעה; הסמן גדל ככל שמספר ההרוגים עולה. לחץ על סמן כדי לפתוח את הכרטיס שלו.",
+  "Show": "הצגה",
+  "Dim": "עמעום",
+  "Hide": "הסתרה",
+  "Ground aircraft": "מטוסים על הקרקע",
+  "Resources": "משאבים",
+  "Resource usage": "שימוש במשאבים",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "מצב חסכוני במשאבים משתמש ב־30 FPS, ברזולוציה מופחתת ובאפקטים קלים יותר. נתוני אנשי הקשר, החיפוש והמעקב נשארים זמינים.",
+  "Standard": "רגיל",
+  "Low resource": "חסכוני במשאבים"
 }

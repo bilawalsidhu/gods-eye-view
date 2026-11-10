@@ -408,6 +408,11 @@ const OPTION_GROUPS = Object.freeze({
       proximity: 'p',
       all: 'a',
     }),
+    enumOption('groundMode', 'g', 'dim', ['show', 'dim', 'hide'], {
+      show: 's',
+      dim: 'd',
+      hide: 'h',
+    }),
     trackingIdOption('selectedFlightsTrackingId', 't', null),
     trackingIdOption('selectedMilitaryTrackingId', 'u', null),
   ]),

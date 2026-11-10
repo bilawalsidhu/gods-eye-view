@@ -806,6 +806,26 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     );
   }
 
+  /** Release native coverage outside the existing visible set; calibration and
+   * sampled frustum coordinates stay on the lightweight record for reconstruction. */
+  function releaseUnusedCoverageEntities(visibleIds, activeId) {
+    const removed = new Set();
+    for (const record of layerState._records) {
+      if (record.camera.id === activeId || visibleIds.has(record.camera.id))
+        continue;
+      for (const entity of record.coverageEntities || []) {
+        layerState._viewer?.entities.remove(entity);
+        removed.add(entity);
+      }
+      record.coverageEntities = [];
+      destroyViewshedVolume(record);
+    }
+    if (removed.size)
+      layerState._coverageEntities = layerState._coverageEntities.filter(
+        (entity) => !removed.has(entity),
+      );
+  }
+
   /**
    * Removes all coverage entities and projection runtimes from the scene.
    */
@@ -819,6 +839,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
     for (const record of layerState._records) {
       destroyViewshedVolume(record);
+      record.coverageEntities = [];
+      record.projection = null;
     }
 
     for (const runtime of layerState._projectionEntities) {
@@ -827,6 +849,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     layerState._projectionEntities = [];
   }
   return {
+    releaseUnusedCoverageEntities,
     computeFrustumGeometry,
     hasShippedFootprint,
     footprintPose,

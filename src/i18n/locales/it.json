@@ -3535,5 +3535,14 @@
   "Play speed": "Velocità di riproduzione",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scorri o pizzica per lo zoom, trascina per spostarti · doppio clic per vedere tutto",
   "1 min/s": "1 min/s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "Resources": "Risorse",
+  "Resource usage": "Utilizzo delle risorse",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "La modalità a basso consumo usa 30 FPS, una risoluzione ridotta ed effetti più leggeri. I dati dei contatti, la ricerca e il tracciamento restano disponibili.",
+  "Standard": "Normale",
+  "Low resource": "Basso consumo",
+  "Show": "Mostra",
+  "Dim": "Attenua",
+  "Hide": "Nascondi",
+  "Ground aircraft": "Aeromobili a terra"
 }

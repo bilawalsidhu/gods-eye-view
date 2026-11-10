@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createQueries } from './queries.js';
+import { createQueries as createMilitaryQueries } from '../military/queries.js';
 import { createRendering } from './rendering.js';
 
-function fixture() {
+function fixture(queryFactory = createQueries) {
   const info = {
     callsign: ' TEST123 ',
     registration: ' N123 ',
@@ -21,7 +22,7 @@ function fixture() {
   };
   let formats = 0;
   const services = {
-    aircraftPresentation: {},
+    aircraftPresentation: { tr3bTypeLabel: (_id, label) => label },
     militaryRegistry: {},
     camera: {},
     focus: {},
@@ -39,9 +40,28 @@ function fixture() {
     motion: { _trackedVisualCached: () => null },
   };
   parts.rendering = createRendering({ flightState, services, parts });
-  const queries = createQueries({ flightState, services, parts }).methods;
+  const queries = queryFactory({ flightState, services, parts }).methods;
   return { flightState, info, bb, parts, queries, formats: () => formats };
 }
+
+test('grounded contacts dim/hide on the map but remain searchable and tracked contacts stay visible in both layers', () => {
+  for (const factory of [createQueries, createMilitaryQueries]) {
+    const f = fixture(factory);
+    f.parts.motion._deadReckon = () => null;
+    f.flightState.records.missingPolls = new Map();
+    f.info.onGround = true;
+    f.flightState._groundMode = 'dim';
+    assert.equal(f.queries.getDetectableObjects()[0].presentationAlpha, 0.35);
+    f.flightState._groundMode = 'hide';
+    assert.equal(f.queries.getDetectableObjects().length, 0);
+    assert.ok(f.queries.findByQuery('TEST123'));
+    f.flightState._trackedIcao = 'abc123';
+    assert.equal(f.queries.getDetectableObjects()[0].presentationAlpha, 1);
+    f.flightState._trackedIcao = null;
+    f.info.onGround = false;
+    assert.equal(f.queries.getDetectableObjects()[0].presentationAlpha, 1);
+  }
+});
 
 test('candidate text follows in-place enrichment without freezing identity or positions', () => {
   const f = fixture();
@@ -79,6 +99,35 @@ test('unchanged candidate text is normalized once across paints', (t) => {
   for (let i = 0; i < 20; i++) f.queries.getDetectableObjects();
   assert.equal(calls, 1);
 });
+
+for (const [name, factory] of [
+  ['civilian', createQueries],
+  ['military', createMilitaryQueries],
+]) {
+  test(`${name}: viewport filtering is opt-in for drawing and preserves synchronous public contact queries`, () => {
+    const f = fixture(factory);
+    f.bb.viewportVisible = false;
+    assert.equal(
+      f.queries.getDetectableObjects().length,
+      1,
+      'freshly ingested and offscreen contacts remain queryable before scene admission',
+    );
+    assert.deepEqual(
+      f.queries.getDetectableObjects({ viewportOnly: true }),
+      [],
+    );
+    assert.equal(
+      f.flightState._detectionObjects.size,
+      0,
+      'offscreen drawing cache is evicted',
+    );
+    f.bb.viewportVisible = true;
+    assert.equal(
+      f.queries.getDetectableObjects({ viewportOnly: true }).length,
+      1,
+    );
+  });
+}
 
 test('candidate collection resolves models once and keeps handoffs live', (t) => {
   const f = fixture();

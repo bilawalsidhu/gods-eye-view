@@ -139,6 +139,39 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     }
   }
 
+  // Point rendering needs ECEF only. Keep rich geodetic/velocity answers in
+  // propagatePosition for tracking, search and analyst records.
+  let rotationEpoch = NaN;
+  let rotationCos = 0;
+  let rotationSin = 0;
+  function propagateCartesian(satrec, date, result) {
+    try {
+      const state = propagate(satrec, date);
+      const p = state.position;
+      if (
+        !p ||
+        typeof p === 'boolean' ||
+        !Number.isFinite(p.x) ||
+        !Number.isFinite(p.y) ||
+        !Number.isFinite(p.z)
+      )
+        return null;
+      const epoch = date.getTime();
+      if (epoch !== rotationEpoch) {
+        const angle = gstime(date);
+        rotationCos = Math.cos(angle);
+        rotationSin = Math.sin(angle);
+        rotationEpoch = epoch;
+      }
+      result.x = (p.x * rotationCos + p.y * rotationSin) * 1000;
+      result.y = (-p.x * rotationSin + p.y * rotationCos) * 1000;
+      result.z = p.z * 1000;
+      return result;
+    } catch {
+      return null;
+    }
+  }
+
   function orbitalPeriodSeconds(satrec) {
     const meanMotion = satrec.no * (1440 / (2 * Math.PI));
     return 86400 / Math.max(meanMotion, 0.1);
@@ -424,6 +457,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     orbitFrameModelMatrix,
     parseTLE,
     propagatePosition,
+    propagateCartesian,
     orbitalPeriodSeconds,
     computeOrbitPath,
     getNextIssPass,

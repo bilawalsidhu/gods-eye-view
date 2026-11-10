@@ -239,18 +239,24 @@ const BODIES = {
 };
 
 const _iconCache = new Map();
+const _iconKinds = new Map();
+
+/** Shared vector artwork for the independent aircraft surface. */
+export function aircraftIconArtwork(kind) {
+  return BODIES[kind];
+}
+export function aircraftIconKind(image) {
+  return _iconKinds.get(image);
+}
 
 const _b64 = (s) =>
   typeof btoa === 'function'
     ? btoa(s)
     : Buffer.from(s, 'utf8').toString('base64');
 
-/** Fleet raster: billboards render at ~40–58 DEVICE px (width 20–24 CSS ×
- *  Retina × class scale). Cesium's billboard atlas has no mipmaps, so a big
- *  texture gets GPU-minified into mush (192 px ÷ 40 = 4.8× — the owner's
- *  "soft" glyphs; the pre-2026-08-15 96 px raster aliased instead). Rastering
- *  NEAR the display size lets the browser's SVG AA do the work: crisp AND
- *  smooth. 64 covers the 40–58 px fleet band with ≤1.6× minification. */
+/** Default fleet raster. Renderers choose shared 32/64/96/192 px variants
+ * from actual framebuffer size (aircraftPixels.js), avoiding large texture
+ * minification and enlargement when scene resolution differs from monitor DPR. */
 const FLEET_RASTER_PX = 64;
 /** Tracked raster: the tracked billboard is the one SUSTAINED large 2D glyph
  *  (close-zoom fleet flybys hand off to 3D models). Keep the 192 px texture so
@@ -269,6 +275,7 @@ export function aircraftIcon(kind, px = FLEET_RASTER_PX) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEW} ${VIEW}"><g transform="translate(${C},${C})">${BODIES[k]}</g></svg>`;
     uri = 'data:image/svg+xml;base64,' + _b64(svg);
     _iconCache.set(key, uri);
+    _iconKinds.set(uri, k);
   }
   return uri;
 }

@@ -1,5 +1,10 @@
 import * as Cesium from 'cesium';
 import {
+  cableViewportPass,
+  syncCableResidency,
+  syncCableSegment,
+} from './residency.js';
+import {
   probeTranslucentMarkerBlend,
   commitTranslucentMarkerBlend,
 } from './surface.js';
@@ -121,9 +126,16 @@ export function createRendering({ state }) {
     if (next === undefined || next === state._classificationType) return;
     state._classificationType = next;
     if (!state._cableDataSource) return;
-    const entities = state._cableDataSource.entities.values;
+    for (const record of state._surfaceRecords)
+      if (record.segmentOptions)
+        record.segmentOptions.classificationType = next;
+    const entities = state._surfaceRecords.length
+      ? state._surfaceRecords
+          .filter((record) => record.source === state._cableDataSource)
+          .map((record) => record.entity)
+      : state._cableDataSource.entities.values;
     for (let i = 0; i < entities.length; i++) {
-      const polyline = entities[i].polyline;
+      const polyline = entities[i]?.polyline;
       if (polyline) polyline.classificationType = next;
     }
     state._viewer?.scene?.requestRender?.();
@@ -212,23 +224,63 @@ export function createRendering({ state }) {
       Cesium.Ellipsoid.WGS84,
       cameraPos,
     );
-    for (const record of state._referenceRecords) {
-      const visible = occluder.isPointVisible(record.base);
-      record.visible = visible;
-      record.distanceM = Cesium.Cartesian3.distance(cameraPos, record.base);
-      if (record.entity.show !== visible) {
-        record.entity.show = visible;
+    const viewport = cableViewportPass(state._viewer);
+    const sources = [
+      state._cableDataSource,
+      state._landingDataSource,
+      state._referenceDataSource,
+    ];
+    if (viewport)
+      for (const source of sources) source?.entities?.suspendEvents?.();
+    try {
+      for (const record of state._referenceRecords) {
+        let visible = occluder.isPointVisible(record.base);
+        record.distanceM = Cesium.Cartesian3.distance(cameraPos, record.base);
+        // Hidden stems keep their last geometry; this same sweep refreshes them
+        // in the pass where they turn visible again.
+        if (visible)
+          updateCableReferenceStem(record, cameraPos, canvasHeight, fov);
+        if (viewport) {
+          visible &&= viewport.visible(
+            record,
+            state._referenceDataSource.entities.contains(record.entity),
+          );
+          syncCableResidency(
+            state._referenceDataSource,
+            record.entity,
+            visible,
+            state._viewer,
+          );
+        } else record.entity.show = visible;
+        record.visible = visible;
       }
-      // Hidden stems keep their last geometry; this same sweep refreshes them
-      // in the pass where they turn visible again.
-      if (visible)
-        updateCableReferenceStem(record, cameraPos, canvasHeight, fov);
-    }
-    for (const record of state._surfaceRecords) {
-      const visible = occluder.isPointVisible(record.base);
-      if (record.entity.show !== visible) {
-        record.entity.show = visible;
+      for (const record of state._surfaceRecords) {
+        const isLine = Boolean(
+          record.segmentOptions || record.entity?.polyline,
+        );
+        const visible = viewport
+          ? (isLine || occluder.isPointVisible(record.base)) &&
+            viewport.visible(
+              record,
+              Boolean(
+                record.entity && record.source.entities.contains(record.entity),
+              ),
+            )
+          : occluder.isPointVisible(record.base);
+        if (record.segmentOptions)
+          syncCableSegment(record, visible, state._viewer);
+        else if (viewport)
+          syncCableResidency(
+            record.source,
+            record.entity,
+            visible,
+            state._viewer,
+          );
+        else record.entity.show = visible;
       }
+    } finally {
+      if (viewport)
+        for (const source of sources) source?.entities?.resumeEvents?.();
     }
     const winners = selectCableReferenceLabelWinners(state._referenceRecords);
     let changed = winners.length !== state._lastPublishedCount;

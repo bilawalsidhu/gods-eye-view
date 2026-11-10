@@ -69,6 +69,7 @@ export function createFlightState({ source, services }) {
   flightState._models3dEnabled = true;
 
   flightState._models3dMode = 'proximity';
+  flightState._groundMode = 'dim';
   // 'proximity' = nearest MODEL_MAX in view; 'all' = every in-view plane (≤ MODEL_MAX_ALL)
 
   flightState._lastModelCapWarnMs = 0;

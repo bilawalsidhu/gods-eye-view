@@ -690,7 +690,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.match(cyberStyles, /prefers-reduced-motion: reduce/);
   assert.match(detection, /candidate\.sonarFactor \?\? 1/);
   assert.match(detection, /sonarActive && !obj\.skipLabel/);
-  assert.match(detection, /const bracketAlpha = admissionAlpha \* sonarFactor/);
+  assert.ok(detection.split(String.fromCharCode(10)).map(line => line.trim()).join(' ').includes('const bracketAlpha = admissionAlpha * sonarFactor'));
   assert.match(detection, /sonarSampler\.label\(sonarFactor\)/);
   assert.match(detection, /createCyberSonarSampler\(width, height, now\)/);
   assert.match(cyberStyles, /data-cyber-sonar='off'/);
@@ -702,11 +702,11 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   assert.doesNotMatch(detection, /sonarActive \? 1 : 0/);
   assert.match(
     civilRendering,
-    /alpha: flightState\._irBoost \? 1 : treatment\.alpha/,
+    /alpha: flightState[.]_irBoost [?] groundAlpha : treatment[.]alpha/,
   );
   assert.match(
     militaryRendering,
-    /baseAlpha:[\s\S]*?alpha: flightState\._irBoost \? 1 : treatment\.alpha/,
+    /baseAlpha:[^]*?alpha: flightState[.]_irBoost [?] groundAlpha : treatment[.]alpha/,
   );
   assert.match(
     cyberStyles,

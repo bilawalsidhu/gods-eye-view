@@ -17,7 +17,7 @@ import { StyleParameterRows } from '../../styleParameters.js';
 // and each publishes them; until they do, the panel shows its initial markup.
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
-const { view, models3d, parameters, cockpitPortal } = storeToRefs(display);
+const { view, models3d, parameters, cockpitPortal, performance } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
@@ -37,6 +37,12 @@ const celestialTitle = computed(() =>
 );
 const models3dOn = computed(() => models3d.value?.pressed ?? true);
 const modelsMode = computed(() => models3d.value?.mode ?? 'proximity');
+const groundMode = computed(() => models3d.value?.groundMode ?? 'dim');
+const groundOptions = computed(() => [
+  { value: 'show', label: t('Show') },
+  { value: 'dim', label: t('Dim') },
+  { value: 'hide', label: t('Hide') },
+]);
 const modelsOptions = computed(() => [
   { value: 'proximity', label: t('Proximity'), attrs: { id: 'models3d-mode-proximity', 'data-mode': 'proximity' } },
   { value: 'all', label: t('All'), attrs: { id: 'models3d-mode-all', 'data-mode': 'all' } },
@@ -56,6 +62,15 @@ const allocationOptions = computed(() => [
     <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('DISPLAY')" sideways start-collapsed />
   </div>
   <div class="pp-panel-body ui-scroll" data-rail-scroller>
+  <div class="pp-toggle-group" v-if="performance">
+    <div class="pp-slider-row visible">
+      <label class="pp-slider-mini-label" for="performance-mode">{{ t('Resources') }}</label>
+      <UiSelect id="performance-mode" class="pp-select gev-field gev-field--compact" :model-value="performance.mode" @update:model-value="act('setPerformanceMode', $event)" :aria-label="t('Resource usage')" :title="t('Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.')">
+        <option value="standard">{{ t('Standard') }}</option>
+        <option value="low">{{ t('Low resource') }}</option>
+      </UiSelect>
+    </div>
+  </div>
   <!-- Cockpit shows these four groups in its Display popover: each teleports to the slot the Cockpit display portal publishes. While disabled a Teleport stays in place; its 'body' target only keeps server rendering from dropping it. -->
   <Teleport :to="cockpitPortal?.hud ?? 'body'" :disabled="!cockpitPortal?.hud">
   <div class="pp-toggle-group">
@@ -141,6 +156,12 @@ const allocationOptions = computed(() => [
     <div id="param-sliders"><StyleParameterRows v-if="parameters" :key="parameters.style" :rows="parameters.rows" :on-input="(name, value) => act('setStyleParameter', name, value)" /></div>
   </div>
   </Teleport>
+  <div class="pp-toggle-group" id="ground-aircraft-controls">
+    <div class="pp-slider-row visible">
+      <span class="pp-slider-mini-label">{{ t('Ground aircraft') }}</span>
+      <UiSegmented class="pp-mode-seg" item-class="pp-mode-btn" :label="t('Ground aircraft')" :options="groundOptions" :model-value="groundMode" @update:model-value="act('setGroundAircraftMode', $event)" />
+    </div>
+  </div>
   <Teleport :to="cockpitPortal?.models3d ?? 'body'" :disabled="!cockpitPortal?.models3d">
   <div class="pp-toggle-group">
     <!-- 3D aircraft is DEFAULT-ON in Proximity (owner directive 2026-08-22), so the

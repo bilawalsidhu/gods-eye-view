@@ -1,3 +1,4 @@
+import { groundAircraftAlpha } from '../../data/groundAircraft.js';
 import * as Cesium from 'cesium';
 import { julianAt } from '../../time/julian.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
@@ -7,6 +8,11 @@ import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
+import {
+  aircraftRenderPixelRatio,
+  aircraftModelPixelSize,
+  selectAircraftIconRaster,
+} from '../../data/aircraftPixels.js';
 import {
   cameraPoseSignature,
   horizonOccluder,
@@ -146,13 +152,20 @@ export function createRendering({
 
   function _applyFleetBillboardPresentation(icao24, bb) {
     if (!bb) return;
+    const groundAlpha = groundAircraftAlpha(
+      flightState._groundMode,
+      flightState.records.data.get(icao24)?.onGround,
+      icao24 === flightState._trackedIcao ||
+        icao24 === flightState._cockpitSubjectId,
+    );
+    if (!groundAlpha) bb.show = false;
     const limbScale = flightState._billboardLimbScale.get(bb) ?? 1;
     const isCockpitContact =
       flightState._cockpitContactMode && icao24 !== flightState._trackedIcao;
     const isCockpitNear =
       isCockpitContact && flightState._cockpitNearContacts.has(icao24);
     if (isCockpitContact && !isCockpitNear) {
-      const freshnessAlpha = cyberSonarBaseAlpha(bb);
+      const freshnessAlpha = Math.min(cyberSonarBaseAlpha(bb), groundAlpha);
       bb.image = cockpitContactDotImage();
       bb.width = COCKPIT_CONTACT_SIZE_PX;
       bb.height = COCKPIT_CONTACT_SIZE_PX;
@@ -166,13 +179,15 @@ export function createRendering({
     const meta = flightState.records.data.get(icao24);
     bb.image = aircraftIcon(
       _iconKind(icao24, meta?.klass),
-      bb._gevIconLarge ? TRACKED_ICON_PX : undefined,
+      bb._gevIconPx || (bb._gevIconLarge ? TRACKED_ICON_PX : undefined),
     );
     bb.width = icao24 === flightState._trackedIcao ? 24 : 20;
     bb.height = icao24 === flightState._trackedIcao ? 24 : 20;
     bb.scale = _fleetBillboardScale(icao24, meta?.klass) * limbScale;
     bb.scaleByDistance = _normalBillboardScaleByDistance();
-    bb.color = _fleetBillboardColor(icao24).withAlpha(cyberSonarBaseAlpha(bb));
+    bb.color = _fleetBillboardColor(icao24).withAlpha(
+      Math.min(cyberSonarBaseAlpha(bb), groundAlpha),
+    );
   }
 
   /**
@@ -330,6 +345,10 @@ export function createRendering({
       bb.show = true;
       return false;
     }
+    model.minimumPixelSize = aircraftModelPixelSize(
+      flightState._viewer?.scene,
+      MODEL_MIN_PX,
+    );
     const displayPos = _modelDisplayPosition(
       icao24,
       pos,
@@ -481,6 +500,15 @@ export function createRendering({
   /** Lazily create the glTF model for an aircraft (fire-and-forget; billboard shows until ready). */
 
   async function _ensureModel(icao24) {
+    if (
+      !groundAircraftAlpha(
+        flightState._groundMode,
+        flightState.records.data.get(icao24)?.onGround,
+        icao24 === flightState._trackedIcao ||
+          icao24 === flightState._cockpitSubjectId,
+      )
+    )
+      return;
     // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
     // tick skips it, so a model here would be orphaned + double-rendered.
     if (icao24 === flightState._trackedIcao) return;
@@ -497,6 +525,15 @@ export function createRendering({
       _modelCap()
     )
       return;
+    // Bound cold-fleet admission independently of the eventual visible cap.
+    // Existing models return above; subsequent fleet ticks admit waiting contacts.
+    if (
+      flightState._modelPending.size >= 4 ||
+      (flightState._modelLoadsThisTick || 0) >= 4
+    )
+      return;
+    flightState._modelLoadsThisTick =
+      (flightState._modelLoadsThisTick || 0) + 1;
     const epoch = flightState._modelEpoch; // lifecycle token: if destroy() bumps it, this load is dead
     const gen = flightState._modelGen.get(icao24) || 0; // capture; if it changes during the load, we're stale
     flightState._modelPending.add(icao24);
@@ -511,9 +548,12 @@ export function createRendering({
       const spec = _modelSpec(flightState.records.data.get(icao24)?.klass);
       model = await Cesium.Model.fromGltfAsync({
         url: resolveAsset(spec.url),
-        asynchronous: false,
+        asynchronous: true,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
-        minimumPixelSize: MODEL_MIN_PX,
+        minimumPixelSize: aircraftModelPixelSize(
+          flightState._viewer?.scene,
+          MODEL_MIN_PX,
+        ),
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
         colorBlendMode: Cesium.ColorBlendMode.MIX,
@@ -553,6 +593,12 @@ export function createRendering({
     const stale =
       (flightState._modelGen.get(icao24) || 0) !== gen ||
       !_modelRegimeActive() ||
+      !groundAircraftAlpha(
+        flightState._groundMode,
+        flightState.records.data.get(icao24)?.onGround,
+        icao24 === flightState._trackedIcao ||
+          icao24 === flightState._cockpitSubjectId,
+      ) ||
       !flightState._modelCollection ||
       flightState._modelCollection.isDestroyed() ||
       !flightState.records.data.has(icao24) ||
@@ -731,9 +777,12 @@ export function createRendering({
       const trackedIrBoost = flightState._irBoost;
       Cesium.Model.fromGltfAsync({
         url: resolveAsset(trackedSpec.url),
-        asynchronous: false,
+        asynchronous: true,
         environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
-        minimumPixelSize: TRACKED_MODEL_MIN_PX,
+        minimumPixelSize: aircraftModelPixelSize(
+          flightState._viewer?.scene,
+          TRACKED_MODEL_MIN_PX,
+        ),
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
         colorBlendMode: Cesium.ColorBlendMode.MIX,
@@ -820,6 +869,10 @@ export function createRendering({
       return; // billboard carries the visual until the model is ready
     }
     if (flightState._trackedModel) {
+      flightState._trackedModel.minimumPixelSize = aircraftModelPixelSize(
+        flightState._viewer?.scene,
+        TRACKED_MODEL_MIN_PX,
+      );
       // Keep the transform current while GPU resources are still loading. Cesium
       // can flip ready during scene update after this callback; waiting for ready
       // here would let that first rendered frame use a stale load-start matrix.
@@ -884,7 +937,11 @@ export function createRendering({
     // (The tracked trail head is now the per-frame _trailHeadEntity segment — no 1 Hz
     // primitive rebuild needed here anymore.)
 
-    if (nowMs - flightState._lastFleetTickMs < FLEET_DR_INTERVAL_MS) return;
+    const fleetIntervalMs = Math.max(
+      FLEET_DR_INTERVAL_MS,
+      Number(flightState._viewer.gevFleetIntervalMs) || 0,
+    );
+    if (nowMs - flightState._lastFleetTickMs < fleetIntervalMs) return;
     const tickDtSec = flightState._lastFleetTickMs
       ? Math.min(
           COURSE_SLEW_DT_MAX_SEC,
@@ -892,6 +949,7 @@ export function createRendering({
         )
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
+    const renderPixelRatio = aircraftRenderPixelRatio(scene);
     // Every contact in this pass shares the same delayed display instant.
     const renderTime = Cesium.JulianDate.addSeconds(
       julianAt(flightState.now(), flightState._scratchFleetRenderTime),
@@ -918,6 +976,7 @@ export function createRendering({
 
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
     // Drop all models the moment we leave it (toggled off / zoomed out) so billboards resume.
+    flightState._modelLoadsThisTick = 0;
     const useModels = _modelRegimeActive();
     // Drop live models AND invalidate in-flight loads on leaving the regime (else a load that
     // resolves after zoom-out could briefly add a model outside the 3D-model regime).
@@ -951,8 +1010,19 @@ export function createRendering({
       );
       // Candidates = planes within the KEEP radius, nearest first, each tagged with on-screen-ness.
       const cand = [];
+      // Show/Dim ground traffic shares the model budget; Hide is excluded.
       for (const [icao, bb] of flightState._billboards) {
+        if (
+          !groundAircraftAlpha(
+            flightState._groundMode,
+            flightState.records.data.get(icao)?.onGround,
+            icao === flightState._trackedIcao ||
+              icao === flightState._cockpitSubjectId,
+          )
+        )
+          continue;
         if (icao === flightState._trackedIcao) continue;
+        if (bb.viewportVisible === false) continue;
         // A converted TR-3B renders as a billboard and can never take a model, so
         // it must not occupy a CAP SLOT either — excluded here at selection time,
         // not just at the handoff below, or accumulated conversions would starve
@@ -996,10 +1066,21 @@ export function createRendering({
       for (const icao of toRelease) _releaseModel(icao);
     }
 
-    const hiddenDrPhase = flightState._fleetTickSeq++ % HIDDEN_CONTACT_DR_TICKS;
+    const hiddenTicks = Math.max(
+      1,
+      Math.round(
+        (HIDDEN_CONTACT_DR_TICKS * FLEET_DR_INTERVAL_MS) / fleetIntervalMs,
+      ),
+    );
+    const hiddenDrPhase = flightState._fleetTickSeq++ % hiddenTicks;
 
     for (const [icao24, bb] of flightState._billboards) {
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
+      const groundAlpha = groundAircraftAlpha(
+        flightState._groundMode,
+        flightState.records.data.get(icao24)?.onGround,
+        icao24 === flightState._cockpitSubjectId,
+      );
 
       // A contact still behind the horizon at its last position would only be
       // re-reckoned to be hidden again, so off its turn it keeps that position
@@ -1007,7 +1088,7 @@ export function createRendering({
       // and any contact with a fleet model, takes the full pass below at once.
       if (
         !bb.show &&
-        _hiddenDrPhase(bb, icao24) !== hiddenDrPhase &&
+        _hiddenDrPhase(bb, icao24) % hiddenTicks !== hiddenDrPhase &&
         !flightState._models.has(icao24) &&
         !occluder.isPointVisible(
           flightState._cullPositions.get(icao24) || bb.position,
@@ -1047,6 +1128,11 @@ export function createRendering({
       // sub-ellipsoid point near the limb "beyond the horizon" and the fleet
       // pass would hide a plane that is really just low over high-N terrain
       // waiting for its floor to warm (ATL grounded contacts at geoid −31 m).
+      if (!groundAlpha) {
+        bb.show = false;
+        _releaseModel(icao24);
+        continue;
+      }
       const beyondHorizon = !occluder.isPointVisible(
         flightState._cullPositions.get(icao24) || bb.position,
       );
@@ -1070,6 +1156,14 @@ export function createRendering({
       // locked NearFarScalar remains a separate multiplicative stage. This
       // narrowly amends always-visible rendering without count culling or zero
       // alpha; nearer focus behavior remains tunable rather than universal.
+      // Offscreen contacts keep their live position for search and tracking,
+      // but do not need sprite styling between camera/rotation refreshes.
+      if (
+        !doRotations &&
+        bb.viewportVisible === false &&
+        !flightState._models.has(icao24)
+      )
+        continue;
       const cameraDistanceM = Cesium.Cartesian3.distance(
         camera.positionWC,
         bb.position,
@@ -1103,34 +1197,27 @@ export function createRendering({
           flightState._cockpitContactMode && !isCockpitNear
             ? 1
             : _fleetBillboardScale(icao24, info?.klass),
-        baseAlpha: flightState.records.missingPolls.get(icao24)
-          ? STALE_ALPHA
-          : 1,
+        baseAlpha:
+          (flightState.records.missingPolls.get(icao24) ? STALE_ALPHA : 1) *
+          groundAlpha,
         baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,
         cameraHeightM: camera.positionCartographic?.height,
       });
       flightState._billboardLimbScale.set(bb, treatment.factors.scale);
-      // Two-tier glyph raster (owner playtest 2026-08-16): the billboard atlas
-      // has no mipmaps, so no single texture stays crisp across the ~25–150
-      // device-px range scaleByDistance produces. Swap between the 64 px fleet
-      // raster and the 192 px close raster on the billboard's ACTUAL on-screen
-      // size — post-treatment bb.scale, so focus/limb recession counts — with
-      // hysteresis so zoom oscillation never thrashes the atlas.
+      // Match the shared SVG raster to WebGL pixels, rather than monitor DPR:
+      // the scene may use a capped ratio or the optional low-resource budget.
       if (!flightState._cockpitContactMode || isCockpitNear) {
-        const glyphDevPx =
-          (bb.width || 20) *
-          (bb.scale || 1) *
-          distanceScale *
-          (globalThis.devicePixelRatio || 1);
-        const wantLarge = bb._gevIconLarge ? glyphDevPx > 56 : glyphDevPx > 76;
-        if (wantLarge !== !!bb._gevIconLarge) {
-          bb._gevIconLarge = wantLarge;
-          bb.image = aircraftIcon(
-            _iconKind(icao24, info?.klass),
-            wantLarge ? TRACKED_ICON_PX : undefined,
-          );
+        const pixels =
+          (bb.width || 20) * (bb.scale || 1) * distanceScale * renderPixelRatio;
+        const previous =
+          bb._gevIconPx || (bb._gevIconLarge ? TRACKED_ICON_PX : 64);
+        const raster = selectAircraftIconRaster(pixels, previous);
+        if (raster !== previous) {
+          bb._gevIconPx = raster;
+          bb._gevIconLarge = raster === TRACKED_ICON_PX;
+          bb.image = aircraftIcon(_iconKind(icao24, info?.klass), raster);
         }
       }
 
@@ -1189,7 +1276,7 @@ export function createRendering({
               baseColor: flightState._irBoost
                 ? Cesium.Color.WHITE
                 : _modelColor(icao24),
-              alpha: flightState._irBoost ? 1 : treatment.alpha,
+              alpha: flightState._irBoost ? groundAlpha : treatment.alpha,
             });
           },
         );

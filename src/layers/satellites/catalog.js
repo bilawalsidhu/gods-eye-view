@@ -26,6 +26,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
    * (~2K props ≈ 4ms) would cause.
    */
 
+  const propagationPosition = new Cesium.Cartesian3();
   function _propagateDenseChunk() {
     if (layerState._denseIds.length === 0) return;
     const perFrame = Math.max(
@@ -41,14 +42,12 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       const sat = layerState._catalog.get(noradId);
       const point = layerState._points.get(noradId);
       if (!sat || !point) continue;
-      const pos = parts.orbits.propagatePosition(sat.satrec, now);
-      if (pos) {
-        point.position = Cesium.Cartesian3.fromDegrees(
-          pos.longitude,
-          pos.latitude,
-          pos.altitude,
-        );
-      }
+      const cartesian = parts.orbits.propagateCartesian(
+        sat.satrec,
+        now,
+        propagationPosition,
+      );
+      if (cartesian) point.position = cartesian;
     }
   }
 

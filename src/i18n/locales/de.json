@@ -3454,5 +3454,14 @@
   "Play speed": "Wiedergabegeschwindigkeit",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben · Doppelklick zeigt alles",
   "1 min/s": "1 Min./s",
-  "Photo © {photographer}": "Foto © {photographer}"
+  "Photo © {photographer}": "Foto © {photographer}",
+  "Resources": "Ressourcen",
+  "Resource usage": "Ressourcennutzung",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "Der ressourcensparende Modus nutzt 30 FPS, eine geringere Auflösung und einfachere Effekte. Kontaktdaten, Suche und Verfolgung bleiben verfügbar.",
+  "Standard": "Normalmodus",
+  "Low resource": "Ressourcensparend",
+  "Show": "Anzeigen",
+  "Dim": "Abblenden",
+  "Hide": "Ausblenden",
+  "Ground aircraft": "Flugzeuge am Boden"
 }

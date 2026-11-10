@@ -293,13 +293,16 @@ export function createControls({ state: layerState, services, parts, source }) {
 
       const result = [];
       for (let i = start; i < layerState._dots.length; i += stride) {
-        const pos = layerState._dots[i].point.position;
+        const dot = layerState._dots[i];
+        const pos = dot.point.position;
         if (!pos) continue;
-        const entry = {
-          position: pos,
-          id: `VEH-${String(layerState._dots[i].id).padStart(4, '0')}`,
-          type: 'VEH',
-        };
+        const entry = (dot.detectContact ||= { type: 'VEH' });
+        entry.position = pos;
+        if (entry._dotId !== dot.id) {
+          entry._dotId = dot.id;
+          entry.id = `VEH-${String(dot.id).padStart(4, '0')}`;
+        }
+        entry.tier = undefined;
         // Live mode: the detection bracket carries the congestion signal —
         // its canvas sits ABOVE the post-FX chain, so tier colors survive
         // every preset (owner round 2: "bounding boxes do the heavy

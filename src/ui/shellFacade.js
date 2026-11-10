@@ -1328,6 +1328,10 @@ export class ShellFacade {
     return this._aircraftDisplay._setModels3dEnabled(...args);
   }
 
+  _setGroundAircraftMode(...args) {
+    return this._aircraftDisplay._setGroundAircraftMode(...args);
+  }
+
   _setModels3dMode(...args) {
     return this._aircraftDisplay._setModels3dMode(...args);
   }

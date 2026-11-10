@@ -86,6 +86,7 @@ export function createRendering({ state, services, parts }) {
     entry.endpointToSeq = entry.sample.toSeq;
   }
   function placeSample(entry, nearGround = parts.height.nearGround()) {
+    if (!entry.marker) return;
     if (
       entry.endpointRevision !== entry.sample.revision ||
       entry.endpointFromSeq !== entry.sample.fromSeq ||
@@ -135,6 +136,9 @@ export function createRendering({ state, services, parts }) {
       disableDepthTestDistance: old.disableDepthTestDistance,
     });
     entry.markerCollection.remove(old);
+    // Public removeAll releases Cesium's pending-update references once this
+    // collection empties; remove alone can retain the old billboard objects.
+    if (entry.markerCollection.length === 0) entry.markerCollection.removeAll();
     entry.marker = marker;
     entry.markerCollection = collection;
     entry.markerRevision = (entry.markerRevision || 0) + 1;
@@ -263,7 +267,21 @@ export function createRendering({ state, services, parts }) {
       applySpriteStyle(entry);
   }
 
+  function releaseMarker(entry) {
+    cancelWake(entry);
+    state._moving.delete(entry);
+    if (entry.marker && entry.markerCollection) {
+      entry.markerCollection.remove(entry.marker);
+      if (entry.markerCollection.length === 0)
+        entry.markerCollection.removeAll();
+    }
+    entry.marker = null;
+    entry.markerCollection = null;
+    entry.detectContact = null;
+  }
+
   function addMarker(key, entry) {
+    if (entry.marker) return entry.marker;
     const marker = state._markers.add({
       id: key,
       position: entry.toCart,
@@ -277,6 +295,9 @@ export function createRendering({ state, services, parts }) {
     });
     entry.marker = marker;
     entry.markerCollection = state._markers;
+    entry.markerRevision = (entry.markerRevision || 0) + 1;
+    entry.rotationCourse = null;
+    state._rotationDirty = true;
     marker.show = false;
     applySpriteStyle(entry);
     return marker;
@@ -496,7 +517,6 @@ export function createRendering({ state, services, parts }) {
     const planes = frustum?.planes;
     let changed = false;
     for (const entry of state._vehicles.values()) {
-      if (!entry.marker) continue;
       // Refresh hidden clocks before testing admission, even if no frame has
       // ever sampled them. Do not write the billboard until it is admitted.
       const noSample = !entry.sample || !Number.isFinite(entry.sample.lat);
@@ -505,7 +525,7 @@ export function createRendering({ state, services, parts }) {
         updatePlayback(entry, state.now(), performance.now());
       }
       sphere.center =
-        state._visible.has(entry) || !entry.sample
+        entry.marker && (state._visible.has(entry) || !entry.sample)
           ? entry.marker.position
           : cartesianFor(
               entry.sample.lat,
@@ -538,10 +558,12 @@ export function createRendering({ state, services, parts }) {
       visibility.occluder = horizon;
       visibility.frustum = inFrustum;
       visibility.noSample = noSample;
-      const wasShown = entry.marker.show;
+      const wasShown = entry.marker?.show === true;
       const wasVisible = state._visible.has(entry);
-      if (visible) state._visible.add(entry);
-      else state._visible.delete(entry);
+      if (visible) {
+        state._visible.add(entry);
+        addMarker(entry.key, entry);
+      } else state._visible.delete(entry);
       if (visible && entry.track?.count) {
         if (!wasVisible && !entry.qaFixture) syncPlayback(entry, now);
         // Re-entry can advance into an unprepared corridor; loaded tiles can
@@ -555,12 +577,16 @@ export function createRendering({ state, services, parts }) {
           placeSample(entry);
         }
       }
-      entry.marker.show =
-        visible && !entry.heightPending && entry.surfaceReady !== false;
+      if (entry.marker)
+        entry.marker.show =
+          visible && !entry.heightPending && entry.surfaceReady !== false;
+      // Keep logical records/history; only GPU-facing residents follow the view.
+      if (!visible && entry.key !== state._selectedKey) releaseMarker(entry);
       visibility.heightPending = !!entry.heightPending;
       visibility.surfaceReady = entry.surfaceReady ?? null;
       schedulePlayback(entry);
-      changed ||= visible !== wasVisible || wasShown !== entry.marker.show;
+      changed ||=
+        visible !== wasVisible || wasShown !== (entry.marker?.show === true);
     }
     state._shownCount = state._visible.size;
     if (changed) state._detectRevision++;
@@ -615,6 +641,7 @@ export function createRendering({ state, services, parts }) {
     refreshVisibility,
     vehicleInView,
     addMarker,
+    releaseMarker,
     paintMode,
     paintSelected,
     applySpriteStyle,

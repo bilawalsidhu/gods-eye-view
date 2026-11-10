@@ -3373,5 +3373,14 @@
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "滚动或双指缩放，拖动以移动 · 双击查看全部",
   "1 min/s": "1 分钟/秒",
-  "Photo © {photographer}": "照片 © {photographer}"
+  "Photo © {photographer}": "照片 © {photographer}",
+  "Resources": "资源",
+  "Resource usage": "资源使用",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "低资源模式使用30 FPS、较低分辨率和简化效果。目标数据、搜索和跟踪仍然可用。",
+  "Standard": "标准",
+  "Low resource": "低资源",
+  "Show": "显示",
+  "Dim": "淡化",
+  "Hide": "隐藏",
+  "Ground aircraft": "地面飞机"
 }

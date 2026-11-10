@@ -3373,5 +3373,14 @@
   "Play speed": "再生速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "スクロールまたはピンチでズーム、ドラッグで移動 · ダブルクリックで全体表示",
   "1 min/s": "1分/秒",
-  "Photo © {photographer}": "写真 © {photographer}"
+  "Photo © {photographer}": "写真 © {photographer}",
+  "Resources": "リソース",
+  "Resource usage": "リソース使用量",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "省リソースモードでは30 FPS、低い解像度、軽量なエフェクトを使用します。コンタクトデータ、検索、追跡は引き続き利用できます。",
+  "Standard": "標準",
+  "Low resource": "省リソース",
+  "Show": "表示",
+  "Dim": "薄く表示",
+  "Hide": "非表示",
+  "Ground aircraft": "地上の航空機"
 }

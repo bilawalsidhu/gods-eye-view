@@ -1,4 +1,7 @@
 import { SceneDirector } from '../scenes/director.js';
+import { createPerformanceController } from './performance.js';
+import { readPerformanceMode } from './performancePolicy.js';
+import { setWorldOverlayPixelRatioCap } from '../overlays/worldOverlay.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
 import {
@@ -204,6 +207,20 @@ export function createApplicationTools({
   // loop burning behind a hidden tab. (perf wave 2 fix)
   syncVisibilitySuspension();
 
+  const performanceController = createPerformanceController({
+    viewer,
+    styleManager,
+    dataManager,
+    mapStackController,
+    store: useDisplayStore(applicationPinia()),
+    setOverlayPixelRatioCap: setWorldOverlayPixelRatioCap,
+    startupRenderBaseline:
+      readPerformanceMode() === 'low'
+        ? { fps: 60, resolution: viewer.gevStandardResolutionScale, msaa: 4 }
+        : null,
+  });
+  defer(() => performanceController.destroy());
+
   window.__godsEyeView = {
     viewer,
     styleManager,
@@ -217,6 +234,7 @@ export function createApplicationTools({
     getRenderGovernorDiagnostics,
     surfaceServices: operations.surface,
     requestRender: governorRequestRender,
+    performance: performanceController,
   };
   const debug = window.__godsEyeView;
   defer(() => {

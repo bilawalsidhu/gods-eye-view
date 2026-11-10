@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { createCompactInfrastructureSource } from './compactInfrastructure.js';
 import {
   layerTitle,
   mapAnalystRecord,
@@ -308,6 +309,7 @@ export function createLocalGeoJsonLayer(
     source = 'Local JSONL',
     osmDerived = false,
     labels = true,
+    viewportEntities = false,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
     screenSpaceEventHandlerFactory = (canvas) =>
@@ -343,16 +345,18 @@ export function createLocalGeoJsonLayer(
   let _loadPromise = null;
   let _loadController = null;
   /**
-   * The parsed bundled dataset, kept across disable/enable so a re-enable
-   * rebuilds entities without refetching. The Cesium entities themselves are
+   * The bundled dataset text, kept across disable/enable so a re-enable
+   * rebuilds entities without refetching. Keeping its serialized form avoids
+   * retaining a second graph of feature/geometry arrays while disabled.
+   * The Cesium entities themselves are
    * NOT kept: a hidden data source still costs every frame (DataSourceDisplay
    * walks every visualizer over every entity regardless of `show`), and the
    * ~11k entities of the three bundled layers hold hundreds of MB, so leaving
    * them parked after a toggle-off made the whole scene render ~2× slower for
    * the rest of the session (owner field test 2026-09-13).
-   * @type {Array<object>|null}
+   * @type {string|null}
    */
-  let _cachedFeatures = null;
+  let _cachedText = null;
   /**
    * Globe-LOD active set: the record ids allowed to carry a live stem right
    * now. This bounds geometry refreshes and ground-sample work to the
@@ -432,8 +436,8 @@ export function createLocalGeoJsonLayer(
   });
 
   /**
-   * Take the built entities out of the scene entirely. The parsed features
-   * stay cached, so the next enable() rebuilds without a fetch; what must not
+   * Take the built entities out of the scene entirely. The dataset text
+   * stays cached, so the next enable() rebuilds without a fetch; what must not
    * survive a disable is the per-frame visualizer walk and the entity memory.
    * @param {object} viewer
    */
@@ -522,8 +526,8 @@ export function createLocalGeoJsonLayer(
      * Snapshot in-memory infrastructure features as plain JSON-safe objects
      * for the analyst query engine. On-demand only (called at most once per
      * spoken query) — zero per-frame cost, no listeners, no caching. Returns
-     * [] while the layer is disabled or empty. Disable keeps the loaded
-     * stems for reuse; this method still returns [] until the next enable.
+     * [] while the layer is disabled or empty. Disable keeps the dataset
+     * text for rebuilding; this returns [] until the next enable.
      * @param {number} [maxCount=2000] Maximum records to return (truncation).
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
@@ -584,8 +588,8 @@ export function createLocalGeoJsonLayer(
             // windows (before vs after the add settles) need different cleanup.
             let addedToScene = false;
             try {
-              let features = _cachedFeatures;
-              if (!features) {
+              let text = _cachedText;
+              if (text === null) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
                 });
@@ -595,11 +599,12 @@ export function createLocalGeoJsonLayer(
                 if (!response.ok) {
                   throw new Error(`HTTP ${response.status ?? '?'}`);
                 }
-                const text = await response.text();
+                text = await response.text();
                 if (_destroyed) return;
-                features = parseGeojsonLines(text);
-                _cachedFeatures = features;
               }
+              const features = parseGeojsonLines(text);
+              // Commit only valid data so a parse failure can retry the fetch.
+              _cachedText = text;
 
               const geojson = {
                 type: 'FeatureCollection',
@@ -607,14 +612,20 @@ export function createLocalGeoJsonLayer(
               };
 
               // Natively parse into entities and use it as our _dataSource
-              loaded = await Cesium.GeoJsonDataSource.load(geojson, {
-                clampToGround: true,
-                stroke: baseColor,
-                fill: baseColor.withAlpha(0.3),
-                strokeWidth: 2,
-                markerSize: 8,
-                markerColor: baseColor,
-              });
+              loaded =
+                viewer.gevLowResource || viewportEntities
+                  ? createCompactInfrastructureSource(features, viewer, {
+                      detailed: !viewer.gevLowResource,
+                      color: baseColor,
+                    })
+                  : await Cesium.GeoJsonDataSource.load(geojson, {
+                      clampToGround: true,
+                      stroke: baseColor,
+                      fill: baseColor.withAlpha(0.3),
+                      strokeWidth: 2,
+                      markerSize: 8,
+                      markerColor: baseColor,
+                    });
 
               if (_destroyed) return;
               loaded.name = name;
@@ -634,14 +645,30 @@ export function createLocalGeoJsonLayer(
               }
 
               // Convert parsed points into 3D stems or style polygons
-              const entities = loaded.entities.values;
+              const entities = loaded.compactEntities || loaded.entities.values;
               _count = entities.length;
               _stemRecords = [];
               _stemGeometryDirty = true;
 
+              // These styles never change per feature. Share their property /
+              // event graphs within this build; positions and stem buffers
+              // remain entity-owned. Keep them build-local so disabling the
+              // source also releases the subscribers on the shared graphics.
+              const pointStyle = new Cesium.PointGraphics({
+                pixelSize: 10,
+                color: baseColor,
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 2,
+                // Globe-horizon culling happens in the pre-render occluder.
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              });
+              const stemMaterial = new Cesium.ColorMaterialProperty(baseColor);
+              const stemWidth = new Cesium.ConstantProperty(3.5);
+
               for (let i = 0; i < entities.length; i++) {
                 const feature = entities[i];
                 feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
+                feature.syncTags?.();
 
                 let pos = feature.position?.getValue(Cesium.JulianDate.now());
 
@@ -713,20 +740,15 @@ export function createLocalGeoJsonLayer(
                   [base, tip],
                   [base, tip],
                 ];
-                feature.polyline = new Cesium.PolylineGraphics({
+                const line = {
                   positions: stemPositionBuffers[0],
-                  width: 3.5,
-                  material: new Cesium.ColorMaterialProperty(baseColor),
-                });
-                feature.point = new Cesium.PointGraphics({
-                  pixelSize: 10,
-                  color: baseColor,
-                  outlineColor: Cesium.Color.BLACK,
-                  outlineWidth: 2,
-                  // Never depth-cull the anchor against the photoreal mesh —
-                  // globe-horizon culling is handled by the pre-render occluder.
-                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                });
+                  width: stemWidth,
+                  material: stemMaterial,
+                };
+                feature.polyline = loaded.compactEntities
+                  ? line
+                  : new Cesium.PolylineGraphics(line);
+                feature.point = pointStyle;
 
                 const priority = labelPriorityFromProperties(properties, id);
                 _stemRecords.push({
@@ -859,6 +881,7 @@ export function createLocalGeoJsonLayer(
       if (_enabled && !_preRenderRemover) {
         _preRenderRemover = viewer.scene.preRender.addEventListener(() => {
           if (!_enabled || !_dataSource) return;
+          _dataSource.releaseUnselected?.();
           const now = performance.now();
           if (now - _lastVisibilityUpdate < VISIBILITY_UPDATE_MS) return;
           _lastVisibilityUpdate = now;
@@ -1054,7 +1077,7 @@ export function createLocalGeoJsonLayer(
       // Honor a disable() that landed while we were awaiting the fetch/parse:
       // disable() runs before _dataSource exists, so its release is a no-op —
       // release the finished build here instead of parking it hidden in the
-      // scene (the parsed features stay cached for the next enable).
+      // scene (the dataset text stays cached for the next enable).
       if (!_enabled) {
         releaseDataSource(viewer);
         return;
@@ -1064,6 +1087,33 @@ export function createLocalGeoJsonLayer(
     },
 
     disable: disableLayer,
+
+    async refreshResourceMode(viewer) {
+      if (
+        !_enabled ||
+        !_dataSource ||
+        (_dataSource.resourceMode || 'standard') ===
+          (viewer.gevLowResource ? 'low' : 'standard')
+      )
+        return;
+      const selectedId =
+        viewer.selectedEntity?.__localLayerId === id
+          ? viewer.selectedEntity.__gevContextId
+          : null;
+      if (selectedId) viewer.selectedEntity = undefined;
+      releaseDataSource(viewer);
+      await this.enable(viewer);
+      if (selectedId && _enabled) {
+        const record = _stemRecords.find(
+          (row) => row.entity.__gevContextId === selectedId,
+        );
+        if (record) {
+          record.entity.show = true;
+          viewer.selectedEntity = record.entity.native || record.entity;
+          selectEntityContext(viewer.selectedEntity);
+        }
+      }
+    },
 
     destroy: (viewer) => {
       if (_destroyed) return;
@@ -1082,7 +1132,7 @@ export function createLocalGeoJsonLayer(
       }
       _overlayPublisher.destroy();
       _dataSource = null;
-      _cachedFeatures = null;
+      _cachedText = null;
       _stemRecords = [];
       _count = 0;
       _lastUpdate = null;

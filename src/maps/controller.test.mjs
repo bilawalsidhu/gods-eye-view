@@ -25,6 +25,7 @@ function fixture(registry, options = {}) {
     removed = [],
     changes = [];
   const viewer = {
+    camera: { moveEnd: event() },
     scene: {
       globe: { show: true },
       requestRender() {},
@@ -69,6 +70,57 @@ function fixture(registry, options = {}) {
 const settle = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
+
+test('leaving a 3D stack trims hidden tile contents once while retaining the source and its quality settings', async () => {
+  const env = publicFixture();
+  let trims = 0;
+  Object.assign(env.tileset, {
+    cacheBytes: 1536 * 1024 * 1024,
+    maximumScreenSpaceError: 16,
+    trimLoadedTiles() {
+      trims++;
+    },
+  });
+  await env.controller.setStack('photoreal');
+  assert.equal(trims, 0);
+  await env.controller.setStack('osm');
+  assert.equal(trims, 1);
+  await env.controller.setStack('osm');
+  assert.equal(
+    trims,
+    1,
+    'reapplying the flat stack does not retrim or reload it',
+  );
+  await env.controller.setStack('photoreal');
+  assert.equal(env.tileset.show, true);
+  assert.equal(env.tileset.cacheBytes, 1536 * 1024 * 1024);
+  assert.equal(env.tileset.maximumScreenSpaceError, 16);
+  env.controller.destroy();
+});
+
+test('settling a 3D camera trims unused history and releases its listener on destroy, without touching flat-map frames', async () => {
+  const env = publicFixture();
+  let trims = 0,
+    renders = 0;
+  env.tileset.trimLoadedTiles = () => {
+    trims++;
+  };
+  env.controller._requestRender = () => {
+    renders++;
+  };
+  await env.controller.setStack('photoreal');
+  const before = renders;
+  env.viewer.camera.moveEnd.raise();
+  assert.equal(trims, 1);
+  assert.equal(renders, before + 1);
+  await env.controller.setStack('osm');
+  const after = renders;
+  env.viewer.camera.moveEnd.raise();
+  assert.equal(renders, after);
+  assert.equal(trims, 2);
+  env.controller.destroy();
+  assert.equal(env.viewer.camera.moveEnd.size, 0);
+});
 const descriptor = (id) => ({ id, label: id, kind: 'imagery' });
 function publicFixture(options) {
   const tileset = { show: true };

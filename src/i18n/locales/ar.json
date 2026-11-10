@@ -3778,5 +3778,14 @@
   "Play speed": "سرعة التشغيل",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "مرّر أو اقرص للتكبير، واسحب للتنقل · انقر نقرًا مزدوجًا لرؤية الكل",
   "1 min/s": "دقيقة/ث",
-  "Photo © {photographer}": "صورة © {photographer}"
+  "Photo © {photographer}": "صورة © {photographer}",
+  "Resources": "الموارد",
+  "Resource usage": "استخدام الموارد",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "يستخدم وضع الموارد المنخفضة 30 إطارًا في الثانية ودقة أقل وتأثيرات أخف. تظل بيانات جهات الاتصال والبحث والتتبع متاحة.",
+  "Standard": "قياسي",
+  "Low resource": "موارد منخفضة",
+  "Show": "إظهار",
+  "Dim": "تعتيم",
+  "Hide": "إخفاء",
+  "Ground aircraft": "الطائرات على الأرض"
 }

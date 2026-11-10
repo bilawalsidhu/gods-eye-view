@@ -144,6 +144,13 @@ let _cockpitActive = false;
  */
 let _destroyed = false;
 let _resizeDirty = true;
+let _pixelRatioCap = Infinity;
+
+/** Cap backing pixels without changing CSS coordinates, picking or layout. */
+export function setWorldOverlayPixelRatioCap(value = Infinity) {
+  _pixelRatioCap = Math.max(1, Number(value) || 1);
+  markLayoutDirty();
+}
 let _occludersDirty = true;
 let _solveDirty = true;
 let _canvasNeedsClear = true;
@@ -1302,7 +1309,10 @@ function ensureCanvasSize() {
     0,
     Math.round(Number(_viewer.canvas.clientHeight) || 0),
   );
-  const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
+  const dpr = Math.min(
+    _pixelRatioCap,
+    Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1),
+  );
   const changed =
     _canvas.width !== Math.round(width * dpr) ||
     _canvas.height !== Math.round(height * dpr) ||

@@ -164,20 +164,19 @@ export function createRendering({
    * excluded: they refresh on the round-robin budget in _propagateDenseChunk.
    */
 
+  const propagationPosition = new Cesium.Cartesian3();
   function _propagateAll() {
     const now = new Date(layerState.now());
     let updated = 0;
 
     for (const [noradId, sat] of layerState._catalog) {
       if (sat.group === 'dense') continue;
-      const pos = parts.orbits.propagatePosition(sat.satrec, now);
-      if (!pos) continue;
-
-      const cartesian = Cesium.Cartesian3.fromDegrees(
-        pos.longitude,
-        pos.latitude,
-        pos.altitude,
+      const cartesian = parts.orbits.propagateCartesian(
+        sat.satrec,
+        now,
+        propagationPosition,
       );
+      if (!cartesian) continue;
       const point = layerState._points.get(noradId);
       if (point) {
         point.position = cartesian;

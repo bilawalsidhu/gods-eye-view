@@ -36,6 +36,21 @@ function fixture(t, view = DisplayPanel) {
   return { store: useDisplayStore(pinia), $, unmount };
 }
 
+test('the resource selector routes native changes to its owner', async t => {
+  const {store,$}=fixture(t);
+  const calls=[];
+  store.connect({setPerformanceMode(mode){calls.push(mode);store.publishPerformance({mode});}});
+  store.publishPerformance({mode:'standard'});
+  await nextTick();
+  const select=$('performance-mode');
+  assert.equal(select.value,'standard');
+  select.value='low';
+  select.dispatchEvent(new Event('change',{bubbles:true}));
+  await nextTick();
+  assert.deepEqual(calls,['low']);
+  assert.equal(select.value,'low');
+});
+
 /** A VisualSettings over stand-in effects, publishing to `store`. */
 function settings(store) {
   const owner = Object.create(VisualSettings.prototype);
@@ -357,6 +372,21 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.equal(row.classList.contains('visible'), true);
   assert.equal(all.getAttribute('aria-checked'), 'false');
+});
+
+test('ground controls default to Dim, update both aircraft layers and restore their saved mode', async t => {
+  const {store,$}=fixture(t), params=[];
+  const owner=new AircraftDisplay({elements:{},readDataManager:()=>({setLayerParams:(id,next)=>params.push([id,next])}),layout(){},store});
+  store.connect({setGroundAircraftMode:mode=>owner._setGroundAircraftMode(mode)});
+  owner._publishModels3d();await nextTick();
+  const choices=[...$('ground-aircraft-controls').querySelectorAll('[role="radio"]')];
+  const option=name=>choices.find(el=>el.textContent.trim()===name);
+  assert.equal(option('Dim').getAttribute('aria-checked'),'true');
+  option('Hide').click();await nextTick();
+  assert.equal(option('Hide').getAttribute('aria-checked'),'true');
+  assert.deepEqual(params,[['flights',{groundMode:'hide'}],['military',{groundMode:'hide'}]]);
+  owner._syncModels3dFromLayerState({options:{flights:{groundMode:'show'}}});await nextTick();
+  assert.equal(option('Show').getAttribute('aria-checked'),'true');
 });
 
 test('DISPLAY no longer holds Draw or Import', (t) => {

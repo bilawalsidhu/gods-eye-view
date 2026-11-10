@@ -40,6 +40,7 @@ function createGlobeRendering({
   const mosaics = new Map();
   let prefetchJob = null;
   let prefetchedKey = null;
+  let retainHistory = true;
 
   function profile(product) {
     return {
@@ -53,6 +54,17 @@ function createGlobeRendering({
     prefetchJob?.controller.abort();
     prefetchJob = null;
     prefetchedKey = null;
+  }
+
+  function trimIdleCache() {
+    // Providers may still read the displayed/staging/retiring mosaic while
+    // servicing tiles. Drop only history; never resize a live provider's canvas.
+    const keep = new Set(
+      [current, incoming, ...retiring]
+        .filter(Boolean)
+        .map((frame) => `${frame.time}|${frame.infrared}`),
+    );
+    for (const key of mosaics.keys()) if (!keep.has(key)) mosaics.delete(key);
   }
 
   async function mosaic(time, mode, signal, onFetched) {
@@ -212,7 +224,11 @@ function createGlobeRendering({
   }
   return {
     rehome,
-    cancelPrefetch,
+    cancelPrefetch() {
+      cancelPrefetch();
+      retainHistory = false;
+      trimIdleCache();
+    },
     updateSnapshot,
     async prefetch(snapshot, time, { infrared = 'filtered' } = {}) {
       let job;
@@ -224,6 +240,7 @@ function createGlobeRendering({
           !snapshot.times.includes(time)
         )
           return false;
+        retainHistory = true;
         const global = snapshot.product === 'clouds';
         const urls = global ? [] : prefetchTiles(snapshot, time);
         const key = global ? `${time}|${infrared}` : urls.join('|');
@@ -337,6 +354,7 @@ function createGlobeRendering({
             previous.offRetire = viewer.scene.postRender.addEventListener(
               () => {
                 remove(previous);
+                if (!retainHistory) trimIdleCache();
                 viewer.scene.requestRender();
               },
             );
@@ -348,6 +366,7 @@ function createGlobeRendering({
           remove(frame);
         }
         frame.resolve(ok);
+        if (!retainHistory) trimIdleCache();
         viewer.scene.requestRender();
         onChange();
       };
@@ -542,6 +561,7 @@ function createGlobeRendering({
         cancelPrefetch();
         cancelIncoming();
         for (const frame of retiring) remove(frame);
+        trimIdleCache();
       }
       rehome();
       viewer.scene.requestRender();

@@ -425,6 +425,7 @@ export function createWeatherShell({
   let imageBytes = 0;
   let prefetchJob = null;
   let prefetchedKey = null;
+  let retainHistory = true;
   // The detail window for the shown bounds, the image drawn in it and its fetch.
   let view = null;
   let viewBounds = null;
@@ -446,6 +447,14 @@ export function createWeatherShell({
     for (const [key, entry] of images) {
       if (imageBytes <= cacheBytes) return;
       if (kept.has(key)) continue;
+      images.delete(key);
+      imageBytes -= entry.bytes;
+    }
+  }
+  function trimIdleCache() {
+    const keep = new Set([current?.key, incoming?.key, detail?.key]);
+    for (const [key, entry] of images) {
+      if (keep.has(key)) continue;
       images.delete(key);
       imageBytes -= entry.bytes;
     }
@@ -524,6 +533,7 @@ export function createWeatherShell({
     detail = { box: job.box, key: job.key, image, stale: false };
     syncDetail();
     evict();
+    if (!retainHistory) trimIdleCache();
     scene.requestRender();
   }
   function failDetail(job) {
@@ -661,6 +671,7 @@ export function createWeatherShell({
     applyVisibility();
     lastError = null;
     evict();
+    if (!retainHistory) trimIdleCache();
     // The full-extent image swaps first; the detail follows for the same time.
     watchCamera();
     if (viewBounds !== current.bounds) computeView();
@@ -711,7 +722,11 @@ export function createWeatherShell({
       if (changed) scene.requestRender();
       return changed;
     },
-    cancelPrefetch,
+    cancelPrefetch() {
+      cancelPrefetch();
+      retainHistory = false;
+      trimIdleCache();
+    },
     async prefetch(snapshot, time, { infrared: mode = 'filtered' } = {}) {
       let job;
       try {
@@ -724,6 +739,7 @@ export function createWeatherShell({
         )
           return false;
         // Warm the next frame's detail window too while the window stays put.
+        retainHistory = true;
         const box =
           view && viewBounds === boundsKey(snapshot.bounds) ? view : null;
         const coarse = cacheKey(time, mode);
@@ -815,6 +831,7 @@ export function createWeatherShell({
         cancelPrefetch();
         cancelIncoming();
         cancelDetail();
+        trimIdleCache();
       }
       applyVisibility();
       if (!hidden) refreshDetail();

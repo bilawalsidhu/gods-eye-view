@@ -11,7 +11,8 @@
       "src/data/localGeojsonLod.js",
       "src/data/inputOwnership.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/data/compactInfrastructure.js"
     ],
     "external": ["cesium"]
   },
@@ -183,7 +184,8 @@
       "src/sky/starrySky.js",
       "src/sky/stars.js",
       "src/data/bundledJson.js",
-      "src/renderGovernor.js"
+      "src/renderGovernor.js",
+      "src/app/renderResolution.js"
     ],
     "external": ["cesium"]
   },
@@ -1527,7 +1529,12 @@
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
       "src/time/julian.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/aircraftPixels.js",
+      "src/data/groundAircraft.js",
+      "src/data/viewportBillboards.js",
+      "src/data/aircraftSurface.js",
+      "src/data/aircraftSurfaceGpu.js"
     ],
     "external": ["cesium"]
   },
@@ -1590,7 +1597,12 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/time/julian.js"
+      "src/time/julian.js",
+      "src/data/aircraftPixels.js",
+      "src/data/groundAircraft.js",
+      "src/data/viewportBillboards.js",
+      "src/data/aircraftSurface.js",
+      "src/data/aircraftSurfaceGpu.js"
     ],
     "external": ["cesium"]
   },
@@ -1622,7 +1634,9 @@
       "src/data/trackingClickGesture.js",
       "src/layers/aircraft/classification.js",
       "src/layers/aircraft/index.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/data/aircraftPixels.js",
+      "src/data/groundAircraft.js"
     ],
     "external": ["cesium"]
   },
@@ -2097,7 +2111,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/cctv/materialDisposal.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2293,7 +2308,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-Hant.json"
+      "src/i18n/locales/zh-Hant.json",
+      "src/layers/submarineCables/residency.js"
     ],
     "external": ["cesium"]
   },
@@ -3547,7 +3563,21 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/app/performance.js",
+      "src/app/performancePolicy.js",
+      "src/app/renderResolution.js",
+      "src/data/detectionBracketRaster.js",
+      "src/data/detectionProjectionCache.js",
+      "src/data/detectionBracketPaths.js",
+      "src/data/compactInfrastructure.js",
+      "src/data/aircraftPixels.js",
+      "src/data/groundAircraft.js",
+      "src/layers/cctv/materialDisposal.js",
+      "src/data/viewportBillboards.js",
+      "src/data/aircraftSurface.js",
+      "src/data/aircraftSurfaceGpu.js",
+      "src/layers/submarineCables/residency.js"
     ],
     "external": [
       "hls.js",
@@ -4226,7 +4256,18 @@
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/data/compactInfrastructure.js",
+      "src/data/aircraftPixels.js",
+      "src/data/groundAircraft.js",
+      "src/layers/cctv/materialDisposal.js",
+      "src/data/viewportBillboards.js",
+      "src/data/aircraftSurface.js",
+      "src/data/aircraftSurfaceGpu.js",
+      "src/layers/submarineCables/residency.js",
+      "src/data/detectionBracketRaster.js",
+      "src/data/detectionProjectionCache.js",
+      "src/data/detectionBracketPaths.js"
     ],
     "external": [
       "hls.js",

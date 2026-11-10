@@ -139,3 +139,49 @@ test('same pixels at a new aspect redraw at the new fit', () => {
   ]);
   assert.equal(runtime.canvasStamp, 2);
 });
+
+test('an evicted cadence-limited still restores its cached proxy frame without advancing refresh', () => {
+  const last = Date.now() - 1000;
+  const originalUrl = '/api/cctv/frame/slow?ts=123&projTs=123';
+  const runtime = {
+    mode: 'image',
+    image: { src: '' },
+    lastImageRefreshAt: last,
+    imageReady: false,
+  };
+  const record = {
+    camera: { id: 'slow', frameRefreshMs: 600000 },
+    projection: runtime,
+    lastProjectionImageUrl: originalUrl,
+    lastProjectionImageRefreshAt: last,
+  };
+  const frames = createFrames({
+    state: { _activeCameraId: 'slow' },
+    parts: {
+      model: {
+        safeNumber: (n, fallback) =>
+          Number.isFinite(Number(n)) ? Number(n) : fallback,
+      },
+    },
+    source: {
+      getFrameUrl() {
+        throw new Error(
+          'must not generate a fresh provider URL inside its floor',
+        );
+      },
+    },
+  });
+  frames.refreshProjectionImage(record, true);
+  assert.equal(runtime.image.src, originalUrl);
+  assert.equal(runtime.imageLoading, true);
+  assert.equal(runtime.lastImageRefreshAt, last);
+  assert.equal(record.lastProjectionImageRefreshAt, last);
+  runtime.imageLoading = false;
+  runtime.image.src = '';
+  frames.refreshProjectionImage(record, true);
+  assert.equal(
+    runtime.image.src,
+    '',
+    'do not repeatedly request a failed cached restore',
+  );
+});

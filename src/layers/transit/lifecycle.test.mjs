@@ -1199,9 +1199,9 @@ test('only the vehicles near the view are animated frame by frame', async (t) =>
   );
   assert.ok(app.state()._moving.has(byId.get('near')));
   assert.equal(
-    byId.get('far').marker.show,
-    false,
-    'the off-screen vehicle is hidden',
+    byId.get('far').marker,
+    null,
+    'the off-screen vehicle releases its billboard while retaining history',
   );
 
   app.advance(TRANSIT_POLL_MS / 4);
@@ -1214,6 +1214,16 @@ test('only the vehicles near the view are animated frame by frame', async (t) =>
   assert.ok(
     app.state()._moving.has(byId.get('near')),
     'the one in view keeps playing',
+  );
+
+  assert.equal(
+    app.layer.getAnalystRecords().length,
+    2,
+    'offscreen records remain queryable',
+  );
+  assert.ok(
+    byId.get('far').track.count > 0,
+    'offscreen history survives eviction',
   );
 
   // When the view reaches it, its clock is re-synced and the frame pass places
@@ -4141,4 +4151,47 @@ test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) 
     app.layer.getStats().statusMessage,
     'Fly below 2,850 km to a covered region',
   );
+});
+
+test('offscreen transit remains queryable and selectable without resident billboards', async (t) => {
+  const app = harness(t);
+  const cleared = t.mock.method(app.state()._markers, 'removeAll');
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('away', 42.62, -71.44, reported())],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.advance(300);
+  app.settle(2);
+  const entry = app.vehicles()[0];
+  const historyCount = entry.track.count;
+  assert.equal(entry.marker, null);
+  assert.ok(
+    cleared.mock.callCount() > 0,
+    'empty collection releases pending-update references',
+  );
+  assert.equal(app.layer.getAnalystRecords()[0].id, 'away');
+  const parts = app.layer._transitPartsForTest();
+  parts.selection.selectVehicle(entry.key);
+  assert.equal(app.state()._selectedKey, entry.key);
+  assert.ok(entry.marker, 'selection admits a protected resident');
+  app.advance(300);
+  parts.rendering.refreshVisibility();
+  assert.ok(entry.marker, 'selection survives a sweep outside the viewport');
+  assert.equal(entry.track.count, historyCount);
+  parts.selection.clearSelection();
+  app.advance(300);
+  parts.rendering.refreshVisibility();
+  assert.equal(
+    entry.marker,
+    null,
+    'deselection releases the offscreen resident',
+  );
+  assert.equal(app.layer.getAnalystRecords().length, 1);
 });

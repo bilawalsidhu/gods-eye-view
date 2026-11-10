@@ -89,6 +89,8 @@
  *   --source-base <path>  Browser module prefix (default /src)
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
+ *   --hardware         Use headless Metal on macOS (default headless uses SwiftShader)
+ *   --dpr <number>     Browser device-pixel ratio (default 1)
  *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
  *   --keep-open        Leave the browser open after the run (debugging)
  */
@@ -114,6 +116,8 @@ const SOURCE_BASE = getOpt('--source-base', '/src').replace(/\/$/, '');
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
+const HARDWARE = getFlag('--hardware');
+const DPR = Number(getOpt('--dpr', '1'));
 const OFFLINE_IMAGERY = getFlag('--offline-imagery');
 const KEEP_OPEN = getFlag('--keep-open');
 
@@ -245,7 +249,7 @@ async function main() {
       // kills frame production entirely (rAF stops while timers/evals stay
       // alive), wedging any rAF-awaiting evaluation. Same policy as
       // qa-focus-evidence: headful = real GPU.
-      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
+      ...(HEADFUL ? [] : HARDWARE && process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu'] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -266,7 +270,7 @@ async function main() {
   try {
     const page = await browser.newPage();
   await page.evaluateOnNewDocument((base) => { window.__gevQaSourceBase = base; }, SOURCE_BASE);
-    await page.setViewport({ width: 1280, height: 800 });
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: DPR });
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = new URL(request.url());
@@ -2093,12 +2097,15 @@ async function main() {
     // that then VANISHES from the feed still fast-culls after ONE missed
     // poll. Military mirror keys off adsb.lol's alt_baro === "ground".
     // ============================================================
-    console.log('\nChange 3 — ground traffic: full-alpha style, in-place transitions, fast cull');
+    console.log('\nChange 3 — ground traffic: Show mode, in-place transitions, fast cull');
     const ground = await evalPage(async () => {
       const v = window.__godsEyeView.viewer;
       const dm = window.__godsEyeView.dataManager;
       const fl = dm.layers.get('flights').module;
       const mil = dm.layers.get('military').module;
+      // Full-alpha legacy ground invariants now explicitly exercise Show.
+      fl.setParams({ groundMode: 'show' });
+      mil.setParams({ groundMode: 'show' });
       const findBB = (id) => {
         let found = null;
         const walk = (coll) => {

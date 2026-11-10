@@ -3616,5 +3616,14 @@
   "Play speed": "Швидкість відтворення",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Прокрутіть або зведіть пальці для масштабу, перетягніть для переміщення · подвійне клацання — показати все",
   "1 min/s": "1 хв/с",
-  "Photo © {photographer}": "Фото © {photographer}"
+  "Photo © {photographer}": "Фото © {photographer}",
+  "Resources": "Ресурси",
+  "Resource usage": "Використання ресурсів",
+  "Low resource mode uses 30 FPS, reduced resolution and lighter effects. Contact data, search and tracking stay available.": "Економний режим використовує 30 кадрів/с, знижену роздільність і спрощені ефекти. Дані контактів, пошук і відстеження залишаються доступними.",
+  "Standard": "Звичайний",
+  "Low resource": "Економний",
+  "Show": "Показати",
+  "Dim": "Приглушити",
+  "Hide": "Приховати",
+  "Ground aircraft": "Літаки на землі"
 }

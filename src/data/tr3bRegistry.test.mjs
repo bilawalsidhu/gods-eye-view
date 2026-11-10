@@ -410,7 +410,7 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
     const source = readLayerSource(new URL(`./${name}`, import.meta.url));
     // Anchor on the MODEL-eligibility loop (keepDistSq), not the unrelated
     // ambient-enrichment candidate loop that also builds a `cand`.
-    const loop = /const\s*cand\s*=\s*\[\];\s*\n\s*for\s*\(\s*const\s*\[icao,\s*bb\]\s*of\s*(?:flightState\.)?_billboards,?\s*\)[\s\S]*?cand\.push\(\s*/.exec(source)?.[0];
+    const loop = /const\s*cand\s*=\s*\[\];\s*\n\s*for\s*\(\s*const\s*\[icao,\s*bb\]\s*of\s*(?:flightState\.)?_billboards,?\s*\)[\s\S]*?cand\.push\(\s*/.exec(stripComments(source))?.[0];
     assert.ok(loop, `${name}: the model-eligibility candidate loop is present`);
     assert.match(loop, /keepDistSq/, `${name}: matched the model-eligibility loop`);
     assert.match(loop, /if \(isTr3b\(icao\)\) continue;/,
