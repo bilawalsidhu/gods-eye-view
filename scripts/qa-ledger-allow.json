@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "local-dams-footprints",
+    "family": "ground",
+    "field": "count",
+    "reason": "Infrastructure level of detail keeps features chosen on the way to a view (incumbents and eviction grace, so footprints do not flicker while panning); a cold start reaches the view without that path."
+  },
+  {
+    "id": "local-datacenters-footprints",
+    "family": "ground",
+    "field": "count",
+    "reason": "Infrastructure level of detail keeps features chosen on the way to a view (incumbents and eviction grace, so footprints do not flicker while panning); a cold start reaches the view without that path."
+  }
+]

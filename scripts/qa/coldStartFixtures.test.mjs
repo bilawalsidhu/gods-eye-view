@@ -8,6 +8,8 @@ import { parseSatcatCsv } from '../../src/layers/satellites/classes.js';
 import { createFakeEngine } from '../../src/globe/testing/fakeEngine.js';
 import { createTrafficDisplay } from '../../src/layers/traffic/render/display.js';
 import { createAnimation } from '../../src/layers/traffic/animation.js';
+import { createRecentImagerySource } from '../../src/layers/recentImagery/source.js';
+import { createThumbnailLoader } from '../../src/layers/recentImagery/thumbnails.js';
 
 const origin = 'http://127.0.0.1:4309';
 test('every group has valid strict fixture routes', async () => {
@@ -221,48 +223,81 @@ test('traffic uses deterministic road and flow tiles', async () => {
     assert.ok((await (await page.fetch(url)).arrayBuffer()).byteLength > 0);
 });
 
-test('traffic dots finish their birth fade with the fixture clock', async (t) => {
+test('imagery fixtures admit a recent S30 scene through the real thumbnail loader', async (t) => {
+  const page = await installedPage('imagery');
+  const source = createRecentImagerySource({ fetchImpl: page.fetch });
+  const box = { west: -97.77, east: -97.71, south: 30.25, north: 30.29 };
+  const now = new Date(page.fixture.epoch);
+  const { candidates } = await source.searchHls({ box, now });
+  const candidate = candidates.find((row) => row.product === 'S30');
+  assert.ok(candidate);
+  assert.ok(now - Date.parse(candidate.day) < 3 * 86_400_000);
+  const loader = createThumbnailLoader({
+    requestThumbnail: source.getThumbnail,
+    createObjectUrl: () => 'blob:fixture',
+    revokeObjectUrl() {},
+  });
+  t.after(() => loader.destroy());
+  const finished = new Promise((resolve) => {
+    loader.subscribe((key) => {
+      const state = loader.get(key);
+      if (!state.loading && state.status !== 'unknown') resolve(state);
+    });
+  });
+  loader.request(candidate, box);
+  const state = await finished;
+  assert.equal(state.status, 'present');
+  assert.equal(state.objectUrl, 'blob:fixture');
+});
+
+test('traffic fixture dots finish their birth fade and stay visible during comparison', async (t) => {
   const page = await installedPage('traffic');
   t.mock.method(Date, 'now', () => vm.runInContext('Date.now()', page.context));
-  const engine = createFakeEngine();
+  t.mock.method(Math, 'random', () =>
+    vm.runInContext('Math.random()', page.context),
+  );
+  const engine = createFakeEngine({ altitude: 1800 });
   const display = createTrafficDisplay(engine);
   t.after(() => {
     display.destroy();
     engine.destroy();
   });
-  const point = {
-    position: { x: 6378137, y: 0, z: 0 },
-    show: true,
-    pixelSize: 6,
-    color: { red: 1, green: 1, blue: 1, alpha: 1 },
-    outlineWidth: 0,
-  };
-  const dot = {
-    point,
-    born: Date.now(),
-    nominalSize: 6,
-    direction: 1,
-    segIdx: 0,
-    numSegments: 1,
-    t: 0.5,
-    mps: 1,
-    stoppedUntil: 0,
-    segmentDist: [1000],
-    waypoints: [point.position, { x: 6378137, y: 1000, z: 0 }],
-  };
   const animation = createAnimation({
     state: {
       _enabled: true,
       _renderHeld: true,
       _engine: engine,
       _display: display,
-      _dots: [dot],
+      _dots: [],
+      _scratchLerp: {},
+      _nextDotId: 1,
+      _speedScale: 1,
+      _fadeScaleFar: 100000,
+      _fadeTransFar: 100000,
+      _bucketCounts: { sim: 0 },
+      _motion: { added: 0, recycled: 0 },
       _lastAnimTime: Date.now(),
       _animFrame: 0,
     },
     services: {},
-    parts: { rendering: {}, retention: { easeHeights() {} } },
+    parts: {
+      rendering: {},
+      retention: { easeHeights() {} },
+      style: { baseDotSize: () => 6, activeSizeDelta: () => 0 },
+    },
   });
+  animation.spawnDotsForRoad(
+    {
+      type: 'primary',
+      segmentDist: [10000],
+      waypoints: [
+        { x: 6378137, y: 0, z: 0 },
+        { x: 6378137, y: 10000, z: 0 },
+      ],
+    },
+    1800,
+    10,
+  );
   animation.animate();
   animation.drawDots();
   assert.equal(
@@ -274,6 +309,15 @@ test('traffic dots finish their birth fade with the fixture clock', async (t) =>
   animation.drawDots();
   assert.equal(
     engine.movers.list().find(({ id }) => id === 'traffic-fill').count,
-    1,
+    10,
   );
+  for (let i = 0; i < 300; i++) {
+    page.advance(100);
+    animation.animate();
+    animation.drawDots();
+    assert.equal(
+      engine.movers.list().find(({ id }) => id === 'traffic-fill').count,
+      10,
+    );
+  }
 });

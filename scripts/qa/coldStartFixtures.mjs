@@ -25,9 +25,11 @@ export async function coldStartFixtures(origin, group) {
   const epoch =
     group === 'space'
       ? SATELLITE_FIXTURE_EPOCH
-      : group === 'urban'
-        ? TRANSIT_EPOCH
-        : Date.now();
+      : group === 'imagery'
+        ? Date.parse('2026-10-29T12:00:00Z')
+        : group === 'urban'
+          ? TRANSIT_EPOCH
+          : Date.now();
   const png = await sharp({
     create: { width: 256, height: 256, channels: 4, background: '#40506a' },
   })
@@ -298,6 +300,9 @@ function installFeeds({ group, epoch, groups, ghost, launches, firms }) {
       return Math.floor(now());
     }
   };
+  // Mid-road starts keep the traffic population visible through birth fades
+  // without random road-end recycling during the comparison.
+  if (group === 'traffic') Math.random = () => 0.5;
   localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
   window.__coldStartUnexpectedApi = [];
   const original = window.fetch.bind(window);
@@ -315,6 +320,23 @@ function installFeeds({ group, epoch, groups, ghost, launches, firms }) {
   window.fetch = (input, options) => {
     const url = new URL(input.url ?? input, location.href),
       path = url.pathname;
+    // The image fixture also needs the snapshot API's explicit pixel proof.
+    if (
+      group === 'imagery' &&
+      url.hostname === 'wvs.earthdata.nasa.gov' &&
+      path.startsWith('/api/v1/snapshot')
+    )
+      return original(input, options).then((response) =>
+        response.ok
+          ? new Response(response.body, {
+              status: response.status,
+              headers: {
+                ...Object.fromEntries(response.headers),
+                'Data-Present': 'true',
+              },
+            })
+          : response,
+      );
     if (path === '/api/flights')
       return json({
         time: epoch / 1000,

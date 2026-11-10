@@ -406,5 +406,47 @@ test('readiness waits for fixture publications, LOD and the locator reveal', () 
   assert.equal(ready('transit'), false);
   bus.set(0, { show: true });
   assert.equal(ready('transit'), true);
+  entry('traffic');
+  assert.equal(ready('traffic'), false);
+  const cars = engine.movers.createSet({
+    id: 'traffic-fill',
+    kind: 'point',
+    capacity: 10,
+    point: { sizePx: 4 },
+  });
+  cars.setCount(9);
+  assert.equal(ready('traffic'), true, 'fading vehicles need not all draw');
+  for (let i = 0; i < 9; i++) cars.set(i, { show: false });
+  assert.equal(ready('traffic'), false, 'hidden traffic is not ready');
+  for (let i = 0; i < 9; i++) cars.set(i, { show: true });
+  dataManager.layers.get('traffic').module.getStats = () => ({
+    count: 10,
+    loading: true,
+  });
+  assert.equal(ready('traffic'), false, 'population admission must finish');
   engine.destroy();
+});
+
+test('a field entry excuses only that field of that set and never a missing set', () => {
+  const a = snapshot(),
+    b = snapshot();
+  b.ledger[0].count = 2;
+  const allow = [
+    { id: 'radio-selected', family: 'movers', field: 'count', reason: 'path' },
+  ];
+  const excused = compareColdStart(a, b, { ...options, allow });
+  assert.deepEqual(
+    excused.differences.filter((row) => row.family === 'movers'),
+    [],
+  );
+  assert.ok(excused.skipped.some((row) => row.reason === 'path'));
+  // The radio marker is declared session state; compare it as plain content.
+  b.ledger = [];
+  assert.ok(
+    compareColdStart(a, b, {
+      ...options,
+      allow,
+      sessionState: false,
+    }).differences.some((row) => row.field === 'present'),
+  );
 });

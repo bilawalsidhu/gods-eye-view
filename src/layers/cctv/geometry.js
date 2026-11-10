@@ -744,6 +744,32 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     );
   }
 
+  function releaseInactiveGeometry(activeId, visibleIds) {
+    const removed = new Set();
+    for (const record of layerState._records) {
+      if (record.camera.id === activeId) continue;
+      if (!visibleIds.has(record.camera.id)) {
+        for (const entity of record.coverageEntities || []) {
+          parts.renderer.removeCoverageEntity(entity);
+          removed.add(entity);
+        }
+        record.coverageEntities = [];
+      }
+      const runtime = record.projection;
+      if (runtime?.planeEntity) {
+        // Keep decoded media for reselection, but only the active plane draws.
+        parts.renderer.removePlane(runtime);
+        runtime.planeEntity = runtime.planeMaterial = null;
+        runtime.planeVisible = false;
+        runtime.needsPlane = true;
+      }
+    }
+    if (removed.size)
+      layerState._coverageEntities = layerState._coverageEntities.filter(
+        (entity) => !removed.has(entity),
+      );
+  }
+
   /**
    * Removes all coverage entities and projection runtimes from the scene.
    */
@@ -790,6 +816,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     registerCoverageEntities,
     ensureActiveCoverageEntities,
     ensureVisibleCoverageEntities,
+    releaseInactiveGeometry,
     destroyCoverageEntities,
   };
 }

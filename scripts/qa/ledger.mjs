@@ -42,7 +42,9 @@ export function compareLedgers(before, after, allow = []) {
       if (b.has(key)) return [];
       const exception = allow.find(
         (entry) =>
-          entry.id === row.id && (!entry.family || entry.family === row.family),
+          !entry.field &&
+          entry.id === row.id &&
+          (!entry.family || entry.family === row.family),
       );
       if (exception) {
         allowed.push({
