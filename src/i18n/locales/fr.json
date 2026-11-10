@@ -734,6 +734,7 @@
   "loading...": "chargement…",
   "KEY REQUIRED": "CLÉ REQUISE",
   "LIVE · updated {age}": "DIRECT · mis à jour {age}",
+  "24 h to {day} {time} UTC": "24 h jusqu'au {day} {time} UTC",
   "Source snapshot time unavailable": "Heure de l'instantané source indisponible",
   "Live data unavailable": "Données en direct indisponibles",
   "Intel Picture": "Situation renseignement",

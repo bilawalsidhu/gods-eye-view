@@ -750,6 +750,7 @@
   "loading...": "טוען...",
   "KEY REQUIRED": "נדרש מפתח",
   "LIVE · updated {age}": "חי · עודכן {age}",
+  "24 h to {day} {time} UTC": "24 שעות עד {day} {time} UTC",
   "FIRE": "שריפה",
   "Source snapshot time unavailable": "זמן תמונת המצב של המקור אינו זמין",
   "Live data unavailable": "נתונים חיים אינם זמינים",

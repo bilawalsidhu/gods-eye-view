@@ -711,6 +711,7 @@
   "loading...": "加載中…",
   "KEY REQUIRED": "需要密鑰",
   "LIVE · updated {age}": "實時 · 更新於 {age}",
+  "24 h to {day} {time} UTC": "截至 {day} {time} UTC 的 24 小時",
   "Source snapshot time unavailable": "來源快照時間不可用",
   "Live data unavailable": "實時數據不可用",
   "Low-accuracy score < 2%": "低精度評分 < 2%",

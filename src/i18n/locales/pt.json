@@ -732,6 +732,7 @@
   "loading...": "carregando...",
   "KEY REQUIRED": "CHAVE NECESSÁRIA",
   "LIVE · updated {age}": "AO VIVO · atualizado {age}",
+  "24 h to {day} {time} UTC": "24 h até {day} {time} UTC",
   "Source snapshot time unavailable": "Horário do snapshot da fonte indisponível",
   "Live data unavailable": "Dados ao vivo indisponíveis",
   "Intel Picture": "Panorama de inteligência",
