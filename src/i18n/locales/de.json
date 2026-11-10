@@ -72,6 +72,7 @@
   "LOADING": "LÄDT",
   "DEGRADED": "EINGESCHRÄNKT",
   "STALE": "VERALTET",
+  "SIGNAL LOST · {time}": "SIGNAL VERLOREN · {time}",
   "PARTIAL": "TEILWEISE",
   "FALLBACK": "FALLBACK",
   "SUMMARY": "ÜBERSICHT",
@@ -164,6 +165,7 @@
   "loading...": "lädt...",
   "KEY REQUIRED": "SCHLÜSSEL ERFORDERLICH",
   "LIVE · updated {age}": "LIVE · aktualisiert {age}",
+  "24 h to {day} {time} UTC": "24 Std. bis {day} {time} UTC",
   "loading mapped installation context": "Kontext der kartierten Anlage wird geladen",
   "MAPPED INSTALLATION": "KARTIERTE ANLAGE",
   "LAUNCH SITE · {site}": "STARTPLATZ · {site}",
@@ -2751,6 +2753,11 @@
     "one": "Hier noch kein Feed · {n} Region verfügbar",
     "other": "Hier noch kein Feed · {n} Regionen verfügbar"
   },
+  "Fly below {km} km to a covered city": "Unter {km} km Höhe zu einer abgedeckten Stadt fliegen",
+  "No bike share here yet · {n} systems available": {
+    "one": "Hier noch kein Bikesharing · {n} System verfügbar",
+    "other": "Hier noch kein Bikesharing · {n} Systeme verfügbar"
+  },
   "degraded": "eingeschränkt",
   "stale": "veraltet",
   "partial": "teilweise",
@@ -3306,5 +3313,6 @@
   "1 wk/s": "1 Wo./s",
   "Play speed": "Wiedergabegeschwindigkeit",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "Scrollen oder mit zwei Fingern zoomen, ziehen zum Verschieben · Doppelklick zeigt alles",
-  "1 min/s": "1 Min./s"
+  "1 min/s": "1 Min./s",
+  "Photo © {photographer}": "Foto © {photographer}"
 }

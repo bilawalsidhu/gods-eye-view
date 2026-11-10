@@ -323,6 +323,7 @@
   "LOADING": "加载中",
   "DEGRADED": "降级",
   "STALE": "过期",
+  "SIGNAL LOST · {time}": "信号丢失 · {time}",
   "PARTIAL": "部分",
   "FALLBACK": "备用",
   "view band|STREET": "街道",
@@ -716,6 +717,7 @@
   "loading...": "加载中…",
   "KEY REQUIRED": "需要密钥",
   "LIVE · updated {age}": "实时 · 更新于 {age}",
+  "24 h to {day} {time} UTC": "截至 {day} {time} UTC 的 24 小时",
   "Source snapshot time unavailable": "来源快照时间不可用",
   "Live data unavailable": "实时数据不可用",
   "Low-accuracy score < 2%": "低精度评分 < 2%",
@@ -2355,6 +2357,10 @@
   "No feed here yet · {n} regions available": {
     "other": "此处暂无数据源 · 有 {n} 个覆盖区域"
   },
+  "Fly below {km} km to a covered city": "请降至 {km} km 以下并飞往有覆盖的城市",
+  "No bike share here yet · {n} systems available": {
+    "other": "此处暂无共享单车 · 有 {n} 个可用系统"
+  },
   "degraded": "降级",
   "stale": "过期",
   "partial": "部分可用",
@@ -3230,5 +3236,6 @@
   "1 wk/s": "1 周/秒",
   "Play speed": "播放速度",
   "Scroll or pinch to zoom, drag to move along · double-click to see it all": "滚动或双指缩放，拖动以移动 · 双击查看全部",
-  "1 min/s": "1 分钟/秒"
+  "1 min/s": "1 分钟/秒",
+  "Photo © {photographer}": "照片 © {photographer}"
 }
