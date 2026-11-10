@@ -128,6 +128,9 @@ const DRAW_FROM_CALLER = new Set([
   // Its layer draws and reads the view through the ports alone, and its mesh
   // floor sampler asks the camera, globe and query ports.
   './layers/transit/standalone',
+  // Its badges, density glow and privacy cells draw through `drawOf`; it
+  // takes clicks, projects and reads the eye and the globe through the ports.
+  './layers/wildlife-sightings',
   // Its dots and heat-lines draw through `drawOf`; it reads the eye, the
   // surface (its identity and whether it has loaded) and heights through
   // the camera, globe and query ports.

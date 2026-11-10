@@ -717,6 +717,11 @@
   content: '⌁';
 }
 :root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='wildlife-sightings']
+  .data-icon::before {
+  content: '✿';
+}
+:root[data-ui-theme='cyber']
   .data-toggle-row[data-layer-id='radio']
   .data-icon::before {
   content: '◉';
@@ -1693,7 +1698,9 @@
   :root[data-ui-theme='cyber']
     body:not(.cockpit-mode)
     #left-panel-stack:has(> [data-panel-id]:not(.collapsed))
-    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(.collapsed) {
+    > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(
+      .collapsed
+    ) {
     flex: 1 1 auto;
     height: auto;
     max-height: none;

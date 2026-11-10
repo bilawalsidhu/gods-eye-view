@@ -34,6 +34,27 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
   assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
 });
 
+test('Wildlife follows Events and precedes Weather', () => {
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const order = JSON.parse(
+    runInNewContext(
+      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
+    ),
+  );
+  const wildlife = order.findIndex(({ id }) => id === 'wildlife-sightings');
+  assert.equal(order[wildlife].label, 'Wildlife');
+  assert.equal(order[wildlife - 1].id, 's2-ghostmaps');
+  assert.equal(order[wildlife + 1].id, 'air-quality');
+  assert.equal(order.filter(({ id }) => id === 'wildlife-sightings').length, 1);
+});
+
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
   const { LayerPanel, layerFeedState, presentLayerToggle } =
     await import('./layerPanel.js');

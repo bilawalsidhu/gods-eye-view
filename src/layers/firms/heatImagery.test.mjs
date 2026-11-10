@@ -64,7 +64,7 @@ test('setRaster drapes one full-globe tile and replaces it on the next build', (
     north: 90,
   });
   assert.equal(h.layers[0].spec.url, 'data:image/png;base64,AAAA');
-  assert.equal(h.layers[0].spec.zOrder, 5, 'over the other imagery');
+  assert.equal(h.layers[0].spec.zOrder, 0.5, 'over the other imagery');
   const first = h.layers[0];
   h.imagery.setRaster(raster);
   assert.equal(h.layers.length, 1, 'never two heat layers');

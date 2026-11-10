@@ -47,6 +47,7 @@
     "build:panel": "node scripts/build-panel.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:perf": "node scripts/run-perf-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:street-level": "node scripts/qa-street-level.mjs",
@@ -302,6 +303,8 @@
     "./render/stub": "./src/render/stub/index.js",
     "./render/camera/events": "./src/render/camera/events.js",
     "./render/cesium/unbound": "./src/render/cesium/unbound.js",
-    "./render/conformance": "./src/render/conformance/index.js"
+    "./render/conformance": "./src/render/conformance/index.js",
+    "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
+    "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
   }
 }

@@ -62,8 +62,14 @@ export function onSceneDoubleClick(position) {
 const holdStockFollow = (viewer) =>
   findInput(viewer)?.behaviours?.dblclickFollow?.suppress?.() ?? null;
 
-/** How long a press on the followed track keeps the stock follow off. */
+/**
+ * How long a press on the followed track keeps the stock follow off, and
+ * how soon after a press the next one may end a double-click with it.
+ */
 const SUBJECT_PRESS_HOLD_MS = 700;
+
+/** How far apart, CSS pixels, two presses of one double-click may land. */
+const DOUBLE_CLICK_SLOP_PX = 8;
 
 /**
  * Take the scene's double-click on the followed track for the Cockpit. The
@@ -74,7 +80,12 @@ const SUBJECT_PRESS_HOLD_MS = 700;
  * one, so a press on the followed track holds it off for that press
  * (`behaviours.dblclickFollow`, a hold a `down` subscriber takes covers its
  * press), and the double-click it ends in enters. A double-click anywhere
- * else is the renderer's, as before. `this.holdStockFollow`, when set, takes
+ * else is the renderer's, as before. The renderer decides a double-click's
+ * stock follow from its second press, as the hold stood when that press
+ * went down, so a press that cannot end a double-click on the track (no
+ * press on the track came just before it, at about the same spot) gives
+ * its hold back at its release: a second press off the track then finds
+ * the follow free. `this.holdStockFollow`, when set, takes
  * the hold in place of the renderer's input port (tests).
  * @returns {() => void} Stops listening and lets any hold go.
  */
@@ -89,22 +100,41 @@ export function routeSceneDoubleClick() {
   }
   let release = null;
   let timer = null;
+  // The last left press (when, where, and whether it was on the track),
+  // and whether the held press could end a double-click on the track.
+  let last = null;
+  let endsDouble = false;
   const drop = () => {
     globalThis.clearTimeout(timer);
     timer = null;
     release?.();
     release = null;
   };
+  // Ambient `down`/`up` are the unmodified left button's, while the
+  // pointer is free.
   const offDown = input.onPointer('down', ({ position }) => {
     drop();
-    if (this.active || this.destroyed || !isPointerFree()) return;
-    if (!doubleClickHitsSubject(position, subjectCanvasPosition.call(this)))
-      return;
+    const at = Date.now();
+    const onSubject =
+      !this.active &&
+      !this.destroyed &&
+      isPointerFree() &&
+      doubleClickHitsSubject(position, subjectCanvasPosition.call(this));
+    endsDouble =
+      !!last?.onSubject &&
+      at - last.at <= SUBJECT_PRESS_HOLD_MS &&
+      Math.hypot(position?.x - last.x, position?.y - last.y) <=
+        DOUBLE_CLICK_SLOP_PX;
+    last = { at, x: position?.x, y: position?.y, onSubject };
+    if (!onSubject) return;
     release = this.holdStockFollow
       ? this.holdStockFollow()
       : holdStockFollow(this.viewer);
     // A press that ends in no double-click gives the follow back by itself.
     timer = globalThis.setTimeout(drop, SUBJECT_PRESS_HOLD_MS);
+  });
+  const offUp = input.onPointer('up', () => {
+    if (!endsDouble) drop();
   });
   const offDouble = input.onPointer('dblclick', ({ position }) => {
     this.onSceneDoubleClick(position);
@@ -112,6 +142,7 @@ export function routeSceneDoubleClick() {
   });
   return () => {
     offDown();
+    offUp();
     offDouble();
     drop();
   };

@@ -19,6 +19,7 @@ const tests = (file) =>
   file === 'src/input/testDoubles.mjs' ||
   file === 'src/layers/recentImagery/testDoubles.mjs' ||
   file === 'src/voice/voiceWorkflowHarness.mjs' ||
+  file === 'src/layers/wildlifeSightings/renderPerformanceFixtures.mjs' ||
   file === 'src/overlays/worldOverlayAllocation.worker.mjs';
 const source = (file) =>
   file.startsWith('src/sources/') ||

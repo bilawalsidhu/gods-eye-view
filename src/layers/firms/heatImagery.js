@@ -15,11 +15,11 @@
 const WORLD = Object.freeze({ west: -180, south: -90, east: 180, north: 90 });
 
 /**
- * Drawn over the port's other imagery, the weather layers included
- * (`WEATHER_IMAGERY_Z` tops out at 4): each drape went to the top of the
- * stack.
+ * Drawn over the port's other imagery (zOrder 0) and under the weather
+ * layers (`WEATHER_IMAGERY_Z` starts at 1), so weather turned on after the
+ * heat stacks above it, as each weather frame went on top of the stack.
  */
-export const HEAT_IMAGERY_Z = 5;
+export const HEAT_IMAGERY_Z = 0.5;
 
 const defaultCanvas = (width, height) => {
   const canvas = document.createElement('canvas');
