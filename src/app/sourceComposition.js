@@ -37,6 +37,8 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
   satellites: contract(['satellites'], ['readGroup']),
   launches: contract(['rocket-launches'], ['getLaunches', 'getActiveTle']),
   alpr: contract(['alpr-cameras'], ['fetch']),
+  'sea-state': contract(['sea-state'], ['getSnapshot']),
+  'ocean-currents': contract(['ocean-currents'], ['getSnapshot']),
   firms: contract(['local-firms'], ['getSnapshot']),
   wind: contract(['wind'], ['getSnapshot']),
   weather: contract(
