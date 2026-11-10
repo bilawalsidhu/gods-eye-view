@@ -519,6 +519,9 @@ test('marker style: severity fill, attestation rim, size by sources, fading with
   assert.equal(fresh.severity, 3); // the event's, when higher than the report's
   assert.equal(fresh.rim, 'claimed');
   assert.equal(fresh.size, eventPixelSize(4));
+  // The icon is half the disc: no marker is too small to read it.
+  assert.equal(eventPixelSize(1), 24);
+  assert.equal(eventPixelSize(1000), 36);
   assert.equal(fresh.alpha, 1);
   assert.equal(markerStyle(r, NOW + 48 * 3_600_000).alpha, 0.45);
   assert.equal(reportSeverity({ category: 'political' }), 0);

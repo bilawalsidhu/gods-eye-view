@@ -45,6 +45,8 @@ import {
   cardEvents,
   cardView,
   categoryLabel,
+  countryGroups,
+  countryOnly,
   disputedLabel,
   feedCardView,
   feedQueryFor,
@@ -71,7 +73,7 @@ import {
   visibleOnMap,
   withinNewsWindow,
 } from './model.js';
-import { SPRITE_SCALE, markerSprite } from './sprites.js';
+import { SPRITE_SCALE, countSprite, markerSprite } from './sprites.js';
 import { CARD_H, CARD_W, eventCard } from './cards.js';
 export * from './model.js';
 export { createNewsSource } from './source.js';
@@ -117,6 +119,9 @@ const REPORT_PREFIX = `${NEWS_PICK_PREFIX}report:`;
 const HOTSPOT_PREFIX = `${NEWS_PICK_PREFIX}hotspot:`;
 const DEVELOPING_PREFIX = `${NEWS_PICK_PREFIX}developing:`;
 const LOCAL_PREFIX = `${NEWS_PICK_PREFIX}local:`;
+const COUNTRY_PREFIX = `${NEWS_PICK_PREFIX}country:`;
+// A country badge carries a number: large enough to read two digits.
+const COUNTRY_BADGE_PX = 34;
 // Outlines in GEV's own colours, apart from the severity ramp: hotspots in
 // the accent, developing places in its lighter tint, disputed areas dotted
 // in the primary text colour, the Local section's area a faint line of it.
@@ -222,6 +227,8 @@ export function createNewsLayer({
     selectedPin = 0;
   let shownDetail = null;
   let cullTargets = [];
+  // The country badges drawn, by key: a click opens that country's news.
+  let countryBadges = new Map();
   const contextEntities = new Map();
   // Credits are registered once what they credit first shows; the registry
   // keeps them for the session (as TomTom's) and has no removal.
@@ -492,6 +499,8 @@ export function createNewsLayer({
     for (const report of drawn) {
       const isSelected = report.id === selectedId;
       if (!report.pins.length || (!isSelected && !onMap(report))) continue;
+      // A country's own news has no spot: its badge stands for it.
+      if (!isSelected && countryOnly(report)) continue;
       // One marker per pin; the pin index rides on the pick id. Fill is
       // severity, the icon the category, the rim attestation; a marker grows
       // with the sources reporting its event and fades with age. A fresh,
@@ -548,6 +557,59 @@ export function createNewsLayer({
               }),
         });
       }
+    }
+  }
+
+  // News placed no closer than a country: one badge at its centre with the
+  // number of reports, in place of that many markers piled there.
+  function renderCountryBadges(entities, drawn, labels) {
+    countryBadges = new Map();
+    const groups = countryGroups(
+      drawn.filter((r) => r.id !== selectedId && onMap(r)),
+    );
+    for (const group of groups) {
+      countryBadges.set(group.key, group);
+      const position = cesium.Cartesian3.fromDegrees(group.lon, group.lat);
+      const size = COUNTRY_BADGE_PX;
+      const sprite = countSprite(
+        group.count,
+        size * (viewer?.scene?.pixelRatio || 1),
+      );
+      const color = cesium.Color.fromCssColorString(DISPUTED_COLOR);
+      entities.add({
+        id: `${COUNTRY_PREFIX}${group.key}`,
+        position,
+        ...(sprite
+          ? {
+              billboard: {
+                image: sprite,
+                width: Math.round(size * SPRITE_SCALE),
+                height: Math.round(size * SPRITE_SCALE),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+            }
+          : {
+              point: {
+                pixelSize: size,
+                color: color.withAlpha(0.3),
+                outlineColor: color,
+                outlineWidth: 2,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+            }),
+      });
+      labels.push(
+        ambientLabel({
+          id: `country:${group.key}`,
+          position,
+          // The badge carries the count; the label's line stops at its rim.
+          title: group.place,
+          leaderOffsetPx: Math.round((size * SPRITE_SCALE) / 2),
+          accent: DISPUTED_COLOR,
+          priority: 9_000 + group.count,
+          gapPx: size / 2 + 4,
+        }),
+      );
     }
   }
 
@@ -693,6 +755,7 @@ export function createNewsLayer({
         ? [...shown, current]
         : shown;
     renderMarkers(entities, drawn);
+    renderCountryBadges(entities, drawn, labels);
     if (enabled) creditReports(drawn.filter((r) => r.pins.length && onMap(r)));
     entities.resumeEvents();
     showOutlines(detail);
@@ -1207,6 +1270,19 @@ export function createNewsLayer({
             Math.min(85, lat + 3.5),
           ]);
         }
+        return;
+      }
+      if (typeof id === 'string' && id.startsWith(COUNTRY_PREFIX)) {
+        // The country's news is the Local list with the view over it.
+        const group = countryBadges.get(id.slice(COUNTRY_PREFIX.length));
+        if (!group) return;
+        layer.setParams({ filters: { section: 'local' } });
+        focusRectangle([
+          group.lon - 5,
+          Math.max(-85, group.lat - 3.5),
+          group.lon + 5,
+          Math.min(85, group.lat + 3.5),
+        ]);
         return;
       }
       if (typeof id === 'string' && id.startsWith(HOTSPOT_PREFIX)) {

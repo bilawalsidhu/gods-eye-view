@@ -841,6 +841,49 @@ test('a failed Conflicts read leaves Local reading with each refresh', async (t)
   assert.equal(view.error, 'News feed unavailable');
 });
 
+test("a country's own news is one badge with a count, not markers piled on its centre", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const anchor = {
+    lat: 49,
+    lon: 36,
+    place: 'Ukraine',
+    precision: 'country',
+    mappable: true,
+  };
+  const { layer, viewer } = fixture(t, {
+    height: 1_000_000,
+    source: {
+      getFeed: async () => ({
+        reports: [
+          report('own-1', { relevance: 'minor', pins: [anchor] }),
+          report('own-2', { relevance: 'minor', pins: [anchor] }),
+          report('placed', { relevance: 'minor' }),
+        ],
+        nextBefore: null,
+      }),
+    },
+  });
+  const ids = () =>
+    viewer.added[1].entities.values.map((entity) => String(entity.id));
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { section: 'local' } });
+  await flush();
+  assert.deepEqual(
+    ids().filter((id) => /~\d+$/.test(id)),
+    ['news:report:placed~0'],
+  );
+  assert.deepEqual(
+    ids().filter((id) => id.startsWith('news:country:')),
+    ['news:country:Ukraine'],
+  );
+  // Both are still listed, and one picked there gets its own marker.
+  assert.equal(layer.getRowControls().feed.inView.items.length, 3);
+  layer.setParams({ reportId: 'own-1' });
+  await flush();
+  assert.ok(ids().includes('news:report:own-1~0'));
+});
+
 test('Local reports are listed an hour at most while they cannot be read again', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let at = NOW;

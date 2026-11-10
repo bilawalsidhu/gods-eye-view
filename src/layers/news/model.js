@@ -404,7 +404,9 @@ export const beaconPixelSize = (last24h) =>
 /** Marker size for an event: grows with the number of distinct sources. */
 export function eventPixelSize(sources = 1) {
   return Math.round(
-    Math.min(30, 16 + 3.5 * Math.log2(Math.max(1, Number(sources) || 1))),
+    // No smaller than 24: the category icon is half the disc and unreadable
+    // below that.
+    Math.min(36, 24 + 3 * Math.log2(Math.max(1, Number(sources) || 1))),
   );
 }
 
@@ -591,6 +593,32 @@ export function feedCardView(report, now = Date.now()) {
         url: s.url,
       })),
   };
+}
+
+/**
+ * Whether a report is placed no closer than a country: it has no spot of its
+ * own on the map.
+ */
+export const countryOnly = (report) =>
+  report.pins?.length > 0 &&
+  report.pins.every((pin) => pin.precision === 'country');
+
+/**
+ * Country-only reports as one group per country, in the order met:
+ * `{key, place, lat, lon, count}`. They are drawn as one badge with a count,
+ * not as markers piled on the country's centre.
+ */
+export function countryGroups(reports) {
+  const groups = new Map();
+  for (const report of reports) {
+    if (!countryOnly(report)) continue;
+    const { lat, lon, place } = report.pins[0];
+    const key = place || `${lat.toFixed(1)},${lon.toFixed(1)}`;
+    const group = groups.get(key);
+    if (group) group.count += 1;
+    else groups.set(key, { key, place: place || '', lat, lon, count: 1 });
+  }
+  return [...groups.values()];
 }
 
 /**

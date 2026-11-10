@@ -9,6 +9,7 @@ const CANVAS = 64;
 const BODY = 52; // disc diameter inside the canvas; the rest is rim and ring
 const INK = 'rgba(10, 10, 15, 0.92)';
 const SELECTED = '#00d4ff';
+const COUNT_INK = '#e8eaed';
 
 /** Canvas pixels per marker pixel: the billboard is drawn at this ratio. */
 export const SPRITE_SCALE = CANVAS / BODY;
@@ -82,6 +83,48 @@ export function markerSprite({ category, severity, rim, selected = false }) {
     ctx.strokeStyle = SELECTED;
     ctx.stroke();
   }
+  const url = canvas.toDataURL('image/png');
+  cache.set(key, url);
+  return url;
+}
+
+/**
+ * Data URL of a country badge: the dark disc with a light rim and the number
+ * of reports it stands for, drawn at the pixels it is shown at so the digits
+ * stay sharp. Null where there is no canvas.
+ * @param {number} count Reports the badge stands for.
+ * @param {number} pixels The disc's diameter in drawn pixels.
+ */
+export function countSprite(count, pixels) {
+  const body = Math.max(1, Math.round(pixels));
+  const text = count > 99 ? '99+' : String(count);
+  const key = `count|${text}|${body}`;
+  if (cache.has(key)) return cache.get(key);
+  const canvas = globalThis.document?.createElement?.('canvas');
+  const ctx = canvas?.getContext?.('2d');
+  if (!ctx) return null;
+  const k = body / BODY;
+  canvas.width = canvas.height = Math.round(CANVAS * k);
+  const c = canvas.width / 2;
+  const r = body / 2;
+  ctx.beginPath();
+  ctx.arc(c, c, r + 1.5 * k, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(c, c, r, 0, 2 * Math.PI);
+  ctx.fillStyle = INK;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(c, c, r - 2 * k, 0, 2 * Math.PI);
+  ctx.lineWidth = 3 * k;
+  ctx.strokeStyle = COUNT_INK;
+  ctx.stroke();
+  ctx.fillStyle = COUNT_INK;
+  ctx.font = `600 ${Math.round(body * (text.length > 2 ? 0.34 : 0.44))}px ui-monospace, Menlo, monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, c, c + k);
   const url = canvas.toDataURL('image/png');
   cache.set(key, url);
   return url;
