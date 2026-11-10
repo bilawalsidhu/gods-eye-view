@@ -356,6 +356,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         fetching: Boolean(layerState._fetching),
         flowPending: layerState._flowPending,
         surfaceRefining: Boolean(layerState._surfaceRefining),
+        surfaceWaiting: Boolean(layerState._surfaceRefineRemove),
         populationPending: Boolean(layerState._populationPending),
         heightPending: Boolean(layerState._heightPending),
         generation: layerState._loadGeneration,

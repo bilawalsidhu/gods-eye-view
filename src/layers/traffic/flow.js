@@ -277,6 +277,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       layerState._surfaceRefining = false;
       layerState._surfaceRefineRemove?.();
       layerState._surfaceRefineRemove = null;
+      layerState._surfaceRefineDeadline = null;
     }
     if (!roads.length) {
       // A streamed tile with no roads changes nothing on screen. A completed
@@ -557,6 +558,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
     // without leaving offscreen or unavailable stations loading forever.
     const retryPending =
       prepared.pending.length > 0 &&
+      (!refining || performance.now() < layerState._surfaceRefineDeadline) &&
       (!refining ||
         !trafficSurfaceReady(engine) ||
         prepared.metrics.resolvedSamples > 0);
@@ -570,6 +572,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
         (!refining && ready.some((road) => road.surfaceSettled === false)))
     ) {
       layerState._surfaceRefineRemove?.();
+      // A ready frame can start another pass; it must not renew the budget.
+      layerState._surfaceRefineDeadline ??= performance.now() + 10000;
       const stop = () => {
         remove();
         clearTimeout(timer);
@@ -609,10 +613,13 @@ export function createFlow({ state: layerState, services, parts, source }) {
               layerState._surfaceRefining = false;
           });
       });
-      const timer = setTimeout(() => {
-        stop();
-        if (current()) layerState._surfacePending = 0;
-      }, 10000);
+      const timer = setTimeout(
+        () => {
+          stop();
+          if (current()) layerState._surfacePending = 0;
+        },
+        Math.max(0, layerState._surfaceRefineDeadline - performance.now()),
+      );
       layerState._surfaceRefineRemove = stop;
       engine.render.request('traffic-surface');
     }

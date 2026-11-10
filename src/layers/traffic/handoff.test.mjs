@@ -306,6 +306,7 @@ test('a completed surface defers unavailable roads until the next view instead o
 });
 
 test('the surface wait deadline defers pending roads when the mesh never settles', async (t) => {
+  t.mock.method(performance, 'now', () => 0);
   const surface = incomingGlobe(t);
   surface.frame();
   const { state, flow } = fixture(surface);
@@ -334,6 +335,45 @@ test('the surface wait deadline defers pending roads when the mesh never settles
   deadline();
   assert.equal(state._surfacePending, 0);
   assert.equal(state._surfaceRefineRemove, null);
+});
+
+test('successive surface-ready frames cannot restart the refinement deadline', async (t) => {
+  const surface = incomingGlobe(t);
+  surface.ready = true;
+  surface.frame();
+  const { state, flow } = fixture(surface);
+  t.after(() => {
+    state._activeFetchAbort.abort();
+    state._surfaceRefineRemove?.();
+  });
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  surface.engine.fake.script('terrainHeight', (point) => {
+    if (geo.math.toDegrees(point.latitude) <= LAT + 0.004) return GROUND;
+    // A ready frame can be followed by more tile work during a surface pass.
+    surface.ready = false;
+    surface.frame();
+    return undefined;
+  });
+  const roads = [road(0, GROUND), road(0.008, GROUND)];
+  await flow.applyFlowThenRender(
+    roads,
+    { ...bounds, coverage },
+    1,
+    1800,
+    'Loaded full',
+  );
+  assert.equal(state._surfacePending, 1);
+  for (let pass = 0; pass < 6 && state._surfaceRefineRemove; pass++) {
+    now += 2000;
+    surface.ready = true;
+    surface.frame();
+    await settle(() => !state._surfaceRefining);
+  }
+  assert.equal(state._surfacePending, 0, 'the whole refinement has a deadline');
+  assert.equal(state._surfaceRefining, false);
+  assert.equal(state._surfaceRefineRemove, null);
+  assert.equal(roads[1].surfaceReady, false, 'missing heights stay hidden');
 });
 
 test('resuming the viewport republishes the retained roads as a pass that can still refine', () => {
