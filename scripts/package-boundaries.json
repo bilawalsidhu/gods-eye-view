@@ -226,7 +226,9 @@
       "src/data/bundledJson.js",
       "src/renderGovernor.js",
       "src/sky/icrf.js",
-      "src/globeInView.js"
+      "src/globeInView.js",
+      "src/render/cesium/imageryLookAhead.js",
+      "src/cockpitOrbital.js"
     ],
     "external": ["cesium"]
   },
@@ -4545,7 +4547,8 @@
       "src/layers/satellites/classes.js",
       "src/layers/satellites/sensors.js",
       "src/data/ucsSatellites.js",
-      "src/data/imagingSensors.js"
+      "src/data/imagingSensors.js",
+      "src/render/cesium/imageryLookAhead.js"
     ],
     "external": [
       "hls.js",

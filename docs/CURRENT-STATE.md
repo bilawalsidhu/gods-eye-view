@@ -1745,10 +1745,13 @@ hidden; tilted past the Earth's limb neither the sensor nor the swath
 reads. A swath is confirmed only on the operator's, an agency's (ESA's
 eoPortal included) or an academic page for its platform. From
 16×, with flat imagery on the globe (not Google 3D tiles) and the view at
-nadir, every 2 s the view asks the base imagery layer for the tiles it will
-need 5 to 20 s ahead along the ground track (`prefetchImageryAhead` in
-`src/ui/cockpitOrbitalView.js`), so the browser has them cached when the
-view arrives. The level is the one Cesium will draw there
+nadir, every 2 s the Cesium renderer asks the base imagery layer for the
+tiles the view will need 5 to 20 s ahead along the ground track, so the
+browser has them cached when the view arrives. The renderer works this from
+its own camera (`preloadImageryAhead` in
+`src/render/cesium/imageryLookAhead.js`): a vertical field of view as narrow
+as an orbital view's at 16× for the camera's height, a look straight down,
+and the camera's own motion over the ground, which gives the track. The level is the one Cesium will draw there
 (`imageryLevelForView` in `src/cockpitOrbital.js`, following Cesium's own
 choice: the terrain level whose error spans at most the globe's maximum
 screen-space error, then the imagery level whose texels are nearest that
@@ -1758,7 +1761,7 @@ at the lowest priority, so a request is declined while the imagery server's
 slots are taken by the tiles on screen and is the first dropped when the
 scheduler is full (a declined or dropped tile is asked for again later, one that failed to load is not); it remembers the last 512 tiles asked for and does not ask
 for those again, starts over on another base map (cancelling the old map's
-pending requests), and cancels the requests still pending on exit. Across the track it samples the centre line, a third
+pending requests), and when the view widens (below 16× or on exit) cancels the requests still pending and forgets the tiles asked for. Across the track it samples the centre line, a third
 out and the frame's edges. While tilted off nadir the view looks away from
 the track, and with the world clock more than a minute from now (paused or
 played back) it will not pass where the look-ahead points, so nothing is

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from '../../app/atmosphereCompat.js';
+import { preloadImageryAhead } from './imageryLookAhead.js';
 import { StarrySky } from './starrySky.js';
 
 /**
@@ -89,6 +90,8 @@ export function createApplicationViewer({ container, creditContainer }) {
     if (globalThis.matchMedia?.('(pointer: coarse)').matches)
       viewer.scene.screenSpaceCameraController.zoomFactor *= 3;
     limitZoomOut(viewer);
+    // A narrow view carried along an orbit outruns the imagery under it.
+    preloadImageryAhead(viewer);
     // Before any tile builds a draw command: Cesium's per-vertex model
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.
