@@ -28,6 +28,11 @@ const GROUPS = {
   galileo: [42000, 30, 56, 1.7047, 'QA GALILEO'],
   geo: [45000, 32, 0.1, 1.0027, 'QA GEO'],
   starlink: [50000, 6000, 53, 15.2, 'QA STARLINK'],
+  resource: [60000, 12, 98.2, 14.6, 'QA RESOURCE'],
+  weather: [61000, 8, 98.7, 14.1, 'QA WEATHER'],
+  planet: [62000, 24, 97.5, 15.1, 'QA PLANET'],
+  sar: [63000, 6, 97.9, 15.0, 'QA SAR'],
+  science: [64000, 6, 28.5, 15.1, 'QA SCIENCE'],
 };
 export const SATELLITE_FIXTURE_EPOCH = W1_FROZEN_MS;
 export function satelliteFixture(group) {

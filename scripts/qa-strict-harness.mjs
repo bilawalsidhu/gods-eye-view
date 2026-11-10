@@ -29,6 +29,20 @@ import {
 import { createMissLoader, tileCacheFile } from './qa/tileCache.mjs';
 import { closeBrowser, diagnoseExit, exitAfterFlush } from './qa/browser.mjs';
 import { DAYTIME, shiftTime } from './qa/time.mjs';
+import {
+  PLANESPOTTERS_EMPTY_BODY,
+  PLANESPOTTERS_ORIGIN,
+} from './qa-photo-stub.mjs';
+
+// Tracking a civil flight asks Planespotters for its photo; strict runs
+// answer every lookup with no photos instead of leaving the machine.
+const PHOTO_ROUTE = Object.freeze({
+  pattern: `${PLANESPOTTERS_ORIGIN}/*`,
+  respond: () => ({
+    contentType: 'application/json',
+    body: PLANESPOTTERS_EMPTY_BODY,
+  }),
+});
 
 export const ENGINES = Object.freeze(['cesium', 'navara']);
 /** What the Globe Engine picker offers: the engines and Navara HD. */
@@ -104,6 +118,7 @@ export async function installStrictNetwork(
   },
 ) {
   const preview = new URL(origin);
+  routes = [...routes, PHOTO_ROUTE];
   fixtures = [...fixtures, ...routes.map((route) => route.pattern)];
   const urlPatterns = strictBlockPatterns(origin, { fixtures, tileHosts });
   const answers = routes.map((route) => ({

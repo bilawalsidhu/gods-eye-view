@@ -16,6 +16,11 @@ test('satellite fixture has distinct, valid SGP4 catalogs including LEO, MEO and
     galileo: 30,
     geo: 32,
     starlink: 6000,
+    resource: 12,
+    weather: 8,
+    planet: 24,
+    sar: 6,
+    science: 6,
   };
   for (const [group, count] of Object.entries(counts)) {
     const lines = satelliteFixture(group).trim().split('\n');

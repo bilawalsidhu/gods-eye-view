@@ -31,8 +31,20 @@ await strict.run({}, async (b) => {
       'galileo',
       'geo',
       'starlink',
+      'resource',
+      'weather',
+      'planet',
+      'sar',
+      'science',
     ].map((g) => [g, satelliteFixture(g)]),
   );
+  // The core catalog is every group but Starlink, which only the dense
+  // catalog adds; each fixture satellite is three lines.
+  const satellitesIn = (g) => groups[g].trim().split('\n').length / 3;
+  const coreCount = Object.keys(groups)
+    .filter((g) => g !== 'starlink')
+    .reduce((sum, g) => sum + satellitesIn(g), 0);
+  const denseCount = coreCount + satellitesIn('starlink');
   await p.evaluateOnNewDocument(
     (groups, launches, epoch) => {
       const fetch = window.fetch.bind(window);
@@ -76,14 +88,18 @@ await strict.run({}, async (b) => {
     } else await dataManager.setEnabled('satellites', true, { origin: 'user' });
   }, missions);
   if (!missions) {
-    await p.waitForFunction(() => window.sa.getStats().count === 839, {
-      timeout: 40000,
-    });
+    await p.waitForFunction(
+      (count) => window.sa.getStats().count === count,
+      { timeout: 40000 },
+      coreCount,
+    );
     console.log('core catalog ready');
     await p.evaluate(() => window.sa.setParams({ catalog: 'dense' }));
-    await p.waitForFunction(() => window.sa.getStats().count === 6839, {
-      timeout: 60000,
-    });
+    await p.waitForFunction(
+      (count) => window.sa.getStats().count === count,
+      { timeout: 60000 },
+      denseCount,
+    );
     console.log('dense catalog ready');
     assert.ok(
       await p.evaluate(() => window.sa.trackById(25544, { origin: 'user' })),
@@ -119,7 +135,7 @@ await strict.run({}, async (b) => {
     before.mission,
     before.replay?.active,
   );
-  // Each source read exactly once: the seven TLE groups of the dense
+  // Each source read exactly once: the twelve TLE groups of the dense
   // catalog; in Space Missions the launch list and every TLE group the
   // mission view asks for.
   const groupPaths = Object.keys(groups).map((g) => '/api/celestrak/' + g);
@@ -130,7 +146,7 @@ await strict.run({}, async (b) => {
       layer,
       missions
         ? 'the launch list and each TLE group read exactly once'
-        : 'each of the seven TLE groups read exactly once',
+        : 'each of the twelve TLE groups read exactly once',
       Object.values(reads).every((n) => n === 1) &&
         (missions
           ? reads['/api/launches'] === 1
@@ -181,7 +197,7 @@ await strict.run({}, async (b) => {
         before.replay.phaseProgress,
       );
     } else {
-      assert.equal(state.sat.count, 6839);
+      assert.equal(state.sat.count, denseCount);
       assert.equal(state.params.selectedSatTrackingId, 25544);
       assert.ok(state.follow && state.ring > 0);
       assert.equal(state.sat.lastUpdate, before.stamp);
@@ -191,7 +207,7 @@ await strict.run({}, async (b) => {
       layer,
       missions
         ? 'same models; Space Missions mode, the same mission paused at the same progress, speed 4'
-        : 'same models; 6 839 objects, the ISS tracked with its ring, same update stamp',
+        : `same models; ${denseCount} objects, the ISS tracked with its ring, same update stamp`,
     );
     await readsOnce();
   }
