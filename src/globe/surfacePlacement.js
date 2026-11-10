@@ -176,6 +176,11 @@ export function createSurfacePoints(
     for (const { set, points, exclude = [set] } of groups()) {
       if (!set) continue;
       let changed = false;
+      const yieldPass = () => {
+        if (changed) set.commit();
+        if (changed || moved) request();
+        timer = setTimeout(place, 0);
+      };
       for (let index = 0; index < points.length; index++) {
         const point = points[index];
         if (point.surfaceRevision === revision) continue;
@@ -183,12 +188,11 @@ export function createSurfacePoints(
           samples >= SAMPLES_PER_PASS ||
           (visited > 0 && performance.now() - started >= SAMPLE_BUDGET_MS)
         ) {
-          if (changed) set.commit();
-          if (changed || moved) request();
-          timer = setTimeout(place, 0);
+          yieldPass();
           return;
         }
         visited++;
+        const previousRevision = point.surfaceRevision;
         point.surfaceRevision = revision;
         if (point.show === false) continue;
         const offset =
@@ -215,6 +219,13 @@ export function createSurfacePoints(
             )
           : point.position;
         if (!onScreen(position, size)) continue;
+        // The camera estimate above counts too: leave this point for the
+        // next pass rather than go over the budget.
+        if (samples >= SAMPLES_PER_PASS) {
+          point.surfaceRevision = previousRevision;
+          yieldPass();
+          return;
+        }
         samples++;
         const height = readSurface(engine, point.cartographic, {
           exclude,

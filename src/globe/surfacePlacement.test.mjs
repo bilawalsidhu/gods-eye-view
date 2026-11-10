@@ -211,6 +211,22 @@ test('initial placement projects high ground before testing the screen and retai
   assert.ok(Math.abs(heights()[0] - 2502) < 0.01);
 });
 
+test('the camera ground estimate counts against the per-pass sample budget', async (t) => {
+  const { engine, surface } = setup(t, 20, { estimateGround: true });
+  await engine.maps.setPhotorealTiles({});
+  // Fifteen points find plausible terrain; the sixteenth needs the camera
+  // estimate, which is a tile sample of its own.
+  let terrainReads = 0;
+  engine.fake.script('terrainHeight', () => (++terrainReads <= 15 ? 10 : 20000));
+  engine.fake.script('sampleHeight', 50);
+  const sampled = t.mock.method(engine.surface, 'sampleHeight');
+  surface.place();
+  assert.ok(
+    sampled.mock.callCount() <= 16,
+    `${sampled.mock.callCount()} samples in one pass`,
+  );
+});
+
 test('a consumer with its own visibility gate can place a ground vertical whose base does not project', (t) => {
   const { engine, surface, heights } = setup(t, 1, { screenMargin: Infinity });
   engine.fake.script('terrainHeight', 2500);
