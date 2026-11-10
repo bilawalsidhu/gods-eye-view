@@ -1,11 +1,6 @@
 {
   "engineImportExceptions": [
     {
-      "file": "src/data/bhoteKoshiEmbeddedMedia.js",
-      "package": "cesium",
-      "reason": "Authored story media still uses Cesium positions and property records."
-    },
-    {
       "file": "src/data/bhoteKoshiEvent.js",
       "package": "cesium",
       "reason": "Authored event timing and geometry still build Cesium property records for the shared story display."
@@ -978,7 +973,8 @@
       "src/ui/unitLabels.js",
       "src/geo/",
       "src/globe/cesium/doubleClick.js",
-      "src/globe/cesium/orbital.js"
+      "src/globe/cesium/orbital.js",
+      "src/globe/cesium/orbitalImagery.js"
     ],
     "external": ["cesium"]
   },
@@ -1261,11 +1257,9 @@
       "src/globe/cesium/doubleClick.js",
       "src/celestialRing.js",
       "src/celestialRing/ephemeris.js",
-      "src/celestialRing/view.js",
       "src/data/detectionCohort.js",
       "src/data/labelArbiter.js",
       "src/globe/cesium/celestial.js",
-      "src/layers/shared/render/engineView.js",
       "src/overlays/worldOverlay.js",
       "src/overlays/worldOverlayDraw.js",
       "src/overlays/worldOverlayTokens.js",
@@ -1273,7 +1267,9 @@
       "src/data/trackedReadout.js",
       "src/ui/releaseTrackers.js",
       "src/globe/cesium/orbital.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/cesium/celestialHost.js",
+      "src/globe/cesium/orbitalImagery.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -2521,11 +2517,8 @@
       "src/layers/wind/model.js",
       "src/layers/wind/fields.js",
       "src/layers/wind/streamlines.js",
-      "src/layers/wind/gpuRendering.js",
-      "src/layers/wind/relief.js",
       "src/layers/wind/inspection.js",
       "src/layers/wind/presentation.js",
-      "src/layers/wind/rendering.js",
       "src/layers/wind/source.js",
       "src/sources/windBody.js",
       "src/data/detection.js",
@@ -3458,7 +3451,6 @@
       "src/layers/localAdsb/render/display.js",
       "src/layers/shared/render/engineView.js",
       "src/globe/cesium/celestial.js",
-      "src/celestialRing/view.js",
       "src/globe/navara/ground/pulse.js",
       "src/globe/navara/shaderChunks.js",
       "src/globe/navara/sceneDepth.js",
@@ -3593,7 +3585,12 @@
       "src/globe/cesium/orbital.js",
       "src/globe/cesium/worldTime.js",
       "src/data/geoImportLimits.js",
-      "src/data/geoImportPlan.js"
+      "src/data/geoImportPlan.js",
+      "src/globe/cesium/celestialHost.js",
+      "src/globe/cesium/orbitalImagery.js",
+      "src/globe/cesium/windGpuRendering.js",
+      "src/globe/cesium/windRelief.js",
+      "src/globe/cesium/windRendering.js"
     ],
     "external": [
       "hls.js",
@@ -3650,11 +3647,8 @@
       "src/layers/wind/model.js",
       "src/layers/wind/fields.js",
       "src/layers/wind/streamlines.js",
-      "src/layers/wind/gpuRendering.js",
-      "src/layers/wind/relief.js",
       "src/layers/wind/inspection.js",
       "src/layers/wind/presentation.js",
-      "src/layers/wind/rendering.js",
       "src/app/layers/aisLiveVessels.js",
       "src/app/layers/alprCameras.js",
       "src/app/layers/bikeshare.js",
@@ -4212,7 +4206,6 @@
       "src/layers/localAdsb/render/display.js",
       "src/layers/shared/render/moverBank.js",
       "src/globe/cesium/celestial.js",
-      "src/celestialRing/view.js",
       "src/layers/shared/render/engineView.js",
       "src/layers/firms/rectangle.js",
       "src/time/worldClock.js",
@@ -4306,7 +4299,11 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
-      "src/data/geoImportLimits.js"
+      "src/data/geoImportLimits.js",
+      "src/globe/cesium/celestialHost.js",
+      "src/globe/cesium/windGpuRendering.js",
+      "src/globe/cesium/windRelief.js",
+      "src/globe/cesium/windRendering.js"
     ],
     "external": [
       "hls.js",
@@ -5013,7 +5010,6 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/celestialRing/view.js",
       "src/layers/shared/render/engineView.js",
       "src/globe/cesium/sceneProjection.js",
       "src/layers/shared/color.js",
@@ -5031,7 +5027,8 @@
       "src/data/trackedReadout.js",
       "src/data/trackingGesture.js",
       "src/time/worldClock.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/cesium/celestialHost.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },

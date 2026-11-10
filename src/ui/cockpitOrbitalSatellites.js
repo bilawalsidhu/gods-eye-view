@@ -122,8 +122,8 @@ export function switchOrbitalSatellite(noradId) {
   } catch {
     tracked = false;
   }
-  // Tracking hands the camera to Cesium's follow; the orbital view keeps it.
-  this.viewer.trackedEntity = undefined;
+  // Tracking hands the camera to follow; the orbital view keeps it.
+  this.host.release();
   const info = tracked ? this.readSatelliteInfo() : null;
   if (!info || String(info.noradId) !== String(noradId)) {
     // Nothing changed hands, or the layer could not take it: the view ends

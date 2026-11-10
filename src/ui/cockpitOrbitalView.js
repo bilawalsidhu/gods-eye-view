@@ -1,23 +1,14 @@
 /** The orbital (satellite) view of the Cockpit controller: camera, zoom, look and HUD. */
-import {
-  createOrbitalImageryRequest,
-  isGeographicProjection,
-} from '../globe/cesium/orbital.js';
 import { formatNumber, msg, t } from '../i18n/index.js';
 import {
   ORBITAL_DEFAULT_ZOOM,
   ORBITAL_PREFETCH_INTERVAL_MS,
-  centreLinesFirst,
-  ORBITAL_PREFETCH_MAX_TILES,
   ORBITAL_PREFETCH_MIN_ZOOM,
   ORBITAL_SETTLE_BLUR_PX,
   ORBITAL_ZOOM_LADDER,
   ORBITAL_ZOOM_TRANSITION_MS,
-  cesiumFrustumFovRad,
   footprintWidthKm,
   fovForZoom,
-  groundTrackAhead,
-  imageryLevelForView,
   interpolateZoomFov,
   nadirOrientation,
   nextOrbitalZoom,
@@ -30,7 +21,6 @@ import {
   previousOrbitalZoom,
   sensorStripFraction,
   sensorSwathZoom,
-  tilesForPoints,
   wheelZoomStep,
   zoomSettleHolding,
   zoomTransitionState,
@@ -86,7 +76,7 @@ const NADIR_LOOK = Object.freeze({ yawDeg: 0, pitchDeg: 0 });
  * the exit can put it back exactly.
  */
 export function beginOrbital() {
-  const frustum = this.viewer.camera?.frustum;
+  const pose = this.host.camera.pose();
   const state = {
     imagery: acquireOrbitImagery(this.services),
     zoom: ORBITAL_DEFAULT_ZOOM,
@@ -102,7 +92,9 @@ export function beginOrbital() {
     // A zoom step in flight: the magnification it started from and when.
     transition: null,
     previousUp: null,
-    savedFov: Number.isFinite(frustum?.fov) ? frustum.fov : null,
+    savedFov: Number.isFinite(pose.fovy)
+      ? 2 * Math.atan(Math.tan(pose.fovy / 2) * Math.max(1, pose.aspectRatio))
+      : null,
     altitudeM: null,
     verticalFov: null,
     lastBriefMs: 0,
@@ -135,8 +127,12 @@ export function endOrbital() {
   // Pre-loads still queued or in flight are for a view no longer shown.
   for (const request of state.prefetchRequests) request.cancel?.();
   state.prefetchRequests.clear();
-  const frustum = this.viewer.camera?.frustum;
-  if (frustum && state.savedFov !== null) frustum.fov = state.savedFov;
+  if (state.savedFov !== null) {
+    const aspect = Math.max(1, this.host.camera.pose().aspectRatio);
+    this.host.camera.setFovy(
+      2 * Math.atan(Math.tan(state.savedFov / 2) / aspect),
+    );
+  }
   // Back to the map the operator had, unless they picked another meanwhile.
   state.imagery?.release?.()?.catch?.(() => {});
   this.publishOrbital(null);
@@ -153,10 +149,7 @@ function trackPlace(info, nowMs) {
   if (!state?.placeTracker) return;
   let nearKm = null;
   if (Number.isFinite(info.altitudeM)) {
-    const frustum = this.viewer.camera?.frustum;
-    const aspect = Number.isFinite(frustum?.aspectRatio)
-      ? frustum.aspectRatio
-      : canvasAspect(this.viewer);
+    const aspect = viewAspect(this.host);
     const fov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
     // The field of view is vertical: aspect 1 gives the ground height.
     nearKm = nearPlaceRadiusKm(
@@ -241,7 +234,7 @@ function applyFov(state, altitudeM, nowMs) {
     state,
     baseFov,
     nowMs,
-    tilesLoaded(this.viewer),
+    this.host.imageryReady(),
   );
   // The step's last frame (its lock tick over) publishes the idle state.
   if (state.transition && !reading.moving) {
@@ -249,33 +242,11 @@ function applyFov(state, altitudeM, nowMs) {
     reading.transition = IDLE_TRANSITION;
   }
   state.verticalFov = reading.fov;
-  const frustum = this.viewer.camera?.frustum;
-  if (frustum && 'fov' in frustum) {
-    const aspect = Number.isFinite(frustum.aspectRatio)
-      ? frustum.aspectRatio
-      : canvasAspect(this.viewer);
-    frustum.fov = cesiumFrustumFovRad(reading.fov, aspect);
-  }
+  this.host.camera.setFovy(reading.fov);
   return reading;
 }
 
-/**
- * Whether the imagery under the view has loaded. Flat imagery drapes the
- * globe; with the globe hidden (Google 3D kept) there is nothing to wait for.
- */
-function tilesLoaded(viewer) {
-  const globe = viewer.scene?.globe;
-  return !globe?.show || globe.tilesLoaded !== false;
-}
-
-function canvasAspect(viewer) {
-  const canvas = viewer.scene?.canvas;
-  const width = canvas?.clientWidth;
-  const height = canvas?.clientHeight;
-  return width > 0 && height > 0 ? width / height : 1;
-}
-
-/** Copy a plain vector into a Cesium scratch. */
+/** Copy a plain vector into the camera scratch. */
 function intoCartesian(vector, result) {
   result.x = vector.x;
   result.y = vector.y;
@@ -293,8 +264,8 @@ function intoCartesian(vector, result) {
  */
 export function updateOrbital(nowMs) {
   // Tracking anything from orbit (an aircraft, another satellite) ends the
-  // view and leaves Cesium tracking with that target.
-  if (this.host.current() || this.viewer.trackedEntity?.position) {
+  // view and leaves the engine tracking with that target.
+  if (this.host.camera.following()) {
     this.exit({ restoreTracking: false });
     return;
   }
@@ -343,7 +314,7 @@ export function updateOrbital(nowMs) {
   });
   const zoomStepping = Boolean(state.transition);
   const reading = applyFov.call(this, state, info.altitudeM, nowMs);
-  this.viewer.camera.setView({
+  this.host.camera.setView({
     destination: eye,
     orientation: {
       direction: intoCartesian(view.direction, this.scratchForward),
@@ -372,9 +343,6 @@ export function updateOrbital(nowMs) {
   prefetchImageryAhead.call(this, info, nowMs);
 }
 
-/** Tiles remembered as asked for in one orbital session. */
-const PREFETCH_MEMORY = 512;
-
 /** How far the shown time may be from now for the look-ahead to run, ms. */
 const PREFETCH_LIVE_TOLERANCE_MS = 60_000;
 
@@ -388,7 +356,7 @@ const PREFETCH_LIVE_TOLERANCE_MS = 60_000;
  * lowest priority: Cesium's request scheduler declines one while the
  * imagery server's slots are taken by the tiles on screen or the scheduler
  * is full, and a declined tile is asked again on a later look-ahead. At most
- * ORBITAL_PREFETCH_MAX_TILES a time; the last PREFETCH_MEMORY tiles asked
+ * 12 a time; the last 512 tiles asked
  * for are not asked again unless their request failed, and a new base map
  * starts the memory over. Exit cancels the requests still pending. Nothing
  * below 16x, while the view is tilted off nadir (it no longer looks at the
@@ -411,121 +379,8 @@ export function prefetchImageryAhead(info, nowMs) {
   )
     return 0;
   state.prefetchMs = nowMs;
-  try {
-    const globe = this.viewer.scene?.globe;
-    if (!globe || globe.show === false) return 0;
-    const provider = baseImageryProvider(this.viewer);
-    if (!provider) return 0;
-    // Another base map: its tiles have not been asked for.
-    // A fresh set, so a late failure from the old map's requests cannot
-    // drop a tile the new one has fetched.
-    if (provider !== state.prefetchProvider) {
-      for (const request of state.prefetchRequests) request.cancel?.();
-      state.prefetchRequests = new Set();
-      state.prefetched = new Set();
-      state.prefetchProvider = provider;
-    }
-    const fov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
-    const viewKm = footprintWidthKm(
-      info.altitudeM,
-      fov,
-      viewAspect(this.viewer),
-    );
-    // The ground one CSS pixel covers at the nadir point, as Cesium's
-    // screen-space error measures it: the vertical field of view over the
-    // canvas height, at the satellite's altitude.
-    const canvas = this.viewer.scene?.canvas;
-    const heightPx = canvas?.clientHeight || canvas?.height;
-    const terrain =
-      this.viewer.terrainProvider ?? this.viewer.scene?.globe?.terrainProvider;
-    const level = imageryLevelForView(provider.tilingScheme, {
-      metresPerPixel: (info.altitudeM * 2 * Math.tan(fov / 2)) / heightPx,
-      latitudeDeg: info.latitude,
-      geographic: isGeographicProjection(provider.tilingScheme.projection),
-      tileWidthPx: provider.tileWidth,
-      minimumLevel: provider.minimumLevel,
-      maximumLevel: provider.maximumLevel,
-      maximumScreenSpaceError: globe.maximumScreenSpaceError,
-      terrainLevelErrorM:
-        typeof terrain?.getLevelMaximumGeometricError === 'function'
-          ? (terrainLevel) =>
-              terrain.getLevelMaximumGeometricError(terrainLevel)
-          : undefined,
-    });
-    if (level === null) return 0;
-    const memory = state.prefetched;
-    const tiles = tilesForPoints(
-      provider.tilingScheme,
-      centreLinesFirst(groundTrackAhead(info, viewKm)),
-      level,
-      {
-        maxTiles: ORBITAL_PREFETCH_MAX_TILES,
-        skip: (key) => memory.has(key),
-      },
-    );
-    let asked = 0;
-    for (const tile of tiles) {
-      let pending;
-      let request;
-      try {
-        // The tiles on screen keep their slots: Cesium's scheduler declines
-        // this request while the imagery server's slots are taken (shared
-        // with the globe's own tile requests, throttleByServer) or the
-        // scheduler is full, and at the lowest priority it is the first
-        // dropped from the priority heap, never one the screen asked for.
-        pending = provider.requestImage(
-          tile.x,
-          tile.y,
-          tile.level,
-          (request = createOrbitalImageryRequest()),
-        );
-      } catch {
-        continue;
-      }
-      // A provider that declines now (throttled) is asked again later.
-      if (!pending) continue;
-      const requests = state.prefetchRequests;
-      requests.add(request);
-      Promise.resolve(pending).then(
-        () => requests.delete(request),
-        (error) => {
-          requests.delete(request);
-          // Dropped by the scheduler (rejected with no error): asked again
-          // later. A tile that failed to load stays remembered, so one
-          // missing from the map is not asked for every look-ahead.
-          if (error === undefined) memory.delete(tile.key);
-        },
-      );
-      memory.add(tile.key);
-      if (memory.size > PREFETCH_MEMORY)
-        memory.delete(memory.values().next().value);
-      asked += 1;
-    }
-    return asked;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * The provider of the lowest shown imagery layer, the base map the globe
- * drapes, when it can be asked for a tile; else null.
- */
-function baseImageryProvider(viewer) {
-  const layers = viewer.imageryLayers ?? viewer.scene?.imageryLayers;
-  const count = Number.isInteger(layers?.length) ? layers.length : 0;
-  for (let i = 0; i < count; i += 1) {
-    const layer = layers.get(i);
-    if (!layer || layer.show === false || layer.alpha === 0) continue;
-    const provider = layer.imageryProvider;
-    if (
-      typeof provider?.requestImage === 'function' &&
-      typeof provider.tilingScheme?.positionToTileXY === 'function'
-    )
-      return provider;
-    return null;
-  }
-  return null;
+  const fov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
+  return this.host.prefetchImagery(state, info, fov, viewAspect(this.host));
 }
 
 /**
@@ -623,9 +478,7 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   if (!state || !info) return;
   const focus = orbitalFocusReadout.call(this);
   const offset = Boolean(focus) || lookIsOffset(state.lookTarget, 0);
-  const aspect = Number.isFinite(this.viewer.camera?.frustum?.aspectRatio)
-    ? this.viewer.camera.frustum.aspectRatio
-    : canvasAspect(this.viewer);
+  const aspect = viewAspect(this.host);
   const settledFov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
   const footprintKm = footprintWidthKm(info.altitudeM, settledFov, aspect);
   // The strip is drawn over the picture, so it follows the view as a step
@@ -796,7 +649,7 @@ export function jumpToSensorSwath() {
   const zoom = sensorSwathZoom(
     info.altitudeM,
     swathKm,
-    viewAspect(this.viewer),
+    viewAspect(this.host),
     orbitalMaxZoomFor.call(this, info),
   );
   return zoom === null ? false : goToZoom.call(this, zoom);
@@ -840,14 +693,12 @@ function orbitalMaxZoomFor(info) {
   return orbitalMaxZoom(
     info?.altitudeM,
     zoomableSwathKm(info?.sensor),
-    viewAspect(this.viewer),
+    viewAspect(this.host),
   );
 }
 
-function viewAspect(viewer) {
-  return Number.isFinite(viewer.camera?.frustum?.aspectRatio)
-    ? viewer.camera.frustum.aspectRatio
-    : canvasAspect(viewer);
+function viewAspect(host) {
+  return host.camera.pose().aspectRatio;
 }
 
 /**

@@ -289,6 +289,9 @@ function fixture(t, { reducedMotion = false } = {}) {
   const onMode = (event) => modeEvents.push(event.detail);
   window.addEventListener('gev:cockpit-mode-changed', onMode);
   const engine = createFakeEngine({ kind: 'cesium' });
+  engine.camera.setView = (options) => viewer.camera.setView(options);
+  const following = engine.camera.following;
+  engine.camera.following = () => viewer.trackedEntity ? { stop() { viewer.trackedEntity = undefined; } } : following();
   engine.fake.script('pick', (position) => picks.get(`${position.x},${position.y}`));
   const cockpit = new CockpitViewController(engine, {
     viewer,

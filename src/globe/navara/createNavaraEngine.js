@@ -114,10 +114,13 @@ export function createNavaraEngine(
     width: canvas.clientWidth,
     height: canvas.clientHeight,
   });
+  const applyFovy = (radians) => {
+    if (hooks.setCameraFovy) hooks.setCameraFovy(radians);
+    else view.camera.fov = math.toDegrees(radians);
+  };
   const matchFov = () => {
     const { width, height } = size();
-    if (width > 0 && height > 0)
-      view.camera.fov = math.toDegrees(cesiumFovy(width, height));
+    if (width > 0 && height > 0) applyFovy(cesiumFovy(width, height));
   };
   matchFov();
 
@@ -131,6 +134,7 @@ export function createNavaraEngine(
       stop: () => view.setCamera({}),
       size,
       requestFrame: () => view.forceUpdate(),
+      setFovy: applyFovy,
       suspendCameraInputs: () => input.input.suspendCameraInputs(),
     },
     ...(clock ? { clock } : {}),
@@ -201,7 +205,9 @@ export function createNavaraEngine(
       model.afterFrame();
       frames.postRender.raiseEvent(time);
     },
-    resize: () => matchFov(),
+    resize: () => {
+      applyFovy(model.camera.pose().fovy);
+    },
   };
   for (const [name, handler] of Object.entries(handlers))
     view.on(name, handler);

@@ -33,14 +33,15 @@ Status: Open (manual map selection)
 Navara does not report tile errors, so a failing map source does not trigger
 fallback to another map. Select another map manually when tiles fail to load.
 
-### Orbital cockpit is unavailable on Navara
+### Orbital imagery look-ahead is unavailable on Navara
 
 Status: Open (Cesium only)
 
-The Navara engine does not offer the satellite cockpit, including sensor
-zoom, ground focus and satellite switching. Satellites can still be selected
-and tracked on the globe. The orbital entry control stays hidden. Switch to
-Cesium to use the orbital cockpit.
+The orbital cockpit works on both engines. On Navara it loads imagery for
+its current view but does not prefetch imagery ahead of the ground track.
+At high optical zoom, imagery can arrive later than on Cesium. Navara's
+package does not expose a raster prefetch operation sharing its tile cache
+and request priorities.
 
 ### Ship bridge waterline uses loaded geometry on Navara
 

@@ -6,14 +6,14 @@
     "engineSwitchLayerIds": 3,
     "cesiumLayerRendererLines": 0,
     "navaraLayerRendererLines": 0,
-    "cesiumImportFiles": 3,
-    "viewerLines": 784,
+    "cesiumImportFiles": 2,
+    "viewerLines": 666,
     "navaraKindChecks": 1,
     "engineSniffCalls": 0,
-    "engineExtensionReads": 3,
+    "engineExtensionReads": 2,
     "groundEffectPasses": 0,
     "cesiumSdkLoads": 3,
     "screenSpaceHandlerFiles": 2,
-    "engineNameLines": 21
+    "engineNameLines": 20
   }
 }

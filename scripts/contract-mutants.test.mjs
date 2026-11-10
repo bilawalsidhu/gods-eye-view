@@ -16,6 +16,20 @@ const handle = (engine, area, factory, mutate) =>
 
 const mutants = [
   [
+    'field of view changes are ignored',
+    'camera.setFovy: changes projection',
+    (e) => { e.camera.setFovy = () => {}; },
+  ],
+  [
+    'optical fields below one degree are ignored',
+    'camera.setFovy: changes projection',
+    (e) => {
+      replace(e.camera, 'setFovy', (set) => (radians) => {
+        if (radians >= Math.PI / 180) set(radians);
+      });
+    },
+  ],
+  [
     'retarget omits followChanged',
     'camera.following: set, retarget',
     (e) => {

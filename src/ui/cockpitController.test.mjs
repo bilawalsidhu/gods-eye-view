@@ -59,7 +59,7 @@ test('Cockpit subscriptions are released once and retained actions cannot restar
   }
 });
 
-test('without a Cesium viewer orbital entry stays hidden and has no side effects', () => {
+test('orbital entry is offered through the engine without a native viewer', () => {
   const env = environment();
   try {
     const owner = new CockpitViewController(env.engine, {
@@ -68,15 +68,15 @@ test('without a Cesium viewer orbital entry stays hidden and has no side effects
         militaryFlightsLayer: { getTrackedInfo: () => null },
         satellitesLayer: {
           getCockpitSubject: () => ({ noradId: 25544, layerId: 'satellites' }),
-          setCockpitSubject: () => assert.fail('no satellite may be hidden'),
+          setCockpitSubject: () => true,
         },
         isTr3b: () => false,
       },
       isOrbitEntryAllowed: () => true,
     });
     owner.syncEntry();
-    assert.equal(owner.presence.entryAvailable, false);
-    assert.equal(owner.enter({ kind: 'satellite' }), false);
+    assert.equal(owner.presence.entryAvailable, true);
+    assert.equal(owner.presence.entryKind, 'satellite');
     assert.equal(owner.orbital, null);
     assert.equal(env.engine.input.cameraInputsEnabled(), true);
     owner.dispose();

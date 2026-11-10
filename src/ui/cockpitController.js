@@ -137,7 +137,6 @@ export class CockpitViewController {
     } = {},
   ) {
     this.host = cockpitHost(engine, { viewer });
-    // Orbital optics and imagery prefetch still belong to the Cesium viewer.
     this.viewer = viewer;
     this.services = services;
     this.destroyed = false;
@@ -206,7 +205,7 @@ export class CockpitViewController {
         : () => false;
     // Nor a satellite layer to ride without one.
     this.isOrbitEntryAllowed =
-      viewer && typeof isOrbitEntryAllowed === 'function'
+      typeof isOrbitEntryAllowed === 'function'
         ? isOrbitEntryAllowed
         : () => false;
     this.isUtilityDisclosureOpen =
@@ -311,7 +310,7 @@ export class CockpitViewController {
     );
     this._listenerRemovers.push(routeSceneDoubleClick.call(this));
     // In orbit a click on a mapped point keeps the camera on it.
-    if (viewer) this._listenerRemovers.push(routeSceneClick.call(this));
+    this._listenerRemovers.push(routeSceneClick.call(this));
     // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
     // off while the Cockpit holds the camera).
     this._listen(

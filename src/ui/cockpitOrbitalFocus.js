@@ -9,7 +9,6 @@
  * it ends with the session.
  */
 import { cartesian3 } from '../geo/index.js';
-import { routeViewerClick } from '../globe/cesium/orbital.js';
 import { clampOrbitalLook, easeLook } from '../cockpitLook.js';
 import { ORBITAL_EARTH_RADIUS_M } from '../cockpitOrbital.js';
 import {
@@ -264,9 +263,7 @@ export function onOrbitalClick(position) {
  *   (the draw tool borrows it) has replaced ours since.
  */
 export function routeSceneClick() {
-  return routeViewerClick(this.viewer, (position) =>
-    this.onOrbitalClick(position),
-  );
+  return this.host.routeClick((position) => this.onOrbitalClick(position));
 }
 
 /**
