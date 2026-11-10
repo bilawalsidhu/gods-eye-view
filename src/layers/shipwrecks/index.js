@@ -33,19 +33,20 @@ const MAX_CARD_LINES = 14;
 const MAX_SHOWN_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * When each source's wrecks leave the map, on this page's clock: the age the
- * proxy reports (its own clock) is subtracted from the limit, so the two
- * clocks are never compared. With no age reported, the snapshot counts as
- * fresh when it arrives.
+ * When the shown wrecks leave the map if the page cannot refresh, on this
+ * page's clock: the age the proxy reports (its own clock) is subtracted from
+ * the limit, so the two clocks are never compared, and the newest source
+ * decides. A wreck both sources list is one merged record, so the snapshot
+ * goes as a whole, not per source. With no age reported, the snapshot counts
+ * as fresh when it arrives.
  */
-export function sourceDeadlines(snapshot, at) {
+export function snapshotDeadline(snapshot, at) {
   const limit = snapshot.maxAgeMs ?? MAX_SHOWN_AGE_MS;
-  const deadlines = {};
-  for (const name of ['emodnet', 'wikidata']) {
-    if (snapshot.sources?.[name] === false) continue;
-    deadlines[name] = at + limit - (snapshot.ages?.[name] ?? 0);
-  }
-  return deadlines;
+  const ages = ['emodnet', 'wikidata']
+    .filter((name) => snapshot.sources?.[name] !== false)
+    .map((name) => snapshot.ages?.[name] ?? 0);
+  const newest = ages.length ? Math.min(...ages) : 0;
+  return at + limit - newest;
 }
 /**
  * Marker size in pixels: grows with the death toll, from 16 px (no deaths known) to 36 px (about a thousand or more).
@@ -101,7 +102,7 @@ export function createShipwrecksLayer({
   let _records = new Map();
   let _pins = [];
   let _snapshot = null;
-  let _deadlines = {};
+  let _deadline = null;
   let _lastError = null;
   let _clickHandler = null;
   let _rowListener = null;
@@ -402,7 +403,7 @@ export function createShipwrecksLayer({
           snapshot.version === _snapshot?.version &&
           _pins.length > 0;
         _snapshot = snapshot;
-        _deadlines = sourceDeadlines(snapshot, now());
+        _deadline = snapshotDeadline(snapshot, now());
         _lastError =
           snapshot.sources.emodnet && snapshot.sources.wikidata
             ? null
@@ -417,27 +418,14 @@ export function createShipwrecksLayer({
           return false;
         console.warn('[Data:Shipwrecks] Fetch error:', error);
         _lastError = error?.message || msg('Shipwrecks unavailable');
-        // What is on the map was not refreshed: say so, and drop each
-        // source's wrecks once they are older than the proxy would serve.
+        // What is on the map was not refreshed: say so, and drop it once
+        // even its newest source is older than the proxy would serve.
         if (_snapshot) {
-          const at = now();
-          const expired = Object.keys(_deadlines).filter(
-            (name) => _deadlines[name] <= at,
-          );
-          for (const name of expired) delete _deadlines[name];
-          if (!Object.keys(_deadlines).length) {
+          if (now() >= _deadline) {
             _snapshot = null;
+            _deadline = null;
             rebuild([]);
-          } else {
-            _snapshot = { ..._snapshot, stale: true };
-            if (expired.length) {
-              _snapshot.records = _snapshot.records.filter(
-                (record) => !expired.includes(record.source),
-              );
-              _snapshot.version = null;
-              rebuild(_snapshot.records);
-            }
-          }
+          } else _snapshot = { ..._snapshot, stale: true };
         }
         notifyRow();
         return false;
@@ -458,7 +446,7 @@ export function createShipwrecksLayer({
       _records = new Map();
       _pins = [];
       _snapshot = null;
-      _deadlines = {};
+      _deadline = null;
       _viewer = null;
       _rowListener = null;
     },

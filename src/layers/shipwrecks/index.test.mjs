@@ -292,10 +292,10 @@ test('a failed refresh marks the shown wrecks stale, and clears them after seven
   assert.equal(h.markers.billboards.length, 0);
 });
 
-test('expiry runs on the page clock, per source, even without timestamps', async () => {
+test('expiry runs on the page clock and keeps every wreck until the newest source is too old', async () => {
   const DAY = 24 * 60 * 60 * 1000;
   const down = () => new Error('Shipwrecks unavailable (HTTP 502)');
-  // A page clock far from the proxy's: only the reported ages count.
+  // The page clock is far from the proxy's fetchedAt: only reported ages count.
   let clock = 5e12;
   const h = harness({
     now: () => clock,
@@ -303,33 +303,33 @@ test('expiry runs on the page clock, per source, even without timestamps', async
       {
         ...snapshot([
           wreck('fresh', { source: 'emodnet' }),
-          wreck('old', { source: 'wikidata' }),
+          wreck('merged', { source: 'wikidata', alsoIn: 'emodnet' }),
         ]),
-        fetchedAt: null,
+        fetchedAt: 1,
         ages: { emodnet: 0, wikidata: 6.5 * DAY },
         maxAgeMs: 7 * DAY,
       },
-      down(),
       down(),
       down(),
     ],
   });
   h.layer.enable();
   await h.layer.update();
-  clock += 0.25 * DAY;
+  clock += 1 * DAY;
   await h.layer.update();
-  assert.equal(h.layer.getStats().count, 2, 'both still inside their limit');
-  clock += 0.5 * DAY;
-  await h.layer.update();
-  assert.deepEqual(
-    h.markers.billboards.map((billboard) => billboard.id),
-    ['shipwreck:fresh'],
-    'only the source past its limit leaves',
+  assert.equal(
+    h.layer.getStats().count,
+    2,
+    'nothing leaves while EMODnet is in date',
   );
   assert.equal(h.layer.getStats().stale, true);
-  clock += 7 * DAY;
+  clock += 6.5 * DAY;
   await h.layer.update();
-  assert.equal(h.layer.getStats().count, 0);
+  assert.equal(
+    h.layer.getStats().count,
+    0,
+    'all leave once the newest is too old',
+  );
 });
 
 test('a snapshot with no timestamp or ages still expires seven days after it arrived', async () => {
