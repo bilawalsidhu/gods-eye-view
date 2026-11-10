@@ -37,6 +37,12 @@ function refusingOnce() {
 
 const settle = (ms) => new Promise((done) => setTimeout(done, ms));
 
+/** The services Flights enrichment reads: neither military nor a TR-3B. */
+const enrichServices = {
+  militaryRegistry: { isMilitaryIcao: () => false },
+  aircraftPresentation: { isTr3b: () => false },
+};
+
 test('Local ADS-B asks again after a 429 once the refusal has passed', async (t) => {
   const source = refusingOnce();
   const enrichment = createLocalAdsbEnrichment({ source, onChange() {} });
@@ -85,7 +91,11 @@ test('Flights asks again after a 429 once the refusal has passed', async (t) => 
     },
   });
   t.after(() => flightState.lifetime.abort());
-  const enrichment = createEnrichment({ flightState, services: {}, parts: {} });
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices,
+    parts: {},
+  });
   let applied = null;
   const ask = () =>
     enrichment._enqueueEnrich(
