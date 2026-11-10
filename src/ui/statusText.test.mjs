@@ -35,6 +35,10 @@ test('en: status lines and errors show as they came', () => {
     'ECCC HTTP 503',
     'GNSS feed unavailable (HTTP 503)',
     'Upstream response too large',
+    'STALE · cached 3h',
+    'feed silent 90s — no AIS data',
+    'reconnecting to feed… (attempt 2)',
+    'SIMULATED — TomTom daily budget reached',
   ]) {
     assert.equal(translateFeedError(text), text);
     assert.equal(translateStatusLine(text), text);
