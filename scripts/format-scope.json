@@ -1077,6 +1077,7 @@
   "src/layers/traffic/roadModes.test.mjs",
   "scripts/qa-traffic-motion.mjs",
   "src/layers/traffic/motion.test.mjs",
+  "src/layers/traffic/lineRebuild.test.mjs",
   "scripts/qa-journey-recorder.mjs",
   "scripts/qa-alpr-journey.mjs",
   "scripts/qa-context-arrivals.mjs",

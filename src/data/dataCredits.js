@@ -135,6 +135,13 @@ export const DATA_CREDITS = [
       'explicit permission of David J Taylor, Edinburgh',
   },
   {
+    key: 'planespotters',
+    html:
+      'Aircraft photos: ' +
+      '<a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> ' +
+      '· each photo is © its photographer, credited beside it',
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +

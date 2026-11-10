@@ -425,7 +425,7 @@ test('a dependency the user adopts stays on when Contacts turns off', async () =
     assert.deepEqual(
       released,
       AWARENESS_DEPENDENCIES.filter((layerId) => layerId !== 'flights').sort(),
-      'the adopted layer is the user\'s now; the rest are still released',
+      "the adopted layer is the user's now; the rest are still released",
     );
   } finally {
     runtime.restore();
@@ -1114,6 +1114,92 @@ test('production military tracked-subject label falls back to registration befor
       [],
       'production military test state must be fully cleared',
     );
+    runtime.restore();
+  }
+});
+
+test('the tracked airliner’s photo reaches the Contacts panel when it lands after selection', async () => {
+  const id = 'a1f2c3';
+  const position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
+  const sourceViewer = { camera: { positionCartographic: null }, scene: {} };
+  const runtime = installAwarenessRuntime();
+  const restores = [];
+  const meta = {
+    callsign: 'AAL100',
+    altitude: 10_668,
+    renderAltitudeM: 10_700,
+    velocity: 250,
+    true_track: 95,
+    klass: 'airliner',
+    onGround: false,
+    wasAirborne: true,
+    turnRateDps: 0,
+    rawLat: 30.21,
+    rawLon: -97.71,
+    photo: null,
+  };
+
+  try {
+    _setTrackedFlightRefreshStateForTest({
+      icao24: id,
+      entity: null,
+      billboard: { position, color: Cesium.Color.WHITE, show: true },
+      billboardCollection: { show: true, remove() {} },
+      viewer: sourceViewer,
+      meta,
+    });
+    runtime.viewer.trackedEntity = { gevTrackedId: `flights:${id}` };
+    replaceMethod(
+      militaryFlightsLayer,
+      'getTrackedSubject',
+      () => null,
+      restores,
+    );
+    replaceMethod(flightsLayer, 'trackById', () => true, restores);
+    replaceMethod(militaryFlightsLayer, 'trackById', () => true, restores);
+
+    militaryAwarenessLayer.setParams({ passive: false });
+    await nextTurn();
+    assert.equal(runtime.panel().view?.kind, 'results');
+    assert.equal(runtime.panel().view.photo, null, 'no photo before it lands');
+
+    // An unchanged refresh stays quiet.
+    const settledPublishes = runtime.panel().publishes;
+    await militaryAwarenessLayer.update();
+    assert.equal(runtime.panel().publishes, settledPublishes);
+
+    // The photo lands while the plane holds still: render-worthy on its own.
+    meta.photo = {
+      src: 'https://t.plnspttrs.net/1/a1f2c3_280.jpg',
+      width: 280,
+      height: 186,
+      photographer: 'Jane Doe',
+      link: 'https://www.planespotters.net/photo/1/n100aa',
+    };
+    await militaryAwarenessLayer.update();
+    assert.deepEqual(runtime.panel().view.photo, {
+      src: 'https://t.plnspttrs.net/1/a1f2c3_280.jpg',
+      width: 280,
+      height: 186,
+      link: 'https://www.planespotters.net/photo/1/n100aa',
+      credit: 'Photo © Jane Doe',
+    });
+
+    // And it repaints once, not on every refresh.
+    const shownPublishes = runtime.panel().publishes;
+    await militaryAwarenessLayer.update();
+    assert.equal(runtime.panel().publishes, shownPublishes);
+  } finally {
+    restores.reverse().forEach((restore) => restore());
+    _setTrackedFlightRefreshStateForTest({
+      icao24: id,
+      entity: null,
+      billboard: { position, show: true },
+      billboardCollection: { show: false, remove() {} },
+      viewer: sourceViewer,
+      meta: {},
+      tracked: false,
+    });
     runtime.restore();
   }
 });
