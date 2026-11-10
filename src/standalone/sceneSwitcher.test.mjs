@@ -32,6 +32,7 @@ function fixture({ failResume = false, changeTarget = false } = {}) {
   const entry = {
     module: {
       attachRenderer() {},
+      trackById: () => true,
       resumeViewport() {
         log.push('viewport');
       },
