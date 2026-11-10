@@ -303,6 +303,38 @@ test('a routing outage is reported as unavailable, not as invalid arguments', as
   );
 });
 
+test('an HTML 502 gateway response tells voice the route service is unavailable', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      routing: createRouteService({
+        fetchImpl: async () =>
+          new Response('<html>Bad Gateway</html>', {
+            status: 502,
+            headers: { 'content-type': 'text/html' },
+          }),
+      }),
+      places,
+    },
+  });
+  const server = createMcpServer({ catalog, name: 'test', version: '1.0.0' });
+  const { result } = await server.handle({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {
+      name: 'plan_route',
+      arguments: { from: { place: 'Austin' }, to: { place: 'Dallas' } },
+    },
+  });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.error, 'unavailable');
+  assert.equal(
+    result.content[0].text,
+    'Routing service unavailable (HTTP 502)',
+  );
+});
+
 test('place answers say when the search limits may have left places out', async () => {
   const five = Array.from({ length: 5 }, (_, index) =>
     place(`p${index}`, 30.27, -97.74),
