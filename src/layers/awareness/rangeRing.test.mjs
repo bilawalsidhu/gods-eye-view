@@ -363,10 +363,10 @@ test('the ring core and halo contrast on light and dark ground', () => {
   const ratio = (luminance(core) + 0.05) / (luminance(halo) + 0.05);
   assert.ok(ratio >= 4.5, `core:halo contrast ${ratio.toFixed(2)}`);
   assert.ok(core.alpha >= 0.9 && halo.alpha >= 0.7);
-  // A visible halo on each side of a core at least 2 px wide.
+  // A visible halo, half on each side, around a core at least 2 px wide.
   const { width, outlineWidth } = AWARENESS_RANGE_RING_STYLE;
   assert.ok(outlineWidth >= 1);
-  assert.ok(width - 2 * outlineWidth >= 2);
+  assert.ok(width - outlineWidth >= 2);
 });
 
 test('renderVisual draws the ring as a haloed line in an unpickable set, never an entity', (t) => {
@@ -1126,9 +1126,10 @@ test('the band is one flat unpickable ellipse at the rim, drawn anew each step a
     assert.equal(core.show, true);
     assert.equal(core.widthPx, AWARENESS_RANGE_PULSE.width);
     assert.equal(halo.style.color.length, 4);
+    // The outline is the halo's width in all, half on each side.
     assert.equal(
       core.style.outline.widthPx,
-      AWARENESS_RANGE_PULSE.outlineWidth / 2,
+      AWARENESS_RANGE_PULSE.outlineWidth,
     );
     const pulse = awarenessPulseState(at, index);
     const ground = Cesium.Cartesian3.fromDegrees(3, 27, 0);

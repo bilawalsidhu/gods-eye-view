@@ -81,6 +81,10 @@ optional, so a renderer written before it still conforms:
 - A line item's `depthFail` style, solid or dashed, draws the parts behind
   the surface (the Draw tool's rubber band is dashed there too); without one
   they are hidden.
+- A solid line's `outline.widthPx` is the outline's whole width, half on
+  each side, inside the line's own width: an 8 px line with a 4 px outline
+  is 2 px of outline, 4 px of colour and 2 px of outline, as Cesium draws
+  it. The check `draw.lines.outline` pins it.
 - A shape's `lit` chooses shading by the renderer's fixed light (true) or a
   flat colour (false); omitted, extruded shapes and boxes are lit and the
   rest flat, as before. The Cesium port lights unclamped shapes only

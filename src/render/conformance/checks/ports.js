@@ -2005,6 +2005,73 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.outline',
+      'a solid line’s outline is `widthPx` in all, half on each side, inside the line’s width',
+      async (h, r) => {
+        await overAustin(h, r);
+        const lines = r.draw.lines({ id: 'conf:line-outline' });
+        const at = (dLon) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat, height: 200 });
+        // 20 px wide with an outline of 8: 4 px of red each side of 12 px
+        // of green. Read as 8 px each side, it would leave 4 px of green.
+        lines.set([
+          {
+            id: 'l',
+            positions: [at(-0.004), at(0.004)],
+            widthPx: 20,
+            mode: '3d',
+            style: {
+              kind: 'solid',
+              color: '#00ff00',
+              outline: { color: '#ff0000', widthPx: 8 },
+            },
+          },
+        ]);
+        await drawn(h, r);
+        await settled(r);
+        r.frame.renderNow();
+        const s = r.query.project(at(0));
+        ok(s, 'the line projects');
+        const half = 30;
+        const image = r.readPixels({
+          crop: {
+            x: Math.round(s.x) - 2,
+            y: Math.round(s.y) - half,
+            width: 5,
+            height: 2 * half + 1,
+          },
+        });
+        // The middle column, top to bottom: r(ed), g(reen) or - (neither).
+        let column = '';
+        for (let row = 0; row < image.height; row++) {
+          const i = (row * image.width + 2) * 4;
+          const [red, green, blue] = image.data.slice(i, i + 3);
+          column +=
+            red > 160 && green < 100 && blue < 100
+              ? 'r'
+              : green > 160 && red < 100 && blue < 100
+                ? 'g'
+                : '-';
+        }
+        lines.dispose();
+        if (!column.includes('g') && !column.includes('r'))
+          return { skip: 'this renderer draws no line pixels' };
+        const runs = column.match(/r+|g+/g) ?? [];
+        const sides = runs.filter((run) => run[0] === 'r');
+        const core = runs.find((run) => run[0] === 'g') ?? '';
+        equal(sides.length, 2, `an outline each side (${column})`);
+        for (const side of sides)
+          ok(
+            side.length >= 3 && side.length <= 5,
+            `4 px of outline each side, not ${side.length} (${column})`,
+          );
+        ok(
+          core.length >= 10 && core.length <= 14,
+          `12 px of line between them, not ${core.length} (${column})`,
+        );
+      },
+    ),
+    check(
       'draw.lines.drape',
       'draped glow, dash and arrow lines draw and pick; a revealed line draws only its first part; a draped line and a clamped point that move every frame are drawn where they now are in the next frame',
       async (h, r) => {

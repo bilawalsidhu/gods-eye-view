@@ -196,9 +196,11 @@ export type LineStyle =
       kind: 'solid';
       color: Color;
       /**
-       * A band `widthPx` wide each side, inside the line's width, drawn in
-       * the same pass as the line: a translucent halo that does not darken
-       * where it meets the line. Its colour changes in place.
+       * An edge `widthPx` wide in all, half of it on each side, inside the
+       * line's width (a line 8 px wide with an outline of 4 has 2 px of
+       * outline each side and 4 px of `color` between), drawn in the same
+       * pass as the line: a translucent edge does not darken where it meets
+       * the line. Its colour changes in place.
        */
       outline?: { color: Color; widthPx: number };
     }

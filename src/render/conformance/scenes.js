@@ -192,7 +192,8 @@ export const REFERENCE_SCENES = Object.freeze([
           style: { kind: 'solid', color: '#ff3b30' },
         },
         {
-          // A bright core inside a dark edge 2 px wide on each side.
+          // A bright core inside a dark edge 4 px wide in all, 2 px on
+          // each side.
           id: 'outlined',
           positions: row(800),
           widthPx: 8,
@@ -200,7 +201,7 @@ export const REFERENCE_SCENES = Object.freeze([
           style: {
             kind: 'solid',
             color: '#30d158',
-            outline: { color: '#000000', widthPx: 2 },
+            outline: { color: '#000000', widthPx: 4 },
           },
         },
         {

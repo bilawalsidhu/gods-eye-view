@@ -189,8 +189,9 @@ function rgba(css) {
 const faded = ([r, g, b, a], alpha) => [r, g, b, a * alpha];
 
 /**
- * A haloed line as the draw port draws it: `widthPx` wide, its outer
- * `haloPx` on each side in the halo's colour, the rest in the core's.
+ * A haloed line as the draw port draws it: `widthPx` wide, an outer
+ * `haloPx` in all (half on each side) in the halo's colour, the rest in the
+ * core's.
  * @returns {object} The line item.
  */
 const haloedLine = (id, positions, { core, halo, widthPx, haloPx, show }) => ({
@@ -561,8 +562,7 @@ export function createRangeRing({
               core: faded(core, state.alpha * level),
               halo: faded(halo, state.alpha * level),
               widthPx: pulse.width,
-              // The fronts' `outlineWidth` is both sides together.
-              haloPx: pulse.outlineWidth / 2,
+              haloPx: pulse.outlineWidth,
               show: level > 0,
             }),
           );

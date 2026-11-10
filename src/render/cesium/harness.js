@@ -47,6 +47,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.lines.depthFail',
   'draw.lines.settled',
   'draw.lines.styles',
+  'draw.lines.outline',
   'draw.lines.drape',
   'draw.lines.segments',
   'draw.ids',
