@@ -323,7 +323,10 @@ test('a thing view turns its layer on, follows by id and frames the shared offse
     page.viewer.camera,
     Object.getOwnPropertyDescriptors(followCamera),
   );
-  entity = withEntityRecord({}, { trackedId: 'flights:a1b2c3', displayPosition: () => target });
+  entity = withEntityRecord(
+    {},
+    { trackedId: 'flights:a1b2c3', displayPosition: () => target },
+  );
 
   const parsed = page.manager._parseShareCode(aircraftCode());
   assert.deepEqual(parsed.layerState.enabledLayerIds, ['flights']);
@@ -495,7 +498,10 @@ test('the followed entity is read in the share format, and its offset round-trip
   const viewer = bindFakeCesiumCamera({
     camera: { positionWC: cameraPosition },
     clock: { currentTime: Cesium.JulianDate.now() },
-    trackedEntity: withEntityRecord({}, { trackedId: 'military:ae1234', displayPosition: () => target }),
+    trackedEntity: withEntityRecord(
+      {},
+      { trackedId: 'military:ae1234', displayPosition: () => target },
+    ),
   });
   const subject = readShareFollowSubject({ viewer, nowMs: NOW_MS });
   assert.equal(subject.kind, 'military_aircraft');

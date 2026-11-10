@@ -37,7 +37,6 @@ registerHooks({
 
 const { IntelHUD } = await import('../../hud.js');
 
-
 function mount(t) {
   document.body.replaceChildren();
   const pinia = createPinia();
@@ -47,7 +46,9 @@ function mount(t) {
   const hud = new IntelHUD(
     {},
     {
-      camera: fakeCameraPort({ pose: { lat: deg(0.7), lon: deg(-1.2), height: 500 } }).port,
+      camera: fakeCameraPort({
+        pose: { lat: deg(0.7), lon: deg(-1.2), height: 500 },
+      }).port,
       // No AI summary: the readouts are what this test renders.
       summaryService: { configured: async () => false },
       publish: (view) => store.publish(view),

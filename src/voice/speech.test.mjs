@@ -8,6 +8,7 @@ import {
   progressStepLabel,
   spokenLabel,
 } from './speech.js';
+import { presentResult } from './resultDisplay.js';
 import { countWords, findHedges } from './speechLint.js';
 import { setLocale } from '../i18n/index.js';
 
@@ -419,6 +420,52 @@ test('analyst speech preserves exact counts, lower bounds and partial status', (
     }).say,
     'At least 250,000 aircraft anywhere in the loaded data. Partial; military not answered.',
   );
+  assert.equal(
+    attachVoiceResult('analyst_query', {
+      ...raw,
+      count: 7,
+      coverage: {
+        layersQueried: [{ layerKey: 'flights' }, { layerKey: 'military' }],
+      },
+    }).say,
+    '7 aircraft anywhere in the loaded data.',
+    'combined Contacts aircraft layers retain their shared semantic noun',
+  );
+  for (const [feedState, spoken] of [
+    ['stale', '3 aircraft anywhere in the loaded data, stale.'],
+    ['degraded', '3 aircraft anywhere in the loaded data, degraded.'],
+    [
+      'unavailable',
+      'Feed unavailable anywhere in the loaded data; no authoritative count.',
+    ],
+  ]) {
+    const result = attachVoiceResult('analyst_query', {
+      ...raw,
+      feedState,
+      feedProvenance: { overall: feedState },
+    });
+    assert.equal(result.say, spoken);
+    assert.equal(
+      presentResult('analyst_query', result).display.chips[0].label,
+      feedState,
+      'speech and card carry the same material feed state',
+    );
+  }
+  const longScope = `within the selected operational corridor ${'north-east '.repeat(8).trim()}`;
+  const longResult = attachVoiceResult('analyst_query', {
+    ...raw,
+    scopeLabel: longScope,
+  });
+  assert.equal(
+    presentResult('analyst_query', longResult).display.title,
+    longResult.say.replace(/[.]$/, ''),
+    'card and speech consume the exact same long headline',
+  );
+  assert.ok(
+    longResult.say.length <= 64,
+    'the shared headline fits the voice card without a second truncation',
+  );
+  assert.match(longResult.say, /…$/);
 });
 
 test('builders never break an action and callers can override analyst speech', () => {

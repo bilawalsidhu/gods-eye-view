@@ -5,7 +5,7 @@
  * the viewer behind a renderer it made, the photoreal base tileset the scene
  * loads into that viewer, and the viewer hooks the scene hands the
  * application (stale command trimming, inline panel rendering, whether an
- * entity is the viewer's own). The scene imports this module and no other
+ * entity is the viewer's own, the zoom-out guard). The scene imports this module and no other
  * part of the adapter (`src/render/noCesiumOutsideRender.test.mjs`).
  */
 import * as Cesium from 'cesium';
@@ -13,6 +13,7 @@ import { cesiumRenderer, cesiumViewerOf } from './appRenderer.js';
 import { loadPhotorealisticTileset } from './google3d.js';
 import { keepPanelRendering } from './panelRendering.js';
 import { trimStaleSceneCommands } from './sceneCommandRelease.js';
+import { installZoomOutGuard } from './zoomOutGuard.js';
 
 export { cesiumRenderer, cesiumViewerOf };
 
@@ -55,5 +56,8 @@ export function applicationViewerHooks(viewer) {
     // Whether an entity is one of the viewer's own (Cockpit asks whether
     // the aircraft it flies still draws).
     viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
+    // Keeps outward user zooms bounded and the Earth framed; returns its
+    // disposer (see zoomOutGuard.js).
+    installZoomOutGuard: (options) => installZoomOutGuard(viewer, options),
   };
 }

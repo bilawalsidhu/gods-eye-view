@@ -67,7 +67,16 @@ function fixture(t) {
   const nodes = () => [
     ...container.querySelectorAll('.gev-wind-inspection-marker'),
   ];
-  return { owner, viewer, store, frames, projected, requests, nodes, container };
+  return {
+    owner,
+    viewer,
+    store,
+    frames,
+    projected,
+    requests,
+    nodes,
+    container,
+  };
 }
 
 test('the marker follows only its captured point, hides beyond the limb, and releases its listener', async (t) => {

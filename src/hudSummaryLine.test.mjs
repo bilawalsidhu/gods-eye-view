@@ -52,7 +52,9 @@ function createHud(
   };
   const sent = [];
   const hud = new IntelHUD(viewer, {
-    camera: fakeCameraPort({ pose: { lat: deg(0.53), lon: deg(-1.7), height: 600 } }).port,
+    camera: fakeCameraPort({
+      pose: { lat: deg(0.53), lon: deg(-1.7), height: 600 },
+    }).port,
     publish,
     summaryService: {
       configured: async () => true,

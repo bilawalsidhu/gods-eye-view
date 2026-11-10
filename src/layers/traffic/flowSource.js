@@ -20,6 +20,19 @@ function tileFreshness(response) {
   };
 }
 
+/**
+ * Clip a flow line to a box. Every piece keeps its uncut line as `line`, so
+ * pieces of one line that doubles back are never paired with each other.
+ */
+function clipFlowSegment(segment, bbox) {
+  const line = segment.line || segment;
+  return clipTileLine(segment.coords, bbox).map((coords) => ({
+    ...segment,
+    coords,
+    line,
+  }));
+}
+
 /** Own one bounded decoded flow cache; every request still passes the server tile budget. */
 export function createFlowTileSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -41,12 +54,7 @@ export function createFlowTileSource({
       entry?.release();
       const segments = decodeFlowTile(bytes, z, x, y, { strict: true })
         .filter(isDrivableFlowSegment)
-        .flatMap((segment) =>
-          clipTileLine(segment.coords, tileToBBox(z, x, y)).map((coords) => ({
-            ...segment,
-            coords,
-          })),
-        );
+        .flatMap((segment) => clipFlowSegment(segment, tileToBBox(z, x, y)));
       if (mark) freshness.set(segments, mark);
       return segments;
     },
@@ -87,12 +95,9 @@ export function createFlowTileSource({
     partial = result.partial;
     const segments = bounds.coverage
       ? result.tiles.flat()
-      : result.tiles.flat().flatMap((segment) =>
-          clipTileLine(segment.coords, bounds).map((coords) => ({
-            ...segment,
-            coords,
-          })),
-        );
+      : result.tiles
+          .flat()
+          .flatMap((segment) => clipFlowSegment(segment, bounds));
     const marks = result.tiles.map((tile) => freshness.get(tile) || {});
     const times = marks
       .map((mark) => mark.fetchedAt)

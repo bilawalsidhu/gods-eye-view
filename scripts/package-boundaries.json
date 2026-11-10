@@ -465,7 +465,11 @@
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/sources/overpass.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/common/boundedCache.js",
+      "src/data/osmPresets.js",
+      "server/providers/overpass/osmFeatures.js",
+      "server/providers/overpass/osmFeaturesRoute.js"
     ],
     "external": []
   },
@@ -557,9 +561,11 @@
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs",
       "src/voice/actionSchemas.js",
+      "src/voice/areaCandidateContract.js",
       "src/voice/layerManifest.js",
       "server/providers/openai/toolDescriptions.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/overpass/constants.js"
     ],
     "external": []
   },
@@ -4298,7 +4304,21 @@
       "src/render/cesium/mapEngine.js",
       "src/sky/icrf.js",
       "src/render/cesium/panelRendering.js",
-      "src/render/cesium/application.js"
+      "src/render/cesium/application.js",
+      "src/sources/osmFeatures.js",
+      "src/voice/imageryActions.js",
+      "src/voice/layerActionOwnership.js",
+      "src/data/areaGeometry.js",
+      "src/layers/osmPlaces/model.js",
+      "src/data/areaStore.js",
+      "src/data/areaResolver.js",
+      "src/voice/areaCandidateContract.js",
+      "src/data/osmPresets.js",
+      "src/voice/osmActions.js",
+      "src/layers/osmPlaces/index.js",
+      "src/app/layers/osmPlaces.js",
+      "src/voice/areaActions.js",
+      "src/render/cesium/zoomOutGuard.js"
     ],
     "external": [
       "hls.js",
@@ -4985,7 +5005,10 @@
       "src/render/cesium/tileRequests.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/pickMemo.js",
-      "src/render/cesium/nativeClick.js"
+      "src/render/cesium/nativeClick.js",
+      "src/layers/osmPlaces/model.js",
+      "src/layers/osmPlaces/index.js",
+      "src/app/layers/osmPlaces.js"
     ],
     "external": [
       "hls.js",
@@ -5482,6 +5505,7 @@
     "exports": ["./voice/action-schemas"],
     "modules": [
       "src/voice/actionSchemas.js",
+      "src/voice/areaCandidateContract.js",
       "src/voice/layerManifest.js",
       "src/hudLayoutPolicy.js"
     ],

@@ -49,8 +49,7 @@ function installPage() {
     setInterval,
     clearInterval,
   };
-  const viewer = {
-  };
+  const viewer = {};
   return {
     viewer,
     publish,
@@ -68,7 +67,9 @@ function createHud(t, summaryService) {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const page = installPage();
   const hud = new IntelHUD(page.viewer, {
-    camera: fakeCameraPort({ pose: { lat: deg(0.53), lon: deg(-1.7), height: 600 } }).port,
+    camera: fakeCameraPort({
+      pose: { lat: deg(0.53), lon: deg(-1.7), height: 600 },
+    }).port,
     summaryService,
     publish: page.publish,
   });

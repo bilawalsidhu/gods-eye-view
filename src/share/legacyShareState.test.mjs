@@ -210,16 +210,18 @@ function generatedLegacyHash(random) {
   const int = (min, max) => min + Math.floor(random() * (max - min + 1));
   globalThis.window = { location: { hash: '', href: 'http://localhost/' } };
   const manager = new ShareLinkManager(
-    bindFakeCesiumCamera(stubViewer({
-      position: {
-        latitude: (int(-899999, 899999) / 1e4) * DEG,
-        longitude: (int(-1799999, 1799999) / 1e4) * DEG,
-        height: pick(random, [int(-50, 3000), int(0, 30_000_000)]),
-      },
-      heading: int(0, 359) * DEG + (random() < 0.1 ? 0.99 * DEG : 0),
-      pitch: int(-90, 0) * DEG,
-      roll: pick(random, [0, 359.7 * DEG, int(0, 359) * DEG]),
-    })),
+    bindFakeCesiumCamera(
+      stubViewer({
+        position: {
+          latitude: (int(-899999, 899999) / 1e4) * DEG,
+          longitude: (int(-1799999, 1799999) / 1e4) * DEG,
+          height: pick(random, [int(-50, 3000), int(0, 30_000_000)]),
+        },
+        heading: int(0, 359) * DEG + (random() < 0.1 ? 0.99 * DEG : 0),
+        pitch: int(-90, 0) * DEG,
+        roll: pick(random, [0, 359.7 * DEG, int(0, 359) * DEG]),
+      }),
+    ),
   );
   const style = pick(random, VIEW_STYLES);
   manager.onStyleChange(style);
