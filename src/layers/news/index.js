@@ -190,6 +190,7 @@ export function createNewsLayer({
     request = null,
     feedRequest = null,
     inViewRequest = null,
+    inViewRequestKey = null,
     areaRequest = null,
     settleTimer = null,
     pulseTimer = null,
@@ -958,7 +959,9 @@ export function createNewsLayer({
       // clears it, not only the next refresh.
       needs = { ...needs, conflicts: null };
       feed = {
-        ...mergeFeedPage(feed, page, mode, now(), undefined, windowMs),
+        // Kept for the server's whole window (the shown one filters the
+        // view), so the rows between the head and the cursor are never lost.
+        ...mergeFeedPage(feed, page, mode, now(), undefined, maxWindowMs),
         loading: false,
         error: null,
       };
@@ -1039,18 +1042,24 @@ export function createNewsLayer({
     // The section changed, or the layer went off, while the area was read.
     if (!local() || !enabled) return;
     const readKey = inView.area?.key ?? '';
-    if (
-      !force &&
-      inView.readKey === readKey &&
-      (inView.minor || inViewRequest)
-    ) {
+    const held = inView.readKey === readKey && inView.minor;
+    if (!force && (inViewRequest ? inViewRequestKey === readKey : held)) {
       render();
       notify();
       return;
     }
+    // A read still out for another area must not land over this one.
     inViewRequest?.abort();
+    if (!force && held) {
+      inViewRequest = null;
+      inView = { ...inView, loading: false };
+      render();
+      notify();
+      return;
+    }
     const controller = new AbortController();
     inViewRequest = controller;
+    inViewRequestKey = readKey;
     inView = { ...inView, loading: true };
     notify();
     try {

@@ -617,6 +617,8 @@ export function reportMarkerPosition(report, pin = 0) {
  * only the window and at most `max` rows (a long session does not grow
  * the list). `mode` 'head' refreshes the top and keeps the older cursor;
  * 'append' adds an older page and takes its cursor; 'replace' starts over.
+ * A head page that has older pages behind it and shares no row with the list
+ * left a gap (more than a page arrived since), so it starts over too.
  */
 export function mergeFeedPage(
   feed,
@@ -627,6 +629,10 @@ export function mergeFeedPage(
   windowMs = NEWS_WINDOW_MS,
 ) {
   const byId = new Map();
+  if (mode === 'head' && page.nextBefore && feed.items.length) {
+    const held = new Set(feed.items.map((item) => item.id));
+    if (!page.reports.some((item) => held.has(item.id))) mode = 'replace';
+  }
   const items =
     mode === 'replace'
       ? page.reports

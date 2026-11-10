@@ -318,6 +318,23 @@ test('feed pages merge newest first without duplicates', () => {
   );
 });
 
+test('a head page that does not reach the rows held starts the list over', () => {
+  const held = report('h', '2026-10-28T06:00:00Z');
+  const fresh = report('n', '2026-10-28T09:30:00Z');
+  // More than a page arrived since the last refresh (a suspended tab): the
+  // reports between this page and the rows held are behind its cursor.
+  const feed = mergeFeedPage(
+    { items: [held], nextBefore: 'OLD' },
+    { reports: [fresh], nextBefore: 'NEW' },
+    'head',
+    NOW,
+  );
+  assert.deepEqual(
+    [feed.items.map((r) => r.id), feed.nextBefore],
+    [['n'], 'NEW'],
+  );
+});
+
 test('the feed list keeps only the last 24 hours and at most its cap', () => {
   const fresh = report('f', '2026-10-28T09:00:00Z');
   const stale = report('s', '2026-10-27T09:00:00Z');

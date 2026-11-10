@@ -852,3 +852,107 @@ test('a failed read keeps the layer on with an error; disable clears the overlay
   assert.deepEqual(entries.at(-1), []);
   assert.deepEqual(layer.getRowControls().feed.items, []);
 });
+
+test('narrowing the window and widening it again loses no report already read', async (t) => {
+  const { layer } = fixture(t, {
+    source: {
+      // Two pages: the head page, and an older one behind its cursor.
+      getFeed: async ({ before } = {}) =>
+        before
+          ? {
+              reports: [
+                report('earlier', { publishedAt: '2026-10-28T05:00:00.000Z' }),
+              ],
+              nextBefore: null,
+            }
+          : {
+              reports: [
+                report('recent', { publishedAt: '2026-10-28T09:30:00.000Z' }),
+              ],
+              nextBefore: '2026-10-28T09:30:00.000Z',
+            },
+    },
+  });
+  const shown = () => layer.getRowControls().feed.items.map((item) => item.id);
+  layer.enable();
+  await layer.update();
+  for (let i = 0; i < 3; i++) await settle();
+  assert.deepEqual(shown(), ['recent', 'earlier']);
+  layer.setParams({ filters: { hours: 1 } });
+  for (let i = 0; i < 3; i++) await settle();
+  assert.deepEqual(shown(), ['recent']);
+  layer.setParams({ filters: { hours: 24 } });
+  for (let i = 0; i < 3; i++) await settle();
+  assert.deepEqual(shown(), ['recent', 'earlier']);
+});
+
+test("a slower Local read for the area just left never replaces the current area's reports", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let centre = { lat: 49, lon: 36 };
+  const pending = [];
+  const russia = {
+    area: { key: 'RU', name: 'Russia', kind: 'country', country: 'RU' },
+    polygons: [
+      {
+        outer: [
+          [38, 48],
+          [40, 48],
+          [40, 50.5],
+          [38, 50.5],
+        ],
+        holes: [],
+      },
+    ],
+    borders: [],
+    disputed: [],
+  };
+  const { layer, camera } = fixture(t, {
+    height: 1_000_000,
+    centre: () => centre,
+    source: {
+      getAreaOutline: async (point) => (point.lon < 37.5 ? ukraine : russia),
+      getFeed: (query) => {
+        if (!(query.relevance === '' && query.limit === 500))
+          return Promise.resolve({ reports: [], nextBefore: null });
+        if (query.at.lon < 37.5)
+          return Promise.resolve({
+            reports: [report('kharkiv', { severity: 1 })],
+            nextBefore: null,
+          });
+        // Russia's read is slow.
+        return new Promise((resolve) => pending.push(resolve));
+      },
+    },
+  });
+  const look = async (at) => {
+    centre = at;
+    camera.moveEnd.raiseEvent();
+    t.mock.timers.tick(800);
+    await flush();
+  };
+  const shown = () =>
+    layer.getRowControls().feed.inView.items.map((item) => item.id);
+  layer.enable();
+  await layer.update();
+  await flush();
+  layer.setParams({ filters: { section: 'local' } });
+  await flush();
+  assert.deepEqual(shown(), ['kharkiv']);
+  await look({ lat: 49, lon: 39 });
+  assert.equal(pending.length, 1);
+  await look({ lat: 49, lon: 36 });
+  pending[0]({
+    reports: [
+      report('belgorod', {
+        severity: 1,
+        pins: [{ lat: 49, lon: 39, place: 'Rossosh', mappable: true }],
+      }),
+    ],
+    nextBefore: null,
+  });
+  await flush();
+  const view = layer.getRowControls().feed;
+  assert.equal(view.inView.area, 'Ukraine');
+  assert.equal(view.inView.loading, false);
+  assert.deepEqual(shown(), ['kharkiv']);
+});
