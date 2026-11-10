@@ -2106,10 +2106,15 @@ An inline conversation panel never reloads or navigates its host's page, so it
 offers Retry after a render error only, and nothing after a lost context, where
 the panel runtime's own notice applies. The panel's timer
 (`keepPanelRendering()`) draws only while Cesium's render loop is on, so it
-stops after a render error and draws again after Retry. An error in a frame
-the timer draws leaves the loop's next animation frame queued, and the timer
-keeps Cesium's loop marked running, so Retry does not start a second loop that
-would draw every frame twice once the host resumes frames.
+stops after a render error and draws again after Retry.
+
+A render error marks Cesium's loop stopped, but a frame drawn while the loop
+ran leaves its next animation frame queued: an error Scene catches itself
+returns to the loop, which queues the frame, and a frame the panel's timer
+draws leaves it queued. The `render()` and `resize()` wrapper keeps the loop
+marked running after such a call, so a Retry before that frame, or a tab shown
+again (`src/app/tools.js`), does not start a second loop that would draw every
+frame twice. The queued frame stops the loop itself if nothing restarted it.
 
 The `webglcontextlost` listener does not `preventDefault()` the context loss or
 restore the context; it only reports it.

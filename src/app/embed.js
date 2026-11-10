@@ -103,20 +103,12 @@ export function keepPanelRendering(
   // Cesium stops its render loop after a render error, and the timer stops
   // with it; Retry restarts both. Report the error in full: workers report
   // plain objects, which Cesium prints as [object Object].
-  let drawing = false;
   const removeErrorListener = viewer.scene?.renderError?.addEventListener(
-    (_scene, error) => {
-      // Cesium marks its loop stopped, but in a frame the timer draws, the
-      // loop's next animation frame is still queued and resumes when frames
-      // do. Restarting the loop now would start a second one beside it, and
-      // the globe would draw twice a frame.
-      if (drawing && viewer.cesiumWidget)
-        viewer.cesiumWidget._renderLoopRunning = true;
+    (_scene, error) =>
       console.error(
         "[God's Eye View panel] render error:",
         describeError(error),
-      );
-    },
+      ),
   );
   const timer = windowRef.setInterval(() => {
     if (
@@ -125,13 +117,8 @@ export function keepPanelRendering(
       viewer.isDestroyed?.()
     )
       return;
-    drawing = true;
-    try {
-      viewer.resize();
-      viewer.render();
-    } finally {
-      drawing = false;
-    }
+    viewer.resize();
+    viewer.render();
   }, PANEL_FRAME_MS);
   return () => {
     windowRef.clearInterval(timer);

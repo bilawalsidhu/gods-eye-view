@@ -162,25 +162,37 @@ function finishRaise(event) {
 }
 
 /**
- * Wrap `target[name]` so an error it throws is reported and thrown on, for
- * the caller to handle as before. Returns a function that unwraps it.
+ * Wrap the widget's `name` method so an error it throws is reported and
+ * thrown on, for the caller to handle as before. Returns a function that
+ * unwraps it.
+ *
+ * A render error marks Cesium's render loop stopped, but a call made while
+ * the loop ran leaves the loop's next animation frame queued: the loop queues
+ * it after a call that returns, and a frame an inline panel's timer draws
+ * leaves it queued. That frame stops the loop itself, and a Retry or a shown
+ * tab that comes first must not start a second loop beside it, so the loop
+ * stays marked running. A call from the loop that throws is still marked
+ * stopped by the loop's own catch.
  */
-function reportThrown(target, name, report) {
-  const original = target?.[name];
+function reportThrown(widget, name, report) {
+  const original = widget?.[name];
   if (typeof original !== 'function') return () => {};
-  const own = Object.hasOwn(target, name);
+  const own = Object.hasOwn(widget, name);
   const guarded = function (...args) {
+    const looping = widget._renderLoopRunning;
     try {
       return original.apply(this, args);
     } catch (error) {
       report(error);
       throw error;
+    } finally {
+      if (looping) widget._renderLoopRunning = true;
     }
   };
-  target[name] = guarded;
+  widget[name] = guarded;
   return () => {
-    if (target[name] !== guarded) return;
-    if (own) target[name] = original;
-    else delete target[name];
+    if (widget[name] !== guarded) return;
+    if (own) widget[name] = original;
+    else delete widget[name];
   };
 }
