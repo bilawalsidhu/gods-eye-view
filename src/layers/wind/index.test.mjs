@@ -365,8 +365,10 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
     feed: { getSnapshot: async ({ model }) => complete(model) },
     createNativeRendering: () => rendering,
   });
-  // A Cesium page: the viewer samples, the engine projects the marker.
-  layer.init(viewer, { engine: createFakeEngine({ container }) });
+  const engine = createFakeEngine({ container, canvas: viewer.scene.canvas });
+  engine.camera.pickEllipsoid = (point) => viewer.camera.pickEllipsoid(point);
+  engine.frames.postRender = viewer.scene.postRender;
+  layer.init(viewer, { engine });
   layer.enable();
   await layer.update();
   layer.setParams({ inspect: true });

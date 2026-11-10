@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWindRelief } from './relief.js';
+import { createWindRelief } from '../../globe/cesium/windRelief.js';
 
 function fixture({ material = undefined, normals = true } = {}) {
   const materials = [];

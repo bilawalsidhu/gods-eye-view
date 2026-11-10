@@ -21,6 +21,61 @@ export function poseChecks(engine, { settle, until, nadirView }) {
   const { camera } = engine;
   return [
     [
+      'camera.setFovy: changes projection and rays without moving the camera',
+      async () => {
+        const saved = camera.pose();
+        const size = engine.host.size();
+        const pixel = { x: size.width * 0.65, y: size.height * 0.5 };
+        const ray = camera.pickRay(pixel);
+        const point = cartesian3.add(
+          ray.origin,
+          cartesian3.multiplyByScalar(ray.direction, 1000, cartesian3.create()),
+          cartesian3.create(),
+        );
+        const before = engine.projector.worldToWindow(point);
+        try {
+          camera.setFovy(saved.fovy / 128);
+          await settle();
+          near(
+            camera.pose().fovy,
+            saved.fovy / 128,
+            1e-10,
+            'vertical field of view',
+          );
+          near(
+            cartesian3.distance(camera.pose().position, saved.position),
+            0,
+            0.01,
+            'position unchanged',
+          );
+          const after = engine.projector.worldToWindow(point);
+          ensure(after.x > before.x, 'narrowing the field magnifies the image');
+          const narrower = camera.pickRay(pixel);
+          ensure(
+            cartesian3.distance(narrower.direction, ray.direction) > 1e-3,
+            'pick ray follows the lens',
+          );
+          for (const invalid of [0, -1, Math.PI, NaN, Infinity]) {
+            let rejected = false;
+            try {
+              camera.setFovy(invalid);
+            } catch {
+              rejected = true;
+            }
+            ensure(rejected, 'invalid field of view is rejected');
+          }
+          near(
+            camera.pose().fovy,
+            saved.fovy / 128,
+            1e-10,
+            'invalid input keeps the lens',
+          );
+        } finally {
+          camera.setFovy(saved.fovy);
+        }
+      },
+    ],
+    [
       'camera.setView: heading, pitch and roll round-trip through pose',
       async () => {
         const destination = cartesian3.fromDegrees(-70, 45, 25000);

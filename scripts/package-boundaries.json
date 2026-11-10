@@ -1,11 +1,6 @@
 {
   "engineImportExceptions": [
     {
-      "file": "src/data/bhoteKoshiEmbeddedMedia.js",
-      "package": "cesium",
-      "reason": "Authored story media still uses Cesium positions and property records."
-    },
-    {
       "file": "src/data/bhoteKoshiEvent.js",
       "package": "cesium",
       "reason": "Authored event timing and geometry still build Cesium property records for the shared story display."
@@ -855,7 +850,8 @@
       "src/globe/cesium/doubleClick.js",
       "src/globe/cesium/orbital.js",
       "src/globe/surfaceDetail.js",
-      "src/globe/surfacePlacement.js"
+      "src/globe/surfacePlacement.js",
+      "src/globe/cesium/orbitalImagery.js"
     ],
     "external": ["cesium"]
   },
@@ -1108,7 +1104,6 @@
       "src/data/detectionCohort.js",
       "src/data/labelArbiter.js",
       "src/globe/cesium/celestial.js",
-      "src/layers/shared/render/engineView.js",
       "src/overlays/worldOverlay.js",
       "src/overlays/worldOverlayDraw.js",
       "src/overlays/worldOverlayTokens.js",
@@ -1116,7 +1111,9 @@
       "src/data/trackedReadout.js",
       "src/ui/releaseTrackers.js",
       "src/globe/cesium/orbital.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/cesium/celestialHost.js",
+      "src/globe/cesium/orbitalImagery.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -2820,7 +2817,12 @@
       "src/data/geoImportLimits.js",
       "src/data/geoImportPlan.js",
       "src/globe/cesium/qaTileset.js",
-      "src/maps/qaTileset.js"
+      "src/maps/qaTileset.js",
+      "src/globe/cesium/celestialHost.js",
+      "src/globe/cesium/orbitalImagery.js",
+      "src/globe/cesium/windGpuRendering.js",
+      "src/globe/cesium/windRelief.js",
+      "src/globe/cesium/windRendering.js"
     ],
     "external": [
       "hls.js",
@@ -2877,11 +2879,8 @@
       "src/layers/wind/model.js",
       "src/layers/wind/fields.js",
       "src/layers/wind/streamlines.js",
-      "src/layers/wind/gpuRendering.js",
-      "src/layers/wind/relief.js",
       "src/layers/wind/inspection.js",
       "src/layers/wind/presentation.js",
-      "src/layers/wind/rendering.js",
       "src/app/layers/aisLiveVessels.js",
       "src/app/layers/alprCameras.js",
       "src/app/layers/bikeshare.js",
@@ -3260,7 +3259,11 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
-      "src/data/geoImportLimits.js"
+      "src/data/geoImportLimits.js",
+      "src/globe/cesium/celestialHost.js",
+      "src/globe/cesium/windGpuRendering.js",
+      "src/globe/cesium/windRelief.js",
+      "src/globe/cesium/windRendering.js"
     ],
     "external": [
       "hls.js",
@@ -3882,7 +3885,6 @@
       "src/sources/featureSource.js",
       "src/sources/capability.js",
       "src/i18n/",
-      "src/celestialRing/view.js",
       "src/layers/shared/render/engineView.js",
       "src/globe/cesium/sceneProjection.js",
       "src/layers/shared/color.js",
@@ -3900,7 +3902,8 @@
       "src/data/trackedReadout.js",
       "src/data/trackingGesture.js",
       "src/time/worldClock.js",
-      "src/time/clock.js"
+      "src/time/clock.js",
+      "src/globe/cesium/celestialHost.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },

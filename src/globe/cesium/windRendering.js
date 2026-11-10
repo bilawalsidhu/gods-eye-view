@@ -1,7 +1,11 @@
-import { createWindRelief } from './relief.js';
-import { createWindGpuRendering } from './gpuRendering.js';
-import { advectParticle, sampleWind, sameWind } from './model.js';
-import { trailEraseAlpha, windTrailColor } from './fields.js';
+import { createWindRelief } from './windRelief.js';
+import { createWindGpuRendering } from './windGpuRendering.js';
+import {
+  advectParticle,
+  sampleWind,
+  sameWind,
+} from '../../layers/wind/model.js';
+import { trailEraseAlpha, windTrailColor } from '../../layers/wind/fields.js';
 
 /** The wind's streamlines on Cesium (the wind display's flow backend,
  * render/display.js, which draws the colour field): globe-projected surface

@@ -13,7 +13,8 @@ const loader = registerHooks({
       : next(specifier, context);
   },
 });
-const { navaraHooks, forEachLuminanceUniform } = await import('./internals.js');
+const { navaraHooks, forEachLuminanceUniform, setCameraFovy } =
+  await import('./internals.js');
 loader.deregister();
 const { ModelMesh } = await import(sdkStub);
 
@@ -200,4 +201,32 @@ test('feature changes of a deleted vector layer leave the queue; live ones stay'
     dropOrphanFeatureChanges({ events: [], remove() {} }, () => false),
     0,
   );
+});
+
+test('optical zoom below one degree reaches the native frustum', async () => {
+  const { initSync, Core } = await import('@navaramap/engine');
+  initSync({
+    module: readFileSync(
+      new URL(
+        '../../../node_modules/@navaramap/engine/navara_wasm_bg.wasm',
+        import.meta.url,
+      ),
+    ),
+  });
+  const core = new Core('optical-zoom-test');
+  core.start();
+  core.resize(1280, 800, 1);
+  core.update(0);
+  try {
+    const view = { _core: core };
+    setCameraFovy(view, 0.0002);
+    core.update(16);
+    assert.ok(Math.abs(core.getCameraFOV() - 0.0002) < 1e-12);
+    setCameraFovy(view, Math.PI / 3);
+    core.update(32);
+    assert.ok(Math.abs(core.getCameraFOV() - Math.PI / 3) < 1e-12);
+    assert.throws(() => setCameraFovy({}, 0.0002), /setFrustum/);
+  } finally {
+    core.free();
+  }
 });

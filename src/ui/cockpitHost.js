@@ -2,6 +2,8 @@ import { readSurface } from '../globe/surfacePlacement.js';
 // Camera and aircraft ownership used by the shared first-person controller,
 // on the globe contract: the ridden aircraft is the engine follow's target,
 // the aircraft display's tracked glyph handle.
+import { routeViewerClick } from '../globe/cesium/orbital.js';
+import { prefetchOrbitalImagery } from '../globe/cesium/orbitalImagery.js';
 import { routeViewerDoubleClick } from '../globe/cesium/doubleClick.js';
 
 /**
@@ -26,6 +28,8 @@ export function cockpitHost(engine, { viewer = null } = {}) {
     release: () => engine.camera.following()?.stop(),
     restore: (target) => target.resumeAircraftFollow(),
     camera: engine.camera,
+    imageryReady: () =>
+      engine.maps.photorealActive() || engine.surface.tilesLoaded(),
     cartographic: () => engine.camera.pose().cartographic,
     terrainHeight: (place) => readSurface(engine, place, { prefer: 'terrain' }),
     surface: engine,
@@ -52,6 +56,12 @@ export function cockpitHost(engine, { viewer = null } = {}) {
         resumeInputs = null;
       } else resumeInputs ??= engine.input.suspendCameraInputs();
     },
+    prefetchImagery: (state, info, fov, aspect) =>
+      viewer ? prefetchOrbitalImagery(viewer, state, info, fov, aspect) : 0,
+    routeClick: (handle) =>
+      viewer
+        ? routeViewerClick(viewer, handle)
+        : engine.input.on('click', (event) => handle(event.position)),
     canvasPosition: (world) => engine.projector.worldToWindow(world) ?? null,
     routeDoubleClick: (handle) =>
       viewer

@@ -579,3 +579,47 @@ test('setView ends the engine flight through its cancellation callback', () => {
   assert.deepEqual(outcome, ['cancel']);
   assert.equal(camera.flightActive(), false);
 });
+
+test('completing a sphere flight fires only complete before its look-at', () => {
+  const { scene, engine } = createCameraViewer();
+  scene.tweens = new Cesium.TweenCollection();
+  scene.screenSpaceCameraController = { enableInputs: true };
+  const target = geo.cartesian3.fromDegrees(85.9, 27.9, 2000);
+  const offset = { heading: 0.4, pitch: -0.6, range: 12000 };
+  const outcome = [];
+  engine.camera.flyToSphere(
+    { center: target, radius: 80 },
+    {
+      ...offset,
+      duration: 2.2,
+      complete() {
+        outcome.push('complete');
+        engine.camera.lookAt(target, offset);
+        engine.camera.release();
+      },
+      cancel: () => outcome.push('cancel'),
+    },
+  );
+  engine.camera.completeFlight();
+  engine.camera.completeFlight();
+  assert.deepEqual(outcome, ['complete']);
+  assert.equal(engine.camera.flightActive(), false);
+  assert.ok(
+    Math.abs(
+      geo.cartesian3.distance(engine.camera.pose().position, target) -
+        offset.range,
+    ) < 0.01,
+  );
+  engine.destroy();
+});
+
+test('vertical field of view changes the real Cesium projection and restores it', () => {
+  const { camera, engine } = createCameraViewer();
+  const saved = camera.frustum.fovy;
+  engine.camera.setFovy(0.2);
+  assert.ok(Math.abs(camera.frustum.fovy - 0.2) < 1e-12);
+  assert.ok(Math.abs(engine.camera.pose().fovy - 0.2) < 1e-12);
+  engine.camera.setFovy(saved);
+  assert.ok(Math.abs(camera.frustum.fovy - saved) < 1e-12);
+  engine.destroy();
+});

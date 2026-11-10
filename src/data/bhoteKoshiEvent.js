@@ -885,7 +885,7 @@ function openExternal(url) {
   if (target) target.opener = null;
 }
 
-function focusView(viewer, viewpoint, engine) {
+function focusView(engine, viewpoint) {
   announceNavigationAuthority('bhote-koshi-event-focus');
   const target = Cesium.Cartesian3.fromDegrees(
     viewpoint.lon,
@@ -897,32 +897,20 @@ function focusView(viewer, viewpoint, engine) {
     Cesium.Math.toRadians(viewpoint.pitchDeg),
     viewpoint.rangeM,
   );
-  if (engine) {
-    engine.camera.cancelFlight();
-    engine.camera.flyToSphere(
-      { center: target, radius: 80 },
-      {
-        heading: offset.heading,
-        pitch: offset.pitch,
-        range: offset.range,
-        duration: 2.2,
-        complete: () => {
-          engine.camera.lookAt(target, offset);
-          engine.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-        },
+  engine.camera.cancelFlight();
+  engine.camera.flyToSphere(
+    { center: target, radius: 80 },
+    {
+      heading: offset.heading,
+      pitch: offset.pitch,
+      range: offset.range,
+      duration: 2.2,
+      complete: () => {
+        engine.camera.lookAt(target, offset);
+        engine.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
       },
-    );
-    return;
-  }
-  viewer.camera.cancelFlight?.();
-  viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 80), {
-    offset,
-    duration: 2.2,
-    complete: () => {
-      viewer.camera.lookAt(target, offset);
-      viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     },
-  });
+  );
 }
 
 function setElementProperty(element, property, value) {
@@ -3524,8 +3512,7 @@ export function createBhoteKoshiEventLayer({
     _embeddedEvidenceIndex = -1;
     _embeddedMedia?.hide?.();
     setSplit(0.5);
-    if (cameraForScene())
-      focusView(_viewer, _event.viewpoints.corridor, _engine);
+    if (_engine) focusView(_engine, _event.viewpoints.corridor);
   }
 
   // Each attachment and release advances this. An attachment that resumes

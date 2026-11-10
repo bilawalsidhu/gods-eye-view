@@ -233,11 +233,25 @@ export function featureChangeQueue(view) {
     : null;
 }
 
+/**
+ * Navara's public camera.fov setter drops angles below one degree, although
+ * the core supports them. Optical zoom needs the same frustum for drawing,
+ * tile selection and picking. Upstream ask: accept every positive FOV.
+ */
+export function setCameraFovy(view, radians) {
+  requireMember(
+    'view._core.setFrustum',
+    typeof view?._core?.setFrustum === 'function',
+  );
+  view._core.setFrustum((radians * 180) / Math.PI, undefined, undefined);
+}
+
 /** The hooks createNavaraEngine takes. */
 export const navaraHooks = (view) => {
   assertNavaraInternals(view);
   return {
     retainTileGeometry,
+    setCameraFovy: (radians) => setCameraFovy(view, radians),
     tileRoots: () => tileRoots(view),
     isIdle: () => isIdle(view),
     dropOrphanFeatureChanges: () =>

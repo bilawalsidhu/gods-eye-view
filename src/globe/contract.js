@@ -89,6 +89,10 @@
  *   engine-owned object: the same object on every read, holding the current
  *   position (at the latest when read). For per-frame readers, which must not
  *   allocate; read-only, copy it to keep a value.
+ * @property {(radians: number) => void} setFovy Set the vertical field of
+ *   view (finite, strictly between 0 and PI). Resizing retains the angle
+ *   across the wider canvas side, as Cesium does. Does not cancel flights
+ *   or following; pose, projection and picking use the new field of view.
  * @property {() => number} height The camera's height above the WGS84
  *   ellipsoid (the pose's cartographic height), without building a pose.
  * @property {(view: { destination: Cartesian3 | Rectangle, orientation?: Orientation }) => void} setView
@@ -978,6 +982,7 @@ const SHAPE = {
   host: { container: isObject, canvas: isObject, size: isFunction },
   camera: {
     pose: isFunction,
+    setFovy: isFunction,
     livePosition: (value) =>
       value != null &&
       isNumber(value.x) &&

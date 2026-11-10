@@ -109,13 +109,15 @@ panel carries no Navara or three. There is no blanket exception for layer
 
 The temporary `engineImportExceptions` list in `scripts/package-boundaries.json`
 contains exact file/package pairs with reasons. The checker reports the used
-entries and rejects duplicates, missing reasons and unused entries. Its three
-exceptions are the Bhote Koshi event, locator and embedded-media models in
-`src/data/`, which still construct Cesium property records. Their drawing uses
-shared displays. Exceptions do not relax the portable, contract or cross-engine
-graph checks. Cesium annotation renderers live in `src/globe/cesium/annotations/`;
-wind backend adapters live in their engine folders. Wind's older injected-SDK
-helpers and the remaining annotation migration are separate debt.
+entries and rejects duplicates, missing reasons and unused entries. Its two
+exceptions are the Bhote Koshi event and locator models in `src/data/`, which
+still construct Cesium property records. Their drawing uses shared displays.
+Exceptions do not relax the portable, contract or cross-engine graph checks.
+Cesium annotation renderers live in `src/globe/cesium/annotations/`. Wind's
+Cesium rendering (the particle canvas, its GPU path and the relief shading)
+lives in `src/globe/cesium/`; `src/layers/wind/` keeps the data, model,
+presentation and engine-neutral inspection. The remaining annotation migration
+is separate debt.
 
 Source-only factories use dedicated `layers/<family>/source` exports where
 available, preserving the same factory implementation without loading rendering.

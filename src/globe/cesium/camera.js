@@ -179,6 +179,14 @@ export function createCesiumCamera(viewer) {
   }
 
   const camera = {
+    setFovy(radians) {
+      if (!Number.isFinite(radians) || radians <= 0 || radians >= Math.PI)
+        throw new RangeError('Field of view must be between 0 and PI');
+      const aspect = cesium.frustum.aspectRatio;
+      cesium.frustum.fov =
+        aspect > 1 ? 2 * Math.atan(Math.tan(radians / 2) * aspect) : radians;
+      viewer.scene.requestRender();
+    },
     pose() {
       const position = toGeo3(cesium.positionWC);
       return {

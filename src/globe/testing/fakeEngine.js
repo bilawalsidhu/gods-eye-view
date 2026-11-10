@@ -195,7 +195,7 @@ export function createFakeEngine(options = {}) {
   let width = options.width ?? 1024;
   let height = options.height ?? 768;
   // Cesium's default: 60 degrees across the wider canvas dimension.
-  const fovy = options.fovy ?? cesiumFovy(width, height);
+  let fovy = options.fovy ?? cesiumFovy(width, height);
   const state = {
     position: cartesian3.create(),
     direction: cartesian3.create(),
@@ -579,6 +579,13 @@ export function createFakeEngine(options = {}) {
   }
 
   const camera = {
+    setFovy(radians) {
+      if (!Number.isFinite(radians) || radians <= 0 || radians >= Math.PI)
+        throw new RangeError('Field of view must be between 0 and PI');
+      record('camera.setFovy', [radians]);
+      fovy = radians;
+      engine.render.request('camera-fov');
+    },
     pose() {
       const angles = poseAngles();
       return {
@@ -1057,8 +1064,16 @@ export function createFakeEngine(options = {}) {
       );
     },
     setSize(nextWidth, nextHeight) {
+      const fov =
+        width > height
+          ? 2 * Math.atan((Math.tan(fovy / 2) * width) / height)
+          : fovy;
       width = nextWidth;
       height = nextHeight;
+      fovy =
+        width > height
+          ? 2 * Math.atan((Math.tan(fov / 2) * height) / width)
+          : fov;
     },
     callsOf: (method) => fake.calls.filter((call) => call.method === method),
     resetCalls() {

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createWindRendering } from './rendering.js';
+import { createWindRendering } from '../../globe/cesium/windRendering.js';
 
 function event() {
   const listeners = new Set();

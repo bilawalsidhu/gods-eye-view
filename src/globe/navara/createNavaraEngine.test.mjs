@@ -769,3 +769,17 @@ test('a wheel during a flight with the camera inputs suspended does not cancel i
   assert.equal(engine.input.cameraInputsEnabled(), true);
   engine.destroy();
 });
+
+test('optical zoom reaches the drawn camera and survives a resize', () => {
+  const { engine, view } = setup();
+  engine.camera.setFovy(0.2);
+  near(view.camera.fovs.at(-1), geo.math.toDegrees(0.2), 1e-12, 'drawn fovy');
+  near(engine.camera.pose().fovy, 0.2, 1e-12, 'projector fovy');
+  const fov = 2 * Math.atan(Math.tan(0.1) * engine.camera.pose().aspectRatio);
+  view.canvas.clientWidth = 600;
+  view.canvas.clientHeight = 900;
+  view.emit('resize');
+  near(view.camera.fovs.at(-1), geo.math.toDegrees(fov), 1e-12, 'resized fovy');
+  near(engine.camera.pose().fovy, fov, 1e-12, 'resized projector');
+  engine.destroy();
+});

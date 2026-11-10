@@ -1,7 +1,7 @@
 // Cesium's backend of the wind display: the wind renderer's streamlines
-// (src/layers/wind/rendering.js) over the viewer, read only once a Cesium globe draws.
+// over the viewer, read only once a Cesium globe draws.
 import * as Cesium from 'cesium';
-import { createWindRendering } from '../../layers/wind/rendering.js';
+import { createWindRendering } from './windRendering.js';
 
 export function createWindCesiumFlow(engine, { onStatusChange } = {}) {
   return createWindRendering({

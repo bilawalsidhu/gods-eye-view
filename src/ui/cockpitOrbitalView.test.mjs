@@ -109,6 +109,8 @@ function fixture(
   t,
   {
     satellite = ISS,
+    kind = 'cesium',
+    nativeViewer = true,
     orbitAllowed = true,
     reducedMotion = true,
     aircraftInfo = null,
@@ -136,7 +138,7 @@ function fixture(
   const listeners = () => ({ addEventListener: () => () => {} });
   const shots = [];
   const aircraftPosition = Cesium.Cartesian3.fromDegrees(10.2, 54.5, 3000);
-  const globe = createCockpitEngine({ kind: 'cesium' });
+  const globe = createCockpitEngine({ kind });
   const { engine } = globe;
   const aircraft = globe.aircraft({
     position: aircraftPosition,
@@ -174,7 +176,16 @@ function fixture(
   });
   engine.camera.setView = (options) => viewer.camera.setView(options);
   const pose = engine.camera.pose;
-  engine.camera.pose = () => ({ ...pose(), heading: viewer.camera.heading ?? 0 });
+  engine.camera.pose = () => ({
+    ...pose(),
+    heading: viewer.camera.heading ?? 0,
+    fovy: 2 * Math.atan(Math.tan(viewer.camera.frustum.fov / 2) / Math.max(1, viewer.camera.frustum.aspectRatio)),
+    aspectRatio: viewer.camera.frustum.aspectRatio,
+  });
+  engine.camera.setFovy = (radians) => {
+    viewer.camera.frustum.fov = cesiumFrustumFovRad(radians, viewer.camera.frustum.aspectRatio);
+  };
+  engine.surface.tilesLoaded = () => !viewer.scene.globe?.show || viewer.scene.globe.tilesLoaded !== false;
   engine.projector.worldToWindow = (position) =>
     viewer.scene.cartesianToCanvasCoordinates?.(position, {}) ?? null;
   engine.surface.sampleHeight = (position) => viewer.scene.sampleHeight?.(position);
@@ -186,7 +197,7 @@ function fixture(
     get: () => engine.input.cameraInputsEnabled(),
   });
   const cockpit = new CockpitViewController(engine, {
-    viewer,
+    viewer: nativeViewer ? viewer : null,
     services: {
       flightsLayer: { getTrackedInfo: () => aircraftInfo },
       militaryFlightsLayer: { getTrackedInfo: () => null },
@@ -1648,4 +1659,35 @@ test('back to nadir from past the limb, the sensor waits for the view', async (t
   }
   await settle();
   assert.ok(store.orbital.sensor, 'back on the Earth');
+});
+
+test('Navara orbital entry, zoom, look and exit need only the contract', async (t) => {
+  const { cockpit, engine, shots, satellites } = fixture(t, {
+    kind: 'navara', nativeViewer: false,
+  });
+  const saved = engine.camera.pose().fovy;
+  assert.equal(cockpit.enter({ kind: 'satellite' }), true);
+  cockpit.updateOrbital(performance.now());
+  assert.equal(cockpit.subjectKind, 'satellite');
+  assert.equal(engine.input.cameraInputsEnabled(), false);
+  assert.ok(shots.length > 0);
+  const first = engine.camera.pose().fovy;
+  cockpit.stepOrbitalZoom(1);
+  assert.ok(engine.camera.pose().fovy < first);
+  cockpit.turnOrbitalLook({ axis: 'yaw', sign: 1, stepDeg: 10 });
+  cockpit.updateOrbital(performance.now());
+  assert.ok(cockpit.orbital.lookTarget.yawDeg > 0);
+  cockpit.exit();
+  assert.equal(cockpit.active, false);
+  assert.equal(engine.input.cameraInputsEnabled(), true);
+  near(engine.camera.pose().fovy, saved, 'restored lens');
+  assert.ok(satellites.calls.some(([name, id]) => name === 'subject' && id === ISS.noradId));
+});
+
+test('leaving orbit after a resize restores the wider-side lens angle', async (t) => {
+  const { cockpit, viewer } = await orbitAt(t);
+  viewer.camera.frustum.aspectRatio = 0.75;
+  cockpit.updateOrbital(performance.now());
+  cockpit.exit();
+  near(viewer.camera.frustum.fov, SAVED_FOV, 'restored lens after resize');
 });

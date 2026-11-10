@@ -19,7 +19,6 @@
 import * as geo from '../../geo/index.js';
 import { createEngineEvent } from '../contract.js';
 import {
-  cesiumFovy,
   headingPitchRoll,
   horizonVisible,
   lookAtFrame,
@@ -83,6 +82,7 @@ function posesNear(a, b, distance, angle) {
  *     stop: () => void,
  *     size: () => { width: number, height: number },
  *     requestFrame: () => void,
+ *     setFovy?: (radians: number) => void,
  *     suspendCameraInputs?: () => () => void,
  *   },
  *   clock?: { now: () => number, setTimeout: Function, clearTimeout: Function },
@@ -120,6 +120,13 @@ export function createCameraModel({
           ...orientationVectors(position, 0, -math.PI_OVER_TWO, 0),
         };
       })();
+  let fov = Math.PI / 3;
+  const fovy = () => {
+    const { width, height } = port.size();
+    return width > height
+      ? 2 * Math.atan((Math.tan(fov / 2) * height) / width)
+      : fov;
+  };
   let transform = [...matrix4.IDENTITY];
   let percentageChanged = DEFAULT_PERCENTAGE_CHANGED;
   let flight = null;
@@ -139,7 +146,7 @@ export function createCameraModel({
 
   const view = () => {
     const { width, height } = port.size();
-    return { ...state, fovy: cesiumFovy(width, height), width, height };
+    return { ...state, fovy: fovy(), width, height };
   };
 
   // A programmatic pose: exact here, pushed to Navara for drawing.
@@ -154,11 +161,7 @@ export function createCameraModel({
     const { width, height } = port.size();
     const position =
       'west' in destination
-        ? rectangleViewPosition(
-            destination,
-            cesiumFovy(width, height),
-            width / height,
-          )
+        ? rectangleViewPosition(destination, fovy(), width / height)
         : copy3(destination);
     if (orientation && 'direction' in orientation)
       return {
@@ -311,6 +314,17 @@ export function createCameraModel({
   const livePosition = cartesian3.create();
 
   const camera = {
+    setFovy(radians) {
+      if (!Number.isFinite(radians) || radians <= 0 || radians >= Math.PI)
+        throw new RangeError('Field of view must be between 0 and PI');
+      const { width, height } = port.size();
+      fov =
+        width > height
+          ? 2 * Math.atan((Math.tan(radians / 2) * width) / height)
+          : radians;
+      port.setFovy?.(radians);
+      port.requestFrame();
+    },
     get livePosition() {
       return cartesian3.clone(state.position, livePosition);
     },
@@ -356,8 +370,7 @@ export function createCameraModel({
       transform = [...matrix4.IDENTITY];
       const { width, height } = port.size();
       const range =
-        options.range ||
-        sphereRange(sphere.radius, cesiumFovy(width, height), width / height);
+        options.range || sphereRange(sphere.radius, fovy(), width / height);
       const frame = geo.transforms.eastNorthUpToFixedFrame(
         sphere.center,
         WGS84,
