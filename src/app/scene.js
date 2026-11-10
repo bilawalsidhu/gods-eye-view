@@ -21,6 +21,7 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
+import { FREE_LOOK_MAX_HEIGHT_METERS } from '../globeInView.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 
 /**
@@ -92,6 +93,10 @@ export async function createApplicationScene({
   defer(() => input.destroy());
   // Ctrl+wheel and trackpad pinches zoom the globe, not the page.
   renderer.input.ctrlWheelZoom = true;
+  // What the adapter hands the application about its viewer; free look is
+  // limited to low heights from the start.
+  const viewerHooks = applicationViewerHooks(viewer);
+  defer(viewerHooks.installFreeLookHeightLimit(FREE_LOOK_MAX_HEIGHT_METERS));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));
@@ -168,6 +173,6 @@ export async function createApplicationScene({
     // Trims stale draw commands, keeps an inline panel drawing, says
     // whether an entity is the viewer's own, and installs the zoom-out
     // guard (render/cesium/application.js).
-    ...applicationViewerHooks(viewer),
+    ...viewerHooks,
   };
 }

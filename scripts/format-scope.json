@@ -1177,6 +1177,8 @@
   "scripts/qa-status-badges.mjs",
   "src/dockerTrustedPeers.test.mjs",
   "src/cameraGlobeRotation.test.mjs",
+  "src/cameraTilt.test.mjs",
+  "src/ui/shellFacade.test.mjs",
   "src/voice/globeResetConfirmation.test.mjs",
   "src/hudDms.test.mjs",
   "server/providers/common/rateLimitKeys.test.mjs",

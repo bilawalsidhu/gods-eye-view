@@ -9,7 +9,13 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
-import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
+import {
+  installScopeMask,
+  destroyScopeMask,
+  isScopeMaskEnabled,
+} from '../scopeMask.js';
+import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
+import { installGlobeInViewRecovery } from './globeInViewRecovery.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
   getRenderGovernorDiagnostics,
@@ -50,6 +56,14 @@ export function createApplicationTools({
     .get('bhote-koshi-2026')
     ?.module.attachSceneController(sceneDirector);
   defer(() => sceneDirector.destroy());
+  defer(
+    installGlobeInViewRecovery(viewer, {
+      // The scope mask hides everything outside its keyhole.
+      keyholeRadius: () => (isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0),
+      // An authored scene frames its own shots, holds included.
+      paused: () => sceneDirector.running,
+    }),
+  );
   onSceneDirector?.(sceneDirector);
   const annotations = initAnnotations({
     viewer,

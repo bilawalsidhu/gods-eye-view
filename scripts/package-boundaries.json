@@ -216,7 +216,8 @@
       "src/sky/stars.js",
       "src/data/bundledJson.js",
       "src/renderGovernor.js",
-      "src/sky/icrf.js"
+      "src/sky/icrf.js",
+      "src/globeInView.js"
     ],
     "external": ["cesium"]
   },
@@ -4384,7 +4385,10 @@
       "src/layers/firms/heatImagery.js",
       "src/ui/layerPanel/RowSwitch.vue",
       "src/ui/layerPanel/RowSlider.vue",
-      "src/data/rioRouteNames.js"
+      "src/data/rioRouteNames.js",
+      "src/globeInView.js",
+      "src/app/globeInViewRecovery.js",
+      "src/render/cesium/freeLookLimit.js"
     ],
     "external": [
       "hls.js",
@@ -5087,7 +5091,10 @@
       "src/data/firmsIntensity.js",
       "src/data/firmsHeatRaster.js",
       "src/layers/firms/heatImagery.js",
-      "src/data/rioRouteNames.js"
+      "src/data/rioRouteNames.js",
+      "src/globeInView.js",
+      "src/scopeMaskPolicy.js",
+      "src/scopeMask.js"
     ],
     "external": [
       "hls.js",
