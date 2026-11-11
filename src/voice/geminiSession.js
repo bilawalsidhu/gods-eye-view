@@ -359,7 +359,11 @@ export class GeminiSessionController {
     );
   }
 
-  setStatus(status, detail, recovery) {
+  /**
+   * @param {{missingKey?: boolean}} [options] True when the server has no
+   *   Gemini key: the control then drops its microphone hint.
+   */
+  setStatus(status, detail, recovery, { missingKey = false } = {}) {
     this.status = status;
     if (status === 'listening' && this.input.pushToTalkMode)
       detail = this.input.pushToTalkKeyHeld
@@ -371,6 +375,7 @@ export class GeminiSessionController {
       detail: translateKnown(detail),
     };
     if (recovery) event.recovery = translateKnown(recovery);
+    if (missingKey) event.missingKey = true;
     this.emit(event);
     this.input.updateVoiceButtonLabel();
     if (['idle', 'connecting', 'error'].includes(status))
@@ -584,12 +589,15 @@ export class GeminiSessionController {
       const data = await readResponseJsonCapped(response, 256 * 1024, signal);
       signal.throwIfAborted();
       if (!response.ok)
-        throw new Error(
-          typeof data?.error === 'string'
-            ? tokenErrorMessage(data.error)
-            : t('Gemini token request failed (HTTP {status})', {
-                status: response.status,
-              }),
+        throw Object.assign(
+          new Error(
+            typeof data?.error === 'string'
+              ? tokenErrorMessage(data.error)
+              : t('Gemini token request failed (HTTP {status})', {
+                  status: response.status,
+                }),
+          ),
+          typeof data?.code === 'string' ? { code: data.code } : {},
         );
       if (
         typeof data?.model !== 'string' ||
@@ -966,7 +974,9 @@ export class GeminiSessionController {
           : error?.message || msg('Gemini voice could not start');
     this.lastError = detail;
     this.stop({ preserveStatus: true });
-    this.setStatus('error', detail, recovery);
+    this.setStatus('error', detail, recovery, {
+      missingKey: error?.code === 'API_KEY_MISSING',
+    });
   }
 
   abortTools() {
