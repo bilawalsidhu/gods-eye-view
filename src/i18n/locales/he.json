@@ -3545,5 +3545,12 @@
   "ICAO: {id}": "ICAO: {id}",
   "NORAD: {id}": "NORAD: {id}",
   "MMSI: {id}": "MMSI: {id}",
-  "Vessel UUID: {id}": "UUID של כלי השיט: {id}"
+  "Vessel UUID: {id}": "UUID של כלי השיט: {id}",
+  "The globe stopped drawing": "הגלובוס הפסיק להצטייר",
+  "The browser took back the globe's 3D graphics. Layers and controls still work, but the map cannot draw until the page reloads.": "הדפדפן לקח בחזרה את הגרפיקה התלת-ממדית של הגלובוס. השכבות והפקדים עדיין פועלים, אבל המפה לא תוכל להצטייר עד שהעמוד ייטען מחדש.",
+  "Rendering stopped after an error. Layers and controls still work, but the map is not updating.": "הרינדור נעצר בעקבות שגיאה. השכבות והפקדים עדיין פועלים, אבל המפה אינה מתעדכנת.",
+  "Reset view reloads the app without the view restored from the address bar.": "\"איפוס תצוגה\" טוען מחדש את האפליקציה בלי התצוגה ששוחזרה משורת הכתובת.",
+  "Reload": "טען מחדש",
+  "Retry": "נסה שוב",
+  "Reset view": "איפוס תצוגה"
 }
