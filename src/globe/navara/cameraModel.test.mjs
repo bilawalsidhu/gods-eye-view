@@ -229,7 +229,7 @@ test('flyTo with duration 0 lands and completes before it returns', () => {
 });
 
 test('a timed flyTo flies with Navara in ms with the mapped easing and completes on arrival', async () => {
-  const { camera, port, frame } = setup();
+  const { camera, port, frame, clock } = setup();
   const destination = cartesian3.fromDegrees(100, 0, 5e6);
   const outcome = [];
   camera.flyTo({
@@ -255,10 +255,119 @@ test('a timed flyTo flies with Navara in ms with the mapped easing and completes
   assert.deepEqual(outcome, ['complete']);
   assert.equal(camera.flightActive(), false);
   near(cartesian3.distance(camera.pose().position, destination), 0, 1e-9, 'p');
+  clock.advance(3000);
+  assert.deepEqual(outcome, ['complete']);
 });
 
-test('easings map onto Navara presets and an omitted one stays Navara’s own', () => {
-  const { camera, port } = setup();
+test('flights land by their duration even when Navara has not settled', async (context) => {
+  for (const method of ['flyTo', 'flyToSphere'])
+    for (const easing of ['linear', 'cubicInOut', 'sinusoidalInOut', undefined])
+      for (const height of [100, 40000, 1.2e7])
+        await context.test(`${method}, ${easing}, ${height} m`, async () => {
+          const { camera, port, clock } = setup();
+          const destination = cartesian3.fromDegrees(86.925, 27.988, height);
+          const outcome = [];
+          let suspensions = 0;
+          port.suspendCameraInputs = () => {
+            suspensions++;
+            return () => suspensions--;
+          };
+          const options = {
+            duration: 1,
+            easing,
+            complete: () => {
+              assert.equal(camera.flightActive(), false);
+              assert.equal(suspensions, 0);
+              outcome.push('complete');
+            },
+            cancel: () => outcome.push('cancel'),
+          };
+          if (method === 'flyTo') camera.flyTo({ destination, ...options });
+          else
+            camera.flyToSphere(
+              { center: destination, radius: 100 },
+              { ...options, range: 5000, pitch: -0.5 },
+            );
+          const target = port.flights[0].pose;
+          clock.advance(999);
+          assert.deepEqual(outcome, []);
+          assert.equal(camera.flightActive(), true);
+          assert.equal(suspensions, 1);
+          clock.advance(1);
+          assert.deepEqual(outcome, ['complete']);
+          assert.equal(port.stops, 1);
+          const expected = cartesian3.fromDegrees(
+            target.lng,
+            target.lat,
+            target.height,
+          );
+          near(
+            cartesian3.distance(camera.pose().position, expected),
+            0,
+            1e-6,
+            'landed position',
+          );
+          assert.deepEqual(port.applied.at(-1), target);
+          assert.equal(clock.timers.length, 0);
+          // A native result may arrive late or never arrive at all.
+          if (height !== 1.2e7) port.flights[0].settle(height === 40000);
+          await flush();
+          assert.deepEqual(outcome, ['complete']);
+        });
+});
+
+test('a flight deadline includes the time spent starting the native flight', () => {
+  const { camera, port, clock } = setup();
+  const fly = port.fly;
+  port.fly = (...args) => {
+    clock.advance(250);
+    return fly(...args);
+  };
+  let done = false;
+  camera.flyTo({
+    destination: cartesian3.fromDegrees(10, 45, 5000),
+    duration: 1,
+    complete: () => (done = true),
+  });
+  clock.advance(749);
+  assert.equal(done, false);
+  clock.advance(1);
+  assert.equal(done, true);
+});
+
+test('ending a flight clears its deadline and ignores late native settlement', async (context) => {
+  for (const action of ['cancel', 'complete', 'replace', 'setView', 'destroy'])
+    await context.test(action, async () => {
+      const { camera, port, clock, model } = setup();
+      const destination = cartesian3.fromDegrees(10, 45, 5000);
+      const outcome = [];
+      camera.flyTo({
+        destination,
+        duration: 1,
+        complete: () => outcome.push('complete'),
+        cancel: () => outcome.push('cancel'),
+      });
+      clock.advance(250);
+      if (action === 'cancel') camera.cancelFlight();
+      if (action === 'complete') camera.completeFlight();
+      if (action === 'setView') camera.setView({ destination });
+      if (action === 'destroy') model.destroy();
+      if (action === 'replace') camera.flyTo({ destination, duration: 2 });
+      const expected = action === 'complete' ? ['complete'] : ['cancel'];
+      assert.deepEqual(outcome, expected);
+      assert.equal(clock.timers.length, action === 'replace' ? 1 : 0);
+      clock.advance(750);
+      port.flights[0].settle(true);
+      await flush();
+      assert.deepEqual(outcome, expected);
+      assert.equal(camera.flightActive(), action === 'replace');
+      model.destroy();
+      assert.equal(clock.timers.length, 0);
+    });
+});
+
+test('easings map onto Navara presets and omitted durations use Cesium’s default', () => {
+  const { camera, port, clock } = setup();
   for (const easing of ['linear', 'cubicInOut', undefined])
     camera.flyTo({
       destination: cartesian3.fromDegrees(1, 2, 3e5),
@@ -269,8 +378,16 @@ test('easings map onto Navara presets and an omitted one stays Navara’s own', 
     port.flights.map((flight) => flight.options.easing),
     ['linear', 'cubicInOut', undefined],
   );
-  camera.flyTo({ destination: cartesian3.fromDegrees(1, 2, 3e5) });
-  assert.equal(port.flights.at(-1).options.duration, undefined);
+  const destination = cartesian3.fromDegrees(1, 2, 3e5);
+  camera.flyTo({ destination });
+  assert.equal(port.flights.at(-1).options.duration, 3000);
+  clock.advance(3000);
+  assert.equal(camera.flightActive(), false);
+  camera.setView({ destination });
+  camera.flyTo({ destination, orientation: { heading: 1 } });
+  assert.equal(port.flights.at(-1).options.duration, 2000);
+  clock.advance(2000);
+  assert.equal(camera.flightActive(), false);
 });
 
 test('an invalid flight pose does not suspend camera inputs', () => {

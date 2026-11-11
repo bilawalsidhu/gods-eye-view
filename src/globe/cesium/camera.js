@@ -148,6 +148,9 @@ export function createCesiumCamera(viewer) {
   // completed synchronously (Cesium keeps no current flight for those).
   let flight = null;
   let completing = false;
+  // Cesium calls complete from the flight's tween before it leaves
+  // scene.tweens; the flight is over by then.
+  let landing = false;
   function trackFlight(options) {
     const token = {};
     flight = token;
@@ -158,7 +161,12 @@ export function createCesiumCamera(viewer) {
       end,
       complete: () => {
         end();
-        options.complete?.();
+        landing = true;
+        try {
+          options.complete?.();
+        } finally {
+          landing = false;
+        }
       },
       cancel: () => {
         end();
@@ -266,7 +274,8 @@ export function createCesiumCamera(viewer) {
     },
     // Also a flight started straight on viewer.camera (layers' flyTo and
     // flyToBoundingSphere): Cesium runs every camera flight as a scene tween.
-    flightActive: () => flight != null || viewer.scene.tweens?.length > 0,
+    flightActive: () =>
+      flight != null || (!landing && viewer.scene.tweens?.length > 0),
     lookAt(target, offset) {
       cesium.lookAt(toCesium3(target), cesiumOffset(offset));
     },

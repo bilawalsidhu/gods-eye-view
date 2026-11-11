@@ -256,6 +256,77 @@ export function flightChecks(engine, { settle, until, nadirView, centre }) {
   const { camera } = engine;
   return [
     [
+      'camera.flyTo: completes within its duration at every distance and easing',
+      async () => {
+        const duration = 0.4;
+        // Allow frame scheduling jitter, but not the director's safety delay.
+        const toleranceMs = 100;
+        for (const easing of [
+          'linear',
+          'cubicInOut',
+          'sinusoidalInOut',
+          undefined,
+        ])
+          for (const coordinates of [
+            [20.01, 10, 5000],
+            [-160, -10, 1.2e7],
+          ]) {
+            camera.setView({
+              destination: cartesian3.fromDegrees(20, 10, 10000),
+            });
+            await settle();
+            const destination = cartesian3.fromDegrees(...coordinates);
+            const outcome = [];
+            let arrived;
+            let active;
+            let elapsed;
+            const started = performance.now();
+            try {
+              camera.flyTo({
+                destination,
+                duration,
+                easing,
+                complete: () => {
+                  elapsed = performance.now() - started;
+                  arrived = camera.pose().position;
+                  active = camera.flightActive();
+                  outcome.push('complete');
+                },
+                cancel: () => outcome.push('cancel'),
+              });
+              await until(
+                () =>
+                  outcome.length > 0 ||
+                  performance.now() - started > duration * 1000 + toleranceMs,
+                'flight deadline',
+              );
+              ensure(
+                outcome.join() === 'complete',
+                `${easing}: flight missed its duration (${outcome})`,
+              );
+              ensure(
+                elapsed <= duration * 1000 + toleranceMs,
+                `${easing}: flight completed after ${elapsed} ms`,
+              );
+              ensure(!active, 'flight still active in complete');
+              near(
+                cartesian3.distance(arrived, destination),
+                0,
+                0.01,
+                'position at completion (m)',
+              );
+              await settle(2);
+              ensure(
+                outcome.join() === 'complete',
+                `flight ended with ${outcome}`,
+              );
+            } finally {
+              camera.cancelFlight();
+            }
+          }
+      },
+    ],
+    [
       'camera.flyTo: duration 0 lands and completes before flyTo returns',
       async () => {
         await nadirView();

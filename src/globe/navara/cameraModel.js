@@ -186,6 +186,7 @@ export function createCameraModel({
   function endFlight(current, outcome) {
     if (flight !== current) return;
     flight = null;
+    clock.clearTimeout(current.timer);
     current.resume?.();
     if (outcome === 'cancel') current.options.cancel?.();
   }
@@ -202,6 +203,14 @@ export function createCameraModel({
     place(target);
   }
 
+  function finishFlight(current) {
+    if (flight !== current || destroyed) return;
+    endFlight(current, 'complete');
+    port.stop();
+    land(current.options, current.target);
+    current.options.complete?.();
+  }
+
   function startFlight(options, target) {
     cancelCurrentFlight();
     if (options.duration !== undefined && options.duration <= 0) {
@@ -209,10 +218,17 @@ export function createCameraModel({
       options.complete?.();
       return;
     }
+    // Match Cesium's distance-derived duration when none was supplied.
+    const duration =
+      options.duration ??
+      Math.min(
+        Math.ceil(cartesian3.distance(state.position, target.position) / 1e6) +
+          2,
+        3,
+      );
+    const deadline = clock.now() + duration * 1000;
     const pose = navaraPose(target.position, target.direction, target.up);
-    const flyOptions = {};
-    if (options.duration !== undefined)
-      flyOptions.duration = options.duration * 1000;
+    const flyOptions = { duration: duration * 1000 };
     if (options.easing !== undefined)
       flyOptions.easing = NAVARA_EASINGS[options.easing];
     const current = { options, target, resume: port.suspendCameraInputs?.() };
@@ -227,13 +243,17 @@ export function createCameraModel({
     }
     // Navara moves the camera from here on; read it back every frame.
     pushed = null;
+    // Navara caps flight time per frame, so slow frames lose elapsed time.
+    // The contract duration is wall time, independent of rendering cadence.
+    current.timer = clock.setTimeout(
+      () => finishFlight(current),
+      Math.max(0, deadline - clock.now()),
+    );
     pending.then(
       (arrived) => {
         if (flight !== current || destroyed) return;
         if (!arrived) return endFlight(current, 'cancel');
-        endFlight(current, 'complete');
-        land(options, target);
-        options.complete?.();
+        finishFlight(current);
       },
       () => endFlight(current, 'cancel'),
     );

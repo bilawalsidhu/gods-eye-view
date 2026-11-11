@@ -132,6 +132,26 @@ test('flightActive also reports a flight started straight on the Cesium camera',
   assert.equal(camera.flightActive(), false);
 });
 
+test('a flight is no longer active when its complete callback runs', () => {
+  const { viewer, camera } = setup();
+  let activeInComplete = null;
+  camera.flyTo({
+    destination: geo.cartesian3.fromDegrees(0, 0, 1e6),
+    complete: () => {
+      activeInComplete = camera.flightActive();
+    },
+  });
+  // Cesium calls complete from the flight's tween, which stays in the scene's
+  // tween collection until the callback returns.
+  const [options] = viewer.callsOf('camera.flyTo')[0].args;
+  const tween = {};
+  viewer.scene.tweens.push(tween);
+  options.complete();
+  viewer.scene.tweens.splice(viewer.scene.tweens.indexOf(tween), 1);
+  assert.equal(activeInComplete, false);
+  assert.equal(camera.flightActive(), false);
+});
+
 test('completeFlight lands at the destination and calls complete only', () => {
   const { scene, engine } = createCameraViewer();
   // Cesium's own flight: a real tween collection under the real camera.
