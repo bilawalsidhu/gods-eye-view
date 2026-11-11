@@ -201,6 +201,16 @@ export interface CameraControls {
    * the page.
    */
   zoomInputs: Array<'wheel' | 'pinch' | 'rightDrag' | 'ctrlWheel'>;
+  /**
+   * `keepEarthFramed`: keep the whole Earth in reach and in frame as the
+   * user zooms out. An outward user zoom goes no farther than about
+   * 40,000 km, or than the height a camera command left the eye at when
+   * that is higher (the user then zooms in from there), and from high up
+   * it turns the view down toward the globe so the whole Earth stays in
+   * frame. A camera command, a follow and a flight are not held to it, and
+   * a camera command ends any turn under way. Off by default.
+   */
+  keepEarthFramed?: boolean;
 }
 
 export type CameraEvent =

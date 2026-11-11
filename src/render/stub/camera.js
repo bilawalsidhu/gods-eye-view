@@ -75,7 +75,8 @@ const ONE_DEGREE = Math.PI / 180;
  * @param {(reason: string) => void} options.requestRender
  * @param {(error: Error) => void} options.report
  * @param {boolean} [options.thresholds] `cameraChangeThreshold`: each
- *   `changed` listener's own threshold (default true).
+ *   `changed` listener's own threshold (default true). `framing`: whether
+ *   the controls have `keepEarthFramed` (default false).
  */
 export function createStubCamera({
   viewport,
@@ -85,6 +86,7 @@ export function createStubCamera({
   report,
   drawnPosition = () => null,
   thresholds = true,
+  framing = false,
 }) {
   // Local frame values; world values are `frame` applied to them.
   let frame = IDENTITY;
@@ -147,6 +149,9 @@ export function createStubCamera({
     pitchRange: [-Math.PI / 2, 0],
     zoomInputs: ['wheel', 'pinch', 'rightDrag'],
   };
+  // The stub takes no user input: there is nothing to keep framed, and the
+  // setting only reads back.
+  if (framing) controls.keepEarthFramed = false;
 
   function aspectRatio() {
     const { width, height } = viewport();

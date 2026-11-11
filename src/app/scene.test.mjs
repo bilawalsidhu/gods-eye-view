@@ -46,14 +46,15 @@ test('the scene runs on a renderer with only the required members', async (t) =>
     'isDestroyed',
   ]);
   // No hooks: each is left out, not faked.
-  for (const name of [
-    'trimStaleCommands',
-    'keepPanelRendering',
-    'viewerDrawsEntity',
-    'installZoomOutGuard',
-    'qaHandles',
-  ])
+  for (const name of ['trimStaleCommands', 'viewerDrawsEntity', 'qaHandles'])
     assert.equal(scene[name], undefined, name);
+  // What the renderer does through its ports.
+  assert.equal(typeof scene.keepPanelRendering, 'function');
+  assert.equal(
+    renderer.camera.controls.keepEarthFramed,
+    undefined,
+    'no framing on a renderer without it',
+  );
   // Keyless, the map stack shows Esri on the globe through the globe port.
   assert.equal(scene.tileset, null);
   assert.equal(scene.mapStackController.getActiveId(), 'esri-imagery');
@@ -89,6 +90,39 @@ test('the scene runs on a renderer with only the required members', async (t) =>
   assert.equal(rendererOf(scene.viewer), null, 'and lets go of the renderer');
   assert.equal(renderer.globe.imagery.list().length, 0, 'imagery released');
   assert.equal(document.getElementById('gev-credits'), null, 'credits gone');
+});
+
+test('the scene keeps the Earth framed where the renderer can', async (t) => {
+  const { renderer, deferred } = await startOnStub(t, {
+    capabilities: ['keepEarthFramed'],
+  });
+  assert.equal(renderer.camera.controls.keepEarthFramed, true);
+  const controls = renderer.camera.controls;
+  for (const fn of deferred.splice(0).reverse()) await fn();
+  assert.equal(controls.keepEarthFramed, false, 'and lets go on teardown');
+});
+
+test("the scene takes a plugin's application hooks", async (t) => {
+  const stub = createStubRendererPlugin({ capabilities: [] });
+  const given = [];
+  const handles = Object.freeze({ probe: 'qa' });
+  const { scene } = await startOnStub(t, {
+    renderer: {
+      id: 'stub-with-hooks',
+      create: (options) => stub.create(options),
+      applicationHooks(made) {
+        given.push(made);
+        return { qaHandles: handles, ownCreditDisplay: true };
+      },
+    },
+  });
+  assert.deepEqual(given, [scene.renderer], 'asked once, for the renderer');
+  assert.equal(scene.qaHandles, handles, 'QA scripts read its handles');
+  assert.equal(
+    document.getElementById('gev-credits'),
+    null,
+    'its own display shows the credits',
+  );
 });
 
 test('with credentials, the photoreal base loads through the globe port', async (t) => {

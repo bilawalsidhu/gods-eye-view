@@ -51,7 +51,6 @@ import {
 import { detectionBracketOpacity } from './detectionPresentation.js';
 import { SurfaceOcclusion } from './detectionOcclusion.js';
 import { rendererOf } from '../render/rendererOf.js';
-import { applicationHooksOf } from '../render/applicationHooks.js';
 import {
   createCyberSonarSampler,
   cyberSonarFrameDelay,
@@ -287,7 +286,7 @@ const NO_OCCLUSION_PROBE = Object.freeze({
  * Hides the bracket and callout of a depth-tested contact (a street vehicle)
  * that the scene drew something in front of. `_occlusionProbe` asks the GPU
  * about each such contact without waiting for the answer (the renderer's
- * `createOcclusionProbe` application hook, `render/applicationHooks.js`);
+ * `query.occlusionTest()`, where it has the `occlusionTest` capability);
  * `_surfaceOcclusion` remembers the answers and decides, every frame, who is
  * drawn.
  */
@@ -297,8 +296,10 @@ const _surfaceOcclusion = new SurfaceOcclusion(_occlusionProbe);
 /** Use the occlusion probe of `viewer`'s renderer, or none. */
 function _useOcclusionProbe(viewer) {
   _occlusionProbe.destroy();
+  const renderer = rendererOf(viewer);
   _occlusionProbe =
-    applicationHooksOf(rendererOf(viewer)).createOcclusionProbe?.() ??
+    (renderer?.capabilities?.has('occlusionTest') &&
+      renderer.query.occlusionTest?.()) ||
     NO_OCCLUSION_PROBE;
   _surfaceOcclusion.clear();
   _surfaceOcclusion.probe = _occlusionProbe;

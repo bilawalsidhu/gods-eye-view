@@ -25,6 +25,39 @@ export interface RendererPlugin {
   /** Stable id, recorded with each session (`'cesium'`, ...). */
   id: string;
   create(options: CreateOptions): Promise<Renderer>;
+  /**
+   * What the plugin hands the application beside the contract for a
+   * renderer it made, asked once, right after `create` resolves. Omitted:
+   * none.
+   */
+  applicationHooks?(renderer: Renderer): ApplicationHooks;
+}
+
+/**
+ * What only some renderers have and the application uses where given, does
+ * application uses each where given and does without where not. None is a
+ * do is in the ports.
+ */
+export interface ApplicationHooks {
+  /**
+   * The renderer's own map engine, which the map stacks switch through in
+   * place of the globe port (`src/maps/engine.js`).
+   */
+  mapEngine?: unknown;
+  /**
+   * True when the renderer shows its credits in a display of its own;
+   * otherwise the application shows what the credits port lists.
+   */
+  ownCreditDisplay?: boolean;
+  /**
+   * Drop the draw commands the renderer keeps for a while after it stops
+   * drawing them; run after a layer turns off.
+   */
+  trimStaleCommands?(): void;
+  /** Whether an entity is one the renderer draws itself. */
+  viewerDrawsEntity?(entity: unknown): boolean;
+  /** Values QA scripts read from the page's debug handle. */
+  qaHandles?: Readonly<Record<string, unknown>>;
 }
 
 export interface CreateOptions {

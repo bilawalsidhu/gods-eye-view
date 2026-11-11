@@ -234,6 +234,7 @@ export function createStubRenderer(options = {}) {
     report,
     drawnPosition: (ref, aheadMs) => drawnPosition(ref, aheadMs),
     thresholds: capabilities.has('cameraChangeThreshold'),
+    framing: capabilities.has('keepEarthFramed'),
   });
   camera.setViewRectangle(viewRectangle);
   if (capabilities.has('followFrame'))
@@ -1064,6 +1065,28 @@ export function createStubRenderer(options = {}) {
       return rayEllipsoid(ray);
     },
   };
+  // The stub's only surface is the ellipsoid: a point is hidden behind its
+  // horizon, answered at once.
+  if (capabilities.has('occlusionTest'))
+    query.occlusionTest = () => {
+      let now = 0;
+      return {
+        mode: 'sync',
+        maxPerFrame: Number.POSITIVE_INFINITY,
+        beginFrame(t) {
+          now = t;
+        },
+        add(point, position) {
+          point.pending = false;
+          point.answered = true;
+          if (isOccluded(position)) point.lastHiddenAt = now;
+          return true;
+        },
+        endFrame() {},
+        reset() {},
+        destroy() {},
+      };
+    };
 
   // --- Input -----------------------------------------------------------------
 

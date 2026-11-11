@@ -9,16 +9,16 @@
  * and it has every member of the contract. The application's base (the
  * photoreal tiles, the map stack's imagery and terrain) is still loaded
  * through the Cesium map engine (`mapEngine.js`), which the plugin hands
- * the application with the renderer (`../applicationHooks.js`); the globe
+ * the application with the renderer (its `applicationHooks`); the globe
  * port drapes its imagery on that base as drawn (see `globe.js`).
  * `whenSettled` waits for the globe, the scene's 3D tiles and what the draw
  * sets hold.
  *
  * What only this renderer needs at startup is set up here: the free-look
  * height limit, keyboard access to the credits' expand link (in the page's
- * language), and the hooks the application uses where a renderer has
- * them (stale command trimming, inline panel rendering, whether an entity
- * is the viewer's own, the zoom-out guard, the viewer QA scripts read).
+ * language). The plugin's `applicationHooks` are what the application
+ * uses where a renderer has them: the map engine, stale command trimming,
+ * whether an entity is the viewer's own, and the viewer QA scripts read.
  * Adapter code reaches the viewer behind a renderer through
  * `cesiumViewerOf` (`viewers.js`), never through a renderer member, so no
  * engine type crosses the contract.
@@ -26,16 +26,12 @@
 import { createApplicationViewer } from './applicationViewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
 import { bindRenderer } from '../rendererOf.js';
-import { provideApplicationHooks } from '../applicationHooks.js';
 import { FREE_LOOK_MAX_HEIGHT_METERS } from '../../globeInView.js';
 import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
 import { cesiumMapEngine } from './mapEngine.js';
 import { installFreeLookHeightLimit } from './freeLookLimit.js';
-import { keepPanelRendering } from './panelRendering.js';
 import { trimStaleSceneCommands } from './sceneCommandRelease.js';
-import { installZoomOutGuard } from './zoomOutGuard.js';
-import { createViewerOcclusionProbe } from './sceneOcclusionProbe.js';
 import { configureCreditKeyboardAccess } from './creditKeyboard.js';
 import { onLocaleChange } from '../../i18n/index.js';
 import { cesiumViewerOf, recordViewer } from './viewers.js';
@@ -168,29 +164,27 @@ export function createCesiumRendererPlugin({
       });
       recordViewer(renderer, viewer);
       unbind = bindRenderer(viewer, renderer);
-      provideApplicationHooks(renderer, {
+      return renderer;
+    },
+    /**
+     * @param {TransitionalRenderer} renderer
+     * @returns {import('../contract/renderer').ApplicationHooks}
+     */
+    applicationHooks(renderer) {
+      const viewer = cesiumViewerOf(renderer);
+      return {
         mapEngine: cesiumMapEngine,
         // Cesium's credit display (#cesium-credits) shows the credits.
         ownCreditDisplay: true,
         // Drops the draw commands the scene keeps after it stops drawing
         // them; run after a drawn frame (see sceneCommandRelease.js).
         trimStaleCommands: () => trimStaleSceneCommands(viewer.scene),
-        // Keeps the globe drawing in an inline panel whose host stops
-        // animation frames (embed mode, src/app/embed.js).
-        keepPanelRendering: (options) => keepPanelRendering(viewer, options),
         // Whether an entity is one of the viewer's own (Cockpit asks whether
         // the aircraft it flies still draws).
         viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
-        // Keeps outward user zooms bounded and the Earth framed; returns its
-        // disposer (see zoomOutGuard.js).
-        installZoomOutGuard: (options) => installZoomOutGuard(viewer, options),
-        // Tests depth-tested contacts (street vehicles) against the frame's
-        // own depth, for the detection overlay (see sceneOcclusionProbe.js).
-        createOcclusionProbe: () => createViewerOcclusionProbe(viewer),
         // QA scripts drive and read the viewer itself.
         qaHandles: { viewer },
-      });
-      return renderer;
+      };
     },
   });
 }

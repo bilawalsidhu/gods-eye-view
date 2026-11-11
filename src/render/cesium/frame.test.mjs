@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test from 'node:test';
 import { bindRenderer, findFrame, frameOf } from '../rendererOf.js';
-import './frame.js';
+import { renderNow } from './frame.js';
 
 /** A viewer whose scene raises its phases when `tick` is called. */
 function fakeViewer() {
@@ -188,4 +188,22 @@ test('a built frame port counts holds per reason, times out a wait, and settles 
   const unbind = bindRenderer(viewer, { frame: { id: 'renderer' } });
   await waiting;
   unbind();
+});
+
+test('renderNow throws the error Cesium raises on renderError', () => {
+  const listeners = new Set();
+  const failure = new Error('worker failed');
+  let fail = false;
+  const scene = {
+    renderError: {
+      addEventListener: (cb) => (listeners.add(cb), () => listeners.delete(cb)),
+    },
+    forceRender() {
+      if (fail) for (const cb of listeners) cb(scene, failure);
+    },
+  };
+  renderNow(scene);
+  fail = true;
+  assert.throws(() => renderNow(scene), failure);
+  assert.equal(listeners.size, 0, 'it stops listening either way');
 });

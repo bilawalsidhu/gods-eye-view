@@ -92,6 +92,12 @@ export interface QueryPort {
   projectMany(source: Float64Array, out: Float32Array): void;
   /** Hidden by the ellipsoid's horizon from the current eye. */
   isOccluded(position: Ecef): boolean;
+  /**
+   * `occlusionTest`: a test of many points against the depth of the frames
+   * drawn, for overlays that leave out what something stands in front of.
+   * Each call makes a new one; its owner destroys it.
+   */
+  occlusionTest?(): OcclusionTest;
   /** `sampleHeight`: cached height now, or null when not loaded. */
   sampleHeightNow(point: LonLat, options?: HeightOptions): number | null;
   /**
@@ -112,4 +118,48 @@ export interface QueryPort {
     ray: Ray,
     options?: HeightOptions & { maxDistance?: number },
   ): Promise<Ecef | null>;
+}
+
+/**
+ * One point under test (`OcclusionTest.add`): the test's owner keeps it and
+ * reads the answer from it. The test sets `pending` when it takes the point,
+ * and when the answer comes clears `pending`, sets `answered` and, when
+ * something drawn stood in front of the point, sets `lastHiddenAt` to
+ * `OcclusionTest`'s clock as of the frame it was tested against.
+ */
+export interface OcclusionPoint {
+  pending: boolean;
+  answered: boolean;
+  lastHiddenAt: number;
+  /** When the owner queued it, on the same clock. */
+  queuedAt: number;
+}
+
+/**
+ * Tests points against the depth of the frames as drawn, without waiting
+ * for the GPU: an answer may come a frame or two after its test.
+ */
+export interface OcclusionTest {
+  /**
+   * `'async'` while answers come a frame or two after their test, `'sync'`
+   * while they come at once, `'off'` while nothing can be tested (no depth
+   * to test against): every point is then to be taken as seen.
+   */
+  readonly mode: 'async' | 'sync' | 'off';
+  /** How many points it takes in one frame; Infinity when unbounded. */
+  readonly maxPerFrame: number;
+  /** Open a frame, collecting the answers that have come; `now` dates them. */
+  beginFrame(now: number): void;
+  /**
+   * Test `point`, at `position`, against this frame: hidden when a surface
+   * drawn stands in front of it by more than a small margin, which grows as
+   * the view looks along the ground rather than down on it. False when it
+   * cannot take one more this frame.
+   */
+  add(point: OcclusionPoint, position: Ecef): boolean;
+  /** Close the frame: start the tests taken. */
+  endFrame(): void;
+  /** Drop every test under way. */
+  reset(): void;
+  destroy(): void;
 }

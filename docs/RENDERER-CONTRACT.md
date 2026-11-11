@@ -107,6 +107,20 @@ optional, so a renderer written before it still conforms:
   its image fill turns with it. The Cesium port drapes image fills too, each
   on a ground primitive of its own. A renderer that predates it draws the
   rectangle unturned.
+- `camera.controls.keepEarthFramed` (capability `keepEarthFramed`) stops
+  the user's outward zooms at a whole-Earth view (about 40,000 km, or
+  higher where a camera command left the eye) and, from high up, turns the
+  view down toward the globe so the whole Earth stays in frame; camera
+  commands are not held to it and end its turn. The Cesium port eases the
+  view until the Earth's limb is 8° below its centre line above 300 km
+  (`zoomOutGuard.js`). The application turns it on where a renderer has it.
+- `query.occlusionTest()` (capability `occlusionTest`) tests many points
+  against the depth of the frames drawn without waiting for the GPU; the
+  detection overlay leaves out the street vehicles it finds hidden.
+- `RendererPlugin.applicationHooks(renderer)` hands the application what
+  only some renderers have (`ApplicationHooks`); see
+  [The application and its renderer](#the-application-and-its-renderer).
+- `frame.renderNow()` throws when the frame fails to draw.
 
 The Cesium port also draws `pattern` line styles (the image repeated
 `repeat` times along the line, in the translucent pass), lines in the
@@ -213,20 +227,27 @@ on (no `renderer.id`, no engine type, no engine object's presence).
 - **What only the Cesium renderer needs at startup** is done in its
   `create`: for Cesium, the free-look height limit and keyboard access to its
   credits' expand link (`src/render/cesium/appRenderer.js`).
-- **What a plugin may hand the application beside the contract** goes through
-  `provideApplicationHooks(renderer, hooks)` (`src/render/applicationHooks.js`),
-  each hook optional and used only where given: a map engine of its own,
-  stale command trimming, inline panel rendering, whether an entity is its
-  own, the zoom-out guard, whether it shows its credits in a display of
-  its own (`ownCreditDisplay`; otherwise the application's own line,
-  `src/ui/creditsView.js`, shows the credits port's list), a probe that
-  tests street vehicles against the frame's depth for the detection overlay
-  (`createOcclusionProbe`; Cesium's is `src/render/cesium/sceneOcclusionProbe.js`,
-  and without one every such vehicle's bracket shows), and what QA
-  scripts read from
-  `window.__godsEyeView` (Cesium's viewer there, for the scripts that drive
-  it). None is a contract member, and a renderer without them runs the
-  application without that behaviour.
+- **What a plugin may hand the application beside the contract** is its
+  `applicationHooks(renderer)` (`ApplicationHooks`,
+  `src/render/contract/renderer.d.ts`), asked once as the scene creates the
+  renderer and recorded for the application (`src/render/applicationHooks.js`):
+  a map engine of its own, stale command trimming, whether an entity is its
+  own, whether it shows its credits in a display of its own
+  (`ownCreditDisplay`; otherwise the application's own line,
+  `src/ui/creditsView.js`, shows the credits port's list), and what QA
+  scripts read from `window.__godsEyeView` (Cesium's viewer there, for the
+  scripts that drive it). Each is optional, none is a contract member, and
+  a renderer without them runs the application without that behaviour.
+- **What the renderer should do is in the ports**, each through the
+  application's own code: outward zooms stop at a whole-Earth view that
+  stays framed (`camera.controls.keepEarthFramed`, which the scene turns
+  on; Cesium's is `src/render/cesium/zoomOutGuard.js`); the detection
+  overlay leaves out street vehicles something stands in front of through
+  `query.occlusionTest()` under the `occlusionTest` capability (Cesium's is
+  `src/render/cesium/sceneOcclusionProbe.js`; without it every such
+  vehicle's bracket shows); and an inline panel whose host stops animation
+  frames keeps drawing through `resize` and `frame.renderNow()`
+  (`src/app/panelRendering.js`), stopping at a frame that throws.
 - **The map stacks** switch through the renderer's own map engine when its
   plugin hands one, else through its globe port (`src/maps/globeEngine.js`);
   see `docs/CURRENT-STATE.md` § Map source factories and coordination.

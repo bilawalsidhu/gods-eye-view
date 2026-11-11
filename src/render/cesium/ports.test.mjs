@@ -41,6 +41,7 @@ test('capabilities follow what the scene supports', () => {
     ...draw,
     ...effects,
     'pickPosition',
+    'occlusionTest',
   ]);
   assert.deepEqual(
     cesiumCapabilities({
@@ -53,6 +54,7 @@ test('capabilities follow what the scene supports', () => {
       ...effects,
       'globeVisibility',
       'pickPosition',
+      'occlusionTest',
       'sampleHeight',
       'finestHeights',
       'rayCast',
@@ -67,6 +69,14 @@ test('a caller can ask for fewer capabilities, never more', () => {
     'rayCast',
   ]);
   assert.deepEqual(cesiumCapabilities({}, new Set(['sampleHeight'])), []);
+  // The zoom-out guard needs the scene's own controller and frame events.
+  assert.ok(
+    cesiumCapabilities({
+      screenSpaceCameraController: {},
+      preRender: {},
+    }).includes('keepEarthFramed'),
+  );
+  assert.ok(!cesiumCapabilities({ preRender: {} }).includes('keepEarthFramed'));
 });
 
 test('a listener list keeps the listener rules', () => {

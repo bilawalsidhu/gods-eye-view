@@ -170,6 +170,10 @@ export type Capability =
   | 'gpuTiming'
   /** Depth picks against tiles and terrain. */
   | 'pickPosition'
+  /** Points tested against the frame's depth (`query.occlusionTest`). */
+  | 'occlusionTest'
+  /** Outward user zooms that keep the Earth framed (`controls.keepEarthFramed`). */
+  | 'keepEarthFramed'
   /** Height sampling against tiles and terrain. */
   | 'sampleHeight'
   /** Ray casts against tiles and terrain. */

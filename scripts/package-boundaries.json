@@ -60,7 +60,10 @@
       "src/render/color.js",
       "src/geo/sphere.js",
       "src/geo/rhumb.js",
-      "src/geo/frustum.js"
+      "src/geo/frustum.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -1101,7 +1104,10 @@
       "src/cockpitLook.js",
       "src/cockpitOrbital.js",
       "src/cockpitOrbitalFocus.js",
-      "src/geoDistance.js"
+      "src/geoDistance.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -1433,8 +1439,6 @@
       "src/render/input/router.js",
       "src/sky/icrf.js",
       "src/data/firmsIntensity.js",
-      "src/ui/layerPanel/RowSwitch.vue",
-      "src/ui/layerPanel/RowSlider.vue",
       "src/ui/kit/UiSegmented.vue",
       "src/ui/wildlifeSightingCard.js",
       "src/layers/wildlifeSightings/records.js",
@@ -1470,7 +1474,10 @@
       "src/render/cesium/viewers.js",
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
-      "src/maps/engine.js"
+      "src/maps/engine.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1651,7 +1658,10 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1794,7 +1804,10 @@
       "src/data/firmsIntensity.js",
       "src/time/worldClock.js",
       "src/data/satelliteClassMask.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -1914,7 +1927,10 @@
       "src/data/firmsIntensity.js",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/data/satelliteClassMask.js"
+      "src/data/satelliteClassMask.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -2047,7 +2063,10 @@
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
       "src/layers/vessels/cockpitSubject.js",
-      "src/geoDistance.js"
+      "src/geoDistance.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -2125,7 +2144,10 @@
       "src/render/cesium/starrySky.js",
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -2262,7 +2284,10 @@
       "src/data/firmsIntensity.js",
       "src/data/firmsHeatRaster.js",
       "src/layers/firms/heatImagery.js",
-      "src/render/color.js"
+      "src/render/color.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -2360,7 +2385,10 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/data/bundledJson.js",
-      "src/data/retryableLoad.js"
+      "src/data/retryableLoad.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -2454,7 +2482,10 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -2556,7 +2587,10 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -2632,7 +2666,8 @@
       "src/data/feedState.js",
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/render/cesium/zoomOutGuard.js"
     ],
     "external": ["cesium"]
   },
@@ -2742,7 +2777,10 @@
       "src/render/input/router.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/input.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -2798,7 +2836,8 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/zoomOutGuard.js"
     ],
     "external": ["cesium"]
   },
@@ -2914,7 +2953,10 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2965,7 +3007,6 @@
       "src/render/cesium/common.js",
       "src/layers/streetLevel/marker.js",
       "src/layers/streetLevel/view.js",
-      "src/geo/horizon.js",
       "src/layers/streetLevel/uiState.js",
       "src/layers/streetLevel/pickRouter.js",
       "src/data/idSwitches.js",
@@ -3033,7 +3074,10 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
       "src/queries/heights.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
@@ -3110,7 +3154,10 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/input/router.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -3213,7 +3260,10 @@
       "src/render/input/router.js",
       "src/render/cesium/internals.js",
       "src/data/firmsIntensity.js",
-      "src/data/satelliteClassMask.js"
+      "src/data/satelliteClassMask.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -3280,7 +3330,10 @@
       "src/render/cesium/input.js",
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -3404,7 +3457,10 @@
       "src/maps/engine.js",
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -4089,7 +4145,6 @@
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
       "src/ui/mobileShell.js",
-      "src/exclusiveSurfaces.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
@@ -4563,7 +4618,6 @@
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
       "src/ui/stores/providerSettings.js",
-      "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js",
@@ -4621,7 +4675,7 @@
       "src/maps/attribution.js",
       "src/render/cesium/mapEngine.js",
       "src/sky/icrf.js",
-      "src/render/cesium/panelRendering.js",
+      "src/app/panelRendering.js",
       "src/render/cesium/application.js",
       "src/sources/osmFeatures.js",
       "src/voice/imageryActions.js",
@@ -4641,8 +4695,6 @@
       "src/data/firmsIntensity.js",
       "src/data/firmsHeatRaster.js",
       "src/layers/firms/heatImagery.js",
-      "src/ui/layerPanel/RowSwitch.vue",
-      "src/ui/layerPanel/RowSlider.vue",
       "src/data/rioRouteNames.js",
       "src/globeInView.js",
       "src/app/globeInViewRecovery.js",
@@ -5475,7 +5527,8 @@
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
       "src/maps/engine.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/render/cesium/zoomOutGuard.js"
     ],
     "external": [
       "hls.js",
@@ -5611,7 +5664,10 @@
       "src/render/input/router.js",
       "src/render/cesium/nativeClick.js",
       "src/render/cesium/input.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": [
       "cesium",
@@ -5646,7 +5702,8 @@
       "src/data/inputOwnership.js",
       "src/data/pickRegistry.js",
       "src/data/scenePick.js",
-      "src/render/rendererOf.js"
+      "src/render/rendererOf.js",
+      "src/render/cesium/zoomOutGuard.js"
     ],
     "external": ["cesium"]
   },
@@ -5708,7 +5765,10 @@
       "src/render/cesium/follow.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/common.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },
@@ -5968,7 +6028,8 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/render/cesium/zoomOutGuard.js"
     ],
     "external": ["cesium"]
   },
@@ -6394,7 +6455,10 @@
       "src/data/rioRouteNames.js",
       "src/overlays/worldOverlayChrome.js",
       "src/time/worldClock.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -6503,7 +6567,10 @@
       "src/render/cesium/nativeClick.js",
       "src/data/rioRouteNames.js",
       "src/time/worldClock.js",
-      "src/render/cesium/viewers.js"
+      "src/render/cesium/viewers.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium", "pbf"]
   },
@@ -6586,7 +6653,8 @@
       "src/render/input/wheel.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
-      "src/render/input/router.js"
+      "src/render/input/router.js",
+      "src/render/cesium/zoomOutGuard.js"
     ],
     "external": ["cesium"]
   },
@@ -6745,7 +6813,10 @@
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
-      "src/queries/heights.js"
+      "src/queries/heights.js",
+      "src/render/cesium/zoomOutGuard.js",
+      "src/render/cesium/sceneOcclusionProbe.js",
+      "src/data/detectionOcclusion.js"
     ],
     "external": ["cesium"]
   },

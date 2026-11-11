@@ -19,7 +19,7 @@ import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
 import { GPU_ICON_CAPABILITIES } from './gpuIcons.js';
 import { createCesiumEffects } from './effects.js';
-import { willDraw } from './frame.js';
+import { renderNow, willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuery, queryCapabilities } from './query.js';
 import { createCesiumQuality } from './quality.js';
@@ -70,6 +70,10 @@ export function cesiumCapabilities(scene, only) {
     'fields',
     'followFrame',
     'cameraChangeThreshold',
+    // The zoom-out guard reads the scene's own controller and frame events.
+    ...(scene?.screenSpaceCameraController && scene?.preRender
+      ? ['keepEarthFramed']
+      : []),
     ...GPU_ICON_CAPABILITIES,
     'styles',
     'bloom',
@@ -294,8 +298,8 @@ export function createCesiumPorts(widget, { capabilities, credentials = {} }) {
       widget.useDefaultRenderLoop = !suspended;
       if (!suspended) scene.requestRender();
     },
-    // Draws even when nothing asked for a frame.
-    renderNow: () => scene.forceRender(widget.clock.currentTime),
+    // Draws even when nothing asked for a frame; throws when it fails.
+    renderNow: () => renderNow(scene, widget.clock.currentTime),
     renderOnce: (options) => nextPostRender(options),
     setTargetFps(fps) {
       targetFps = fps > 0 ? fps : 0;

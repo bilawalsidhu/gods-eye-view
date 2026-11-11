@@ -15,7 +15,11 @@ import { describeError } from './errors.js';
 import { worldClock, worldTimeFor } from '../time/worldClock.js';
 import { followWorldTime } from '../time/viewerClock.js';
 import { t } from '../i18n/index.js';
-import { applicationHooksOf } from '../render/applicationHooks.js';
+import {
+  applicationHooksOf,
+  provideApplicationHooks,
+} from '../render/applicationHooks.js';
+import { keepPanelRendering } from './panelRendering.js';
 import { createSceneHost } from '../render/rendererOf.js';
 
 let defaultLoad = null;
@@ -95,7 +99,6 @@ export async function createApplicationScene({
   // bound to the renderer.
   const scene = createSceneHost(renderer, { container });
   const viewer = scene.host;
-  const hooks = applicationHooksOf(renderer);
   // The governor keeps its holds on the renderer's frame port. The loop
   // draws every frame until the application's tools are up (they release
   // 'boot'), as it did before anything could hold it.
@@ -112,6 +115,14 @@ export async function createApplicationScene({
       }
     }
   });
+  // What the plugin hands the application beside the contract, each hook
+  // optional (render/applicationHooks.js).
+  if (typeof rendererPlugin.applicationHooks === 'function')
+    provideApplicationHooks(
+      renderer,
+      rendererPlugin.applicationHooks(renderer),
+    );
+  const hooks = applicationHooksOf(renderer);
   // The renderer follows its container's size (`Renderer.resize`).
   if (typeof ResizeObserver === 'function' && container) {
     const resizes = new ResizeObserver(() => renderer.resize());
@@ -126,6 +137,13 @@ export async function createApplicationScene({
   const { controls } = renderer.camera;
   if (!controls.zoomInputs.includes('ctrlWheel'))
     controls.zoomInputs = [...controls.zoomInputs, 'ctrlWheel'];
+  // The user's outward zooms stop at a whole-Earth view, which stays framed.
+  if (renderer.capabilities.has('keepEarthFramed')) {
+    controls.keepEarthFramed = true;
+    defer(() => {
+      controls.keepEarthFramed = false;
+    });
+  }
   defer(
     followWorldTime(viewer, worldTimeFor('sky'), {
       subscribe: worldClock.subscribe,
@@ -214,14 +232,15 @@ export async function createApplicationScene({
     mapStackController,
     operations,
     input,
+    // Keeps the globe drawing in an inline panel whose host stops animation
+    // frames (embed mode, src/app/embed.js); returns its disposer.
+    keepPanelRendering: (options) => keepPanelRendering(renderer, options),
     // What the renderer's plugin hands the application beside the contract,
-    // each optional: trims stale draw commands, keeps an inline panel
-    // drawing, says whether an entity is the renderer's own, installs the
-    // zoom-out guard, and what QA scripts read (render/applicationHooks.js).
+    // each optional: trims stale draw commands, says whether an entity is
+    // the renderer's own, and what QA scripts read
+    // (render/applicationHooks.js).
     trimStaleCommands: hooks.trimStaleCommands,
-    keepPanelRendering: hooks.keepPanelRendering,
     viewerDrawsEntity: hooks.viewerDrawsEntity,
-    installZoomOutGuard: hooks.installZoomOutGuard,
     qaHandles: hooks.qaHandles,
   };
 }

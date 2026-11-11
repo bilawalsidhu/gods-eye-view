@@ -26,11 +26,16 @@
  *   contract has no name for is kept as it is when they are set. While
  *   they hold `ctrlWheel`, trackpad pinches (small pixel-mode Ctrl+wheel
  *   events) are relayed at a usable speed (`ctrlWheelZoom.js`).
+ * - `keepEarthFramed` installs the zoom-out guard (`zoomOutGuard.js`) on
+ *   the widget, which reads the controller's own input; a camera command
+ *   (`onCommand`) ends its easing. Without a widget whose scene has a
+ *   controller, it only reads back.
  */
 import * as Cesium from 'cesium';
 import { acquireCameraInput } from './cameraInput.js';
 import { installTrackpadPinchRelay } from './ctrlWheelZoom.js';
 import { followZoomBase, setFollowZoomBase } from './follow.js';
+import { installZoomOutGuard } from './zoomOutGuard.js';
 
 const HALF_PI = Math.PI / 2;
 const { WHEEL, PINCH, RIGHT_DRAG } = Cesium.CameraEventType;
@@ -88,9 +93,12 @@ export const controllerDefaults = () => ({
 
 /**
  * @param {{scene: {screenSpaceCameraController?: object}, widget?: object,
- *   pinchRelay?: typeof installTrackpadPinchRelay}} options `widget`, the
- *   Viewer or CesiumWidget, takes the trackpad pinch relay; without one
- *   `ctrlWheel` binds Ctrl+wheel alone.
+ *   pinchRelay?: typeof installTrackpadPinchRelay,
+ *   onCommand?: (cb: () => void) => () => void,
+ *   zoomOutGuard?: typeof installZoomOutGuard}} options `widget`, the
+ *   Viewer or CesiumWidget, takes the trackpad pinch relay and the zoom-out
+ *   guard; without one `ctrlWheel` binds Ctrl+wheel alone. `onCommand`
+ *   subscribes to the camera port's commands.
  * @returns {{controls: import('../contract/camera').CameraControls,
  *   dispose: () => void}}
  */
@@ -98,6 +106,8 @@ export function createCesiumControls({
   scene,
   widget,
   pinchRelay = installTrackpadPinchRelay,
+  onCommand,
+  zoomOutGuard = installZoomOutGuard,
 }) {
   const ownController = scene.screenSpaceCameraController;
   const controller = ownController ?? controllerDefaults();
@@ -125,6 +135,13 @@ export function createCesiumControls({
   // The pitch range as last set, read back while the controller still has
   // the tilt limit it was given.
   let pitchSet = null;
+  // `keepEarthFramed`, and the guard's disposer while it is installed.
+  let framed = false;
+  let releaseGuard = null;
+  const guardable = () =>
+    Boolean(
+      ownController && widget?.camera && widget?.canvas && scene.preRender,
+    );
 
   const controls = {
     // Read without taking over `enableInputs`: once any user holds input,
@@ -249,6 +266,27 @@ export function createCesiumControls({
       ];
       relayPinches(value.includes('ctrlWheel'));
     },
+    get keepEarthFramed() {
+      return framed;
+    },
+    set keepEarthFramed(value) {
+      framed = Boolean(value);
+      if (framed && !releaseGuard && !disposed && guardable())
+        releaseGuard = zoomOutGuard(widget, {
+          requestRender: () => scene.requestRender?.(),
+          // A command that places the eye ends the guard's easing; the
+          // step views a held key sends every frame do not (the guard
+          // lets go of a pose it did not make on its own).
+          subscribeCameraHandoff: (listener) =>
+            onCommand?.((command) => {
+              if (command?.kind !== 'setView') listener(command);
+            }),
+        });
+      else if (!framed && releaseGuard) {
+        releaseGuard();
+        releaseGuard = null;
+      }
+    },
   };
   // A controller that already binds Ctrl+wheel relays pinches from the start.
   relayPinches(controls.zoomInputs.includes('ctrlWheel'));
@@ -257,6 +295,8 @@ export function createCesiumControls({
     controls,
     dispose() {
       relayPinches(false);
+      releaseGuard?.();
+      releaseGuard = null;
       disposed = true;
       cameraInput?.release();
       cameraInput = null;

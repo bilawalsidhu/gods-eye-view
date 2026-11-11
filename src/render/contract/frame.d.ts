@@ -72,7 +72,7 @@ export interface FramePort {
   diagnostics(): FrameDiagnostics;
   /** Stop ticking while the page is hidden; resume on `false`. */
   suspend(hidden: boolean): void;
-  /** Draw a frame now, synchronously. */
+  /** Draw a frame now, synchronously; throws when the frame fails to draw. */
   renderNow(): void;
   /** Resolves after the next frame has been drawn and presented. */
   renderOnce(options?: { timeoutMs?: number }): Promise<void>;

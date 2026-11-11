@@ -117,11 +117,15 @@ export function createCesiumCamera({
       })
     : null;
 
-  const controlsPart = createCesiumControls({ scene, widget });
-
   // Camera commands: hooks run before each one, so an owner can yield.
   const commandHooks = listenerList(report);
   const command = (kind) => commandHooks.fire({ kind });
+
+  const controlsPart = createCesiumControls({
+    scene,
+    widget,
+    onCommand: (cb) => commandHooks.on(cb),
+  });
 
   // The flight this port started, while it is in progress. Cesium cancels
   // a flight in progress when another starts, including one started on

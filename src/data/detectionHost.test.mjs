@@ -43,8 +43,7 @@ import {
   depthImage,
   viewDistanceToDepth,
 } from '../render/cesium/fixtures/fakeDepthScene.mjs';
-import { createViewerOcclusionProbe } from '../render/cesium/sceneOcclusionProbe.js';
-import { provideApplicationHooks } from '../render/applicationHooks.js';
+import { createSceneOcclusionTest } from '../render/cesium/sceneOcclusionProbe.js';
 import { rendererOf } from '../render/rendererOf.js';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
@@ -1418,10 +1417,11 @@ function installDepthScene(env, surfaceDistance, { webgl2 = true } = {}) {
   const image = paint();
   const scene = createFakeDepthScene({ gl, ranges: [{ near, far, image }] });
   Object.assign(env.viewer.scene, scene, { camera });
-  // The renderer's occlusion probe, as the Cesium renderer hands it over.
-  provideApplicationHooks(rendererOf(env.viewer), {
-    createOcclusionProbe: () => createViewerOcclusionProbe(env.viewer),
-  });
+  // The renderer's occlusion test, as the Cesium query port gives it.
+  const renderer = rendererOf(env.viewer);
+  renderer.capabilities = new Set(['occlusionTest']);
+  renderer.query.occlusionTest = () =>
+    createSceneOcclusionTest(env.viewer.scene);
   return {
     gl,
     /** Draw the next frame's depth. */

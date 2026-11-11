@@ -1,12 +1,11 @@
 /**
  * @module render/cesium/zoomOutGuard
  * @description Keeps the user's outward zooms bounded and the Earth framed
- * on the Cesium camera controller. It reads that controller's own input, so
- * it lives in the adapter; the application installs it through the scene's
- * viewer hooks (`application.js`).
+ * on the Cesium camera controller: the camera port's
+ * `controls.keepEarthFramed` (`cameraControls.js`). It reads that
+ * controller's own input, so it lives in the adapter.
  */
 import * as Cesium from 'cesium';
-import { governorRequestRender } from '../../renderGovernor.js';
 import { cameraFlightActive } from './internals.js';
 
 /** Whole-Earth input limit; explicit camera destinations can go farther. */
@@ -87,7 +86,7 @@ function readInput(aggregator, bindings) {
 export function installZoomOutGuard(
   viewer,
   {
-    requestRender = governorRequestRender,
+    requestRender = () => viewer?.scene?.requestRender?.(),
     subscribeCameraHandoff,
     createAggregator = (canvas) => new Cesium.CameraEventAggregator(canvas),
   } = {},

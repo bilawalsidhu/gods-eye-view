@@ -3,7 +3,6 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { CONTRACT_VERSION, checkRendererShape } from '../contract/index.js';
 import { rendererOf } from '../rendererOf.js';
-import { applicationHooksOf } from '../applicationHooks.js';
 import { cesiumMapEngine } from './mapEngine.js';
 import {
   ReadonlySet,
@@ -142,17 +141,13 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
     false,
     'free look is limited to low heights from the start',
   );
-  const hooks = applicationHooksOf(renderer);
+  const hooks = plugin.applicationHooks(renderer);
   assert.equal(hooks.mapEngine, cesiumMapEngine, 'the map stacks use Cesium');
+  assert.equal(hooks.ownCreditDisplay, true, 'Cesium shows its own credits');
   assert.equal(hooks.qaHandles.viewer, viewer, 'QA scripts read the viewer');
   assert.equal(hooks.viewerDrawsEntity({ own: true }), true);
   assert.equal(hooks.viewerDrawsEntity({}), false);
-  for (const name of [
-    'trimStaleCommands',
-    'keepPanelRendering',
-    'installZoomOutGuard',
-  ])
-    assert.equal(typeof hooks[name], 'function', name);
+  assert.equal(typeof hooks.trimStaleCommands, 'function');
 
   assert.ok(viewer.listeners.size > 0, 'the ports follow the frame phases');
   assert.equal(typeof renderer.draw.icons, 'function');

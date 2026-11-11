@@ -225,3 +225,46 @@ test('a scene without a controller still has settings', () => {
   assert.equal(controls.zoomFactor, 9);
   assert.deepEqual(controls.zoomInputs, ['rightDrag', 'wheel', 'pinch']);
 });
+
+test('keepEarthFramed installs the zoom-out guard, which placing commands cancel', () => {
+  const scene = { ...sceneWithController(), preRender: {}, requestRender() {} };
+  const widget = { scene, camera: {}, canvas: {} };
+  const commands = new Set();
+  const installed = [];
+  const { controls, dispose } = createCesiumControls({
+    scene,
+    widget,
+    onCommand: (cb) => (commands.add(cb), () => commands.delete(cb)),
+    zoomOutGuard(viewer, { subscribeCameraHandoff }) {
+      const guard = { viewer, cancels: 0, released: false };
+      const off = subscribeCameraHandoff(() => (guard.cancels += 1));
+      installed.push(guard);
+      return () => {
+        guard.released = true;
+        off();
+      };
+    },
+  });
+  assert.equal(controls.keepEarthFramed, false);
+  controls.keepEarthFramed = true;
+  controls.keepEarthFramed = true;
+  assert.equal(installed.length, 1, 'installed once');
+  assert.equal(installed[0].viewer, widget);
+  // A held key's step views do not cancel it; a flight does.
+  for (const cb of commands) cb({ kind: 'setView' });
+  assert.equal(installed[0].cancels, 0);
+  for (const cb of commands) cb({ kind: 'flyTo' });
+  assert.equal(installed[0].cancels, 1);
+  controls.keepEarthFramed = false;
+  assert.equal(installed[0].released, true);
+  assert.equal(commands.size, 0);
+  controls.keepEarthFramed = true;
+  dispose();
+  assert.equal(installed[1].released, true, 'released on dispose');
+});
+
+test('keepEarthFramed only reads back without a controller to guard', () => {
+  const { controls } = createCesiumControls({ scene: {} });
+  controls.keepEarthFramed = true;
+  assert.equal(controls.keepEarthFramed, true);
+});

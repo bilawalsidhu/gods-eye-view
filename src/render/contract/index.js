@@ -45,6 +45,8 @@ export const CAPABILITIES = Object.freeze([
   'globeVisibility',
   'followFrame',
   'cameraChangeThreshold',
+  'occlusionTest',
+  'keepEarthFramed',
 ]);
 
 /** @type {readonly import('./frame').FrameStep[]} */
@@ -199,9 +201,10 @@ export const PORTS = deepFreeze({
       'matrices',
     ),
     ['followFrame', 'followFrame'],
+    ['controls.keepEarthFramed', 'keepEarthFramed'],
   ]),
-  query: Object.fromEntries(
-    required(
+  query: Object.fromEntries([
+    ...required(
       'pick',
       'drillPick',
       'pickPosition',
@@ -216,7 +219,8 @@ export const PORTS = deepFreeze({
       'clampToSurface',
       'rayCast',
     ),
-  ),
+    ['occlusionTest', 'occlusionTest'],
+  ]),
   input: Object.fromEntries(
     required(
       'on',

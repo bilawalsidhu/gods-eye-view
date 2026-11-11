@@ -2899,6 +2899,33 @@ export function portChecks() {
         }
       },
     ),
+    check(
+      'query.occlusionTest',
+      'an occlusion test takes points and leaves the unanswered pending',
+      async (h) => {
+        const r = await h.create({ viewport: SCRIPT_VIEWPORT });
+        try {
+          const test = r.query.occlusionTest();
+          ok(
+            ['async', 'sync', 'off'].includes(test.mode),
+            'mode is async, sync or off',
+          );
+          ok(test.maxPerFrame > 0, 'takes at least one point a frame');
+          const point = { pending: false, answered: false, lastHiddenAt: 0 };
+          test.beginFrame(0);
+          const taken = test.add(point, h.toEcef({ ...AUSTIN, height: 10 }));
+          equal(typeof taken, 'boolean', 'add says whether it took the point');
+          if (taken && test.mode === 'async')
+            ok(point.pending || point.answered, 'a point taken is under test');
+          test.endFrame();
+          test.reset();
+          test.destroy();
+        } finally {
+          r.destroy();
+        }
+      },
+      { capability: 'occlusionTest' },
+    ),
 
     // --- Input -------------------------------------------------------------
     check(

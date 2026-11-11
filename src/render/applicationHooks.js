@@ -11,21 +11,20 @@
  *   (`src/maps/globeEngine.js`).
  * - `trimStaleCommands()`: drops the draw commands a renderer keeps for a
  *   while after it stops drawing them; run after a layer turns off.
- * - `keepPanelRendering(options)`: keeps the globe drawing in an inline panel
- *   whose host stops animation frames (embed mode); returns its disposer.
  * - `viewerDrawsEntity(entity)`: whether an entity is one the renderer draws
  *   itself (Cockpit asks whether the aircraft it flies still draws).
- * - `installZoomOutGuard(options)`: keeps outward user zooms bounded and the
- *   Earth framed; returns its disposer.
- * - `createOcclusionProbe()`: a probe that tests depth-tested contacts
- *   (street vehicles) against what the frame drew, so the detection overlay
- *   leaves out those something stands in front of (`SurfaceOcclusion` in
- *   `src/data/detectionOcclusion.js` says what it answers); without one,
- *   every such contact is drawn.
  * - `qaHandles`: values QA scripts read from `window.__godsEyeView`.
  * - `ownCreditDisplay`: true when the renderer shows its credits in a
  *   display of its own; otherwise the application shows what its credits
  *   port lists (`src/ui/creditsView.js`).
+ *
+ * A plugin hands them as its `applicationHooks(renderer)`
+ * (`ApplicationHooks`, `contract/renderer.d.ts`); the application scene
+ * records them here as it creates the renderer. What the renderer should
+ * do is in the contract instead: keeping the Earth framed on zooming out is
+ * `camera.controls.keepEarthFramed`, the detection overlay's depth test is
+ * `query.occlusionTest`, and an inline panel keeps drawing through the frame
+ * port (`src/app/panelRendering.js`).
  */
 
 const hooks = new WeakMap();

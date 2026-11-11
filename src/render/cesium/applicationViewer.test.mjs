@@ -21,7 +21,10 @@ test("zooming out stops with the globe 30% of the screen's height across", () =>
 
 test('a wide screen, whose view is narrower, may zoom out farther', () => {
   assert.ok(zoomOutLimit(0.4) > zoomOutLimit(Math.PI / 3));
-  assert.ok(zoomOutLimit(Math.PI / 3) > 20_000_000, 'past the views a link opens');
+  assert.ok(
+    zoomOutLimit(Math.PI / 3) > 20_000_000,
+    'past the views a link opens',
+  );
 });
 
 function fakeViewer({ fovy = Math.PI / 3, height = 10_000_000 } = {}) {

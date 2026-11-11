@@ -18,6 +18,7 @@ import { toCartesian } from './common.js';
 import { unboundDrawPart } from './draw.js';
 import { drawHitOf } from './drawHit.js';
 import { rememberPick } from './pickMemo.js';
+import { createSceneOcclusionTest } from './sceneOcclusionProbe.js';
 
 /** The fewest things a bounded drill looks through (`QueryPort.drillPick`). */
 const DRILL_DEPTH = 16;
@@ -31,7 +32,8 @@ const DRILL_DEPTH = 16;
  */
 export function queryCapabilities(scene) {
   const found = [];
-  if (scene.pickPositionSupported) found.push('pickPosition');
+  // The occlusion test reads the same depth a depth pick does.
+  if (scene.pickPositionSupported) found.push('pickPosition', 'occlusionTest');
   if (scene.sampleHeightSupported)
     found.push('sampleHeight', 'finestHeights', 'rayCast');
   return found;
@@ -460,6 +462,9 @@ export function createCesiumQuery({
         : null;
     },
   };
+  // Only where the scene keeps the depth it tests against.
+  if (can('occlusionTest'))
+    query.occlusionTest = () => createSceneOcclusionTest(scene);
   return query;
 }
 

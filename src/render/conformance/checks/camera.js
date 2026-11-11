@@ -335,6 +335,13 @@ export function cameraChecks() {
           ['ctrlWheel', 'wheel'],
           'zoomInputs are settable',
         );
+        if (r.capabilities.has('keepEarthFramed')) {
+          equal(c.keepEarthFramed, false, 'keepEarthFramed is off at first');
+          c.keepEarthFramed = true;
+          equal(c.keepEarthFramed, true, 'keepEarthFramed is settable');
+          c.keepEarthFramed = false;
+          equal(c.keepEarthFramed, false, 'keepEarthFramed turns off');
+        }
         r.destroy();
       },
     },

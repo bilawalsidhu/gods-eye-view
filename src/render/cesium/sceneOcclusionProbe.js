@@ -805,13 +805,13 @@ export class SceneOcclusionProbe {
 }
 
 /**
- * A probe bound to `viewer`'s scene: what the application's detection
- * overlay is handed (the `createOcclusionProbe` application hook). Its
- * `beginFrame(now)` reads the scene itself; the rest is the probe's.
- * @param {Cesium.Viewer} viewer
- * @returns {object}
+ * The query port's `occlusionTest()` on `scene`: a probe whose
+ * `beginFrame(now)` reads the scene itself (none once it is destroyed); the
+ * rest is the probe's.
+ * @param {object} scene A Cesium scene.
+ * @returns {import('../contract/query').OcclusionTest}
  */
-export function createViewerOcclusionProbe(viewer) {
+export function createSceneOcclusionTest(scene) {
   const probe = new SceneOcclusionProbe();
   return {
     get mode() {
@@ -827,9 +827,9 @@ export function createViewerOcclusionProbe(viewer) {
       return probe.lastFrameTests;
     },
     beginFrame(now) {
-      probe.beginFrame(viewer.isDestroyed?.() ? null : viewer.scene, now);
+      probe.beginFrame(scene.isDestroyed?.() ? null : scene, now);
     },
-    add: (contact, position) => probe.add(contact, position),
+    add: (point, position) => probe.add(point, position),
     endFrame: () => probe.endFrame(),
     reset: () => probe.reset(),
     destroy: () => probe.destroy(),

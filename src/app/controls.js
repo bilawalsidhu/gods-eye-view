@@ -11,13 +11,7 @@ import { t } from '../i18n/index.js';
  * picker, for a page that does not initialize the app's locale.
  */
 export function createApplicationControls({
-  scene: {
-    viewer,
-    mapStackController,
-    operations,
-    viewerDrawsEntity,
-    installZoomOutGuard,
-  },
+  scene: { viewer, mapStackController, operations, viewerDrawsEntity },
   loaderStatus,
   Controls = StyleManager,
   services,
@@ -49,15 +43,6 @@ export function createApplicationControls({
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());
   defer(() => styleManager.dispose());
-  // The scene's renderer bounds the user's outward zooms (a scene whose
-  // renderer has no such guard gives none).
-  if (installZoomOutGuard)
-    defer(
-      installZoomOutGuard({
-        subscribeCameraHandoff: (listener) =>
-          styleManager.subscribeCameraHandoff?.(listener),
-      }),
-    );
   // The previous multi-canvas weather compositor remains disabled. Cockpit
   // clouds use a separate, capped low-resolution GPU pass that never attaches
   // Cesium fog or post-process stages and is fully stopped in map mode.
