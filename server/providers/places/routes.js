@@ -267,10 +267,6 @@ export function installRouteMiddleware(
       });
       res.end(JSON.stringify({ ok: false, error: msg }));
     };
-    const unavailable = (msg) => {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: false, error: msg }));
-    };
     try {
       if (!_routeRateLimiter(clientKey(req))) {
         rateLimited('rate limited', 5);
@@ -384,7 +380,9 @@ export function installRouteMiddleware(
           );
         }
         if (upstreamError instanceof UpstreamUnavailableError) {
-          return unavailable(upstreamError.message);
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: upstreamError.message }));
+          return;
         }
         throw upstreamError;
       }
